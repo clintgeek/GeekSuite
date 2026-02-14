@@ -1,0 +1,62 @@
+{
+  "slug": "guitar-first-strum",
+  "template": "guided_steps_v1",
+  "instrumentSlug": "guitar",
+  "orderIndex": 5,
+  "meta": {
+    "title": "Strumming Your First Chord",
+    "subtitle": "Learn to strum with rhythm and make your chord sound great!",
+    "category": "First Chords",
+    "difficulty": 1,
+    "audience": "kid",
+    "estimatedTimeMinutes": 10,
+    "xpReward": 60,
+    "tags": ["guitar", "beginner", "strumming", "rhythm"],
+    "imageUrl": "/assets/lessons/guitar/first-strum/hero.svg"
+  },
+  "content": {
+    "learningOutcomes": [
+      "Strum with a steady, even rhythm",
+      "Keep your wrist loose and relaxed",
+      "Play your Em chord with confidence"
+    ],
+    "steps": [
+      {
+        "id": "intro",
+        "type": "text",
+        "title": "Let's make it groove!",
+        "body": "You know the E minor chord—now let's make it sound really good by learning to strum with rhythm. Strumming is all about keeping a steady beat and staying relaxed."
+      },
+      {
+        "id": "hand-position",
+        "type": "text",
+        "title": "Relax your strumming hand",
+        "body": "Hold your strumming hand loose and relaxed—like you're gently shaking water off your fingers. Your wrist should be loose, not stiff. You'll strum from your wrist, not your whole arm."
+      },
+      {
+        "id": "down-strum",
+        "type": "text",
+        "title": "The down strum",
+        "body": "Make your Em chord with your left hand. With your right hand, strum DOWN across all the strings in one smooth motion. Start at the thickest string and sweep down. Let your hand follow through naturally—don't stop suddenly."
+      },
+      {
+        "id": "rhythm",
+        "type": "text",
+        "title": "Count and strum",
+        "body": "Let's add rhythm! Count out loud: '1, 2, 3, 4' and strum DOWN on each number. Keep the timing even—like a clock ticking. Try it: 'ONE strum, TWO strum, THREE strum, FOUR strum.' Repeat this a few times."
+      },
+      {
+        "id": "practice",
+        "type": "checkpoint",
+        "title": "Play with steady rhythm",
+        "body": "Keep your Em chord pressed down and strum 8 times in a row, counting '1, 2, 3, 4, 1, 2, 3, 4.' Keep the rhythm steady and even. If your fingers get tired, take a quick break and try again!"
+      },
+      {
+        "id": "celebration",
+        "type": "celebration",
+        "title": "🎵 You're playing music!",
+        "body": "YES! You just played a chord with rhythm—that's real music! 🎸 You're strumming like a pro already. With just this one chord and steady strumming, you could play along with tons of songs. You're building the foundation for everything else you'll learn. Keep it up!"
+      }
+    ]
+  }
+}

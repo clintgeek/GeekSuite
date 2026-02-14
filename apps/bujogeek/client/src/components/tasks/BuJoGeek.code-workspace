@@ -1,0 +1,18 @@
+{
+	"folders": [
+		{
+			"path": "../../../.."
+		},
+		{
+			"path": "../../../../../NoteGeek"
+		},
+		{
+			"path": "../../../../../../../../Volumes/Media/Docker/BuJoGeek"
+		},
+		{
+			"path": "../../../../../../../../Volumes/Media/Docker/nginx"
+		}
+	],
+	"settings": {
+	}
+}

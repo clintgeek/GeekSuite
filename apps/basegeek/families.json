@@ -1,0 +1,64 @@
+{
+  "families": {
+    "llama": {
+      "providers": ["cerebras", "groq", "together", "cloudflare", "openrouter", "llmgateway"],
+      "strengths": ["reasoning", "contextual", "general", "tool-use"],
+      "contextWindow": "64K-1M",
+      "promptStrategy": "tool-decisive",
+      "notes": "Llama 3.3 70B (Cerebras, Cloudflare) and Llama 3.1 70B (Groq, Together, OpenRouter) excellent for tool use. Llama 4 Maverick (LLM Gateway) has 1M context."
+    },
+    "qwen": {
+      "providers": ["ollama", "llm7"],
+      "strengths": ["code", "technical"],
+      "contextWindow": "128K-480B",
+      "promptStrategy": "tool-decisive",
+      "notes": "Best for code generation, debugging, and technical documentation. Lower priority for tool use due to model personality issues."
+    },
+    "deepseek": {
+      "providers": ["ollama"],
+      "strengths": ["creative", "reasoning"],
+      "contextWindow": "64K-671B",
+      "promptStrategy": "reasoning-focused",
+      "notes": "DeepSeek V3.1 671B (Ollama) excels at creative problem-solving and extended reasoning. Use for complex analytical tasks, not tool execution."
+    },
+    "gemini": {
+      "providers": ["gemini", "openrouter"],
+      "strengths": ["lookup", "fast", "contextual"],
+      "contextWindow": "1M",
+      "promptStrategy": "concise",
+      "notes": "Fastest response times, 1M context window for long conversations"
+    },
+    "claude": {
+      "providers": ["onemin", "anthropic", "openrouter"],
+      "strengths": ["analysis", "writing", "tool-use"],
+      "contextWindow": "200K",
+      "promptStrategy": "tool-decisive",
+      "notes": "Claude 3.7 Sonnet (1min.ai) excellent for complex tool use. Best-in-class reasoning and code generation. 1M credits/month free tier."
+    },
+    "gpt": {
+      "providers": ["ollama"],
+      "strengths": ["general", "creative"],
+      "contextWindow": "8K-128K",
+      "promptStrategy": "balanced",
+      "notes": "GPT OSS models available on Ollama Cloud for general-purpose tasks."
+    },
+    "specialized": {
+      "providers": ["ollama", "cohere"],
+      "strengths": ["enterprise", "multilingual"],
+      "contextWindow": "128K-1T",
+      "promptStrategy": "balanced",
+      "notes": "Kimi K2 (1T context) and Cohere for specialized enterprise tasks"
+    }
+  },
+  "taskRouting": {
+    "code": "qwen",
+    "reasoning": "llama",
+    "contextual": "llama",
+    "creative": "deepseek",
+    "lookup": "gemini",
+    "analysis": "claude",
+    "general": "gpt"
+  },
+  "version": "1.0.0",
+  "lastUpdated": "2025-01-XX"
+}

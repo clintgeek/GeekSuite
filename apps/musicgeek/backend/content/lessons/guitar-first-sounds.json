@@ -1,0 +1,70 @@
+{
+  "slug": "guitar-first-sounds",
+  "template": "guided_steps_v1",
+  "instrumentSlug": "guitar",
+  "orderIndex": 2,
+  "meta": {
+    "title": "Your First Sounds",
+    "subtitle": "Make music by plucking the strings and listening carefully.",
+    "category": "Getting Started",
+    "difficulty": 1,
+    "audience": "kid",
+    "estimatedTimeMinutes": 8,
+    "xpReward": 50,
+    "tags": ["guitar", "beginner", "open-strings", "listening"],
+    "imageUrl": "/assets/lessons/guitar/first-sounds/hero.svg"
+  },
+  "content": {
+    "learningOutcomes": [
+      "Pluck individual strings with your thumb or finger",
+      "Recognize the difference between thick and thin strings",
+      "Listen to how each string sounds different"
+    ],
+    "steps": [
+      {
+        "id": "intro",
+        "type": "text",
+        "title": "Time to make some noise!",
+        "body": "You're about to play your first sounds on the guitar. No fingers on the frets yet—just pluck the strings and listen. Each string has its own special sound."
+      },
+      {
+        "id": "pluck-technique",
+        "type": "text+image",
+        "title": "How to pluck",
+        "body": "Use your thumb or pointer finger. Gently pull the string away from the guitar body, then let it go. Don't pull too hard—just enough to make a clear sound. Try it on the thickest string first!",
+        "imageUrl": "/assets/lessons/guitar/first-sounds/guitar-full.jpg"
+      },
+      {
+        "id": "see-strings",
+        "type": "text+image",
+        "title": "Look at your strings",
+        "body": "Your guitar has 6 strings. The thickest one at the top is the LOW E string (it makes a deep sound). The thinnest one at the bottom is the HIGH E string (it makes a high sound). Each string makes a different sound!",
+        "imageUrl": "/assets/lessons/guitar/first-sounds/strings-closeup.jpg"
+      },
+      {
+        "id": "thick-strings",
+        "type": "text",
+        "title": "The thick strings",
+        "body": "Look at the top three strings—they're thicker and wrapped in metal. These are your LOW strings. Pluck the thickest one (closest to your face) with your thumb. Hear that deep, low sound? That's the 6th string, called Low E."
+      },
+      {
+        "id": "thin-strings",
+        "type": "text",
+        "title": "The thin strings",
+        "body": "Now look at the bottom three strings—they're thinner and shinier. These are your HIGH strings. Pluck the thinnest one (closest to the floor) with your finger. Hear that bright, high sound? That's the 1st string, also called High E."
+      },
+      {
+        "id": "practice",
+        "type": "checkpoint",
+        "title": "Try all six strings",
+        "body": "Pluck each string one at a time, from thick to thin. Listen carefully—can you hear how they go from LOW to HIGH? Try it a few times. Let each string ring out before plucking the next one."
+      },
+      {
+        "id": "celebration",
+        "type": "celebration",
+        "title": "🎶 You're making music!",
+        "body": "Awesome! You just played all six strings on your guitar. You're already making real sounds! 🎸 Every great guitarist started exactly where you are right now—plucking strings and listening. Keep exploring those sounds!"
+      }
+    ]
+  }
+}

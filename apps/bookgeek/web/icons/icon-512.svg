@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="80" fill="#b45309"/>
+  <g fill="#ffffff">
+    <!-- Open book -->
+    <path d="M256 144 C256 144 172 124 108 144 L108 376 C172 356 256 376 256 376 C256 376 340 356 404 376 L404 144 C340 124 256 144 256 144Z" fill="none" stroke="#ffffff" stroke-width="16" stroke-linejoin="round"/>
+    <!-- Spine -->
+    <line x1="256" y1="144" x2="256" y2="376" stroke="#ffffff" stroke-width="10"/>
+    <!-- Page lines left -->
+    <line x1="148" y1="200" x2="224" y2="210" stroke="#ffffff" stroke-width="8" opacity="0.7"/>
+    <line x1="148" y1="240" x2="224" y2="250" stroke="#ffffff" stroke-width="8" opacity="0.7"/>
+    <line x1="148" y1="280" x2="224" y2="290" stroke="#ffffff" stroke-width="8" opacity="0.7"/>
+    <!-- Page lines right -->
+    <line x1="288" y1="210" x2="364" y2="200" stroke="#ffffff" stroke-width="8" opacity="0.7"/>
+    <line x1="288" y1="250" x2="364" y2="240" stroke="#ffffff" stroke-width="8" opacity="0.7"/>
+    <line x1="288" y1="290" x2="364" y2="280" stroke="#ffffff" stroke-width="8" opacity="0.7"/>
+  </g>
+</svg>

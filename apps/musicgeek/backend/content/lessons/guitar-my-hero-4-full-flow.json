@@ -1,0 +1,80 @@
+{
+  "slug": "guitar-my-hero-4-full-flow",
+  "template": "guided_steps_v1",
+  "instrumentSlug": "guitar",
+  "orderIndex": 24,
+  "meta": {
+    "title": "My Hero - Full Song Flow",
+    "subtitle": "Connect intro, verse, and chorus into one performance.",
+    "category": "Song Projects",
+    "difficulty": 3,
+    "audience": "both",
+    "estimatedTimeMinutes": 22,
+    "xpReward": 180,
+    "tags": ["guitar", "intermediate", "songs", "structure", "my-hero"],
+    "imageUrl": "/assets/lessons/guitar/my-hero-4-full-flow/hero.svg"
+  },
+  "content": {
+    "objectives": [
+      "Understand a simple section map for a rock song",
+      "Play through intro, verse, and chorus without stopping",
+      "Build stamina for continuous 8th-note strumming"
+    ],
+    "steps": [
+      {
+        "id": "intro",
+        "type": "text",
+        "title": "From riff to full song",
+        "body": "You've built a strong My Hero-style riff with power chords, muting, and dynamics. Now it's time to connect everything into one flowing performance: intro, verse, and chorus, just like a real song."
+      },
+      {
+        "id": "section-map",
+        "type": "text",
+        "title": "Simple section map",
+        "body": "We'll use a simplified structure inspired by big rock songs: Intro -> Verse 1 -> Chorus 1 -> Verse 2 -> Chorus 2. No bridge yet - just a clean path that you can actually play from start to finish. Think of it as your own short My Hero arrangement."
+      },
+      {
+        "id": "intro-groove",
+        "type": "text",
+        "title": "Intro groove",
+        "body": "For the intro, play your power-chord loop with open strums but a slightly softer touch than the chorus. You want it to feel like a build-up, not the loudest part of the song. Play 2-4 bars of this to set the mood."
+      },
+      {
+        "id": "verse-pattern",
+        "type": "text",
+        "title": "Verse pattern",
+        "body": "When the \"verse\" starts, switch to the muted version of your loop from the Grohl Rhythm lesson. Keep your 8th notes tight and controlled. Aim for 4 bars of muted verse playing before you think about \"going big\" again."
+      },
+      {
+        "id": "chorus-pattern",
+        "type": "text",
+        "title": "Chorus pattern",
+        "body": "For the chorus, play the same chord loop fully open and at near-maximum strumming intensity. Remember to accent beats 2 and 4 so it feels locked to an imaginary snare drum. Start with 4 bars of big chorus playing."
+      },
+      {
+        "id": "linking-sections",
+        "type": "text",
+        "title": "Practice the transitions",
+        "body": "Work on three key transitions: Intro -> Verse, Verse -> Chorus, and Chorus -> Verse. In each case, keep your right hand moving in time and only change your muting and intensity. If you pause or rush, slow down and try that transition again by itself."
+      },
+      {
+        "id": "mini-performance",
+        "type": "text",
+        "title": "Mini performance run",
+        "body": "Now try this full flow: Intro (2 bars) -> Verse 1 (4 bars muted) -> Chorus 1 (4 bars open) -> Verse 2 (4 bars muted) -> Chorus 2 (4 bars open). Don't worry about lyrics - focus just on the guitar part and the dynamic story."
+      },
+      {
+        "id": "checkpoint",
+        "type": "checkpoint",
+        "title": "Full My Hero-style flow",
+        "body": "Can you play the full flow without stopping, even if it's at a slower tempo? If your arm gets tired, that's normal - take a short break and try again. The goal is to feel comfortable playing for a full song-length chunk of time while controlling your energy."
+      },
+      {
+        "id": "celebration",
+        "type": "celebration",
+        "title": "🎸 You played the whole thing!",
+        "body": "Huge milestone! You just played through a complete, simplified My Hero-style song form with intro, verses, and choruses. This is what real performance feels like: holding the groove from start to finish."
+      }
+    ]
+  }
+}

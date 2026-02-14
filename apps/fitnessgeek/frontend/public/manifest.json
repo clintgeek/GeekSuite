@@ -1,0 +1,25 @@
+{
+  "name": "FitnessGeek",
+  "short_name": "FitnessGeek",
+  "description": "Track your nutrition, fitness goals, and weight with FitnessGeek - powered by the GeekSuite ecosystem",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8f9fa",
+  "theme_color": "#6098CC",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512x512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

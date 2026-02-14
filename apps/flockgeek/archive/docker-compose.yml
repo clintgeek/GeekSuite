@@ -1,0 +1,42 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: flockgeek-backend
+    environment:
+      - NODE_ENV=production
+      - PORT=5001
+      - MONGODB_URI=${MONGODB_URI}
+      - JWT_SECRET=${JWT_SECRET}
+      - BASEGEEK_URL=${BASEGEEK_URL}
+    expose:
+      - "5001"
+
+    networks:
+      - flockgeek_network
+    restart: always
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - BACKEND_PORT=5001
+    container_name: flockgeek-frontend
+    environment:
+      - BACKEND_PORT=5001
+      - VITE_API_URL=${VITE_API_URL}
+      - VITE_BASEGEEK_URL=${VITE_BASEGEEK_URL}
+    ports:
+      - "4081:80"  # Expose on port 4081, your nginx can proxy to this
+
+    depends_on:
+      - backend
+    networks:
+      - flockgeek_network
+    restart: always
+
+networks:
+  flockgeek_network:
+    driver: bridge

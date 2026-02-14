@@ -1,0 +1,14 @@
+{
+  "name": "@geeksuite/user",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "axios": ">=1"
+  }
+}

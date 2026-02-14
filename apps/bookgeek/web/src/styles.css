@@ -1,0 +1,177 @@
+/* ===== Dark theme (default) ===== */
+:root,
+.dark {
+  color-scheme: dark;
+
+  /* Layer separation: page → surface → card */
+  --color-bg-page: #010409;           /* near-black blue — the "desktop" */
+  --color-bg-surface: #0f172a;        /* slate-900ish — the floating app panel */
+  --color-bg-surface-alt: #0c1220;    /* slightly darker surface variant */
+  --color-bg-card: #151e2f;           /* a hair lighter — book cards */
+
+  /* Borders */
+  --color-border: rgba(100, 116, 139, 0.22);
+  --color-border-subtle: rgba(100, 116, 139, 0.08);
+  --color-border-card: rgba(130, 145, 170, 0.18);
+  --color-border-input: rgba(120, 135, 160, 0.35);
+
+  /* Text hierarchy */
+  --color-text-primary: #f1f5f9;
+  --color-text-secondary: #cbd5e1;
+  --color-text-muted: #64748b;
+  --color-text-faint: #475569;
+
+  /* Sidebar (deliberately lower-contrast) */
+  --color-sidebar-bg: rgba(8, 12, 22, 0.5);
+  --color-sidebar-text: #94a3b8;
+  --color-sidebar-heading: #64748b;
+  --color-sidebar-active-bg: rgba(30, 41, 59, 0.7);
+  --color-sidebar-active-text: #e2e8f0;
+
+  /* Card depth */
+  --shadow-card: 0 2px 8px rgba(0,0,0,0.3), 0 0 0 1px var(--color-border-card);
+  --shadow-panel: 0 22px 60px rgba(0,0,0,0.5);
+}
+
+/* ===== Light theme ===== */
+.light {
+  color-scheme: light;
+
+  --color-bg-page: #e8ecf1;
+  --color-bg-surface: #ffffff;
+  --color-bg-surface-alt: #f8fafc;
+  --color-bg-card: #ffffff;
+
+  --color-border: rgba(15, 23, 42, 0.10);
+  --color-border-subtle: rgba(15, 23, 42, 0.04);
+  --color-border-card: rgba(15, 23, 42, 0.10);
+  --color-border-input: rgba(15, 23, 42, 0.18);
+
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #334155;
+  --color-text-muted: #64748b;
+  --color-text-faint: #94a3b8;
+
+  --color-sidebar-bg: rgba(241, 245, 249, 0.7);
+  --color-sidebar-text: #475569;
+  --color-sidebar-heading: #94a3b8;
+  --color-sidebar-active-bg: rgba(15, 23, 42, 0.06);
+  --color-sidebar-active-text: #0f172a;
+
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.06), 0 0 0 1px var(--color-border-card);
+  --shadow-panel: 0 8px 30px rgba(0,0,0,0.08);
+}
+
+/* ===== Base ===== */
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  background-color: var(--color-bg-page);
+  color: var(--color-text-primary);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* ===== Preserved legacy classes ===== */
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  background-color: var(--color-bg-page);
+}
+
+.app-inner {
+  width: 100%;
+  max-width: 1120px;
+  padding: 24px 20px 32px;
+}
+
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.app-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.app-tagline {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+.app-pill {
+  font-size: 0.75rem;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--color-bg-surface-alt);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+}
+
+.app-card {
+  border-radius: 18px;
+  border: 1px solid var(--color-border-card);
+  background: var(--color-bg-card);
+  padding: 18px 18px 20px;
+  box-shadow: var(--shadow-panel);
+}
+
+.app-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.app-card-title {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.app-card-subtitle {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.app-badge-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 0.75rem;
+  margin-top: 8px;
+}
+
+.app-badge {
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-surface-alt);
+}
+
+.app-footer {
+  margin-top: 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+/* ===== Theme transition helper ===== */
+.theme-transition,
+.theme-transition *,
+.theme-transition *::before,
+.theme-transition *::after {
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease !important;
+}

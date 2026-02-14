@@ -1,0 +1,15 @@
+{
+  "name": "influx-mcp",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "server.js",
+  "license": "MIT",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.24.3",
+    "dotenv": "^16.4.5",
+    "influx": "^5.11.0"
+  }
+}

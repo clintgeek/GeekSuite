@@ -1,0 +1,83 @@
+{
+  "slug": "guitar-intro-fingerpicking",
+  "template": "guided_steps_v1",
+  "instrumentSlug": "guitar",
+  "orderIndex": 18,
+  "meta": {
+    "title": "Introduction to Fingerpicking",
+    "subtitle": "Learn to pick individual strings for beautiful melodies!",
+    "category": "Fingerpicking Basics",
+    "difficulty": 2,
+    "audience": "kid",
+    "estimatedTimeMinutes": 18,
+    "xpReward": 125,
+    "tags": ["guitar", "intermediate", "fingerpicking", "technique", "melody"],
+    "imageUrl": "/assets/lessons/guitar/intro-fingerpicking/hero.svg"
+  },
+  "content": {
+    "objectives": [
+      "Learn proper fingerpicking hand position",
+      "Assign fingers to specific strings",
+      "Play simple fingerpicking patterns",
+      "Combine fingerpicking with chords"
+    ],
+    "steps": [
+      {
+        "id": "intro",
+        "type": "text",
+        "title": "A whole new sound!",
+        "body": "So far you've been strumming—hitting all the strings at once. That sounds great! But there's another way to play guitar: FINGERPICKING. This is when you pluck individual strings with your fingers to create beautiful, flowing melodies. It sounds magical and it's easier than you think!"
+      },
+      {
+        "id": "finger-assignment",
+        "type": "text",
+        "title": "Which finger plays which string?",
+        "body": "Here's the system: Your THUMB plays the 3 thick strings (6th, 5th, 4th). Your POINTER finger plays the 3rd string. Your MIDDLE finger plays the 2nd string. Your RING finger plays the 1st string (thinnest). Your pinky rests on the guitar body for support. This is the foundation of fingerpicking!"
+      },
+      {
+        "id": "thumb-practice",
+        "type": "text",
+        "title": "Practice with your thumb",
+        "body": "Make a C chord. Now use ONLY your thumb to pluck the 5th string (A string), then the 4th string (D string), then the 3rd string (G string). Repeat this pattern slowly: 5-4-3, 5-4-3, 5-4-3. Your thumb should move smoothly. This is called a 'bass line'!"
+      },
+      {
+        "id": "fingers-practice",
+        "type": "text",
+        "title": "Add your fingers",
+        "body": "Keep holding C. Now pluck: 3rd string (pointer), 2nd string (middle), 1st string (ring). Do this pattern: 3-2-1, 3-2-1, 3-2-1. Each finger should pluck its assigned string. This is the 'melody line.' Your fingers should feel relaxed and curved!"
+      },
+      {
+        "id": "basic-pattern",
+        "type": "text",
+        "title": "Your first fingerpicking pattern",
+        "body": "Now combine them! Hold C and play this pattern: Thumb(5th)-Pointer(3rd)-Middle(2nd)-Ring(1st)-Middle(2nd)-Pointer(3rd). Count: 1-2-3-4-5-6. This creates a flowing, harp-like sound. Play it slowly and evenly. This pattern works with ANY chord!",
+        "videoUrl": "https://www.youtube.com/embed/Z7xm_juNcPY"
+      },
+      {
+        "id": "with-chord-changes",
+        "type": "text",
+        "title": "Fingerpicking with chord changes",
+        "body": "Now try the pattern with different chords! Play the pattern 4 times on C, then switch to G and play it 4 times. The pattern stays the same—only the chord changes. This is how fingerpicking songs work! Try it with C-G-Am-F for a beautiful sound!"
+      },
+      {
+        "id": "travis-picking-intro",
+        "type": "text",
+        "title": "Bonus: Travis Picking",
+        "body": "Want to sound like a pro? There's a famous fingerpicking style called 'Travis Picking' where your thumb alternates between bass strings while your fingers play melody. It's used in country, folk, and blues! Watch this video to learn the pattern—it's easier to see than to explain!",
+        "videoUrl": "https://www.youtube.com/embed/ILuFldyZU50"
+      },
+      {
+        "id": "practice",
+        "type": "checkpoint",
+        "title": "Master the basic pattern",
+        "body": "Can you play the basic pattern (5-3-2-1-2-3) on C major without looking at your picking hand? Even if it's slow, that's great! Fingerpicking takes time to feel natural. Practice 5 minutes daily and soon your fingers will know exactly where to go!"
+      },
+      {
+        "id": "celebration",
+        "type": "celebration",
+        "title": "🎸 You're a fingerpicker now!",
+        "body": "Amazing! You just learned fingerpicking—one of the most beautiful techniques in guitar! 🌟 This opens up a whole new world of songs and styles. Fingerpicking lets you play melody and rhythm at the same time, like a one-person band! Keep practicing these patterns and soon you'll be playing songs that sound like magic! 🎵✨"
+      }
+    ]
+  }
+}

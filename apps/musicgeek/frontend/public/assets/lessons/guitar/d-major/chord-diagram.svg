@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240">
+  <!-- Title -->
+  <text x="120" y="20" text-anchor="middle" font-size="16" font-weight="bold" fill="#333">D</text>
+
+  <!-- Fretboard -->
+  <g transform="translate(35, 50)">
+    <line x1="0" y1="0" x2="0" y2="160" stroke="#333" stroke-width="1.5"/>
+    <line x1="30" y1="0" x2="30" y2="160" stroke="#333" stroke-width="1.5"/>
+    <line x1="60" y1="0" x2="60" y2="160" stroke="#333" stroke-width="1.5"/>
+    <line x1="90" y1="0" x2="90" y2="160" stroke="#333" stroke-width="1.5"/>
+    <line x1="120" y1="0" x2="120" y2="160" stroke="#333" stroke-width="1.5"/>
+    <line x1="150" y1="0" x2="150" y2="160" stroke="#333" stroke-width="1.5"/>
+    <line x1="0" y1="0" x2="150" y2="0" stroke="#333" stroke-width="3"/>
+    <line x1="0" y1="40" x2="150" y2="40" stroke="#333" stroke-width="1.5"/>
+    <line x1="0" y1="80" x2="150" y2="80" stroke="#333" stroke-width="1.5"/>
+    <line x1="0" y1="120" x2="150" y2="120" stroke="#333" stroke-width="1.5"/>
+    <line x1="0" y1="160" x2="150" y2="160" stroke="#333" stroke-width="1.5"/>
+    <text x="0" y="-10" text-anchor="middle" font-size="16" font-weight="bold" fill="#c00">X</text>
+    <text x="30" y="-10" text-anchor="middle" font-size="16" font-weight="bold" fill="#c00">X</text>
+    <circle cx="60" cy="-10" r="6" fill="none" stroke="#333" stroke-width="2"/>
+    <circle cx="90" cy="60" r="10" fill="#2563eb"/>
+    <text x="90" y="64" text-anchor="middle" font-size="12" font-weight="bold" fill="white">1</text>
+    <circle cx="120" cy="100" r="10" fill="#2563eb"/>
+    <text x="120" y="104" text-anchor="middle" font-size="12" font-weight="bold" fill="white">3</text>
+    <circle cx="150" cy="60" r="10" fill="#2563eb"/>
+    <text x="150" y="64" text-anchor="middle" font-size="12" font-weight="bold" fill="white">2</text>
+  </g>
+
+  <!-- String labels -->
+  <text x="35" y="220" text-anchor="middle" font-size="10" fill="#666">E</text>
+  <text x="65" y="220" text-anchor="middle" font-size="10" fill="#666">A</text>
+  <text x="95" y="220" text-anchor="middle" font-size="10" fill="#666">D</text>
+  <text x="125" y="220" text-anchor="middle" font-size="10" fill="#666">G</text>
+  <text x="155" y="220" text-anchor="middle" font-size="10" fill="#666">B</text>
+  <text x="185" y="220" text-anchor="middle" font-size="10" fill="#666">E</text>
+</svg>

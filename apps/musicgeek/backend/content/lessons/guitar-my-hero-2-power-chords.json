@@ -1,0 +1,74 @@
+{
+  "slug": "guitar-my-hero-2-power-chords",
+  "template": "guided_steps_v1",
+  "instrumentSlug": "guitar",
+  "orderIndex": 22,
+  "meta": {
+    "title": "My Hero - Power-Chord Edition",
+    "subtitle": "Turn your campfire version into a rock riff with power chords.",
+    "category": "Song Projects",
+    "difficulty": 2,
+    "audience": "both",
+    "estimatedTimeMinutes": 20,
+    "xpReward": 160,
+    "tags": ["guitar", "intermediate", "songs", "rock", "power-chords", "my-hero"],
+    "imageUrl": "/assets/lessons/guitar/my-hero-2-power-chords/hero.svg"
+  },
+  "content": {
+    "objectives": [
+      "Play rock-style power chords on the low strings",
+      "Keep a tight 8th-note downstroke groove",
+      "Switch cleanly between a small set of power-chord shapes"
+    ],
+    "steps": [
+      {
+        "id": "intro",
+        "type": "text",
+        "title": "From campfire to rock stage",
+        "body": "Open chords sound great, but rock bands often use power chords for extra punch. In this lesson you'll turn your My Hero-inspired progression into a heavier, low-string power-chord riff that feels much closer to the sound of a real rock anthem."
+      },
+      {
+        "id": "power-chord-shape",
+        "type": "text",
+        "title": "The power-chord shape",
+        "body": "A power chord (also called a \"5 chord\") uses just two or three notes: the root and the fifth. On the low E string, place your index finger on any fret, then your ring finger two frets higher on the A string. Strum only those two strings. That's your basic rock building block!"
+      },
+      {
+        "id": "single-chord-groove",
+        "type": "text",
+        "title": "Lock in the groove on one chord",
+        "body": "Pick one low-string power chord (for example, 3rd fret on the low E string). Strum it using straight 8th-note downstrokes: count \"1-and-2-and-3-and-4-and\" and strum down on every number and every \"and.\" Keep your wrist relaxed and your hand moving like a machine."
+      },
+      {
+        "id": "two-chord-switch",
+        "type": "text",
+        "title": "Add a second chord",
+        "body": "Now choose a second power chord a few frets away. Play 2 bars on chord 1 (8 downstrums per bar), then 2 bars on chord 2. Keep your right hand moving no matter what. If the left-hand switch is messy at first, slow down the tempo until it feels comfortable."
+      },
+      {
+        "id": "hero-loop",
+        "type": "text",
+        "title": "A My Hero-style riff loop",
+        "body": "Build a short loop with 3-4 power chords on the low strings. For example, you might play: Chord 1 (2 bars) - Chord 2 (1 bar) - Chord 3 (1 bar), then repeat. The exact frets aren't important here - what matters is that you feel a strong, driving rhythm that reminds you of the My Hero groove."
+      },
+      {
+        "id": "tighten-the-sound",
+        "type": "text",
+        "title": "Clean up noise and muting",
+        "body": "Use the underside of your fretting fingers and the edge of your picking hand to mute strings you don't want to hear. When you strum, you should mainly hear the two or three notes of your power chord, not a bunch of extra strings ringing. Rock rhythm guitar is all about control."
+      },
+      {
+        "id": "checkpoint",
+        "type": "checkpoint",
+        "title": "Power-chord My Hero loop",
+        "body": "Can you play your power-chord My Hero loop for at least 4 bars in a row without losing the 8th-note groove? Try it slowly first, then a little faster. If your arm gets tired, shake it out and try again. A strong, steady strumming hand is a big part of sounding like a rock guitarist."
+      },
+      {
+        "id": "celebration",
+        "type": "celebration",
+        "title": "🎸 You sound like a rock band!",
+        "body": "Nice! You've turned your simple My Hero chord progression into a real rock riff using power chords and tight rhythm. This is exactly how songs feel huge when played by a full band. In the next lessons, you'll shape this riff with muting and dynamics to get even closer to a Dave Grohl-style performance."
+      }
+    ]
+  }
+}

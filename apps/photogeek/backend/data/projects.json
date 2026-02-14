@@ -1,0 +1,704 @@
+[
+  {
+    "title": "Meet Your Camera: The Fundamentals",
+    "slug": "meet-your-camera",
+    "order": 1,
+    "description": "Your essential first step in photography! Learn what ISO, aperture, and shutter speed actually mean, why they matter, and how they work together to create your photos. This hands-on introduction will demystify your camera's core controls.",
+    "difficulty": "beginner",
+    "technique": {
+      "name": "Camera Fundamentals and Exposure Triangle",
+      "category": "fundamentals",
+      "difficulty": "beginner"
+    },
+    "subject": "Any subject in your home or yard",
+    "location": "Indoor or outdoor with good lighting",
+    "lighting": "Natural daylight or bright indoor lighting",
+    "cameraSettings": {
+      "mode": "Start with Auto, then experiment with P (Program)",
+      "aperture": "Various (we'll explore this)",
+      "shutterSpeed": "Various (we'll explore this)",
+      "iso": "Various (we'll explore this)"
+    },
+    "learningObjectives": [
+      "Understand what ISO is and how it affects your image brightness and quality",
+      "Learn what aperture (f-stop) means and how it controls light and depth of field",
+      "Discover what shutter speed is and how it freezes or blurs motion",
+      "Grasp the concept of exposure and how these three elements work together",
+      "Build confidence in moving beyond Auto mode"
+    ],
+    "tips": [
+      "**ISO Explained**: Think of ISO as your camera's sensitivity to light. Low ISO (100-400) = clean images but needs more light. High ISO (1600+) = works in dim light but adds grain/noise. Start at ISO 400 for daytime shooting.",
+      "**Aperture (f-stop) Explained**: The aperture is the opening in your lens that lets light through. Smaller f-numbers (f/1.8, f/2.8) = WIDER opening = more light + blurry backgrounds. Larger f-numbers (f/8, f/16) = smaller opening = less light + sharper backgrounds. It's counterintuitive but remember: small number = big hole!",
+      "**Shutter Speed Explained**: This is how long your camera's sensor is exposed to light. Fast speeds (1/500, 1/1000) freeze motion but let in less light. Slow speeds (1/30, 1 second) capture motion blur and let in more light. Below 1/60, you'll need steady hands or a tripod!",
+      "**Exposure in One Line**: Exposure is the total amount of light that reaches your sensor - too little and your photo is dark (underexposed), too much and it's washed out (overexposed). ISO, aperture, and shutter speed all control this together.",
+      "**Your First Experiment**: Take the same photo 3 times - once in Auto mode, once with high ISO (1600), and once with low ISO (100). Notice the difference in grain/noise. This is your first step to understanding your camera!",
+      "**The Exposure Triangle**: These three settings (ISO, aperture, shutter speed) work together like a seesaw - change one, and you need to adjust the others to keep the same exposure. We'll explore this relationship in future projects!"
+    ],
+    "estimatedTime": "45-60 minutes",
+    "xpReward": 150,
+    "tags": [
+      "fundamentals",
+      "iso",
+      "aperture",
+      "shutter-speed",
+      "exposure",
+      "beginner",
+      "camera-basics"
+    ]
+  },
+  {
+    "title": "Rule of Thirds Practice",
+    "slug": "rule-of-thirds-practice",
+    "order": 4,
+    "description": "Master the fundamental composition technique that will instantly improve your photos - the rule of thirds. Learn why our eyes are drawn to certain placements and how to use visual weight in your images.",
+    "difficulty": "beginner",
+    "technique": {
+      "name": "Rule of Thirds",
+      "category": "composition",
+      "difficulty": "beginner"
+    },
+    "subject": "Any subject (landscape, portrait, or object)",
+    "location": "Any location",
+    "lighting": "Any lighting",
+    "cameraSettings": {
+      "mode": "Any mode (Auto is fine)",
+      "aperture": "Any",
+      "shutterSpeed": "Any",
+      "iso": "Any"
+    },
+    "learningObjectives": [
+      "Understand the rule of thirds grid and why it works",
+      "Learn to position subjects at intersection points",
+      "Practice aligning horizons on grid lines",
+      "Develop an eye for balanced composition",
+      "Understand visual weight and how our eyes scan images"
+    ],
+    "tips": [
+      "**Why Rule of Thirds Works**: Our eyes naturally gravitate to these intersection points rather than dead center. Centering a subject can feel static and boring, while off-center placement creates visual interest and allows the viewer's eye to 'travel' through the image. This is based on centuries of art theory!",
+      "**The Science**: Studies show that when viewing images, our eyes follow predictable patterns (like an 'F' shape when reading). Placing important elements at these intersections aligns with how we naturally scan visual information.",
+      "Enable grid lines in your camera viewfinder/screen (check your camera's display settings)",
+      "Place main subject at grid intersections - this creates 'visual tension' that's more interesting than centering",
+      "Align horizons with top or bottom grid line (NOT the middle) - bottom third for interesting skies, top third for interesting foregrounds",
+      "Leave space in direction subject is facing/moving - this is called 'lead room' and gives context to the action",
+      "Take multiple shots with different placements and compare - you'll see the difference!",
+      "**Breaking the Rule**: Once you understand it, you can break it intentionally for effect. Centered subjects work great for symmetry, reflections, or creating a formal, powerful feeling. Rules are guidelines, not laws!"
+    ],
+    "estimatedTime": "20-30 minutes",
+    "xpReward": 75,
+    "tags": [
+      "composition",
+      "rule-of-thirds",
+      "beginner",
+      "fundamentals",
+      "visual-theory"
+    ]
+  },
+  {
+    "title": "Shallow Depth of Field",
+    "slug": "shallow-depth-of-field",
+    "order": 6,
+    "description": "Create beautiful blurred backgrounds (bokeh) by mastering aperture settings and depth of field control. Understand the physics of how your lens focuses light and why some areas are sharp while others are beautifully soft.",
+    "difficulty": "beginner",
+    "technique": {
+      "name": "Shallow Depth of Field and Bokeh",
+      "category": "aperture",
+      "difficulty": "beginner"
+    },
+    "subject": "Portrait or close-up object",
+    "location": "Any location with some distance to background",
+    "lighting": "Good lighting (avoid very dark conditions)",
+    "cameraSettings": {
+      "mode": "Aperture Priority (A/Av)",
+      "aperture": "f/1.8 - f/4.0 (widest your lens allows)",
+      "shutterSpeed": "Auto",
+      "iso": "100-400 in good light, higher if needed"
+    },
+    "learningObjectives": [
+      "Understand how aperture affects depth of field",
+      "Learn to use Aperture Priority mode",
+      "Create pleasing background blur (bokeh)",
+      "Master focus point selection",
+      "Understand the relationship between aperture, focal length, and subject distance"
+    ],
+    "tips": [
+      "**Depth of Field Explained**: This is the zone of acceptable sharpness in your photo. Shallow DOF means only a thin slice is sharp (great for portraits). Deep DOF means most of the scene is sharp (great for landscapes). You control this primarily with aperture!",
+      "**The Physics**: Wide apertures (small f-numbers like f/1.8) create a narrow cone of sharp focus. Light rays from out-of-focus areas spread out more, creating blur. This is why portrait lenses often have wide maximum apertures - to isolate subjects from backgrounds.",
+      "**What is Bokeh?**: Bokeh (pronounced 'boh-kay') is the aesthetic quality of the out-of-focus areas. Good bokeh is smooth and creamy, not harsh or distracting. It's affected by your lens design, aperture shape, and how far out of focus the background is.",
+      "Use the widest aperture your lens allows (lowest f-number) - f/1.8 is better than f/4 for maximum blur",
+      "Get close to your subject - the closer you are, the shallower the depth of field becomes",
+      "Create distance between subject and background - the farther the background, the more it blurs",
+      "Use longer focal length if available (50mm+) - telephoto lenses naturally create shallower DOF than wide angles",
+      "Focus precisely on subject's eyes for portraits - with shallow DOF, even slight misfocus is very noticeable",
+      "**The Three Factors**: Remember, depth of field is controlled by three things: aperture (smaller f-number = shallower), subject distance (closer = shallower), and focal length (longer lens = shallower). Use all three together for maximum effect!"
+    ],
+    "estimatedTime": "30 minutes",
+    "xpReward": 100,
+    "tags": [
+      "aperture",
+      "bokeh",
+      "depth-of-field",
+      "beginner",
+      "portrait",
+      "optics"
+    ]
+  },
+  {
+    "title": "Freezing Motion",
+    "slug": "freezing-motion",
+    "order": 8,
+    "description": "Learn to freeze fast-moving subjects with the right shutter speed settings. Understand how your camera's mechanical shutter works and why timing is everything in action photography.",
+    "difficulty": "beginner",
+    "technique": {
+      "name": "Fast Shutter Speed",
+      "category": "shutter-speed",
+      "difficulty": "beginner"
+    },
+    "subject": "Moving subject (person running, car, pet, water splash)",
+    "location": "Any location with action",
+    "lighting": "Bright lighting (outdoors or well-lit indoors)",
+    "cameraSettings": {
+      "mode": "Shutter Priority (S/Tv)",
+      "aperture": "Auto",
+      "shutterSpeed": "1/500 or faster (1/1000+ for very fast action)",
+      "iso": "Auto or 400-1600"
+    },
+    "learningObjectives": [
+      "Understand how shutter speed freezes motion",
+      "Learn to use Shutter Priority mode",
+      "Master the relationship between shutter speed and motion blur",
+      "Practice continuous autofocus for moving subjects",
+      "Understand the mechanical shutter and how it works"
+    ],
+    "tips": [
+      "**How the Shutter Works**: Your camera has a mechanical curtain (or electronic equivalent) that opens and closes to expose the sensor to light. Shutter speed is literally how long this curtain stays open. 1/500 means the shutter is open for 1/500th of a second - incredibly fast!",
+      "**Motion Blur Physics**: When the shutter is open, anything moving will travel across the frame, creating blur. Faster shutter speeds reduce this travel distance to nearly zero, 'freezing' the motion. The faster the subject, the faster the shutter speed needed.",
+      "**The Speed Guide**: Walking = 1/250, Jogging = 1/500, Running/Sports = 1/1000, Race cars/birds = 1/2000+. These are starting points - adjust based on results!",
+      "Use 1/500 for walking/jogging, 1/1000+ for running/sports, 1/2000+ for very fast subjects",
+      "Enable continuous autofocus (AI Servo on Canon, AF-C on Nikon/Sony) - this tracks moving subjects",
+      "Use burst mode to capture the perfect moment - action happens fast!",
+      "Increase ISO if image is too dark - fast shutter speeds let in less light, so you may need to compensate",
+      "Pan with the subject for better tracking - move your camera to follow the action",
+      "**Shutter Priority Mode**: In this mode (S or Tv), you set the shutter speed and the camera automatically adjusts aperture to get correct exposure. Perfect for action where motion control is your priority!",
+      "**Pro Tip**: Sometimes motion blur is artistic! Try 1/60 or 1/125 for a sense of movement while keeping the subject recognizable. This is called 'motion blur' and it's a creative choice, not a mistake!"
+    ],
+    "estimatedTime": "30-45 minutes",
+    "xpReward": 100,
+    "tags": [
+      "shutter-speed",
+      "action",
+      "sports",
+      "beginner",
+      "motion",
+      "timing"
+    ]
+  },
+  {
+    "title": "Golden Hour Portrait",
+    "slug": "golden-hour-portrait",
+    "order": 9,
+    "description": "Learn to capture stunning portraits during the magical golden hour, mastering backlighting and exposure compensation techniques while understanding how light quality changes throughout the day.",
+    "difficulty": "beginner",
+    "technique": {
+      "name": "Backlighting and Exposure Compensation",
+      "category": "lighting",
+      "difficulty": "beginner"
+    },
+    "subject": "Portrait",
+    "location": "Outdoors during golden hour (1 hour before sunset)",
+    "lighting": "Natural backlight from setting sun",
+    "cameraSettings": {
+      "mode": "Aperture Priority (A/Av)",
+      "aperture": "f/2.8 - f/4.0",
+      "shutterSpeed": "Auto (likely 1/250 - 1/500)",
+      "iso": "100-400",
+      "meteringMode": "Spot or Center-weighted"
+    },
+    "learningObjectives": [
+      "Understand how to expose for backlit subjects",
+      "Learn to use exposure compensation (+1 to +2 stops)",
+      "Create beautiful rim lighting effects",
+      "Master spot metering vs evaluative metering",
+      "Understand why golden hour light is special for portraits"
+    ],
+    "tips": [
+      "**Why Golden Hour?**: The hour before sunset (and after sunrise) provides soft, warm, directional light. The sun is low on the horizon, creating flattering shadows and warm tones. Midday sun is harsh and creates unflattering shadows under eyes and nose.",
+      "**Light Theory**: When you backlight a subject, you're creating 'rim light' - a glowing edge around them. This separates them from the background and creates depth. But your camera's meter gets confused and underexposes the face, which is why we need exposure compensation.",
+      "**Exposure Compensation Explained**: This tells your camera to make the image brighter (+) or darker (-) than it thinks is correct. In backlit situations, add +1 to +2 stops to properly expose your subject's face.",
+      "Shoot 1 hour before sunset for best golden light",
+      "Position subject with sun behind them at a 45-degree angle",
+      "Use exposure compensation to brighten the face without blowing out the background",
+      "Try spot metering on the subject's face to get accurate exposure",
+      "Experiment with lens flare for creative effects - position sun just outside frame edge",
+      "**Pro Tip**: The 'magic' happens because you're balancing two light sources - the bright backlight creating rim light, and the softer reflected light illuminating the face. This creates dimension and drama!"
+    ],
+    "estimatedTime": "30-45 minutes",
+    "xpReward": 100,
+    "tags": [
+      "portrait",
+      "golden-hour",
+      "backlighting",
+      "beginner",
+      "natural-light",
+      "exposure-compensation"
+    ]
+  },
+  {
+    "title": "Low Light Photography",
+    "slug": "low-light-photography",
+    "order": 10,
+    "description": "Master shooting in challenging low-light conditions by understanding the exposure triangle and ISO management. Learn when to push your camera's limits and when to embrace the darkness.",
+    "difficulty": "intermediate",
+    "technique": {
+      "name": "ISO and Exposure Triangle",
+      "category": "exposure",
+      "difficulty": "intermediate"
+    },
+    "subject": "Any subject in low light (indoor, evening, night)",
+    "location": "Low light environment",
+    "lighting": "Dim indoor lighting or twilight/night",
+    "cameraSettings": {
+      "mode": "Manual (M) or Aperture Priority (A/Av)",
+      "aperture": "f/1.8 - f/4.0 (wide open)",
+      "shutterSpeed": "1/60 or slower (use tripod if slower)",
+      "iso": "800-3200 (balance noise vs exposure)"
+    },
+    "learningObjectives": [
+      "Understand the exposure triangle (ISO, aperture, shutter speed) in depth",
+      "Learn to balance ISO for proper exposure without excessive noise",
+      "Master when to use high ISO vs longer shutter speed",
+      "Practice steady hand-holding techniques",
+      "Understand digital noise and how to manage it"
+    ],
+    "tips": [
+      "**The Exposure Triangle Deep Dive**: Think of exposure like filling a bucket with water. ISO = how sensitive the bucket is (higher ISO = fills faster but gets 'noisier'). Aperture = size of the faucet (wider = more water flow). Shutter Speed = how long you leave it on. All three work together to 'fill' your exposure!",
+      "**ISO and Digital Noise**: High ISO amplifies the sensor's signal, but it also amplifies electronic noise (like turning up a radio and hearing static). Modern cameras handle this better than ever, but there's always a tradeoff. ISO 100-400 = clean, ISO 800-1600 = slight grain, ISO 3200+ = noticeable noise but usable!",
+      "**The Reciprocal Rule**: For hand-holding, your shutter speed should be at least 1/focal length. With a 50mm lens, use 1/60 or faster. With a 200mm lens, use 1/250 or faster. This prevents camera shake blur.",
+      "Use widest aperture available - this is your first line of defense in low light",
+      "Increase ISO gradually until properly exposed - start at 800, then 1600, then 3200 as needed",
+      "Keep shutter speed at 1/60 or faster for hand-holding to avoid camera shake",
+      "Use a tripod for shutter speeds slower than 1/60 - this lets you use lower ISO for cleaner images",
+      "Shoot in RAW to recover details in post-processing - RAW files have much more data than JPEGs",
+      "Accept some noise - a sharp noisy photo beats a blurry clean one every time!",
+      "**When to Prioritize What**: If subject is moving, prioritize shutter speed. If subject is still and you have a tripod, prioritize low ISO. If hand-holding a still subject, find the balance between ISO and shutter speed using the reciprocal rule.",
+      "**The Tradeoff Triangle**: You can only pick two: Sharp (fast shutter), Clean (low ISO), or Bright (wide aperture). In low light, something has to give - usually ISO goes up or shutter speed goes down. Understanding this helps you make informed creative decisions!"
+    ],
+    "estimatedTime": "45 minutes",
+    "xpReward": 150,
+    "tags": [
+      "low-light",
+      "iso",
+      "exposure-triangle",
+      "intermediate",
+      "night",
+      "noise-management"
+    ]
+  },
+  {
+    "title": "Program Mode With Intent",
+    "slug": "program-mode-with-intent",
+    "order": 2,
+    "description": "Turn Program mode from a fancy Auto into a learning tool. Practice noticing how your camera chooses aperture, shutter speed, and ISO in different situations so you can later take control yourself.",
+    "difficulty": "beginner",
+    "technique": {
+      "name": "Program Mode and Exposure Awareness",
+      "category": "fundamentals",
+      "difficulty": "beginner"
+    },
+    "subject": "Everyday scenes at home, school, or outdoors",
+    "location": "Indoor and outdoor locations you visit regularly",
+    "lighting": "Mix of indoor and outdoor lighting",
+    "cameraSettings": {
+      "mode": "Program (P)",
+      "aperture": "Camera-chosen – notice how it changes",
+      "shutterSpeed": "Camera-chosen – notice how it changes",
+      "iso": "Auto, or ISO 400-800 indoors / 100-400 outdoors"
+    },
+    "learningObjectives": [
+      "Understand how Program mode differs from full Auto",
+      "Begin reading aperture, shutter speed, and ISO before and after each shot",
+      "See how the camera changes settings as the light and subject change",
+      "Build a habit of checking exposure settings instead of just the picture",
+      "Prepare for moving into Aperture Priority and Shutter Priority with confidence"
+    ],
+    "tips": [
+      "Switch from full Auto to Program (P) so you keep control of ISO and flash decisions while the camera chooses aperture and shutter.",
+      "Before you take a photo, quickly read the settings in your viewfinder or on the back screen – say them in your head: '1/125 at f/5.6, ISO 400'.",
+      "Photograph the same scene indoors and outdoors and compare how the camera changes ISO, aperture, and shutter speed.",
+      "Try a dark corner and then a bright window. How does shutter speed change? When does ISO jump up?",
+      "Review your images on the camera and check the info/EXIF screen – this is your training data for understanding what your camera is thinking.",
+      "If your camera supports Program Shift, gently rotate the main dial to see how it trades aperture for shutter speed while keeping exposure the same. This is the exposure triangle in action."
+    ],
+    "estimatedTime": "30-45 minutes",
+    "xpReward": 100,
+    "tags": [
+      "fundamentals",
+      "program-mode",
+      "exposure",
+      "beginner",
+      "camera-basics"
+    ]
+  },
+  {
+    "title": "Get in Focus: AF Modes & Points",
+    "slug": "af-modes-and-points",
+    "order": 3,
+    "description": "Learn how your camera decides what to focus on and take control using autofocus modes and focus points so your subject is sharp every time.",
+    "difficulty": "beginner",
+    "technique": {
+      "name": "Autofocus Modes and Focus Points",
+      "category": "fundamentals",
+      "difficulty": "beginner"
+    },
+    "subject": "Portraits and small objects at different distances",
+    "location": "Indoor or outdoor with good light",
+    "lighting": "Even, not-too-dim light so autofocus works reliably",
+    "cameraSettings": {
+      "mode": "Program (P) or Aperture Priority (A/Av)",
+      "aperture": "f/2.8 - f/5.6 for portraits if your lens allows",
+      "shutterSpeed": "Camera-chosen (aim for 1/125 or faster for people)",
+      "iso": "100-800 depending on light"
+    },
+    "learningObjectives": [
+      "Understand the difference between single-shot and continuous autofocus modes",
+      "Learn to manually choose a single focus point instead of letting the camera guess",
+      "Practice focusing on the eyes in portraits and keeping them sharp",
+      "Use focus-and-recompose when your subject is off-center",
+      "Build confidence that you can place focus exactly where you want it"
+    ],
+    "tips": [
+      "Set your camera to single-shot AF for still subjects and continuous AF for moving subjects (Canon calls these One Shot and AI Servo).",
+      "Switch from automatic point selection to a single AF point and move it over your subject's eye or the most important detail.",
+      "Practice with a friend or object at different distances – focus on the same spot each time and zoom in on playback to check sharpness.",
+      "Try focus-and-recompose: place the AF point over the eye, half-press to lock focus, then reframe while holding the shutter half-pressed before taking the shot.",
+      "Avoid very low light for this exercise at first – give the autofocus some contrast and light so you can learn without fighting the camera.",
+      "Watch how depth of field changes at different distances – very close subjects require more precise focusing because small errors are more obvious."
+    ],
+    "estimatedTime": "30-45 minutes",
+    "xpReward": 100,
+    "tags": [
+      "fundamentals",
+      "focus",
+      "autofocus",
+      "beginner",
+      "portraits"
+    ]
+  },
+  {
+    "title": "Lens Tour: Wide vs Telephoto",
+    "slug": "lens-tour-wide-vs-telephoto",
+    "order": 5,
+    "description": "Explore how your kit zoom (and aux telephoto adapter) changes perspective, background size, and distortion from wide-angle to telephoto.",
+    "difficulty": "beginner",
+    "technique": {
+      "name": "Focal Length and Perspective",
+      "category": "fundamentals",
+      "difficulty": "beginner"
+    },
+    "subject": "Portraits, buildings, and street scenes",
+    "location": "Outdoor areas with enough space to step forward and back",
+    "lighting": "Daylight or bright overcast for easy hand-held shooting",
+    "cameraSettings": {
+      "mode": "Program (P) or Aperture Priority (A/Av)",
+      "aperture": "f/4 - f/8 for balanced sharpness",
+      "shutterSpeed": "Camera-chosen (try to keep faster than 1/100 at the long end)",
+      "iso": "100-400 in daylight"
+    },
+    "learningObjectives": [
+      "See how wide-angle and telephoto focal lengths change perspective and background size",
+      "Understand why wide angles can distort faces up close while telephoto lenses flatten features",
+      "Learn to move your feet instead of only zooming with the lens",
+      "Compare how backgrounds look at 18mm, 35mm, 55mm, and with your aux telephoto adapter",
+      "Choose focal lengths intentionally for portraits, architecture, and scenes"
+    ],
+    "tips": [
+      "Photograph the same subject at 18mm, 35mm, 55mm, and with your aux telephoto adapter without changing your framing distance – then compare how the background changes.",
+      "For portraits, step back and zoom in – telephoto focal lengths are usually more flattering and give nicer background compression.",
+      "For architecture and interiors, use the wide end (18mm) but watch for bending vertical lines – keep the camera level to avoid exaggerated distortion.",
+      "Try a simple scene like a person in front of a background with recognizable elements (trees, buildings, signs) so changes in background size are easy to see.",
+      "Remember that longer focal lengths require faster shutter speeds to avoid camera shake – raise ISO if your shutter speed drops too low.",
+      "Think of focal length as a storytelling tool: wide to show environment, telephoto to isolate and simplify."
+    ],
+    "estimatedTime": "45-60 minutes",
+    "xpReward": 150,
+    "tags": [
+      "fundamentals",
+      "focal-length",
+      "composition",
+      "beginner",
+      "telephoto",
+      "wide-angle"
+    ]
+  },
+  {
+    "title": "Macro Nature Hunt",
+    "slug": "macro-nature-hunt",
+    "order": 7,
+    "description": "Use your aux macro lens to explore tiny worlds – leaves, flowers, textures, and everyday objects – while learning to control depth of field up close.",
+    "difficulty": "intermediate",
+    "technique": {
+      "name": "Close-Up and Macro Composition",
+      "category": "aperture",
+      "difficulty": "intermediate"
+    },
+    "subject": "Leaves, flowers, textures, and small objects",
+    "location": "Outdoors in your yard, garden, or a nearby park",
+    "lighting": "Bright open shade or soft overcast for even light",
+    "cameraSettings": {
+      "mode": "Aperture Priority (A/Av)",
+      "aperture": "f/2.8 - f/5.6 for dreamy blur, f/8 - f/11 for more detail",
+      "shutterSpeed": "Camera-chosen (aim for 1/125 or faster when hand-held)",
+      "iso": "100-800 depending on light"
+    },
+    "learningObjectives": [
+      "Understand how depth of field becomes extremely shallow at close focusing distances",
+      "Practice choosing apertures for either dreamy background blur or more detailed subjects",
+      "Learn to control backgrounds and avoid distractions in close-up compositions",
+      "Experiment with textures, patterns, and repeating shapes in nature",
+      "Develop steady hand-holding and breathing techniques for sharp macro shots"
+    ],
+    "tips": [
+      "Attach your aux macro lens to the kit zoom and start near the longer end of the zoom (around 35-55mm) to get more working distance.",
+      "Focus on the most important detail – the tip of a leaf, the center of a flower, the eye on a small object – and use single-point autofocus if possible.",
+      "Use open shade or cloudy light to avoid harsh shadows and blown highlights on shiny surfaces.",
+      "Watch your background carefully – even a tiny bright spot can be very distracting when the subject fills the frame.",
+      "Try both wide apertures (for soft, dreamy backgrounds) and stopped-down apertures like f/8-f/11 (for more of the subject in focus) and compare the results.",
+      "Brace your elbows against your body or a solid object, and gently exhale as you press the shutter to reduce camera shake."
+    ],
+    "estimatedTime": "45-60 minutes",
+    "xpReward": 150,
+    "tags": [
+      "aperture",
+      "macro",
+      "close-up",
+      "nature",
+      "intermediate",
+      "depth-of-field"
+    ]
+  },
+  {
+    "title": "Open Shade & Window Light Portraits",
+    "slug": "open-shade-window-light-portraits",
+    "order": 11,
+    "description": "Learn to find soft, flattering light for portraits using open shade outdoors and window light indoors – no flash required.",
+    "difficulty": "beginner",
+    "technique": {
+      "name": "Open Shade and Window Light",
+      "category": "lighting",
+      "difficulty": "beginner"
+    },
+    "subject": "Portraits of family or friends in soft light",
+    "location": "Outdoors in open shade or indoors next to a bright window",
+    "lighting": "Soft open shade or diffused window light (no direct sun on the face)",
+    "cameraSettings": {
+      "mode": "Aperture Priority (A/Av)",
+      "aperture": "f/2.8 - f/4.0 (or widest your lens allows)",
+      "shutterSpeed": "Camera-chosen (aim for 1/125 or faster for people)",
+      "iso": "100-800 depending on light"
+    },
+    "learningObjectives": [
+      "Learn how to find open shade and flattering window light for portraits",
+      "Understand why soft, directional light is better than harsh overhead sun",
+      "Practice positioning your subject relative to the light for catchlights and depth",
+      "Use aperture to control background blur in portrait situations",
+      "Build confidence shooting portraits without needing flash"
+    ],
+    "tips": [
+      "Look for open shade – areas that are bright but not in direct sun, like under trees, porches, or on the shadow side of a building.",
+      "Indoors, place your subject near a window and turn them slowly until you see a nice gradient of light across the face with catchlights in the eyes.",
+      "Avoid having your subject stand in patchy light (sun spots on the face) or directly under harsh overhead light.",
+      "Use a wide aperture (low f-number) to blur the background and separate your subject from clutter.",
+      "Watch the background carefully – move your subject or your own position to remove distractions behind the head.",
+      "Take a few frames where the subject looks toward the window and a few where the light is more from the side for moodier portraits."
+    ],
+    "estimatedTime": "30-45 minutes",
+    "xpReward": 100,
+    "tags": [
+      "lighting",
+      "portraits",
+      "beginner",
+      "open-shade",
+      "window-light"
+    ]
+  },
+  {
+    "title": "Everyday Storytelling: A Day in 10 Photos",
+    "slug": "everyday-storytelling-10-photos",
+    "order": 12,
+    "description": "Tell the story of a real day in your life using just 10 photos, practicing variety in composition, perspective, and moments.",
+    "difficulty": "beginner",
+    "technique": {
+      "name": "Visual Storytelling and Sequencing",
+      "category": "composition",
+      "difficulty": "beginner"
+    },
+    "subject": "A normal day (school, weekend, or family event)",
+    "location": "Wherever your day happens – home, school, outdoors",
+    "lighting": "Varies throughout the day",
+    "cameraSettings": {
+      "mode": "Program (P) or Aperture Priority (A/Av)",
+      "aperture": "f/2.8 - f/8 depending on the scene",
+      "shutterSpeed": "Camera-chosen (raise ISO if it drops too low)",
+      "iso": "100-1600 depending on light"
+    },
+    "learningObjectives": [
+      "Learn to think in sequences instead of single photos",
+      "Practice mixing wide, medium, and close-up shots to tell a story",
+      "Use composition (rule of thirds, leading lines, framing) in real-world moments",
+      "Learn to edit yourself by choosing only 10 images from many",
+      "Document real life, not just posed photos"
+    ],
+    "tips": [
+      "Plan to photograph one real day: getting ready, traveling, activities, quiet moments, and the end of the day.",
+      "Aim for variety: wide shots that show environment, medium shots of people doing things, and close-ups of details (hands, objects, textures).",
+      "Use the rule of thirds and leading lines from earlier projects to guide where you place subjects.",
+      "Don't worry about perfection – focus on capturing genuine moments and expressions.",
+      "At the end of the day, review all your photos and pick only 10 that best tell the story from start to finish.",
+      "Lay out your 10 photos in order and ask: does someone who wasn't there understand what this day felt like?"
+    ],
+    "estimatedTime": "One day (shooting) + 20-30 minutes (editing)",
+    "xpReward": 200,
+    "tags": [
+      "composition",
+      "storytelling",
+      "beginner",
+      "documentary",
+      "everyday-life"
+    ]
+  },
+  {
+    "title": "Panning & Intentional Motion Blur",
+    "slug": "panning-intentional-motion-blur",
+    "order": 13,
+    "description": "Go beyond freezing motion and learn to add energy to your photos by panning with moving subjects to create sharp subjects against streaked backgrounds.",
+    "difficulty": "intermediate",
+    "technique": {
+      "name": "Panning and Motion Blur",
+      "category": "shutter-speed",
+      "difficulty": "intermediate"
+    },
+    "subject": "Moving subjects like bikes, cars, runners, or pets",
+    "location": "Sidewalk, park path, or road where subjects move in a straight line",
+    "lighting": "Daylight or bright overcast for comfortable shutter speeds",
+    "cameraSettings": {
+      "mode": "Shutter Priority (S/Tv)",
+      "aperture": "Auto",
+      "shutterSpeed": "Around 1/30 - 1/60 to start (slower for more blur)",
+      "iso": "100-400 in daylight"
+    },
+    "learningObjectives": [
+      "Understand how slower shutter speeds create motion blur",
+      "Learn to pan smoothly with a moving subject",
+      "Balance subject sharpness with background streaks for a sense of speed",
+      "Practice continuous autofocus and burst shooting for action",
+      "Control shutter speed intentionally instead of always trying to freeze motion"
+    ],
+    "tips": [
+      "Start with subjects moving at a predictable speed in a straight line, like bikes or cars on a road.",
+      "Stand parallel to the subject's path, plant your feet, and rotate your upper body smoothly as they pass.",
+      "Set a starting shutter speed around 1/30–1/60 and adjust based on results – slower means more blur.",
+      "Use continuous autofocus (AI Servo/AF-C) and burst mode to increase your chances of getting a sharp subject.",
+      "Follow through: keep moving the camera smoothly even after you press the shutter.",
+      "Review your shots zoomed in – look for one sharp subject with a nicely blurred background, and notice how the sense of motion changes with shutter speed."
+    ],
+    "estimatedTime": "45-60 minutes",
+    "xpReward": 150,
+    "tags": [
+      "shutter-speed",
+      "motion",
+      "panning",
+      "intermediate",
+      "action"
+    ]
+  },
+  {
+    "title": "Tripod Night Lights & Long Exposures",
+    "slug": "tripod-night-lights",
+    "order": 14,
+    "description": "Use your tripod to capture magical night scenes with long exposures – car light trails, glowing streets, and smooth water.",
+    "difficulty": "intermediate",
+    "technique": {
+      "name": "Long Exposure Night Photography",
+      "category": "shutter-speed",
+      "difficulty": "intermediate"
+    },
+    "subject": "City streets, traffic, fairgrounds, or lit buildings at night",
+    "location": "Safe spot with some lights and moving subjects (cars, people, rides)",
+    "lighting": "Blue hour or full night with artificial lights",
+    "cameraSettings": {
+      "mode": "Manual (M) or Shutter Priority (S/Tv)",
+      "aperture": "Around f/8 - f/11 for sharpness and starburst effects",
+      "shutterSpeed": "1-10 seconds on a tripod (longer if needed)",
+      "iso": "100-400 for clean files"
+    },
+    "learningObjectives": [
+      "Learn to stabilize the camera on a tripod for long exposures",
+      "Understand how multi-second shutter speeds affect moving lights and water",
+      "Balance aperture, shutter speed, and ISO at night for clean, detailed images",
+      "Experiment with light trails, smooth water, and light painting",
+      "Gain confidence shooting at night instead of avoiding it"
+    ],
+    "tips": [
+      "Set up your tripod in a safe, stable spot where you won't be bumped.",
+      "Use a self-timer or remote to avoid camera shake when pressing the shutter.",
+      "Start at around f/8, ISO 100, and a 5-second shutter speed, then adjust based on brightness.",
+      "Look for moving lights (cars, rides, people with phones) to create interesting trails in your frame.",
+      "If your highlights (street lamps, signs) are blowing out, shorten the shutter speed or stop down to f/11-f/16.",
+      "Try pointing the camera at traffic for light trails, or at a fountain/river for smooth, silky water."
+    ],
+    "estimatedTime": "60-90 minutes (including setup and experimentation)",
+    "xpReward": 200,
+    "tags": [
+      "shutter-speed",
+      "long-exposure",
+      "night",
+      "intermediate",
+      "tripod"
+    ]
+  },
+  {
+    "title": "Polarizer Magic: Reflections & Deep Skies",
+    "slug": "polarizer-magic-reflections-skies",
+    "order": 15,
+    "description": "Discover what your circular polarizer (CPL) can do: cut reflections from glass and water, deepen blue skies, and make foliage colors pop.",
+    "difficulty": "intermediate",
+    "technique": {
+      "name": "Using a Polarizing Filter",
+      "category": "lighting",
+      "difficulty": "intermediate"
+    },
+    "subject": "Windows, water surfaces, blue skies, and foliage",
+    "location": "Outdoors on a bright day near reflective surfaces or open sky",
+    "lighting": "Sunny or bright partly cloudy daylight",
+    "cameraSettings": {
+      "mode": "Aperture Priority (A/Av)",
+      "aperture": "f/5.6 - f/11 for general scenes",
+      "shutterSpeed": "Camera-chosen (watch it drop as the CPL darkens the scene)",
+      "iso": "100-400 in daylight"
+    },
+    "learningObjectives": [
+      "Understand how a circular polarizer affects reflections and sky color",
+      "Practice rotating the filter to control the strength of the effect",
+      "Learn when a polarizer helps and when it can hurt (like uneven skies)",
+      "See how the CPL reduces light and affects shutter speed and ISO",
+      "Use the polarizer creatively for richer colors and cleaner reflections"
+    ],
+    "tips": [
+      "Mount your CPL on the lens, then look through the viewfinder or screen while slowly rotating the front ring.",
+      "Photograph a window or water surface and rotate the filter – watch reflections disappear and reappear.",
+      "On a sunny day with blue sky, point your camera about 90 degrees away from the sun for the strongest darkening effect.",
+      "Be careful with very wide-angle shots – the sky can look unevenly dark if the polarization is strongest in one part of the frame.",
+      "Remember that the polarizer cuts light – expect slower shutter speeds or higher ISO than without it.",
+      "Try before/after pairs for each scene so you can see clearly what the CPL is doing."
+    ],
+    "estimatedTime": "45-60 minutes",
+    "xpReward": 150,
+    "tags": [
+      "lighting",
+      "filter",
+      "polarizer",
+      "intermediate",
+      "reflections",
+      "sky"
+    ]
+  }
+]

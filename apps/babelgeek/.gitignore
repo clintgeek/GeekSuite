@@ -1,0 +1,22 @@
+# Node artifacts
+node_modules/
+.npm/
+
+# Logs
+*.log
+logs/
+
+# Env files
+.env
+.env.local
+
+# Build outputs
+dist/
+frontend/dev-dist/
+frontend/dist/
+backend/dist/
+
+# Editor junk
+.DS_Store
+.idea/
+.vscode/

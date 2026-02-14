@@ -1,0 +1,83 @@
+{
+  "slug": "guitar-d-major-chord",
+  "template": "guided_steps_v1",
+  "instrumentSlug": "guitar",
+  "orderIndex": 9,
+  "meta": {
+    "title": "The D Major Chord",
+    "subtitle": "Learn the triangle-shaped D chord—your third chord!",
+    "category": "Essential Chords",
+    "difficulty": 1,
+    "audience": "kid",
+    "estimatedTimeMinutes": 12,
+    "xpReward": 75,
+    "tags": ["guitar", "beginner", "chords", "d-major"],
+    "imageUrl": "/assets/lessons/guitar/d-major/hero.svg"
+  },
+  "content": {
+    "objectives": [
+      "Learn the D major chord shape",
+      "Make a triangle pattern with your fingers",
+      "Strum only the bottom 4 strings",
+      "Play the brightest-sounding chord yet!"
+    ],
+    "steps": [
+      {
+        "id": "intro",
+        "type": "text",
+        "title": "Your third chord!",
+        "body": "You know E minor and A major—now let's add D MAJOR! This chord is special because your fingers make a little triangle shape. It's also the brightest, happiest-sounding chord you've learned so far. And guess what? You only strum 4 strings!"
+      },
+      {
+        "id": "see-diagram",
+        "type": "text+image",
+        "title": "The D major chord diagram",
+        "body": "Here's what D major looks like. Your three fingers make a triangle pointing down! Notice the X's on the two thickest strings? That means we DON'T play those strings—only the bottom 4 strings get strummed.",
+        "imageUrl": "/assets/lessons/guitar/d-major/chord-diagram.svg",
+        "videoUrl": "https://www.youtube.com/embed/xHiJ1jAkemM"
+      },
+      {
+        "id": "finger-one",
+        "type": "text",
+        "title": "Place your first finger",
+        "body": "Put your POINTER finger (1st finger) on the 2nd fret of the 3rd string (G string). This is the top point of your triangle!"
+      },
+      {
+        "id": "finger-two",
+        "type": "text",
+        "title": "Add your second finger",
+        "body": "Put your RING finger (3rd finger) on the 3rd fret of the 2nd string (B string). This is the bottom-right point of your triangle. Notice it's one fret higher than your pointer finger!"
+      },
+      {
+        "id": "finger-three",
+        "type": "text",
+        "title": "Add your third finger",
+        "body": "Put your MIDDLE finger (2nd finger) on the 2nd fret of the 1st string (high E string—the thinnest one). This is the bottom-left point of your triangle. Now you have a complete triangle shape!"
+      },
+      {
+        "id": "check-position",
+        "type": "text",
+        "title": "Check your triangle",
+        "body": "Look at your hand—your fingers should form a triangle pattern. Pointer on top, middle and ring fingers below. Make sure each finger is curved and pressing firmly behind the fret. The two thickest strings should be untouched."
+      },
+      {
+        "id": "strum-technique",
+        "type": "text",
+        "title": "Strum only 4 strings",
+        "body": "Here's the tricky part: Start your strum from the 4th string (D string), NOT from the top. Strum down across only 4 strings. Try to avoid hitting those two thick strings—they'll make the chord sound muddy!"
+      },
+      {
+        "id": "practice",
+        "type": "checkpoint",
+        "title": "Practice D major",
+        "body": "Strum your D major chord a few times. Listen for a bright, clear, happy sound. If it sounds buzzy, check that your fingers are pressing firmly and not touching other strings. This chord takes practice to get clean!"
+      },
+      {
+        "id": "celebration",
+        "type": "celebration",
+        "title": "🎸 Three chords unlocked!",
+        "body": "Fantastic! You now know THREE guitar chords—Em, A, and D! 🎉 Do you know what that means? You can play THOUSANDS of songs! Most popular music uses just these three chords. You're not a beginner anymore—you're becoming a real guitarist! Keep practicing that triangle shape! 🌟"
+      }
+    ]
+  }
+}

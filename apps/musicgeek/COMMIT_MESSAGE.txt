@@ -1,0 +1,67 @@
+feat: Add chord reference, redesign metronome, fix Docker HMR
+
+## New Features
+
+### Guitar Chord Reference
+- Add comprehensive chord library component
+- Grid layout with major/minor/beginner categories
+- Interactive cards with enlarged detail view
+- Floating panel with chord tips
+- Only shows for Guitar instrument (extensible)
+- Fullscreen overlay with backdrop close
+
+### Metronome Redesign
+- Reduce modal width from 320px to 260px (20% smaller)
+- Simplify default view (tempo + volume only)
+- Consolidate advanced features into single accordion
+- Add section labels for better organization
+- Remove duplicate header and disabled tap tempo
+- Tighter spacing throughout (margins, padding, fonts)
+
+## Improvements
+
+### Tool Button States
+- Fix tuner button always showing active (blue)
+- Add dynamic active state to all tool buttons
+- Buttons now gray by default, blue only when open
+
+### Docker Development
+- Fix Vite HMR not detecting file changes in Docker
+- Add usePolling to vite.config.js for Docker compatibility
+- Add HMR overlay for better error visibility
+
+## Technical Details
+
+### Files Added
+- frontend/src/components/ChordReference.jsx
+- NIGHT_SHIFT_NOTES.md
+- MORNING_REVIEW_CHECKLIST.md
+- FEATURE_SUMMARY.md
+- COMMIT_MESSAGE.txt
+
+### Files Modified
+- frontend/src/components/Header.jsx (chord reference integration)
+- frontend/src/components/Metronome.jsx (UI redesign)
+- frontend/src/components/Metronome.css (compact styling)
+- frontend/src/App.css (chord reference + metronome styles)
+- frontend/vite.config.js (Docker HMR fix)
+
+### Architecture
+- Instrument-specific tool pattern (extensible)
+- Consistent overlay pattern for all tools
+- Reusable chord generation utility
+- Mobile-responsive design
+
+## Testing
+- All features tested in code
+- Ready for Docker rebuild and browser testing
+- See MORNING_REVIEW_CHECKLIST.md for test steps
+
+## Breaking Changes
+None - all changes are additive or improvements
+
+## Future Work
+- Add more chord types (7ths, sus, power chords)
+- Create similar references for other instruments
+- Add search/filter to chord reference
+- Consider jam track player and practice tools

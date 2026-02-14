@@ -1,0 +1,81 @@
+{
+  "slug": "guitar-chord-transitions",
+  "template": "guided_steps_v1",
+  "instrumentSlug": "guitar",
+  "orderIndex": 17,
+  "meta": {
+    "title": "Mastering Chord Transitions",
+    "subtitle": "Build speed and smoothness switching between any chords!",
+    "category": "Technique & Practice",
+    "difficulty": 2,
+    "audience": "kid",
+    "estimatedTimeMinutes": 18,
+    "xpReward": 125,
+    "tags": ["guitar", "intermediate", "chord-changes", "practice", "technique"],
+    "imageUrl": "/assets/lessons/guitar/chord-transitions/hero.svg"
+  },
+  "content": {
+    "objectives": [
+      "Practice efficient chord change techniques",
+      "Build muscle memory for common transitions",
+      "Increase speed without losing accuracy",
+      "Learn practice strategies for any chord change"
+    ],
+    "steps": [
+      {
+        "id": "intro",
+        "type": "text",
+        "title": "Time to get smooth and fast!",
+        "body": "You know all the essential chords—amazing! But what separates beginners from pros? SMOOTH, FAST chord changes. Right now you might pause between chords. That's normal! Today we'll learn techniques to make your transitions lightning-fast. This is how you go from 'playing chords' to 'playing songs'!"
+      },
+      {
+        "id": "the-one-minute-drill",
+        "type": "text",
+        "title": "The One-Minute Drill",
+        "body": "Here's the secret practice method: Pick two chords (let's say G and C). Set a timer for 1 minute. Switch back and forth as many times as you can: G-C-G-C-G-C. Count how many switches you make. Rest for 30 seconds, then try again and beat your score! Do this daily and watch your speed explode!"
+      },
+      {
+        "id": "common-finger-trick",
+        "type": "text",
+        "title": "The common finger trick",
+        "body": "Many chord changes share common fingers! For example, G to C: your ring finger stays on the 3rd fret of the high E string for BOTH chords! Keep it there and just move the other fingers. This makes the change way faster. Look for these 'anchor fingers' in every transition!"
+      },
+      {
+        "id": "hardest-transitions",
+        "type": "text",
+        "title": "The toughest transitions",
+        "body": "Some changes are harder than others. The trickiest ones: G to D, C to G, and D to A. Why? Because you're moving ALL your fingers to completely different positions. These need extra practice. Spend 2 minutes daily on your hardest transition and it'll become easy!"
+      },
+      {
+        "id": "visualization",
+        "type": "text",
+        "title": "Mental practice: Visualization",
+        "body": "Here's a pro technique: While strumming one chord, LOOK at your fingers and think about the next chord shape. Your brain starts preparing the movement before you actually do it! This is called 'looking ahead' and it's how pros play without thinking!"
+      },
+      {
+        "id": "slow-to-fast",
+        "type": "text",
+        "title": "The slow-to-fast method",
+        "body": "Never practice fast and sloppy! Start SLOW and perfect. Play G-D-Em-A super slowly, making each chord perfect. Once you can do it 5 times perfectly, speed up just a little. Repeat. This builds clean technique. Fast and sloppy = bad habits. Slow and perfect = future speed!"
+      },
+      {
+        "id": "practice-routine",
+        "type": "text",
+        "title": "Your daily practice routine",
+        "body": "Here's a 5-minute daily routine: (1) One-minute drill on your hardest transition. (2) Play G-D-Em-A progression 3 times slowly. (3) Play C-G-Am-F progression 3 times slowly. (4) Pick any song and play it once. Do this every day and you'll improve faster than you can imagine!"
+      },
+      {
+        "id": "practice",
+        "type": "checkpoint",
+        "title": "Test your transitions",
+        "body": "Can you play the G-D-Em-A progression without any pauses between chords? Even if it's slow, that's perfect! Can you do the one-minute drill and switch at least 10 times? These exercises might not feel like 'playing songs,' but they're the foundation that makes playing songs easy!"
+      },
+      {
+        "id": "celebration",
+        "type": "celebration",
+        "title": "🎸 You're building pro-level skills!",
+        "body": "Incredible! You just learned the practice techniques that professional guitarists use! 🌟 Smooth chord changes don't happen by accident—they come from smart practice. The one-minute drill, anchor fingers, and slow-to-fast method are techniques you'll use forever. Keep practicing these drills and soon you'll be switching chords without even thinking about it! 🔥🎵"
+      }
+    ]
+  }
+}

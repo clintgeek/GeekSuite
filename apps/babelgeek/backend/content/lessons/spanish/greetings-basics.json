@@ -1,0 +1,110 @@
+{
+  "slug": "spanish-greetings-basics",
+  "template": "guided_steps_v1",
+  "languageCode": "es",
+  "level": "A1",
+  "orderIndex": 1,
+  "meta": {
+    "title": "¡Hola! - Greetings",
+    "subtitle": "Learn to greet people in Spanish",
+    "category": "Basics",
+    "difficulty": 1,
+    "audience": "both",
+    "estimatedTimeMinutes": 8,
+    "xpReward": 50,
+    "tags": ["greetings", "basics", "beginner"],
+    "imageUrl": "/assets/lessons/spanish/greetings/hero.svg"
+  },
+  "content": {
+    "learningOutcomes": [
+      "Say hello and goodbye in Spanish",
+      "Greet people at different times of day",
+      "Ask 'how are you?' and respond"
+    ],
+    "vocabulary": ["hola", "adiós", "buenos días", "buenas tardes", "buenas noches", "¿cómo estás?", "bien", "mal"],
+    "steps": [
+      {
+        "id": "intro",
+        "type": "text+image",
+        "title": "Welcome to Spanish!",
+        "body": "Spanish is spoken by over 500 million people worldwide. Let's start with the most essential skill - saying hello! 🌍",
+        "imageUrl": "/assets/lessons/spanish/greetings/world-map.svg"
+      },
+      {
+        "id": "hola",
+        "type": "text+audio",
+        "title": "¡Hola!",
+        "body": "The most universal Spanish greeting is **hola** (hello). You can use it anytime, anywhere, with anyone!\n\nPronunciation tip: The 'h' is silent in Spanish, so it sounds like 'OH-lah'.",
+        "audioPhrase": "Hola",
+        "phonetic": "OH-lah"
+      },
+      {
+        "id": "time-greetings",
+        "type": "text+audio",
+        "title": "Time of Day Greetings",
+        "body": "Spanish has specific greetings for different times:\n\n• **Buenos días** - Good morning (until noon)\n• **Buenas tardes** - Good afternoon (noon to sunset)\n• **Buenas noches** - Good evening/night",
+        "audioPhrase": "Buenos días. Buenas tardes. Buenas noches."
+      },
+      {
+        "id": "listen-repeat-1",
+        "type": "listen_repeat",
+        "title": "Listen & Repeat",
+        "phrase": "¡Hola! Buenos días.",
+        "translation": "Hello! Good morning.",
+        "audioPhrase": "¡Hola! Buenos días."
+      },
+      {
+        "id": "como-estas",
+        "type": "text+audio",
+        "title": "¿Cómo estás?",
+        "body": "To ask 'How are you?' in casual conversation:\n\n**¿Cómo estás?** - How are you? (informal)\n**¿Cómo está usted?** - How are you? (formal)",
+        "audioPhrase": "¿Cómo estás? ¿Cómo está usted?"
+      },
+      {
+        "id": "responses",
+        "type": "text+audio",
+        "title": "Common Responses",
+        "body": "When someone asks how you are:\n\n• **Bien, gracias** - Good, thanks\n• **Muy bien** - Very good\n• **Más o menos** - So-so\n• **Mal** - Bad",
+        "audioPhrase": "Bien, gracias. Muy bien. Más o menos. Mal."
+      },
+      {
+        "id": "match-1",
+        "type": "matching",
+        "title": "Match the Pairs",
+        "pairs": [
+          { "left": "Hola", "right": "Hello" },
+          { "left": "Buenos días", "right": "Good morning" },
+          { "left": "Buenas noches", "right": "Good night" },
+          { "left": "¿Cómo estás?", "right": "How are you?" }
+        ]
+      },
+      {
+        "id": "adios",
+        "type": "text+audio",
+        "title": "Saying Goodbye",
+        "body": "To say goodbye:\n\n• **Adiós** - Goodbye\n• **Hasta luego** - See you later\n• **Hasta mañana** - See you tomorrow\n• **Chao** - Bye (casual, from Italian 'ciao')",
+        "audioPhrase": "Adiós. Hasta luego. Hasta mañana. Chao."
+      },
+      {
+        "id": "listen-repeat-2",
+        "type": "listen_repeat",
+        "title": "Listen & Repeat",
+        "phrase": "Bien, gracias. ¡Hasta luego!",
+        "translation": "Good, thanks. See you later!",
+        "audioPhrase": "Bien, gracias. ¡Hasta luego!"
+      },
+      {
+        "id": "checkpoint",
+        "type": "checkpoint",
+        "title": "Quick Check",
+        "body": "You've learned:\n✓ How to say hello (Hola)\n✓ Time-based greetings\n✓ How to ask and answer 'How are you?'\n✓ How to say goodbye"
+      },
+      {
+        "id": "celebration",
+        "type": "celebration",
+        "title": "🎉 ¡Excelente!",
+        "body": "You just completed your first Spanish lesson! You can now greet anyone in Spanish. Keep practicing these phrases - you'll use them every day! 🌟\n\n**Pro tip:** Try greeting people in Spanish today!"
+      }
+    ]
+  }
+}

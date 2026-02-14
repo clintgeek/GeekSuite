@@ -1,0 +1,74 @@
+{
+  "slug": "guitar-my-hero-3-grohl-rhythm",
+  "template": "guided_steps_v1",
+  "instrumentSlug": "guitar",
+  "orderIndex": 23,
+  "meta": {
+    "title": "My Hero - Grohl Rhythm Engine",
+    "subtitle": "Add palm muting and dynamics to make your riff breathe.",
+    "category": "Technique & Expression",
+    "difficulty": 3,
+    "audience": "both",
+    "estimatedTimeMinutes": 20,
+    "xpReward": 170,
+    "tags": ["guitar", "intermediate", "rock", "muting", "dynamics", "my-hero"],
+    "imageUrl": "/assets/lessons/guitar/my-hero-3-grohl-rhythm/hero.svg"
+  },
+  "content": {
+    "objectives": [
+      "Use palm muting to create tight verse-style parts",
+      "Open up your strumming for big chorus moments",
+      "Control dynamics to tell a \"quiet-loud\" story"
+    ],
+    "steps": [
+      {
+        "id": "intro",
+        "type": "text",
+        "title": "What makes Dave Grohl sound huge?",
+        "body": "A lot of the magic in My Hero is not complicated notes - it's the way the rhythm guitar moves between tight, controlled verses and exploding choruses. In this lesson you'll use palm muting and dynamics to turn your power-chord loop into something that feels much more like the real song."
+      },
+      {
+        "id": "palm-mute-review",
+        "type": "text",
+        "title": "Quick palm-muting review",
+        "body": "Rest the side of your picking hand lightly on the strings near the bridge, right where the strings meet the metal. Strum your low-string power chord. You should hear a chunky, \"chug-chug\" sound instead of a full ring. If it's too dead, move your hand a little closer to the neck. If it's too bright, move slightly toward the bridge."
+      },
+      {
+        "id": "muted-verse-pattern",
+        "type": "text",
+        "title": "Verse: tight and muted",
+        "body": "Take the power-chord My Hero loop from the previous lesson and play it with palm muting the entire time. Use steady 8th-note downstrokes but keep the sound controlled and low to the strings. Imagine you're playing along with a drummer on the kick and snare. This is your verse feel."
+      },
+      {
+        "id": "open-chorus-pattern",
+        "type": "text",
+        "title": "Chorus: open and huge",
+        "body": "Now play the same loop again but lift your palm completely off the strings. Let the chords ring out fully and strum a little harder. Keep the rhythm identical - same tempo, same 8th-note grid - but let the sound get much bigger. This contrast between muted and open is what makes the chorus explode."
+      },
+      {
+        "id": "accent-beats",
+        "type": "text",
+        "title": "Add backbeat accents",
+        "body": "While you're playing your 8th-note groove, try hitting beats 2 and 4 a little harder than the others. Count \"1 2 3 4\" and make 2 and 4 pop out. This locks you in with the snare drum and gives the riff a stronger, more professional feel."
+      },
+      {
+        "id": "verse-to-chorus-switch",
+        "type": "text",
+        "title": "Smooth verse-to-chorus changes",
+        "body": "Practice playing 2 bars of muted \"verse\" riff followed by 2 bars of open \"chorus\" riff. The only thing that changes is your right-hand touch. Your timing and strumming motion stay exactly the same. No pauses, no tempo jumps - just a smooth lift from quiet to loud."
+      },
+      {
+        "id": "checkpoint",
+        "type": "checkpoint",
+        "title": "Your own quiet-loud engine",
+        "body": "Can you loop 2 bars muted and 2 bars open for at least 4 cycles in a row without losing the beat? Listen for a clear difference between the \"verse\" sound (tight, controlled) and \"chorus\" sound (big, ringing). If you can feel that contrast, you're starting to think like a rock rhythm guitarist."
+      },
+      {
+        "id": "celebration",
+        "type": "celebration",
+        "title": "🎸 You control the energy!",
+        "body": "Great job! You just learned how to shape a riff using palm muting, open strums, and accents - the same tools players like Dave Grohl rely on. You're not just playing the right chords anymore - you're controlling the energy of the song."
+      }
+    ]
+  }
+}

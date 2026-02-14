@@ -1,0 +1,29 @@
+{
+  "name": "photogeek",
+  "version": "1.0.0",
+  "description": "Photography learning and project companion app",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "sync:lessons": "cd backend && node scripts/seedProjects.js"
+  },
+  "keywords": [
+    "photography",
+    "learning",
+    "education",
+    "camera",
+    "dslr"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

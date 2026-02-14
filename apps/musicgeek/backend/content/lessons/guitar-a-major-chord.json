@@ -1,0 +1,83 @@
+{
+  "slug": "guitar-a-major-chord",
+  "template": "guided_steps_v1",
+  "instrumentSlug": "guitar",
+  "orderIndex": 6,
+  "meta": {
+    "title": "Your Second Chord: A Major",
+    "subtitle": "Learn the bright and happy A chord—just 3 fingers!",
+    "category": "First Chords",
+    "difficulty": 1,
+    "audience": "kid",
+    "estimatedTimeMinutes": 12,
+    "xpReward": 75,
+    "tags": ["guitar", "beginner", "chords", "a-major"],
+    "imageUrl": "/assets/lessons/guitar/a-major/hero.svg"
+  },
+  "content": {
+    "objectives": [
+      "Learn the A major chord shape",
+      "Place 3 fingers on the 2nd fret",
+      "Strum only the bottom 5 strings",
+      "Make a clear, bright sound"
+    ],
+    "steps": [
+      {
+        "id": "intro",
+        "type": "text",
+        "title": "Time for chord #2!",
+        "body": "You already know E minor—now let's learn A MAJOR! This chord sounds bright and happy. It uses 3 fingers, all on the same fret. The cool part? You only strum 5 strings instead of all 6!"
+      },
+      {
+        "id": "see-diagram",
+        "type": "text+image",
+        "title": "The A major chord diagram",
+        "body": "Here's what A major looks like. You'll use 3 fingers—middle (2), ring (3), and pinky (4)—all on the 2nd fret. Notice the X on the thickest string? That means DON'T play that string!",
+        "imageUrl": "/assets/lessons/guitar/a-major/chord-diagram.svg",
+        "videoUrl": "https://www.youtube.com/embed/n-hZ7z5oSWk"
+      },
+      {
+        "id": "finger-one",
+        "type": "text",
+        "title": "Place your first finger",
+        "body": "Put your MIDDLE finger (2nd finger) on the 2nd fret of the 4th string (D string). Press down firmly behind the fret. This is the same string you used for E minor!"
+      },
+      {
+        "id": "finger-two",
+        "type": "text",
+        "title": "Add your second finger",
+        "body": "Put your RING finger (3rd finger) on the 2nd fret of the 3rd string (G string). Now you have two fingers side by side on the 2nd fret."
+      },
+      {
+        "id": "finger-three",
+        "type": "text",
+        "title": "Add your third finger",
+        "body": "Put your PINKY finger (4th finger) on the 2nd fret of the 2nd string (B string). All three fingers are now on the 2nd fret, lined up like little soldiers!"
+      },
+      {
+        "id": "check-position",
+        "type": "text",
+        "title": "Check your chord shape",
+        "body": "Look at your hand—you should have 3 fingers on the 2nd fret, on strings 4, 3, and 2. Your pinky should be relaxed and out of the way. The thickest string (Low E) should NOT be touched."
+      },
+      {
+        "id": "strum-technique",
+        "type": "text",
+        "title": "Strum only 5 strings",
+        "body": "Here's the tricky part: Start your strum from the 5th string (A string), NOT the thickest string. Strum down across 5 strings. Try to avoid hitting that thick Low E string—it doesn't belong in this chord!"
+      },
+      {
+        "id": "practice",
+        "type": "checkpoint",
+        "title": "Practice A major",
+        "body": "Strum your A major chord a few times. Listen for a bright, happy sound. If any strings buzz or sound muted, check that your fingers are pressing firmly and curved. Take your time—this chord takes practice!"
+      },
+      {
+        "id": "celebration",
+        "type": "celebration",
+        "title": "🎉 You know 2 chords!",
+        "body": "Amazing work! You now know TWO guitar chords—E minor and A major! 🎸 That's huge! Most popular songs only use 3-4 chords, so you're already halfway to playing real music. Keep practicing these shapes until your fingers remember them!"
+      }
+    ]
+  }
+}

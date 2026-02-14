@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+  <!-- Background -->
+  <rect width="800" height="600" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="400" y="60" font-family="Arial, sans-serif" font-size="32" font-weight="bold" text-anchor="middle" fill="#333">
+    Standard Guitar Tuning
+  </text>
+
+  <!-- Subtitle -->
+  <text x="400" y="95" font-family="Arial, sans-serif" font-size="16" text-anchor="middle" fill="#666">
+    From thickest (6th) to thinnest (1st) string
+  </text>
+
+  <!-- Guitar neck representation -->
+  <rect x="100" y="140" width="600" height="300" fill="#f5f5f5" stroke="#999" stroke-width="2" rx="10"/>
+
+  <!-- Strings with labels -->
+  <!-- String 6 (Low E) -->
+  <line x1="120" y1="170" x2="680" y2="170" stroke="#333" stroke-width="4"/>
+  <text x="70" y="175" font-family="Arial, sans-serif" font-size="20" font-weight="bold" text-anchor="end" fill="#333">6</text>
+  <text x="720" y="175" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="#d32f2f">E</text>
+  <text x="760" y="175" font-family="Arial, sans-serif" font-size="14" fill="#666">(82.41 Hz)</text>
+
+  <!-- String 5 (A) -->
+  <line x1="120" y1="210" x2="680" y2="210" stroke="#333" stroke-width="3.5"/>
+  <text x="70" y="215" font-family="Arial, sans-serif" font-size="20" font-weight="bold" text-anchor="end" fill="#333">5</text>
+  <text x="720" y="215" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="#1976d2">A</text>
+  <text x="760" y="215" font-family="Arial, sans-serif" font-size="14" fill="#666">(110 Hz)</text>
+
+  <!-- String 4 (D) -->
+  <line x1="120" y1="250" x2="680" y2="250" stroke="#333" stroke-width="3"/>
+  <text x="70" y="255" font-family="Arial, sans-serif" font-size="20" font-weight="bold" text-anchor="end" fill="#333">4</text>
+  <text x="720" y="255" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="#388e3c">D</text>
+  <text x="760" y="255" font-family="Arial, sans-serif" font-size="14" fill="#666">(146.83 Hz)</text>
+
+  <!-- String 3 (G) -->
+  <line x1="120" y1="290" x2="680" y2="290" stroke="#333" stroke-width="2.5"/>
+  <text x="70" y="295" font-family="Arial, sans-serif" font-size="20" font-weight="bold" text-anchor="end" fill="#333">3</text>
+  <text x="720" y="295" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="#f57c00">G</text>
+  <text x="760" y="295" font-family="Arial, sans-serif" font-size="14" fill="#666">(196 Hz)</text>
+
+  <!-- String 2 (B) -->
+  <line x1="120" y1="330" x2="680" y2="330" stroke="#333" stroke-width="2"/>
+  <text x="70" y="335" font-family="Arial, sans-serif" font-size="20" font-weight="bold" text-anchor="end" fill="#333">2</text>
+  <text x="720" y="335" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="#7b1fa2">B</text>
+  <text x="760" y="335" font-family="Arial, sans-serif" font-size="14" fill="#666">(246.94 Hz)</text>
+
+  <!-- String 1 (High E) -->
+  <line x1="120" y1="370" x2="680" y2="370" stroke="#333" stroke-width="1.5"/>
+  <text x="70" y="375" font-family="Arial, sans-serif" font-size="20" font-weight="bold" text-anchor="end" fill="#333">1</text>
+  <text x="720" y="375" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="#d32f2f">E</text>
+  <text x="760" y="375" font-family="Arial, sans-serif" font-size="14" fill="#666">(329.63 Hz)</text>
+
+  <!-- Mnemonic -->
+  <rect x="150" y="470" width="500" height="80" fill="#e3f2fd" stroke="#1976d2" stroke-width="2" rx="8"/>
+  <text x="400" y="500" font-family="Arial, sans-serif" font-size="18" font-weight="bold" text-anchor="middle" fill="#1976d2">
+    Memory Tip:
+  </text>
+  <text x="400" y="530" font-family="Arial, sans-serif" font-size="20" text-anchor="middle" fill="#333">
+    <tspan font-weight="bold" fill="#d32f2f">E</tspan>ddie
+    <tspan font-weight="bold" fill="#1976d2">A</tspan>te
+    <tspan font-weight="bold" fill="#388e3c">D</tspan>ynamite,
+    <tspan font-weight="bold" fill="#f57c00">G</tspan>ood
+    <tspan font-weight="bold" fill="#7b1fa2">B</tspan>ye
+    <tspan font-weight="bold" fill="#d32f2f">E</tspan>ddie
+  </text>
+</svg>

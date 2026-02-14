@@ -1,0 +1,69 @@
+{
+  "slug": "spanish-a1-beginner",
+  "languageCode": "es",
+  "level": "A1",
+  "template": "linear_units_v1",
+  "isDefault": true,
+  "title": "Spanish for Beginners",
+  "subtitle": "Start your Spanish journey from zero",
+  "meta": {
+    "description": "A complete beginner's path to Spanish. Learn greetings, introductions, numbers, and everyday phrases.",
+    "estimatedHours": 20,
+    "lessonsCount": 30,
+    "imageUrl": "/assets/paths/spanish-a1.svg"
+  },
+  "content": {
+    "units": [
+      {
+        "id": "basics",
+        "title": "The Basics",
+        "subtitle": "Greetings, introductions, and your first words",
+        "lessons": [
+          "spanish-greetings-basics",
+          "spanish-introductions",
+          "spanish-numbers-1-10"
+        ]
+      },
+      {
+        "id": "everyday",
+        "title": "Everyday Phrases",
+        "subtitle": "Common expressions for daily life",
+        "lessons": [
+          "spanish-common-phrases",
+          "spanish-questions-basics",
+          "spanish-polite-expressions"
+        ]
+      },
+      {
+        "id": "people-places",
+        "title": "People & Places",
+        "subtitle": "Describe yourself and your surroundings",
+        "lessons": [
+          "spanish-family-members",
+          "spanish-colors",
+          "spanish-days-months"
+        ]
+      },
+      {
+        "id": "food-drink",
+        "title": "Food & Drink",
+        "subtitle": "Order at restaurants and talk about food",
+        "lessons": [
+          "spanish-food-basics",
+          "spanish-at-restaurant",
+          "spanish-drinks"
+        ]
+      },
+      {
+        "id": "verbs-intro",
+        "title": "First Verbs",
+        "subtitle": "Essential action words",
+        "lessons": [
+          "spanish-ser-estar",
+          "spanish-present-tense-ar",
+          "spanish-common-verbs"
+        ]
+      }
+    ]
+  }
+}

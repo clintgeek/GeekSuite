@@ -1,0 +1,34 @@
+version: "3.9"
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    command: npm run dev -- --host 0.0.0.0
+    ports:
+      - "4081:5173"
+    environment:
+      VITE_API_BASE_URL: http://backend:4094/api
+      VITE_DEV_API_PROXY: http://backend:4094
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: npm run dev
+    ports:
+      - "5001:4094"
+    environment:
+      NODE_ENV: development
+      PORT: 4094
+      JWT_SECRET: change-me
+      CORS_ORIGIN: http://localhost:4081,http://localhost:5194,http://localhost:5183,http://localhost:5173,https://flockgeek.clintgeek.com
+      MONGODB_URI: mongodb://localhost:27017/flockgeek?authSource=admin
+    volumes:
+      - ./backend:/app
+      - /app/node_modules

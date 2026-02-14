@@ -1,0 +1,81 @@
+{
+  "slug": "guitar-four-chord-songs",
+  "template": "guided_steps_v1",
+  "instrumentSlug": "guitar",
+  "orderIndex": 13,
+  "meta": {
+    "title": "Four-Chord Songs",
+    "subtitle": "Play the most famous chord progression in music history!",
+    "category": "Playing Songs",
+    "difficulty": 2,
+    "audience": "kid",
+    "estimatedTimeMinutes": 20,
+    "xpReward": 150,
+    "tags": ["guitar", "intermediate", "songs", "chord-progression", "famous"],
+    "imageUrl": "/assets/lessons/guitar/four-chord-songs/hero.svg"
+  },
+  "content": {
+    "objectives": [
+      "Play the I-V-vi-IV progression",
+      "Learn the most popular chord pattern in music",
+      "Switch smoothly between all four chords",
+      "Play songs you hear on the radio"
+    ],
+    "steps": [
+      {
+        "id": "intro",
+        "type": "text",
+        "title": "The magic four-chord progression",
+        "body": "Ready to blow your mind? There's ONE chord progression that appears in hundreds of hit songs—from pop to rock to country. It's called the 'Four-Chord Song' and it uses G, D, Em, and A. Once you learn this pattern, you'll hear it EVERYWHERE!"
+      },
+      {
+        "id": "the-pattern",
+        "type": "text",
+        "title": "The famous pattern",
+        "body": "Here it is: G (4 strums) → D (4 strums) → Em (4 strums) → A (4 strums). That's it! This simple pattern is in songs like 'Let It Be,' 'No Woman No Cry,' 'With or Without You,' and literally hundreds more. Let's break it down!"
+      },
+      {
+        "id": "part-one",
+        "type": "text",
+        "title": "Part 1: G to D",
+        "body": "Start with G major. Strum down 4 times: 1-2-3-4. Now switch to D. Strum 4 times: 1-2-3-4. Practice just this part until it's smooth. The switch from G to D is tricky because you're moving all three fingers!"
+      },
+      {
+        "id": "part-two",
+        "type": "text",
+        "title": "Part 2: Em to A",
+        "body": "Now try Em (4 strums) to A (4 strums). This switch is easier because both chords use fingers on the 2nd fret. Practice this part separately. Once you've got it, you're ready to put it all together!"
+      },
+      {
+        "id": "full-progression",
+        "type": "text",
+        "title": "The complete progression",
+        "body": "Now play the whole thing: G → D → Em → A. That's 16 total strums. Don't worry if you need to pause between chords at first—that's normal! The goal is to play it all the way through without stopping. This is the pattern that powers thousands of songs!"
+      },
+      {
+        "id": "add-rhythm",
+        "type": "text",
+        "title": "Add the down-up pattern",
+        "body": "Ready to level up? Instead of 4 down-strums per chord, try the down-up pattern: DOWN-up-DOWN-up for each chord. So: G (DOWN-up-DOWN-up) → D (DOWN-up-DOWN-up) → Em (DOWN-up-DOWN-up) → A (DOWN-up-DOWN-up). Now it sounds like a real song!"
+      },
+      {
+        "id": "loop-it",
+        "type": "text",
+        "title": "Loop the progression",
+        "body": "Here's the secret: Real songs REPEAT this pattern over and over! Try playing it 4 times in a row without stopping: G-D-Em-A, G-D-Em-A, G-D-Em-A, G-D-Em-A. Congratulations—you just played a complete song structure!"
+      },
+      {
+        "id": "practice",
+        "type": "checkpoint",
+        "title": "Master the progression",
+        "body": "Can you play the four-chord progression (G-D-Em-A) at least twice in a row without stopping? Even if it's slow, that's perfect! This is THE most important chord progression in modern music. Once you have this down, you can play along with countless songs!"
+      },
+      {
+        "id": "celebration",
+        "type": "celebration",
+        "title": "🎵 You can play HUNDREDS of songs!",
+        "body": "AMAZING! You just learned the most famous chord progression in music history! 🎸🎉 Seriously—this G-D-Em-A pattern (or variations of it) appears in hundreds of hit songs. Next time you hear a song on the radio, try playing this progression along with it. You'll be shocked how often it fits! You're not just learning guitar—you're unlocking the secret code of popular music! 🌟🔥🎶"
+      }
+    ]
+  }
+}

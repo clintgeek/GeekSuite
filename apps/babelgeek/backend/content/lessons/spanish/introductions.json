@@ -1,0 +1,130 @@
+{
+  "slug": "spanish-introductions",
+  "template": "guided_steps_v1",
+  "languageCode": "es",
+  "level": "A1",
+  "orderIndex": 2,
+  "meta": {
+    "title": "Introducing Yourself",
+    "subtitle": "Learn to introduce yourself in Spanish",
+    "category": "Basics",
+    "difficulty": 1,
+    "audience": "both",
+    "estimatedTimeMinutes": 10,
+    "xpReward": 50,
+    "tags": ["introductions", "basics", "beginner", "names"],
+    "imageUrl": "/assets/lessons/spanish/introductions/hero.svg"
+  },
+  "content": {
+    "learningOutcomes": [
+      "Introduce yourself by name",
+      "Ask someone's name",
+      "Say where you're from",
+      "Use basic pleasantries"
+    ],
+    "vocabulary": ["me llamo", "soy", "¿cómo te llamas?", "mucho gusto", "encantado/a", "¿de dónde eres?", "soy de"],
+    "steps": [
+      {
+        "id": "intro",
+        "type": "text",
+        "title": "Making Connections",
+        "body": "Meeting new people is exciting! In this lesson, you'll learn how to introduce yourself and start conversations in Spanish. 🤝"
+      },
+      {
+        "id": "me-llamo",
+        "type": "text+audio",
+        "title": "My Name Is...",
+        "body": "There are two common ways to say your name:\n\n• **Me llamo...** - My name is... (literally: 'I call myself')\n• **Soy...** - I am...\n\nExample: **Me llamo María** or **Soy María**",
+        "audioPhrase": "Me llamo María. Soy María."
+      },
+      {
+        "id": "listen-repeat-1",
+        "type": "listen_repeat",
+        "title": "Listen & Repeat",
+        "phrase": "¡Hola! Me llamo Carlos.",
+        "translation": "Hello! My name is Carlos.",
+        "audioPhrase": "¡Hola! Me llamo Carlos."
+      },
+      {
+        "id": "asking-name",
+        "type": "text+audio",
+        "title": "What's Your Name?",
+        "body": "To ask someone's name:\n\n**Informal:** ¿Cómo te llamas? (How do you call yourself?)\n**Formal:** ¿Cómo se llama usted?\n\nOr simply: **¿Cuál es tu nombre?** (What is your name?)",
+        "audioPhrase": "¿Cómo te llamas? ¿Cómo se llama usted?"
+      },
+      {
+        "id": "mucho-gusto",
+        "type": "text+audio",
+        "title": "Nice to Meet You!",
+        "body": "After introductions, say:\n\n• **Mucho gusto** - Nice to meet you (most common)\n• **Encantado** - Delighted (if you're male)\n• **Encantada** - Delighted (if you're female)\n• **Es un placer** - It's a pleasure",
+        "audioPhrase": "Mucho gusto. Encantado. Encantada. Es un placer."
+      },
+      {
+        "id": "fill-blank-1",
+        "type": "fill_blank",
+        "title": "Complete the Sentence",
+        "sentence": "¡Hola! ___ llamo Ana. ¿Cómo ___ llamas?",
+        "blanks": ["Me", "te"],
+        "hint": "Use 'Me' for yourself, 'te' for the other person"
+      },
+      {
+        "id": "where-from",
+        "type": "text+audio",
+        "title": "Where Are You From?",
+        "body": "To ask and answer about origin:\n\n**¿De dónde eres?** - Where are you from? (informal)\n**Soy de...** - I am from...\n\nExample: **Soy de Estados Unidos** (I'm from the United States)",
+        "audioPhrase": "¿De dónde eres? Soy de Estados Unidos."
+      },
+      {
+        "id": "countries",
+        "type": "text+image",
+        "title": "Countries in Spanish",
+        "body": "Common country names:\n\n• Estados Unidos - United States\n• México - Mexico\n• España - Spain\n• Inglaterra - England\n• Francia - France\n• Alemania - Germany",
+        "imageUrl": "/assets/lessons/spanish/introductions/countries.svg"
+      },
+      {
+        "id": "multiple-choice-1",
+        "type": "multiple_choice",
+        "title": "Quick Quiz",
+        "question": "How do you ask 'What's your name?' informally?",
+        "options": [
+          "¿Cómo te llamas?",
+          "¿Cómo está usted?",
+          "¿De dónde eres?",
+          "¿Qué tal?"
+        ],
+        "correctIndex": 0
+      },
+      {
+        "id": "full-intro",
+        "type": "listen_repeat",
+        "title": "Full Introduction",
+        "phrase": "¡Hola! Me llamo Ana. Soy de México. Mucho gusto.",
+        "translation": "Hello! My name is Ana. I'm from Mexico. Nice to meet you.",
+        "audioPhrase": "¡Hola! Me llamo Ana. Soy de México. Mucho gusto."
+      },
+      {
+        "id": "match-1",
+        "type": "matching",
+        "title": "Match the Pairs",
+        "pairs": [
+          { "left": "Me llamo", "right": "My name is" },
+          { "left": "¿Cómo te llamas?", "right": "What's your name?" },
+          { "left": "Mucho gusto", "right": "Nice to meet you" },
+          { "left": "Soy de", "right": "I'm from" }
+        ]
+      },
+      {
+        "id": "checkpoint",
+        "type": "checkpoint",
+        "title": "Great Progress!",
+        "body": "You've learned:\n✓ Two ways to say your name\n✓ How to ask someone's name\n✓ Pleasantries after meeting\n✓ How to say where you're from"
+      },
+      {
+        "id": "celebration",
+        "type": "celebration",
+        "title": "🎉 ¡Fantástico!",
+        "body": "You can now introduce yourself completely in Spanish! Next time you meet a Spanish speaker, try out your new skills. They'll be impressed! 🌟\n\n**Challenge:** Practice introducing yourself out loud 3 times today!"
+      }
+    ]
+  }
+}

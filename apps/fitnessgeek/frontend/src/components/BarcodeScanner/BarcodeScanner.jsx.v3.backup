@@ -1,0 +1,964 @@
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  Box,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  Typography,
+  CircularProgress,
+  Alert,
+  IconButton,
+  TextField,
+  Chip
+} from '@mui/material';
+import {
+  Close as CloseIcon,
+  Keyboard as KeyboardIcon,
+  CheckCircle as CheckCircleIcon
+} from '@mui/icons-material';
+import { fitnessGeekService } from '../../services/fitnessGeekService';
+import './BarcodeScanner.css';
+
+const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [manualBarcode, setManualBarcode] = useState('');
+  const [scannedCode, setScannedCode] = useState(null);
+  const [isScanning, setIsScanning] = useState(false);
+  const [isManualMode, setIsManualMode] = useState(false);
+  const [scanHistory, setScanHistory] = useState([]);
+
+  const scannerRef = useRef(null);
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+
+  // Load ZXing library dynamically
+  useEffect(() => {
+    if (!window.ZXing) {
+      const script = document.createElement('script');
+      script.src = 'https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js';
+      script.async = true;
+      document.body.appendChild(script);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (open) {
+      loadScanHistory();
+      startScanner();
+    } else {
+      stopScanner();
+    }
+  }, [open]);
+
+  useEffect(() => {
+    return () => {
+      stopScanner();
+    };
+  }, []);
+
+  const startScanner = async () => {
+    if (isScanning || isManualMode) return;
+
+    try {
+      setIsScanning(true);
+      setError(null);
+
+      // Wait for ZXing to load
+      let attempts = 0;
+      while (!window.ZXing && attempts < 50) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        attempts++;
+      }
+
+      if (!window.ZXing) {
+        throw new Error('Failed to load ZXing library');
+      }
+
+      // Simple constraints - just like v2
+      const constraints = {
+        video: {
+          facingMode: 'environment',
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      streamRef.current = stream;
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+
+        // Initialize ZXing scanner
+        const codeReader = new window.ZXing.BrowserMultiFormatReader();
+        scannerRef.current = codeReader;
+
+        // Start decoding
+        codeReader.decodeFromVideoDevice(
+          null,
+          videoRef.current,
+          (result, err) => {
+            if (result) {
+              handleBarcodeDetected(result.text);
+            }
+          }
+        );
+      }
+    } catch (err) {
+      console.error('Scanner error:', err);
+      setError(err.message || 'Failed to start scanner');
+      setIsScanning(false);
+    }
+  };
+
+  const stopScanner = () => {
+    if (scannerRef.current) {
+      try {
+        scannerRef.current.reset();
+      } catch (err) {
+        console.error('Error resetting scanner:', err);
+      }
+      scannerRef.current = null;
+    }
+
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+
+    setIsScanning(false);
+  };
+
+  const handleBarcodeDetected = async (barcode) => {
+    if (!barcode || scannedCode) return;
+
+    console.log('Barcode detected:', barcode);
+    setScannedCode(barcode);
+    saveToHistory(barcode);
+
+    // Lookup the product
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const result = await fitnessGeekService.lookupBarcode(barcode);
+      
+      if (result.success && result.data) {
+        onBarcodeScanned(result.data);
+        onClose();
+      } else {
+        setError(result.message || 'Product not found');
+        setTimeout(() => {
+          setScannedCode(null);
+          setError(null);
+        }, 2000);
+      }
+    } catch (err) {
+      console.error('Barcode lookup error:', err);
+      setError('Failed to lookup product. Please try manual entry.');
+      setTimeout(() => {
+        setScannedCode(null);
+        setError(null);
+      }, 2000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadScanHistory = () => {
+    try {
+      const history = JSON.parse(localStorage.getItem('barcodeScanHistory') || '[]');
+      setScanHistory(history.slice(0, 5));
+    } catch (err) {
+      console.error('Error loading scan history:', err);
+    }
+  };
+
+  const saveToHistory = (barcode) => {
+    try {
+      const history = JSON.parse(localStorage.getItem('barcodeScanHistory') || '[]');
+      const newHistory = [barcode, ...history.filter(item => item !== barcode)].slice(0, 10);
+      localStorage.setItem('barcodeScanHistory', JSON.stringify(newHistory));
+      setScanHistory(newHistory.slice(0, 5));
+    } catch (err) {
+      console.error('Error saving to history:', err);
+    }
+  };
+
+  const handleManualSubmit = async () => {
+    if (!manualBarcode.trim()) return;
+    await handleBarcodeDetected(manualBarcode.trim());
+  };
+
+  const handleHistoryClick = async (barcode) => {
+    await handleBarcodeDetected(barcode);
+        setUseNativeDetector(true);
+        setDiagnostics(prev => ({ ...prev, detectorType: 'native' }));
+        
+        // IMPORTANT: Samsung S24/S25 hide camera labels until permissions are granted
+        // Request a dummy stream first to unlock camera labels
+        try {
+          const dummyStream = await navigator.mediaDevices.getUserMedia({ video: true });
+          dummyStream.getTracks().forEach(track => track.stop());
+          addDiagnostic('Camera permission granted', 'success');
+        } catch (err) {
+          addDiagnostic('Camera permission needed', 'info');
+        }
+        
+        // Get all video input devices to find the best camera for barcode scanning
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(device => device.kind === 'videoinput');
+        
+        if (videoDevices.length > 0) {
+          addDiagnostic(`Found ${videoDevices.length} cameras`, 'info');
+          
+          // Store all cameras for selection
+          const cameraList = videoDevices.map(device => ({
+            id: device.deviceId,
+            label: device.label || `Camera ${videoDevices.indexOf(device) + 1}`
+          }));
+          setCameras(cameraList);
+          
+          // Try to find the main/telephoto camera (best for barcode scanning)
+          // Avoid ultra-wide and macro cameras
+          const mainCamera = videoDevices.find(device => {
+            const label = device.label.toLowerCase();
+            return (label.includes('back') || label.includes('rear')) &&
+                   !label.includes('ultra') &&
+                   !label.includes('wide') &&
+                   !label.includes('macro');
+          });
+          
+          if (mainCamera) {
+            setSelectedCamera(mainCamera.deviceId);
+            addDiagnostic(`Main camera: ${mainCamera.label}`, 'success');
+          } else {
+            // Fallback to any back camera
+            const backCamera = videoDevices.find(device => 
+              device.label.toLowerCase().includes('back') ||
+              device.label.toLowerCase().includes('rear')
+            );
+            setSelectedCamera(backCamera ? backCamera.deviceId : videoDevices[0].deviceId);
+            addDiagnostic(`Using: ${backCamera ? backCamera.label : videoDevices[0].label}`, 'info');
+          }
+        } else {
+          setCameras([{ id: 'environment', label: 'Back Camera' }]);
+          setSelectedCamera('environment');
+        }
+        return;
+      } else {
+        addDiagnostic('Using html5-qrcode fallback', 'info');
+        setDiagnostics(prev => ({ ...prev, detectorType: 'html5-qrcode' }));
+      }
+      
+      const devices = await Html5Qrcode.getCameras();
+      console.log('Available cameras:', devices);
+      setCameras(devices);
+      addDiagnostic(`Found ${devices.length} camera(s)`, 'success');
+      
+      // Auto-select back camera if available
+      const backCamera = devices.find(device => 
+        device.label.toLowerCase().includes('back') ||
+        device.label.toLowerCase().includes('rear') ||
+        device.label.toLowerCase().includes('environment')
+      );
+      
+      if (backCamera) {
+        setSelectedCamera(backCamera.id);
+        addDiagnostic(`Auto-selected: ${backCamera.label}`, 'info');
+      } else if (devices.length > 0) {
+        // Use last camera (usually back on mobile)
+        setSelectedCamera(devices[devices.length - 1].id);
+        addDiagnostic(`Selected: ${devices[devices.length - 1].label}`, 'info');
+      }
+      
+      setDiagnostics(prev => ({ ...prev, cameraInfo: devices.map(d => d.label).join(', ') }));
+    } catch (err) {
+      console.error('Error getting cameras:', err);
+      addDiagnostic(`Camera error: ${err.message}`, 'error');
+      setError('Unable to access cameras. Please check permissions.');
+    }
+  };
+
+  const loadScanHistory = () => {
+    try {
+      const history = JSON.parse(localStorage.getItem('barcodeScanHistory') || '[]');
+      setScanHistory(history.slice(0, 5));
+    } catch (err) {
+      console.error('Error loading scan history:', err);
+    }
+  };
+
+  const saveToHistory = (barcode) => {
+    try {
+      const history = JSON.parse(localStorage.getItem('barcodeScanHistory') || '[]');
+      const newHistory = [barcode, ...history.filter(item => item !== barcode)].slice(0, 10);
+      localStorage.setItem('barcodeScanHistory', JSON.stringify(newHistory));
+      setScanHistory(newHistory.slice(0, 5));
+    } catch (err) {
+      console.error('Error saving to history:', err);
+    }
+  };
+
+  const startScanner = async () => {
+    if (isManualMode || !selectedCamera) return;
+
+    setIsLoading(true);
+    setError(null);
+    addDiagnostic('Starting scanner...', 'info');
+    setDiagnostics(prev => ({ ...prev, scannerState: 'initializing' }));
+
+    try {
+      if (useNativeDetector) {
+        // Use native BarcodeDetector API (Android Chrome)
+        addDiagnostic('Starting NATIVE BarcodeDetector', 'success');
+        
+        // Use the selected camera device ID if available
+        const constraints = {
+          video: {
+            deviceId: selectedCamera && selectedCamera !== 'environment' 
+              ? { exact: selectedCamera } 
+              : undefined,
+            facingMode: selectedCamera === 'environment' ? 'environment' : undefined,
+            width: { ideal: 1920 },
+            height: { ideal: 1080 }
+          }
+        };
+        
+        addDiagnostic('Requesting camera...', 'info');
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        streamRef.current = stream;
+        
+        const videoTrack = stream.getVideoTracks()[0];
+        const capabilities = videoTrack.getCapabilities();
+        const settings = videoTrack.getSettings();
+        
+        addDiagnostic(`Available: ${capabilities.focusMode ? capabilities.focusMode.join(', ') : 'none'}`, 'info');
+        addDiagnostic(`Current: ${settings.focusMode || 'unknown'}`, 'info');
+        
+        // Samsung reports only "manual" but claims to be in "continuous" - this is broken
+        // Try forcing manual mode with infinity focus distance for barcode scanning
+        if (capabilities.focusMode && capabilities.focusMode.includes('manual')) {
+          try {
+            // Get focus distance range
+            if (capabilities.focusDistance) {
+              const focusCaps = capabilities.focusDistance;
+              addDiagnostic(`Focus range: ${focusCaps.min}-${focusCaps.max}`, 'info');
+              
+              // For barcode scanning, we want medium-far distance (around 0.5-1.0 meters)
+              // Use the maximum distance to ensure we're not too close
+              const targetDistance = focusCaps.max || 1.0;
+              
+              await videoTrack.applyConstraints({
+                focusMode: 'manual',
+                focusDistance: targetDistance
+              });
+              
+              const newSettings = videoTrack.getSettings();
+              addDiagnostic(`Manual focus: ${newSettings.focusDistance}m`, 'success');
+            } else {
+              addDiagnostic('⚠ Focus distance not supported', 'info');
+              // Just try manual mode without distance
+              await videoTrack.applyConstraints({
+                focusMode: 'manual'
+              });
+            }
+          } catch (err) {
+            addDiagnostic(`Focus error: ${err.message}`, 'error');
+          }
+        }
+        
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+          addDiagnostic('Video stream started', 'success');
+        }
+        
+        const barcodeDetector = new window.BarcodeDetector({
+          formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39']
+        });
+        
+        addDiagnostic('Formats: EAN_13, EAN_8, UPC_A, UPC_E', 'info');
+        
+        // Continuously detect barcodes with consistency check
+        const detectBarcode = async () => {
+          if (!videoRef.current || videoRef.current.readyState !== videoRef.current.HAVE_ENOUGH_DATA) {
+            return;
+          }
+          
+          try {
+            const barcodes = await barcodeDetector.detect(videoRef.current);
+            if (barcodes.length > 0) {
+              const barcode = barcodes[0];
+              const now = Date.now();
+              
+              // Require same barcode detected 3 times in a row within 1 second
+              if (lastDetectedRef.current.code === barcode.rawValue) {
+                // Same barcode detected again
+                if (now - lastDetectedRef.current.timestamp < 1000) {
+                  lastDetectedRef.current.count++;
+                  addDiagnostic(`Detected ${barcode.rawValue} (${lastDetectedRef.current.count}/3)`, 'info');
+                  
+                  if (lastDetectedRef.current.count >= 3) {
+                    // Confirmed! Same barcode 3 times = good scan
+                    console.log('Native detector CONFIRMED:', barcode.rawValue);
+                    addDiagnostic(`✓ CONFIRMED: ${barcode.rawValue}`, 'success');
+                    setDiagnostics(prev => ({ ...prev, lastScanAttempt: new Date().toLocaleTimeString() }));
+                    lastDetectedRef.current = { code: null, count: 0, timestamp: 0 };
+                    handleBarcodeDetected(barcode.rawValue);
+                  }
+                } else {
+                  // Timeout, restart count
+                  lastDetectedRef.current = { code: barcode.rawValue, count: 1, timestamp: now };
+                }
+              } else {
+                // Different barcode, start new count
+                lastDetectedRef.current = { code: barcode.rawValue, count: 1, timestamp: now };
+                addDiagnostic(`Detecting: ${barcode.rawValue} (1/3)`, 'info');
+              }
+            } else {
+              // No barcode found, reset
+              if (lastDetectedRef.current.code) {
+                lastDetectedRef.current = { code: null, count: 0, timestamp: 0 };
+              }
+            }
+          } catch (err) {
+            console.error('Detection error:', err);
+          }
+        };
+        
+        detectionIntervalRef.current = setInterval(detectBarcode, 200); // Check every 200ms
+        
+        setIsScanning(true);
+        setDiagnostics(prev => ({ ...prev, scannerState: 'scanning' }));
+        addDiagnostic('Native scanner active!', 'success');
+        checkTorchSupport();
+        
+      } else {
+        // Fallback to html5-qrcode
+        addDiagnostic('Starting html5-qrcode fallback', 'info');
+        html5QrCodeRef.current = new Html5Qrcode(scannerDivId);
+        
+        const config = {
+          fps: 10,
+          qrbox: function(viewfinderWidth, viewfinderHeight) {
+            const minEdgePercentage = 0.7;
+            const minEdgeSize = Math.min(viewfinderWidth, viewfinderHeight);
+            const qrboxWidth = Math.floor(minEdgeSize * minEdgePercentage);
+            const qrboxHeight = Math.floor(qrboxWidth / 2.5);
+            return { width: qrboxWidth, height: qrboxHeight };
+          },
+          formatsToSupport: [8, 12, 9, 13, 3, 2]
+        };
+
+        await html5QrCodeRef.current.start(
+          { facingMode: "environment" },
+          config,
+          (decodedText) => {
+            console.log('html5-qrcode detected:', decodedText);
+            addDiagnostic(`Scanned: ${decodedText}`, 'success');
+            setDiagnostics(prev => ({ ...prev, lastScanAttempt: new Date().toLocaleTimeString() }));
+            handleBarcodeDetected(decodedText);
+          },
+          () => {}
+        );
+
+        setIsScanning(true);
+        setDiagnostics(prev => ({ ...prev, scannerState: 'scanning' }));
+        addDiagnostic('html5-qrcode active', 'success');
+        checkTorchSupport();
+      }
+      
+    } catch (err) {
+      console.error('Error starting scanner:', err);
+      addDiagnostic(`Start error: ${err.message || err.toString()}`, 'error');
+      setDiagnostics(prev => ({ ...prev, scannerState: 'error' }));
+      
+      let errorMessage = 'Camera access denied. ';
+      if (err.toString().includes('NotAllowedError')) {
+        errorMessage += 'Please allow camera access in your browser settings.';
+      } else if (err.toString().includes('NotFoundError')) {
+        errorMessage += 'No camera found on this device.';
+      } else if (err.toString().includes('NotReadableError')) {
+        errorMessage += 'Camera is in use by another app. Please close other apps and try again.';
+      } else {
+        errorMessage += 'Please use manual entry instead.';
+      }
+      
+      setError(errorMessage);
+      setIsManualMode(true);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const checkTorchSupport = async () => {
+    try {
+      // Get the video element created by html5-qrcode
+      const videoElement = document.querySelector(`#${scannerDivId} video`);
+      if (videoElement && videoElement.srcObject) {
+        const stream = videoElement.srcObject;
+        const track = stream.getVideoTracks()[0];
+        const capabilities = track.getCapabilities();
+        
+        if (capabilities.torch) {
+          setHasTorch(true);
+          console.log('Torch supported');
+        }
+      }
+    } catch (err) {
+      console.warn('Error checking torch support:', err);
+    }
+  };
+
+  const stopScanner = async () => {
+    addDiagnostic('Stopping scanner...', 'info');
+    setIsScanning(false);
+    setTorchEnabled(false);
+    setHasTorch(false);
+    setDiagnostics(prev => ({ ...prev, scannerState: 'stopped' }));
+
+    // Stop native detector interval
+    if (detectionIntervalRef.current) {
+      clearInterval(detectionIntervalRef.current);
+      detectionIntervalRef.current = null;
+    }
+
+    // Stop video stream
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+
+    // Stop html5-qrcode
+    if (html5QrCodeRef.current) {
+      try {
+        await html5QrCodeRef.current.stop();
+        html5QrCodeRef.current.clear();
+        html5QrCodeRef.current = null;
+        addDiagnostic('Scanner stopped', 'success');
+      } catch (err) {
+        console.warn('Error stopping scanner:', err);
+        addDiagnostic(`Stop error: ${err.message}`, 'error');
+      }
+    }
+  };
+
+  const toggleTorch = async () => {
+    if (!hasTorch) return;
+    
+    try {
+      const videoElement = document.querySelector(`#${scannerDivId} video`);
+      if (videoElement && videoElement.srcObject) {
+        const stream = videoElement.srcObject;
+        const track = stream.getVideoTracks()[0];
+        const newTorchState = !torchEnabled;
+        
+        await track.applyConstraints({
+          advanced: [{ torch: newTorchState }]
+        });
+        
+        setTorchEnabled(newTorchState);
+        console.log('Torch toggled:', newTorchState);
+      }
+    } catch (err) {
+      console.error('Could not toggle torch:', err);
+    }
+  };
+
+  const handleCameraChange = async (event) => {
+    const newCameraId = event.target.value;
+    setSelectedCamera(newCameraId);
+    
+    if (isScanning) {
+      await stopScanner();
+      // Scanner will auto-restart via useEffect
+    }
+  };
+
+
+
+  const handleBarcodeDetected = async (barcode) => {
+    if (!barcode || scannedCode === barcode) return;
+
+    addDiagnostic(`Barcode detected: ${barcode}`, 'success');
+    setScannedCode(barcode);
+    saveToHistory(barcode);
+    stopScanner();
+
+    // Validate barcode format
+    if (!isValidBarcode(barcode)) {
+      addDiagnostic('Invalid barcode format', 'error');
+      setError('Invalid barcode format. Please try again.');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      addDiagnostic('Looking up food...', 'info');
+
+      // Look up food by barcode
+      const food = await fitnessGeekService.getFoodByBarcode(barcode);
+
+      if (food) {
+        onBarcodeScanned(food);
+        onClose();
+      } else {
+        setError('No food found for this barcode. You can add it manually.');
+      }
+    } catch (err) {
+      console.error('Error looking up barcode:', err);
+      setError('Failed to look up barcode. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleManualSubmit = async () => {
+    if (!manualBarcode.trim()) return;
+
+    const barcode = manualBarcode.trim();
+
+    if (!isValidBarcode(barcode)) {
+      setError('Invalid barcode format. Please enter a valid barcode.');
+      return;
+    }
+
+    await handleBarcodeDetected(barcode);
+  };
+
+  const isValidBarcode = (barcode) => {
+    // Basic validation for common barcode formats
+    const barcodeRegex = /^[0-9]{8,14}$/;
+    return barcodeRegex.test(barcode);
+  };
+
+  const handleHistoryItemClick = (barcode) => {
+    setManualBarcode(barcode);
+    handleManualSubmit();
+  };
+
+  const handleClose = () => {
+    stopScanner();
+    setScannedCode(null);
+    setError(null);
+    setManualBarcode('');
+    setIsManualMode(false);
+    onClose();
+  };
+
+  const toggleMode = () => {
+    if (isManualMode) {
+      setIsManualMode(false);
+      setError(null);
+      setTimeout(startScanner, 100);
+    } else {
+      stopScanner();
+      setIsManualMode(true);
+      setError(null);
+    }
+  };
+
+
+
+  const renderScanner = () => {
+    if (isManualMode) {
+      return (
+        <Box sx={{ p: { xs: 3, sm: 4 } }}>
+          <Typography variant="h6" sx={{ mb: 3, textAlign: 'center' }}>
+            Enter Barcode Manually
+          </Typography>
+
+          <TextField
+            fullWidth
+            label="Barcode"
+            value={manualBarcode}
+            onChange={(e) => setManualBarcode(e.target.value)}
+            placeholder="Enter 8-14 digit barcode"
+            inputProps={{ maxLength: 14 }}
+            sx={{ mb: 3 }}
+            autoFocus
+          />
+
+          <Button
+            fullWidth
+            variant="contained"
+            onClick={handleManualSubmit}
+            disabled={!manualBarcode.trim() || isLoading}
+            startIcon={isLoading ? <CircularProgress size={20} /> : <CheckCircleIcon />}
+            size="large"
+            sx={{ mb: 3 }}
+          >
+            {isLoading ? 'Looking up...' : 'Look Up Barcode'}
+          </Button>
+
+          {scanHistory.length > 0 && (
+            <Box>
+              <Typography variant="subtitle2" sx={{ mb: 2 }}>
+                Recent Scans:
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
+                {scanHistory.map((barcode, index) => (
+                  <Chip
+                    key={index}
+                    label={barcode}
+                    onClick={() => handleHistoryItemClick(barcode)}
+                    variant="outlined"
+                    size="small"
+                  />
+                ))}
+              </Box>
+            </Box>
+          )}
+        </Box>
+      );
+    }
+
+    return (
+      <Box sx={{
+        position: 'relative',
+        width: '100%',
+        minHeight: { xs: 350, sm: 400 }
+      }}>
+        {/* Camera selector */}
+        {cameras.length > 1 && (
+          <FormControl fullWidth sx={{ mb: 2, px: 2, pt: 2 }}>
+            <InputLabel>Camera</InputLabel>
+            <Select
+              value={selectedCamera}
+              onChange={handleCameraChange}
+              label="Camera"
+            >
+              {cameras.map((camera) => (
+                <MenuItem key={camera.id} value={camera.id}>
+                  {camera.label || `Camera ${camera.id.substring(0, 8)}`}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        )}
+
+        {/* Native video element for BarcodeDetector API */}
+        {useNativeDetector && (
+          <video
+            ref={videoRef}
+            style={{
+              width: '100%',
+              maxHeight: 400,
+              borderRadius: 8,
+              objectFit: 'cover'
+            }}
+            autoPlay
+            playsInline
+            muted
+          />
+        )}
+        
+        {/* Html5-qrcode scanner div (fallback) */}
+        {!useNativeDetector && (
+          <div 
+            id={scannerDivId}
+            style={{
+              width: '100%',
+              borderRadius: 8,
+              overflow: 'hidden'
+            }}
+          />
+        )}
+
+        {isLoading && (
+          <Box sx={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            bgcolor: 'rgba(0,0,0,0.5)',
+            zIndex: 10
+          }}>
+            <CircularProgress />
+          </Box>
+        )}
+
+        {/* Torch toggle FAB */}
+        {hasTorch && (
+          <Fab
+            color={torchEnabled ? "secondary" : "default"}
+            size="small"
+            onClick={toggleTorch}
+            sx={{
+              position: 'absolute',
+              top: 20,
+              left: 20,
+              zIndex: 100,
+              bgcolor: torchEnabled ? 'warning.main' : 'rgba(255,255,255,0.9)',
+              '&:hover': {
+                bgcolor: torchEnabled ? 'warning.dark' : 'rgba(255,255,255,1)'
+              }
+            }}
+          >
+            {torchEnabled ? <FlashlightOnIcon /> : <FlashlightOffIcon />}
+          </Fab>
+        )}
+
+        {/* Mode toggle FAB */}
+        <Fab
+          color="primary"
+          size="small"
+          onClick={toggleMode}
+          sx={{
+            position: 'absolute',
+            top: 20,
+            right: 20,
+            zIndex: 100
+          }}
+        >
+          <KeyboardIcon />
+        </Fab>
+      </Box>
+    );
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onClose={handleClose}
+      maxWidth="sm"
+      fullWidth
+      PaperProps={{
+        sx: {
+          borderRadius: { xs: 0, sm: 2 },
+          margin: { xs: 0, sm: 2 },
+          maxHeight: { xs: '100vh', sm: '90vh' },
+          width: { xs: '100%', sm: 'auto' }
+        }
+      }}
+    >
+      <DialogTitle sx={{ pb: 2, px: { xs: 3, sm: 4 } }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Typography variant="h6" sx={{ fontSize: { xs: '1.1rem', sm: '1.25rem' } }}>
+            {isManualMode ? 'Manual Entry' : 'Scan Barcode'}
+          </Typography>
+          <IconButton onClick={handleClose} size="large">
+            <CloseIcon />
+          </IconButton>
+        </Box>
+      </DialogTitle>
+
+      <DialogContent sx={{ p: 0 }}>
+        {/* Error Display */}
+        {error && (
+          <Alert severity="error" sx={{ m: 3 }}>
+            {error}
+          </Alert>
+        )}
+
+        {/* Scanner Content */}
+        {renderScanner()}
+        
+        {/* Diagnostics Panel - Always Visible */}
+        <Box sx={{
+          position: 'sticky',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          bgcolor: 'rgba(0, 0, 0, 0.85)',
+          color: 'white',
+          p: 2,
+          borderTop: '2px solid',
+          borderColor: 'primary.main',
+          fontSize: '0.75rem',
+          zIndex: 1000,
+          maxHeight: 200,
+          overflow: 'auto'
+        }}>
+          <Typography variant="caption" sx={{ display: 'block', fontWeight: 'bold', mb: 1, color: 'primary.light', fontSize: '0.85rem' }}>
+            📊 DIAGNOSTICS
+          </Typography>
+          <Typography variant="caption" sx={{ display: 'block', mb: 0.5 }}>
+            <strong>Mode:</strong> {isManualMode ? 'Manual Entry' : 'Camera Scanner'}
+          </Typography>
+          <Typography variant="caption" sx={{ display: 'block', mb: 0.5 }}>
+            <strong>Detector:</strong> {diagnostics.detectorType} {useNativeDetector && '✓ (NATIVE!)'}
+          </Typography>
+          <Typography variant="caption" sx={{ display: 'block', mb: 0.5 }}>
+            <strong>Status:</strong> {diagnostics.scannerState}
+          </Typography>
+          <Typography variant="caption" sx={{ display: 'block', mb: 0.5 }}>
+            <strong>Cameras Found:</strong> {cameras.length}
+          </Typography>
+          {cameras.length > 0 && (
+            <Typography variant="caption" sx={{ display: 'block', mb: 0.5 }}>
+              <strong>Selected:</strong> {cameras.find(c => c.id === selectedCamera)?.label || 'none'}
+            </Typography>
+          )}
+          {diagnostics.lastScanAttempt && (
+            <Typography variant="caption" sx={{ display: 'block', mb: 0.5 }}>
+              <strong>Last Scan:</strong> {diagnostics.lastScanAttempt}
+            </Typography>
+          )}
+          {diagnostics.errorLog.length > 0 && (
+            <Box sx={{ mt: 1, pt: 1, borderTop: '1px solid rgba(255,255,255,0.3)' }}>
+              <Typography variant="caption" sx={{ display: 'block', fontWeight: 'bold', mb: 0.5 }}>
+                Event Log:
+              </Typography>
+              {diagnostics.errorLog.map((log, idx) => (
+                <Typography 
+                  key={idx} 
+                  variant="caption" 
+                  sx={{ 
+                    display: 'block',
+                    color: log.type === 'error' ? '#ff6b6b' : 
+                           log.type === 'success' ? '#51cf66' : '#adb5bd',
+                    fontSize: '0.7rem',
+                    fontFamily: 'monospace'
+                  }}
+                >
+                  [{log.timestamp}] {log.message}
+                </Typography>
+              ))}
+            </Box>
+          )}
+        </Box>
+      </DialogContent>
+
+      <DialogActions sx={{ p: { xs: 3, sm: 4 }, pt: 2, gap: 2 }}>
+        {!isManualMode && (
+          <Button
+            onClick={() => {
+              if (isScanning) {
+                stopScanner();
+              } else {
+                startScanner();
+              }
+            }}
+            startIcon={isScanning ? <CloseIcon /> : <CameraIcon />}
+            disabled={isLoading}
+            size="large"
+            variant="outlined"
+            sx={{ minWidth: { xs: 'auto', sm: '120px' } }}
+          >
+            {isScanning ? 'Stop' : 'Start'}
+          </Button>
+        )}
+
+        <Button onClick={handleClose} size="large">
+          Cancel
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
+export default BarcodeScanner;

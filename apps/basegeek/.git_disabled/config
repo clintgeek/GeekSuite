@@ -1,0 +1,21 @@
+[core]
+	repositoryformatversion = 0
+	filemode = true
+	bare = false
+	logallrefupdates = true
+	ignorecase = true
+	precomposeunicode = true
+[branch "main"]
+	vscode-merge-base = origin/main
+	remote = origin
+	merge = refs/heads/main
+[branch "step-back-a-bit"]
+	vscode-merge-base = origin/main
+	remote = origin
+	merge = refs/heads/step-back-a-bit
+[remote "origin"]
+	url = https://git.clintgeek.com/clintgeek/BaseGeek.git
+	fetch = +refs/heads/*:refs/remotes/origin/*
+[branch "experimental"]
+	remote = origin
+	merge = refs/heads/experimental

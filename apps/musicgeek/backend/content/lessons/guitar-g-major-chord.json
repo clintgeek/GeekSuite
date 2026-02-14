@@ -1,0 +1,83 @@
+{
+  "slug": "guitar-g-major-chord",
+  "template": "guided_steps_v1",
+  "instrumentSlug": "guitar",
+  "orderIndex": 12,
+  "meta": {
+    "title": "The G Major Chord",
+    "subtitle": "Learn the big, full-sounding G chord—all 6 strings!",
+    "category": "Essential Chords",
+    "difficulty": 2,
+    "audience": "kid",
+    "estimatedTimeMinutes": 15,
+    "xpReward": 100,
+    "tags": ["guitar", "beginner", "chords", "g-major"],
+    "imageUrl": "/assets/lessons/guitar/g-major/hero.svg"
+  },
+  "content": {
+    "objectives": [
+      "Learn the G major chord shape",
+      "Stretch your fingers across 3 frets",
+      "Strum all 6 strings for a full sound",
+      "Complete the 'Big 4' chords"
+    ],
+    "steps": [
+      {
+        "id": "intro",
+        "type": "text",
+        "title": "The biggest chord yet!",
+        "body": "You know Em, A, and D—now let's learn G MAJOR! This chord is special because it uses ALL 6 strings and sounds huge and powerful. It's also a bit of a stretch—your fingers will spread across 3 different frets. But once you get it, you'll have the 'Big 4' chords that unlock almost every song!"
+      },
+      {
+        "id": "see-diagram",
+        "type": "text+image",
+        "title": "The G major chord diagram",
+        "body": "Here's what G major looks like. Notice how spread out your fingers are? Your middle finger goes all the way down to the 3rd fret! This is the biggest stretch you've learned so far. Take your time with this one.",
+        "imageUrl": "/assets/lessons/guitar/g-major/chord-diagram.svg",
+        "videoUrl": "https://www.youtube.com/embed/gEzwpqmt2gc"
+      },
+      {
+        "id": "finger-one",
+        "type": "text",
+        "title": "Place your first finger",
+        "body": "Put your MIDDLE finger (2nd finger) on the 3rd fret of the 6th string (low E—the thickest string). This is the anchor of your G chord. Press down firmly!"
+      },
+      {
+        "id": "finger-two",
+        "type": "text",
+        "title": "Add your second finger",
+        "body": "Put your POINTER finger (1st finger) on the 2nd fret of the 5th string (A string). Now you have two fingers down, and they're on different frets. This is the stretch part!"
+      },
+      {
+        "id": "finger-three",
+        "type": "text",
+        "title": "Add your third finger",
+        "body": "Here's the big stretch: Put your RING finger (3rd finger) on the 3rd fret of the 1st string (high E—the thinnest string). Your hand should feel stretched out. If it's uncomfortable at first, that's normal! Your hand will get used to it."
+      },
+      {
+        "id": "check-position",
+        "type": "text",
+        "title": "Check your G shape",
+        "body": "Look at your hand—your fingers should be spread across the neck like a spider! Middle finger on the thick string, pointer in the middle, ring finger on the thin string. The 2nd, 3rd, and 4th strings are left open (not pressed). This is the G major shape!"
+      },
+      {
+        "id": "strum-all-six",
+        "type": "text",
+        "title": "Strum all 6 strings!",
+        "body": "Finally, a chord where you strum everything! Start from the thickest string and strum down across ALL 6 strings. Hear that big, full, ringing sound? That's the power of G major! It should sound rich and complete."
+      },
+      {
+        "id": "practice",
+        "type": "checkpoint",
+        "title": "Practice the stretch",
+        "body": "Strum your G chord a few times. If any strings buzz, check that all three fingers are pressing firmly and curved. This chord takes time to get comfortable because of the stretch. Practice making the shape, then releasing, then making it again. Your hand is building new muscle memory!"
+      },
+      {
+        "id": "celebration",
+        "type": "celebration",
+        "title": "🎸 You've mastered the Big 4!",
+        "body": "INCREDIBLE! You now know the 'Big 4' guitar chords—Em, A, D, and G! 🎉 These four chords appear in literally THOUSANDS of hit songs across every genre. You can now play most popular music! This is a huge milestone. You're not a beginner anymore—you're a real guitarist with serious skills! Keep practicing that G stretch! 🌟🔥"
+      }
+    ]
+  }
+}

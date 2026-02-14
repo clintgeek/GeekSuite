@@ -1,0 +1,80 @@
+{
+  "slug": "guitar-my-hero-1-open-chords",
+  "template": "guided_steps_v1",
+  "instrumentSlug": "guitar",
+  "orderIndex": 21,
+  "meta": {
+    "title": "My Hero - Campfire Version",
+    "subtitle": "Play a simple open-chord version inspired by My Hero.",
+    "category": "Song Projects",
+    "difficulty": 2,
+    "audience": "both",
+    "estimatedTimeMinutes": 18,
+    "xpReward": 150,
+    "tags": ["guitar", "intermediate", "songs", "rock", "my-hero", "project"],
+    "imageUrl": "/assets/lessons/guitar/my-hero-1-open-chords/hero.svg"
+  },
+  "content": {
+    "objectives": [
+      "Approximate the sound of a rock anthem using basic open chords",
+      "Strum with a steady rock rhythm",
+      "Play a simple verse-chorus loop without stopping"
+    ],
+    "steps": [
+      {
+        "id": "intro",
+        "type": "text",
+        "title": "A rock anthem, simplified",
+        "body": "In this lesson you'll learn a super-simple, campfire-style version of the song \"My Hero\" by Foo Fighters. We'll use the open chords you already know to capture the energy and mood of the song without worrying about every tiny detail."
+      },
+      {
+        "id": "chords-overview",
+        "type": "text",
+        "title": "The chord team",
+        "body": "We'll build our version of the song using the open chords you know from earlier lessons: G, D, Em, and C. These four chords are powerful enough to create that big, emotional rock sound. Make sure you can switch between them slowly before moving on."
+      },
+      {
+        "id": "practice-changes",
+        "type": "text",
+        "title": "Warm up the chord changes",
+        "body": "Start by switching between G and D for one full minute: G - D - G - D. Then try Em - C. Don't worry about speed yet. Focus on clean sounding chords and smooth changes. This warms up the exact moves you'll use in your My Hero progression."
+      },
+      {
+        "id": "strum-pattern",
+        "type": "text",
+        "title": "Rock strum pattern",
+        "body": "Use a steady 4-beat pattern you already know: DOWN-down-DOWN-down (with a light \"up\" stroke between some of the downs if it feels natural). Count \"1, 2, 3, 4\" out loud and strum down on each beat. Keep your strumming hand moving like a pendulum."
+      },
+      {
+        "id": "verse-loop",
+        "type": "text",
+        "title": "Verse-style loop",
+        "body": "Here's a simple loop that feels like the verse of a rock anthem: G (4 strums) - D (4 strums) - Em (4 strums) - C (4 strums). Play it very slowly at first. Try to keep the rhythm even and your chord changes smooth. This is your \"verse engine\" for My Hero."
+      },
+      {
+        "id": "chorus-energy",
+        "type": "text",
+        "title": "Turn up the chorus",
+        "body": "For a chorus feeling, use the same chords but play a little louder and with more confident strums. Try this pattern: G (4 strong strums) - D (4 strong strums) - Em (4 strong strums) - C (4 strong strums). Imagine you're playing along with a loud band and filling the room with sound."
+      },
+      {
+        "id": "mini-song",
+        "type": "text",
+        "title": "Build a mini song",
+        "body": "Put it together like this: Verse loop (quiet-medium) - Verse loop again - Chorus loop (louder). That's 3 rounds of your progression. Don't stop if you make a mistake - just keep your strumming hand moving and jump back in on the next chord."
+      },
+      {
+        "id": "checkpoint",
+        "type": "checkpoint",
+        "title": "Campfire My Hero",
+        "body": "Can you play the mini song (two \"verse\" loops and one \"chorus\" loop) all the way through without stopping your strumming hand? Even if the chord changes are a little slow, that's okay. The goal is steady rhythm and a clear difference between verse and chorus energy."
+      },
+      {
+        "id": "celebration",
+        "type": "celebration",
+        "title": "🎸 You played a rock anthem!",
+        "body": "Amazing work! You just played a campfire-style version of \"My Hero\" using open chords and solid rhythm. This is exactly how real guitarists simplify songs when they first learn them. Later lessons will add more power and detail, but you've already captured the heart of the song."
+      }
+    ]
+  }
+}

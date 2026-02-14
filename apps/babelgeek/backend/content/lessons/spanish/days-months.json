@@ -1,0 +1,109 @@
+{
+  "slug": "spanish-days-months",
+  "template": "guided_steps_v1",
+  "languageCode": "es",
+  "level": "A1",
+  "orderIndex": 6,
+  "meta": {
+    "title": "Días y Meses",
+    "subtitle": "Days of the week and months",
+    "category": "Basics",
+    "difficulty": 1,
+    "audience": "both",
+    "estimatedTimeMinutes": 10,
+    "xpReward": 60,
+    "tags": ["days", "months", "time", "basics", "beginner"],
+    "imageUrl": "/assets/lessons/spanish/calendar/hero.svg"
+  },
+  "content": {
+    "learningOutcomes": [
+      "Name all 7 days of the week",
+      "Name all 12 months of the year",
+      "Talk about dates and schedules"
+    ],
+    "vocabulary": ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo", "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"],
+    "steps": [
+      {
+        "id": "intro",
+        "type": "text",
+        "title": "Time Talk",
+        "body": "📅 Days and months are essential for making plans, scheduling, and understanding when things happen!\n\nFun fact: Spanish days are NOT capitalized like in English."
+      },
+      {
+        "id": "weekdays",
+        "type": "text+audio",
+        "title": "Days of the Week",
+        "body": "The Spanish week starts on Monday:\n\n• **lunes** - Monday (from 'luna' - moon) 🌙\n• **martes** - Tuesday (from Mars)\n• **miércoles** - Wednesday (from Mercury)\n• **jueves** - Thursday (from Jupiter)\n• **viernes** - Friday (from Venus) 🎉",
+        "audioPhrase": "lunes, martes, miércoles, jueves, viernes"
+      },
+      {
+        "id": "listen-weekdays",
+        "type": "listen_repeat",
+        "title": "Practice: Weekdays",
+        "phrase": "Lunes, martes, miércoles, jueves, viernes",
+        "translation": "Monday, Tuesday, Wednesday, Thursday, Friday",
+        "audioPhrase": "lunes, martes, miércoles, jueves, viernes"
+      },
+      {
+        "id": "weekend",
+        "type": "text+audio",
+        "title": "The Weekend",
+        "body": "The best days! 🎊\n\n• **sábado** - Saturday (from Sabbath)\n• **domingo** - Sunday (from 'Lord's day')\n\n**El fin de semana** = The weekend",
+        "audioPhrase": "sábado, domingo. El fin de semana."
+      },
+      {
+        "id": "using-days",
+        "type": "text+audio",
+        "title": "Using Days in Sentences",
+        "body": "Use **el** before a specific day:\n\n• **El lunes trabajo** - On Monday I work\n• **El viernes es la fiesta** - The party is on Friday\n\nFor repeated days, use **los**:\n• **Los martes estudio** - On Tuesdays I study",
+        "audioPhrase": "El lunes trabajo. Los martes estudio español."
+      },
+      {
+        "id": "months-1",
+        "type": "text+audio",
+        "title": "Months: January - June",
+        "body": "• **enero** - January\n• **febrero** - February\n• **marzo** - March\n• **abril** - April\n• **mayo** - May\n• **junio** - June",
+        "audioPhrase": "enero, febrero, marzo, abril, mayo, junio"
+      },
+      {
+        "id": "months-2",
+        "type": "text+audio",
+        "title": "Months: July - December",
+        "body": "• **julio** - July\n• **agosto** - August\n• **septiembre** - September\n• **octubre** - October\n• **noviembre** - November\n• **diciembre** - December 🎄",
+        "audioPhrase": "julio, agosto, septiembre, octubre, noviembre, diciembre"
+      },
+      {
+        "id": "dates",
+        "type": "text+audio",
+        "title": "Saying Dates",
+        "body": "Dates use **el + number + de + month**:\n\n• **El 25 de diciembre** - December 25th\n• **El 1 de enero** - January 1st\n• **El 14 de febrero** - February 14th 💕\n\nFor 'first', use **primero**: El primero de mayo",
+        "audioPhrase": "El veinticinco de diciembre. El primero de enero."
+      },
+      {
+        "id": "match-days",
+        "type": "matching",
+        "title": "Match the Days",
+        "pairs": [
+          { "left": "lunes", "right": "Monday" },
+          { "left": "miércoles", "right": "Wednesday" },
+          { "left": "viernes", "right": "Friday" },
+          { "left": "domingo", "right": "Sunday" }
+        ]
+      },
+      {
+        "id": "listen-date",
+        "type": "listen_repeat",
+        "title": "Practice: Saying a Date",
+        "phrase": "Hoy es viernes, el 15 de marzo",
+        "translation": "Today is Friday, March 15th",
+        "audioPhrase": "Hoy es viernes, el quince de marzo"
+      },
+      {
+        "id": "celebration",
+        "type": "celebration",
+        "title": "🎉 ¡Perfecto!",
+        "body": "You can now talk about days and dates in Spanish! This is incredibly useful for scheduling.\n\n**Practice:** What day is your birthday in Spanish?"
+      }
+    ]
+  }
+}

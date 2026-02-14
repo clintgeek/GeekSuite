@@ -1,0 +1,116 @@
+{
+  "slug": "spanish-alphabet",
+  "template": "guided_steps_v1",
+  "languageCode": "es",
+  "level": "A1",
+  "orderIndex": 4,
+  "meta": {
+    "title": "El Alfabeto",
+    "subtitle": "Learn the Spanish alphabet",
+    "category": "Basics",
+    "difficulty": 1,
+    "audience": "both",
+    "estimatedTimeMinutes": 10,
+    "xpReward": 60,
+    "tags": ["alphabet", "basics", "beginner", "pronunciation"],
+    "imageUrl": "/assets/lessons/spanish/alphabet/hero.svg"
+  },
+  "content": {
+    "learningOutcomes": [
+      "Recognize all 27 letters of the Spanish alphabet",
+      "Pronounce Spanish letter names correctly",
+      "Understand special Spanish letters like Ñ"
+    ],
+    "vocabulary": ["a", "be", "ce", "de", "e", "efe", "ge", "hache", "i", "jota", "ka", "ele", "eme", "ene", "eñe", "o", "pe", "cu", "erre", "ese", "te", "u", "uve", "doble uve", "equis", "i griega", "zeta"],
+    "steps": [
+      {
+        "id": "intro",
+        "type": "text",
+        "title": "The Spanish Alphabet",
+        "body": "The Spanish alphabet has **27 letters** - all 26 English letters plus the unique **Ñ**! 🔤\n\nMost letters are pronounced differently than in English. Let's learn them in groups!"
+      },
+      {
+        "id": "vowels",
+        "type": "text+audio",
+        "title": "The Vowels: A E I O U",
+        "body": "Spanish vowels are pure and consistent - they always sound the same!\n\n• **A** - like 'ah' in 'father'\n• **E** - like 'eh' in 'bed'\n• **I** - like 'ee' in 'see'\n• **O** - like 'oh' in 'go'\n• **U** - like 'oo' in 'moon'",
+        "audioPhrase": "a, e, i, o, u"
+      },
+      {
+        "id": "listen-vowels",
+        "type": "listen_repeat",
+        "title": "Practice the Vowels",
+        "phrase": "A, E, I, O, U",
+        "translation": "The five Spanish vowels",
+        "audioPhrase": "a, e, i, o, u"
+      },
+      {
+        "id": "consonants-1",
+        "type": "text+audio",
+        "title": "Consonants: B - G",
+        "body": "• **B** (be) - like 'bay'\n• **C** (ce) - like 'say'\n• **D** (de) - like 'day'\n• **F** (efe) - like 'EH-fay'\n• **G** (ge) - like 'hay'",
+        "audioPhrase": "be, ce, de, efe, ge"
+      },
+      {
+        "id": "consonants-2",
+        "type": "text+audio",
+        "title": "Consonants: H - N",
+        "body": "• **H** (hache) - like 'AH-chay' (H is always silent!)\n• **J** (jota) - like 'HOH-tah'\n• **K** (ka) - like 'kah'\n• **L** (ele) - like 'EH-lay'\n• **M** (eme) - like 'EH-may'\n• **N** (ene) - like 'EH-nay'",
+        "audioPhrase": "hache, jota, ka, ele, eme, ene"
+      },
+      {
+        "id": "ene-special",
+        "type": "text+audio",
+        "title": "The Special Ñ (eñe)",
+        "body": "**Ñ** is unique to Spanish! 🇪🇸\n\nIt's pronounced like 'ny' in 'canyon'.\n\nExamples:\n• **España** (Spain)\n• **niño** (boy/child)\n• **año** (year)\n• **mañana** (tomorrow/morning)",
+        "audioPhrase": "eñe. España, niño, año, mañana"
+      },
+      {
+        "id": "consonants-3",
+        "type": "text+audio",
+        "title": "Consonants: P - T",
+        "body": "• **P** (pe) - like 'pay'\n• **Q** (cu) - like 'koo'\n• **R** (erre) - like 'EH-rray' (rolled!)\n• **S** (ese) - like 'EH-say'\n• **T** (te) - like 'tay'",
+        "audioPhrase": "pe, cu, erre, ese, te"
+      },
+      {
+        "id": "consonants-4",
+        "type": "text+audio",
+        "title": "Consonants: V - Z",
+        "body": "• **V** (uve) - like 'OO-bay'\n• **W** (doble uve) - like 'DOH-blay OO-bay'\n• **X** (equis) - like 'EH-kees'\n• **Y** (i griega) - like 'ee GRYEH-gah'\n• **Z** (zeta) - like 'SAY-tah'",
+        "audioPhrase": "uve, doble uve, equis, i griega, zeta"
+      },
+      {
+        "id": "full-alphabet",
+        "type": "listen_repeat",
+        "title": "The Complete Alphabet",
+        "phrase": "A, B, C, D, E, F, G, H, I, J, K, L, M, N, Ñ, O, P, Q, R, S, T, U, V, W, X, Y, Z",
+        "translation": "All 27 Spanish letters",
+        "audioPhrase": "a, be, ce, de, e, efe, ge, hache, i, jota, ka, ele, eme, ene, eñe, o, pe, cu, erre, ese, te, u, uve, doble uve, equis, i griega, zeta"
+      },
+      {
+        "id": "match-letters",
+        "type": "matching",
+        "title": "Match the Letter Names",
+        "pairs": [
+          { "left": "H", "right": "hache" },
+          { "left": "J", "right": "jota" },
+          { "left": "Ñ", "right": "eñe" },
+          { "left": "Y", "right": "i griega" },
+          { "left": "W", "right": "doble uve" }
+        ]
+      },
+      {
+        "id": "key-differences",
+        "type": "text",
+        "title": "Key Differences from English",
+        "body": "Remember these important points:\n\n🔇 **H is always silent** - 'hola' sounds like 'OH-lah'\n\n🔄 **B and V sound the same** - both like a soft 'b'\n\n👅 **R is rolled** - especially RR (perro = dog)\n\n🆕 **Ñ is its own letter** - not just N with a mark!"
+      },
+      {
+        "id": "celebration",
+        "type": "celebration",
+        "title": "🎉 ¡Fantástico!",
+        "body": "You've learned the Spanish alphabet! Now you can spell any Spanish word and understand when native speakers spell things out.\n\n**Practice tip:** Try spelling your name in Spanish!"
+      }
+    ]
+  }
+}

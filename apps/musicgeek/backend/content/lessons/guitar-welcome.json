@@ -1,0 +1,57 @@
+{
+  "slug": "guitar-welcome",
+  "template": "guided_steps_v1",
+  "instrumentSlug": "guitar",
+  "orderIndex": 1,
+  "meta": {
+    "title": "Welcome to Your Guitar",
+    "subtitle": "Get to know your guitar and get comfortable holding it.",
+    "category": "Getting Started",
+    "difficulty": 1,
+    "audience": "kid",
+    "estimatedTimeMinutes": 10,
+    "xpReward": 50,
+    "tags": ["guitar", "beginner", "welcome"],
+    "imageUrl": "/assets/lessons/guitar/welcome/hero.svg"
+  },
+  "content": {
+    "learningOutcomes": [
+      "Recognize the main parts of your guitar",
+      "Hold your guitar in a relaxed, comfortable position",
+      "Play your first simple sounds"
+    ],
+    "steps": [
+      {
+        "id": "intro",
+        "type": "text+image",
+        "title": "Meet your guitar",
+        "body": "This is your guitar. In this lesson you will learn what it is made of and how to hold it so it feels natural.",
+        "imageUrl": "/assets/lessons/guitar/welcome/parts.jpeg"
+      },
+      {
+        "id": "posture",
+        "type": "text",
+        "title": "Find your playing posture",
+        "body": "Sit on the front edge of your chair with both feet on the floor. Rest the guitar on your leg and keep your shoulders relaxed."
+      },
+      {
+        "id": "first-sounds",
+        "type": "text",
+        "title": "Make your first sounds",
+        "body": "Gently pluck one string with your picking hand. Let it ring out and listen to the sound. Try this on a few strings."
+      },
+      {
+        "id": "wrap-up",
+        "type": "checkpoint",
+        "title": "You and your guitar",
+        "body": "If you can name a few parts of your guitar and hold it comfortably, you are ready for the next lesson."
+      },
+      {
+        "id": "celebration",
+        "type": "celebration",
+        "title": "🎵 Amazing work!",
+        "body": "You just completed your first guitar lesson! 🎸 You're on your way to becoming a great musician. Remember: every expert was once a beginner, and you've taken that first brave step. Keep practicing, stay curious, and most importantly - have fun making music! 🌟"
+      }
+    ]
+  }
+}

@@ -1,0 +1,241 @@
+{
+  "slug": "guitar-beginner-kid-main",
+  "instrumentSlug": "guitar",
+  "level": "beginner",
+  "audience": "kid",
+  "trackType": "core",
+  "isDefault": true,
+  "template": "linear_units_v1",
+  "title": "Guitar Beginner – Kids",
+  "subtitle": "Your first steps with the guitar",
+  "content": {
+    "units": [
+      {
+        "id": "unit-1-getting-started",
+        "title": "Getting Started",
+        "description": "Meet your guitar and learn how to hold it.",
+        "lessons": [
+          {
+            "lessonSlug": "guitar-welcome",
+            "required": true
+          },
+          {
+            "lessonSlug": "guitar-first-sounds",
+            "required": true
+          },
+          {
+            "lessonSlug": "guitar-meet-frets",
+            "required": true
+          }
+        ]
+      },
+      {
+        "id": "unit-2-first-chord",
+        "title": "Your First Chord",
+        "description": "Learn to play E minor and strum with rhythm.",
+        "lessons": [
+          {
+            "lessonSlug": "guitar-e-minor-chord",
+            "required": true
+          }
+        ]
+      },
+      {
+        "id": "unit-3-strumming",
+        "title": "Making Music",
+        "description": "Add rhythm and make your chord sound great.",
+        "lessons": [
+          {
+            "lessonSlug": "guitar-first-strum",
+            "required": true
+          }
+        ]
+      },
+      {
+        "id": "unit-4-second-chord",
+        "title": "More Chords",
+        "description": "Learn A major and start switching between chords.",
+        "lessons": [
+          {
+            "lessonSlug": "guitar-a-major-chord",
+            "required": true
+          },
+          {
+            "lessonSlug": "guitar-chord-switching",
+            "required": true
+          }
+        ]
+      },
+      {
+        "id": "unit-5-first-song",
+        "title": "Your First Song",
+        "description": "Put it all together and play a real song!",
+        "lessons": [
+          {
+            "lessonSlug": "guitar-first-song",
+            "required": true
+          }
+        ]
+      },
+      {
+        "id": "unit-6-third-chord",
+        "title": "The Triangle Chord",
+        "description": "Learn D major and expand your chord vocabulary.",
+        "lessons": [
+          {
+            "lessonSlug": "guitar-d-major-chord",
+            "required": true
+          }
+        ]
+      },
+      {
+        "id": "unit-7-more-songs",
+        "title": "More Songs",
+        "description": "Play classic chord progressions with three chords.",
+        "lessons": [
+          {
+            "lessonSlug": "guitar-three-chord-songs",
+            "required": true
+          }
+        ]
+      },
+      {
+        "id": "unit-8-rhythm",
+        "title": "Better Rhythm",
+        "description": "Master the down-up strumming pattern.",
+        "lessons": [
+          {
+            "lessonSlug": "guitar-down-up-strumming",
+            "required": true
+          }
+        ]
+      },
+      {
+        "id": "unit-9-fourth-chord",
+        "title": "The Big 4",
+        "description": "Complete your chord collection with G major.",
+        "lessons": [
+          {
+            "lessonSlug": "guitar-g-major-chord",
+            "required": true
+          }
+        ]
+      },
+      {
+        "id": "unit-10-famous-songs",
+        "title": "Famous Songs",
+        "description": "Play the most popular chord progression ever!",
+        "lessons": [
+          {
+            "lessonSlug": "guitar-four-chord-songs",
+            "required": true
+          }
+        ]
+      },
+      {
+        "id": "unit-11-expression",
+        "title": "Adding Expression",
+        "description": "Learn muting and dynamics to sound professional.",
+        "lessons": [
+          {
+            "lessonSlug": "guitar-muting-dynamics",
+            "required": true
+          }
+        ]
+      },
+      {
+        "id": "unit-12-fifth-chord",
+        "title": "Complete the Collection",
+        "description": "Learn C major—the final essential open chord!",
+        "lessons": [
+          {
+            "lessonSlug": "guitar-c-major-chord",
+            "required": true
+          }
+        ]
+      },
+      {
+        "id": "unit-13-patterns",
+        "title": "Rhythm Mastery",
+        "description": "Learn 4 essential strumming patterns for any song.",
+        "lessons": [
+          {
+            "lessonSlug": "guitar-strumming-patterns",
+            "required": true
+          }
+        ]
+      },
+      {
+        "id": "unit-14-speed",
+        "title": "Speed & Smoothness",
+        "description": "Master fast, clean chord transitions.",
+        "lessons": [
+          {
+            "lessonSlug": "guitar-chord-transitions",
+            "required": true
+          }
+        ]
+      },
+      {
+        "id": "unit-15-fingerpicking",
+        "title": "Fingerpicking Basics",
+        "description": "Learn to pick individual strings beautifully.",
+        "lessons": [
+          {
+            "lessonSlug": "guitar-intro-fingerpicking",
+            "required": true
+          }
+        ]
+      },
+      {
+        "id": "unit-16-reading",
+        "title": "Reading Music",
+        "description": "Learn to read chord charts and play any song.",
+        "lessons": [
+          {
+            "lessonSlug": "guitar-reading-chord-charts",
+            "required": true
+          }
+        ]
+      },
+      {
+        "id": "unit-17-theory",
+        "title": "Understanding Music",
+        "description": "Learn why chords sound happy or sad.",
+        "lessons": [
+          {
+            "lessonSlug": "guitar-minor-vs-major",
+            "required": true
+          }
+        ]
+      },
+      {
+        "id": "unit-18-my-hero-project",
+        "title": "Rock Project: My Hero",
+        "description": "Use everything you've learned to play a My Hero-style rock anthem.",
+        "lessons": [
+          {
+            "lessonSlug": "guitar-my-hero-1-open-chords",
+            "required": true
+          },
+          {
+            "lessonSlug": "guitar-my-hero-2-power-chords",
+            "required": true
+          },
+          {
+            "lessonSlug": "guitar-my-hero-3-grohl-rhythm",
+            "required": true
+          },
+          {
+            "lessonSlug": "guitar-my-hero-4-full-flow",
+            "required": true
+          },
+          {
+            "lessonSlug": "guitar-my-hero-5-grohl-mode",
+            "required": true
+          }
+        ]
+      }
+    ]
+  }
+}

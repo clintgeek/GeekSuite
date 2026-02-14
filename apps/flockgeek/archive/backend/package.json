@@ -1,0 +1,20 @@
+{
+  "name": "flockgeek-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --env-file=.env src/server.js",
+    "start": "node src/server.js",
+    "seed": "node --env-file=.env src/scripts/seed.js"
+  },
+  "dependencies": {
+    "axios": "^1.12.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.0",
+    "mongoose": "^8.5.1",
+    "morgan": "^1.10.0"
+  }
+}

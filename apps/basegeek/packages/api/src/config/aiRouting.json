@@ -1,0 +1,64 @@
+{
+  "redis": {
+    "host": "192.168.1.17",
+    "port": 6380,
+    "contextCacheDB": 0,
+    "stateDB": 1,
+    "retryStrategy": {
+      "enabled": true,
+      "maxAttempts": 10,
+      "backoffMs": 100,
+      "maxBackoffMs": 3000,
+      "timeout": 3600000
+    }
+  },
+  "mongodb": {
+    "host": "192.168.1.17",
+    "port": 27018,
+    "database": "basegeek"
+  },
+  "postgres": {
+    "host": "192.168.1.17",
+    "port": 55432,
+    "database": "basegeek",
+    "enabled": false
+  },
+  "roundRobin": {
+    "enabled": true,
+    "resetInterval": 3600000,
+    "respectRateLimits": true
+  },
+  "contextManagement": {
+    "defaultStrategy": "summarize-old",
+    "summarizationThreshold": 4000,
+    "maxContextTokens": 8000,
+    "summaryModel": "gemini:gemini-2.0-flash-exp",
+    "cacheEnabled": true
+  },
+  "healthTracking": {
+    "enabled": true,
+    "failureThreshold": 3,
+    "cooldownSeconds": 300,
+    "checkInterval": 60000,
+    "backgroundJobEnabled": true,
+    "backgroundJobInterval": 60000
+  },
+  "taskDetection": {
+    "enabled": true,
+    "confidenceThreshold": 0.7,
+    "defaultTask": "general"
+  },
+  "telemetry": {
+    "dryRunMode": false,
+    "logToConsole": true,
+    "logToFile": true,
+    "logPath": "./logs/routing-telemetry.log",
+    "postgresEnabled": false,
+    "includeFamily": true,
+    "includeTaskType": true,
+    "includeLatency": true,
+    "includeProviderScore": true
+  },
+  "familiesConfigPath": "./families.json",
+  "debug": false
+}

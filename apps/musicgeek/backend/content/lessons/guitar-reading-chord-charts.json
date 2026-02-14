@@ -1,0 +1,83 @@
+{
+  "slug": "guitar-reading-chord-charts",
+  "template": "guided_steps_v1",
+  "instrumentSlug": "guitar",
+  "orderIndex": 19,
+  "meta": {
+    "title": "Reading Chord Charts & Song Sheets",
+    "subtitle": "Learn to read and play from chord charts like a pro!",
+    "category": "Music Reading",
+    "difficulty": 2,
+    "audience": "kid",
+    "estimatedTimeMinutes": 15,
+    "xpReward": 100,
+    "tags": ["guitar", "intermediate", "reading", "chords", "theory"],
+    "imageUrl": "/assets/lessons/guitar/reading-chord-charts/song-sheet-example.svg"
+  },
+  "content": {
+    "objectives": [
+      "Understand chord diagram notation",
+      "Read chord charts and song sheets",
+      "Interpret timing and structure",
+      "Play songs from written music"
+    ],
+    "steps": [
+      {
+        "id": "intro",
+        "type": "text",
+        "title": "Learn to read music!",
+        "body": "You've been learning chords from diagrams in these lessons—awesome! But what about learning songs from the internet or books? Today you'll learn to read CHORD CHARTS and SONG SHEETS. This skill lets you play thousands of songs you've never heard before. It's like learning to read, but for music!"
+      },
+      {
+        "id": "chord-diagram-review",
+        "type": "text+image",
+        "title": "Understanding chord diagrams",
+        "body": "You've seen these before! The 6 vertical lines are the strings (thick on left, thin on right). The horizontal lines are frets. Dots show where to put your fingers. Numbers tell you which finger (1=pointer, 2=middle, 3=ring, 4=pinky). X means don't play that string. O means play it open!",
+        "imageUrl": "/assets/lessons/guitar/a-major/chord-diagram.svg"
+      },
+      {
+        "id": "song-sheet-format",
+        "type": "text+image",
+        "title": "What is a song sheet?",
+        "body": "A song sheet shows chord diagrams at the top, then the song structure below. Look at this example! The chord boxes show you HOW to play each chord. The colored boxes below show you WHEN to play them. Blue boxes are the verse, orange boxes are the chorus. Each box = 4 beats!",
+        "imageUrl": "/assets/lessons/guitar/reading-chord-charts/song-sheet-example.svg"
+      },
+      {
+        "id": "reading-timing",
+        "type": "text",
+        "title": "Understanding timing marks",
+        "body": "In chord charts, you'll see: | (bar line) = end of a measure. / (slash) = one beat. So 'G / / /' means play G for 4 beats. 'G / D /' means play G for 2 beats, then D for 2 beats. The vertical bars help you count and stay organized!"
+      },
+      {
+        "id": "song-structure",
+        "type": "text",
+        "title": "Song structure labels",
+        "body": "Songs have sections labeled like this: [Verse], [Chorus], [Bridge], [Intro], [Outro]. These tell you which part of the song you're playing. Often you'll see 'Verse x2' meaning play the verse twice. Or 'Chorus (repeat)' meaning loop it. These labels help you navigate the song!"
+      },
+      {
+        "id": "practice-reading",
+        "type": "text",
+        "title": "Practice reading a simple chart",
+        "body": "Here's a simple chart to practice:\n\n[Verse]\nG  /  /  /  |  D  /  /  /  |  Em  /  /  /  |  C  /  /  /\n\n[Chorus]\nC  /  /  /  |  G  /  /  /  |  D  /  /  /  |  G  /  /  /\n\nTry playing this! Each chord gets 4 beats (count: 1-2-3-4). The vertical bars | separate measures. This is a complete song structure you can play right now!"
+      },
+      {
+        "id": "finding-songs",
+        "type": "text",
+        "title": "Where to find chord charts",
+        "body": "Want to learn your favorite songs? Search '[song name] chords' on Google! Websites like Ultimate Guitar, Chordify, and others have thousands of free chord charts. Start with songs marked 'Easy' or 'Beginner.' Look for songs that use the chords you know: G, D, Em, C, A!"
+      },
+      {
+        "id": "practice",
+        "type": "checkpoint",
+        "title": "Read and play",
+        "body": "Can you look at a chord chart and understand what it's telling you? Can you play the practice chart from step 6? Being able to read chord charts means you can learn ANY song, even if you've never heard it before. This is a superpower for guitarists!"
+      },
+      {
+        "id": "celebration",
+        "type": "celebration",
+        "title": "🎵 You can read music!",
+        "body": "Incredible! You can now read chord charts and song sheets! 🎸 This means the entire world of guitar music is open to you. You're not limited to lessons anymore—you can learn any song you want! Search for your favorite songs online and start playing them. You're officially a self-sufficient guitarist! 🌟📖🎶"
+      }
+    ]
+  }
+}

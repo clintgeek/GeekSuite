@@ -1,0 +1,103 @@
+{
+  "slug": "spanish-common-phrases",
+  "template": "guided_steps_v1",
+  "languageCode": "es",
+  "level": "A1",
+  "orderIndex": 5,
+  "meta": {
+    "title": "Frases Comunes",
+    "subtitle": "Essential everyday phrases",
+    "category": "Basics",
+    "difficulty": 1,
+    "audience": "both",
+    "estimatedTimeMinutes": 8,
+    "xpReward": 50,
+    "tags": ["phrases", "basics", "beginner", "essential"],
+    "imageUrl": "/assets/lessons/spanish/phrases/hero.svg"
+  },
+  "content": {
+    "learningOutcomes": [
+      "Use polite expressions (please, thank you)",
+      "Apologize and ask for permission",
+      "Understand basic yes/no responses"
+    ],
+    "vocabulary": ["por favor", "gracias", "de nada", "lo siento", "perdón", "sí", "no", "claro", "vale"],
+    "steps": [
+      {
+        "id": "intro",
+        "type": "text",
+        "title": "Magic Words",
+        "body": "Just like in English, polite phrases open doors everywhere! 🚪✨\n\nThese words will make every interaction smoother and earn you respect from native speakers."
+      },
+      {
+        "id": "please-thanks",
+        "type": "text+audio",
+        "title": "Please & Thank You",
+        "body": "The two most important phrases:\n\n• **Por favor** - Please (literally: 'for favor')\n• **Gracias** - Thank you\n• **Muchas gracias** - Thank you very much\n• **Mil gracias** - Thanks a million (literally: 'a thousand thanks')",
+        "audioPhrase": "Por favor. Gracias. Muchas gracias."
+      },
+      {
+        "id": "listen-please",
+        "type": "listen_repeat",
+        "title": "Practice: Ordering Coffee",
+        "phrase": "Un café, por favor. ¡Gracias!",
+        "translation": "A coffee, please. Thank you!",
+        "audioPhrase": "Un café, por favor. ¡Gracias!"
+      },
+      {
+        "id": "youre-welcome",
+        "type": "text+audio",
+        "title": "You're Welcome",
+        "body": "When someone thanks you:\n\n• **De nada** - You're welcome (literally: 'of nothing')\n• **No hay de qué** - Don't mention it\n• **Con gusto** - With pleasure (common in Latin America)",
+        "audioPhrase": "De nada. No hay de qué. Con gusto."
+      },
+      {
+        "id": "sorry-excuse",
+        "type": "text+audio",
+        "title": "Sorry & Excuse Me",
+        "body": "• **Lo siento** - I'm sorry (for something you did)\n• **Perdón** - Pardon/Excuse me (to get attention or pass by)\n• **Disculpe** - Excuse me (more formal)\n• **Con permiso** - Excuse me (when passing through)",
+        "audioPhrase": "Lo siento. Perdón. Disculpe. Con permiso."
+      },
+      {
+        "id": "listen-sorry",
+        "type": "listen_repeat",
+        "title": "Practice: Getting Past Someone",
+        "phrase": "Perdón, ¿puedo pasar?",
+        "translation": "Excuse me, may I pass?",
+        "audioPhrase": "Perdón, ¿puedo pasar?"
+      },
+      {
+        "id": "yes-no",
+        "type": "text+audio",
+        "title": "Yes & No",
+        "body": "• **Sí** - Yes\n• **No** - No\n• **Claro** - Of course/Sure\n• **Vale** - Okay (very common in Spain)\n• **Bueno** - Okay/Good (common in Latin America)",
+        "audioPhrase": "Sí. No. Claro. Vale. Bueno."
+      },
+      {
+        "id": "useful-extras",
+        "type": "text+audio",
+        "title": "Super Useful Extras",
+        "body": "These will help you in any situation:\n\n• **No entiendo** - I don't understand\n• **¿Puede repetir?** - Can you repeat?\n• **Más despacio, por favor** - More slowly, please\n• **No hablo español** - I don't speak Spanish",
+        "audioPhrase": "No entiendo. ¿Puede repetir? Más despacio, por favor."
+      },
+      {
+        "id": "match-phrases",
+        "type": "matching",
+        "title": "Match the Phrases",
+        "pairs": [
+          { "left": "Por favor", "right": "Please" },
+          { "left": "Gracias", "right": "Thank you" },
+          { "left": "Lo siento", "right": "I'm sorry" },
+          { "left": "De nada", "right": "You're welcome" },
+          { "left": "Perdón", "right": "Excuse me" }
+        ]
+      },
+      {
+        "id": "celebration",
+        "type": "celebration",
+        "title": "🎉 ¡Muy bien!",
+        "body": "You now know the essential polite phrases! Using these will make a great impression.\n\n**Challenge:** Use 'gracias' and 'por favor' at least 5 times today!"
+      }
+    ]
+  }
+}

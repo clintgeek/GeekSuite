@@ -1,0 +1,52 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: musicgeek-backend
+    environment:
+      - NODE_ENV=development
+      - PORT=3006
+      - CORS_ORIGIN=http://localhost:3005
+      - MONGO_URI=${MONGO_URI}
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+      - BASEGEEK_URL=${BASEGEEK_URL}
+    ports:
+      - "3006:3006"
+    networks:
+      - musicgeek_network
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    command: npm run dev
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: musicgeek-frontend
+    environment:
+      - VITE_API_URL=
+    ports:
+      - "3005:3005"
+    depends_on:
+      - backend
+    networks:
+      - musicgeek_network
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: npm run dev
+    restart: unless-stopped
+
+networks:
+  musicgeek_network:
+    driver: bridge

@@ -1,0 +1,76 @@
+{
+  "slug": "guitar-down-up-strumming",
+  "template": "guided_steps_v1",
+  "instrumentSlug": "guitar",
+  "orderIndex": 11,
+  "meta": {
+    "title": "Down-Up Strumming",
+    "subtitle": "Learn the up-strum to make your rhythm more interesting!",
+    "category": "Rhythm & Strumming",
+    "difficulty": 2,
+    "audience": "kid",
+    "estimatedTimeMinutes": 15,
+    "xpReward": 100,
+    "tags": ["guitar", "beginner", "strumming", "rhythm", "technique"],
+    "imageUrl": "/assets/lessons/guitar/down-up-strumming/hero.svg"
+  },
+  "content": {
+    "objectives": [
+      "Learn the up-strum technique",
+      "Combine down and up strums",
+      "Play basic strumming patterns",
+      "Add groove to your playing"
+    ],
+    "steps": [
+      {
+        "id": "intro",
+        "type": "text",
+        "title": "Time to add the up-strum!",
+        "body": "So far you've been strumming DOWN on every beat. That sounds good, but real guitarists also strum UP! This creates a flowing, groovy rhythm that makes songs come alive. Let's learn how to do it!"
+      },
+      {
+        "id": "down-review",
+        "type": "text",
+        "title": "Review: The down-strum",
+        "body": "Make an Em chord. Strum DOWN across the strings—your hand moves from the ceiling toward the floor. Do this 4 times slowly. This is what you already know. Easy, right?"
+      },
+      {
+        "id": "up-strum",
+        "type": "text",
+        "title": "The up-strum",
+        "body": "Now for something new! Keep holding Em. This time, strum UP—your hand moves from the floor toward the ceiling. You'll hit fewer strings (maybe 3-4), and that's perfect! The up-strum is lighter and softer than the down-strum. Try it 4 times slowly."
+      },
+      {
+        "id": "down-up-pattern",
+        "type": "text",
+        "title": "Combine them: Down-Up",
+        "body": "Now let's put them together! Strum DOWN, then UP, then DOWN, then UP. Say it out loud: 'DOWN-up-DOWN-up-DOWN-up-DOWN-up'. Keep your arm moving like a windshield wiper—smooth and steady. The down-strums are louder, the up-strums are quieter.",
+        "videoUrl": "https://www.youtube.com/embed/5rhC2hrWohU"
+      },
+      {
+        "id": "counting",
+        "type": "text",
+        "title": "Add counting",
+        "body": "Let's add numbers! Count '1-and-2-and-3-and-4-and' while you strum. DOWN on the numbers (1, 2, 3, 4), UP on the 'ands'. So: DOWN(1)-up(and)-DOWN(2)-up(and)-DOWN(3)-up(and)-DOWN(4)-up(and). This is the most important strumming pattern in guitar!"
+      },
+      {
+        "id": "with-chords",
+        "type": "text",
+        "title": "Try it with chord changes",
+        "body": "Now let's make it musical! Play Em with the down-up pattern for 8 strums (1-and-2-and-3-and-4-and), then switch to A and do the same pattern. The chord changes happen on beat 1, but your strumming pattern stays the same. This is how real songs work!"
+      },
+      {
+        "id": "practice",
+        "type": "checkpoint",
+        "title": "Master the pattern",
+        "body": "Can you play the down-up pattern (DOWN-up-DOWN-up-DOWN-up-DOWN-up) on Em without stopping? Even if it's slow, that's great! This pattern will be the foundation for almost every song you play. Keep that arm moving steady like a metronome!"
+      },
+      {
+        "id": "celebration",
+        "type": "celebration",
+        "title": "🎸 You've leveled up your rhythm!",
+        "body": "Incredible! You just learned the down-up strumming pattern—the secret to making songs groove! 🎵 This pattern appears in almost every song you hear. Your playing just went from 'beginner' to 'real guitarist'! Practice this pattern every day, and soon it'll feel as natural as walking. You're crushing it! 🌟🔥"
+      }
+    ]
+  }
+}

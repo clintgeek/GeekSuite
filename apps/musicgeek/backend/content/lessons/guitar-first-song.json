@@ -1,0 +1,75 @@
+{
+  "slug": "guitar-first-song",
+  "template": "guided_steps_v1",
+  "instrumentSlug": "guitar",
+  "orderIndex": 8,
+  "meta": {
+    "title": "Your First Song!",
+    "subtitle": "Play a real song using Em and A major chords.",
+    "category": "Playing Songs",
+    "difficulty": 1,
+    "audience": "kid",
+    "estimatedTimeMinutes": 15,
+    "xpReward": 150,
+    "tags": ["guitar", "beginner", "song", "performance"],
+    "imageUrl": "/assets/lessons/guitar/first-song/hero.svg"
+  },
+  "content": {
+    "objectives": [
+      "Play a complete song from start to finish",
+      "Use Em and A major chords in a pattern",
+      "Keep steady rhythm throughout",
+      "Perform your first piece of music!"
+    ],
+    "steps": [
+      {
+        "id": "intro",
+        "type": "text",
+        "title": "You're ready for a REAL song!",
+        "body": "This is it—the moment you've been working toward! You know E minor, A major, and how to switch between them. That means you can play a REAL SONG! We're going to learn a simple, beautiful melody that uses just these 2 chords."
+      },
+      {
+        "id": "song-pattern",
+        "type": "text",
+        "title": "The song pattern",
+        "body": "Our song has a simple pattern: Em (4 strums) → A (4 strums) → Em (4 strums) → A (4 strums). That's it! We'll repeat this pattern to make a complete song. Let's break it down step by step."
+      },
+      {
+        "id": "part-a",
+        "type": "text",
+        "title": "Part A: The verse",
+        "body": "Start with E minor. Strum down 4 times, counting '1, 2, 3, 4'. Switch to A major. Strum down 4 times: '1, 2, 3, 4'. That's Part A! Practice this until you can do it smoothly without stopping."
+      },
+      {
+        "id": "part-b",
+        "type": "text",
+        "title": "Part B: The chorus",
+        "body": "Now do the same thing again: Em (4 strums) → A (4 strums). This is Part B—it's the same as Part A, but we're repeating it to make the song longer. Try playing Part A, then Part B without stopping."
+      },
+      {
+        "id": "full-song",
+        "type": "text",
+        "title": "Put it all together",
+        "body": "Here's the full song: Part A (Em-A) + Part B (Em-A) = 16 total strums! That's: Em, Em, Em, Em, A, A, A, A, Em, Em, Em, Em, A, A, A, A. Play this all the way through. Congratulations—you just played a song!"
+      },
+      {
+        "id": "add-dynamics",
+        "type": "text",
+        "title": "Make it musical",
+        "body": "Now let's make it sound even better! Try strumming softer on the Em parts (gentle and moody) and louder on the A parts (bright and strong). This is called 'dynamics'—it makes your playing more expressive and musical!"
+      },
+      {
+        "id": "performance",
+        "type": "checkpoint",
+        "title": "Your first performance",
+        "body": "Can you play the whole song from start to finish without stopping? Even if you make mistakes, keep going—that's what real musicians do! When you're ready, play it one more time like you're performing for an audience. You've got this!"
+      },
+      {
+        "id": "celebration",
+        "type": "celebration",
+        "title": "🎸 YOU JUST PLAYED A SONG!",
+        "body": "AMAZING! You just played your first complete song on guitar! 🎉🎵 Do you realize how incredible that is? You went from never touching a guitar to playing actual music! This is a moment to be proud of. Every famous guitarist started exactly where you are—with their first song. Keep practicing, keep playing, and most importantly—keep having fun! You're a guitarist now! 🌟🎸"
+      }
+    ]
+  }
+}

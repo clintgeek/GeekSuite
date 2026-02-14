@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <!-- Background -->
+    <rect width="32" height="32" fill="#6098CC"/>
+
+    <!-- Notebook Icon -->
+    <path d="M8 4C6.89543 4 6 4.89543 6 6V26C6 27.1046 6.89543 28 8 28H24C25.1046 28 26 27.1046 26 26V6C26 4.89543 25.1046 4 24 4H8Z" fill="white"/>
+    <path d="M8 4H24C25.1046 4 26 4.89543 26 6V26C26 27.1046 25.1046 28 24 28H8C6.89543 28 6 27.1046 6 26V6C6 4.89543 6.89543 4 8 4Z" stroke="white" stroke-width="2"/>
+    <line x1="10" y1="8" x2="22" y2="8" stroke="#6098CC" stroke-width="2"/>
+    <line x1="10" y1="12" x2="22" y2="12" stroke="#6098CC" stroke-width="2"/>
+    <line x1="10" y1="16" x2="22" y2="16" stroke="#6098CC" stroke-width="2"/>
+    <line x1="10" y1="20" x2="22" y2="20" stroke="#6098CC" stroke-width="2"/>
+</svg>

@@ -1,0 +1,76 @@
+{
+  "slug": "guitar-e-minor-chord",
+  "template": "guided_steps_v1",
+  "instrumentSlug": "guitar",
+  "orderIndex": 4,
+  "meta": {
+    "title": "Your First Chord: E Minor",
+    "subtitle": "Learn the easiest guitar chord—only 2 fingers!",
+    "category": "First Chords",
+    "difficulty": 1,
+    "audience": "kid",
+    "estimatedTimeMinutes": 12,
+    "xpReward": 75,
+    "tags": ["guitar", "beginner", "chords", "e-minor"],
+    "imageUrl": "/assets/lessons/guitar/e-minor/hero.svg"
+  },
+  "content": {
+    "learningOutcomes": [
+      "Play the E minor chord with correct finger placement",
+      "Strum all six strings together",
+      "Make your first real chord sound!"
+    ],
+    "steps": [
+      {
+        "id": "intro",
+        "type": "text",
+        "title": "Your first chord!",
+        "body": "A CHORD is when you play multiple strings at the same time to make a fuller sound. E minor (Em) is the perfect first chord because you only need 2 fingers. Let's learn it step by step!"
+      },
+      {
+        "id": "see-diagram",
+        "type": "text+image",
+        "title": "The E minor chord diagram",
+        "body": "Here's what E minor looks like on a chord diagram. You'll use just 2 fingers! The dots show where to put your fingers, and the numbers tell you which fingers to use (2 = middle finger, 3 = ring finger).",
+        "imageUrl": "/assets/lessons/guitar/e-minor/chord-diagram.svg",
+        "videoUrl": "https://www.youtube.com/embed/Hfm4-yOI6oA"
+      },
+      {
+        "id": "finger-one",
+        "type": "text",
+        "title": "Place your first finger",
+        "body": "Put your MIDDLE finger (2nd finger) on the 2nd fret of the 5th string (the A string—second thickest). Press down firmly behind the fret."
+      },
+      {
+        "id": "finger-two",
+        "type": "text",
+        "title": "Add your second finger",
+        "body": "Now put your RING finger (3rd finger) on the 2nd fret of the 4th string (the D string). Both fingers should be on the same fret, just different strings. Keep them curved like little hammers!"
+      },
+      {
+        "id": "check-position",
+        "type": "text",
+        "title": "Check your chord shape",
+        "body": "Look at your hand—you should have 2 fingers on the 2nd fret, side by side. Your other fingers should be relaxed and out of the way. This is the E minor chord shape!"
+      },
+      {
+        "id": "strum",
+        "type": "text",
+        "title": "Strum all the strings",
+        "body": "With your other hand, use your thumb or a pick to strum DOWN across ALL SIX strings in one smooth motion. Start from the thickest string and sweep down to the thinnest. Hear that rich, full sound? That's your first chord!"
+      },
+      {
+        "id": "practice",
+        "type": "checkpoint",
+        "title": "Practice your Em chord",
+        "body": "Try strumming the chord a few times. Make sure each string rings clearly—if you hear buzzing, press down a bit firmer or adjust your finger position. It's okay if it takes a few tries to get it right!"
+      },
+      {
+        "id": "celebration",
+        "type": "celebration",
+        "title": "🎸 You're a guitarist now!",
+        "body": "INCREDIBLE! You just played your first real guitar chord! 🌟 E minor is used in thousands of songs, and you just nailed it. This is a HUGE milestone—you're officially making music! Every song you'll ever play starts with learning chords just like this one. Be proud!"
+      }
+    ]
+  }
+}

@@ -1,0 +1,49 @@
+services:
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: bujogeek-backend
+    environment:
+      - NODE_ENV=production
+      - PORT=${PORT}
+      - DB_URI=${DB_URI}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+      - SECRET_KEY=${SECRET_KEY}
+      - BASEGEEK_URL=${BASEGEEK_URL}
+      - APP_NAME=bujogeek
+    ports:
+      - "${PORT}:${PORT}"
+    expose:
+      - "${PORT}"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:${PORT}/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - bujogeek_network
+    restart: always
+
+  frontend:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      args:
+        - BACKEND_PORT=${PORT}
+    container_name: bujogeek-frontend
+    environment:
+      - BACKEND_PORT=${PORT}
+    ports:
+      - "9989:80"  # As specified in the plan for reverse proxy
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - bujogeek_network
+    restart: always
+
+networks:
+  bujogeek_network:
+    driver: bridge

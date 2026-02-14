@@ -1,0 +1,16 @@
+FROM node:20-alpine AS build
+
+WORKDIR /app
+
+# Copy shared @geeksuite/user package first (dependency of ui)
+COPY packages/user ../user
+
+COPY packages/ui/package*.json ./
+RUN npm install
+
+COPY packages/ui ./
+RUN npm run build
+
+EXPOSE 8988
+
+CMD ["npm", "run", "preview", "--", "--port", "8988", "--host", "0.0.0.0"]

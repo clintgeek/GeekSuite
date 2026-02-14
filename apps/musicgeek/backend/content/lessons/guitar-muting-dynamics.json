@@ -1,0 +1,81 @@
+{
+  "slug": "guitar-muting-dynamics",
+  "template": "guided_steps_v1",
+  "instrumentSlug": "guitar",
+  "orderIndex": 14,
+  "meta": {
+    "title": "Muting & Dynamics",
+    "subtitle": "Control your sound and add expression to your playing!",
+    "category": "Technique & Expression",
+    "difficulty": 2,
+    "audience": "kid",
+    "estimatedTimeMinutes": 15,
+    "xpReward": 100,
+    "tags": ["guitar", "intermediate", "technique", "muting", "dynamics", "expression"],
+    "imageUrl": "/assets/lessons/guitar/muting-dynamics/hero.svg"
+  },
+  "content": {
+    "objectives": [
+      "Learn palm muting technique",
+      "Control volume with dynamics",
+      "Add accents to your strumming",
+      "Make your playing more expressive"
+    ],
+    "steps": [
+      {
+        "id": "intro",
+        "type": "text",
+        "title": "Time to add expression!",
+        "body": "You know chords and strumming patterns—awesome! But what separates good guitarists from GREAT guitarists? Expression! That means controlling HOW you play, not just WHAT you play. Today we'll learn two powerful techniques: muting and dynamics. These will make your playing sound professional!"
+      },
+      {
+        "id": "what-is-muting",
+        "type": "text",
+        "title": "What is palm muting?",
+        "body": "Palm muting is when you rest the side of your strumming hand lightly on the strings near the bridge (the metal part where the strings attach). This creates a 'chunky,' muted sound—like 'chk-chk-chk' instead of 'ring-ring-ring.' It's used in almost every rock and pop song!"
+      },
+      {
+        "id": "try-muting",
+        "type": "text",
+        "title": "Try palm muting",
+        "body": "Make an Em chord. Rest the side of your strumming hand (the pinky side) lightly on the strings right where they cross the bridge. Now strum. Hear that muted, percussive sound? That's palm muting! If it sounds too muted, lift your hand slightly. If it rings out normally, press down a bit more."
+      },
+      {
+        "id": "muting-pattern",
+        "type": "text",
+        "title": "Muted vs. open pattern",
+        "body": "Here's a cool pattern: Play Em with palm muting for 4 strums (muted sound), then lift your hand and play 4 strums normally (open, ringing sound). The contrast sounds awesome! Try it: MUTED-muted-muted-muted, OPEN-open-open-open. This is how pros create dynamics!"
+      },
+      {
+        "id": "what-is-dynamics",
+        "type": "text",
+        "title": "What are dynamics?",
+        "body": "Dynamics means playing LOUD and soft. It's like the volume knob on your playing! Playing everything at the same volume sounds boring. But when you mix loud and soft, your music comes alive! Let's learn how to control your volume."
+      },
+      {
+        "id": "loud-soft",
+        "type": "text",
+        "title": "Practice loud and soft",
+        "body": "Play G major. First, strum REALLY SOFT—barely touch the strings. Then strum REALLY LOUD—dig into the strings with power! Feel the difference? Now try this pattern: soft-soft-LOUD-soft, soft-soft-LOUD-soft. The loud strum is called an 'accent'—it adds punch to your rhythm!"
+      },
+      {
+        "id": "combine-techniques",
+        "type": "text",
+        "title": "Combine muting and dynamics",
+        "body": "Now let's put it all together! Play the G-D-Em-A progression with this pattern: G (muted, soft) → D (muted, soft) → Em (open, LOUD) → A (open, LOUD). Hear how much more interesting that sounds? You're creating a story with your playing!"
+      },
+      {
+        "id": "practice",
+        "type": "checkpoint",
+        "title": "Master expression",
+        "body": "Can you play any chord with both palm muting and normal strumming? Can you control your volume from soft to loud? These techniques might feel awkward at first, but they're what make the difference between playing notes and making music. Keep experimenting!"
+      },
+      {
+        "id": "celebration",
+        "type": "celebration",
+        "title": "🎸 You sound like a pro!",
+        "body": "Fantastic! You just learned two of the most important techniques in guitar playing! 🎵 Palm muting and dynamics are what separate bedroom players from stage performers. These techniques add emotion, energy, and professionalism to everything you play. Now when you play songs, you're not just hitting chords—you're creating art! Keep exploring these techniques and your playing will keep getting better and better! 🌟🔥"
+      }
+    ]
+  }
+}

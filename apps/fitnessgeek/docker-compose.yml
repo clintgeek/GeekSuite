@@ -1,0 +1,51 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: fitnessgeek-backend
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - MONGODB_URI=${MONGODB_URI}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+      - BASEGEEK_URL=${BASEGEEK_URL}
+      - REDIS_URL=${REDIS_URL}
+      - AI_GEEK_API_KEY=${AI_GEEK_API_KEY}
+      - USDA_API_KEY=${USDA_API_KEY}
+      - NUTRITIONIX_APP_ID=${NUTRITIONIX_APP_ID}
+      - NUTRITIONIX_API_KEY=${NUTRITIONIX_API_KEY}
+      - OPENFOODFACTS_API_URL=${OPENFOODFACTS_API_URL}
+      - CORS_ORIGINS=${CORS_ORIGINS}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    expose:
+      - "3001"
+
+    networks:
+      - fitnessgeek_network
+    restart: always
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - BACKEND_PORT=3001
+    container_name: fitnessgeek-frontend
+    environment:
+      - BACKEND_PORT=3001
+      - VITE_API_URL=${VITE_API_URL}
+      - VITE_BASEGEEK_URL=${VITE_BASEGEEK_URL}
+    ports:
+      - "4080:80"  # Expose on port 4080, your nginx can proxy to this
+
+    depends_on:
+      - backend
+    networks:
+      - fitnessgeek_network
+    restart: always
+
+networks:
+  fitnessgeek_network:
+    driver: bridge

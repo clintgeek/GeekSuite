@@ -1,0 +1,80 @@
+{
+  "slug": "guitar-my-hero-5-grohl-mode",
+  "template": "guided_steps_v1",
+  "instrumentSlug": "guitar",
+  "orderIndex": 25,
+  "meta": {
+    "title": "My Hero - Grohl Mode",
+    "subtitle": "Dial in tone, feel, and performance like a rock frontperson.",
+    "category": "Performance & Tone",
+    "difficulty": 4,
+    "audience": "both",
+    "estimatedTimeMinutes": 25,
+    "xpReward": 200,
+    "tags": ["guitar", "intermediate", "performance", "tone", "my-hero", "grohl"],
+    "imageUrl": "/assets/lessons/guitar/my-hero-5-grohl-mode/hero.svg"
+  },
+  "content": {
+    "objectives": [
+      "Shape your tone for a rock anthem sound",
+      "Control intensity without speeding up",
+      "Add small performance details to your My Hero arrangement"
+    ],
+    "steps": [
+      {
+        "id": "intro",
+        "type": "text",
+        "title": "Playing like a frontperson",
+        "body": "At this point you can play a full My Hero-style arrangement. Now it's about how you play it: your tone, your timing feel, and your confidence. In this lesson you'll polish your sound so it feels closer to a live rock performance."
+      },
+      {
+        "id": "tone-electric",
+        "type": "text",
+        "title": "Electric tone basics",
+        "body": "If you're on electric guitar, try this starting point: use a bridge or bridge+middle pickup, set your amp or modeler to a crunchy rock sound (medium gain, not maxed out), and keep the mids turned up enough so your chords sound clear. Too much bass or gain will make things muddy when you strum hard."
+      },
+      {
+        "id": "tone-acoustic",
+        "type": "text",
+        "title": "Acoustic feel",
+        "body": "If you're on acoustic, focus on your hands instead of gear. Use a medium pick and aim your strums slightly closer to the bridge for choruses to get a brighter, more aggressive sound. Keep your grip relaxed so you don't \"dig in\" so hard that the strings choke."
+      },
+      {
+        "id": "timing-feel",
+        "type": "text",
+        "title": "Solid timing with attitude",
+        "body": "Play your full My Hero flow with a metronome or drum loop. First, aim to sit exactly on the beat. Once that feels comfortable, experiment with leaning just a tiny bit ahead of the click during the chorus. Not rushing, just giving it a bit of forward energy the way many rock players do."
+      },
+      {
+        "id": "dynamic-arc",
+        "type": "text",
+        "title": "Plan your volume story",
+        "body": "Decide on clear intensity levels for each section. For example: Intro at 70%, Verse at 60%, Chorus at 95%. Practice playing through your structure while keeping those levels consistent. If you catch yourself starting a verse too loud, restart and try again."
+      },
+      {
+        "id": "embellishments",
+        "type": "text",
+        "title": "Small rock details",
+        "body": "Add simple, tasteful touches: slide into your starting power chord from one fret below, stop the sound with your hands right before a big chorus, or let the final chord ring while you slowly relax your strumming hand. These tiny moves make your performance feel intentional."
+      },
+      {
+        "id": "record-yourself",
+        "type": "text",
+        "title": "Record and review",
+        "body": "Use your phone or computer to record a full run of your My Hero arrangement. Then listen back once, without playing. Ask yourself: Is my timing steady? Do the choruses really feel bigger than the verses? Does my tone stay clear when I strum hard? Pick one thing to improve on the next take."
+      },
+      {
+        "id": "checkpoint",
+        "type": "checkpoint",
+        "title": "Grohl-mode performance",
+        "body": "Can you play through your full My Hero-style song with confident strumming, clear tone, and a strong quiet-loud story from start to finish? If you can listen back to a recording and feel proud of the energy, you're absolutely in Grohl mode."
+      },
+      {
+        "id": "celebration",
+        "type": "celebration",
+        "title": "🎸 You finished the My Hero project!",
+        "body": "Huge achievement! You took a big rock song and built it from campfire chords all the way to a full, expressive performance. This is exactly how real guitarists approach songs: start simple, add power chords, shape the rhythm, then focus on tone and feel. You've just proved you can do all of that."
+      }
+    ]
+  }
+}

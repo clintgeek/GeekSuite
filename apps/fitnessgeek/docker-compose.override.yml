@@ -1,0 +1,30 @@
+services:
+  backend:
+    build: null
+    image: node:22-bullseye
+    working_dir: /app
+    environment:
+      - NODE_ENV=development
+      - LOCAL_AUTH_COOKIE_DOMAIN=localhost
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://localhost:4080
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    command: sh -lc "npm install && npm run dev"
+
+  frontend:
+    image: node:22-bullseye
+    build: null
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_BASEGEEK_URL=${VITE_BASEGEEK_URL:-https://basegeek.clintgeek.com}
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:3001/api}
+      - VITE_ENABLE_LOCAL_LOGIN=true
+    command: sh -lc "npm install && npm run dev -- --host 0.0.0.0 --port 80"
+    depends_on:
+      - backend

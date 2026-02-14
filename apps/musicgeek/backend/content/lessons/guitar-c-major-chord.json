@@ -1,0 +1,83 @@
+{
+  "slug": "guitar-c-major-chord",
+  "template": "guided_steps_v1",
+  "instrumentSlug": "guitar",
+  "orderIndex": 15,
+  "meta": {
+    "title": "The C Major Chord",
+    "subtitle": "Learn the 5th essential chord—bright and versatile!",
+    "category": "Essential Chords",
+    "difficulty": 2,
+    "audience": "kid",
+    "estimatedTimeMinutes": 15,
+    "xpReward": 100,
+    "tags": ["guitar", "intermediate", "chords", "c-major"],
+    "imageUrl": "/assets/lessons/guitar/c-major/hero.svg"
+  },
+  "content": {
+    "objectives": [
+      "Learn the C major chord shape",
+      "Master the wide finger spread",
+      "Strum 5 strings cleanly",
+      "Complete the essential open chords"
+    ],
+    "steps": [
+      {
+        "id": "intro",
+        "type": "text",
+        "title": "The final essential chord!",
+        "body": "You know Em, A, D, and G—now let's add C MAJOR! This is the last of the 5 essential open chords. Once you have this one, you'll have all the chords you need to play thousands of songs. C is bright, happy, and used in almost every genre of music!"
+      },
+      {
+        "id": "see-diagram",
+        "type": "text+image",
+        "title": "The C major chord diagram",
+        "body": "Here's what C major looks like. Notice how your fingers are spread across 3 different frets? This chord requires good finger independence. The thickest string (low E) doesn't get played—just like with A major!",
+        "imageUrl": "/assets/lessons/guitar/c-major/chord-diagram.svg",
+        "videoUrl": "https://www.youtube.com/embed/RBYqdBqogo4"
+      },
+      {
+        "id": "finger-one",
+        "type": "text",
+        "title": "Place your first finger",
+        "body": "Put your POINTER finger (1st finger) on the 1st fret of the 2nd string (B string). This is the highest finger position in the chord—way up near the headstock!"
+      },
+      {
+        "id": "finger-two",
+        "type": "text",
+        "title": "Add your second finger",
+        "body": "Put your MIDDLE finger (2nd finger) on the 2nd fret of the 4th string (D string). Now you have two fingers down, on different frets and different strings. Your hand should feel stretched!"
+      },
+      {
+        "id": "finger-three",
+        "type": "text",
+        "title": "Add your third finger",
+        "body": "Put your RING finger (3rd finger) on the 3rd fret of the 5th string (A string). This is the lowest finger in the chord. All three fingers are now on different frets—1st, 2nd, and 3rd. This is the C major shape!"
+      },
+      {
+        "id": "check-position",
+        "type": "text",
+        "title": "Check your C shape",
+        "body": "Look at your hand—your fingers should form a diagonal line across the fretboard. Pointer high, middle in the middle, ring low. Make sure each finger is curved and pressing firmly. The thickest string (low E) should not be touched."
+      },
+      {
+        "id": "strum-technique",
+        "type": "text",
+        "title": "Strum 5 strings",
+        "body": "Start your strum from the 5th string (A string), not the thickest string. Strum down across 5 strings. Avoid hitting that low E string—it'll make the chord sound muddy. Listen for a bright, clear, ringing sound!"
+      },
+      {
+        "id": "practice",
+        "type": "checkpoint",
+        "title": "Practice C major",
+        "body": "Strum your C chord several times. If any strings buzz, check your finger placement—make sure you're pressing behind the frets and your fingers aren't touching other strings. This chord takes practice because of the wide spread!"
+      },
+      {
+        "id": "celebration",
+        "type": "celebration",
+        "title": "🎸 All 5 essential chords complete!",
+        "body": "AMAZING! You now know all 5 essential open chords—Em, A, D, G, and C! 🎉 These five chords are the foundation of guitar playing. With these chords, you can play literally THOUSANDS of songs across every genre! You've completed your open chord education. You're officially an intermediate guitarist! 🌟🔥"
+      }
+    ]
+  }
+}

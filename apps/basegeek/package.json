@@ -1,0 +1,19 @@
+{
+  "name": "datageek",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:ui\"",
+    "dev:api": "npm run dev --workspace=@datageek/api",
+    "dev:ui": "npm run dev --workspace=@basegeek/ui",
+    "build": "npm run build --workspaces",
+    "start": "npm run start --workspace=@datageek/api"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "typescript": "^5.3.3"
+  }
+}

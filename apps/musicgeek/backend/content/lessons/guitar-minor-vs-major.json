@@ -1,0 +1,81 @@
+{
+  "slug": "guitar-minor-vs-major",
+  "template": "guided_steps_v1",
+  "instrumentSlug": "guitar",
+  "orderIndex": 20,
+  "meta": {
+    "title": "Minor vs Major Chords",
+    "subtitle": "Understand the emotions and sounds of different chords!",
+    "category": "Music Theory",
+    "difficulty": 2,
+    "audience": "kid",
+    "estimatedTimeMinutes": 12,
+    "xpReward": 100,
+    "tags": ["guitar", "intermediate", "theory", "chords", "emotion"],
+    "imageUrl": "/assets/lessons/guitar/minor-vs-major/hero.svg"
+  },
+  "content": {
+    "objectives": [
+      "Understand the difference between minor and major",
+      "Hear the emotional quality of each type",
+      "Learn why chords sound happy or sad",
+      "Choose chords to match song moods"
+    ],
+    "steps": [
+      {
+        "id": "intro",
+        "type": "text",
+        "title": "Why do chords have feelings?",
+        "body": "Have you noticed that some chords sound happy and bright, while others sound sad or moody? That's not an accident! Chords come in two main types: MAJOR (happy, bright) and MINOR (sad, moody). Today you'll learn why they sound different and how to use them to create emotions in your music!"
+      },
+      {
+        "id": "major-sound",
+        "type": "text",
+        "title": "The major sound: Happy & bright",
+        "body": "Play a G major chord and strum it a few times. Listen to how it sounds—bright, happy, uplifting, positive! Now try C major, then D major, then A major. They all have that same bright, cheerful quality. Major chords sound like sunshine, celebration, and joy!"
+      },
+      {
+        "id": "minor-sound",
+        "type": "text",
+        "title": "The minor sound: Sad & moody",
+        "body": "Now play an E minor chord. Hear the difference? It sounds darker, sadder, more serious. Minor chords have a moody, emotional quality. They sound like rain, reflection, and deep feelings. Minor chords aren't 'bad'—they're just different! They add depth and emotion to music."
+      },
+      {
+        "id": "compare-directly",
+        "type": "text",
+        "title": "Compare them directly",
+        "body": "Here's a cool trick: Play A major, then switch to A minor (you'll learn this chord later—it's like A major but move one finger down one fret). Hear how just ONE NOTE changes the whole feeling from happy to sad? That's the power of major vs minor! The difference is tiny but the emotional impact is huge!"
+      },
+      {
+        "id": "why-the-difference",
+        "type": "text",
+        "title": "Why do they sound different?",
+        "body": "Here's the music theory: Major and minor chords use different notes. The 'middle note' (called the third) is what makes the difference. In major chords, this note is higher (bright sound). In minor chords, it's lower (dark sound). Just one note creates all that emotional difference!"
+      },
+      {
+        "id": "using-both",
+        "type": "text",
+        "title": "Using both in songs",
+        "body": "Great songs use BOTH major and minor chords! Try these progressions:\n\nProgression 1:\nC (major) → G (major) → Am (minor) → F (major)\nHear how the Am adds emotional depth?\n\nProgression 2:\nEm (minor) → C (major) → G (major) → D (major)\nThe Em start gives it a moody beginning that lifts into brightness!"
+      },
+      {
+        "id": "choosing-chords",
+        "type": "text",
+        "title": "Choosing chords for your song",
+        "body": "Want to write a happy song? Use mostly major chords (G, C, D, A). Want a sad or emotional song? Start with minor chords (Em, Am) and maybe add some major ones for contrast. Want something complex? Mix them equally! The chord types you choose create the emotional story of your song!"
+      },
+      {
+        "id": "practice",
+        "type": "checkpoint",
+        "title": "Test your ears",
+        "body": "Can you hear the difference between major and minor? Play G major, then Em. Can you feel the emotional shift? This is called 'ear training'—learning to hear the qualities of different chords. The more you practice listening, the better musician you become!"
+      },
+      {
+        "id": "celebration",
+        "type": "celebration",
+        "title": "🎵 You understand music theory!",
+        "body": "Awesome! You now understand one of the most important concepts in music—major vs minor! 🎸 This isn't just guitar knowledge—this applies to ALL music. Now when you listen to songs, you'll hear whether they're using major or minor chords and understand why they make you feel certain emotions. You're thinking like a real musician! 🌟🎶"
+      }
+    ]
+  }
+}

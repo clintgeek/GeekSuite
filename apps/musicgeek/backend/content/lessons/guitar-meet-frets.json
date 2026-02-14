@@ -1,0 +1,58 @@
+{
+  "slug": "guitar-meet-frets",
+  "template": "guided_steps_v1",
+  "instrumentSlug": "guitar",
+  "orderIndex": 3,
+  "meta": {
+    "title": "Meet the Frets",
+    "subtitle": "Discover the metal bars on your guitar neck and how they change the sound.",
+    "category": "Getting Started",
+    "difficulty": 1,
+    "audience": "kid",
+    "estimatedTimeMinutes": 10,
+    "xpReward": 50,
+    "tags": ["guitar", "beginner", "frets", "fretboard"],
+    "imageUrl": "/assets/lessons/guitar/meet-frets/hero.svg"
+  },
+  "content": {
+    "learningOutcomes": [
+      "Understand what frets are and how they work",
+      "Press down on a fret to change a string's sound",
+      "Play your first fretted notes"
+    ],
+    "steps": [
+      {
+        "id": "intro",
+        "type": "text+image",
+        "title": "What are frets?",
+        "body": "See those metal bars going across the neck of your guitar? Those are called FRETS. They're like magic buttons—when you press a string down behind a fret, it changes the sound to a different note!",
+        "imageUrl": "/assets/lessons/guitar/meet-frets/frets-closeup.avif"
+      },
+      {
+        "id": "how-to-press",
+        "type": "text+image",
+        "title": "How to press a fret",
+        "body": "Use your fingertip to press the string down BEHIND the fret (toward the headstock, not on top of the metal bar). Press firmly but not too hard. Your finger should be close to the fret but not touching it.",
+        "imageUrl": "/assets/lessons/guitar/meet-frets/finger-position.png"
+      },
+      {
+        "id": "first-fret",
+        "type": "text",
+        "title": "Try the first fret",
+        "body": "Put your first finger (pointer finger) on the 1st fret of the thinnest string (High E). Press down, then pluck the string with your other hand. Hear how the sound is higher than the open string? That's your first fretted note!"
+      },
+      {
+        "id": "experiment",
+        "type": "checkpoint",
+        "title": "Explore the frets",
+        "body": "Try pressing different frets on the same string. Notice how the sound gets higher as you move toward the body of the guitar? Try the 1st fret, then 3rd fret, then 5th fret. Each one sounds higher!"
+      },
+      {
+        "id": "celebration",
+        "type": "celebration",
+        "title": "🎯 Fret master!",
+        "body": "You did it! You just learned how frets work and played your first fretted notes. 🎸 This is huge—now you can play ANY note on the guitar! Next up, we'll use these frets to play your first chord. You're doing amazing!"
+      }
+    ]
+  }
+}

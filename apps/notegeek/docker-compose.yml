@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  # mongo:
+  #   image: mongo:latest
+  #   container_name: notegeek-mongo
+  #   ports:
+  #     - "27017:27017" # Exposes MongoDB port to the host machine
+  #   environment:
+  #     # Use variables from .env file again
+  #     MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+  #     MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+  #   volumes:
+  #     - ./data/db:/data/db # Persists database data on the host
+  #     - ./data/backups:/data/backups # For potential backup service later
+  #   networks:
+  #     - notegeek_network
+  #   restart: always
+
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+      args:
+        - COMPOSE_BAKE=true
+    container_name: notegeek-backend
+    environment:
+      - NODE_ENV=production
+      - PORT=${PORT}
+      - DB_URI=${DB_URI}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+    expose:
+      - "${PORT}"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:${PORT}/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - notegeek_network
+    restart: always
+
+  frontend:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      args:
+        - COMPOSE_BAKE=true
+    container_name: notegeek-frontend
+    environment:
+      - BACKEND_PORT=${PORT}
+    ports:
+      - "9988:80"  # As specified in the plan for reverse proxy
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - notegeek_network
+    restart: always
+
+networks:
+  notegeek_network:
+    driver: bridge

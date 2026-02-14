@@ -1,0 +1,75 @@
+{
+  "slug": "guitar-three-chord-songs",
+  "template": "guided_steps_v1",
+  "instrumentSlug": "guitar",
+  "orderIndex": 10,
+  "meta": {
+    "title": "Three-Chord Songs",
+    "subtitle": "Play songs using Em, A, and D—the magic trio!",
+    "category": "Playing Songs",
+    "difficulty": 2,
+    "audience": "kid",
+    "estimatedTimeMinutes": 18,
+    "xpReward": 125,
+    "tags": ["guitar", "beginner", "songs", "chord-progression"],
+    "imageUrl": "/assets/lessons/guitar/three-chord-songs/hero.svg"
+  },
+  "content": {
+    "objectives": [
+      "Play chord progressions with Em, A, and D",
+      "Learn the classic I-IV-V pattern",
+      "Switch smoothly between all three chords",
+      "Play multiple song patterns"
+    ],
+    "steps": [
+      {
+        "id": "intro",
+        "type": "text",
+        "title": "The magic of three chords",
+        "body": "You know Em, A, and D—congratulations! These three chords are like magic keys that unlock hundreds of songs. Today we're going to learn some classic chord patterns that real songs use. Get ready to sound like a pro!"
+      },
+      {
+        "id": "pattern-1",
+        "type": "text",
+        "title": "Pattern 1: The Circle",
+        "body": "Let's start simple: D (4 strums) → A (4 strums) → Em (4 strums) → A (4 strums). This pattern sounds like it's going in a circle. Practice it slowly until you can play it without stopping. This pattern is used in tons of pop songs!"
+      },
+      {
+        "id": "pattern-2",
+        "type": "text",
+        "title": "Pattern 2: The Journey",
+        "body": "Now try this: Em (4 strums) → D (4 strums) → A (4 strums) → A (4 strums). This pattern feels like it's taking you on a journey—starting moody with Em, then getting brighter with D and A. Many rock songs use this!"
+      },
+      {
+        "id": "switching-tips",
+        "type": "text",
+        "title": "Switching tips",
+        "body": "Switching to and from D is tricky because it uses different fingers than Em and A. Here's the secret: Look ahead! While you're strumming one chord, your brain should already be thinking about the next chord shape. This is how pros do it!"
+      },
+      {
+        "id": "pattern-3",
+        "type": "text",
+        "title": "Pattern 3: The Classic",
+        "body": "Ready for the most famous pattern in music? D (4 strums) → A (4 strums) → D (4 strums) → A (4 strums) → Em (4 strums) → A (4 strums) → Em (4 strums) → A (4 strums). This is the pattern used in countless hit songs!"
+      },
+      {
+        "id": "add-rhythm",
+        "type": "text",
+        "title": "Make it groove",
+        "body": "Now let's add some rhythm! Instead of 4 even strums, try this: DOWN-down-DOWN-down (emphasizing beats 1 and 3). This makes it sound more musical and less like an exercise. Try it with Pattern 1!"
+      },
+      {
+        "id": "practice",
+        "type": "checkpoint",
+        "title": "Master the patterns",
+        "body": "Can you play Pattern 1 (The Circle) all the way through without stopping? Even if it's slow, that's perfect! The more you practice these patterns, the more songs you'll be able to play. These are the building blocks of real music!"
+      },
+      {
+        "id": "celebration",
+        "type": "celebration",
+        "title": "🎵 You're playing real music!",
+        "body": "Amazing! You just learned chord progressions—the patterns that make up real songs! 🎸 These three chords (Em, A, D) appear in thousands of songs across every genre. You're not just practicing anymore—you're making actual music! Keep exploring these patterns and soon you'll recognize them in songs you hear on the radio! 🌟🎶"
+      }
+    ]
+  }
+}

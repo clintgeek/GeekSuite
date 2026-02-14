@@ -1,0 +1,16 @@
+{
+  "dev": {
+    "driver": "pg",
+    "host": "192.168.1.17",
+    "port": 55432,
+    "database": "guitargeek",
+    "user": "datageek_pg_admin",
+    "password": "REDACTED"
+  },
+  "production": {
+    "driver": "pg",
+    "connectionString": {
+      "ENV": "DATABASE_URL"
+    }
+  }
+}

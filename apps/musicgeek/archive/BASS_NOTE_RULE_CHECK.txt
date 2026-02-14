@@ -1,0 +1,20 @@
+=== BASS NOTE RULE VERIFICATION ===
+
+Checking if all chord lessons explain chord type and strumming origin...
+
+✅ Your First Chord: A Major
+   Step 3: "Strumming: Here's the key rule - strum from the A string (5th string) downward. ..."
+✅ The Triangle: D Major Chord
+   Step 3: "Strumming D Major: Like A major, D is a D-type chord, so we strum from the D str..."
+✅ Full Sound: E Major Chord
+   Step 3: "Strumming - Your First Full Sound: E major is an E-type chord, so we strum from ..."
+✅ Understanding Minor: A Minor Chord
+   Step 1: "Understanding A Minor: Here's where your learning begins to compound! A minor us..."
+✅ Easiest Chord: E Minor
+   Step 3: "Practice Advantage: Switching between E major and E minor is your first chord ch..."
+✅ Dark Sound: D Minor Chord
+   Step 3: "The Sound: D Minor is a D-type chord, so strum from the D string (4th) downward...."
+❌ Bright Sound: C Major Chord - Bass note rule NOT found
+✅ Full Strummer: G Major Chord
+   Step 4: "Strumming G Major: G major is a G-type chord, so strum from the G string (3rd st..."
+❌ The Challenge: F Major Barre Chord - Bass note rule NOT found

@@ -1,0 +1,30 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: photogeek-backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      MONGO_URI: mongodb://localhost:27017/photogeek?authSource=admin
+      NODE_ENV: production
+    ports:
+      - "4010:4010"
+    volumes:
+      - ./backend/uploads:/app/uploads
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: photogeek-frontend
+    restart: unless-stopped
+    environment:
+      VITE_ALLOWED_HOSTS: photogeek.clintgeek.com
+      VITE_API_PROXY_TARGET: http://photogeek-backend:4010
+    ports:
+      - "5173:4173"
+    depends_on:
+      - backend

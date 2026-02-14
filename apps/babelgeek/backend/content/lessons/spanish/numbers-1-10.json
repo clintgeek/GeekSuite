@@ -1,0 +1,119 @@
+{
+  "slug": "spanish-numbers-1-10",
+  "template": "guided_steps_v1",
+  "languageCode": "es",
+  "level": "A1",
+  "orderIndex": 3,
+  "meta": {
+    "title": "Numbers 1-10",
+    "subtitle": "Learn to count in Spanish",
+    "category": "Basics",
+    "difficulty": 1,
+    "audience": "both",
+    "estimatedTimeMinutes": 8,
+    "xpReward": 50,
+    "tags": ["numbers", "basics", "beginner", "counting"],
+    "imageUrl": "/assets/lessons/spanish/numbers/hero.svg"
+  },
+  "content": {
+    "learningOutcomes": [
+      "Count from 1 to 10 in Spanish",
+      "Pronounce numbers correctly",
+      "Recognize written numbers"
+    ],
+    "vocabulary": ["uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve", "diez"],
+    "steps": [
+      {
+        "id": "intro",
+        "type": "text",
+        "title": "Let's Count!",
+        "body": "Numbers are essential for everyday life - shopping, telling time, giving phone numbers. Let's master 1-10! 🔢"
+      },
+      {
+        "id": "numbers-1-5",
+        "type": "text+audio",
+        "title": "Numbers 1-5",
+        "body": "Let's start with the first five:\n\n**1** - uno (OO-noh)\n**2** - dos (dohs)\n**3** - tres (trehs)\n**4** - cuatro (KWAH-troh)\n**5** - cinco (SEEN-koh)",
+        "audioPhrase": "Uno. Dos. Tres. Cuatro. Cinco."
+      },
+      {
+        "id": "listen-repeat-1",
+        "type": "listen_repeat",
+        "title": "Listen & Repeat: 1-5",
+        "phrase": "Uno, dos, tres, cuatro, cinco",
+        "translation": "One, two, three, four, five",
+        "audioPhrase": "Uno, dos, tres, cuatro, cinco"
+      },
+      {
+        "id": "numbers-6-10",
+        "type": "text+audio",
+        "title": "Numbers 6-10",
+        "body": "Now let's learn 6 through 10:\n\n**6** - seis (says)\n**7** - siete (see-EH-teh)\n**8** - ocho (OH-choh)\n**9** - nueve (NWEH-veh)\n**10** - diez (dee-EHS)",
+        "audioPhrase": "Seis. Siete. Ocho. Nueve. Diez."
+      },
+      {
+        "id": "listen-repeat-2",
+        "type": "listen_repeat",
+        "title": "Listen & Repeat: 6-10",
+        "phrase": "Seis, siete, ocho, nueve, diez",
+        "translation": "Six, seven, eight, nine, ten",
+        "audioPhrase": "Seis, siete, ocho, nueve, diez"
+      },
+      {
+        "id": "match-1",
+        "type": "matching",
+        "title": "Match Numbers to Words",
+        "pairs": [
+          { "left": "3", "right": "tres" },
+          { "left": "7", "right": "siete" },
+          { "left": "5", "right": "cinco" },
+          { "left": "10", "right": "diez" }
+        ]
+      },
+      {
+        "id": "full-count",
+        "type": "listen_repeat",
+        "title": "Count 1 to 10",
+        "phrase": "Uno, dos, tres, cuatro, cinco, seis, siete, ocho, nueve, diez",
+        "translation": "One, two, three, four, five, six, seven, eight, nine, ten",
+        "audioPhrase": "Uno, dos, tres, cuatro, cinco, seis, siete, ocho, nueve, diez"
+      },
+      {
+        "id": "multiple-choice-1",
+        "type": "multiple_choice",
+        "title": "Quick Quiz",
+        "question": "What is 'eight' in Spanish?",
+        "options": ["ocho", "seis", "nueve", "siete"],
+        "correctIndex": 0
+      },
+      {
+        "id": "fill-blank-1",
+        "type": "fill_blank",
+        "title": "Complete the Sequence",
+        "sentence": "Uno, dos, ___, cuatro, ___",
+        "blanks": ["tres", "cinco"],
+        "hint": "Fill in the missing numbers"
+      },
+      {
+        "id": "type-answer-1",
+        "type": "type_answer",
+        "title": "Type the Number",
+        "question": "Type the Spanish word for '4':",
+        "correctAnswer": "cuatro",
+        "hint": "Starts with 'c'"
+      },
+      {
+        "id": "checkpoint",
+        "type": "checkpoint",
+        "title": "Number Master!",
+        "body": "You've learned:\n✓ All numbers from 1 to 10\n✓ Correct pronunciation\n✓ How to recognize and write them"
+      },
+      {
+        "id": "celebration",
+        "type": "celebration",
+        "title": "🎉 ¡Muy bien!",
+        "body": "You can now count to 10 in Spanish! This is a huge foundation for shopping, telling time, and everyday conversations. 🌟\n\n**Fun practice:** Count objects around you in Spanish!"
+      }
+    ]
+  }
+}

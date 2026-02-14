@@ -1,0 +1,83 @@
+{
+  "slug": "guitar-chord-switching",
+  "template": "guided_steps_v1",
+  "instrumentSlug": "guitar",
+  "orderIndex": 7,
+  "meta": {
+    "title": "Switching Between Chords",
+    "subtitle": "Learn to change smoothly between E minor and A major.",
+    "category": "First Chords",
+    "difficulty": 1,
+    "audience": "kid",
+    "estimatedTimeMinutes": 15,
+    "xpReward": 100,
+    "tags": ["guitar", "beginner", "chord-changes", "transitions"],
+    "imageUrl": "/assets/lessons/guitar/chord-switching/hero.svg"
+  },
+  "content": {
+    "objectives": [
+      "Switch from Em to A major",
+      "Keep a steady rhythm while changing",
+      "Build muscle memory for chord shapes",
+      "Play smooth transitions"
+    ],
+    "steps": [
+      {
+        "id": "intro",
+        "type": "text",
+        "title": "Time to connect your chords!",
+        "body": "You know E minor and A major—awesome! But real songs need you to SWITCH between chords while keeping the music flowing. This is one of the most important guitar skills. Let's learn how to do it smoothly!"
+      },
+      {
+        "id": "review-em",
+        "type": "text+image",
+        "title": "Review: E minor",
+        "body": "Make your E minor chord: middle finger on 2nd fret of 5th string, ring finger on 2nd fret of 4th string. Strum all 6 strings. Got it? Good! Now let go and shake out your hand.",
+        "imageUrl": "/assets/lessons/guitar/e-minor/chord-diagram.svg"
+      },
+      {
+        "id": "review-a",
+        "type": "text+image",
+        "title": "Review: A major",
+        "body": "Make your A major chord: 3 fingers on the 2nd fret of strings 4, 3, and 2. Strum only the bottom 5 strings. Got it? Great! Now let go and shake out your hand again.",
+        "imageUrl": "/assets/lessons/guitar/a-major/chord-diagram.svg"
+      },
+      {
+        "id": "slow-switch",
+        "type": "text",
+        "title": "Your first switch (super slow)",
+        "body": "Make E minor. Strum it once. Now SLOWLY lift all your fingers and move them to A major. Don't worry about speed—just get the shape right. Strum A major. That's one switch! Do this 5 times, as slowly as you need."
+      },
+      {
+        "id": "anchor-finger",
+        "type": "text",
+        "title": "The secret: anchor finger",
+        "body": "Here's a cool trick: Notice that your MIDDLE finger stays on the same fret (2nd) for both chords? It just moves one string over! Use this as your 'anchor'—move it first, then add the other fingers. This makes switching easier!"
+      },
+      {
+        "id": "rhythm-pattern",
+        "type": "text",
+        "title": "Add a rhythm",
+        "body": "Let's add counting! Play Em and strum 4 times while counting '1, 2, 3, 4'. Then switch to A major and strum 4 times: '1, 2, 3, 4'. The switch happens BETWEEN the counts. Try this pattern 3 times in a row."
+      },
+      {
+        "id": "speed-up",
+        "type": "text",
+        "title": "Gradually speed up",
+        "body": "Keep doing the same pattern (4 strums on Em, switch, 4 strums on A), but try to make the switch a little faster each time. It's okay if it's not perfect—your fingers are learning! The more you practice, the smoother it gets."
+      },
+      {
+        "id": "practice",
+        "type": "checkpoint",
+        "title": "Practice the pattern",
+        "body": "Can you switch between Em and A at least 3 times in a row without stopping? Even if it's slow, that's perfect! Your fingers are building muscle memory. This is exactly how real guitarists practice."
+      },
+      {
+        "id": "celebration",
+        "type": "celebration",
+        "title": "🎵 You're playing like a real guitarist!",
+        "body": "Incredible! You just learned one of the hardest skills in guitar—changing chords! 🎸 This takes time to get smooth, but you're doing it! Every time you practice, your fingers get faster and smarter. You're not just learning chords—you're becoming a musician! 🌟"
+      }
+    ]
+  }
+}

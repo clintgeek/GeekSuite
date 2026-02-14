@@ -1,0 +1,36 @@
+:root {
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* CSS Custom Properties for theming */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #FAFAF9;
+}
+
+/* Signifier styling - uses monospace font */
+.signifier {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 1rem;
+}
+
+/* Selection styling */
+::selection {
+  background-color: rgba(96, 152, 204, 0.3);
+}
+
+/* Focus visible for accessibility */
+:focus-visible {
+  outline: 2px solid #6098CC;
+  outline-offset: 2px;
+}

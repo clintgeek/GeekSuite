@@ -1,0 +1,83 @@
+{
+  "slug": "guitar-strumming-patterns",
+  "template": "guided_steps_v1",
+  "instrumentSlug": "guitar",
+  "orderIndex": 16,
+  "meta": {
+    "title": "Essential Strumming Patterns",
+    "subtitle": "Learn 4 versatile patterns that work for any song!",
+    "category": "Rhythm & Strumming",
+    "difficulty": 2,
+    "audience": "kid",
+    "estimatedTimeMinutes": 20,
+    "xpReward": 125,
+    "tags": ["guitar", "intermediate", "strumming", "rhythm", "patterns"],
+    "imageUrl": "/assets/lessons/guitar/strumming-patterns/hero.svg"
+  },
+  "content": {
+    "objectives": [
+      "Learn 4 essential strumming patterns",
+      "Understand when to use each pattern",
+      "Apply patterns to any chord progression",
+      "Match patterns to song styles"
+    ],
+    "steps": [
+      {
+        "id": "intro",
+        "type": "text",
+        "title": "Your strumming toolkit!",
+        "body": "You know down-up strumming—awesome! But different songs need different rhythms. Today you'll learn 4 essential strumming patterns that cover almost every style of music. These patterns are like tools in a toolbox—each one works for different situations!",
+        "videoUrl": "https://www.youtube.com/embed/6C2WFkVESBk"
+      },
+      {
+        "id": "pattern-1-folk",
+        "type": "text",
+        "title": "Pattern 1: The Folk Strum",
+        "body": "This is the most basic pattern: DOWN-DOWN-UP-UP-DOWN-UP. Count it as '1-2-and-3-and-4-and'. Try it on G major, nice and slow. This pattern works great for folk songs, campfire songs, and ballads. It's gentle and flowing!",
+        "videoUrl": "https://www.youtube.com/embed/aF661jj7QdU"
+      },
+      {
+        "id": "pattern-2-pop",
+        "type": "text",
+        "title": "Pattern 2: The Pop Pattern",
+        "body": "Here's a punchier pattern: DOWN-DOWN-UP-DOWN-UP. Count: '1-2-and-3-and-4'. Notice we skip the 'up' after beat 2? This creates a syncopated, catchy rhythm. Try it on the G-D-Em-A progression. This is THE pattern for modern pop songs!"
+      },
+      {
+        "id": "pattern-3-rock",
+        "type": "text",
+        "title": "Pattern 3: The Rock Strum",
+        "body": "Time to rock! DOWN-UP-DOWN-UP-DOWN-DOWN-UP. Count: '1-and-2-and-3-4-and'. The double down-strum on beats 3-4 gives it power and drive. Try it with palm muting on Em for a classic rock sound. This pattern has attitude!"
+      },
+      {
+        "id": "pattern-4-ballad",
+        "type": "text",
+        "title": "Pattern 4: The Ballad Pattern",
+        "body": "For slow, emotional songs: DOWN-DOWN-DOWN-UP-DOWN-UP. Count: '1-2-3-and-4-and'. The three down-strums at the start create a strong, steady feel. Try it slowly on C major. This pattern is perfect for love songs and emotional ballads!"
+      },
+      {
+        "id": "choosing-patterns",
+        "type": "text",
+        "title": "Choosing the right pattern",
+        "body": "How do you know which pattern to use? Listen to the song! Fast, upbeat songs? Use the Pop or Rock pattern. Slow, gentle songs? Use the Folk or Ballad pattern. The best part? You can use ANY pattern with ANY chord progression. Experiment and find what sounds good!"
+      },
+      {
+        "id": "practice-switching",
+        "type": "text",
+        "title": "Practice with chord changes",
+        "body": "Now let's combine patterns with chord changes! Pick your favorite pattern and play it with the G-D-Em-A progression. The pattern stays the same even when chords change. This is how real songs work—consistent rhythm, changing chords!"
+      },
+      {
+        "id": "practice",
+        "type": "checkpoint",
+        "title": "Master the patterns",
+        "body": "Can you play at least 2 of the 4 patterns without stopping? Try the Folk pattern and the Pop pattern—those are the most useful. Don't worry about speed yet. Focus on getting the rhythm right. These patterns will serve you for your entire guitar journey!"
+      },
+      {
+        "id": "celebration",
+        "type": "celebration",
+        "title": "🎵 You have a complete rhythm toolkit!",
+        "body": "Fantastic! You now have 4 strumming patterns that work for almost any song! 🎸 These patterns are used by professional guitarists every day. Next time you hear a song, try to figure out which pattern they're using—you'll be amazed how often you recognize them! You're not just playing guitar—you're understanding music! 🌟🎶"
+      }
+    ]
+  }
+}
