@@ -4,6 +4,8 @@ import express from "express";
 import helmet from "helmet";
 import morgan from "morgan";
 import mongoose from "mongoose";
+import path from "path";
+import { fileURLToPath } from "url";
 import { env } from "./config/env.js";
 import apiRouter from "./routes/api.js";
 import { logger } from "./utils/logger.js";
@@ -39,11 +41,17 @@ mongoose
     process.exit(1);
   });
 
-app.get("/", (req, res) => {
-  res.json({ message: "FlockGeek API is ready", version: "0.1.0" });
-});
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const publicPath = path.join(__dirname, "..", "public");
 
 app.use("/api", apiRouter);
+
+app.use(express.static(publicPath));
+
+app.get("*", (req, res) => {
+  res.sendFile(path.join(publicPath, "index.html"));
+});
 
 app.use((req, res) => {
   res.status(404).json({ message: "Route not found" });

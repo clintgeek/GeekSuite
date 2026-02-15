@@ -1,5 +1,5 @@
 {
-  "name": "frontend",
+  "name": "fitnessgeek-frontend",
   "private": true,
   "version": "2.0.0",
   "type": "module",
@@ -23,6 +23,7 @@
     "@nivo/core": "^0.99.0",
     "@nivo/line": "^0.99.0",
     "@nivo/pie": "^0.99.0",
+    "@geeksuite/auth": "workspace:*",
     "axios": "^1.10.0",
     "chart.js": "^4.5.1",
     "chartjs-adapter-date-fns": "^3.0.0",

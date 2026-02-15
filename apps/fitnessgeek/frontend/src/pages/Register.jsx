@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { Box, CircularProgress, Typography } from '@mui/material';
 import { useLocation } from 'react-router-dom';
-import { loginRedirect } from '../utils/authClient.js';
+import { loginRedirect } from '@geeksuite/auth';
 
 const Register = () => {
   const location = useLocation();
@@ -10,7 +10,7 @@ const Register = () => {
     const returnTo = location.state?.from?.pathname
       ? `${window.location.origin}${location.state.from.pathname}`
       : window.location.href;
-    loginRedirect(returnTo, 'register');
+    loginRedirect('fitnessgeek', returnTo, 'register');
   }, [location]);
 
   return (

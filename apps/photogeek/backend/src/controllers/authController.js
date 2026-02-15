@@ -15,16 +15,23 @@ function getForwardAuthHeaders(req) {
   return headers;
 }
 
+function rewriteCookieDomain(cookie) {
+  return cookie
+    // allow all subdomains to share auth cookie
+    .replace(/Domain=[^;]+/i, 'Domain=.clintgeek.com')
+    // ensure cross-site cookies work over HTTPS
+    .replace(/SameSite=Lax/i, 'SameSite=None')
+    .replace(/SameSite=Strict/i, 'SameSite=None');
+}
+
 function forwardSetCookieHeaders(res, upstreamHeaders) {
   const setCookie = upstreamHeaders?.['set-cookie'];
   if (!setCookie) return;
 
-  if (Array.isArray(setCookie)) {
-    res.setHeader('Set-Cookie', setCookie);
-    return;
-  }
+  const cookies = Array.isArray(setCookie) ? setCookie : [setCookie];
+  const rewritten = cookies.map(rewriteCookieDomain);
 
-  res.setHeader('Set-Cookie', [setCookie]);
+  res.setHeader('Set-Cookie', rewritten);
 }
 
 /**

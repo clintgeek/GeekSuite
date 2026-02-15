@@ -127,6 +127,19 @@ app.use('/api/insights', require('./routes/insightsRoutes'));
 app.use('/api/food-reports', require('./routes/foodReportRoutes'));
 app.use('/api/influx', require('./routes/influxRoutes'));
 
+// Serve built frontend files
+const path = require('path');
+const publicPath = path.join(__dirname, '..', 'public');
+app.use(express.static(publicPath));
+
+// SPA Catch-all handler
+app.get("*", (req, res, next) => {
+  if (req.path.startsWith('/api/')) {
+    return next();
+  }
+  res.sendFile(path.join(publicPath, "index.html"));
+});
+
 // 404 handler
 app.use('*', (req, res) => {
   res.status(404).json({

@@ -16,7 +16,9 @@ const startProject = async (projectId) => {
 const getUserProjects = async (status = '') => {
   const params = status ? `?status=${ status }` : '';
   const response = await axios.get(`${ API_URL }${ params }`);
-  return response.data;
+  // Ensure we always return an array, even if API returns error object or null
+  const data = response.data;
+  return Array.isArray(data) ? data : [];
 };
 
 /**

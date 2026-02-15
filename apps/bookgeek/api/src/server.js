@@ -9,6 +9,7 @@ import multer from "multer";
 import crypto from "crypto";
 import { execFile } from "child_process";
 import { promisify } from "util";
+import { fileURLToPath } from "url";
 import { Book } from "./models/book.js";
 import { Profile } from "./models/profile.js";
 import authRouter from "./routes/authRoutes.js";
@@ -20,11 +21,16 @@ import { sendMail } from "./services/emailService.js";
 dotenv.config();
 
 const app = express();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const publicPath = path.join(__dirname, "../public");
 
 function isAllowedCorsOrigin(origin) {
   if (!origin) return true;
 
   const allowList = new Set([
+    "http://localhost:1800",
+    "http://127.0.0.1:1800",
     "http://localhost:1801",
     "http://127.0.0.1:1801",
   ]);
@@ -2862,6 +2868,12 @@ async function tryCalibreEnrich(book, update, updatedFields, sourceParts) {
     });
   }
 }
+
+app.use(express.static(publicPath));
+
+app.get(/^\/(?!api(?:\/|$)|kindle(?:\/|$)).*/, (req, res) => {
+  return res.sendFile(path.join(publicPath, "index.html"));
+});
 
 async function start() {
   if (!MONGODB_URI) {

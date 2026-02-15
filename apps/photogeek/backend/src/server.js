@@ -10,19 +10,20 @@ dotenv.config();
 
 // Initialize Express app
 const app = express();
+app.set('trust proxy', 1);
 
 // Connect to MongoDB
 connectDB();
 
 // Middleware
-app.use(
-  cors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
-    credentials: true,
-  })
-);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Define the path to the public directory
+const publicPath = path.join(__dirname, '..', 'public');
+
+// Serve static files from the public directory
+app.use(express.static(publicPath));
 
 // Serve static files from uploads directory
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
@@ -65,6 +66,11 @@ app.use('/api/projects', require('./routes/projects'));
 app.use('/api/user-projects', require('./routes/userProjects'));
 app.use('/api/user', require('./routes/user'));
 app.use('/api/upload', require('./routes/upload'));
+
+// SPA fallback
+app.get('*', (req, res) => {
+  res.sendFile(path.join(publicPath, 'index.html'));
+});
 
 // Error handling middleware
 app.use((err, req, res, next) => {

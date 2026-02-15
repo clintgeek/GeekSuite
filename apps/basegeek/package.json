@@ -5,6 +5,9 @@
   "workspaces": [
     "packages/*"
   ],
+  "dependencies": {
+    "@geeksuite/user": "workspace:*"
+  },
   "scripts": {
     "dev": "concurrently \"npm run dev:api\" \"npm run dev:ui\"",
     "dev:api": "npm run dev --workspace=@datageek/api",

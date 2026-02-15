@@ -9,7 +9,8 @@ import {
   Typography
 } from '@mui/material';
 import { useLocation } from 'react-router-dom';
-import { getBackendOrigin, loginRedirect } from '../utils/authClient.js';
+import { loginRedirect } from '@geeksuite/auth';
+import { getBackendOrigin } from '../utils/authClient.js';
 
 const Login = () => {
   const location = useLocation();
@@ -32,7 +33,7 @@ const Login = () => {
       return;
     }
 
-    loginRedirect(redirectTarget, 'login');
+    loginRedirect('fitnessgeek', redirectTarget, 'login');
   }, [location, localLoginEnabled, redirectTarget]);
 
   const handleLocalLogin = async (event) => {

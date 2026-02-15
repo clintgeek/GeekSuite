@@ -2,9 +2,6 @@
   "name": "musicgeek",
   "version": "1.0.0",
   "private": true,
-  "scripts": {
-    "prepare": "husky install"
-  },
   "lint-staged": {
     "backend/**/*.js": [
       "eslint --fix",

@@ -1,8 +1,7 @@
 import axios from "axios";
 
 function getApiBase() {
-  if (import.meta.env.DEV) return "/api";
-  return import.meta.env.VITE_API_BASE || "/api";
+  return "/api";
 }
 
 const client = axios.create({

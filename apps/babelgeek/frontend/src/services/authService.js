@@ -4,7 +4,7 @@
  * Uses baseGeek for centralized SSO authentication
  */
 
-import { getMe, loginRedirect, logout as logoutRequest } from "../utils/authClient";
+import { getMe, loginRedirect, logout as logoutRequest } from "@geeksuite/auth";
 
 const APP_NAME = "babelgeek";
 
@@ -16,7 +16,7 @@ export const authService = {
    * Register a new user
    */
   async register(userData) {
-    loginRedirect(window.location.href, "register");
+    loginRedirect(APP_NAME, window.location.href, "register");
     return { user: null, token: null, refreshToken: null, app: APP_NAME };
   },
 
@@ -24,7 +24,7 @@ export const authService = {
    * Login user
    */
   async login(credentials) {
-    loginRedirect(window.location.href, "login");
+    loginRedirect(APP_NAME, window.location.href, "login");
     return { user: null, token: null, refreshToken: null, app: APP_NAME };
   },
 

@@ -7,9 +7,9 @@ import {
   loginRedirect,
   logout as logoutServer,
   onLogout as onLogoutBroadcast,
-  startSessionKeepAlive,
-  stopSessionKeepAlive
-} from '../utils/authClient.js';
+  startRefreshTimer,
+  stopRefreshTimer
+} from '@geeksuite/auth';
 
 // Auth provider component
 export const AuthProvider = ({ children }) => {
@@ -31,14 +31,14 @@ export const AuthProvider = ({ children }) => {
 
         if (currentUser) {
           setUser(currentUser);
-          startSessionKeepAlive(() => {
+          startRefreshTimer(() => {
             logger.warn('Session expired - forcing logout');
             setUser(null);
           });
           await recordDailyLoginIfNeeded();
         } else {
           setUser(null);
-          stopSessionKeepAlive();
+          stopRefreshTimer();
         }
       } catch (error) {
         logger.error('Error initializing auth:', error);
@@ -58,12 +58,12 @@ export const AuthProvider = ({ children }) => {
     return () => {
       cancelled = true;
       unsubscribe();
-      stopSessionKeepAlive();
+      stopRefreshTimer();
     };
   }, []);
 
   const login = async () => {
-    loginRedirect(window.location.href, 'login');
+    loginRedirect('fitnessgeek', window.location.href, 'login');
   };
 
   // Record streak once per local calendar day
@@ -86,12 +86,12 @@ export const AuthProvider = ({ children }) => {
   };
 
   const register = async () => {
-    loginRedirect(window.location.href, 'register');
+    loginRedirect('fitnessgeek', window.location.href, 'register');
   };
 
   const logout = async () => {
     await logoutServer();
-    stopSessionKeepAlive();
+    stopRefreshTimer();
     setUser(null);
     setError(null);
   };

@@ -7,9 +7,9 @@ WORKDIR /app
 RUN apk add --no-cache python3 make g++ vips-dev
 
 # Copy package manifests
-COPY package*.json ./
-COPY packages/api/package*.json ./packages/api/
-COPY packages/ui/package*.json ./packages/ui/
+COPY apps/basegeek/package*.json ./
+COPY apps/basegeek/packages/api/package*.json ./packages/api/
+COPY apps/basegeek/packages/ui/package*.json ./packages/ui/
 
 # Copy shared @geeksuite/user package (dependency of ui)
 COPY packages/user ./packages/user
@@ -22,7 +22,7 @@ RUN cd packages/ui && npm install
 COPY . .
 
 # Build the frontend
-RUN cd packages/ui && npm run build
+RUN cd apps/basegeek/packages/ui && npm run build
 
 # 2. Production stage
 FROM node:20-alpine AS prod
@@ -33,7 +33,7 @@ WORKDIR /app/packages/api
 RUN apk add --no-cache vips
 
 # Copy API package files
-COPY packages/api/package*.json ./
+COPY apps/basegeek/packages/api/package*.json ./
 
 # Install only production dependencies for API
 RUN npm install --production
@@ -45,13 +45,13 @@ RUN npm install onnxruntime-web@1.14.0
 RUN rm -rf node_modules/onnxruntime-node
 
 # Copy API source
-COPY packages/api .
+COPY apps/basegeek/packages/api .
 
 # Copy families.json to root app directory
-COPY families.json /app/families.json
+COPY apps/basegeek/families.json /app/families.json
 
 # Copy built UI to the expected location
-COPY --from=build /app/packages/ui/dist ./../ui/dist
+COPY --from=build /app/apps/basegeek/packages/ui/dist ./../ui/dist
 
 # Expose the port
 EXPOSE 8987

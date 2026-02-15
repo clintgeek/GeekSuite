@@ -1,10 +1,10 @@
-import { getMe as getMeFromCookie, loginRedirect } from '../utils/authClient';
+import { getMe as getMeFromCookie, loginRedirect } from '@geeksuite/auth';
 
 /**
  * Register new user
  */
 const register = async () => {
-  loginRedirect(window.location.href, 'register');
+  loginRedirect('photogeek', window.location.href, 'register');
   return null;
 };
 
@@ -12,7 +12,7 @@ const register = async () => {
  * Login user
  */
 const login = async () => {
-  loginRedirect(window.location.href, 'login');
+  loginRedirect('photogeek', window.location.href, 'login');
   return null;
 };
 

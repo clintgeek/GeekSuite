@@ -1,9 +1,13 @@
 import axios from 'axios';
 
-axios.defaults.withCredentials = true;
+const api = axios.create({
+  baseURL: '/api',
+});
+
+api.defaults.withCredentials = true;
 
 // Add response interceptor to handle auth errors
-axios.interceptors.response.use(
+api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
@@ -16,4 +20,4 @@ axios.interceptors.response.use(
   }
 );
 
-export default axios;
+export default api;

@@ -4,8 +4,6 @@ WORKDIR /app
 
 COPY package.json ./
 
-RUN npm config set @geeksuite:registry http://172.17.0.1:4873
-
 RUN npm install
 
 COPY . .

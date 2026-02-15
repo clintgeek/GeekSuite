@@ -20,7 +20,8 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.23.1",
-    "@geeksuite/user": "^0.1.0"
+    "@geeksuite/auth": "workspace:*",
+    "@geeksuite/user": "workspace:*"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",

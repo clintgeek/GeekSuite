@@ -1,0 +1,5 @@
+{
+	"name": "geeksuite",
+	"private": true,
+	"packageManager": "pnpm@latest"
+}

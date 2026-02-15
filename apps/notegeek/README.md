@@ -5,7 +5,7 @@ Notes, in MarkDown, as God intended.
 
 - Node.js: LTS version (v18.x or newer)
   - The app will not work correctly with Node.js v14 (system default)
-  - Always use `nvm use --lts` before starting the client or server
+  - Always use `nvm use --lts` before starting the frontend or backend
 
 ## Development Setup
 
@@ -17,24 +17,24 @@ Notes, in MarkDown, as God intended.
 
 2. Install dependencies:
    ```bash
-   # In server directory
-   cd server
+   # In backend directory
+   cd backend
    npm install
 
-   # In client directory
-   cd ../client
+   # In frontend directory
+   cd ../frontend
    npm install
    ```
 
 3. Start the development servers:
    ```bash
-   # Start server (in server directory)
-   cd ../server
+   # Start backend (in backend directory)
+   cd ../backend
    nvm use --lts  # Important!
    npm run dev
 
-   # Start client (in client directory)
-   cd ../client
+   # Start frontend (in frontend directory)
+   cd ../frontend
    nvm use --lts  # Important!
    npm run dev
    ```
@@ -42,5 +42,5 @@ Notes, in MarkDown, as God intended.
 ## Troubleshooting
 
 - If you see errors like `Unexpected token '||='`, you're using an outdated Node.js version
-- Always run `nvm use --lts` before starting either the client or server
-- The server requires port 5001 to be available
+- Always run `nvm use --lts` before starting either the frontend or backend
+- The unified app container defaults to port 9988 (override with `PORT`)

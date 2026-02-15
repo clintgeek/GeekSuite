@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import ePub from "epubjs";
-import { getMe, loginRedirect, logout as logoutRequest, onLogout, startRefreshTimer, stopRefreshTimer } from "./utils/authClient";
+import { getMe, loginRedirect, logout as logoutRequest, onLogout, startRefreshTimer, stopRefreshTimer } from "@geeksuite/auth";
 import { useUser, usePreferences, useAppPreferences } from "@geeksuite/user";
 import { registerReset, reset as resetUserStore } from "./utils/resetUserStore";
 
@@ -1805,7 +1805,7 @@ export default function App() {
                 onClick={() => {
                   setAuthLoading(true);
                   setAuthError(null);
-                  loginRedirect(window.location.href, "login");
+                  loginRedirect("bookgeek", window.location.href, "login");
                 }}
                 className="w-full rounded-lg px-3 py-2.5 text-sm font-medium hover:opacity-90 disabled:opacity-60 transition-opacity"
                 style={{ backgroundColor: 'var(--color-bg-surface-alt)', border: '1px solid var(--color-border)', color: 'var(--color-text-primary)' }}
@@ -2528,7 +2528,7 @@ export default function App() {
                       onClick={() => {
                         setAuthLoading(true);
                         setAuthError(null);
-                        loginRedirect(window.location.href, "login");
+                        loginRedirect("bookgeek", window.location.href, "login");
                       }}
                       className="inline-flex items-center rounded border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-slate-50 hover:border-slate-500 disabled:opacity-60"
                     >

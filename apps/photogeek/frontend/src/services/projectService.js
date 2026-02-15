@@ -16,7 +16,9 @@ const getProjects = async (filters = {}) => {
   const url = queryString ? `${ API_URL }?${ queryString }` : API_URL;
 
   const response = await axios.get(url);
-  return response.data;
+  // Ensure we always return an array
+  const data = response.data;
+  return Array.isArray(data) ? data : [];
 };
 
 /**

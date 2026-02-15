@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "build": "esbuild ./src/main.jsx --bundle --outfile=dist/main.js --minify --loader:.js=jsx --loader:.jsx=jsx",
     "dev": "bun dev . --port 1801",
     "serve": "bun server.js"
   },
@@ -10,7 +11,11 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "epubjs": "^0.3.93",
-    "@geeksuite/user": "^0.1.0",
+    "@geeksuite/auth": "workspace:*",
+    "@geeksuite/user": "workspace:*",
     "axios": "^1.7.2"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
   }
 }

@@ -5,13 +5,13 @@
   "description": "BabelGeek - Language Learning Platform",
   "type": "module",
   "scripts": {
-    "postinstall": "npm install --prefix backend && npm install --prefix frontend",
     "start": "concurrently \"npm run start --prefix backend\" \"npm run dev --prefix frontend\"",
     "dev": "npm run start",
     "backend": "npm run dev --prefix backend",
     "frontend": "npm run dev --prefix frontend"
   },
   "dependencies": {
-    "concurrently": "^8.2.0"
+    "concurrently": "^8.2.0",
+    "@geeksuite/user": "workspace:*"
   }
 }

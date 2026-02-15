@@ -1,4 +1,5 @@
 const express = require('express');
+const path = require('path');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
@@ -68,6 +69,10 @@ app.use('/api/practice', practiceRoutes);
 app.use('/api/achievements', achievementRoutes);
 app.use('/api/instruments', instrumentRoutes);
 
+// Serve static frontend files
+const publicPath = path.join(__dirname, '..', 'public');
+app.use(express.static(publicPath));
+
 // Legacy route for backward compatibility
 app.get('/', (req, res) => {
   res.send('MusicGeek Backend API is running!');
@@ -82,6 +87,11 @@ app.get('/users', async (req, res) => {
     console.error(err);
     res.status(500).send('Server Error');
   }
+});
+
+// SPA fallback - must be after all API routes and before 404 handler
+app.get('*', (req, res) => {
+  res.sendFile(path.join(publicPath, 'index.html'));
 });
 
 // Error handlers (must be last)

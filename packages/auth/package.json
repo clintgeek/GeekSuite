@@ -1,0 +1,14 @@
+{
+  "name": "@geeksuite/auth",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "@mui/material": ">=5"
+  }
+}

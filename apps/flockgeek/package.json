@@ -5,7 +5,6 @@
   "description": "Root orchestrator for FlockGeek frontend and backend services",
   "type": "module",
   "scripts": {
-    "postinstall": "npm install --prefix backend && npm install --prefix frontend",
     "start": "concurrently \"npm run start --prefix backend\" \"npm run dev --prefix frontend\"",
     "dev": "npm run start",
     "backend": "npm run dev --prefix backend",

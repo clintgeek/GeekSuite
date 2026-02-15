@@ -135,8 +135,8 @@ dist
 .yarn/install-state.gz
 .pnp.*
 
-client/dist/
-client/build/
+frontend/dist/
+frontend/build/
 .env*
 CURSOR-CONTEXT.md
 data/
