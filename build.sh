@@ -88,7 +88,45 @@ build_and_deploy() {
   fi
 }
 
+# Check for dialog if running interactively
+if [ -z "$1" ] && command -v dialog >/dev/null 2>&1; then
+  # Build checklist options
+  OPTIONS=()
+  for app in "${APPS[@]}"; do
+    if [ -f "apps/${app}/Dockerfile" ]; then
+      OPTIONS+=("$app" "Build & Deploy" "OFF") # Default OFF
+    fi
+  done
+
+  # Show checklist
+  CHOICES=$(dialog --stdout --backtitle "GeekSuite Monorepo Builder" \
+         --title "Select Apps" \
+                   --checklist "Choose which applications to build and deploy:" \
+                   20 60 15 \
+                   "${OPTIONS[@]}")
+
+  clear
+
+  if [ -z "$CHOICES" ]; then
+    echo "No apps selected. Exiting."
+    exit 0
+  fi
+
+  echo "Selected apps: $CHOICES"
+  echo ""
+
+  # Loop through choices (dialog returns quoted strings like "app1" "app2")
+  for app in $CHOICES; do
+    # Remove quotes
+    app="${app%\"}"
+    app="${app#\"}"
+    build_and_deploy "$app"
+  done
+  exit 0
+fi
+
 if [ "$1" = "--list" ] || [ -z "$1" ]; then
+  # Fallback for no-args if dialog is missing, or explicit --list
   echo "Usage: ./build.sh [app_name] | --all"
   echo ""
   echo "Buildable apps:"
