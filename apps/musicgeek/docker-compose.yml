@@ -1,8 +1,6 @@
 services:
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    image: geeksuite/musicgeek:latest
     container_name: musicgeek-backend
     environment:
       - NODE_ENV=development
@@ -24,28 +22,29 @@ services:
       - musicgeek_network
     volumes:
       - ./backend:/app
-      - /app/node_modules
-    command: npm run dev
+      - /mnt/Media/Projects/GeekSuite/node_modules:/node_modules
+      - /mnt/Media/Projects/GeekSuite/packages/user:/packages/user
+    command: npm start
     restart: unless-stopped
 
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: musicgeek-frontend
-    environment:
-      - VITE_API_URL=
-    ports:
-      - "3005:3005"
-    depends_on:
-      - backend
-    networks:
-      - musicgeek_network
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    command: npm run dev
-    restart: unless-stopped
+#   frontend:
+#     build:
+#       context: ./frontend
+#       dockerfile: Dockerfile
+#     container_name: musicgeek-frontend
+#     environment:
+#       - VITE_API_URL=
+#     ports:
+#       - "3005:3005"
+#     depends_on:
+#       - backend
+#     networks:
+#       - musicgeek_network
+#     volumes:
+#       - ./frontend:/app
+#       - /app/node_modules
+#     command: npm run dev
+#     restart: unless-stopped
 
 networks:
   musicgeek_network:

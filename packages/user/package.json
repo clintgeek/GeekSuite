@@ -1,14 +1,21 @@
 {
   "name": "@geeksuite/user",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "type": "module",
   "main": "src/index.js",
   "exports": {
-    ".": "./src/index.js"
+    ".": "./src/index.js",
+    "./server": "./src/server/index.js"
   },
   "peerDependencies": {
     "react": ">=18",
-    "axios": ">=1"
+    "axios": ">=1",
+    "mongoose": ">=7",
+    "express": ">=4"
+  },
+  "peerDependenciesMeta": {
+    "react": { "optional": true },
+    "mongoose": { "optional": true },
+    "express": { "optional": true }
   }
 }

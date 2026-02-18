@@ -1,4 +1,4 @@
-# 1. Build stage
+# ---------- BUILD STAGE ----------
 FROM node:20-alpine AS build
 
 WORKDIR /app
@@ -6,55 +6,40 @@ WORKDIR /app
 # Install build dependencies for native modules (sharp, etc.)
 RUN apk add --no-cache python3 make g++ vips-dev
 
-# Copy package manifests
-COPY apps/basegeek/package*.json ./
-COPY apps/basegeek/packages/api/package*.json ./packages/api/
-COPY apps/basegeek/packages/ui/package*.json ./packages/ui/
+# Copy workspace files
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY packages ./packages
+COPY apps/basegeek ./apps/basegeek
 
-# Copy shared @geeksuite/user package (dependency of ui)
-COPY packages/user ./packages/user
+# Install ALL workspace deps (resolves workspace:* links)
+RUN npm install -g pnpm
+RUN pnpm install
 
-# Install all dependencies (including devDependencies)
-RUN cd packages/api && npm install
-RUN cd packages/ui && npm install
+# Build the frontend (UI)
+WORKDIR /app/apps/basegeek/packages/ui
+RUN pnpm run build
 
-# Copy all source code
-COPY . .
-
-# Build the frontend
-RUN cd apps/basegeek/packages/ui && npm run build
-
-# 2. Production stage
+# ---------- PRODUCTION STAGE ----------
 FROM node:20-alpine AS prod
 
-WORKDIR /app/packages/api
-
-# Install runtime dependencies for sharp (vips)
+WORKDIR /app
 RUN apk add --no-cache vips
 
-# Copy API package files
-COPY apps/basegeek/packages/api/package*.json ./
+# Copy the API source and its resolved node_modules from the build stage
+COPY --from=build /app/apps/basegeek/packages/api ./apps/basegeek/packages/api
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/apps/basegeek/node_modules ./apps/basegeek/node_modules
+COPY --from=build /app/apps/basegeek/packages/api/node_modules ./apps/basegeek/packages/api/node_modules
 
-# Install only production dependencies for API
-RUN npm install --production
+# Copy shared packages (runtime dependency for workspace:* links)
+COPY --from=build /app/packages ./packages
 
-# Install WASM ONNX runtime
-RUN npm install onnxruntime-web@1.14.0
-
-# Remove native binary completely - delete the entire problematic package
-RUN rm -rf node_modules/onnxruntime-node
-
-# Copy API source
-COPY apps/basegeek/packages/api .
-
-# Copy families.json to root app directory
-COPY apps/basegeek/families.json /app/families.json
+# Copy families.json
+COPY apps/basegeek/families.json ./apps/basegeek/families.json
 
 # Copy built UI to the expected location
+WORKDIR /app/apps/basegeek/packages/api
 COPY --from=build /app/apps/basegeek/packages/ui/dist ./../ui/dist
 
-# Expose the port
 EXPOSE 8987
-
-# Start the API
-CMD ["npm", "start"]
+CMD ["node", "src/server.js"]

@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { healthcheck } from "../controllers/statusController.js";
-import { me as meController } from "../controllers/authController.js";
 import authRoutes from "./auth.js";
+import { requireAuth } from "../middleware/authMiddleware.js";
+import { meHandler } from "@geeksuite/user/server";
 import birdsRoutes from "./birds.js";
 import groupsRoutes from "./groups.js";
 import groupMembershipsRoutes from "./groupMemberships.js";
@@ -18,7 +19,7 @@ const router = Router();
 router.get("/health", healthcheck);
 
 // Canonical session check for cookie-based auth
-router.get("/me", meController);
+router.get("/me", requireAuth, meHandler());
 
 // Auth routes (no ownerId required for login/register)
 router.use("/auth", authRoutes);

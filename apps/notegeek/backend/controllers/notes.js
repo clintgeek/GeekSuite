@@ -1,5 +1,5 @@
 import Note from '../models/Note.js';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 
 // --- Helper Functions (Consider moving to a service/util file later) ---
 
@@ -99,7 +99,7 @@ export const getNotes = async (req, res) => {
 
   // Filter by tag prefix (for hierarchical tags)
   if (prefix) {
-    filter.tags = { $regex: `^${escapeRegex(prefix)}` };
+    filter.tags = { $regex: `^${ escapeRegex(prefix) }` };
   }
 
   // Pagination

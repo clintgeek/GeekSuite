@@ -16,6 +16,7 @@ import authRouter from "./routes/authRoutes.js";
 import aiRouter from "./routes/aiRoutes.js";
 import importRouter from "./routes/importRoutes.js";
 import { authenticateToken } from "./middleware/auth.js";
+import { meHandler } from "@geeksuite/user/server";
 import { sendMail } from "./services/emailService.js";
 
 dotenv.config();
@@ -696,16 +697,7 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-app.get("/api/me", authenticateToken, (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  res.json({
-    success: true,
-    data: {
-      user: req.userRaw || req.user,
-    },
-    timestamp: new Date().toISOString(),
-  });
-});
+app.get("/api/me", authenticateToken, meHandler());
 
 app.get("/api/books", authenticateToken, async (req, res) => {
   try {

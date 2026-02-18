@@ -3,6 +3,7 @@ import ePub from "epubjs";
 import { getMe, loginRedirect, logout as logoutRequest, onLogout, startRefreshTimer, stopRefreshTimer } from "@geeksuite/auth";
 import { useUser, usePreferences, useAppPreferences } from "@geeksuite/user";
 import { registerReset, reset as resetUserStore } from "./utils/resetUserStore";
+import { LoginSplash } from "@geeksuite/ui";
 
 let API_BASE = "http://localhost:1800/api";
 
@@ -10,14 +11,14 @@ if (typeof window !== "undefined") {
   const hostname = window.location.hostname;
   const origin = window.location.origin.replace(/\/$/, "");
   if (hostname !== "localhost" && hostname !== "127.0.0.1") {
-    API_BASE = `${origin}/api`;
+    API_BASE = `${ origin }/api`;
   }
 }
 
 let INCLUDE_CREDENTIALS = false;
 if (typeof window !== "undefined") {
   const origin = window.location.origin.replace(/\/$/, "");
-  INCLUDE_CREDENTIALS = API_BASE.startsWith(`${origin}/api`);
+  INCLUDE_CREDENTIALS = API_BASE.startsWith(`${ origin }/api`);
 }
 
 const shelves = [
@@ -67,14 +68,14 @@ function formatDescriptionForDisplay(raw) {
 
 function getCoverUrl(book) {
   if (!book || !book._id) return null;
-  const base = `${API_BASE}/books/${book._id}/cover`;
+  const base = `${ API_BASE }/books/${ book._id }/cover`;
   const ts =
     (typeof book.updatedAt === "string" && book.updatedAt) ||
     (typeof book.updatedAt === "number" && book.updatedAt) ||
     (typeof book.createdAt === "string" && book.createdAt) ||
     (typeof book.createdAt === "number" && book.createdAt) ||
     Date.now();
-  return `${base}?v=${encodeURIComponent(ts)}`;
+  return `${ base }?v=${ encodeURIComponent(ts) }`;
 }
 
 export default function App() {
@@ -232,7 +233,7 @@ export default function App() {
     if (sessionLoading) return;
     if (bootstrapRanRef.current) return;
     bootstrapRanRef.current = true;
-    bootstrap().catch(() => {});
+    bootstrap().catch(() => { });
   }, [user, sessionLoading, bootstrap]);
 
   useEffect(() => {
@@ -411,7 +412,7 @@ export default function App() {
           const formData = new FormData();
           formData.append("file", addBookFile);
 
-          const uploadRes = await authFetch(`/books/${created._id}/upload`, {
+          const uploadRes = await authFetch(`/books/${ created._id }/upload`, {
             method: "POST",
             body: formData,
           });
@@ -469,7 +470,7 @@ export default function App() {
     setDeleteFilterLoadingId(id);
     setSavedFiltersError(null);
     try {
-      const res = await authFetch(`/profile/library-filters/${encodeURIComponent(id)}`, {
+      const res = await authFetch(`/profile/library-filters/${ encodeURIComponent(id) }`, {
         method: "DELETE",
       });
       const json = await res.json().catch(() => null);
@@ -523,8 +524,8 @@ export default function App() {
       if (ownedFilter === "unowned") params.set("owned", "false");
 
       const [healthRes, booksRes] = await Promise.all([
-        fetch(`${API_BASE}/health`, { cache: "no-store" }),
-        authFetch(`/books?${params.toString()}`, { cache: "no-store" }),
+        fetch(`${ API_BASE }/health`, { cache: "no-store" }),
+        authFetch(`/books?${ params.toString() }`, { cache: "no-store" }),
       ]);
 
       const healthJson = await healthRes.json().catch(() => null);
@@ -533,15 +534,15 @@ export default function App() {
       if (!healthRes.ok) {
         throw new Error(
           booksJson?.error?.message ||
-            `Health check failed (${healthRes.status})`
+          `Health check failed (${ healthRes.status })`
         );
       }
 
       if (!booksRes.ok || booksJson?.success === false) {
         throw new Error(
           booksJson?.error?.message ||
-            booksJson?.message ||
-            `Books request failed (${booksRes.status})`
+          booksJson?.message ||
+          `Books request failed (${ booksRes.status })`
         );
       }
 
@@ -604,7 +605,7 @@ export default function App() {
       const formData = new FormData();
       formData.append("file", uploadFile);
 
-      const res = await authFetch(`/books/${book._id}/upload`, {
+      const res = await authFetch(`/books/${ book._id }/upload`, {
         method: "POST",
         body: formData,
       });
@@ -636,7 +637,7 @@ export default function App() {
   }
 
   async function authFetch(path, options = {}) {
-    const url = path.startsWith("/") ? `${API_BASE}${path}` : `${API_BASE}/${path}`;
+    const url = path.startsWith("/") ? `${ API_BASE }${ path }` : `${ API_BASE }/${ path }`;
 
     const headers = { ...(options.headers || {}) };
     const res = await fetch(url, {
@@ -899,7 +900,7 @@ export default function App() {
           return;
         }
 
-        const url = `${API_BASE}/books/${selectedBook._id}/download/epub`;
+        const url = `${ API_BASE }/books/${ selectedBook._id }/download/epub`;
         const book = ePub(url, { openAs: "epub" });
         readerBookRef.current = book;
 
@@ -1113,7 +1114,7 @@ export default function App() {
     setEnrichSummary(null);
 
     try {
-      const res = await authFetch(`/books/${selectedBook._id}/enrich`, {
+      const res = await authFetch(`/books/${ selectedBook._id }/enrich`, {
         method: "POST",
       });
 
@@ -1138,7 +1139,7 @@ export default function App() {
       }
 
       if (updatedFields.length > 0) {
-        setEnrichSummary(`Updated: ${updatedFields.join(", ")}`);
+        setEnrichSummary(`Updated: ${ updatedFields.join(", ") }`);
       } else {
         setEnrichSummary("No changes were needed; metadata already populated.");
       }
@@ -1160,8 +1161,8 @@ export default function App() {
       typeof coverSearchQuery === "string" && coverSearchQuery.trim()
         ? coverSearchQuery.trim()
         : typeof selectedBook.title === "string"
-        ? selectedBook.title
-        : "";
+          ? selectedBook.title
+          : "";
 
     if (!baseQuery) {
       setCoverSearchError("Add a title or search term first.");
@@ -1176,7 +1177,7 @@ export default function App() {
       params.set("q", baseQuery);
 
       const res = await authFetch(
-        `/books/${selectedBook._id}/search-covers?${params.toString()}`,
+        `/books/${ selectedBook._id }/search-covers?${ params.toString() }`,
         {
           method: "GET",
         }
@@ -1229,10 +1230,10 @@ export default function App() {
         typeof candidate.coverUrl === "string" && candidate.coverUrl
           ? candidate.coverUrl
           : typeof candidate.largeUrl === "string" && candidate.largeUrl
-          ? candidate.largeUrl
-          : typeof candidate.thumbUrl === "string"
-          ? candidate.thumbUrl
-          : null;
+            ? candidate.largeUrl
+            : typeof candidate.thumbUrl === "string"
+              ? candidate.thumbUrl
+              : null;
       if (!coverUrl) {
         setCoverSearchError("Invalid Google Books cover candidate.");
         return;
@@ -1247,13 +1248,13 @@ export default function App() {
       typeof candidate.id === "string"
         ? candidate.id
         : provider === "openlibrary"
-        ? `cover-${String(body.coverId)}`
-        : `cover-${String(body.coverUrl || "")}`;
+          ? `cover-${ String(body.coverId) }`
+          : `cover-${ String(body.coverUrl || "") }`;
     setCoverApplyLoadingId(loadingId);
     setCoverSearchError(null);
 
     try {
-      const res = await authFetch(`/books/${selectedBook._id}/cover`, {
+      const res = await authFetch(`/books/${ selectedBook._id }/cover`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1309,7 +1310,7 @@ export default function App() {
       const formData = new FormData();
       formData.append("file", coverUploadFile);
 
-      const res = await authFetch(`/books/${selectedBook._id}/cover/upload`, {
+      const res = await authFetch(`/books/${ selectedBook._id }/cover/upload`, {
         method: "POST",
         body: formData,
       });
@@ -1348,7 +1349,7 @@ export default function App() {
     setCoverSearchError(null);
 
     try {
-      const res = await authFetch(`/books/${selectedBook._id}/cover`, {
+      const res = await authFetch(`/books/${ selectedBook._id }/cover`, {
         method: "DELETE",
       });
 
@@ -1472,7 +1473,7 @@ export default function App() {
 
     try {
       const res = await authFetch(
-        `/books/${selectedBook._id}?deleteFiles=${deleteFlag}`,
+        `/books/${ selectedBook._id }?deleteFiles=${ deleteFlag }`,
         {
           method: "DELETE",
         }
@@ -1520,7 +1521,7 @@ export default function App() {
       review: selectedBook.review || "",
       rating:
         typeof selectedBook.rating === "number" &&
-        !Number.isNaN(selectedBook.rating)
+          !Number.isNaN(selectedBook.rating)
           ? String(selectedBook.rating)
           : "",
     });
@@ -1555,15 +1556,15 @@ export default function App() {
       review: editDraft.review || null,
       authors: editDraft.authors
         ? editDraft.authors
-            .split(",")
-            .map((s) => s.trim())
-            .filter(Boolean)
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
         : [],
       tags: editDraft.tags
         ? editDraft.tags
-            .split(",")
-            .map((s) => s.trim())
-            .filter(Boolean)
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
         : [],
     };
 
@@ -1576,7 +1577,7 @@ export default function App() {
     }
 
     try {
-      const res = await authFetch(`/books/${selectedBook._id}`, {
+      const res = await authFetch(`/books/${ selectedBook._id }`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -1620,7 +1621,7 @@ export default function App() {
 
     try {
       const res = await authFetch(
-        `/books/${book._id}/send-to-kindle`,
+        `/books/${ book._id }/send-to-kindle`,
         {
           method: "POST",
           headers: {
@@ -1651,7 +1652,7 @@ export default function App() {
     setShelfSavingId(bookId);
 
     try {
-      const res = await authFetch(`/books/${bookId}`, {
+      const res = await authFetch(`/books/${ bookId }`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -1759,7 +1760,7 @@ export default function App() {
         const message =
           json?.error?.message ||
           json?.message ||
-          `AI status failed (${response.status})`;
+          `AI status failed (${ response.status })`;
         throw new Error(message);
       }
 
@@ -1783,39 +1784,29 @@ export default function App() {
 
   if (!user) {
     return (
-      <div className="min-h-screen font-sans" style={{ backgroundColor: 'var(--color-bg-page)', color: 'var(--color-text-primary)' }}>
-        <div className="mx-auto flex min-h-screen max-w-6xl flex-col items-center justify-center px-4 py-8 md:px-6">
-          <div className="mx-auto w-full max-w-md rounded-2xl p-6" style={{ backgroundColor: 'var(--color-bg-surface)', border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-panel)' }}>
-            <div className="mb-5">
-              <h1 className="text-2xl font-bold tracking-tight font-serif" style={{ color: 'var(--color-text-primary)' }}>
-                BookGeek
-              </h1>
-              <div className="mt-1 text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                Sign in with your baseGeek account.
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              {authError && (
-                <div className="text-xs text-rose-400">{authError}</div>
-              )}
-              <button
-                type="button"
-                disabled={authLoading}
-                onClick={() => {
-                  setAuthLoading(true);
-                  setAuthError(null);
-                  loginRedirect("bookgeek", window.location.href, "login");
-                }}
-                className="w-full rounded-lg px-3 py-2.5 text-sm font-medium hover:opacity-90 disabled:opacity-60 transition-opacity"
-                style={{ backgroundColor: 'var(--color-bg-surface-alt)', border: '1px solid var(--color-border)', color: 'var(--color-text-primary)' }}
-              >
-                {authLoading ? "Redirecting…" : "Sign in"}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <LoginSplash
+        appName="book"
+        appSuffix="geek"
+        taglineLine1="Read beautifully."
+        taglineLine2="Your library, reimagined."
+        description="A modern, clean e-reader for your personal library. upload, organize, and read your favorite books anywhere."
+        features={['EPUB Support', 'Sync Progress', 'Metadata Management', 'Dark Mode']}
+        onLogin={() => {
+          setAuthLoading(true);
+          setAuthError(null);
+          loginRedirect("bookgeek", window.location.href, "login");
+        }}
+        loading={authLoading}
+        error={authError}
+        // BookGeek branding (Blue/Slate)
+        logoColor="#3b82f6" // Blue 500
+        logoSuffixColor="#1d4ed8" // Blue 700
+        // Custom ink wash for BookGeek
+        inkColors={[
+          'rgba(59, 130, 246, 0.08)', // Blue
+          'rgba(30, 64, 175, 0.06)'   // Darker Blue
+        ]}
+      />
     );
   }
 
@@ -1926,20 +1917,20 @@ export default function App() {
                   tagFilter.trim() ||
                   shelfFilter !== "all" ||
                   ownedFilter !== "all") && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSearchQuery("");
-                      setAuthorFilter("");
-                      setTagFilter("");
-                      setShelfFilter("all");
-                      setOwnedFilter("all");
-                    }}
-                    className="inline-flex w-full items-center justify-center rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-[11px] text-slate-200 hover:border-slate-500 hover:bg-slate-900"
-                  >
-                    Clear all filters
-                  </button>
-                )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchQuery("");
+                        setAuthorFilter("");
+                        setTagFilter("");
+                        setShelfFilter("all");
+                        setOwnedFilter("all");
+                      }}
+                      className="inline-flex w-full items-center justify-center rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-[11px] text-slate-200 hover:border-slate-500 hover:bg-slate-900"
+                    >
+                      Clear all filters
+                    </button>
+                  )}
                 {savedFiltersError && (
                   <div className="text-[10px] text-rose-400">
                     {savedFiltersError}
@@ -1990,126 +1981,126 @@ export default function App() {
               </div>
             </div>
 
-      {addBookOpen && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 px-2 py-4">
-          <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-950 p-4 text-sm text-slate-100 shadow-2xl">
-            <div className="mb-3 flex items-center justify-between">
-              <div>
-                <h2 className="text-sm font-semibold text-slate-100">
-                  Add book
-                </h2>
-                <p className="text-[11px] text-slate-500">
-                  Create a book entry (useful for want-to-read titles). You can
-                  attach an EPUB later.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  if (addBookLoading) return;
-                  setAddBookOpen(false);
-                  setAddBookError(null);
-                }}
-                className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-700 bg-slate-900 text-sm font-semibold text-slate-300 hover:border-slate-500 hover:text-slate-50"
-              >
-                ×
-              </button>
-            </div>
-            <form
-              className="space-y-2 text-[11px]"
-              onSubmit={handleCreateBook}
-            >
-              <div className="space-y-1">
-                <label className="block text-slate-300">Title *</label>
-                <input
-                  type="text"
-                  value={addBookTitle}
-                  onChange={(e) => setAddBookTitle(e.target.value)}
-                  className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100 outline-none focus:border-sky-500"
-                  placeholder="Book title"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="block text-slate-300">Authors</label>
-                <input
-                  type="text"
-                  value={addBookAuthors}
-                  onChange={(e) => setAddBookAuthors(e.target.value)}
-                  className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100 outline-none focus:border-sky-500"
-                  placeholder="Comma-separated list"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="block text-slate-300">ISBN</label>
-                <input
-                  type="text"
-                  value={addBookIsbn}
-                  onChange={(e) => setAddBookIsbn(e.target.value)}
-                  className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100 outline-none focus:border-sky-500"
-                  placeholder="Optional"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="block text-slate-300">Optional file</label>
-                <input
-                  type="file"
-                  accept=".epub,.mobi,.azw3,.pdf,.fb2,.rtf,.txt,.html"
-                  onChange={(e) => {
-                    const file = e.target.files && e.target.files[0];
-                    setAddBookFile(file || null);
-                  }}
-                  className="text-[10px] text-slate-200 file:mr-2 file:rounded file:border-0 file:bg-slate-800 file:px-2 file:py-1 file:text-[10px] file:text-slate-100 hover:file:bg-slate-700"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="block text-slate-300">Shelf</label>
-                <select
-                  value={addBookShelf}
-                  onChange={(e) => setAddBookShelf(e.target.value)}
-                  className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100 outline-none focus:border-sky-500"
-                >
-                  <option value="want-to-read">Want to read</option>
-                  <option value="unread">Unread</option>
-                  <option value="reading">Reading</option>
-                  <option value="read">Read</option>
-                  <option value="abandoned">Abandoned</option>
-                  <option value="need-to-find">Need to find</option>
-                </select>
-              </div>
-              {addBookError && (
-                <div className="text-[11px] text-rose-400">{addBookError}</div>
-              )}
-              {token ? (
-                <div className="mt-2 flex justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (addBookLoading) return;
-                      setAddBookOpen(false);
-                      setAddBookError(null);
-                    }}
-                    className="rounded border border-slate-700 bg-slate-900 px-3 py-1 text-[11px] text-slate-200 hover:border-slate-500"
-                    disabled={addBookLoading}
+            {addBookOpen && (
+              <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 px-2 py-4">
+                <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-950 p-4 text-sm text-slate-100 shadow-2xl">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div>
+                      <h2 className="text-sm font-semibold text-slate-100">
+                        Add book
+                      </h2>
+                      <p className="text-[11px] text-slate-500">
+                        Create a book entry (useful for want-to-read titles). You can
+                        attach an EPUB later.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (addBookLoading) return;
+                        setAddBookOpen(false);
+                        setAddBookError(null);
+                      }}
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-700 bg-slate-900 text-sm font-semibold text-slate-300 hover:border-slate-500 hover:text-slate-50"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <form
+                    className="space-y-2 text-[11px]"
+                    onSubmit={handleCreateBook}
                   >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={addBookLoading}
-                    className="rounded border border-emerald-600 bg-emerald-900/60 px-3 py-1 text-[11px] font-medium text-emerald-100 hover:border-emerald-400 hover:bg-emerald-800 disabled:opacity-60"
-                  >
-                    {addBookLoading ? "Creating…" : "Create book"}
-                  </button>
+                    <div className="space-y-1">
+                      <label className="block text-slate-300">Title *</label>
+                      <input
+                        type="text"
+                        value={addBookTitle}
+                        onChange={(e) => setAddBookTitle(e.target.value)}
+                        className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100 outline-none focus:border-sky-500"
+                        placeholder="Book title"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-slate-300">Authors</label>
+                      <input
+                        type="text"
+                        value={addBookAuthors}
+                        onChange={(e) => setAddBookAuthors(e.target.value)}
+                        className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100 outline-none focus:border-sky-500"
+                        placeholder="Comma-separated list"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-slate-300">ISBN</label>
+                      <input
+                        type="text"
+                        value={addBookIsbn}
+                        onChange={(e) => setAddBookIsbn(e.target.value)}
+                        className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100 outline-none focus:border-sky-500"
+                        placeholder="Optional"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-slate-300">Optional file</label>
+                      <input
+                        type="file"
+                        accept=".epub,.mobi,.azw3,.pdf,.fb2,.rtf,.txt,.html"
+                        onChange={(e) => {
+                          const file = e.target.files && e.target.files[0];
+                          setAddBookFile(file || null);
+                        }}
+                        className="text-[10px] text-slate-200 file:mr-2 file:rounded file:border-0 file:bg-slate-800 file:px-2 file:py-1 file:text-[10px] file:text-slate-100 hover:file:bg-slate-700"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-slate-300">Shelf</label>
+                      <select
+                        value={addBookShelf}
+                        onChange={(e) => setAddBookShelf(e.target.value)}
+                        className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100 outline-none focus:border-sky-500"
+                      >
+                        <option value="want-to-read">Want to read</option>
+                        <option value="unread">Unread</option>
+                        <option value="reading">Reading</option>
+                        <option value="read">Read</option>
+                        <option value="abandoned">Abandoned</option>
+                        <option value="need-to-find">Need to find</option>
+                      </select>
+                    </div>
+                    {addBookError && (
+                      <div className="text-[11px] text-rose-400">{addBookError}</div>
+                    )}
+                    {token ? (
+                      <div className="mt-2 flex justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (addBookLoading) return;
+                            setAddBookOpen(false);
+                            setAddBookError(null);
+                          }}
+                          className="rounded border border-slate-700 bg-slate-900 px-3 py-1 text-[11px] text-slate-200 hover:border-slate-500"
+                          disabled={addBookLoading}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={addBookLoading}
+                          className="rounded border border-emerald-600 bg-emerald-900/60 px-3 py-1 text-[11px] font-medium text-emerald-100 hover:border-emerald-400 hover:bg-emerald-800 disabled:opacity-60"
+                        >
+                          {addBookLoading ? "Creating…" : "Create book"}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-rose-400">
+                        You must be signed in to add books.
+                      </div>
+                    )}
+                  </form>
                 </div>
-              ) : (
-                <div className="text-[11px] text-rose-400">
-                  You must be signed in to add books.
-                </div>
-              )}
-            </form>
-          </div>
-        </div>
-      )}
+              </div>
+            )}
 
             <div className="mt-5 pt-4 text-[11px]" style={{ borderTop: '1px solid var(--color-border-subtle)', color: 'var(--color-text-faint)' }}>
               <div className="mb-1 font-medium" style={{ color: 'var(--color-sidebar-text)' }}>
@@ -2137,7 +2128,7 @@ export default function App() {
                       <div className="h-14 w-10 flex-shrink-0 overflow-hidden rounded" style={{ border: '1px solid var(--color-border-subtle)', backgroundColor: 'var(--color-bg-surface)' }}>
                         {rec._id && (
                           <img
-                            src={`${API_BASE}/books/${rec._id}/cover`}
+                            src={`${ API_BASE }/books/${ rec._id }/cover`}
                             alt={rec.title || "Book cover"}
                             className="h-full w-full object-cover"
                           />
@@ -2185,10 +2176,10 @@ export default function App() {
                   {loading
                     ? "Loading from backend…"
                     : error
-                    ? "Backend error — see status chip above."
-                    : books.length === 0
-                    ? "No books found."
-                    : ""}
+                      ? "Backend error — see status chip above."
+                      : books.length === 0
+                        ? "No books found."
+                        : ""}
                 </p>
               </div>
             </div>
@@ -2283,7 +2274,7 @@ export default function App() {
                   >
                     {mergeLoading
                       ? "Merging…"
-                      : `Merge selected (${selectedBookIds.length || 0}/2)`}
+                      : `Merge selected (${ selectedBookIds.length || 0 }/2)`}
                   </button>
                 )}
               </div>
@@ -2294,169 +2285,169 @@ export default function App() {
               tagFilter.trim() ||
               shelfFilter !== "all" ||
               ownedFilter !== "all") && (
-              <div className="mb-3 flex flex-wrap gap-1 text-[11px]">
-                {shelfFilter !== "all" && (
+                <div className="mb-3 flex flex-wrap gap-1 text-[11px]">
+                  {shelfFilter !== "all" && (
+                    <button
+                      type="button"
+                      onClick={() => setShelfFilter("all")}
+                      className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-slate-200 hover:border-slate-500 hover:bg-slate-800"
+                    >
+                      <span>
+                        Shelf:{" "}
+                        {shelves.find((s) => s.id === shelfFilter)?.label ||
+                          shelfFilter}
+                      </span>
+                      <span className="text-slate-400">×</span>
+                    </button>
+                  )}
+                  {searchQuery.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery("")}
+                      className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-slate-200 hover:border-slate-500 hover:bg-slate-800"
+                    >
+                      <span>Search: {searchQuery.trim()}</span>
+                      <span className="text-slate-400">×</span>
+                    </button>
+                  )}
+                  {authorFilter.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => setAuthorFilter("")}
+                      className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-slate-200 hover:border-slate-500 hover:bg-slate-800"
+                    >
+                      <span>Author: {authorFilter.trim()}</span>
+                      <span className="text-slate-400">×</span>
+                    </button>
+                  )}
+                  {tagFilter.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => setTagFilter("")}
+                      className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-slate-200 hover:border-slate-500 hover:bg-slate-800"
+                    >
+                      <span>Tag: {tagFilter.trim()}</span>
+                      <span className="text-slate-400">×</span>
+                    </button>
+                  )}
+                  {ownedFilter === "owned" && (
+                    <button
+                      type="button"
+                      onClick={() => setOwnedFilter("all")}
+                      className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-slate-200 hover:border-slate-500 hover:bg-slate-800"
+                    >
+                      <span>Owned only</span>
+                      <span className="text-slate-400">×</span>
+                    </button>
+                  )}
+                  {ownedFilter === "unowned" && (
+                    <button
+                      type="button"
+                      onClick={() => setOwnedFilter("all")}
+                      className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-slate-200 hover:border-slate-500 hover:bg-slate-800"
+                    >
+                      <span>Unowned only</span>
+                      <span className="text-slate-400">×</span>
+                    </button>
+                  )}
                   <button
                     type="button"
-                    onClick={() => setShelfFilter("all")}
-                    className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-slate-200 hover:border-slate-500 hover:bg-slate-800"
+                    onClick={() => {
+                      setSearchQuery("");
+                      setAuthorFilter("");
+                      setTagFilter("");
+                      setShelfFilter("all");
+                      setOwnedFilter("all");
+                    }}
+                    className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-950 px-2 py-0.5 text-slate-200 hover:border-slate-500 hover:bg-slate-900"
                   >
-                    <span>
-                      Shelf:{" "}
-                      {shelves.find((s) => s.id === shelfFilter)?.label ||
-                        shelfFilter}
-                    </span>
-                    <span className="text-slate-400">×</span>
+                    <span>Clear all</span>
                   </button>
-                )}
-                {searchQuery.trim() && (
-                  <button
-                    type="button"
-                    onClick={() => setSearchQuery("")}
-                    className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-slate-200 hover:border-slate-500 hover:bg-slate-800"
-                  >
-                    <span>Search: {searchQuery.trim()}</span>
-                    <span className="text-slate-400">×</span>
-                  </button>
-                )}
-                {authorFilter.trim() && (
-                  <button
-                    type="button"
-                    onClick={() => setAuthorFilter("")}
-                    className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-slate-200 hover:border-slate-500 hover:bg-slate-800"
-                  >
-                    <span>Author: {authorFilter.trim()}</span>
-                    <span className="text-slate-400">×</span>
-                  </button>
-                )}
-                {tagFilter.trim() && (
-                  <button
-                    type="button"
-                    onClick={() => setTagFilter("")}
-                    className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-slate-200 hover:border-slate-500 hover:bg-slate-800"
-                  >
-                    <span>Tag: {tagFilter.trim()}</span>
-                    <span className="text-slate-400">×</span>
-                  </button>
-                )}
-                {ownedFilter === "owned" && (
-                  <button
-                    type="button"
-                    onClick={() => setOwnedFilter("all")}
-                    className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-slate-200 hover:border-slate-500 hover:bg-slate-800"
-                  >
-                    <span>Owned only</span>
-                    <span className="text-slate-400">×</span>
-                  </button>
-                )}
-                {ownedFilter === "unowned" && (
-                  <button
-                    type="button"
-                    onClick={() => setOwnedFilter("all")}
-                    className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-slate-200 hover:border-slate-500 hover:bg-slate-800"
-                  >
-                    <span>Unowned only</span>
-                    <span className="text-slate-400">×</span>
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSearchQuery("");
-                    setAuthorFilter("");
-                    setTagFilter("");
-                    setShelfFilter("all");
-                    setOwnedFilter("all");
-                  }}
-                  className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-950 px-2 py-0.5 text-slate-200 hover:border-slate-500 hover:bg-slate-900"
-                >
-                  <span>Clear all</span>
-                </button>
-              </div>
-            )}
+                </div>
+              )}
 
             <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
               {loading
                 ? Array.from({ length: 8 }).map((_, i) => (
-                    <div
-                      key={i}
-                      className="flex flex-col rounded-xl p-2.5 text-xs animate-pulse"
-                      style={{ backgroundColor: 'var(--color-bg-card)', boxShadow: 'var(--shadow-card)' }}
-                    >
-                      <div className="mb-2 aspect-[2/3] w-full rounded-md" style={{ backgroundColor: 'var(--color-bg-surface)' }} />
-                      <div className="mb-1 h-3 w-5/6 rounded" style={{ backgroundColor: 'var(--color-bg-surface)' }} />
-                      <div className="h-2.5 w-2/3 rounded" style={{ backgroundColor: 'var(--color-bg-surface)' }} />
-                    </div>
-                  ))
+                  <div
+                    key={i}
+                    className="flex flex-col rounded-xl p-2.5 text-xs animate-pulse"
+                    style={{ backgroundColor: 'var(--color-bg-card)', boxShadow: 'var(--shadow-card)' }}
+                  >
+                    <div className="mb-2 aspect-[2/3] w-full rounded-md" style={{ backgroundColor: 'var(--color-bg-surface)' }} />
+                    <div className="mb-1 h-3 w-5/6 rounded" style={{ backgroundColor: 'var(--color-bg-surface)' }} />
+                    <div className="h-2.5 w-2/3 rounded" style={{ backgroundColor: 'var(--color-bg-surface)' }} />
+                  </div>
+                ))
                 : books.map((book) => {
-                    const isSelected = selectedBookIds.includes(book._id);
-                    return (
-                      <div
-                        key={book._id}
-                        className={
-                          "relative flex cursor-pointer flex-col rounded-xl p-2.5 text-xs transition-all duration-200 " +
-                          (showMergeUi && isSelected
-                            ? "ring-2 ring-sky-500"
-                            : "hover:translate-y-[-1px]")
-                        }
-                        style={{
-                          backgroundColor: 'var(--color-bg-card)',
-                          boxShadow: 'var(--shadow-card)',
-                          color: 'var(--color-text-secondary)',
-                        }}
-                        onClick={() => {
-                          setSelectedBook(book);
-                          setDownloadOpen(false);
-                        }}
-                      >
-                        {showMergeUi && (
-                          <div className="absolute left-1.5 top-1.5 z-10">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                              }}
-                              onChange={(e) => toggleBookSelection(book._id, e)}
-                              className="h-3 w-3 rounded border-slate-500 bg-slate-900 text-sky-500 focus:ring-sky-500"
-                              title="Select for manual merge"
-                            />
-                          </div>
-                        )}
-                        <div className="mb-2 aspect-[2/3] w-full overflow-hidden rounded-lg" style={{ backgroundColor: 'var(--color-bg-surface)' }}>
-                          {book._id ? (
-                            <img
-                              src={
-                                getCoverUrl(book) ||
-                                `${API_BASE}/books/${book._id}/cover`
-                              }
-                              alt={book.title || "Book cover"}
-                              className="h-full w-full object-cover"
-                              loading="lazy"
-                              onError={(e) => {
-                                e.currentTarget.style.visibility = "hidden";
-                              }}
-                            />
-                          ) : null}
+                  const isSelected = selectedBookIds.includes(book._id);
+                  return (
+                    <div
+                      key={book._id}
+                      className={
+                        "relative flex cursor-pointer flex-col rounded-xl p-2.5 text-xs transition-all duration-200 " +
+                        (showMergeUi && isSelected
+                          ? "ring-2 ring-sky-500"
+                          : "hover:translate-y-[-1px]")
+                      }
+                      style={{
+                        backgroundColor: 'var(--color-bg-card)',
+                        boxShadow: 'var(--shadow-card)',
+                        color: 'var(--color-text-secondary)',
+                      }}
+                      onClick={() => {
+                        setSelectedBook(book);
+                        setDownloadOpen(false);
+                      }}
+                    >
+                      {showMergeUi && (
+                        <div className="absolute left-1.5 top-1.5 z-10">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                            }}
+                            onChange={(e) => toggleBookSelection(book._id, e)}
+                            className="h-3 w-3 rounded border-slate-500 bg-slate-900 text-sky-500 focus:ring-sky-500"
+                            title="Select for manual merge"
+                          />
                         </div>
-                        <div className="mb-0.5 line-clamp-2 font-serif font-medium text-[13px]" style={{ color: 'var(--color-text-primary)' }}>
-                          {book.title || "Untitled"}
-                        </div>
-                        <div className="flex items-center justify-between text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
-                          <span className="truncate">
-                            {Array.isArray(book.authors) && book.authors.length > 0
-                              ? book.authors.join(", ")
-                              : "Unknown author"}
-                          </span>
-                          {book.owned && (
-                            <span className="ml-2 flex-shrink-0 rounded-full border border-emerald-500/70 bg-emerald-900/40 px-1.5 py-0.5 text-[9px] font-medium text-emerald-200">
-                              Owned
-                            </span>
-                          )}
-                        </div>
+                      )}
+                      <div className="mb-2 aspect-[2/3] w-full overflow-hidden rounded-lg" style={{ backgroundColor: 'var(--color-bg-surface)' }}>
+                        {book._id ? (
+                          <img
+                            src={
+                              getCoverUrl(book) ||
+                              `${ API_BASE }/books/${ book._id }/cover`
+                            }
+                            alt={book.title || "Book cover"}
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                            onError={(e) => {
+                              e.currentTarget.style.visibility = "hidden";
+                            }}
+                          />
+                        ) : null}
                       </div>
-                    );
-                  })}
+                      <div className="mb-0.5 line-clamp-2 font-serif font-medium text-[13px]" style={{ color: 'var(--color-text-primary)' }}>
+                        {book.title || "Untitled"}
+                      </div>
+                      <div className="flex items-center justify-between text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
+                        <span className="truncate">
+                          {Array.isArray(book.authors) && book.authors.length > 0
+                            ? book.authors.join(", ")
+                            : "Unknown author"}
+                        </span>
+                        {book.owned && (
+                          <span className="ml-2 flex-shrink-0 rounded-full border border-emerald-500/70 bg-emerald-900/40 px-1.5 py-0.5 text-[9px] font-medium text-emerald-200">
+                            Owned
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
             </div>
 
             {showMergeUi && mergeSelectionError && (
@@ -2479,12 +2470,11 @@ export default function App() {
                 {loading
                   ? "Fetching data from API…"
                   : error
-                  ? "Error talking to API. Check containers and .env."
-                  : books.length === 0
-                  ? "Connected to API. No books in the database yet."
-                  : `Connected to API. Loaded ${books.length} book${
-                      books.length === 1 ? "" : "s"
-                    }.`}
+                    ? "Error talking to API. Check containers and .env."
+                    : books.length === 0
+                      ? "Connected to API. No books in the database yet."
+                      : `Connected to API. Loaded ${ books.length } book${ books.length === 1 ? "" : "s"
+                      }.`}
               </span>
             </div>
           </main>
@@ -2819,7 +2809,7 @@ export default function App() {
                 <div className="relative aspect-[2/3] w-full overflow-hidden rounded-md border border-slate-800 bg-slate-900">
                   {selectedBook._id ? (
                     <img
-                      src={getCoverUrl(selectedBook) || `${API_BASE}/books/${selectedBook._id}/cover`}
+                      src={getCoverUrl(selectedBook) || `${ API_BASE }/books/${ selectedBook._id }/cover`}
                       alt={selectedBook.title || "Book cover"}
                       className="h-full w-full object-cover"
                       onError={(e) => {
@@ -2893,9 +2883,9 @@ export default function App() {
                               const key =
                                 typeof candidate.id === "string"
                                   ? candidate.id
-                                  : `cover-${String(
-                                      candidate.coverId ?? ""
-                                    )}`;
+                                  : `cover-${ String(
+                                    candidate.coverId ?? ""
+                                  ) }`;
                               const isApplying = coverApplyLoadingId === key;
                               return (
                                 <button
@@ -2949,8 +2939,8 @@ export default function App() {
                               const sizeMB = sizeBytes / (1024 * 1024);
                               const sizeLabel =
                                 sizeMB >= 0.1
-                                  ? `${sizeMB.toFixed(1)} MB`
-                                  : `${(sizeBytes / 1024).toFixed(0)} KB`;
+                                  ? `${ sizeMB.toFixed(1) } MB`
+                                  : `${ (sizeBytes / 1024).toFixed(0) } KB`;
 
                               const fmt = (file.format || "").toLowerCase();
                               const formatSlug = fmt ||
@@ -2966,7 +2956,7 @@ export default function App() {
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     if (!selectedBook._id || !formatSlug) return;
-                                    const url = `${API_BASE}/books/${selectedBook._id}/download/${formatSlug}`;
+                                    const url = `${ API_BASE }/books/${ selectedBook._id }/download/${ formatSlug }`;
                                     window.location.href = url;
                                     setDownloadOpen(false);
                                   }}
@@ -3008,26 +2998,26 @@ export default function App() {
                     {(!selectedBook.owned ||
                       !selectedBook.files ||
                       selectedBook.files.length === 0) && (
-                      <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-400">
-                        <input
-                          type="file"
-                          accept=".epub,.mobi,.azw3,.pdf,.fb2,.rtf,.txt,.html"
-                          onChange={handleUploadFileChange}
-                          className="text-[10px] text-slate-200 file:mr-2 file:rounded file:border-0 file:bg-slate-800 file:px-2 file:py-1 file:text-[10px] file:text-slate-100 hover:file:bg-slate-700"
-                        />
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleUploadBookFile(selectedBook);
-                          }}
-                          disabled={uploadLoading || !uploadFile}
-                          className="inline-flex items-center rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[10px] font-medium text-slate-50 hover:border-slate-500 disabled:opacity-60"
-                        >
-                          {uploadLoading ? "Attaching…" : "Attach file"}
-                        </button>
-                      </div>
-                    )}
+                        <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-400">
+                          <input
+                            type="file"
+                            accept=".epub,.mobi,.azw3,.pdf,.fb2,.rtf,.txt,.html"
+                            onChange={handleUploadFileChange}
+                            className="text-[10px] text-slate-200 file:mr-2 file:rounded file:border-0 file:bg-slate-800 file:px-2 file:py-1 file:text-[10px] file:text-slate-100 hover:file:bg-slate-700"
+                          />
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleUploadBookFile(selectedBook);
+                            }}
+                            disabled={uploadLoading || !uploadFile}
+                            className="inline-flex items-center rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[10px] font-medium text-slate-50 hover:border-slate-500 disabled:opacity-60"
+                          >
+                            {uploadLoading ? "Attaching…" : "Attach file"}
+                          </button>
+                        </div>
+                      )}
                   </div>
 
                   <div>

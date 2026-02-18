@@ -36,7 +36,7 @@ export const register = async (req, res) => {
       });
     }
 
-    const response = await axios.post(`${env.basegeekUrl}/api/auth/register`, {
+    const response = await axios.post(`${ env.basegeekUrl }/api/auth/register`, {
       username,
       email,
       password,
@@ -82,7 +82,7 @@ export const login = async (req, res) => {
       });
     }
 
-    const response = await axios.post(`${env.basegeekUrl}/api/auth/login`, {
+    const response = await axios.post(`${ env.basegeekUrl }/api/auth/login`, {
       identifier,
       password,
       app: app || env.appName
@@ -124,8 +124,8 @@ export const me = async (req, res) => {
       return res.status(401).json({ message: "Authentication token required" });
     }
 
-    const response = await axios.get(`${env.basegeekUrl}/api/users/me`, {
-      headers: { Authorization: `Bearer ${token}` }
+    const response = await axios.get(`${ env.basegeekUrl }/api/users/me`, {
+      headers: { Authorization: `Bearer ${ token }` }
     });
 
     // Normalize user object to ensure id field exists
@@ -160,14 +160,11 @@ export const refresh = async (req, res) => {
   try {
     const { refreshToken } = req.body;
 
-    if (!refreshToken) {
-      return res.status(400).json({
-        message: "Refresh token required"
-      });
-    }
+    // BaseGeek handles token from cookie or body
+    // if (!refreshToken) return 400;
 
     const response = await axios.post(
-      `${env.basegeekUrl}/api/auth/refresh`,
+      `${ env.basegeekUrl }/api/auth/refresh`,
       {
         refreshToken,
         app: env.appName
@@ -208,7 +205,7 @@ export const logout = (req, res) => {
     try {
       const cookie = req.headers.cookie;
       const upstream = await axios.post(
-        `${env.basegeekUrl}/api/auth/logout`,
+        `${ env.basegeekUrl }/api/auth/logout`,
         {},
         {
           headers: cookie ? { Cookie: cookie } : undefined

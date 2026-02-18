@@ -12,6 +12,7 @@ import noteRoutes from './routes/notes.js'; // Import note routes
 import tagRoutes from './routes/tags.js'; // Import tag routes
 import searchRoutes from './routes/search.js'; // Import search routes
 import { protect } from './middleware/authMiddleware.js';
+import { meHandler } from '@geeksuite/user/server';
 
 // Import route files
 import authRoutes from './routes/auth.js';
@@ -31,6 +32,9 @@ connectDB();
 
 // Initialize Express app
 const app = express();
+
+// Trust NGINX proxy
+app.set('trust proxy', 1);
 
 // Security middleware
 app.use(helmet({
@@ -72,7 +76,7 @@ app.use(express.json({ limit: '50mb' })); // Parse JSON request bodies
 app.use(express.urlencoded({ limit: '50mb', extended: true })); // Parse URL-encoded request bodies
 
 app.use(cors({
-  origin: function(origin, callback) {
+  origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
 
@@ -103,7 +107,7 @@ app.use(cors({
 // Add request origin logging
 app.use((req, res, next) => {
   if (process.env.NODE_ENV === 'development') {
-    console.log(`${req.method} ${req.path}`);
+    console.log(`${ req.method } ${ req.path }`);
   }
   next();
 });
@@ -118,17 +122,7 @@ if (process.env.NODE_ENV === 'development') {
 app.use('/api/auth', authRoutes);
 
 // Canonical auth check (cookie-first)
-app.get('/api/me', protect, (req, res) => {
-  res.setHeader('Cache-Control', 'no-store');
-
-  const mergedUser = {
-    ...(req.ssoUser || {}),
-    localId: req.user?._id,
-    email: req.user?.email || req.ssoUser?.email,
-  };
-
-  return res.json({ user: mergedUser });
-});
+app.get('/api/me', protect, meHandler());
 
 app.use('/api/notes', noteRoutes);
 app.use('/api/tags', tagRoutes);
@@ -163,39 +157,39 @@ const PORT = process.env.PORT || 9988;
 const requiredNodeVersion = '16.0.0';
 
 function compareVersions(v1, v2) {
-    const v1parts = v1.split('.').map(Number);
-    const v2parts = v2.split('.').map(Number);
+  const v1parts = v1.split('.').map(Number);
+  const v2parts = v2.split('.').map(Number);
 
-    for (let i = 0; i < v1parts.length; ++i) {
-        if (v2parts.length === i) {
-            return 1; // v1 is longer, so greater
-        }
-        if (v1parts[i] > v2parts[i]) {
-            return 1;
-        }
-        if (v1parts[i] < v2parts[i]) {
-            return -1;
-        }
+  for (let i = 0; i < v1parts.length; ++i) {
+    if (v2parts.length === i) {
+      return 1; // v1 is longer, so greater
     }
-
-    if (v1parts.length !== v2parts.length) {
-        return -1; // v2 is longer, so greater
+    if (v1parts[i] > v2parts[i]) {
+      return 1;
     }
+    if (v1parts[i] < v2parts[i]) {
+      return -1;
+    }
+  }
 
-    return 0;
+  if (v1parts.length !== v2parts.length) {
+    return -1; // v2 is longer, so greater
+  }
+
+  return 0;
 }
 
 if (compareVersions(process.version.substring(1), requiredNodeVersion) < 0) {
-    console.error(`\n\n\x1b[31m=========== ERROR: INCOMPATIBLE NODE.JS VERSION ===========\x1b[0m`);
-    console.error(`\x1b[31mYou are running Node.js ${process.version}, but NoteGeek requires at least v${requiredNodeVersion}\x1b[0m`);
-    console.error(`\x1b[31mPlease run: \x1b[33mnvm use --lts\x1b[31m and try again.\x1b[0m`);
-    console.error(`\x1b[31m=========================================================\x1b[0m\n`);
-    process.exit(1);
+  console.error(`\n\n\x1b[31m=========== ERROR: INCOMPATIBLE NODE.JS VERSION ===========\x1b[0m`);
+  console.error(`\x1b[31mYou are running Node.js ${ process.version }, but NoteGeek requires at least v${ requiredNodeVersion }\x1b[0m`);
+  console.error(`\x1b[31mPlease run: \x1b[33mnvm use --lts\x1b[31m and try again.\x1b[0m`);
+  console.error(`\x1b[31m=========================================================\x1b[0m\n`);
+  process.exit(1);
 }
 
 // Start the server
 app.listen(PORT, () => {
-  console.log(`NoteGeek server running on port ${PORT}`);
+  console.log(`NoteGeek server running on port ${ PORT }`);
 });
 
 export default app;

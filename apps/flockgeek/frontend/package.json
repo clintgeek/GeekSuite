@@ -22,6 +22,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "@geeksuite/auth": "workspace:*",
+    "@geeksuite/ui": "workspace:*",
     "react-router-dom": "^6.23.1"
   },
   "devDependencies": {

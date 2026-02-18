@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   mongodb:
     image: mongo:latest
@@ -60,16 +58,13 @@ services:
     restart: unless-stopped
 
   basegeek_app:
-    build: .
+    image: geeksuite/basegeek:latest
     container_name: basegeek_app
     env_file:
       - .env.production
     environment:
       - NODE_ENV=production
       - PORT=8987
-      - USE_ONNXRUNTIME_WASM=1
-      - TRANSFORMERS_CACHE=/tmp/transformers_cache
-      - ONNX_RUNTIME_WEB_ONLY=1
     ports:
       - "8987:8987"
     depends_on:
@@ -81,26 +76,7 @@ services:
       - datageek_network
     restart: unless-stopped
 
-  basegeek_ui:
-    build:
-      context: .
-      dockerfile: Dockerfile.ui
-    container_name: basegeek_ui
-    env_file:
-      - .env.production
-    environment:
-      - NODE_ENV=production
-      - PORT=8988
-    ports:
-      - "8988:8988"
-    networks:
-      - datageek_network
-    restart: unless-stopped
-
-volumes:
-  mongodb_data:
-  redis_data:
-
 networks:
   datageek_network:
     external: true
+

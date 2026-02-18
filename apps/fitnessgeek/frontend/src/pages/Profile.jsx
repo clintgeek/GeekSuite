@@ -38,7 +38,7 @@ import {
   Select,
   MenuItem
 } from '@mui/material';
-import { useAuth } from '../hooks/useAuth.js';
+import { useAuth } from '@geeksuite/auth';
 import { userService } from '../services/userService.js';
 import { settingsService } from '../services/settingsService.js';
 import { useTheme as useAppTheme } from '../contexts/ThemeContext.jsx';
@@ -222,7 +222,7 @@ const Profile = () => {
               </Avatar>
               <Typography variant="h5" sx={{ fontWeight: 600, mb: 1 }}>
                 {editData.firstName && editData.lastName
-                  ? `${editData.firstName} ${editData.lastName}`
+                  ? `${ editData.firstName } ${ editData.lastName }`
                   : editData.username || user?.username || user?.name || 'User'
                 }
               </Typography>

@@ -1,139 +1,33 @@
-import React, { useEffect, useState } from 'react';
-import {
-  Alert,
-  Box,
-  Button,
-  CircularProgress,
-  Stack,
-  TextField,
-  Typography
-} from '@mui/material';
-import { useLocation } from 'react-router-dom';
-import { loginRedirect } from '@geeksuite/auth';
-import { getBackendOrigin } from '../utils/authClient.js';
+import { LoginSplash } from '@geeksuite/ui';
+import { useAuth } from '@geeksuite/auth';
 
 const Login = () => {
-  const location = useLocation();
-  const [identifier, setIdentifier] = useState('');
-  const [password, setPassword] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState(null);
+  const { login, loading, error } = useAuth();
 
-  const localLoginEnabled = import.meta.env.DEV && import.meta.env.VITE_ENABLE_LOCAL_LOGIN !== 'false';
-
-  const redirectTarget = (() => {
-    if (location.state?.from?.pathname) {
-      return `${window.location.origin}${location.state.from.pathname}`;
-    }
-    return window.location.origin + '/';
-  })();
-
-  useEffect(() => {
-    if (localLoginEnabled) {
-      return;
-    }
-
-    loginRedirect('fitnessgeek', redirectTarget, 'login');
-  }, [location, localLoginEnabled, redirectTarget]);
-
-  const handleLocalLogin = async (event) => {
-    event.preventDefault();
-    setError(null);
-    setSubmitting(true);
-
-    try {
-      const response = await fetch(`${getBackendOrigin()}/api/auth/login`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          identifier,
-          password,
-          app: 'fitnessgeek'
-        })
-      });
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data?.message || data?.error || 'Local login failed');
-      }
-
-      window.location.href = redirectTarget;
-    } catch (err) {
-      setError(err.message || 'Unable to login locally');
-    } finally {
-      setSubmitting(false);
-    }
+  const handleLogin = async () => {
+    await login();
   };
 
   return (
-    <Box
-      sx={{
-        minHeight: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 2
-      }}
-    >
-      {localLoginEnabled ? (
-        <Box
-          component="form"
-          onSubmit={handleLocalLogin}
-          sx={{
-            width: '100%',
-            maxWidth: 360,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 2
-          }}
-        >
-          <Typography variant="h5" textAlign="center">
-            Local Developer Login
-          </Typography>
-          <Typography variant="body2" color="text.secondary" textAlign="center">
-            Credentials are sent through the FitnessGeek backend so cookies can be rewritten for
-            localhost. This form only appears in development builds.
-          </Typography>
-          <Stack spacing={2}>
-            <TextField
-              label="Email or username"
-              type="text"
-              value={identifier}
-              autoComplete="username"
-              onChange={(e) => setIdentifier(e.target.value)}
-              disabled={submitting}
-              required
-            />
-            <TextField
-              label="Password"
-              type="password"
-              value={password}
-              autoComplete="current-password"
-              onChange={(e) => setPassword(e.target.value)}
-              disabled={submitting}
-              required
-            />
-            {error && <Alert severity="error">{error}</Alert>}
-            <Button
-              type="submit"
-              variant="contained"
-              disabled={submitting || !identifier || !password}
-            >
-              {submitting ? 'Signing in…' : 'Sign in locally'}
-            </Button>
-          </Stack>
-        </Box>
-      ) : (
-        <>
-          <CircularProgress size={40} />
-          <Typography>Redirecting to baseGeek…</Typography>
-        </>
-      )}
-    </Box>
+    <LoginSplash
+      appName="fitness"
+      appSuffix="geek"
+      taglineLine1="Train smarter."
+      taglineLine2="Live stronger."
+      description="Your personal command center for health tracking, workout analytics, and nutrition planning."
+      features={['Workout Logs', 'Nutrition Tracking', 'Progress Charts', 'Body Metrics']}
+      onLogin={handleLogin}
+      loading={loading}
+      error={error}
+      // FitnessGeek branding (Blue/Energy)
+      logoColor="#2563eb" // Blue 600
+      logoSuffixColor="#3b82f6" // Blue 500
+      // Custom ink wash for FitnessGeek
+      inkColors={[
+        'rgba(37, 99, 235, 0.08)', // Blue
+        'rgba(59, 130, 246, 0.06)'  // Lighter Blue
+      ]}
+    />
   );
 };
 

@@ -72,6 +72,11 @@ class TaskService {
             createdAt: {
               $lte: endOfDayDate
             }
+          },
+          // 4. Past-due tasks that are still incomplete (carry forward)
+          {
+            dueDate: { $lt: startOfDayDate },
+            status: { $in: ['pending', 'migrated_future'] }
           }
         ];
         break;
@@ -105,6 +110,11 @@ class TaskService {
             createdAt: {
               $lte: endOfWeekDate
             }
+          },
+          // 4. Past-due tasks from before this week that are still incomplete
+          {
+            dueDate: { $lt: startOfWeekDate },
+            status: { $in: ['pending', 'migrated_future'] }
           }
         ];
         break;
@@ -136,6 +146,11 @@ class TaskService {
             createdAt: {
               $lte: endOfMonthDate
             }
+          },
+          // 4. Past-due tasks from before this month that are still incomplete
+          {
+            dueDate: { $lt: startOfMonthDate },
+            status: { $in: ['pending', 'migrated_future'] }
           }
         ];
         break;

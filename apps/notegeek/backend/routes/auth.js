@@ -68,8 +68,8 @@ router.get('/me', async (req, res) => {
       });
     }
 
-    const response = await axios.get(`${BASEGEEK_URL}/api/users/me`, {
-      headers: { Authorization: `Bearer ${token}` },
+    const response = await axios.get(`${ BASEGEEK_URL }/api/users/me`, {
+      headers: { Authorization: `Bearer ${ token }` },
     });
 
     res.setHeader('Cache-Control', 'no-store');
@@ -78,7 +78,7 @@ router.get('/me', async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     if (!error.response) {
       return res.status(502).json({
-        message: `Unable to reach baseGeek auth service at ${BASEGEEK_URL}`,
+        message: `Unable to reach baseGeek auth service at ${ BASEGEEK_URL }`,
       });
     }
 
@@ -94,7 +94,7 @@ router.get('/me', async (req, res) => {
 router.post('/logout', async (req, res) => {
   try {
     const response = await axios.post(
-      `${BASEGEEK_URL}/api/auth/logout`,
+      `${ BASEGEEK_URL }/api/auth/logout`,
       {},
       {
         headers: {
@@ -110,7 +110,36 @@ router.post('/logout', async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     if (!error.response) {
       return res.status(502).json({
-        message: `Unable to reach baseGeek auth service at ${BASEGEEK_URL}`,
+        message: `Unable to reach baseGeek auth service at ${ BASEGEEK_URL }`,
+      });
+    }
+    return res.status(error.response.status || 500).json(error.response.data);
+  }
+});
+
+// @desc    Refresh token (proxy to baseGeek)
+// @route   POST /api/auth/refresh
+// @access  Public
+router.post('/refresh', async (req, res) => {
+  try {
+    const response = await axios.post(
+      `${ BASEGEEK_URL }/api/auth/refresh`,
+      {},
+      {
+        headers: {
+          Cookie: req.headers.cookie || '',
+        },
+      }
+    );
+
+    forwardSetCookieHeaders(res, response.headers);
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(response.status).json(response.data);
+  } catch (error) {
+    res.setHeader('Cache-Control', 'no-store');
+    if (!error.response) {
+      return res.status(502).json({
+        message: `Unable to reach baseGeek auth service at ${ BASEGEEK_URL }`,
       });
     }
     return res.status(error.response.status || 500).json(error.response.data);

@@ -5,7 +5,7 @@ WORKDIR /app
 RUN apk add --no-cache python3 make g++
 
 # Copy workspace files
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY packages ./packages
 COPY apps/flockgeek ./apps/flockgeek
 
@@ -22,18 +22,19 @@ FROM node:20-alpine AS prod
 
 WORKDIR /app
 RUN apk add --no-cache vips
+RUN npm install -g pnpm
 
-# Install backend production deps
-COPY apps/flockgeek/backend/package*.json ./apps/flockgeek/backend/
-WORKDIR /app/apps/flockgeek/backend
+# Copy workspace manifests + shared packages + backend
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY packages ./packages
+COPY apps/flockgeek/backend ./apps/flockgeek/backend
 
-RUN npm install --production
-
-# Copy backend source
-COPY apps/flockgeek/backend .
+# Install production deps (resolves workspace:* links)
+RUN pnpm install --frozen-lockfile --prod
 
 # Copy built frontend into backend public folder
+WORKDIR /app/apps/flockgeek/backend
 COPY --from=build /app/apps/flockgeek/frontend/dist ./public
 
 EXPOSE 5001
-CMD ["npm", "start"]
+CMD ["node", "src/server.js"]

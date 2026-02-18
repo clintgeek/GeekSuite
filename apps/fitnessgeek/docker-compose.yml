@@ -6,7 +6,7 @@ services:
     container_name: fitnessgeek-backend
     environment:
       - NODE_ENV=production
-      - PORT=3001
+      - PORT=5002
       - MONGODB_URI=${MONGODB_URI}
       - JWT_SECRET=${JWT_SECRET}
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
@@ -19,29 +19,10 @@ services:
       - OPENFOODFACTS_API_URL=${OPENFOODFACTS_API_URL}
       - CORS_ORIGINS=${CORS_ORIGINS}
       - LOG_LEVEL=${LOG_LEVEL:-info}
-    expose:
-      - "3001"
-
-    networks:
-      - fitnessgeek_network
-    restart: always
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        - BACKEND_PORT=3001
-    container_name: fitnessgeek-frontend
-    environment:
-      - BACKEND_PORT=3001
-      - VITE_API_URL=${VITE_API_URL}
-      - VITE_BASEGEEK_URL=${VITE_BASEGEEK_URL}
     ports:
-      - "4080:80"  # Expose on port 4080, your nginx can proxy to this
-
-    depends_on:
-      - backend
+      - "4080:5002"
+    volumes:
+      - ./frontend/dist:/app/public
     networks:
       - fitnessgeek_network
     restart: always

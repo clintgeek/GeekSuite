@@ -1,0 +1,1 @@
+export { LoginSplash } from './LoginSplash';

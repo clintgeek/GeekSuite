@@ -5,13 +5,13 @@ WORKDIR /app
 RUN apk add --no-cache python3 make g++
 
 # Copy workspace files
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY packages ./packages
 COPY apps/notegeek ./apps/notegeek
 
 # Install ALL workspace deps (resolves workspace:* links + frontend/backend deps)
 RUN npm install -g pnpm
-RUN pnpm install --frozen-lockfile
+RUN pnpm install
 
 # ---------- Build frontend ----------
 WORKDIR /app/apps/notegeek/frontend
@@ -22,18 +22,19 @@ FROM node:20-alpine AS prod
 
 WORKDIR /app
 RUN apk add --no-cache vips
+RUN npm install -g pnpm
 
-# Install backend production deps
-COPY apps/notegeek/backend/package*.json ./apps/notegeek/backend/
-WORKDIR /app/apps/notegeek/backend
+# Copy workspace manifests + shared packages + backend
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY packages ./packages
+COPY apps/notegeek/backend ./apps/notegeek/backend
 
-RUN npm install --production
-
-# Copy backend source
-COPY apps/notegeek/backend .
+# Install production deps (resolves workspace:* links)
+RUN pnpm install --prod
 
 # Copy built frontend into backend public folder
+WORKDIR /app/apps/notegeek/backend
 COPY --from=build /app/apps/notegeek/frontend/dist ./public
 
 EXPOSE 9988
-CMD ["npm", "start"]
+CMD ["node", "server.js"]

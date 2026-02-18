@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import path from 'path'
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -87,13 +88,20 @@ export default defineConfig({
     })
   ],
   resolve: {
-    dedupe: ['react', 'react-dom', '@emotion/react', '@emotion/styled']
+    dedupe: ['react', 'react-dom', '@emotion/react', '@emotion/styled'],
+    alias: {
+      '@geeksuite/ui': path.resolve(__dirname, '../../../packages/ui/src/index.js'),
+      'react': path.resolve(__dirname, './node_modules/react'),
+      'react-dom': path.resolve(__dirname, './node_modules/react-dom'),
+      '@emotion/react': path.resolve(__dirname, './node_modules/@emotion/react'),
+      '@emotion/styled': path.resolve(__dirname, './node_modules/@emotion/styled')
+    }
   },
   server: {
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
+        target: 'http://localhost:5002',
         changeOrigin: true,
         secure: false,
       }

@@ -9,7 +9,7 @@ import {
 } from '@mui/icons-material';
 import { userService } from '../../services/userService.js';
 import { settingsService } from '../../services/settingsService.js';
-import { useAuth } from '../../hooks/useAuth.js';
+import { useAuth } from '@geeksuite/auth';
 
 const CalorieGoalWizard = () => {
   const { user } = useAuth();
@@ -487,9 +487,9 @@ const CalorieGoalWizard = () => {
                 Plan Type: {plan.planType === 'standard' ? 'Standard' : plan.planType === 'weekender' ? 'Weekender' : 'Auto adjust'}
               </Typography>
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                <Chip label={`${plan.weightToLose.toFixed(1)} lbs to lose`} color="primary" />
-                <Chip label={`${plan.timeline} weeks`} variant="outlined" />
-                <Chip label={`${plan.weightChangeRate} lb/week`} variant="outlined" />
+                <Chip label={`${ plan.weightToLose.toFixed(1) } lbs to lose`} color="primary" />
+                <Chip label={`${ plan.timeline } weeks`} variant="outlined" />
+                <Chip label={`${ plan.weightChangeRate } lb/week`} variant="outlined" />
               </Box>
             </CardContent>
           </Card>

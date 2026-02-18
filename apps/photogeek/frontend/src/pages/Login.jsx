@@ -1,75 +1,33 @@
-import { useEffect } from 'react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
-import { Container, Box, Paper, Typography, Button, Link } from '@mui/material';
-import { CameraAlt } from '@mui/icons-material';
-import { useAuth } from '../contexts/AuthContext';
+import { LoginSplash } from '@geeksuite/ui';
+import { useAuth } from '@geeksuite/auth';
 
 const Login = () => {
-  const navigate = useNavigate();
-  const { login, user, loading } = useAuth();
+  const { login, loading, error } = useAuth();
 
-  useEffect(() => {
-    if (!loading && user) {
-      navigate('/', { replace: true });
-    }
-  }, [loading, user, navigate]);
+  const handleLogin = async () => {
+    await login();
+  };
 
   return (
-    <Container component="main" maxWidth="xs">
-      <Box
-        sx={{
-          marginTop: 8,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-        }}
-      >
-        <Paper
-          elevation={3}
-          sx={{
-            padding: 4,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            width: '100%',
-          }}
-        >
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              mb: 2,
-            }}
-          >
-            <CameraAlt sx={{ fontSize: 40, color: 'primary.main', mr: 1 }} />
-            <Typography component="h1" variant="h4" fontWeight="bold">
-              PhotoGeek
-            </Typography>
-          </Box>
-
-          <Typography component="h2" variant="h5" sx={{ mb: 3 }}>
-            Sign In
-          </Typography>
-
-          <Box sx={{ width: '100%' }}>
-            <Button
-              fullWidth
-              variant="contained"
-              sx={{ mt: 3, mb: 2 }}
-              onClick={() => login()}
-              disabled={loading}
-            >
-              Continue with GeekSuite
-            </Button>
-            <Box sx={{ textAlign: 'center' }}>
-              <Link component={RouterLink} to="/register" variant="body2">
-                Need an account? Create one
-              </Link>
-            </Box>
-          </Box>
-        </Paper>
-      </Box>
-    </Container>
+    <LoginSplash
+      appName="photo"
+      appSuffix="geek"
+      taglineLine1="Capture light."
+      taglineLine2="Organize life."
+      description="A professional workflow for photographers. Manage shoots, track gear, and deliver stunning galleries."
+      features={['Shoot Planning', 'Gear Tracking', 'Client Galleries', 'Location Scouting']}
+      onLogin={handleLogin}
+      loading={loading}
+      error={error}
+      // PhotoGeek branding (Rose/Pink)
+      logoColor="#e11d48" // Rose 600
+      logoSuffixColor="#f43f5e" // Rose 500
+      // Custom ink wash for PhotoGeek
+      inkColors={[
+        'rgba(225, 29, 72, 0.08)', // Rose
+        'rgba(244, 63, 94, 0.06)'   // Lighter Rose
+      ]}
+    />
   );
 };
 

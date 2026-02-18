@@ -28,7 +28,7 @@ export default defineConfig(({ command, mode }) => {
           ],
         },
         devOptions: {
-          enabled: !isProduction,
+          enabled: false,
         },
       })
     ],
@@ -37,8 +37,8 @@ export default defineConfig(({ command, mode }) => {
       proxy: {
         '/api': {
           target: isProduction
-            ? `http://backend:${process.env.BACKEND_PORT || 5000}`
-            : 'http://localhost:5001',
+            ? `http://backend:${ process.env.BACKEND_PORT || 5000 }`
+            : 'http://localhost:5005',
           changeOrigin: true,
           secure: false,
         }
@@ -55,6 +55,7 @@ export default defineConfig(({ command, mode }) => {
       extensions: ['.js', '.jsx', '.json'],
       alias: {
         '@': path.resolve(__dirname, './src'),
+        '@geeksuite/ui': path.resolve(__dirname, '../../../packages/ui/src/index.js'),
       },
     },
   }

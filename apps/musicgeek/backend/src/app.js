@@ -7,6 +7,7 @@ const config = require('./config/config');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const logger = require('./utils/logger');
 const { authenticate } = require('./middleware/auth');
+const { meHandler } = require('@geeksuite/user/server');
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -51,16 +52,7 @@ app.get('/health', (req, res) => {
 // API routes
 app.use('/api/auth', authRoutes);
 
-app.get('/api/me', authenticate, (req, res) => {
-  res.setHeader('Cache-Control', 'no-store');
-  return res.json({
-    success: true,
-    data: {
-      user: req.user,
-    },
-    timestamp: new Date().toISOString(),
-  });
-});
+app.get('/api/me', authenticate, meHandler());
 
 app.use('/api/users', userRoutes);
 app.use('/api/lessons', lessonRoutes);

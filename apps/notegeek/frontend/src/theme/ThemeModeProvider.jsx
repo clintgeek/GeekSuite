@@ -62,7 +62,7 @@ function ThemeModeProvider({ children }) {
         <CssBaseline />
         <GlobalStyles
           styles={{
-            '.MuiInputBase-root, .MuiOutlinedInput-root, .css-y0i3t, [class*="css-"]': {
+            '.MuiInputBase-root, .MuiOutlinedInput-root': {
               minHeight: 'auto !important',
             },
           }}

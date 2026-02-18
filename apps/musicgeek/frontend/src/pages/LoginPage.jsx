@@ -1,34 +1,34 @@
-import { Link, Navigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { LoginSplash } from '@geeksuite/ui';
+import { useAuth } from '@geeksuite/auth';
 
-export default function LoginPage() {
-  const { login, error, isAuthenticated, isLoading } = useAuth();
-  const APP_NAME = import.meta.env.VITE_APP_NAME || 'musicgeek';
+const LoginPage = () => {
+  const { login, loading, error } = useAuth();
 
-  if (isLoading) {
-    return null;
-  }
-
-  if (isAuthenticated) {
-    return <Navigate to="/" replace />;
-  }
+  const handleLogin = async () => {
+    await login();
+  };
 
   return (
-    <div className="login-page">
-      <div className="login-container">
-        <h1>Welcome Back</h1>
-        <p className="subtitle">Sign in with your baseGeek account to access {APP_NAME}</p>
-
-        {error && <div className="error-message">{error}</div>}
-
-        <button type="button" className="btn-primary" onClick={() => login()}>
-          Sign in
-        </button>
-
-        <p className="register-link">
-          Don’t have an account? <Link to="/register">Sign up</Link>
-        </p>
-      </div>
-    </div>
+    <LoginSplash
+      appName="music"
+      appSuffix="geek"
+      taglineLine1="Play daily."
+      taglineLine2="Master rhythm."
+      description="Interactive tools for musicians. Metronomes, tuners, and practice logs to help you master your craft."
+      features={['Smart Metronome', 'Tuners', 'Practice Logs', 'Progress Tracking']}
+      onLogin={handleLogin}
+      loading={loading}
+      error={error}
+      // MusicGeek branding (Violet/Purple)
+      logoColor="#7c3aed" // Violet 600
+      logoSuffixColor="#8b5cf6" // Violet 500
+      // Custom ink wash for MusicGeek
+      inkColors={[
+        'rgba(124, 58, 237, 0.08)', // Violet
+        'rgba(139, 92, 246, 0.06)'  // Lighter Violet
+      ]}
+    />
   );
-}
+};
+
+export default LoginPage;

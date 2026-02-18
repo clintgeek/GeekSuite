@@ -5,7 +5,7 @@ WORKDIR /app
 RUN apk add --no-cache python3 make g++
 
 # Copy workspace files
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY packages ./packages
 COPY apps/babelgeek ./apps/babelgeek
 
@@ -23,18 +23,19 @@ FROM node:20-alpine AS prod
 
 WORKDIR /app
 RUN apk add --no-cache vips
+RUN npm install -g pnpm
 
-# Install backend production deps
-COPY apps/babelgeek/backend/package*.json ./apps/babelgeek/backend/
-WORKDIR /app/apps/babelgeek/backend
+# Copy workspace manifests + shared packages + backend
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY packages ./packages
+COPY apps/babelgeek/backend ./apps/babelgeek/backend
 
-RUN npm install --production
-
-# Copy backend source
-COPY apps/babelgeek/backend .
+# Install production deps (resolves workspace:* links)
+RUN pnpm install --frozen-lockfile --prod
 
 # Copy built frontend into backend public folder
+WORKDIR /app/apps/babelgeek/backend
 COPY --from=build /app/apps/babelgeek/frontend/dist ./public
 
 EXPOSE 4000
-CMD ["npm", "start"]
+CMD ["node", "src/server.js"]

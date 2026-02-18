@@ -10,6 +10,7 @@
     "migrate-owner": "node --env-file=.env src/scripts/migrateOwnerId.js"
   },
   "dependencies": {
+    "@geeksuite/user": "workspace:*",
     "axios": "^1.12.2",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.6",

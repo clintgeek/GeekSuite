@@ -21,7 +21,7 @@ import { useTaskContext } from './context/TaskContext.jsx';
 import { useMemo, useState, useEffect } from 'react';
 
 function AppWithAuth() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const { createTask } = useTaskContext();
   const [paletteOpen, setPaletteOpen] = useState(false);
 
@@ -41,12 +41,12 @@ function AppWithAuth() {
   return (
     <AppShell>
       <Routes>
-        {/* Auth routes */}
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
+        {/* Auth routes — redirect to /today if already authenticated */}
+        <Route path="/login" element={user ? <Navigate to="/today" replace /> : <LoginPage />} />
+        <Route path="/register" element={user ? <Navigate to="/today" replace /> : <RegisterPage />} />
 
         {/* Default redirect */}
-        <Route path="/" element={<Navigate to={user ? '/today' : '/login'} replace />} />
+        <Route path="/" element={loading ? null : <Navigate to={user ? '/today' : '/login'} replace />} />
 
         {/* Primary views */}
         <Route path="/today" element={<ProtectedRoute><TodayPage /></ProtectedRoute>} />
@@ -65,7 +65,7 @@ function AppWithAuth() {
         <Route path="/tasks/*" element={<Navigate to="/today" replace />} />
 
         {/* Catch-all */}
-        <Route path="*" element={<Navigate to={user ? '/today' : '/login'} replace />} />
+        <Route path="*" element={loading ? null : <Navigate to={user ? '/today' : '/login'} replace />} />
       </Routes>
 
       {user && (

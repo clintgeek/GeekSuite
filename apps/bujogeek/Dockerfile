@@ -5,7 +5,7 @@ WORKDIR /app
 RUN apk add --no-cache python3 make g++
 
 # Copy workspace files
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY packages ./packages
 COPY apps/bujogeek ./apps/bujogeek
 
@@ -22,18 +22,19 @@ RUN pnpm run build
 FROM node:20-alpine AS prod
 
 WORKDIR /app
+RUN npm install -g pnpm
 
-# Install backend production deps
-COPY apps/bujogeek/backend/package*.json ./apps/bujogeek/backend/
-WORKDIR /app/apps/bujogeek/backend
+# Copy workspace manifests + shared packages + backend
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY packages ./packages
+COPY apps/bujogeek/backend ./apps/bujogeek/backend
 
-RUN npm install --production
-
-# Copy backend source
-COPY apps/bujogeek/backend .
+# Install production deps (resolves workspace:* links)
+RUN pnpm install --frozen-lockfile --prod
 
 # Copy built frontend into backend public folder
+WORKDIR /app/apps/bujogeek/backend
 COPY --from=build /app/apps/bujogeek/frontend/dist ./public
 
 EXPOSE 5005
-CMD ["npm", "start"]
+CMD ["node", "server.js"]

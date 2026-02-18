@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import path from 'path';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -62,7 +63,7 @@ export default defineConfig(({ mode }) => {
               urlPattern: ({ url }) => {
                 // Match both relative and absolute API URLs
                 return url.pathname.startsWith('/api/') ||
-                       url.href.startsWith('https://notegeek.clintgeek.com/api/');
+                  url.href.startsWith('https://notegeek.clintgeek.com/api/');
               },
               handler: 'NetworkFirst',
               options: {
@@ -114,6 +115,11 @@ export default defineConfig(({ mode }) => {
     },
     define: {
       'import.meta.env.VITE_API_URL': JSON.stringify(apiUrl)
+    },
+    resolve: {
+      alias: {
+        '@geeksuite/ui': path.resolve(__dirname, '../../../packages/ui/src/index.js')
+      }
     }
   };
 });

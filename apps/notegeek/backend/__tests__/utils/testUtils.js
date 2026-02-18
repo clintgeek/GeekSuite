@@ -1,6 +1,6 @@
 import { jest } from '@jest/globals';
 import jwt from 'jsonwebtoken';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 
 // Mock models that will be exported and used directly
 export const UserModel = {
@@ -24,7 +24,7 @@ export const mockMongoose = {
     model: jest.fn((name) => {
         if (name === 'User') return UserModel;
         if (name === 'Note') return NoteModel;
-        throw new Error(`Model ${name} not mocked`);
+        throw new Error(`Model ${ name } not mocked`);
     }),
     Types: {
         ObjectId: () => ({

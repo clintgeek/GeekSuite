@@ -38,27 +38,8 @@ app.get('/api/health', (req, res) => {
 });
 
 // Canonical auth check (cookie-first)
-app.get('/api/me', protect, (req, res) => {
-  res.setHeader('Cache-Control', 'no-store');
-
-  const mergedUser = {
-    ...(req.user || {}),
-    localId: req.localUser?._id,
-    profile: req.localUser?.profile,
-    skillLevel: req.localUser?.skillLevel,
-    xp: req.localUser?.xp,
-    level: req.localUser?.level,
-    streak: req.localUser?.streak,
-  };
-
-  return res.json({
-    success: true,
-    data: {
-      user: mergedUser,
-    },
-    timestamp: new Date().toISOString(),
-  });
-});
+const { meHandler } = require('@geeksuite/user/server');
+app.get('/api/me', protect, meHandler());
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));

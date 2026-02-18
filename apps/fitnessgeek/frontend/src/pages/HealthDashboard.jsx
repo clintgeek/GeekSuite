@@ -20,7 +20,7 @@ import {
   Psychology as CoachIcon,
   Settings as SettingsIcon
 } from '@mui/icons-material';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth } from '@geeksuite/auth';
 import { apiService } from '../services/apiService';
 import IntradayDashboard from '../components/IntradayDashboard';
 import SleepAnalysis from '../components/SleepAnalysis';
@@ -41,7 +41,7 @@ export default function HealthDashboard() {
     const year = today.getFullYear();
     const month = String(today.getMonth() + 1).padStart(2, '0');
     const day = String(today.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    return `${ year }-${ month }-${ day }`;
   });
   const [influxEnabled, setInfluxEnabled] = useState(false);
   const [checkingInflux, setCheckingInflux] = useState(true);
@@ -154,7 +154,7 @@ export default function HealthDashboard() {
                 onChange={(e) => handleDateChange(e.target.value)}
                 max={(() => {
                   const today = new Date();
-                  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+                  return `${ today.getFullYear() }-${ String(today.getMonth() + 1).padStart(2, '0') }-${ String(today.getDate()).padStart(2, '0') }`;
                 })()}
                 style={{
                   padding: '8px',
@@ -169,7 +169,7 @@ export default function HealthDashboard() {
                 onClick={() => {
                   const yesterday = new Date();
                   yesterday.setDate(yesterday.getDate() - 1);
-                  handleDateChange(`${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`);
+                  handleDateChange(`${ yesterday.getFullYear() }-${ String(yesterday.getMonth() + 1).padStart(2, '0') }-${ String(yesterday.getDate()).padStart(2, '0') }`);
                 }}
               >
                 Yesterday
@@ -179,7 +179,7 @@ export default function HealthDashboard() {
                 size="small"
                 onClick={() => {
                   const today = new Date();
-                  handleDateChange(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`);
+                  handleDateChange(`${ today.getFullYear() }-${ String(today.getMonth() + 1).padStart(2, '0') }-${ String(today.getDate()).padStart(2, '0') }`);
                 }}
               >
                 Today

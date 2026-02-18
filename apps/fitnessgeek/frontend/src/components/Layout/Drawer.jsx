@@ -23,7 +23,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '@mui/material/styles';
-import { useAuth } from '../../hooks/useAuth.js';
+import { useAuth } from '@geeksuite/auth';
 
 const AppDrawer = ({ open, onClose }) => {
   const navigate = useNavigate();
@@ -88,7 +88,7 @@ const AppDrawer = ({ open, onClose }) => {
         '& .MuiDrawer-paper': {
           width: 280,
           backgroundColor: theme.palette.background.paper,
-          borderRight: `1px solid ${theme.palette.divider}`,
+          borderRight: `1px solid ${ theme.palette.divider }`,
           color: theme.palette.text.primary,
         },
       }}

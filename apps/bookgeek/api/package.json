@@ -8,6 +8,7 @@
     "start": "bun src/server.js"
   },
   "dependencies": {
+    "@geeksuite/user": "workspace:*",
     "axios": "^1.7.7",
     "cors": "^2.8.5",
     "csv-parse": "^5.5.5",

@@ -6,7 +6,7 @@ FROM node:20-alpine AS build
 WORKDIR /app
 
 # Copy workspace root + shared packages
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY packages ./packages
 COPY apps/bookgeek ./apps/bookgeek
 
@@ -23,14 +23,18 @@ FROM ${BUN_CALIBRE_BASE} AS prod
 
 WORKDIR /app
 
-# Install backend production deps
-COPY apps/bookgeek/api/package.json ./apps/bookgeek/api/package.json
+# Install pnpm + Node for workspace dependency resolution
+RUN apt-get update && apt-get install -y nodejs npm && npm install -g pnpm && rm -rf /var/lib/apt/lists/*
+
+# Copy workspace manifests + shared packages + backend
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY packages ./packages
+COPY apps/bookgeek/api ./apps/bookgeek/api
+
+# Install production deps (resolves workspace:* links)
+RUN pnpm install --frozen-lockfile --prod
+
 WORKDIR /app/apps/bookgeek/api
-
-RUN bun install --production
-
-# Copy backend source
-COPY apps/bookgeek/api .
 
 # Copy built frontend into backend public folder
 RUN mkdir -p ./public/src

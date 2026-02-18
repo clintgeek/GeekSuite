@@ -5,7 +5,7 @@ WORKDIR /app
 RUN apk add --no-cache python3 make g++
 
 # Copy workspace files
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY packages ./packages
 COPY apps/musicgeek ./apps/musicgeek
 
@@ -22,18 +22,19 @@ FROM node:20-alpine AS prod
 
 WORKDIR /app
 RUN apk add --no-cache vips
+RUN npm install -g pnpm
 
-# Install backend production deps
-COPY apps/musicgeek/backend/package*.json ./apps/musicgeek/backend/
-WORKDIR /app/apps/musicgeek/backend
+# Copy workspace manifests + shared packages + backend
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY packages ./packages
+COPY apps/musicgeek/backend ./apps/musicgeek/backend
 
-RUN npm install --production
-
-# Copy backend source
-COPY apps/musicgeek/backend .
+# Install production deps (resolves workspace:* links)
+RUN pnpm install --frozen-lockfile --prod
 
 # Copy built frontend into backend public folder
+WORKDIR /app/apps/musicgeek/backend
 COPY --from=build /app/apps/musicgeek/frontend/dist ./public
 
 EXPOSE 3005
-CMD ["npm", "start"]
+CMD ["node", "src/server.js"]

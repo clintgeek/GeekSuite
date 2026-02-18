@@ -9,7 +9,7 @@ const BASEGEEK_URL = (process.env.BASEGEEK_URL || 'https://basegeek.clintgeek.co
 // 🔑 START SSO LOGIN FLOW
 router.get('/sso/login', (req, res) => {
   const redirect = req.query.redirect || 'https://photogeek.clintgeek.com/';
-  const url = `${BASEGEEK_URL}/login?app=photogeek&redirect=${encodeURIComponent(redirect)}`;
+  const url = `${ BASEGEEK_URL }/login?app=photogeek&redirect=${ encodeURIComponent(redirect) }`;
   return res.redirect(url);
 });
 
@@ -21,12 +21,16 @@ router.post('/logout', logout);
 // Token refresh (proxied to BaseGeek)
 router.post('/refresh', async (req, res) => {
   try {
+    const refreshToken = req.body?.refreshToken;
+    // BaseGeek handles token from cookie or body
+    // if (!refreshToken) return 400;
+
     const headers = {};
     if (req.headers.cookie) headers.Cookie = req.headers.cookie;
     if (req.headers.authorization) headers.Authorization = req.headers.authorization;
 
-    const response = await axios.post(`${BASEGEEK_URL}/api/auth/refresh`, {
-      ...req.body,
+    const response = await axios.post(`${ BASEGEEK_URL }/api/auth/refresh`, {
+      refreshToken,
       app: 'photogeek'
     }, { headers });
 
@@ -38,7 +42,7 @@ router.post('/refresh', async (req, res) => {
     return res.json(response.data);
   } catch (error) {
     if (!error.response) {
-      return res.status(502).json({ message: `Unable to reach baseGeek auth service at ${BASEGEEK_URL}` });
+      return res.status(502).json({ message: `Unable to reach baseGeek auth service at ${ BASEGEEK_URL }` });
     }
     return res.status(error.response.status || 500).json(error.response.data);
   }

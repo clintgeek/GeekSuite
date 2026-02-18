@@ -25,6 +25,7 @@
     "express-rate-limit": "^7.1.5",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.2.1",
+    "mongodb": "^6.0.0",
     "morgan": "^1.10.0",
     "onnxruntime-web": "^1.14.0",
     "pg": "^8.15.6",

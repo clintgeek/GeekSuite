@@ -35,7 +35,7 @@ class AuthController {
 
       // Register user with baseGeek
       const response = await axios.post(
-        `${BASEGEEK_URL}/api/auth/register`,
+        `${ BASEGEEK_URL }/api/auth/register`,
         {
           username,
           email,
@@ -58,10 +58,10 @@ class AuthController {
       // Create local UserProfile for MusicGeek-specific data
       const userProfile = userId
         ? await UserProfile.create({
-            userId,
-            email: upstreamUser?.email || email,
-            displayName: upstreamUser?.username || email.split('@')[0],
-          })
+          userId,
+          email: upstreamUser?.email || email,
+          displayName: upstreamUser?.username || email.split('@')[0],
+        })
         : null;
 
       logger.info('User registered successfully', { userId, email: upstreamUser?.email || email });
@@ -122,12 +122,12 @@ class AuthController {
       };
 
       logger.info('Sending to BaseGeek', {
-        url: `${BASEGEEK_URL}/api/auth/login`,
+        url: `${ BASEGEEK_URL }/api/auth/login`,
         payload: { ...loginPayload, password: '***' },
       });
 
       // Login via baseGeek
-      const response = await axios.post(`${BASEGEEK_URL}/api/auth/login`, loginPayload, {
+      const response = await axios.post(`${ BASEGEEK_URL }/api/auth/login`, loginPayload, {
         headers: getForwardAuthHeaders(req),
       });
 
@@ -146,10 +146,10 @@ class AuthController {
         // Create profile for existing baseGeek user
         userProfile = userId
           ? await UserProfile.create({
-              userId,
-              email: upstreamUser?.email,
-              displayName: upstreamUser?.username || loginIdentifier.split('@')[0],
-            })
+            userId,
+            email: upstreamUser?.email,
+            displayName: upstreamUser?.username || loginIdentifier.split('@')[0],
+          })
           : null;
         logger.info('Created new user profile', { userId });
       }
@@ -220,10 +220,10 @@ class AuthController {
         // Create profile if it doesn't exist
         userProfile = userId
           ? await UserProfile.create({
-              userId,
-              email: req.user.email,
-              displayName: req.user.username || req.user.email?.split('@')[0] || 'User',
-            })
+            userId,
+            email: req.user.email,
+            displayName: req.user.username || req.user.email?.split('@')[0] || 'User',
+          })
           : null;
         logger.info('Created user profile on-demand', { userId });
       }
@@ -262,9 +262,9 @@ class AuthController {
 
       logger.info('Validating SSO token');
 
-      const response = await axios.get(`${BASEGEEK_URL}/api/users/me`, {
+      const response = await axios.get(`${ BASEGEEK_URL }/api/users/me`, {
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${ token }`,
         },
       });
 
@@ -277,10 +277,10 @@ class AuthController {
       if (!userProfile) {
         userProfile = userId
           ? await UserProfile.create({
-              userId,
-              email: upstreamUser?.email,
-              displayName: upstreamUser?.username || upstreamUser?.email?.split('@')[0] || 'User',
-            })
+            userId,
+            email: upstreamUser?.email,
+            displayName: upstreamUser?.username || upstreamUser?.email?.split('@')[0] || 'User',
+          })
           : null;
         logger.info('Created user profile via SSO', { userId });
       }
@@ -320,18 +320,14 @@ class AuthController {
     try {
       const { refreshToken } = req.body;
 
-      if (!refreshToken) {
-        return res.status(400).json({
-          success: false,
-          error: { message: 'Refresh token is required' },
-        });
-      }
+      // BaseGeek handles token from cookie or body
+      // if (!refreshToken) return 400;
 
       logger.info('Token refresh attempt');
 
       // Forward refresh request to baseGeek
       const response = await axios.post(
-        `${BASEGEEK_URL}/api/auth/refresh`,
+        `${ BASEGEEK_URL }/api/auth/refresh`,
         {
           refreshToken,
           app: 'musicgeek',
@@ -392,7 +388,7 @@ class AuthController {
    */
   async logout(req, res, next) {
     try {
-      const response = await axios.post(`${BASEGEEK_URL}/api/auth/logout`, {}, {
+      const response = await axios.post(`${ BASEGEEK_URL }/api/auth/logout`, {}, {
         headers: getForwardAuthHeaders(req),
       });
 

@@ -1,5 +1,12 @@
 {
 	"name": "geeksuite",
 	"private": true,
-	"packageManager": "pnpm@latest"
+	"packageManager": "pnpm@latest",
+	"pnpm": {
+		"overrides": {
+			"@mui/material": "^5.0.0",
+			"@mui/system": "^5.0.0",
+			"react-dom": "^18.0.0"
+		}
+	}
 }

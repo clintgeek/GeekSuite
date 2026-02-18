@@ -35,7 +35,7 @@ import {
   Calculate as WizardIcon,
   Settings as SettingsIcon,
 } from '@mui/icons-material';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '@geeksuite/auth';
 import ThemeToggle from '../ThemeToggle';
 import BottomNav from './BottomNavigation.jsx';
 
@@ -270,7 +270,7 @@ export default function ModernLayout() {
       sx={{
         display: { xs: 'block', md: 'none' },
         backgroundColor: theme.palette.background.paper,
-        borderBottom: `1px solid ${theme.palette.divider}`,
+        borderBottom: `1px solid ${ theme.palette.divider }`,
         paddingTop: 'env(safe-area-inset-top, 0px)',
       }}
     >
@@ -316,9 +316,9 @@ export default function ModernLayout() {
       sx={{
         display: { xs: 'none', md: 'block' },
         left: DRAWER_WIDTH,
-        width: `calc(100% - ${DRAWER_WIDTH}px)`,
+        width: `calc(100% - ${ DRAWER_WIDTH }px)`,
         backgroundColor: theme.palette.background.paper,
-        borderBottom: `1px solid ${theme.palette.divider}`,
+        borderBottom: `1px solid ${ theme.palette.divider }`,
       }}
     >
       <Toolbar sx={{ justifyContent: 'flex-end', minHeight: '56px !important' }}>
@@ -353,7 +353,7 @@ export default function ModernLayout() {
     >
       {navSections.map((section) => [
         <Typography
-          key={`label-${section.label}`}
+          key={`label-${ section.label }`}
           variant="overline"
           sx={{
             px: 2,
@@ -435,7 +435,7 @@ export default function ModernLayout() {
         component="main"
         sx={{
           flexGrow: 1,
-          width: { xs: '100%', md: `calc(100% - ${DRAWER_WIDTH}px)` },
+          width: { xs: '100%', md: `calc(100% - ${ DRAWER_WIDTH }px)` },
           minHeight: '100vh',
           pt: { xs: '64px', md: '56px' },
           pb: { xs: '88px', md: 0 },

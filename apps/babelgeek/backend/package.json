@@ -9,6 +9,7 @@
     "content:sync": "node scripts/syncContent.js"
   },
   "dependencies": {
+    "@geeksuite/user": "workspace:*",
     "axios": "^1.7.2",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.6",

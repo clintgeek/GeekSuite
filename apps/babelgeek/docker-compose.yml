@@ -1,8 +1,15 @@
 services:
   babelgeek:
     image: geeksuite/babelgeek:latest
+    container_name: babelgeek
     restart: unless-stopped
     env_file:
       - .env
     ports:
       - "4000:4000"
+    volumes:
+      - /mnt/Media/Projects/GeekSuite/apps/babelgeek/backend:/app/apps/babelgeek/backend
+      - /mnt/Media/Projects/GeekSuite/packages/user:/app/packages/user
+      - /mnt/Media/Projects/GeekSuite/node_modules:/app/node_modules
+    working_dir: /app/apps/babelgeek/backend
+    command: node src/server.js

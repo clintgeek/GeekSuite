@@ -8,7 +8,7 @@
     ".": "./src/index.js"
   },
   "peerDependencies": {
-    "react": ">=18",
-    "@mui/material": ">=5"
+    "react": "^18.0.0",
+    "@mui/material": "^5.0.0"
   }
 }

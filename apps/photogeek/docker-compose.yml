@@ -1,10 +1,8 @@
-version: "3.9"
 
 services:
   backend:
-    build:
-      context: ./backend
-    container_name: photogeek-backend
+    image: geeksuite/photogeek:latest
+    container_name: photogeek
     restart: unless-stopped
     env_file:
       - ./backend/.env
@@ -14,17 +12,22 @@ services:
     ports:
       - "4010:4010"
     volumes:
-      - ./backend/uploads:/app/uploads
+      - /mnt/Media/Projects/GeekSuite/apps/photogeek/backend:/app/apps/photogeek/backend
+      - /mnt/Media/Projects/GeekSuite/packages/user:/app/packages/user
+      - /mnt/Media/Projects/GeekSuite/node_modules:/app/node_modules
+      - /mnt/Media/Projects/GeekSuite/apps/photogeek/backend/uploads:/app/apps/photogeek/backend/uploads
+    working_dir: /app/apps/photogeek/backend
+    command: node src/server.js
 
-  frontend:
-    build:
-      context: ./frontend
-    container_name: photogeek-frontend
-    restart: unless-stopped
-    environment:
-      VITE_ALLOWED_HOSTS: photogeek.clintgeek.com
-      VITE_API_PROXY_TARGET: http://photogeek-backend:4010
-    ports:
-      - "5173:4173"
-    depends_on:
-      - backend
+#   frontend:
+#     build:
+#       context: ./frontend
+#     container_name: photogeek-frontend
+#     restart: unless-stopped
+#     environment:
+#       VITE_ALLOWED_HOSTS: photogeek.clintgeek.com
+#       VITE_API_PROXY_TARGET: http://photogeek-backend:4010
+#     ports:
+#       - "5173:4173"
+#     depends_on:
+#       - backend

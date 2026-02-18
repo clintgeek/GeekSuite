@@ -1,12 +1,13 @@
 import { Router } from "express";
-import { login, me, register, refresh, logout } from "../controllers/authController.js";
+import { login, register, refresh, logout } from "../controllers/authController.js";
+import { requireAuth } from "../middleware/authMiddleware.js";
+import { meHandler } from "@geeksuite/user/server";
 
 const router = Router();
 
 router.post("/register", register);
 router.post("/login", login);
-// Note: /me validates token by forwarding to BaseGeek, no local requireAuth needed
-router.get("/me", me);
+router.get("/me", requireAuth, meHandler());
 router.post("/refresh", refresh);
 router.post("/logout", logout);
 

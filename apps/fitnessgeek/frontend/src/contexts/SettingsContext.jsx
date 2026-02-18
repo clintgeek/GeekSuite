@@ -1,6 +1,6 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { settingsService } from '../services/settingsService.js';
-import { AuthContext } from './AuthContextDef.jsx';
+import { useAuth } from '@geeksuite/auth';
 import logger from '../utils/logger.js';
 
 const SettingsContext = createContext();
@@ -8,7 +8,7 @@ const SettingsContext = createContext();
 export { SettingsContext };
 
 export const SettingsProvider = ({ children }) => {
-  const { user, loading: authLoading, isAuthenticated } = useContext(AuthContext);
+  const { user, loading: authLoading, isAuthenticated } = useAuth();
   const [dashboardSettings, setDashboardSettings] = useState(null);
   const [loading, setLoading] = useState(true);
 

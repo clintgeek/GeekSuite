@@ -17,6 +17,7 @@
     "react-dom": "^18.2.0",
     "react-markdown": "^10.1.0",
     "@geeksuite/auth": "workspace:*",
+    "@geeksuite/ui": "workspace:*",
     "react-router-dom": "^6.20.1"
   },
   "devDependencies": {

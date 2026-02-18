@@ -8,11 +8,10 @@ const connectDB = require('./config/database');
 const redisClient = require('./config/redis');
 const logger = require('./config/logger');
 const { authenticateToken } = require('./middleware/auth');
+const { meHandler } = require('@geeksuite/user/server');
 
 // Load environment variables
 dotenv.config();
-
-const BASEGEEK_URL = (process.env.BASEGEEK_URL || process.env.BASE_GEEK_URL || 'https://basegeek.clintgeek.com').replace(/\/$/, '');
 
 // Connect to MongoDB
 connectDB();
@@ -77,35 +76,7 @@ app.get('/health', (req, res) => {
 });
 
 // Session identity endpoint
-app.get(
-  '/api/me',
-  (req, res, next) => {
-    res.setHeader('Cache-Control', 'no-store');
-    next();
-  },
-  authenticateToken,
-  async (req, res) => {
-    try {
-      const authHeader = req.headers.authorization;
-      if (!authHeader) {
-        return res.status(401).json({ error: 'Not authenticated' });
-      }
-
-      const upstream = await axios.get(`${BASEGEEK_URL}/api/users/me`, {
-        headers: { Authorization: authHeader }
-      });
-
-      forwardSetCookieHeaders(res, upstream.headers);
-
-      return res.status(upstream.status).json({ user: upstream.data?.user || upstream.data });
-    } catch (error) {
-      if (!error.response) {
-        return res.status(502).json({ error: `Unable to reach baseGeek user service at ${BASEGEEK_URL}` });
-      }
-      return res.status(error.response.status || 500).json(error.response.data);
-    }
-  }
-);
+app.get('/api/me', authenticateToken, meHandler());
 
 // API Routes
 app.use('/api/auth', require('./routes/authRoutes'));
