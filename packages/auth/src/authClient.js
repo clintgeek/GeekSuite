@@ -3,6 +3,8 @@ const LOGOUT_EVENT_TYPE = 'LOGOUT';
 const REFRESH_INTERVAL_MS = 50 * 60 * 1000; // 50 minutes
 
 let refreshTimerId = null;
+let isRefreshing = false;
+let refreshQueue = [];
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -54,6 +56,40 @@ function broadcastLogout() {
   }
 }
 
+function processRefreshQueue(error, token = null) {
+  refreshQueue.forEach((promise) => {
+    if (error) {
+      promise.reject(error);
+    } else {
+      promise.resolve(token);
+    }
+  });
+  refreshQueue = [];
+}
+
+async function doTokenRefresh() {
+  const apiBase = getApiBase();
+  const res = await fetch(`${apiBase}/auth/refresh`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  });
+
+  if (res.status === 401 || res.status === 403) {
+    const error = new Error('Session expired');
+    error.status = res.status;
+    throw error;
+  }
+
+  const data = await res.json();
+  if (!res.ok || data?.success === false) {
+    throw new Error(data?.message || 'Token refresh failed');
+  }
+
+  return data;
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -64,11 +100,43 @@ function broadcastLogout() {
  */
 export async function getMe() {
   const apiBase = getApiBase();
-  const res = await fetch(`${apiBase}/me`, {
-    method: 'GET',
-    credentials: 'include',
-    cache: 'no-store',
-  });
+
+  const fetchMe = async () => {
+    return await fetch(`${apiBase}/me`, {
+      method: 'GET',
+      credentials: 'include',
+      cache: 'no-store',
+    });
+  };
+
+  let res = await fetchMe();
+
+  if (res.status === 401) {
+    // Attempt hydration refresh
+    if (!isRefreshing) {
+      isRefreshing = true;
+      try {
+        await doTokenRefresh();
+        processRefreshQueue(null);
+        // Retry fetchMe
+        res = await fetchMe();
+      } catch (error) {
+        processRefreshQueue(error);
+        return null;
+      } finally {
+        isRefreshing = false;
+      }
+    } else {
+      try {
+        await new Promise((resolve, reject) => {
+          refreshQueue.push({ resolve, reject });
+        });
+        res = await fetchMe();
+      } catch {
+        return null;
+      }
+    }
+  }
 
   if (res.status === 401) return null;
 
@@ -124,7 +192,7 @@ export async function logout() {
  */
 export function onLogout(callback) {
   if (typeof window === 'undefined' || !window.BroadcastChannel) {
-    return () => {};
+    return () => { };
   }
 
   try {
@@ -144,7 +212,7 @@ export function onLogout(callback) {
       }
     };
   } catch {
-    return () => {};
+    return () => { };
   }
 }
 
@@ -155,24 +223,17 @@ export function onLogout(callback) {
 export function startRefreshTimer(onFailure) {
   stopRefreshTimer();
   const apiBase = getApiBase();
-  async function doRefresh() {
+  async function autoRefresh() {
     try {
-      const res = await fetch(`${apiBase}/auth/refresh`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      });
-      if (res.status === 401 || res.status === 403) {
-        stopRefreshTimer();
-        if (onFailure) onFailure();
-      }
+      await doTokenRefresh();
     } catch {
-      // transient failure — keep trying
+      // transient failure — keep trying, or if 401/403, stop timer
+      stopRefreshTimer();
+      if (onFailure) onFailure();
     }
   }
-  doRefresh();
-  refreshTimerId = setInterval(doRefresh, REFRESH_INTERVAL_MS);
+  autoRefresh();
+  refreshTimerId = setInterval(autoRefresh, REFRESH_INTERVAL_MS);
 }
 
 /**
@@ -183,4 +244,78 @@ export function stopRefreshTimer() {
     clearInterval(refreshTimerId);
     refreshTimerId = null;
   }
+}
+
+/**
+ * Configure an Axios instance with a response interceptor to handle
+ * automatic token refreshing on 401/403 unauthorized responses.
+ *
+ * @param {import('axios').AxiosInstance} axiosInstance - The Axios instance to configure
+ * @param {Function} [onSessionExpired] - Callback to trigger user logout or UI notification when the refresh fails
+ */
+export function setupAxiosInterceptors(axiosInstance, onSessionExpired) {
+  // Add a response interceptor
+  axiosInstance.interceptors.response.use(
+    (response) => {
+      // Any status code that lie within the range of 2xx cause this function to trigger
+      return response;
+    },
+    async (error) => {
+      const originalRequest = error.config;
+
+      // Check if it's a 401/403 Auth error and we haven't already retried
+      if (
+        error.response &&
+        (error.response.status === 401 || error.response.status === 403) &&
+        !originalRequest._retry
+      ) {
+
+        // Prevent infinite loops on the refresh endpoint itself
+        if (originalRequest.url?.includes('/auth/refresh')) {
+          return Promise.reject(error);
+        }
+
+        originalRequest._retry = true;
+
+        if (!isRefreshing) {
+          isRefreshing = true;
+
+          try {
+            await doTokenRefresh();
+            // Process the queue queue
+            processRefreshQueue(null);
+
+            // Re-run the original request that failed
+            return axiosInstance(originalRequest);
+          } catch (refreshError) {
+            // Refresh failed, queue needs to be rejected
+            processRefreshQueue(refreshError);
+
+            // Trigger logout procedure
+            stopRefreshTimer();
+            if (onSessionExpired) onSessionExpired();
+
+            return Promise.reject(refreshError);
+          } finally {
+            isRefreshing = false;
+          }
+        } else {
+          // If a refresh is already in progress, wait for it to finish
+          return new Promise((resolve, reject) => {
+            refreshQueue.push({ resolve, reject });
+          })
+            .then(() => {
+              // Once refresh completes, replay original request
+              return axiosInstance(originalRequest);
+            })
+            .catch((err) => {
+              return Promise.reject(err);
+            });
+        }
+      }
+
+      // If not 401 or retry already failed, reject everything else normally
+      return Promise.reject(error);
+    }
+  );
 }

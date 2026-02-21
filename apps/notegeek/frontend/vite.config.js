@@ -41,7 +41,6 @@ export default defineConfig(({ mode }) => {
           ],
           start_url: '/',
           scope: '/',
-          orientation: 'portrait',
           categories: ['productivity', 'utilities']
         },
         workbox: {

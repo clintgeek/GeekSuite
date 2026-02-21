@@ -1,5 +1,6 @@
 import axios from 'axios';
 import logger from '../utils/logger.js';
+import { setupAxiosInterceptors } from '@geeksuite/auth';
 
 // Determine API base URL based on environment
 let API_URL = '/api'; // Default for production
@@ -33,6 +34,8 @@ api.interceptors.request.use(
   }
 );
 
+setupAxiosInterceptors(api);
+
 // Response interceptor for handling errors
 api.interceptors.response.use(
   (response) => {
@@ -51,6 +54,7 @@ api.interceptors.response.use(
 
     switch (status) {
       case 401:
+        // Handled by setupAxiosInterceptors, only reaches here if refresh fails
         return Promise.reject(new Error(data.message || 'Unauthorized. Please login again.'));
       case 403:
         return Promise.reject(new Error(data.message || 'You do not have permission to access this resource.'));

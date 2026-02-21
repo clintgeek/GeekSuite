@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { setupAxiosInterceptors } from '@geeksuite/auth';
 
 // Define the base URL for the API
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
@@ -17,24 +18,8 @@ const apiClient = axios.create({
     credentials: 'include'
 });
 
-// Add response interceptor for auth errors
-apiClient.interceptors.response.use(
-    (response) => response,
-    (error) => {
-        if (error.response) {
-            // Handle 401 Unauthorized
-            if (error.response.status === 401) {
-                // Cookie-first SSO: let the app redirect to /login based on auth state.
-            }
-            console.error('API Error:', error.response.status, error.config?.url);
-        } else if (error.request) {
-            console.error('API No Response:', error.request);
-        } else {
-            console.error('API Error:', error.message);
-        }
-        return Promise.reject(error);
-    }
-);
+// Add response interceptor for automatic 401 token refresh and requeueing
+setupAxiosInterceptors(apiClient);
 
 // Auth
 export const loginApi = (credentials) => apiClient.post('/auth/login', credentials);

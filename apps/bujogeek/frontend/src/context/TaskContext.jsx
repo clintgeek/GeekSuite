@@ -1,8 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import axios from 'axios';
+import apiClient from '../services/apiClient';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 
-const API_URL = '/api';
 
 const AUTH_CONFIG = { withCredentials: true };
 
@@ -152,7 +151,7 @@ const TaskProvider = ({ children }) => {
       const formattedStartDate = format(startDate, 'yyyy-MM-dd');
       const formattedEndDate = format(endDate, 'yyyy-MM-dd');
 
-      const response = await axios.get(`${API_URL}/tasks`, {
+      const response = await apiClient.get(`/tasks`, {
         params: {
           viewType: 'all',
           startDate: formattedStartDate,
@@ -226,7 +225,7 @@ const TaskProvider = ({ children }) => {
           params = { viewType, date: date ? format(date, 'yyyy-MM-dd') : undefined };
       }
 
-      const response = await axios.get(`${API_URL}${endpoint}`, {
+      const response = await apiClient.get(`${endpoint}`, {
         params,
         ...AUTH_CONFIG
       });
@@ -255,7 +254,7 @@ const TaskProvider = ({ children }) => {
       setLoading(LoadingState.FETCHING);
       setError(null);
 
-      const response = await axios.get(`${API_URL}/tasks/all`, {
+      const response = await apiClient.get(`/tasks/all`, {
         ...AUTH_CONFIG
       });
 
@@ -334,7 +333,7 @@ const TaskProvider = ({ children }) => {
     setLoading('CREATING');
     setError(null);
     try {
-      const response = await axios.post(`${API_URL}/tasks`, taskData, {
+      const response = await apiClient.post(`/tasks`, taskData, {
         ...AUTH_CONFIG
       });
       console.log('Task created successfully:', response.data);
@@ -357,7 +356,7 @@ const TaskProvider = ({ children }) => {
   const updateTask = useCallback(async (taskId, updates) => {
     try {
       setLoading(LoadingState.UPDATING);
-      const response = await axios.put(`${API_URL}/tasks/${taskId}`, updates, {
+      const response = await apiClient.put(`/tasks/${taskId}`, updates, {
         ...AUTH_CONFIG
       });
       const updatedTask = response.data;
@@ -441,7 +440,7 @@ const TaskProvider = ({ children }) => {
     try {
       setLoading(LoadingState.UPDATING);
       setError(null);
-      const response = await axios.put(`${API_URL}/tasks/${taskId}`, { status: newStatus }, {
+      const response = await apiClient.put(`/tasks/${taskId}`, { status: newStatus }, {
         ...AUTH_CONFIG
       });
 
@@ -477,7 +476,7 @@ const TaskProvider = ({ children }) => {
     try {
       setLoading(LoadingState.DELETING);
       setError(null);
-      await axios.delete(`${API_URL}/tasks/${taskId}`, {
+      await apiClient.delete(`/tasks/${taskId}`, {
         ...AUTH_CONFIG
       });
 
@@ -510,8 +509,8 @@ const TaskProvider = ({ children }) => {
     try {
       setLoading(LoadingState.MIGRATING);
       setError(null);
-      const response = await axios.post(
-        `${API_URL}/tasks/${taskId}/migrate-future`,
+      const response = await apiClient.post(
+        `/tasks/${taskId}/migrate-future`,
         { futureDate: targetDate.toISOString() },
         { ...AUTH_CONFIG }
       );
@@ -565,7 +564,7 @@ const TaskProvider = ({ children }) => {
     migrateTask,
     saveDailyOrder: async (dateKey, orderedTaskIds) => {
       try {
-        await axios.post(`${API_URL}/tasks/daily/order`, { dateKey, orderedTaskIds }, {
+        await apiClient.post(`/tasks/daily/order`, { dateKey, orderedTaskIds }, {
           ...AUTH_CONFIG
         });
       } catch (error) {

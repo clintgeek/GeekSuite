@@ -1,7 +1,8 @@
 import { Box, Typography } from "@mui/material";
 
 const entries = [
-  { key: "birdsCount", label: "Birds", unit: "active" },
+  { key: "birdsCount", label: "Total Birds", unit: "active" },
+  { key: "layingHensCount", label: "Laying Hens" },
   { key: "groupsCount", label: "Groups" },
   { key: "avgDailyEggs", label: "Eggs / day", unit: "avg" },
   { key: "hatchCount", label: "Hatches", unit: "recent" }
@@ -18,8 +19,8 @@ const SummaryCards = ({ stats }) => {
       sx={{
         display: "flex",
         flexWrap: "wrap",
-        borderTop: (theme) => `1px solid ${theme.palette.divider}`,
-        borderBottom: (theme) => `1px solid ${theme.palette.divider}`
+        borderTop: (theme) => `1px solid ${ theme.palette.divider }`,
+        borderBottom: (theme) => `1px solid ${ theme.palette.divider }`
       }}
     >
       {entries.map(({ key, label, unit }, i) => (
@@ -31,10 +32,10 @@ const SummaryCards = ({ stats }) => {
             pr: 3,
             borderRight: (theme) =>
               i < entries.length - 1
-                ? { xs: i % 2 === 0 ? `1px solid ${theme.palette.divider}` : "none", md: `1px solid ${theme.palette.divider}` }
+                ? { xs: i % 2 === 0 ? `1px solid ${ theme.palette.divider }` : "none", md: `1px solid ${ theme.palette.divider }` }
                 : "none",
             pl: i === 0 ? 0 : { xs: i % 2 === 1 ? 2 : 0, md: 3 },
-            borderBottom: (theme) => ({ xs: i < 2 ? `1px solid ${theme.palette.divider}` : "none", md: "none" })
+            borderBottom: (theme) => ({ xs: i < 2 ? `1px solid ${ theme.palette.divider }` : "none", md: "none" })
           }}
         >
           <Typography

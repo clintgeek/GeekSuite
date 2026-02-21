@@ -7,4 +7,5 @@ export {
   onLogout,
   startRefreshTimer,
   stopRefreshTimer,
+  setupAxiosInterceptors,
 } from './authClient.js';

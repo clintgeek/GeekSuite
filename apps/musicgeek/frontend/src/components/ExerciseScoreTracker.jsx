@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
+import { api } from '../services/api';
 import './ExerciseScoreTracker.css';
 
 const ExerciseScoreTracker = ({
@@ -55,13 +55,10 @@ const ExerciseScoreTracker = ({
 
   const loadStats = async () => {
     try {
-      const response = await axios.get(
-        `/api/progress/exercise/${exerciseType}?lesson_id=${lessonId}&limit=5`,
-        {
-          withCredentials: true,
-        }
+      const response = await api.get(
+        `/progress/exercise/${exerciseType}?lesson_id=${lessonId}&limit=5`
       );
-      setStats(response.data.data.stats);
+      setStats(response.data.stats);
     } catch (err) {
       console.error('Failed to load exercise history:', err);
       // Don't show error to user - stats are optional
@@ -91,17 +88,14 @@ const ExerciseScoreTracker = ({
   const saveProgress = async (finalCount) => {
     setLoading(true);
     try {
-      await axios.post(
-        '/api/progress/exercise',
+      await api.post(
+        '/progress/exercise',
         {
           lesson_id: lessonId,
           exercise_type: exerciseType,
           metric_name: metricName,
           metric_value: finalCount,
           notes: `Completed ${finalCount} changes in ${duration} seconds`,
-        },
-        {
-          withCredentials: true,
         }
       );
 

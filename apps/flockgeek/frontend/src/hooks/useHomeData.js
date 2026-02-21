@@ -50,7 +50,7 @@ export default function useHomeData() {
         const reqs = await Promise.allSettled([
           client.get('/birds'),
           client.get('/groups'),
-          client.get(`/egg-production?from=${todayStart}&to=${todayEnd}`),
+          client.get(`/egg-production?from=${ todayStart }&to=${ todayEnd }`),
           client.get('/hatch-events?limit=5')
         ]);
 
@@ -70,6 +70,7 @@ export default function useHomeData() {
         // Build stats
         const birdsCount = extractTotal(birds, 'birds') || birdsList.length;
         const groupsCount = extractTotal(groups, 'groups') || groupsList.length;
+        const layingHensCount = birdsList.filter(b => (b.sex === 'hen' || b.sex === 'pullet') && b.status === 'active').length;
 
         // Calculate average daily egg production rate across all locations
         // Each record has eggsCount and daysObserved, so rate = eggsCount / daysObserved
@@ -118,31 +119,31 @@ export default function useHomeData() {
         }
 
         // Recent activity: map eggs and hatches and birds (recently created)
-        const eggItems = eggsList.slice(0,5).map(e => ({
-          id: `egg-${e._id || e.id || Math.random()}`,
+        const eggItems = eggsList.slice(0, 5).map(e => ({
+          id: `egg-${ e._id || e.id || Math.random() }`,
           type: 'egg',
-          text: `${e.eggsCount} eggs logged${e.groupId ? ` for group ${e.groupId}` : e.birdId ? ` for bird ${e.birdId}` : ''}`,
+          text: `${ e.eggsCount } eggs logged${ e.groupId ? ` for group ${ e.groupId }` : e.birdId ? ` for bird ${ e.birdId }` : '' }`,
           occurredAt: e.date || e.createdAt || e.occurredAt
         }));
 
-        const hatchItems = hatchesList.slice(0,5).map(h => ({
-          id: `hatch-${h._id || h.id || Math.random()}`,
+        const hatchItems = hatchesList.slice(0, 5).map(h => ({
+          id: `hatch-${ h._id || h.id || Math.random() }`,
           type: 'hatch',
-          text: `Hatch: ${h.title || h.description || ''}`,
+          text: `Hatch: ${ h.title || h.description || '' }`,
           occurredAt: h.occurredAt || h.date || h.createdAt
         }));
 
         const birdItems = birdsList
           .filter(b => b.createdAt)
-          .sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt))
-          .slice(0,3)
-          .map(b => ({ id: `bird-${b._id || b.id}`, type: 'bird', text: `New bird: ${b.name || b.tagId || 'unnamed'}`, occurredAt: b.createdAt }));
+          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+          .slice(0, 3)
+          .map(b => ({ id: `bird-${ b._id || b.id }`, type: 'bird', text: `New bird: ${ b.name || b.tagId || 'unnamed' }`, occurredAt: b.createdAt }));
 
-        const merged = [...eggItems, ...hatchItems, ...birdItems].sort((a,b) => new Date(b.occurredAt) - new Date(a.occurredAt)).slice(0,8);
+        const merged = [...eggItems, ...hatchItems, ...birdItems].sort((a, b) => new Date(b.occurredAt) - new Date(a.occurredAt)).slice(0, 8);
 
         if (!mounted) return;
 
-        setStats({ birdsCount, groupsCount, avgDailyEggs, recentHatches: hatchesList });
+        setStats({ birdsCount, groupsCount, layingHensCount, avgDailyEggs, recentHatches: hatchesList });
         setItems(merged);
       } catch (err) {
         if (!mounted) return;

@@ -1,4 +1,7 @@
 import express from 'express';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
 import cors from 'cors';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
@@ -54,7 +57,7 @@ const allowedOrigins = [
 ];
 
 app.use(cors({
-  origin: function(origin, callback) {
+  origin: function (origin, callback) {
     // allow requests with no origin (like mobile apps, curl, etc.)
     if (!origin) return callback(null, true);
     if (allowedOrigins.indexOf(origin) === -1) {
@@ -109,6 +112,11 @@ app.use('/api/redis', redisRoutes);
 app.use('/api/postgres', postgresRoutes);
 app.use('/api/influx', influxRoutes);
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const uiBuildPath = path.join(__dirname, '../../ui/dist');
+app.use(express.static(uiBuildPath));
+
 // Track server start time for uptime
 const serverStartTime = Date.now();
 
@@ -146,13 +154,13 @@ app.get('/api/health/app/:appName', async (req, res) => {
   // Fallback hardcoded map if DB has no entry
   if (!baseUrl) {
     const fallback = {
-      basegeek:    'https://basegeek.clintgeek.com',
-      notegeek:    'https://notegeek.clintgeek.com',
-      bujogeek:    'https://bujogeek.clintgeek.com',
+      basegeek: 'https://basegeek.clintgeek.com',
+      notegeek: 'https://notegeek.clintgeek.com',
+      bujogeek: 'https://bujogeek.clintgeek.com',
       fitnessgeek: 'https://fitnessgeek.clintgeek.com',
-      storygeek:   'https://storygeek.clintgeek.com',
-      flockgeek:   'https://flockgeek.clintgeek.com',
-      babelgeek:   'https://babelgeek.clintgeek.com',
+      storygeek: 'https://storygeek.clintgeek.com',
+      flockgeek: 'https://flockgeek.clintgeek.com',
+      babelgeek: 'https://babelgeek.clintgeek.com',
     };
     baseUrl = fallback[appName.toLowerCase()];
   }
@@ -187,6 +195,18 @@ app.get('/api/health/app/:appName', async (req, res) => {
       checkedAt: new Date().toISOString(),
     });
   }
+});
+
+// Fallback route for SPA (MUST be after all API and static routes)
+app.get('*', (req, res) => {
+  res.sendFile(path.join(uiBuildPath, 'index.html'), (err) => {
+    if (err) {
+      console.error('Error serving index.html:', err);
+      if (!res.headersSent) {
+        res.status(404).send('UI not found. Is it built?');
+      }
+    }
+  });
 });
 
 // Error handling middleware

@@ -1,4 +1,4 @@
-ARG BUN_CALIBRE_BASE=geeksuite/bun-calibre:latest
+ARG BUN_CALIBRE_BASE=192.168.1.17:5000/geeksuite/bun-calibre:latest
 
 # ---------- BUILD STAGE ----------
 FROM node:20-alpine AS build

@@ -78,12 +78,14 @@ const QuickHarvestEntry = ({ onSuccess, locations = [] }) => {
         const lastRecord = records[0];
         setLastHarvest(lastRecord);
 
-        // Calculate days since last harvest
         const lastDate = new Date(lastRecord.date);
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        lastDate.setHours(0, 0, 0, 0);
-        const diffDays = Math.round((today - lastDate) / (1000 * 60 * 60 * 24));
+        // lastDate could be "2026-02-19T00:00:00.000Z", which parses to local Feb 18 18:00
+        // We should parse it as UTC midnight to compare fairly
+        const lastUTCDate = new Date(lastRecord.date);
+        const lastDateLocal = new Date(lastUTCDate.getUTCFullYear(), lastUTCDate.getUTCMonth(), lastUTCDate.getUTCDate());
+        const diffDays = Math.round((today - lastDateLocal) / (1000 * 60 * 60 * 24));
         setDaysSinceLastHarvest(Math.max(1, diffDays));
       } else {
         setLastHarvest(null);
@@ -117,7 +119,7 @@ const QuickHarvestEntry = ({ onSuccess, locations = [] }) => {
 
     try {
       const payload = {
-        date: new Date().toISOString(),
+        date: new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0],
         eggsCount: eggCount,
         daysObserved: daysSinceLastHarvest,
         source: "manual"
@@ -134,8 +136,8 @@ const QuickHarvestEntry = ({ onSuccess, locations = [] }) => {
       await client.post("/egg-production", payload);
 
       // Success feedback
-      const daysText = daysSinceLastHarvest > 1 ? ` (${daysSinceLastHarvest} days)` : "";
-      setSuccess(`Logged ${eggCount} egg${eggCount !== 1 ? "s" : ""}${daysText}`);
+      const daysText = daysSinceLastHarvest > 1 ? ` (${ daysSinceLastHarvest } days)` : "";
+      setSuccess(`Logged ${ eggCount } egg${ eggCount !== 1 ? "s" : "" }${ daysText }`);
 
       // Reset form
       setEggCount(0);
@@ -213,7 +215,7 @@ const QuickHarvestEntry = ({ onSuccess, locations = [] }) => {
           {lastHarvest ? (
             <Chip
               size="small"
-              label={`Last harvest: ${new Date(lastHarvest.date).toLocaleDateString()} (${daysSinceLastHarvest} day${daysSinceLastHarvest !== 1 ? "s" : ""} ago) — ${lastHarvest.eggsCount} egg${lastHarvest.eggsCount !== 1 ? "s" : ""}`}
+              label={`Last harvest: ${ new Date(lastHarvest.date).toLocaleDateString(undefined, { timeZone: 'UTC' }) } (${ daysSinceLastHarvest } day${ daysSinceLastHarvest !== 1 ? "s" : "" } ago) — ${ lastHarvest.eggsCount } egg${ lastHarvest.eggsCount !== 1 ? "s" : "" }`}
               sx={{ bgcolor: (theme) => alpha(theme.palette.success.main, 0.1), color: "text.primary" }}
             />
           ) : (
@@ -277,12 +279,33 @@ const QuickHarvestEntry = ({ onSuccess, locations = [] }) => {
           <AddIcon fontSize="large" />
         </IconButton>
 
-        {/* Days observed indicator */}
-        <Tooltip title="Days since last harvest — eggs will be averaged over this period for estimation">
-          <Chip
-            label={`÷ ${daysSinceLastHarvest} day${daysSinceLastHarvest !== 1 ? "s" : ""}`}
-            variant="outlined"
-            sx={{ fontWeight: 500 }}
+        {/* Days observed input */}
+        <Tooltip title="Days since last harvest — eggs will be averaged over this period">
+          <TextField
+            type="number"
+            size="small"
+            value={daysSinceLastHarvest}
+            onChange={(e) => setDaysSinceLastHarvest(Math.max(1, parseInt(e.target.value) || 1))}
+            InputProps={{
+              startAdornment: <Box component="span" sx={{ color: "text.secondary", mr: 0.5, userSelect: "none" }}>÷</Box>,
+              endAdornment: <Box component="span" sx={{ color: "text.secondary", ml: 0.5, fontSize: "0.75rem", userSelect: "none" }}>days</Box>,
+            }}
+            inputProps={{
+              min: 1,
+              style: { textAlign: "center", width: "40px", padding: "4px 0" }
+            }}
+            sx={{
+              width: 100,
+              "& .MuiOutlinedInput-notchedOutline": {
+                borderColor: "transparent" // Make it look cleaner/integrated
+              },
+              "&:hover .MuiOutlinedInput-notchedOutline": {
+                borderColor: "action.hover"
+              },
+              "& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                borderColor: "primary.main"
+              }
+            }}
           />
         </Tooltip>
       </Box>
@@ -359,7 +382,7 @@ const QuickHarvestEntry = ({ onSuccess, locations = [] }) => {
           fontWeight: 600
         }}
       >
-        {submitting ? "Saving..." : `Log ${eggCount} Egg${eggCount !== 1 ? "s" : ""}`}
+        {submitting ? "Saving..." : `Log ${ eggCount } Egg${ eggCount !== 1 ? "s" : "" }`}
       </Button>
 
       {/* Daily rate preview */}

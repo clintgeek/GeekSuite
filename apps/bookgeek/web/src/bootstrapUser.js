@@ -1,5 +1,6 @@
 import axios from "axios";
 import { configure } from "@geeksuite/user";
+import { setupAxiosInterceptors } from "@geeksuite/auth";
 
 const BASEGEEK_API_URL =
   import.meta.env?.VITE_BASEGEEK_URL ||
@@ -11,6 +12,8 @@ const baseGeekApi = axios.create({
   withCredentials: true,
   headers: { "Content-Type": "application/json" },
 });
+
+setupAxiosInterceptors(baseGeekApi);
 
 export function configureUserPlatform() {
   configure(baseGeekApi);

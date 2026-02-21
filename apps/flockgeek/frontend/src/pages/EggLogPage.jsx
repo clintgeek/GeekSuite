@@ -121,7 +121,7 @@ const EggLogPage = () => {
     if (!window.confirm("Delete this egg production record?")) return;
 
     try {
-      await client.delete(`/egg-production/${id}`);
+      await client.delete(`/egg-production/${ id }`);
       fetchEggProduction();
     } catch (err) {
       setError(err.message || "Failed to delete record");
@@ -148,7 +148,7 @@ const EggLogPage = () => {
   const handleEditRecord = (record) => {
     setEditingRecord(record);
     setEditFormData({
-      date: record.date ? new Date(record.date).toISOString().split('T')[0] : "",
+      date: record.date ? record.date.substring(0, 10) : "",
       eggsCount: record.eggsCount || "",
       locationId: record.locationId?._id || record.locationId || "",
       daysObserved: record.daysObserved || 1,
@@ -184,7 +184,7 @@ const EggLogPage = () => {
     }
 
     try {
-      await client.put(`/egg-production/${editingRecord._id}`, editFormData);
+      await client.put(`/egg-production/${ editingRecord._id }`, editFormData);
       fetchEggProduction();
       handleCloseEditDialog();
     } catch (err) {
@@ -194,7 +194,7 @@ const EggLogPage = () => {
 
   const handleAddRecord = () => {
     setAddFormData({
-      date: new Date().toISOString().split('T')[0],
+      date: new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0],
       eggsCount: "",
       locationId: locations.length === 1 ? locations[0]._id : "",
       daysObserved: 1,
@@ -362,9 +362,7 @@ const EggLogPage = () => {
                 ) : (
                   eggProduction.map((record) => (
                     <TableRow key={record._id} hover>
-                      <TableCell>
-                        {new Date(record.date).toLocaleDateString()}
-                      </TableCell>
+                      {new Date(record.date).toLocaleDateString(undefined, { timeZone: 'UTC' })}
                       <TableCell>
                         {record.locationId ? getLocationName(record.locationId._id || record.locationId) : "-"}
                       </TableCell>

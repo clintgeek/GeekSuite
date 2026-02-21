@@ -1,4 +1,7 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+import axios from 'axios';
+import { setupAxiosInterceptors } from '@geeksuite/auth';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 class ApiError extends Error {
   constructor(message, status, data) {
@@ -9,65 +12,65 @@ class ApiError extends Error {
   }
 }
 
-async function fetchAPI(endpoint, options = {}, isRetry = false) {
-  const url = `${API_BASE_URL}${endpoint}`;
+const apiClient = axios.create({
+  baseURL: API_BASE_URL,
+  withCredentials: true,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
 
-  const config = {
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-    ...options,
-  };
+setupAxiosInterceptors(apiClient);
 
-  try {
-    const response = await fetch(url, config);
+function handleAxiosError(error) {
+  if (error.response) {
+    const errorData = error.response.data || {};
+    const status = error.response.status;
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-
-      if (response.status === 401 || response.status === 403) {
-        throw new ApiError('Authentication required. Please sign in again.', response.status, errorData);
-      }
-
-      throw new ApiError(errorData.error || 'API request failed', response.status, errorData);
+    if (status === 401 || status === 403) {
+      throw new ApiError('Authentication required. Please sign in again.', status, errorData);
     }
-
-    // Handle 204 No Content
-    if (response.status === 204) {
-      return null;
-    }
-
-    return await response.json();
-  } catch (error) {
-    if (error instanceof ApiError) {
-      throw error;
-    }
-    // Network error or other issues
-    throw new ApiError('Network error or server unavailable', 0, {});
+    throw new ApiError(errorData.error || errorData.message || 'API request failed', status, errorData);
   }
+  throw new ApiError('Network error or server unavailable', 0, {});
 }
 
 export const api = {
-  get: (endpoint) => fetchAPI(endpoint),
+  get: async (endpoint) => {
+    try {
+      const response = await apiClient.get(endpoint);
+      return response.data;
+    } catch (e) {
+      handleAxiosError(e);
+    }
+  },
 
-  post: (endpoint, data) =>
-    fetchAPI(endpoint, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
+  post: async (endpoint, data) => {
+    try {
+      const response = await apiClient.post(endpoint, data);
+      return response.data;
+    } catch (e) {
+      handleAxiosError(e);
+    }
+  },
 
-  put: (endpoint, data) =>
-    fetchAPI(endpoint, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    }),
+  put: async (endpoint, data) => {
+    try {
+      const response = await apiClient.put(endpoint, data);
+      return response.data;
+    } catch (e) {
+      handleAxiosError(e);
+    }
+  },
 
-  delete: (endpoint) =>
-    fetchAPI(endpoint, {
-      method: 'DELETE',
-    }),
+  delete: async (endpoint) => {
+    try {
+      const response = await apiClient.delete(endpoint);
+      return response.data;
+    } catch (e) {
+      handleAxiosError(e);
+    }
+  },
 };
 
 export { ApiError };
