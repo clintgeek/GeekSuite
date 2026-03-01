@@ -18,6 +18,9 @@ import importRouter from "./routes/importRoutes.js";
 import { authenticateToken } from "./middleware/auth.js";
 import { meHandler } from "@geeksuite/user/server";
 import { sendMail } from "./services/emailService.js";
+import { setupGeekSuiteSubgraph } from "@geeksuite/apollo-server-utils";
+import { typeDefs } from "./graphql/schema.js";
+import { resolvers } from "./graphql/resolvers.js";
 
 dotenv.config();
 
@@ -2879,8 +2882,10 @@ async function start() {
     console.log("Connected to MongoDB");
   }
 
-  app.listen(API_PORT, () => {
-    console.log(`bookgeek-api listening on http://localhost:${API_PORT}`);
+  await setupGeekSuiteSubgraph(app, { typeDefs, resolvers, path: "/graphql" });
+
+  app.listen(API_PORT, "0.0.0.0", () => {
+    console.log(`bookgeek-api listening on http://0.0.0.0:\${API_PORT}`);
   });
 }
 

@@ -1,0 +1,14 @@
+{
+    "name": "@geeksuite/graphql-config",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "main": "src/index.js",
+    "exports": {
+        ".": "./src/index.js"
+    },
+    "dependencies": {
+        "graphql": "^16.8.1",
+        "graphql-tag": "^2.12.6"
+    }
+}

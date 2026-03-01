@@ -9,7 +9,9 @@ import {
   Draw as HandwrittenIcon,
   ArrowBack as BackIcon,
 } from '@mui/icons-material';
-import useNoteStore from '../store/noteStore';
+import { useQuery, useMutation } from '@apollo/client';
+import { GET_NOTE_BY_ID, GET_NOTES } from '../graphql/queries';
+import { CREATE_NOTE, UPDATE_NOTE } from '../graphql/mutations';
 import { NoteShell, NoteMetaBar, NoteActions, NoteTypeRouter, NOTE_TYPES } from '../components/notes';
 import DeleteNoteDialog from '../components/DeleteNoteDialog';
 
@@ -124,15 +126,20 @@ function NoteEditorPage() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const {
-    selectedNote,
-    pendingNote,
-    fetchNoteById,
-    createNote,
-    updateNote,
-    isLoadingSelected,
-    selectedError,
-  } = useNoteStore();
+  const isNewNote = !id || id === 'new';
+
+  const { data, loading: isLoadingSelected, error: queryError } = useQuery(GET_NOTE_BY_ID, {
+    variables: { id },
+    skip: isNewNote,
+    fetchPolicy: 'cache-and-network',
+  });
+  const noteToEdit = data?.note;
+  const selectedError = queryError?.message;
+
+  const [createNoteMutation] = useMutation(CREATE_NOTE, {
+    refetchQueries: [{ query: GET_NOTES }]
+  });
+  const [updateNoteMutation] = useMutation(UPDATE_NOTE);
 
   // Form state
   const [title, setTitle] = useState('');
@@ -146,10 +153,6 @@ function NoteEditorPage() {
 
   // Track initialization
   const initialized = useRef(false);
-
-  // Get note data to edit
-  const noteToEdit = selectedNote || pendingNote;
-  const isNewNote = !id || id === 'new';
   const isMindMap = noteType === NOTE_TYPES.MINDMAP;
   const isHandwritten = noteType === NOTE_TYPES.HANDWRITTEN;
 
@@ -243,12 +246,15 @@ function NoteEditorPage() {
       let savedNote;
 
       if (savedNoteId) {
-        savedNote = await updateNote(savedNoteId, noteData);
+        const { data } = await updateNoteMutation({ variables: { id: savedNoteId, ...noteData } });
+        savedNote = data?.updateNote;
       } else {
-        savedNote = await createNote(noteData);
-        if (savedNote?._id) {
-          setSavedNoteId(savedNote._id);
-          navigate(`/notes/${savedNote._id}`, { replace: true });
+        const { data } = await createNoteMutation({ variables: noteData });
+        savedNote = data?.createNote;
+        if (savedNote?.id || savedNote?._id) {
+          const newId = savedNote.id || savedNote._id;
+          setSavedNoteId(newId);
+          navigate(`/notes/${newId}`, { replace: true });
         }
       }
 
@@ -275,15 +281,8 @@ function NoteEditorPage() {
     setContent(newContent);
   }, []);
 
-  useEffect(() => {
-    if (isNewNote) return;
-    if (!id) return;
+  // Removed manual fetch inside useEffect since useQuery handles it
 
-    const loadedId = selectedNote?._id || pendingNote?._id;
-    if (loadedId === id) return;
-
-    fetchNoteById(id);
-  }, [fetchNoteById, id, isNewNote, pendingNote?._id, selectedNote?._id]);
 
   // Loading state
   if (isLoadingSelected && !isNewNote) {

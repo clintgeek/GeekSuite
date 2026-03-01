@@ -5,6 +5,8 @@ import { registerSW } from 'virtual:pwa-register'
 // Import ReactFlow styles
 import 'reactflow/dist/style.css';
 
+import { GeekSuiteApolloProvider } from '@geeksuite/api-client';
+
 // Import custom SASS styles
 import './styles/main.scss';
 
@@ -25,10 +27,12 @@ configureUserPlatform();
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <ThemeModeProvider>
-      <AppBootstrapper>
-        <App />
-      </AppBootstrapper>
-    </ThemeModeProvider>
+    <GeekSuiteApolloProvider>
+      <ThemeModeProvider>
+        <AppBootstrapper>
+          <App />
+        </AppBootstrapper>
+      </ThemeModeProvider>
+    </GeekSuiteApolloProvider>
   </StrictMode>,
 )

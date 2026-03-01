@@ -3,19 +3,23 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "esbuild ./src/main.jsx --bundle --outfile=dist/main.js --minify --loader:.js=jsx --loader:.jsx=jsx",
-    "dev": "bun dev . --port 1801",
-    "serve": "bun server.js"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
   },
   "dependencies": {
+    "@apollo/client": "^3.11.4",
+    "graphql": "^16.10.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "epubjs": "^0.3.93",
+    "@geeksuite/api-client": "workspace:*",
     "@geeksuite/auth": "workspace:*",
     "@geeksuite/user": "workspace:*",
     "axios": "^1.7.2"
   },
   "devDependencies": {
-    "esbuild": "^0.25.0"
+    "@vitejs/plugin-react": "^4.3.1",
+    "vite": "^5.4.1"
   }
 }

@@ -105,7 +105,7 @@ app.use(express.static(publicPath));
 
 // SPA Catch-all handler
 app.get("*", (req, res, next) => {
-  if (req.path.startsWith('/api/')) {
+  if (req.path.startsWith('/api/') || req.path.startsWith('/graphql')) {
     return next();
   }
   res.sendFile(path.join(publicPath, "index.html"));
@@ -150,12 +150,22 @@ process.on('SIGINT', async () => {
 });
 
 // Start server
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 FitnessGeek API server running on port ${PORT}`);
-  console.log(`📊 Health check available at http://localhost:${PORT}/health`);
-  console.log(`🔗 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🤖 AI features enabled`);
-  console.log(`💾 Redis caching: ${redisClient.isReady() ? 'enabled' : 'disabled'}`);
+import('@geeksuite/apollo-server-utils').then(({ setupGeekSuiteSubgraph }) => {
+  const { typeDefs, resolvers } = require('./graphql/index');
+  setupGeekSuiteSubgraph(app, {
+    typeDefs,
+    resolvers,
+    path: '/graphql'
+  }).then(() => {
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 FitnessGeek API server running on port ${PORT}`);
+      console.log(`📊 Health check available at http://localhost:${PORT}/health`);
+      console.log(`🔗 Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`🤖 AI features enabled`);
+      console.log(`💾 Redis caching: ${redisClient.isReady() ? 'enabled' : 'disabled'}`);
+      console.log(`graphql GraphQL Subgraph ready at /graphql`);
+    });
+  });
 });
 
 module.exports = app;

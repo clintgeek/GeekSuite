@@ -1,58 +1,26 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect } from 'react';
 import { useParams, useMatch, useNavigate } from 'react-router-dom';
-import { CircularProgress, Alert, Box, Button, Typography, alpha, useTheme } from '@mui/material';
-import useNoteStore from '../store/noteStore';
+import { CircularProgress, Alert, Box, Button, Typography } from '@mui/material';
 import useAuthStore from '../store/authStore';
 import NoteViewer from '../components/NoteViewer';
 import NoteEditorPage from './NoteEditorPage';
-import { NOTE_TYPES } from '../components/notes/NoteTypeRouter';
+import { useQuery } from '@apollo/client';
+import { GET_NOTE_BY_ID } from '../graphql/queries';
 
 function NotePage() {
     const { id } = useParams();
     const isEditRoute = useMatch('/notes/:id/edit');
     const navigate = useNavigate();
     const { isAuthenticated } = useAuthStore();
-    const {
-        fetchNoteById,
-        isLoadingSelected,
-        selectedError,
-        selectedNote,
-        pendingNote,
-        clearSelectedNote
-    } = useNoteStore();
-    const [fetchAttempted, setFetchAttempted] = useState(false);
-    const lastFetchedId = useRef(null);
-    const noteWasLoaded = useRef(false);
 
-    useEffect(() => {
-        // Only fetch if we have an ID and it's not 'new' and user is authenticated
-        if (id && id !== 'new' && isAuthenticated) {
-            lastFetchedId.current = id;
-            fetchNoteById(id)
-                .then(data => {
-                    if (data && data._id) {
-                        noteWasLoaded.current = true;
-                    }
-                    setFetchAttempted(true);
-                })
-                .catch(err => {
-                    console.error("Error fetching note:", err);
-                    setFetchAttempted(true);
-                });
-        }
-        return () => clearSelectedNote();
-    }, [id, fetchNoteById, clearSelectedNote, isAuthenticated]);
+    const { data, loading: isLoadingSelected, error } = useQuery(GET_NOTE_BY_ID, {
+        variables: { id },
+        skip: id === 'new' || !isAuthenticated,
+        fetchPolicy: 'cache-and-network',
+    });
 
-    // Log whenever selectedNote changes
-    useEffect(() => {
-        // If we have a valid selectedNote, mark it as successfully loaded
-        if (selectedNote && selectedNote._id === lastFetchedId.current) {
-            noteWasLoaded.current = true;
-        }
-    }, [selectedNote]);
-
-    // Use pendingNote as a fallback when selectedNote is not available
-    const noteToDisplay = selectedNote || pendingNote;
+    const noteToDisplay = data?.note;
+    const selectedError = error?.message;
 
     // Add or remove 'mindmap-view' class from body when viewing mind maps
     useEffect(() => {
@@ -144,29 +112,8 @@ function NotePage() {
         );
     }
 
-    // If we have a pending note but no selectedNote yet, show loading state
-    if (pendingNote && !selectedNote) {
-        return (
-            <Box
-                sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    minHeight: '300px',
-                    gap: 2,
-                }}
-            >
-                <CircularProgress size={32} />
-                <Typography variant="body2" color="text.secondary">
-                    Loading note...
-                </Typography>
-            </Box>
-        );
-    }
-
     // Show error if note couldn't be loaded
-    if (fetchAttempted && selectedError) {
+    if (selectedError) {
         return (
             <Box sx={{ maxWidth: 500, mx: 'auto', py: 8 }}>
                 <Alert
@@ -185,8 +132,7 @@ function NotePage() {
     }
 
     // Show warning if note not found
-    // Only show this if we haven't successfully loaded the note before and there's no pending note
-    if (fetchAttempted && !selectedNote && !pendingNote && !noteWasLoaded.current) {
+    if (!isLoadingSelected && !noteToDisplay && id !== 'new') {
         return (
             <Box sx={{ maxWidth: 500, mx: 'auto', py: 8 }}>
                 <Alert
@@ -200,28 +146,6 @@ function NotePage() {
                 >
                     Note not found or may have been deleted.
                 </Alert>
-            </Box>
-        );
-    }
-
-    // If we've successfully loaded the note before but it's temporarily null,
-    // show a loading state instead of "not found"
-    if (fetchAttempted && !selectedNote && (noteWasLoaded.current || pendingNote)) {
-        return (
-            <Box
-                sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    minHeight: '300px',
-                    gap: 2,
-                }}
-            >
-                <CircularProgress size={32} />
-                <Typography variant="body2" color="text.secondary">
-                    Loading note...
-                </Typography>
             </Box>
         );
     }
