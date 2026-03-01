@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { Box, InputBase, Typography, useTheme } from '@mui/material';
 import { colors } from '../../theme/colors';
+import TaskInputHelpButton from '../tasks/TaskInputHelpButton';
+import parseTaskInput from '../../utils/parseTaskInput';
 
 const InlineQuickAdd = ({ onAdd, autoFocus = false }) => {
   const theme = useTheme();
@@ -20,33 +22,17 @@ const InlineQuickAdd = ({ onAdd, autoFocus = false }) => {
     const trimmed = value.trim();
     if (!trimmed) return;
 
-    // Parse tags
-    const tags = [];
-    const tagMatches = trimmed.match(/#(\w+)/g);
-    if (tagMatches) {
-      tagMatches.forEach((t) => tags.push(t.replace('#', '')));
+    const parsed = parseTaskInput(trimmed);
+    if (!parsed.content) return;
+
+    // Default dueDate to today 9am local when the user doesn't specify one
+    if (!parsed.dueDate) {
+      const today = new Date();
+      today.setHours(9, 0, 0, 0);
+      parsed.dueDate = today;
     }
 
-    // Parse priority
-    let priority = null;
-    if (/!high/i.test(trimmed)) priority = 1;
-    else if (/!medium/i.test(trimmed)) priority = 2;
-    else if (/!low/i.test(trimmed)) priority = 3;
-
-    // Clean content
-    const content = trimmed
-      .replace(/#\w+/g, '')
-      .replace(/!(high|medium|low)/i, '')
-      .trim();
-
-    if (!content) return;
-
-    onAdd?.({
-      content,
-      tags: tags.length > 0 ? tags : undefined,
-      priority: priority || undefined,
-      dueDate: new Date().toISOString(),
-    });
+    onAdd?.(parsed);
 
     setValue('');
     // Keep focus after submit — the user is planning, let them keep writing
@@ -79,30 +65,32 @@ const InlineQuickAdd = ({ onAdd, autoFocus = false }) => {
       >
         {/* Prompt label — visible only when empty and unfocused */}
         {!focused && !value && (
-          <Typography
-            sx={{
-              fontFamily: '"Fraunces", serif',
-              fontSize: { xs: '0.75rem', sm: '0.8125rem' },
-              fontWeight: 400,
-              fontStyle: 'italic',
-              color: isDark ? 'rgba(255,255,255,0.25)' : colors.ink[300],
-              mb: 0.75,
-              letterSpacing: '0.01em',
-              lineHeight: 1,
-              userSelect: 'none',
-            }}
-          >
-            Start your day
-          </Typography>
+          <Box sx={{ mb: 0.75 }}>
+            <Typography
+              sx={{
+                fontFamily: '"Fraunces", serif',
+                fontSize: { xs: '0.75rem', sm: '0.8125rem' },
+                fontWeight: 400,
+                fontStyle: 'italic',
+                color: isDark ? 'rgba(255,255,255,0.25)' : colors.ink[300],
+                letterSpacing: '0.01em',
+                lineHeight: 1,
+                userSelect: 'none',
+              }}
+            >
+              Plan your day
+            </Typography>
+          </Box>
         )}
 
-        <InputBase
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <InputBase
           inputRef={inputRef}
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          placeholder={focused ? 'Write a task\u2026  #tag  !high  !low' : 'What needs to happen today?'}
+          placeholder={focused ? 'Write a task\u2026  #tag  !high  /tomorrow  ^note' : 'What needs to happen today?'}
           fullWidth
           sx={{
             fontSize: { xs: '1rem', sm: '1.0625rem' },
@@ -124,6 +112,8 @@ const InlineQuickAdd = ({ onAdd, autoFocus = false }) => {
             'aria-label': 'Add a task for today',
           }}
         />
+          <TaskInputHelpButton compact />
+        </Box>
 
         {/* Bottom rule line — like paper */}
         <Box

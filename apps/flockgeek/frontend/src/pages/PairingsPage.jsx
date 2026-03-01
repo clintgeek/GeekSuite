@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { toLocalDateString } from "../utils/dateUtils";
 import {
   Container,
   Paper,
@@ -106,7 +107,7 @@ const PairingsPage = () => {
       name: pairing.name || "",
       roosterIds: pairing.roosterIds || [],
       henIds: pairing.henIds || [],
-      pairingDate: pairing.pairingDate ? new Date(pairing.pairingDate).toISOString().split('T')[0] : "",
+      pairingDate: pairing.pairingDate ? toLocalDateString(pairing.pairingDate) : "",
       notes: pairing.notes || ""
     });
     setEditDialogOpen(true);
@@ -144,7 +145,7 @@ const PairingsPage = () => {
       name: "",
       roosterIds: [],
       henIds: [],
-      pairingDate: new Date().toISOString().split('T')[0],
+      pairingDate: toLocalDateString(new Date()),
       notes: ""
     });
     setAddDialogOpen(true);

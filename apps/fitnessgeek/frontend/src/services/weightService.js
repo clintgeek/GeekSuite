@@ -1,4 +1,5 @@
 import { apiService } from './apiService';
+import { formatDateLocal } from '../utils/dateUtils';
 
 const BASE_URL = '/weight';
 
@@ -69,9 +70,15 @@ export const weightService = {
    * Add weight log with date formatting
    */
   async addWeightLog(weight, date = new Date(), notes = '') {
+    let logDate;
+    if (date instanceof Date) {
+      logDate = formatDateLocal(date);
+    } else {
+      logDate = date; // already a YYYY-MM-DD string
+    }
     const weightData = {
       weight_value: parseFloat(weight),
-      log_date: date instanceof Date ? date.toISOString() : date,
+      log_date: logDate,
       notes
     };
 

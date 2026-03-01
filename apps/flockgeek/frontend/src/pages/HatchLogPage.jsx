@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { toLocalDateString } from "../utils/dateUtils";
 import {
   Container,
   Paper,
@@ -128,8 +129,8 @@ const HatchLogPage = () => {
   const handleEditEvent = (event) => {
     setEditingEvent(event);
     setEditFormData({
-      setDate: event.setDate ? new Date(event.setDate).toISOString().split('T')[0] : "",
-      hatchDate: event.hatchDate ? new Date(event.hatchDate).toISOString().split('T')[0] : "",
+      setDate: event.setDate ? toLocalDateString(event.setDate) : "",
+      hatchDate: event.hatchDate ? toLocalDateString(event.hatchDate) : "",
       eggsSet: event.eggsSet || "",
       eggsFertile: event.eggsFertile || "",
       chicksHatched: event.chicksHatched || "",
@@ -363,11 +364,11 @@ const HatchLogPage = () => {
                   hatchEvents.map((event) => (
                     <TableRow key={event._id} hover>
                       <TableCell>
-                        {new Date(event.setDate).toLocaleDateString()}
+                        {new Date(event.setDate).toLocaleDateString(undefined, { timeZone: 'UTC' })}
                       </TableCell>
                       <TableCell>
                         {event.hatchDate
-                          ? new Date(event.hatchDate).toLocaleDateString()
+                          ? new Date(event.hatchDate).toLocaleDateString(undefined, { timeZone: 'UTC' })
                           : "-"}
                       </TableCell>
                       <TableCell>{event.eggsSet || 0}</TableCell>

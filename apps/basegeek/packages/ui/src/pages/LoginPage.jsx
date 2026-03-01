@@ -80,9 +80,26 @@ export default function LoginPage() {
             alert('Invalid callback URL. Please try again.');
           }
         } else if (redirectUrl && redirectUrl !== '/') {
-          const url = new URL(decodeURIComponent(redirectUrl));
-          console.log('Redirecting to custom URL:', url.toString());
-          window.location.href = url.toString();
+          try {
+            const url = new URL(decodeURIComponent(redirectUrl));
+            // Append tokens to the redirect URL to ensure they are available even if cookies fail (e.g. on mobile)
+            url.searchParams.set('token', result.token);
+            if (result.refreshToken) {
+              url.searchParams.set('refreshToken', result.refreshToken);
+            }
+            // Also include app and state if present
+            url.searchParams.set('app', app);
+            if (state) {
+              url.searchParams.set('state', state);
+            }
+            
+            console.log('Redirecting to custom URL with tokens:', url.toString());
+            window.location.href = url.toString();
+          } catch (urlError) {
+            console.error('Invalid redirect URL:', redirectUrl, urlError);
+            // Fallback to simple redirect if URL parsing fails
+            window.location.href = decodeURIComponent(redirectUrl);
+          }
         } else {
           navigate('/');
         }

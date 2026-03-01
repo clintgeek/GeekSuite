@@ -42,8 +42,7 @@ function NoteViewer() {
         selectedNote,
         pendingNote,
         isLoadingSelected,
-        selectedError,
-        deleteNote
+        selectedError
     } = useNoteStore();
 
     const noteToView = selectedNote || pendingNote;
@@ -59,13 +58,7 @@ function NoteViewer() {
         setDeleteDialogOpen(true);
     };
 
-    const handleDeleteConfirm = async () => {
-        if (!noteToView) return;
-        const success = await deleteNote(noteToView._id);
-        if (success) {
-            navigate('/');
-        }
-    };
+
 
     const handleUnlock = () => {
         alert('Unlock functionality not implemented yet.');
@@ -410,7 +403,7 @@ function NoteViewer() {
                 <DeleteNoteDialog
                     open={deleteDialogOpen}
                     onClose={() => setDeleteDialogOpen(false)}
-                    onConfirm={handleDeleteConfirm}
+                    noteId={noteToView?._id}
                     noteTitle={noteToView?.title}
                 />
             </Box>

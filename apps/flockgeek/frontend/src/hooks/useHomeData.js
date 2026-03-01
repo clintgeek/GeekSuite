@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import client from '../services/apiClient';
+import { toLocalDateString } from '../utils/dateUtils';
 
 const isDev = typeof import.meta !== 'undefined' ? Boolean(import.meta.env?.DEV) : process.env.NODE_ENV !== 'production';
 
@@ -44,13 +45,17 @@ export default function useHomeData() {
       try {
         // Parallel requests
         const now = new Date();
-        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-        const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString();
+        const todayStr = toLocalDateString(now);
+
+        // Rolling 14-day window for egg average
+        const fourteenDaysAgo = new Date(now);
+        fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+        const rollingStartStr = toLocalDateString(fourteenDaysAgo);
 
         const reqs = await Promise.allSettled([
           client.get('/birds'),
           client.get('/groups'),
-          client.get(`/egg-production?from=${ todayStart }&to=${ todayEnd }`),
+          client.get(`/egg-production?startDate=${ rollingStartStr }&endDate=${ todayStr }`),
           client.get('/hatch-events?limit=5')
         ]);
 
@@ -72,29 +77,15 @@ export default function useHomeData() {
         const groupsCount = extractTotal(groups, 'groups') || groupsList.length;
         const layingHensCount = birdsList.filter(b => (b.sex === 'hen' || b.sex === 'pullet') && b.status === 'active').length;
 
-        // Calculate average daily egg production rate across all locations
-        // Each record has eggsCount and daysObserved, so rate = eggsCount / daysObserved
-        // We want the sum of all location daily rates
+        // Rolling 14-day average: total eggs collected in the window ÷ 14 days
         let avgDailyEggs = 0;
         if (eggsList.length > 0) {
-          // Group by locationId and get the most recent record for each location
-          const byLocation = {};
+          let totalEggs = 0;
           for (const e of eggsList) {
-            const locKey = e.locationId || 'unknown';
-            const recordDate = new Date(e.date || e.createdAt);
-            if (!byLocation[locKey] || recordDate > new Date(byLocation[locKey].date || byLocation[locKey].createdAt)) {
-              byLocation[locKey] = e;
-            }
+            totalEggs += (e.eggsCount || 0);
           }
-          // Sum up daily rates from each location's most recent record
-          for (const e of Object.values(byLocation)) {
-            const days = e.daysObserved || 1;
-            const rate = (e.eggsCount || 0) / days;
-            avgDailyEggs += rate;
-          }
+          avgDailyEggs = Math.round((totalEggs / 14) * 10) / 10;
         }
-        // Round to 1 decimal place
-        avgDailyEggs = Math.round(avgDailyEggs * 10) / 10;
 
         if (isDev) {
           const debugPayload = {

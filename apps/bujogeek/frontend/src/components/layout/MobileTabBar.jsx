@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Box, Typography, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Divider } from '@mui/material';
+import { Box, Typography, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
-import { CalendarCheck, ClipboardCheck, Calendar, MoreHorizontal, LayoutTemplate, Settings, LogOut } from 'lucide-react';
+import { CalendarCheck, ClipboardCheck, Calendar, Hash, MoreHorizontal, LogOut } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { MOBILE_TAB_HEIGHT } from '../../utils/constants';
@@ -11,6 +11,7 @@ const tabs = [
   { label: 'Today', icon: CalendarCheck, path: '/today' },
   { label: 'Review', icon: ClipboardCheck, path: '/review' },
   { label: 'Plan', icon: Calendar, path: '/plan' },
+  { label: 'Tags', icon: Hash, path: '/tags' },
   { label: 'More', icon: MoreHorizontal, path: null },
 ];
 
@@ -126,21 +127,6 @@ const MobileTabBar = () => {
             }}
           />
           <List>
-            <ListItem disablePadding>
-              <ListItemButton
-                onClick={() => {
-                  navigate('/templates');
-                  setMoreOpen(false);
-                }}
-                sx={{ borderRadius: '8px' }}
-              >
-                <ListItemIcon sx={{ minWidth: 40 }}>
-                  <LayoutTemplate size={20} />
-                </ListItemIcon>
-                <ListItemText primary="Templates" primaryTypographyProps={{ fontSize: '0.9375rem' }} />
-              </ListItemButton>
-            </ListItem>
-            <Divider sx={{ my: 0.5 }} />
             <ListItem disablePadding>
               <ListItemButton
                 onClick={handleLogout}

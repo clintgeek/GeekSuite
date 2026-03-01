@@ -152,9 +152,7 @@ const BloodPressure = () => {
 
   const loadHRSeries = async (date) => {
     try {
-      const today = new Date();
-      const local = new Date(today.getTime() - today.getTimezoneOffset() * 60000);
-      const ymd = (date || local.toISOString().split('T')[0]);
+      const ymd = (date || getTodayLocal());
       const resp = await fitnessGeekService.get(`/fitness/garmin/heart-rate/${ymd}`);
       const data = resp.data || resp?.data?.data || resp;
       if (data && data.series) setHrSeries(data.series);

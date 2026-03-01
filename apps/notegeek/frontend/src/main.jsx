@@ -1,5 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { registerSW } from 'virtual:pwa-register'
 
 // Import ReactFlow styles
 import 'reactflow/dist/style.css';
@@ -12,6 +13,13 @@ import { configureUserPlatform } from './bootstrapUser'
 import App from './App.jsx'
 import AppBootstrapper from './AppBootstrapper.jsx'
 import ThemeModeProvider from './theme/ThemeModeProvider.jsx'
+
+registerSW({
+  immediate: true,
+  onNeedRefresh() {
+    window.location.reload();
+  },
+});
 
 configureUserPlatform();
 

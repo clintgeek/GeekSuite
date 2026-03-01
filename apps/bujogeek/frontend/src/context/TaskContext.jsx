@@ -383,7 +383,13 @@ const TaskProvider = ({ children }) => {
         );
 
         const newDateKey = updatedTask.dueDate ?
-          new Date(updatedTask.dueDate).toISOString().split('T')[0] :
+          (() => {
+            const d = new Date(updatedTask.dueDate);
+            const y = d.getUTCFullYear();
+            const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+            const day = String(d.getUTCDate()).padStart(2, '0');
+            return `${y}-${m}-${day}`;
+          })() :
           'no-date';
 
         const newTasks = { ...prevTasks };

@@ -17,6 +17,7 @@ import {
     Clear as ClearIcon,
 } from '@mui/icons-material';
 import useNoteStore from '../store/noteStore';
+import { formatRelativeTime } from '../utils/dateUtils';
 
 const TYPE_COLORS = {
     text: { light: '#5B50A8', dark: '#A99DF0' },
@@ -31,21 +32,6 @@ function getPreview(content) {
     if (typeof content === 'string' && content.startsWith('data:image/')) return '';
     const plain = String(content).replace(/<[^>]+>/g, '');
     return plain.split(/\r?\n/).filter(Boolean).slice(0, 1).join(' ').slice(0, 120);
-}
-
-function formatRelativeTime(date) {
-    const now = new Date();
-    const then = new Date(date);
-    const diffMs = now - then;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-    if (diffMins < 1) return 'just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
-    return then.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
 function ResultRow({ note }) {

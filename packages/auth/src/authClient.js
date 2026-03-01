@@ -2,6 +2,9 @@ const BROADCAST_CHANNEL = 'geeksuite-auth';
 const LOGOUT_EVENT_TYPE = 'LOGOUT';
 const REFRESH_INTERVAL_MS = 50 * 60 * 1000; // 50 minutes
 
+const GEEK_TOKEN_KEY = 'geek_token';
+const GEEK_REFRESH_TOKEN_KEY = 'geek_refresh_token';
+
 let refreshTimerId = null;
 let isRefreshing = false;
 let refreshQueue = [];
@@ -9,6 +12,36 @@ let refreshQueue = [];
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
+
+function getStoredToken() {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(GEEK_TOKEN_KEY);
+}
+
+function getStoredRefreshToken() {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(GEEK_REFRESH_TOKEN_KEY);
+}
+
+function saveTokens(token, refreshToken) {
+  if (typeof window === 'undefined') return;
+  if (token) localStorage.setItem(GEEK_TOKEN_KEY, token);
+  if (refreshToken) localStorage.setItem(GEEK_REFRESH_TOKEN_KEY, refreshToken);
+}
+
+function clearTokens() {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(GEEK_TOKEN_KEY);
+  localStorage.removeItem(GEEK_REFRESH_TOKEN_KEY);
+}
+
+function getTokensFromUrl() {
+  if (typeof window === 'undefined') return {};
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('token');
+  const refreshToken = params.get('refreshToken');
+  return { token, refreshToken };
+}
 
 function getBaseGeekUrl() {
   if (typeof import.meta !== 'undefined' && import.meta.env) {
@@ -69,14 +102,24 @@ function processRefreshQueue(error, token = null) {
 
 async function doTokenRefresh() {
   const apiBase = getApiBase();
+  const refreshToken = getStoredRefreshToken();
+  
+  const headers = { 'Content-Type': 'application/json' };
+  const body = {};
+  
+  if (refreshToken) {
+    body.refreshToken = refreshToken;
+  }
+
   const res = await fetch(`${apiBase}/auth/refresh`, {
     method: 'POST',
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({}),
+    headers,
+    body: JSON.stringify(body),
   });
 
   if (res.status === 401 || res.status === 403) {
+    clearTokens();
     const error = new Error('Session expired');
     error.status = res.status;
     throw error;
@@ -85,6 +128,10 @@ async function doTokenRefresh() {
   const data = await res.json();
   if (!res.ok || data?.success === false) {
     throw new Error(data?.message || 'Token refresh failed');
+  }
+
+  if (data.token) {
+    saveTokens(data.token, data.refreshToken);
   }
 
   return data;
@@ -102,10 +149,33 @@ export async function getMe() {
   const apiBase = getApiBase();
 
   const fetchMe = async () => {
+    // 1. Check for tokens in URL (SSO redirect)
+    const { token: urlToken, refreshToken: urlRefreshToken } = getTokensFromUrl();
+    if (urlToken) {
+      saveTokens(urlToken, urlRefreshToken);
+      // Clean up URL
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('token');
+        url.searchParams.delete('refreshToken');
+        window.history.replaceState({}, '', url.toString());
+      } catch (e) {
+        console.warn('Failed to clean up URL params', e);
+      }
+    }
+
+    // 2. Prepare request with stored token if available
+    const token = getStoredToken();
+    const headers = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     return await fetch(`${apiBase}/me`, {
       method: 'GET',
       credentials: 'include',
       cache: 'no-store',
+      headers
     });
   };
 
@@ -138,7 +208,10 @@ export async function getMe() {
     }
   }
 
-  if (res.status === 401) return null;
+  if (res.status === 401) {
+    clearTokens();
+    return null;
+  }
 
   const json = await res.json().catch(() => null);
   if (!res.ok || json?.success === false) {
@@ -175,15 +248,22 @@ export function loginRedirect(appName, returnTo, mode = 'login') {
  */
 export async function logout() {
   const apiBase = getApiBase();
+  const token = getStoredToken();
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   try {
     await fetch(`${apiBase}/auth/logout`, {
       method: 'POST',
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
+      headers
     });
   } catch {
     // ignore
   }
+  clearTokens();
   broadcastLogout();
 }
 
@@ -247,13 +327,28 @@ export function stopRefreshTimer() {
 }
 
 /**
- * Configure an Axios instance with a response interceptor to handle
- * automatic token refreshing on 401/403 unauthorized responses.
+ * Configure an Axios instance with request and response interceptors.
+ * - Request interceptor: Adds the stored token to the Authorization header.
+ * - Response interceptor: Handles automatic token refreshing on 401/403 responses.
  *
  * @param {import('axios').AxiosInstance} axiosInstance - The Axios instance to configure
  * @param {Function} [onSessionExpired] - Callback to trigger user logout or UI notification when the refresh fails
  */
 export function setupAxiosInterceptors(axiosInstance, onSessionExpired) {
+  // Add a request interceptor to include the token in the Authorization header
+  axiosInstance.interceptors.request.use(
+    (config) => {
+      const token = getStoredToken();
+      if (token && !config.headers['Authorization']) {
+        config.headers['Authorization'] = `Bearer ${token}`;
+      }
+      return config;
+    },
+    (error) => {
+      return Promise.reject(error);
+    }
+  );
+
   // Add a response interceptor
   axiosInstance.interceptors.response.use(
     (response) => {
@@ -285,7 +380,11 @@ export function setupAxiosInterceptors(axiosInstance, onSessionExpired) {
             // Process the queue queue
             processRefreshQueue(null);
 
-            // Re-run the original request that failed
+            // Re-run the original request with the new token
+            const token = getStoredToken();
+            if (token) {
+                originalRequest.headers['Authorization'] = `Bearer ${token}`;
+            }
             return axiosInstance(originalRequest);
           } catch (refreshError) {
             // Refresh failed, queue needs to be rejected
@@ -305,7 +404,11 @@ export function setupAxiosInterceptors(axiosInstance, onSessionExpired) {
             refreshQueue.push({ resolve, reject });
           })
             .then(() => {
-              // Once refresh completes, replay original request
+              // Once refresh completes, replay original request with the new token
+              const token = getStoredToken();
+              if (token) {
+                  originalRequest.headers['Authorization'] = `Bearer ${token}`;
+              }
               return axiosInstance(originalRequest);
             })
             .catch((err) => {

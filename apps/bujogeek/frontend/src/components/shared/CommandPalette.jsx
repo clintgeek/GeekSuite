@@ -3,6 +3,8 @@ import { Box, InputBase, Typography, Modal, Backdrop, useTheme } from '@mui/mate
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Plus } from 'lucide-react';
 import { colors } from '../../theme/colors';
+import TaskInputHelpButton from '../tasks/TaskInputHelpButton';
+import parseTaskInput from '../../utils/parseTaskInput';
 
 const CommandPalette = ({ open, onClose, onCreateTask }) => {
   const theme = useTheme();
@@ -22,46 +24,17 @@ const CommandPalette = ({ open, onClose, onCreateTask }) => {
     const trimmed = value.trim();
     if (!trimmed) return;
 
-    // Parse tags
-    const tags = [];
-    const tagMatches = trimmed.match(/#(\w+)/g);
-    if (tagMatches) {
-      tagMatches.forEach((t) => tags.push(t.replace('#', '')));
+    const parsed = parseTaskInput(trimmed);
+    if (!parsed.content) return;
+
+    // Default dueDate to today 9am local when the user doesn't specify one
+    if (!parsed.dueDate) {
+      const today = new Date();
+      today.setHours(9, 0, 0, 0);
+      parsed.dueDate = today;
     }
 
-    // Parse priority
-    let priority = null;
-    if (/!high/i.test(trimmed)) priority = 1;
-    else if (/!medium/i.test(trimmed)) priority = 2;
-    else if (/!low/i.test(trimmed)) priority = 3;
-
-    // Parse date shortcuts
-    let dueDate = new Date().toISOString();
-    if (/@tomorrow/i.test(trimmed)) {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      dueDate = tomorrow.toISOString();
-    } else if (/@next\s*week/i.test(trimmed)) {
-      const nextWeek = new Date();
-      nextWeek.setDate(nextWeek.getDate() + 7);
-      dueDate = nextWeek.toISOString();
-    }
-
-    // Clean content
-    const content = trimmed
-      .replace(/#\w+/g, '')
-      .replace(/!(high|medium|low)/i, '')
-      .replace(/@(tomorrow|next\s*week)/i, '')
-      .trim();
-
-    if (!content) return;
-
-    onCreateTask?.({
-      content,
-      tags: tags.length > 0 ? tags : undefined,
-      priority: priority || undefined,
-      dueDate,
-    });
+    onCreateTask?.(parsed);
 
     setValue('');
     onClose();
@@ -159,13 +132,14 @@ const CommandPalette = ({ open, onClose, onCreateTask }) => {
                   flexWrap: 'wrap',
                 }}
               >
+                <HintChip label="*task" />
+                <HintChip label="@event" />
                 <HintChip label="#tag" />
                 <HintChip label="!high" />
-                <HintChip label="!medium" />
-                <HintChip label="!low" />
-                <HintChip label="@tomorrow" />
-                <HintChip label="@next week" />
+                <HintChip label="/tomorrow" />
+                <HintChip label="^note" />
                 <Box sx={{ flex: 1 }} />
+                <TaskInputHelpButton compact />
                 <Typography
                   sx={{
                     fontSize: '0.6875rem',

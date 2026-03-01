@@ -58,11 +58,11 @@ loginStreakSchema.statics.getOrCreateStreak = async function(userId) {
 // Method to record a login and update streak
 loginStreakSchema.methods.recordLogin = async function() {
   const today = new Date();
-  today.setHours(0, 0, 0, 0); // Start of day
+  today.setUTCHours(0, 0, 0, 0); // Start of day
 
   const lastLogin = this.last_login_date ? new Date(this.last_login_date) : null;
   if (lastLogin) {
-    lastLogin.setHours(0, 0, 0, 0); // Start of day
+    lastLogin.setUTCHours(0, 0, 0, 0); // Start of day
   }
 
   const yesterday = new Date(today);

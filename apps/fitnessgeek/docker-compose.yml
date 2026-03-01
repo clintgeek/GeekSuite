@@ -5,6 +5,7 @@ services:
       dockerfile: Dockerfile
     container_name: fitnessgeek-backend
     environment:
+      - TZ=America/Chicago
       - NODE_ENV=production
       - PORT=5002
       - MONGODB_URI=${MONGODB_URI}

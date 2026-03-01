@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { toLocalDateString } from "../utils/dateUtils";
 import {
   Paper,
   Box,
@@ -119,7 +120,7 @@ const QuickHarvestEntry = ({ onSuccess, locations = [] }) => {
 
     try {
       const payload = {
-        date: new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0],
+        date: toLocalDateString(new Date()),
         eggsCount: eggCount,
         daysObserved: daysSinceLastHarvest,
         source: "manual"

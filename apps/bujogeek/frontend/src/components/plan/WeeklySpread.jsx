@@ -96,15 +96,7 @@ const WeeklySpread = () => {
       {isLoading ? (
         <SkeletonLoader rows={5} />
       ) : (
-        <Box
-          sx={{
-            display: { xs: 'flex', md: 'grid' },
-            gridTemplateColumns: { md: 'repeat(7, 1fr)' },
-            gap: { xs: 0, md: 0.5 },
-            overflowX: { xs: 'auto', md: 'visible' },
-            flexDirection: { xs: 'column', md: 'unset' },
-          }}
-        >
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
           {days.map((day) => {
             const key = format(day, 'yyyy-MM-dd');
             const dayTasks = tasksByDay[key] || [];
@@ -114,20 +106,21 @@ const WeeklySpread = () => {
               <Box
                 key={key}
                 sx={{
-                  minWidth: { xs: 'auto', md: 0 },
-                  borderRadius: '8px',
+                  borderRadius: '10px',
                   border: `1px solid ${today ? colors.primary[200] : colors.ink[100]}`,
                   backgroundColor: today ? `${colors.primary[50]}80` : colors.parchment.paper,
                   overflow: 'hidden',
-                  mb: { xs: 1, md: 0 },
                 }}
               >
-                {/* Day header */}
+                {/* Day header row */}
                 <Box
                   sx={{
-                    px: 1.5,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1.5,
+                    px: 2,
                     py: 1,
-                    borderBottom: `1px solid ${today ? colors.primary[200] : colors.ink[100]}`,
+                    borderBottom: dayTasks.length > 0 ? `1px solid ${today ? colors.primary[200] : colors.ink[100]}` : 'none',
                     backgroundColor: today ? colors.primary[50] : colors.ink[50],
                   }}
                 >
@@ -138,44 +131,44 @@ const WeeklySpread = () => {
                       color: today ? colors.primary[600] : colors.ink[400],
                       textTransform: 'uppercase',
                       letterSpacing: '0.04em',
+                      minWidth: 32,
                     }}
                   >
                     {format(day, 'EEE')}
                   </Typography>
                   <Typography
                     sx={{
-                      fontSize: '1.125rem',
+                      fontSize: '1rem',
                       fontWeight: today ? 600 : 500,
                       color: today ? colors.primary[600] : colors.ink[800],
                       lineHeight: 1.2,
                     }}
                   >
-                    {format(day, 'd')}
+                    {format(day, 'MMM d')}
                   </Typography>
+                  {dayTasks.length === 0 && (
+                    <Typography
+                      sx={{ fontSize: '0.75rem', color: colors.ink[300], fontStyle: 'italic', ml: 1 }}
+                    >
+                      No tasks
+                    </Typography>
+                  )}
                 </Box>
 
-                {/* Day tasks */}
-                <Box sx={{ minHeight: 60 }}>
-                  {dayTasks.length === 0 ? (
-                    <Box sx={{ py: 2, px: 1.5 }}>
-                      <Typography
-                        sx={{ fontSize: '0.6875rem', color: colors.ink[300], fontStyle: 'italic' }}
-                      >
-                        No tasks
-                      </Typography>
-                    </Box>
-                  ) : (
-                    dayTasks.map((task) => (
-                      <Box key={task._id} sx={{ borderBottom: `1px solid ${colors.ink[50]}` }}>
+                {/* Tasks */}
+                {dayTasks.length > 0 && (
+                  <Box>
+                    {dayTasks.map((task) => (
+                      <Box key={task._id} sx={{ borderBottom: `1px solid ${colors.ink[50]}`, '&:last-child': { borderBottom: 'none' } }}>
                         <TaskRow
                           task={task}
                           onStatusToggle={handleStatusToggle}
                           onDelete={handleDelete}
                         />
                       </Box>
-                    ))
-                  )}
-                </Box>
+                    ))}
+                  </Box>
+                )}
               </Box>
             );
           })}

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { toLocalDateString } from "../utils/dateUtils";
 import {
   Container,
   Paper,
@@ -194,7 +195,7 @@ const EggLogPage = () => {
 
   const handleAddRecord = () => {
     setAddFormData({
-      date: new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0],
+      date: toLocalDateString(new Date()),
       eggsCount: "",
       locationId: locations.length === 1 ? locations[0]._id : "",
       daysObserved: 1,

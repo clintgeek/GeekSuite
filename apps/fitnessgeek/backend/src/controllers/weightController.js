@@ -2,6 +2,15 @@ const Weight = require('../models/Weight');
 const cacheService = require('../services/cacheService');
 const logger = require('../config/logger');
 
+function toUtcMidnight(dateStr) {
+  if (typeof dateStr === 'string' && dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d));
+  }
+  const date = new Date(dateStr);
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
 /**
  * Get all weight logs for a user
  */
@@ -97,22 +106,15 @@ const createWeightLog = async (req, res) => {
     }
 
     // Check if weight log already exists for the same date
-    let checkDate;
-    if (log_date) {
-      if (typeof log_date === 'string' && log_date.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        checkDate = new Date(log_date + 'T00:00:00');
-      } else {
-        checkDate = new Date(log_date);
-      }
-    } else {
-      checkDate = new Date();
-    }
+    const checkDate = log_date ? toUtcMidnight(log_date) : toUtcMidnight(new Date());
+    const checkEnd = new Date(checkDate);
+    checkEnd.setUTCHours(23, 59, 59, 999);
 
     const existingLog = await Weight.findOne({
       userId,
       log_date: {
-        $gte: new Date(checkDate.getFullYear(), checkDate.getMonth(), checkDate.getDate(), 0, 0, 0, 0),
-        $lt: new Date(checkDate.getFullYear(), checkDate.getMonth(), checkDate.getDate(), 23, 59, 59, 999)
+        $gte: checkDate,
+        $lt: checkEnd
       }
     });
 
@@ -124,19 +126,7 @@ const createWeightLog = async (req, res) => {
       });
     }
 
-    // Handle date properly to avoid timezone issues
-    let parsedDate;
-    if (log_date) {
-      // If it's just a date string (YYYY-MM-DD), treat it as local time
-      if (typeof log_date === 'string' && log_date.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        // Create date in local timezone by adding time component
-        parsedDate = new Date(log_date + 'T00:00:00');
-      } else {
-        parsedDate = new Date(log_date);
-      }
-    } else {
-      parsedDate = new Date();
-    }
+    const parsedDate = log_date ? toUtcMidnight(log_date) : toUtcMidnight(new Date());
 
     const weightLog = new Weight({
       userId,
@@ -206,13 +196,7 @@ const updateWeightLog = async (req, res) => {
       weightLog.weight_value = parseFloat(parseFloat(weight_value).toFixed(1));
     }
     if (log_date !== undefined) {
-      // Handle date properly to avoid timezone issues
-      if (typeof log_date === 'string' && log_date.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        // Create date in local timezone by adding time component
-        weightLog.log_date = new Date(log_date + 'T00:00:00');
-      } else {
-        weightLog.log_date = new Date(log_date);
-      }
+      weightLog.log_date = toUtcMidnight(log_date);
     }
     if (notes !== undefined) {
       weightLog.notes = notes;
@@ -343,7 +327,7 @@ const getWeightStats = async (req, res) => {
 
     // Calculate weekly and monthly changes using start-of-day boundaries
     const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const startOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
     const startOfWeekAgo = new Date(startOfToday.getTime() - 7 * 24 * 60 * 60 * 1000);
     const startOfMonthAgo = new Date(startOfToday.getTime() - 30 * 24 * 60 * 60 * 1000);
 

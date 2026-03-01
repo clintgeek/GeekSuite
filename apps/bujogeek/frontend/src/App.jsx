@@ -17,6 +17,7 @@ import TodayPage from './pages/TodayPage';
 import ReviewPage from './pages/ReviewPage';
 import PlanPage from './pages/PlanPage';
 import TemplatesPage from './pages/TemplatesPage';
+import TagsPage from './pages/TagsPage';
 import { useTaskContext } from './context/TaskContext.jsx';
 import { useMemo, useState, useEffect } from 'react';
 
@@ -55,6 +56,7 @@ function AppWithAuth() {
         <Route path="/plan/:subview" element={<ProtectedRoute><PlanPage /></ProtectedRoute>} />
         <Route path="/templates" element={<ProtectedRoute><TemplatesPage /></ProtectedRoute>} />
         <Route path="/templates/*" element={<ProtectedRoute><TemplatesPage /></ProtectedRoute>} />
+        <Route path="/tags" element={<ProtectedRoute><TagsPage /></ProtectedRoute>} />
 
         {/* Legacy redirects */}
         <Route path="/tasks/daily" element={<Navigate to="/today" replace />} />

@@ -103,9 +103,9 @@ class AIInsightsService {
    */
   async getFoodLogContext(userId, startDate, endDate) {
     const start = new Date(startDate);
-    start.setHours(0, 0, 0, 0);
+    start.setUTCHours(0, 0, 0, 0);
     const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999);
+    end.setUTCHours(23, 59, 59, 999);
 
     const logs = await FoodLog.find({
       user_id: userId,
@@ -143,7 +143,7 @@ class AIInsightsService {
     };
 
     logs.forEach(log => {
-      const dateKey = format(new Date(log.log_date), 'yyyy-MM-dd');
+      const dateKey = new Date(log.log_date).toISOString().split('T')[0];
       const totals = calcNutrition(log);
 
       if (!dailyTotals[dateKey]) {
@@ -507,10 +507,10 @@ Format as 3-5 key findings with brief explanations.`;
   async generateWeeklyReport(userId, userToken, options = {}) {
     const days = options.days || 7;
     const start = options.start || format(subDays(new Date(), days - 1), 'yyyy-MM-dd');
-    
+
     // Generate cache key based on userId, start date, and days
     const cacheKey = cacheService.key('ai', 'user', userId, 'weekly-report', start, days);
-    
+
     // Try cache first - 6 hour TTL for AI insights
     return cacheService.wrap(cacheKey, async () => {
       const report = await foodReportService.getOverview(userId, {
@@ -560,10 +560,10 @@ Guidelines:
   async generateTrendWatch(userId, userToken, options = {}) {
     const days = options.days || 30;
     const start = options.start || format(subDays(new Date(), days - 1), 'yyyy-MM-dd');
-    
+
     // Generate cache key
     const cacheKey = cacheService.key('ai', 'user', userId, 'trend-watch', start, days);
-    
+
     // Try cache first - 12 hour TTL for trend analysis
     return cacheService.wrap(cacheKey, async () => {
       const trends = await foodReportService.getTrends(userId, {

@@ -259,7 +259,7 @@ export const deleteNote = async (req, res) => {
       return res.status(403).json({ message: 'Cannot delete an encrypted note yet.' });
     }
 
-    await Note.deleteOne({ _id: noteId, userId });
+    await note.deleteOne(); // Use the instance method for deletion
     res.status(200).json({ message: 'Note deleted successfully' });
   } catch (error) {
     console.error('Error deleting note:', error);

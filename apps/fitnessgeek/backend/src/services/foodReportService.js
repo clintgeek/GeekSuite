@@ -8,10 +8,10 @@ const METRICS = ['calories', 'protein', 'carbs', 'fat', 'fiber', 'sugar'];
 class FoodReportService {
   async getOverview(userId, { start, days = 7 } = {}) {
     const startDate = start ? new Date(start) : subDays(new Date(), days - 1);
-    startDate.setHours(0, 0, 0, 0);
+    startDate.setUTCHours(0, 0, 0, 0);
     const endDate = new Date(startDate);
-    endDate.setDate(endDate.getDate() + (days - 1));
-    endDate.setHours(23, 59, 59, 999);
+    endDate.setUTCDate(endDate.getUTCDate() + (days - 1));
+    endDate.setUTCHours(23, 59, 59, 999);
 
     const logs = await this.#fetchLogs(userId, startDate, endDate);
     if (!logs.length) {
@@ -46,10 +46,10 @@ class FoodReportService {
 
   async getTrends(userId, { start, days = 30 } = {}) {
     const startDate = start ? new Date(start) : subDays(new Date(), days - 1);
-    startDate.setHours(0, 0, 0, 0);
+    startDate.setUTCHours(0, 0, 0, 0);
     const endDate = new Date(startDate);
-    endDate.setDate(endDate.getDate() + (days - 1));
-    endDate.setHours(23, 59, 59, 999);
+    endDate.setUTCDate(endDate.getUTCDate() + (days - 1));
+    endDate.setUTCHours(23, 59, 59, 999);
 
     const logs = await this.#fetchLogs(userId, startDate, endDate);
     const daily = this.#buildDaily(logs);
@@ -108,7 +108,7 @@ class FoodReportService {
       log_date: { $gte: startDate, $lte: endDate }
     }).sort({ log_date: 1 }).lean();
     return entries.map(entry => ({
-      date: format(new Date(entry.log_date), 'yyyy-MM-dd'),
+      date: new Date(entry.log_date).toISOString().split('T')[0],
       weight: entry.weight_value
     }));
   }
@@ -116,7 +116,7 @@ class FoodReportService {
   #buildDaily(logs) {
     const map = new Map();
     logs.forEach(log => {
-      const dateKey = format(new Date(log.log_date), 'yyyy-MM-dd');
+      const dateKey = new Date(log.log_date).toISOString().split('T')[0];
       if (!map.has(dateKey)) {
         map.set(dateKey, { date: dateKey, ...this.#emptyTotals(), entries: 0 });
       }

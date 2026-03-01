@@ -11,9 +11,11 @@ export default defineConfig(({ command, mode }) => {
     plugins: [
       react(),
       VitePWA({
+        injectRegister: false,
         registerType: 'autoUpdate',
-        manifest: '/manifest.json',
+        manifest: false,
         workbox: {
+          cleanupOutdatedCaches: true,
           globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
           runtimeCaching: [
             {

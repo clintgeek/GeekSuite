@@ -1,5 +1,5 @@
 import { Box, Typography, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Divider, Avatar } from '@mui/material';
-import { CalendarCheck, ClipboardCheck, Calendar, LayoutTemplate, LogOut } from 'lucide-react';
+import { CalendarCheck, ClipboardCheck, Calendar, Hash, LogOut } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '@mui/material/styles';
@@ -10,10 +10,7 @@ const navItems = [
   { label: 'Today', icon: CalendarCheck, path: '/today' },
   { label: 'Review', icon: ClipboardCheck, path: '/review' },
   { label: 'Plan', icon: Calendar, path: '/plan' },
-];
-
-const bottomItems = [
-  { label: 'Templates', icon: LayoutTemplate, path: '/templates' },
+  { label: 'Tags', icon: Hash, path: '/tags' },
 ];
 
 const Sidebar = () => {
@@ -120,37 +117,6 @@ const Sidebar = () => {
       {/* Bottom Section */}
       <Divider sx={{ borderColor: chromeDivider }} />
       <List sx={{ px: 1, py: 1 }}>
-        {bottomItems.map((item) => {
-          const Icon = item.icon;
-          const active = isActive(item.path);
-          return (
-            <ListItem key={item.path} disablePadding>
-              <ListItemButton
-                onClick={() => navigate(item.path)}
-                sx={{
-                  py: 1,
-                  px: 2,
-                  borderRadius: '6px',
-                  color: active ? 'rgba(255,248,240,0.85)' : 'rgba(255,248,240,0.4)',
-                  backgroundColor: active ? 'rgba(96, 152, 204, 0.09)' : 'transparent',
-                  '&:hover': {
-                    backgroundColor: 'rgba(255, 248, 240, 0.04)',
-                    color: 'rgba(255,248,240,0.7)',
-                  },
-                }}
-              >
-                <ListItemIcon sx={{ color: 'inherit', minWidth: 36 }}>
-                  <Icon size={18} />
-                </ListItemIcon>
-                <ListItemText
-                  primary={item.label}
-                  primaryTypographyProps={{ fontSize: '0.8125rem' }}
-                />
-              </ListItemButton>
-            </ListItem>
-          );
-        })}
-
         {/* User / Logout */}
         <ListItem disablePadding>
           <ListItemButton

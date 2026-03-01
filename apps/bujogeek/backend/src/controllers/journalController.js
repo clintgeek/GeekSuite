@@ -2,6 +2,11 @@ import JournalEntry from '../models/JournalEntry.js';
 import Template from '../models/Template.js';
 import { handleError } from '../utils/errorHandler.js';
 
+function toUtcMidnight(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d));
+}
+
 // Create a new journal entry
 export const createEntry = async (req, res) => {
   try {
@@ -50,8 +55,16 @@ export const getEntries = async (req, res) => {
 
     if (startDate || endDate) {
       query.date = {};
-      if (startDate) query.date.$gte = new Date(startDate);
-      if (endDate) query.date.$lte = new Date(endDate);
+      if (startDate) {
+        const start = toUtcMidnight(startDate);
+        start.setUTCHours(0, 0, 0, 0);
+        query.date.$gte = start;
+      }
+      if (endDate) {
+        const end = toUtcMidnight(endDate);
+        end.setUTCHours(23, 59, 59, 999);
+        query.date.$lte = end;
+      }
     }
 
     if (tags) {

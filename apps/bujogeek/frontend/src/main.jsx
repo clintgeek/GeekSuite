@@ -1,10 +1,16 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { registerSW } from 'virtual:pwa-register';
 import { configureUserPlatform } from './bootstrapUser';
 import App from './App.jsx';
 import './index.css';
 
-
+registerSW({
+  immediate: true,
+  onNeedRefresh() {
+    window.location.reload();
+  },
+});
 
 configureUserPlatform();
 

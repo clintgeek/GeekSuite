@@ -1,6 +1,15 @@
 const BloodPressure = require('../models/BloodPressure');
 const logger = require('../config/logger');
 
+function toUtcMidnight(dateStr) {
+  if (typeof dateStr === 'string' && dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d));
+  }
+  const date = new Date(dateStr);
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
 /**
  * Get all blood pressure logs for a user
  */
@@ -104,22 +113,15 @@ const createBPLog = async (req, res) => {
     }
 
     // Check if BP log already exists for the same date
-    let checkDate;
-    if (log_date) {
-      if (typeof log_date === 'string' && log_date.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        checkDate = new Date(log_date + 'T00:00:00');
-      } else {
-        checkDate = new Date(log_date);
-      }
-    } else {
-      checkDate = new Date();
-    }
+    const checkDate = log_date ? toUtcMidnight(log_date) : toUtcMidnight(new Date());
+    const checkEnd = new Date(checkDate);
+    checkEnd.setUTCHours(23, 59, 59, 999);
 
     const existingLog = await BloodPressure.findOne({
       userId,
       log_date: {
         $gte: checkDate,
-        $lt: new Date(checkDate.getTime() + 24 * 60 * 60 * 1000)
+        $lt: checkEnd
       }
     });
 
@@ -131,19 +133,7 @@ const createBPLog = async (req, res) => {
       });
     }
 
-    // Handle date properly to avoid timezone issues
-    let logDate;
-    if (log_date) {
-      // If it's just a date string (YYYY-MM-DD), treat it as local time
-      if (typeof log_date === 'string' && log_date.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        // Create date in local timezone by adding time component
-        logDate = new Date(log_date + 'T00:00:00');
-      } else {
-        logDate = new Date(log_date);
-      }
-    } else {
-      logDate = new Date();
-    }
+    const logDate = log_date ? toUtcMidnight(log_date) : toUtcMidnight(new Date());
 
     const bpLog = new BloodPressure({
       userId,
@@ -212,13 +202,7 @@ const updateBPLog = async (req, res) => {
     bpLog.diastolic = parseInt(diastolic);
     bpLog.pulse = pulse ? parseInt(pulse) : null;
     if (log_date) {
-      // Handle date properly to avoid timezone issues
-      if (typeof log_date === 'string' && log_date.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        // Create date in local timezone by adding time component
-        bpLog.log_date = new Date(log_date + 'T00:00:00');
-      } else {
-        bpLog.log_date = new Date(log_date);
-      }
+      bpLog.log_date = toUtcMidnight(log_date);
     }
     if (notes !== undefined) bpLog.notes = notes;
 

@@ -14,10 +14,10 @@ import HatchLogPage from "./pages/HatchLogPage";
 
 // Protected route component
 const ProtectedRoute = ({ element }) => {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
   const location = useLocation();
 
-  if (isLoading) {
+  if (loading) {
     return (
       <Box
         sx={{
@@ -38,9 +38,9 @@ const ProtectedRoute = ({ element }) => {
 };
 
 const App = () => {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
 
-  if (isLoading) {
+  if (loading) {
     return (
       <Box
         sx={{

@@ -3,6 +3,7 @@ services:
     image: geeksuite/bujogeek:latest
     container_name: bujogeek
     environment:
+      - TZ=America/Chicago
       - NODE_ENV=production
       - PORT=5005
       - DB_URI=${DB_URI}

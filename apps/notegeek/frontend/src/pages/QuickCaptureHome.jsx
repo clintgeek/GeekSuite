@@ -20,6 +20,7 @@ import {
 import { NOTE_TYPES } from '../components/notes/NoteTypeRouter';
 import useNoteStore from '../store/noteStore';
 import useAuthStore from '../store/authStore';
+import { formatRelativeTime } from '../utils/dateUtils';
 
 // ─── Type shortcuts on the scratch surface ───────────────────────────────────
 const TYPE_PILLS = [
@@ -37,21 +38,6 @@ function getGreeting() {
   if (h < 12) return 'Good morning';
   if (h < 18) return 'Good afternoon';
   return 'Good evening';
-}
-
-function formatRelativeTime(date) {
-  const now = new Date();
-  const then = new Date(date);
-  const diffMs = now - then;
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-  if (diffMins < 1) return 'just now';
-  if (diffMins < 60) return `${diffMins}m`;
-  if (diffHours < 24) return `${diffHours}h`;
-  if (diffDays < 7) return `${diffDays}d`;
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w`;
-  return then.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
 function getTypeColor(type, palette) {

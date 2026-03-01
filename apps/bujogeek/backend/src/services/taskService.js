@@ -1,6 +1,5 @@
 import Task from '../models/Task.js';
 import TaskOrder from '../models/TaskOrder.js';
-import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, parseISO } from 'date-fns';
 
 class TaskService {
   constructor() {
@@ -12,9 +11,17 @@ class TaskService {
    * @param {Date} date - The date to convert
    * @returns {Date} UTC date
    */
-  getUtcDate(date) {
-    const d = new Date(date);
-    return new Date(d.getTime() + d.getTimezoneOffset() * 60000);
+  /**
+   * Parse a YYYY-MM-DD string to a UTC midnight Date.
+   * This is timezone-safe regardless of server locale.
+   */
+  toUtcMidnight(dateStr) {
+    if (dateStr instanceof Date) {
+      return new Date(Date.UTC(dateStr.getUTCFullYear(), dateStr.getUTCMonth(), dateStr.getUTCDate()));
+    }
+    const str = typeof dateStr === 'string' ? dateStr : new Date(dateStr).toISOString();
+    const [y, m, d] = str.split('T')[0].split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d));
   }
 
   /**
@@ -28,19 +35,19 @@ class TaskService {
    */
   async getTasksForDateRange({ userId, startDate, endDate, viewType }) {
     const query = {
-      createdBy: userId,
-      isBacklog: false
+      createdBy: userId
     };
 
-    // Convert input date to UTC
-    const utcDate = this.getUtcDate(startDate);
-    const utcYear = utcDate.getUTCFullYear();
-    const utcMonth = utcDate.getUTCMonth();
-    const utcDay = utcDate.getUTCDate();
+    // Calendar views should not include backlog tasks.
+    // The "all" view powers Backlog/Review screens and must include them.
+    if (viewType !== 'all') {
+      query.isBacklog = false;
+    }
 
-    // Create start and end of day in UTC
-    const startOfDayDate = new Date(Date.UTC(utcYear, utcMonth, utcDay, 0, 0, 0, 0));
-    const endOfDayDate = new Date(Date.UTC(utcYear, utcMonth, utcDay, 23, 59, 59, 999));
+    // Parse the incoming date string to UTC midnight boundaries
+    const startOfDayDate = this.toUtcMidnight(startDate);
+    const endOfDayDate = new Date(startOfDayDate);
+    endOfDayDate.setUTCHours(23, 59, 59, 999);
 
     // Add date range based on view type
     switch (viewType) {
@@ -82,7 +89,9 @@ class TaskService {
         break;
       case 'weekly':
         // Get start of week (Sunday) in UTC
-        const startOfWeekDate = new Date(Date.UTC(utcYear, utcMonth, utcDay - utcDate.getUTCDay(), 0, 0, 0, 0));
+        const startOfWeekDate = new Date(startOfDayDate);
+          startOfWeekDate.setUTCDate(startOfWeekDate.getUTCDate() - startOfWeekDate.getUTCDay());
+          startOfWeekDate.setUTCHours(0, 0, 0, 0);
         const endOfWeekDate = new Date(startOfWeekDate);
         endOfWeekDate.setUTCDate(endOfWeekDate.getUTCDate() + 6);
         endOfWeekDate.setUTCHours(23, 59, 59, 999);
@@ -120,8 +129,8 @@ class TaskService {
         break;
       case 'monthly':
         // Get start of month in UTC
-        const startOfMonthDate = new Date(Date.UTC(utcYear, utcMonth, 1, 0, 0, 0, 0));
-        const endOfMonthDate = new Date(Date.UTC(utcYear, utcMonth + 1, 0, 23, 59, 59, 999));
+        const startOfMonthDate = new Date(Date.UTC(startOfDayDate.getUTCFullYear(), startOfDayDate.getUTCMonth(), 1, 0, 0, 0, 0));
+        const endOfMonthDate = new Date(Date.UTC(startOfDayDate.getUTCFullYear(), startOfDayDate.getUTCMonth() + 1, 0, 23, 59, 59, 999));
 
         query.$or = [
           // 1. Tasks due in this month (regardless of status)
@@ -155,7 +164,7 @@ class TaskService {
         ];
         break;
       case 'all':
-        // For 'all' view, we want to group tasks by their relevant dates
+        // For 'all' view, include normal tasks plus explicit backlog tasks.
         query.$or = [
           // 1. All tasks with due dates
           {
@@ -169,6 +178,13 @@ class TaskService {
           {
             dueDate: null,
             status: 'pending'
+          },
+          // 4. Tasks explicitly moved to backlog
+          {
+            status: 'migrated_back'
+          },
+          {
+            isBacklog: true
           }
         ];
         break;
@@ -239,9 +255,9 @@ class TaskService {
 
   formatDateKey(date) {
     const d = new Date(date);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(d.getUTCDate()).padStart(2, '0');
     return `${y}-${m}-${day}`;
   }
 
@@ -337,6 +353,37 @@ class TaskService {
     return this.taskModel.findById(taskId)
       .populate('parentTask', 'content status')
       .populate('subtasks');
+  }
+
+  /**
+   * Get all distinct tags for a user, with usage counts
+   * @param {string} userId
+   * @returns {Promise<Array<{ tag: string, count: number }>>}
+   */
+  async getTagsForUser(userId) {
+    return this.taskModel.aggregate([
+      { $match: { createdBy: new (await import('mongoose')).default.Types.ObjectId(userId) } },
+      { $unwind: '$tags' },
+      { $group: { _id: '$tags', count: { $sum: 1 } } },
+      { $sort: { count: -1, _id: 1 } },
+      { $project: { _id: 0, tag: '$_id', count: 1 } }
+    ]);
+  }
+
+  /**
+   * Get all tasks matching given tags for a user, sorted chronologically
+   * @param {string} userId
+   * @param {string[]} tags - Tags to filter by (AND logic)
+   * @returns {Promise<Array>}
+   */
+  async getTasksByTags(userId, tags) {
+    const query = {
+      createdBy: userId,
+      tags: { $all: tags }
+    };
+    const tasks = await this.taskModel.find(query)
+      .sort({ dueDate: -1, createdAt: -1 });
+    return tasks.map(t => t.toObject());
   }
 }
 

@@ -216,11 +216,11 @@ dailySummarySchema.statics.updateFromLogs = async function(userId, date) {
 
 // Static method to get summary for date range
 dailySummarySchema.statics.getSummaryRange = async function(userId, startDate, endDate) {
-  const start = new Date(startDate);
-  start.setHours(0, 0, 0, 0);
+  const start = toUtcDate(startDate);
+  start.setUTCHours(0, 0, 0, 0);
 
-  const end = new Date(endDate);
-  end.setHours(23, 59, 59, 999);
+  const end = toUtcDate(endDate);
+  end.setUTCHours(23, 59, 59, 999);
 
   return await this.find({
     user_id: userId,

@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { Box, Typography, Chip, IconButton, Tooltip, useTheme } from '@mui/material';
+import { useState, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Box, Typography, Chip, IconButton, Tooltip, useTheme, useMediaQuery } from '@mui/material';
 import { Pencil, Trash2 } from 'lucide-react';
 import { format, formatDistanceToNowStrict } from 'date-fns';
 import TaskCheckbox from './TaskCheckbox';
@@ -15,12 +16,25 @@ const priorityDotColors = {
 
 const TaskRow = ({ task, onStatusToggle, onEdit, onDelete }) => {
   const theme = useTheme();
+  const navigate = useNavigate();
   const isDark = theme.palette.mode === 'dark';
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [hovered, setHovered] = useState(false);
+  const [tapped, setTapped] = useState(false);
   const isCompleted = task.status === 'completed';
   const { level, days } = getTaskAge(task);
   const agingColor = isCompleted ? colors.ink[200] : getAgingColor(level);
   const agingLabel = getAgingLabel(days);
+
+  // On mobile, tap the row to toggle action buttons; tap again or tap elsewhere to dismiss.
+  const handleRowClick = useCallback((e) => {
+    if (!isMobile) return;
+    // Don't toggle if the tap was on an interactive element (checkbox, button, chip)
+    if (e.target.closest('button, input, [role="button"], .MuiChip-root')) return;
+    setTapped((prev) => !prev);
+  }, [isMobile]);
+
+  const showActions = isMobile ? tapped : hovered;
 
   const cleanContent = (content) => {
     if (!content) return '';
@@ -64,6 +78,7 @@ const TaskRow = ({ task, onStatusToggle, onEdit, onDelete }) => {
 
   return (
     <Box
+      onClick={handleRowClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       sx={{
@@ -73,7 +88,7 @@ const TaskRow = ({ task, onStatusToggle, onEdit, onDelete }) => {
         py: { xs: 1.25, sm: 1 },
         px: { xs: 1, sm: 2 },
         borderLeft: `3px solid ${agingColor}`,
-        backgroundColor: hovered ? (isDark ? 'rgba(255,255,255,0.04)' : `${colors.ink[100]}60`) : 'transparent',
+        backgroundColor: (hovered || tapped) ? (isDark ? 'rgba(255,255,255,0.04)' : `${colors.ink[100]}60`) : 'transparent',
         transition: 'background-color 0.12s ease',
         cursor: 'default',
         position: 'relative',
@@ -175,13 +190,21 @@ const TaskRow = ({ task, onStatusToggle, onEdit, onDelete }) => {
                 key={tag}
                 label={tag}
                 size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate(`/tags?tag=${encodeURIComponent(tag)}`);
+                }}
                 sx={{
                   height: 20,
                   fontSize: '0.6875rem',
                   fontWeight: 500,
+                  cursor: 'pointer',
                   backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : colors.ink[100],
                   color: theme.palette.text.secondary,
                   border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : colors.ink[200]}`,
+                  '&:hover': {
+                    backgroundColor: isDark ? 'rgba(255,255,255,0.14)' : colors.ink[200],
+                  },
                   '& .MuiChip-label': { px: 0.75 },
                 }}
               />
@@ -204,17 +227,26 @@ const TaskRow = ({ task, onStatusToggle, onEdit, onDelete }) => {
         )}
       </Box>
 
-      {/* Hover actions (desktop) */}
-      {hovered && (
+      {/* Actions — hover on desktop, tap on mobile */}
+      {showActions && (onEdit || onDelete) && (
         <Box
           sx={{
-            display: { xs: 'none', sm: 'flex' },
+            display: 'flex',
             alignItems: 'center',
             gap: 0.25,
-            position: 'absolute',
-            right: 8,
-            top: '50%',
-            transform: 'translateY(-50%)',
+            // Desktop: absolute overlay
+            ...(!isMobile && {
+              position: 'absolute',
+              right: 8,
+              top: '50%',
+              transform: 'translateY(-50%)',
+            }),
+            // Mobile: inline, push in from the right
+            ...(isMobile && {
+              flexShrink: 0,
+              alignSelf: 'center',
+              ml: 0.5,
+            }),
           }}
         >
           {onEdit && (

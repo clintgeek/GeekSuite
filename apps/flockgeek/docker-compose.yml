@@ -22,6 +22,7 @@ services:
     ports:
       - "5001:4094"
     environment:
+      TZ: America/Chicago
       NODE_ENV: development # Keep existing setting
       PORT: 4094
       JWT_SECRET: change-me

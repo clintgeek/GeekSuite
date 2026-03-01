@@ -20,7 +20,6 @@ import {
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import LogoutIcon from '@mui/icons-material/Logout';
-import CodeIcon from '@mui/icons-material/Code';
 import ViewListIcon from '@mui/icons-material/ViewList';
 import ViewModuleIcon from '@mui/icons-material/ViewModule';
 import CalendarViewWeekIcon from '@mui/icons-material/CalendarViewWeek';
@@ -151,23 +150,6 @@ const AppLayout = ({
       <Divider sx={{ borderColor: 'rgba(255, 255, 255, 0.1)', mt: 'auto' }} />
 
       <List sx={{ px: 1, py: 1 }}>
-        <ListItem disablePadding>
-          <ListItemButton
-            onClick={() => navigate('/templates')}
-            sx={{
-              py: 1.25,
-              px: 2,
-              borderRadius: 0,
-              color: '#94a3b8',
-              '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.05)', color: '#ffffff' },
-            }}
-          >
-            <ListItemIcon sx={{ color: 'inherit', minWidth: 36 }}>
-              <CodeIcon sx={{ fontSize: 20 }} />
-            </ListItemIcon>
-            <ListItemText primary="Templates" primaryTypographyProps={{ fontSize: '0.875rem' }} />
-          </ListItemButton>
-        </ListItem>
         <ListItem disablePadding>
           <ListItemButton
             onClick={handleLogout}
@@ -307,20 +289,6 @@ const AppLayout = ({
           <List sx={{ px: 1, py: 1 }}>
             <ListItem disablePadding>
               <ListItemButton
-                onClick={() => {
-                  navigate('/templates');
-                  setDrawerOpen(false);
-                }}
-                sx={{ color: '#94a3b8', '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.05)', color: '#ffffff' } }}
-              >
-                <ListItemIcon sx={{ color: 'inherit', minWidth: 36 }}>
-                  <CodeIcon sx={{ fontSize: 20 }} />
-                </ListItemIcon>
-                <ListItemText primary="Templates" />
-              </ListItemButton>
-            </ListItem>
-            <ListItem disablePadding>
-              <ListItemButton
                 onClick={handleLogout}
                 sx={{ color: '#94a3b8', '&:hover': { backgroundColor: 'rgba(239, 68, 68, 0.12)', color: '#ef4444' } }}
               >
@@ -341,15 +309,6 @@ const AppLayout = ({
         transformOrigin={{ horizontal: 'right', vertical: 'top' }}
         anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
       >
-        <MenuItem
-          onClick={() => {
-            setAccountMenuAnchor(null);
-            navigate('/templates');
-          }}
-        >
-          Templates
-        </MenuItem>
-        <Divider />
         <MenuItem onClick={handleLogout} sx={{ color: theme.palette.error.main }}>
           Logout
         </MenuItem>

@@ -221,3 +221,25 @@ export const saveDailyTaskOrder = async (req, res) => {
     handleError(res, error);
   }
 };
+
+// Get all distinct tags for the current user
+export const getUserTags = async (req, res) => {
+  try {
+    const tags = await taskService.getTagsForUser(req.user._id);
+    res.json(tags);
+  } catch (error) {
+    handleError(res, error);
+  }
+};
+
+// Get all tasks matching a tag
+export const getTasksByTag = async (req, res) => {
+  try {
+    const { tag } = req.params;
+    if (!tag) return res.status(400).json({ message: 'Tag is required' });
+    const tasks = await taskService.getTasksByTags(req.user._id, [tag]);
+    res.json(tasks);
+  } catch (error) {
+    handleError(res, error);
+  }
+};

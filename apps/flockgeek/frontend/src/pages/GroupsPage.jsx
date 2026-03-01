@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { toLocalDateString } from "../utils/dateUtils";
 import {
   Container,
   Paper,
@@ -127,8 +128,8 @@ const GroupsPage = () => {
       name: group.name || "",
       purpose: group.purpose || "",
       type: group.type || "",
-      startDate: group.startDate ? new Date(group.startDate).toISOString().split('T')[0] : "",
-      endDate: group.endDate ? new Date(group.endDate).toISOString().split('T')[0] : "",
+      startDate: group.startDate ? toLocalDateString(group.startDate) : "",
+      endDate: group.endDate ? toLocalDateString(group.endDate) : "",
       description: group.description || "",
       notes: group.notes || ""
     });
@@ -170,7 +171,7 @@ const GroupsPage = () => {
       name: "",
       purpose: "",
       type: "",
-      startDate: new Date().toISOString().split('T')[0],
+      startDate: toLocalDateString(new Date()),
       endDate: "",
       description: "",
       notes: ""
@@ -381,9 +382,9 @@ const GroupsPage = () => {
                     </Typography>
                   )}
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                    {group.startDate ? new Date(group.startDate).toLocaleDateString() : "No start"}
+                    {group.startDate ? new Date(group.startDate).toLocaleDateString(undefined, { timeZone: 'UTC' }) : "No start"}
                     {" → "}
-                    {group.endDate ? new Date(group.endDate).toLocaleDateString() : "Ongoing"}
+                    {group.endDate ? new Date(group.endDate).toLocaleDateString(undefined, { timeZone: 'UTC' }) : "Ongoing"}
                   </Typography>
                   {members.length === 0 ? (
                     <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>

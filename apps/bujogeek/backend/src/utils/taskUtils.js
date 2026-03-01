@@ -25,9 +25,9 @@ export const getTasksForDates = (tasks, options = {}) => {
   } = options;
 
   // Normalize dates
-  today.setHours(0, 0, 0, 0);
-  if (startDate) startDate.setHours(0, 0, 0, 0);
-  if (endDate) endDate.setHours(0, 0, 0, 0);
+  today.setUTCHours(0, 0, 0, 0);
+  if (startDate) startDate.setUTCHours(0, 0, 0, 0);
+  if (endDate) endDate.setUTCHours(0, 0, 0, 0);
 
   // Generate all dates in the range
   const dateRange = generateDateRange(startDate, endDate);
@@ -69,12 +69,12 @@ export const getTasksForDates = (tasks, options = {}) => {
 const determineTaskDate = (task, today, options) => {
   const { includeCompleted, includeUnscheduled, includePastDue } = options;
   const taskDueDate = task.dueDate ? new Date(task.dueDate) : null;
-  if (taskDueDate) taskDueDate.setHours(0, 0, 0, 0);
+  if (taskDueDate) taskDueDate.setUTCHours(0, 0, 0, 0);
 
   // Completed tasks show on completion date
   if (task.status === 'completed' && includeCompleted) {
     const completedDate = new Date(task.updatedAt);
-    completedDate.setHours(0, 0, 0, 0);
+    completedDate.setUTCHours(0, 0, 0, 0);
     return completedDate;
   }
 

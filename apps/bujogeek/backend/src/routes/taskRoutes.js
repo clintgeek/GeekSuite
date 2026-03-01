@@ -13,7 +13,9 @@ import {
   getMonthlyTasks,
   getAllTasks,
   migrateTaskToFuture,
-  saveDailyTaskOrder
+  saveDailyTaskOrder,
+  getUserTags,
+  getTasksByTag
 } from '../controllers/taskController.js';
 
 const router = express.Router();
@@ -28,6 +30,10 @@ router.get('/all', getAllTasks);
 router.get('/daily', getDailyTasks);
 router.get('/weekly', getWeeklyTasks);
 router.get('/monthly', getMonthlyTasks);
+
+// Tag endpoints (must be before /:id)
+router.get('/tags', getUserTags);
+router.get('/by-tag/:tag', getTasksByTag);
 
 // Task CRUD operations
 router.post('/', createTask);

@@ -14,7 +14,7 @@ router.get('/meal-suggestions', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    today.setUTCHours(0, 0, 0, 0);
 
     // Get today's logs
     const logs = await FoodLog.find({
@@ -186,7 +186,7 @@ router.post('/ask', authenticateToken, async (req, res) => {
       log_date: { $gte: weekAgo }
     }).populate('food_item_id');
 
-    const avgCalories = logs.length > 0 
+    const avgCalories = logs.length > 0
       ? logs.reduce((sum, log) => {
           const multiplier = log.servings || 1;
           return sum + (log.food_item_id.nutrition.calories_per_serving * multiplier);

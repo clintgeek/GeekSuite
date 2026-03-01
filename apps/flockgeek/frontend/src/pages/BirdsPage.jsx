@@ -35,6 +35,7 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import client from "../services/apiClient";
+import { toLocalDateString } from "../utils/dateUtils";
 
 const BirdsPage = () => {
   const [birds, setBirds] = useState([]);
@@ -59,9 +60,8 @@ const BirdsPage = () => {
 
   const formatDateForInput = (value) => {
     if (!value) return "";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "";
-    return date.toISOString().split("T")[0];
+    const str = toLocalDateString(value);
+    return str || "";
   };
 
   const emptyEditForm = {
@@ -681,7 +681,7 @@ const BirdsPage = () => {
                                     />
                                   ) : (
                                     <Typography variant="body2">
-                                      {bird.hatchDate ? new Date(bird.hatchDate).toLocaleDateString() : "-"}
+                                      {bird.hatchDate ? new Date(bird.hatchDate).toLocaleDateString(undefined, { timeZone: 'UTC' }) : "-"}
                                     </Typography>
                                   )}
                                 </Box>
@@ -974,7 +974,7 @@ const BirdsPage = () => {
                                       <>
                                         <Typography variant="subtitle2" color="text.secondary">Status Date</Typography>
                                         <Typography variant="body1">
-                                          {bird.statusDate ? new Date(bird.statusDate).toLocaleDateString() : '-'}
+                                          {bird.statusDate ? new Date(bird.statusDate).toLocaleDateString(undefined, { timeZone: 'UTC' }) : '-'}
                                         </Typography>
                                       </>
                                     )}

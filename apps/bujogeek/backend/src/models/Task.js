@@ -144,4 +144,7 @@ taskSchema.methods.carryForward = function() {
 
 const Task = mongoose.model('Task', taskSchema);
 
+// Ensure index for tag queries
+taskSchema.index({ createdBy: 1, tags: 1 });
+
 export default Task;

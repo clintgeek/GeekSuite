@@ -273,9 +273,9 @@ const MonthlyLog = ({ date, onDateChange }) => {
       return tasks.filter(task => {
         const taskDate = task.dueDate ? new Date(task.dueDate) : null;
         return taskDate &&
-          taskDate.getFullYear() === date.getFullYear() &&
-          taskDate.getMonth() === date.getMonth() &&
-          taskDate.getDate() === date.getDate();
+          taskDate.getUTCFullYear() === date.getFullYear() &&
+          taskDate.getUTCMonth() === date.getMonth() &&
+          taskDate.getUTCDate() === date.getDate();
       });
     }
 

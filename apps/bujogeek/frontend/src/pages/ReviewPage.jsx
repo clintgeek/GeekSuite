@@ -9,6 +9,7 @@ import { getTaskAge } from '../utils/taskAging';
 import { normalizeTasks } from '../utils/normalizeTasks';
 import { colors } from '../theme/colors';
 import { format, addDays } from 'date-fns';
+import { toLocalDateString } from '../utils/dateUtils';
 
 const ReviewPage = () => {
   const [mode, setMode] = useState('endofday');
@@ -70,16 +71,17 @@ const ReviewPage = () => {
 
   const handleKeep = useCallback(async (task) => {
     // Keep on today — update dueDate to today
-    await updateTask(task._id, { ...task, dueDate: new Date().toISOString() });
+    const todayStr = toLocalDateString(new Date());
+    await updateTask(task._id, { ...task, dueDate: todayStr });
     markReviewed(task._id);
   }, [updateTask, markReviewed]);
 
   const handleMoveForward = useCallback(async (task) => {
     // Move to tomorrow
-    const tomorrow = addDays(new Date(), 1);
+    const tomorrowStr = toLocalDateString(addDays(new Date(), 1));
     await updateTask(task._id, {
       ...task,
-      dueDate: tomorrow.toISOString(),
+      dueDate: tomorrowStr,
       status: 'migrated_future',
     });
     markReviewed(task._id);

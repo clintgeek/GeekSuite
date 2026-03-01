@@ -13,8 +13,7 @@ router.get('/today', async (req, res) => {
     const userId = req.user.id;
     // Local today in YYYY-MM-DD
     const now = new Date();
-    const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
-    const today = local.toISOString().split('T')[0];
+    const today = now.toISOString().split('T')[0];
 
     const summary = await DailySummary.updateFromLogs(userId, today);
 
@@ -143,8 +142,9 @@ router.get('/week/:startDate', async (req, res) => {
 
     // Calculate end date (7 days from start)
     const start = new Date(startDate);
+    start.setUTCHours(0, 0, 0, 0);
     const end = new Date(start);
-    end.setDate(end.getDate() + 6);
+    end.setUTCDate(end.getUTCDate() + 6);
 
     const summaries = await DailySummary.getSummaryRange(userId, start, end);
 

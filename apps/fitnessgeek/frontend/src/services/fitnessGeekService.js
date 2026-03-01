@@ -1,4 +1,5 @@
 import { apiService } from './apiService.js';
+import { formatDateLocal } from '../utils/dateUtils.js';
 import logger from '../utils/logger.js';
 
 // FitnessGeek service for food logging and nutrition tracking
@@ -384,9 +385,7 @@ export const fitnessGeekService = {
   // Format date for API
   formatDate: (date) => {
     if (typeof date === 'string') return date;
-    // Format as YYYY-MM-DD in local time (avoid UTC shift)
-    const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-    return local.toISOString().split('T')[0];
+    return formatDateLocal(date);
   },
 
   // Get meal type display name

@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { toLocalDateString } from '../../utils/dateUtils';
 import {
   List,
   ListItem,
@@ -82,12 +83,16 @@ const TaskList = ({ tasks = [], viewType = 'daily' }) => {
       const date = new Date(dateString);
       // Check if date is valid
       if (isNaN(date.getTime())) {
-        return getLocalDate(new Date()); // fallback to today if invalid
+        return getLocalDate(new Date().toISOString()); // fallback to today if invalid
       }
-      return new Date(date.getFullYear(), date.getMonth(), date.getDate()).toISOString().split('T')[0];
+      // Use UTC accessors since calendar dates are stored as UTC midnight
+      const y = date.getUTCFullYear();
+      const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const d = String(date.getUTCDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
     } catch (error) {
       console.warn('Invalid date:', dateString);
-      return getLocalDate(new Date()); // fallback to today if error
+      return getLocalDate(new Date().toISOString()); // fallback to today if error
     }
   };
 
@@ -220,7 +225,7 @@ const TaskList = ({ tasks = [], viewType = 'daily' }) => {
 
     // Persist order for daily only
     try {
-      const dateKey = new Date(currentDate || new Date()).toISOString().split('T')[0];
+      const dateKey = toLocalDateString(currentDate || new Date());
       setLocalOrder(updated.map(t => t._id));
       await saveDailyOrder(dateKey, updated.map(t => t._id));
     } catch (err) {

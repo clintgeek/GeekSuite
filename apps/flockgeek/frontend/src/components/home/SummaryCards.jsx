@@ -4,7 +4,7 @@ const entries = [
   { key: "birdsCount", label: "Total Birds", unit: "active" },
   { key: "layingHensCount", label: "Laying Hens" },
   { key: "groupsCount", label: "Groups" },
-  { key: "avgDailyEggs", label: "Eggs / day", unit: "avg" },
+  { key: "avgDailyEggs", label: "Eggs / day", unit: "14d avg" },
   { key: "hatchCount", label: "Hatches", unit: "recent" }
 ];
 

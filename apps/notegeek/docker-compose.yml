@@ -24,6 +24,7 @@ services:
         - COMPOSE_BAKE=true
     container_name: notegeek-backend
     environment:
+      - TZ=America/Chicago
       - NODE_ENV=production
       - PORT=${PORT}
       - DB_URI=${DB_URI}
