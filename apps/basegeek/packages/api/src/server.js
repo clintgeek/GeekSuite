@@ -51,6 +51,7 @@ const allowedOrigins = [
   'https://geeksuite.clintgeek.com', // GeekSuite public portal
   'https://notegeek.clintgeek.com',  // NoteGeek production
   'https://fitnessgeek.clintgeek.com',  // FitnessGeek production
+  'https://bujogeek.clintgeek.com',  // BujoGeek production
   'https://bookgeek.clintgeek.com',  // epub library
   'https://storygeek.clintgeek.com',  // StoryGeek production
   'https://flockgeek.clintgeek.com',  // FlockGeek production
