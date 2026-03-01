@@ -1,0 +1,20 @@
+{
+    "name": "@geeksuite/apollo-server-utils",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "main": "src/index.js",
+    "exports": {
+        ".": "./src/index.js"
+    },
+    "dependencies": {
+        "@apollo/server": "^4.10.0",
+        "@apollo/subgraph": "^2.7.0",
+        "graphql": "^16.8.1",
+        "graphql-tag": "^2.12.6",
+        "@geeksuite/graphql-config": "workspace:*"
+    },
+    "peerDependencies": {
+        "express": ">=4"
+    }
+}

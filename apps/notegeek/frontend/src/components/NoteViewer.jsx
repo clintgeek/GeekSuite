@@ -12,8 +12,9 @@ import {
     alpha,
     Fade,
 } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
-import useNoteStore from '../store/noteStore';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useQuery } from '@apollo/client';
+import { GET_NOTE_BY_ID } from '../graphql/queries';
 import LockIcon from '@mui/icons-material/Lock';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -38,15 +39,17 @@ function NoteViewer() {
     const isDark = theme.palette.mode === 'dark';
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-    const {
-        selectedNote,
-        pendingNote,
-        isLoadingSelected,
-        selectedError
-    } = useNoteStore();
-
-    const noteToView = selectedNote || pendingNote;
+    const { id } = useParams();
     const navigate = useNavigate();
+
+    const { data, loading: isLoadingSelected, error } = useQuery(GET_NOTE_BY_ID, {
+        variables: { id },
+        skip: !id,
+        fetchPolicy: 'cache-and-network',
+    });
+
+    const noteToView = data?.note;
+    const selectedError = error?.message;
 
     const handleEdit = () => {
         if (noteToView) {
@@ -403,7 +406,7 @@ function NoteViewer() {
                 <DeleteNoteDialog
                     open={deleteDialogOpen}
                     onClose={() => setDeleteDialogOpen(false)}
-                    noteId={noteToView?._id}
+                    noteId={noteToView?.id || noteToView?._id}
                     noteTitle={noteToView?.title}
                 />
             </Box>

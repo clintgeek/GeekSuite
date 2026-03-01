@@ -13,6 +13,8 @@ import taskRoutes from './src/routes/taskRoutes.js';
 import authRoutes from './src/routes/authRoutes.js';
 import { authenticate } from './src/middleware/authMiddleware.js';
 import { meHandler } from '@geeksuite/user/server';
+import { setupGeekSuiteSubgraph } from '@geeksuite/apollo-server-utils';
+import { typeDefs, resolvers } from './src/graphql/index.js';
 
 // Get the directory name
 const __filename = fileURLToPath(import.meta.url);
@@ -40,7 +42,7 @@ app.use(morgan('dev'));
 
 // Debug logging for auth headers
 app.use((req, res, next) => {
-  console.log(`[DEBUG] ${ req.method } ${ req.url }`);
+  console.log(`[DEBUG] ${req.method} ${req.url}`);
   console.log(`[DEBUG] Headers:`, JSON.stringify(req.headers, null, 2));
   console.log(`[DEBUG] Cookies:`, req.headers.cookie);
   next();
@@ -56,10 +58,10 @@ app.use('/api/auth', authRoutes);
 app.get('/api/me', (req, res, next) => {
   const hasCookie = !!req.headers.cookie?.includes('geek_token');
   const hasAuth = !!req.headers.authorization;
-  console.log(`[DEBUG /api/me] cookie=${ hasCookie } auth=${ hasAuth }`);
+  console.log(`[DEBUG /api/me] cookie=${hasCookie} auth=${hasAuth}`);
   next();
 }, authenticate, (req, res, next) => {
-  console.log(`[DEBUG /api/me] after auth: geek.user=${ !!req.geek?.user }`);
+  console.log(`[DEBUG /api/me] after auth: geek.user=${!!req.geek?.user}`);
   next();
 }, meHandler());
 
@@ -76,7 +78,10 @@ app.get('/api/health', (req, res) => {
 });
 
 // SPA fallback - serve index.html for all non-API routes (must be LAST)
-app.get('*', (req, res) => {
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/graphql')) {
+    return next();
+  }
   res.sendFile(path.join(publicPath, 'index.html'));
 });
 
@@ -101,7 +106,14 @@ const connectDB = async () => {
 };
 
 // Start server
-app.listen(PORT, async () => {
-  await connectDB();
-  console.log(`Server running on port ${ PORT }`);
+setupGeekSuiteSubgraph(app, {
+  typeDefs,
+  resolvers,
+  path: '/graphql'
+}).then(() => {
+  app.listen(PORT, async () => {
+    await connectDB();
+    console.log(`Server running on port ${PORT}`);
+    console.log(`BujoGeek GraphQL Subgraph ready at /graphql`);
+  });
 });

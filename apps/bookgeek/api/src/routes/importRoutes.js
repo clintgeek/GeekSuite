@@ -1,5 +1,5 @@
 import express from "express";
-import { Database } from "bun:sqlite";
+import Database from "better-sqlite3";
 import fs from "fs/promises";
 import path from "path";
 import multer from "multer";
@@ -40,7 +40,7 @@ router.post("/calibre", async (req, res) => {
     await Book.deleteMany({ source: "calibre-import" });
     const db = new Database(dbPath);
 
-    const baseQuery = db.query(`
+    const baseQuery = db.prepare(`
       SELECT
         b.id AS id,
         b.title AS title,
@@ -409,7 +409,7 @@ router.post("/calibre/rescan", authenticateToken, async (req, res) => {
 
     const db = new Database(dbPath);
 
-    const baseQuery = db.query(`
+    const baseQuery = db.prepare(`
       SELECT
         b.id AS id,
         b.title AS title,

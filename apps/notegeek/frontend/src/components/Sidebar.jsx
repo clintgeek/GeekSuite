@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
     List,
@@ -30,6 +30,13 @@ import useTagStore from '../store/tagStore';
 import useAuthStore from '../store/authStore';
 import useNoteStore from '../store/noteStore';
 import TagContextMenu from './TagContextMenu';
+import { gql, useQuery } from '@apollo/client';
+
+const GET_TAGS = gql`
+  query GetTags {
+    tags
+  }
+`;
 
 // Color palette for tag indicators — earthy, muted
 const TAG_COLORS = [
@@ -57,27 +64,17 @@ function Sidebar({ closeNavbar }) {
     const navigate = useNavigate();
     const theme = useTheme();
     const isDark = theme.palette.mode === 'dark';
-    const { tags, fetchTags, clearTags, isLoading: tagsLoading, error: tagsError } = useTagStore();
-    const { logout, user } = useAuthStore();
+    // Still import clearTags for logout
+    const { clearTags } = useTagStore();
+    const { logout } = useAuthStore();
     const { clearNotes } = useNoteStore();
     const [tagFilter, setTagFilter] = useState('');
-    const [hasFetchedTags, setHasFetchedTags] = useState(false);
 
-    const fetchUserTags = useCallback(async () => {
-        if (user?.id && !hasFetchedTags) {
-            await fetchTags();
-            setHasFetchedTags(true);
-        }
-    }, [user, fetchTags, hasFetchedTags]);
-
-    useEffect(() => {
-        fetchUserTags();
-    }, [fetchUserTags]);
-
-    // Reset hasFetchedTags when user changes
-    useEffect(() => {
-        setHasFetchedTags(false);
-    }, [user?.id]);
+    const { data, loading: tagsLoading, error } = useQuery(GET_TAGS, {
+        fetchPolicy: 'cache-and-network'
+    });
+    const tags = data?.tags || [];
+    const tagsError = error?.message;
 
     const handleLinkClick = () => {
         closeNavbar?.();

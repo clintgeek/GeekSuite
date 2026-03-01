@@ -9,6 +9,8 @@ import { fileURLToPath } from "url";
 import { env } from "./config/env.js";
 import apiRouter from "./routes/api.js";
 import { logger } from "./utils/logger.js";
+import { setupGeekSuiteSubgraph } from "@geeksuite/apollo-server-utils";
+import { typeDefs, resolvers } from "./graphql/index.js";
 
 const app = express();
 
@@ -49,7 +51,10 @@ app.use("/api", apiRouter);
 
 app.use(express.static(publicPath));
 
-app.get("*", (req, res) => {
+app.get("*", (req, res, next) => {
+  if (req.path.startsWith('/graphql')) {
+    return next();
+  }
   res.sendFile(path.join(publicPath, "index.html"));
 });
 
@@ -62,6 +67,14 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: "Unexpected server error" });
 });
 
-app.listen(env.port, () => {
-  logger.info(`FlockGeek API listening on port ${env.port}`);
+// Setup GraphQL Subgraph
+setupGeekSuiteSubgraph(app, {
+  typeDefs,
+  resolvers,
+  path: '/graphql'
+}).then(() => {
+  app.listen(env.port, () => {
+    logger.info(`FlockGeek API listening on port ${env.port}`);
+    logger.info(`FlockGeek GraphQL Subgraph ready at /graphql`);
+  });
 });

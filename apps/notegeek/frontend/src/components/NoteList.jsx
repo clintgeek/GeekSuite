@@ -11,6 +11,21 @@ import {
 } from '@mui/material';
 import useNoteStore from '../store/noteStore';
 import { formatRelativeTime } from '../utils/dateUtils';
+import { gql, useQuery } from '@apollo/client';
+
+const GET_NOTES = gql`
+    query GetNotes($tag: String, $prefix: String) {
+        notes(tag: $tag, prefix: $prefix) {
+            id
+            title
+            content
+            type
+            tags
+            createdAt
+            updatedAt
+        }
+    }
+`;
 
 const TYPE_COLORS = {
     text: { light: '#5B50A8', dark: '#A99DF0' },
@@ -41,7 +56,7 @@ function NoteRow({ note }) {
     return (
         <ButtonBase
             component={Link}
-            to={`/notes/${note._id}`}
+            to={`/notes/${note.id || note._id}`}
             sx={{
                 display: 'flex',
                 alignItems: 'center',
@@ -160,19 +175,15 @@ function NoteRow({ note }) {
 }
 
 function NoteList({ tag, prefix }) {
-    const notes = useNoteStore((state) => state.notes);
-    const isLoadingList = useNoteStore((state) => state.isLoadingList);
-    const listError = useNoteStore((state) => state.listError);
-    const fetchNotes = useNoteStore((state) => state.fetchNotes);
+    const { loading: isLoadingList, error, data } = useQuery(GET_NOTES, {
+        variables: { tag, prefix },
+        fetchPolicy: 'cache-and-network',
+    });
 
-    useEffect(() => {
-        const filters = {};
-        if (tag) filters.tag = tag;
-        if (prefix) filters.prefix = prefix;
-        fetchNotes(filters);
-    }, [fetchNotes, tag, prefix]);
+    const notes = data?.notes || [];
+    const listError = error?.message;
 
-    if (isLoadingList) {
+    if (isLoadingList && !data) {
         return (
             <Box sx={{ py: 2, maxWidth: 680, mx: 'auto' }}>
                 {[1, 2, 3, 4, 5, 6].map((i) => (
@@ -225,7 +236,7 @@ function NoteList({ tag, prefix }) {
 
             <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                 {sortedNotes.map((note) => (
-                    <NoteRow key={note._id} note={note} />
+                    <NoteRow key={note.id || note._id} note={note} />
                 ))}
             </Box>
         </Box>

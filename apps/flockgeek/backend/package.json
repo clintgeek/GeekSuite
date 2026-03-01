@@ -10,8 +10,14 @@
     "migrate-owner": "node --env-file=.env src/scripts/migrateOwnerId.js"
   },
   "dependencies": {
+    "@apollo/server": "^4.11.3",
+    "@apollo/subgraph": "^2.9.3",
+    "@geeksuite/apollo-server-utils": "workspace:*",
+    "@geeksuite/graphql-config": "workspace:*",
     "@geeksuite/user": "workspace:*",
     "axios": "^1.12.2",
+    "graphql": "^16.10.0",
+    "graphql-tag": "^2.12.6",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",

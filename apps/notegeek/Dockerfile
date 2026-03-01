@@ -9,11 +9,14 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY packages ./packages
 COPY apps/notegeek ./apps/notegeek
 
-# Install ALL workspace deps (resolves workspace:* links + frontend/backend deps)
+# Use local Verdaccio registry for @geeksuite packages
+RUN echo "@geeksuite:registry=http://192.168.1.17:4873" > .npmrc
+
+# Install ALL workspace deps
 RUN npm install -g pnpm
 RUN pnpm install
 
-# ---------- Build frontend ----------
+# Build frontend
 WORKDIR /app/apps/notegeek/frontend
 RUN pnpm run build
 
@@ -29,11 +32,14 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY packages ./packages
 COPY apps/notegeek/backend ./apps/notegeek/backend
 
+# Use local Verdaccio registry for @geeksuite packages
+RUN echo "@geeksuite:registry=http://192.168.1.17:4873" > .npmrc
+
 # Install production deps (resolves workspace:* links)
+WORKDIR /app/apps/notegeek/backend
 RUN pnpm install --prod
 
 # Copy built frontend into backend public folder
-WORKDIR /app/apps/notegeek/backend
 COPY --from=build /app/apps/notegeek/frontend/dist ./public
 
 EXPOSE 9988

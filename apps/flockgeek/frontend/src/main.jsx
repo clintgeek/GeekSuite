@@ -11,6 +11,7 @@ import App from "./App";
 import "./index.css";
 import { AuthProvider } from "./contexts/AuthContext";
 import { AppThemeProvider } from "./theme/AppThemeProvider";
+import { GeekSuiteApolloProvider } from "@geeksuite/api-client";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
@@ -18,7 +19,9 @@ ReactDOM.createRoot(document.getElementById("root")).render(
       <CssBaseline />
       <BrowserRouter>
         <AuthProvider>
-          <App />
+          <GeekSuiteApolloProvider>
+            <App />
+          </GeekSuiteApolloProvider>
         </AuthProvider>
       </BrowserRouter>
     </AppThemeProvider>
@@ -38,7 +41,7 @@ if ("serviceWorker" in navigator) {
     navigator.serviceWorker
       .register("/sw.js")
       .then((registration) => {
-        registration.update().catch(() => {});
+        registration.update().catch(() => { });
       })
       .catch((error) => console.error("Service worker registration failed", error));
   });

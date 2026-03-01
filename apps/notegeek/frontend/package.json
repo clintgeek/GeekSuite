@@ -14,8 +14,10 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@apollo/client": "^3.14.0",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
+    "@geeksuite/api-client": "workspace:*",
     "@geeksuite/auth": "workspace:*",
     "@geeksuite/ui": "workspace:*",
     "@geeksuite/user": "workspace:*",
@@ -32,6 +34,7 @@
     "@tiptap/starter-kit": "^2.11.7",
     "@tldraw/tldraw": "^2.0.0",
     "axios": "^1.8.4",
+    "graphql": "^16.13.0",
     "jwt-decode": "^4.0.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
