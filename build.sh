@@ -67,8 +67,8 @@ deploy_app() {
     return 1
   fi
 
-  # Deploy: restart container to pick up new image
-  (cd "$deploy_dir" && docker compose up -d)
+  # Deploy: restart container to pick up new image and renew anonymous volumes (-V)
+  (cd "$deploy_dir" && docker compose up -d -V)
 
   if [ $? -eq 0 ]; then
     echo -e "${GREEN}✓ ${app} deployed successfully${NC}"

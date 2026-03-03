@@ -18,7 +18,10 @@ import {
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { Close as CloseIcon } from '@mui/icons-material';
+import { useMutation } from '@apollo/client';
 import { useTaskContext } from '../../context/TaskContext.jsx';
+import { useToast } from '../shared/Toast';
+import { CREATE_NOTE } from '../../graphql/notegeekMutations';
 
 const signifierOptions = [
   { value: '*', label: 'Task (*)' },
@@ -36,6 +39,8 @@ const priorityOptions = [
 
 const TaskEditor = ({ open, onClose, task = null }) => {
   const { createTask, updateTask } = useTaskContext();
+  const toast = useToast();
+  const [createNote, { loading: savingNote }] = useMutation(CREATE_NOTE);
   const [formData, setFormData] = useState({
     content: '',
     signifier: '*',
@@ -87,6 +92,22 @@ const TaskEditor = ({ open, onClose, task = null }) => {
       ...formData,
       tags: formData.tags.filter(tag => tag !== tagToRemove)
     });
+  };
+
+  const handleSaveAsNote = async () => {
+    try {
+      await createNote({
+        variables: {
+          title: formData.content,
+          content: formData.note || formData.content,
+          type: 'text',
+          tags: formData.tags || [],
+        },
+      });
+      toast.success('Note saved to NoteGeek');
+    } catch (err) {
+      toast.error('Failed to save note to NoteGeek');
+    }
   };
 
   const handleSubmit = async (event) => {
@@ -219,6 +240,14 @@ const TaskEditor = ({ open, onClose, task = null }) => {
 
         <DialogActions>
           <Button onClick={onClose}>Cancel</Button>
+          {task && (
+            <Button
+              onClick={handleSaveAsNote}
+              disabled={savingNote}
+            >
+              Save as Note
+            </Button>
+          )}
           <Button
             type="submit"
             variant="contained"

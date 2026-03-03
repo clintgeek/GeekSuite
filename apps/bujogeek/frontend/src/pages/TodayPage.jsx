@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Box } from '@mui/material';
+import { useMutation } from '@apollo/client';
 import { useTaskContext } from '../context/TaskContext';
+import { useToast } from '../components/shared/Toast';
 import PageHeader from '../components/layout/PageHeader';
 import OverdueSection from '../components/today/OverdueSection';
 import TodaySection from '../components/today/TodaySection';
@@ -8,11 +10,14 @@ import CompletedSection from '../components/today/CompletedSection';
 import InlineQuickAdd from '../components/today/InlineQuickAdd';
 import SkeletonLoader from '../components/shared/SkeletonLoader';
 import TaskEditor from '../components/tasks/TaskEditor';
+import { CREATE_NOTE } from '../graphql/notegeekMutations';
 import { getTaskAge } from '../utils/taskAging';
 
 const TodayPage = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [editingTask, setEditingTask] = useState(null);
+  const toast = useToast();
+  const [createNote] = useMutation(CREATE_NOTE);
   const {
     tasks,
     loading,
@@ -45,6 +50,22 @@ const TodayPage = () => {
       await deleteTask(task._id);
     }
   }, [deleteTask]);
+
+  const handleSaveAsNote = useCallback(async (task) => {
+    try {
+      await createNote({
+        variables: {
+          title: task.content,
+          content: task.note || task.content,
+          type: 'text',
+          tags: task.tags || [],
+        },
+      });
+      toast.success('Note saved to NoteGeek');
+    } catch (err) {
+      toast.error('Failed to save note to NoteGeek');
+    }
+  }, [createNote, toast]);
 
   const handleQuickAdd = useCallback(async (taskData) => {
     await createTask(taskData);
@@ -125,6 +146,7 @@ const TodayPage = () => {
             onStatusToggle={handleStatusToggle}
             onEdit={handleEdit}
             onDelete={handleDelete}
+            onSaveAsNote={handleSaveAsNote}
           />
 
           <TodaySection
@@ -132,6 +154,7 @@ const TodayPage = () => {
             onStatusToggle={handleStatusToggle}
             onEdit={handleEdit}
             onDelete={handleDelete}
+            onSaveAsNote={handleSaveAsNote}
           />
 
           <CompletedSection
@@ -139,6 +162,7 @@ const TodayPage = () => {
             onStatusToggle={handleStatusToggle}
             onEdit={handleEdit}
             onDelete={handleDelete}
+            onSaveAsNote={handleSaveAsNote}
           />
         </>
       )}

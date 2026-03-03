@@ -12,7 +12,8 @@
         "@apollo/subgraph": "^2.7.0",
         "graphql": "^16.8.1",
         "graphql-tag": "^2.12.6",
-        "@geeksuite/graphql-config": "workspace:*"
+        "@geeksuite/graphql-config": "workspace:*",
+        "@geeksuite/user": "workspace:*"
     },
     "peerDependencies": {
         "express": ">=4"

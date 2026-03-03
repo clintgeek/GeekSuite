@@ -11,6 +11,9 @@ services:
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
       - BASEGEEK_URL=${BASEGEEK_URL}
       - APP_NAME=bujogeek
+      - GATEWAY_URL=http://host.docker.internal:4100
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "5005:5005"
     volumes:

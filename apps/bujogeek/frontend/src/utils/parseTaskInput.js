@@ -7,6 +7,7 @@
  *   Priority:                 !high  !medium  !low
  *   Tags:                     #work  #my-tag  (letters, digits, hyphens, underscores)
  *   Note:                     ^some note text  (must be last token)
+ *   NoteGeek note:            $^note text  (saves to NoteGeek; must be last token)
  *   Date:                     /today  /tomorrow  /next-week  /next-month
  *                             /monday … /sunday  (or /mon … /sun)
  *                             /next-monday … /next-sunday
@@ -14,7 +15,7 @@
  *                             /mar 5th  /january 15
  *   Time (after a date):      9am  14:30  2:30pm  2 p.m.
  *
- * Returns: { content, signifier, priority, dueDate, tags, note }
+ * Returns: { content, signifier, priority, dueDate, tags, note, noteGeekNote }
  */
 
 const DAY_NAMES = {
@@ -68,6 +69,7 @@ const PATTERNS = {
   timeMarker: /\b([ap]\.?m\.?)\b/i,
   tags: /#([a-zA-Z0-9_-]+)/g,
   type: /[*@\-!?]/,
+  noteGeek: /\$\^(.+)$/,
   note: /\^(.+)$/,
 };
 
@@ -79,6 +81,7 @@ export default function parseTaskInput(text) {
   let priority = null;
   let signifier = null;
   let note = null;
+  let noteGeekNote = null;
   const tags = [];
 
   // 1. Tags — extract first so # tokens don't interfere with other parsing
@@ -88,8 +91,15 @@ export default function parseTaskInput(text) {
   }
   content = content.replace(/#[a-zA-Z0-9_-]+/g, '').trim();
 
-  // 2. Note — anchored at end
-  const noteMatch = content.match(PATTERNS.note);
+  // 2a. NoteGeek note ($^) — check before regular note (^) since ^ would partially match
+  const noteGeekMatch = content.match(PATTERNS.noteGeek);
+  if (noteGeekMatch) {
+    noteGeekNote = noteGeekMatch[1].trim();
+    content = content.replace(noteGeekMatch[0], '').trim();
+  }
+
+  // 2b. Note — anchored at end
+  const noteMatch = !noteGeekMatch && content.match(PATTERNS.note);
   if (noteMatch) {
     note = noteMatch[1].trim();
     content = content.replace(noteMatch[0], '').trim();
@@ -200,5 +210,6 @@ export default function parseTaskInput(text) {
     dueDate: dueDate || undefined,
     tags: tags.length > 0 ? tags : undefined,
     note: note || undefined,
+    noteGeekNote: noteGeekNote || undefined,
   };
 }
