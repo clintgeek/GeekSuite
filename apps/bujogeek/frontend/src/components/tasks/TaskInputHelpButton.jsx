@@ -41,6 +41,7 @@ const fullCodes = [
   { section: 'Other' },
   { code: '#tag', meaning: 'Tag (e.g. #work, #errand)' },
   { code: '^note text', meaning: 'Append a note to the task' },
+  { code: '$^note text', meaning: 'Also save as a NoteGeek note' },
 ];
 
 

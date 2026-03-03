@@ -4,7 +4,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import TaskRow from '../tasks/TaskRow';
 import { colors } from '../../theme/colors';
 
-const OverdueSection = ({ tasks, onStatusToggle, onEdit, onDelete }) => {
+const OverdueSection = ({ tasks, onStatusToggle, onEdit, onDelete, onSaveAsNote }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const [expanded, setExpanded] = useState(true);
@@ -73,6 +73,7 @@ const OverdueSection = ({ tasks, onStatusToggle, onEdit, onDelete }) => {
               onStatusToggle={onStatusToggle}
               onEdit={onEdit}
               onDelete={onDelete}
+              onSaveAsNote={onSaveAsNote}
             />
           ))}
         </Box>

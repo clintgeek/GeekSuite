@@ -1,50 +1,48 @@
-import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 
 // --- Mocks ---
 const mockAxios = {
-    get: jest.fn(),
-    post: jest.fn(),
+    get: vi.fn(),
+    post: vi.fn(),
 };
-jest.unstable_mockModule('axios', () => ({
+vi.mock('axios', () => ({
     default: mockAxios,
 }));
 
 const mockJwt = {
-    verify: jest.fn(),
+    verify: vi.fn(),
 };
-jest.unstable_mockModule('jsonwebtoken', () => ({
+vi.mock('jsonwebtoken', () => ({
     default: mockJwt,
 }));
 
 // Setup mock controller to avoid needing real auth logic for /register, /login
-jest.unstable_mockModule('../../controllers/auth.js', () => ({
+vi.mock('../../controllers/auth.js', () => ({
     registerUser: (req, res) => res.status(200).json({ msg: 'mocked register' }),
     loginUser: (req, res) => res.status(200).json({ msg: 'mocked login' }),
 }));
 
 // Note: we'll mock User.findById and limit what it needs to do for validation
 const mockUserModel = {
-    findById: jest.fn(),
-    create: jest.fn(),
+    findById: vi.fn(),
+    create: vi.fn(),
 };
-jest.unstable_mockModule('../../models/User.js', () => ({
+vi.mock('../../models/User.js', () => ({
     default: mockUserModel,
 }));
 
 // Import after mocks
 const { default: authRoutes } = await import('../../routes/auth.js');
 
-// Create an Express app specifically for testing the routes
 const app = express();
 app.use(express.json());
 app.use('/api/auth', authRoutes);
 
 describe('Auth Routes (Inline Handlers)', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
-        // Reset env vars used in the router
+        vi.clearAllMocks();
         process.env.USERGEEK_API_URL = 'https://mock.basegeek.com';
         process.env.JWT_SECRET = 'testsecret';
     });
@@ -172,8 +170,8 @@ describe('Auth Routes (Inline Handlers)', () => {
 
             expect(mockAxios.post).toHaveBeenCalledWith(
                 'https://mock.basegeek.com/api/auth/refresh',
-                {},
-                { headers: { Cookie: 'some_cookie=value' } }
+                { app: 'notegeek' },
+                { headers: { Cookie: 'some_cookie=value', Authorization: '' } }
             );
             expect(res.status).toBe(200);
             expect(res.headers['set-cookie']).toEqual(['geek_token=new_token; HttpOnly']);
@@ -197,7 +195,7 @@ describe('Auth Routes (Inline Handlers)', () => {
             mockJwt.verify.mockReturnValueOnce({ id: 'user123', email: 'test@example.com' });
 
             const mockUser = { _id: 'user123', email: 'test@example.com', createdAt: '2023-01-01' };
-            const selectMock = jest.fn().mockResolvedValueOnce(mockUser);
+            const selectMock = vi.fn().mockResolvedValueOnce(mockUser);
             mockUserModel.findById.mockReturnValueOnce({ select: selectMock });
 
             const res = await request(app)
@@ -219,7 +217,7 @@ describe('Auth Routes (Inline Handlers)', () => {
         it('should create user if not found during SSO', async () => {
             mockJwt.verify.mockReturnValueOnce({ id: 'newuser123', email: 'new@example.com' });
 
-            const selectMock = jest.fn().mockResolvedValueOnce(null);
+            const selectMock = vi.fn().mockResolvedValueOnce(null);
             mockUserModel.findById.mockReturnValueOnce({ select: selectMock });
 
             const newMockUser = { _id: 'newuser123', email: 'new@example.com', createdAt: 'new-date' };

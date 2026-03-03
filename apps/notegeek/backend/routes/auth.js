@@ -6,7 +6,7 @@ import axios from 'axios';
 
 const router = express.Router();
 
-const BASEGEEK_URL = (process.env.USERGEEK_API_URL || process.env.BASEGEEK_URL || 'https://basegeek.clintgeek.com').replace(/\/$/, '');
+const getBaseGeekUrl = () => (process.env.USERGEEK_API_URL || process.env.BASEGEEK_URL || 'https://basegeek.clintgeek.com').replace(/\/$/, '');
 
 function getCookieFromHeader(cookieHeader, name) {
   if (!cookieHeader) return null;
@@ -68,7 +68,7 @@ router.get('/me', async (req, res) => {
       });
     }
 
-    const response = await axios.get(`${ BASEGEEK_URL }/api/users/me`, {
+    const response = await axios.get(`${ getBaseGeekUrl() }/api/users/me`, {
       headers: { Authorization: `Bearer ${ token }` },
     });
 
@@ -78,7 +78,7 @@ router.get('/me', async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     if (!error.response) {
       return res.status(502).json({
-        message: `Unable to reach baseGeek auth service at ${ BASEGEEK_URL }`,
+        message: `Unable to reach baseGeek auth service at ${ getBaseGeekUrl() }`,
       });
     }
 
@@ -94,7 +94,7 @@ router.get('/me', async (req, res) => {
 router.post('/logout', async (req, res) => {
   try {
     const response = await axios.post(
-      `${ BASEGEEK_URL }/api/auth/logout`,
+      `${ getBaseGeekUrl() }/api/auth/logout`,
       {},
       {
         headers: {
@@ -110,7 +110,7 @@ router.post('/logout', async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     if (!error.response) {
       return res.status(502).json({
-        message: `Unable to reach baseGeek auth service at ${ BASEGEEK_URL }`,
+        message: `Unable to reach baseGeek auth service at ${ getBaseGeekUrl() }`,
       });
     }
     return res.status(error.response.status || 500).json(error.response.data);
@@ -122,12 +122,21 @@ router.post('/logout', async (req, res) => {
 // @access  Public
 router.post('/refresh', async (req, res) => {
   try {
+    const refreshToken = req.body?.refreshToken;
+    const app = req.body?.app || 'notegeek';
+
+    const payload = { app };
+    if (refreshToken) {
+      payload.refreshToken = refreshToken;
+    }
+
     const response = await axios.post(
-      `${ BASEGEEK_URL }/api/auth/refresh`,
-      {},
+      `${ getBaseGeekUrl() }/api/auth/refresh`,
+      payload,
       {
         headers: {
           Cookie: req.headers.cookie || '',
+          Authorization: req.headers.authorization || ''
         },
       }
     );
@@ -139,7 +148,7 @@ router.post('/refresh', async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     if (!error.response) {
       return res.status(502).json({
-        message: `Unable to reach baseGeek auth service at ${ BASEGEEK_URL }`,
+        message: `Unable to reach baseGeek auth service at ${ getBaseGeekUrl() }`,
       });
     }
     return res.status(error.response.status || 500).json(error.response.data);

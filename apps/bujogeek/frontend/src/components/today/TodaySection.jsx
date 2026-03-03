@@ -3,7 +3,7 @@ import SectionHeader from '../shared/SectionHeader';
 import TaskRow from '../tasks/TaskRow';
 import EmptyState from '../shared/EmptyState';
 
-const TodaySection = ({ tasks, onStatusToggle, onEdit, onDelete }) => {
+const TodaySection = ({ tasks, onStatusToggle, onEdit, onDelete, onSaveAsNote }) => {
   if (!tasks || tasks.length === 0) {
     return (
       <EmptyState
@@ -29,6 +29,7 @@ const TodaySection = ({ tasks, onStatusToggle, onEdit, onDelete }) => {
             onStatusToggle={onStatusToggle}
             onEdit={onEdit}
             onDelete={onDelete}
+            onSaveAsNote={onSaveAsNote}
           />
         ))}
       </Box>

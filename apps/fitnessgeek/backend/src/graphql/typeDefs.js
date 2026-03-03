@@ -1,6 +1,8 @@
 const { gql } = require('graphql-tag');
 
 const typeDefs = gql`
+  extend schema @link(url: "https://specs.apollo.dev/federation/v2.0", import: ["@key", "@shareable"])
+
   type Nutrition {
     calories_per_serving: Float
     protein_grams: Float

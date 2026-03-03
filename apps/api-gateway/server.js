@@ -19,10 +19,10 @@ class AuthenticatedDataSource extends RemoteGraphQLDataSource {
 const gateway = new ApolloGateway({
     supergraphSdl: new IntrospectAndCompose({
         subgraphs: [
-            { name: 'notegeek', url: 'http://localhost:4002/graphql' },
-            { name: 'flockgeek', url: 'http://localhost:4003/graphql' },
-            { name: 'bujogeek', url: 'http://localhost:5001/graphql' },
-            { name: 'fitnessgeek', url: 'http://localhost:3001/graphql' },
+            { name: 'notegeek', url: 'http://localhost:9988/graphql' },
+            // { name: 'flockgeek', url: 'http://localhost:5001/graphql' },  // no /graphql yet
+            { name: 'bujogeek', url: 'http://localhost:5005/graphql' },
+            // { name: 'fitnessgeek', url: 'http://localhost:4080/graphql' }, // no /graphql yet
             { name: 'bookgeek', url: 'http://localhost:1800/graphql' }
         ],
     }),
@@ -52,7 +52,7 @@ app.use(
     })
 );
 
-const PORT = process.env.PORT || 4000;
+const PORT = process.env.PORT || 4100;
 app.listen(PORT, () => {
     console.log(`🚀 Gateway ready at http://localhost:${PORT}/graphql`);
 });

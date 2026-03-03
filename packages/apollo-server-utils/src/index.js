@@ -1,7 +1,11 @@
+import { createRequire } from 'node:module';
 import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@apollo/server/express4';
 import { buildSubgraphSchema } from '@apollo/subgraph';
 import { baseTypeDefs } from '@geeksuite/graphql-config';
+
+const require = createRequire(import.meta.url);
+const { optionalUser } = require('@geeksuite/user/server');
 
 /**
  * Utility to set up a GeekSuite subgraph on an Express app.
@@ -25,6 +29,9 @@ export async function setupGeekSuiteSubgraph(app, { typeDefs, resolvers, path = 
     });
 
     await server.start();
+
+    // Populate req.user from Bearer token (non-blocking — missing/invalid tokens are ignored)
+    app.use(path, optionalUser());
 
     app.use(
         path,

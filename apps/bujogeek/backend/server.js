@@ -5,6 +5,7 @@ import morgan from 'morgan';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { request as httpRequest } from 'node:http';
 
 // Import routes
 import templateRoutes from './src/routes/templateRoutes.js';
@@ -75,6 +76,36 @@ app.get('/api/health', (req, res) => {
     status: 'healthy',
     database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
   });
+});
+
+// Proxy federated GraphQL requests to the API gateway (same-origin, no CORS issues)
+const GATEWAY_URL = process.env.GATEWAY_URL || 'http://host.docker.internal:4100';
+app.use('/graphql-gateway', (req, res) => {
+  const gatewayUrl = new URL(GATEWAY_URL);
+  // Re-serialize body since express.json() already consumed the stream
+  const body = JSON.stringify(req.body);
+  const proxyReq = httpRequest(
+    {
+      hostname: gatewayUrl.hostname,
+      port: gatewayUrl.port,
+      path: '/graphql',
+      method: req.method,
+      headers: {
+        'content-type': 'application/json',
+        'content-length': Buffer.byteLength(body),
+        ...(req.headers.authorization && { authorization: req.headers.authorization }),
+      },
+    },
+    (proxyRes) => {
+      res.writeHead(proxyRes.statusCode, proxyRes.headers);
+      proxyRes.pipe(res);
+    }
+  );
+  proxyReq.on('error', (err) => {
+    console.error('Gateway proxy error:', err.message);
+    if (!res.headersSent) res.status(502).json({ error: 'Gateway unavailable' });
+  });
+  proxyReq.end(body);
 });
 
 // SPA fallback - serve index.html for all non-API routes (must be LAST)

@@ -1,8 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { Box, InputBase, Typography, useTheme } from '@mui/material';
+import { useMutation } from '@apollo/client';
 import { colors } from '../../theme/colors';
+import { useToast } from '../shared/Toast';
 import TaskInputHelpButton from '../tasks/TaskInputHelpButton';
 import parseTaskInput from '../../utils/parseTaskInput';
+import { CREATE_NOTE } from '../../graphql/notegeekMutations';
 
 const InlineQuickAdd = ({ onAdd, autoFocus = false }) => {
   const theme = useTheme();
@@ -10,6 +13,8 @@ const InlineQuickAdd = ({ onAdd, autoFocus = false }) => {
   const inputRef = useRef(null);
   const [value, setValue] = useState('');
   const [focused, setFocused] = useState(false);
+  const toast = useToast();
+  const [createNote] = useMutation(CREATE_NOTE);
 
   useEffect(() => {
     if (autoFocus) {
@@ -32,7 +37,23 @@ const InlineQuickAdd = ({ onAdd, autoFocus = false }) => {
       parsed.dueDate = today;
     }
 
-    onAdd?.(parsed);
+    // If $^ was used, also save a note to NoteGeek
+    if (parsed.noteGeekNote) {
+      createNote({
+        variables: {
+          title: parsed.content,
+          content: parsed.noteGeekNote,
+          type: 'text',
+          tags: parsed.tags || [],
+        },
+      })
+        .then(() => toast.success('Note saved to NoteGeek'))
+        .catch(() => toast.error('Failed to save note to NoteGeek'));
+    }
+
+    // Strip noteGeekNote before passing to task creation
+    const { noteGeekNote, ...taskData } = parsed;
+    onAdd?.(taskData);
 
     setValue('');
     // Keep focus after submit — the user is planning, let them keep writing
@@ -90,7 +111,7 @@ const InlineQuickAdd = ({ onAdd, autoFocus = false }) => {
           onChange={(e) => setValue(e.target.value)}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          placeholder={focused ? 'Write a task\u2026  #tag  !high  /tomorrow  ^note' : 'What needs to happen today?'}
+          placeholder={focused ? 'Write a task\u2026  #tag  !high  /tomorrow  ^note  $^notegeek' : 'What needs to happen today?'}
           fullWidth
           sx={{
             fontSize: { xs: '1rem', sm: '1.0625rem' },

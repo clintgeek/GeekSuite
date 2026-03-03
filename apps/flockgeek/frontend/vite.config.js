@@ -16,6 +16,10 @@ export default defineConfig(({ mode }) => {
           // Default proxy target should match backend `env.port` (5001)
           target: env.VITE_DEV_API_PROXY || "http://localhost:4094",
           changeOrigin: true
+        },
+        "/graphql": {
+          target: env.VITE_DEV_API_PROXY || "http://localhost:4094",
+          changeOrigin: true
         }
       }
     },

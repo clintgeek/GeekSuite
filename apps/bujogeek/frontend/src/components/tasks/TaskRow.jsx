@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Typography, Chip, IconButton, Tooltip, useTheme, useMediaQuery } from '@mui/material';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Pencil, Trash2, StickyNote } from 'lucide-react';
 import { format, formatDistanceToNowStrict } from 'date-fns';
 import TaskCheckbox from './TaskCheckbox';
 import { getTaskAge, getAgingColor, getAgingLabel } from '../../utils/taskAging';
@@ -14,7 +14,7 @@ const priorityDotColors = {
   3: colors.priority.low,
 };
 
-const TaskRow = ({ task, onStatusToggle, onEdit, onDelete }) => {
+const TaskRow = ({ task, onStatusToggle, onEdit, onDelete, onSaveAsNote }) => {
   const theme = useTheme();
   const navigate = useNavigate();
   const isDark = theme.palette.mode === 'dark';
@@ -228,7 +228,7 @@ const TaskRow = ({ task, onStatusToggle, onEdit, onDelete }) => {
       </Box>
 
       {/* Actions — hover on desktop, tap on mobile */}
-      {showActions && (onEdit || onDelete) && (
+      {showActions && (onEdit || onDelete || onSaveAsNote) && (
         <Box
           sx={{
             display: 'flex',
@@ -257,6 +257,17 @@ const TaskRow = ({ task, onStatusToggle, onEdit, onDelete }) => {
                 sx={{ color: colors.ink[400], '&:hover': { color: colors.primary[500] } }}
               >
                 <Pencil size={16} />
+              </IconButton>
+            </Tooltip>
+          )}
+          {onSaveAsNote && (
+            <Tooltip title="Save as Note" placement="top">
+              <IconButton
+                size="small"
+                onClick={() => onSaveAsNote(task)}
+                sx={{ color: colors.ink[400], '&:hover': { color: colors.primary[500] } }}
+              >
+                <StickyNote size={16} />
               </IconButton>
             </Tooltip>
           )}

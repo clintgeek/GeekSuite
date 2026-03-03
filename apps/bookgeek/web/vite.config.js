@@ -16,6 +16,11 @@ export default defineConfig(({ mode }) => {
           target: 'http://localhost:1800',
           changeOrigin: true,
           secure: false,
+        },
+        '/graphql': {
+          target: 'http://localhost:1800',
+          changeOrigin: true,
+          secure: false,
         }
       }
     },

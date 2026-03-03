@@ -2,8 +2,9 @@ import React from 'react';
 import { ApolloClient, InMemoryCache, ApolloProvider, createHttpLink } from '@apollo/client';
 import { setContext } from '@apollo/client/link/context';
 
-// In a real scenario, this might come from an environment variable
-const GRAPHQL_API_URI = process.env.VITE_GRAPHQL_API_URL || 'http://localhost:4000/graphql';
+// Use env var if set, otherwise fallback to relative /graphql
+const envUri = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_GRAPHQL_API_URL : process.env.VITE_GRAPHQL_API_URL;
+const GRAPHQL_API_URI = envUri || '/graphql';
 
 const httpLink = createHttpLink({
     uri: GRAPHQL_API_URI,
@@ -15,7 +16,7 @@ const authLink = setContext((_, { headers }) => {
     return {
         headers: {
             ...headers,
-            authorization: token ? `Bearer ${token}` : "",
+            authorization: token ? `Bearer ${ token }` : "",
         }
     }
 });
