@@ -4,6 +4,9 @@ import { getMe, loginRedirect, logout as logoutRequest, onLogout, startRefreshTi
 import { useUser, usePreferences, useAppPreferences } from "@geeksuite/user";
 import { registerReset, reset as resetUserStore } from "./utils/resetUserStore";
 import { LoginSplash } from "@geeksuite/ui";
+import { useApolloClient } from "@apollo/client";
+import { GET_BOOKS, GET_SHELVES } from "./graphql/queries.js";
+import { UPDATE_BOOK, DELETE_BOOK } from "./graphql/mutations.js";
 
 let API_BASE = "http://localhost:1800/api";
 
@@ -79,6 +82,7 @@ function getCoverUrl(book) {
 }
 
 export default function App() {
+  const apolloClient = useApolloClient();
   const { bootstrap, reset: resetUser } = useUser();
   const { preferences, loaded: prefsLoaded } = usePreferences();
   const { preferences: appPrefs, updateAppPreferences, loaded: appPrefsLoaded } = useAppPreferences("bookgeek");
@@ -511,39 +515,33 @@ export default function App() {
       const pageToLoad =
         typeof nextPage === "number" && nextPage > 0 ? nextPage : 1;
 
-      const params = new URLSearchParams();
-      params.set("page", String(pageToLoad));
-      params.set("limit", "50");
-      params.set("sort", sortBy || "title");
-      params.set("sortDir", sortDir || "asc");
-      if (searchQuery.trim()) params.set("q", searchQuery.trim());
-      if (authorFilter.trim()) params.set("author", authorFilter.trim());
-      if (tagFilter.trim()) params.set("tag", tagFilter.trim());
-      if (shelfFilter !== "all") params.set("shelf", shelfFilter);
-      if (ownedFilter === "owned") params.set("owned", "true");
-      if (ownedFilter === "unowned") params.set("owned", "false");
+      const variables = {
+        page: pageToLoad,
+        limit: 50,
+        sort: sortBy || "title",
+        sortDir: sortDir || "asc",
+      };
+      if (searchQuery.trim()) variables.q = searchQuery.trim();
+      if (authorFilter.trim()) variables.author = authorFilter.trim();
+      if (tagFilter.trim()) variables.tag = tagFilter.trim();
+      if (shelfFilter !== "all") variables.shelf = shelfFilter;
+      if (ownedFilter === "owned") variables.owned = "true";
+      if (ownedFilter === "unowned") variables.owned = "false";
 
-      const [healthRes, booksRes] = await Promise.all([
+      const [healthRes, apolloRes] = await Promise.all([
         fetch(`${ API_BASE }/health`, { cache: "no-store" }),
-        authFetch(`/books?${ params.toString() }`, { cache: "no-store" }),
+        apolloClient.query({
+          query: GET_BOOKS,
+          variables,
+          fetchPolicy: "no-cache",
+        }),
       ]);
 
       const healthJson = await healthRes.json().catch(() => null);
-      const booksJson = await booksRes.json().catch(() => null);
+      const booksJson = apolloRes.data?.books || {};
 
       if (!healthRes.ok) {
-        throw new Error(
-          booksJson?.error?.message ||
-          `Health check failed (${ healthRes.status })`
-        );
-      }
-
-      if (!booksRes.ok || booksJson?.success === false) {
-        throw new Error(
-          booksJson?.error?.message ||
-          booksJson?.message ||
-          `Books request failed (${ booksRes.status })`
-        );
+        throw new Error(`Health check failed (${ healthRes.status })`);
       }
 
       setHealth(healthJson);
@@ -708,10 +706,9 @@ export default function App() {
       await loadBooksPage(1, { append: false });
 
       try {
-        const res = await authFetch("/shelves");
-        const json = await res.json().catch(() => null);
-        if (!cancelled && res.ok && json?.success !== false) {
-          setShelfSummary(json.data || null);
+        const apolloRes = await apolloClient.query({ query: GET_SHELVES, fetchPolicy: "no-cache" });
+        if (!cancelled && apolloRes.data?.shelves) {
+          setShelfSummary(apolloRes.data.shelves);
         }
       } catch {
         // ignore shelf errors for now
@@ -1469,24 +1466,17 @@ export default function App() {
     setDeleteLoading(true);
     setDeleteError(null);
 
-    const deleteFlag = deleteIncludeFiles ? "true" : "false";
-
     try {
-      const res = await authFetch(
-        `/books/${ selectedBook._id }?deleteFiles=${ deleteFlag }`,
-        {
-          method: "DELETE",
-        }
-      );
+      const apolloRes = await apolloClient.mutate({
+        mutation: DELETE_BOOK,
+        variables: { id: selectedBook._id, deleteFiles: deleteIncludeFiles },
+      });
 
-      const json = await res.json().catch(() => null);
-      if (!res.ok || json?.success === false) {
-        const message = json?.error?.message || json?.message || "Delete failed";
-        throw new Error(message);
+      if (!apolloRes.data?.deleteBook?.success) {
+        throw new Error("Delete failed");
       }
 
-      const deletedId =
-        json?.data?.deletedId?.toString?.() || selectedBook._id.toString();
+      const deletedId = apolloRes.data.deleteBook.deletedId || selectedBook._id.toString();
 
       setBooks((prev) => prev.filter((b) => b._id !== deletedId));
       setSelectedBookIds((prev) => prev.filter((id) => id !== deletedId));
@@ -1577,21 +1567,15 @@ export default function App() {
     }
 
     try {
-      const res = await authFetch(`/books/${ selectedBook._id }`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
+      const apolloRes = await apolloClient.mutate({
+        mutation: UPDATE_BOOK,
+        variables: { id: selectedBook._id, input: payload },
       });
 
-      const json = await res.json().catch(() => null);
-      if (!res.ok || json?.success === false) {
-        const message = json?.error?.message || json?.message || "Edit failed";
-        throw new Error(message);
+      const updated = apolloRes.data?.updateBook;
+      if (!updated) {
+        throw new Error("Edit failed");
       }
-
-      const updated = json.data || null;
       if (updated && updated._id) {
         setBooks((prev) =>
           prev.map((b) => (b._id === updated._id ? updated : b))
@@ -1652,22 +1636,14 @@ export default function App() {
     setShelfSavingId(bookId);
 
     try {
-      const res = await authFetch(`/books/${ bookId }`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ shelf: newShelf }),
+      const apolloRes = await apolloClient.mutate({
+        mutation: UPDATE_BOOK,
+        variables: { id: bookId, input: { shelf: newShelf } },
       });
-
-      const json = await res.json().catch(() => null);
-      if (!res.ok || json?.success === false) {
-        const message =
-          json?.error?.message || json?.message || "Failed to update shelf";
-        throw new Error(message);
+      const updated = apolloRes.data?.updateBook;
+      if (!updated) {
+        throw new Error("Failed to update shelf");
       }
-
-      const updated = json.data || null;
       if (updated && updated._id) {
         setBooks((prev) =>
           prev.map((b) => (b._id === updated._id ? updated : b))
@@ -1679,10 +1655,9 @@ export default function App() {
       }
 
       try {
-        const shelvesRes = await authFetch("/shelves");
-        const shelvesJson = await shelvesRes.json().catch(() => null);
-        if (shelvesRes.ok && shelvesJson?.success !== false) {
-          setShelfSummary(shelvesJson.data || null);
+        const shelvesRes = await apolloClient.query({ query: GET_SHELVES, fetchPolicy: "no-cache" });
+        if (shelvesRes.data?.shelves) {
+          setShelfSummary(shelvesRes.data.shelves);
         }
       } catch {
         // ignore shelf summary refresh errors

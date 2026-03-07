@@ -12,6 +12,7 @@
     },
     "dependencies": {
         "@apollo/client": "^3.9.5",
+        "@geeksuite/auth": "workspace:*",
         "graphql": "^16.8.1"
     }
 }

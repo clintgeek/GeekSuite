@@ -17,7 +17,7 @@ configureUserPlatform();
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <GeekSuiteApolloProvider>
+    <GeekSuiteApolloProvider appName="bujogeek">
       <App />
     </GeekSuiteApolloProvider>
   </React.StrictMode>,

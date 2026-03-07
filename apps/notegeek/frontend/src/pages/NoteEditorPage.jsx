@@ -77,7 +77,7 @@ function TypeCard({ config, onSelect }) {
         width: '100%',
         py: 1,
         px: 1.5,
-        border: `1px solid ${theme.palette.divider}`,
+        border: `1px solid ${ theme.palette.divider }`,
         borderRadius: 2,
         cursor: 'pointer',
         textAlign: 'left',
@@ -88,7 +88,7 @@ function TypeCard({ config, onSelect }) {
           bgcolor: alpha(color, 0.03),
         },
         '&:focus-visible': {
-          outline: `2px solid ${color}`,
+          outline: `2px solid ${ color }`,
           outlineOffset: 2,
         },
       }}
@@ -130,7 +130,7 @@ function NoteEditorPage() {
 
   const { data, loading: isLoadingSelected, error: queryError } = useQuery(GET_NOTE_BY_ID, {
     variables: { id },
-    skip: isNewNote,
+    skip: isNewNote || id === 'undefined',
     fetchPolicy: 'cache-and-network',
   });
   const noteToEdit = data?.note;
@@ -149,7 +149,7 @@ function NoteEditorPage() {
   const [hasPickedType, setHasPickedType] = useState(false);
   const [saveStatus, setSaveStatus] = useState('');
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [savedNoteId, setSavedNoteId] = useState(() => (id && id !== 'new' ? id : null));
+  const [savedNoteId, setSavedNoteId] = useState(() => (id && id !== 'new' && id !== 'undefined' ? id : null));
 
   // Track initialization
   const initialized = useRef(false);
@@ -244,9 +244,10 @@ function NoteEditorPage() {
 
     try {
       let savedNote;
+      const currentId = savedNoteId && savedNoteId !== 'undefined' ? savedNoteId : null;
 
-      if (savedNoteId) {
-        const { data } = await updateNoteMutation({ variables: { id: savedNoteId, ...noteData } });
+      if (currentId) {
+        const { data } = await updateNoteMutation({ variables: { id: currentId, ...noteData } });
         savedNote = data?.updateNote;
       } else {
         const { data } = await createNoteMutation({ variables: noteData });
@@ -254,7 +255,7 @@ function NoteEditorPage() {
         if (savedNote?.id || savedNote?._id) {
           const newId = savedNote.id || savedNote._id;
           setSavedNoteId(newId);
-          navigate(`/notes/${newId}`, { replace: true });
+          navigate(`/notes/${ newId }`, { replace: true });
         }
       }
 
@@ -369,7 +370,7 @@ function NoteEditorPage() {
               config={config}
               index={index}
               onSelect={(type) => {
-                navigate(`/notes/new?type=${encodeURIComponent(type)}`, { replace: true });
+                navigate(`/notes/new?type=${ encodeURIComponent(type) }`, { replace: true });
               }}
             />
           ))}

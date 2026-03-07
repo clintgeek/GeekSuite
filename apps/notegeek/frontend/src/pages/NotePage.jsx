@@ -13,14 +13,16 @@ function NotePage() {
     const navigate = useNavigate();
     const { isAuthenticated } = useAuthStore();
 
-    const { data, loading: isLoadingSelected, error } = useQuery(GET_NOTE_BY_ID, {
+    const isNewNote = id === 'new';
+
+    const { data, loading: isLoadingSelected, error: queryError } = useQuery(GET_NOTE_BY_ID, {
         variables: { id },
-        skip: id === 'new' || !isAuthenticated,
+        skip: isNewNote || id === 'undefined' || !isAuthenticated,
         fetchPolicy: 'cache-and-network',
     });
 
     const noteToDisplay = data?.note;
-    const selectedError = error?.message;
+    const selectedError = queryError?.message;
 
     // Add or remove 'mindmap-view' class from body when viewing mind maps
     useEffect(() => {
@@ -68,7 +70,7 @@ function NotePage() {
     };
 
     // For new notes, show the editor
-    if (id === 'new') {
+    if (isNewNote) {
         return renderEditor();
     }
 
@@ -131,8 +133,8 @@ function NotePage() {
         );
     }
 
-    // Show warning if note not found
-    if (!isLoadingSelected && !noteToDisplay && id !== 'new') {
+    // Show warning if note not found or id is 'undefined'
+    if (!isLoadingSelected && !noteToDisplay && !isNewNote || id === 'undefined') {
         return (
             <Box sx={{ maxWidth: 500, mx: 'auto', py: 8 }}>
                 <Alert

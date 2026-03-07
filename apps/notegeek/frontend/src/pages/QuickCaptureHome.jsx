@@ -64,7 +64,7 @@ function NoteCard({ note, featured, onClick, theme }) {
         display: 'flex',
         textAlign: 'left',
         borderRadius: 2.5,
-        border: `1px solid ${theme.palette.divider}`,
+        border: `1px solid ${ theme.palette.divider }`,
         bgcolor: 'background.paper',
         overflow: 'hidden',
         width: '100%',
@@ -72,7 +72,7 @@ function NoteCard({ note, featured, onClick, theme }) {
         minHeight: featured ? { xs: 110, sm: 130 } : { xs: 88, sm: 100 },
         '&:hover': {
           borderColor: theme.palette.glow.border,
-          boxShadow: `0 0 0 3px ${theme.palette.glow.ring}`,
+          boxShadow: `0 0 0 3px ${ theme.palette.glow.ring }`,
           transform: 'translateY(-1px)',
           '& .card-bar': { width: 4 },
         },
@@ -190,7 +190,7 @@ function QuickCaptureHome() {
     });
     if (created) {
       setCaptureText('');
-      navigate(`/notes/${created._id}/edit`);
+      navigate(`/notes/${ created.id || created._id }/edit`);
     }
   };
 
@@ -221,7 +221,7 @@ function QuickCaptureHome() {
               lineHeight: 1.2,
             }}
           >
-            {getGreeting()}{firstName ? `, ${firstName}` : ''}
+            {getGreeting()}{firstName ? `, ${ firstName }` : ''}
           </Typography>
           {notes.length > 0 && (
             <Typography
@@ -246,13 +246,13 @@ function QuickCaptureHome() {
         sx={{
           mb: { xs: 3, sm: 4 },
           borderRadius: 3,
-          border: `1px solid ${theme.palette.divider}`,
+          border: `1px solid ${ theme.palette.divider }`,
           bgcolor: 'background.paper',
           overflow: 'hidden',
           transition: 'border-color 180ms ease, box-shadow 180ms ease',
           '&:focus-within': {
             borderColor: theme.palette.glow.border,
-            boxShadow: `0 0 0 3px ${theme.palette.glow.ring}`,
+            boxShadow: `0 0 0 3px ${ theme.palette.glow.ring }`,
           },
         }}
       >
@@ -299,7 +299,7 @@ function QuickCaptureHome() {
             return (
               <ButtonBase
                 key={pill.type}
-                onClick={() => navigate(`/notes/new?type=${encodeURIComponent(pill.type)}`)}
+                onClick={() => navigate(`/notes/new?type=${ encodeURIComponent(pill.type) }`)}
                 sx={{
                   display: 'flex',
                   alignItems: 'center',
@@ -427,7 +427,7 @@ function QuickCaptureHome() {
                 <NoteCard
                   note={featuredNote}
                   featured
-                  onClick={() => navigate(`/notes/${featuredNote._id}`)}
+                  onClick={() => navigate(`/notes/${ featuredNote.id || featuredNote._id }`)}
                   theme={theme}
                 />
               </Box>
@@ -436,9 +436,9 @@ function QuickCaptureHome() {
             {/* Rest of desk */}
             {deskNotes.map((note) => (
               <NoteCard
-                key={note._id}
+                key={note.id || note._id}
                 note={note}
-                onClick={() => navigate(`/notes/${note._id}`)}
+                onClick={() => navigate(`/notes/${ note.id || note._id }`)}
                 theme={theme}
               />
             ))}

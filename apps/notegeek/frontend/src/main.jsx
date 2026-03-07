@@ -27,7 +27,7 @@ configureUserPlatform();
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <GeekSuiteApolloProvider>
+    <GeekSuiteApolloProvider appName="notegeek">
       <ThemeModeProvider>
         <AppBootstrapper>
           <App />

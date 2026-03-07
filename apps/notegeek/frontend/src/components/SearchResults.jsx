@@ -45,7 +45,7 @@ function ResultRow({ note }) {
 
     return (
         <ButtonBase
-            onClick={() => navigate(`/notes/${note._id}`)}
+            onClick={() => navigate(`/notes/${ note.id || note._id }`)}
             sx={{
                 display: 'flex',
                 alignItems: 'center',
@@ -211,7 +211,7 @@ function SearchResults() {
                     </Typography>
                     <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                         {searchResults.map((note) => (
-                            <ResultRow key={note._id} note={note} />
+                            <ResultRow key={note.id || note._id} note={note} />
                         ))}
                     </Box>
                 </Box>
