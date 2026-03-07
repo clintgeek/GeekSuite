@@ -53,7 +53,7 @@ function NoteViewer() {
 
     const handleEdit = () => {
         if (noteToView) {
-            navigate(`/notes/${noteToView._id}/edit`);
+            navigate(`/notes/${ noteToView.id || noteToView._id }/edit`);
         }
     };
 
@@ -166,7 +166,7 @@ function NoteViewer() {
                                 borderRadius: 1.5,
                                 transition: 'all 120ms ease',
                                 '&:hover': { bgcolor: theme.palette.glow.soft },
-                                '&:focus-visible': { boxShadow: `0 0 0 3px ${theme.palette.glow.ring}` },
+                                '&:focus-visible': { boxShadow: `0 0 0 3px ${ theme.palette.glow.ring }` },
                             }}
                         >
                             <EditIcon sx={{ fontSize: 17 }} />
@@ -195,7 +195,7 @@ function NoteViewer() {
                     sx={{
                         borderRadius: 2.5,
                         overflow: 'hidden',
-                        border: `1px solid ${theme.palette.divider}`,
+                        border: `1px solid ${ theme.palette.divider }`,
                         display: 'flex',
                     }}
                 >
@@ -240,7 +240,7 @@ function NoteViewer() {
                                                 <Typography
                                                     key={tag}
                                                     component="span"
-                                                    onClick={() => navigate(`/tags/${encodeURIComponent(tag)}`)}
+                                                    onClick={() => navigate(`/tags/${ encodeURIComponent(tag) }`)}
                                                     sx={{
                                                         fontSize: '0.625rem',
                                                         color: 'text.disabled',
@@ -326,7 +326,7 @@ function NoteViewer() {
                                     fontSize: '0.825rem',
                                     lineHeight: 1.7,
                                     bgcolor: isDark ? '#23211F' : '#F0EEEB',
-                                    border: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
+                                    border: `1px solid ${ alpha(theme.palette.divider, 0.5) }`,
                                     p: 2.5,
                                     borderRadius: 3,
                                     overflow: 'auto',
@@ -337,7 +337,7 @@ function NoteViewer() {
                                     },
                                 },
                                 '& blockquote': {
-                                    borderLeft: `3px solid ${typeColor}`,
+                                    borderLeft: `3px solid ${ typeColor }`,
                                     pl: 2.5,
                                     ml: 0,
                                     my: 2.5,
@@ -366,7 +366,7 @@ function NoteViewer() {
                                     width: '100%',
                                     my: 2,
                                     '& th, & td': {
-                                        border: `1px solid ${theme.palette.divider}`,
+                                        border: `1px solid ${ theme.palette.divider }`,
                                         px: 1.5,
                                         py: 1,
                                         textAlign: 'left',

@@ -1,4 +1,4 @@
-import { differenceInDays } from 'date-fns';
+import { differenceInCalendarDays } from 'date-fns';
 import { colors } from '../theme/colors';
 
 /**
@@ -9,7 +9,11 @@ export const getTaskAge = (task) => {
   const referenceDate = task.originalDate || task.dueDate || task.createdAt;
   if (!referenceDate) return { level: 'fresh', days: 0 };
 
-  const days = differenceInDays(new Date(), new Date(referenceDate));
+  const parsed = new Date(referenceDate);
+  if (isNaN(parsed.getTime())) return { level: 'fresh', days: 0 };
+
+  // Use calendar days to ensure "yesterday" is actually the previous calendar day
+  const days = differenceInCalendarDays(new Date(), parsed);
 
   if (days <= 0) return { level: 'fresh', days };
   if (days <= 2) return { level: 'warning', days };
@@ -29,8 +33,11 @@ export const getAgingColor = (level) => {
  */
 export const getAgingLabel = (days) => {
   if (days <= 0) return null;
-  if (days === 1) return 'yesterday';
-  if (days <= 7) return `${days} days ago`;
-  if (days <= 30) return `${Math.floor(days / 7)} weeks ago`;
-  return `${Math.floor(days / 30)} months ago`;
+  if (days >= 1) {
+    if (days === 1) return 'yesterday';
+    if (days <= 7) return `${ days } days ago`;
+    if (days <= 30) return `${ Math.floor(days / 7) } weeks ago`;
+    return `${ Math.floor(days / 30) } months ago`;
+  }
+  return null;
 };

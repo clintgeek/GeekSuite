@@ -2,7 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Typography, Chip, IconButton, Tooltip, useTheme, useMediaQuery } from '@mui/material';
 import { Pencil, Trash2, StickyNote } from 'lucide-react';
-import { format, formatDistanceToNowStrict } from 'date-fns';
+import { format, differenceInCalendarDays } from 'date-fns';
 import TaskCheckbox from './TaskCheckbox';
 import { getTaskAge, getAgingColor, getAgingLabel } from '../../utils/taskAging';
 import { colors } from '../../theme/colors';
@@ -47,21 +47,30 @@ const TaskRow = ({ task, onStatusToggle, onEdit, onDelete, onSaveAsNote }) => {
   const getDueBadge = () => {
     if (!task.dueDate) return null;
     const due = new Date(task.dueDate);
+    if (isNaN(due.getTime())) return null;
     const now = new Date();
-    const diffMs = due.getTime() - now.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    // Use differenceInCalendarDays to avoid Math.floor/negative rounding issues
+    const diffDays = differenceInCalendarDays(due, now);
 
     let label;
     let badgeColor;
 
     if (diffDays < -1) {
-      label = `${Math.abs(diffDays)} days overdue`;
+      label = `${ Math.abs(diffDays) } days overdue`;
       badgeColor = colors.aging.overdue;
     } else if (diffDays === -1) {
       label = 'yesterday';
       badgeColor = colors.aging.warning;
     } else if (diffDays === 0) {
-      label = format(due, 'h:mm a');
+      // If it's today, show the time if it's significant (not midnight/9am default)
+      const hours = due.getHours();
+      const mins = due.getMinutes();
+      if (hours === 0 && mins === 0) {
+        label = 'today';
+      } else {
+        label = format(due, 'h:mm a');
+      }
       badgeColor = colors.aging.fresh;
     } else if (diffDays === 1) {
       label = 'tomorrow';
@@ -87,8 +96,8 @@ const TaskRow = ({ task, onStatusToggle, onEdit, onDelete, onSaveAsNote }) => {
         gap: { xs: 0.5, sm: 1 },
         py: { xs: 1.25, sm: 1 },
         px: { xs: 1, sm: 2 },
-        borderLeft: `3px solid ${agingColor}`,
-        backgroundColor: (hovered || tapped) ? (isDark ? 'rgba(255,255,255,0.04)' : `${colors.ink[100]}60`) : 'transparent',
+        borderLeft: `3px solid ${ agingColor }`,
+        backgroundColor: (hovered || tapped) ? (isDark ? 'rgba(255,255,255,0.04)' : `${ colors.ink[100] }60`) : 'transparent',
         transition: 'background-color 0.12s ease',
         cursor: 'default',
         position: 'relative',
@@ -192,7 +201,7 @@ const TaskRow = ({ task, onStatusToggle, onEdit, onDelete, onSaveAsNote }) => {
                 size="small"
                 onClick={(e) => {
                   e.stopPropagation();
-                  navigate(`/tags?tag=${encodeURIComponent(tag)}`);
+                  navigate(`/tags?tag=${ encodeURIComponent(tag) }`);
                 }}
                 sx={{
                   height: 20,
@@ -201,7 +210,7 @@ const TaskRow = ({ task, onStatusToggle, onEdit, onDelete, onSaveAsNote }) => {
                   cursor: 'pointer',
                   backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : colors.ink[100],
                   color: theme.palette.text.secondary,
-                  border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : colors.ink[200]}`,
+                  border: `1px solid ${ isDark ? 'rgba(255,255,255,0.12)' : colors.ink[200] }`,
                   '&:hover': {
                     backgroundColor: isDark ? 'rgba(255,255,255,0.14)' : colors.ink[200],
                   },

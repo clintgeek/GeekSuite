@@ -1563,6 +1563,9 @@ importers:
       '@apollo/client':
         specifier: ^3.9.5
         version: 3.14.0(@types/react@19.2.14)(graphql@16.13.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@geeksuite/auth':
+        specifier: workspace:*
+        version: link:../auth
       graphql:
         specifier: ^16.8.1
         version: 16.13.0

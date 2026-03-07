@@ -13,7 +13,7 @@ import { GeekSuiteApolloProvider } from '@geeksuite/api-client';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <GeekSuiteApolloProvider>
+    <GeekSuiteApolloProvider appName="fitnessgeek">
       <App />
     </GeekSuiteApolloProvider>
   </StrictMode>,

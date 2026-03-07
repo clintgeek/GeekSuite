@@ -16,12 +16,21 @@ class TaskService {
    * This is timezone-safe regardless of server locale.
    */
   toUtcMidnight(dateStr) {
+    if (!dateStr) return new Date(new Date().setUTCHours(0, 0, 0, 0));
+
+    let y, m, d;
     if (dateStr instanceof Date) {
-      return new Date(Date.UTC(dateStr.getUTCFullYear(), dateStr.getUTCMonth(), dateStr.getUTCDate()));
+      y = dateStr.getFullYear();
+      m = dateStr.getMonth();
+      d = dateStr.getDate();
+    } else {
+      const str = typeof dateStr === 'string' ? dateStr : new Date(dateStr).toISOString();
+      const parts = str.split('T')[0].split('-').map(Number);
+      y = parts[0];
+      m = parts[1] - 1;
+      d = parts[2];
     }
-    const str = typeof dateStr === 'string' ? dateStr : new Date(dateStr).toISOString();
-    const [y, m, d] = str.split('T')[0].split('-').map(Number);
-    return new Date(Date.UTC(y, m - 1, d));
+    return new Date(Date.UTC(y, m, d, 0, 0, 0, 0));
   }
 
   /**
@@ -41,7 +50,7 @@ class TaskService {
     // Calendar views should not include backlog tasks.
     // The "all" view powers Backlog/Review screens and must include them.
     if (viewType !== 'all') {
-      query.isBacklog = false;
+      query.isBacklog = { $ne: true };
     }
 
     // Parse the incoming date string to UTC midnight boundaries
@@ -90,8 +99,8 @@ class TaskService {
       case 'weekly':
         // Get start of week (Sunday) in UTC
         const startOfWeekDate = new Date(startOfDayDate);
-          startOfWeekDate.setUTCDate(startOfWeekDate.getUTCDate() - startOfWeekDate.getUTCDay());
-          startOfWeekDate.setUTCHours(0, 0, 0, 0);
+        startOfWeekDate.setUTCDate(startOfWeekDate.getUTCDate() - startOfWeekDate.getUTCDay());
+        startOfWeekDate.setUTCHours(0, 0, 0, 0);
         const endOfWeekDate = new Date(startOfWeekDate);
         endOfWeekDate.setUTCDate(endOfWeekDate.getUTCDate() + 6);
         endOfWeekDate.setUTCHours(23, 59, 59, 999);
@@ -258,7 +267,7 @@ class TaskService {
     const y = d.getUTCFullYear();
     const m = String(d.getUTCMonth() + 1).padStart(2, '0');
     const day = String(d.getUTCDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
+    return `${ y }-${ m }-${ day }`;
   }
 
   async saveDailyOrder({ userId, dateKey, orderedTaskIds }) {

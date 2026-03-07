@@ -116,11 +116,11 @@ const TaskCard = ({ task, onEdit }) => {
             justifyContent: 'center',
           }}
         >
-            {task.status === 'completed' ? (
-              <CheckCircleIcon color="success" sx={{ fontSize: { xs: 32, sm: 24 } }} />
-            ) : (
-              <UncheckedIcon sx={{ fontSize: { xs: 32, sm: 24 } }} />
-            )}
+          {task.status === 'completed' ? (
+            <CheckCircleIcon color="success" sx={{ fontSize: { xs: 32, sm: 24 } }} />
+          ) : (
+            <UncheckedIcon sx={{ fontSize: { xs: 32, sm: 24 } }} />
+          )}
         </ListItemIcon>
 
         <ListItemText
@@ -143,7 +143,7 @@ const TaskCard = ({ task, onEdit }) => {
           }
           secondary={
             <Box sx={{ mt: 0.5, }}>
-              {task.dueDate && (
+              {task.dueDate && !isNaN(new Date(task.dueDate).getTime()) && (
                 <Typography variant="body2" color="text.secondary" component="span" sx={{ fontSize: { xs: '0.95rem', sm: '0.875rem' } }}>
                   Due: {format(new Date(task.dueDate), 'MMM d, yyyy h:mm a')}
                 </Typography>
@@ -165,13 +165,13 @@ const TaskCard = ({ task, onEdit }) => {
               {task.tags?.length > 0 && (
                 <Box sx={{ mt: 0.5 }}>
                   {task.tags.map((tag) => (
-                  <Chip
-                    key={tag}
-                    label={tag}
-                    size="small"
-                    sx={{ mr: 0.5, fontSize: { xs: '0.85rem', sm: '0.75rem' }, height: { xs: 24, sm: 20 } }}
-                  />
-                ))}
+                    <Chip
+                      key={tag}
+                      label={tag}
+                      size="small"
+                      sx={{ mr: 0.5, fontSize: { xs: '0.85rem', sm: '0.75rem' }, height: { xs: 24, sm: 20 } }}
+                    />
+                  ))}
                 </Box>
               )}
             </Box>

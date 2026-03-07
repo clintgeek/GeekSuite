@@ -1,6 +1,12 @@
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import apiClient from '../services/apiClient';
+import { useApolloClient } from '@apollo/client';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
+import {
+  GET_TASKS, GET_ALL_TASKS, GET_DAILY_TASKS, GET_WEEKLY_TASKS, GET_MONTHLY_TASKS
+} from '../graphql/queries';
+import {
+  CREATE_TASK, UPDATE_TASK, DELETE_TASK, UPDATE_TASK_STATUS, MIGRATE_TASK_TO_FUTURE, SAVE_DAILY_TASK_ORDER
+} from '../graphql/mutations';
 
 
 const AUTH_CONFIG = { withCredentials: true };
@@ -36,6 +42,8 @@ export const useTaskContext = () => {
 };
 
 const TaskProvider = ({ children }) => {
+  const apolloClient = useApolloClient();
+
   // Main state
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState('IDLE');
@@ -135,7 +143,7 @@ const TaskProvider = ({ children }) => {
   // NOTE: Backend does not implement /tasks/range; use /tasks with startDate/endDate query params.
   const fetchTasksForDateRange = useCallback(async (startDate, endDate, fetchKey) => {
     // Generate fetch key if not provided
-    const key = fetchKey || `${startDate.toISOString()}-${endDate.toISOString()}`;
+    const key = fetchKey || `${ startDate.toISOString() }-${ endDate.toISOString() }`;
 
     // Skip if already fetching this range
     if (loading === LoadingState.FETCHING && lastFetchRef.current === key) {
@@ -151,16 +159,13 @@ const TaskProvider = ({ children }) => {
       const formattedStartDate = format(startDate, 'yyyy-MM-dd');
       const formattedEndDate = format(endDate, 'yyyy-MM-dd');
 
-      const response = await apiClient.get(`/tasks`, {
-        params: {
-          viewType: 'all',
-          startDate: formattedStartDate,
-          endDate: formattedEndDate
-        },
-        ...AUTH_CONFIG
+      const response = await apolloClient.query({
+        query: GET_MONTHLY_TASKS, // Reuse monthly for arbitrary range conceptually
+        variables: { startDate: formattedStartDate, endDate: formattedEndDate },
+        fetchPolicy: 'no-cache'
       });
 
-      const newTasks = response.data;
+      const newTasks = response.data?.monthlyTasks || [];
       setTasks(prevTasks => {
         if (JSON.stringify(prevTasks) !== JSON.stringify(newTasks)) {
           return newTasks;
@@ -190,46 +195,51 @@ const TaskProvider = ({ children }) => {
     setLoading(LoadingState.FETCHING);
     setError(null);
     try {
-      let endpoint = '/tasks';
-      let params = {};
+      let responseData = [];
 
       switch (viewType) {
         case 'daily':
-          endpoint = '/tasks/daily';
-          params = { date: format(date || new Date(), 'yyyy-MM-dd') };
+          const dateStr = format(date || new Date(), 'yyyy-MM-dd');
+          const dRes = await apolloClient.query({
+            query: GET_DAILY_TASKS,
+            variables: { date: dateStr },
+            fetchPolicy: 'no-cache'
+          });
+          responseData = dRes.data?.dailyTasks || [];
           break;
         case 'weekly':
           const startDate = startOfWeek(date || new Date());
-          const endDate = endOfWeek(date || new Date());
-          endpoint = '/tasks/weekly';
-          params = {
-            startDate: format(startDate, 'yyyy-MM-dd'),
-            endDate: format(endDate, 'yyyy-MM-dd')
-          };
+          const wRes = await apolloClient.query({
+            query: GET_WEEKLY_TASKS,
+            variables: { date: format(startDate, 'yyyy-MM-dd') },
+            fetchPolicy: 'no-cache'
+          });
+          responseData = wRes.data?.weeklyTasks || [];
           break;
         case 'monthly':
           const monthStart = startOfMonth(date || new Date());
           const monthEnd = endOfMonth(date || new Date());
-          endpoint = '/tasks/monthly';
-          params = {
-            startDate: format(monthStart, 'yyyy-MM-dd'),
-            endDate: format(monthEnd, 'yyyy-MM-dd')
-          };
+          const mRes = await apolloClient.query({
+            query: GET_MONTHLY_TASKS,
+            variables: {
+              startDate: format(monthStart, 'yyyy-MM-dd'),
+              endDate: format(monthEnd, 'yyyy-MM-dd')
+            },
+            fetchPolicy: 'no-cache'
+          });
+          responseData = mRes.data?.monthlyTasks || [];
           break;
         case 'year':
-          endpoint = '/tasks/yearly';
-          params = { year: (date || new Date()).getFullYear() };
-          break;
         default:
-          endpoint = '/tasks';
-          params = { viewType, date: date ? format(date, 'yyyy-MM-dd') : undefined };
+          const aRes = await apolloClient.query({
+            query: GET_ALL_TASKS,
+            fetchPolicy: 'no-cache'
+          });
+          responseData = aRes.data?.allTasks || [];
+          break;
       }
 
-      const response = await apiClient.get(`${endpoint}`, {
-        params,
-        ...AUTH_CONFIG
-      });
-      setTasks(response.data);
+      setTasks(responseData);
       setCurrentView(viewType);
       setCurrentDate(date || new Date());
       setLoading(LoadingState.IDLE);
@@ -254,8 +264,9 @@ const TaskProvider = ({ children }) => {
       setLoading(LoadingState.FETCHING);
       setError(null);
 
-      const response = await apiClient.get(`/tasks/all`, {
-        ...AUTH_CONFIG
+      const response = await apolloClient.query({
+        query: GET_ALL_TASKS,
+        fetchPolicy: 'no-cache'
       });
 
       // Check if this is still the most recent request
@@ -263,7 +274,7 @@ const TaskProvider = ({ children }) => {
         return;
       }
 
-      const newTasks = response.data;
+      const newTasks = response.data?.allTasks || [];
 
       // Only update state if the data has actually changed
       setTasks(prevTasks => {
@@ -333,16 +344,20 @@ const TaskProvider = ({ children }) => {
     setLoading('CREATING');
     setError(null);
     try {
-      const response = await apiClient.post(`/tasks`, taskData, {
-        ...AUTH_CONFIG
+      const response = await apolloClient.mutate({
+        mutation: CREATE_TASK,
+        variables: { ...taskData }
       });
-      console.log('Task created successfully:', response.data);
+
+      const createdTask = response.data?.createTask;
+      console.log('Task created successfully:', createdTask);
+
       setTasks(prevTasks => {
-        const newTasks = Array.isArray(prevTasks) ? [...prevTasks, response.data] : [response.data];
+        const newTasks = Array.isArray(prevTasks) ? [...prevTasks, createdTask] : [createdTask];
         console.log('Updated tasks array:', newTasks);
         return newTasks;
       });
-      return response.data;
+      return createdTask;
     } catch (err) {
       console.error('Error creating task:', err);
       setError(err.response?.data?.message || 'Failed to create task');
@@ -356,10 +371,21 @@ const TaskProvider = ({ children }) => {
   const updateTask = useCallback(async (taskId, updates) => {
     try {
       setLoading(LoadingState.UPDATING);
-      const response = await apiClient.put(`/tasks/${taskId}`, updates, {
-        ...AUTH_CONFIG
+
+      // Need to strip __typename and unupdatable fields from updates before sending
+      const cleanUpdates = { ...updates };
+      delete cleanUpdates.__typename;
+      delete cleanUpdates.id;
+      delete cleanUpdates._id;
+      delete cleanUpdates.parentTask;
+      delete cleanUpdates.subtasks;
+
+      const response = await apolloClient.mutate({
+        mutation: UPDATE_TASK,
+        variables: { id: taskId, input: cleanUpdates }
       });
-      const updatedTask = response.data;
+
+      const updatedTask = response.data?.updateTask;
 
       setTasks(prevTasks => {
         // Handle array format (daily view)
@@ -388,7 +414,7 @@ const TaskProvider = ({ children }) => {
             const y = d.getUTCFullYear();
             const m = String(d.getUTCMonth() + 1).padStart(2, '0');
             const day = String(d.getUTCDate()).padStart(2, '0');
-            return `${y}-${m}-${day}`;
+            return `${ y }-${ m }-${ day }`;
           })() :
           'no-date';
 
@@ -446,15 +472,16 @@ const TaskProvider = ({ children }) => {
     try {
       setLoading(LoadingState.UPDATING);
       setError(null);
-      const response = await apiClient.put(`/tasks/${taskId}`, { status: newStatus }, {
-        ...AUTH_CONFIG
+      const response = await apolloClient.mutate({
+        mutation: UPDATE_TASK_STATUS,
+        variables: { id: taskId, status: newStatus }
       });
 
       setTasks(prev => {
         // If prev is an array (daily, weekly views)
         if (Array.isArray(prev)) {
           return sortTasks(prev.map(task =>
-            task._id === taskId ? response.data : task
+            task._id === taskId || task.id === taskId ? response.data.updateTaskStatus : task
           ));
         }
 
@@ -463,14 +490,14 @@ const TaskProvider = ({ children }) => {
         Object.entries(newTasks).forEach(([date, tasks]) => {
           if (Array.isArray(tasks)) {
             newTasks[date] = sortTasks(tasks.map(task =>
-              task._id === taskId ? response.data : task
+              task._id === taskId || task.id === taskId ? response.data.updateTaskStatus : task
             ));
           }
         });
         return newTasks;
       });
 
-      return response.data;
+      return response.data?.updateTaskStatus;
     } catch (error) {
       handleApiError(error);
     } finally {
@@ -482,8 +509,9 @@ const TaskProvider = ({ children }) => {
     try {
       setLoading(LoadingState.DELETING);
       setError(null);
-      await apiClient.delete(`/tasks/${taskId}`, {
-        ...AUTH_CONFIG
+      await apolloClient.mutate({
+        mutation: DELETE_TASK,
+        variables: { id: taskId }
       });
 
       setTasks(prev => {
@@ -515,11 +543,13 @@ const TaskProvider = ({ children }) => {
     try {
       setLoading(LoadingState.MIGRATING);
       setError(null);
-      const response = await apiClient.post(
-        `/tasks/${taskId}/migrate-future`,
-        { futureDate: targetDate.toISOString() },
-        { ...AUTH_CONFIG }
-      );
+
+      const response = await apolloClient.mutate({
+        mutation: MIGRATE_TASK_TO_FUTURE,
+        variables: { id: taskId, futureDate: targetDate.toISOString() }
+      });
+
+      const migratedTask = response.data?.migrateTaskToFuture;
 
       setTasks(prev => {
         const newTasks = {};
@@ -534,12 +564,12 @@ const TaskProvider = ({ children }) => {
         if (!newTasks[newDate]) {
           newTasks[newDate] = [];
         }
-        newTasks[newDate].push(response.data);
+        newTasks[newDate].push(migratedTask);
 
         return newTasks;
       });
 
-      return response.data;
+      return migratedTask;
     } catch (error) {
       handleApiError(error);
     } finally {
@@ -570,8 +600,9 @@ const TaskProvider = ({ children }) => {
     migrateTask,
     saveDailyOrder: async (dateKey, orderedTaskIds) => {
       try {
-        await apiClient.post(`/tasks/daily/order`, { dateKey, orderedTaskIds }, {
-          ...AUTH_CONFIG
+        await apolloClient.mutate({
+          mutation: SAVE_DAILY_TASK_ORDER,
+          variables: { dateKey, orderedTaskIds }
         });
       } catch (error) {
         handleApiError(error);

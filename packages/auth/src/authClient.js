@@ -29,7 +29,7 @@ function saveTokens(token, refreshToken) {
   if (refreshToken) localStorage.setItem(GEEK_REFRESH_TOKEN_KEY, refreshToken);
 }
 
-function clearTokens() {
+export function clearTokens() {
   if (typeof window === 'undefined') return;
   localStorage.removeItem(GEEK_TOKEN_KEY);
   localStorage.removeItem(GEEK_REFRESH_TOKEN_KEY);
@@ -59,7 +59,7 @@ function getApiBase() {
     const raw = import.meta.env.VITE_API_URL;
     if (raw) {
       const base = String(raw).replace(/\/$/, '');
-      return base.endsWith('/api') ? base : `${base}/api`;
+      return base.endsWith('/api') ? base : `${ base }/api`;
     }
   }
   return '/api';
@@ -78,7 +78,7 @@ function sanitizeRedirectTarget(target) {
   }
 }
 
-function broadcastLogout() {
+export function broadcastLogout() {
   if (typeof window === 'undefined' || !window.BroadcastChannel) return;
   try {
     const bc = new BroadcastChannel(BROADCAST_CHANNEL);
@@ -103,15 +103,15 @@ function processRefreshQueue(error, token = null) {
 async function doTokenRefresh() {
   const apiBase = getApiBase();
   const refreshToken = getStoredRefreshToken();
-  
+
   const headers = { 'Content-Type': 'application/json' };
   const body = {};
-  
+
   if (refreshToken) {
     body.refreshToken = refreshToken;
   }
 
-  const res = await fetch(`${apiBase}/auth/refresh`, {
+  const res = await fetch(`${ apiBase }/auth/refresh`, {
     method: 'POST',
     credentials: 'include',
     headers,
@@ -168,10 +168,10 @@ export async function getMe() {
     const token = getStoredToken();
     const headers = {};
     if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+      headers['Authorization'] = `Bearer ${ token }`;
     }
 
-    return await fetch(`${apiBase}/me`, {
+    return await fetch(`${ apiBase }/me`, {
       method: 'GET',
       credentials: 'include',
       cache: 'no-store',
@@ -234,7 +234,7 @@ export function loginRedirect(appName, returnTo, mode = 'login') {
   if (typeof window === 'undefined') return;
   const baseGeekUrl = getBaseGeekUrl();
   const path = mode === 'register' ? '/register' : '/login';
-  const url = new URL(`${baseGeekUrl}${path}`);
+  const url = new URL(`${ baseGeekUrl }${ path }`);
   url.searchParams.set('app', appName);
   url.searchParams.set(
     'redirect',
@@ -251,11 +251,11 @@ export async function logout() {
   const token = getStoredToken();
   const headers = { 'Content-Type': 'application/json' };
   if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+    headers['Authorization'] = `Bearer ${ token }`;
   }
 
   try {
-    await fetch(`${apiBase}/auth/logout`, {
+    await fetch(`${ apiBase }/auth/logout`, {
       method: 'POST',
       credentials: 'include',
       headers
@@ -340,7 +340,7 @@ export function setupAxiosInterceptors(axiosInstance, onSessionExpired) {
     (config) => {
       const token = getStoredToken();
       if (token && !config.headers['Authorization']) {
-        config.headers['Authorization'] = `Bearer ${token}`;
+        config.headers['Authorization'] = `Bearer ${ token }`;
       }
       return config;
     },
@@ -383,7 +383,7 @@ export function setupAxiosInterceptors(axiosInstance, onSessionExpired) {
             // Re-run the original request with the new token
             const token = getStoredToken();
             if (token) {
-                originalRequest.headers['Authorization'] = `Bearer ${token}`;
+              originalRequest.headers['Authorization'] = `Bearer ${ token }`;
             }
             return axiosInstance(originalRequest);
           } catch (refreshError) {
@@ -391,6 +391,8 @@ export function setupAxiosInterceptors(axiosInstance, onSessionExpired) {
             processRefreshQueue(refreshError);
 
             // Trigger logout procedure
+            clearTokens();
+            broadcastLogout();
             stopRefreshTimer();
             if (onSessionExpired) onSessionExpired();
 
@@ -407,7 +409,7 @@ export function setupAxiosInterceptors(axiosInstance, onSessionExpired) {
               // Once refresh completes, replay original request with the new token
               const token = getStoredToken();
               if (token) {
-                  originalRequest.headers['Authorization'] = `Bearer ${token}`;
+                originalRequest.headers['Authorization'] = `Bearer ${ token }`;
               }
               return axiosInstance(originalRequest);
             })

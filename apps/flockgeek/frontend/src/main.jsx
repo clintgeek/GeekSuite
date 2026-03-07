@@ -19,7 +19,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
       <CssBaseline />
       <BrowserRouter>
         <AuthProvider>
-          <GeekSuiteApolloProvider>
+          <GeekSuiteApolloProvider appName="flockgeek">
             <App />
           </GeekSuiteApolloProvider>
         </AuthProvider>

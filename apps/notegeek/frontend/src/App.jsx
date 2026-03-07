@@ -70,38 +70,41 @@ function App() {
                     </Box>
                 ) : (
                     <Routes>
-                    {/* Public routes */}
-                    <Route path="/login" element={<Login />} />
-                    <Route path="/register" element={<Register />} />
+                        {/* Public routes */}
+                        <Route path="/login" element={<Login />} />
+                        <Route path="/register" element={<Register />} />
 
-                    {/* Protected routes */}
-                    <Route
-                        path="/"
-                        element={
-                            isAuthenticated ? (
-                                <Layout>
-                                    <QuickCaptureHome />
-                                </Layout>
-                            ) : (
-                                <Navigate to="/login" replace />
-                            )
-                        }
-                    />
+                        {/* Protected routes */}
+                        <Route
+                            path="/"
+                            element={
+                                isAuthenticated ? (
+                                    <Layout>
+                                        <QuickCaptureHome />
+                                    </Layout>
+                                ) : (
+                                    <Navigate to="/login" replace />
+                                )
+                            }
+                        />
 
-                    {/* Add other protected routes here */}
-                    {isAuthenticated && (
-                        <>
-                            <Route path="/notes/new" element={<Layout><NewNoteWrapper /></Layout>} />
-                            <Route path="/notes" element={<Layout><NoteList /></Layout>} />
-                            <Route path="/notes/:id" element={<Layout><NotePage /></Layout>} />
-                            <Route path="/notes/:id/edit" element={<Layout><NoteEditorPage /></Layout>} />
-                            <Route path="/tags/:tag" element={<Layout><TagNotesList /></Layout>} />
-                            <Route path="/search" element={<Layout><SearchResults /></Layout>} />
-                            <Route path="/settings" element={<Layout><Settings /></Layout>} />
-                        </>
-                    )}
+                        {/* Add other protected routes here */}
+                        {isAuthenticated && (
+                            <>
+                                <Route path="/notes/new" element={<Layout><NewNoteWrapper /></Layout>} />
+                                <Route path="/notes/undefined" element={<Navigate to="/" replace />} />
+                                <Route path="/notes/undefined/edit" element={<Navigate to="/" replace />} />
+                                <Route path="/notes" element={<Layout><NoteList /></Layout>} />
+                                <Route path="/notes/:id" element={<Layout><NotePage /></Layout>} />
+                                <Route path="/notes/:id/edit" element={<Layout><NoteEditorPage /></Layout>} />
+                                <Route path="/tags/:tag" element={<Layout><TagNotesList /></Layout>} />
+                                <Route path="/search" element={<Layout><SearchResults /></Layout>} />
+                                <Route path="/settings" element={<Layout><Settings /></Layout>} />
+                            </>
+                        )}
 
-                    {/* ... other existing routes ... */}
+                        {/* Catch-all route to prevent blank page freeze when unauthorized */}
+                        <Route path="*" element={<Navigate to={isAuthenticated ? "/" : "/login"} replace />} />
                     </Routes>
                 )}
             </Router>

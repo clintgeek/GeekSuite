@@ -76,7 +76,7 @@ const TaskModal = ({
               renderInput={(params) => <TextField {...params} fullWidth sx={{ mb: 2 }} />}
             />
           </LocalizationProvider>
-          {mode === 'edit' && (
+          {mode === 'edit' && editedTask.createdAt && !isNaN(new Date(editedTask.createdAt).getTime()) && (
             <Typography variant="caption" color="text.secondary">
               Created: {format(new Date(editedTask.createdAt), 'EEEE, MMMM d, yyyy h:mm a')}
             </Typography>
