@@ -36,8 +36,8 @@ The BaseGeek SSO integration for MusicGeek is **complete and functional**. The c
 - **Environment Variables** (`.env`)
 
   ```bash
-  JWT_SECRET=REDACTED_JWT_SECRET
-  JWT_REFRESH_SECRET=REDACTED_JWT_REFRESH_SECRET
+  JWT_SECRET=CHANGE_ME_SET_JWT_SECRET
+  JWT_REFRESH_SECRET=CHANGE_ME_SET_JWT_REFRESH_SECRET
   BASEGEEK_URL=https://basegeek.clintgeek.com
   ```
 

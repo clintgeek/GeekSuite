@@ -12,7 +12,7 @@ The project has been reconfigured to use your existing PostgreSQL server instead
 - Port: `55432`
 - Database: `guitargeek` (dedicated database for this project)
 - User: `datageek_pg_admin`
-- Password: `REDACTED`
+- Password: `CHANGE_ME`
 
 ### What Changed
 
@@ -35,7 +35,7 @@ Or manually:
 
 ```bash
 # Create database
-PGPASSWORD=REDACTED psql -h localhost -p 55432 -U datageek_pg_admin -d datageek -c "CREATE DATABASE guitargeek;"
+PGPASSWORD=CHANGE_ME psql -h localhost -p 55432 -U datageek_pg_admin -d datageek -c "CREATE DATABASE guitargeek;"
 
 # Run migrations
 cd backend
@@ -71,7 +71,7 @@ curl http://localhost:3001/health
 **Connect to database:**
 
 ```bash
-PGPASSWORD=REDACTED psql -h localhost -p 55432 -U datageek_pg_admin -d guitargeek
+PGPASSWORD=CHANGE_ME psql -h localhost -p 55432 -U datageek_pg_admin -d guitargeek
 ```
 
 **View tables:**
@@ -104,9 +104,9 @@ All database configuration is in `.env`:
 POSTGRES_HOST=localhost
 POSTGRES_PORT=55432
 POSTGRES_USER=datageek_pg_admin
-POSTGRES_PASSWORD=REDACTED
+POSTGRES_PASSWORD=CHANGE_ME
 POSTGRES_DB=guitargeek
-DATABASE_URL=postgres://datageek_pg_admin:REDACTED@localhost:55432/guitargeek
+DATABASE_URL=postgres://datageek_pg_admin:CHANGE_ME@localhost:55432/guitargeek
 ```
 
 ### Docker Compose Changes
@@ -132,7 +132,7 @@ docker-compose logs backend
 2. Check firewall allows connections
 3. Ensure `guitargeek` database exists:
    ```bash
-   PGPASSWORD=REDACTED psql -h localhost -p 55432 -U datageek_pg_admin -d datageek -c "\l" | grep guitargeek
+   PGPASSWORD=CHANGE_ME psql -h localhost -p 55432 -U datageek_pg_admin -d datageek -c "\l" | grep guitargeek
    ```
 
 **Migration errors:**
@@ -140,7 +140,7 @@ docker-compose logs backend
 ```bash
 cd backend
 # Check connection
-PGPASSWORD=REDACTED psql -h localhost -p 55432 -U datageek_pg_admin -d guitargeek -c "SELECT 1;"
+PGPASSWORD=CHANGE_ME psql -h localhost -p 55432 -U datageek_pg_admin -d guitargeek -c "SELECT 1;"
 
 # Re-run migrations
 npm run migrate:up

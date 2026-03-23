@@ -10,7 +10,7 @@ const axios = require('axios');
 
 const JWT_SECRET =
   process.env.JWT_SECRET ||
-  'REDACTED_JWT_SECRET';
+  'CHANGE_ME_SET_JWT_SECRET';
 const MUSICGEEK_API = 'http://localhost:3001';
 
 async function testJWTVerification() {

@@ -143,7 +143,7 @@ If everything is configured correctly:
 - **Cause**: JWT_SECRET mismatch between BaseGeek and MusicGeek
 - **Solution**:
   1. Check `.env` file: `JWT_SECRET` must match BaseGeek exactly
-  2. Current value should be: `REDACTED_JWT_SECRET`
+  2. Current value should be: `CHANGE_ME_SET_JWT_SECRET`
   3. Restart backend after changing `.env`
 
 ### BaseGeek Not Responding

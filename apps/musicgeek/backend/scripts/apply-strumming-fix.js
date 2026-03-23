@@ -6,7 +6,7 @@ const pool = new Pool({
   port: 55432,
   database: 'guitargeek',
   user: 'postgres',
-  password: 'REDACTED',
+  password: 'CHANGE_ME',
 });
 
 async function main() {

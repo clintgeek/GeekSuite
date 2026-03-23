@@ -30,4 +30,4 @@ Standard beginner chords: A, D, E, Am, Em, Dm, C, G, F, D7, A7 (actually 11, plu
 - Chord database uses suffix "7" for dominant 7ths (not "dominant7")
 - Database constraints: UNIQUE(lesson_id, step_number) on lesson_steps table
 - SVG chord diagrams: 240x240px with verified fingerings
-- Migration system uses datageek_pg_admin user (password: REDACTED)
+- Migration system uses datageek_pg_admin user (password: CHANGE_ME)

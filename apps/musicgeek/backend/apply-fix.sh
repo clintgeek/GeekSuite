@@ -2,7 +2,7 @@
 set -e
 
 echo "Applying strumming fix..."
-PGPASSWORD='REDACTED' psql -h 192.168.1.17 -p 55432 -U postgres -d guitargeek -f fix-strumming.sql
+PGPASSWORD='CHANGE_ME' psql -h 192.168.1.17 -p 55432 -U postgres -d guitargeek -f fix-strumming.sql
 
 echo ""
 echo "Done! The Strumming 101 lesson now has:"

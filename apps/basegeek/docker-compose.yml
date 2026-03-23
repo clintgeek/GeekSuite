@@ -49,7 +49,7 @@ services:
       - "55432:5432"
     environment:
       - POSTGRES_USER=datageek_pg_admin
-      - POSTGRES_PASSWORD=REDACTED
+      - POSTGRES_PASSWORD=CHANGE_ME
       - POSTGRES_DB=datageek
     volumes:
       - ./data/postgres:/var/lib/postgresql/data

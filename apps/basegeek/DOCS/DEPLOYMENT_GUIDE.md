@@ -40,7 +40,7 @@ INFLUXDB_ORG=basegeek
 INFLUXDB_BUCKET=datageek_metrics
 INFLUXDB_TOKEN=<scoped_app_token>
 INFLUXDB_SETUP_USERNAME=datageek_influx_admin
-INFLUXDB_SETUP_PASSWORD=REDACTED
+INFLUXDB_SETUP_PASSWORD=CHANGE_ME_SET_INFLUXDB_PASSWORD
 INFLUXDB_ADMIN_TOKEN=<bootstrap_setup_token>
 ```
 
@@ -424,7 +424,7 @@ Expected indexes:
 ```bash
 # Backup conversations collection
 docker exec datageek_mongodb mongodump \
-  --uri="mongodb://datageek_admin:REDACTED@localhost:27017/datageek?authSource=admin" \
+  --uri="mongodb://datageek_admin:CHANGE_ME@localhost:27017/datageek?authSource=admin" \
   --collection=conversations \
   --out=/tmp/backup
 
