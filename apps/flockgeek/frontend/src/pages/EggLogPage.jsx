@@ -1,352 +1,173 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useMemo } from "react";
+import { useQuery, useMutation } from '@apollo/client';
 import { toLocalDateString } from "../utils/dateUtils";
 import {
-  Container,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableSortLabel,
-  TableRow,
-  TablePagination,
-  Button,
-  Box,
-  Typography,
-  CircularProgress,
-  Alert,
-  TextField,
-  MenuItem,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  FormControl,
-  InputLabel,
-  Select,
-  IconButton
+  Container, Paper, Table, TableBody, TableCell, TableContainer,
+  TableHead, TableSortLabel, TableRow, TablePagination, Button, Box,
+  Typography, CircularProgress, Alert, TextField, MenuItem, Dialog,
+  DialogTitle, DialogContent, DialogActions, FormControl, InputLabel,
+  Select, IconButton
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
-import client from "../services/apiClient";
 import QuickHarvestEntry from "../components/QuickHarvestEntry";
+import { GET_EGG_PRODUCTIONS, GET_LOCATIONS } from "../graphql/queries";
+import { RECORD_EGG_PRODUCTION, UPDATE_EGG_PRODUCTION, DELETE_ENTITY } from "../graphql/mutations";
+
+const emptyForm = { date: "", eggsCount: "", locationId: "", notes: "" };
 
 const EggLogPage = () => {
-  const [eggProduction, setEggProduction] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [total, setTotal] = useState(0);
   const [sortBy, setSortBy] = useState("date");
   const [sortOrder, setSortOrder] = useState("desc");
-  const [filters, setFilters] = useState({
-    startDate: "",
-    endDate: "",
-    locationId: ""
-  });
+  const [filters, setFilters] = useState({ startDate: "", endDate: "", locationId: "" });
+  const [mutationError, setMutationError] = useState("");
 
-  // Locations for quick entry
-  const [locations, setLocations] = useState([]);
-
-  // Dialog states
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
-  const [editFormData, setEditFormData] = useState({
-    date: "",
-    eggsCount: "",
-    locationId: "",
-    daysObserved: 1,
-    eggColor: "",
-    eggSize: "",
-    quality: "",
-    source: "",
-    notes: ""
-  });
+  const [editFormData, setEditFormData] = useState(emptyForm);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
-  const [addFormData, setAddFormData] = useState({
-    date: "",
-    eggsCount: "",
-    locationId: "",
-    daysObserved: 1,
-    eggColor: "",
-    eggSize: "",
-    quality: "",
-    source: "",
-    notes: ""
+  const [addFormData, setAddFormData] = useState(emptyForm);
+
+  const { data: eggsData, loading: eggsLoading, error: eggsError } = useQuery(GET_EGG_PRODUCTIONS);
+  const { data: locData } = useQuery(GET_LOCATIONS);
+
+  const allEggs = eggsData?.eggProductions || [];
+  const locations = locData?.flockLocations || [];
+
+  const refetchList = ['GetEggProductions'];
+
+  const [recordEggProduction] = useMutation(RECORD_EGG_PRODUCTION, {
+    refetchQueries: refetchList, awaitRefetchQueries: true,
+    onCompleted: () => { setAddDialogOpen(false); setAddFormData(emptyForm); },
+    onError: (err) => setMutationError(err.message),
   });
 
-  const fetchEggProduction = async () => {
-    setLoading(true);
-    setError("");
+  const [updateEggProduction] = useMutation(UPDATE_EGG_PRODUCTION, {
+    refetchQueries: refetchList, awaitRefetchQueries: true,
+    onCompleted: () => { setEditDialogOpen(false); setEditingRecord(null); },
+    onError: (err) => setMutationError(err.message),
+  });
 
-    try {
-      const params = {
-        page: page + 1,
-        sortBy,
-        sortOrder,
-        limit: rowsPerPage,
-        ...Object.fromEntries(Object.entries(filters).filter(([, v]) => v))
-      };
+  const [deleteEntity] = useMutation(DELETE_ENTITY, {
+    refetchQueries: refetchList,
+    onError: (err) => setMutationError(err.message),
+  });
 
-      const response = await client.get("/egg-production", { params });
-      setEggProduction(response.data.data.eggProduction);
-      setTotal(response.data.data.pagination.total);
-    } catch (err) {
-      setError(err.message || "Failed to fetch egg production records");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const filtered = useMemo(() => allEggs.filter(e => {
+    const dateStr = e.date ? e.date.substring(0, 10) : "";
+    if (filters.startDate && dateStr < filters.startDate) return false;
+    if (filters.endDate && dateStr > filters.endDate) return false;
+    if (filters.locationId && e.locationId !== filters.locationId) return false;
+    return true;
+  }), [allEggs, filters]);
 
-  const fetchLocations = async () => {
-    try {
-      const response = await client.get("/locations", { params: { limit: 100 } });
-      setLocations(response.data.data.locations || []);
-    } catch (err) {
-      console.error("Failed to fetch locations:", err);
-    }
-  };
+  const sorted = useMemo(() => [...filtered].sort((a, b) => {
+    const av = a[sortBy] ?? ""; const bv = b[sortBy] ?? "";
+    const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+    return sortOrder === "asc" ? cmp : -cmp;
+  }), [filtered, sortBy, sortOrder]);
 
-  useEffect(() => {
-    fetchLocations();
-  }, []);
+  const paginated = sorted.slice(page * rowsPerPage, (page + 1) * rowsPerPage);
 
-  useEffect(() => {
-    fetchEggProduction();
-  }, [page, rowsPerPage, filters, sortBy, sortOrder]);
+  const handleSort = (col) => { setSortOrder(sortBy === col && sortOrder === "asc" ? "desc" : "asc"); setSortBy(col); setPage(0); };
 
-  const handleDeleteRecord = async (id) => {
+  const handleDelete = (id) => {
     if (!window.confirm("Delete this egg production record?")) return;
-
-    try {
-      await client.delete(`/egg-production/${ id }`);
-      fetchEggProduction();
-    } catch (err) {
-      setError(err.message || "Failed to delete record");
-    }
+    deleteEntity({ variables: { type: "eggproduction", id } });
   };
 
-  const handleChangePage = (event, newPage) => {
-    setPage(newPage);
-  };
-
-  const handleChangeRowsPerPage = (event) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
-  };
-
-  const handleSort = (column) => {
-    const isAsc = sortBy === column && sortOrder === "asc";
-    setSortOrder(isAsc ? "desc" : "asc");
-    setSortBy(column);
-    setPage(0);
-  };
-
-  // Dialog handlers
-  const handleEditRecord = (record) => {
+  const handleEdit = (record) => {
     setEditingRecord(record);
     setEditFormData({
       date: record.date ? record.date.substring(0, 10) : "",
       eggsCount: record.eggsCount || "",
-      locationId: record.locationId?._id || record.locationId || "",
-      daysObserved: record.daysObserved || 1,
-      eggColor: record.eggColor || "",
-      eggSize: record.eggSize || "",
-      quality: record.quality || "",
-      source: record.source || "",
-      notes: record.notes || ""
+      locationId: record.locationId || "",
+      notes: record.notes || "",
     });
     setEditDialogOpen(true);
   };
 
-  const handleCloseEditDialog = () => {
-    setEditDialogOpen(false);
-    setEditingRecord(null);
-    setEditFormData({
-      date: "",
-      eggsCount: "",
-      locationId: "",
-      daysObserved: 1,
-      eggColor: "",
-      eggSize: "",
-      quality: "",
-      source: "",
-      notes: ""
-    });
+  const handleSaveEdit = () => {
+    if (!editFormData.date || !editFormData.eggsCount) { setMutationError("Date and eggs count are required"); return; }
+    updateEggProduction({ variables: {
+      id: editingRecord.id,
+      date: editFormData.date,
+      eggsCount: parseInt(editFormData.eggsCount),
+      locationId: editFormData.locationId || undefined,
+      notes: editFormData.notes || undefined,
+    }});
   };
 
-  const handleSaveEdit = async () => {
-    if (!editFormData.date || !editFormData.eggsCount) {
-      setError("Date and eggs count are required");
-      return;
-    }
-
-    try {
-      await client.put(`/egg-production/${ editingRecord._id }`, editFormData);
-      fetchEggProduction();
-      handleCloseEditDialog();
-    } catch (err) {
-      setError(err.message || "Failed to update record");
-    }
+  const handleSaveAdd = () => {
+    if (!addFormData.date || !addFormData.eggsCount) { setMutationError("Date and eggs count are required"); return; }
+    recordEggProduction({ variables: {
+      date: addFormData.date,
+      eggsCount: parseInt(addFormData.eggsCount),
+      locationId: addFormData.locationId || undefined,
+      notes: addFormData.notes || undefined,
+    }});
   };
 
-  const handleAddRecord = () => {
-    setAddFormData({
-      date: toLocalDateString(new Date()),
-      eggsCount: "",
-      locationId: locations.length === 1 ? locations[0]._id : "",
-      daysObserved: 1,
-      eggColor: "",
-      eggSize: "",
-      quality: "",
-      source: "manual",
-      notes: ""
-    });
-    setAddDialogOpen(true);
-  };
+  const getLocationName = (locId) => locations.find(l => l.id === locId)?.name ?? "-";
 
-  const handleCloseAddDialog = () => {
-    setAddDialogOpen(false);
-    setAddFormData({
-      date: "",
-      eggsCount: "",
-      locationId: "",
-      daysObserved: 1,
-      eggColor: "",
-      eggSize: "",
-      quality: "",
-      source: "",
-      notes: ""
-    });
-  };
+  const sortCol = (col, label) => (
+    <TableSortLabel active={sortBy === col} direction={sortBy === col ? sortOrder : "asc"} onClick={() => handleSort(col)}>{label}</TableSortLabel>
+  );
 
-  const handleSaveAdd = async () => {
-    if (!addFormData.date || !addFormData.eggsCount) {
-      setError("Date and eggs count are required");
-      return;
-    }
-
-    try {
-      await client.post("/egg-production", addFormData);
-      fetchEggProduction();
-      handleCloseAddDialog();
-    } catch (err) {
-      setError(err.message || "Failed to create record");
-    }
-  };
-
-  // Get location name by ID for table display
-  const getLocationName = (locId) => {
-    const loc = locations.find(l => l._id === locId);
-    return loc ? loc.name : "-";
-  };
+  const locationSelect = (formData, setForm) => (
+    <FormControl fullWidth>
+      <InputLabel>Location</InputLabel>
+      <Select value={formData.locationId} label="Location" onChange={(e) => setForm(p => ({ ...p, locationId: e.target.value }))}>
+        <MenuItem value=""><em>No specific location</em></MenuItem>
+        {locations.map((loc) => <MenuItem key={loc.id} value={loc.id}>{loc.name}</MenuItem>)}
+      </Select>
+    </FormControl>
+  );
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
-      {/* Quick Harvest Entry */}
-      <QuickHarvestEntry
-        locations={locations}
-        onSuccess={fetchEggProduction}
-      />
+      <QuickHarvestEntry locations={locations} />
 
-      {/* History section header */}
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
-        <Typography variant="h6" sx={{ color: "text.secondary" }}>
-          Harvest History
-        </Typography>
-        <Button
-          variant="outlined"
-          size="small"
-          startIcon={<AddIcon />}
-          onClick={handleAddRecord}
-        >
+        <Typography variant="h6" sx={{ color: "text.secondary" }}>Harvest History</Typography>
+        <Button variant="outlined" size="small" startIcon={<AddIcon />}
+          onClick={() => { setAddFormData({ date: toLocalDateString(new Date()), eggsCount: "", locationId: locations.length === 1 ? locations[0].id : "", notes: "" }); setAddDialogOpen(true); }}>
           Add Detailed Entry
         </Button>
       </Box>
 
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {(eggsError || mutationError) && <Alert severity="error" sx={{ mb: 2 }}>{eggsError?.message || mutationError}</Alert>}
 
-      {/* Filters */}
       <Paper sx={{ p: 2, mb: 3 }}>
         <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 2 }}>
-          <TextField
-            type="date"
-            label="Start Date"
-            size="small"
-            InputLabelProps={{ shrink: true }}
-            value={filters.startDate}
-            onChange={(e) => {
-              setFilters({ ...filters, startDate: e.target.value });
-              setPage(0);
-            }}
-          />
-
-          <TextField
-            type="date"
-            label="End Date"
-            size="small"
-            InputLabelProps={{ shrink: true }}
-            value={filters.endDate}
-            onChange={(e) => {
-              setFilters({ ...filters, endDate: e.target.value });
-              setPage(0);
-            }}
-          />
-
+          <TextField type="date" label="Start Date" size="small" InputLabelProps={{ shrink: true }} value={filters.startDate}
+            onChange={(e) => { setFilters(p => ({ ...p, startDate: e.target.value })); setPage(0); }} />
+          <TextField type="date" label="End Date" size="small" InputLabelProps={{ shrink: true }} value={filters.endDate}
+            onChange={(e) => { setFilters(p => ({ ...p, endDate: e.target.value })); setPage(0); }} />
           <FormControl size="small">
             <InputLabel>Location</InputLabel>
-            <Select
-              value={filters.locationId || ""}
-              label="Location"
-              onChange={(e) => {
-                setFilters({ ...filters, locationId: e.target.value });
-                setPage(0);
-              }}
-            >
+            <Select value={filters.locationId} label="Location" onChange={(e) => { setFilters(p => ({ ...p, locationId: e.target.value })); setPage(0); }}>
               <MenuItem value="">All Locations</MenuItem>
-              {locations.map((loc) => (
-                <MenuItem key={loc._id} value={loc._id}>
-                  {loc.name}
-                </MenuItem>
-              ))}
+              {locations.map((loc) => <MenuItem key={loc.id} value={loc.id}>{loc.name}</MenuItem>)}
             </Select>
           </FormControl>
         </Box>
       </Paper>
 
-      {/* Table */}
       <TableContainer component={Paper}>
-        {loading ? (
-          <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}>
-            <CircularProgress />
-          </Box>
+        {eggsLoading ? (
+          <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}><CircularProgress /></Box>
         ) : (
           <>
             <Table size="small">
               <TableHead sx={{ backgroundColor: "#f5f5f5" }}>
                 <TableRow>
-                  <TableCell>
-                    <TableSortLabel
-                      active={sortBy === "date"}
-                      direction={sortBy === "date" ? sortOrder : "asc"}
-                      onClick={() => handleSort("date")}
-                    >
-                      Date
-                    </TableSortLabel>
-                  </TableCell>
+                  <TableCell>{sortCol("date", "Date")}</TableCell>
                   <TableCell>Location</TableCell>
-                  <TableCell align="center">
-                    <TableSortLabel
-                      active={sortBy === "eggsCount"}
-                      direction={sortBy === "eggsCount" ? sortOrder : "asc"}
-                      onClick={() => handleSort("eggsCount")}
-                    >
-                      Eggs
-                    </TableSortLabel>
-                  </TableCell>
+                  <TableCell align="center">{sortCol("eggsCount", "Eggs")}</TableCell>
                   <TableCell align="center">Days</TableCell>
                   <TableCell align="center">Rate</TableCell>
                   <TableCell>Notes</TableCell>
@@ -354,197 +175,79 @@ const EggLogPage = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {eggProduction.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
-                      No egg production records found
+                {paginated.length === 0 ? (
+                  <TableRow><TableCell colSpan={7} align="center" sx={{ py: 4 }}>No egg production records found</TableCell></TableRow>
+                ) : paginated.map((record) => (
+                  <TableRow key={record.id} hover>
+                    <TableCell>{new Date(record.date).toLocaleDateString(undefined, { timeZone: 'UTC' })}</TableCell>
+                    <TableCell>{record.locationId ? getLocationName(record.locationId) : "-"}</TableCell>
+                    <TableCell align="center" sx={{ fontWeight: 600 }}>{record.eggsCount}</TableCell>
+                    <TableCell align="center">{record.daysObserved || 1}</TableCell>
+                    <TableCell align="center" sx={{ color: "text.secondary" }}>
+                      {(record.eggsCount / (record.daysObserved || 1)).toFixed(1)}/day
+                    </TableCell>
+                    <TableCell sx={{ maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {record.notes || "-"}
+                    </TableCell>
+                    <TableCell align="right">
+                      <IconButton size="small" onClick={() => handleEdit(record)} sx={{ mr: 0.5 }}>
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton size="small" color="error" onClick={() => handleDelete(record.id)}>
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
                     </TableCell>
                   </TableRow>
-                ) : (
-                  eggProduction.map((record) => (
-                    <TableRow key={record._id} hover>
-                      {new Date(record.date).toLocaleDateString(undefined, { timeZone: 'UTC' })}
-                      <TableCell>
-                        {record.locationId ? getLocationName(record.locationId._id || record.locationId) : "-"}
-                      </TableCell>
-                      <TableCell align="center" sx={{ fontWeight: 600 }}>
-                        {record.eggsCount}
-                      </TableCell>
-                      <TableCell align="center">
-                        {record.daysObserved || 1}
-                      </TableCell>
-                      <TableCell align="center" sx={{ color: "text.secondary" }}>
-                        {((record.eggsCount) / (record.daysObserved || 1)).toFixed(1)}/day
-                      </TableCell>
-                      <TableCell sx={{ maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {record.notes || "-"}
-                      </TableCell>
-                      <TableCell align="right">
-                        <IconButton
-                          size="small"
-                          onClick={() => handleEditRecord(record)}
-                          sx={{ mr: 0.5 }}
-                        >
-                          <EditIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton
-                          size="small"
-                          color="error"
-                          onClick={() => handleDeleteRecord(record._id)}
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
+                ))}
               </TableBody>
             </Table>
-            <TablePagination
-              rowsPerPageOptions={[5, 10, 25]}
-              component="div"
-              count={total}
-              rowsPerPage={rowsPerPage}
-              page={page}
-              onPageChange={handleChangePage}
-              onRowsPerPageChange={handleChangeRowsPerPage}
-            />
+            <TablePagination rowsPerPageOptions={[5, 10, 25]} component="div" count={sorted.length}
+              rowsPerPage={rowsPerPage} page={page}
+              onPageChange={(_, p) => setPage(p)} onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }} />
           </>
         )}
       </TableContainer>
 
       {/* Edit Dialog */}
-      <Dialog open={editDialogOpen} onClose={handleCloseEditDialog} maxWidth="sm" fullWidth>
+      <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Edit Egg Production Record</DialogTitle>
         <DialogContent>
           <Box sx={{ pt: 2, display: "grid", gap: 2 }}>
             <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
-              <TextField
-                type="date"
-                label="Date"
-                required
-                fullWidth
-                InputLabelProps={{ shrink: true }}
-                value={editFormData.date}
-                onChange={(e) => setEditFormData({ ...editFormData, date: e.target.value })}
-              />
-              <TextField
-                type="number"
-                label="Eggs Count"
-                required
-                fullWidth
-                value={editFormData.eggsCount}
-                onChange={(e) => setEditFormData({ ...editFormData, eggsCount: e.target.value })}
-              />
+              <TextField type="date" label="Date" required fullWidth InputLabelProps={{ shrink: true }}
+                value={editFormData.date} onChange={(e) => setEditFormData(p => ({ ...p, date: e.target.value }))} />
+              <TextField type="number" label="Eggs Count" required fullWidth value={editFormData.eggsCount}
+                onChange={(e) => setEditFormData(p => ({ ...p, eggsCount: e.target.value }))} />
             </Box>
-            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
-              <FormControl fullWidth>
-                <InputLabel>Location</InputLabel>
-                <Select
-                  value={editFormData.locationId}
-                  label="Location"
-                  onChange={(e) => setEditFormData({ ...editFormData, locationId: e.target.value })}
-                >
-                  <MenuItem value="">
-                    <em>No specific location</em>
-                  </MenuItem>
-                  {locations.map((loc) => (
-                    <MenuItem key={loc._id} value={loc._id}>
-                      {loc.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <TextField
-                type="number"
-                label="Days Observed"
-                fullWidth
-                inputProps={{ min: 1 }}
-                value={editFormData.daysObserved}
-                onChange={(e) => setEditFormData({ ...editFormData, daysObserved: parseInt(e.target.value) || 1 })}
-                helperText="Days since last harvest"
-              />
-            </Box>
-            <TextField
-              label="Notes"
-              fullWidth
-              multiline
-              rows={2}
-              value={editFormData.notes}
-              onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })}
-            />
+            {locationSelect(editFormData, setEditFormData)}
+            <TextField label="Notes" fullWidth multiline rows={2} value={editFormData.notes}
+              onChange={(e) => setEditFormData(p => ({ ...p, notes: e.target.value }))} />
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseEditDialog}>Cancel</Button>
+          <Button onClick={() => setEditDialogOpen(false)}>Cancel</Button>
           <Button onClick={handleSaveEdit} variant="contained">Save</Button>
         </DialogActions>
       </Dialog>
 
       {/* Add Dialog */}
-      <Dialog open={addDialogOpen} onClose={handleCloseAddDialog} maxWidth="sm" fullWidth>
+      <Dialog open={addDialogOpen} onClose={() => setAddDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Add Egg Production Record</DialogTitle>
         <DialogContent>
           <Box sx={{ pt: 2, display: "grid", gap: 2 }}>
             <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
-              <TextField
-                type="date"
-                label="Date"
-                required
-                fullWidth
-                InputLabelProps={{ shrink: true }}
-                value={addFormData.date}
-                onChange={(e) => setAddFormData({ ...addFormData, date: e.target.value })}
-              />
-              <TextField
-                type="number"
-                label="Eggs Count"
-                required
-                fullWidth
-                value={addFormData.eggsCount}
-                onChange={(e) => setAddFormData({ ...addFormData, eggsCount: e.target.value })}
-              />
+              <TextField type="date" label="Date" required fullWidth InputLabelProps={{ shrink: true }}
+                value={addFormData.date} onChange={(e) => setAddFormData(p => ({ ...p, date: e.target.value }))} />
+              <TextField type="number" label="Eggs Count" required fullWidth value={addFormData.eggsCount}
+                onChange={(e) => setAddFormData(p => ({ ...p, eggsCount: e.target.value }))} />
             </Box>
-            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
-              <FormControl fullWidth>
-                <InputLabel>Location</InputLabel>
-                <Select
-                  value={addFormData.locationId}
-                  label="Location"
-                  onChange={(e) => setAddFormData({ ...addFormData, locationId: e.target.value })}
-                >
-                  <MenuItem value="">
-                    <em>No specific location</em>
-                  </MenuItem>
-                  {locations.map((loc) => (
-                    <MenuItem key={loc._id} value={loc._id}>
-                      {loc.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <TextField
-                type="number"
-                label="Days Observed"
-                fullWidth
-                inputProps={{ min: 1 }}
-                value={addFormData.daysObserved}
-                onChange={(e) => setAddFormData({ ...addFormData, daysObserved: parseInt(e.target.value) || 1 })}
-                helperText="Days since last harvest"
-              />
-            </Box>
-            <TextField
-              label="Notes"
-              fullWidth
-              multiline
-              rows={2}
-              value={addFormData.notes}
-              onChange={(e) => setAddFormData({ ...addFormData, notes: e.target.value })}
-            />
+            {locationSelect(addFormData, setAddFormData)}
+            <TextField label="Notes" fullWidth multiline rows={2} value={addFormData.notes}
+              onChange={(e) => setAddFormData(p => ({ ...p, notes: e.target.value }))} />
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseAddDialog}>Cancel</Button>
+          <Button onClick={() => setAddDialogOpen(false)}>Cancel</Button>
           <Button onClick={handleSaveAdd} variant="contained">Add</Button>
         </DialogActions>
       </Dialog>

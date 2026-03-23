@@ -38,7 +38,7 @@ const TodayPage = () => {
 
   const handleStatusToggle = useCallback(async (task) => {
     const newStatus = task.status === 'completed' ? 'pending' : 'completed';
-    await updateTaskStatus(task._id, newStatus);
+    await updateTaskStatus((task.id || task._id), newStatus);
   }, [updateTaskStatus]);
 
   const handleEdit = useCallback((task) => {
@@ -47,7 +47,7 @@ const TodayPage = () => {
 
   const handleDelete = useCallback(async (task) => {
     if (window.confirm('Delete this task?')) {
-      await deleteTask(task._id);
+      await deleteTask((task.id || task._id));
     }
   }, [deleteTask]);
 

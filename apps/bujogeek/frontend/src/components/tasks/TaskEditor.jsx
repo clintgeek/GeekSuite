@@ -116,7 +116,7 @@ const TaskEditor = ({ open, onClose, task = null }) => {
 
     try {
       if (task) {
-        await updateTask(task._id, formData);
+        await updateTask((task.id || task._id), formData);
       } else {
         await createTask(formData);
       }

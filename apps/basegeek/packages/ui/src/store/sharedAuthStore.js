@@ -39,7 +39,7 @@ const useSharedAuthStore = create(
                     // Try to refresh the token if we have a refresh token
                     if (state.refreshToken) {
                         try {
-                            const refreshResult = await get().refreshToken();
+                            const refreshResult = await get().refreshAuthToken();
                             if (refreshResult) return true;
                         } catch (refreshError) {
                             console.error('Failed to refresh token during initialize:', refreshError);
@@ -209,7 +209,7 @@ const useSharedAuthStore = create(
                     // Try to refresh the token
                     if (state.refreshToken) {
                         try {
-                            const refreshResult = await get().refreshToken();
+                            const refreshResult = await get().refreshAuthToken();
                             if (refreshResult) return true;
                         } catch (refreshError) {
                             console.error('Failed to refresh token during checkAuth:', refreshError);
@@ -229,7 +229,7 @@ const useSharedAuthStore = create(
             },
 
             // Refresh token
-            refreshToken: async () => {
+            refreshAuthToken: async () => {
                 const state = get();
                 if (!state.refreshToken || !state.currentApp) return false;
 

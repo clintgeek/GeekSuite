@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, useMemo } from 'react';
+import { usePreferences } from '@geeksuite/user';
 
 const ThemeContext = createContext({
   theme: 'light',           // Effective theme (light or dark)
@@ -26,6 +27,14 @@ function getStoredPreference() {
 export function ThemeProvider({ children }) {
   const [themePreference, setThemePreference] = useState(getStoredPreference);
   const [systemTheme, setSystemTheme] = useState(getSystemTheme);
+  const { preferences, updatePreferences, loaded } = usePreferences();
+
+  // Sync with global preferences
+  useEffect(() => {
+    if (loaded && preferences?.theme) {
+      setThemePreference(preferences.theme);
+    }
+  }, [loaded, preferences?.theme]);
 
   // Listen for system preference changes
   useEffect(() => {
@@ -52,7 +61,14 @@ export function ThemeProvider({ children }) {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     window.localStorage.setItem(STORAGE_KEY, themePreference);
-  }, [themePreference]);
+    
+    // Persist to global store if logged in and loaded
+    if (loaded && preferences?.theme !== themePreference) {
+      updatePreferences({ theme: themePreference }).catch(err => {
+        console.error('Failed to update global theme preference', err);
+      });
+    }
+  }, [themePreference, loaded, updatePreferences, preferences?.theme]);
 
   // Update document theme attribute when effective theme changes
   useEffect(() => {

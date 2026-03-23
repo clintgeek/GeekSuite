@@ -13,6 +13,9 @@ const WeightChartNivo = ({ data, goalLine, startWeight, targetWeight, startDate,
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
+  const validStart = startDate && !isNaN(new Date(startDate).getTime()) ? startDate : null;
+  const validGoal = goalDate && !isNaN(new Date(goalDate).getTime()) ? goalDate : null;
+
   // Transform data for Nivo
   const chartData = useMemo(() => {
     const result = [];
@@ -23,14 +26,16 @@ const WeightChartNivo = ({ data, goalLine, startWeight, targetWeight, startDate,
         .sort((a, b) => new Date(a.log_date) - new Date(b.log_date))
         .map(item => {
           try {
+            const isValidWeight = !isNaN(parseFloat(item.weight_value));
+            if (!isValidLogDate || !isValidWeight) return null;
             return {
-              date: goalLine && startDate && goalDate ?
+              date: goalLine && validStart && validGoal ?
                 new Date(item.log_date) :
                 new Date(item.log_date).toLocaleDateString('en-US', {
                   month: 'short',
                   day: 'numeric'
                 }),
-              value: parseFloat(item.weight_value) || 0,
+              value: parseFloat(item.weight_value),
               fullDate: item.log_date
             };
           } catch (error) {
@@ -48,10 +53,10 @@ const WeightChartNivo = ({ data, goalLine, startWeight, targetWeight, startDate,
     }
 
     // Add goal line only for goal display: always two points, start and finish of goal period
-    if (goalLine && startWeight != null && targetWeight != null && startDate && goalDate) {
+    if (goalLine && startWeight != null && targetWeight != null && validStart && validGoal) {
       try {
-        const firstDate = new Date(startDate);
-        const goalDateObj = new Date(goalDate);
+        const firstDate = new Date(validStart);
+        const goalDateObj = new Date(validGoal);
 
         // Create goal line data points that span the entire goal period
         const goalStartDate = new Date(firstDate);
@@ -79,11 +84,9 @@ const WeightChartNivo = ({ data, goalLine, startWeight, targetWeight, startDate,
     }
 
     return result;
-  }, [data, goalLine, startWeight, targetWeight, startDate, goalDate, theme.palette]);
+  }, [data, goalLine, startWeight, targetWeight, validStart, validGoal, theme.palette]);
 
-
-
-  if (chartData.length === 0 && !(goalLine && startDate && goalDate && startWeight != null && targetWeight != null)) {
+  if (chartData.length === 0 && !(goalLine && validStart && validGoal && startWeight != null && targetWeight != null)) {
     return (
       <Card sx={{
         width: '100%',
@@ -122,19 +125,21 @@ const WeightChartNivo = ({ data, goalLine, startWeight, targetWeight, startDate,
           <ResponsiveLine
             data={chartData.length > 0 ? chartData : [
               { id: 'weight', color: theme.palette.primary.main, data: [] },
-              { id: 'goal', color: theme.palette.secondary.main, data: [
-                { x: new Date(startDate), y: parseFloat(startWeight) || 0 },
-                { x: new Date(goalDate), y: parseFloat(targetWeight) || 0 }
-              ]}
+              ...(goalLine && validStart && validGoal ? [{
+                id: 'goal', color: theme.palette.secondary.main, data: [
+                  { x: new Date(validStart), y: parseFloat(startWeight) || 0 },
+                  { x: new Date(validGoal), y: parseFloat(targetWeight) || 0 }
+                ]
+              }] : [])
             ]}
             margin={{ top: 20, right: 30, left: 70, bottom: 50 }}
             xScale={{
-              type: goalLine && startDate && goalDate ? 'time' : 'point',
-              ...(goalLine && startDate && goalDate ? {
+              type: goalLine && validStart && validGoal ? 'time' : 'point',
+              ...(goalLine && validStart && validGoal ? {
                 format: '%b %d',
                 useUTC: false,
-                min: startDate ? new Date(startDate) : undefined,
-                max: goalDate ? new Date(goalDate) : undefined
+                min: validStart ? new Date(validStart) : undefined,
+                max: validGoal ? new Date(validGoal) : undefined
               } : {})
             }}
             yScale={{
@@ -188,7 +193,7 @@ const WeightChartNivo = ({ data, goalLine, startWeight, targetWeight, startDate,
               tickSize: 5,
               tickPadding: 5,
               tickRotation: 0,
-              legend: `Weight (${unit})`,
+              legend: `Weight (${ unit })`,
               legendOffset: -40,
               legendPosition: 'middle'
             }}
@@ -226,7 +231,7 @@ const WeightChartNivo = ({ data, goalLine, startWeight, targetWeight, startDate,
               return (
                 <div style={{
                   backgroundColor: theme.palette.background.paper,
-                  border: `1px solid ${theme.palette.divider}`,
+                  border: `1px solid ${ theme.palette.divider }`,
                   borderRadius: 6,
                   padding: 12,
                   boxShadow: theme.shadows[4],

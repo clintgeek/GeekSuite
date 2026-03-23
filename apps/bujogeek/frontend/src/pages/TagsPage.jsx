@@ -11,8 +11,7 @@ import {
 } from '@mui/material';
 import { Search, Hash, ChevronDown, ChevronRight } from 'lucide-react';
 import { isToday, isPast } from 'date-fns';
-import { useApolloClient } from '@apollo/client';
-import { GET_TASK_TAGS, GET_TASKS_BY_TAG } from '../graphql/queries';
+import apiClient from '../services/apiClient';
 import TaskRow from '../components/tasks/TaskRow';
 import TaskEditor from '../components/tasks/TaskEditor';
 import SkeletonLoader from '../components/shared/SkeletonLoader';
@@ -24,7 +23,6 @@ const AUTH_CONFIG = { withCredentials: true };
 const TagsPage = () => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
-  const apolloClient = useApolloClient();
   const { updateTaskStatus, deleteTask } = useTaskContext();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -44,29 +42,22 @@ const TagsPage = () => {
     setSearchParams({ tag }, { replace: true });
     setTasksLoading(true);
     try {
-      const res = await apolloClient.query({
-        query: GET_TASKS_BY_TAG,
-        variables: { tag },
-        fetchPolicy: 'no-cache'
-      });
-      setTagTasks(res.data?.tasksByTag || []);
+      const res = await apiClient.get(`/tasks/by-tag/${encodeURIComponent(tag)}`, AUTH_CONFIG);
+      setTagTasks(res.data || []);
     } catch {
       setTagTasks([]);
     } finally {
       setTasksLoading(false);
     }
-  }, [setSearchParams, apolloClient]);
+  }, [setSearchParams]);
 
   // Fetch all tags on mount
   useEffect(() => {
     const fetchTags = async () => {
       setTagsLoading(true);
       try {
-        const res = await apolloClient.query({
-          query: GET_TASK_TAGS,
-          fetchPolicy: 'no-cache'
-        });
-        setAllTags(res.data?.taskTags || []);
+        const res = await apiClient.get('/tasks/tags', AUTH_CONFIG);
+        setAllTags(res.data || []);
       } catch {
         setAllTags([]);
       } finally {
@@ -74,7 +65,7 @@ const TagsPage = () => {
       }
     };
     fetchTags();
-  }, [apolloClient]);
+  }, []);
 
   // Auto-select tag from ?tag= query param
   useEffect(() => {
@@ -89,14 +80,10 @@ const TagsPage = () => {
   const refreshTagTasks = useCallback(async () => {
     if (!selectedTag) return;
     try {
-      const res = await apolloClient.query({
-        query: GET_TASKS_BY_TAG,
-        variables: { tag: selectedTag },
-        fetchPolicy: 'no-cache'
-      });
-      setTagTasks(res.data?.tasksByTag || []);
+      const res = await apiClient.get(`/tasks/by-tag/${encodeURIComponent(selectedTag)}`, AUTH_CONFIG);
+      setTagTasks(res.data || []);
     } catch { /* ignore */ }
-  }, [selectedTag, apolloClient]);
+  }, [selectedTag]);
 
   const handleStatusToggle = useCallback(async (task) => {
     const newStatus = task.status === 'completed' ? 'pending' : 'completed';
@@ -219,11 +206,11 @@ const TagsPage = () => {
             py: 1.25,
             borderRadius: '10px',
             backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : colors.parchment.warm,
-            border: `1.5px solid ${ isDark ? 'rgba(255,255,255,0.06)' : colors.ink[100] }`,
+            border: `1.5px solid ${isDark ? 'rgba(255,255,255,0.06)' : colors.ink[100]}`,
             transition: 'all 0.15s ease',
             '&:focus-within': {
               borderColor: colors.primary[300],
-              boxShadow: `0 0 0 3px ${ isDark ? 'rgba(96,152,204,0.12)' : colors.primary[50] }`,
+              boxShadow: `0 0 0 3px ${isDark ? 'rgba(96,152,204,0.12)' : colors.primary[50]}`,
             },
           }}
         >
@@ -326,10 +313,11 @@ const TagsPage = () => {
                     color: isActive
                       ? '#fff'
                       : theme.palette.text.primary,
-                    border: `1px solid ${ isActive
+                    border: `1px solid ${
+                      isActive
                         ? colors.primary[500]
                         : (isDark ? 'rgba(255,255,255,0.1)' : colors.ink[200])
-                      }`,
+                    }`,
                     transition: 'all 0.15s ease',
                     '&:hover': {
                       backgroundColor: isActive
@@ -421,9 +409,9 @@ const TagsPage = () => {
                 const isCollapsed = collapsedSections[key];
                 const sectionColor =
                   key === 'overdue' ? colors.aging.overdue
-                    : key === 'today' ? colors.aging.fresh
-                      : key === 'completed' ? colors.task.completed
-                        : colors.ink[400];
+                  : key === 'today' ? colors.aging.fresh
+                  : key === 'completed' ? colors.task.completed
+                  : colors.ink[400];
 
                 return (
                   <Box key={key}>
@@ -472,7 +460,7 @@ const TagsPage = () => {
                       <Box
                         sx={{
                           borderRadius: '10px',
-                          border: `1px solid ${ isDark ? 'rgba(255,255,255,0.06)' : colors.ink[100] }`,
+                          border: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : colors.ink[100]}`,
                           overflow: 'hidden',
                           backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : colors.parchment.paper,
                         }}
@@ -482,7 +470,7 @@ const TagsPage = () => {
                             key={task._id}
                             sx={{
                               borderBottom: i < sectionTasks.length - 1
-                                ? `1px solid ${ isDark ? 'rgba(255,255,255,0.04)' : colors.ink[50] }`
+                                ? `1px solid ${isDark ? 'rgba(255,255,255,0.04)' : colors.ink[50]}`
                                 : 'none',
                             }}
                           >

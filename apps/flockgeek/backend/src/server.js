@@ -9,8 +9,6 @@ import { fileURLToPath } from "url";
 import { env } from "./config/env.js";
 import apiRouter from "./routes/api.js";
 import { logger } from "./utils/logger.js";
-import { setupGeekSuiteSubgraph } from "@geeksuite/apollo-server-utils";
-import { typeDefs, resolvers } from "./graphql/index.js";
 
 const app = express();
 
@@ -19,7 +17,7 @@ app.disable("x-powered-by");
 app.use(helmet());
 
 const allowedOrigins = env.corsOrigin.split(",").map(s => s.trim());
-logger.info(`CORS enabled for origins: ${JSON.stringify(allowedOrigins)}`);
+logger.info(`CORS enabled for origins: ${ JSON.stringify(allowedOrigins) }`);
 
 app.use(
   cors({
@@ -36,7 +34,7 @@ app.use(morgan(env.nodeEnv === "production" ? "combined" : "dev"));
 mongoose
   .connect(env.mongodbUri, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => {
-    logger.info(`MongoDB connected to ${env.mongodbUri.split("@")[0]}...`);
+    logger.info(`MongoDB connected to ${ env.mongodbUri.split("@")[0] }...`);
   })
   .catch((err) => {
     logger.error("MongoDB connection error:", err);
@@ -52,9 +50,6 @@ app.use("/api", apiRouter);
 app.use(express.static(publicPath));
 
 app.get("*", (req, res, next) => {
-  if (req.path.startsWith('/graphql')) {
-    return next();
-  }
   res.sendFile(path.join(publicPath, "index.html"));
 });
 
@@ -67,14 +62,7 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: "Unexpected server error" });
 });
 
-// Setup GraphQL Subgraph
-setupGeekSuiteSubgraph(app, {
-  typeDefs,
-  resolvers,
-  path: '/graphql'
-}).then(() => {
-  app.listen(env.port, () => {
-    logger.info(`FlockGeek API listening on port ${env.port}`);
-    logger.info(`FlockGeek GraphQL Subgraph ready at /graphql`);
-  });
+// Start Server
+app.listen(env.port, () => {
+  logger.info(`FlockGeek API listening on port ${ env.port }`);
 });

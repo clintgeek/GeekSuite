@@ -37,7 +37,7 @@ const CompletedSection = ({ tasks, onStatusToggle, onEdit, onDelete, onSaveAsNot
         >
           {tasks.map((task) => (
             <TaskRow
-              key={task._id}
+              key={(task.id || task._id)}
               task={task}
               onStatusToggle={onStatusToggle}
               onEdit={onEdit}

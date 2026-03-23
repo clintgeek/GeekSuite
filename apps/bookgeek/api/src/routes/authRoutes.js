@@ -175,20 +175,7 @@ router.post("/refresh", async (req, res) => {
 
     const { token: newToken, refreshToken: newRefreshToken, user } = response.data;
 
-    res.json({
-      success: true,
-      data: {
-        token: newToken,
-        refreshToken: newRefreshToken,
-        user: {
-          id: user.id,
-          username: user.username,
-          email: user.email,
-          app: user.app,
-        },
-      },
-      timestamp: new Date().toISOString(),
-    });
+    return res.status(response.status).json(response.data);
   } catch (error) {
     const status = error.response?.status;
     const message =

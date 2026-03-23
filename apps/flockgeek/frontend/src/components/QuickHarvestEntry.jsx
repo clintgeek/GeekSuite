@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useMemo } from "react";
+import { useQuery, useMutation } from '@apollo/client';
 import { toLocalDateString } from "../utils/dateUtils";
 import {
   Paper,
@@ -22,148 +23,80 @@ import RemoveIcon from "@mui/icons-material/Remove";
 import EggIcon from "@mui/icons-material/EggAlt";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
-import client from "../services/apiClient";
+import { GET_EGG_PRODUCTIONS } from "../graphql/queries";
+import { RECORD_EGG_PRODUCTION } from "../graphql/mutations";
 
-/**
- * Quick Harvest Entry - Fast egg collection logging
- *
- * Features:
- * - Large +/- buttons for egg count (tap-friendly)
- * - Auto-calculates days since last harvest for selected location
- * - Defaults to today's date
- * - Minimal required fields, optional expansion for details
- */
 const QuickHarvestEntry = ({ onSuccess, locations = [] }) => {
   const [eggCount, setEggCount] = useState(0);
   const [locationId, setLocationId] = useState("");
   const [notes, setNotes] = useState("");
   const [showDetails, setShowDetails] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  // Last harvest info
-  const [lastHarvest, setLastHarvest] = useState(null);
-  const [daysSinceLastHarvest, setDaysSinceLastHarvest] = useState(1);
-  const [loadingLastHarvest, setLoadingLastHarvest] = useState(false);
+  // Fetch recent egg productions to find last harvest per location
+  const { data: eggsData, refetch: refetchEggs } = useQuery(GET_EGG_PRODUCTIONS, {
+    fetchPolicy: 'cache-and-network',
+  });
+  const allEggs = eggsData?.eggProductions || [];
 
-  // Auto-select first location if only one exists
-  useEffect(() => {
-    if (locations.length === 1 && !locationId) {
-      setLocationId(locations[0]._id);
-    }
-  }, [locations, locationId]);
+  // Find last harvest for the selected location
+  const { lastHarvest, daysSinceLastHarvest } = useMemo(() => {
+    if (!locationId) return { lastHarvest: null, daysSinceLastHarvest: 1 };
+    const forLocation = allEggs
+      .filter(e => e.locationId === locationId)
+      .sort((a, b) => new Date(b.date) - new Date(a.date));
+    if (forLocation.length === 0) return { lastHarvest: null, daysSinceLastHarvest: 1 };
+    const last = forLocation[0];
+    const lastUTCDate = new Date(last.date);
+    const lastDateLocal = new Date(lastUTCDate.getUTCFullYear(), lastUTCDate.getUTCMonth(), lastUTCDate.getUTCDate());
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const diffDays = Math.round((today - lastDateLocal) / (1000 * 60 * 60 * 24));
+    return { lastHarvest: last, daysSinceLastHarvest: Math.max(1, diffDays) };
+  }, [locationId, allEggs]);
 
-  // Fetch last harvest when location changes
-  const fetchLastHarvest = useCallback(async () => {
-    if (!locationId) {
-      setLastHarvest(null);
-      setDaysSinceLastHarvest(1);
-      return;
-    }
+  const [daysOverride, setDaysOverride] = useState(null);
+  const days = daysOverride ?? daysSinceLastHarvest;
 
-    setLoadingLastHarvest(true);
-    try {
-      // Get most recent egg production for this location
-      const response = await client.get("/egg-production", {
-        params: {
-          locationId,
-          limit: 1,
-          sortBy: "date",
-          sortOrder: "desc"
-        }
-      });
-
-      const records = response.data.data.eggProduction;
-      if (records && records.length > 0) {
-        const lastRecord = records[0];
-        setLastHarvest(lastRecord);
-
-        const lastDate = new Date(lastRecord.date);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        // lastDate could be "2026-02-19T00:00:00.000Z", which parses to local Feb 18 18:00
-        // We should parse it as UTC midnight to compare fairly
-        const lastUTCDate = new Date(lastRecord.date);
-        const lastDateLocal = new Date(lastUTCDate.getUTCFullYear(), lastUTCDate.getUTCMonth(), lastUTCDate.getUTCDate());
-        const diffDays = Math.round((today - lastDateLocal) / (1000 * 60 * 60 * 24));
-        setDaysSinceLastHarvest(Math.max(1, diffDays));
-      } else {
-        setLastHarvest(null);
-        setDaysSinceLastHarvest(1);
-      }
-    } catch (err) {
-      console.error("Failed to fetch last harvest:", err);
-      setLastHarvest(null);
-      setDaysSinceLastHarvest(1);
-    } finally {
-      setLoadingLastHarvest(false);
-    }
-  }, [locationId]);
-
-  useEffect(() => {
-    fetchLastHarvest();
-  }, [fetchLastHarvest]);
-
-  const handleIncrement = () => setEggCount(prev => prev + 1);
-  const handleDecrement = () => setEggCount(prev => Math.max(0, prev - 1));
-
-  const handleSubmit = async () => {
-    if (eggCount === 0) {
-      setError("Enter at least 1 egg");
-      return;
-    }
-
-    setSubmitting(true);
-    setError("");
-    setSuccess("");
-
-    try {
-      const payload = {
-        date: toLocalDateString(new Date()),
-        eggsCount: eggCount,
-        daysObserved: daysSinceLastHarvest,
-        source: "manual"
-      };
-
-      if (locationId) {
-        payload.locationId = locationId;
-      }
-
-      if (notes.trim()) {
-        payload.notes = notes.trim();
-      }
-
-      await client.post("/egg-production", payload);
-
-      // Success feedback
-      const daysText = daysSinceLastHarvest > 1 ? ` (${ daysSinceLastHarvest } days)` : "";
+  const [recordEggProduction, { loading: submitting }] = useMutation(RECORD_EGG_PRODUCTION, {
+    refetchQueries: ['GetEggProductions'],
+    awaitRefetchQueries: true,
+    onCompleted: () => {
+      const daysText = days > 1 ? ` (${ days } days)` : "";
       setSuccess(`Logged ${ eggCount } egg${ eggCount !== 1 ? "s" : "" }${ daysText }`);
-
-      // Reset form
       setEggCount(0);
       setNotes("");
       setShowDetails(false);
-
-      // Refresh last harvest info
-      setTimeout(() => {
-        fetchLastHarvest();
-        setSuccess("");
-      }, 2000);
-
-      // Notify parent to refresh list
+      setDaysOverride(null);
+      refetchEggs();
       if (onSuccess) onSuccess();
-    } catch (err) {
-      setError(err.response?.data?.error?.message || err.message || "Failed to log harvest");
-    } finally {
-      setSubmitting(false);
-    }
+      setTimeout(() => setSuccess(""), 2000);
+    },
+    onError: (err) => setError(err.message || "Failed to log harvest"),
+  });
+
+  const handleSubmit = async () => {
+    if (eggCount === 0) { setError("Enter at least 1 egg"); return; }
+    setError("");
+    const payload = {
+      date: toLocalDateString(new Date()),
+      eggsCount: eggCount,
+      daysObserved: days,
+      source: "manual",
+      ...(locationId ? { locationId } : {}),
+      ...(notes.trim() ? { notes: notes.trim() } : {}),
+    };
+    recordEggProduction({ variables: payload });
   };
 
-  // Quick-add buttons for common counts
-  const quickAddButtons = [1, 2, 3, 4, 5, 6];
+  // Auto-select single location
+  React.useEffect(() => {
+    if (locations.length === 1 && !locationId) setLocationId(locations[0].id);
+  }, [locations, locationId]);
 
-  const selectedLocation = locations.find(l => l._id === locationId);
+  const quickAddButtons = [1, 2, 3, 4, 5, 6];
+  const selectedLocation = locations.find(l => l.id === locationId);
 
   return (
     <Paper
@@ -177,41 +110,28 @@ const QuickHarvestEntry = ({ onSuccess, locations = [] }) => {
     >
       <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
         <EggIcon sx={{ color: "primary.main", fontSize: 28 }} />
-        <Typography variant="h6" sx={{ fontWeight: 600 }}>
-          Quick Harvest Entry
-        </Typography>
+        <Typography variant="h6" sx={{ fontWeight: 600 }}>Quick Harvest Entry</Typography>
       </Box>
 
-      {/* Location selector (if multiple locations) */}
       {locations.length > 1 && (
         <FormControl size="small" sx={{ mb: 2, minWidth: 200 }}>
           <InputLabel>Location / Pen</InputLabel>
-          <Select
-            value={locationId}
-            label="Location / Pen"
-            onChange={(e) => setLocationId(e.target.value)}
-          >
-            <MenuItem value="">
-              <em>No specific location</em>
-            </MenuItem>
+          <Select value={locationId} label="Location / Pen" onChange={(e) => { setLocationId(e.target.value); setDaysOverride(null); }}>
+            <MenuItem value=""><em>No specific location</em></MenuItem>
             {locations.map((loc) => (
-              <MenuItem key={loc._id} value={loc._id}>
-                {loc.name}
-              </MenuItem>
+              <MenuItem key={loc.id} value={loc.id}>{loc.name}</MenuItem>
             ))}
           </Select>
         </FormControl>
       )}
 
-      {/* Single location display */}
       {locations.length === 1 && (
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           📍 {locations[0].name}
         </Typography>
       )}
 
-      {/* Last harvest info */}
-      {locationId && !loadingLastHarvest && (
+      {locationId && (
         <Box sx={{ mb: 2 }}>
           {lastHarvest ? (
             <Chip
@@ -229,15 +149,12 @@ const QuickHarvestEntry = ({ onSuccess, locations = [] }) => {
         </Box>
       )}
 
-      {/* Main egg count input */}
       <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2, flexWrap: "wrap" }}>
-        {/* Big decrement button */}
         <IconButton
-          onClick={handleDecrement}
+          onClick={() => setEggCount(prev => Math.max(0, prev - 1))}
           disabled={eggCount === 0}
           sx={{
-            width: 56,
-            height: 56,
+            width: 56, height: 56,
             bgcolor: (theme) => alpha(theme.palette.error.main, 0.08),
             "&:hover": { bgcolor: (theme) => alpha(theme.palette.error.main, 0.15) },
             "&:disabled": { bgcolor: "action.disabledBackground" }
@@ -246,33 +163,18 @@ const QuickHarvestEntry = ({ onSuccess, locations = [] }) => {
           <RemoveIcon fontSize="large" />
         </IconButton>
 
-        {/* Egg count display */}
         <TextField
           type="number"
           value={eggCount}
           onChange={(e) => setEggCount(Math.max(0, parseInt(e.target.value) || 0))}
-          inputProps={{
-            min: 0,
-            style: {
-              textAlign: "center",
-              fontSize: "2rem",
-              fontWeight: 700,
-              width: "80px"
-            }
-          }}
-          sx={{
-            "& .MuiOutlinedInput-root": {
-              backgroundColor: "background.paper"
-            }
-          }}
+          inputProps={{ min: 0, style: { textAlign: "center", fontSize: "2rem", fontWeight: 700, width: "80px" } }}
+          sx={{ "& .MuiOutlinedInput-root": { backgroundColor: "background.paper" } }}
         />
 
-        {/* Big increment button */}
         <IconButton
-          onClick={handleIncrement}
+          onClick={() => setEggCount(prev => prev + 1)}
           sx={{
-            width: 56,
-            height: 56,
+            width: 56, height: 56,
             bgcolor: (theme) => alpha(theme.palette.success.main, 0.08),
             "&:hover": { bgcolor: (theme) => alpha(theme.palette.success.main, 0.15) }
           }}
@@ -280,120 +182,66 @@ const QuickHarvestEntry = ({ onSuccess, locations = [] }) => {
           <AddIcon fontSize="large" />
         </IconButton>
 
-        {/* Days observed input */}
         <Tooltip title="Days since last harvest — eggs will be averaged over this period">
           <TextField
             type="number"
             size="small"
-            value={daysSinceLastHarvest}
-            onChange={(e) => setDaysSinceLastHarvest(Math.max(1, parseInt(e.target.value) || 1))}
+            value={days}
+            onChange={(e) => setDaysOverride(Math.max(1, parseInt(e.target.value) || 1))}
             InputProps={{
               startAdornment: <Box component="span" sx={{ color: "text.secondary", mr: 0.5, userSelect: "none" }}>÷</Box>,
               endAdornment: <Box component="span" sx={{ color: "text.secondary", ml: 0.5, fontSize: "0.75rem", userSelect: "none" }}>days</Box>,
             }}
-            inputProps={{
-              min: 1,
-              style: { textAlign: "center", width: "40px", padding: "4px 0" }
-            }}
+            inputProps={{ min: 1, style: { textAlign: "center", width: "40px", padding: "4px 0" } }}
             sx={{
               width: 100,
-              "& .MuiOutlinedInput-notchedOutline": {
-                borderColor: "transparent" // Make it look cleaner/integrated
-              },
-              "&:hover .MuiOutlinedInput-notchedOutline": {
-                borderColor: "action.hover"
-              },
-              "& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline": {
-                borderColor: "primary.main"
-              }
+              "& .MuiOutlinedInput-notchedOutline": { borderColor: "transparent" },
+              "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "action.hover" },
+              "& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline": { borderColor: "primary.main" }
             }}
           />
         </Tooltip>
       </Box>
 
-      {/* Quick-add buttons */}
       <Box sx={{ display: "flex", gap: 1, mb: 2, flexWrap: "wrap" }}>
         {quickAddButtons.map((n) => (
-          <Button
-            key={n}
-            variant="outlined"
-            size="small"
-            onClick={() => setEggCount(n)}
-            sx={{
-              minWidth: 40,
-              bgcolor: eggCount === n ? (theme) => alpha(theme.palette.primary.main, 0.12) : "transparent",
-              borderColor: eggCount === n ? "primary.main" : undefined
-            }}
-          >
+          <Button key={n} variant="outlined" size="small" onClick={() => setEggCount(n)}
+            sx={{ minWidth: 40, bgcolor: eggCount === n ? (theme) => alpha(theme.palette.primary.main, 0.12) : "transparent", borderColor: eggCount === n ? "primary.main" : undefined }}>
             {n}
           </Button>
         ))}
-        <Button
-          variant="outlined"
-          size="small"
-          onClick={() => setEggCount(12)}
-          sx={{
-            minWidth: 50,
-            bgcolor: eggCount === 12 ? (theme) => alpha(theme.palette.primary.main, 0.12) : "transparent",
-            borderColor: eggCount === 12 ? "primary.main" : undefined
-          }}
-        >
+        <Button variant="outlined" size="small" onClick={() => setEggCount(12)}
+          sx={{ minWidth: 50, bgcolor: eggCount === 12 ? (theme) => alpha(theme.palette.primary.main, 0.12) : "transparent", borderColor: eggCount === 12 ? "primary.main" : undefined }}>
           12
         </Button>
       </Box>
 
-      {/* Expandable details section */}
-      <Button
-        size="small"
-        onClick={() => setShowDetails(!showDetails)}
-        endIcon={showDetails ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-        sx={{ mb: 1, color: "text.secondary" }}
-      >
+      <Button size="small" onClick={() => setShowDetails(!showDetails)} endIcon={showDetails ? <ExpandLessIcon /> : <ExpandMoreIcon />} sx={{ mb: 1, color: "text.secondary" }}>
         {showDetails ? "Hide" : "Add"} Notes
       </Button>
 
       <Collapse in={showDetails}>
         <TextField
-          label="Notes (optional)"
-          fullWidth
-          size="small"
-          multiline
-          rows={2}
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          placeholder="e.g., One cracked, found in unusual spot..."
-          sx={{ mb: 2 }}
+          label="Notes (optional)" fullWidth size="small" multiline rows={2}
+          value={notes} onChange={(e) => setNotes(e.target.value)}
+          placeholder="e.g., One cracked, found in unusual spot..." sx={{ mb: 2 }}
         />
       </Collapse>
 
-      {/* Error/Success messages */}
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
 
-      {/* Submit button */}
       <Button
-        variant="contained"
-        size="large"
-        fullWidth
-        onClick={handleSubmit}
+        variant="contained" size="large" fullWidth onClick={handleSubmit}
         disabled={submitting || eggCount === 0}
-        sx={{
-          py: 1.5,
-          fontSize: "1.1rem",
-          fontWeight: 600
-        }}
+        sx={{ py: 1.5, fontSize: "1.1rem", fontWeight: 600 }}
       >
         {submitting ? "Saving..." : `Log ${ eggCount } Egg${ eggCount !== 1 ? "s" : "" }`}
       </Button>
 
-      {/* Daily rate preview */}
-      {eggCount > 0 && daysSinceLastHarvest > 1 && (
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          sx={{ mt: 1, textAlign: "center" }}
-        >
-          ≈ {(eggCount / daysSinceLastHarvest).toFixed(1)} eggs/day average
+      {eggCount > 0 && days > 1 && (
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1, textAlign: "center" }}>
+          ≈ {(eggCount / days).toFixed(1)} eggs/day average
         </Typography>
       )}
     </Paper>

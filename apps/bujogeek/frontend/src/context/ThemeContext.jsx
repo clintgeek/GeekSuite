@@ -27,17 +27,18 @@ function getStoredPreference() {
 export function ThemeProvider({ children }) {
   const [themePreference, setThemePreference] = useState(getStoredPreference);
   const [systemTheme, setSystemTheme] = useState(getSystemTheme);
-  const { preferences, loaded } = usePreferences();
+  const { preferences, updatePreferences, loaded } = usePreferences();
 
   // Sync theme from baseGeek global preferences once loaded
   useEffect(() => {
     if (loaded && preferences?.theme) {
       const remote = preferences.theme;
-      if (remote === 'light' || remote === 'dark') {
-        setThemePreference(remote);
+      if (remote === 'light' || remote === 'dark' || remote === 'system' || remote === 'auto') {
+        const mapped = remote === 'system' ? 'auto' : remote;
+        setThemePreference(mapped);
       }
     }
-  }, [loaded, preferences]);
+  }, [loaded, preferences?.theme]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -52,14 +53,22 @@ export function ThemeProvider({ children }) {
   }, []);
 
   const theme = useMemo(() => {
-    if (themePreference === 'auto') return systemTheme;
+    if (themePreference === 'auto' || themePreference === 'system') return systemTheme;
     return themePreference;
   }, [themePreference, systemTheme]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     window.localStorage.setItem(STORAGE_KEY, themePreference);
-  }, [themePreference]);
+
+    // Persist to global store
+    if (loaded && preferences?.theme !== themePreference) {
+      const remoteVal = themePreference === 'auto' ? 'system' : themePreference;
+      updatePreferences({ theme: remoteVal }).catch(err => {
+        console.error('Failed to update global theme preference', err);
+      });
+    }
+  }, [themePreference, loaded, updatePreferences, preferences?.theme]);
 
   useEffect(() => {
     if (typeof document === 'undefined') return;

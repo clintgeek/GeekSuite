@@ -53,12 +53,12 @@ const BacklogList = () => {
 
   const handleStatusToggle = async (task) => {
     const newStatus = task.status === 'completed' ? 'pending' : 'completed';
-    await updateTaskStatus(task._id, newStatus);
+    await updateTaskStatus((task.id || task._id), newStatus);
   };
 
   const handleDelete = async (task) => {
     if (window.confirm('Delete this task?')) {
-      await deleteTask(task._id);
+      await deleteTask((task.id || task._id));
     }
   };
 
@@ -114,7 +114,7 @@ const BacklogList = () => {
             }}
           >
             {staleTasks.map((task) => (
-              <Box key={task._id}>
+              <Box key={(task.id || task._id)}>
                 <TaskRow
                   task={task}
                   onStatusToggle={handleStatusToggle}
@@ -152,7 +152,7 @@ const BacklogList = () => {
           >
             {recentBacklog.map((task) => (
               <TaskRow
-                key={task._id}
+                key={(task.id || task._id)}
                 task={task}
                 onStatusToggle={handleStatusToggle}
                 onDelete={handleDelete}

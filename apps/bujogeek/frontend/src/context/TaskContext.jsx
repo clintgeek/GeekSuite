@@ -391,7 +391,7 @@ const TaskProvider = ({ children }) => {
         // Handle array format (daily view)
         if (Array.isArray(prevTasks)) {
           return prevTasks
-            .map(task => task._id === taskId ? updatedTask : task)
+            .map(task => (task.id || task._id) === taskId ? updatedTask : task)
             .sort((a, b) => {
               const priorityOrder = { high: 0, medium: 1, low: 2, none: 3 };
               const priorityDiff = priorityOrder[a.priority] - priorityOrder[b.priority];
@@ -405,7 +405,7 @@ const TaskProvider = ({ children }) => {
 
         // Handle object format (all/other views)
         const oldDateKey = Object.keys(prevTasks).find(date =>
-          prevTasks[date].some(task => task._id === taskId)
+          prevTasks[date].some(task => (task.id || task._id) === taskId)
         );
 
         const newDateKey = updatedTask.dueDate ?
@@ -423,7 +423,7 @@ const TaskProvider = ({ children }) => {
         // Remove from old date if it exists
         if (oldDateKey) {
           newTasks[oldDateKey] = newTasks[oldDateKey]
-            .filter(task => task._id !== taskId)
+            .filter(task => (task.id || task._id) !== taskId)
             .sort((a, b) => {
               const priorityOrder = { high: 0, medium: 1, low: 2, none: 3 };
               const priorityDiff = priorityOrder[a.priority] - priorityOrder[b.priority];
@@ -481,7 +481,7 @@ const TaskProvider = ({ children }) => {
         // If prev is an array (daily, weekly views)
         if (Array.isArray(prev)) {
           return sortTasks(prev.map(task =>
-            task._id === taskId || task.id === taskId ? response.data.updateTaskStatus : task
+            (task.id || task._id) === taskId || task.id === taskId ? response.data.updateTaskStatus : task
           ));
         }
 
@@ -490,7 +490,7 @@ const TaskProvider = ({ children }) => {
         Object.entries(newTasks).forEach(([date, tasks]) => {
           if (Array.isArray(tasks)) {
             newTasks[date] = sortTasks(tasks.map(task =>
-              task._id === taskId || task.id === taskId ? response.data.updateTaskStatus : task
+              (task.id || task._id) === taskId || task.id === taskId ? response.data.updateTaskStatus : task
             ));
           }
         });
@@ -517,14 +517,14 @@ const TaskProvider = ({ children }) => {
       setTasks(prev => {
         // If prev is an array (daily view)
         if (Array.isArray(prev)) {
-          return prev.filter(task => task._id !== taskId);
+          return prev.filter(task => (task.id || task._id) !== taskId);
         }
 
         // If prev is an object (grouped by dates)
         const newTasks = {};
         Object.entries(prev).forEach(([date, dateTasks]) => {
           if (!Array.isArray(dateTasks)) return;
-          const filteredTasks = dateTasks.filter(task => task._id !== taskId);
+          const filteredTasks = dateTasks.filter(task => (task.id || task._id) !== taskId);
           if (filteredTasks.length > 0) {
             newTasks[date] = filteredTasks;
           }
@@ -554,7 +554,7 @@ const TaskProvider = ({ children }) => {
       setTasks(prev => {
         const newTasks = {};
         Object.entries(prev).forEach(([date, tasks]) => {
-          const filteredTasks = tasks.filter(task => task._id !== taskId);
+          const filteredTasks = tasks.filter(task => (task.id || task._id) !== taskId);
           if (filteredTasks.length > 0) {
             newTasks[date] = filteredTasks;
           }

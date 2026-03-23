@@ -14,8 +14,6 @@ import taskRoutes from './src/routes/taskRoutes.js';
 import authRoutes from './src/routes/authRoutes.js';
 import { authenticate } from './src/middleware/authMiddleware.js';
 import { meHandler } from '@geeksuite/user/server';
-import { setupGeekSuiteSubgraph } from '@geeksuite/apollo-server-utils';
-import { typeDefs, resolvers } from './src/graphql/index.js';
 
 // Get the directory name
 const __filename = fileURLToPath(import.meta.url);
@@ -43,7 +41,7 @@ app.use(morgan('dev'));
 
 // Debug logging for auth headers
 app.use((req, res, next) => {
-  console.log(`[DEBUG] ${req.method} ${req.url}`);
+  console.log(`[DEBUG] ${ req.method } ${ req.url }`);
   console.log(`[DEBUG] Headers:`, JSON.stringify(req.headers, null, 2));
   console.log(`[DEBUG] Cookies:`, req.headers.cookie);
   next();
@@ -59,10 +57,10 @@ app.use('/api/auth', authRoutes);
 app.get('/api/me', (req, res, next) => {
   const hasCookie = !!req.headers.cookie?.includes('geek_token');
   const hasAuth = !!req.headers.authorization;
-  console.log(`[DEBUG /api/me] cookie=${hasCookie} auth=${hasAuth}`);
+  console.log(`[DEBUG /api/me] cookie=${ hasCookie } auth=${ hasAuth }`);
   next();
 }, authenticate, (req, res, next) => {
-  console.log(`[DEBUG /api/me] after auth: geek.user=${!!req.geek?.user}`);
+  console.log(`[DEBUG /api/me] after auth: geek.user=${ !!req.geek?.user }`);
   next();
 }, meHandler());
 
@@ -78,35 +76,7 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Proxy federated GraphQL requests to the API gateway (same-origin, no CORS issues)
-const GATEWAY_URL = process.env.GATEWAY_URL || 'http://host.docker.internal:4100';
-app.use('/graphql-gateway', (req, res) => {
-  const gatewayUrl = new URL(GATEWAY_URL);
-  // Re-serialize body since express.json() already consumed the stream
-  const body = JSON.stringify(req.body);
-  const proxyReq = httpRequest(
-    {
-      hostname: gatewayUrl.hostname,
-      port: gatewayUrl.port,
-      path: '/graphql',
-      method: req.method,
-      headers: {
-        'content-type': 'application/json',
-        'content-length': Buffer.byteLength(body),
-        ...(req.headers.authorization && { authorization: req.headers.authorization }),
-      },
-    },
-    (proxyRes) => {
-      res.writeHead(proxyRes.statusCode, proxyRes.headers);
-      proxyRes.pipe(res);
-    }
-  );
-  proxyReq.on('error', (err) => {
-    console.error('Gateway proxy error:', err.message);
-    if (!res.headersSent) res.status(502).json({ error: 'Gateway unavailable' });
-  });
-  proxyReq.end(body);
-});
+
 
 // SPA fallback - serve index.html for all non-API routes (must be LAST)
 app.get('*', (req, res, next) => {
@@ -137,14 +107,7 @@ const connectDB = async () => {
 };
 
 // Start server
-setupGeekSuiteSubgraph(app, {
-  typeDefs,
-  resolvers,
-  path: '/graphql'
-}).then(() => {
-  app.listen(PORT, async () => {
-    await connectDB();
-    console.log(`Server running on port ${PORT}`);
-    console.log(`BujoGeek GraphQL Subgraph ready at /graphql`);
-  });
+app.listen(PORT, async () => {
+  await connectDB();
+  console.log(`Server running on port ${ PORT }`);
 });

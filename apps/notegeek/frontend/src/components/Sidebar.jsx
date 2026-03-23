@@ -33,8 +33,8 @@ import TagContextMenu from './TagContextMenu';
 import { gql, useQuery } from '@apollo/client';
 
 const GET_TAGS = gql`
-  query GetTags {
-    tags
+  query GetNoteTags {
+    noteTags
   }
 `;
 
@@ -73,7 +73,7 @@ function Sidebar({ closeNavbar }) {
     const { data, loading: tagsLoading, error } = useQuery(GET_TAGS, {
         fetchPolicy: 'cache-and-network'
     });
-    const tags = data?.tags || [];
+    const tags = data?.noteTags || [];
     const tagsError = error?.message;
 
     const handleLinkClick = () => {
@@ -96,7 +96,7 @@ function Sidebar({ closeNavbar }) {
             let current = hierarchy;
             let currentPath = '';
             parts.forEach(part => {
-                currentPath = currentPath ? `${currentPath}/${part}` : part;
+                currentPath = currentPath ? `${ currentPath }/${ part }` : part;
                 if (!current[part]) {
                     current[part] = {
                         path: currentPath,
@@ -128,14 +128,14 @@ function Sidebar({ closeNavbar }) {
         return (
             <>
                 {Object.entries(hierarchy).map(([tag, data]) => {
-                    const isSelected = location.pathname === `/tags/${encodeURIComponent(data.path)}`;
+                    const isSelected = location.pathname === `/tags/${ encodeURIComponent(data.path) }`;
                     const tagColor = getTagColor(data.path);
 
                     return (
                         <div key={data.path}>
                             <ListItemButton
                                 component={Link}
-                                to={`/tags/${encodeURIComponent(data.path)}`}
+                                to={`/tags/${ encodeURIComponent(data.path) }`}
                                 selected={isSelected}
                                 onClick={handleLinkClick}
                                 onContextMenu={(e) => handleContextMenu(e, data.path)}
@@ -347,7 +347,7 @@ function Sidebar({ closeNavbar }) {
                                 },
                                 '&.Mui-focused': {
                                     bgcolor: 'background.paper',
-                                    boxShadow: `0 0 0 3px ${theme.palette.glow.ring}`,
+                                    boxShadow: `0 0 0 3px ${ theme.palette.glow.ring }`,
                                 },
                             },
                         }}

@@ -1,103 +1,118 @@
 # GeekSuite GraphQL Consolidation Guide
 
-> **Goal**: Eliminate the per-app GraphQL subgraphs and the API Gateway. Each app becomes a smart frontend that talks to a **single unified GraphQL API** hosted by BaseGeek.
+> **Goal**: Eliminate all per-app GraphQL subgraphs and the API Gateway. Every app frontend becomes a smart SPA querying a **single unified GraphQL API** hosted by BaseGeek at `basegeek.clintgeek.com/graphql`.
+
+---
+
+## Confirmed Decisions
+
+| Decision | Choice |
+|----------|--------|
+| Date field type | `scalar Date` (standardize all apps on FitnessGeek's approach) |
+| FitnessGeek module format | Convert to **ESM** (`import`/`export`) before merging |
+| Rollout strategy | **All apps at once** — migrate all schemas, flip all frontends simultaneously |
+| GraphQL mount point | `apps/basegeek/packages/api/src/server.js` (existing Express app) — add `/graphql` before the SPA catch-all |
 
 ---
 
 ## Architecture Overview
 
-### Current State (Federated Subgraphs)
+### Before
 
 ```
-┌─────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐
-│ NoteGeek│  │ BujoGeek │  │ FlockGeek│  │ BookGeek │
-│ :9988   │  │ :5005    │  │ :5001    │  │ :1800    │
-│ /graphql│  │ /graphql │  │ /graphql │  │ /graphql │
-│ Express │  │ Express  │  │ Express  │  │ Express  │
-│ +Apollo │  │ +Apollo  │  │ +Apollo  │  │ +Apollo  │
-│ Subgraph│  │ Subgraph │  │ Subgraph │  │ Subgraph │
-└────┬────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘
-     │            │             │              │
-     └────────────┴──────┬──────┴──────────────┘
-                         │
-                  ┌──────┴──────┐
-                  │ API Gateway │  ← often not running!
-                  │   :4100     │
-                  └─────────────┘
+Frontend → /graphql → App's own Express+Apollo server → MongoDB
+           (each app has its own backend container)
 ```
 
-Each app has: its own Express server, its own Apollo subgraph, its own resolvers, its own Mongoose models, all connecting to the **same MongoDB instance**.
-
-### Target State (Unified API)
+### After
 
 ```
-              ┌─────────────────────────────────────────┐
-              │            BaseGeek API (:8987)          │
-              │                                         │
-              │  /graphql ── unified Apollo Server       │
-              │    ├── notegeek/ (schema + resolvers)    │
-              │    ├── bujogeek/ (schema + resolvers)    │
-              │    ├── flockgeek/ (schema + resolvers)   │
-              │    └── bookgeek/ (schema + resolvers)    │
-              │                                         │
-              │  /api/auth ── existing auth routes       │
-              │  /api/users ── existing user routes      │
-              │                                         │
-              │  MongoDB connection (shared, singular)   │
-              └─────────────────────────────────────────┘
-
-     ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐
-     │ NoteGeek │  │ BujoGeek │  │ FlockGeek│  │ BookGeek │
-     │ Frontend │  │ Frontend │  │ Frontend │  │ Frontend │
-     │ (SPA)    │  │ (SPA)    │  │ (SPA)    │  │ (SPA)    │
-     └──────────┘  └──────────┘  └──────────┘  └──────────┘
-         │              │              │              │
-         └──────────────┴──────┬───────┴──────────────┘
-                               │
-                     basegeek.clintgeek.com/graphql
+Frontend → https://basegeek.clintgeek.com/graphql → BaseGeek Express+Apollo → MongoDB
+           (one container, one connection, one endpoint)
 ```
 
-- **No more API Gateway** — single Apollo Server in BaseGeek
-- **No more per-app Express backends** for GraphQL (apps keep REST endpoints they need)
-- **One MongoDB connection pool** instead of 4+
-- **Frontends become pure SPAs** that point their Apollo client at BaseGeek's `/graphql`
+BaseGeek already has:
+- ✅ CORS configured for all GeekSuite origins with `credentials: true`
+- ✅ MongoDB connected
+- ✅ Auth routes (`/api/auth`, `/api/users`)
+- ✅ ESM (`import`/`export`) throughout
+- ✅ `optionalUser()` / `attachUser` middleware available via `@geeksuite/user/server`
 
 ---
 
-## Current Subgraph Inventory
+## Subgraph Inventory
 
-| App | Types | Queries | Mutations | Schema File |
-|-----|-------|---------|-----------|-------------|
-| **NoteGeek** | `Note` | 3 | 3 | `apps/notegeek/backend/graphql/typeDefs.js` |
-| **BujoGeek** | `Task`, `JournalEntry`, `TagCount`, `SaveOrderResponse`, `DeleteResponse` | 10 | 11 | `apps/bujogeek/backend/src/graphql/typeDefs.js` |
-| **FlockGeek** | `Bird`, `BirdTrait`, `BirdNote`, `HealthRecord`, `EggProduction`, `HatchEvent`, `Pairing`, `Group`, `GroupMembership`, `Location`, `Event`, `LineageCache`, `MeatRun` | 11 | 13 | `apps/flockgeek/backend/src/graphql/typeDefs.js` |
-| **BookGeek** | (embedded in 2900-line server.js) | TBD | TBD | `apps/bookgeek/api/src/server.js` |
+| App | Types | Notes |
+|-----|-------|-------|
+| **NoteGeek** | `Note` | Simplest — good first one |
+| **BujoGeek** | `Task`, `JournalEntry`, `TagCount`, `DeleteResponse`, `SaveOrderResponse` | Well-structured service layer |
+| **FlockGeek** | `Bird`, `Pairing`, `HatchEvent`, `MeatRun`, `Group`, `Location`, `EggProduction`, `HealthRecord`, `BirdTrait`, `BirdNote`, `GroupMembership`, `Event`, `LineageCache` | Largest — do last |
+| **FitnessGeek** | `Weight`, `FoodItem`, `FoodLog`, `Meal`, `Medication`, `BloodPressure`, `UserSettings`, `NutritionGoals` + support types | Already well-structured, needs ESM conversion |
+| **BookGeek** | Embedded in 2900-line `server.js` | Needs schema extracted first |
 
 ---
 
 ## Step-by-Step Instructions
 
-### Phase 1: Set Up the Unified GraphQL Endpoint in BaseGeek
+---
 
-#### Step 1.1 — Create the Domain Folders
+### PHASE 0 — Pre-work: Convert FitnessGeek to ESM
 
-Inside BaseGeek's API, create a folder structure to hold each app's schema and resolvers:
+FitnessGeek's backend currently uses CommonJS (`require`/`module.exports`). All other apps and BaseGeek use ESM. Do this conversion before Phase 1.
+
+**In `apps/fitnessgeek/backend/`:**
+
+1. Add `"type": "module"` to `package.json`
+2. In every `.js` file, change:
+   - `const X = require('...')` → `import X from '...'`
+   - `module.exports = X` → `export default X` (or `export const X = ...`)
+   - `require.resolve`, `__dirname`, `__filename` → use `import.meta.url` + `fileURLToPath`
+3. Add file extensions to relative imports if missing: `import X from './foo'` → `import X from './foo.js'`
+
+The files to convert are:
+- `src/graphql/typeDefs.js`
+- `src/graphql/resolvers.js`
+- `src/graphql/index.js`
+- `src/models/*.js` (all Mongoose models)
+- `src/config/*.js`
+
+---
+
+### PHASE 1 — Extract BookGeek's Schema
+
+BookGeek's GraphQL schema and resolvers are currently embedded in a 2900-line `server.js`. Before merging:
+
+1. Find the `typeDefs` and `resolvers` values inside `apps/bookgeek/api/src/server.js`
+2. Create:
+   - `apps/bookgeek/api/src/graphql/typeDefs.js`
+   - `apps/bookgeek/api/src/graphql/resolvers.js`
+3. Import them back into `server.js` (the existing backend keeps running unchanged for now)
+
+---
+
+### PHASE 2 — Build the Unified GraphQL Module in BaseGeek
+
+#### Step 2.1 — Create the Folder Structure
 
 ```
 apps/basegeek/packages/api/src/graphql/
-├── index.js              ← Merges all schemas + resolvers
+├── index.js              ← Entry point: merges all schemas
 ├── shared/
-│   └── typeDefs.js       ← Shared types (DeleteResponse, PaginationInfo, etc.)
+│   └── typeDefs.js       ← Shared scalars and types (Date, DeleteResponse, etc.)
 ├── notegeek/
-│   ├── typeDefs.js       ← Note schema (copy from notegeek)
-│   ├── resolvers.js      ← Note resolvers (copy from notegeek)
-│   └── models/           ← Mongoose models (copy from notegeek)
+│   ├── typeDefs.js
+│   ├── resolvers.js
+│   └── models/           ← Note.js
 ├── bujogeek/
 │   ├── typeDefs.js
 │   ├── resolvers.js
-│   ├── models/
-│   └── services/         ← TaskService, etc.
+│   ├── models/           ← Task.js, JournalEntry.js
+│   └── services/         ← taskService.js
 ├── flockgeek/
+│   ├── typeDefs.js
+│   ├── resolvers.js
+│   └── models/
+├── fitnessgeek/
 │   ├── typeDefs.js
 │   ├── resolvers.js
 │   └── models/
@@ -107,40 +122,104 @@ apps/basegeek/packages/api/src/graphql/
     └── models/
 ```
 
-#### Step 1.2 — Copy Schemas (One App at a Time)
+#### Step 2.2 — Create `graphql/shared/typeDefs.js`
 
-Start with the **simplest app first** (NoteGeek), then work up to the complex ones.
+This holds types that appear in multiple apps so they're defined only once:
 
-For each app:
+```js
+import { gql } from 'graphql-tag';
 
-1. **Copy the `typeDefs.js`** into the corresponding `graphql/<appname>/` folder
-2. **Remove federation directives** — change `extend type Query` to just `type Query` (or merge them). Remove `@key`, `@shareable`, and the `extend schema @link(...)` line since we won't be using federation anymore
-3. **Copy the `resolvers.js`** into the same folder
-4. **Copy the Mongoose models** the resolvers depend on
-5. **Copy any service files** (e.g., BujoGeek's `taskService.js`)
+export const sharedTypeDefs = gql`
+  scalar Date
 
-> **Important**: All models already connect to the same MongoDB — you don't need to change connection strings. Just make sure the Mongoose model names don't clash (they shouldn't, since each app uses distinct collection names like `notes`, `tasks`, `birds`, etc.).
+  type DeleteResponse {
+    success: Boolean!
+    message: String
+  }
 
-#### Step 1.3 — Create the Merged Schema Index
+  type SaveOrderResponse {
+    success: Boolean!
+    updatedAt: String
+  }
 
-Create `apps/basegeek/packages/api/src/graphql/index.js`:
+  type TagCount {
+    tag: String!
+    count: Int!
+  }
+`;
+```
+
+> **Important**: Remove `DeleteResponse`, `SaveOrderResponse`, `TagCount`, and the `scalar Date` from individual app schemas — they live here now.
+
+#### Step 2.3 — Copy and Clean Each App's Schema
+
+For each app, copy `typeDefs.js` and `resolvers.js` into the corresponding folder, then:
+
+**Schema cleanup checklist (typeDefs.js):**
+
+- [ ] Remove `extend schema @link(url: "https://specs.apollo.dev/federation/v2.0", ...)` — no longer needed
+- [ ] Change `extend type Query { ... }` → `type Query { ... }`
+- [ ] Change `extend type Mutation { ... }` → `type Mutation { ... }`
+- [ ] Remove `@key(fields: "id")` from all types
+- [ ] Remove `@shareable` from all types
+- [ ] Remove `DeleteResponse`, `SaveOrderResponse`, `TagCount` (they're in shared now)
+- [ ] Change all date fields from `String` to `Date` (to match the `scalar Date` standard)
+
+**Resolver cleanup checklist (resolvers.js):**
+
+- [ ] Fix the dummy userId fallback. Change every instance of:
+  ```js
+  const userId = context.user?.id || '000000000000000000000000';
+  ```
+  to:
+  ```js
+  const userId = context.user?.id;
+  if (!userId) return []; // or throw new Error('Unauthorized');
+  ```
+  FitnessGeek's resolvers already do this correctly — use them as a reference.
+
+- [ ] Verify Mongoose model `id` field resolvers. Each app needs:
+  ```js
+  ModelName: {
+    id: (doc) => doc._id.toString(),
+  }
+  ```
+
+#### Step 2.4 — Copy Mongoose Models
+
+Copy each app's `models/` directory into `graphql/<appname>/models/`. Then check for these issues:
+
+- **Mongoose model name conflicts**: Each app uses different model names (`Note`, `Task`, `Bird`, etc.) — no conflicts expected. Double-check before running.
+- **Shared `User` model**: BaseGeek already has a `User` model in `src/models/`. Don't copy it from the subgraphs — reference the existing one instead.
+
+#### Step 2.5 — Create `graphql/index.js`
 
 ```js
 import { mergeTypeDefs, mergeResolvers } from '@graphql-tools/merge';
-import { makeExecutableSchema } from '@graphql-tools/schema';
 
-// Import each domain's schema + resolvers
-import { typeDefs as noteTypeDefs, resolvers as noteResolvers } from './notegeek/index.js';
-import { typeDefs as bujoTypeDefs, resolvers as bujoResolvers } from './bujogeek/index.js';
-import { typeDefs as flockTypeDefs, resolvers as flockResolvers } from './flockgeek/index.js';
-import { typeDefs as bookTypeDefs, resolvers as bookResolvers } from './bookgeek/index.js';
 import { sharedTypeDefs } from './shared/typeDefs.js';
+
+import { typeDefs as noteTypeDefs } from './notegeek/typeDefs.js';
+import { resolvers as noteResolvers } from './notegeek/resolvers.js';
+
+import { typeDefs as bujoTypeDefs } from './bujogeek/typeDefs.js';
+import { resolvers as bujoResolvers } from './bujogeek/resolvers.js';
+
+import { typeDefs as flockTypeDefs } from './flockgeek/typeDefs.js';
+import { resolvers as flockResolvers } from './flockgeek/resolvers.js';
+
+import { typeDefs as fitnessTypeDefs } from './fitnessgeek/typeDefs.js';
+import { resolvers as fitnessResolvers } from './fitnessgeek/resolvers.js';
+
+import { typeDefs as bookTypeDefs } from './bookgeek/typeDefs.js';
+import { resolvers as bookResolvers } from './bookgeek/resolvers.js';
 
 export const typeDefs = mergeTypeDefs([
   sharedTypeDefs,
   noteTypeDefs,
   bujoTypeDefs,
   flockTypeDefs,
+  fitnessTypeDefs,
   bookTypeDefs,
 ]);
 
@@ -148,15 +227,21 @@ export const resolvers = mergeResolvers([
   noteResolvers,
   bujoResolvers,
   flockResolvers,
+  fitnessResolvers,
   bookResolvers,
 ]);
 ```
 
-> **Install dependency**: `pnpm add @graphql-tools/merge @graphql-tools/schema` in BaseGeek's API package.
+Install required dependencies in BaseGeek's API package:
 
-#### Step 1.4 — Mount Apollo Server in BaseGeek
+```bash
+cd apps/basegeek/packages/api
+pnpm add @apollo/server @graphql-tools/merge @graphql-tools/schema graphql-tag
+```
 
-In BaseGeek's `server.js`, add the GraphQL endpoint:
+#### Step 2.6 — Mount Apollo Server in BaseGeek's `server.js`
+
+Add this **before** the SPA catch-all (`app.get('*', ...)`):
 
 ```js
 import { ApolloServer } from '@apollo/server';
@@ -164,152 +249,101 @@ import { expressMiddleware } from '@apollo/server/express4';
 import { typeDefs, resolvers } from './graphql/index.js';
 import { optionalUser } from '@geeksuite/user/server';
 
-// ... after existing middleware setup ...
-
+// In the server startup (the app.listen callback, or top-level await):
 const apolloServer = new ApolloServer({ typeDefs, resolvers });
 await apolloServer.start();
 
-// Auth middleware — extracts user from cookie/Bearer token
 app.use('/graphql', optionalUser());
-
 app.use('/graphql', expressMiddleware(apolloServer, {
   context: async ({ req }) => ({
     user: req.user || null,
-    token: req.headers.authorization || '',
   }),
 }));
 ```
 
-#### Step 1.5 — Fix Resolver User ID Extraction
-
-In each copied resolver, fix the user ID pattern. Currently they all do:
-
-```js
-const userId = context.user?.id || '000000000000000000000000';
-```
-
-Change this to throw an error or return empty results instead of silently querying a dummy user:
-
-```js
-const userId = context.user?.id;
-if (!userId) return [];  // or throw new AuthenticationError(...)
-```
+> **Note**: `optionalUser()` extracts the JWT from the `Authorization: Bearer <token>` header and populates `req.user`. This is already used by every subgraph — same behavior, same package.
 
 ---
 
-### Phase 2: Update Frontend Apollo Clients
+### PHASE 3 — Update All Frontend Apps
 
-#### Step 2.1 — Update `@geeksuite/api-client`
+#### Step 3.1 — Set `VITE_GRAPHQL_API_URL` in Each App
 
-In `packages/api-client/src/index.js`, change the GraphQL URL logic to always point at BaseGeek:
+For each app, update the production env file:
 
-```js
-// Old: const GRAPHQL_API_URI = envUri || '/graphql';
-// New: Always point at BaseGeek
-const GRAPHQL_API_URI = envUri || 'https://basegeek.clintgeek.com/graphql';
-```
-
-> **Alternatively**: Each app can set `VITE_GRAPHQL_API_URL=https://basegeek.clintgeek.com/graphql` in its `.env` file. This is the safer approach since it's per-app configurable.
-
-#### Step 2.2 — Configure CORS on BaseGeek
-
-BaseGeek's CORS config must accept requests from all GeekSuite app origins:
-
-```js
-const ALLOWED_ORIGINS = [
-  'https://notegeek.clintgeek.com',
-  'https://bujogeek.clintgeek.com',
-  'https://flockgeek.clintgeek.com',
-  'https://bookgeek.clintgeek.com',
-  // ... add localhost for dev
-];
-```
-
-Make sure `credentials: true` is set so cookies (auth tokens) are forwarded.
-
-#### Step 2.3 — Update Each Frontend
-
-For each app, update the env file:
-
+**`apps/<appname>/frontend/.env`** (or wherever the production env lives):
 ```env
-# .env (production)
 VITE_GRAPHQL_API_URL=https://basegeek.clintgeek.com/graphql
+```
 
-# .env.local (development)
+**`apps/<appname>/frontend/.env.local`** (local dev):
+```env
 VITE_GRAPHQL_API_URL=http://localhost:8987/graphql
 ```
 
-Then **rebuild and redeploy** the frontend.
+Apps to update: `notegeek`, `bujogeek`, `flockgeek`, `fitnessgeek`, `bookgeek`
+
+#### Step 3.2 — Rebuild All Frontends
+
+`VITE_GRAPHQL_API_URL` is baked into the JS bundle at build time. After updating the env files, rebuild and redeploy all apps:
+
+```bash
+cd /mnt/Media/Projects/GeekSuite
+./build.sh --all
+```
 
 ---
 
-### Phase 3: Remove Per-App Subgraph Code
+### PHASE 4 — Remove Per-App Subgraph Backends
 
-> **Do this AFTER Phase 2 is working and verified.**
+> ⚠️ **Do this only after Phase 3 is verified working end-to-end.**
 
-For each app backend:
+For each app, in its `backend/server.js`:
 
-1. Remove the `graphql/` directory (typeDefs, resolvers)
-2. Remove the `setupGeekSuiteSubgraph()` call from `server.js`
-3. Remove `@geeksuite/apollo-server-utils` from `package.json`
-4. Keep the REST API routes — they may still be needed (auth callbacks, file uploads, etc.)
-5. If the app backend has NO remaining REST routes, the backend can be eliminated entirely and the app becomes a pure SPA served by Nginx
+1. Remove `setupGeekSuiteSubgraph()` and its import
+2. Remove `typeDefs`/`resolvers` imports
+3. Remove the `graphql/` directory
+4. Remove `@geeksuite/apollo-server-utils` from `package.json`
+5. If the app has **no remaining REST routes**, the entire backend can be deleted and the app becomes a static Nginx container
 
----
-
-### Phase 4: Remove the API Gateway
-
-1. Delete `apps/api-gateway/` entirely
-2. Remove any `GATEWAY_URL` environment variables from Docker configs
-3. Remove the `/graphql-gateway` proxy from any app's `server.js`
+Apps that likely have REST routes to keep:
+- **NoteGeek**: REST notes routes may still exist in BaseGeek (`/api/notes`)
+- **BujoGeek**: Check — may have REST routes outside GraphQL
+- **BookGeek**: Definitely keep — has Kindle UI and REST import/export routes
+- **FitnessGeek**: Check for Garmin/InfluxDB data sync routes
 
 ---
 
-### Phase 5: Clean Up Shared Packages
+### PHASE 5 — Clean Up
 
-1. **`@geeksuite/apollo-server-utils`** — Can be deleted once no app uses `setupGeekSuiteSubgraph()`
-2. **`@geeksuite/graphql-config`** — Move `baseTypeDefs` into the new `graphql/shared/typeDefs.js` in BaseGeek, then delete the package
-3. **`@geeksuite/api-client`** — Keep! Update it to default to BaseGeek's URL
-
----
-
-## Migration Order (Recommended)
-
-Do one app at a time, fully verified before moving to the next:
-
-| Order | App | Complexity | Why This Order |
-|-------|-----|------------|----------------|
-| 1 | **NoteGeek** | Low | Smallest schema (1 type, 3+3 operations). Good proof of concept. |
-| 2 | **BujoGeek** | Medium | 2 types, well-structured service layer, already familiar. |
-| 3 | **BookGeek** | Medium | Has a subgraph but also heavy REST/Kindle routes that stay in its backend. |
-| 4 | **FlockGeek** | High | Largest schema (13 types, 24 operations). Do last since it's the most work. |
+1. **Delete `apps/api-gateway/`** — no longer needed
+2. Remove `/graphql-gateway` proxy routes from any remaining app servers
+3. **`@geeksuite/apollo-server-utils`** — delete after all apps remove it
+4. **`@geeksuite/graphql-config`** — contents moved to `graphql/shared/typeDefs.js` in BaseGeek; delete the package
 
 ---
 
-## Testing Checklist (Per App)
+## Verification Checklist (Run After Phase 3)
 
-After migrating each app:
+For each app, open it in a browser and verify:
 
-- [ ] Open the app in a browser
-- [ ] Open DevTools Network tab
-- [ ] Confirm GraphQL requests go to `basegeek.clintgeek.com/graphql` (not the app's own endpoint)
-- [ ] Confirm data loads correctly (tasks, notes, birds, etc.)
-- [ ] Confirm creating a new item works
-- [ ] Confirm editing an item works
-- [ ] Confirm deleting an item works
-- [ ] Confirm auth works (log out, log back in, data is still there)
-- [ ] Check browser console for errors
+- [ ] DevTools Network: GraphQL requests go to `basegeek.clintgeek.com/graphql`
+- [ ] Data loads (tasks, notes, birds, etc.)
+- [ ] Creating a new item works
+- [ ] Editing an item works
+- [ ] Deleting an item works
+- [ ] Logging out and back in still shows data
+- [ ] No errors in browser console
 
 ---
 
-## Things to Watch Out For
+## Known Gotchas
 
-1. **Type name collisions** — Both BujoGeek and BookGeek might have a `DeleteResponse` type. These need to be unified or namespaced (e.g., `BujoDeleteResponse`). Check for duplicates before merging schemas.
-
-2. **Resolver context.user shape** — When each app was a subgraph, `context.user` came from `optionalUser()` on its own server. Now it comes from BaseGeek. Make sure the user object shape (`id`, `_id`, `userId`, `email`) is consistent. Check `normalizeSsoUser()` in `@geeksuite/user/server/tokenUtils.js`.
-
-3. **Mongoose model registration** — Mongoose requires each model name to be unique. Since each app uses different collection names (`notes`, `tasks`, `birds`) this should be fine, but double-check there are no duplicate `mongoose.model('User', ...)` calls.
-
-4. **Federation directives** — When copying schemas, remove ALL federation directives (`@key`, `@shareable`, `extend schema @link(...)`, `extend type Query`). Use plain `type Query` instead.
-
-5. **CORS credentials** — Cross-origin GraphQL requires `credentials: 'include'` on the client and matching CORS headers on the server. The current `@geeksuite/api-client` doesn't set `credentials: 'include'` on the HTTP link — it only sends a Bearer token from `localStorage`. If apps switch to cross-origin requests, you'll need to ensure the token is passed as a header (it already is).
+| Issue | Details |
+|-------|---------|
+| **Duplicate type names** | `DeleteResponse` appears in BujoGeek + potentially others. Move all shared types to `graphql/shared/typeDefs.js` and remove from individual schemas. |
+| **`Date` scalar conflicts** | FitnessGeek defines `scalar Date`. The `sharedTypeDefs` defines it once. Every other app's `String` date fields should be migrated to `Date` consistently. |
+| **Mongoose model re-registration** | Mongoose throws if you register the same model name twice. Use `mongoose.models.ModelName || mongoose.model(...)` pattern as a guard. |
+| **`context.user.id` vs `context.user._id`** | Apps are inconsistent — some use `.id`, some `._id`. Verify the `optionalUser()` middleware output shape and standardize. |
+| **FitnessGeek `__dirname`** | CommonJS `__dirname` doesn't exist in ESM. Replace with `const __dirname = path.dirname(fileURLToPath(import.meta.url))`. |
+| **BookGeek models** | BookGeek's models are deep inside `server.js`. Extract them carefully and verify collection names don't conflict with other apps. |

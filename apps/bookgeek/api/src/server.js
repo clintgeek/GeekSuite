@@ -18,9 +18,6 @@ import importRouter from "./routes/importRoutes.js";
 import { authenticateToken } from "./middleware/auth.js";
 import { meHandler } from "@geeksuite/user/server";
 import { sendMail } from "./services/emailService.js";
-import { setupGeekSuiteSubgraph } from "@geeksuite/apollo-server-utils";
-import { typeDefs } from "./graphql/schema.js";
-import { resolvers } from "./graphql/resolvers.js";
 
 dotenv.config();
 
@@ -125,13 +122,13 @@ function isHttpsRequest(req) {
 }
 
 function setCookie(res, name, value, opts = {}) {
-  const parts = [`${name}=${encodeURIComponent(value)}`];
-  parts.push(`Path=${opts.path || "/"}`);
+  const parts = [`${ name }=${ encodeURIComponent(value) }`];
+  parts.push(`Path=${ opts.path || "/" }`);
   if (opts.httpOnly !== false) parts.push("HttpOnly");
-  if (opts.sameSite) parts.push(`SameSite=${opts.sameSite}`);
+  if (opts.sameSite) parts.push(`SameSite=${ opts.sameSite }`);
   if (opts.secure) parts.push("Secure");
   if (typeof opts.maxAgeSeconds === "number") {
-    parts.push(`Max-Age=${Math.max(0, Math.floor(opts.maxAgeSeconds))}`);
+    parts.push(`Max-Age=${ Math.max(0, Math.floor(opts.maxAgeSeconds)) }`);
   }
   res.setHeader("Set-Cookie", parts.join("; "));
 }
@@ -151,12 +148,12 @@ function kindleLayout(title, bodyHtml) {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${escapeHtml(title)}</title>
+  <title>${ escapeHtml(title) }</title>
   <link rel="stylesheet" href="/kindle/style.css" />
 </head>
 <body>
   <div class="wrap">
-    ${bodyHtml}
+    ${ bodyHtml }
   </div>
 </body>
 </html>`;
@@ -185,7 +182,7 @@ function requireKindleAuth(req, res, next) {
     return next();
   }
   const nextUrl = req.originalUrl || "/kindle";
-  return res.redirect(`/kindle/login?next=${encodeURIComponent(nextUrl)}`);
+  return res.redirect(`/kindle/login?next=${ encodeURIComponent(nextUrl) }`);
 }
 
 async function resolveKindleTargetEmail() {
@@ -244,9 +241,9 @@ app.get("/kindle/login", (req, res) => {
     </div>
     <div class="card">
       <div class="row"><span class="label">PIN Login</span></div>
-      ${err ? `<div class="row muted">${escapeHtml(err)}</div>` : ""}
+      ${ err ? `<div class="row muted">${ escapeHtml(err) }</div>` : "" }
       <form method="post" action="/kindle/login" class="controls">
-        <input type="hidden" name="next" value="${escapeHtml(nextUrl)}" />
+        <input type="hidden" name="next" value="${ escapeHtml(nextUrl) }" />
         <input type="password" inputmode="numeric" name="pin" placeholder="8-digit PIN" />
         <button type="submit">Sign in</button>
       </form>
@@ -265,9 +262,9 @@ app.post("/kindle/login", (req, res) => {
   const nextUrl = typeof req.body?.next === "string" ? req.body.next : "/kindle";
   if (!pin || pin !== KINDLE_UI_PIN) {
     return res.redirect(
-      `/kindle/login?err=${encodeURIComponent("Invalid PIN")}&next=${encodeURIComponent(
+      `/kindle/login?err=${ encodeURIComponent("Invalid PIN") }&next=${ encodeURIComponent(
         nextUrl
-      )}`
+      ) }`
     );
   }
 
@@ -385,14 +382,14 @@ app.get("/kindle", requireKindleAuth, async (req, res) => {
     const shelfOptionsHtml = shelves
       .map((s) => {
         const sel = s === shelf ? " selected" : "";
-        return `<option value="${escapeHtml(s)}"${sel}>${escapeHtml(s)}</option>`;
+        return `<option value="${ escapeHtml(s) }"${ sel }>${ escapeHtml(s) }</option>`;
       })
       .join("");
 
     const ownedOptionsHtml = ownedOptions
       .map((o) => {
         const sel = o.id === owned ? " selected" : "";
-        return `<option value="${escapeHtml(o.id)}"${sel}>${escapeHtml(o.label)}</option>`;
+        return `<option value="${ escapeHtml(o.id) }"${ sel }>${ escapeHtml(o.label) }</option>`;
       })
       .join("");
 
@@ -411,23 +408,23 @@ app.get("/kindle", requireKindleAuth, async (req, res) => {
           });
         const badge = hasEpub ? "" : " <span class=\"small muted\">(no epub)</span>";
         const back = encodeURIComponent(req.originalUrl || "/kindle");
-        return `<li><a href="/kindle/books/${encodeURIComponent(
+        return `<li><a href="/kindle/books/${ encodeURIComponent(
           id
-        )}?back=${back}"><span class="label">${escapeHtml(
+        ) }?back=${ back }"><span class="label">${ escapeHtml(
           titleText
-        )}</span></a><div class="small muted">${escapeHtml(
+        ) }</span></a><div class="small muted">${ escapeHtml(
           authorsText
-        )}${badge}</div></li>`;
+        ) }${ badge }</div></li>`;
       })
       .join("\n");
 
     const prevLink =
       page > 1
-        ? `/kindle?${baseParams.toString()}&page=${page - 1}`
+        ? `/kindle?${ baseParams.toString() }&page=${ page - 1 }`
         : null;
     const nextLink =
       page < totalPages
-        ? `/kindle?${baseParams.toString()}&page=${page + 1}`
+        ? `/kindle?${ baseParams.toString() }&page=${ page + 1 }`
         : null;
 
     const html = kindleLayout(
@@ -442,39 +439,39 @@ app.get("/kindle", requireKindleAuth, async (req, res) => {
           <div class="row">
             <div class="label">Shelf</div>
             <select name="shelf">
-              ${shelfOptionsHtml}
+              ${ shelfOptionsHtml }
             </select>
           </div>
           <div class="row">
             <div class="label">Owned</div>
             <select name="owned">
-              ${ownedOptionsHtml}
+              ${ ownedOptionsHtml }
             </select>
           </div>
           <div class="row">
             <div class="label">Sort</div>
             <select name="sort">
-              <option value="title"${sort === "title" ? " selected" : ""}>Title</option>
-              <option value="author"${sort === "author" ? " selected" : ""}>Author</option>
+              <option value="title"${ sort === "title" ? " selected" : "" }>Title</option>
+              <option value="author"${ sort === "author" ? " selected" : "" }>Author</option>
             </select>
             <select name="dir">
-              <option value="asc"${dir === 1 ? " selected" : ""}>A-Z</option>
-              <option value="desc"${dir === -1 ? " selected" : ""}>Z-A</option>
+              <option value="asc"${ dir === 1 ? " selected" : "" }>A-Z</option>
+              <option value="desc"${ dir === -1 ? " selected" : "" }>Z-A</option>
             </select>
           </div>
           <div class="row">
             <div class="label">Search</div>
-            <input type="text" name="q" value="${escapeHtml(q)}" placeholder="Title/Author/Tag" />
+            <input type="text" name="q" value="${ escapeHtml(q) }" placeholder="Title/Author/Tag" />
           </div>
           <button type="submit">Apply</button>
         </form>
       </div>
 
-      <div class="row small muted">Showing ${items.length} of ${total}. Page ${page} / ${totalPages}.</div>
-      <ul class="booklist">${listItems || "<li>No books found.</li>"}</ul>
+      <div class="row small muted">Showing ${ items.length } of ${ total }. Page ${ page } / ${ totalPages }.</div>
+      <ul class="booklist">${ listItems || "<li>No books found.</li>" }</ul>
       <div class="row pager">
-        ${prevLink ? `<a href="${prevLink}">Prev</a>` : ""}
-        ${nextLink ? `<a href="${nextLink}">Next</a>` : ""}
+        ${ prevLink ? `<a href="${ prevLink }">Prev</a>` : "" }
+        ${ nextLink ? `<a href="${ nextLink }">Next</a>` : "" }
       </div>
     `
     );
@@ -512,10 +509,10 @@ app.get("/kindle/books/:id", requireKindleAuth, async (req, res) => {
     const tagsText = Array.isArray(book.tags) ? book.tags.join(", ") : "";
     const descText = normalizeDescription(book.description) || "";
     const coverToggleUrl = showCover
-      ? `/kindle/books/${encodeURIComponent(id)}?back=${encodeURIComponent(back)}`
-      : `/kindle/books/${encodeURIComponent(id)}?back=${encodeURIComponent(
-          back
-        )}&cover=1`;
+      ? `/kindle/books/${ encodeURIComponent(id) }?back=${ encodeURIComponent(back) }`
+      : `/kindle/books/${ encodeURIComponent(id) }?back=${ encodeURIComponent(
+        back
+      ) }&cover=1`;
 
     const hasEpub =
       Array.isArray(book.files) &&
@@ -530,43 +527,42 @@ app.get("/kindle/books/:id", requireKindleAuth, async (req, res) => {
       titleText,
       `
       <div class="topbar">
-        <a href="${escapeHtml(back)}">← Back</a>
+        <a href="${ escapeHtml(back) }">← Back</a>
         <a href="/kindle/logout" class="small">Logout</a>
       </div>
       <div class="card">
-        <div class="row"><span class="label">${escapeHtml(titleText)}</span></div>
-        <div class="row small muted">${escapeHtml(authorsText)}</div>
-        ${tagsText ? `<div class="row small"><span class="label">Tags:</span> ${escapeHtml(tagsText)}</div>` : ""}
-        <div class="row small"><span class="label">Owned:</span> ${book.owned ? "Yes" : "No"}</div>
-        <div class="row small"><span class="label">Shelf:</span> ${escapeHtml(book.shelf || "unread")}</div>
+        <div class="row"><span class="label">${ escapeHtml(titleText) }</span></div>
+        <div class="row small muted">${ escapeHtml(authorsText) }</div>
+        ${ tagsText ? `<div class="row small"><span class="label">Tags:</span> ${ escapeHtml(tagsText) }</div>` : "" }
+        <div class="row small"><span class="label">Owned:</span> ${ book.owned ? "Yes" : "No" }</div>
+        <div class="row small"><span class="label">Shelf:</span> ${ escapeHtml(book.shelf || "unread") }</div>
 
-        ${status ? `<div class="row small">${escapeHtml(status)}</div>` : ""}
-        ${errorMsg ? `<div class="row small">${escapeHtml(errorMsg)}</div>` : ""}
+        ${ status ? `<div class="row small">${ escapeHtml(status) }</div>` : "" }
+        ${ errorMsg ? `<div class="row small">${ escapeHtml(errorMsg) }</div>` : "" }
 
         <div class="row">
-          <a href="${coverToggleUrl}" class="small">${showCover ? "Hide cover" : "Show cover"}</a>
+          <a href="${ coverToggleUrl }" class="small">${ showCover ? "Hide cover" : "Show cover" }</a>
         </div>
-        ${
-          showCover
-            ? `<div class="row"><img class="cover" src="/api/books/${encodeURIComponent(
-                id
-              )}/cover" alt="Cover" /></div>`
-            : ""
-        }
+        ${ showCover
+        ? `<div class="row"><img class="cover" src="/api/books/${ encodeURIComponent(
+          id
+        ) }/cover" alt="Cover" /></div>`
+        : ""
+      }
 
         <div class="row">
-          <form method="post" action="/kindle/books/${encodeURIComponent(id)}/send">
-            <input type="hidden" name="back" value="${escapeHtml(back)}" />
-            ${showCover ? `<input type="hidden" name="cover" value="1" />` : ""}
-            <button type="submit" ${hasEpub ? "" : "disabled"}>Send to Kindle</button>
+          <form method="post" action="/kindle/books/${ encodeURIComponent(id) }/send">
+            <input type="hidden" name="back" value="${ escapeHtml(back) }" />
+            ${ showCover ? `<input type="hidden" name="cover" value="1" />` : "" }
+            <button type="submit" ${ hasEpub ? "" : "disabled" }>Send to Kindle</button>
           </form>
-          ${hasEpub ? "" : `<div class=\"small muted\">No EPUB available for this book.</div>`}
+          ${ hasEpub ? "" : `<div class=\"small muted\">No EPUB available for this book.</div>` }
         </div>
       </div>
 
       <div class="card">
         <div class="row"><span class="label">Description</span></div>
-        <div class="desc">${escapeHtml(descText || "")}</div>
+        <div class="desc">${ escapeHtml(descText || "") }</div>
       </div>
     `
     );
@@ -584,9 +580,9 @@ app.post("/kindle/books/:id/send", requireKindleAuth, async (req, res) => {
   try {
     if (!MONGODB_URI || mongoose.connection.readyState !== 1) {
       return res.redirect(
-        `/kindle/books/${encodeURIComponent(
+        `/kindle/books/${ encodeURIComponent(
           req.params.id
-        )}?err=${encodeURIComponent("Database not connected")}`
+        ) }?err=${ encodeURIComponent("Database not connected") }`
       );
     }
 
@@ -598,17 +594,17 @@ app.post("/kindle/books/:id/send", requireKindleAuth, async (req, res) => {
     const kindleEmail = await resolveKindleTargetEmail();
     if (!kindleEmail) {
       return res.redirect(
-        `/kindle/books/${encodeURIComponent(
+        `/kindle/books/${ encodeURIComponent(
           id
-        )}?back=${encodeURIComponent(back)}${coverParam}&err=${encodeURIComponent(
+        ) }?back=${ encodeURIComponent(back) }${ coverParam }&err=${ encodeURIComponent(
           "Kindle email not configured"
-        )}`
+        ) }`
       );
     }
 
     const book = await Book.findById(id).lean();
     if (!book) {
-      return res.redirect(`/kindle?err=${encodeURIComponent("Book not found")}`);
+      return res.redirect(`/kindle?err=${ encodeURIComponent("Book not found") }`);
     }
 
     let epubFile = null;
@@ -623,11 +619,11 @@ app.post("/kindle/books/:id/send", requireKindleAuth, async (req, res) => {
 
     if (!epubFile) {
       return res.redirect(
-        `/kindle/books/${encodeURIComponent(
+        `/kindle/books/${ encodeURIComponent(
           id
-        )}?back=${encodeURIComponent(back)}${coverParam}&err=${encodeURIComponent(
+        ) }?back=${ encodeURIComponent(back) }${ coverParam }&err=${ encodeURIComponent(
           "No EPUB format available"
-        )}`
+        ) }`
       );
     }
 
@@ -638,17 +634,17 @@ app.post("/kindle/books/:id/send", requireKindleAuth, async (req, res) => {
       String(process.env.KINDLE_ENABLED || "").toLowerCase() === "true";
     if (!kindleEnabled) {
       return res.redirect(
-        `/kindle/books/${encodeURIComponent(
+        `/kindle/books/${ encodeURIComponent(
           id
-        )}?back=${encodeURIComponent(back)}${coverParam}&status=${encodeURIComponent(
+        ) }?back=${ encodeURIComponent(back) }${ coverParam }&status=${ encodeURIComponent(
           "KINDLE_ENABLED is not true"
-        )}`
+        ) }`
       );
     }
 
     const subject =
       book.title && typeof book.title === "string"
-        ? `${book.title} (BookGeek)`
+        ? `${ book.title } (BookGeek)`
         : "Book from BookGeek";
 
     await sendMail({
@@ -666,11 +662,11 @@ app.post("/kindle/books/:id/send", requireKindleAuth, async (req, res) => {
     });
 
     return res.redirect(
-      `/kindle/books/${encodeURIComponent(
+      `/kindle/books/${ encodeURIComponent(
         id
-      )}?back=${encodeURIComponent(back)}${coverParam}&status=${encodeURIComponent(
+      ) }?back=${ encodeURIComponent(back) }${ coverParam }&status=${ encodeURIComponent(
         "Sent"
-      )}`
+      ) }`
     );
   } catch (err) {
     console.error("/kindle/books/:id/send error", err);
@@ -679,11 +675,11 @@ app.post("/kindle/books/:id/send", requireKindleAuth, async (req, res) => {
     const cover = typeof req.body?.cover === "string" ? req.body.cover : "";
     const coverParam = cover === "1" ? "&cover=1" : "";
     return res.redirect(
-      `/kindle/books/${encodeURIComponent(
+      `/kindle/books/${ encodeURIComponent(
         id
-      )}?back=${encodeURIComponent(back)}${coverParam}&err=${encodeURIComponent(
+      ) }?back=${ encodeURIComponent(back) }${ coverParam }&err=${ encodeURIComponent(
         err?.message || "Send failed"
-      )}`
+      ) }`
     );
   }
 });
@@ -904,7 +900,7 @@ app.post("/api/books", authenticateToken, async (req, res) => {
           : undefined,
       description:
         typeof req.body?.description === "string" &&
-        req.body.description.trim().length > 0
+          req.body.description.trim().length > 0
           ? req.body.description
           : undefined,
       tags: tags.length > 0 ? tags : undefined,
@@ -950,7 +946,7 @@ app.post(
       const book = await Book.findById(req.params.id);
       if (!book) {
         if (req.file?.path) {
-          await fs.promises.unlink(req.file.path).catch(() => {});
+          await fs.promises.unlink(req.file.path).catch(() => { });
         }
         return res.status(404).json({ error: "Book not found" });
       }
@@ -966,7 +962,7 @@ app.post(
         .extname(file.originalname || file.filename || "")
         .toLowerCase();
       const safeExt = ext || ".jpg";
-      const filename = `${String(book._id)}-upload-${Date.now()}${safeExt}`;
+      const filename = `${ String(book._id) }-upload-${ Date.now() }${ safeExt }`;
       const relPath = resolveCoverRelativePathForBook(book, filename);
       const destPath = path.join(libraryRoot, relPath);
 
@@ -1005,7 +1001,7 @@ app.delete("/api/books/:id/cover", authenticateToken, async (req, res) => {
     const libraryRoot = process.env.LIBRARY_PATH || "/data/library";
     if (book.coverPath && typeof book.coverPath === "string") {
       const fullPath = path.join(libraryRoot, book.coverPath);
-      await fs.promises.unlink(fullPath).catch(() => {});
+      await fs.promises.unlink(fullPath).catch(() => { });
     }
 
     book.coverPath = undefined;
@@ -1044,7 +1040,7 @@ app.post(
 
       const book = await Book.findById(bookId);
       if (!book) {
-        await fs.promises.unlink(file.path).catch(() => {});
+        await fs.promises.unlink(file.path).catch(() => { });
         return res.status(404).json({ error: "Book not found" });
       }
 
@@ -1814,7 +1810,7 @@ app.post(
         try {
           const subject =
             book.title && typeof book.title === "string"
-              ? `${book.title} (BookGeek)`
+              ? `${ book.title } (BookGeek)`
               : "Book from BookGeek";
 
           const result = await sendMail({
@@ -1911,7 +1907,7 @@ app.get("/api/books/:id/search-covers", authenticateToken, async (req, res) => {
           if (primaryAuthor) params.set("author", primaryAuthor);
           params.set("limit", "12");
 
-          const url = `https://openlibrary.org/search.json?${params.toString()}`;
+          const url = `https://openlibrary.org/search.json?${ params.toString() }`;
           const search = await fetchJson(url);
           const docs = Array.isArray(search?.docs) ? search.docs : [];
 
@@ -1922,14 +1918,14 @@ app.get("/api/books/:id/search-covers", authenticateToken, async (req, res) => {
             .map((doc) => {
               const coverId = doc.cover_i;
               return {
-                id: `openlibrary-${coverId}`,
+                id: `openlibrary-${ coverId }`,
                 source: "openlibrary",
                 coverId,
                 title: doc.title || null,
                 authors: Array.isArray(doc.author_name) ? doc.author_name : [],
                 firstPublishYear: doc.first_publish_year || null,
-                thumbUrl: `https://covers.openlibrary.org/b/id/${coverId}-M.jpg`,
-                largeUrl: `https://covers.openlibrary.org/b/id/${coverId}-L.jpg`,
+                thumbUrl: `https://covers.openlibrary.org/b/id/${ coverId }-M.jpg`,
+                largeUrl: `https://covers.openlibrary.org/b/id/${ coverId }-L.jpg`,
               };
             });
         } catch {
@@ -1939,8 +1935,8 @@ app.get("/api/books/:id/search-covers", authenticateToken, async (req, res) => {
       (async () => {
         try {
           const qParts = [];
-          if (title) qParts.push(`intitle:${title}`);
-          if (primaryAuthor) qParts.push(`inauthor:${primaryAuthor}`);
+          if (title) qParts.push(`intitle:${ title }`);
+          if (primaryAuthor) qParts.push(`inauthor:${ primaryAuthor }`);
           if (!qParts.length && title) qParts.push(title);
 
           const googleParams = new URLSearchParams();
@@ -1950,7 +1946,7 @@ app.get("/api/books/:id/search-covers", authenticateToken, async (req, res) => {
             googleParams.set("key", process.env.GOOGLE_BOOKS_API_KEY);
           }
 
-          const googleUrl = `https://www.googleapis.com/books/v1/volumes?${googleParams.toString()}`;
+          const googleUrl = `https://www.googleapis.com/books/v1/volumes?${ googleParams.toString() }`;
           const search = await fetchJson(googleUrl);
           const items = Array.isArray(search?.items) ? search.items : [];
 
@@ -1961,7 +1957,7 @@ app.get("/api/books/:id/search-covers", authenticateToken, async (req, res) => {
               const thumb = links.thumbnail || links.smallThumbnail;
               if (!thumb) return null;
               return {
-                id: `googlebooks-${item.id || thumb}`,
+                id: `googlebooks-${ item.id || thumb }`,
                 source: "googlebooks",
                 title: info.title || null,
                 authors: Array.isArray(info.authors) ? info.authors : [],
@@ -2040,7 +2036,7 @@ app.post("/api/books/:id/cover", authenticateToken, async (req, res) => {
 
         const libraryRoot = process.env.LIBRARY_PATH || "/data/library";
 
-        const filename = `${String(book._id)}-gb-${Date.now()}.jpg`;
+        const filename = `${ String(book._id) }-gb-${ Date.now() }.jpg`;
         const relPath = resolveCoverRelativePathForBook(book, filename);
         const destPath = path.join(libraryRoot, relPath);
         await fs.promises.mkdir(path.dirname(destPath), { recursive: true });
@@ -2205,15 +2201,15 @@ app.post("/api/books/:id/enrich", authenticateToken, async (req, res) => {
         const existingTags = Array.isArray(update.tags)
           ? update.tags
           : Array.isArray(book.tags)
-          ? book.tags
-          : [];
+            ? book.tags
+            : [];
         const newTags = external.subjects
           .map((s) =>
             typeof s === "string"
               ? s
               : s && typeof s.name === "string"
-              ? s.name
-              : null
+                ? s.name
+                : null
           )
           .filter(Boolean);
         if (newTags.length > 0) {
@@ -2378,7 +2374,7 @@ async function fetchJson(url) {
     if (res.status === 404) {
       return null;
     }
-    throw new Error(`Request failed with status ${res.status}`);
+    throw new Error(`Request failed with status ${ res.status }`);
   }
   const json = await res.json().catch(() => null);
   if (!json || typeof json !== "object") {
@@ -2390,9 +2386,9 @@ async function fetchJson(url) {
 async function fetchOpenLibraryByIsbn(isbn) {
   const trimmed = String(isbn || "").trim();
   if (!trimmed) return null;
-  const url = `https://openlibrary.org/isbn/${encodeURIComponent(
+  const url = `https://openlibrary.org/isbn/${ encodeURIComponent(
     trimmed
-  )}.json`;
+  ) }.json`;
   const edition = await fetchJson(url);
   if (!edition) return null;
 
@@ -2404,12 +2400,12 @@ async function fetchOpenLibraryByIsbn(isbn) {
         typeof w === "string"
           ? w
           : w && typeof w.key === "string"
-          ? w.key
-          : null;
+            ? w.key
+            : null;
       if (workKey) {
         const workUrl = workKey.startsWith("http")
-          ? `${workKey}.json`
-          : `https://openlibrary.org${workKey}.json`;
+          ? `${ workKey }.json`
+          : `https://openlibrary.org${ workKey }.json`;
         work = await fetchJson(workUrl);
       }
     }
@@ -2441,7 +2437,7 @@ async function fetchOpenLibraryByTitleAuthor(title, author) {
   if (title) params.set("title", title);
   if (author) params.set("author", author);
   params.set("limit", "1");
-  const url = `https://openlibrary.org/search.json?${params.toString()}`;
+  const url = `https://openlibrary.org/search.json?${ params.toString() }`;
   const search = await fetchJson(url);
   if (!search || !Array.isArray(search.docs) || search.docs.length === 0) {
     return null;
@@ -2454,7 +2450,7 @@ async function fetchOpenLibraryByTitleAuthor(title, author) {
         ? doc.key
         : null;
     if (workKey) {
-      const workUrl = `https://openlibrary.org${workKey}.json`;
+      const workUrl = `https://openlibrary.org${ workKey }.json`;
       work = await fetchJson(workUrl);
     }
   } catch {
@@ -2510,7 +2506,7 @@ function resolveCoverRelativePathForBook(book, filename) {
 
 async function downloadOpenLibraryCover(coverId, bookOrId) {
   if (!coverId || !bookOrId) return null;
-  const url = `https://covers.openlibrary.org/b/id/${coverId}-L.jpg`;
+  const url = `https://covers.openlibrary.org/b/id/${ coverId }-L.jpg`;
   const res = await fetch(url);
   if (!res.ok) {
     return null;
@@ -2531,7 +2527,7 @@ async function downloadOpenLibraryCover(coverId, bookOrId) {
 
   const idForName =
     (book && book._id && String(book._id)) || String(bookOrId);
-  const filename = `${idForName}-ol-${coverId}.jpg`;
+  const filename = `${ idForName }-ol-${ coverId }.jpg`;
   const relPath = resolveCoverRelativePathForBook(book, filename);
   const destPath = path.join(libraryRoot, relPath);
 
@@ -2568,7 +2564,7 @@ async function moveFileSafe(src, dest) {
         read.pipe(write);
       });
 
-      await fs.promises.unlink(src).catch(() => {});
+      await fs.promises.unlink(src).catch(() => { });
       return;
     }
     throw err;
@@ -2679,7 +2675,7 @@ function parseEbookMetaOutput(text) {
     if (lastKey === "comments" && typeof meta.description === "string") {
       const continuation = String(rawLine).trim();
       if (continuation) {
-        meta.description = `${meta.description}\n${continuation}`;
+        meta.description = `${ meta.description }\n${ continuation }`;
       }
     }
   }
@@ -2711,11 +2707,11 @@ async function extractCalibreCoverIfMissing(book, fullPath, update, updatedField
     return false;
   }
   const tmpDir = TEMP_PATH || "/data/temp";
-  const tmpName = `calibre-cover-${String(book._id)}-${Date.now()}.jpg`;
+  const tmpName = `calibre-cover-${ String(book._id) }-${ Date.now() }.jpg`;
   const tmpPath = path.join(tmpDir, tmpName);
   try {
     await fs.promises.mkdir(tmpDir, { recursive: true });
-  } catch {}
+  } catch { }
   try {
     await execFileAsync(CALIBRE_EBOOK_META_BIN, [fullPath, "--get-cover", tmpPath], {
       maxBuffer: 1024 * 1024,
@@ -2736,13 +2732,13 @@ async function extractCalibreCoverIfMissing(book, fullPath, update, updatedField
   try {
     const stats = await fs.promises.stat(tmpPath);
     if (!stats.isFile() || stats.size === 0) {
-      await fs.promises.unlink(tmpPath).catch(() => {});
+      await fs.promises.unlink(tmpPath).catch(() => { });
       return false;
     }
     const libraryRoot = process.env.LIBRARY_PATH || "/data/library";
     const coversDir = path.join(libraryRoot, "covers");
     await fs.promises.mkdir(coversDir, { recursive: true });
-    const finalName = `${String(book._id)}-calibre-${Date.now()}.jpg`;
+    const finalName = `${ String(book._id) }-calibre-${ Date.now() }.jpg`;
     const finalPath = path.join(coversDir, finalName);
     await moveFileSafe(tmpPath, finalPath);
     const relPath = path.relative(libraryRoot, finalPath);
@@ -2753,7 +2749,7 @@ async function extractCalibreCoverIfMissing(book, fullPath, update, updatedField
     console.warn("Failed to persist Calibre-extracted cover", {
       error: err.message,
     });
-    await fs.promises.unlink(tmpPath).catch(() => {});
+    await fs.promises.unlink(tmpPath).catch(() => { });
     return false;
   }
 }
@@ -2881,8 +2877,6 @@ async function start() {
     });
     console.log("Connected to MongoDB");
   }
-
-  await setupGeekSuiteSubgraph(app, { typeDefs, resolvers, path: "/graphql" });
 
   app.listen(API_PORT, "0.0.0.0", () => {
     console.log(`bookgeek-api listening on http://0.0.0.0:\${API_PORT}`);

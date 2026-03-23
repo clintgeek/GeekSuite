@@ -68,7 +68,7 @@ const OverdueSection = ({ tasks, onStatusToggle, onEdit, onDelete, onSaveAsNote 
         >
           {tasks.map((task) => (
             <TaskRow
-              key={task._id}
+              key={(task.id || task._id)}
               task={task}
               onStatusToggle={onStatusToggle}
               onEdit={onEdit}
