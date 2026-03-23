@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
 
 // Use the exact same logic as the server
-const JWT_SECRET = process.env.JWT_SECRET || 'REDACTED_JWT_SECRET';
+const JWT_SECRET = process.env.JWT_SECRET || 'CHANGE_ME_SET_JWT_SECRET';
 
 console.log('Using JWT_SECRET:', JWT_SECRET);
 

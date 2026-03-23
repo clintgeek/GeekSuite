@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
 
 // JWT secret - should match baseGeek's secret
-const JWT_SECRET = 'REDACTED_JWT_SECRET';
+const JWT_SECRET = 'CHANGE_ME_SET_JWT_SECRET';
 
 // Get token from command line argument
 const token = process.argv[2];

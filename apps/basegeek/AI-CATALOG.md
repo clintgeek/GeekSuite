@@ -3,12 +3,8 @@
 **Total Providers:** 12
 **Total Models:** 50
 
-OpenRouter: REDACTED_OPENROUTER_KEY
-Cerebras: REDACTED_CEREBRAS_KEY
-Gemini: REDACTED_GEMINI_KEY
-Groq: REDACTED_GROQ_KEY
-Together: REDACTED_TOGETHER_KEY
-Ollama Cloud: REDACTED_OLLAMA_CLOUD_KEY
+<!-- API keys are stored in the database via BaseGeek UI - never commit real keys here -->
+<!-- Configure provider keys at: BaseGeek UI → AI Geek → Configuration -->
 
 Qwen3Coder 30B a3B
 Mistral Devstral SMALL 2507

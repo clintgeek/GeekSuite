@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
 
 // Test JWT token validation
-const JWT_SECRET = 'REDACTED_JWT_SECRET';
+const JWT_SECRET = 'CHANGE_ME_SET_JWT_SECRET';
 
 // Create a test token
 const testPayload = {

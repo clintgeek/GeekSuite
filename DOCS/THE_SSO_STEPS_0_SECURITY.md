@@ -15,7 +15,7 @@
 
 **Find this**:
 ```javascript
-const JWT_SECRET = process.env.JWT_SECRET || 'REDACTED_JWT_SECRET';
+const JWT_SECRET = process.env.JWT_SECRET || 'CHANGE_ME_SET_JWT_SECRET';
 ```
 
 **Replace with**:
