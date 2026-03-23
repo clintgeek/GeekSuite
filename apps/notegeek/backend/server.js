@@ -13,8 +13,6 @@ import tagRoutes from './routes/tags.js'; // Import tag routes
 import searchRoutes from './routes/search.js'; // Import search routes
 import { protect } from './middleware/authMiddleware.js';
 import { meHandler } from '@geeksuite/user/server';
-import { setupGeekSuiteSubgraph } from '@geeksuite/apollo-server-utils';
-import { typeDefs, resolvers } from './graphql/index.js';
 
 // Import route files
 import authRoutes from './routes/auth.js';
@@ -110,7 +108,7 @@ async function start() {
   // Add request origin logging
   app.use((req, res, next) => {
     if (process.env.NODE_ENV === 'development') {
-      console.log(`${req.method} ${req.path}`);
+      console.log(`${ req.method } ${ req.path }`);
     }
     next();
   });
@@ -148,9 +146,6 @@ async function start() {
     return res.sendFile(path.join(publicPath, 'index.html'));
   });
 
-  // Setup GraphQL Subgraph before error handling middleware
-  await setupGeekSuiteSubgraph(app, { typeDefs, resolvers, path: '/graphql' });
-
   // Error handling middleware (must be after all routes)
   app.use(notFound);
   app.use(errorHandler);
@@ -160,7 +155,7 @@ async function start() {
 
   // Start the server
   app.listen(PORT, () => {
-    console.log(`NoteGeek server running on port ${PORT}`);
+    console.log(`NoteGeek server running on port ${ PORT }`);
   });
 }
 

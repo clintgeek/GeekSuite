@@ -31,7 +31,7 @@ export const GET_NOTE_BY_ID = gql`
 `;
 
 export const GET_TAGS = gql`
-    query GetTags {
-        tags
+    query GetNoteTags {
+        noteTags
     }
 `;

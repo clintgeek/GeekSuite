@@ -1,7 +1,7 @@
 import { gql } from '@apollo/client';
 
 export const CREATE_TASK = gql`
-  mutation CreateTask($content: String!, $signifier: String, $status: String, $priority: Int, $tags: [String], $dueDate: String, $createdAt: String, $updatedAt: String) {
+  mutation CreateTask($content: String!, $signifier: String, $status: String, $priority: Int, $tags: [String], $dueDate: Date, $createdAt: Date, $updatedAt: Date) {
     createTask(content: $content, signifier: $signifier, status: $status, priority: $priority, tags: $tags, dueDate: $dueDate, createdAt: $createdAt, updatedAt: $updatedAt) {
       id
       content
@@ -82,7 +82,7 @@ export const UPDATE_TASK_STATUS = gql`
 `;
 
 export const MIGRATE_TASK_TO_FUTURE = gql`
-  mutation MigrateTaskToFuture($id: ID!, $futureDate: String!) {
+  mutation MigrateTaskToFuture($id: ID!, $futureDate: Date!) {
     migrateTaskToFuture(id: $id, futureDate: $futureDate) {
       id
       content
@@ -113,7 +113,7 @@ export const SAVE_DAILY_TASK_ORDER = gql`
 `;
 
 export const CREATE_JOURNAL_ENTRY = gql`
-  mutation CreateJournalEntry($title: String!, $content: String!, $type: String, $date: String, $tags: [String], $status: String) {
+  mutation CreateJournalEntry($title: String!, $content: String!, $type: String, $date: Date, $tags: [String], $status: String) {
     createJournalEntry(title: $title, content: $content, type: $type, date: $date, tags: $tags, status: $status) {
       id
       title
@@ -130,7 +130,7 @@ export const CREATE_JOURNAL_ENTRY = gql`
 `;
 
 export const UPDATE_JOURNAL_ENTRY = gql`
-  mutation UpdateJournalEntry($id: ID!, $title: String, $content: String, $type: String, $date: String, $tags: [String], $status: String) {
+  mutation UpdateJournalEntry($id: ID!, $title: String, $content: String, $type: String, $date: Date, $tags: [String], $status: String) {
     updateJournalEntry(id: $id, title: $title, content: $content, type: $type, date: $date, tags: $tags, status: $status) {
       id
       title

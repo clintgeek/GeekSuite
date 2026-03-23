@@ -36,7 +36,7 @@ export const register = async (req, res) => {
       });
     }
 
-    const response = await axios.post(`${ env.basegeekUrl }/api/auth/register`, {
+    const response = await axios.post(`${env.basegeekUrl}/api/auth/register`, {
       username,
       email,
       password,
@@ -82,7 +82,7 @@ export const login = async (req, res) => {
       });
     }
 
-    const response = await axios.post(`${ env.basegeekUrl }/api/auth/login`, {
+    const response = await axios.post(`${env.basegeekUrl}/api/auth/login`, {
       identifier,
       password,
       app: app || env.appName
@@ -124,8 +124,8 @@ export const me = async (req, res) => {
       return res.status(401).json({ message: "Authentication token required" });
     }
 
-    const response = await axios.get(`${ env.basegeekUrl }/api/users/me`, {
-      headers: { Authorization: `Bearer ${ token }` }
+    const response = await axios.get(`${env.basegeekUrl}/api/users/me`, {
+      headers: { Authorization: `Bearer ${token}` }
     });
 
     // Normalize user object to ensure id field exists
@@ -164,10 +164,16 @@ export const refresh = async (req, res) => {
     // if (!refreshToken) return 400;
 
     const response = await axios.post(
-      `${ env.basegeekUrl }/api/auth/refresh`,
+      `${env.basegeekUrl}/api/auth/refresh`,
       {
         refreshToken,
         app: env.appName
+      },
+      {
+        headers: {
+          Cookie: req.headers.cookie || '',
+          Authorization: req.headers.authorization || ''
+        }
       }
     );
 
@@ -180,11 +186,7 @@ export const refresh = async (req, res) => {
       user.id = user._id;
     }
 
-    return res.json({
-      success: true,
-      data: { token, refreshToken: newRefreshToken, user },
-      timestamp: new Date().toISOString()
-    });
+    return res.status(response.status).json(response.data);
   } catch (error) {
     logger.error("Token refresh error:", error.response?.data || error.message);
     const status = error.response?.status || 500;
@@ -205,7 +207,7 @@ export const logout = (req, res) => {
     try {
       const cookie = req.headers.cookie;
       const upstream = await axios.post(
-        `${ env.basegeekUrl }/api/auth/logout`,
+        `${env.basegeekUrl}/api/auth/logout`,
         {},
         {
           headers: cookie ? { Cookie: cookie } : undefined

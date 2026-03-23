@@ -20,25 +20,27 @@ export const GET_BIRDS = gql`
       statusDate
       statusReason
       notes
+      createdAt
     }
   }
 `;
 
 export const GET_LOCATIONS = gql`
-  query GetLocations($activeOnly: Boolean) {
-    locations(activeOnly: $activeOnly) {
+  query GetFlockLocations($activeOnly: Boolean) {
+    flockLocations(activeOnly: $activeOnly) {
       id
       name
       type
       capacity
       isActive
+      description
       notes
     }
   }
 `;
 
 export const GET_EGG_PRODUCTIONS = gql`
-  query GetEggProductions($startDate: String, $endDate: String, $birdId: ID, $groupId: ID) {
+  query GetEggProductions($startDate: Date, $endDate: Date, $birdId: ID, $groupId: ID) {
     eggProductions(startDate: $startDate, endDate: $endDate, birdId: $birdId, groupId: $groupId) {
       id
       date
@@ -83,6 +85,42 @@ export const GET_HATCH_EVENTS = gql`
       pullets
       cockerels
       notes
+    }
+  }
+`;
+
+export const GET_FLOCK_GROUPS = gql`
+  query GetFlockGroups($activeOnly: Boolean) {
+    flockGroups(activeOnly: $activeOnly) {
+      id
+      name
+      purpose
+      type
+      startDate
+      endDate
+      description
+      notes
+    }
+  }
+`;
+
+export const GET_GROUP_MEMBERSHIPS = gql`
+  query GetGroupMemberships($groupId: ID, $activeOnly: Boolean) {
+    groupMemberships(groupId: $groupId, activeOnly: $activeOnly) {
+      id
+      groupId
+      birdId
+      joinedAt
+      leftAt
+      role
+      bird {
+        id
+        name
+        tagId
+        species
+        breed
+        sex
+      }
     }
   }
 `;

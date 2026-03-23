@@ -68,6 +68,12 @@ const BPChartNivo = ({ data, unit = 'mmHg' }) => {
 
     // Sort data by date
     const sortedData = [...data]
+      .filter(item => {
+        const s = parseFloat(item.systolic);
+        const d = parseFloat(item.diastolic);
+        const date = new Date(item.log_date);
+        return !isNaN(s) && !isNaN(d) && !isNaN(date.getTime());
+      })
       .sort((a, b) => new Date(a.log_date) - new Date(b.log_date))
       .map(item => ({
         date: new Date(item.log_date).toLocaleDateString('en-US', {
@@ -148,7 +154,7 @@ const BPChartNivo = ({ data, unit = 'mmHg' }) => {
       <Card sx={{
         borderRadius: '20px',
         boxShadow: theme.shadows[1],
-        border: `1px solid ${theme.palette.divider}`
+        border: `1px solid ${ theme.palette.divider }`
       }}>
         <CardContent sx={{ p: 4 }}>
           <Box sx={{
@@ -171,7 +177,7 @@ const BPChartNivo = ({ data, unit = 'mmHg' }) => {
     <Card sx={{
       borderRadius: '20px',
       boxShadow: theme.shadows[1],
-      border: `1px solid ${theme.palette.divider}`
+      border: `1px solid ${ theme.palette.divider }`
     }}>
       <CardContent sx={{ p: 3 }}>
         <Box sx={{ height: isMobile ? 200 : 220 }}>
@@ -197,7 +203,7 @@ const BPChartNivo = ({ data, unit = 'mmHg' }) => {
               tickSize: 5,
               tickPadding: 5,
               tickRotation: 0,
-              legend: `Blood Pressure (${unit})`,
+              legend: `Blood Pressure (${ unit })`,
               legendOffset: -40,
               legendPosition: 'middle'
             }}
@@ -255,7 +261,7 @@ const BPChartNivo = ({ data, unit = 'mmHg' }) => {
               return (
                 <div style={{
                   backgroundColor: theme.palette.background.paper,
-                  border: `1px solid ${theme.palette.divider}`,
+                  border: `1px solid ${ theme.palette.divider }`,
                   borderRadius: 6,
                   padding: 12,
                   boxShadow: theme.shadows[4],
@@ -328,28 +334,28 @@ const BPChartNivo = ({ data, unit = 'mmHg' }) => {
             areaBaselineValue={0}
             areaOpacity={0.1}
             areaBlendMode="normal"
-            // areaGenerator={() => {
-            //   // Create shaded areas for normal BP ranges
-            //   const normalSystolicArea = {
-            //     id: 'normal-systolic',
-            //     color: theme.palette.success.main,
-            //     data: chartData[0]?.data?.map(point => ({
-            //       x: point.x,
-            //       y: 120 // Normal systolic upper bound
-            //     })) || []
-            //   };
+          // areaGenerator={() => {
+          //   // Create shaded areas for normal BP ranges
+          //   const normalSystolicArea = {
+          //     id: 'normal-systolic',
+          //     color: theme.palette.success.main,
+          //     data: chartData[0]?.data?.map(point => ({
+          //       x: point.x,
+          //       y: 120 // Normal systolic upper bound
+          //     })) || []
+          //   };
 
-            //   const normalDiastolicArea = {
-            //     id: 'normal-diastolic',
-            //     color: theme.palette.success.main,
-            //     data: chartData[0]?.data?.map(point => ({
-            //       x: point.x,
-            //       y: 80 // Normal diastolic upper bound
-            //     })) || []
-            //   };
+          //   const normalDiastolicArea = {
+          //     id: 'normal-diastolic',
+          //     color: theme.palette.success.main,
+          //     data: chartData[0]?.data?.map(point => ({
+          //       x: point.x,
+          //       y: 80 // Normal diastolic upper bound
+          //     })) || []
+          //   };
 
-            //   return [normalSystolicArea, normalDiastolicArea];
-            // }}
+          //   return [normalSystolicArea, normalDiastolicArea];
+          // }}
           />
         </Box>
 

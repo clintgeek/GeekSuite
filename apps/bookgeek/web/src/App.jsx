@@ -70,8 +70,8 @@ function formatDescriptionForDisplay(raw) {
 }
 
 function getCoverUrl(book) {
-  if (!book || !book._id) return null;
-  const base = `${ API_BASE }/books/${ book._id }/cover`;
+  if (!book || !(book.id || book._id)) return null;
+  const base = `${ API_BASE }/books/${ (book.id || book._id) }/cover`;
   const ts =
     (typeof book.updatedAt === "string" && book.updatedAt) ||
     (typeof book.updatedAt === "number" && book.updatedAt) ||
@@ -411,12 +411,12 @@ export default function App() {
 
       let created = json.data || null;
 
-      if (created && created._id && addBookFile) {
+      if (created && (created.id || created._id) && addBookFile) {
         try {
           const formData = new FormData();
           formData.append("file", addBookFile);
 
-          const uploadRes = await authFetch(`/books/${ created._id }/upload`, {
+          const uploadRes = await authFetch(`/books/${ (created.id || created._id) }/upload`, {
             method: "POST",
             body: formData,
           });
@@ -430,7 +430,7 @@ export default function App() {
           }
 
           const updated = uploadJson.data || null;
-          if (updated && updated._id) {
+          if (updated && (updated.id || updated._id)) {
             created = updated;
           }
         } catch (uploadErr) {
@@ -450,7 +450,7 @@ export default function App() {
       // Reload first page with current filters
       await loadBooksPage(1, { append: false });
 
-      if (created && created._id) {
+      if (created && (created.id || created._id)) {
         setSelectedBook(created);
       }
     } catch (err) {
@@ -603,7 +603,7 @@ export default function App() {
       const formData = new FormData();
       formData.append("file", uploadFile);
 
-      const res = await authFetch(`/books/${ book._id }/upload`, {
+      const res = await authFetch(`/books/${ (book.id || book._id) }/upload`, {
         method: "POST",
         body: formData,
       });
@@ -616,11 +616,11 @@ export default function App() {
       }
 
       const updated = json.data || null;
-      if (updated && updated._id) {
+      if (updated && (updated.id || updated._id)) {
         setBooks((prev) =>
-          prev.map((b) => (b._id === updated._id ? updated : b))
+          prev.map((b) => ((b.id || b._id) === (updated.id || updated._id) ? updated : b))
         );
-        if (selectedBook && selectedBook._id === updated._id) {
+        if (selectedBook && (selectedBook.id || selectedBook._id) === (updated.id || updated._id)) {
           setSelectedBook(updated);
         }
       }
@@ -897,7 +897,7 @@ export default function App() {
           return;
         }
 
-        const url = `${ API_BASE }/books/${ selectedBook._id }/download/epub`;
+        const url = `${ API_BASE }/books/${ (selectedBook.id || selectedBook._id) }/download/epub`;
         const book = ePub(url, { openAs: "epub" });
         readerBookRef.current = book;
 
@@ -1111,7 +1111,7 @@ export default function App() {
     setEnrichSummary(null);
 
     try {
-      const res = await authFetch(`/books/${ selectedBook._id }/enrich`, {
+      const res = await authFetch(`/books/${ (selectedBook.id || selectedBook._id) }/enrich`, {
         method: "POST",
       });
 
@@ -1128,9 +1128,9 @@ export default function App() {
         ? data.updatedFields
         : [];
 
-      if (updatedBook && updatedBook._id) {
+      if (updatedBook && (updatedBook.id || updatedBook._id)) {
         setBooks((prev) =>
-          prev.map((b) => (b._id === updatedBook._id ? updatedBook : b))
+          prev.map((b) => ((b.id || b._id) === (updatedBook.id || updatedBook._id) ? updatedBook : b))
         );
         setSelectedBook(updatedBook);
       }
@@ -1174,7 +1174,7 @@ export default function App() {
       params.set("q", baseQuery);
 
       const res = await authFetch(
-        `/books/${ selectedBook._id }/search-covers?${ params.toString() }`,
+        `/books/${ (selectedBook.id || selectedBook._id) }/search-covers?${ params.toString() }`,
         {
           method: "GET",
         }
@@ -1251,7 +1251,7 @@ export default function App() {
     setCoverSearchError(null);
 
     try {
-      const res = await authFetch(`/books/${ selectedBook._id }/cover`, {
+      const res = await authFetch(`/books/${ (selectedBook.id || selectedBook._id) }/cover`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1268,9 +1268,9 @@ export default function App() {
 
       const data = json.data || {};
       const updatedBook = data.book || null;
-      if (updatedBook && updatedBook._id) {
+      if (updatedBook && (updatedBook.id || updatedBook._id)) {
         setBooks((prev) =>
-          prev.map((b) => (b._id === updatedBook._id ? updatedBook : b))
+          prev.map((b) => ((b.id || b._id) === (updatedBook.id || updatedBook._id) ? updatedBook : b))
         );
         setSelectedBook(updatedBook);
       }
@@ -1307,7 +1307,7 @@ export default function App() {
       const formData = new FormData();
       formData.append("file", coverUploadFile);
 
-      const res = await authFetch(`/books/${ selectedBook._id }/cover/upload`, {
+      const res = await authFetch(`/books/${ (selectedBook.id || selectedBook._id) }/cover/upload`, {
         method: "POST",
         body: formData,
       });
@@ -1321,9 +1321,9 @@ export default function App() {
 
       const data = json.data || {};
       const updatedBook = data.book || null;
-      if (updatedBook && updatedBook._id) {
+      if (updatedBook && (updatedBook.id || updatedBook._id)) {
         setBooks((prev) =>
-          prev.map((b) => (b._id === updatedBook._id ? updatedBook : b))
+          prev.map((b) => ((b.id || b._id) === (updatedBook.id || updatedBook._id) ? updatedBook : b))
         );
         setSelectedBook(updatedBook);
         setCoverUploadFile(null);
@@ -1346,7 +1346,7 @@ export default function App() {
     setCoverSearchError(null);
 
     try {
-      const res = await authFetch(`/books/${ selectedBook._id }/cover`, {
+      const res = await authFetch(`/books/${ (selectedBook.id || selectedBook._id) }/cover`, {
         method: "DELETE",
       });
 
@@ -1359,9 +1359,9 @@ export default function App() {
 
       const data = json.data || {};
       const updatedBook = data.book || null;
-      if (updatedBook && updatedBook._id) {
+      if (updatedBook && (updatedBook.id || updatedBook._id)) {
         setBooks((prev) =>
-          prev.map((b) => (b._id === updatedBook._id ? updatedBook : b))
+          prev.map((b) => ((b.id || b._id) === (updatedBook.id || updatedBook._id) ? updatedBook : b))
         );
         setSelectedBook(updatedBook);
       }
@@ -1384,8 +1384,8 @@ export default function App() {
     }
 
     const [idA, idB] = selectedBookIds;
-    const a = books.find((b) => b._id === idA);
-    const b = books.find((b) => b._id === idB);
+    const a = books.find((b) => (b.id || b._id) === idA);
+    const b = books.find((b) => (b.id || b._id) === idB);
 
     if (!a || !b) {
       setMergeSelectionError("Selected books are no longer in the current list.");
@@ -1415,8 +1415,8 @@ export default function App() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          primaryId: primary._id,
-          secondaryId: secondary._id,
+          primaryId: (primary.id || primary._id),
+          secondaryId: (secondary.id || secondary._id),
         }),
       });
 
@@ -1430,16 +1430,16 @@ export default function App() {
       const updatedPrimary = json?.data?.primary || null;
       const deletedId = json?.data?.deletedId?.toString?.();
 
-      if (updatedPrimary && updatedPrimary._id) {
-        const updatedId = updatedPrimary._id.toString();
+      if (updatedPrimary && (updatedPrimary.id || updatedPrimary._id)) {
+        const updatedId = (updatedPrimary.id || updatedPrimary._id).toString();
         setBooks((prev) =>
           prev
-            .filter((b) => b._id !== deletedId)
-            .map((b) => (b._id === updatedId ? updatedPrimary : b))
+            .filter((b) => (b.id || b._id) !== deletedId)
+            .map((b) => ((b.id || b._id) === updatedId ? updatedPrimary : b))
         );
 
         if (selectedBook) {
-          const selId = selectedBook._id;
+          const selId = (selectedBook.id || selectedBook._id);
           if (selId === deletedId) {
             setSelectedBook(updatedPrimary);
           } else if (selId === updatedId) {
@@ -1469,16 +1469,16 @@ export default function App() {
     try {
       const apolloRes = await apolloClient.mutate({
         mutation: DELETE_BOOK,
-        variables: { id: selectedBook._id, deleteFiles: deleteIncludeFiles },
+        variables: { id: (selectedBook.id || selectedBook._id), deleteFiles: deleteIncludeFiles },
       });
 
       if (!apolloRes.data?.deleteBook?.success) {
         throw new Error("Delete failed");
       }
 
-      const deletedId = apolloRes.data.deleteBook.deletedId || selectedBook._id.toString();
+      const deletedId = apolloRes.data.deleteBook.deletedId || (selectedBook.id || selectedBook._id).toString();
 
-      setBooks((prev) => prev.filter((b) => b._id !== deletedId));
+      setBooks((prev) => prev.filter((b) => (b.id || b._id) !== deletedId));
       setSelectedBookIds((prev) => prev.filter((id) => id !== deletedId));
       setSelectedBook(null);
       setDeleteConfirmOpen(false);
@@ -1569,16 +1569,16 @@ export default function App() {
     try {
       const apolloRes = await apolloClient.mutate({
         mutation: UPDATE_BOOK,
-        variables: { id: selectedBook._id, input: payload },
+        variables: { id: (selectedBook.id || selectedBook._id), input: payload },
       });
 
       const updated = apolloRes.data?.updateBook;
       if (!updated) {
         throw new Error("Edit failed");
       }
-      if (updated && updated._id) {
+      if (updated && (updated.id || updated._id)) {
         setBooks((prev) =>
-          prev.map((b) => (b._id === updated._id ? updated : b))
+          prev.map((b) => ((b.id || b._id) === (updated.id || updated._id) ? updated : b))
         );
         setSelectedBook(updated);
       }
@@ -1605,7 +1605,7 @@ export default function App() {
 
     try {
       const res = await authFetch(
-        `/books/${ book._id }/send-to-kindle`,
+        `/books/${ (book.id || book._id) }/send-to-kindle`,
         {
           method: "POST",
           headers: {
@@ -1632,7 +1632,7 @@ export default function App() {
     if (!book?._id) return;
     if (!newShelf || newShelf === book.shelf) return;
 
-    const bookId = book._id;
+    const bookId = (book.id || book._id);
     setShelfSavingId(bookId);
 
     try {
@@ -1644,12 +1644,12 @@ export default function App() {
       if (!updated) {
         throw new Error("Failed to update shelf");
       }
-      if (updated && updated._id) {
+      if (updated && (updated.id || updated._id)) {
         setBooks((prev) =>
-          prev.map((b) => (b._id === updated._id ? updated : b))
+          prev.map((b) => ((b.id || b._id) === (updated.id || updated._id) ? updated : b))
         );
 
-        if (selectedBook && selectedBook._id === updated._id) {
+        if (selectedBook && (selectedBook.id || selectedBook._id) === (updated.id || updated._id)) {
           setSelectedBook(updated);
         }
       }
@@ -2101,9 +2101,9 @@ export default function App() {
                       }}
                     >
                       <div className="h-14 w-10 flex-shrink-0 overflow-hidden rounded" style={{ border: '1px solid var(--color-border-subtle)', backgroundColor: 'var(--color-bg-surface)' }}>
-                        {rec._id && (
+                        {(rec.id || rec._id) && (
                           <img
-                            src={`${ API_BASE }/books/${ rec._id }/cover`}
+                            src={`${ API_BASE }/books/${ (rec.id || rec._id) }/cover`}
                             alt={rec.title || "Book cover"}
                             className="h-full w-full object-cover"
                           />
@@ -2355,10 +2355,10 @@ export default function App() {
                   </div>
                 ))
                 : books.map((book) => {
-                  const isSelected = selectedBookIds.includes(book._id);
+                  const isSelected = selectedBookIds.includes((book.id || book._id));
                   return (
                     <div
-                      key={book._id}
+                      key={(book.id || book._id)}
                       className={
                         "relative flex cursor-pointer flex-col rounded-xl p-2.5 text-xs transition-all duration-200 " +
                         (showMergeUi && isSelected
@@ -2383,18 +2383,18 @@ export default function App() {
                             onClick={(e) => {
                               e.stopPropagation();
                             }}
-                            onChange={(e) => toggleBookSelection(book._id, e)}
+                            onChange={(e) => toggleBookSelection((book.id || book._id), e)}
                             className="h-3 w-3 rounded border-slate-500 bg-slate-900 text-sky-500 focus:ring-sky-500"
                             title="Select for manual merge"
                           />
                         </div>
                       )}
                       <div className="mb-2 aspect-[2/3] w-full overflow-hidden rounded-lg" style={{ backgroundColor: 'var(--color-bg-surface)' }}>
-                        {book._id ? (
+                        {(book.id || book._id) ? (
                           <img
                             src={
                               getCoverUrl(book) ||
-                              `${ API_BASE }/books/${ book._id }/cover`
+                              `${ API_BASE }/books/${ (book.id || book._id) }/cover`
                             }
                             alt={book.title || "Book cover"}
                             className="h-full w-full object-cover"
@@ -2782,9 +2782,9 @@ export default function App() {
             <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 py-4 md:flex-row">
               <div className="mx-auto w-32 flex-shrink-0 md:mx-0 md:w-40">
                 <div className="relative aspect-[2/3] w-full overflow-hidden rounded-md border border-slate-800 bg-slate-900">
-                  {selectedBook._id ? (
+                  {(selectedBook.id || selectedBook._id) ? (
                     <img
-                      src={getCoverUrl(selectedBook) || `${ API_BASE }/books/${ selectedBook._id }/cover`}
+                      src={getCoverUrl(selectedBook) || `${ API_BASE }/books/${ (selectedBook.id || selectedBook._id) }/cover`}
                       alt={selectedBook.title || "Book cover"}
                       className="h-full w-full object-cover"
                       onError={(e) => {
@@ -2930,8 +2930,8 @@ export default function App() {
                                   className="flex w-full items-center justify-between px-3 py-1.5 text-left hover:bg-slate-800"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    if (!selectedBook._id || !formatSlug) return;
-                                    const url = `${ API_BASE }/books/${ selectedBook._id }/download/${ formatSlug }`;
+                                    if (!(selectedBook.id || selectedBook._id) || !formatSlug) return;
+                                    const url = `${ API_BASE }/books/${ (selectedBook.id || selectedBook._id) }/download/${ formatSlug }`;
                                     window.location.href = url;
                                     setDownloadOpen(false);
                                   }}
@@ -3320,7 +3320,7 @@ export default function App() {
                       className="min-w-[140px] rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100 outline-none focus:border-slate-500"
                       value={selectedBook.shelf || ""}
                       disabled={
-                        !!shelfSavingId && shelfSavingId === selectedBook._id
+                        !!shelfSavingId && shelfSavingId === (selectedBook.id || selectedBook._id)
                       }
                       onChange={(e) =>
                         handleUpdateShelf(selectedBook, e.target.value)

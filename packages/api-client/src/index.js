@@ -8,11 +8,12 @@ const GRAPHQL_API_URI = envUri || '/graphql';
 
 const httpLink = createHttpLink({
     uri: GRAPHQL_API_URI,
+    credentials: 'include',
 });
 
 const authLink = setContext((_, { headers }) => {
     // Extract token. In GeekSuite, it might be stored in localStorage by auth pkg
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('geek_token');
     return {
         headers: {
             ...headers,

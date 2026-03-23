@@ -2,7 +2,6 @@ import RefreshIcon from "@mui/icons-material/RefreshOutlined";
 import { Alert, Box, Button, Card, CardContent, CircularProgress, Grid, Stack, Typography } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import { useCallback, useEffect, useState } from "react";
-import { useApi } from "../hooks/useApi";
 
 const cards = [
   {
@@ -26,13 +25,23 @@ const cards = [
 ];
 
 const DashboardPage = () => {
-  const { request, loading, error } = useApi();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [health, setHealth] = useState(null);
 
   const fetchHealth = useCallback(async () => {
-    const data = await request({ method: "GET", url: "/health" });
-    setHealth(data);
-  }, [request]);
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/health');
+      const data = await res.json();
+      setHealth(data);
+    } catch (err) {
+      setError(err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     fetchHealth().catch(() => {});

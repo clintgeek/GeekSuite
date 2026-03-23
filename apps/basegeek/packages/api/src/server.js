@@ -22,6 +22,11 @@ import openaiProxyRoutes from './routes/openaiProxy.js';
 import apiKeyRoutes from './routes/apiKeys.js';
 import appsRoutes from './routes/apps.js';
 import { connectAIGeekDB } from './config/database.js';
+import { ApolloServer } from '@apollo/server';
+import { expressMiddleware } from '@as-integrations/express4';
+import { typeDefs, resolvers } from './graphql/index.js';
+import { optionalUser } from '@geeksuite/user/server';
+
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -102,7 +107,7 @@ if (process.env.NODE_ENV === 'development') {
 
 // Log all requests
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  console.log(`${ new Date().toISOString() } - ${ req.method } ${ req.url }`);
   next();
 });
 
@@ -225,7 +230,7 @@ app.get('/api/health/app/:appName', async (req, res) => {
     const axios = (await import('axios')).default;
     const start = Date.now();
     // Try the health endpoint first; accept ANY HTTP response as "online"
-    const response = await axios.get(`${baseUrl}${healthPath}`, {
+    const response = await axios.get(`${ baseUrl }${ healthPath }`, {
       timeout: 5000,
       validateStatus: () => true, // don't throw on 4xx/5xx
     });
@@ -249,6 +254,22 @@ app.get('/api/health/app/:appName', async (req, res) => {
   }
 });
 
+// ─── Unified GraphQL API ────────────────────────────────────────────────────
+// Apollo Server is started during app.listen (see below); mounted here as middleware.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Start Apollo Server and then the HTTP server
+const apolloServer = new ApolloServer({ typeDefs, resolvers });
+await apolloServer.start();
+
+// Mount GraphQL BEFORE the SPA catch-all
+app.use('/graphql', optionalUser());
+app.use('/graphql', expressMiddleware(apolloServer, {
+  context: async ({ req }) => ({
+    user: req.user || null,
+  }),
+}));
+
 // Fallback route for SPA (MUST be after all API and static routes)
 app.get('*', (req, res) => {
   res.sendFile(path.join(uiBuildPath, 'index.html'), (err) => {
@@ -270,14 +291,16 @@ app.use((err, req, res, next) => {
   });
 });
 
+
 app.listen(PORT, '0.0.0.0', async () => {
-  console.log(`API server running on port ${PORT}`);
-  console.log(`Health check available at http://localhost:${PORT}/api/health`);
-  console.log(`MongoDB status available at http://localhost:${PORT}/api/mongo/status`);
-  console.log(`Redis status available at http://localhost:${PORT}/api/redis/status`);
-  console.log(`Postgres status available at http://localhost:${PORT}/api/postgres/status`);
-  console.log(`User API available at http://localhost:${PORT}/api/users/`);
-  console.log(`NoteGeek API available at http://localhost:${PORT}/api/notes/`);
+  console.log(`API server running on port ${ PORT }`);
+  console.log(`🔷 GraphQL available at http://localhost:${ PORT }/graphql`);
+  console.log(`Health check available at http://localhost:${ PORT }/api/health`);
+  console.log(`MongoDB status available at http://localhost:${ PORT }/api/mongo/status`);
+  console.log(`Redis status available at http://localhost:${ PORT }/api/redis/status`);
+  console.log(`Postgres status available at http://localhost:${ PORT }/api/postgres/status`);
+  console.log(`User API available at http://localhost:${ PORT }/api/users/`);
+  console.log(`NoteGeek API available at http://localhost:${ PORT }/api/notes/`);
 
   // Phase 2A: Start provider health background job
   try {

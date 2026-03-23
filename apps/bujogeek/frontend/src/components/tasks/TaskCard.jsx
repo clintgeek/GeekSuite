@@ -55,18 +55,18 @@ const TaskCard = ({ task, onEdit }) => {
 
   const handleStatusToggle = async () => {
     const newStatus = task.status === 'completed' ? 'pending' : 'completed';
-    await updateTaskStatus(task._id, newStatus);
+    await updateTaskStatus((task.id || task._id), newStatus);
   };
 
   const handleDelete = async () => {
     if (window.confirm('Are you sure you want to delete this task?')) {
-      await deleteTask(task._id);
+      await deleteTask((task.id || task._id));
     }
   };
 
   const handleMoveToBacklog = async () => {
     if (window.confirm('Move this task to the backlog?')) {
-      await updateTask(task._id, { ...task, status: 'migrated_back', dueDate: null });
+      await updateTask((task.id || task._id), { ...task, status: 'migrated_back', dueDate: null });
     }
   };
 
@@ -76,7 +76,7 @@ const TaskCard = ({ task, onEdit }) => {
   };
 
   const handleScheduleSubmit = async () => {
-    await updateTask(task._id, {
+    await updateTask((task.id || task._id), {
       ...task,
       status: 'migrated_future',
       dueDate: scheduledDate

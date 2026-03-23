@@ -312,7 +312,7 @@ const TaskList = ({ tasks = [], viewType = 'daily' }) => {
           // To visually separate the double border
           position: 'relative',
         } : {}}
-        key={task._id}
+        key={(task.id || task._id)}
       >
         <ListItem
           onClick={() => handleTaskClick(task)}
@@ -409,7 +409,7 @@ const TaskList = ({ tasks = [], viewType = 'daily' }) => {
               edge="end"
               onClick={(e) => {
                 e.stopPropagation();
-                handleMigrateToFuture(task._id, futureDate);
+                handleMigrateToFuture((task.id || task._id), futureDate);
               }}
               sx={{ mr: 1 }}
               title="Schedule Task"
@@ -420,7 +420,7 @@ const TaskList = ({ tasks = [], viewType = 'daily' }) => {
               edge="end"
               onClick={(e) => {
                 e.stopPropagation();
-                handleStatusChange(task._id, task.status === 'completed' ? 'pending' : 'completed');
+                handleStatusChange((task.id || task._id), task.status === 'completed' ? 'pending' : 'completed');
               }}
               sx={{ mr: 1 }}
               title={task.status === 'completed' ? 'Mark as Pending' : 'Mark as Completed'}
@@ -431,7 +431,7 @@ const TaskList = ({ tasks = [], viewType = 'daily' }) => {
               edge="end"
               onClick={(e) => {
                 e.stopPropagation();
-                handleDelete(task._id);
+                handleDelete((task.id || task._id));
               }}
               title="Delete Task"
             >
@@ -449,11 +449,11 @@ const TaskList = ({ tasks = [], viewType = 'daily' }) => {
         <List>
           {displayTasks.map(task => (
             <div
-              key={task._id}
+              key={(task.id || task._id)}
               draggable
-              onDragStart={(e) => handleDragStart(e, task._id)}
+              onDragStart={(e) => handleDragStart(e, (task.id || task._id))}
               onDragOver={handleDragOver}
-              onDrop={(e) => handleDrop(e, task._id)}
+              onDrop={(e) => handleDrop(e, (task.id || task._id))}
             >
               {renderTask(task)}
             </div>

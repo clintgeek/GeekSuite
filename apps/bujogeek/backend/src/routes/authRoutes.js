@@ -27,7 +27,7 @@ router.post('/login', async (req, res) => {
     const password = req.body?.password;
     const app = req.body?.app || APP_NAME;
 
-    const response = await axios.post(`${ BASEGEEK_URL }/api/auth/login`, {
+    const response = await axios.post(`${BASEGEEK_URL}/api/auth/login`, {
       identifier,
       password,
       app
@@ -44,7 +44,7 @@ router.post('/login', async (req, res) => {
     if (!error.response) {
       return res.status(502).json({
         success: false,
-        error: { message: `Unable to reach baseGeek auth service at ${ BASEGEEK_URL }` }
+        error: { message: `Unable to reach baseGeek auth service at ${BASEGEEK_URL}` }
       });
     }
 
@@ -58,7 +58,7 @@ router.post('/login', async (req, res) => {
 
 router.post('/register', async (req, res) => {
   try {
-    const response = await axios.post(`${ BASEGEEK_URL }/api/auth/register`, {
+    const response = await axios.post(`${BASEGEEK_URL}/api/auth/register`, {
       ...req.body,
       app: req.body?.app || APP_NAME
     });
@@ -74,7 +74,7 @@ router.post('/register', async (req, res) => {
     if (!error.response) {
       return res.status(502).json({
         success: false,
-        error: { message: `Unable to reach baseGeek auth service at ${ BASEGEEK_URL }` }
+        error: { message: `Unable to reach baseGeek auth service at ${BASEGEEK_URL}` }
       });
     }
 
@@ -92,7 +92,7 @@ router.post('/refresh', async (req, res) => {
     // BaseGeek handles token from cookie or body, so we just pass through
     // console.log('[DEBUG /api/auth/refresh] Passing through to BaseGeek');
 
-    const response = await axios.post(`${ BASEGEEK_URL }/api/auth/refresh`, {
+    const response = await axios.post(`${BASEGEEK_URL}/api/auth/refresh`, {
       refreshToken,
       app: req.body?.app || APP_NAME
     }, {
@@ -101,16 +101,12 @@ router.post('/refresh', async (req, res) => {
 
     forwardSetCookieHeaders(res, response.headers);
 
-    return res.json({
-      success: true,
-      data: response.data,
-      timestamp: new Date().toISOString()
-    });
+    return res.status(response.status).json(response.data);
   } catch (error) {
     if (!error.response) {
       return res.status(502).json({
         success: false,
-        error: { message: `Unable to reach baseGeek auth service at ${ BASEGEEK_URL }` }
+        error: { message: `Unable to reach baseGeek auth service at ${BASEGEEK_URL}` }
       });
     }
 
@@ -124,7 +120,7 @@ router.post('/refresh', async (req, res) => {
 
 router.post('/logout', async (req, res) => {
   try {
-    const response = await axios.post(`${ BASEGEEK_URL }/api/auth/logout`, {}, {
+    const response = await axios.post(`${BASEGEEK_URL}/api/auth/logout`, {}, {
       headers: getForwardAuthHeaders(req)
     });
     forwardSetCookieHeaders(res, response.headers);
