@@ -5,7 +5,8 @@ import { registerSW } from 'virtual:pwa-register'
 // Import ReactFlow styles
 import 'reactflow/dist/style.css';
 
-import { GeekSuiteApolloProvider } from '@geeksuite/api-client';
+import { ApolloProvider } from '@apollo/client';
+import { apolloClient } from './apolloClient';
 
 // Import custom SASS styles
 import './styles/main.scss';
@@ -27,12 +28,12 @@ configureUserPlatform();
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <GeekSuiteApolloProvider appName="notegeek">
+    <ApolloProvider client={apolloClient}>
       <ThemeModeProvider>
         <AppBootstrapper>
           <App />
         </AppBootstrapper>
       </ThemeModeProvider>
-    </GeekSuiteApolloProvider>
+    </ApolloProvider>
   </StrictMode>,
 )

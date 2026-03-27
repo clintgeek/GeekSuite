@@ -35,6 +35,30 @@ export const typeDefs = gql`
     updatedAt: Date
   }
 
+  type TemplateVariable {
+    name: String
+    type: String
+    defaultValue: String
+    required: Boolean
+  }
+
+  type Template {
+    id: ID!
+    name: String!
+    description: String
+    type: String
+    content: String!
+    isDefault: Boolean
+    isPublic: Boolean
+    tags: [String]
+    variables: [TemplateVariable]
+    createdAt: Date
+    updatedAt: Date
+    createdBy: ID
+    lastUsed: Date
+    preview: String
+  }
+
   input UpdateTaskInput {
     content: String
     signifier: String
@@ -60,6 +84,8 @@ export const typeDefs = gql`
     tasksByTag(tag: String!): [Task!]!
     journalEntries(type: String, tags: [String]): [JournalEntry!]!
     journalEntry(id: ID!): JournalEntry
+    templates(type: String, isDefault: Boolean): [Template!]!
+    template(id: ID!): Template
   }
 
   type Mutation {
@@ -75,5 +101,8 @@ export const typeDefs = gql`
     deleteJournalEntry(id: ID!): DeleteResponse!
     createJournalFromTemplate(templateId: ID!, date: Date): JournalEntry!
     updateBujoPreferences(theme: String!): FitnessJSON!
+    createTemplate(name: String!, description: String, type: String, content: String!, isDefault: Boolean, isPublic: Boolean, tags: [String]): Template!
+    updateTemplate(id: ID!, name: String, description: String, type: String, content: String, isDefault: Boolean, isPublic: Boolean, tags: [String]): Template!
+    deleteTemplate(id: ID!): DeleteResponse!
   }
 `;

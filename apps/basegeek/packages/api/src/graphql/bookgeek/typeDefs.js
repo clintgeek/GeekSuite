@@ -86,6 +86,14 @@ export const typeDefs = gql`
     goodreadsId: String
   }
 
+  input CreateBookInput {
+    title: String!
+    authors: [String]
+    isbn: String
+    shelf: String
+    owned: Boolean
+  }
+
   type Query {
     books(page: Int, limit: Int, sort: String, sortDir: String, author: String, tag: String, shelf: String, owned: String, q: String): BookPage!
     book(id: ID!): Book
@@ -93,6 +101,7 @@ export const typeDefs = gql`
   }
 
   type Mutation {
+    createBook(input: CreateBookInput!): Book
     updateBook(id: ID!, input: UpdateBookInput!): Book
     deleteBook(id: ID!, deleteFiles: Boolean): DeleteBookResponse
   }

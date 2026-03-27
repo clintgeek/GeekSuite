@@ -6,7 +6,7 @@ import { registerReset, reset as resetUserStore } from "./utils/resetUserStore";
 import { LoginSplash } from "@geeksuite/ui";
 import { useApolloClient } from "@apollo/client";
 import { GET_BOOKS, GET_SHELVES } from "./graphql/queries.js";
-import { UPDATE_BOOK, DELETE_BOOK } from "./graphql/mutations.js";
+import { UPDATE_BOOK, DELETE_BOOK, CREATE_BOOK } from "./graphql/mutations.js";
 
 let API_BASE = "http://localhost:1800/api";
 
@@ -395,21 +395,12 @@ export default function App() {
         owned: false,
       };
 
-      const res = await authFetch("/books", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
+      const { data } = await apolloClient.mutate({
+        mutation: CREATE_BOOK,
+        variables: { input: body }
       });
-      const json = await res.json().catch(() => null);
-      if (!res.ok || json?.success === false) {
-        const message =
-          json?.error?.message || json?.message || "Failed to create book";
-        throw new Error(message);
-      }
 
-      let created = json.data || null;
+      let created = data.createBook || null;
 
       if (created && (created.id || created._id) && addBookFile) {
         try {

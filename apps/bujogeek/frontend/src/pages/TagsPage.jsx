@@ -11,7 +11,8 @@ import {
 } from '@mui/material';
 import { Search, Hash, ChevronDown, ChevronRight } from 'lucide-react';
 import { isToday, isPast } from 'date-fns';
-import apiClient from '../services/apiClient';
+import { apolloClient } from '../apolloClient';
+import { GET_TASK_TAGS, GET_TASKS_BY_TAG } from '../graphql/queries';
 import TaskRow from '../components/tasks/TaskRow';
 import TaskEditor from '../components/tasks/TaskEditor';
 import SkeletonLoader from '../components/shared/SkeletonLoader';
@@ -42,8 +43,8 @@ const TagsPage = () => {
     setSearchParams({ tag }, { replace: true });
     setTasksLoading(true);
     try {
-      const res = await apiClient.get(`/tasks/by-tag/${encodeURIComponent(tag)}`, AUTH_CONFIG);
-      setTagTasks(res.data || []);
+      const { data } = await apolloClient.query({ query: GET_TASKS_BY_TAG, variables: { tag }, fetchPolicy: 'network-only' });
+      setTagTasks(data.tasksByTag || []);
     } catch {
       setTagTasks([]);
     } finally {
@@ -56,8 +57,8 @@ const TagsPage = () => {
     const fetchTags = async () => {
       setTagsLoading(true);
       try {
-        const res = await apiClient.get('/tasks/tags', AUTH_CONFIG);
-        setAllTags(res.data || []);
+        const { data } = await apolloClient.query({ query: GET_TASK_TAGS, fetchPolicy: 'network-only' });
+        setAllTags(data.taskTags || []);
       } catch {
         setAllTags([]);
       } finally {
@@ -80,8 +81,8 @@ const TagsPage = () => {
   const refreshTagTasks = useCallback(async () => {
     if (!selectedTag) return;
     try {
-      const res = await apiClient.get(`/tasks/by-tag/${encodeURIComponent(selectedTag)}`, AUTH_CONFIG);
-      setTagTasks(res.data || []);
+      const { data } = await apolloClient.query({ query: GET_TASKS_BY_TAG, variables: { tag: selectedTag }, fetchPolicy: 'network-only' });
+      setTagTasks(data.tasksByTag || []);
     } catch { /* ignore */ }
   }, [selectedTag]);
 

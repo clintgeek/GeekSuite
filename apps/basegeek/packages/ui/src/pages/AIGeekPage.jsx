@@ -30,8 +30,6 @@ import {
   Analytics as AnalyticsIcon,
   Key as KeyIcon,
   Visibility as VisibilityIcon,
-  VisibilityOff as VisibilityOffIcon,
-  Refresh as RefreshIcon,
   Save as SaveIcon,
   Warning as WarningIcon,
   CheckCircle as CheckCircleIcon,
@@ -39,6 +37,11 @@ import {
   SmartToy as SmartToyIcon
 } from '@mui/icons-material';
 import useSharedAuthStore from '../store/sharedAuthStore';
+import { apolloClient } from '../apolloClient';
+import { GET_AI_CONFIG, GET_AI_STATS, GET_AI_DIRECTOR_MODELS, GET_AI_USAGE } from '../graphql/queries';
+import { SAVE_AI_CONFIG, TEST_AI_PROVIDER, RESET_AI_STATS, SEED_DIRECTOR_PRICING, SEED_DIRECTOR_FREE_TIER } from '../graphql/mutations';
+import { GET_AI_CONFIG, GET_AI_STATS, GET_AI_DIRECTOR_MODELS, GET_AI_USAGE } from '../graphql/queries';
+import { SAVE_AI_CONFIG, TEST_AI_PROVIDER, RESET_AI_STATS, SEED_DIRECTOR_PRICING, SEED_DIRECTOR_FREE_TIER } from '../graphql/mutations';
 
 const AIGeekPage = () => {
   console.log('AIGeekPage component rendering');
@@ -97,15 +100,9 @@ const AIGeekPage = () => {
   const loadConfiguration = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/ai/config', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setConfig(data);
+      const { data } = await apolloClient.query({ query: GET_AI_CONFIG, fetchPolicy: 'network-only' });
+      if (data && data.aiConfig) {
+        setConfig(data.aiConfig);
       }
     } catch (error) {
       setError('Failed to load AI configuration');
@@ -117,18 +114,10 @@ const AIGeekPage = () => {
   const loadStatistics = async () => {
     try {
       console.log('Loading statistics...');
-      const response = await fetch('/api/ai/stats', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Received stats:', data);
-        setStats(data.data || data);
-      } else {
-        console.error('Failed to load statistics:', response.status, response.statusText);
+      const { data } = await apolloClient.query({ query: GET_AI_STATS, fetchPolicy: 'network-only' });
+      if (data && data.aiStats) {
+        console.log('Received stats:', data.aiStats);
+        setStats(data.aiStats.data || data.aiStats);
       }
     } catch (error) {
       console.error('Failed to load statistics:', error);
@@ -144,46 +133,22 @@ const AIGeekPage = () => {
 
       // First, seed pricing data if needed
       try {
-        const pricingResponse = await fetch('/api/ai/director/seed-pricing', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        console.log('Pricing seed response:', pricingResponse.status);
+        await apolloClient.mutate({ mutation: SEED_DIRECTOR_PRICING });
       } catch (error) {
         console.log('Pricing already seeded or error:', error);
       }
 
       // Then, seed free tier information if needed
       try {
-        const freeTierResponse = await fetch('/api/ai/director/seed-free-tier', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        console.log('Free tier seed response:', freeTierResponse.status);
+        await apolloClient.mutate({ mutation: SEED_DIRECTOR_FREE_TIER });
       } catch (error) {
         console.log('Free tier already seeded or error:', error);
       }
 
       // Then load the comprehensive model data
-      const response = await fetch('/api/ai/director/models', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setDirectorData(data.data);
-      } else {
-        const errorData = await response.json();
-        setError(errorData.error?.message || 'Failed to load AI Director data');
+      const { data } = await apolloClient.query({ query: GET_AI_DIRECTOR_MODELS, fetchPolicy: 'network-only' });
+      if (data && data.aiDirectorModels) {
+        setDirectorData(data.aiDirectorModels);
       }
     } catch (error) {
       setError(`Failed to load AI Director data: ${error.message}`);
@@ -202,20 +167,10 @@ const AIGeekPage = () => {
 
       for (const provider of providers) {
         try {
-          // Use session-level tracking
-          const response = await fetch(`/api/ai/usage/${provider}?userId=session`, {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            }
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-            console.log(`Usage data for ${provider}:`, data);
-            usageSummary[provider] = data.data;
-          } else {
-            console.error(`Failed to load usage for ${provider}:`, response.status, response.statusText);
+          const { data } = await apolloClient.query({ query: GET_AI_USAGE, variables: { provider }, fetchPolicy: 'network-only' });
+          if (data && data.aiUsage) {
+            console.log(`Usage data for ${provider}:`, data.aiUsage);
+            usageSummary[provider] = data.aiUsage;
           }
         } catch (error) {
           console.log(`Failed to load usage for ${provider}:`, error);
@@ -237,24 +192,11 @@ const AIGeekPage = () => {
       setError('');
       setSuccess('');
 
-      const response = await fetch('/api/ai/config', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(config)
-      });
-
-      if (response.ok) {
-        setSuccess('AI configuration saved successfully');
-        await loadStatistics(); // Refresh stats after config change
-      } else {
-        const errorData = await response.json();
-        setError(errorData.error?.message || 'Failed to save configuration');
-      }
+      await apolloClient.mutate({ mutation: SAVE_AI_CONFIG, variables: { config } });
+      setSuccess('AI configuration saved successfully');
+      await loadStatistics(); // Refresh stats after config change
     } catch (error) {
-      setError('Failed to save AI configuration');
+      setError(error.message || 'Failed to save AI configuration');
     } finally {
       setLoading(false);
     }
@@ -263,16 +205,8 @@ const AIGeekPage = () => {
   const testProvider = async (provider) => {
     try {
       setLoading(true);
-      const response = await fetch('/api/ai/test', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ provider, appName: 'baseGeek-test' })
-      });
-
-      if (response.ok) {
+      const { data } = await apolloClient.mutate({ mutation: TEST_AI_PROVIDER, variables: { provider } });
+      if (data && data.testAIProvider) {
         setSuccess(`${provider} API key is valid`);
       } else {
         setError(`${provider} API key is invalid`);
@@ -286,19 +220,9 @@ const AIGeekPage = () => {
 
   const resetStatistics = async () => {
     try {
-      const response = await fetch('/api/ai/reset-stats', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (response.ok) {
-        setSuccess('Statistics reset successfully');
-        await loadStatistics();
-      } else {
-        setError('Failed to reset statistics');
-      }
+      await apolloClient.mutate({ mutation: RESET_AI_STATS });
+      setSuccess('Statistics reset successfully');
+      await loadStatistics();
     } catch (error) {
       setError('Failed to reset statistics');
     }

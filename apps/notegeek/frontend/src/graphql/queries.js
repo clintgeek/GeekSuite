@@ -35,3 +35,35 @@ export const GET_TAGS = gql`
         noteTags
     }
 `;
+
+export const GET_FOLDERS = gql`
+    query GetFolders {
+        folders {
+            id
+            name
+            parentId
+            icon
+            color
+            createdAt
+            updatedAt
+        }
+    }
+`;
+
+export const SEARCH_NOTES = gql`
+    query SearchNotes($q: String!) {
+        searchNotes(q: $q) {
+            _id
+            title
+            type
+            tags
+            isLocked
+            isEncrypted
+            createdAt
+            updatedAt
+            score
+            snippet
+            message
+        }
+    }
+`;

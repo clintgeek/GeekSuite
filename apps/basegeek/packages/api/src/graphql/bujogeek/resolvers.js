@@ -61,6 +61,21 @@ export const resolvers = {
       if (!userId) return null;
       return JournalEntry.findOne({ _id: id, createdBy: userId });
     },
+    templates: async (_, { type, isDefault }, context) => {
+      const userId = context.user?.id;
+      if (!userId) return [];
+      const filter = { createdBy: userId };
+      if (type) filter.type = type;
+      if (isDefault !== undefined) filter.isDefault = isDefault;
+      const { default: Template } = await import('./models/Template.js');
+      return Template.find(filter).sort({ name: 1 });
+    },
+    template: async (_, { id }, context) => {
+      const userId = context.user?.id;
+      if (!userId) return null;
+      const { default: Template } = await import('./models/Template.js');
+      return Template.findOne({ _id: id, createdBy: userId });
+    },
   },
 
   Mutation: {
@@ -155,8 +170,32 @@ export const resolvers = {
       await template.save();
       return entry;
     },
+    createTemplate: async (_, args, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const { default: Template } = await import('./models/Template.js');
+      const template = new Template({ ...args, createdBy: userId });
+      return template.save();
+    },
+    updateTemplate: async (_, { id, ...updateFields }, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const { default: Template } = await import('./models/Template.js');
+      const template = await Template.findOneAndUpdate({ _id: id, createdBy: userId }, updateFields, { new: true, runValidators: true });
+      if (!template) throw new Error('Template not found');
+      return template;
+    },
+    deleteTemplate: async (_, { id }, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const { default: Template } = await import('./models/Template.js');
+      const template = await Template.findOneAndDelete({ _id: id, createdBy: userId });
+      if (!template) throw new Error('Template not found');
+      return { success: true, message: 'Template deleted successfully' };
+    },
   },
 
   Task: { id: (task) => task._id ? task._id.toString() : task.id?.toString() },
   JournalEntry: { id: (entry) => entry._id ? entry._id.toString() : entry.id?.toString() },
+  Template: { id: (template) => template._id ? template._id.toString() : template.id?.toString() },
 };

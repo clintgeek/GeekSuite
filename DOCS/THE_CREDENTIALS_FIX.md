@@ -29,7 +29,7 @@ This document details the steps required to fix the sensitive credential exposur
 
 ### 3. Authentication Secrets
 
-| Secret Type | Value | Files Affected |
+| Secret Type | Value | Files Affected | 
 |-------------|-------|----------------|
 | JWT_SECRET | `REDACTED_JWT_SECRET` | `apps/basegeek/.env`, `apps/basegeek/.env.production`, `apps/flockgeek/.env`, `apps/flockgeek/backend/.env` |
 | JWT_REFRESH_SECRET | `REDACTED_JWT_REFRESH_SECRET` | `apps/basegeek/.env`, `apps/basegeek/.env.production` |

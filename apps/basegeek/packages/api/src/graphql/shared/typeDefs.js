@@ -3,6 +3,7 @@ import { gql } from 'graphql-tag';
 // Shared types used across multiple apps — defined once here
 export const sharedTypeDefs = gql`
   scalar Date
+  scalar JSON
 
   type DeleteResponse {
     success: Boolean!

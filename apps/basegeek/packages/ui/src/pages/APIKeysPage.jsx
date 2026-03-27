@@ -44,7 +44,9 @@ import {
   VisibilityOff as VisibilityOffIcon,
   ExpandMore as ExpandMoreIcon
 } from '@mui/icons-material';
-import api from '../api';
+import { apolloClient } from '../apolloClient';
+import { GET_API_KEYS, GET_API_KEYS_APPS_LIST } from '../graphql/queries';
+import { CREATE_API_KEY, UPDATE_API_KEY, DELETE_API_KEY, REGENERATE_API_KEY } from '../graphql/mutations';
 
 const AVAILABLE_PERMISSIONS = [
   { value: 'ai:call', label: 'AI Calls', description: 'Make AI API calls' },
@@ -87,8 +89,8 @@ const APIKeysPage = () => {
 
   const fetchApiKeys = async () => {
     try {
-      const response = await api.get('/api-keys');
-      setApiKeys(response.data.data.apiKeys);
+      const { data } = await apolloClient.query({ query: GET_API_KEYS, fetchPolicy: 'network-only' });
+      setApiKeys(data.apiKeys || []);
     } catch (error) {
       showSnackbar('Failed to fetch API keys', 'error');
     } finally {
@@ -98,8 +100,8 @@ const APIKeysPage = () => {
 
   const fetchApps = async () => {
     try {
-      const response = await api.get('/api-keys/apps/list');
-      setApps(response.data.data.apps);
+      const { data } = await apolloClient.query({ query: GET_API_KEYS_APPS_LIST, fetchPolicy: 'network-only' });
+      setApps(data.apiKeysAppsList || []);
     } catch (error) {
       console.error('Failed to fetch apps:', error);
     }
@@ -111,8 +113,18 @@ const APIKeysPage = () => {
 
   const handleCreateApiKey = async () => {
     try {
-      const response = await api.post('/api-keys', formData);
-      setNewApiKey(response.data.data.apiKey);
+      const { data } = await apolloClient.mutate({
+        mutation: CREATE_API_KEY,
+        variables: {
+          name: formData.name,
+          appName: formData.appName,
+          description: formData.description,
+          permissions: formData.permissions,
+          rateLimit: formData.rateLimit,
+          expiresAt: formData.expiresAt ? new Date(formData.expiresAt).toISOString() : null
+        }
+      });
+      setNewApiKey(data.createAPIKey.apiKey);
       setShowNewApiKey(true);
       setCreateDialogOpen(false);
       fetchApiKeys();
@@ -120,20 +132,31 @@ const APIKeysPage = () => {
       showSnackbar('API key created successfully', 'success');
       resetForm();
     } catch (error) {
-      showSnackbar(error.response?.data?.error?.message || 'Failed to create API key', 'error');
+      showSnackbar(error.message || 'Failed to create API key', 'error');
     }
   };
 
   const handleUpdateApiKey = async () => {
     try {
-      await api.put(`/api-keys/${selectedKey.id}`, formData);
+      await apolloClient.mutate({
+        mutation: UPDATE_API_KEY,
+        variables: {
+          id: selectedKey.id,
+          name: formData.name,
+          description: formData.description,
+          permissions: formData.permissions,
+          rateLimit: formData.rateLimit,
+          expiresAt: formData.expiresAt ? new Date(formData.expiresAt).toISOString() : null,
+          isActive: formData.isActive
+        }
+      });
       setEditDialogOpen(false);
       fetchApiKeys();
       fetchApps();
       showSnackbar('API key updated successfully', 'success');
       resetForm();
     } catch (error) {
-      showSnackbar(error.response?.data?.error?.message || 'Failed to update API key', 'error');
+      showSnackbar(error.message || 'Failed to update API key', 'error');
     }
   };
 
@@ -143,12 +166,12 @@ const APIKeysPage = () => {
     }
 
     try {
-      await api.delete(`/api-keys/${keyId}`);
+      await apolloClient.mutate({ mutation: DELETE_API_KEY, variables: { id: keyId } });
       fetchApiKeys();
       fetchApps();
       showSnackbar('API key deleted successfully', 'success');
     } catch (error) {
-      showSnackbar(error.response?.data?.error?.message || 'Failed to delete API key', 'error');
+      showSnackbar(error.message || 'Failed to delete API key', 'error');
     }
   };
 
@@ -158,13 +181,13 @@ const APIKeysPage = () => {
     }
 
     try {
-      const response = await api.post(`/api-keys/${keyId}/regenerate`);
-      setNewApiKey(response.data.data.apiKey);
+      const { data } = await apolloClient.mutate({ mutation: REGENERATE_API_KEY, variables: { id: keyId } });
+      setNewApiKey(data.regenerateAPIKey.apiKey);
       setShowNewApiKey(true);
       fetchApiKeys();
       showSnackbar('API key regenerated successfully', 'success');
     } catch (error) {
-      showSnackbar(error.response?.data?.error?.message || 'Failed to regenerate API key', 'error');
+      showSnackbar(error.message || 'Failed to regenerate API key', 'error');
     }
   };
 

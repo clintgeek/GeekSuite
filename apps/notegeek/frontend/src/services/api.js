@@ -1,6 +1,10 @@
 import axios from 'axios';
 import { setupAxiosInterceptors } from '@geeksuite/auth';
 
+import { apolloClient } from '../apolloClient';
+import { GET_FOLDERS, SEARCH_NOTES, GET_NOTES, GET_NOTE_BY_ID, GET_TAGS } from '../graphql/queries';
+import { CREATE_FOLDER, UPDATE_FOLDER, DELETE_FOLDER, RENAME_TAG, DELETE_TAG, CREATE_NOTE, UPDATE_NOTE, DELETE_NOTE } from '../graphql/mutations';
+
 // Define the base URL for the API
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
@@ -28,26 +32,56 @@ export const logoutApi = () => apiClient.post('/auth/logout');
 export const getMeApi = () => apiClient.get('/auth/me');
 
 // Notes
-export const getNotesApi = (filters = {}) => apiClient.get('/notes', { params: filters });
-export const getNoteByIdApi = (id) => apiClient.get(`/notes/${id}`);
-export const createNoteApi = (noteData) => apiClient.post('/notes', noteData);
-export const updateNoteApi = (id, noteData) => apiClient.put(`/notes/${id}`, noteData);
-export const deleteNoteApi = (id) => apiClient.delete(`/notes/${id}`);
+export const getNotesApi = async (filters = {}) => {
+    const { data } = await apolloClient.query({ query: GET_NOTES, variables: filters, fetchPolicy: 'network-only' });
+    return { data: data.notes };
+};
+export const getNoteByIdApi = async (id) => {
+    const { data } = await apolloClient.query({ query: GET_NOTE_BY_ID, variables: { id }, fetchPolicy: 'network-only' });
+    return { data: data.note };
+};
+export const createNoteApi = async (noteData) => {
+    const { data } = await apolloClient.mutate({ mutation: CREATE_NOTE, variables: noteData });
+    return { data: data.createNote };
+};
+export const updateNoteApi = async (id, noteData) => {
+    const { data } = await apolloClient.mutate({ mutation: UPDATE_NOTE, variables: { id, ...noteData } });
+    return { data: data.updateNote };
+};
+export const deleteNoteApi = async (id) => {
+    const { data } = await apolloClient.mutate({ mutation: DELETE_NOTE, variables: { id } });
+    return { data: data.deleteNote };
+};
 
 // Tags
-export const getTagsApi = () => apiClient.get('/tags');
+export const getTagsApi = async () => {
+    const { data } = await apolloClient.query({ query: GET_TAGS, fetchPolicy: 'network-only' });
+    return { data: data.noteTags };
+};
 
 // Folders
-export const createFolderApi = (folderData) => apiClient.post('/folders', folderData);
-export const getFoldersApi = () => apiClient.get('/folders');
-export const updateFolderApi = (folderId, folderData) => apiClient.put(`/folders/${folderId}`, folderData);
-export const deleteFolderApi = (folderId, cascade = false) => apiClient.delete(`/folders/${folderId}?deleteNotes=${cascade}`);
+export const createFolderApi = async (folderData) => {
+    const { data } = await apolloClient.mutate({ mutation: CREATE_FOLDER, variables: folderData });
+    return { data: data.createFolder };
+};
+export const getFoldersApi = async () => {
+    const { data } = await apolloClient.query({ query: GET_FOLDERS, fetchPolicy: 'network-only' });
+    return { data: data.folders };
+};
+export const updateFolderApi = async (folderId, folderData) => {
+    const { data } = await apolloClient.mutate({ mutation: UPDATE_FOLDER, variables: { id: folderId, ...folderData } });
+    return { data: data.updateFolder };
+};
+export const deleteFolderApi = async (folderId, cascade = false) => {
+    const { data } = await apolloClient.mutate({ mutation: DELETE_FOLDER, variables: { id: folderId, deleteNotes: cascade } });
+    return { data: data.deleteFolder };
+};
 
 // Search
 export const searchNotesApi = async (query) => {
     try {
-        const response = await apiClient.get('/search', { params: { q: query } });
-        return response;
+        const { data } = await apolloClient.query({ query: SEARCH_NOTES, variables: { q: query }, fetchPolicy: 'network-only' });
+        return { data: data.searchNotes };
     } catch (error) {
         console.error('Search failed:', error.message);
         throw error;
@@ -57,8 +91,8 @@ export const searchNotesApi = async (query) => {
 // Tag Management
 export const renameTagApi = async (oldTag, newTag) => {
     try {
-        const response = await apiClient.put('/tags/rename', { oldTag, newTag });
-        return response;
+        const { data } = await apolloClient.mutate({ mutation: RENAME_TAG, variables: { oldTag, newTag } });
+        return { data: data.renameTag };
     } catch (error) {
         console.error('API Rename Tag Error:', error);
         throw error;
@@ -67,8 +101,8 @@ export const renameTagApi = async (oldTag, newTag) => {
 
 export const deleteTagApi = async (tag) => {
     try {
-        const response = await apiClient.delete(`/tags/${encodeURIComponent(tag)}`);
-        return response;
+        const { data } = await apolloClient.mutate({ mutation: DELETE_TAG, variables: { tag } });
+        return { data: data.deleteTag };
     } catch (error) {
         console.error('Delete tag failed:', error.message);
         throw error;

@@ -131,6 +131,21 @@ export const resolvers = {
     },
   },
   Mutation: {
+    createBook: async (_, { input }, { user }) => {
+      if (!user) throw new Error("Unauthorized");
+      const doc = {
+        title: input.title,
+        authors: input.authors || [],
+        isbn: input.isbn,
+        shelf: input.shelf || "want-to-read",
+        owned: input.owned || false,
+        dateAdded: new Date(),
+        source: "manual",
+      };
+      
+      const book = await Book.create(doc);
+      return book.toObject ? book.toObject() : book;
+    },
     updateBook: async (_, { id, input }) => {
       const updated = await Book.findByIdAndUpdate(
         id,

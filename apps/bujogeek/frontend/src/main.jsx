@@ -4,7 +4,8 @@ import { registerSW } from 'virtual:pwa-register';
 import { configureUserPlatform } from './bootstrapUser';
 import App from './App.jsx';
 import './index.css';
-import { GeekSuiteApolloProvider } from '@geeksuite/api-client';
+import { ApolloProvider } from '@apollo/client';
+import { apolloClient } from './apolloClient';
 
 registerSW({
   immediate: true,
@@ -17,8 +18,8 @@ configureUserPlatform();
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <GeekSuiteApolloProvider appName="bujogeek">
+    <ApolloProvider client={apolloClient}>
       <App />
-    </GeekSuiteApolloProvider>
+    </ApolloProvider>
   </React.StrictMode>,
 );
