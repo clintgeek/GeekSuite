@@ -40,8 +40,7 @@ import useSharedAuthStore from '../store/sharedAuthStore';
 import { apolloClient } from '../apolloClient';
 import { GET_AI_CONFIG, GET_AI_STATS, GET_AI_DIRECTOR_MODELS, GET_AI_USAGE } from '../graphql/queries';
 import { SAVE_AI_CONFIG, TEST_AI_PROVIDER, RESET_AI_STATS, SEED_DIRECTOR_PRICING, SEED_DIRECTOR_FREE_TIER } from '../graphql/mutations';
-import { GET_AI_CONFIG, GET_AI_STATS, GET_AI_DIRECTOR_MODELS, GET_AI_USAGE } from '../graphql/queries';
-import { SAVE_AI_CONFIG, TEST_AI_PROVIDER, RESET_AI_STATS, SEED_DIRECTOR_PRICING, SEED_DIRECTOR_FREE_TIER } from '../graphql/mutations';
+
 
 const AIGeekPage = () => {
   console.log('AIGeekPage component rendering');

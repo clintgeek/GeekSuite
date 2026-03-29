@@ -18,7 +18,7 @@ const emptyForm = { name: "", pairingDate: "", active: true, notes: "" };
 const PairingsPage = () => {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [sortBy, setSortBy] = useState("pairingDate");
+  const [sortBy, setSortBy] = useState("startDate");
   const [sortOrder, setSortOrder] = useState("desc");
   const [filters, setFilters] = useState({ active: "", q: "" });
   const [mutationError, setMutationError] = useState("");
@@ -88,7 +88,7 @@ const PairingsPage = () => {
     setEditingPairing(pairing);
     setEditFormData({
       name: pairing.name || "",
-      pairingDate: pairing.pairingDate ? toLocalDateString(pairing.pairingDate) : "",
+      pairingDate: pairing.startDate ? toLocalDateString(pairing.startDate) : "",
       active: pairing.active ?? true,
       notes: pairing.notes || "",
     });

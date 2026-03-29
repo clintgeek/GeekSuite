@@ -182,9 +182,9 @@ const EggLogPage = () => {
                     <TableCell>{new Date(record.date).toLocaleDateString(undefined, { timeZone: 'UTC' })}</TableCell>
                     <TableCell>{record.locationId ? getLocationName(record.locationId) : "-"}</TableCell>
                     <TableCell align="center" sx={{ fontWeight: 600 }}>{record.eggsCount}</TableCell>
-                    <TableCell align="center">{record.daysObserved || 1}</TableCell>
+                    <TableCell align="center">{record.avgEggWeightGrams || "-"}</TableCell>
                     <TableCell align="center" sx={{ color: "text.secondary" }}>
-                      {(record.eggsCount / (record.daysObserved || 1)).toFixed(1)}/day
+                      {(record.eggsCount / (record.avgEggWeightGrams || 1)).toFixed(1)}/day
                     </TableCell>
                     <TableCell sx={{ maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {record.notes || "-"}

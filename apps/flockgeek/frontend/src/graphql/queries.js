@@ -46,7 +46,7 @@ export const GET_EGG_PRODUCTIONS = gql`
       date
       eggsCount
       locationId
-      daysObserved
+      avgEggWeightGrams
       eggColor
       eggSize
       source
@@ -63,7 +63,8 @@ export const GET_PAIRINGS = gql`
       name
       roosterIds
       henIds
-      pairingDate
+      startDate
+      endDate
       active
       notes
       season

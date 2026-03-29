@@ -12,7 +12,7 @@
     "dev": "concurrently \"npm run dev:api\" \"npm run dev:ui\"",
     "dev:api": "npm run dev --workspace=@datageek/api",
     "dev:ui": "npm run dev --workspace=@basegeek/ui",
-    "build": "npm run build --workspaces",
+    "build": "npm run build --workspaces --if-present",
     "start": "npm run start --workspace=@datageek/api"
   },
   "devDependencies": {
