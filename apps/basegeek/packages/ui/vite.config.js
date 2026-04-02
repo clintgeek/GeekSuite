@@ -44,6 +44,6 @@ export default defineConfig({
   preview: {
     port: 8988,
     host: '0.0.0.0',
-    allowedHosts: ['basegeek.clintgeek.com']
+    allowedHosts: ['basegeek.clintgeek.com', 'geeksuite.clintgeek.com']
   }
 });

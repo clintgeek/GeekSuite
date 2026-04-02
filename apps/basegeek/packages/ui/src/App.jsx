@@ -14,6 +14,7 @@ import APIKeysPage from './pages/APIKeysPage';
 import Settings from './pages/Settings';
 import AccountPage from './pages/AccountPage';
 import SharedAuthProvider from './components/SharedAuthProvider';
+import PortalPage from './pages/PortalPage';
 
 function App() {
   return (
@@ -22,9 +23,12 @@ function App() {
       <SharedAuthProvider app="basegeek">
         <Router>
           <Routes>
+            {/* Public routes — no auth required */}
+            <Route path="/portal" element={<PortalPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
+            {/* Protected routes */}
             <Route path="/" element={<RequireAuth><Layout /></RequireAuth>}>
               <Route index element={<BaseGeekHome />} />
               <Route path="datageek" element={<DataGeekPage />} />

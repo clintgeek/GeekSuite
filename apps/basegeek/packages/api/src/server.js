@@ -1,6 +1,10 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
 
 import cors from 'cors';
 import morgan from 'morgan';
@@ -44,13 +48,15 @@ const allowedOrigins = [
   'http://localhost:5000',    // Backend dev server (alternative port)
   'http://localhost:3000',    // StartGeek & StoryGeek frontend
   'https://basegeek.clintgeek.com',  // Production domain
+  'https://geeksuite.clintgeek.com', // GeekSuite public portal
   'https://notegeek.clintgeek.com',  // NoteGeek production
   'https://fitnessgeek.clintgeek.com',  // FitnessGeek production
   'https://bookgeek.clintgeek.com',  // epub library
   'https://storygeek.clintgeek.com',  // StoryGeek production
-  'https://flockgeek.clintgeek.com',  // StoryGeek production
+  'https://flockgeek.clintgeek.com',  // FlockGeek production
   'https://babelgeek.clintgeek.com',  // BabelGeek production
   'https://start.clintgeek.com',  // StartGeek production
+  'https://clintgeek.com',        // Portfolio (for portal link)
   'http://192.168.1.17:5173',  // Local network access
   'http://192.168.1.17:5174',   // Local network access (alternative port)
   'http://192.168.1.17:9977'   // StoryGeek local network access
@@ -130,6 +136,51 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString(),
     app: 'basegeek',
   });
+});
+
+// Public infra health — checks mongo/redis/influx internally (no auth required)
+app.get('/api/health/infra', async (req, res) => {
+  const results = {};
+
+  // MongoDB
+  try {
+    const { MongoClient } = await import('mongodb');
+    const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/datageek?authSource=admin';
+    const start = Date.now();
+    const client = await MongoClient.connect(uri, { serverSelectionTimeoutMS: 2000 });
+    const serverStatus = await client.db().admin().command({ serverStatus: 1 });
+    await client.close();
+    results.mongo = { online: true, latency: Date.now() - start, version: serverStatus.version };
+  } catch (err) {
+    results.mongo = { online: false, latency: null };
+  }
+
+  // Redis
+  try {
+    const { createClient } = await import('redis');
+    const redisUrl = process.env.REDIS_URL || 'redis://192.168.1.17:6380';
+    const client = createClient({ url: redisUrl, socket: { connectTimeout: 3000 } });
+    const start = Date.now();
+    await client.connect();
+    const info = await client.info('server');
+    await client.quit();
+    const versionMatch = info.match(/redis_version:(.+)/);
+    results.redis = { online: true, latency: Date.now() - start, version: versionMatch?.[1]?.trim() || null };
+  } catch (err) {
+    results.redis = { online: false, latency: null };
+  }
+
+  // InfluxDB
+  try {
+    const { pingInflux } = await import('./config/influx.js');
+    const start = Date.now();
+    const reachable = await pingInflux();
+    results.influx = { online: reachable, latency: reachable ? Date.now() - start : null };
+  } catch (err) {
+    results.influx = { online: false, latency: null };
+  }
+
+  res.json({ checkedAt: new Date().toISOString(), services: results });
 });
 
 // App health proxy — check other GeekSuite apps without CORS issues
