@@ -98,6 +98,31 @@ app.use('/api/insights', require('./routes/insightsRoutes'));
 app.use('/api/food-reports', require('./routes/foodReportRoutes'));
 app.use('/api/influx', require('./routes/influxRoutes'));
 
+// GraphQL reverse-proxy → BaseGeek unified API
+const BASEGEEK_URL = (process.env.BASEGEEK_URL || 'https://basegeek.clintgeek.com').replace(/\/$/, '');
+app.all('/graphql', async (req, res) => {
+  try {
+    const headers = { 'content-type': 'application/json' };
+    if (req.headers.authorization) headers.authorization = req.headers.authorization;
+    if (req.headers.cookie) headers.cookie = req.headers.cookie;
+
+    const response = await axios({
+      method: req.method,
+      url: `${ BASEGEEK_URL }/graphql`,
+      data: req.body,
+      headers,
+      timeout: 30000,
+    });
+
+    forwardSetCookieHeaders(res, response.headers);
+    res.status(response.status).json(response.data);
+  } catch (err) {
+    const status = err.response?.status || 502;
+    const data = err.response?.data || { errors: [{ message: 'GraphQL proxy: unable to reach BaseGeek' }] };
+    res.status(status).json(data);
+  }
+});
+
 // Serve built frontend files
 const path = require('path');
 const publicPath = path.join(__dirname, '..', 'public');
@@ -105,7 +130,7 @@ app.use(express.static(publicPath));
 
 // SPA Catch-all handler
 app.get("*", (req, res, next) => {
-  if (req.path.startsWith('/api/')) {
+  if (req.path.startsWith('/api/') || req.path.startsWith('/graphql')) {
     return next();
   }
   res.sendFile(path.join(publicPath, "index.html"));

@@ -2168,6 +2168,13 @@ class AIService {
   }
 
   /**
+   * Simple chat interface - sends a prompt and returns the response text
+   */
+  async chat(prompt, config = {}) {
+    return this.callAI(prompt, config);
+  }
+
+  /**
    * Get available providers
    */
   getAvailableProviders() {
