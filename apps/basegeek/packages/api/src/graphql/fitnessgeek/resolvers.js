@@ -216,7 +216,7 @@ const getBPContext = async (userId, startDate, endDate) => {
   let category = 'normal';
   if (avgSystolic >= 180 || avgDiastolic >= 120) category = 'crisis';
   else if (avgSystolic >= 140 || avgDiastolic >= 90) category = 'stage2';
-  else if (avgSystolic >= 130 || avgDiacholic >= 80) category = 'stage1';
+  else if (avgSystolic >= 130 || avgDiastolic >= 80) category = 'stage1';
   else if (avgSystolic >= 120) category = 'elevated';
   return {
     entries: readings.length,
@@ -721,7 +721,7 @@ export const resolvers = {
 
     logMeal: async (_, { mealId, date, mealType }, { user }) => {
       if (!user) throw new Error('Unauthorized');
-      const meal = await FitnessMeal.findById(mealId).populate('food_items.food_item_id');
+      const meal = await Meal.findById(mealId).populate('food_items.food_item_id');
       if (!meal) throw new Error('Meal not found');
 
       const logs = [];

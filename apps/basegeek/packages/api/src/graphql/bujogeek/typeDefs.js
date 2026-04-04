@@ -100,7 +100,7 @@ export const typeDefs = gql`
     updateJournalEntry(id: ID!, title: String, content: String, type: String, date: Date, tags: [String], status: String): JournalEntry!
     deleteJournalEntry(id: ID!): DeleteResponse!
     createJournalFromTemplate(templateId: ID!, date: Date): JournalEntry!
-    updateBujoPreferences(theme: String!): FitnessJSON!
+    updateBujoPreferences(theme: String!): JSON!
     createTemplate(name: String!, description: String, type: String, content: String!, isDefault: Boolean, isPublic: Boolean, tags: [String]): Template!
     updateTemplate(id: ID!, name: String, description: String, type: String, content: String, isDefault: Boolean, isPublic: Boolean, tags: [String]): Template!
     deleteTemplate(id: ID!): DeleteResponse!

@@ -18,7 +18,7 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true
         },
         "/graphql": {
-          target: env.VITE_DEV_API_PROXY || "http://localhost:4094",
+          target: "http://localhost:3002",
           changeOrigin: true
         }
       }

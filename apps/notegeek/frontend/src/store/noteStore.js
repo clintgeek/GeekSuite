@@ -82,7 +82,7 @@ const useNoteStore = create((set, get) => {
                 const response = await getNoteByIdApi(noteId);
 
                 // Check if we received valid note data
-                if (!response.data || !response.data._id) {
+                if (!response.data || !response.data.id) {
                     throw new Error("Invalid note data received from server");
                 }
 

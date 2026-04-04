@@ -45,9 +45,7 @@ export default defineConfig(({ command, mode }) => {
           secure: false,
         },
         '/graphql': {
-          target: isProduction
-            ? `http://backend:${ process.env.BACKEND_PORT || 5000 }`
-            : 'http://localhost:5005',
+          target: 'http://localhost:3002',
           changeOrigin: true,
           secure: false,
         }
