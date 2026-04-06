@@ -1,0 +1,23 @@
+services:
+  dashgeek_app:
+    build:
+      context: ../..
+      dockerfile: apps/dashgeek/Dockerfile
+      args:
+        VERDACCIO_URL: ${VERDACCIO_URL}
+    image: geeksuite/dashgeek:latest
+    container_name: dashgeek_app
+    env_file:
+      - .env.production
+    environment:
+      - NODE_ENV=production
+      - PORT=4090
+    ports:
+      - "4090:4090"
+    networks:
+      - datageek_network
+    restart: unless-stopped
+
+networks:
+  datageek_network:
+    external: true

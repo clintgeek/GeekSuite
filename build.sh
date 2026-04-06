@@ -16,6 +16,7 @@ APPS=(
   basegeek
   bookgeek
   bujogeek
+  dashgeek
   fitnessgeek
   flockgeek
   musicgeek

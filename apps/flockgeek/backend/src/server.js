@@ -14,7 +14,10 @@ const app = express();
 
 app.disable("x-powered-by");
 
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+}));
 
 const allowedOrigins = env.corsOrigin.split(",").map(s => s.trim());
 logger.info(`CORS enabled for origins: ${ JSON.stringify(allowedOrigins) }`);

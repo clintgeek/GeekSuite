@@ -60,6 +60,8 @@ const allowedOrigins = [
   'https://bookgeek.clintgeek.com',  // epub library
   'https://storygeek.clintgeek.com',  // StoryGeek production
   'https://flockgeek.clintgeek.com',  // FlockGeek production
+  'https://dash.clintgeek.com',       // DashGeek production
+  'https://dashgeek.clintgeek.com',   // DashGeek production (alt)
   'https://babelgeek.clintgeek.com',  // BabelGeek production
   'https://start.clintgeek.com',  // StartGeek production
   'https://clintgeek.com',        // Portfolio (for portal link)
@@ -219,6 +221,7 @@ app.get('/api/health/app/:appName', async (req, res) => {
       storygeek: 'https://storygeek.clintgeek.com',
       flockgeek: 'https://flockgeek.clintgeek.com',
       babelgeek: 'https://babelgeek.clintgeek.com',
+      dashgeek: 'https://dash.clintgeek.com',
     };
     baseUrl = fallback[appName.toLowerCase()];
   }

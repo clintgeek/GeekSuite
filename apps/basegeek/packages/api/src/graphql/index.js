@@ -23,6 +23,9 @@ import { resolvers as fitnessResolvers } from './fitnessgeek/resolvers.js';
 import { typeDefs as bookTypeDefs } from './bookgeek/typeDefs.js';
 import { resolvers as bookResolvers } from './bookgeek/resolvers.js';
 
+import { typeDefs as dashTypeDefs } from './dashboard/typeDefs.js';
+import { resolvers as dashResolvers } from './dashboard/resolvers.js';
+
 // Scalar resolver for the shared `Date` type
 const dateScalarResolver = {
   Date: new GraphQLScalarType({
@@ -62,6 +65,7 @@ export const typeDefs = mergeTypeDefs([
   flockTypeDefs,
   fitnessTypeDefs,
   bookTypeDefs,
+  dashTypeDefs,
 ]);
 
 export const resolvers = mergeResolvers([
@@ -72,4 +76,5 @@ export const resolvers = mergeResolvers([
   flockResolvers,
   fitnessResolvers,
   bookResolvers,
+  dashResolvers,
 ]);
