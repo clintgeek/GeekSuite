@@ -3,9 +3,13 @@ set -e
 
 # GeekSuite Docker Image Builder
 # Builds app images from the monorepo root
-# Usage: ./build.sh [app-name]   Build a single app
-#        ./build.sh              Build all apps
-#        ./build.sh --list       List buildable apps
+# Usage: ./build.sh [app-name]            Build a single app
+#        ./build.sh [app-name] --no-cache Build without cache
+#        ./build.sh                       Build all apps
+#        ./build.sh --list                List buildable apps
+#
+# Extra docker build flags can be passed after the app name:
+#   ./build.sh storygeek --no-cache --progress=plain
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -22,12 +26,15 @@ APPS=(
   musicgeek
   notegeek
   photogeek
+  storygeek
 )
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
+
+DOCKER_BUILD_EXTRA=()
 
 build_app() {
   local app="$1"
@@ -39,7 +46,7 @@ build_app() {
   fi
 
   echo -e "${YELLOW}🔨 Building geeksuite/${app}:latest ...${NC}"
-  docker build -t "geeksuite/${app}:latest" -f "$dockerfile" .
+  docker build "${DOCKER_BUILD_EXTRA[@]}" -t "geeksuite/${app}:latest" -f "$dockerfile" .
 
   if [ $? -eq 0 ]; then
     echo -e "${GREEN}✓ geeksuite/${app}:latest built successfully${NC}"
@@ -159,7 +166,10 @@ if [ "$1" = "--all" ]; then
     exit 1
   fi
 else
-  # Build and deploy single app
-  build_and_deploy "$1"
+  # Build and deploy single app; remaining args are extra docker build flags
+  APP="$1"
+  shift
+  DOCKER_BUILD_EXTRA=("$@")
+  build_and_deploy "$APP"
 fi
 

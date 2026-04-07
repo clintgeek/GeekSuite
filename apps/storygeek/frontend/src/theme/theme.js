@@ -1,135 +1,195 @@
-import { createTheme } from '@mui/material';
+import { createTheme, alpha } from '@mui/material';
 
-// GeekSuite Design Language Colors
-const geekSuiteColors = {
-  primary: {
-    main: '#6098CC', // GeekSuite primary blue
-    light: '#7BB3F0',
-    dark: '#2E5C8A',
-    contrastText: '#FFFFFF',
+// --- Arcane Codex Color Tokens ---
+const codex = {
+  gold:       '#c9a84c',
+  goldLight:  '#e0c872',
+  goldDark:   '#9a7b2e',
+  burgundy:   '#8b2635',
+  burgundyLight: '#b03848',
+  emerald:    '#2d6a4f',
+  crimson:    '#9b2226',
+  amber:      '#d4a036',
+};
+
+const darkPalette = {
+  leather:    '#1a1614',
+  wood:       '#2a2420',
+  woodLight:  '#352e28',
+  woodLighter:'#403830',
+  parchment:  '#e8dcc8',
+  parchDim:   '#b8a890',
+  inkFaint:   '#786a5a',
+};
+
+const lightPalette = {
+  parchment:   '#f4ece1',
+  parchLight:  '#fff8ef',
+  parchDark:   '#e8dcc8',
+  ink:         '#2c1810',
+  inkSecondary:'#5a4636',
+  inkFaint:    '#8a7662',
+  woodAccent:  '#3d2b1f',
+};
+
+// --- Shared Typography ---
+const sharedTypography = {
+  fontFamily: '"Crimson Pro", "Georgia", serif',
+  h1: {
+    fontFamily: '"Cinzel Decorative", "Cinzel", serif',
+    fontWeight: 700,
+    fontSize: '2.25rem',
+    letterSpacing: '0.04em',
+    lineHeight: 1.2,
   },
-  secondary: {
-    main: '#1976D2',
-    light: '#2196F3',
-    dark: '#1565C0',
-    contrastText: '#FFFFFF',
+  h2: {
+    fontFamily: '"Cinzel", serif',
+    fontWeight: 600,
+    fontSize: '1.625rem',
+    letterSpacing: '0.03em',
+    lineHeight: 1.3,
   },
-  error: {
-    main: '#B00020',
+  h3: {
+    fontFamily: '"Cinzel", serif',
+    fontWeight: 600,
+    fontSize: '1.375rem',
+    letterSpacing: '0.02em',
   },
-  success: {
-    main: '#4CAF50',
+  h4: {
+    fontFamily: '"Cinzel", serif',
+    fontWeight: 500,
+    fontSize: '1.2rem',
+    letterSpacing: '0.02em',
   },
-  warning: {
-    main: '#FFC107',
+  h5: {
+    fontFamily: '"Cinzel", serif',
+    fontWeight: 500,
+    fontSize: '1.05rem',
+    letterSpacing: '0.015em',
   },
-  info: {
-    main: '#2196F3',
+  h6: {
+    fontFamily: '"Cinzel", serif',
+    fontWeight: 500,
+    fontSize: '0.925rem',
+    letterSpacing: '0.015em',
+  },
+  body1: {
+    fontSize: '1rem',
+    lineHeight: 1.7,
+    letterSpacing: '0.01em',
+  },
+  body2: {
+    fontSize: '0.875rem',
+    lineHeight: 1.6,
+  },
+  caption: {
+    fontFamily: '"JetBrains Mono", monospace',
+    fontSize: '0.75rem',
+    letterSpacing: '0.04em',
+    textTransform: 'uppercase',
+  },
+  overline: {
+    fontFamily: '"Cinzel", serif',
+    fontSize: '0.7rem',
+    letterSpacing: '0.12em',
+    textTransform: 'uppercase',
+    fontWeight: 600,
+  },
+  button: {
+    fontFamily: '"Cinzel", serif',
+    fontWeight: 600,
+    fontSize: '0.85rem',
+    letterSpacing: '0.06em',
+    textTransform: 'none',
   },
 };
 
-// Light Theme
-const lightTheme = createTheme({
-  palette: {
-    mode: 'light',
-    primary: geekSuiteColors.primary,
-    secondary: geekSuiteColors.secondary,
-    background: {
-      default: '#f5f5f5', // Very light grey for view background
-      paper: '#ffffff',
-      codeEditor: '#f5f5f5',
-      mindMap: '#f8f9fa',
-    },
-    text: {
-      primary: '#212121', // Dark grey for text
-      secondary: '#757575',
-      disabled: '#BDBDBD',
-      placeholder: 'rgba(117, 117, 117, 0.7)',
-    },
-    error: geekSuiteColors.error,
-    success: geekSuiteColors.success,
-    warning: geekSuiteColors.warning,
-    info: geekSuiteColors.info,
-  },
-  typography: {
-    fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
-    h1: {
-      fontSize: '2rem',
-      fontWeight: 500,
-    },
-    h2: {
-      fontSize: '1.5rem',
-      fontWeight: 500,
-    },
-    h3: {
-      fontSize: '1.25rem',
-      fontWeight: 500,
-    },
-    h4: {
-      fontSize: '1.125rem',
-      fontWeight: 500,
-    },
-    h5: {
-      fontSize: '1rem',
-      fontWeight: 500,
-    },
-    h6: {
-      fontSize: '0.875rem',
-      fontWeight: 500,
-      letterSpacing: '0.02em',
-    },
-    body1: {
-      fontSize: '0.875rem',
-    },
-    body2: {
-      fontSize: '0.75rem',
-    },
-    code: {
-      fontFamily: '"Roboto Mono", monospace',
-      fontSize: '0.9rem',
-    },
-  },
-  spacing: 8, // Base spacing unit of 8px
-  shape: {
-    borderRadius: 8,
-  },
-  components: {
-    MuiAppBar: {
-      defaultProps: {
-        elevation: 0,
+// --- Shared Component Overrides ---
+const sharedComponents = (mode) => {
+  const isDark = mode === 'dark';
+  const gold = codex.gold;
+  const goldAlpha = (a) => alpha(gold, a);
+  const bg = isDark ? darkPalette : lightPalette;
+
+  return {
+    MuiCssBaseline: {
+      styleOverrides: {
+        body: {
+          backgroundImage: isDark
+            ? `radial-gradient(ellipse at 20% 0%, ${alpha(codex.burgundy, 0.08)} 0%, transparent 50%),
+               radial-gradient(ellipse at 80% 100%, ${alpha(codex.gold, 0.04)} 0%, transparent 50%)`
+            : `radial-gradient(ellipse at 20% 0%, ${alpha(codex.gold, 0.06)} 0%, transparent 50%),
+               radial-gradient(ellipse at 80% 100%, ${alpha(codex.burgundy, 0.03)} 0%, transparent 50%)`,
+        },
       },
+    },
+    MuiAppBar: {
+      defaultProps: { elevation: 0 },
       styleOverrides: {
         root: {
-          height: 60, // GeekSuite standard header height
+          backdropFilter: 'blur(12px)',
+          borderBottom: `1px solid ${goldAlpha(isDark ? 0.15 : 0.2)}`,
         },
       },
     },
     MuiButton: {
+      defaultProps: { disableElevation: true },
       styleOverrides: {
         root: {
-          textTransform: 'none',
-          fontWeight: 500,
-          borderRadius: 8,
+          borderRadius: 6,
+          padding: '8px 20px',
+          transition: 'all 0.2s ease',
+        },
+        contained: {
+          background: isDark
+            ? `linear-gradient(135deg, ${codex.gold} 0%, ${codex.goldDark} 100%)`
+            : `linear-gradient(135deg, ${codex.burgundy} 0%, ${alpha(codex.burgundy, 0.85)} 100%)`,
+          color: isDark ? darkPalette.leather : '#fff',
           '&:hover': {
-            backgroundColor: 'rgba(96, 152, 204, 0.04)',
-          },
-          '&.Mui-disabled': {
-            opacity: 0.38,
+            background: isDark
+              ? `linear-gradient(135deg, ${codex.goldLight} 0%, ${codex.gold} 100%)`
+              : `linear-gradient(135deg, ${codex.burgundyLight} 0%, ${codex.burgundy} 100%)`,
+            transform: 'translateY(-1px)',
+            boxShadow: `0 4px 12px ${goldAlpha(0.25)}`,
           },
         },
-      },
-      defaultProps: {
-        disableElevation: true,
+        outlined: {
+          borderColor: goldAlpha(0.35),
+          color: isDark ? codex.gold : codex.burgundy,
+          '&:hover': {
+            borderColor: isDark ? codex.gold : codex.burgundy,
+            backgroundColor: goldAlpha(0.06),
+          },
+        },
       },
     },
     MuiCard: {
       styleOverrides: {
         root: {
-          borderRadius: 8,
-          boxShadow: '0px 2px 4px -1px rgba(0,0,0,0.1), 0px 4px 5px 0px rgba(0,0,0,0.07), 0px 1px 10px 0px rgba(0,0,0,0.06)',
+          borderRadius: 4,
+          border: `1px solid ${goldAlpha(isDark ? 0.12 : 0.18)}`,
+          backgroundImage: isDark
+            ? `linear-gradient(160deg, ${darkPalette.wood} 0%, ${darkPalette.leather} 100%)`
+            : 'none',
+          boxShadow: isDark
+            ? `0 2px 8px ${alpha('#000', 0.3)}, inset 0 1px 0 ${goldAlpha(0.06)}`
+            : `0 1px 4px ${alpha('#000', 0.06)}`,
+          transition: 'all 0.25s ease',
           '&:hover': {
-            boxShadow: '0px 4px 8px -2px rgba(0,0,0,0.1), 0px 6px 7px 0px rgba(0,0,0,0.07), 0px 2px 12px 0px rgba(0,0,0,0.06)',
+            borderColor: goldAlpha(isDark ? 0.25 : 0.3),
+            boxShadow: isDark
+              ? `0 4px 16px ${alpha('#000', 0.4)}, 0 0 0 1px ${goldAlpha(0.1)}`
+              : `0 4px 12px ${alpha('#000', 0.08)}`,
           },
+        },
+      },
+    },
+    MuiPaper: {
+      defaultProps: { elevation: 0 },
+      styleOverrides: {
+        root: {
+          backgroundImage: 'none',
+          borderRadius: 6,
         },
       },
     },
@@ -137,227 +197,144 @@ const lightTheme = createTheme({
       styleOverrides: {
         root: {
           '& .MuiOutlinedInput-root': {
-            borderRadius: 8,
+            borderRadius: 6,
+            '& fieldset': {
+              borderColor: goldAlpha(isDark ? 0.2 : 0.25),
+            },
+            '&:hover fieldset': {
+              borderColor: goldAlpha(isDark ? 0.4 : 0.45),
+            },
+            '&.Mui-focused fieldset': {
+              borderColor: isDark ? codex.gold : codex.burgundy,
+              borderWidth: 1.5,
+            },
           },
-        },
-      },
-    },
-    MuiDrawer: {
-      styleOverrides: {
-        paper: {
-          width: 220,
-          backgroundColor: '#FFFFFF',
-          border: '1px solid rgba(0, 0, 0, 0.12)',
-          boxShadow: 'none',
+          '& .MuiInputLabel-root.Mui-focused': {
+            color: isDark ? codex.gold : codex.burgundy,
+          },
         },
       },
     },
     MuiChip: {
       styleOverrides: {
         root: {
-          backgroundColor: 'rgba(96, 152, 204, 0.1)',
-          color: '#6098CC',
-          '&:hover': {
-            backgroundColor: 'rgba(96, 152, 204, 0.2)',
-          },
+          fontFamily: '"JetBrains Mono", monospace',
+          fontSize: '0.7rem',
+          letterSpacing: '0.03em',
+          fontWeight: 500,
+          borderRadius: 4,
         },
       },
     },
-    MuiIconButton: {
+    MuiDrawer: {
+      styleOverrides: {
+        paper: {
+          backgroundImage: isDark
+            ? `linear-gradient(180deg, ${darkPalette.wood} 0%, ${darkPalette.leather} 100%)`
+            : `linear-gradient(180deg, ${lightPalette.parchLight} 0%, ${lightPalette.parchment} 100%)`,
+          borderRight: `1px solid ${goldAlpha(0.15)}`,
+        },
+      },
+    },
+    MuiDialog: {
+      styleOverrides: {
+        paper: {
+          border: `1px solid ${goldAlpha(0.2)}`,
+          borderRadius: 8,
+        },
+      },
+    },
+    MuiDivider: {
       styleOverrides: {
         root: {
-          '&:hover': {
-            backgroundColor: 'rgba(0, 0, 0, 0.04)',
-          },
+          borderColor: goldAlpha(isDark ? 0.1 : 0.15),
         },
       },
     },
-    MuiPaper: {
-      defaultProps: {
-        elevation: 0,
-      },
+    MuiTooltip: {
       styleOverrides: {
-        root: {
-          backgroundImage: 'none',
+        tooltip: {
+          fontFamily: '"Crimson Pro", serif',
+          fontSize: '0.8rem',
+          backgroundColor: isDark ? darkPalette.woodLight : lightPalette.ink,
+          border: `1px solid ${goldAlpha(0.2)}`,
         },
       },
     },
-  },
-  breakpoints: {
-    values: {
-      xs: 0,
-      sm: 600,
-      md: 900,
-      lg: 1200,
-      xl: 1536,
-    },
-  },
-});
+  };
+};
 
-// Dark Theme
+// ============== DARK THEME ==============
 const darkTheme = createTheme({
   palette: {
     mode: 'dark',
-    primary: geekSuiteColors.primary,
-    secondary: geekSuiteColors.secondary,
+    primary: {
+      main: codex.gold,
+      light: codex.goldLight,
+      dark: codex.goldDark,
+      contrastText: darkPalette.leather,
+    },
+    secondary: {
+      main: codex.burgundy,
+      light: codex.burgundyLight,
+      contrastText: '#fff',
+    },
     background: {
-      default: '#121212', // Very dark grey
-      paper: '#1e1e1e', // Dark grey
-      codeEditor: '#1a1a1a',
-      mindMap: '#1e1e1e',
+      default: darkPalette.leather,
+      paper: darkPalette.wood,
     },
     text: {
-      primary: '#E0E0E0', // Light grey for text
-      secondary: '#B0B0B0',
-      disabled: '#666666',
-      placeholder: 'rgba(176, 176, 176, 0.7)',
+      primary: darkPalette.parchment,
+      secondary: darkPalette.parchDim,
+      disabled: darkPalette.inkFaint,
     },
-    error: geekSuiteColors.error,
-    success: geekSuiteColors.success,
-    warning: geekSuiteColors.warning,
-    info: geekSuiteColors.info,
+    error: { main: codex.crimson },
+    success: { main: codex.emerald },
+    warning: { main: codex.amber },
+    info: { main: codex.gold },
+    divider: alpha(codex.gold, 0.1),
+    codex,
   },
-  typography: {
-    fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
-    h1: {
-      fontSize: '2rem',
-      fontWeight: 500,
+  typography: sharedTypography,
+  shape: { borderRadius: 6 },
+  components: sharedComponents('dark'),
+});
+
+// ============== LIGHT THEME ==============
+const lightTheme = createTheme({
+  palette: {
+    mode: 'light',
+    primary: {
+      main: codex.burgundy,
+      light: codex.burgundyLight,
+      dark: '#6d1f2b',
+      contrastText: '#fff',
     },
-    h2: {
-      fontSize: '1.5rem',
-      fontWeight: 500,
+    secondary: {
+      main: codex.gold,
+      light: codex.goldLight,
+      dark: codex.goldDark,
+      contrastText: lightPalette.ink,
     },
-    h3: {
-      fontSize: '1.25rem',
-      fontWeight: 500,
+    background: {
+      default: lightPalette.parchment,
+      paper: lightPalette.parchLight,
     },
-    h4: {
-      fontSize: '1.125rem',
-      fontWeight: 500,
+    text: {
+      primary: lightPalette.ink,
+      secondary: lightPalette.inkSecondary,
+      disabled: lightPalette.inkFaint,
     },
-    h5: {
-      fontSize: '1rem',
-      fontWeight: 500,
-    },
-    h6: {
-      fontSize: '0.875rem',
-      fontWeight: 500,
-      letterSpacing: '0.02em',
-    },
-    body1: {
-      fontSize: '0.875rem',
-    },
-    body2: {
-      fontSize: '0.75rem',
-    },
-    code: {
-      fontFamily: '"Roboto Mono", monospace',
-      fontSize: '0.9rem',
-    },
+    error: { main: codex.crimson },
+    success: { main: codex.emerald },
+    warning: { main: codex.amber },
+    info: { main: codex.goldDark },
+    divider: alpha(codex.gold, 0.15),
+    codex,
   },
-  spacing: 8, // Base spacing unit of 8px
-  shape: {
-    borderRadius: 8,
-  },
-  components: {
-    MuiAppBar: {
-      defaultProps: {
-        elevation: 0,
-      },
-      styleOverrides: {
-        root: {
-          height: 60, // GeekSuite standard header height
-        },
-      },
-    },
-    MuiButton: {
-      styleOverrides: {
-        root: {
-          textTransform: 'none',
-          fontWeight: 500,
-          borderRadius: 8,
-          '&:hover': {
-            backgroundColor: 'rgba(96, 152, 204, 0.08)',
-          },
-          '&.Mui-disabled': {
-            opacity: 0.38,
-          },
-        },
-      },
-      defaultProps: {
-        disableElevation: true,
-      },
-    },
-    MuiCard: {
-      styleOverrides: {
-        root: {
-          borderRadius: 8,
-          boxShadow: '0px 2px 4px -1px rgba(0,0,0,0.3), 0px 4px 5px 0px rgba(0,0,0,0.2), 0px 1px 10px 0px rgba(0,0,0,0.2)',
-          '&:hover': {
-            boxShadow: '0px 4px 8px -2px rgba(0,0,0,0.3), 0px 6px 7px 0px rgba(0,0,0,0.2), 0px 2px 12px 0px rgba(0,0,0,0.2)',
-          },
-        },
-      },
-    },
-    MuiTextField: {
-      styleOverrides: {
-        root: {
-          '& .MuiOutlinedInput-root': {
-            borderRadius: 8,
-          },
-        },
-      },
-    },
-    MuiDrawer: {
-      styleOverrides: {
-        paper: {
-          width: 220,
-          backgroundColor: '#1e1e1e',
-          border: '1px solid rgba(255, 255, 255, 0.12)',
-          boxShadow: 'none',
-        },
-      },
-    },
-    MuiChip: {
-      styleOverrides: {
-        root: {
-          backgroundColor: 'rgba(96, 152, 204, 0.2)',
-          color: '#7BB3F0',
-          '&:hover': {
-            backgroundColor: 'rgba(96, 152, 204, 0.3)',
-          },
-        },
-      },
-    },
-    MuiIconButton: {
-      styleOverrides: {
-        root: {
-          '&:hover': {
-            backgroundColor: 'rgba(255, 255, 255, 0.08)',
-          },
-        },
-      },
-    },
-    MuiPaper: {
-      defaultProps: {
-        elevation: 0,
-      },
-      styleOverrides: {
-        root: {
-          backgroundImage: 'none',
-        },
-      },
-    },
-  },
-  breakpoints: {
-    values: {
-      xs: 0,
-      sm: 600,
-      md: 900,
-      lg: 1200,
-      xl: 1536,
-    },
-  },
+  typography: sharedTypography,
+  shape: { borderRadius: 6 },
+  components: sharedComponents('light'),
 });
 
 export { lightTheme, darkTheme };

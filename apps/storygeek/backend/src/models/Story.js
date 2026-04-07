@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const characterSchema = new mongoose.Schema({
   name: { type: String, required: true },
@@ -47,7 +47,7 @@ const locationSchema = new mongoose.Schema({
 });
 
 const diceResultSchema = new mongoose.Schema({
-  diceType: { type: String, required: true }, // 'd4', 'd6', 'd8', 'd10', 'd12', 'd20', 'd100'
+  diceType: { type: String, required: true },
   result: { type: Number, required: true },
   interpretation: { type: String, required: true },
   context: { type: String, default: '' },
@@ -117,7 +117,7 @@ const storySchema = new mongoose.Schema({
   storyThreads: [storyThreadSchema],
   diceResults: [diceResultSchema],
   events: [storyEventSchema],
-  storySummaries: [storySummarySchema], // Added storySummaries
+  storySummaries: [storySummarySchema],
 
   // Checkpoints for going back
   checkpoints: [{
@@ -151,13 +151,13 @@ const storySchema = new mongoose.Schema({
     establishedFacts: [{
       category: { type: String, enum: ['character', 'location', 'event', 'detail'], required: true },
       fact: { type: String, required: true },
-      source: { type: String, default: 'narrative' }, // 'narrative', 'player', 'dice'
+      source: { type: String, default: 'narrative' },
       timestamp: { type: Date, default: Date.now }
     }],
     activeCharacters: [{
       name: { type: String, required: true },
-      relationship: { type: String, default: '' }, // 'husband', 'brother', 'friend', etc.
-      status: { type: String, default: 'alive' }, // 'alive', 'dead', 'missing'
+      relationship: { type: String, default: '' },
+      status: { type: String, default: 'alive' },
       details: { type: String, default: '' }
     }],
     currentLocation: {
@@ -172,7 +172,6 @@ const storySchema = new mongoose.Schema({
     totalInteractions: { type: Number, default: 0 },
     totalDiceRolls: { type: Number, default: 0 },
     averageResponseTime: { type: Number, default: 0 },
-
     lastActive: { type: Date, default: Date.now }
   },
 
@@ -209,4 +208,4 @@ storySchema.virtual('activeThreads').get(function() {
   return this.storyThreads.filter(thread => thread.status === 'active');
 });
 
-module.exports = mongoose.model('Story', storySchema);
+export default mongoose.model('Story', storySchema);

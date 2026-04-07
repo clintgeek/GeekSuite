@@ -44,7 +44,6 @@ class DiceService {
       },
 
       d100: {
-        // Percentage-based interpretations
         default: (result) => {
           if (result <= 5) return "Critical failure - disaster strikes";
           if (result <= 15) return "Major failure - significant setback";
@@ -66,7 +65,7 @@ class DiceService {
 
       weather: () => {
         const weathers = ['stormy', 'clear', 'foggy', 'windy', 'calm', 'rainy', 'snowy', 'overcast'];
-        return weathers[Math.floor(Math.random() * moods.length)];
+        return weathers[Math.floor(Math.random() * weathers.length)];
       },
 
       encounter: () => {
@@ -86,7 +85,6 @@ class DiceService {
     };
   }
 
-  // Roll a specific dice type
   roll(diceType) {
     if (!this.diceTypes[diceType]) {
       throw new Error(`Unknown dice type: ${diceType}`);
@@ -103,67 +101,39 @@ class DiceService {
     };
   }
 
-  // Roll with advantage (take highest of 2 rolls)
   rollWithAdvantage(diceType = 'd20') {
     const roll1 = this.roll(diceType);
     const roll2 = this.roll(diceType);
-
     const betterRoll = roll1.result > roll2.result ? roll1 : roll2;
-
-    return {
-      ...betterRoll,
-      advantage: true,
-      rolls: [roll1.result, roll2.result]
-    };
+    return { ...betterRoll, advantage: true, rolls: [roll1.result, roll2.result] };
   }
 
-  // Roll with disadvantage (take lowest of 2 rolls)
   rollWithDisadvantage(diceType = 'd20') {
     const roll1 = this.roll(diceType);
     const roll2 = this.roll(diceType);
-
     const worseRoll = roll1.result < roll2.result ? roll1 : roll2;
-
-    return {
-      ...worseRoll,
-      disadvantage: true,
-      rolls: [roll1.result, roll2.result]
-    };
+    return { ...worseRoll, disadvantage: true, rolls: [roll1.result, roll2.result] };
   }
 
-  // Roll multiple dice
   rollMultiple(diceType, count) {
     const rolls = [];
     let total = 0;
-
     for (let i = 0; i < count; i++) {
       const roll = this.roll(diceType);
       rolls.push(roll);
       total += roll.result;
     }
-
-    return {
-      diceType: diceType,
-      count: count,
-      rolls: rolls,
-      total: total,
-      average: total / count,
-      timestamp: new Date()
-    };
+    return { diceType, count, rolls, total, average: total / count, timestamp: new Date() };
   }
 
-  // Interpret dice result
   interpretResult(diceType, result) {
     if (this.interpretations[diceType]) {
       return this.interpretations[diceType][result] ||
              this.interpretations[diceType].default?.(result) ||
              `Result: ${result}`;
     }
-
-    // Default interpretation for other dice types
     const maxValue = parseInt(diceType.substring(1));
     const percentage = (result / maxValue) * 100;
-
     if (percentage <= 10) return "Critical failure";
     if (percentage <= 25) return "Major failure";
     if (percentage <= 40) return "Failure";
@@ -173,23 +143,14 @@ class DiceService {
     return "Critical success";
   }
 
-  // Roll story-specific dice
   rollStoryDice(type) {
     if (!this.storyDice[type]) {
       throw new Error(`Unknown story dice type: ${type}`);
     }
-
     const result = this.storyDice[type]();
-
-    return {
-      diceType: `story_${type}`,
-      result: result,
-      interpretation: `Story ${type}: ${result}`,
-      timestamp: new Date()
-    };
+    return { diceType: `story_${type}`, result, interpretation: `Story ${type}: ${result}`, timestamp: new Date() };
   }
 
-  // Roll for specific story situations
   rollForSituation(situation) {
     const situations = {
       combat: {
@@ -200,7 +161,6 @@ class DiceService {
           default: (result) => result <= 10 ? "Miss" : "Hit"
         }
       },
-
       persuasion: {
         diceType: 'd20',
         interpretations: {
@@ -209,7 +169,6 @@ class DiceService {
           default: (result) => result <= 8 ? "Failure" : result <= 15 ? "Partial success" : "Success"
         }
       },
-
       stealth: {
         diceType: 'd20',
         interpretations: {
@@ -218,7 +177,6 @@ class DiceService {
           default: (result) => result <= 10 ? "Detected" : "Hidden"
         }
       },
-
       investigation: {
         diceType: 'd20',
         interpretations: {
@@ -227,7 +185,6 @@ class DiceService {
           default: (result) => result <= 8 ? "No clues found" : result <= 15 ? "Minor clue" : "Important discovery"
         }
       },
-
       survival: {
         diceType: 'd20',
         interpretations: {
@@ -239,23 +196,15 @@ class DiceService {
     };
 
     const config = situations[situation];
-    if (!config) {
-      throw new Error(`Unknown situation: ${situation}`);
-    }
+    if (!config) throw new Error(`Unknown situation: ${situation}`);
 
     const roll = this.roll(config.diceType);
     const interpretation = config.interpretations[roll.result] ||
                          config.interpretations.default?.(roll.result) ||
                          roll.interpretation;
-
-    return {
-      ...roll,
-      situation: situation,
-      interpretation: interpretation
-    };
+    return { ...roll, situation, interpretation };
   }
 
-  // Generate random story elements
   generateStoryElement(type) {
     const elements = {
       character: {
@@ -263,13 +212,11 @@ class DiceService {
         traits: ['brave', 'cunning', 'wise', 'mysterious', 'loyal', 'ambitious', 'kind', 'fierce'],
         backgrounds: ['noble', 'commoner', 'outcast', 'scholar', 'warrior', 'merchant', 'wanderer', 'royalty']
       },
-
       location: {
         names: ['Shadowmere', 'Crystal Peak', 'Whisperwood', 'Ironforge', 'Silverbrook', 'Stormhaven'],
         types: ['city', 'forest', 'mountain', 'castle', 'village', 'ruins', 'temple', 'cave'],
         atmospheres: ['mysterious', 'peaceful', 'dangerous', 'magical', 'ancient', 'bustling', 'desolate']
       },
-
       item: {
         names: ['Crystal Blade', 'Shadow Cloak', 'Phoenix Feather', 'Moonstone Ring', 'Thunder Hammer'],
         types: ['weapon', 'armor', 'artifact', 'tool', 'jewelry', 'potion', 'scroll', 'talisman'],
@@ -278,36 +225,17 @@ class DiceService {
     };
 
     const element = elements[type];
-    if (!element) {
-      throw new Error(`Unknown element type: ${type}`);
-    }
+    if (!element) throw new Error(`Unknown element type: ${type}`);
 
     const name = element.names[Math.floor(Math.random() * element.names.length)];
     const trait = element.traits ? element.traits[Math.floor(Math.random() * element.traits.length)] : null;
     const background = element.backgrounds ? element.backgrounds[Math.floor(Math.random() * element.backgrounds.length)] : null;
-
-    return {
-      name: name,
-      trait: trait,
-      background: background,
-      type: type
-    };
+    return { name, trait, background, type };
   }
 
-  // Get available dice types
-  getAvailableDiceTypes() {
-    return Object.keys(this.diceTypes);
-  }
-
-  // Get available story dice types
-  getAvailableStoryDiceTypes() {
-    return Object.keys(this.storyDice);
-  }
-
-  // Get available situations
-  getAvailableSituations() {
-    return ['combat', 'persuasion', 'stealth', 'investigation', 'survival'];
-  }
+  getAvailableDiceTypes() { return Object.keys(this.diceTypes); }
+  getAvailableStoryDiceTypes() { return Object.keys(this.storyDice); }
+  getAvailableSituations() { return ['combat', 'persuasion', 'stealth', 'investigation', 'survival']; }
 }
 
-module.exports = new DiceService();
+export default new DiceService();

@@ -164,7 +164,7 @@ router.post('/validate', async (req, res) => {
         res.json({
             valid: true,
             user: {
-                id: result.userId,
+                id: result.id,
                 username: result.username,
                 email: result.email,
                 app: result.app

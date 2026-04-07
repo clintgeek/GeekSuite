@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const characterSchema = new mongoose.Schema({
   storyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Story', required: true },
@@ -6,7 +6,7 @@ const characterSchema = new mongoose.Schema({
 
   // Basic Info
   description: { type: String, default: '' },
-  relationship: { type: String, default: '' }, // 'ally', 'enemy', 'neutral', 'unknown'
+  relationship: { type: String, default: '' },
   status: { type: String, enum: ['alive', 'dead', 'missing', 'injured'], default: 'alive' },
 
   // Location & Movement
@@ -22,8 +22,8 @@ const characterSchema = new mongoose.Schema({
   }],
 
   // Position & Role
-  position: { type: String, default: '' }, // 'leader', 'scout', 'medic', 'engineer', etc.
-  organization: { type: String, default: '' }, // Which group they belong to
+  position: { type: String, default: '' },
+  organization: { type: String, default: '' },
 
   // Alliances & Relationships
   alliances: [{
@@ -37,7 +37,7 @@ const characterSchema = new mongoose.Schema({
     category: { type: String, enum: ['background', 'motivation', 'secrets', 'goals'], required: true },
     info: { type: String, required: true },
     discoveredAt: { type: Date, default: Date.now },
-    source: { type: String, default: 'player' } // 'player', 'npc', 'observation'
+    source: { type: String, default: 'player' }
   }],
 
   // Game State
@@ -55,4 +55,4 @@ characterSchema.pre('save', function(next) {
   next();
 });
 
-module.exports = mongoose.model('Character', characterSchema);
+export default mongoose.model('Character', characterSchema);

@@ -1,13 +1,12 @@
-import React, { useState } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
-import { QueryClient, QueryClientProvider } from 'react-query';
+import { CircularProgress, Box } from '@mui/material';
+import { ApolloProvider } from '@apollo/client';
+import apolloClient from './apolloClient';
 
-// Components
 import Layout from './components/Layout';
-import RequireAuth from './components/RequireAuth';
-import SharedAuthProvider from './components/SharedAuthProvider';
 import StoryCreation from './pages/StoryCreation';
 import StoryPlay from './pages/StoryPlay';
 import StoryList from './pages/StoryList';
@@ -15,29 +14,31 @@ import CharacterSheet from './pages/CharacterSheet';
 import Settings from './pages/Settings';
 import LoginPage from './pages/LoginPage';
 
-// Theme
+import useSharedAuthStore from './store/sharedAuthStore';
 import { lightTheme, darkTheme } from './theme/theme';
-
-// Create React Query client
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 1,
-      refetchOnWindowFocus: false,
-    },
-  },
-});
 
 function App() {
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const { hydrateUser, isAuthenticated, isLoading } = useSharedAuthStore();
+  const [isHydrating, setIsHydrating] = useState(true);
 
-  // Get theme from localStorage or default to light
-  React.useEffect(() => {
+  useEffect(() => {
     const savedTheme = localStorage.getItem('storyGeek-theme');
-    if (savedTheme === 'dark') {
-      setIsDarkMode(true);
-    }
+    if (savedTheme === 'dark') setIsDarkMode(true);
   }, []);
+
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        await hydrateUser();
+      } catch {
+        // Auth hydration failed
+      } finally {
+        setIsHydrating(false);
+      }
+    };
+    initAuth();
+  }, [hydrateUser]);
 
   const handleThemeToggle = () => {
     const newTheme = !isDarkMode;
@@ -48,53 +49,58 @@ function App() {
   const currentTheme = isDarkMode ? darkTheme : lightTheme;
 
   return (
-    <QueryClientProvider client={queryClient}>
+    <ApolloProvider client={apolloClient}>
       <ThemeProvider theme={currentTheme}>
         <CssBaseline />
         <Router>
-          <SharedAuthProvider app="storygeek">
+          {isHydrating ? (
+            <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
+              <CircularProgress />
+            </Box>
+          ) : (
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/" element={
-                <RequireAuth>
+                isAuthenticated ? (
                   <Layout onThemeToggle={handleThemeToggle} isDarkMode={isDarkMode}>
                     <StoryList />
                   </Layout>
-                </RequireAuth>
+                ) : <Navigate to="/login" replace />
               } />
               <Route path="/create" element={
-                <RequireAuth>
+                isAuthenticated ? (
                   <Layout onThemeToggle={handleThemeToggle} isDarkMode={isDarkMode}>
                     <StoryCreation />
                   </Layout>
-                </RequireAuth>
+                ) : <Navigate to="/login" replace />
               } />
               <Route path="/play/:storyId" element={
-                <RequireAuth>
+                isAuthenticated ? (
                   <Layout onThemeToggle={handleThemeToggle} isDarkMode={isDarkMode}>
                     <StoryPlay />
                   </Layout>
-                </RequireAuth>
+                ) : <Navigate to="/login" replace />
               } />
               <Route path="/characters/:storyId" element={
-                <RequireAuth>
+                isAuthenticated ? (
                   <Layout onThemeToggle={handleThemeToggle} isDarkMode={isDarkMode}>
                     <CharacterSheet />
                   </Layout>
-                </RequireAuth>
+                ) : <Navigate to="/login" replace />
               } />
               <Route path="/settings" element={
-                <RequireAuth>
+                isAuthenticated ? (
                   <Layout onThemeToggle={handleThemeToggle} isDarkMode={isDarkMode}>
                     <Settings />
                   </Layout>
-                </RequireAuth>
+                ) : <Navigate to="/login" replace />
               } />
+              <Route path="*" element={<Navigate to={isAuthenticated ? "/" : "/login"} replace />} />
             </Routes>
-          </SharedAuthProvider>
+          )}
         </Router>
       </ThemeProvider>
-    </QueryClientProvider>
+    </ApolloProvider>
   );
 }
 
