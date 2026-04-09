@@ -115,8 +115,8 @@ router.post('/conversation/message', async (req, res) => {
     const permissionError = requirePermission(req, res, 'ai:call');
     if (permissionError) return;
 
-    const { 
-      conversationId, 
+    const {
+      conversationId,
       messages: newMessages,
       systemPrompt,
       stream = false,
@@ -124,6 +124,7 @@ router.post('/conversation/message', async (req, res) => {
       contextWindow,
       provider,
       model,
+      freeOnly = false,
       appName = 'unknown'
     } = req.body;
     const userId = req.user.id;
@@ -163,6 +164,7 @@ router.post('/conversation/message', async (req, res) => {
       taskTypeHint: metadata?.taskTypeHint,
       userId,
       appName,
+      freeOnly: freeOnly || provider === 'free',
     };
 
     if (stream) {
@@ -437,6 +439,12 @@ router.post('/call', async (req, res) => {
     let messages = req.body.messages;
     let prompt = req.body.prompt;
     let config = req.body.config || {};
+
+    // Support freeOnly flag — apps can request provider: "free" or freeOnly: true
+    if (config.provider === 'free' || config.freeOnly || req.body.freeOnly) {
+      config.freeOnly = true;
+      delete config.provider; // Let the free-tier selector pick the provider
+    }
 
     // If messages provided, use them directly (don't convert to string yet)
     if (Array.isArray(messages) && messages.length > 0) {

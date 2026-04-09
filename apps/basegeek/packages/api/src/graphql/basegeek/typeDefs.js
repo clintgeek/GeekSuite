@@ -50,5 +50,12 @@ export const typeDefs = gql`
     resetAIStats: Boolean
     seedDirectorPricing: Boolean
     seedDirectorFreeTier: Boolean
+
+    # Model Management
+    syncProviderModels(provider: String!): JSON
+    updateModelPricing(provider: String!, modelId: String!, inputPrice: Float!, outputPrice: Float!): JSON
+    deleteModelPricing(provider: String!, modelId: String!): Boolean
+    updateModelFreeTier(provider: String!, modelId: String!, isFree: Boolean!, freeLimits: JSON, notes: String): JSON
+    deleteModelFreeTier(provider: String!, modelId: String!): Boolean
   }
 `;

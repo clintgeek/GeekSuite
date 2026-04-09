@@ -23,23 +23,32 @@ import {
   Tab,
   Divider,
   IconButton,
-  Tooltip
+  Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions
 } from '@mui/material';
 import {
   Settings as SettingsIcon,
   Analytics as AnalyticsIcon,
   Key as KeyIcon,
   Visibility as VisibilityIcon,
+  VisibilityOff as VisibilityOffIcon,
   Save as SaveIcon,
   Warning as WarningIcon,
   CheckCircle as CheckCircleIcon,
   Error as ErrorIcon,
-  SmartToy as SmartToyIcon
+  SmartToy as SmartToyIcon,
+  Refresh as RefreshIcon,
+  Sync as SyncIcon,
+  Edit as EditIcon,
+  AttachMoney as MoneyIcon
 } from '@mui/icons-material';
 import useSharedAuthStore from '../store/sharedAuthStore';
 import { apolloClient } from '../apolloClient';
 import { GET_AI_CONFIG, GET_AI_STATS, GET_AI_DIRECTOR_MODELS, GET_AI_USAGE } from '../graphql/queries';
-import { SAVE_AI_CONFIG, TEST_AI_PROVIDER, RESET_AI_STATS, SEED_DIRECTOR_PRICING, SEED_DIRECTOR_FREE_TIER } from '../graphql/mutations';
+import { SAVE_AI_CONFIG, TEST_AI_PROVIDER, RESET_AI_STATS, SEED_DIRECTOR_PRICING, SEED_DIRECTOR_FREE_TIER, SYNC_PROVIDER_MODELS, UPDATE_MODEL_PRICING, UPDATE_MODEL_FREE_TIER } from '../graphql/mutations';
 
 
 const AIGeekPage = () => {
@@ -85,6 +94,11 @@ const AIGeekPage = () => {
   // Usage tracking state
   const [usageData, setUsageData] = useState({});
   const [usageLoading, setUsageLoading] = useState(false);
+
+  // Model management state
+  const [syncingProvider, setSyncingProvider] = useState(null);
+  const [editingPricing, setEditingPricing] = useState(null); // { provider, modelId, inputPrice, outputPrice }
+  const [editingFreeTier, setEditingFreeTier] = useState(null); // { provider, modelId, isFree, freeLimits, notes }
 
   useEffect(() => {
     console.log('AIGeekPage useEffect running');
@@ -235,6 +249,71 @@ const AIGeekPage = () => {
         [field]: value
       }
     }));
+  };
+
+  // Sync models for a specific provider
+  const syncProviderModels = async (provider) => {
+    try {
+      setSyncingProvider(provider);
+      setError('');
+      const { data } = await apolloClient.mutate({
+        mutation: SYNC_PROVIDER_MODELS,
+        variables: { provider }
+      });
+      const result = data?.syncProviderModels;
+      setSuccess(`${provider}: Synced ${result?.modelsFound || 0} models from API`);
+      // Reload director data to show updated models
+      await loadDirectorData();
+    } catch (error) {
+      setError(`Failed to sync ${provider} models: ${error.message}`);
+    } finally {
+      setSyncingProvider(null);
+    }
+  };
+
+  // Save pricing for a model
+  const savePricing = async () => {
+    if (!editingPricing) return;
+    try {
+      setError('');
+      await apolloClient.mutate({
+        mutation: UPDATE_MODEL_PRICING,
+        variables: {
+          provider: editingPricing.provider,
+          modelId: editingPricing.modelId,
+          inputPrice: parseFloat(editingPricing.inputPrice) || 0,
+          outputPrice: parseFloat(editingPricing.outputPrice) || 0
+        }
+      });
+      setSuccess(`Pricing updated for ${editingPricing.modelId}`);
+      setEditingPricing(null);
+      await loadDirectorData();
+    } catch (error) {
+      setError(`Failed to update pricing: ${error.message}`);
+    }
+  };
+
+  // Save free tier for a model
+  const saveFreeTier = async () => {
+    if (!editingFreeTier) return;
+    try {
+      setError('');
+      await apolloClient.mutate({
+        mutation: UPDATE_MODEL_FREE_TIER,
+        variables: {
+          provider: editingFreeTier.provider,
+          modelId: editingFreeTier.modelId,
+          isFree: editingFreeTier.isFree,
+          freeLimits: editingFreeTier.freeLimits || {},
+          notes: editingFreeTier.notes || ''
+        }
+      });
+      setSuccess(`Free tier updated for ${editingFreeTier.modelId}`);
+      setEditingFreeTier(null);
+      await loadDirectorData();
+    } catch (error) {
+      setError(`Failed to update free tier: ${error.message}`);
+    }
   };
 
   const formatCost = (cost) => {
@@ -701,7 +780,20 @@ const AIGeekPage = () => {
                             <Typography variant="h6" sx={{ textTransform: 'capitalize' }}>
                               {providerName}
                             </Typography>
-                            <Box sx={{ display: 'flex', gap: 1 }}>
+                            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                              <Tooltip title="Sync models from provider API">
+                                <span>
+                                  <Button
+                                    variant="outlined"
+                                    size="small"
+                                    startIcon={syncingProvider === providerName ? <CircularProgress size={16} /> : <SyncIcon />}
+                                    onClick={() => syncProviderModels(providerName)}
+                                    disabled={syncingProvider !== null || !provider.hasApiKey}
+                                  >
+                                    Sync
+                                  </Button>
+                                </span>
+                              </Tooltip>
                               <Chip
                                 label={provider.hasApiKey ? 'API Key' : 'No API Key'}
                                 color={provider.hasApiKey ? 'success' : 'error'}
@@ -723,38 +815,65 @@ const AIGeekPage = () => {
                             <Box>
                               {provider.models.map((model, index) => (
                                 <Card key={index} variant="outlined" sx={{ mb: 1, p: 1 }}>
-                                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <Box>
-                                      <Typography variant="body2" fontWeight="bold">
+                                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                                      <Typography variant="body2" fontWeight="bold" noWrap>
                                         {model.name}
                                       </Typography>
-                                      <Typography variant="caption" color="text.secondary">
+                                      <Typography variant="caption" color="text.secondary" noWrap display="block">
                                         {model.id}
                                       </Typography>
                                     </Box>
-                                    <Box sx={{ textAlign: 'right' }}>
-                                      <Typography variant="caption" display="block">
-                                        Input: ${model.pricing.input}/1K tokens
-                                      </Typography>
-                                      <Typography variant="caption" display="block">
-                                        Output: ${model.pricing.output}/1K tokens
-                                      </Typography>
-                                      {model.freeTier?.isFree && (
-                                        <Chip
-                                          label="FREE"
-                                          color="success"
-                                          size="small"
-                                          sx={{ mt: 0.5 }}
-                                        />
-                                      )}
-                                      {!model.freeTier?.isFree && model.pricing.input !== 'Unknown' && (
-                                        <Chip
-                                          label="PAID"
-                                          color="default"
-                                          size="small"
-                                          sx={{ mt: 0.5 }}
-                                        />
-                                      )}
+                                    <Box sx={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
+                                      <Box>
+                                        <Typography variant="caption" display="block">
+                                          In: ${typeof model.pricing.input === 'number' ? model.pricing.input : '?'}/1K
+                                        </Typography>
+                                        <Typography variant="caption" display="block">
+                                          Out: ${typeof model.pricing.output === 'number' ? model.pricing.output : '?'}/1K
+                                        </Typography>
+                                        {model.freeTier?.isFree ? (
+                                          <Chip label="FREE" color="success" size="small" sx={{ mt: 0.5 }} />
+                                        ) : model.pricing.input !== 'Unknown' ? (
+                                          <Chip label="PAID" color="default" size="small" sx={{ mt: 0.5 }} />
+                                        ) : null}
+                                      </Box>
+                                      <Box sx={{ display: 'flex', flexDirection: 'column', ml: 0.5 }}>
+                                        <Tooltip title="Edit pricing">
+                                          <IconButton
+                                            size="small"
+                                            onClick={() => setEditingPricing({
+                                              provider: providerName,
+                                              modelId: model.id,
+                                              modelName: model.name,
+                                              inputPrice: typeof model.pricing.input === 'number' ? model.pricing.input : 0,
+                                              outputPrice: typeof model.pricing.output === 'number' ? model.pricing.output : 0
+                                            })}
+                                          >
+                                            <MoneyIcon fontSize="small" />
+                                          </IconButton>
+                                        </Tooltip>
+                                        <Tooltip title="Edit free tier">
+                                          <IconButton
+                                            size="small"
+                                            onClick={() => setEditingFreeTier({
+                                              provider: providerName,
+                                              modelId: model.id,
+                                              modelName: model.name,
+                                              isFree: model.freeTier?.isFree || false,
+                                              freeLimits: model.freeTier?.limits || {
+                                                requestsPerMinute: 30,
+                                                requestsPerDay: 14400,
+                                                tokensPerMinute: 18000,
+                                                tokensPerDay: 5184000
+                                              },
+                                              notes: model.freeTier?.notes || ''
+                                            })}
+                                          >
+                                            <EditIcon fontSize="small" />
+                                          </IconButton>
+                                        </Tooltip>
+                                      </Box>
                                     </Box>
                                   </Box>
                                 </Card>
@@ -762,7 +881,7 @@ const AIGeekPage = () => {
                             </Box>
                           ) : (
                             <Typography variant="body2" color="text.secondary">
-                              No models available
+                              No models available — click Sync to fetch from API
                             </Typography>
                           )}
                         </CardContent>
@@ -783,6 +902,128 @@ const AIGeekPage = () => {
           </CardContent>
         </Card>
       )}
+
+      {/* Pricing Edit Dialog */}
+      <Dialog open={!!editingPricing} onClose={() => setEditingPricing(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>Edit Pricing — {editingPricing?.modelName}</DialogTitle>
+        <DialogContent>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+            {editingPricing?.provider} / {editingPricing?.modelId}
+          </Typography>
+          <TextField
+            fullWidth
+            label="Input Price (per 1K tokens)"
+            type="number"
+            inputProps={{ step: '0.0001', min: '0' }}
+            value={editingPricing?.inputPrice ?? ''}
+            onChange={(e) => setEditingPricing(prev => ({ ...prev, inputPrice: e.target.value }))}
+            margin="normal"
+          />
+          <TextField
+            fullWidth
+            label="Output Price (per 1K tokens)"
+            type="number"
+            inputProps={{ step: '0.0001', min: '0' }}
+            value={editingPricing?.outputPrice ?? ''}
+            onChange={(e) => setEditingPricing(prev => ({ ...prev, outputPrice: e.target.value }))}
+            margin="normal"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditingPricing(null)}>Cancel</Button>
+          <Button variant="contained" onClick={savePricing}>Save Pricing</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Free Tier Edit Dialog */}
+      <Dialog open={!!editingFreeTier} onClose={() => setEditingFreeTier(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>Edit Free Tier — {editingFreeTier?.modelName}</DialogTitle>
+        <DialogContent>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+            {editingFreeTier?.provider} / {editingFreeTier?.modelId}
+          </Typography>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={editingFreeTier?.isFree || false}
+                onChange={(e) => setEditingFreeTier(prev => ({ ...prev, isFree: e.target.checked }))}
+              />
+            }
+            label="Free Tier Available"
+          />
+          {editingFreeTier?.isFree && (
+            <Box sx={{ mt: 2 }}>
+              <Grid container spacing={2}>
+                <Grid item xs={6}>
+                  <TextField
+                    fullWidth
+                    label="Requests/Minute"
+                    type="number"
+                    value={editingFreeTier?.freeLimits?.requestsPerMinute ?? ''}
+                    onChange={(e) => setEditingFreeTier(prev => ({
+                      ...prev,
+                      freeLimits: { ...prev.freeLimits, requestsPerMinute: parseInt(e.target.value) || 0 }
+                    }))}
+                    size="small"
+                  />
+                </Grid>
+                <Grid item xs={6}>
+                  <TextField
+                    fullWidth
+                    label="Requests/Day"
+                    type="number"
+                    value={editingFreeTier?.freeLimits?.requestsPerDay ?? ''}
+                    onChange={(e) => setEditingFreeTier(prev => ({
+                      ...prev,
+                      freeLimits: { ...prev.freeLimits, requestsPerDay: parseInt(e.target.value) || 0 }
+                    }))}
+                    size="small"
+                  />
+                </Grid>
+                <Grid item xs={6}>
+                  <TextField
+                    fullWidth
+                    label="Tokens/Minute"
+                    type="number"
+                    value={editingFreeTier?.freeLimits?.tokensPerMinute ?? ''}
+                    onChange={(e) => setEditingFreeTier(prev => ({
+                      ...prev,
+                      freeLimits: { ...prev.freeLimits, tokensPerMinute: parseInt(e.target.value) || 0 }
+                    }))}
+                    size="small"
+                  />
+                </Grid>
+                <Grid item xs={6}>
+                  <TextField
+                    fullWidth
+                    label="Tokens/Day"
+                    type="number"
+                    value={editingFreeTier?.freeLimits?.tokensPerDay ?? ''}
+                    onChange={(e) => setEditingFreeTier(prev => ({
+                      ...prev,
+                      freeLimits: { ...prev.freeLimits, tokensPerDay: parseInt(e.target.value) || 0 }
+                    }))}
+                    size="small"
+                  />
+                </Grid>
+              </Grid>
+              <TextField
+                fullWidth
+                label="Notes"
+                value={editingFreeTier?.notes ?? ''}
+                onChange={(e) => setEditingFreeTier(prev => ({ ...prev, notes: e.target.value }))}
+                margin="normal"
+                multiline
+                rows={2}
+              />
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditingFreeTier(null)}>Cancel</Button>
+          <Button variant="contained" onClick={saveFreeTier}>Save Free Tier</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

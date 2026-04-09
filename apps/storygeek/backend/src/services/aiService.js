@@ -186,8 +186,8 @@ As the Game Master, respond to the player's input by advancing the story within 
       const response = await this.callBaseGeekAI(prompt, {
         maxTokens: aiConfig.maxTokens || 2400,
         temperature: typeof aiConfig.temperature === 'number' ? aiConfig.temperature : 0.9,
-        provider: aiConfig.provider || 'groq',
-        model: aiConfig.model || 'llama3-70b-8192'
+        provider: aiConfig.provider || 'gemini',
+        model: aiConfig.model || 'gemini-1.5-flash-latest'
       }, userToken);
 
       const rollRegex = /^\s*ROLL:\s*d20(?:\s*\|\s*situation=([^|\n\r]+))?(?:\s*\|\s*reason=([^\n\r]*))?\s*$/mi;
@@ -230,8 +230,8 @@ As the Game Master, respond to the player's input by advancing the story within 
           const postResponse = await this.callBaseGeekAI(postRollPrompt, {
             maxTokens: aiConfig.maxTokens || 2400,
             temperature: typeof aiConfig.temperature === 'number' ? aiConfig.temperature : 0.9,
-            provider: aiConfig.provider || 'groq',
-            model: aiConfig.model || 'llama3-70b-8192'
+            provider: aiConfig.provider || 'gemini',
+            model: aiConfig.model || 'gemini-1.5-flash-latest'
           }, userToken);
 
           let finalContent = postResponse.replace(rollRegex, '').trim();
@@ -263,8 +263,8 @@ As the Game Master, respond to the player's input by advancing the story within 
             const postResponse = await this.callBaseGeekAI(postRollPrompt, {
               maxTokens: aiConfig.maxTokens || 2400,
               temperature: typeof aiConfig.temperature === 'number' ? aiConfig.temperature : 0.9,
-              provider: aiConfig.provider || 'groq',
-              model: aiConfig.model || 'llama3-70b-8192'
+              provider: aiConfig.provider || 'gemini',
+              model: aiConfig.model || 'gemini-1.5-flash-latest'
             }, userToken);
 
             let finalContent = postResponse.replace(/^\s*ROLL:.*$/gim, '').trim();
@@ -364,7 +364,8 @@ As the Game Master, respond to the player's input by advancing the story within 
   async pickFreeProviderModel(userToken = null) {
     const freeList = await this.getFreeProviderModels(userToken);
     if (freeList.length === 0) throw new Error('No free AI models available. Please try again later.');
-    return freeList.find(m => m.provider === 'groq')
+    return freeList.find(m => m.provider === 'gemini')
+      || freeList.find(m => m.provider === 'groq')
       || freeList.find(m => m.provider === 'together')
       || freeList[0];
   }

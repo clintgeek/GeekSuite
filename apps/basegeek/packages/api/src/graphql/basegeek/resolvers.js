@@ -1,5 +1,7 @@
 import APIKey from '../../models/APIKey.js';
 import AIConfig from '../../models/AIConfig.js';
+import AIPricing from '../../models/AIPricing.js';
+import AIFreeTier from '../../models/AIFreeTier.js';
 import aiService from '../../services/aiService.js';
 import aiDirectorService from '../../services/aiDirectorService.js';
 import aiUsageService from '../../services/aiUsageService.js';
@@ -349,6 +351,56 @@ export const resolvers = {
     seedDirectorFreeTier: async (_, __, { user }) => {
       requireAuth(user);
       await aiDirectorService.seedFreeTierInformation();
+      return true;
+    },
+
+    // Model Management
+    syncProviderModels: async (_, { provider }, { user }) => {
+      requireAuth(user);
+      try {
+        const models = await aiService.refreshModels(provider);
+        // Also update pricing for any new models
+        await aiDirectorService.updatePricingForNewModels();
+        return { success: true, provider, modelsFound: models.length, models };
+      } catch (error) {
+        throw new GraphQLError(`Failed to sync models for ${provider}: ${error.message}`);
+      }
+    },
+
+    updateModelPricing: async (_, { provider, modelId, inputPrice, outputPrice }, { user }) => {
+      requireAuth(user);
+      const pricing = await AIPricing.findOneAndUpdate(
+        { provider, modelId },
+        { inputPrice, outputPrice, lastUpdated: new Date(), isActive: true },
+        { upsert: true, new: true }
+      );
+      return { success: true, pricing: { provider, modelId, inputPrice: pricing.inputPrice, outputPrice: pricing.outputPrice } };
+    },
+
+    deleteModelPricing: async (_, { provider, modelId }, { user }) => {
+      requireAuth(user);
+      await AIPricing.deleteOne({ provider, modelId });
+      return true;
+    },
+
+    updateModelFreeTier: async (_, { provider, modelId, isFree, freeLimits, notes }, { user }) => {
+      requireAuth(user);
+      const freeTier = await AIFreeTier.findOneAndUpdate(
+        { provider, modelId },
+        {
+          isFree,
+          freeLimits: freeLimits || {},
+          notes: notes || '',
+          lastUpdated: new Date()
+        },
+        { upsert: true, new: true }
+      );
+      return { success: true, freeTier: { provider, modelId, isFree: freeTier.isFree, freeLimits: freeTier.freeLimits, notes: freeTier.notes } };
+    },
+
+    deleteModelFreeTier: async (_, { provider, modelId }, { user }) => {
+      requireAuth(user);
+      await AIFreeTier.deleteOne({ provider, modelId });
       return true;
     }
   }

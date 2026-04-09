@@ -80,7 +80,7 @@ class BaseGeekAIService {
 
     const requestUrl = `${this.baseGeekUrl}/openai/v1/chat/completions`;
     const requestBody = {
-      model: 'basegeek-rotation',
+      model: 'basegeek-free',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: prompt }

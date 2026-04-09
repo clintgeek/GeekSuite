@@ -106,8 +106,8 @@ function StoryPlay() {
     try {
       const response = await api.post(`/stories/${storyId}/continue`, {
         userInput: input,
-        provider: selectedProvider || 'groq',
-        model: selectedModelId || 'llama3-70b-8192'
+        provider: selectedProvider || 'gemini',
+        model: selectedModelId || 'gemini-1.5-flash-latest'
       });
       const data = response.data;
 

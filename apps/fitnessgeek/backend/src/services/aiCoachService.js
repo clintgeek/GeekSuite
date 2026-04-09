@@ -13,22 +13,30 @@ class AICoachService {
   async callAI(systemPrompt, userPrompt, userToken = null) {
     try {
       const response = await axios.post(
-        `${this.baseGeekUrl}/api/ai`,
+        `${this.baseGeekUrl}/api/ai/call`,
         {
-          system: systemPrompt,
-          prompt: userPrompt,
-          temperature: 0.7,
-          max_tokens: 1500
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          config: {
+            appName: 'fitnessGeek',
+            freeOnly: true,
+            maxTokens: 1500,
+            temperature: 0.7
+          }
         },
         {
           headers: {
             'Content-Type': 'application/json',
             ...(userToken && { 'Authorization': `Bearer ${userToken}` })
-          }
+          },
+          timeout: 30000
         }
       );
 
-      return response.data.response;
+      // Handle both response shapes from /api/ai/call
+      return response.data?.choices?.[0]?.message?.content || response.data?.data?.response || response.data?.response;
     } catch (error) {
       logger.error('AI service error:', error.response?.data || error.message);
       throw new Error('Failed to get AI response');

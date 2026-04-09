@@ -40,10 +40,10 @@ function Settings() {
         }
         setModelsByProvider(mapped);
         if (!selectedProvider && enabledProviders.length > 0) {
-          const groqAvailable = enabledProviders.some(p => p.name === 'groq');
-          if (groqAvailable && mapped['groq']?.length > 0) {
-            const preferred = mapped['groq'].find(m => m.id === 'llama3-70b-8192');
-            setSelection('groq', preferred ? preferred.id : mapped['groq'][0].id);
+          const geminiAvailable = enabledProviders.some(p => p.name === 'gemini');
+          if (geminiAvailable && mapped['gemini']?.length > 0) {
+            const preferred = mapped['gemini'].find(m => m.id === 'gemini-1.5-flash-latest');
+            setSelection('gemini', preferred ? preferred.id : mapped['gemini'][0].id);
           } else {
             const provKey = enabledProviders[0].name;
             setSelection(provKey, mapped[provKey]?.[0]?.id || null);

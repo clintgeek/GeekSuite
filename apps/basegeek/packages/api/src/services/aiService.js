@@ -456,25 +456,80 @@ class AIService {
           break;
 
         case 'anthropic':
-          // Hardcoded models from Anthropic docs
-          models = [
-            { id: 'claude-opus-4-1-20250805', name: 'Claude Opus 4.1' },
-            { id: 'claude-opus-4-20250514', name: 'Claude Opus 4' },
-            { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4' },
-            { id: 'claude-3-7-sonnet-20250219', name: 'Claude Sonnet 3.7' },
-            { id: 'claude-3-5-sonnet-20241022', name: 'Claude Sonnet 3.5' },
-            { id: 'claude-3-5-haiku-20241022', name: 'Claude Haiku 3.5' },
-            { id: 'claude-3-haiku-20240307', name: 'Claude Haiku 3' }
-          ];
+          if (this.providers.anthropic.apiKey) {
+            try {
+              console.log('Fetching Anthropic models via API...');
+              const response = await axios.get('https://api.anthropic.com/v1/models', {
+                headers: {
+                  'x-api-key': this.providers.anthropic.apiKey,
+                  'anthropic-version': '2023-06-01'
+                },
+                timeout: 10000
+              });
+              const anthropicModels = response.data?.data || [];
+              models = anthropicModels.map(m => ({
+                id: m.id,
+                name: m.display_name || m.id
+              }));
+              console.log(`Fetched ${models.length} Anthropic models from API`);
+            } catch (apiError) {
+              console.log('Anthropic models API failed, using hardcoded fallback:', apiError.message);
+              models = [
+                { id: 'claude-opus-4-1-20250805', name: 'Claude Opus 4.1' },
+                { id: 'claude-opus-4-20250514', name: 'Claude Opus 4' },
+                { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4' },
+                { id: 'claude-3-7-sonnet-20250219', name: 'Claude Sonnet 3.7' },
+                { id: 'claude-3-5-sonnet-20241022', name: 'Claude Sonnet 3.5' },
+                { id: 'claude-3-5-haiku-20241022', name: 'Claude Haiku 3.5' },
+                { id: 'claude-3-haiku-20240307', name: 'Claude Haiku 3' }
+              ];
+            }
+          } else {
+            // No API key — use hardcoded fallback
+            models = [
+              { id: 'claude-opus-4-1-20250805', name: 'Claude Opus 4.1' },
+              { id: 'claude-opus-4-20250514', name: 'Claude Opus 4' },
+              { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4' },
+              { id: 'claude-3-7-sonnet-20250219', name: 'Claude Sonnet 3.7' },
+              { id: 'claude-3-5-sonnet-20241022', name: 'Claude Sonnet 3.5' },
+              { id: 'claude-3-5-haiku-20241022', name: 'Claude Haiku 3.5' },
+              { id: 'claude-3-haiku-20240307', name: 'Claude Haiku 3' }
+            ];
+          }
           break;
 
         case 'gemini':
-          // Hardcoded models for Gemini
-          models = [
-            { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash' },
-            { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' },
-            { id: 'gemini-pro', name: 'Gemini Pro' }
-          ];
+          if (this.providers.gemini.apiKey) {
+            try {
+              console.log('Fetching Gemini models via API...');
+              const response = await axios.get(
+                `https://generativelanguage.googleapis.com/v1beta/models?key=${this.providers.gemini.apiKey}`,
+                { timeout: 10000 }
+              );
+              const geminiModels = response.data?.models || [];
+              // Filter to models that support generateContent (chat/text models)
+              models = geminiModels
+                .filter(m => m.supportedGenerationMethods?.includes('generateContent'))
+                .map(m => ({
+                  id: m.name.replace('models/', ''),
+                  name: m.displayName || m.name.replace('models/', '')
+                }));
+              console.log(`Fetched ${models.length} Gemini models from API (filtered for generateContent)`);
+            } catch (apiError) {
+              console.log('Gemini models API failed, using hardcoded fallback:', apiError.message);
+              models = [
+                { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' },
+                { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash' },
+                { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' }
+              ];
+            }
+          } else {
+            models = [
+              { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' },
+              { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash' },
+              { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' }
+            ];
+          }
           break;
       }
 
@@ -1092,17 +1147,57 @@ class AIService {
       }
     }
 
-    const {
+    let {
       provider: requestedProvider = this.currentProvider,
-      maxTokens = this.providers[requestedProvider]?.maxTokens || 4000,
-      temperature = this.providers[requestedProvider]?.temperature || 0.7,
-      model = this.providers[requestedProvider]?.model,
+      maxTokens,
+      temperature,
+      model,
       userId = null,
       appName = 'unknown',
       messages = null,
       autoRotate = false,
+      freeOnly = false,
       cacheNamespace = 'default'
     } = config;
+
+    // "free" mode: query DB for available free-tier models and pick the best one
+    if (freeOnly || requestedProvider === 'free') {
+      try {
+        const freeModels = await AIFreeTier.find({ isFree: true });
+        // Group by provider and find one that's enabled with an API key
+        const candidates = [];
+        for (const fm of freeModels) {
+          const pc = this.providers[fm.provider];
+          if (pc && pc.apiKey && pc.enabled !== false) {
+            candidates.push({ provider: fm.provider, modelId: fm.modelId, limits: fm.freeLimits });
+          }
+        }
+        if (candidates.length > 0) {
+          // Prefer rotation-style selection: pick from the priority list if available
+          const priorityList = this.rotationManager.getPriorityList();
+          const prioritized = candidates.sort((a, b) => {
+            const aIdx = priorityList.indexOf(a.provider);
+            const bIdx = priorityList.indexOf(b.provider);
+            return (aIdx === -1 ? 999 : aIdx) - (bIdx === -1 ? 999 : bIdx);
+          });
+          const pick = prioritized[0];
+          requestedProvider = pick.provider;
+          model = pick.modelId;
+          autoRotate = false; // We've already picked
+          console.log(`[FreeOnly] Selected ${pick.provider}/${pick.modelId}`);
+        } else {
+          console.warn('[FreeOnly] No free-tier models available with configured API keys, falling back to rotation');
+          autoRotate = true;
+        }
+      } catch (freeError) {
+        console.error('[FreeOnly] Failed to query free tier, falling back to rotation:', freeError.message);
+        autoRotate = true;
+      }
+    }
+
+    maxTokens = maxTokens || this.providers[requestedProvider]?.maxTokens || 4000;
+    temperature = temperature ?? (this.providers[requestedProvider]?.temperature || 0.7);
+    model = model || this.providers[requestedProvider]?.model;
 
     const normalizedMessages = normalizeMessages(messages);
 
@@ -1240,6 +1335,27 @@ class AIService {
    * @returns {Promise<object>} - AI response with routing metadata
    */
   async callAISmart(messages, options = {}) {
+    // If freeOnly requested, skip smart routing and go straight to free-tier selection
+    if (options.freeOnly) {
+      const prompt = messages[messages.length - 1]?.content || '';
+      const startTime = Date.now();
+      try {
+        const response = await this.callAI(prompt, {
+          freeOnly: true,
+          messages,
+          userId: options.userId,
+          appName: options.appName || 'free-tier'
+        });
+        return {
+          success: true,
+          content: response,
+          routing: { taskType: 'free-tier', provider: 'free-selection', latency: Date.now() - startTime }
+        };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    }
+
     const ModelFamilyRouter = (await import('./aiRouterService.js')).default;
     const LoadBalancer = (await import('./aiBalancerService.js')).default;
 
