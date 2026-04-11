@@ -259,10 +259,11 @@ export const fitnessGeekService = {
 
   getGarminHeartRate: async (date) => {
     try {
-      const response = await apiService.get(`/fitness/garmin/heart-rate/${date || ''}`);
-      return response.data || response;
+      // No GraphQL equivalent — goes direct to REST on the fitnessgeek backend
+      const response = await restApi.get(`/fitness/garmin/heart-rate/${date || ''}`);
+      return response.data?.data || response.data || null;
     } catch (error) {
-      logger.error('Error getting Garmin heart rate:', error);
+      logger.error('Error getting Garmin heart rate:', error.response?.data || error.message);
       throw error;
     }
   },

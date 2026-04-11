@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { apiService } from '../services/apiService';
+import { influxService } from '../services/influxService';
 import {
   Box,
   Card,
@@ -91,7 +92,7 @@ export default function InfluxDBSettings({ onSettingsChange }) {
     setError(null);
 
     try {
-      const response = await apiService.get('/influx/status');
+      const response = await influxService.getStatus();
       setConnectionStatus({
         success: response.connected,
         database: response.database,

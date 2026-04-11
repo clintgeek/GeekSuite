@@ -1,8 +1,13 @@
 import React from 'react';
 import { Box, Typography } from '@mui/material';
 import { TrendingUp, TrendingDown } from '@mui/icons-material';
-import { useTheme, alpha } from '@mui/material/styles';
+import { useTheme, alpha, keyframes } from '@mui/material/styles';
 import { Surface, StatNumber, SectionLabel } from '../primitives';
+
+const statEnter = keyframes`
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+`;
 
 /**
  * StatCard — a compact metric surface used by the dashboard and Activity.
@@ -28,6 +33,7 @@ export default function StatCard({
   trendValue = null,
   color,
   showLabel = true,
+  delay = 0,
 }) {
   const theme = useTheme();
 
@@ -63,6 +69,11 @@ export default function StatCard({
         justifyContent: 'center',
         px: 1.5,
         py: 1.25,
+        animation: `${statEnter} 460ms cubic-bezier(0.22, 1, 0.36, 1) both`,
+        animationDelay: `${delay}ms`,
+        '@media (prefers-reduced-motion: reduce)': {
+          animation: 'none',
+        },
         transition: 'border-color 180ms ease, transform 180ms ease',
         '&:hover': {
           borderColor: alpha(baseColor, 0.4),

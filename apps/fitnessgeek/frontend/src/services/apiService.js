@@ -62,6 +62,23 @@ const DELETE_FOOD_LOG = gql`
   mutation DeleteFoodLog($id: ID!) { deleteFoodLog(id: $id) }
 `;
 
+// ─── FitnessFood (food LIBRARY items, not log entries) ───────────
+const GET_FOOD_ITEM = gql`
+  query GetFitnessFood($id: ID!) { fitnessFood(id: $id) { id name brand serving_size serving_unit barcode nutrition { calories_per_serving protein_grams carbs_grams fat_grams fiber_grams sugar_grams sodium_mg } } }
+`;
+
+const ADD_FITNESS_FOOD = gql`
+  mutation AddFitnessFood($input: FitnessFoodInput!) { addFitnessFood(input: $input) { id name brand serving_size serving_unit nutrition { calories_per_serving protein_grams carbs_grams fat_grams fiber_grams sugar_grams sodium_mg } } }
+`;
+
+const UPDATE_FITNESS_FOOD = gql`
+  mutation UpdateFitnessFood($id: ID!, $input: FitnessFoodInput!) { updateFitnessFood(id: $id, input: $input) { id } }
+`;
+
+const DELETE_FITNESS_FOOD = gql`
+  mutation DeleteFitnessFood($id: ID!) { deleteFitnessFood(id: $id) }
+`;
+
 const GET_MEALS = gql`
   query GetFitnessMeals($mealType: String) { fitnessMeals(mealType: $mealType) { id name meal_type food_items { servings food_item_id { id name brand serving_size serving_unit nutrition { calories_per_serving protein_grams carbs_grams fat_grams fiber_grams sugar_grams sodium_mg } } } totalNutrition { calories_per_serving protein_grams carbs_grams fat_grams fiber_grams sugar_grams sodium_mg } } }
 `;
@@ -156,19 +173,45 @@ const GET_HOUSEHOLD = gql`
 `;
 
 const JOIN_HOUSEHOLD = gql`
-  mutation JoinFitnessHousehold($householdId: String!) { joinFitnessHousehold(householdId: $householdId) { household_id } }
+  mutation JoinFitnessHousehold($household_id: String!, $display_name: String!) {
+    joinFitnessHousehold(household_id: $household_id, display_name: $display_name) { household_id }
+  }
 `;
 
 const CREATE_HOUSEHOLD = gql`
-  mutation CreateFitnessHousehold($displayName: String!) { createFitnessHousehold(displayName: $displayName) { household_id } }
+  mutation CreateFitnessHousehold($display_name: String!) {
+    createFitnessHousehold(display_name: $display_name) { household_id }
+  }
 `;
 
 const LEAVE_HOUSEHOLD = gql`
   mutation LeaveFitnessHousehold { leaveFitnessHousehold }
 `;
 
+const UPDATE_HOUSEHOLD_SETTINGS = gql`
+  mutation UpdateFitnessHouseholdSettings($input: FitnessJSON!) {
+    updateFitnessHouseholdSettings(input: $input) { household_id }
+  }
+`;
+
+// copyFitnessMeal takes flat args (from_date, to_date, from_meal_type, to_meal_type, from_user_id)
+// and returns [FoodLog], NOT a CopyMealInput + { success }. Query was wrong.
 const COPY_MEAL = gql`
-  mutation CopyFitnessMeal($input: CopyMealInput!) { copyFitnessMeal(input: $input) { success } }
+  mutation CopyFitnessMeal(
+    $from_date: String!
+    $to_date: String!
+    $from_meal_type: String
+    $to_meal_type: String
+    $from_user_id: ID
+  ) {
+    copyFitnessMeal(
+      from_date: $from_date
+      to_date: $to_date
+      from_meal_type: $from_meal_type
+      to_meal_type: $to_meal_type
+      from_user_id: $from_user_id
+    ) { id }
+  }
 `;
 
 const GET_HOUSEHOLD_MEMBER_LOGS = gql`
@@ -253,6 +296,31 @@ function routeRequest(method, url, data) {
     return clean;
   };
 
+  // Normalize a food payload into FitnessFoodInput shape.
+  // Frontend sends { name, brand, nutrition, serving: { size, unit }, barcode, source, ... }
+  // Backend wants  { name, brand, serving_size, serving_unit, barcode, nutrition: {...} }
+  const normalizeFoodInput = (raw = {}) => {
+    const serving_size = raw.serving_size ?? raw.serving?.size ?? 100;
+    const serving_unit = raw.serving_unit ?? raw.serving?.unit ?? 'g';
+    const n = raw.nutrition || {};
+    return {
+      name: raw.name,
+      brand: raw.brand || undefined,
+      serving_size: Number(serving_size) || 100,
+      serving_unit: String(serving_unit || 'g'),
+      ...(raw.barcode ? { barcode: String(raw.barcode) } : {}),
+      nutrition: {
+        calories_per_serving: Number(n.calories_per_serving) || 0,
+        protein_grams: Number(n.protein_grams) || 0,
+        carbs_grams: Number(n.carbs_grams) || 0,
+        fat_grams: Number(n.fat_grams) || 0,
+        fiber_grams: Number(n.fiber_grams) || 0,
+        sugar_grams: Number(n.sugar_grams) || 0,
+        sodium_mg: Number(n.sodium_mg) || 0,
+      },
+    };
+  };
+
   if (method === 'GET') {
     if (base === '/settings') return { query: GET_USER_SETTINGS };
     // /user/settings is an alias — same underlying FitnessUserSettings document
@@ -261,6 +329,10 @@ function routeRequest(method, url, data) {
     if (base === '/goals/nutrition/macros' || base === '/goals/nutrition') return { query: GET_DERIVED_MACROS };
     if (base === '/goals') return { query: GET_DERIVED_MACROS };
     if (base === '/foods') return { query: GET_FOOD_ITEMS, variables: { search: url.includes('search=') ? new URLSearchParams(url.split('?')[1]).get('search') : null } };
+    // Single food item lookup: /foods/:id (24-char Mongo ObjectId)
+    if (parts[0] === 'foods' && parts[1] && /^[0-9a-f]{24}$/i.test(parts[1])) {
+      return { query: GET_FOOD_ITEM, variables: { id: parts[1] } };
+    }
     if (base === '/logs') {
       const sp = new URLSearchParams(url.split('?')[1]);
       return { query: GET_FOOD_LOGS, variables: { date: sp.get('date'), startDate: sp.get('startDate'), endDate: sp.get('endDate'), mealType: sp.get('mealType') } };
@@ -272,7 +344,7 @@ function routeRequest(method, url, data) {
     if (base.startsWith('/logs/')) return { query: GET_FOOD_LOGS, variables: { date: parts[1] } }; // /logs/YYYY-MM-DD
     if (base === '/meals') return { query: GET_MEALS };
     if (base.startsWith('/meals/')) return { query: GET_MEALS, variables: { mealType: parts[1] } };
-    if (base === '/medications') return { query: GET_MEDICATIONS };
+    if (base === '/medications' || base === '/meds') return { query: GET_MEDICATIONS };
     if (base === '/bp' || base === '/blood-pressure') return { query: GET_BPS };
     if (parts[0] === 'blood-pressure' && parts[1]) return { query: GET_BPS }; // Handle /blood-pressure/:id
     if (parts[0] === 'weight' && parts[1]) return { query: GET_WEIGHTS }; // Handle /weight/:id
@@ -336,19 +408,44 @@ function routeRequest(method, url, data) {
 
   if (method === 'POST') {
     if (base === '/streaks/login') return { mutation: RECORD_LOGIN_STREAK };
-    if (base === '/settings/household/create') return { mutation: CREATE_HOUSEHOLD, variables: { displayName: data.displayName } };
-    if (base === '/settings/household/join') return { mutation: JOIN_HOUSEHOLD, variables: { householdId: data.householdId } };
-    if (base === '/logs/copy') return { mutation: COPY_MEAL, variables: { input: data } };
+    if (base === '/settings/household/create') {
+      return {
+        mutation: CREATE_HOUSEHOLD,
+        variables: { display_name: data.display_name || data.displayName || 'My Household' },
+      };
+    }
+    if (base === '/settings/household/join') {
+      return {
+        mutation: JOIN_HOUSEHOLD,
+        variables: {
+          household_id: data.household_id || data.householdId,
+          display_name: data.display_name || data.displayName || 'Member',
+        },
+      };
+    }
+    if (base === '/logs/copy') {
+      return {
+        mutation: COPY_MEAL,
+        variables: {
+          from_date: data.from_date || data.fromDate,
+          to_date: data.to_date || data.toDate,
+          from_meal_type: data.from_meal_type || data.fromMealType || null,
+          to_meal_type: data.to_meal_type || data.toMealType || null,
+          from_user_id: data.from_user_id || data.fromUserId || null,
+        },
+      };
+    }
     if (base === '/insights/chat') return { mutation: AI_CHAT, variables: { message: data.message, history: data.history } };
     if (base === '/fitness/garmin/weight') return { mutation: UPDATE_GARMIN_WEIGHT, variables: { date: data.date, weightLbs: data.weightLbs, timezone: data.timezone } };
     if (base.match(/^\/summary\//)) return { mutation: REFRESH_DAILY_SUMMARY, variables: { date: parts[1] } };
     if (base.match(/^\/meals\/.+\/add-to-log/)) return { mutation: LOG_MEAL, variables: { mealId: parts[1], date: data.date, mealType: data.mealType } };
     if (base === '/weight') return { mutation: ADD_WEIGHT, variables: { input: data } };
     if (base === '/goals') return { mutation: SET_NUTRITION_GOALS, variables: { input: data } };
-    if (base === '/foods') return { mutation: ADD_FOOD_LOG, variables: { input: data } }; // /foods in old api sometimes meant log food
+    // /foods creates a library FoodItem (not a log entry)
+    if (base === '/foods') return { mutation: ADD_FITNESS_FOOD, variables: { input: normalizeFoodInput(data) } };
     if (base === '/logs') return { mutation: ADD_FOOD_LOG, variables: { input: data } };
     if (base === '/meals') return { mutation: ADD_MEAL, variables: { input: data } };
-    if (base === '/medications') return { mutation: ADD_MEDICATION, variables: { input: data } };
+    if (base === '/medications' || base === '/meds') return { mutation: ADD_MEDICATION, variables: { input: data } };
     if (base === '/bp' || base === '/blood-pressure') return { mutation: ADD_BP, variables: { input: data } };
 
     // App settings updates via PUT/POST mixed
@@ -363,13 +460,14 @@ function routeRequest(method, url, data) {
     if (base === '/settings') return { mutation: UPDATE_USER_SETTINGS, variables: { input: sanitizeSettingsInput(data) } };
     // /user/settings is an alias for /settings (PATCH and PUT both hit this)
     if (base === '/user/settings') return { mutation: UPDATE_USER_SETTINGS, variables: { input: sanitizeSettingsInput(data) } };
-    if (base === '/settings/household') return { _isMock: true, data: { success: true } };
+    if (base === '/settings/household') return { mutation: UPDATE_HOUSEHOLD_SETTINGS, variables: { input: data } };
     if (parts[0] === 'settings') return { mutation: UPDATE_USER_SETTINGS, variables: { input: sanitizeSettingsInput(data) } }; // /settings/dashboard etc
     if (parts[0] === 'weight') return { mutation: UPDATE_WEIGHT, variables: { id, input: data } };
-    if (parts[0] === 'foods') return { mutation: UPDATE_FOOD_LOG, variables: { id, input: data } }; // Assuming foods route updates log
+    // /foods/:id updates a library FoodItem (not a log entry)
+    if (parts[0] === 'foods') return { mutation: UPDATE_FITNESS_FOOD, variables: { id, input: normalizeFoodInput(data) } };
     if (parts[0] === 'logs') return { mutation: UPDATE_FOOD_LOG, variables: { id, input: data } };
     if (parts[0] === 'meals') return { mutation: UPDATE_MEAL, variables: { id, input: data } };
-    if (parts[0] === 'medications') return { mutation: UPDATE_MEDICATION, variables: { id, input: data } };
+    if (parts[0] === 'medications' || parts[0] === 'meds') return { mutation: UPDATE_MEDICATION, variables: { id, input: data } };
     if (parts[0] === 'bp' || parts[0] === 'blood-pressure') return { mutation: UPDATE_BP, variables: { id, input: data } };
     return null;
   }
@@ -378,10 +476,11 @@ function routeRequest(method, url, data) {
     const id = parts[1];
     if (base === '/settings/household') return { mutation: LEAVE_HOUSEHOLD };
     if (parts[0] === 'weight') return { mutation: DELETE_WEIGHT, variables: { id } };
-    if (parts[0] === 'foods') return { mutation: DELETE_FOOD_LOG, variables: { id } };
+    // /foods/:id deletes a library FoodItem (not a log entry)
+    if (parts[0] === 'foods') return { mutation: DELETE_FITNESS_FOOD, variables: { id } };
     if (parts[0] === 'logs') return { mutation: DELETE_FOOD_LOG, variables: { id } };
     if (parts[0] === 'meals') return { mutation: DELETE_MEAL, variables: { id } };
-    if (parts[0] === 'medications') return { mutation: DELETE_MEDICATION, variables: { id } };
+    if (parts[0] === 'medications' || parts[0] === 'meds') return { mutation: DELETE_MEDICATION, variables: { id } };
     if (parts[0] === 'bp' || parts[0] === 'blood-pressure') return { mutation: DELETE_BP, variables: { id } };
     return null;
   }

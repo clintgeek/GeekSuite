@@ -15,3 +15,4 @@ export { default as SectionLabel } from './SectionLabel.jsx';
 export { default as DisplayHeading } from './DisplayHeading.jsx';
 export { default as EmptyState } from './EmptyState.jsx';
 export { default as SurfaceSkeleton } from './SurfaceSkeleton.jsx';
+export { default as PageEnter } from './PageEnter.jsx';

@@ -3,14 +3,10 @@ import {
   Box,
   Alert,
   CircularProgress,
-  Card,
-  CardContent,
-  Typography,
   TextField,
   Button,
   Stack,
   Collapse,
-  IconButton,
   Tooltip
 } from '@mui/material';
 import {
@@ -33,6 +29,7 @@ import { useFoodLog } from '../hooks/useFoodLog.js';
 import { fitnessGeekService } from '../services/fitnessGeekService.js';
 import { settingsService } from '../services/settingsService.js';
 import { goalsService } from '../services/goalsService.js';
+import { Surface, SectionLabel, DisplayHeading, StatNumber } from '../components/primitives';
 
 const FoodLog = () => {
   const [selectedDate, setSelectedDate] = useState(() => fitnessGeekService.formatDate(new Date()));
@@ -286,7 +283,13 @@ const FoodLog = () => {
   };
 
   return (
-    <Box sx={{ p: { xs: 2, sm: 3 } }}>
+    <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 960, mx: 'auto' }}>
+      {/* Editorial header */}
+      <Box sx={{ mb: 2.5 }}>
+        <SectionLabel sx={{ mb: 0.75 }}>Today · Food Log</SectionLabel>
+        <DisplayHeading size="page">Food Log</DisplayHeading>
+      </Box>
+
       {/* Date Navigation with compact calorie card */}
       <DateNavigator
         selectedDate={selectedDate}
@@ -362,34 +365,32 @@ const FoodLog = () => {
 
       {/* Calorie Goal Panel (toggle) */}
       <Collapse in={showCaloriePanel} unmountOnExit>
-        <Card id="calorie-goal-panel" sx={{ mb: 2 }}>
-          <CardContent>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }}>
-              <Box sx={{ flex: 1 }}>
-                <Typography variant="subtitle2" color="text.secondary">Calorie Goal Today</Typography>
-                <Typography variant="h6">{todayCalorieGoal || '—'} kcal</Typography>
-              </Box>
-              <TextField
-                label="Adjust today"
-                type="number"
-                size="small"
-                value={goalInput}
-                onChange={(e) => setGoalInput(e.target.value)}
-                sx={{ width: 180 }}
-              />
-              <Button
-                variant="contained"
-                onClick={handleSaveTodayGoal}
-                disabled={savingGoal || !goalInput}
-              >
+        <Surface id="calorie-goal-panel" sx={{ mb: 2 }}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }}>
+            <Box sx={{ flex: 1 }}>
+              <SectionLabel sx={{ mb: 0.75 }}>Calorie Goal Today</SectionLabel>
+              <StatNumber value={todayCalorieGoal} unit="kcal" size="display" />
+            </Box>
+            <TextField
+              label="Adjust today"
+              type="number"
+              size="small"
+              value={goalInput}
+              onChange={(e) => setGoalInput(e.target.value)}
+              sx={{ width: 180 }}
+            />
+            <Button
+              variant="contained"
+              onClick={handleSaveTodayGoal}
+              disabled={savingGoal || !goalInput}
+            >
                 Save
               </Button>
-            </Stack>
-            {goalSavedMsg && (
-              <Alert severity="success" sx={{ mt: 2 }}>{goalSavedMsg}</Alert>
-            )}
-          </CardContent>
-        </Card>
+          </Stack>
+          {goalSavedMsg && (
+            <Alert severity="success" sx={{ mt: 2 }}>{goalSavedMsg}</Alert>
+          )}
+        </Surface>
       </Collapse>
 
       {/* Removed standalone top calorie card; it's now embedded under the date picker */}

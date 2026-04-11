@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { apiService } from '../services/apiService';
+import { influxService } from '../services/influxService';
 import {
   Box,
   Card,
@@ -184,7 +184,7 @@ export default function SleepAnalysis({ date }) {
       setError(null);
 
       try {
-        const response = await apiService.get(`/influx/sleep-analysis/${date}`);
+        const response = await influxService.getSleepAnalysis(date);
         setData(response);
       } catch (err) {
         console.error('Error fetching sleep data:', err);

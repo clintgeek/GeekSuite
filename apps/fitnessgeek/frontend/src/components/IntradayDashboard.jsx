@@ -12,7 +12,7 @@ import {
   Tooltip,
   useTheme
 } from '@mui/material';
-import { apiService } from '../services/apiService';
+import { influxService } from '../services/influxService';
 import {
   FavoriteBorder as HeartIcon,
   Psychology as StressIcon,
@@ -296,7 +296,7 @@ export default function IntradayDashboard({
       setError(null);
 
       try {
-        const response = await apiService.get(`/influx/intraday/${date}/${date}`);
+        const response = await influxService.getIntraday(date, date);
 
         // Transform data for charts
         const transformedData = {

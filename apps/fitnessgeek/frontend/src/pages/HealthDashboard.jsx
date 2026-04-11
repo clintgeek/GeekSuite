@@ -229,42 +229,16 @@ export default function HealthDashboard() {
           </Tabs>
         </Box>
 
-        {/* Tab Panels */}
+        {/* Tab Panels — no redundant heading, tab label already names the section */}
         <Box>
-          {activeTab === 0 && (
-            <Stack spacing={3}>
-              <Typography variant="h5">Daily Overview</Typography>
-              <IntradayDashboard
-                date={selectedDate}
-              />
-            </Stack>
-          )}
-
-          {activeTab === 1 && (
-            <Stack spacing={3}>
-              <Typography variant="h5">Sleep Analysis</Typography>
-              <SleepAnalysis
-                date={selectedDate}
-              />
-            </Stack>
-          )}
-
-          {activeTab === 2 && (
-            <Stack spacing={3}>
-              <Typography variant="h5">Meal Impact Analysis</Typography>
-              <MealImpactVisualization
-                date={selectedDate}
-              />
-            </Stack>
-          )}
-
+          {activeTab === 0 && <IntradayDashboard date={selectedDate} />}
+          {activeTab === 1 && <SleepAnalysis date={selectedDate} />}
+          {activeTab === 2 && <MealImpactVisualization date={selectedDate} />}
           {activeTab === 3 && (
-            <Stack spacing={3}>
-              <RecoveryCoach
-                date={selectedDate}
-                onRequestAIAnalysis={handleAIAnalysisRequest}
-              />
-            </Stack>
+            <RecoveryCoach
+              date={selectedDate}
+              onRequestAIAnalysis={handleAIAnalysisRequest}
+            />
           )}
 
           {activeTab === 4 && (

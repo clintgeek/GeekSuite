@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { apiService } from '../services/apiService';
+import { influxService } from '../services/influxService';
 import {
   Box,
   Card,
@@ -144,7 +144,7 @@ export default function RecoveryCoach({ date, onRequestAIAnalysis }) {
       setError(null);
 
       try {
-        const response = await apiService.get(`/influx/recovery-recommendations/${date}`);
+        const response = await influxService.getRecoveryRecommendations(date);
         setData(response);
       } catch (err) {
         console.error('Error fetching recovery recommendations:', err);
@@ -161,8 +161,7 @@ export default function RecoveryCoach({ date, onRequestAIAnalysis }) {
     if (!onRequestAIAnalysis) return;
 
     try {
-      // Get the full recovery context
-      const response = await apiService.get(`/influx/recovery-context/${date}`);
+      const response = await influxService.getRecoveryContext(date);
       if (response.available) {
         onRequestAIAnalysis(response.promptText);
       }

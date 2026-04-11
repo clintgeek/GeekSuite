@@ -26,8 +26,134 @@ import {
   Psychology as RemIcon,
   Visibility as AwakeIcon,
 } from '@mui/icons-material';
+import { alpha } from '@mui/material/styles';
 import { fitnessGeekService } from '../services/fitnessGeekService';
 import { Surface, SectionLabel, DisplayHeading, StatNumber, EmptyState } from '../components/primitives';
+
+/**
+ * Duration-formatted sleep tile. Renders "Nh Mm" in mono.
+ */
+const SleepStageTile = ({ icon: Icon, minutes = 0, label, color }) => {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return (
+    <Box
+      sx={{
+        textAlign: 'center',
+        p: 1.75,
+        borderRadius: 2,
+        backgroundColor: (t) => alpha(color, t.palette.mode === 'dark' ? 0.12 : 0.08),
+        border: (t) => `1px solid ${alpha(color, t.palette.mode === 'dark' ? 0.22 : 0.14)}`,
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 0.75,
+      }}
+    >
+      {Icon && <Icon sx={{ color, fontSize: 22 }} />}
+      <Typography
+        sx={{
+          fontFamily: "'JetBrains Mono', monospace",
+          fontVariantNumeric: 'tabular-nums',
+          fontSize: '1.125rem',
+          fontWeight: 600,
+          color,
+          lineHeight: 1,
+          letterSpacing: '-0.02em',
+        }}
+      >
+        {hours > 0 ? `${hours}h ` : ''}
+        {mins}m
+      </Typography>
+      <Typography
+        sx={{
+          fontSize: '0.625rem',
+          fontWeight: 700,
+          textTransform: 'uppercase',
+          letterSpacing: '0.1em',
+          color: 'text.secondary',
+        }}
+      >
+        {label}
+      </Typography>
+    </Box>
+  );
+};
+
+/**
+ * Small tile helper for health-metric grids.
+ * Renders value as mono text directly so non-numeric prefixes like "+" are preserved.
+ */
+const MetricTile = ({ icon: Icon, label, value, unit, color, subtext }) => (
+  <Box
+    sx={{
+      textAlign: 'center',
+      p: 1.75,
+      borderRadius: 2,
+      backgroundColor: (t) => alpha(color, t.palette.mode === 'dark' ? 0.12 : 0.08),
+      border: (t) => `1px solid ${alpha(color, t.palette.mode === 'dark' ? 0.2 : 0.14)}`,
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap: 0.5,
+    }}
+  >
+    {Icon && <Icon sx={{ color, fontSize: 22 }} />}
+    <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.375 }}>
+      <Typography
+        sx={{
+          fontFamily: "'JetBrains Mono', monospace",
+          fontVariantNumeric: 'tabular-nums',
+          fontSize: '1.125rem',
+          fontWeight: 600,
+          color,
+          lineHeight: 1,
+          letterSpacing: '-0.02em',
+        }}
+      >
+        {value ?? '--'}
+      </Typography>
+      {unit && (
+        <Typography
+          sx={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: '0.625rem',
+            fontWeight: 600,
+            textTransform: 'uppercase',
+            letterSpacing: '0.08em',
+            color: 'text.secondary',
+          }}
+        >
+          {unit}
+        </Typography>
+      )}
+    </Box>
+    <Typography
+      sx={{
+        fontSize: '0.625rem',
+        fontWeight: 700,
+        textTransform: 'uppercase',
+        letterSpacing: '0.1em',
+        color: 'text.secondary',
+      }}
+    >
+      {label}
+    </Typography>
+    {subtext && (
+      <Typography
+        sx={{
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: '0.625rem',
+          color: 'text.disabled',
+        }}
+      >
+        {subtext}
+      </Typography>
+    )}
+  </Box>
+);
 
 // Activity type icons
 const activityIcons = {
@@ -418,69 +544,45 @@ const Activity = () => {
 
               {/* Sleep Stages */}
               {(sleepData.deepSleepMinutes != null || sleepData.lightSleepMinutes != null || sleepData.remSleepMinutes != null || sleepData.awakeSleepMinutes != null) && (
-                <Grid container spacing={2}>
+                <Grid container spacing={1.5}>
                   {sleepData.deepSleepMinutes != null && (
                     <Grid item xs={6} sm={3}>
-                      <Box sx={{
-                        textAlign: 'center',
-                        p: 2,
-                        borderRadius: 2,
-                        bgcolor: theme.palette.mode === 'dark' ? 'rgba(99, 102, 241, 0.1)' : 'rgba(99, 102, 241, 0.08)'
-                      }}>
-                        <DeepSleepIcon sx={{ color: '#6366f1', fontSize: 28, mb: 1 }} />
-                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                          {Math.floor(sleepData.deepSleepMinutes / 60)}h {sleepData.deepSleepMinutes % 60}m
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">Deep Sleep</Typography>
-                      </Box>
+                      <SleepStageTile
+                        icon={DeepSleepIcon}
+                        minutes={sleepData.deepSleepMinutes}
+                        label="Deep"
+                        color="#6366f1"
+                      />
                     </Grid>
                   )}
                   {sleepData.lightSleepMinutes != null && (
                     <Grid item xs={6} sm={3}>
-                      <Box sx={{
-                        textAlign: 'center',
-                        p: 2,
-                        borderRadius: 2,
-                        bgcolor: theme.palette.mode === 'dark' ? 'rgba(59, 130, 246, 0.1)' : 'rgba(59, 130, 246, 0.08)'
-                      }}>
-                        <LightSleepIcon sx={{ color: '#3b82f6', fontSize: 28, mb: 1 }} />
-                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                          {Math.floor(sleepData.lightSleepMinutes / 60)}h {sleepData.lightSleepMinutes % 60}m
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">Light Sleep</Typography>
-                      </Box>
+                      <SleepStageTile
+                        icon={LightSleepIcon}
+                        minutes={sleepData.lightSleepMinutes}
+                        label="Light"
+                        color="#3b82f6"
+                      />
                     </Grid>
                   )}
                   {sleepData.remSleepMinutes != null && (
                     <Grid item xs={6} sm={3}>
-                      <Box sx={{
-                        textAlign: 'center',
-                        p: 2,
-                        borderRadius: 2,
-                        bgcolor: theme.palette.mode === 'dark' ? 'rgba(168, 85, 247, 0.1)' : 'rgba(168, 85, 247, 0.08)'
-                      }}>
-                        <RemIcon sx={{ color: '#a855f7', fontSize: 28, mb: 1 }} />
-                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                          {Math.floor(sleepData.remSleepMinutes / 60)}h {sleepData.remSleepMinutes % 60}m
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">REM Sleep</Typography>
-                      </Box>
+                      <SleepStageTile
+                        icon={RemIcon}
+                        minutes={sleepData.remSleepMinutes}
+                        label="REM"
+                        color="#a855f7"
+                      />
                     </Grid>
                   )}
                   {sleepData.awakeSleepMinutes != null && (
                     <Grid item xs={6} sm={3}>
-                      <Box sx={{
-                        textAlign: 'center',
-                        p: 2,
-                        borderRadius: 2,
-                        bgcolor: theme.palette.mode === 'dark' ? 'rgba(251, 191, 36, 0.1)' : 'rgba(251, 191, 36, 0.08)'
-                      }}>
-                        <AwakeIcon sx={{ color: '#fbbf24', fontSize: 28, mb: 1 }} />
-                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                          {Math.floor(sleepData.awakeSleepMinutes / 60)}h {sleepData.awakeSleepMinutes % 60}m
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">Awake</Typography>
-                      </Box>
+                      <SleepStageTile
+                        icon={AwakeIcon}
+                        minutes={sleepData.awakeSleepMinutes}
+                        label="Awake"
+                        color="#fbbf24"
+                      />
                     </Grid>
                   )}
                 </Grid>
@@ -500,70 +602,52 @@ const Activity = () => {
               {/* Health Metrics Grid */}
               {(sleepData.avgSpO2 || sleepData.avgOvernightHrv || sleepData.avgRespiration || sleepData.bodyBatteryChange != null) && (
                 <Box sx={{ mt: 3 }}>
-                  <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 2, textAlign: 'center' }}>
-                    Health Metrics
-                  </Typography>
-                  <Grid container spacing={2}>
-                    {/* SpO2 */}
+                  <Box sx={{ textAlign: 'center', mb: 2 }}>
+                    <SectionLabel sx={{ justifyContent: 'center' }}>Health Metrics</SectionLabel>
+                  </Box>
+                  <Grid container spacing={1.5}>
                     {sleepData.avgSpO2 && (
                       <Grid item xs={6} sm={3}>
-                        <Box sx={{ textAlign: 'center', p: 1.5, borderRadius: 1, bgcolor: theme.palette.mode === 'dark' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(239, 68, 68, 0.08)' }}>
-                          <Typography variant="h6" sx={{ fontWeight: 600, color: '#ef4444' }}>
-                            {sleepData.avgSpO2}%
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">Avg SpO2</Typography>
-                          {sleepData.minSpO2 && (
-                            <Typography variant="caption" display="block" color="text.disabled">
-                              Low: {sleepData.minSpO2}%
-                            </Typography>
-                          )}
-                        </Box>
+                        <MetricTile
+                          label="Avg SpO₂"
+                          value={sleepData.avgSpO2}
+                          unit="%"
+                          color="#ef4444"
+                          subtext={sleepData.minSpO2 ? `Low: ${sleepData.minSpO2}%` : null}
+                        />
                       </Grid>
                     )}
-                    {/* HRV */}
                     {sleepData.avgOvernightHrv && (
                       <Grid item xs={6} sm={3}>
-                        <Box sx={{ textAlign: 'center', p: 1.5, borderRadius: 1, bgcolor: theme.palette.mode === 'dark' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(34, 197, 94, 0.08)' }}>
-                          <Typography variant="h6" sx={{ fontWeight: 600, color: '#22c55e' }}>
-                            {sleepData.avgOvernightHrv} ms
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">HRV</Typography>
-                          {sleepData.hrvStatus && (
-                            <Typography variant="caption" display="block" color="text.disabled">
-                              {sleepData.hrvStatus}
-                            </Typography>
-                          )}
-                        </Box>
+                        <MetricTile
+                          label="HRV"
+                          value={sleepData.avgOvernightHrv}
+                          unit="ms"
+                          color="#22c55e"
+                          subtext={sleepData.hrvStatus || null}
+                        />
                       </Grid>
                     )}
-                    {/* Respiration */}
                     {sleepData.avgRespiration && (
                       <Grid item xs={6} sm={3}>
-                        <Box sx={{ textAlign: 'center', p: 1.5, borderRadius: 1, bgcolor: theme.palette.mode === 'dark' ? 'rgba(14, 165, 233, 0.1)' : 'rgba(14, 165, 233, 0.08)' }}>
-                          <Typography variant="h6" sx={{ fontWeight: 600, color: '#0ea5e9' }}>
-                            {sleepData.avgRespiration}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">Breaths/min</Typography>
-                          {sleepData.minRespiration && sleepData.maxRespiration && (
-                            <Typography variant="caption" display="block" color="text.disabled">
-                              {sleepData.minRespiration}-{sleepData.maxRespiration}
-                            </Typography>
-                          )}
-                        </Box>
+                        <MetricTile
+                          label="Breaths/min"
+                          value={Math.round(sleepData.avgRespiration * 10) / 10}
+                          color="#0ea5e9"
+                          subtext={sleepData.minRespiration && sleepData.maxRespiration
+                            ? `${sleepData.minRespiration}–${sleepData.maxRespiration}`
+                            : null}
+                        />
                       </Grid>
                     )}
-                    {/* Body Battery */}
                     {sleepData.bodyBatteryChange != null && (
                       <Grid item xs={6} sm={3}>
-                        <Box sx={{ textAlign: 'center', p: 1.5, borderRadius: 1, bgcolor: theme.palette.mode === 'dark' ? 'rgba(251, 191, 36, 0.1)' : 'rgba(251, 191, 36, 0.08)' }}>
-                          <Typography variant="h6" sx={{ fontWeight: 600, color: '#fbbf24' }}>
-                            +{sleepData.bodyBatteryChange}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">Body Battery</Typography>
-                          <Typography variant="caption" display="block" color="text.disabled">
-                            Recovery
-                          </Typography>
-                        </Box>
+                        <MetricTile
+                          label="Body Battery"
+                          value={`+${sleepData.bodyBatteryChange}`}
+                          color="#fbbf24"
+                          subtext="Recovery"
+                        />
                       </Grid>
                     )}
                   </Grid>
@@ -572,29 +656,45 @@ const Activity = () => {
 
               {/* Stress & Quality Insights */}
               {(sleepData.avgSleepStress || sleepData.restlessMoments || sleepData.sleepInsight) && (
-                <Box sx={{ mt: 3, p: 2, borderRadius: 1, bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)' }}>
+                <Box
+                  sx={{
+                    mt: 3,
+                    p: 2,
+                    borderRadius: 2,
+                    border: (t) => `1px dashed ${t.palette.divider}`,
+                    backgroundColor: (t) => alpha(t.palette.text.primary, t.palette.mode === 'dark' ? 0.04 : 0.02),
+                  }}
+                >
                   <Grid container spacing={2} alignItems="center">
-                    {sleepData.avgSleepStress && (
+                    {sleepData.avgSleepStress != null && (
                       <Grid item xs={4}>
-                        <Typography variant="caption" color="text.secondary" display="block">Sleep Stress</Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>{sleepData.avgSleepStress}</Typography>
+                        <SectionLabel sx={{ mb: 0.5 }}>Sleep Stress</SectionLabel>
+                        <StatNumber value={sleepData.avgSleepStress} size="body" />
                       </Grid>
                     )}
                     {sleepData.restlessMoments != null && (
                       <Grid item xs={4}>
-                        <Typography variant="caption" color="text.secondary" display="block">Restless</Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>{sleepData.restlessMoments}x</Typography>
+                        <SectionLabel sx={{ mb: 0.5 }}>Restless</SectionLabel>
+                        <StatNumber value={sleepData.restlessMoments} unit="×" size="body" />
                       </Grid>
                     )}
                     {sleepData.awakeCount != null && (
                       <Grid item xs={4}>
-                        <Typography variant="caption" color="text.secondary" display="block">Awakenings</Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>{sleepData.awakeCount}x</Typography>
+                        <SectionLabel sx={{ mb: 0.5 }}>Awakenings</SectionLabel>
+                        <StatNumber value={sleepData.awakeCount} unit="×" size="body" />
                       </Grid>
                     )}
                   </Grid>
                   {sleepData.sleepInsight && (
-                    <Typography variant="caption" color="text.secondary" sx={{ mt: 1.5, display: 'block', fontStyle: 'italic' }}>
+                    <Typography
+                      sx={{
+                        mt: 1.5,
+                        display: 'block',
+                        fontStyle: 'italic',
+                        fontSize: '0.75rem',
+                        color: 'text.secondary',
+                      }}
+                    >
                       {sleepData.sleepInsight.replace(/_/g, ' ').toLowerCase()}
                     </Typography>
                   )}

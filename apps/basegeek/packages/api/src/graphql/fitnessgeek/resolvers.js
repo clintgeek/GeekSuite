@@ -778,11 +778,33 @@ export const resolvers = {
     },
     addFitnessFood: async (_, { input }, { user }) => {
       if (!user) throw new Error('Unauthorized');
-      return new FoodItem({ ...input, user_id: user.id }).save();
+      // GraphQL FitnessFoodInput uses flat serving_size/serving_unit and has no
+      // `source` field. The Mongoose FoodItem model uses nested serving.{size,unit}
+      // and requires `source`. Translate here so the GraphQL schema stays clean.
+      const { serving_size, serving_unit, ...rest } = input;
+      const doc = {
+        ...rest,
+        serving: { size: serving_size, unit: serving_unit || 'g' },
+        source: 'custom',
+        user_id: user.id,
+      };
+      return new FoodItem(doc).save();
     },
     updateFitnessFood: async (_, { id, input }, { user }) => {
       if (!user) throw new Error('Unauthorized');
-      const food = await FoodItem.findOneAndUpdate({ _id: id, user_id: user.id }, { ...input, updated_at: new Date() }, { new: true });
+      const { serving_size, serving_unit, ...rest } = input;
+      const update = {
+        ...rest,
+        ...(serving_size != null || serving_unit != null
+          ? { serving: { size: serving_size, unit: serving_unit || 'g' } }
+          : {}),
+        updated_at: new Date(),
+      };
+      const food = await FoodItem.findOneAndUpdate(
+        { _id: id, user_id: user.id },
+        update,
+        { new: true }
+      );
       if (!food) throw new Error('Food item not found or unauthorized');
       return food;
     },

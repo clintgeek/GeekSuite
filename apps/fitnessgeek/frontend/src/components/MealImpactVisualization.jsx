@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { apiService } from '../services/apiService';
+import { influxService } from '../services/influxService';
 import {
   Box,
   Card,
@@ -238,9 +239,9 @@ export default function MealImpactVisualization({ date }) {
       setError(null);
 
       try {
-        // Fetch intraday health data and meals in parallel
+        // Fetch intraday health data (direct REST) and meals (GraphQL) in parallel
         const [intradayResponse, mealsResponse] = await Promise.all([
-          apiService.get(`/influx/intraday/${date}/${date}`),
+          influxService.getIntraday(date, date),
           apiService.get(`/logs?date=${date}`)
         ]);
 

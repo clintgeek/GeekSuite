@@ -3,7 +3,6 @@ import {
   Box,
   Container,
   Alert,
-  CircularProgress as Spinner,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -20,7 +19,7 @@ import QuickActionButton from '../components/Dashboard/QuickActionButton.jsx';
 import StatCard from '../components/Dashboard/StatCard.jsx';
 import MealCard from '../components/Dashboard/MealCard.jsx';
 import AIInsightsCard from '../components/Dashboard/AIInsightsCard.jsx';
-import { Surface, SectionLabel, DisplayHeading } from '../components/primitives';
+import { Surface, SectionLabel, DisplayHeading, SurfaceSkeleton } from '../components/primitives';
 
 // Import services
 import { fitnessGeekService } from '../services/fitnessGeekService.js';
@@ -336,16 +335,27 @@ const DashboardNew = () => {
 
   if (loading) {
     return (
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          minHeight: '60vh',
-        }}
-      >
-        <Spinner size={60} />
-      </Box>
+      <Container maxWidth="lg" sx={{ py: { xs: 2, sm: 3, md: 4 }, px: { xs: 2, sm: 3 } }}>
+        <Box sx={{ mb: { xs: 2.5, md: 3 } }}>
+          <SectionLabel sx={{ mb: 0.75 }}>Today's Log</SectionLabel>
+          <DisplayHeading size="page">{greeting}.</DisplayHeading>
+        </Box>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+          <SurfaceSkeleton variant="ticket" rows={4} showHeader={false} height={280} />
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
+              gap: 1.5,
+            }}
+          >
+            {[0, 1, 2, 3].map((i) => (
+              <SurfaceSkeleton key={i} rows={1} showHeader={false} />
+            ))}
+          </Box>
+          <SurfaceSkeleton rows={4} showHeader />
+        </Box>
+      </Container>
     );
   }
 
@@ -393,6 +403,7 @@ const DashboardNew = () => {
             trend={dashboardData.stats.weight.trend}
             trendValue={dashboardData.stats.weight.trendValue}
             color="#0D9488"
+            delay={40}
           />
           <StatCard
             icon={BPIcon}
@@ -402,6 +413,7 @@ const DashboardNew = () => {
             trend={dashboardData.stats.bloodPressure.trend}
             trendValue={dashboardData.stats.bloodPressure.trendValue}
             color="#ef4444"
+            delay={80}
           />
           <StatCard
             icon={StepsIcon}
@@ -410,6 +422,7 @@ const DashboardNew = () => {
             trend={dashboardData.stats.steps.trend}
             trendValue={dashboardData.stats.steps.trendValue}
             color="#10b981"
+            delay={120}
           />
           <StatCard
             icon={StreakIcon}
@@ -417,6 +430,7 @@ const DashboardNew = () => {
             value={dashboardData.stats.streak.value}
             unit="days"
             color="#f59e0b"
+            delay={160}
           />
         </Box>
 
