@@ -80,7 +80,7 @@ class BaseGeekAIService {
 
     const requestUrl = `${this.baseGeekUrl}/openai/v1/chat/completions`;
     const requestBody = {
-      model: 'basegeek-free',
+      model: 'basegeek-app',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: prompt }
@@ -535,7 +535,7 @@ Examples:
 
     const requestUrl = `${this.baseGeekUrl}/openai/v1/chat/completions`;
     const requestBody = {
-      model: 'basegeek-rotation',
+      model: 'basegeek-app',
       messages,
       temperature: 0.7,
       max_tokens: 2000,

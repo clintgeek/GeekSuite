@@ -17,10 +17,9 @@ class FitnessGoalService {
         prompt,
         config: {
           ...config,
-          appName: 'fitnessGeek',
-          // Use Claude for nutrition planning - better reasoning and health awareness
-          provider: 'anthropic',
-          fallbackOrder: ['anthropic', 'groq', 'gemini', 'together']
+          appName: 'fitnessGeek:mealPlan'
+          // Provider/model/fallback controlled server-side via AIAppConfig
+          // Default: anthropic for reasoning, configurable in baseGeek admin UI
         }
       }, {
         headers: {

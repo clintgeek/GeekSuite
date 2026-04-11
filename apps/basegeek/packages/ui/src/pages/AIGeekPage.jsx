@@ -43,12 +43,15 @@ import {
   Refresh as RefreshIcon,
   Sync as SyncIcon,
   Edit as EditIcon,
-  AttachMoney as MoneyIcon
+  AttachMoney as MoneyIcon,
+  Apps as AppsIcon,
+  Add as AddIcon,
+  Delete as DeleteIcon
 } from '@mui/icons-material';
 import useSharedAuthStore from '../store/sharedAuthStore';
 import { apolloClient } from '../apolloClient';
-import { GET_AI_CONFIG, GET_AI_STATS, GET_AI_DIRECTOR_MODELS, GET_AI_USAGE } from '../graphql/queries';
-import { SAVE_AI_CONFIG, TEST_AI_PROVIDER, RESET_AI_STATS, SEED_DIRECTOR_PRICING, SEED_DIRECTOR_FREE_TIER, SYNC_PROVIDER_MODELS, UPDATE_MODEL_PRICING, UPDATE_MODEL_FREE_TIER } from '../graphql/mutations';
+import { GET_AI_CONFIG, GET_AI_STATS, GET_AI_DIRECTOR_MODELS, GET_AI_USAGE, GET_AI_APP_CONFIGS } from '../graphql/queries';
+import { SAVE_AI_CONFIG, TEST_AI_PROVIDER, RESET_AI_STATS, SEED_DIRECTOR_PRICING, SEED_DIRECTOR_FREE_TIER, SYNC_PROVIDER_MODELS, UPDATE_MODEL_PRICING, UPDATE_MODEL_FREE_TIER, SAVE_AI_APP_CONFIG, DELETE_AI_APP_CONFIG } from '../graphql/mutations';
 
 
 const AIGeekPage = () => {
@@ -97,8 +100,15 @@ const AIGeekPage = () => {
 
   // Model management state
   const [syncingProvider, setSyncingProvider] = useState(null);
-  const [editingPricing, setEditingPricing] = useState(null); // { provider, modelId, inputPrice, outputPrice }
-  const [editingFreeTier, setEditingFreeTier] = useState(null); // { provider, modelId, isFree, freeLimits, notes }
+  const [editingPricing, setEditingPricing] = useState(null);
+  const [editingFreeTier, setEditingFreeTier] = useState(null);
+
+  // App routing state
+  const [appConfigs, setAppConfigs] = useState([]);
+  const [discoveredApps, setDiscoveredApps] = useState([]);
+  const [appConfigsLoading, setAppConfigsLoading] = useState(false);
+  const [editingApp, setEditingApp] = useState(null);
+  const [newAppName, setNewAppName] = useState('');
 
   useEffect(() => {
     console.log('AIGeekPage useEffect running');
@@ -107,6 +117,7 @@ const AIGeekPage = () => {
       loadStatistics();
       loadDirectorData(); // Load AI Director data on mount
       loadUsageData(); // Load usage tracking data on mount
+      loadAppConfigs(); // Load app routing configs on mount
     }
   }, [token]);
 
@@ -316,6 +327,76 @@ const AIGeekPage = () => {
     }
   };
 
+  // App Routing handlers
+  const loadAppConfigs = async () => {
+    try {
+      setAppConfigsLoading(true);
+      const { data } = await apolloClient.query({ query: GET_AI_APP_CONFIGS, fetchPolicy: 'network-only' });
+      if (data?.aiAppConfigs) {
+        setAppConfigs(data.aiAppConfigs.configs || []);
+        setDiscoveredApps(data.aiAppConfigs.discoveredApps || []);
+      }
+    } catch (error) {
+      setError(`Failed to load app configs: ${error.message}`);
+    } finally {
+      setAppConfigsLoading(false);
+    }
+  };
+
+  const saveAppConfig = async () => {
+    if (!editingApp) return;
+    try {
+      setError('');
+      await apolloClient.mutate({
+        mutation: SAVE_AI_APP_CONFIG,
+        variables: {
+          appName: editingApp.appName,
+          config: {
+            displayName: editingApp.displayName || '',
+            tier: editingApp.tier || 'free',
+            provider: editingApp.provider || null,
+            model: editingApp.model || null,
+            fallbackOrder: editingApp.fallbackOrder || [],
+            maxTokens: editingApp.maxTokens ? parseInt(editingApp.maxTokens) : null,
+            temperature: editingApp.temperature != null && editingApp.temperature !== '' ? parseFloat(editingApp.temperature) : null,
+            notes: editingApp.notes || '',
+            enabled: editingApp.enabled !== false
+          }
+        }
+      });
+      setSuccess(`App config saved for ${editingApp.appName}`);
+      setEditingApp(null);
+      await loadAppConfigs();
+    } catch (error) {
+      setError(`Failed to save app config: ${error.message}`);
+    }
+  };
+
+  const deleteAppConfig = async (appName) => {
+    try {
+      await apolloClient.mutate({ mutation: DELETE_AI_APP_CONFIG, variables: { appName } });
+      setSuccess(`App config deleted for ${appName}`);
+      await loadAppConfigs();
+    } catch (error) {
+      setError(`Failed to delete app config: ${error.message}`);
+    }
+  };
+
+  const addDiscoveredApp = (appName) => {
+    setEditingApp({
+      appName,
+      displayName: appName,
+      tier: 'free',
+      provider: null,
+      model: null,
+      fallbackOrder: [],
+      maxTokens: null,
+      temperature: null,
+      notes: '',
+      enabled: true
+    });
+  };
+
   const formatCost = (cost) => {
     if (cost === undefined || cost === null) {
       return '$0.0000';
@@ -374,6 +455,7 @@ const AIGeekPage = () => {
                         <Tab label="Usage & Cost" icon={<AnalyticsIcon />} />
                         <Tab label="Free Tier Monitoring" icon={<WarningIcon />} />
                         <Tab label="AI Catalog" icon={<KeyIcon />} />
+                        <Tab label="App Routing" icon={<AppsIcon />} />
                       </Tabs>
 
       {activeTab === 0 && (
@@ -902,6 +984,263 @@ const AIGeekPage = () => {
           </CardContent>
         </Card>
       )}
+
+      {activeTab === 4 && (
+        <Card>
+          <CardContent>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+              <Typography variant="h6">App Routing — Server-Side Model Configuration</Typography>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Button
+                  variant="outlined"
+                  startIcon={<RefreshIcon />}
+                  onClick={loadAppConfigs}
+                  disabled={appConfigsLoading}
+                >
+                  Refresh
+                </Button>
+              </Box>
+            </Box>
+
+            <Alert severity="info" sx={{ mb: 3 }}>
+              Apps using <code>model: "basegeek-app"</code> or <code>useAppConfig: true</code> will be routed
+              according to these settings. Apps that just identify themselves via <code>appName</code> without
+              specifying a provider will also be routed here automatically.
+            </Alert>
+
+            {appConfigsLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}><CircularProgress /></Box>
+            ) : (
+              <>
+                {/* Discovered but unconfigured apps */}
+                {discoveredApps.length > 0 && (
+                  <Box sx={{ mb: 3 }}>
+                    <Typography variant="subtitle2" sx={{ mb: 1 }}>Discovered Apps (unconfigured)</Typography>
+                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                      {discoveredApps.map(appName => (
+                        <Chip
+                          key={appName}
+                          label={appName}
+                          icon={<AddIcon />}
+                          onClick={() => addDiscoveredApp(appName)}
+                          color="info"
+                          variant="outlined"
+                        />
+                      ))}
+                    </Box>
+                  </Box>
+                )}
+
+                {/* Add new app */}
+                <Box sx={{ display: 'flex', gap: 1, mb: 3, alignItems: 'center' }}>
+                  <TextField
+                    size="small"
+                    label="New App Name"
+                    value={newAppName}
+                    onChange={(e) => setNewAppName(e.target.value)}
+                    placeholder="e.g. myNewApp"
+                  />
+                  <Button
+                    variant="outlined"
+                    startIcon={<AddIcon />}
+                    disabled={!newAppName.trim()}
+                    onClick={() => {
+                      addDiscoveredApp(newAppName.trim());
+                      setNewAppName('');
+                    }}
+                  >
+                    Add App
+                  </Button>
+                </Box>
+
+                {/* Configured apps */}
+                <Grid container spacing={2}>
+                  {appConfigs.map((app) => (
+                    <Grid item xs={12} md={6} key={app.appName}>
+                      <Card variant="outlined">
+                        <CardContent>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                            <Box>
+                              <Typography variant="h6">{app.displayName || app.appName}</Typography>
+                              {app.displayName && app.displayName !== app.appName && (
+                                <Typography variant="caption" color="text.secondary">{app.appName}</Typography>
+                              )}
+                            </Box>
+                            <Box sx={{ display: 'flex', gap: 0.5 }}>
+                              <Chip
+                                label={app.tier}
+                                size="small"
+                                color={app.tier === 'free' ? 'success' : app.tier === 'specific' ? 'primary' : 'default'}
+                              />
+                              <Chip
+                                label={app.enabled ? 'Active' : 'Disabled'}
+                                size="small"
+                                color={app.enabled ? 'success' : 'default'}
+                                variant="outlined"
+                              />
+                              {app.autoDiscovered && (
+                                <Chip label="Auto" size="small" variant="outlined" />
+                              )}
+                            </Box>
+                          </Box>
+
+                          {app.tier === 'specific' && (
+                            <Typography variant="body2" sx={{ mb: 1 }}>
+                              {app.provider}/{app.model}
+                            </Typography>
+                          )}
+                          {app.tier === 'free' && (
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                              Uses free-tier rotation
+                            </Typography>
+                          )}
+                          {app.tier === 'rotation' && (
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                              Uses all-provider rotation
+                            </Typography>
+                          )}
+
+                          {app.notes && (
+                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                              {app.notes}
+                            </Typography>
+                          )}
+
+                          {app.lastSeen && (
+                            <Typography variant="caption" color="text.secondary" display="block">
+                              Last seen: {new Date(parseInt(app.lastSeen)).toLocaleString()}
+                            </Typography>
+                          )}
+
+                          <Box sx={{ mt: 1, display: 'flex', gap: 1 }}>
+                            <Button size="small" startIcon={<EditIcon />} onClick={() => setEditingApp({ ...app })}>
+                              Edit
+                            </Button>
+                            <Button size="small" color="error" startIcon={<DeleteIcon />} onClick={() => deleteAppConfig(app.appName)}>
+                              Delete
+                            </Button>
+                          </Box>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  ))}
+                </Grid>
+
+                {appConfigs.length === 0 && !appConfigsLoading && (
+                  <Box sx={{ textAlign: 'center', py: 4 }}>
+                    <Typography color="text.secondary">
+                      No app configs yet. Apps will be auto-discovered when they connect, or add one manually above.
+                    </Typography>
+                  </Box>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* App Config Edit Dialog */}
+      <Dialog open={!!editingApp} onClose={() => setEditingApp(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>{editingApp?.appName ? `Configure — ${editingApp.appName}` : 'New App Config'}</DialogTitle>
+        <DialogContent>
+          <TextField
+            fullWidth
+            label="Display Name"
+            value={editingApp?.displayName ?? ''}
+            onChange={(e) => setEditingApp(prev => ({ ...prev, displayName: e.target.value }))}
+            margin="normal"
+          />
+
+          <TextField
+            fullWidth
+            select
+            label="Routing Tier"
+            value={editingApp?.tier ?? 'free'}
+            onChange={(e) => setEditingApp(prev => ({ ...prev, tier: e.target.value }))}
+            margin="normal"
+            SelectProps={{ native: true }}
+          >
+            <option value="free">Free — free-tier models only</option>
+            <option value="rotation">Rotation — all providers</option>
+            <option value="specific">Specific — pinned provider/model</option>
+          </TextField>
+
+          {editingApp?.tier === 'specific' && (
+            <>
+              <TextField
+                fullWidth
+                select
+                label="Provider"
+                value={editingApp?.provider ?? ''}
+                onChange={(e) => setEditingApp(prev => ({ ...prev, provider: e.target.value }))}
+                margin="normal"
+                SelectProps={{ native: true }}
+              >
+                <option value="">Select provider...</option>
+                {Object.keys(config).map(p => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </TextField>
+              <TextField
+                fullWidth
+                label="Model ID"
+                value={editingApp?.model ?? ''}
+                onChange={(e) => setEditingApp(prev => ({ ...prev, model: e.target.value }))}
+                margin="normal"
+                helperText="Exact model ID from the AI Catalog"
+              />
+            </>
+          )}
+
+          <Grid container spacing={2} sx={{ mt: 0 }}>
+            <Grid item xs={6}>
+              <TextField
+                fullWidth
+                label="Max Tokens (optional)"
+                type="number"
+                value={editingApp?.maxTokens ?? ''}
+                onChange={(e) => setEditingApp(prev => ({ ...prev, maxTokens: e.target.value }))}
+                size="small"
+              />
+            </Grid>
+            <Grid item xs={6}>
+              <TextField
+                fullWidth
+                label="Temperature (optional)"
+                type="number"
+                inputProps={{ step: '0.1', min: '0', max: '2' }}
+                value={editingApp?.temperature ?? ''}
+                onChange={(e) => setEditingApp(prev => ({ ...prev, temperature: e.target.value }))}
+                size="small"
+              />
+            </Grid>
+          </Grid>
+
+          <TextField
+            fullWidth
+            label="Notes"
+            value={editingApp?.notes ?? ''}
+            onChange={(e) => setEditingApp(prev => ({ ...prev, notes: e.target.value }))}
+            margin="normal"
+            multiline
+            rows={2}
+          />
+
+          <FormControlLabel
+            control={
+              <Switch
+                checked={editingApp?.enabled !== false}
+                onChange={(e) => setEditingApp(prev => ({ ...prev, enabled: e.target.checked }))}
+              />
+            }
+            label="Enabled"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditingApp(null)}>Cancel</Button>
+          <Button variant="contained" onClick={saveAppConfig}>Save</Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Pricing Edit Dialog */}
       <Dialog open={!!editingPricing} onClose={() => setEditingPricing(null)} maxWidth="sm" fullWidth>

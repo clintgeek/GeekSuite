@@ -35,6 +35,10 @@ export const typeDefs = gql`
     aiStats: JSON
     aiDirectorModels: JSON
     aiUsage(provider: String!): JSON
+
+    # App Routing
+    aiAppConfigs: JSON
+    aiAppConfig(appName: String!): JSON
   }
 
   extend type Mutation {
@@ -57,5 +61,9 @@ export const typeDefs = gql`
     deleteModelPricing(provider: String!, modelId: String!): Boolean
     updateModelFreeTier(provider: String!, modelId: String!, isFree: Boolean!, freeLimits: JSON, notes: String): JSON
     deleteModelFreeTier(provider: String!, modelId: String!): Boolean
+
+    # App Routing
+    saveAIAppConfig(appName: String!, config: JSON!): JSON
+    deleteAIAppConfig(appName: String!): Boolean
   }
 `;

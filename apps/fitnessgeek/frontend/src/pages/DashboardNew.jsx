@@ -1,13 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import {
   Box,
-  Typography,
   Container,
-  Card,
-  CardContent,
   Alert,
   CircularProgress as Spinner,
-  useTheme,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -19,12 +15,12 @@ import {
 } from '@mui/icons-material';
 
 // Import new components
-import CalorieBar from '../components/Dashboard/CalorieBar.jsx';
-import MacroBar from '../components/Dashboard/MacroBar.jsx';
+import DailyTicket from '../components/Dashboard/DailyTicket.jsx';
 import QuickActionButton from '../components/Dashboard/QuickActionButton.jsx';
 import StatCard from '../components/Dashboard/StatCard.jsx';
 import MealCard from '../components/Dashboard/MealCard.jsx';
 import AIInsightsCard from '../components/Dashboard/AIInsightsCard.jsx';
+import { Surface, SectionLabel, DisplayHeading } from '../components/primitives';
 
 // Import services
 import { fitnessGeekService } from '../services/fitnessGeekService.js';
@@ -36,6 +32,7 @@ import { streakService } from '../services/streakService.js';
 const DashboardNew = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [removingLogIds, setRemovingLogIds] = useState(new Set());
   const [dashboardData, setDashboardData] = useState({
     calories: { consumed: 0, goal: 2000, remaining: 2000 },
     macros: {
@@ -56,8 +53,6 @@ const DashboardNew = () => {
       { type: 'dinner', foods: [], totalCalories: 0 },
     ],
   });
-
-  const theme = useTheme();
 
   useEffect(() => {
     loadDashboardData();
@@ -108,10 +103,15 @@ const DashboardNew = () => {
         const mealType = log.meal_type || 'snack';
         if (logsByMeal[mealType]) {
           const foodItem = log.food_item_id || log.food_item || {};
-          const calories = (log.nutrition?.calories_per_serving || foodItem.nutrition?.calories_per_serving || 0) * (log.servings || 1);
+          const perServing = log.nutrition?.calories_per_serving || foodItem.nutrition?.calories_per_serving || 0;
+          const servings = log.servings || 1;
           logsByMeal[mealType].push({
+            logId: log._id || log.id,
             name: foodItem.name || 'Unknown food',
-            calories: Math.round(calories),
+            brand: foodItem.brand || '',
+            servings,
+            caloriesPerServing: Math.round(perServing),
+            calories: Math.round(perServing * servings),
           });
         }
       });
@@ -307,6 +307,33 @@ const DashboardNew = () => {
     }
   };
 
+  // Remove a food log directly from the dashboard
+  const handleRemoveFood = async (logId) => {
+    if (!logId) return;
+    // Mark as removing so the row fades out
+    setRemovingLogIds((prev) => new Set(prev).add(logId));
+    try {
+      await fitnessGeekService.deleteFoodLog(logId);
+      // Give the fade-out a beat to play, then reload
+      setTimeout(() => {
+        loadDashboardData();
+        setRemovingLogIds((prev) => {
+          const next = new Set(prev);
+          next.delete(logId);
+          return next;
+        });
+      }, 220);
+    } catch (err) {
+      console.error('Failed to remove food log:', err);
+      setError('Could not remove that item. Try again.');
+      setRemovingLogIds((prev) => {
+        const next = new Set(prev);
+        next.delete(logId);
+        return next;
+      });
+    }
+  };
+
   if (loading) {
     return (
       <Box
@@ -324,21 +351,10 @@ const DashboardNew = () => {
 
   return (
     <Container maxWidth="lg" sx={{ py: { xs: 2, sm: 3, md: 4 }, px: { xs: 2, sm: 3 } }}>
-      {/* Header */}
-      <Box sx={{ mb: { xs: 3, md: 4 } }}>
-        <Typography
-          variant="h3"
-          sx={{
-            fontWeight: 700,
-            mb: 0.5,
-            fontSize: { xs: '1.75rem', sm: '2.25rem', md: '2.5rem' }
-          }}
-        >
-          {greeting}
-        </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}>
-          Here's your nutrition summary for today
-        </Typography>
+      {/* Editorial header — serif greeting */}
+      <Box sx={{ mb: { xs: 2.5, md: 3 } }}>
+        <SectionLabel sx={{ mb: 0.75 }}>Today's Log</SectionLabel>
+        <DisplayHeading size="page">{greeting}.</DisplayHeading>
       </Box>
 
       {error && (
@@ -350,22 +366,16 @@ const DashboardNew = () => {
       {/* Dashboard Grid */}
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
 
-        {/* Calorie Bar — full width hero */}
-        <Card
-          sx={{
-            borderRadius: 2.5,
-            border: `1px solid ${theme.palette.divider}`,
-            boxShadow: 'none',
-          }}
-        >
-          <CardContent sx={{ px: { xs: 1.5, sm: 2.5 }, py: 1.25, '&:last-child': { pb: 1.25 } }}>
-            <CalorieBar
-              consumed={dashboardData.calories.consumed}
-              goal={dashboardData.calories.goal}
-              remaining={dashboardData.calories.remaining}
-            />
-          </CardContent>
-        </Card>
+        {/* ─── Daily Ticket — the editorial hero ─── */}
+        <DailyTicket
+          consumed={dashboardData.calories.consumed}
+          goal={dashboardData.calories.goal}
+          remaining={dashboardData.calories.remaining}
+          greeting="Today's Intake"
+          protein={dashboardData.macros.protein}
+          carbs={dashboardData.macros.carbs}
+          fat={dashboardData.macros.fat}
+        />
 
         {/* Stat Cards — 4-up row */}
         <Box
@@ -410,123 +420,56 @@ const DashboardNew = () => {
           />
         </Box>
 
-        {/* Quick Actions + Macros — side by side on desktop */}
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', md: '1fr 2fr' },
-            gap: 2,
-          }}
-        >
-          {/* Quick Actions */}
-          <Card
-            sx={{
-              borderRadius: 2.5,
-              border: `1px solid ${theme.palette.divider}`,
-              boxShadow: 'none',
-            }}
-          >
-            <CardContent sx={{ px: 2, py: 1.5, '&:last-child': { pb: 1.5 } }}>
-              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1 }}>
-                <QuickActionButton
-                  icon={AddIcon}
-                  label="Food"
-                  to="/food-log"
-                  variant="contained"
-                  compact
-                />
-                <QuickActionButton
-                  icon={WeightIcon}
-                  label="Weight"
-                  to="/weight"
-                  variant="outlined"
-                  compact
-                />
-                <QuickActionButton
-                  icon={BPIcon}
-                  label="BP"
-                  to="/blood-pressure"
-                  variant="outlined"
-                  compact
-                />
-                <QuickActionButton
-                  icon={MedsIcon}
-                  label="Meds"
-                  to="/medications"
-                  variant="outlined"
-                  compact
-                />
-              </Box>
-            </CardContent>
-          </Card>
-
-          {/* Macros */}
-          <Card
-            sx={{
-              borderRadius: 2.5,
-              border: `1px solid ${theme.palette.divider}`,
-              boxShadow: 'none',
-            }}
-          >
-            <CardContent sx={{ px: { xs: 2, sm: 3 }, py: 2, '&:last-child': { pb: 2 } }}>
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, gap: 3 }}>
-                <MacroBar
-                  label="Protein"
-                  current={dashboardData.macros.protein.current}
-                  goal={dashboardData.macros.protein.goal}
-                  unit="g"
-                  color="#10b981"
-                />
-                <MacroBar
-                  label="Carbs"
-                  current={dashboardData.macros.carbs.current}
-                  goal={dashboardData.macros.carbs.goal}
-                  unit="g"
-                  color="#f59e0b"
-                />
-                <MacroBar
-                  label="Fat"
-                  current={dashboardData.macros.fat.current}
-                  goal={dashboardData.macros.fat.goal}
-                  unit="g"
-                  color="#ef4444"
-                />
-              </Box>
-            </CardContent>
-          </Card>
-        </Box>
+        {/* Quick Actions */}
+        <Surface sx={{ py: 1.5 }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1 }}>
+            <QuickActionButton
+              icon={AddIcon}
+              label="Food"
+              to="/food-log"
+              variant="contained"
+              compact
+            />
+            <QuickActionButton
+              icon={WeightIcon}
+              label="Weight"
+              to="/weight"
+              variant="outlined"
+              compact
+            />
+            <QuickActionButton
+              icon={BPIcon}
+              label="BP"
+              to="/blood-pressure"
+              variant="outlined"
+              compact
+            />
+            <QuickActionButton
+              icon={MedsIcon}
+              label="Meds"
+              to="/medications"
+              variant="outlined"
+              compact
+            />
+          </Box>
+        </Surface>
 
         {/* Today's Meals */}
-        <Card
-          sx={{
-            borderRadius: 2.5,
-            border: `1px solid ${theme.palette.divider}`,
-            boxShadow: 'none',
-          }}
-        >
-          <CardContent sx={{ px: { xs: 1.5, sm: 2.5 }, py: 1.5, '&:last-child': { pb: 1.5 } }}>
-            <Typography
-              sx={{
-                fontWeight: 600,
-                fontSize: '0.625rem',
-                textTransform: 'uppercase',
-                letterSpacing: '0.06em',
-                color: theme.palette.text.secondary,
-                mb: 0.75,
-              }}
-            >
-              Today's Meals
-            </Typography>
-            {dashboardData.meals.map((meal, index) => (
-              <MealCard
-                key={index}
-                mealType={meal.type}
-                foods={meal.foods}
-                totalCalories={meal.totalCalories}
-              />
-            ))}
-          </CardContent>
-        </Card>
+        <Surface sx={{ py: 1.5 }}>
+          <Box sx={{ mb: 1 }}>
+            <SectionLabel>Today's Meals</SectionLabel>
+          </Box>
+          {dashboardData.meals.map((meal, index) => (
+            <MealCard
+              key={index}
+              mealType={meal.type}
+              foods={meal.foods}
+              totalCalories={meal.totalCalories}
+              onRemoveFood={handleRemoveFood}
+              removingIds={removingLogIds}
+            />
+          ))}
+        </Surface>
 
         {/* AI Insights */}
         <AIInsightsCard />

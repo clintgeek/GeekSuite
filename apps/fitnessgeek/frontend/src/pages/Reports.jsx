@@ -4,23 +4,18 @@ import {
   Box,
   Typography,
   Grid,
-  Card,
-  CardContent,
   ToggleButtonGroup,
   ToggleButton,
   Button,
   CircularProgress,
   Alert,
   Chip,
-  Divider,
   LinearProgress,
-  Table,
-  TableBody,
-  TableHead,
-  TableRow,
-  TableCell,
   useTheme
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
+import DayRibbon from '../components/Reports/DayRibbon.jsx';
+import { Surface, SectionLabel, DisplayHeading, StatNumber } from '../components/primitives';
 import {
   Download as DownloadIcon,
   Insights as InsightsIcon,
@@ -183,12 +178,11 @@ const Reports = () => {
 
   return (
     <Container maxWidth="xl" sx={{ py: 4, px: { xs: 2, md: 4 } }}>
-      <Box sx={{ mb: 4, display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, alignItems: { md: 'center' } }}>
-        <Box>
-          <Typography variant="h4" sx={{ fontWeight: 700 }}>
-            Reports & Trends
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
+      <Box sx={{ mb: 4, display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, alignItems: { md: 'flex-end' } }}>
+        <Box sx={{ flex: 1 }}>
+          <SectionLabel sx={{ mb: 0.75 }}>Insight · Reports</SectionLabel>
+          <DisplayHeading size="page">Reports & Trends</DisplayHeading>
+          <Typography sx={{ color: 'text.secondary', mt: 0.5, fontSize: '0.9375rem' }}>
             Deep dive into your food logs, macro patterns, and AI insights for the past {range} days.
           </Typography>
         </Box>
@@ -223,146 +217,195 @@ const Reports = () => {
         </Box>
       ) : (
         <Box>
-          {/* Overview Metrics */}
-          <Grid container spacing={3} sx={{ mb: 4 }}>
-            {overview && (
-              <>
-                {Object.entries(overview.averages || {}).map(([key, value]) => (
-                  <Grid item xs={12} sm={6} md={2} key={key}>
-                    <Card sx={{ borderRadius: 3, height: '100%' }}>
-                      <CardContent sx={{ p: 2.5 }}>
-                        <Typography variant="subtitle2" color="text.secondary">
-                          {metricLabels[key] || key}
-                        </Typography>
-                        <Typography variant="h5" sx={{ fontWeight: 700 }}>
-                          {Math.round(value)}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          avg / day
-                        </Typography>
-                      </CardContent>
-                    </Card>
-                  </Grid>
-                ))}
-              </>
-            )}
+          {/* Average metrics — compact 6-up grid of Surfaces with StatNumber */}
+          <Grid container spacing={2} sx={{ mb: 4 }}>
+            {overview && Object.entries(overview.averages || {}).map(([key, value]) => (
+              <Grid item xs={6} sm={4} md={2} key={key}>
+                <Surface sx={{ height: '100%' }}>
+                  <SectionLabel sx={{ mb: 1 }}>{metricLabels[key] || key}</SectionLabel>
+                  <StatNumber value={Math.round(value)} size="display" />
+                  <Typography
+                    sx={{
+                      fontSize: '0.625rem',
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.12em',
+                      color: 'text.secondary',
+                      mt: 0.75,
+                    }}
+                  >
+                    avg / day
+                  </Typography>
+                </Surface>
+              </Grid>
+            ))}
           </Grid>
+
+          {/* Daily Totals — horizontal ribbon of day cards */}
+          <Box sx={{ mb: 3 }}>
+            <DayRibbon
+              daily={overview?.daily || []}
+              calorieTarget={overview?.targets?.calories || overview?.calorieGoal}
+              macroTargets={{
+                protein: overview?.targets?.protein || overview?.proteinGoal,
+                carbs: overview?.targets?.carbs || overview?.carbsGoal,
+                fat: overview?.targets?.fat || overview?.fatGoal,
+                fiber: overview?.targets?.fiber || overview?.fiberGoal,
+              }}
+              rangeLabel={
+                overview?.range
+                  ? `${overview.range.start} → ${overview.range.end}`
+                  : null
+              }
+            />
+          </Box>
 
           <Grid container spacing={3}>
             <Grid item xs={12} md={8}>
-              <Card sx={{ borderRadius: 3, mb: 3 }}>
-                <CardContent sx={{ p: SECTION_PADDING }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                      Daily Totals
-                    </Typography>
-                    {overview?.range && (
-                      <Typography variant="caption" color="text.secondary">
-                        {overview.range.start} – {overview.range.end}
+
+              {/* Meal Breakdown */}
+              <Surface sx={{ mb: 3 }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-end',
+                    mb: 2.5,
+                    gap: 2,
+                  }}
+                >
+                  <Box>
+                    <SectionLabel sx={{ mb: 0.75 }}>Meal Breakdown</SectionLabel>
+                    <DisplayHeading size="card">By Time of Day</DisplayHeading>
+                  </Box>
+                  <Chip
+                    icon={<MealIcon />}
+                    label="Meals logged"
+                    size="small"
+                    sx={{ flexShrink: 0 }}
+                  />
+                </Box>
+                <Grid container spacing={1.5}>
+                  {overview?.meals && Object.entries(overview.meals).map(([meal, stats]) => (
+                    <Grid item xs={6} sm={3} key={meal}>
+                      <Surface variant="inset" sx={{ py: 1.5, px: 1.5, height: '100%' }}>
+                        <SectionLabel sx={{ mb: 0.75, textTransform: 'capitalize' }}>
+                          {meal}
+                        </SectionLabel>
+                        <StatNumber
+                          value={Math.round(stats.calories || 0)}
+                          unit="kcal"
+                          size="display"
+                        />
+                        <Typography
+                          sx={{
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontVariantNumeric: 'tabular-nums',
+                            fontSize: '0.6875rem',
+                            color: 'text.secondary',
+                            mt: 0.75,
+                          }}
+                        >
+                          {stats.count || 0} entries · {Math.round(stats.protein || 0)}g P
+                        </Typography>
+                      </Surface>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Surface>
+
+              {/* Goal Compliance */}
+              <Surface>
+                <Box sx={{ mb: 2.5 }}>
+                  <SectionLabel sx={{ mb: 0.75 }}>Goal Compliance</SectionLabel>
+                  <DisplayHeading size="card">On-Target Days</DisplayHeading>
+                </Box>
+                {goalComplianceEntries.length ? goalComplianceEntries.map(([metric, detail]) => (
+                  <Box key={metric} sx={{ mb: 2, '&:last-child': { mb: 0 } }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75 }}>
+                      <Typography sx={{ fontWeight: 600, fontSize: '0.875rem', textTransform: 'capitalize' }}>
+                        {metricLabels[metric] || metric}
                       </Typography>
-                    )}
-                  </Box>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Date</TableCell>
-                        <TableCell align="right">Calories</TableCell>
-                        <TableCell align="right">Protein</TableCell>
-                        <TableCell align="right">Carbs</TableCell>
-                        <TableCell align="right">Fat</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {overview?.daily?.length ? overview.daily.map((day) => (
-                        <TableRow key={day.date}>
-                          <TableCell>{day.date}</TableCell>
-                          <TableCell align="right">{Math.round(day.calories)}</TableCell>
-                          <TableCell align="right">{Math.round(day.protein)}</TableCell>
-                          <TableCell align="right">{Math.round(day.carbs)}</TableCell>
-                          <TableCell align="right">{Math.round(day.fat)}</TableCell>
-                        </TableRow>
-                      )) : (
-                        <TableRow>
-                          <TableCell colSpan={5} align="center" sx={{ py: 3 }}>
-                            No food logs in this range.
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-
-              <Card sx={{ borderRadius: 3, mb: 3 }}>
-                <CardContent sx={{ p: SECTION_PADDING }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                      Meal Breakdown
-                    </Typography>
-                    <Chip icon={<MealIcon />} label="Meals logged" size="small" />
-                  </Box>
-                  <Grid container spacing={2}>
-                    {overview?.meals && Object.entries(overview.meals).map(([meal, stats]) => (
-                      <Grid item xs={12} sm={6} key={meal}>
-                        <Card variant="outlined" sx={{ borderRadius: 2 }}>
-                          <CardContent sx={{ p: 2.5 }}>
-                            <Typography variant="subtitle2" color="text.secondary" sx={{ textTransform: 'capitalize' }}>
-                              {meal}
-                            </Typography>
-                            <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                              {Math.round(stats.calories || 0)} cal
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {stats.count || 0} entries • {Math.round(stats.protein || 0)}g protein
-                            </Typography>
-                          </CardContent>
-                        </Card>
-                      </Grid>
-                    ))}
-                  </Grid>
-                </CardContent>
-              </Card>
-
-              <Card sx={{ borderRadius: 3 }}>
-                <CardContent sx={{ p: SECTION_PADDING }}>
-                  <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
-                    Goal Compliance
-                  </Typography>
-                  {goalComplianceEntries.length ? goalComplianceEntries.map(([metric, detail]) => (
-                    <Box key={metric} sx={{ mb: 2 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                        <Typography variant="body2" sx={{ textTransform: 'capitalize' }}>
-                          {metricLabels[metric] || metric}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {detail.daysWithin} days on target
-                        </Typography>
-                      </Box>
-                      <LinearProgress variant="determinate" value={detail.percentage} sx={{ borderRadius: 999 }} />
+                      <Typography
+                        sx={{
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontVariantNumeric: 'tabular-nums',
+                          fontSize: '0.75rem',
+                          color: 'text.secondary',
+                        }}
+                      >
+                        {detail.daysWithin} days on target
+                      </Typography>
                     </Box>
-                  )) : (
-                    <Typography variant="body2" color="text.secondary">
-                      No active nutrition goals recorded.
-                    </Typography>
-                  )}
-                </CardContent>
-              </Card>
+                    <LinearProgress variant="determinate" value={detail.percentage} sx={{ borderRadius: 999 }} />
+                  </Box>
+                )) : (
+                  <Typography variant="body2" color="text.secondary">
+                    No active nutrition goals recorded.
+                  </Typography>
+                )}
+              </Surface>
             </Grid>
 
             <Grid item xs={12} md={4}>
-              <Card sx={{ borderRadius: 3, mb: 3 }}>
-                <CardContent sx={{ p: SECTION_PADDING }}>
-                  <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
-                    Top Foods
-                  </Typography>
-                  <Divider sx={{ mb: 2 }} />
+              {/* Top Foods */}
+              <Surface padded={false} sx={{ mb: 3 }}>
+                <Box
+                  sx={{
+                    px: 2.5,
+                    pt: 2,
+                    pb: 1.25,
+                    borderBottom: `1px dashed ${theme.palette.divider}`,
+                  }}
+                >
+                  <SectionLabel>Top Foods</SectionLabel>
+                </Box>
+                <Box sx={{ p: 2.5 }}>
                   {overview?.topFoods?.length ? overview.topFoods.map((food) => (
-                    <Box key={food.name} sx={{ mb: 1.5 }}>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                        {food.name}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {food.count} entries • {Math.round(food.calories)} calories total
+                    <Box
+                      key={food.name}
+                      sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'baseline',
+                        py: 1,
+                        '&:not(:last-of-type)': {
+                          borderBottom: `1px dotted ${alpha(theme.palette.text.primary, 0.1)}`,
+                        },
+                      }}
+                    >
+                      <Box sx={{ minWidth: 0, pr: 1.5 }}>
+                        <Typography
+                          sx={{
+                            fontWeight: 600,
+                            fontSize: '0.875rem',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {food.name}
+                        </Typography>
+                        <Typography
+                          sx={{
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontSize: '0.6875rem',
+                            color: 'text.secondary',
+                          }}
+                        >
+                          {food.count} entries
+                        </Typography>
+                      </Box>
+                      <Typography
+                        sx={{
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontVariantNumeric: 'tabular-nums',
+                          fontSize: '0.8125rem',
+                          fontWeight: 600,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {Math.round(food.calories)} kcal
                       </Typography>
                     </Box>
                   )) : (
@@ -370,19 +413,26 @@ const Reports = () => {
                       No repeated foods logged in this range.
                     </Typography>
                   )}
-                </CardContent>
-              </Card>
+                </Box>
+              </Surface>
 
-              <Card sx={{ borderRadius: 3 }}>
-                <CardContent sx={{ p: SECTION_PADDING }}>
-                  <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
-                    Trend Highlights
-                  </Typography>
-                  <Divider sx={{ mb: 2 }} />
+              {/* Trend Highlights */}
+              <Surface padded={false}>
+                <Box
+                  sx={{
+                    px: 2.5,
+                    pt: 2,
+                    pb: 1.25,
+                    borderBottom: `1px dashed ${theme.palette.divider}`,
+                  }}
+                >
+                  <SectionLabel>Trend Highlights</SectionLabel>
+                </Box>
+                <Box sx={{ p: 2.5 }}>
                   {trends?.highlights?.length ? trends.highlights.map((item, idx) => (
-                    <Box key={idx} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 1.5 }}>
-                      <TrendingUpIcon fontSize="small" sx={{ color: theme.palette.primary.main, mt: 0.2 }} />
-                      <Typography variant="body2">
+                    <Box key={idx} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 1.5, '&:last-child': { mb: 0 } }}>
+                      <TrendingUpIcon fontSize="small" sx={{ color: theme.palette.primary.main, mt: 0.25 }} />
+                      <Typography sx={{ fontSize: '0.875rem', lineHeight: 1.5 }}>
                         {item}
                       </Typography>
                     </Box>
@@ -391,62 +441,64 @@ const Reports = () => {
                       No significant trends detected yet.
                     </Typography>
                   )}
-                </CardContent>
-              </Card>
+                </Box>
+              </Surface>
             </Grid>
           </Grid>
 
           {/* AI Summaries */}
           <Grid container spacing={3} sx={{ mt: 1 }}>
             <Grid item xs={12} md={6}>
-              <Card sx={{ borderRadius: 3, height: '100%' }}>
-                <CardContent sx={{ p: SECTION_PADDING }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                    <InsightsIcon color="primary" />
-                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                      Weekly Coach Summary
-                    </Typography>
+              <Surface sx={{ height: '100%' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 2 }}>
+                  <InsightsIcon sx={{ color: 'primary.main' }} />
+                  <Box>
+                    <SectionLabel>AI Coach</SectionLabel>
+                    <DisplayHeading size="card" sx={{ mt: 0.25 }}>
+                      Weekly Summary
+                    </DisplayHeading>
                   </Box>
-                  {aiLoading ? (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
-                      <CircularProgress size={24} />
-                    </Box>
-                  ) : weeklyCoach?.content ? (
-                    <Box sx={{ color: theme.palette.text.primary, '& ul': { pl: 3 } }}>
-                      {renderInsightContent(weeklyCoach.content)}
-                    </Box>
-                  ) : (
-                    <Typography variant="body2" color="text.secondary">
-                      No AI summary available for this range yet.
-                    </Typography>
-                  )}
-                </CardContent>
-              </Card>
+                </Box>
+                {aiLoading ? (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+                    <CircularProgress size={24} />
+                  </Box>
+                ) : weeklyCoach?.content ? (
+                  <Box sx={{ color: theme.palette.text.primary, '& ul': { pl: 3 } }}>
+                    {renderInsightContent(weeklyCoach.content)}
+                  </Box>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    No AI summary available for this range yet.
+                  </Typography>
+                )}
+              </Surface>
             </Grid>
             <Grid item xs={12} md={6}>
-              <Card sx={{ borderRadius: 3, height: '100%' }}>
-                <CardContent sx={{ p: SECTION_PADDING }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                    <TrendingUpIcon color="secondary" />
-                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              <Surface sx={{ height: '100%' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 2 }}>
+                  <TrendingUpIcon sx={{ color: 'primary.main' }} />
+                  <Box>
+                    <SectionLabel>AI Insight</SectionLabel>
+                    <DisplayHeading size="card" sx={{ mt: 0.25 }}>
                       Trend Watch
-                    </Typography>
+                    </DisplayHeading>
                   </Box>
-                  {aiLoading ? (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
-                      <CircularProgress size={24} />
-                    </Box>
-                  ) : trendWatch?.content ? (
-                    <Box sx={{ color: theme.palette.text.primary, '& ul': { pl: 3 } }}>
-                      {renderInsightContent(trendWatch.content)}
-                    </Box>
-                  ) : (
-                    <Typography variant="body2" color="text.secondary">
-                      Trend summary will appear once enough data is logged.
-                    </Typography>
-                  )}
-                </CardContent>
-              </Card>
+                </Box>
+                {aiLoading ? (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+                    <CircularProgress size={24} />
+                  </Box>
+                ) : trendWatch?.content ? (
+                  <Box sx={{ color: theme.palette.text.primary, '& ul': { pl: 3 } }}>
+                    {renderInsightContent(trendWatch.content)}
+                  </Box>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    Trend summary will appear once enough data is logged.
+                  </Typography>
+                )}
+              </Surface>
             </Grid>
           </Grid>
         </Box>

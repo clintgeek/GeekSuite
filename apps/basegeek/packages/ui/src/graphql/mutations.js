@@ -79,3 +79,15 @@ export const UPDATE_MODEL_FREE_TIER = gql`
     updateModelFreeTier(provider: $provider, modelId: $modelId, isFree: $isFree, freeLimits: $freeLimits, notes: $notes)
   }
 `;
+
+export const SAVE_AI_APP_CONFIG = gql`
+  mutation SaveAIAppConfig($appName: String!, $config: JSON!) {
+    saveAIAppConfig(appName: $appName, config: $config)
+  }
+`;
+
+export const DELETE_AI_APP_CONFIG = gql`
+  mutation DeleteAIAppConfig($appName: String!) {
+    deleteAIAppConfig(appName: $appName)
+  }
+`;

@@ -20,10 +20,8 @@ class AICoachService {
             { role: 'user', content: userPrompt }
           ],
           config: {
-            appName: 'fitnessGeek',
-            freeOnly: true,
-            maxTokens: 1500,
-            temperature: 0.7
+            appName: 'fitnessGeek'
+            // No provider, model, or freeOnly — baseGeek resolves via AIAppConfig
           }
         },
         {

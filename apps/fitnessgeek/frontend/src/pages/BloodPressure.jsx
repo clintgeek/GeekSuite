@@ -4,7 +4,8 @@ import {
   Typography,
   Box,
   Button,
-  ButtonGroup,
+  ToggleButton,
+  ToggleButtonGroup,
   CircularProgress,
   Alert,
   Tabs,
@@ -18,6 +19,7 @@ import {
   Assessment as ReportIcon,
   PictureAsPdf as PdfIcon
 } from '@mui/icons-material';
+import { SectionLabel, DisplayHeading } from '../components/primitives';
 import BPChartNivo from '../components/BloodPressure/BPChartNivo.jsx';
 import BPInsights from '../components/BloodPressure/BPInsights.jsx';
 import BPCategoryDistribution from '../components/BloodPressure/BPCategoryDistribution.jsx';
@@ -248,23 +250,13 @@ const BloodPressure = () => {
   const todayBP = getTodayBP();
 
   return (
-    <Box sx={{ p: 3 }}>
-      {/* Header */}
-      <Box sx={{ mb: 4 }}>
-        <Typography
-          variant="h4"
-          component="h1"
-          sx={{
-            fontWeight: 700,
-            mb: 0.5,
-            color: theme.palette.text.primary,
-            letterSpacing: '-0.02em'
-          }}
-        >
-          Blood Pressure
-        </Typography>
-        <Typography variant="body1" sx={{ color: theme.palette.text.secondary, fontSize: '1.0625rem' }}>
-          Track your blood pressure and heart health
+    <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 960, mx: 'auto' }}>
+      {/* Editorial header */}
+      <Box sx={{ mb: 3 }}>
+        <SectionLabel sx={{ mb: 0.75 }}>Tracking · Blood Pressure</SectionLabel>
+        <DisplayHeading size="page">Blood Pressure</DisplayHeading>
+        <Typography sx={{ color: 'text.secondary', mt: 0.5, fontSize: '0.9375rem' }}>
+          Track your blood pressure and heart health over time.
         </Typography>
       </Box>
 
@@ -296,102 +288,51 @@ const BloodPressure = () => {
       {/* Blood Pressure Chart */}
       {bpLogs.length > 0 && (
         <>
-          {/* Time Range Buttons and Export */}
-          <Box sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            mb: 3
-          }}>
-            <Box sx={{
+          {/* Time Range + Report — matches Reports page control bar */}
+          <Box
+            sx={{
               display: 'flex',
-              alignItems: 'center',
+              flexDirection: { xs: 'column', sm: 'row' },
+              alignItems: { xs: 'stretch', sm: 'center' },
+              justifyContent: 'space-between',
               gap: 2,
-              flexWrap: 'wrap',
-              justifyContent: 'center'
-            }}>
-              <ButtonGroup
-                size="medium"
-                sx={{
-                  '& .MuiButton-root': {
-                    borderColor: theme.palette.divider,
-                    color: theme.palette.text.secondary,
-                    fontWeight: 600,
-                    px: 2,
-                    '&:hover': {
-                      borderColor: theme.palette.primary.main,
-                      backgroundColor: `${theme.palette.primary.main}1a`
-                    }
-                  },
-                  '& .MuiButton-contained': {
-                    backgroundColor: theme.palette.primary.main,
-                    color: theme.palette.primary.contrastText,
-                    borderColor: theme.palette.primary.main,
-                    '&:hover': {
-                      backgroundColor: theme.palette.primary.dark,
-                      borderColor: theme.palette.primary.dark
-                    }
-                  }
-                }}
-              >
-                <Button
-                  onClick={() => handleTimeRangeChange('7')}
-                  variant={timeRangeState === '7' ? 'contained' : 'outlined'}
-                >
-                  7d
-                </Button>
-                <Button
-                  onClick={() => handleTimeRangeChange('30')}
-                  variant={timeRangeState === '30' ? 'contained' : 'outlined'}
-                >
-                  30d
-                </Button>
-                <Button
-                  onClick={() => handleTimeRangeChange('365')}
-                  variant={timeRangeState === '365' ? 'contained' : 'outlined'}
-                >
-                  1y
-                </Button>
-                <Button
-                  onClick={() => handleTimeRangeChange('all')}
-                  variant={timeRangeState === 'all' ? 'contained' : 'outlined'}
-                >
-                  All
-                </Button>
-              </ButtonGroup>
-
-              <Button
-                onClick={() => setShowReport(true)}
-                variant="outlined"
-                startIcon={<PdfIcon />}
-                sx={{
-                  borderColor: theme.palette.primary.main,
-                  color: theme.palette.primary.main,
-                  fontWeight: 600,
-                  px: 3,
-                  borderRadius: '8px',
-                  '&:hover': {
-                    borderColor: theme.palette.primary.dark,
-                    backgroundColor: `${theme.palette.primary.main}0d`
-                  }
-                }}
-              >
-                View Report
-              </Button>
-            </Box>
-
-            {/* Insufficient data message */}
-            {insufficientDataMessage && (
-              <Typography variant="caption" sx={{
-                color: theme.palette.warning.main,
-                fontSize: '0.7rem',
-                mt: 1,
-                textAlign: 'center'
-              }}>
-                {insufficientDataMessage}
-              </Typography>
-            )}
+              mb: 3,
+            }}
+          >
+            <ToggleButtonGroup
+              size="small"
+              value={timeRangeState}
+              exclusive
+              onChange={(_e, v) => { if (v) handleTimeRangeChange(v); }}
+            >
+              <ToggleButton value="7">7d</ToggleButton>
+              <ToggleButton value="30">30d</ToggleButton>
+              <ToggleButton value="365">1y</ToggleButton>
+              <ToggleButton value="all">All</ToggleButton>
+            </ToggleButtonGroup>
+            <Button
+              onClick={() => setShowReport(true)}
+              variant="outlined"
+              size="small"
+              startIcon={<PdfIcon />}
+            >
+              View Report
+            </Button>
           </Box>
+
+          {insufficientDataMessage && (
+            <Typography
+              sx={{
+                display: 'block',
+                fontSize: '0.75rem',
+                color: 'warning.main',
+                mb: 2,
+                textAlign: 'center',
+              }}
+            >
+              {insufficientDataMessage}
+            </Typography>
+          )}
 
           <Box sx={{ mb: 3 }}>
             <BPChartNivo

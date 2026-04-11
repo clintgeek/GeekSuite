@@ -32,7 +32,8 @@ import BarcodeScanner from '../BarcodeScanner/BarcodeScanner.jsx';
 const AddFoodDialog = ({
   open,
   onClose,
-  onFoodSelect,
+  onFoodSelect,   // Legacy single-item callback (still used by Barcode / Custom tabs)
+  onCommitBatch,  // New: batch commit for Search tab's staging tray
   mealType,
   showBarcodeScanner,
   onShowBarcodeScanner
@@ -277,32 +278,23 @@ const AddFoodDialog = ({
             </Tabs>
           </Box>
 
-          {/* Tab Content */}
+          {/* Tab Content — Search uses the staging tray model */}
           {activeTab === 0 && (
             <Box sx={{ minHeight: 400 }}>
               <UnifiedFoodSearch
                 mode="dialog"
-                autoAdd={false}
                 defaultMealType={mealType}
                 showRecent={true}
                 showBarcode={false}
-                showQuickAdd={false}
-                onFoodSelect={(food, meta) => {
-                  // UnifiedFoodSearch already includes servings and mealType
-                  console.log('[AddFoodDialog] onFoodSelect received', {
-                    foodName: food.name,
-                    meta,
-                    isBatch: meta?.isBatch
-                  });
-                  onFoodSelect(food, meta);
-                  if (!meta?.isBatch) {
-                    console.log('[AddFoodDialog] NOT a batch, calling handleClose');
+                onCommitBatch={async (items) => {
+                  const result = await onCommitBatch?.(items);
+                  // On full success, close the dialog
+                  if (result && result.fail === 0) {
                     handleClose();
-                  } else {
-                    console.log('[AddFoodDialog] IS a batch, keeping dialog open');
                   }
+                  return result;
                 }}
-                placeholder="Search for foods..."
+                placeholder="Search foods or describe your meal…"
                 maxResults={25}
               />
             </Box>

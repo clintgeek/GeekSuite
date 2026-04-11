@@ -139,10 +139,10 @@ const FoodLog = () => {
     setShowAddDialog(true);
   };
 
+  // Legacy single-item callback — used by Barcode and Custom tabs
   const handleFoodSelect = async (food, meta = {}) => {
     try {
       if (food && food.type === 'meal' && food._id) {
-        // Saved meal: add entire meal to the selected meal type on the selected date
         await fitnessGeekService.addMealToLog(food._id, selectedDate, selectedMealType || 'snack');
         setShowAddDialog(false);
         await refreshGoals();
@@ -160,6 +160,51 @@ const FoodLog = () => {
     } catch (e) {
       console.error('Failed to add selection to log', e);
     }
+  };
+
+  // Batch commit from the staging tray. Fires all adds in parallel (one transaction
+  // per item, since the REST backend needs to create FoodItems for AI results),
+  // then does a single refresh at the end. Tracks partial failures.
+  const handleCommitBatch = async (items) => {
+    if (!items || items.length === 0) return { ok: 0, fail: 0 };
+
+    const meal = selectedMealType || 'snack';
+
+    const results = await Promise.allSettled(
+      items.map(async (item) => {
+        if (item.type === 'meal' && item._id) {
+          return fitnessGeekService.addMealToLog(item._id, selectedDate, meal);
+        }
+        // Go direct to the service so we skip the hook's per-item toast + reload
+        const parsedServings = Number(item.servings);
+        const safeServings = Number.isFinite(parsedServings) && parsedServings > 0 ? parsedServings : 1;
+        const logData = {
+          food_item: item,
+          meal_type: meal,
+          servings: Math.max(0.1, safeServings),
+          log_date: selectedDate,
+          nutrition: item.nutrition
+        };
+        const resp = await fitnessGeekService.addFoodToLog(logData);
+        if (!(resp && resp.success)) {
+          throw new Error(resp?.error?.message || 'Failed to log item');
+        }
+        return true;
+      })
+    );
+
+    let ok = 0;
+    let fail = 0;
+    for (const r of results) {
+      if (r.status === 'fulfilled') ok += 1;
+      else fail += 1;
+    }
+
+    // Single refresh at the end — much cheaper than N reloads
+    await refreshLogs();
+    await refreshGoals();
+
+    return { ok, fail };
   };
 
   const handleEditLog = (log) => {
@@ -399,6 +444,7 @@ const FoodLog = () => {
         open={showAddDialog}
         onClose={() => setShowAddDialog(false)}
         onFoodSelect={handleFoodSelect}
+        onCommitBatch={handleCommitBatch}
         mealType={selectedMealType}
         showBarcodeScanner={showBarcodeScanner}
         onShowBarcodeScanner={setShowBarcodeScanner}

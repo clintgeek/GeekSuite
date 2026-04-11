@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -12,27 +12,48 @@ import {
 import {
   ExpandMore as ExpandIcon,
   ExpandLess as CollapseIcon,
-  SmartToy as AIIcon
+  SmartToy as AIIcon,
+  AutoAwesome as WandIcon
 } from '@mui/icons-material';
+import { useTheme, alpha } from '@mui/material/styles';
 import SearchBar from './SearchBar';
 import FoodCard from './FoodCard';
 import AddFoodModal from './AddFoodModal';
+import StagingTray from './StagingTray';
 import { foodService } from '../../services/foodService';
 import { fitnessGeekService } from '../../services/fitnessGeekService';
 
+/**
+ * Generate a unique stage ID for an item in the tray.
+ * Multiple identical foods can coexist as separate entries (one per stage event).
+ */
+let stageSeq = 0;
+const nextStageId = () => `stage_${Date.now()}_${++stageSeq}`;
+
+/**
+ * A stable identity key for a food result — used only to compute "staged count" badges on cards.
+ * Does NOT uniquely identify tray items (which have their own stageId).
+ */
+const getFoodIdentity = (food) => {
+  if (!food) return '';
+  return (
+    food._id ||
+    food.id ||
+    `${food.source || 'unknown'}::${food.compositeItem || ''}::${food.name || ''}::${food.compositeIndex ?? ''}`
+  );
+};
+
 const UnifiedFoodSearch = ({
   // Behavior
-  mode = 'page', // 'page' | 'dialog' | 'inline'
-  autoAdd = false, // Auto-add to log vs show modal
+  mode = 'page',
   defaultMealType = 'snack',
 
   // Features
   showRecent = true,
   showBarcode = true,
-  showQuickAdd = true,
 
   // Callbacks
-  onFoodSelect,
+  onCommitBatch, // (items: TrayItem[]) => Promise<{ok:number, fail:number}>
   onBarcodeClick,
 
   // Customization
@@ -40,59 +61,69 @@ const UnifiedFoodSearch = ({
   maxResults = 25,
   className
 }) => {
+  const theme = useTheme();
+  const ink = theme.palette.text.primary;
+  const muted = theme.palette.text.secondary;
+  const primary = theme.palette.primary.main;
+
+  // Search state
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [recentFoods, setRecentFoods] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [selectedFood, setSelectedFood] = useState(null);
-  const [showRecentSection, setShowRecentSection] = useState(true);
   const [hasAIResults, setHasAIResults] = useState(false);
-  const [selectedCompositeFoods, setSelectedCompositeFoods] = useState({});
-  const [pendingSelectionQueue, setPendingSelectionQueue] = useState([]);
+  const [showRecentSection, setShowRecentSection] = useState(true);
   const [showMoreResults, setShowMoreResults] = useState(false);
 
-  // Clear results when query is cleared
+  // ─── Tray state: the new batch primitive ───
+  // Each tray item: { stageId, identityKey, ...food, servings }
+  const [trayItems, setTrayItems] = useState([]);
+  const [committing, setCommitting] = useState(false);
+
+  // For editing a single item's precise macros (still routes through modal)
+  const [modalFood, setModalFood] = useState(null);
+
+  // Tray identity index → used to badge cards and count duplicates
+  const trayIndex = useMemo(() => {
+    const map = new Map();
+    for (const item of trayItems) {
+      const key = item.identityKey;
+      map.set(key, (map.get(key) || 0) + 1);
+    }
+    return map;
+  }, [trayItems]);
+
+  // Auto-clear results when query emptied
   useEffect(() => {
     if (searchQuery.length < 2) {
       setSearchResults([]);
       setHasAIResults(false);
-      setSelectedCompositeFoods({});
-      setPendingSelectionQueue([]);
     }
   }, [searchQuery]);
 
-  // Handle search submit
-  const handleSearchSubmit = () => {
-    if (searchQuery.length >= 2) {
-      searchFoods();
-    }
-  };
-
-  const handleAddAllSelected = () => {
-    const selections = getAllSelectedFoodsOrdered();
-    console.log('[MultiAdd] handleAddAllSelected called', {
-      selectionCount: selections.length,
-      selections: selections.map(f => f.name)
-    });
-    if (selections.length === 0) return;
-
-    setSelectedCompositeFoods({});
-    setPendingSelectionQueue(selections.slice(1));
-    console.log('[MultiAdd] Queue set to:', selections.slice(1).map(f => f.name));
-    setSelectedFood({
-      ...selections[0],
-      servings: selections[0].serving?.size || selections[0].requestedQuantity || selections[0].servings || 1,
-    });
-    console.log('[MultiAdd] First food set to:', selections[0].name);
-  };
-
-  // Load recent foods on mount
+  // Load recent foods
   useEffect(() => {
-    if (showRecent) {
-      loadRecentFoods();
-    }
+    if (showRecent) loadRecentFoods();
   }, [showRecent]);
+
+  const loadRecentFoods = async () => {
+    try {
+      const recent = await fitnessGeekService.getRecentLogs();
+      if (recent && recent.length > 0) {
+        const uniqueFoods = recent.reduce((acc, log) => {
+          const food = log.food_item || log.food_item_id;
+          if (food && !acc.find((f) => f._id === food._id || f.id === food.id)) {
+            acc.push(food);
+          }
+          return acc;
+        }, []);
+        setRecentFoods(uniqueFoods.slice(0, 10));
+      }
+    } catch (err) {
+      console.error('Failed to load recent foods:', err);
+    }
+  };
 
   const searchFoods = async () => {
     if (!searchQuery.trim()) {
@@ -105,17 +136,14 @@ const UnifiedFoodSearch = ({
     setHasAIResults(false);
 
     try {
-      // Use unified food service - backend handles AI fallback
       const foods = await foodService.search(searchQuery, {
         limit: maxResults,
         includeAI: true
       });
 
-      // Check if any results came from AI
-      const aiResults = (foods || []).filter(f => f.source === 'ai');
+      const aiResults = (foods || []).filter((f) => f.source === 'ai');
       setHasAIResults(aiResults.length > 0);
 
-      // Also search saved meals
       let meals = [];
       try {
         meals = await fitnessGeekService.getMeals(null, searchQuery);
@@ -123,12 +151,11 @@ const UnifiedFoodSearch = ({
         // Meals search is optional
       }
 
-      // Map meals to food format
       const mappedMeals = (meals || []).map((m) => {
         const totalCals = (m.food_items || []).reduce((sum, it) => {
           const f = it.food_item_id || it.food_item || {};
           const c = f?.nutrition?.calories_per_serving || 0;
-          return sum + (c * (it.servings || 1));
+          return sum + c * (it.servings || 1);
         }, 0);
         return {
           _id: m._id,
@@ -139,10 +166,7 @@ const UnifiedFoodSearch = ({
         };
       });
 
-      // Show saved meals first, then foods
       setSearchResults([...(mappedMeals || []), ...(foods || [])]);
-      setSelectedCompositeFoods({});
-      setPendingSelectionQueue([]);
       setShowMoreResults(false);
     } catch (err) {
       console.error('Search error:', err);
@@ -153,163 +177,124 @@ const UnifiedFoodSearch = ({
     }
   };
 
-  const getFoodKey = (food) => {
-    return food._id || food.id || `${food.source || 'unknown'}_${food.compositeItem || ''}_${food.name}_${food.requestedQuantity || ''}_${food.compositeIndex || ''}`;
+  const handleSearchSubmit = () => {
+    if (searchQuery.length >= 2) searchFoods();
   };
 
-  const toggleCompositeSelection = (food) => {
-    const key = getFoodKey(food);
-    setSelectedCompositeFoods((prev) => {
-      const next = { ...prev };
-      if (next[key]) {
-        delete next[key];
-      } else {
-        next[key] = food;
-      }
-      return next;
-    });
-  };
+  // ─── Tray ops ───
 
-  const getSelectedFoodsForGroup = (groupItem) => {
-    return Object.values(selectedCompositeFoods).filter((food) => food.compositeItem === groupItem);
-  };
-
-  const getAllSelectedFoodsOrdered = () => {
-    return Object.values(selectedCompositeFoods).sort((a, b) => {
-      const aIndex = typeof a.compositeIndex === 'number' ? a.compositeIndex : Number.MAX_SAFE_INTEGER;
-      const bIndex = typeof b.compositeIndex === 'number' ? b.compositeIndex : Number.MAX_SAFE_INTEGER;
-      if (aIndex !== bIndex) {
-        return aIndex - bIndex;
-      }
-      return (a.name || '').localeCompare(b.name || '');
-    });
-  };
-
-  const handleAddSelectedFromGroup = (groupItem) => {
-    const selections = getSelectedFoodsForGroup(groupItem);
-    if (selections.length === 0) return;
-    setSelectedCompositeFoods((prev) => {
-      const next = { ...prev };
-      selections.forEach((food) => {
-        delete next[getFoodKey(food)];
-      });
-      return next;
-    });
-    setPendingSelectionQueue(selections.slice(1));
-    setSelectedFood({
-      ...selections[0],
-      servings: selections[0].serving?.size || selections[0].requestedQuantity || selections[0].servings || 1,
-    });
-  };
-
-  const loadRecentFoods = async () => {
-    try {
-      const recent = await fitnessGeekService.getRecentLogs();
-      if (recent && recent.length > 0) {
-        // Get unique foods from recent logs
-        const uniqueFoods = recent.reduce((acc, log) => {
-          const food = log.food_item || log.food_item_id;
-          if (food && !acc.find(f => f._id === food._id || f.id === food.id)) {
-            acc.push(food);
-          }
-          return acc;
-        }, []);
-        setRecentFoods(uniqueFoods.slice(0, 10));
-      }
-    } catch (err) {
-      console.error('Failed to load recent foods:', err);
+  const stageFood = (food) => {
+    // Saved meals shouldn't be staged — they commit atomically as a meal.
+    if (food?.type === 'meal') {
+      // Bypass the tray: meals route directly through onCommitBatch as a single-item batch
+      // so the parent handler can distinguish (via item.type === 'meal').
+      setCommitting(true);
+      onCommitBatch?.([
+        {
+          stageId: nextStageId(),
+          identityKey: getFoodIdentity(food),
+          ...food,
+          servings: 1
+        }
+      ])
+        .catch((e) => setError(e?.message || 'Failed to log meal'))
+        .finally(() => setCommitting(false));
+      return;
     }
-  };
 
-  const handleFoodClick = (food) => {
-    if (autoAdd) {
-      // Auto-add with default servings
-      onFoodSelect?.({
+    const defaultServings =
+      food.requestedQuantity && Number(food.requestedQuantity) > 0
+        ? Number(food.requestedQuantity)
+        : food.serving?.size && Number(food.serving.size) > 0 && Number(food.serving.size) <= 10
+        ? Number(food.serving.size)
+        : 1;
+
+    setTrayItems((prev) => [
+      ...prev,
+      {
+        stageId: nextStageId(),
+        identityKey: getFoodIdentity(food),
         ...food,
-        servings: food.serving?.size || 1,
-        mealType: defaultMealType
-      });
+        servings: defaultServings
+      }
+    ]);
+  };
+
+  const unstageFood = (food) => {
+    // Remove the most recently staged entry matching this identity
+    setTrayItems((prev) => {
+      const key = getFoodIdentity(food);
+      const lastIdx = prev
+        .map((item, idx) => ({ item, idx }))
+        .reverse()
+        .find(({ item }) => item.identityKey === key)?.idx;
+      if (lastIdx == null) return prev;
+      return [...prev.slice(0, lastIdx), ...prev.slice(lastIdx + 1)];
+    });
+  };
+
+  const handleCardTap = (food) => {
+    const key = getFoodIdentity(food);
+    const isAlreadyStaged = trayIndex.has(key);
+    if (isAlreadyStaged) {
+      unstageFood(food);
     } else {
-      // Show modal for customization
-      setSelectedFood(food);
+      stageFood(food);
     }
   };
 
-  const handleQuickAdd = (food) => {
-    // Quick add always adds with defaults
-    onFoodSelect?.({
-      ...food,
-      servings: 1,
-      mealType: defaultMealType
-    });
+  const updateServings = (stageId, servings) => {
+    setTrayItems((prev) =>
+      prev.map((item) => (item.stageId === stageId ? { ...item, servings } : item))
+    );
   };
 
-  const handleModalAdd = (foodWithSettings) => {
-    const batchRemaining = pendingSelectionQueue.length;
-    const isBatch = batchRemaining > 0;
+  const removeFromTray = (stageId) => {
+    setTrayItems((prev) => prev.filter((item) => item.stageId !== stageId));
+  };
 
-    console.log('[MultiAdd] handleModalAdd called', {
-      foodName: foodWithSettings.name,
-      batchRemaining,
-      isBatch,
-      queueLength: pendingSelectionQueue.length,
-      queue: pendingSelectionQueue.map(f => f.name)
-    });
+  const clearTray = () => setTrayItems([]);
 
-    // Set up next food BEFORE calling parent callback to prevent race condition
-    if (pendingSelectionQueue.length > 0) {
-      const [next, ...rest] = pendingSelectionQueue;
-      console.log('[MultiAdd] Setting up next food:', next.name, 'remaining:', rest.length);
-      setPendingSelectionQueue(rest);
-      // Use setTimeout to ensure state update happens after current render cycle
-      setTimeout(() => {
-        console.log('[MultiAdd] setTimeout firing, setting selectedFood to:', next.name);
-        setSelectedFood({
-          ...next,
-          servings: next.serving?.size || next.requestedQuantity || next.servings || 1,
-        });
-      }, 100);
-    } else {
-      console.log('[MultiAdd] No more items in queue, clearing selectedFood');
-      setSelectedFood(null);
+  const commitTray = async () => {
+    if (trayItems.length === 0 || committing) return;
+    setCommitting(true);
+    setError(null);
+    try {
+      const result = await onCommitBatch?.(trayItems);
+      if (result && result.fail > 0) {
+        setError(
+          `Logged ${result.ok} item${result.ok !== 1 ? 's' : ''}, ${result.fail} failed. Check your connection and try again.`
+        );
+      }
+      // On success, clear the tray
+      if (!result || result.fail === 0) {
+        setTrayItems([]);
+      }
+    } catch (e) {
+      setError(e?.message || 'Failed to log items');
+    } finally {
+      setCommitting(false);
     }
-
-    // Call parent callback after setting up next food
-    console.log('[MultiAdd] Calling onFoodSelect with isBatch:', isBatch);
-    onFoodSelect?.(foodWithSettings, {
-      batchRemaining,
-      isBatch
-    });
   };
 
-  const handleBarcodeClick = () => {
-    onBarcodeClick?.();
-  };
+  // ─── Rendering helpers ───
 
   const renderLoadingSkeletons = () => (
     <Grid container spacing={2}>
       {[1, 2, 3, 4].map((i) => (
         <Grid item xs={12} sm={6} md={mode === 'page' ? 4 : 6} key={i}>
-          <Skeleton
-            variant="rectangular"
-            height={160}
-            sx={{ borderRadius: '16px' }}
-          />
+          <Skeleton variant="rectangular" height={160} sx={{ borderRadius: '16px' }} />
         </Grid>
       ))}
     </Grid>
   );
 
-  // Check if results are grouped composite results
-  const isCompositeResult = (foods) => {
-    return foods && foods.length > 0 && foods.some((food) => Boolean(food.compositeItem));
-  };
+  const isCompositeResult = (foods) =>
+    foods && foods.length > 0 && foods.some((food) => Boolean(food.compositeItem));
 
-  // Group composite results by their item
   const groupCompositeResults = (foods) => {
     const groups = [];
     let currentGroup = null;
-
     for (const food of foods) {
       if (!currentGroup || currentGroup.item !== food.compositeItem) {
         currentGroup = {
@@ -325,229 +310,233 @@ const UnifiedFoodSearch = ({
     return groups;
   };
 
+  const renderFoodCard = (food, index) => {
+    const identity = getFoodIdentity(food);
+    const stagedCount = trayIndex.get(identity) || 0;
+    return (
+      <Grid item xs={12} sm={6} md={mode === 'page' ? 4 : 6} key={`${identity}_${index}`}>
+        <FoodCard
+          food={food}
+          onClick={handleCardTap}
+          staged={stagedCount > 0}
+          stagedCount={stagedCount}
+          animationDelay={index * 40}
+        />
+      </Grid>
+    );
+  };
+
   const renderCompositeResults = (foods) => {
     const groups = groupCompositeResults(foods);
 
-    const totalSelectedCount = Object.keys(selectedCompositeFoods).length;
-
     return (
       <Box sx={{ mb: 3 }}>
-        <Box
-          sx={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            mb: 2,
-            gap: 2
-          }}
-        >
+        {/* Editorial header */}
+        <Box sx={{ mb: 2.5 }}>
           <Typography
-            variant="h6"
             sx={{
-              fontWeight: 600,
-              color: 'text.primary',
-              fontSize: '1.125rem'
+              fontSize: '0.6875rem',
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              letterSpacing: '0.18em',
+              color: muted,
+              mb: 0.5
             }}
           >
-            Search Results
+            AI Parsed · {groups.length} Item{groups.length !== 1 ? 's' : ''}
           </Typography>
-          <Button
-            type="button"
-            variant="contained"
-            size="small"
-            disabled={totalSelectedCount === 0}
-            onClick={handleAddAllSelected}
+          <Typography
+            component="h2"
+            sx={{
+              fontFamily: "'DM Serif Display', serif",
+              fontSize: { xs: '1.5rem', sm: '1.875rem' },
+              fontWeight: 400,
+              lineHeight: 1.1,
+              color: ink,
+              letterSpacing: '-0.015em'
+            }}
           >
-            Add All Selected ({totalSelectedCount})
-          </Button>
+            Your Meal, Broken Down
+          </Typography>
         </Box>
 
-        {groups.map((group, idx) => (
-          <Box key={idx} sx={{ mb: 3 }}>
-            {/* Group Header */}
+        {groups.map((group, groupIdx) => (
+          <Box key={groupIdx} sx={{ mb: 3.5 }}>
+            {/* Group heading — serif + chip, clear hierarchy */}
             <Box
               sx={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 1,
+                gap: 1.25,
                 mb: 1.5,
                 pb: 1,
-                borderBottom: '2px solid',
-                borderColor: 'primary.main'
+                borderBottom: `2px solid ${ink}`,
+                position: 'relative'
               }}
             >
-              <Chip
-                label={`${group.quantity} ${group.unit}`}
-                size="small"
-                color="primary"
-                sx={{ fontWeight: 600 }}
-              />
               <Typography
-                variant="subtitle1"
                 sx={{
-                  fontWeight: 600,
-                  color: '#374151',
-                  textTransform: 'capitalize'
+                  fontFamily: "'DM Serif Display', serif",
+                  fontSize: '1.25rem',
+                  fontWeight: 400,
+                  color: ink,
+                  textTransform: 'capitalize',
+                  flex: 1,
+                  minWidth: 0,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap'
                 }}
               >
                 {group.item}
               </Typography>
+              <Chip
+                label={`${group.quantity || 1} ${group.unit || ''}`.trim()}
+                size="small"
+                sx={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: '0.6875rem',
+                  fontWeight: 600,
+                  letterSpacing: '0.04em',
+                  textTransform: 'lowercase',
+                  height: 22,
+                  backgroundColor: alpha(ink, 0.08),
+                  color: ink,
+                  border: `1px solid ${alpha(ink, 0.15)}`,
+                  borderRadius: '999px'
+                }}
+              />
             </Box>
 
-            {/* Group Foods */}
             <Grid container spacing={2}>
-              {group.foods.map((food) => (
-                <Grid
-                  item
-                  xs={12}
-                  sm={6}
-                  md={mode === 'page' ? 4 : 6}
-                  key={food._id || food.id}
-                >
-                  <FoodCard
-                    food={food}
-                    onClick={handleFoodClick}
-                    onQuickAdd={showQuickAdd ? handleQuickAdd : null}
-                    showQuickAdd={showQuickAdd}
-                    selectable
-                    selected={!!selectedCompositeFoods[getFoodKey(food)]}
-                    onSelectToggle={toggleCompositeSelection}
-                  />
-                </Grid>
-              ))}
+              {group.foods.map((food, idx) => renderFoodCard(food, groupIdx * 10 + idx))}
             </Grid>
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
-              <Button
-                type="button"
-                variant="contained"
-                size="small"
-                disabled={getSelectedFoodsForGroup(group.item).length === 0}
-                onClick={() => handleAddSelectedFromGroup(group.item)}
-              >
-                Add Selected ({getSelectedFoodsForGroup(group.item).length})
-              </Button>
-            </Box>
           </Box>
         ))}
       </Box>
     );
   };
 
-  const renderFoodGrid = (foods, title, showTitle = true) => {
+  const renderFoodGrid = (foods, title, showTitle = true, startIndex = 0) => {
     if (!foods || foods.length === 0) return null;
-
     return (
       <Box sx={{ mb: 3 }}>
-        {showTitle && (
+        {showTitle && title && (
           <Typography
-            variant="h6"
+            component="h3"
             sx={{
-              fontWeight: 600,
-              mb: 2,
-              color: 'text.primary',
-              fontSize: '1.125rem'
+              fontFamily: "'DM Serif Display', serif",
+              fontSize: '1.125rem',
+              fontWeight: 400,
+              color: ink,
+              mb: 1.5,
+              letterSpacing: '-0.01em'
             }}
           >
-            {title || 'More Results'}
+            {title}
           </Typography>
         )}
         <Grid container spacing={2}>
-          {foods.map((food) => (
-            <Grid
-              item
-              xs={12}
-              sm={6}
-              md={mode === 'page' ? 4 : 6}
-              key={food._id || food.id}
-            >
-              <FoodCard
-                food={food}
-                onClick={handleFoodClick}
-                onQuickAdd={showQuickAdd ? handleQuickAdd : null}
-                showQuickAdd={showQuickAdd}
-              />
-            </Grid>
-          ))}
+          {foods.map((food, idx) => renderFoodCard(food, startIndex + idx))}
         </Grid>
       </Box>
     );
   };
 
   return (
-    <Box className={className}>
-      {/* Search Bar */}
+    <Box
+      className={className}
+      sx={{
+        // Leave breathing room at the bottom so the sticky tray never covers content
+        pb: trayItems.length > 0 ? { xs: 2, sm: 3 } : 0
+      }}
+    >
+      {/* Search bar */}
       <SearchBar
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
         onSubmit={handleSearchSubmit}
-        onBarcodeClick={showBarcode ? handleBarcodeClick : null}
+        onBarcodeClick={showBarcode ? onBarcodeClick : null}
         loading={loading}
         placeholder={placeholder}
         autoFocus={mode === 'dialog'}
       />
 
-      {/* AI Results Indicator with Add All option */}
+      {/* Editorial stage hint — only when tray is empty and no results */}
+      {trayItems.length === 0 && searchQuery.length < 2 && recentFoods.length === 0 && !loading && (
+        <Box
+          sx={{
+            mt: 3,
+            px: 3,
+            py: 5,
+            textAlign: 'center',
+            borderRadius: 3,
+            border: `1px dashed ${alpha(ink, 0.18)}`,
+            backgroundColor: alpha(ink, theme.palette.mode === 'dark' ? 0.04 : 0.02)
+          }}
+        >
+          <WandIcon sx={{ fontSize: 32, color: primary, mb: 1.5 }} />
+          <Typography
+            sx={{
+              fontFamily: "'DM Serif Display', serif",
+              fontSize: '1.5rem',
+              fontWeight: 400,
+              color: ink,
+              mb: 0.5,
+              letterSpacing: '-0.01em'
+            }}
+          >
+            Describe your meal
+          </Typography>
+          <Typography sx={{ color: muted, fontSize: '0.9375rem', maxWidth: 360, mx: 'auto' }}>
+            Try something like “2 chicken tacos, chips, and a margarita” — we'll break it down and
+            let you stage each item on your tray.
+          </Typography>
+        </Box>
+      )}
+
+      {/* AI indicator */}
       {hasAIResults && !loading && (
         <Alert
           severity="info"
           icon={<AIIcon />}
           sx={{
+            mt: 2,
             mb: 2,
-            borderRadius: '12px',
-            backgroundColor: 'rgba(6, 182, 212, 0.1)',
-            border: '1px solid rgba(6, 182, 212, 0.3)',
-            '& .MuiAlert-icon': { color: 'primary.main' }
+            borderRadius: 2,
+            backgroundColor: alpha(primary, 0.08),
+            border: `1px solid ${alpha(primary, 0.22)}`,
+            '& .MuiAlert-icon': { color: primary },
+            '& .MuiAlert-message': {
+              fontSize: '0.875rem',
+              color: ink
+            }
           }}
-          action={
-            searchResults.filter(f => f.source === 'ai').length > 1 && (
-              <Button
-                color="inherit"
-                size="small"
-                onClick={() => {
-                  // Add all AI-parsed items at once
-                  const aiItems = searchResults.filter(f => f.source === 'ai');
-                  aiItems.forEach(food => {
-                    onFoodSelect?.({
-                      ...food,
-                      servings: food.serving?.size || 1,
-                      mealType: defaultMealType
-                    });
-                  });
-                }}
-                sx={{
-                  fontWeight: 600,
-                  color: 'primary.main',
-                  '&:hover': { backgroundColor: 'action.hover' }
-                }}
-              >
-                Add All ({searchResults.filter(f => f.source === 'ai').length})
-              </Button>
-            )
-          }
         >
-          AI parsed your description. Click "Add All" to add everything, or select items individually.
+          AI parsed your description. Tap any card to stage it — you can build a full meal before logging.
         </Alert>
       )}
 
-      {/* Error Message */}
+      {/* Error */}
       {error && (
         <Alert
           severity="error"
           onClose={() => setError(null)}
           sx={{
-            mb: 3,
-            borderRadius: '12px',
-            backgroundColor: 'rgba(239, 68, 68, 0.1)',
-            border: '1px solid rgba(239, 68, 68, 0.2)'
+            mt: 2,
+            mb: 2,
+            borderRadius: 2,
+            backgroundColor: alpha(theme.palette.error.main, 0.08),
+            border: `1px solid ${alpha(theme.palette.error.main, 0.22)}`
           }}
         >
           {error}
         </Alert>
       )}
 
-      {/* Search Results */}
+      {/* Results */}
       {searchQuery.length >= 2 && (
-        <Box sx={{ mb: 3 }}>
+        <Box sx={{ mt: 2, mb: 3 }}>
           {loading ? (
             renderLoadingSkeletons()
           ) : searchResults.length > 0 ? (
@@ -555,8 +544,8 @@ const UnifiedFoodSearch = ({
               renderCompositeResults(searchResults)
             ) : (
               (() => {
-                const mealResults = searchResults.filter((result) => result.type === 'meal');
-                const foodResults = searchResults.filter((result) => result.type !== 'meal');
+                const mealResults = searchResults.filter((r) => r.type === 'meal');
+                const foodResults = searchResults.filter((r) => r.type !== 'meal');
 
                 const rankedFoods = [...foodResults].sort((a, b) => {
                   const rankA = typeof a.sanityRank === 'number' ? a.sanityRank : Number.MAX_SAFE_INTEGER;
@@ -572,14 +561,28 @@ const UnifiedFoodSearch = ({
 
                 return (
                   <>
-                    {mealResults.length > 0 && renderFoodGrid(mealResults, 'Saved Meals')}
-                    {bestMatches.length > 0 && renderFoodGrid(bestMatches, 'Best Matches')}
+                    {mealResults.length > 0 && renderFoodGrid(mealResults, 'Saved Meals', true, 0)}
+                    {bestMatches.length > 0 &&
+                      renderFoodGrid(bestMatches, 'Best Matches', true, mealResults.length)}
                     {moreMatches.length > 0 && (
                       <Box sx={{ mb: 3 }}>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            mb: 1.5
+                          }}
+                        >
                           <Typography
-                            variant="h6"
-                            sx={{ fontWeight: 600, color: 'text.primary', fontSize: '1.125rem' }}
+                            component="h3"
+                            sx={{
+                              fontFamily: "'DM Serif Display', serif",
+                              fontSize: '1.125rem',
+                              fontWeight: 400,
+                              color: ink,
+                              letterSpacing: '-0.01em'
+                            }}
                           >
                             More Results
                           </Typography>
@@ -587,13 +590,24 @@ const UnifiedFoodSearch = ({
                             size="small"
                             onClick={() => setShowMoreResults((prev) => !prev)}
                             endIcon={showMoreResults ? <CollapseIcon /> : <ExpandIcon />}
-                            sx={{ textTransform: 'none', fontWeight: 600 }}
+                            sx={{
+                              textTransform: 'uppercase',
+                              fontWeight: 700,
+                              fontSize: '0.6875rem',
+                              letterSpacing: '0.12em',
+                              color: muted
+                            }}
                           >
                             {showMoreResults ? 'Hide' : `Show ${moreMatches.length}`}
                           </Button>
                         </Box>
                         <Collapse in={showMoreResults}>
-                          {renderFoodGrid(moreMatches, '', false)}
+                          {renderFoodGrid(
+                            moreMatches,
+                            '',
+                            false,
+                            mealResults.length + bestMatches.length
+                          )}
                         </Collapse>
                       </Box>
                     )}
@@ -607,52 +621,48 @@ const UnifiedFoodSearch = ({
                 textAlign: 'center',
                 py: 6,
                 px: 3,
-                borderRadius: '16px',
-                backgroundColor: 'background.default',
-                border: '1px dashed',
-                borderColor: 'divider'
+                borderRadius: 3,
+                border: `1px dashed ${alpha(ink, 0.18)}`,
+                backgroundColor: alpha(ink, theme.palette.mode === 'dark' ? 0.04 : 0.02)
               }}
             >
               <Typography
-                variant="h6"
                 sx={{
-                  color: 'text.secondary',
-                  mb: 1,
-                  fontWeight: 600
+                  fontFamily: "'DM Serif Display', serif",
+                  fontSize: '1.25rem',
+                  color: ink,
+                  mb: 0.5
                 }}
               >
-                No foods found
+                Nothing found
               </Typography>
-              <Typography
-                variant="body2"
-                sx={{
-                  color: 'text.secondary'
-                }}
-              >
-                Try a different search term or scan a barcode
+              <Typography sx={{ color: muted, fontSize: '0.875rem' }}>
+                Try a different phrase or scan a barcode
               </Typography>
             </Box>
           )}
         </Box>
       )}
 
-      {/* Recent Foods */}
+      {/* Recent foods */}
       {showRecent && recentFoods.length > 0 && searchQuery.length < 2 && (
-        <Box>
+        <Box sx={{ mt: 2 }}>
           <Box
             sx={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              mb: 2
+              mb: 1.5
             }}
           >
             <Typography
-              variant="h6"
+              component="h3"
               sx={{
-                fontWeight: 600,
-                color: 'text.primary',
-                fontSize: '1.125rem'
+                fontFamily: "'DM Serif Display', serif",
+                fontSize: '1.125rem',
+                fontWeight: 400,
+                color: ink,
+                letterSpacing: '-0.01em'
               }}
             >
               Recent Foods
@@ -661,62 +671,42 @@ const UnifiedFoodSearch = ({
               onClick={() => setShowRecentSection(!showRecentSection)}
               endIcon={showRecentSection ? <CollapseIcon /> : <ExpandIcon />}
               sx={{
-                color: 'text.secondary',
-                textTransform: 'none',
-                fontWeight: 600,
-                '&:hover': {
-                  backgroundColor: 'action.hover',
-                  color: 'primary.main'
-                }
+                color: muted,
+                textTransform: 'uppercase',
+                fontWeight: 700,
+                fontSize: '0.6875rem',
+                letterSpacing: '0.12em'
               }}
             >
               {showRecentSection ? 'Hide' : 'Show'}
             </Button>
           </Box>
 
-          <Collapse in={showRecentSection}>
-            {renderFoodGrid(recentFoods, '', false)}
-          </Collapse>
+          <Collapse in={showRecentSection}>{renderFoodGrid(recentFoods, '', false, 0)}</Collapse>
         </Box>
       )}
 
-      {/* Empty State (no search, no recent) */}
-      {searchQuery.length < 2 && recentFoods.length === 0 && !loading && (
-        <Box
-          sx={{
-            textAlign: 'center',
-            py: 8,
-            px: 3
-          }}
-        >
-          <Typography
-            variant="h5"
-            sx={{
-              color: 'text.primary',
-              mb: 1,
-              fontWeight: 700
-            }}
-          >
-            Search for foods
-          </Typography>
-          <Typography
-            variant="body1"
-            sx={{
-              color: 'text.secondary',
-              mb: 3
-            }}
-          >
-            Start typing to find foods, or use the barcode scanner
-          </Typography>
-        </Box>
-      )}
+      {/* ─── The staging tray (bottom dock) ─── */}
+      <StagingTray
+        items={trayItems}
+        mealType={defaultMealType}
+        onUpdateServings={updateServings}
+        onRemove={removeFromTray}
+        onClear={clearTray}
+        onCommit={commitTray}
+        committing={committing}
+      />
 
-      {/* Add Food Modal */}
+      {/* Legacy modal — kept for precision macro editing flows (not used by search tap) */}
       <AddFoodModal
-        open={!!selectedFood}
-        onClose={() => setSelectedFood(null)}
-        food={selectedFood}
-        onAdd={handleModalAdd}
+        open={!!modalFood}
+        onClose={() => setModalFood(null)}
+        food={modalFood}
+        onAdd={(foodWithSettings) => {
+          // If modal is used, treat it as a direct one-off: stage then immediately commit
+          stageFood(foodWithSettings);
+          setModalFood(null);
+        }}
         defaultMealType={defaultMealType}
       />
     </Box>

@@ -2,25 +2,20 @@ import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
-  Card,
-  CardContent,
   Button,
   TextField,
   Avatar,
-  Divider,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
-  ListItemSecondaryAction,
-  Switch,
   Alert,
   CircularProgress,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  Grid
+  Grid,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
 } from '@mui/material';
 import {
   Person as PersonIcon,
@@ -28,34 +23,19 @@ import {
   Security as SecurityIcon,
   Logout as LogoutIcon,
   Edit as EditIcon,
-  MonitorHeart as BPIcon,
-  Palette as ThemeIcon,
-  Language as LanguageIcon
 } from '@mui/icons-material';
-import {
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem
-} from '@mui/material';
+import { Link as RouterLink } from 'react-router-dom';
 import { useAuth } from '@geeksuite/auth';
 import { userService } from '../services/userService.js';
-import { settingsService } from '../services/settingsService.js';
-import { useTheme as useAppTheme } from '../contexts/ThemeContext.jsx';
 import HouseholdSettings from '../components/Settings/HouseholdSettings';
+import { Surface, SectionLabel, DisplayHeading } from '../components/primitives';
 
 const Profile = () => {
   const { user, logout } = useAuth();
-  const { themePreference, setThemePreference } = useAppTheme();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showEditDialog, setShowEditDialog] = useState(false);
-  const [garminEnabled, setGarminEnabled] = useState(false);
-  const [garminUsername, setGarminUsername] = useState('');
-  const [garminPassword, setGarminPassword] = useState('');
-  const [savingGarmin, setSavingGarmin] = useState(false);
-  const [units, setUnits] = useState({ weight: 'lbs', height: 'ft' });
   const [editData, setEditData] = useState({
     username: user?.username || user?.name || '',
     email: user?.email || '',
@@ -69,7 +49,6 @@ const Profile = () => {
   // Load user profile data on mount
   useEffect(() => {
     loadUserProfile();
-    loadGarminSettings();
   }, []);
 
   const loadUserProfile = async () => {
@@ -88,71 +67,6 @@ const Profile = () => {
       console.error('Failed to load user profile:', error);
     }
   };
-
-  const loadGarminSettings = async () => {
-    try {
-      const resp = await settingsService.getSettings();
-      const settings = resp?.data || {};
-      const g = settings.garmin || {};
-      setGarminEnabled(!!g.enabled);
-      setGarminUsername(g.username || '');
-      setGarminPassword(''); // never display existing
-      // Load units
-      setUnits(settings.units || { weight: 'lbs', height: 'ft' });
-    } catch (error) {
-      console.error('Failed to load Garmin settings:', error);
-    }
-  };
-
-  const handleThemeChange = async (newTheme) => {
-    // Update the app theme context (this also updates localStorage)
-    setThemePreference(newTheme);
-    try {
-      await settingsService.updateSettings({ theme: newTheme });
-      setSuccess('Theme updated');
-      setTimeout(() => setSuccess(''), 2000);
-    } catch (e) {
-      console.error('Failed to save theme:', e);
-    }
-  };
-
-  const handleUnitChange = async (field, value) => {
-    const newUnits = { ...units, [field]: value };
-    setUnits(newUnits);
-    try {
-      await settingsService.updateSettings({ units: newUnits });
-      setSuccess('Units updated');
-      setTimeout(() => setSuccess(''), 2000);
-    } catch (e) {
-      console.error('Failed to save units:', e);
-    }
-  };
-
-  const handleSaveGarmin = async () => {
-    try {
-      setSavingGarmin(true);
-      setSuccess('');
-      setError('');
-      const payload = {
-        garmin: {
-          enabled: garminEnabled,
-          username: garminUsername,
-          ...(garminPassword ? { password: garminPassword } : {})
-        }
-      };
-      await settingsService.updateSettings(payload);
-      setSuccess('Garmin settings saved');
-      setGarminPassword('');
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (e) {
-      console.error('Failed to save Garmin settings:', e);
-      setError('Failed to save Garmin settings');
-      setTimeout(() => setError(''), 3000);
-    } finally {
-      setSavingGarmin(false);
-    }
-  };
-
 
   const handleLogout = () => {
     logout();
@@ -191,239 +105,224 @@ const Profile = () => {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h4" component="h1" sx={{ fontWeight: 700, color: 'text.primary', mb: 1 }}>
-        Profile & Settings
-      </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
-        Manage your account and preferences
-      </Typography>
+    <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 960, mx: 'auto' }}>
+      {/* Editorial header */}
+      <Box sx={{ mb: 3 }}>
+        <SectionLabel sx={{ mb: 0.75 }}>Account · You</SectionLabel>
+        <DisplayHeading size="page">Profile</DisplayHeading>
+        <Typography sx={{ color: 'text.secondary', mt: 0.5, fontSize: '0.9375rem' }}>
+          Your identity and account. App preferences live in Settings.
+        </Typography>
+      </Box>
 
-      {/* Success/Error Messages */}
       {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
       <Grid container spacing={3}>
         {/* Profile Card */}
         <Grid xs={12} md={4}>
-          <Card sx={{ borderRadius: 2, boxShadow: 1 }}>
-            <CardContent sx={{ textAlign: 'center' }}>
-              <Avatar
-                sx={{
-                  width: 100,
-                  height: 100,
-                  mx: 'auto',
-                  mb: 2,
-                  bgcolor: 'primary.main',
-                  fontSize: '2rem'
-                }}
-              >
-                {(user?.username || user?.name)?.charAt(0)?.toUpperCase() || 'U'}
-              </Avatar>
-              <Typography variant="h5" sx={{ fontWeight: 600, mb: 1 }}>
-                {editData.firstName && editData.lastName
-                  ? `${ editData.firstName } ${ editData.lastName }`
-                  : editData.username || user?.username || user?.name || 'User'
-                }
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                {editData.email || user?.email || 'user@example.com'}
-              </Typography>
-              <Button
-                variant="outlined"
-                startIcon={<EditIcon />}
-                onClick={() => {
-                  setEditData({
-                    username: editData.username || user?.username || user?.name || '',
-                    email: editData.email || user?.email || '',
-                    firstName: editData.firstName || '',
-                    lastName: editData.lastName || '',
-                    age: editData.age || '',
-                    height: editData.height || '',
-                    gender: editData.gender || ''
-                  });
-                  setShowEditDialog(true);
-                }}
-              >
-                Edit Profile
-              </Button>
-            </CardContent>
-          </Card>
+          <Surface sx={{ textAlign: 'center', py: 4 }}>
+            <Avatar
+              sx={{
+                width: 96,
+                height: 96,
+                mx: 'auto',
+                mb: 2,
+                bgcolor: 'primary.main',
+                fontFamily: "'DM Serif Display', serif",
+                fontSize: '2.25rem',
+                fontWeight: 400,
+              }}
+            >
+              {(user?.username || user?.name)?.charAt(0)?.toUpperCase() || 'U'}
+            </Avatar>
+            <Typography
+              sx={{
+                fontFamily: "'DM Serif Display', serif",
+                fontSize: '1.5rem',
+                fontWeight: 400,
+                color: 'text.primary',
+                letterSpacing: '-0.01em',
+                mb: 0.5,
+                lineHeight: 1.15,
+              }}
+            >
+              {editData.firstName && editData.lastName
+                ? `${editData.firstName} ${editData.lastName}`
+                : editData.username || user?.username || user?.name || 'User'}
+            </Typography>
+            <Typography
+              sx={{
+                color: 'text.secondary',
+                fontSize: '0.875rem',
+                mb: 2.5,
+                wordBreak: 'break-word',
+              }}
+            >
+              {editData.email || user?.email || ''}
+            </Typography>
+            <Button
+              variant="outlined"
+              startIcon={<EditIcon />}
+              onClick={() => {
+                setEditData({
+                  username: editData.username || user?.username || user?.name || '',
+                  email: editData.email || user?.email || '',
+                  firstName: editData.firstName || '',
+                  lastName: editData.lastName || '',
+                  age: editData.age || '',
+                  height: editData.height || '',
+                  gender: editData.gender || '',
+                });
+                setShowEditDialog(true);
+              }}
+            >
+              Edit Profile
+            </Button>
+          </Surface>
         </Grid>
 
-        {/* Settings */}
+        {/* Right column */}
         <Grid xs={12} md={8}>
-
-          {/* Garmin Integration */}
-          <Card sx={{ mt: 2, borderRadius: 2, boxShadow: 1 }}>
-            <CardContent>
-              <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
-                <BPIcon sx={{ mr: 1 }} />
-                Garmin Integration
-              </Typography>
-
-              <List>
-                <ListItem>
-                  <ListItemIcon>
-                    <BPIcon />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary="Enable Garmin"
-                    secondary="Toggle Garmin Connect integration for your account"
-                  />
-                  <ListItemSecondaryAction>
-                    <Switch
-                      edge="end"
-                      checked={garminEnabled}
-                      onChange={(e) => setGarminEnabled(e.target.checked)}
-                    />
-                  </ListItemSecondaryAction>
-                </ListItem>
-              </List>
-
-              <Divider sx={{ my: 2 }} />
-
-              <Grid container spacing={2}>
-                <Grid xs={12} md={6}>
-                  <TextField
-                    fullWidth
-                    label="Garmin Username"
-                    value={garminUsername}
-                    onChange={(e) => setGarminUsername(e.target.value)}
-                    disabled={!garminEnabled}
-                  />
-                </Grid>
-                <Grid xs={12} md={6}>
-                  <TextField
-                    fullWidth
-                    type="password"
-                    label="Garmin Password"
-                    placeholder={garminEnabled ? 'Enter to update (leave blank to keep)' : 'Disabled'}
-                    value={garminPassword}
-                    onChange={(e) => setGarminPassword(e.target.value)}
-                    disabled={!garminEnabled}
-                  />
-                </Grid>
-              </Grid>
-
-              <Box sx={{ mt: 2 }}>
-                <Button
-                  variant="contained"
-                  onClick={handleSaveGarmin}
-                  disabled={savingGarmin}
-                >
-                  {savingGarmin ? <CircularProgress size={20} /> : 'Save Garmin Settings'}
-                </Button>
-              </Box>
-            </CardContent>
-          </Card>
-
           {/* Household Sharing */}
-          <Box sx={{ mt: 2 }}>
+          <Box sx={{ mb: 2 }}>
             <HouseholdSettings />
           </Box>
 
-          {/* Appearance */}
-          <Card sx={{ mt: 2, borderRadius: 2, boxShadow: 1 }}>
-            <CardContent>
-              <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
-                <ThemeIcon sx={{ mr: 1 }} />
-                Appearance
-              </Typography>
-              <FormControl fullWidth>
-                <InputLabel>Theme</InputLabel>
-                <Select
-                  value={themePreference}
-                  onChange={(e) => handleThemeChange(e.target.value)}
-                  label="Theme"
-                >
-                  <MenuItem value="light">Light</MenuItem>
-                  <MenuItem value="dark">Dark</MenuItem>
-                  <MenuItem value="auto">Auto (System)</MenuItem>
-                </Select>
-              </FormControl>
-            </CardContent>
-          </Card>
-
-          {/* Units */}
-          <Card sx={{ mt: 2, borderRadius: 2, boxShadow: 1 }}>
-            <CardContent>
-              <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
-                <LanguageIcon sx={{ mr: 1 }} />
-                Units
-              </Typography>
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-                <FormControl fullWidth>
-                  <InputLabel>Weight Units</InputLabel>
-                  <Select
-                    value={units.weight}
-                    onChange={(e) => handleUnitChange('weight', e.target.value)}
-                    label="Weight Units"
+          {/* Preferences pointer */}
+          <Surface sx={{ mb: 2 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 2,
+                flexWrap: 'wrap',
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
+                <SettingsIcon sx={{ color: 'primary.main', flexShrink: 0 }} />
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography
+                    sx={{
+                      fontFamily: "'DM Serif Display', serif",
+                      fontSize: '1.25rem',
+                      fontWeight: 400,
+                      color: 'text.primary',
+                      letterSpacing: '-0.01em',
+                      lineHeight: 1.2,
+                    }}
                   >
-                    <MenuItem value="lbs">Pounds (lbs)</MenuItem>
-                    <MenuItem value="kg">Kilograms (kg)</MenuItem>
-                  </Select>
-                </FormControl>
-                <FormControl fullWidth>
-                  <InputLabel>Height Units</InputLabel>
-                  <Select
-                    value={units.height}
-                    onChange={(e) => handleUnitChange('height', e.target.value)}
-                    label="Height Units"
-                  >
-                    <MenuItem value="ft">Feet/Inches (ft)</MenuItem>
-                    <MenuItem value="cm">Centimeters (cm)</MenuItem>
-                  </Select>
-                </FormControl>
+                    Preferences
+                  </Typography>
+                  <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>
+                    Theme, units, notifications, and Garmin integration
+                  </Typography>
+                </Box>
               </Box>
-            </CardContent>
-          </Card>
+              <Button component={RouterLink} to="/settings" variant="outlined" size="small">
+                Open Settings
+              </Button>
+            </Box>
+          </Surface>
 
           {/* Account Actions */}
-          <Card sx={{ mt: 2, borderRadius: 2, boxShadow: 1 }}>
-            <CardContent>
-              <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
-                <SecurityIcon sx={{ mr: 1 }} />
-                Account
-              </Typography>
-
-              <List>
-                <ListItem>
-                  <ListItemIcon>
-                    <SecurityIcon />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary="Change Password"
-                    secondary="Update your account password"
-                  />
-                </ListItem>
-
-                <Divider />
-
-                <ListItem>
-                  <ListItemIcon>
-                    <PersonIcon />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary="Account Information"
-                    secondary="View and manage your account details"
-                  />
-                </ListItem>
-
-                <Divider />
-
-                <ListItem onClick={handleLogout}>
-                  <ListItemIcon>
-                    <LogoutIcon />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary="Logout"
-                    secondary="Sign out of your account"
-                  />
-                </ListItem>
-              </List>
-            </CardContent>
-          </Card>
+          <Surface padded={false}>
+            <Box
+              sx={{
+                px: 2.5,
+                pt: 2,
+                pb: 1.25,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1.25,
+                borderBottom: (theme) => `1px dashed ${theme.palette.divider}`,
+              }}
+            >
+              <SecurityIcon sx={{ color: 'primary.main', fontSize: 18 }} />
+              <SectionLabel>Account</SectionLabel>
+            </Box>
+            <List sx={{ p: 0 }}>
+              <ListItem
+                sx={{
+                  px: 2.5,
+                  py: 1.5,
+                  borderBottom: (theme) => `1px solid ${theme.palette.divider}`,
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 36 }}>
+                  <SecurityIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText
+                  primary={
+                    <Typography sx={{ fontWeight: 600, fontSize: '0.9375rem' }}>
+                      Change Password
+                    </Typography>
+                  }
+                  secondary={
+                    <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>
+                      Update your account password
+                    </Typography>
+                  }
+                />
+              </ListItem>
+              <ListItem
+                sx={{
+                  px: 2.5,
+                  py: 1.5,
+                  borderBottom: (theme) => `1px solid ${theme.palette.divider}`,
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 36 }}>
+                  <PersonIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText
+                  primary={
+                    <Typography sx={{ fontWeight: 600, fontSize: '0.9375rem' }}>
+                      Account Information
+                    </Typography>
+                  }
+                  secondary={
+                    <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>
+                      View and manage your account details
+                    </Typography>
+                  }
+                />
+              </ListItem>
+              <ListItem
+                component="button"
+                onClick={handleLogout}
+                sx={{
+                  px: 2.5,
+                  py: 1.5,
+                  width: '100%',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  border: 'none',
+                  bgcolor: 'transparent',
+                  '&:hover': {
+                    bgcolor: (theme) => (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)'),
+                  },
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 36 }}>
+                  <LogoutIcon fontSize="small" color="error" />
+                </ListItemIcon>
+                <ListItemText
+                  primary={
+                    <Typography sx={{ fontWeight: 600, fontSize: '0.9375rem', color: 'error.main' }}>
+                      Sign out
+                    </Typography>
+                  }
+                  secondary={
+                    <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>
+                      End this session
+                    </Typography>
+                  }
+                />
+              </ListItem>
+            </List>
+          </Surface>
         </Grid>
       </Grid>
 

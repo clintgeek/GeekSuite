@@ -11,7 +11,8 @@ import {
 } from '@mui/material';
 import {
   Add as AddIcon,
-  Restaurant as FoodIcon
+  Restaurant as FoodIcon,
+  CheckCircle as StagedIcon
 } from '@mui/icons-material';
 import { useTheme, alpha } from '@mui/material/styles';
 
@@ -55,9 +56,14 @@ const FoodCard = ({
   onQuickAdd,
   showQuickAdd = false,
   compact = false,
+  // Legacy selection (still used by non-stage flows)
   selectable = false,
   selected = false,
-  onSelectToggle
+  onSelectToggle,
+  // New: stage-on-tap mode. When staged=true, card shows "in tray" state.
+  staged = false,
+  stagedCount = 0,
+  animationDelay = 0
 }) => {
   const theme = useTheme();
   const primary = theme.palette.primary.main;
@@ -66,6 +72,9 @@ const FoodCard = ({
   const selectedBorder = primary;
   const baseBg = theme.palette.background.paper;
   const selectedBg = alpha(primary, theme.palette.mode === 'dark' ? 0.25 : 0.08);
+  const isDark = theme.palette.mode === 'dark';
+  const stagedBg = alpha(primary, isDark ? 0.22 : 0.09);
+  const stagedBorder = primary;
 
   const handleClick = (e) => {
     // Don't trigger card click if quick add button was clicked
@@ -91,6 +100,11 @@ const FoodCard = ({
   const carbs = nutrition.carbs_grams || 0;
   const fat = nutrition.fat_grams || 0;
 
+  // Determine visual state
+  const isActive = staged || selected;
+  const activeBorder = staged ? stagedBorder : (selected ? selectedBorder : baseBorder);
+  const activeBg = staged ? stagedBg : (selected ? selectedBg : baseBg);
+
   return (
     <Card
       onClick={handleClick}
@@ -98,14 +112,27 @@ const FoodCard = ({
         borderRadius: '16px',
         overflow: 'hidden',
         cursor: 'pointer',
-        transition: 'all 0.2s ease',
-        border: '1px solid',
-        borderColor: selected ? selectedBorder : baseBorder,
-        backgroundColor: selected ? selectedBg : baseBg,
+        transition: 'transform 220ms cubic-bezier(0.22, 1, 0.36, 1), border-color 180ms ease, background-color 180ms ease, box-shadow 220ms ease',
+        border: `1.5px solid ${activeBorder}`,
+        backgroundColor: activeBg,
         position: 'relative',
+        // Staggered fade-in for first paint
+        animation: 'foodCardEnter 460ms cubic-bezier(0.22, 1, 0.36, 1) both',
+        animationDelay: `${animationDelay}ms`,
+        '@keyframes foodCardEnter': {
+          from: { opacity: 0, transform: 'translateY(12px)' },
+          to: { opacity: 1, transform: 'translateY(0)' }
+        },
+        // Staged cards get a subtle inset glow + lifted rest state
+        ...(staged && {
+          boxShadow: `inset 0 0 0 1px ${alpha(primary, 0.35)}, 0 8px 20px -12px ${alpha(primary, 0.5)}`,
+          transform: 'translateY(-2px)'
+        }),
         '&:hover': {
           transform: 'translateY(-4px)',
-          boxShadow: theme.shadows[6],
+          boxShadow: staged
+            ? `inset 0 0 0 1px ${alpha(primary, 0.5)}, 0 14px 30px -12px ${alpha(primary, 0.55)}`
+            : theme.shadows[6],
           borderColor: selectedBorder,
           '& .quick-add-button': {
             opacity: 1,
@@ -114,7 +141,41 @@ const FoodCard = ({
         }
       }}
     >
-      {selectable && (
+      {/* Staged badge — top-right checkmark with count */}
+      {staged && (
+        <Box
+          aria-label={`Staged ${stagedCount > 1 ? `(${stagedCount})` : ''}`}
+          sx={{
+            position: 'absolute',
+            top: 10,
+            right: 10,
+            zIndex: 2,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 0.5,
+            px: 0.75,
+            py: 0.25,
+            borderRadius: 999,
+            backgroundColor: primary,
+            color: theme.palette.primary.contrastText,
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: '0.6875rem',
+            fontWeight: 700,
+            letterSpacing: '0.04em',
+            boxShadow: `0 6px 14px -4px ${alpha(primary, 0.55)}`,
+            animation: 'stagedBadgePop 320ms cubic-bezier(0.34, 1.56, 0.64, 1)',
+            '@keyframes stagedBadgePop': {
+              from: { transform: 'scale(0.6)', opacity: 0 },
+              to: { transform: 'scale(1)', opacity: 1 }
+            }
+          }}
+        >
+          <StagedIcon sx={{ fontSize: 14 }} />
+          {stagedCount > 1 ? `×${stagedCount}` : 'STAGED'}
+        </Box>
+      )}
+
+      {selectable && !staged && (
         <Checkbox
           checked={selected}
           onChange={handleSelectToggle}

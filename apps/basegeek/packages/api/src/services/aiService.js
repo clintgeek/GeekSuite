@@ -8,6 +8,7 @@ import AIModel from '../models/AIModel.js';
 import AIPricing from '../models/AIPricing.js';
 import aiUsageService from './aiUsageService.js';
 import AIFreeTier from '../models/AIFreeTier.js';
+import AIAppConfig from '../models/AIAppConfig.js';
 import AIUsage from '../models/AIUsage.js';
 import RotationManager from './rotationManager.js';
 // Using cloud-based summarization instead of local transformers.js
@@ -356,10 +357,13 @@ class AIService {
     try {
       await this.loadConfigurations();
       await this.seedInitialModels();
-      this.initialized = true;
       console.log('AI Service initialized with configurations from database');
     } catch (error) {
       console.error('Failed to initialize AI service:', error);
+    } finally {
+      // Always mark as initialized so we don't block forever
+      // Even on partial failure, the service can function with defaults
+      this.initialized = true;
     }
   }
 
@@ -1157,8 +1161,56 @@ class AIService {
       messages = null,
       autoRotate = false,
       freeOnly = false,
+      useAppConfig = false,
       cacheNamespace = 'default'
     } = config;
+
+    // App config resolution: look up server-side routing for this appName
+    // Triggered by useAppConfig flag, model "basegeek-app", or when no explicit provider/model is given
+    if (useAppConfig || requestedProvider === 'basegeek-app') {
+      try {
+        const appConfig = await AIAppConfig.findOne({ appName, enabled: true });
+        if (appConfig) {
+          // Update lastSeen
+          appConfig.lastSeen = new Date();
+          appConfig.save().catch(() => {}); // fire-and-forget
+
+          if (appConfig.tier === 'specific' && appConfig.provider && appConfig.model) {
+            requestedProvider = appConfig.provider;
+            model = appConfig.model;
+            autoRotate = false;
+            freeOnly = false;
+            console.log(`[AppConfig] ${appName} → specific: ${appConfig.provider}/${appConfig.model}`);
+          } else if (appConfig.tier === 'free') {
+            freeOnly = true;
+            console.log(`[AppConfig] ${appName} → free tier`);
+          } else if (appConfig.tier === 'rotation') {
+            autoRotate = true;
+            console.log(`[AppConfig] ${appName} → rotation`);
+          }
+
+          // Apply server-side defaults only if not specified in the request
+          if (appConfig.maxTokens && !config.maxTokens) maxTokens = appConfig.maxTokens;
+          if (appConfig.temperature != null && config.temperature == null) temperature = appConfig.temperature;
+          if (appConfig.fallbackOrder?.length > 0) {
+            // Will be used if provider fails — stored for fallback logic
+            config._appFallbackOrder = appConfig.fallbackOrder;
+          }
+        } else {
+          // Auto-discover: create a default config entry for this app
+          AIAppConfig.findOneAndUpdate(
+            { appName },
+            { appName, tier: 'free', autoDiscovered: true, lastSeen: new Date() },
+            { upsert: true, new: true }
+          ).catch(() => {});
+          freeOnly = true;
+          console.log(`[AppConfig] ${appName} → auto-discovered, defaulting to free tier`);
+        }
+      } catch (appConfigError) {
+        console.error(`[AppConfig] Failed to resolve config for ${appName}:`, appConfigError.message);
+        // Fall through to normal routing
+      }
+    }
 
     // "free" mode: query DB for available free-tier models and pick the best one
     if (freeOnly || requestedProvider === 'free') {
@@ -2288,6 +2340,13 @@ class AIService {
    */
   async chat(prompt, config = {}) {
     return this.callAI(prompt, config);
+  }
+
+  async chatWithHistory(messages, config = {}) {
+    // Extract the last user message as the prompt for routing
+    const lastUser = [...messages].reverse().find(m => m.role === 'user');
+    const prompt = lastUser?.content || '';
+    return this.callAI(prompt, { ...config, messages });
   }
 
   /**

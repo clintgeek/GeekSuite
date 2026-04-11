@@ -5,24 +5,36 @@
  * Backend handles smart routing (APIs + AI fallback).
  */
 
+import axios from 'axios';
 import { apiService } from './apiService.js';
+
+// Direct REST client for food search (bypasses GraphQL proxy)
+// The fitnessgeek backend has unifiedFoodService with AI, FatSecret, USDA etc.
+const restApi = axios.create({ baseURL: '/api', timeout: 30000, withCredentials: true });
+
+// Attach auth token to REST calls (same key used by Apollo client)
+restApi.interceptors.request.use((config) => {
+  const token = localStorage.getItem('geek_token');
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
 
 export const foodService = {
   /**
-   * Search for foods - backend handles smart routing
+   * Search for foods - calls fitnessgeek REST API directly for AI + external API search
    * @param {string} query - Search query (can be natural language)
    * @param {Object} options - Search options
    */
   search: async (query, options = {}) => {
     const { limit = 25, includeAI = true } = options;
-    const response = await apiService.get('/foods', {
+    const response = await restApi.get('/foods', {
       params: {
         search: query,
         limit,
         includeAI: includeAI ? 'true' : 'false'
       }
     });
-    return response.data || response;
+    return response.data?.data || response.data || [];
   },
 
   /**
@@ -30,10 +42,10 @@ export const foodService = {
    * @param {string} barcode - UPC/EAN barcode
    */
   getByBarcode: async (barcode) => {
-    const response = await apiService.get('/foods', {
+    const response = await restApi.get('/foods', {
       params: { barcode }
     });
-    const data = response.data || response;
+    const data = response.data?.data || response.data;
     return Array.isArray(data) ? data[0] : data;
   },
 

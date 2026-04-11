@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
-  Card,
-  CardContent,
   Grid,
   CircularProgress,
   Alert,
@@ -29,6 +27,7 @@ import {
   Visibility as AwakeIcon,
 } from '@mui/icons-material';
 import { fitnessGeekService } from '../services/fitnessGeekService';
+import { Surface, SectionLabel, DisplayHeading, StatNumber, EmptyState } from '../components/primitives';
 
 // Activity type icons
 const activityIcons = {
@@ -45,49 +44,44 @@ const getActivityIcon = (type) => {
   return activityIcons[normalizedType] || activityIcons.default;
 };
 
+// Local stat card — uses Surface + StatNumber primitives. Separate from the
+// shared Dashboard/StatCard because this one has a left-aligned icon block.
 const StatCard = ({ icon: Icon, label, value, unit, color, subtitle }) => {
-  const theme = useTheme();
-
   return (
-    <Card sx={{ height: '100%' }}>
-      <CardContent>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-          <Box
-            sx={{
-              bgcolor: `${color}20`,
-              color: color,
-              width: 48,
-              height: 48,
-              borderRadius: '12px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              mr: 2,
-            }}
-          >
-            <Icon sx={{ fontSize: 28 }} />
-          </Box>
-          <Box>
-            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
-              {label}
-            </Typography>
-            <Typography variant="h5" sx={{ fontWeight: 700, color: theme.palette.text.primary }}>
-              {value ?? '--'}
-              {unit && (
-                <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 0.5 }}>
-                  {unit}
-                </Typography>
-              )}
-            </Typography>
-          </Box>
+    <Surface sx={{ height: '100%' }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: subtitle ? 2 : 0, gap: 1.5 }}>
+        <Box
+          sx={{
+            bgcolor: `${color}20`,
+            color,
+            width: 44,
+            height: 44,
+            borderRadius: 2,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+          }}
+        >
+          <Icon sx={{ fontSize: 24 }} />
         </Box>
-        {subtitle && (
-          <Typography variant="caption" color="text.secondary">
-            {subtitle}
-          </Typography>
-        )}
-      </CardContent>
-    </Card>
+        <Box sx={{ minWidth: 0, flex: 1 }}>
+          <SectionLabel sx={{ mb: 0.5 }}>{label}</SectionLabel>
+          <StatNumber value={value} unit={unit} size="display" />
+        </Box>
+      </Box>
+      {subtitle && (
+        <Typography
+          sx={{
+            fontSize: '0.75rem',
+            color: 'text.secondary',
+            mt: 1,
+          }}
+        >
+          {subtitle}
+        </Typography>
+      )}
+    </Surface>
   );
 };
 
@@ -98,76 +92,119 @@ const ActivityCard = ({ activity }) => {
   const distance = activity.distance ? (activity.distance / 1000).toFixed(2) : null;
 
   return (
-    <Card sx={{ mb: 2 }}>
-      <CardContent>
-        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <Box
+    <Surface sx={{ mb: 2 }}>
+      <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0, flex: 1 }}>
+          <Box
+            sx={{
+              bgcolor: theme.palette.primary.main + '20',
+              color: theme.palette.primary.main,
+              width: 44,
+              height: 44,
+              borderRadius: 2,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              mr: 2,
+              flexShrink: 0,
+            }}
+          >
+            <Icon sx={{ fontSize: 24 }} />
+          </Box>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography
               sx={{
-                bgcolor: theme.palette.primary.main + '20',
-                color: theme.palette.primary.main,
-                width: 44,
-                height: 44,
-                borderRadius: '10px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                mr: 2,
+                fontFamily: "'DM Serif Display', serif",
+                fontSize: '1.25rem',
+                fontWeight: 400,
+                color: 'text.primary',
+                letterSpacing: '-0.01em',
+                lineHeight: 1.2,
+                textTransform: 'capitalize',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
               }}
             >
-              <Icon sx={{ fontSize: 24 }} />
-            </Box>
-            <Box>
-              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                {activity.activityName || activity.activityType || 'Activity'}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                {activity.startTimeLocal ? new Date(activity.startTimeLocal).toLocaleString() : 'Unknown time'}
-              </Typography>
-            </Box>
-          </Box>
-          {activity.calories && (
-            <Chip
-              icon={<FireIcon sx={{ fontSize: 16 }} />}
-              label={`${activity.calories} kcal`}
-              size="small"
+              {activity.activityName || activity.activityType || 'Activity'}
+            </Typography>
+            <Typography
               sx={{
-                bgcolor: theme.palette.warning.main + '20',
-                color: theme.palette.warning.dark,
-                fontWeight: 600,
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: '0.6875rem',
+                color: 'text.secondary',
+                mt: 0.25,
+                letterSpacing: '0.02em',
               }}
-            />
-          )}
+            >
+              {activity.startTimeLocal ? new Date(activity.startTimeLocal).toLocaleString() : 'Unknown time'}
+            </Typography>
+          </Box>
         </Box>
+        {activity.calories != null && (
+          <Chip
+            icon={<FireIcon sx={{ fontSize: 16 }} />}
+            label={`${activity.calories} kcal`}
+            size="small"
+            sx={{
+              bgcolor: theme.palette.warning.main + '20',
+              color: theme.palette.warning.dark,
+              fontWeight: 600,
+              fontFamily: "'JetBrains Mono', monospace",
+              flexShrink: 0,
+            }}
+          />
+        )}
+      </Box>
 
-        <Box sx={{ display: 'flex', gap: 3, mt: 2 }}>
-          {duration && (
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <TimeIcon sx={{ fontSize: 18, color: 'text.secondary', mr: 0.5 }} />
-              <Typography variant="body2" color="text.secondary">
-                {duration} min
-              </Typography>
-            </Box>
-          )}
-          {distance && (
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <TrendIcon sx={{ fontSize: 18, color: 'text.secondary', mr: 0.5 }} />
-              <Typography variant="body2" color="text.secondary">
-                {distance} km
-              </Typography>
-            </Box>
-          )}
-          {activity.averageHR && (
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <HeartIcon sx={{ fontSize: 18, color: 'text.secondary', mr: 0.5 }} />
-              <Typography variant="body2" color="text.secondary">
-                {activity.averageHR} bpm avg
-              </Typography>
-            </Box>
-          )}
-        </Box>
-      </CardContent>
-    </Card>
+      <Box sx={{ display: 'flex', gap: 3, mt: 2, flexWrap: 'wrap' }}>
+        {duration != null && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <TimeIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+            <Typography
+              sx={{
+                fontFamily: "'JetBrains Mono', monospace",
+                fontVariantNumeric: 'tabular-nums',
+                fontSize: '0.8125rem',
+                color: 'text.secondary',
+              }}
+            >
+              {duration} min
+            </Typography>
+          </Box>
+        )}
+        {distance && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <TrendIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+            <Typography
+              sx={{
+                fontFamily: "'JetBrains Mono', monospace",
+                fontVariantNumeric: 'tabular-nums',
+                fontSize: '0.8125rem',
+                color: 'text.secondary',
+              }}
+            >
+              {distance} km
+            </Typography>
+          </Box>
+        )}
+        {activity.averageHR && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <HeartIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+            <Typography
+              sx={{
+                fontFamily: "'JetBrains Mono', monospace",
+                fontVariantNumeric: 'tabular-nums',
+                fontSize: '0.8125rem',
+                color: 'text.secondary',
+              }}
+            >
+              {activity.averageHR} bpm avg
+            </Typography>
+          </Box>
+        )}
+      </Box>
+    </Surface>
   );
 };
 
@@ -239,14 +276,13 @@ const Activity = () => {
   }
 
   return (
-    <Box sx={{ p: { xs: 2, sm: 3 } }}>
-      {/* Header */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
-          Activity
-        </Typography>
-        <Typography variant="body1" color="text.secondary">
-          Your Garmin fitness data and recent activities
+    <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 960, mx: 'auto' }}>
+      {/* Editorial header */}
+      <Box sx={{ mb: 3 }}>
+        <SectionLabel sx={{ mb: 0.75 }}>Tracking · Activity</SectionLabel>
+        <DisplayHeading size="page">Activity</DisplayHeading>
+        <Typography sx={{ color: 'text.secondary', mt: 0.5, fontSize: '0.9375rem' }}>
+          Your Garmin fitness data and recent activities.
         </Typography>
       </Box>
 
@@ -259,9 +295,9 @@ const Activity = () => {
       {/* Daily Stats */}
       {dailyData && (
         <>
-          <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
-            Today's Summary
-          </Typography>
+          <Box sx={{ mb: 2 }}>
+            <SectionLabel>Today's Summary</SectionLabel>
+          </Box>
           <Grid container spacing={2} sx={{ mb: 4 }}>
             <Grid item xs={6} sm={3}>
               <StatCard
@@ -304,56 +340,66 @@ const Activity = () => {
       {/* Heart Rate Details */}
       {dailyData?.heartRate && (
         <>
-          <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
-            Heart Rate
-          </Typography>
-          <Card sx={{ mb: 4 }}>
-            <CardContent>
-              <Grid container spacing={3}>
-                <Grid item xs={4}>
-                  <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant="caption" color="text.secondary">Min</Typography>
-                    <Typography variant="h5" sx={{ fontWeight: 600, color: theme.palette.success.main }}>
-                      {dailyData.heartRate.minHeartRate || '--'}
-                    </Typography>
-                  </Box>
-                </Grid>
-                <Grid item xs={4}>
-                  <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant="caption" color="text.secondary">Resting</Typography>
-                    <Typography variant="h5" sx={{ fontWeight: 600, color: theme.palette.info.main }}>
-                      {dailyData.heartRate.restingHeartRate || dailyData.restingHR || '--'}
-                    </Typography>
-                  </Box>
-                </Grid>
-                <Grid item xs={4}>
-                  <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant="caption" color="text.secondary">Max</Typography>
-                    <Typography variant="h5" sx={{ fontWeight: 600, color: theme.palette.error.main }}>
-                      {dailyData.heartRate.maxHeartRate || '--'}
-                    </Typography>
-                  </Box>
-                </Grid>
+          <Box sx={{ mb: 2 }}>
+            <SectionLabel>Heart Rate</SectionLabel>
+          </Box>
+          <Surface sx={{ mb: 4 }}>
+            <Grid container spacing={3}>
+              <Grid item xs={4}>
+                <Box sx={{ textAlign: 'center' }}>
+                  <SectionLabel sx={{ mb: 0.75, justifyContent: 'center' }}>Min</SectionLabel>
+                  <StatNumber
+                    value={dailyData.heartRate.minHeartRate}
+                    unit="bpm"
+                    size="display"
+                    color={theme.palette.success.main}
+                  />
+                </Box>
               </Grid>
-            </CardContent>
-          </Card>
+              <Grid item xs={4}>
+                <Box sx={{ textAlign: 'center' }}>
+                  <SectionLabel sx={{ mb: 0.75, justifyContent: 'center' }}>Resting</SectionLabel>
+                  <StatNumber
+                    value={dailyData.heartRate.restingHeartRate || dailyData.restingHR}
+                    unit="bpm"
+                    size="display"
+                    color={theme.palette.info.main}
+                  />
+                </Box>
+              </Grid>
+              <Grid item xs={4}>
+                <Box sx={{ textAlign: 'center' }}>
+                  <SectionLabel sx={{ mb: 0.75, justifyContent: 'center' }}>Max</SectionLabel>
+                  <StatNumber
+                    value={dailyData.heartRate.maxHeartRate}
+                    unit="bpm"
+                    size="display"
+                    color={theme.palette.error.main}
+                  />
+                </Box>
+              </Grid>
+            </Grid>
+          </Surface>
         </>
       )}
 
       {/* Sleep Details */}
       {sleepData && (
         <>
-          <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
-            Sleep Details
-          </Typography>
-          <Card sx={{ mb: 4 }}>
-            <CardContent>
+          <Box sx={{ mb: 2 }}>
+            <SectionLabel>Sleep Details</SectionLabel>
+          </Box>
+          <Surface sx={{ mb: 4 }}>
+            <Box>
               {sleepData.sleepScore && (
                 <Box sx={{ textAlign: 'center', mb: 3 }}>
-                  <Typography variant="caption" color="text.secondary">Sleep Score</Typography>
-                  <Typography variant="h3" sx={{ fontWeight: 700, color: theme.palette.primary.main }}>
-                    {sleepData.sleepScore}
-                  </Typography>
+                  <SectionLabel sx={{ justifyContent: 'center', mb: 1 }}>Sleep Score</SectionLabel>
+                  <StatNumber
+                    value={sleepData.sleepScore}
+                    size="hero"
+                    color={theme.palette.primary.main}
+                    sx={{ display: 'flex', justifyContent: 'center' }}
+                  />
                 </Box>
               )}
 
@@ -554,31 +600,25 @@ const Activity = () => {
                   )}
                 </Box>
               )}
-            </CardContent>
-          </Card>
+            </Box>
+          </Surface>
         </>
       )}
 
       {/* Recent Activities */}
-      <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
-        Recent Activities
-      </Typography>
+      <Box sx={{ mb: 2 }}>
+        <SectionLabel>Recent Activities</SectionLabel>
+      </Box>
       {activities.length > 0 ? (
         activities.map((activity, index) => (
           <ActivityCard key={activity.activityId || index} activity={activity} />
         ))
       ) : (
-        <Card>
-          <CardContent sx={{ textAlign: 'center', py: 4 }}>
-            <WorkoutIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 2 }} />
-            <Typography color="text.secondary">
-              No recent activities found
-            </Typography>
-            <Typography variant="caption" color="text.disabled">
-              Activities from your Garmin device will appear here
-            </Typography>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={WorkoutIcon}
+          title="No recent activities"
+          copy="Activities from your Garmin device will show up here once they sync."
+        />
       )}
 
       {/* Last Sync Info */}

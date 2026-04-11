@@ -82,8 +82,23 @@ class AIDirectorService {
 
   async collectModelInformation() {
     try {
+      // Wait for aiService to finish loading configs from DB
+      if (!aiService.initialized) {
+        console.log('AI Director waiting for aiService to initialize...');
+        let attempts = 0;
+        while (!aiService.initialized && attempts < 20) {
+          await new Promise(resolve => setTimeout(resolve, 250));
+          attempts++;
+        }
+        if (!aiService.initialized) {
+          // Force a reload as a last resort
+          console.warn('aiService not initialized after 5s, forcing config reload...');
+          await aiService.loadConfigurations();
+        }
+      }
+
       console.log('Starting AI Director collectModelInformation...');
-      const providers = ['anthropic', 'groq', 'gemini', 'together', 'cohere', 'openrouter', 'cerebras', 'cloudflare', 'ollama', 'llm7', 'llmgateway', 'onemin'];
+      const providers = ['anthropic', 'groq', 'gemini', 'together', 'cohere', 'openrouter', 'cerebras', 'cloudflare', 'ollama', 'llm7', 'llmgateway'];
       const modelInfo = {};
 
       for (const provider of providers) {
@@ -91,7 +106,7 @@ class AIDirectorService {
 
         // Check if provider has API key and is enabled
         const hasApiKey = !!aiService.providers[provider]?.apiKey;
-        const isEnabled = aiService.providers[provider]?.enabled || false;
+        const isEnabled = aiService.providers[provider]?.enabled === true;
 
         console.log(`${provider} - hasApiKey: ${hasApiKey}, isEnabled: ${isEnabled}`);
 

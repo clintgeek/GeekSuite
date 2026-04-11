@@ -9,6 +9,7 @@ import { formatResponse } from '../utils/responseFormatter.js';
 const router = express.Router();
 const ROTATION_MODEL_ALIAS = 'basegeek-rotation';
 const FREE_MODEL_ALIAS = 'basegeek-free';
+const APP_MODEL_ALIAS = 'basegeek-app';
 
 function extractModeFromMessages(messages) {
   if (!Array.isArray(messages)) return null;
@@ -108,9 +109,11 @@ router.get('/models', async (req, res) => {
     }
 
     // Add our virtual model aliases
+    const now = Math.floor(Date.now() / 1000);
     allModels.unshift(
-      { id: ROTATION_MODEL_ALIAS, object: 'model', created: Math.floor(Date.now() / 1000), owned_by: 'basegeek' },
-      { id: FREE_MODEL_ALIAS, object: 'model', created: Math.floor(Date.now() / 1000), owned_by: 'basegeek' }
+      { id: ROTATION_MODEL_ALIAS, object: 'model', created: now, owned_by: 'basegeek' },
+      { id: FREE_MODEL_ALIAS, object: 'model', created: now, owned_by: 'basegeek' },
+      { id: APP_MODEL_ALIAS, object: 'model', created: now, owned_by: 'basegeek' }
     );
 
     res.json({ object: 'list', data: allModels });
@@ -126,7 +129,7 @@ router.get('/models/:modelId', async (req, res) => {
     const { modelId } = req.params;
 
     // Check virtual aliases
-    if (modelId === ROTATION_MODEL_ALIAS || modelId === FREE_MODEL_ALIAS) {
+    if (modelId === ROTATION_MODEL_ALIAS || modelId === FREE_MODEL_ALIAS || modelId === APP_MODEL_ALIAS) {
       return res.json({
         id: modelId,
         object: 'model',
@@ -190,7 +193,8 @@ router.post('/chat/completions', async (req, res) => {
 
     const requestedModel = typeof model === 'string' ? model : null;
     const useFreeAlias = requestedModel === FREE_MODEL_ALIAS;
-    const useRotationAlias = !requestedModel || requestedModel === ROTATION_MODEL_ALIAS || useFreeAlias;
+    const useAppAlias = requestedModel === APP_MODEL_ALIAS;
+    const useRotationAlias = !requestedModel || requestedModel === ROTATION_MODEL_ALIAS || useFreeAlias || useAppAlias;
 
     const headerNamespace = req.get('x-cache-namespace');
     const bodyNamespace = typeof req.body?.cache_namespace === 'string' ? req.body.cache_namespace : null;
@@ -232,8 +236,9 @@ router.post('/chat/completions', async (req, res) => {
       topP,
       messages,
       userId,
-      autoRotate: !useFreeAlias,
+      autoRotate: !useFreeAlias && !useAppAlias,
       freeOnly: useFreeAlias,
+      useAppConfig: useAppAlias,
       appName: req.apiKey?.appName || 'openai-proxy',
       cacheNamespace,
       // Pass through standard OpenAI params

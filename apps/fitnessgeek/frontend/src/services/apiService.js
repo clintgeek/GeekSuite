@@ -175,12 +175,32 @@ const GET_HOUSEHOLD_MEMBER_LOGS = gql`
   query GetHouseholdMemberLogs($memberId: ID!, $date: Date!) { fitnessHouseholdMemberLogs(memberId: $memberId, date: $date) { id log_date meal_type servings calculatedNutrition { calories_per_serving protein_grams carbs_grams fat_grams fiber_grams sugar_grams sodium_mg } food_item_id { id name brand } } }
 `;
 
+// Report types resolve to FitnessJSON scalars on the backend — select them
+// as-is without sub-field selection or GraphQL rejects the query with 400.
 const GET_FOOD_REPORT_OVERVIEW = gql`
-  query GetFoodReportOverview($start: String, $days: Int) { fitnessFoodReportOverview(start: $start, days: $days) { range { start end days } totals { calories protein_grams carbs_grams fat_grams fiber_grams sugar_grams sodium_mg } averages { calories protein_grams carbs_grams fat_grams fiber_grams sugar_grams sodium_mg } daily { date calories protein carbs fat fiber sugar entries } meals { breakfast { calories protein carbs fat count } lunch { calories protein carbs fat count } dinner { calories protein carbs fat count } snack { calories protein carbs fat count } } topFoods { name count calories } goalCompliance { calories { goal daysWithin percentage } protein { goal daysWithin percentage } carbs { goal daysWithin percentage } fat { goal daysWithin percentage } } } }
+  query GetFoodReportOverview($start: String, $days: Int) {
+    fitnessFoodReportOverview(start: $start, days: $days) {
+      range
+      totals
+      averages
+      daily
+      meals
+      topFoods
+      goalCompliance
+    }
+  }
 `;
 
 const GET_FOOD_REPORT_TRENDS = gql`
-  query GetFoodReportTrends($start: String, $days: Int) { fitnessFoodReportTrends(start: $start, days: $days) { range { start end days } daily { date calories protein carbs fat fiber sugar } rolling { date calories protein carbs fat fiber sugar } weights { date weight } highlights } }
+  query GetFoodReportTrends($start: String, $days: Int) {
+    fitnessFoodReportTrends(start: $start, days: $days) {
+      range
+      daily
+      rolling
+      weights
+      highlights
+    }
+  }
 `;
 
 const GET_MORNING_BRIEF = gql` query GetMorningBrief { fitnessInsightsMorningBrief { type content generatedAt context } } `;
@@ -227,8 +247,16 @@ function routeRequest(method, url, data) {
   if (base.endsWith('/')) base = base.slice(0, -1);
   const parts = base.split('/').filter(Boolean);
 
+  // Strip fields that don't belong in FitnessUserSettingsInput
+  const sanitizeSettingsInput = (raw) => {
+    const { id, _id, user_id, __typename, favorite_foods, created_at, updated_at, ...clean } = raw || {};
+    return clean;
+  };
+
   if (method === 'GET') {
     if (base === '/settings') return { query: GET_USER_SETTINGS };
+    // /user/settings is an alias — same underlying FitnessUserSettings document
+    if (base === '/user/settings') return { query: GET_USER_SETTINGS };
     if (base === '/weight') return { query: GET_WEIGHTS };
     if (base === '/goals/nutrition/macros' || base === '/goals/nutrition') return { query: GET_DERIVED_MACROS };
     if (base === '/goals') return { query: GET_DERIVED_MACROS };
@@ -325,17 +353,18 @@ function routeRequest(method, url, data) {
 
     // App settings updates via PUT/POST mixed
     if (base.startsWith('/settings/')) {
-      // Just update all settings
-      return { mutation: UPDATE_USER_SETTINGS, variables: { input: data } };
+      return { mutation: UPDATE_USER_SETTINGS, variables: { input: sanitizeSettingsInput(data) } };
     }
     return null;
   }
 
   if (method === 'PUT') {
     const id = parts[1]; // /resource/:id
-    if (base === '/settings') return { mutation: UPDATE_USER_SETTINGS, variables: { input: data } };
+    if (base === '/settings') return { mutation: UPDATE_USER_SETTINGS, variables: { input: sanitizeSettingsInput(data) } };
+    // /user/settings is an alias for /settings (PATCH and PUT both hit this)
+    if (base === '/user/settings') return { mutation: UPDATE_USER_SETTINGS, variables: { input: sanitizeSettingsInput(data) } };
     if (base === '/settings/household') return { _isMock: true, data: { success: true } };
-    if (parts[0] === 'settings') return { mutation: UPDATE_USER_SETTINGS, variables: { input: data } }; // /settings/dashboard etc
+    if (parts[0] === 'settings') return { mutation: UPDATE_USER_SETTINGS, variables: { input: sanitizeSettingsInput(data) } }; // /settings/dashboard etc
     if (parts[0] === 'weight') return { mutation: UPDATE_WEIGHT, variables: { id, input: data } };
     if (parts[0] === 'foods') return { mutation: UPDATE_FOOD_LOG, variables: { id, input: data } }; // Assuming foods route updates log
     if (parts[0] === 'logs') return { mutation: UPDATE_FOOD_LOG, variables: { id, input: data } };

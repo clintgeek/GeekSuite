@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { Box, Typography, Alert, Snackbar, CircularProgress, Button } from '@mui/material';
-import { Flag as GoalIcon } from '@mui/icons-material';
+import { Box, Typography, Alert, Snackbar, CircularProgress } from '@mui/material';
 import { useWeight } from '../hooks/useWeight.js';
 import {
   WeightGoalWizard,
@@ -10,6 +9,7 @@ import {
   WeightLogList
 } from '../components/Weight';
 import { settingsService } from '../services/settingsService.js';
+import { SectionLabel, DisplayHeading } from '../components/primitives';
 
 const Weight = () => {
   const [showGoalWizard, setShowGoalWizard] = useState(false);
@@ -33,13 +33,7 @@ const Weight = () => {
   const handleSaveGoal = async (goalData) => {
     setSavingGoal(true);
     try {
-      // Get current settings
-      const settingsResp = await settingsService.getSettings();
-      const settingsData = settingsResp?.data || settingsResp?.data?.data || settingsResp;
-
-      // Update weight goal
       await settingsService.updateSettings({
-        ...settingsData,
         weight_goal: goalData
       });
 
@@ -68,49 +62,14 @@ const Weight = () => {
   }
 
   return (
-    <Box sx={{ p: { xs: 2, sm: 3 } }}>
-      {/* Header */}
-      <Box sx={{
-        mb: 4,
-        display: 'flex',
-        flexDirection: { xs: 'column', sm: 'row' },
-        justifyContent: 'space-between',
-        alignItems: { xs: 'stretch', sm: 'center' },
-        gap: { xs: 2, sm: 0 }
-      }}>
-        <Box>
-          <Typography
-            variant="h4"
-            component="h1"
-            sx={{
-              fontWeight: 700,
-              mb: 0.5,
-              color: 'text.primary',
-              letterSpacing: '-0.02em',
-              fontSize: { xs: '1.5rem', sm: '2.125rem' }
-            }}
-          >
-            Weight Tracking
-          </Typography>
-          <Typography variant="body1" sx={{ color: 'text.secondary', fontSize: { xs: '0.875rem', sm: '1.0625rem' } }}>
-            Track your weight and reach your goals
-          </Typography>
-        </Box>
-        <Button
-          variant="contained"
-          startIcon={<GoalIcon />}
-          onClick={() => setShowGoalWizard(true)}
-          sx={{
-            borderRadius: '999px',
-            px: 3,
-            py: { xs: 1.25, sm: 1 },
-            textTransform: 'none',
-            fontWeight: 700,
-            alignSelf: { xs: 'stretch', sm: 'auto' },
-          }}
-        >
-          {weightGoal?.enabled ? 'Edit Goal' : 'Set Goal'}
-        </Button>
+    <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 960, mx: 'auto' }}>
+      {/* Editorial header */}
+      <Box sx={{ mb: 3 }}>
+        <SectionLabel sx={{ mb: 0.75 }}>Tracking · Weight</SectionLabel>
+        <DisplayHeading size="page">Weight</DisplayHeading>
+        <Typography sx={{ color: 'text.secondary', mt: 0.5, fontSize: '0.9375rem' }}>
+          Track your weight and reach your goals. Goal editing lives on the progress card below.
+        </Typography>
       </Box>
 
       {/* Progress Card */}

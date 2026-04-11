@@ -68,9 +68,10 @@ export default function InfluxDBSettings({ onSettingsChange }) {
 
     try {
       const response = await apiService.get('/user/settings');
+      const s = response?.data || response || {};
       setSettings({
-        influxEnabled: response.influxEnabled || false,
-        healthBaselines: response.healthBaselines || {
+        influxEnabled: s.influxEnabled || false,
+        healthBaselines: s.healthBaselines || {
           weeklyHRV: null,
           restingHR: null,
           lastUpdated: null
