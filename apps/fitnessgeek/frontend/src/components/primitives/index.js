@@ -16,3 +16,4 @@ export { default as DisplayHeading } from './DisplayHeading.jsx';
 export { default as EmptyState } from './EmptyState.jsx';
 export { default as SurfaceSkeleton } from './SurfaceSkeleton.jsx';
 export { default as PageEnter } from './PageEnter.jsx';
+export { buildChartTheme } from './chartTheme.js';

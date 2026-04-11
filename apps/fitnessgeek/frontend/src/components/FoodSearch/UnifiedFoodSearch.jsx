@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -6,8 +6,7 @@ import {
   Alert,
   Collapse,
   Button,
-  Skeleton,
-  Chip
+  Skeleton
 } from '@mui/material';
 import {
   ExpandMore as ExpandIcon,
@@ -20,6 +19,7 @@ import SearchBar from './SearchBar';
 import FoodCard from './FoodCard';
 import AddFoodModal from './AddFoodModal';
 import StagingTray from './StagingTray';
+import CompositeResolver from './CompositeResolver';
 import { foodService } from '../../services/foodService';
 import { fitnessGeekService } from '../../services/fitnessGeekService';
 
@@ -41,6 +41,58 @@ const getFoodIdentity = (food) => {
     food.id ||
     `${food.source || 'unknown'}::${food.compositeItem || ''}::${food.name || ''}::${food.compositeIndex ?? ''}`
   );
+};
+
+/**
+ * Stable key for an AI composite group. Tied to the parsed phrase + quantity
+ * + the original index, so two distinct groups with the same phrase can coexist.
+ */
+const groupKeyOf = (group) => {
+  const idx = group?.foods?.[0]?.compositeIndex ?? '';
+  return `${group?.item || ''}__${group?.quantity ?? ''}__${group?.unit ?? ''}__${idx}`;
+};
+
+/**
+ * Decide a sensible default serving count for a food we're staging.
+ * Mirrors the heuristic from stageFood so auto-stage and manual stage agree.
+ */
+const computeDefaultServings = (food) => {
+  if (food?.requestedQuantity && Number(food.requestedQuantity) > 0) {
+    return Number(food.requestedQuantity);
+  }
+  const size = Number(food?.serving?.size);
+  if (size > 0 && size <= 10) return size;
+  return 1;
+};
+
+/**
+ * Backend marks AI-parsed composite items with `compositeItem`. If any result
+ * carries that field, the whole result set is treated as composite.
+ */
+const isCompositeResult = (foods) =>
+  foods && foods.length > 0 && foods.some((food) => Boolean(food.compositeItem));
+
+/**
+ * Group composite results by parsed item, preserving order. Backend already
+ * sorts by `compositeIndex` then by relevance, so foods[0] of each group is
+ * the best match for that parsed phrase.
+ */
+const groupCompositeResults = (foods) => {
+  const groups = [];
+  let currentGroup = null;
+  for (const food of foods) {
+    if (!currentGroup || currentGroup.item !== food.compositeItem) {
+      currentGroup = {
+        item: food.compositeItem,
+        quantity: food.requestedQuantity,
+        unit: food.requestedUnit,
+        foods: []
+      };
+      groups.push(currentGroup);
+    }
+    currentGroup.foods.push(food);
+  }
+  return groups;
 };
 
 const UnifiedFoodSearch = ({
@@ -84,6 +136,13 @@ const UnifiedFoodSearch = ({
   // For editing a single item's precise macros (still routes through modal)
   const [modalFood, setModalFood] = useState(null);
 
+  // ─── Composite resolver state ───
+  // Groups the user explicitly skipped (so the auto-stage pass leaves them alone).
+  const [skippedGroupKeys, setSkippedGroupKeys] = useState(() => new Set());
+  // Tracks which composite query has already had its best matches auto-staged,
+  // so we run the pre-fill exactly once per search.
+  const autoStagedQueryRef = useRef(null);
+
   // Tray identity index → used to badge cards and count duplicates
   const trayIndex = useMemo(() => {
     const map = new Map();
@@ -94,13 +153,55 @@ const UnifiedFoodSearch = ({
     return map;
   }, [trayItems]);
 
+  // ─── Derived: composite groups for the resolver ───
+  // Pure derivation off searchResults — feeds both the resolver render and
+  // the auto-stage effect below.
+  const compositeGroups = useMemo(
+    () => (isCompositeResult(searchResults) ? groupCompositeResults(searchResults) : []),
+    [searchResults]
+  );
+
   // Auto-clear results when query emptied
   useEffect(() => {
     if (searchQuery.length < 2) {
       setSearchResults([]);
       setHasAIResults(false);
+      // Reset composite memory so a fresh search re-auto-stages
+      autoStagedQueryRef.current = null;
+      setSkippedGroupKeys(new Set());
     }
   }, [searchQuery]);
+
+  // ─── Auto-stage best matches on composite arrival ───
+  // Runs once per unique composite query. The user lands on the resolver
+  // already pre-resolved — happy path is zero taps to log a parsed meal.
+  useEffect(() => {
+    if (compositeGroups.length === 0) return;
+    if (autoStagedQueryRef.current === searchQuery) return;
+
+    autoStagedQueryRef.current = searchQuery;
+    setSkippedGroupKeys(new Set());
+
+    setTrayItems((prev) => {
+      // Skip any group that already has a representative in the tray (rare,
+      // but guards against double-staging if the user re-runs the same query)
+      const existingIdentities = new Set(prev.map((it) => it.identityKey));
+      const additions = [];
+      for (const group of compositeGroups) {
+        if (!group.foods?.length) continue;
+        const groupIdentities = group.foods.map((f) => getFoodIdentity(f));
+        if (groupIdentities.some((k) => existingIdentities.has(k))) continue;
+        const best = group.foods[0];
+        additions.push({
+          stageId: nextStageId(),
+          identityKey: getFoodIdentity(best),
+          ...best,
+          servings: computeDefaultServings(best)
+        });
+      }
+      return additions.length > 0 ? [...prev, ...additions] : prev;
+    });
+  }, [compositeGroups, searchQuery]);
 
   // Load recent foods
   useEffect(() => {
@@ -202,20 +303,13 @@ const UnifiedFoodSearch = ({
       return;
     }
 
-    const defaultServings =
-      food.requestedQuantity && Number(food.requestedQuantity) > 0
-        ? Number(food.requestedQuantity)
-        : food.serving?.size && Number(food.serving.size) > 0 && Number(food.serving.size) <= 10
-        ? Number(food.serving.size)
-        : 1;
-
     setTrayItems((prev) => [
       ...prev,
       {
         stageId: nextStageId(),
         identityKey: getFoodIdentity(food),
         ...food,
-        servings: defaultServings
+        servings: computeDefaultServings(food)
       }
     ]);
   };
@@ -253,7 +347,104 @@ const UnifiedFoodSearch = ({
     setTrayItems((prev) => prev.filter((item) => item.stageId !== stageId));
   };
 
-  const clearTray = () => setTrayItems([]);
+  const clearTray = () => {
+    setTrayItems([]);
+    setSkippedGroupKeys(new Set());
+    autoStagedQueryRef.current = null;
+  };
+
+  // ─── Composite resolver ops ──────────────────────────────────────────
+  // The resolver maintains a hard invariant: each group has either exactly
+  // one staged candidate, OR is explicitly marked as skipped. Selection swaps
+  // are atomic — never zero, never two.
+
+  const stageBestForGroup = useCallback((group, prevTray) => {
+    if (!group?.foods?.length) return prevTray;
+    const best = group.foods[0];
+    return [
+      ...prevTray,
+      {
+        stageId: nextStageId(),
+        identityKey: getFoodIdentity(best),
+        ...best,
+        servings: computeDefaultServings(best)
+      }
+    ];
+  }, []);
+
+  const selectCandidateForGroup = useCallback((group, newFood) => {
+    const groupIdentityKeys = new Set(group.foods.map((f) => getFoodIdentity(f)));
+    const newIdentity = getFoodIdentity(newFood);
+    setTrayItems((prev) => {
+      // Strip every existing entry from this group, then add the new one
+      const filtered = prev.filter((it) => !groupIdentityKeys.has(it.identityKey));
+      return [
+        ...filtered,
+        {
+          stageId: nextStageId(),
+          identityKey: newIdentity,
+          ...newFood,
+          servings: computeDefaultServings(newFood)
+        }
+      ];
+    });
+    // Selecting always un-skips the group
+    const key = groupKeyOf(group);
+    setSkippedGroupKeys((prev) => {
+      if (!prev.has(key)) return prev;
+      const next = new Set(prev);
+      next.delete(key);
+      return next;
+    });
+  }, []);
+
+  const skipGroup = useCallback((group) => {
+    const key = groupKeyOf(group);
+    const groupIdentityKeys = new Set(group.foods.map((f) => getFoodIdentity(f)));
+    setTrayItems((prev) => prev.filter((it) => !groupIdentityKeys.has(it.identityKey)));
+    setSkippedGroupKeys((prev) => {
+      if (prev.has(key)) return prev;
+      const next = new Set(prev);
+      next.add(key);
+      return next;
+    });
+  }, []);
+
+  const restoreGroup = useCallback((group) => {
+    const key = groupKeyOf(group);
+    setSkippedGroupKeys((prev) => {
+      if (!prev.has(key)) return prev;
+      const next = new Set(prev);
+      next.delete(key);
+      return next;
+    });
+    setTrayItems((prev) => stageBestForGroup(group, prev));
+  }, [stageBestForGroup]);
+
+  const resetCompositeSelections = useCallback((groups) => {
+    if (!groups || groups.length === 0) return;
+    setSkippedGroupKeys(new Set());
+    setTrayItems((prev) => {
+      // Strip everything tied to this composite query, then re-add best matches
+      const allCompositeIdentityKeys = new Set(
+        groups.flatMap((g) => g.foods.map((f) => getFoodIdentity(f)))
+      );
+      const filtered = prev.filter((it) => !allCompositeIdentityKeys.has(it.identityKey));
+      const additions = groups.flatMap((group) => {
+        if (!group?.foods?.length) return [];
+        const best = group.foods[0];
+        return [
+          {
+            stageId: nextStageId(),
+            identityKey: getFoodIdentity(best),
+            ...best,
+            servings: computeDefaultServings(best)
+          }
+        ];
+      });
+      return [...filtered, ...additions];
+    });
+  }, []);
 
   const commitTray = async () => {
     if (trayItems.length === 0 || committing) return;
@@ -289,27 +480,6 @@ const UnifiedFoodSearch = ({
     </Grid>
   );
 
-  const isCompositeResult = (foods) =>
-    foods && foods.length > 0 && foods.some((food) => Boolean(food.compositeItem));
-
-  const groupCompositeResults = (foods) => {
-    const groups = [];
-    let currentGroup = null;
-    for (const food of foods) {
-      if (!currentGroup || currentGroup.item !== food.compositeItem) {
-        currentGroup = {
-          item: food.compositeItem,
-          quantity: food.requestedQuantity,
-          unit: food.requestedUnit,
-          foods: []
-        };
-        groups.push(currentGroup);
-      }
-      currentGroup.foods.push(food);
-    }
-    return groups;
-  };
-
   const renderFoodCard = (food, index) => {
     const identity = getFoodIdentity(food);
     const stagedCount = trayIndex.get(identity) || 0;
@@ -323,97 +493,6 @@ const UnifiedFoodSearch = ({
           animationDelay={index * 40}
         />
       </Grid>
-    );
-  };
-
-  const renderCompositeResults = (foods) => {
-    const groups = groupCompositeResults(foods);
-
-    return (
-      <Box sx={{ mb: 3 }}>
-        {/* Editorial header */}
-        <Box sx={{ mb: 2.5 }}>
-          <Typography
-            sx={{
-              fontSize: '0.6875rem',
-              fontWeight: 700,
-              textTransform: 'uppercase',
-              letterSpacing: '0.18em',
-              color: muted,
-              mb: 0.5
-            }}
-          >
-            AI Parsed · {groups.length} Item{groups.length !== 1 ? 's' : ''}
-          </Typography>
-          <Typography
-            component="h2"
-            sx={{
-              fontFamily: "'DM Serif Display', serif",
-              fontSize: { xs: '1.5rem', sm: '1.875rem' },
-              fontWeight: 400,
-              lineHeight: 1.1,
-              color: ink,
-              letterSpacing: '-0.015em'
-            }}
-          >
-            Your Meal, Broken Down
-          </Typography>
-        </Box>
-
-        {groups.map((group, groupIdx) => (
-          <Box key={groupIdx} sx={{ mb: 3.5 }}>
-            {/* Group heading — serif + chip, clear hierarchy */}
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1.25,
-                mb: 1.5,
-                pb: 1,
-                borderBottom: `2px solid ${ink}`,
-                position: 'relative'
-              }}
-            >
-              <Typography
-                sx={{
-                  fontFamily: "'DM Serif Display', serif",
-                  fontSize: '1.25rem',
-                  fontWeight: 400,
-                  color: ink,
-                  textTransform: 'capitalize',
-                  flex: 1,
-                  minWidth: 0,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap'
-                }}
-              >
-                {group.item}
-              </Typography>
-              <Chip
-                label={`${group.quantity || 1} ${group.unit || ''}`.trim()}
-                size="small"
-                sx={{
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: '0.6875rem',
-                  fontWeight: 600,
-                  letterSpacing: '0.04em',
-                  textTransform: 'lowercase',
-                  height: 22,
-                  backgroundColor: alpha(ink, 0.08),
-                  color: ink,
-                  border: `1px solid ${alpha(ink, 0.15)}`,
-                  borderRadius: '999px'
-                }}
-              />
-            </Box>
-
-            <Grid container spacing={2}>
-              {group.foods.map((food, idx) => renderFoodCard(food, groupIdx * 10 + idx))}
-            </Grid>
-          </Box>
-        ))}
-      </Box>
     );
   };
 
@@ -495,8 +574,9 @@ const UnifiedFoodSearch = ({
         </Box>
       )}
 
-      {/* AI indicator */}
-      {hasAIResults && !loading && (
+      {/* AI indicator — suppressed when the composite resolver is showing,
+          since the resolver carries its own helper line. */}
+      {hasAIResults && !loading && compositeGroups.length === 0 && (
         <Alert
           severity="info"
           icon={<AIIcon />}
@@ -540,8 +620,18 @@ const UnifiedFoodSearch = ({
           {loading ? (
             renderLoadingSkeletons()
           ) : searchResults.length > 0 ? (
-            isCompositeResult(searchResults) ? (
-              renderCompositeResults(searchResults)
+            compositeGroups.length > 0 ? (
+              <CompositeResolver
+                groups={compositeGroups}
+                trayItems={trayItems}
+                skippedGroupKeys={skippedGroupKeys}
+                onSelectCandidate={selectCandidateForGroup}
+                onSkipGroup={skipGroup}
+                onRestoreGroup={restoreGroup}
+                onResetAll={() => resetCompositeSelections(compositeGroups)}
+                groupKeyOf={groupKeyOf}
+                getFoodIdentity={getFoodIdentity}
+              />
             ) : (
               (() => {
                 const mealResults = searchResults.filter((r) => r.type === 'meal');
