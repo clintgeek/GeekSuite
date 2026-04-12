@@ -10,10 +10,10 @@ import {
 } from '@mui/material';
 import { Plus, Pencil, Trash2, Play } from 'lucide-react';
 import { useTemplates } from '../../context/TemplateContext';
-import { useNavigate } from 'react-router-dom';
 import EmptyState from '../shared/EmptyState';
 import SkeletonLoader from '../shared/SkeletonLoader';
 import TemplateApply from './TemplateApply';
+import TemplateEditor from './TemplateEditor';
 import { colors } from '../../theme/colors';
 
 const TEMPLATE_TYPES = {
@@ -35,15 +35,22 @@ const TemplateList = () => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const { templates, loading, error, deleteTemplate } = useTemplates();
-  const navigate = useNavigate();
   const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState(null);
 
   const mutedInk = isDark ? 'rgba(255,255,255,0.5)' : colors.ink[400];
   const primaryInk = theme.palette.text.primary;
   const dottedRule = `1px dotted ${isDark ? 'rgba(255,255,255,0.14)' : colors.ink[200]}`;
 
-  const handleEdit = (templateId) => {
-    navigate(`/templates/edit/${templateId}`);
+  const handleEdit = (template) => {
+    setEditingTemplate(template);
+    setEditorOpen(true);
+  };
+
+  const handleCreate = () => {
+    setEditingTemplate(null);
+    setEditorOpen(true);
   };
 
   const handleDelete = async (templateId) => {
@@ -80,7 +87,7 @@ const TemplateList = () => {
           variant="contained"
           size="small"
           startIcon={<Plus size={16} />}
-          onClick={() => navigate('/templates/new')}
+          onClick={handleCreate}
           sx={{
             fontSize: '0.8125rem',
             fontWeight: 600,
@@ -102,7 +109,7 @@ const TemplateList = () => {
               variant="outlined"
               size="small"
               startIcon={<Plus size={16} />}
-              onClick={() => navigate('/templates/new')}
+              onClick={handleCreate}
               sx={{
                 fontSize: '0.8125rem',
                 color: colors.primary[500],
@@ -182,7 +189,7 @@ const TemplateList = () => {
                   <Tooltip title="Edit template" placement="top">
                     <IconButton
                       size="small"
-                      onClick={() => handleEdit(template._id || template.id)}
+                      onClick={() => handleEdit(template)}
                       sx={{
                         color: mutedInk,
                         '&:hover': { color: colors.primary[500] },
@@ -300,6 +307,16 @@ const TemplateList = () => {
           onApplied={() => setSelectedTemplate(null)}
         />
       )}
+
+      {/* Create/Edit dialog */}
+      <TemplateEditor
+        open={editorOpen}
+        onClose={() => {
+          setEditorOpen(false);
+          setEditingTemplate(null);
+        }}
+        template={editingTemplate}
+      />
     </Box>
   );
 };
