@@ -18,6 +18,11 @@ import { getTaskAge } from '../utils/taskAging';
 const TodayPage = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [editingTask, setEditingTask] = useState(null);
+  // Track whether fetchTasks has resolved for the current date.
+  // Separate from context loading state because: (a) context starts as 'IDLE' string
+  // not matching LoadingState enum, and (b) other views (Review, Plan) mutate the
+  // shared tasks array, so Today renders stale foreign tasks until its own fetch completes.
+  const [todayLoaded, setTodayLoaded] = useState(false);
   const toast = useToast();
   const [createNote] = useMutation(CREATE_NOTE);
   const {
@@ -32,7 +37,8 @@ const TodayPage = () => {
   } = useTaskContext();
 
   useEffect(() => {
-    fetchTasks('daily', currentDate);
+    setTodayLoaded(false);
+    fetchTasks('daily', currentDate).finally(() => setTodayLoaded(true));
   }, [currentDate, fetchTasks]);
 
   const handleDateChange = useCallback((newDate) => {
@@ -139,7 +145,7 @@ const TodayPage = () => {
     completed: completedTasks.length,
   }), [tasks, overdueTasks, completedTasks]);
 
-  const isLoading = loading === LoadingState.FETCHING;
+  const isLoading = !todayLoaded || loading === LoadingState.FETCHING;
 
   // ─── Keyboard navigation ───────────────────────────���─────
   // Flat list of navigable tasks: overdue then active (completed is collapsed)

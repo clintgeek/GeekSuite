@@ -46,7 +46,7 @@ const TaskProvider = ({ children }) => {
 
   // Main state
   const [tasks, setTasks] = useState([]);
-  const [loading, setLoading] = useState('IDLE');
+  const [loading, setLoading] = useState(LoadingState.IDLE);
   const [error, setError] = useState(null);
   const fetchTimeoutRef = useRef(null);
   const lastFetchRef = useRef(null);
@@ -363,8 +363,7 @@ const TaskProvider = ({ children }) => {
       setError(err.response?.data?.message || 'Failed to create task');
       throw err;
     } finally {
-      console.log('Setting loading to IDLE after task creation');
-      setLoading('IDLE');
+      setLoading(LoadingState.IDLE);
     }
   }, []);
 
