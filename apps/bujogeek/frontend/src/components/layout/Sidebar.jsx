@@ -1,5 +1,5 @@
 import { Box, Typography, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Divider, Avatar } from '@mui/material';
-import { CalendarCheck, ClipboardCheck, Calendar, Hash, LogOut } from 'lucide-react';
+import { CalendarCheck, ClipboardCheck, Calendar, Hash, LayoutTemplate, Keyboard, LogOut } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '@mui/material/styles';
@@ -11,6 +11,7 @@ const navItems = [
   { label: 'Review', icon: ClipboardCheck, path: '/review' },
   { label: 'Plan', icon: Calendar, path: '/plan' },
   { label: 'Tags', icon: Hash, path: '/tags' },
+  { label: 'Templates', icon: LayoutTemplate, path: '/templates' },
 ];
 
 const Sidebar = () => {
@@ -113,6 +114,48 @@ const Sidebar = () => {
           );
         })}
       </List>
+
+      {/* Keyboard hint */}
+      <Box
+        sx={{
+          px: 2.5,
+          py: 1.25,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
+          cursor: 'pointer',
+          color: 'rgba(255,248,240,0.2)',
+          transition: 'color 0.15s ease',
+          '&:hover': { color: 'rgba(255,248,240,0.5)' },
+        }}
+        onClick={() => {
+          // Dispatch a ? keydown to trigger the help overlay
+          window.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true }));
+        }}
+        title="Keyboard shortcuts (?)"
+      >
+        <Keyboard size={14} />
+        <Typography sx={{ fontSize: '0.6875rem', fontWeight: 400 }}>
+          Shortcuts
+        </Typography>
+        <Box
+          component="kbd"
+          sx={{
+            ml: 'auto',
+            fontFamily: '"IBM Plex Mono", monospace',
+            fontSize: '0.5625rem',
+            fontWeight: 500,
+            px: 0.5,
+            py: 0.125,
+            borderRadius: '3px',
+            border: '1px solid rgba(255,248,240,0.15)',
+            backgroundColor: 'rgba(255,248,240,0.04)',
+            lineHeight: 1.3,
+          }}
+        >
+          ?
+        </Box>
+      </Box>
 
       {/* Bottom Section */}
       <Divider sx={{ borderColor: chromeDivider }} />

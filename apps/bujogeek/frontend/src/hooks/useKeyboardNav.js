@@ -12,30 +12,36 @@ import { useState, useEffect, useCallback, useRef } from 'react';
  * Automatically suppresses when the user is typing in an input, textarea,
  * contentEditable, or when the hook is disabled (e.g. a modal is open).
  * Scrolls the focused row into view.
- *
- * @param {Object} opts
- * @param {Array}  opts.tasks     — flat ordered array of tasks
- * @param {Function} opts.onToggle  — (task) => toggle complete
- * @param {Function} opts.onEdit    — (task) => open editor
- * @param {Function} opts.onDelete  — (task) => delete (should confirm)
- * @param {boolean}  opts.enabled   — false to suppress all shortcuts
- *
- * @returns {{ focusedIndex, focusedTaskId, setFocusedIndex, clearFocus }}
  */
 const useKeyboardNav = ({ tasks = [], onToggle, onEdit, onDelete, enabled = true }) => {
   const [focusedIndex, setFocusedIndex] = useState(-1);
+
+  // Refs keep the handler's closure always-current without re-registering the listener
+  const focusedIndexRef = useRef(-1);
   const tasksRef = useRef(tasks);
+  const callbacksRef = useRef({ onToggle, onEdit, onDelete });
+
   tasksRef.current = tasks;
+  callbacksRef.current = { onToggle, onEdit, onDelete };
+
+  // Sync ref when state changes
+  const setFocus = useCallback((valueOrFn) => {
+    setFocusedIndex((prev) => {
+      const next = typeof valueOrFn === 'function' ? valueOrFn(prev) : valueOrFn;
+      focusedIndexRef.current = next;
+      return next;
+    });
+  }, []);
 
   // Clamp focused index when task list shrinks (e.g. after delete/complete)
   useEffect(() => {
-    setFocusedIndex((prev) => {
+    setFocus((prev) => {
       if (prev < 0) return prev;
       if (tasks.length === 0) return -1;
       if (prev >= tasks.length) return tasks.length - 1;
       return prev;
     });
-  }, [tasks.length]);
+  }, [tasks.length, setFocus]);
 
   // Scroll focused row into view
   useEffect(() => {
@@ -49,7 +55,7 @@ const useKeyboardNav = ({ tasks = [], onToggle, onEdit, onDelete, enabled = true
     }
   }, [focusedIndex, tasks]);
 
-  const clearFocus = useCallback(() => setFocusedIndex(-1), []);
+  const clearFocus = useCallback(() => setFocus(-1), [setFocus]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -71,20 +77,22 @@ const useKeyboardNav = ({ tasks = [], onToggle, onEdit, onDelete, enabled = true
       if (e.metaKey || e.ctrlKey || e.altKey) return;
 
       const list = tasksRef.current;
+      const idx = focusedIndexRef.current;
+      const { onToggle: toggle, onEdit: edit, onDelete: del } = callbacksRef.current;
 
       switch (e.key) {
         case 'j': {
           e.preventDefault();
-          setFocusedIndex((prev) => {
+          setFocus((prev) => {
             if (list.length === 0) return -1;
-            if (prev < 0) return 0; // first press enters the list
+            if (prev < 0) return 0;
             return Math.min(prev + 1, list.length - 1);
           });
           break;
         }
         case 'k': {
           e.preventDefault();
-          setFocusedIndex((prev) => {
+          setFocus((prev) => {
             if (list.length === 0) return -1;
             if (prev < 0) return 0;
             return Math.max(prev - 1, 0);
@@ -92,37 +100,28 @@ const useKeyboardNav = ({ tasks = [], onToggle, onEdit, onDelete, enabled = true
           break;
         }
         case 'x': {
-          setFocusedIndex((prev) => {
-            if (prev >= 0 && prev < list.length) {
-              e.preventDefault();
-              onToggle?.(list[prev]);
-            }
-            return prev;
-          });
+          if (idx >= 0 && idx < list.length) {
+            e.preventDefault();
+            toggle?.(list[idx]);
+          }
           break;
         }
         case 'e': {
-          setFocusedIndex((prev) => {
-            if (prev >= 0 && prev < list.length) {
-              e.preventDefault();
-              onEdit?.(list[prev]);
-            }
-            return prev;
-          });
+          if (idx >= 0 && idx < list.length) {
+            e.preventDefault();
+            edit?.(list[idx]);
+          }
           break;
         }
         case 'd': {
-          setFocusedIndex((prev) => {
-            if (prev >= 0 && prev < list.length) {
-              e.preventDefault();
-              onDelete?.(list[prev]);
-            }
-            return prev;
-          });
+          if (idx >= 0 && idx < list.length) {
+            e.preventDefault();
+            del?.(list[idx]);
+          }
           break;
         }
         case 'Escape': {
-          setFocusedIndex(-1);
+          setFocus(-1);
           break;
         }
         default:
@@ -132,12 +131,12 @@ const useKeyboardNav = ({ tasks = [], onToggle, onEdit, onDelete, enabled = true
 
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [enabled, onToggle, onEdit, onDelete]);
+  }, [enabled, setFocus]);
 
   const focusedTask = focusedIndex >= 0 ? tasks[focusedIndex] : null;
   const focusedTaskId = focusedTask ? (focusedTask.id || focusedTask._id) : null;
 
-  return { focusedIndex, focusedTaskId, setFocusedIndex, clearFocus };
+  return { focusedIndex, focusedTaskId, setFocusedIndex: setFocus, clearFocus };
 };
 
 export default useKeyboardNav;
