@@ -23,6 +23,11 @@ const taskSchema = new mongoose.Schema({
   migratedFrom: { type: Date, default: null },
   migratedTo: { type: Date, default: null },
   isBacklog: { type: Boolean, default: false },
+  recurrencePattern: {
+    type: String,
+    enum: ['none', 'daily', 'weekly', 'monthly'],
+    default: 'none',
+  },
   parentTask: { type: mongoose.Schema.Types.ObjectId, ref: 'Task', default: null },
   subtasks: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Task' }],
   createdAt: { type: Date, default: Date.now },

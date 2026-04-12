@@ -37,6 +37,13 @@ const PRIORITY_OPTIONS = [
   { value: 3, label: 'Low', color: colors.priority.low },
 ];
 
+const RECURRENCE_OPTIONS = [
+  { value: 'none', label: 'None' },
+  { value: 'daily', label: 'Daily' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'monthly', label: 'Monthly' },
+];
+
 /**
  * TaskEditor — the editorial task edit/create dialog.
  *
@@ -57,6 +64,7 @@ const TaskEditor = ({ open, onClose, task = null }) => {
     dueDate: null,
     tags: [],
     note: '',
+    recurrencePattern: 'none',
   });
   const [tagInput, setTagInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -73,6 +81,7 @@ const TaskEditor = ({ open, onClose, task = null }) => {
         dueDate: task.dueDate ? new Date(task.dueDate) : null,
         tags: task.tags || [],
         note: task.note || '',
+        recurrencePattern: task.recurrencePattern || 'none',
       });
     } else {
       setFormData({
@@ -83,6 +92,7 @@ const TaskEditor = ({ open, onClose, task = null }) => {
         dueDate: null,
         tags: [],
         note: '',
+        recurrencePattern: 'none',
       });
     }
   }, [task]);
@@ -348,7 +358,7 @@ const TaskEditor = ({ open, onClose, task = null }) => {
             </Box>
 
             {/* Tags */}
-            <Box>
+            <Box sx={{ mb: 2 }}>
               <TextField
                 label="Add tags"
                 value={tagInput}
@@ -375,6 +385,37 @@ const TaskEditor = ({ open, onClose, task = null }) => {
                 </Box>
               )}
             </Box>
+          </Box>
+
+          {/* ─── Recurrence section ──────────────────────────────── */}
+          <Box sx={{ borderTop: dottedRule, pt: 2.5, mb: 1 }}>
+            <Typography
+              sx={{
+                fontFamily: '"IBM Plex Mono", monospace',
+                fontSize: '0.6875rem',
+                fontWeight: 500,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                color: captionInk,
+                mb: 1.5,
+              }}
+            >
+              Repeats
+            </Typography>
+            <FormControl fullWidth size="small">
+              <InputLabel>Repeat interval</InputLabel>
+              <Select
+                value={formData.recurrencePattern}
+                onChange={handleChange('recurrencePattern')}
+                label="Repeat interval"
+              >
+                {RECURRENCE_OPTIONS.map((opt) => (
+                  <MenuItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
           </Box>
         </DialogContent>
 

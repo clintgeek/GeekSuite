@@ -376,7 +376,7 @@ const TaskProvider = ({ children }) => {
       // taskType is a Mongoose virtual (not a real schema field) — never send it.
       const ALLOWED_UPDATE_FIELDS = [
         'content', 'signifier', 'status', 'priority', 'note',
-        'tags', 'dueDate', 'isBacklog',
+        'tags', 'dueDate', 'isBacklog', 'recurrencePattern',
       ];
       const cleanUpdates = {};
       for (const key of ALLOWED_UPDATE_FIELDS) {

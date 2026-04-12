@@ -2,7 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Typography, Chip, IconButton, Tooltip, useTheme, useMediaQuery } from '@mui/material';
 import { motion } from 'framer-motion';
-import { Pencil, Trash2, StickyNote } from 'lucide-react';
+import { Pencil, Trash2, StickyNote, Repeat } from 'lucide-react';
 import { format, differenceInCalendarDays } from 'date-fns';
 import TaskCheckbox from './TaskCheckbox';
 import { getTaskAge, getAgingColor, getAgingLabel } from '../../utils/taskAging';
@@ -212,6 +212,23 @@ const TaskRow = ({ task, onStatusToggle, onEdit, onDelete, onSaveAsNote, focused
                 flexShrink: 0,
               }}
             />
+          )}
+
+          {/* Recurrence icon */}
+          {task.recurrencePattern && task.recurrencePattern !== 'none' && (
+            <Tooltip title={`Repeats ${task.recurrencePattern}`} placement="top">
+              <Box
+                component="span"
+                sx={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  flexShrink: 0,
+                  color: isDark ? 'rgba(255,255,255,0.4)' : colors.ink[300],
+                }}
+              >
+                <Repeat size={14} />
+              </Box>
+            </Tooltip>
           )}
         </Box>
 

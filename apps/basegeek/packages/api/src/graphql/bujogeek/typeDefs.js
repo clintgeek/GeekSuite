@@ -15,6 +15,7 @@ export const typeDefs = gql`
     migratedTo: String
     isBacklog: Boolean
     taskType: String
+    recurrencePattern: String
     parentTask: Task
     subtasks: [Task]
     completedAt: Date
@@ -68,6 +69,7 @@ export const typeDefs = gql`
     tags: [String]
     dueDate: Date
     isBacklog: Boolean
+    recurrencePattern: String
   }
 
   type Query {
