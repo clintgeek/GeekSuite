@@ -68,9 +68,6 @@ export const typeDefs = gql`
     tags: [String]
     dueDate: Date
     isBacklog: Boolean
-    taskType: String
-    createdAt: Date
-    updatedAt: Date
   }
 
   type Query {

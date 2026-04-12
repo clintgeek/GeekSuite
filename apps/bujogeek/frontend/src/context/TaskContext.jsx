@@ -373,18 +373,19 @@ const TaskProvider = ({ children }) => {
       setLoading(LoadingState.UPDATING);
 
       // Only send fields that UpdateTaskInput actually accepts.
-      // Spreading the full task object causes 400s — GraphQL strict
-      // validation rejects fields not in the input type definition.
+      // taskType is a Mongoose virtual (not a real schema field) — never send it.
       const ALLOWED_UPDATE_FIELDS = [
         'content', 'signifier', 'status', 'priority', 'note',
-        'tags', 'dueDate', 'isBacklog', 'taskType',
+        'tags', 'dueDate', 'isBacklog',
       ];
       const cleanUpdates = {};
       for (const key of ALLOWED_UPDATE_FIELDS) {
-        if (key in updates && updates[key] !== undefined) {
+        if (key in updates) {
           cleanUpdates[key] = updates[key];
         }
       }
+
+      console.debug('[updateTask] sending:', { id: taskId, input: cleanUpdates });
 
       const response = await apolloClient.mutate({
         mutation: UPDATE_TASK,
@@ -466,8 +467,13 @@ const TaskProvider = ({ children }) => {
       setLoading(LoadingState.IDLE);
       return updatedTask;
     } catch (err) {
-      console.error('Error updating task:', err);
-      setError(err.response?.data?.message || 'Failed to update task');
+      // Surface the real error — Apollo errors live on graphQLErrors/networkError,
+      // not on err.response (which is the axios/REST pattern).
+      const gqlMsg = err.graphQLErrors?.map((e) => e.message).join('; ');
+      const netMsg = err.networkError?.result?.errors?.map((e) => e.message).join('; ');
+      const detail = gqlMsg || netMsg || err.message || 'Failed to update task';
+      console.error('Error updating task:', detail, err);
+      setError(detail);
       setLoading(LoadingState.ERROR);
       throw err;
     }
