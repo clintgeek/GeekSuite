@@ -6,75 +6,67 @@ import {
   Select,
   MenuItem,
   Chip,
-  Stack,
   Button,
   IconButton,
-  InputAdornment
+  InputAdornment,
+  useTheme,
 } from '@mui/material';
-import {
-  Search as SearchIcon,
-  Clear as ClearIcon
-} from '@mui/icons-material';
+import { Search, X } from 'lucide-react';
 import { useTemplates } from '../../context/TemplateContext';
+import { colors } from '../../theme/colors';
 
 const TemplateFilters = () => {
+  const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
   const {
     filters,
     updateFilters,
     clearFilters,
-    templateTypes
+    templateTypes,
   } = useTemplates();
 
-  const handleTypeChange = (event) => {
-    updateFilters({ type: event.target.value });
-  };
+  const mutedInk = isDark ? 'rgba(255,255,255,0.5)' : colors.ink[400];
 
-  const handleSearchChange = (event) => {
-    updateFilters({ search: event.target.value });
-  };
-
-  const handleTagChange = (event) => {
-    const tags = event.target.value.split(',').map(tag => tag.trim());
-    updateFilters({ tags });
-  };
-
-  const handlePublicChange = (event) => {
-    updateFilters({ isPublic: event.target.value === 'true' });
-  };
-
-  const clearSearch = () => {
-    updateFilters({ search: '' });
-  };
+  const hasActiveFilters =
+    filters.search || filters.type || filters.tags.length > 0 || filters.isPublic !== undefined;
 
   return (
-    <Box sx={{ mb: 3 }}>
-      <Stack direction="row" spacing={2} alignItems="center">
+    <Box>
+      <Box
+        sx={{
+          display: 'flex',
+          gap: 1.5,
+          flexWrap: 'wrap',
+          alignItems: 'center',
+        }}
+      >
         <TextField
           size="small"
           placeholder="Search templates..."
           value={filters.search}
-          onChange={handleSearchChange}
+          onChange={(e) => updateFilters({ search: e.target.value })}
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
-                <SearchIcon />
+                <Search size={16} color={mutedInk} />
               </InputAdornment>
             ),
-            endAdornment: filters.search && (
+            endAdornment: filters.search ? (
               <InputAdornment position="end">
-                <IconButton size="small" onClick={clearSearch}>
-                  <ClearIcon />
+                <IconButton size="small" onClick={() => updateFilters({ search: '' })}>
+                  <X size={14} />
                 </IconButton>
               </InputAdornment>
-            )
+            ) : null,
           }}
+          sx={{ minWidth: 180, flex: 1 }}
         />
 
         <FormControl size="small" sx={{ minWidth: 120 }}>
           <InputLabel>Type</InputLabel>
           <Select
             value={filters.type}
-            onChange={handleTypeChange}
+            onChange={(e) => updateFilters({ type: e.target.value })}
             label="Type"
           >
             <MenuItem value="">All Types</MenuItem>
@@ -86,52 +78,38 @@ const TemplateFilters = () => {
           </Select>
         </FormControl>
 
-        <FormControl size="small" sx={{ minWidth: 120 }}>
-          <InputLabel>Visibility</InputLabel>
-          <Select
-            value={filters.isPublic === undefined ? '' : filters.isPublic.toString()}
-            onChange={handlePublicChange}
-            label="Visibility"
-          >
-            <MenuItem value="">All</MenuItem>
-            <MenuItem value="true">Public</MenuItem>
-            <MenuItem value="false">Private</MenuItem>
-          </Select>
-        </FormControl>
-
-        <FormControl size="small" sx={{ minWidth: 120 }}>
-          <TextField
+        {hasActiveFilters && (
+          <Button
             size="small"
-            label="Tags"
-            placeholder="tag1, tag2"
-            value={filters.tags.join(', ')}
-            onChange={handleTagChange}
-          />
-        </FormControl>
+            onClick={clearFilters}
+            startIcon={<X size={14} />}
+            sx={{
+              fontSize: '0.75rem',
+              color: mutedInk,
+              textTransform: 'none',
+              '&:hover': { color: theme.palette.text.primary },
+            }}
+          >
+            Clear
+          </Button>
+        )}
+      </Box>
 
-        <Button
-          variant="outlined"
-          onClick={clearFilters}
-          startIcon={<ClearIcon />}
-        >
-          Clear Filters
-        </Button>
-      </Stack>
-
-      {filters.tags.length > 0 && (
-        <Box sx={{ mt: 1 }}>
-          <Stack direction="row" spacing={1}>
-            {filters.tags.map((tag, index) => (
-              <Chip
-                key={index}
-                label={tag}
-                onDelete={() => {
-                  const newTags = filters.tags.filter((_, i) => i !== index);
-                  updateFilters({ tags: newTags });
-                }}
-              />
-            ))}
-          </Stack>
+      {/* Active tag chips */}
+      {filters.tags.length > 0 && filters.tags[0] !== '' && (
+        <Box sx={{ mt: 1, display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+          {filters.tags.filter(Boolean).map((tag, i) => (
+            <Chip
+              key={i}
+              label={tag}
+              size="small"
+              onDelete={() => {
+                const newTags = filters.tags.filter((_, idx) => idx !== i);
+                updateFilters({ tags: newTags });
+              }}
+              sx={{ fontWeight: 500, fontSize: '0.75rem' }}
+            />
+          ))}
         </Box>
       )}
     </Box>

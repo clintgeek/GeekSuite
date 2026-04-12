@@ -385,8 +385,6 @@ const TaskProvider = ({ children }) => {
         }
       }
 
-      console.debug('[updateTask] sending:', { id: taskId, input: cleanUpdates });
-
       const response = await apolloClient.mutate({
         mutation: UPDATE_TASK,
         variables: { id: taskId, input: cleanUpdates }
