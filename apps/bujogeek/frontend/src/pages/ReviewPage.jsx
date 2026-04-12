@@ -46,7 +46,7 @@ const ReviewPage = () => {
     const taskArray = normalizeTasks(tasks);
     return taskArray.filter((task) => {
       if (task.status === 'completed') return false;
-      if (reviewedIds.has(task._id)) return false;
+      if (reviewedIds.has((task.id || task._id))) return false;
       if (mode === 'endofday') {
         return task.status === 'pending';
       }
@@ -72,8 +72,8 @@ const ReviewPage = () => {
   const handleKeep = useCallback(
     async (task) => {
       const todayStr = toLocalDateString(new Date());
-      await updateTask(task._id, { ...task, dueDate: todayStr });
-      markReviewed(task._id);
+      await updateTask((task.id || task._id), { ...task, dueDate: todayStr });
+      markReviewed((task.id || task._id));
     },
     [updateTask, markReviewed]
   );
@@ -81,25 +81,25 @@ const ReviewPage = () => {
   const handleMoveForward = useCallback(
     async (task) => {
       const tomorrowStr = toLocalDateString(addDays(new Date(), 1));
-      await updateTask(task._id, {
+      await updateTask((task.id || task._id), {
         ...task,
         dueDate: tomorrowStr,
         status: 'migrated_future',
       });
-      markReviewed(task._id);
+      markReviewed((task.id || task._id));
     },
     [updateTask, markReviewed]
   );
 
   const handleBacklog = useCallback(
     async (task) => {
-      await updateTask(task._id, {
+      await updateTask((task.id || task._id), {
         ...task,
         status: 'migrated_back',
         dueDate: null,
         isBacklog: true,
       });
-      markReviewed(task._id);
+      markReviewed((task.id || task._id));
     },
     [updateTask, markReviewed]
   );
@@ -107,8 +107,8 @@ const ReviewPage = () => {
   const handleDelete = useCallback(
     async (task) => {
       if (window.confirm('Delete this task permanently?')) {
-        await deleteTask(task._id);
-        markReviewed(task._id);
+        await deleteTask((task.id || task._id));
+        markReviewed((task.id || task._id));
       }
     },
     [deleteTask, markReviewed]
@@ -283,7 +283,7 @@ const ReviewPage = () => {
           <AnimatePresence mode="popLayout">
             {agingTasks.map((task) => (
               <motion.div
-                key={task._id}
+                key={(task.id || task._id)}
                 layout
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
