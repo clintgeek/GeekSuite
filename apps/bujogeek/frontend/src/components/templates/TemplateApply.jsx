@@ -73,8 +73,7 @@ const TemplateApply = ({ template, onClose, onApplied }) => {
     setLoading(true);
     setError(null);
 
-    const today = new Date();
-    today.setHours(9, 0, 0, 0);
+    const today = toLocalDateString(new Date());
     let created = 0;
 
     try {

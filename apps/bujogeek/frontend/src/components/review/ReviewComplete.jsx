@@ -35,35 +35,36 @@ const ReviewComplete = () => {
         textAlign: 'center',
       }}
     >
-      {/* Hand-drawn flourish mark drawn via SVG */}
-      <motion.svg
-        width="80"
-        height="28"
-        viewBox="0 0 80 28"
-        initial={{ pathLength: 0, opacity: 0 }}
-        animate={{ pathLength: 1, opacity: 0.9 }}
-        transition={{ duration: 1.2, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
-        style={{ marginBottom: 20 }}
+      {/* Hand-drawn flourish mark drawn via SVG pathLength animation */}
+      <svg
+        width="120"
+        height="40"
+        viewBox="0 0 120 40"
+        style={{ marginBottom: 20, overflow: 'visible' }}
       >
-        {/* A gentle flourish — two curves meeting with a dot, like a fountain-pen checkmark */}
+        {/* Calligraphic S-curve swash — fountain-pen flourish */}
         <motion.path
-          d="M 6 14 Q 18 22 28 10 T 52 14 Q 62 18 74 8"
+          d="M 8 30 C 20 10 40 32 60 20 C 80 8 100 28 112 12"
           fill="none"
           stroke={fresh}
           strokeWidth="1.75"
           strokeLinecap="round"
           strokeLinejoin="round"
+          initial={{ pathLength: 0, opacity: 0 }}
+          animate={{ pathLength: 1, opacity: 1 }}
+          transition={{ duration: 1.5, ease: 'easeInOut' }}
         />
+        {/* Terminal dot — pen lifts from the page */}
         <motion.circle
-          cx="74"
-          cy="8"
-          r="2"
+          cx="112"
+          cy="12"
+          r="2.25"
           fill={fresh}
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{ duration: 0.3, delay: 1.1 }}
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 0.3, delay: 1.4 }}
         />
-      </motion.svg>
+      </svg>
 
       {/* Italic eyebrow caption */}
       <Typography
@@ -125,7 +126,7 @@ const ReviewComplete = () => {
 
       <Button
         variant="outlined"
-        onClick={() => navigate('/today')}
+        onClick={() => navigate('/')}
         sx={{
           fontFamily: '"Fraunces", serif',
           fontSize: '0.9375rem',
