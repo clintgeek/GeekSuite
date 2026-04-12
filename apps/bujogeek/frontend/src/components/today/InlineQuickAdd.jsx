@@ -111,7 +111,7 @@ const InlineQuickAdd = ({ onAdd, autoFocus = false }) => {
           onChange={(e) => setValue(e.target.value)}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          placeholder={focused ? 'Write a task\u2026  #tag  !high  /tomorrow  ^note  $^notegeek' : 'What needs to happen today?'}
+          placeholder={focused ? 'Write a task\u2026  #tag  !high  /tomorrow  (daily)  ^note' : 'What needs to happen today?'}
           fullWidth
           sx={{
             fontSize: { xs: '1rem', sm: '1.0625rem' },

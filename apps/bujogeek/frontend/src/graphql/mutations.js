@@ -47,8 +47,8 @@ export const DELETE_TEMPLATE = gql`
 `;
 
 export const CREATE_TASK = gql`
-  mutation CreateTask($content: String!, $signifier: String, $status: String, $priority: Int, $tags: [String], $dueDate: Date, $createdAt: Date, $updatedAt: Date) {
-    createTask(content: $content, signifier: $signifier, status: $status, priority: $priority, tags: $tags, dueDate: $dueDate, createdAt: $createdAt, updatedAt: $updatedAt) {
+  mutation CreateTask($content: String!, $signifier: String, $status: String, $priority: Int, $tags: [String], $dueDate: Date, $createdAt: Date, $updatedAt: Date, $recurrencePattern: String) {
+    createTask(content: $content, signifier: $signifier, status: $status, priority: $priority, tags: $tags, dueDate: $dueDate, createdAt: $createdAt, updatedAt: $updatedAt, recurrencePattern: $recurrencePattern) {
       id
       content
       signifier
@@ -62,6 +62,7 @@ export const CREATE_TASK = gql`
       migratedTo
       isBacklog
       taskType
+      recurrencePattern
       createdAt
       updatedAt
       parentTask {
