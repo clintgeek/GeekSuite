@@ -35,70 +35,33 @@ const ReviewComplete = () => {
         textAlign: 'center',
       }}
     >
-      {/* Fountain pen nib + bilateral calligraphic flourishes */}
+      {/* Calligraphic pen stroke — draws itself like a signature */}
       <svg
-        width="200"
-        height="64"
-        viewBox="0 0 200 64"
-        style={{ marginBottom: 24, overflow: 'visible' }}
+        width="160"
+        height="44"
+        viewBox="0 0 160 44"
+        style={{ marginBottom: 22, overflow: 'visible' }}
       >
-        {/* Pen nib — diamond/nib shape, appears before flourishes draw */}
-        <motion.g
-          initial={{ opacity: 0, scale: 0.7 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-          style={{ transformOrigin: '100px 20px' }}
-        >
-          {/* Nib body — tapered diamond pointing down */}
-          <path
-            d="M 100,4 L 89,20 L 100,29 L 111,20 Z"
-            fill={fresh}
-            fillOpacity={0.9}
-          />
-          {/* Center slit — ink channel */}
-          <line
-            x1="100" y1="9"
-            x2="100" y2="27"
-            stroke={isDark ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.65)'}
-            strokeWidth="1"
-            strokeLinecap="round"
-          />
-        </motion.g>
-
-        {/* Ink droplet at nib tip — appears just before flourishes */}
+        <motion.path
+          d="M 10,35 C 28,10 58,42 82,26 C 106,10 130,36 150,18"
+          fill="none"
+          stroke={fresh}
+          strokeWidth="1.75"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          initial={{ pathLength: 0, opacity: 0 }}
+          animate={{ pathLength: 1, opacity: 1 }}
+          transition={{ duration: 1.5, ease: 'easeInOut' }}
+        />
+        {/* Terminal dot — pen lifts from the page */}
         <motion.circle
-          cx="100"
-          cy="30"
-          r="2.5"
+          cx="150"
+          cy="18"
+          r="2.25"
           fill={fresh}
-          initial={{ scale: 0, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 0.25, delay: 0.28, ease: [0.22, 1, 0.36, 1] }}
-          style={{ transformOrigin: '100px 30px' }}
-        />
-
-        {/* Left flourish — draws outward from nib tip */}
-        <motion.path
-          d="M 97,30 C 80,36 56,48 30,42 C 16,38 6,31 3,35 C 0,38 3,45 11,47 C 26,51 66,42 95,38"
-          fill="none"
-          stroke={fresh}
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          initial={{ pathLength: 0, opacity: 0 }}
-          animate={{ pathLength: 1, opacity: 0.9 }}
-          transition={{ duration: 1.05, ease: 'easeInOut', delay: 0.35 }}
-        />
-
-        {/* Right flourish — mirror of left */}
-        <motion.path
-          d="M 103,30 C 120,36 144,48 170,42 C 184,38 194,31 197,35 C 200,38 197,45 189,47 C 174,51 134,42 105,38"
-          fill="none"
-          stroke={fresh}
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          initial={{ pathLength: 0, opacity: 0 }}
-          animate={{ pathLength: 1, opacity: 0.9 }}
-          transition={{ duration: 1.05, ease: 'easeInOut', delay: 0.55 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3, delay: 1.4 }}
         />
       </svg>
 

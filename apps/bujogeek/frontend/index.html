@@ -15,6 +15,25 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="BuJoGeek" />
+    <!-- Baseline colors that snap immediately before MUI/React boots -->
+    <style>
+      :root                { background: #fdf9f4; color: #2c1810; }
+      :root[data-theme="dark"] { background: #18120e; color: #f0ebe4; }
+      body                 { margin: 0; }
+    </style>
+    <!-- Sync theme before React boots to prevent flash of wrong mode -->
+    <script>
+      (function () {
+        try {
+          var pref = localStorage.getItem('bujogeek_theme') || 'auto';
+          var theme = pref;
+          if (pref === 'auto' || pref === 'system') {
+            theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          }
+          document.documentElement.dataset.theme = theme;
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
