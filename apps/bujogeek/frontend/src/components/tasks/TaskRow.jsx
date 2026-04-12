@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Typography, Chip, IconButton, Tooltip, useTheme, useMediaQuery } from '@mui/material';
+import { motion } from 'framer-motion';
 import { Pencil, Trash2, StickyNote } from 'lucide-react';
 import { format, differenceInCalendarDays } from 'date-fns';
 import TaskCheckbox from './TaskCheckbox';
@@ -132,20 +133,49 @@ const TaskRow = ({ task, onStatusToggle, onEdit, onDelete, onSaveAsNote }) => {
             </Box>
           )}
 
-          {/* Task content */}
-          <Typography
+          {/* Task content — with animated strikethrough overlay */}
+          <Box
             sx={{
-              fontSize: { xs: '0.9375rem', sm: '0.9375rem' },
-              fontWeight: isCompleted ? 400 : 500,
-              color: isCompleted ? theme.palette.text.disabled : theme.palette.text.primary,
-              textDecoration: isCompleted ? 'line-through' : 'none',
-              lineHeight: 1.5,
+              position: 'relative',
               flex: 1,
               minWidth: 0,
+              display: 'inline-block',
             }}
           >
-            {cleanContent(task.content)}
-          </Typography>
+            <Typography
+              sx={{
+                fontSize: { xs: '0.9375rem', sm: '0.9375rem' },
+                fontWeight: isCompleted ? 400 : 500,
+                color: isCompleted ? theme.palette.text.disabled : theme.palette.text.primary,
+                lineHeight: 1.5,
+                transition: 'color 280ms ease, font-weight 280ms ease',
+                display: 'inline',
+              }}
+            >
+              {cleanContent(task.content)}
+            </Typography>
+            {/* Draw-in strikethrough — grows from 0 to full width when completed */}
+            <motion.div
+              initial={false}
+              animate={{
+                scaleX: isCompleted ? 1 : 0,
+                opacity: isCompleted ? 0.65 : 0,
+              }}
+              transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+              style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                top: '50%',
+                height: '1.5px',
+                backgroundColor: theme.palette.text.disabled,
+                pointerEvents: 'none',
+                transformOrigin: 'left center',
+                transform: 'translateY(-50%)',
+              }}
+              aria-hidden="true"
+            />
+          </Box>
 
           {/* Due badge */}
           {dueBadge && !isCompleted && (

@@ -1,19 +1,55 @@
-import { Box, Skeleton } from '@mui/material';
+import { Box, keyframes } from '@mui/material';
+import { colors } from '../../theme/colors';
 
-const TaskRowSkeleton = () => (
+/**
+ * SkeletonLoader — planner-page shimmer.
+ *
+ * Uses a warm parchment gradient sweep instead of MUI's default grey
+ * pulse. Matches task-row layout (checkbox circle + two text lines) so
+ * the skeleton doesn't pop when real content replaces it.
+ */
+const shimmer = keyframes`
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+`;
+
+const SkeletonBar = ({ width, height = 12, borderRadius = 4, sx = {} }) => {
+  const isDark = typeof window !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark';
+  const bg = isDark
+    ? 'linear-gradient(90deg, rgba(255,255,255,0.06) 25%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.06) 75%)'
+    : `linear-gradient(90deg, ${colors.ink[100]} 25%, ${colors.parchment.warm} 50%, ${colors.ink[100]} 75%)`;
+
+  return (
+    <Box
+      sx={{
+        width,
+        height,
+        borderRadius: `${borderRadius}px`,
+        backgroundImage: bg,
+        backgroundSize: '200% 100%',
+        animation: `${shimmer} 1.8s ease-in-out infinite`,
+        ...sx,
+      }}
+    />
+  );
+};
+
+const TaskRowSkeleton = ({ index = 0 }) => (
   <Box
     sx={{
       display: 'flex',
-      alignItems: 'center',
+      alignItems: 'flex-start',
       gap: 1.5,
       py: 1.25,
       px: 2,
+      animationDelay: `${index * 80}ms`,
     }}
   >
-    <Skeleton variant="circular" width={24} height={24} />
-    <Box sx={{ flex: 1 }}>
-      <Skeleton variant="text" width="60%" height={20} />
-      <Skeleton variant="text" width="30%" height={16} />
+    {/* Checkbox placeholder */}
+    <SkeletonBar width={24} height={24} borderRadius={12} sx={{ flexShrink: 0, mt: 0.25 }} />
+    <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 0.75, pt: 0.25 }}>
+      <SkeletonBar width={`${55 + (index % 3) * 12}%`} height={14} />
+      <SkeletonBar width={`${25 + (index % 2) * 10}%`} height={10} />
     </Box>
   </Box>
 );
@@ -22,7 +58,7 @@ const SkeletonLoader = ({ rows = 5 }) => {
   return (
     <Box>
       {Array.from({ length: rows }).map((_, i) => (
-        <TaskRowSkeleton key={i} />
+        <TaskRowSkeleton key={i} index={i} />
       ))}
     </Box>
   );

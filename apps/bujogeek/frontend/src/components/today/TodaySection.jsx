@@ -15,7 +15,7 @@ const TodaySection = ({ tasks, onStatusToggle, onEdit, onDelete, onSaveAsNote })
 
   return (
     <Box>
-      <SectionHeader title="Today" count={tasks.length} />
+      <SectionHeader title="Today" count={tasks.length} size="display" />
       <Box
         sx={{
           borderRadius: '8px',
