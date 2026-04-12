@@ -11,7 +11,7 @@ COPY apps/bujogeek ./apps/bujogeek
 
 # Install ALL workspace deps (resolves workspace:* links + frontend/backend deps)
 RUN npm install -g pnpm
-RUN pnpm install --no-frozen-lockfile
+RUN pnpm install --frozen-lockfile
 
 # ---------- Build frontend ----------
 WORKDIR /app/apps/bujogeek/frontend
@@ -30,7 +30,7 @@ COPY packages ./packages
 COPY apps/bujogeek/backend ./apps/bujogeek/backend
 
 # Install production deps (resolves workspace:* links)
-RUN pnpm install --no-frozen-lockfile --prod
+RUN pnpm install --frozen-lockfile --prod
 
 # Copy built frontend into backend public folder
 WORKDIR /app/apps/bujogeek/backend
