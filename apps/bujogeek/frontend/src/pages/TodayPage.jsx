@@ -179,18 +179,18 @@ const TodayPage = () => {
         stats={stats}
       />
 
+      {/* Writing surface — always visible, never gated on loading */}
+      <InlineQuickAdd
+        onAdd={handleQuickAdd}
+        autoFocus={!isLoading && displayActiveTasks.length === 0 && overdueTasks.length === 0}
+      />
+
       {isLoading ? (
-        <Box sx={{ mt: 3 }}>
+        <Box sx={{ mt: 1 }}>
           <SkeletonLoader rows={6} />
         </Box>
       ) : (
         <>
-          {/* Writing surface — always first. This is the start of the day. */}
-          <InlineQuickAdd
-            onAdd={handleQuickAdd}
-            autoFocus={displayActiveTasks.length === 0 && overdueTasks.length === 0}
-          />
-
           <OverdueSection
             tasks={overdueTasks}
             onStatusToggle={handleStatusToggle}
