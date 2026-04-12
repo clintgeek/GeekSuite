@@ -27,6 +27,7 @@ const TodayPage = () => {
     createTask,
     updateTaskStatus,
     deleteTask,
+    saveDailyOrder,
     LoadingState,
   } = useTaskContext();
 
@@ -108,6 +109,30 @@ const TodayPage = () => {
     return { overdueTasks: overdue, activeTasks: active, completedTasks: completed };
   }, [tasks]);
 
+  // ─── Drag-and-drop reorder for Today's active tasks ───
+  const [orderedActiveTasks, setOrderedActiveTasks] = useState(null);
+
+  // Reset custom order when tasks change from server (new task added, status toggled, etc.)
+  useEffect(() => {
+    setOrderedActiveTasks(null);
+  }, [tasks]);
+
+  // The display list: custom order if user has reordered, otherwise the default
+  const displayActiveTasks = orderedActiveTasks || activeTasks;
+
+  const handleReorder = useCallback(
+    (reordered) => {
+      setOrderedActiveTasks(reordered);
+      // Persist the order to the backend
+      const dateKey = currentDate.toISOString().split('T')[0];
+      const ids = reordered.map((t) => t.id || t._id);
+      saveDailyOrder(dateKey, ids).catch((err) =>
+        console.error('Failed to save task order:', err)
+      );
+    },
+    [currentDate, saveDailyOrder]
+  );
+
   const stats = useMemo(() => ({
     total: Array.isArray(tasks) ? tasks.length : 0,
     overdue: overdueTasks.length,
@@ -119,8 +144,8 @@ const TodayPage = () => {
   // ─── Keyboard navigation ───────────────────────────���─────
   // Flat list of navigable tasks: overdue then active (completed is collapsed)
   const navigableTasks = useMemo(
-    () => [...overdueTasks, ...activeTasks],
-    [overdueTasks, activeTasks]
+    () => [...overdueTasks, ...displayActiveTasks],
+    [overdueTasks, displayActiveTasks]
   );
 
   const { focusedTaskId, clearFocus } = useKeyboardNav({
@@ -157,7 +182,7 @@ const TodayPage = () => {
           {/* Writing surface — always first. This is the start of the day. */}
           <InlineQuickAdd
             onAdd={handleQuickAdd}
-            autoFocus={activeTasks.length === 0 && overdueTasks.length === 0}
+            autoFocus={displayActiveTasks.length === 0 && overdueTasks.length === 0}
           />
 
           <OverdueSection
@@ -170,12 +195,13 @@ const TodayPage = () => {
           />
 
           <TodaySection
-            tasks={activeTasks}
+            tasks={displayActiveTasks}
             onStatusToggle={handleStatusToggle}
             onEdit={handleEdit}
             onDelete={handleDelete}
             onSaveAsNote={handleSaveAsNote}
             focusedTaskId={focusedTaskId}
+            onReorder={handleReorder}
           />
 
           <CompletedSection

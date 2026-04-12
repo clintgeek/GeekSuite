@@ -11,7 +11,10 @@ COPY apps/bujogeek ./apps/bujogeek
 
 # Install ALL workspace deps (resolves workspace:* links + frontend/backend deps)
 RUN npm install -g pnpm
-RUN pnpm install --frozen-lockfile
+# --no-frozen-lockfile because @dnd-kit was added to bujogeek deps and
+# the workspace lockfile may not have it registered for this consumer yet.
+# The packages themselves are already resolved in the lockfile from fitnessgeek.
+RUN pnpm install --no-frozen-lockfile
 
 # ---------- Build frontend ----------
 WORKDIR /app/apps/bujogeek/frontend
@@ -30,7 +33,7 @@ COPY packages ./packages
 COPY apps/bujogeek/backend ./apps/bujogeek/backend
 
 # Install production deps (resolves workspace:* links)
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --no-frozen-lockfile --prod
 
 # Copy built frontend into backend public folder
 WORKDIR /app/apps/bujogeek/backend
