@@ -157,7 +157,7 @@ const ReviewCard = ({ task, onKeep, onMoveForward, onBacklog, onDelete, focused 
             borderColor: colors.primary[200],
             '&:hover': {
               borderColor: colors.primary[500],
-              backgroundColor: colors.primary[50],
+              backgroundColor: isDark ? 'rgba(96, 152, 204, 0.12)' : colors.primary[50],
               transform: 'none',
             },
           }}
@@ -211,7 +211,7 @@ const ReviewCard = ({ task, onKeep, onMoveForward, onBacklog, onDelete, focused 
               color: colors.ink[400],
               '&:hover': {
                 color: colors.aging.overdue,
-                backgroundColor: colors.status.errorBg,
+                backgroundColor: isDark ? 'rgba(196, 69, 60, 0.15)' : colors.status.errorBg,
               },
             }}
           >
