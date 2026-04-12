@@ -131,6 +131,7 @@ const InlineQuickAdd = ({ onAdd, autoFocus = false }) => {
           }}
           inputProps={{
             'aria-label': 'Add a task for today',
+            'data-quickadd': true,
           }}
         />
           <TaskInputHelpButton compact />

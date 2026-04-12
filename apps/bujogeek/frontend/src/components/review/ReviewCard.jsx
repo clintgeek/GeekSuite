@@ -3,7 +3,7 @@ import { X } from 'lucide-react';
 import { colors } from '../../theme/colors';
 import { getTaskAge, getAgingColor, getAgingLabel } from '../../utils/taskAging';
 
-const ReviewCard = ({ task, onKeep, onMoveForward, onBacklog, onDelete }) => {
+const ReviewCard = ({ task, onKeep, onMoveForward, onBacklog, onDelete, focused = false }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const { level, days } = getTaskAge(task);
@@ -18,16 +18,23 @@ const ReviewCard = ({ task, onKeep, onMoveForward, onBacklog, onDelete }) => {
       .trim();
   };
 
+  const taskId = task.id || task._id;
+
   return (
     <Box
+      data-task-id={taskId}
       sx={{
-        backgroundColor: theme.palette.background.paper,
-        border: `1px solid ${theme.palette.divider}`,
+        backgroundColor: focused
+          ? (isDark ? 'rgba(96,152,204,0.08)' : colors.primary[50])
+          : theme.palette.background.paper,
+        border: `1px solid ${focused ? colors.primary[300] : theme.palette.divider}`,
         borderLeft: `4px solid ${agingColor}`,
         borderRadius: '12px',
+        outline: focused ? `2px solid ${colors.primary[400]}` : 'none',
+        outlineOffset: -1,
         p: { xs: 2, sm: 2.5 },
         mb: 2,
-        transition: 'box-shadow 0.15s ease',
+        transition: 'box-shadow 0.15s ease, background-color 0.15s ease, border-color 0.15s ease',
         '&:hover': {
           boxShadow: isDark ? `0 4px 12px rgba(0,0,0,0.3)` : `0 4px 12px ${colors.ink[200]}`,
         },

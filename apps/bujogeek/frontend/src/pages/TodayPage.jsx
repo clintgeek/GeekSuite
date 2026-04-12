@@ -10,6 +10,8 @@ import CompletedSection from '../components/today/CompletedSection';
 import InlineQuickAdd from '../components/today/InlineQuickAdd';
 import SkeletonLoader from '../components/shared/SkeletonLoader';
 import TaskEditor from '../components/tasks/TaskEditor';
+import useKeyboardNav from '../hooks/useKeyboardNav';
+import useGlobalShortcuts from '../hooks/useGlobalShortcuts';
 import { CREATE_NOTE } from '../graphql/notegeekMutations';
 import { getTaskAge } from '../utils/taskAging';
 
@@ -114,6 +116,23 @@ const TodayPage = () => {
 
   const isLoading = loading === LoadingState.FETCHING;
 
+  // ─── Keyboard navigation ───────────────────────────���─────
+  // Flat list of navigable tasks: overdue then active (completed is collapsed)
+  const navigableTasks = useMemo(
+    () => [...overdueTasks, ...activeTasks],
+    [overdueTasks, activeTasks]
+  );
+
+  const { focusedTaskId, clearFocus } = useKeyboardNav({
+    tasks: navigableTasks,
+    onToggle: handleStatusToggle,
+    onEdit: handleEdit,
+    onDelete: handleDelete,
+    enabled: !isLoading && !editingTask,
+  });
+
+  useGlobalShortcuts();
+
   return (
     <Box
       sx={{
@@ -147,6 +166,7 @@ const TodayPage = () => {
             onEdit={handleEdit}
             onDelete={handleDelete}
             onSaveAsNote={handleSaveAsNote}
+            focusedTaskId={focusedTaskId}
           />
 
           <TodaySection
@@ -155,6 +175,7 @@ const TodayPage = () => {
             onEdit={handleEdit}
             onDelete={handleDelete}
             onSaveAsNote={handleSaveAsNote}
+            focusedTaskId={focusedTaskId}
           />
 
           <CompletedSection

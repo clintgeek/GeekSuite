@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Box, Typography, useTheme } from '@mui/material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTaskContext } from '../context/TaskContext';
@@ -6,6 +6,8 @@ import ReviewCard from '../components/review/ReviewCard';
 import ReviewProgress from '../components/review/ReviewProgress';
 import ReviewComplete from '../components/review/ReviewComplete';
 import SkeletonLoader from '../components/shared/SkeletonLoader';
+import useKeyboardNav from '../hooks/useKeyboardNav';
+import useGlobalShortcuts from '../hooks/useGlobalShortcuts';
 import { getTaskAge } from '../utils/taskAging';
 import { normalizeTasks } from '../utils/normalizeTasks';
 import { colors } from '../theme/colors';
@@ -117,6 +119,54 @@ const ReviewPage = () => {
   const isLoading = loading === LoadingState.FETCHING;
   const allReviewed = agingTasks.length === 0 && !isLoading && totalToReview > 0;
   const nothingToReview = totalToReview === 0 && !isLoading;
+
+  // ─── Keyboard nav for review cards ─────────────────────────
+  // j/k to move between cards, 1=Keep, 2=Tomorrow, 3=Backlog, d=Delete
+  const { focusedTaskId } = useKeyboardNav({
+    tasks: agingTasks,
+    onToggle: handleKeep,     // x → keep today (closest semantic)
+    onEdit: handleKeep,       // e → keep today (no edit in review)
+    onDelete: handleDelete,
+    enabled: !isLoading && !allReviewed && !nothingToReview,
+  });
+
+  // Review-specific number shortcuts (1/2/3)
+  useEffect(() => {
+    if (isLoading || allReviewed || nothingToReview) return;
+
+    const handler = (e) => {
+      const tag = e.target.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      const focusedTask = agingTasks.find(
+        (t) => (t.id || t._id) === focusedTaskId
+      );
+      if (!focusedTask) return;
+
+      switch (e.key) {
+        case '1':
+          e.preventDefault();
+          handleKeep(focusedTask);
+          break;
+        case '2':
+          e.preventDefault();
+          handleMoveForward(focusedTask);
+          break;
+        case '3':
+          e.preventDefault();
+          handleBacklog(focusedTask);
+          break;
+        default:
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [isLoading, allReviewed, nothingToReview, focusedTaskId, agingTasks, handleKeep, handleMoveForward, handleBacklog]);
+
+  useGlobalShortcuts();
 
   const captionInk = isDark ? 'rgba(255,255,255,0.32)' : colors.ink[300];
   const mutedInk = isDark ? 'rgba(255,255,255,0.5)' : colors.ink[400];
@@ -296,6 +346,7 @@ const ReviewPage = () => {
                   onMoveForward={handleMoveForward}
                   onBacklog={handleBacklog}
                   onDelete={handleDelete}
+                  focused={focusedTaskId === (task.id || task._id)}
                 />
               </motion.div>
             ))}

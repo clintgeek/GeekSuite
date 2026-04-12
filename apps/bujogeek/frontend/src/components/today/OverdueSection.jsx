@@ -12,7 +12,7 @@ import { colors } from '../../theme/colors';
  * amber left rule; header is a two-row editorial block with an italic
  * Fraunces caption.
  */
-const OverdueSection = ({ tasks, onStatusToggle, onEdit, onDelete, onSaveAsNote }) => {
+const OverdueSection = ({ tasks, onStatusToggle, onEdit, onDelete, onSaveAsNote, focusedTaskId }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const [expanded, setExpanded] = useState(true);
@@ -114,6 +114,7 @@ const OverdueSection = ({ tasks, onStatusToggle, onEdit, onDelete, onSaveAsNote 
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onSaveAsNote={onSaveAsNote}
+                focused={focusedTaskId === (task.id || task._id)}
               />
             </Box>
           ))}

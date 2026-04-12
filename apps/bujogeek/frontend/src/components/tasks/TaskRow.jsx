@@ -15,7 +15,7 @@ const priorityDotColors = {
   3: colors.priority.low,
 };
 
-const TaskRow = ({ task, onStatusToggle, onEdit, onDelete, onSaveAsNote }) => {
+const TaskRow = ({ task, onStatusToggle, onEdit, onDelete, onSaveAsNote, focused = false }) => {
   const theme = useTheme();
   const navigate = useNavigate();
   const isDark = theme.palette.mode === 'dark';
@@ -86,8 +86,11 @@ const TaskRow = ({ task, onStatusToggle, onEdit, onDelete, onSaveAsNote }) => {
 
   const dueBadge = getDueBadge();
 
+  const taskId = task.id || task._id;
+
   return (
     <Box
+      data-task-id={taskId}
       onClick={handleRowClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -98,8 +101,14 @@ const TaskRow = ({ task, onStatusToggle, onEdit, onDelete, onSaveAsNote }) => {
         py: { xs: 1.25, sm: 1 },
         px: { xs: 1, sm: 2 },
         borderLeft: `3px solid ${ agingColor }`,
-        backgroundColor: (hovered || tapped) ? (isDark ? 'rgba(255,255,255,0.04)' : `${ colors.ink[100] }60`) : 'transparent',
-        transition: 'background-color 0.12s ease',
+        backgroundColor: focused
+          ? (isDark ? 'rgba(96, 152, 204, 0.1)' : `${colors.primary[50]}`)
+          : (hovered || tapped) ? (isDark ? 'rgba(255,255,255,0.04)' : `${ colors.ink[100] }60`) : 'transparent',
+        // Focused ring — visible, not competing with content
+        outline: focused ? `2px solid ${colors.primary[400]}` : 'none',
+        outlineOffset: -2,
+        borderRadius: focused ? '6px' : 0,
+        transition: 'background-color 0.12s ease, outline 0.12s ease',
         cursor: 'default',
         position: 'relative',
       }}
