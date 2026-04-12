@@ -372,13 +372,19 @@ const TaskProvider = ({ children }) => {
     try {
       setLoading(LoadingState.UPDATING);
 
-      // Need to strip __typename and unupdatable fields from updates before sending
-      const cleanUpdates = { ...updates };
-      delete cleanUpdates.__typename;
-      delete cleanUpdates.id;
-      delete cleanUpdates._id;
-      delete cleanUpdates.parentTask;
-      delete cleanUpdates.subtasks;
+      // Only send fields that UpdateTaskInput actually accepts.
+      // Spreading the full task object causes 400s — GraphQL strict
+      // validation rejects fields not in the input type definition.
+      const ALLOWED_UPDATE_FIELDS = [
+        'content', 'signifier', 'status', 'priority', 'note',
+        'tags', 'dueDate', 'isBacklog', 'taskType',
+      ];
+      const cleanUpdates = {};
+      for (const key of ALLOWED_UPDATE_FIELDS) {
+        if (key in updates && updates[key] !== undefined) {
+          cleanUpdates[key] = updates[key];
+        }
+      }
 
       const response = await apolloClient.mutate({
         mutation: UPDATE_TASK,
