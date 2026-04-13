@@ -69,7 +69,7 @@ const InlineQuickAdd = ({ onAdd, autoFocus = false }) => {
         sx={{
           px: { xs: 1.5, sm: 2 },
           py: { xs: 2, sm: 2.5 },
-          borderRadius: '12px',
+          borderRadius: '8px',
           backgroundColor: focused
             ? theme.palette.background.paper
             : (isDark ? 'rgba(255,255,255,0.02)' : colors.parchment.warm),

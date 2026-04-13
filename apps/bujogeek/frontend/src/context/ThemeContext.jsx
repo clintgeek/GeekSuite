@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { usePreferences } from '@geeksuite/user';
 
 const ThemeContext = createContext({
@@ -28,15 +28,21 @@ export function ThemeProvider({ children }) {
   const [themePreference, setThemePreference] = useState(getStoredPreference);
   const [systemTheme, setSystemTheme] = useState(getSystemTheme);
   const { preferences, updatePreferences, loaded } = usePreferences();
+  // Suppress remote-push for one cycle after a remote→local sync, so the two
+  // effects don't fight each other (was causing dark/light flicker on boot).
+  const syncingFromRemote = useRef(false);
 
   // Sync theme from baseGeek global preferences once loaded
   useEffect(() => {
-    if (loaded && preferences?.theme) {
-      const remote = preferences.theme;
-      if (remote === 'light' || remote === 'dark' || remote === 'system' || remote === 'auto') {
-        const mapped = remote === 'system' ? 'auto' : remote;
-        setThemePreference(mapped);
-      }
+    if (!loaded || !preferences?.theme) return;
+    const remote = preferences.theme;
+    if (remote === 'light' || remote === 'dark' || remote === 'system' || remote === 'auto') {
+      const mapped = remote === 'system' ? 'auto' : remote;
+      setThemePreference(prev => {
+        if (prev === mapped) return prev;
+        syncingFromRemote.current = true;
+        return mapped;
+      });
     }
   }, [loaded, preferences?.theme]);
 
@@ -61,9 +67,20 @@ export function ThemeProvider({ children }) {
     if (typeof window === 'undefined') return;
     window.localStorage.setItem(STORAGE_KEY, themePreference);
 
-    // Persist to global store
-    if (loaded && preferences?.theme !== themePreference) {
-      const remoteVal = themePreference === 'auto' ? 'system' : themePreference;
+    if (!loaded) return;
+
+    // Local just changed because we synced from remote — skip the push-back.
+    if (syncingFromRemote.current) {
+      syncingFromRemote.current = false;
+      return;
+    }
+
+    // Normalize before comparing: DB stores 'system', local stores 'auto' — they're equivalent.
+    const remoteVal    = themePreference === 'auto' ? 'system' : themePreference;
+    const storedRemote = preferences?.theme;
+    const remoteNorm   = storedRemote === 'system' ? 'auto' : storedRemote;
+
+    if (remoteNorm !== themePreference) {
       updatePreferences({ theme: remoteVal }).catch(err => {
         console.error('Failed to update global theme preference', err);
       });

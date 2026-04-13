@@ -1,32 +1,120 @@
-import { Box, Typography, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Divider, Avatar } from '@mui/material';
-import { CalendarCheck, ClipboardCheck, Calendar, Hash, LayoutTemplate, Keyboard, LogOut } from 'lucide-react';
+import { Box, Typography, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Avatar } from '@mui/material';
+import { CalendarCheck, ClipboardCheck, Calendar, Hash, LayoutTemplate, LogOut } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '@mui/material/styles';
+import { motion, AnimatePresence } from 'framer-motion';
 import { SIDEBAR_WIDTH } from '../../utils/constants';
 import { colors } from '../../theme/colors';
 
 const navItems = [
-  { label: 'Today', icon: CalendarCheck, path: '/today' },
-  { label: 'Review', icon: ClipboardCheck, path: '/review' },
-  { label: 'Plan', icon: Calendar, path: '/plan' },
-  { label: 'Tags', icon: Hash, path: '/tags' },
-  { label: 'Templates', icon: LayoutTemplate, path: '/templates' },
+  { label: 'Today',     icon: CalendarCheck,  path: '/today',     description: 'Daily log' },
+  { label: 'Review',    icon: ClipboardCheck, path: '/review',    description: 'End of day' },
+  { label: 'Plan',      icon: Calendar,       path: '/plan',      description: 'Upcoming' },
+  { label: 'Tags',      icon: Hash,           path: '/tags',      description: 'Browse tags' },
+  { label: 'Templates', icon: LayoutTemplate, path: '/templates', description: 'Reusable tasks' },
 ];
 
+// Chrome palette — dark tobacco, warm and grounded
+// Consistent between light/dark app modes so the sidebar is always a dark anchor
+const chrome = {
+  bg:           '#252018',  // deeper tobacco — more luxurious than before
+  bgHover:      '#2E2820',
+  active:       '#1E1B14',  // sunken active state
+  border:       'rgba(255, 245, 220, 0.07)',
+  text:         'rgba(255, 245, 220, 0.85)',
+  textMuted:    'rgba(255, 245, 220, 0.38)',
+  textDisabled: 'rgba(255, 245, 220, 0.2)',
+  accent:       colors.primary[400],
+  accentBg:     'rgba(96, 152, 204, 0.1)',
+  danger:       'rgba(184, 60, 52, 0.75)',
+  dangerBg:     'rgba(184, 60, 52, 0.08)',
+  logo:         'rgba(255, 245, 220, 0.78)',
+  logoAccent:   colors.primary[400],
+  divider:      'rgba(255, 245, 220, 0.06)',
+};
+
+const NavItem = ({ item, active, onClick }) => {
+  const Icon = item.icon;
+
+  return (
+    <ListItem disablePadding sx={{ mb: 0.125 }}>
+      <ListItemButton
+        onClick={onClick}
+        sx={{
+          py: 1.125,
+          px: 1.75,
+          borderRadius: '6px',
+          position: 'relative',
+          color: active ? chrome.text : chrome.textMuted,
+          backgroundColor: active ? chrome.active : 'transparent',
+          transition: 'color 0.14s ease, background-color 0.14s ease',
+          '&:hover': {
+            backgroundColor: active ? chrome.active : chrome.bgHover,
+            color: active ? chrome.text : 'rgba(255, 245, 220, 0.72)',
+          },
+          // Remove default MUI hover
+          '&.Mui-selected': { backgroundColor: 'transparent' },
+        }}
+        aria-current={active ? 'page' : undefined}
+      >
+        {/* Active accent bar — animated */}
+        <AnimatePresence>
+          {active && (
+            <motion.div
+              layoutId="nav-active-bar"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 360, damping: 30 }}
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                width: 3,
+                height: '56%',
+                borderRadius: '0 2px 2px 0',
+                backgroundColor: chrome.accent,
+              }}
+            />
+          )}
+        </AnimatePresence>
+
+        <ListItemIcon
+          sx={{
+            color: active ? chrome.accent : 'inherit',
+            minWidth: 34,
+            transition: 'color 0.14s ease',
+          }}
+        >
+          <Icon size={17} strokeWidth={active ? 2 : 1.75} />
+        </ListItemIcon>
+
+        <ListItemText
+          primary={item.label}
+          primaryTypographyProps={{
+            fontFamily:    '"Source Sans 3", sans-serif',
+            fontWeight:    active ? 600 : 400,
+            fontSize:      '0.875rem',
+            letterSpacing: active ? '-0.005em' : '0',
+            color:         'inherit',
+            lineHeight:    1,
+          }}
+        />
+      </ListItemButton>
+    </ListItem>
+  );
+};
+
 const Sidebar = () => {
-  const navigate = useNavigate();
-  const location = useLocation();
+  const navigate  = useNavigate();
+  const location  = useLocation();
   const { user, logout } = useAuth();
   const theme = useTheme();
 
-  const chromeBg = theme.palette.mode === 'dark' ? '#272420' : '#3B3632';
-  const chromeDivider = 'rgba(255, 245, 230, 0.07)';
-
   const isActive = (path) => {
-    if (path === '/plan') {
-      return location.pathname.startsWith('/plan');
-    }
+    if (path === '/plan') return location.pathname.startsWith('/plan');
     return location.pathname === path;
   };
 
@@ -35,193 +123,206 @@ const Sidebar = () => {
     navigate('/login');
   };
 
+  const userInitial = user?.email?.[0]?.toUpperCase() || 'U';
+  // Truncate email gracefully
+  const displayEmail = user?.email
+    ? user.email.length > 22
+      ? `${user.email.slice(0, 20)}…`
+      : user.email
+    : 'Account';
+
   return (
     <Box
       sx={{
-        width: SIDEBAR_WIDTH,
-        height: '100vh',
-        position: 'fixed',
-        left: 0,
-        top: 0,
-        backgroundColor: chromeBg,
-        display: 'flex',
-        flexDirection: 'column',
-        zIndex: 1200,
+        width:           SIDEBAR_WIDTH,
+        height:          '100vh',
+        position:        'fixed',
+        left:            0,
+        top:             0,
+        backgroundColor: chrome.bg,
+        display:         'flex',
+        flexDirection:   'column',
+        zIndex:          1200,
+        // Subtle inner shadow on the right edge — depth illusion
+        boxShadow:       '2px 0 20px rgba(0,0,0,0.28)',
       }}
     >
-      {/* Logo */}
+      {/* ─── Wordmark ─────────────────────────────────────────── */}
       <Box
         sx={{
-          height: 56,
-          px: 2.5,
-          display: 'flex',
-          alignItems: 'center',
-          borderBottom: `1px solid ${chromeDivider}`,
-          flexShrink: 0,
+          height:      56,
+          px:          2.25,
+          display:     'flex',
+          alignItems:  'center',
+          borderBottom: `1px solid ${chrome.border}`,
+          flexShrink:  0,
+          userSelect:  'none',
         }}
       >
-        <Typography
-          sx={{
-            fontFamily: '"Source Sans 3", sans-serif',
-            fontWeight: 300,
-            color: 'rgba(255,248,240,0.82)' ,
-            fontSize: '1.25rem',
-            letterSpacing: '-0.02em',
-          }}
-        >
-          bujo
-          <Box component="span" sx={{ fontWeight: 600, color: colors.primary[400] }}>
-            geek
-          </Box>
-        </Typography>
-      </Box>
-
-      {/* Main Navigation */}
-      <List sx={{ px: 1, py: 1.5, flex: 1 }}>
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const active = isActive(item.path);
-          return (
-            <ListItem key={item.path} disablePadding sx={{ mb: 0.25 }}>
-              <ListItemButton
-                onClick={() => navigate(item.path)}
-                sx={{
-                  py: 1.25,
-                  px: 2,
-                  borderRadius: '6px',
-                  borderLeft: active ? `3px solid ${colors.primary[400]}` : '3px solid transparent',
-                  backgroundColor: active ? 'rgba(96, 152, 204, 0.09)' : 'transparent',
-                  color: active ? 'rgba(255,248,240,0.92)' : 'rgba(255,248,240,0.45)',
-                  transition: 'all 0.15s ease',
-                  '&:hover': {
-                    backgroundColor: active ? 'rgba(96, 152, 204, 0.12)' : 'rgba(255, 248, 240, 0.04)',
-                    color: 'rgba(255,248,240,0.78)',
-                  },
-                }}
-              >
-                <ListItemIcon sx={{ color: 'inherit', minWidth: 36 }}>
-                  <Icon size={20} />
-                </ListItemIcon>
-                <ListItemText
-                  primary={item.label}
-                  primaryTypographyProps={{
-                    fontWeight: active ? 500 : 400,
-                    fontSize: '0.875rem',
-                  }}
-                />
-              </ListItemButton>
-            </ListItem>
-          );
-        })}
-      </List>
-
-      {/* Keyboard hint */}
-      <Box
-        sx={{
-          px: 2.5,
-          py: 1.25,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 1,
-          cursor: 'pointer',
-          color: 'rgba(255,248,240,0.2)',
-          transition: 'color 0.15s ease',
-          '&:hover': { color: 'rgba(255,248,240,0.5)' },
-        }}
-        onClick={() => {
-          // Dispatch a ? keydown to trigger the help overlay
-          window.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true }));
-        }}
-        title="Keyboard shortcuts (?)"
-      >
-        <Keyboard size={14} />
-        <Typography sx={{ fontSize: '0.6875rem', fontWeight: 400 }}>
-          Shortcuts
-        </Typography>
-        <Box
-          component="kbd"
-          sx={{
-            ml: 'auto',
-            fontFamily: '"IBM Plex Mono", monospace',
-            fontSize: '0.5625rem',
-            fontWeight: 500,
-            px: 0.5,
-            py: 0.125,
-            borderRadius: '3px',
-            border: '1px solid rgba(255,248,240,0.15)',
-            backgroundColor: 'rgba(255,248,240,0.04)',
-            lineHeight: 1.3,
-          }}
-        >
-          ?
-        </Box>
-      </Box>
-
-      {/* Bottom Section */}
-      <Divider sx={{ borderColor: chromeDivider }} />
-      <List sx={{ px: 1, py: 1 }}>
-        {/* User / Logout */}
-        <ListItem disablePadding>
-          <ListItemButton
-            onClick={handleLogout}
-            sx={{
-              py: 1,
-              px: 2,
-              borderRadius: '6px',
-              color: 'rgba(255,248,240,0.35)',
-              '&:hover': {
-                backgroundColor: 'rgba(196, 69, 60, 0.07)',
-                color: 'rgba(196, 69, 60, 0.75)',
-              },
-            }}
-          >
-            <ListItemIcon sx={{ color: 'inherit', minWidth: 36 }}>
-              <LogOut size={18} />
-            </ListItemIcon>
-            <ListItemText
-              primary="Logout"
-              primaryTypographyProps={{ fontSize: '0.8125rem' }}
-            />
-          </ListItemButton>
-        </ListItem>
-      </List>
-
-      {/* User Badge */}
-      {user && (
+        {/* Minimal monogram mark */}
         <Box
           sx={{
-            px: 2,
-            py: 1.5,
-            borderTop: `1px solid ${chromeDivider}`,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1.5,
+            width:           26,
+            height:          26,
+            borderRadius:    '5px',
+            border:          `1.5px solid ${chrome.logoAccent}`,
+            display:         'flex',
+            alignItems:      'center',
+            justifyContent:  'center',
+            mr:              1.25,
+            flexShrink:      0,
+            opacity:         0.9,
           }}
         >
-          <Avatar
-            sx={{
-              width: 28,
-              height: 28,
-              backgroundColor: colors.primary[500],
-              fontSize: '0.75rem',
-              fontWeight: 600,
-            }}
-          >
-            {user?.email?.[0]?.toUpperCase() || 'U'}
-          </Avatar>
           <Typography
             sx={{
-              color: 'rgba(255,248,240,0.3)',
-              fontSize: '0.75rem',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
+              fontFamily:    '"IBM Plex Mono", monospace',
+              fontSize:      '0.625rem',
+              fontWeight:    700,
+              color:         chrome.logoAccent,
+              letterSpacing: '0.04em',
+              lineHeight:    1,
             }}
           >
-            {user?.email || 'User'}
+            BJ
           </Typography>
         </Box>
-      )}
+
+        <Box>
+          <Typography
+            sx={{
+              fontFamily: '"Source Sans 3", sans-serif',
+              fontWeight: 300,
+              color:      chrome.logo,
+              fontSize:   '1.0625rem',
+              letterSpacing: '-0.02em',
+              lineHeight: 1,
+            }}
+          >
+            bujo
+            <Box
+              component="span"
+              sx={{
+                fontWeight: 700,
+                color:      chrome.logoAccent,
+                letterSpacing: '-0.01em',
+              }}
+            >
+              geek
+            </Box>
+          </Typography>
+        </Box>
+      </Box>
+
+      {/* ─── Main Navigation ──────────────────────────────────── */}
+      <Box sx={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+        {/* Section label */}
+        <Box sx={{ px: 2.25, pt: 2.25, pb: 0.75 }}>
+          <Typography
+            sx={{
+              fontFamily:    '"IBM Plex Mono", monospace',
+              fontSize:      '0.5625rem',
+              fontWeight:    700,
+              letterSpacing: '0.12em',
+              textTransform: 'uppercase',
+              color:         chrome.textDisabled,
+              lineHeight:    1,
+            }}
+          >
+            Navigation
+          </Typography>
+        </Box>
+
+        <List sx={{ px: 1, py: 0 }}>
+          {navItems.map((item) => (
+            <NavItem
+              key={item.path}
+              item={item}
+              active={isActive(item.path)}
+              onClick={() => navigate(item.path)}
+            />
+          ))}
+        </List>
+      </Box>
+
+      {/* ─── Footer zone ─────────────────────────────────────── */}
+      <Box sx={{ flexShrink: 0 }}>
+        {/* Logout */}
+        <List sx={{ px: 1, py: 0.75 }}>
+          <ListItem disablePadding>
+            <ListItemButton
+              onClick={handleLogout}
+              sx={{
+                py:           0.875,
+                px:           1.75,
+                borderRadius: '6px',
+                color:        chrome.textDisabled,
+                transition:   'color 0.14s ease, background-color 0.14s ease',
+                '&:hover': {
+                  backgroundColor: chrome.dangerBg,
+                  color:           chrome.danger,
+                },
+              }}
+            >
+              <ListItemIcon sx={{ color: 'inherit', minWidth: 34 }}>
+                <LogOut size={15} strokeWidth={1.75} />
+              </ListItemIcon>
+              <ListItemText
+                primary="Sign out"
+                primaryTypographyProps={{
+                  fontFamily: '"Source Sans 3", sans-serif',
+                  fontSize:   '0.8125rem',
+                  color:      'inherit',
+                }}
+              />
+            </ListItemButton>
+          </ListItem>
+        </List>
+
+        {/* User badge */}
+        {user && (
+          <Box
+            sx={{
+              px:          2.25,
+              py:          1.25,
+              borderTop:   `1px solid ${chrome.divider}`,
+              display:     'flex',
+              alignItems:  'center',
+              gap:         1.25,
+            }}
+          >
+            <Avatar
+              sx={{
+                width:           26,
+                height:          26,
+                backgroundColor: colors.primary[700],
+                fontSize:        '0.6875rem',
+                fontFamily:      '"Fraunces", serif',
+                fontWeight:      600,
+                letterSpacing:   '-0.01em',
+                color:           'rgba(255,255,255,0.9)',
+                flexShrink:      0,
+              }}
+            >
+              {userInitial}
+            </Avatar>
+            <Typography
+              sx={{
+                color:         chrome.textDisabled,
+                fontSize:      '0.6875rem',
+                fontFamily:    '"Source Sans 3", sans-serif',
+                overflow:      'hidden',
+                textOverflow:  'ellipsis',
+                whiteSpace:    'nowrap',
+                flex:          1,
+                minWidth:      0,
+              }}
+            >
+              {displayEmail}
+            </Typography>
+          </Box>
+        )}
+      </Box>
     </Box>
   );
 };

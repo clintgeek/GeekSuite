@@ -60,8 +60,8 @@ const TodaySection = ({
             as="div"
             style={{ cursor: 'grab' }}
             whileDrag={{
-              scale: 1.02,
-              boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+              scale: 1.015,
+              boxShadow: '0 6px 20px rgba(28,20,14,0.16)',
               cursor: 'grabbing',
               zIndex: 10,
             }}
