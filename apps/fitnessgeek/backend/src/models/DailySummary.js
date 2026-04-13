@@ -37,6 +37,11 @@ const dailySummarySchema = new mongoose.Schema({
       default: 0,
       min: 0
     },
+    net_carbs_grams: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
     sugar_grams: {
       type: Number,
       default: 0,
@@ -146,6 +151,7 @@ dailySummarySchema.statics.updateFromLogs = async function(userId, date) {
     carbs_grams: 0,
     fat_grams: 0,
     fiber_grams: 0,
+    net_carbs_grams: 0,
     sugar_grams: 0,
     sodium_mg: 0
   };
@@ -174,6 +180,7 @@ dailySummarySchema.statics.updateFromLogs = async function(userId, date) {
     totals.carbs_grams += ((n.carbs_grams || 0) * multiplier);
     totals.fat_grams += ((n.fat_grams || 0) * multiplier);
     totals.fiber_grams += ((n.fiber_grams || 0) * multiplier);
+    totals.net_carbs_grams += Math.max(0, ((n.carbs_grams || 0) - (n.fiber_grams || 0)) * multiplier);
     totals.sugar_grams += ((n.sugar_grams || 0) * multiplier);
     totals.sodium_mg += ((n.sodium_mg || 0) * multiplier);
 

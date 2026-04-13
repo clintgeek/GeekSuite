@@ -79,7 +79,9 @@ router.post('/', authenticateToken, async (req, res) => {
         daily_calorie_target: nutrition.goals.calories ?? settings.nutrition_goal?.daily_calorie_target,
         protein_grams: nutrition.goals.protein ?? settings.nutrition_goal?.protein_grams,
         carbs_grams: nutrition.goals.carbs ?? settings.nutrition_goal?.carbs_grams,
-        fat_grams: nutrition.goals.fat ?? settings.nutrition_goal?.fat_grams
+        fat_grams: nutrition.goals.fat ?? settings.nutrition_goal?.fat_grams,
+        ...(nutrition.mode !== undefined && { mode: nutrition.mode }),
+        ...(nutrition.keto !== undefined && { keto: nutrition.keto })
       };
       await UserSettings.updateSettings(userIdObjectId, { nutrition_goal: ng });
     }
