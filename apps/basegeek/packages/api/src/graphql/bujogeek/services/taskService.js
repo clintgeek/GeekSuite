@@ -141,6 +141,25 @@ class TaskService {
     return this.taskModel.findByIdAndDelete(taskId);
   }
 
+  nextRecurrenceDate(baseDate, pattern) {
+    const d = new Date(baseDate || Date.now());
+    switch (pattern) {
+      case 'daily':
+        d.setUTCDate(d.getUTCDate() + 1);
+        break;
+      case 'weekly':
+        d.setUTCDate(d.getUTCDate() + 7);
+        break;
+      case 'monthly':
+        d.setUTCMonth(d.getUTCMonth() + 1);
+        break;
+      default:
+        return null;
+    }
+    d.setUTCHours(9, 0, 0, 0);
+    return d;
+  }
+
   async updateTaskStatus(taskId, status) {
     const now = new Date();
     const updateData = { status, updatedAt: now };
@@ -149,7 +168,45 @@ class TaskService {
     } else {
       updateData.completedAt = null;
     }
-    return this.taskModel.findByIdAndUpdate(taskId, updateData, { new: true, runValidators: true });
+
+    const task = await this.taskModel.findByIdAndUpdate(taskId, updateData, { new: true, runValidators: true });
+
+    // Auto-spawn next occurrence when a recurring task is completed
+    if (task && status === 'completed' && task.recurrencePattern && task.recurrencePattern !== 'none') {
+      const nextDue = this.nextRecurrenceDate(task.dueDate, task.recurrencePattern);
+      if (nextDue) {
+        // Only create if no pending instance already exists for that date
+        const startOfDay = new Date(nextDue);
+        startOfDay.setUTCHours(0, 0, 0, 0);
+        const endOfDay = new Date(nextDue);
+        endOfDay.setUTCHours(23, 59, 59, 999);
+
+        const existing = await this.taskModel.findOne({
+          createdBy: task.createdBy,
+          content: task.content,
+          recurrencePattern: task.recurrencePattern,
+          status: 'pending',
+          dueDate: { $gte: startOfDay, $lte: endOfDay },
+        });
+
+        if (!existing) {
+          await this.taskModel.create({
+            content: task.content,
+            signifier: task.signifier,
+            status: 'pending',
+            priority: task.priority,
+            note: task.note,
+            tags: task.tags,
+            dueDate: nextDue,
+            originalDate: nextDue,
+            recurrencePattern: task.recurrencePattern,
+            createdBy: task.createdBy,
+          });
+        }
+      }
+    }
+
+    return task;
   }
 
   async getTaskById(taskId) {
