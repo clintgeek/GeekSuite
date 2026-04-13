@@ -1,19 +1,17 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Box, Typography, Alert, Snackbar, CircularProgress } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
 import { useWeight } from '../hooks/useWeight.js';
 import {
-  WeightGoalWizard,
   WeightTimeline,
   WeightProgress,
   QuickAddWeight,
   WeightLogList
 } from '../components/Weight';
-import { settingsService } from '../services/settingsService.js';
 import { SectionLabel, DisplayHeading } from '../components/primitives';
 
 const Weight = () => {
-  const [showGoalWizard, setShowGoalWizard] = useState(false);
-  const [savingGoal, setSavingGoal] = useState(false);
+  const navigate = useNavigate();
 
   // Use custom hook for weight operations
   const {
@@ -29,24 +27,6 @@ const Weight = () => {
     clearSuccessMessage,
     clearErrorMessage
   } = useWeight();
-
-  const handleSaveGoal = async (goalData) => {
-    setSavingGoal(true);
-    try {
-      await settingsService.updateSettings({
-        weight_goal: goalData
-      });
-
-      // Reload weight data to get updated goal
-      await loadWeightData();
-      setShowGoalWizard(false);
-    } catch (error) {
-      console.error('Failed to save weight goal:', error);
-      alert('Failed to save goal: ' + error.message);
-    } finally {
-      setSavingGoal(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -68,7 +48,7 @@ const Weight = () => {
         <SectionLabel sx={{ mb: 0.75 }}>Tracking · Weight</SectionLabel>
         <DisplayHeading size="page">Weight</DisplayHeading>
         <Typography sx={{ color: 'text.secondary', mt: 0.5, fontSize: '0.9375rem' }}>
-          Track your weight and reach your goals. Goal editing lives on the progress card below.
+          Track your weight and reach your goals.
         </Typography>
       </Box>
 
@@ -79,7 +59,7 @@ const Weight = () => {
           goal={weightGoal}
           currentWeight={currentWeight}
           unit="lbs"
-          onEditGoal={() => setShowGoalWizard(true)}
+          onEditGoal={() => navigate('/calorie-wizard')}
         />
       </Box>
 
@@ -105,16 +85,6 @@ const Weight = () => {
           unit="lbs"
         />
       </Box>
-
-      {/* Goal Wizard Dialog */}
-      <WeightGoalWizard
-        open={showGoalWizard}
-        onClose={() => setShowGoalWizard(false)}
-        onSave={handleSaveGoal}
-        currentWeight={currentWeight}
-        existingGoal={weightGoal}
-        unit="lbs"
-      />
 
       {/* Success/Error Messages */}
       <Snackbar
