@@ -15,7 +15,7 @@ const shimmer = keyframes`
 
 const SkeletonBar = ({ width, height = 12, borderRadius = 4, isDark, sx = {} }) => {
   const bg = isDark
-    ? 'linear-gradient(90deg, rgba(255,255,255,0.06) 25%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.06) 75%)'
+    ? 'linear-gradient(90deg, rgba(255,255,255,0.09) 25%, rgba(255,255,255,0.18) 50%, rgba(255,255,255,0.09) 75%)'
     : `linear-gradient(90deg, ${colors.ink[100]} 25%, ${colors.parchment.warm} 50%, ${colors.ink[100]} 75%)`;
 
   return (
