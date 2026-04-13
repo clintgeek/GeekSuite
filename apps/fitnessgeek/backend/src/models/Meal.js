@@ -51,28 +51,26 @@ mealSchema.pre('save', function(next) {
   next();
 });
 
-// Get all active meals (global)
-mealSchema.statics.getActiveMeals = async function() {
-  return this.find({
-    is_deleted: false
-  }).populate('food_items.food_item_id').sort({ name: 1 });
+// Get all active meals for a user
+mealSchema.statics.getActiveMeals = async function(userId) {
+  const query = { is_deleted: false };
+  if (userId) query.user_id = userId;
+  return this.find(query).populate('food_items.food_item_id').sort({ name: 1 });
 };
 
-// Get meals by meal type
-mealSchema.statics.getMealsByType = async function(mealType) {
-  return this.find({
-    meal_type: mealType,
-    is_deleted: false
-  }).populate('food_items.food_item_id').sort({ name: 1 });
+// Get meals by meal type for a user
+mealSchema.statics.getMealsByType = async function(mealType, userId) {
+  const query = { meal_type: mealType, is_deleted: false };
+  if (userId) query.user_id = userId;
+  return this.find(query).populate('food_items.food_item_id').sort({ name: 1 });
 };
 
-// Search meals by name (global)
-mealSchema.statics.searchMeals = async function(searchTerm) {
+// Search meals by name for a user
+mealSchema.statics.searchMeals = async function(searchTerm, userId) {
   const regex = new RegExp(searchTerm, 'i');
-  return this.find({
-    name: regex,
-    is_deleted: false
-  }).populate('food_items.food_item_id').sort({ name: 1 });
+  const query = { name: regex, is_deleted: false };
+  if (userId) query.user_id = userId;
+  return this.find(query).populate('food_items.food_item_id').sort({ name: 1 });
 };
 
 // Calculate total nutrition for the meal

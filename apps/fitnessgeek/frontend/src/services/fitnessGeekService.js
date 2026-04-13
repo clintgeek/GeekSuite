@@ -368,7 +368,8 @@ export const fitnessGeekService = {
   // Add meal to log
   addMealToLog: async (mealId, logDate, mealType) => {
     try {
-      const response = await apiService.post(`/meals/${mealId}/add-to-log`, {
+      // REST endpoint — expects log_date + meal_type in body (not the GQL apiService path)
+      const response = await restApi.post(`/meals/${mealId}/add-to-log`, {
         log_date: logDate,
         meal_type: mealType
       });

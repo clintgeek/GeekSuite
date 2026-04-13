@@ -77,7 +77,7 @@ const MyMeals = () => {
     if (!mealToDelete) return;
     try {
       setDeleting(true);
-      await fitnessGeekService.deleteMeal(mealToDelete._id);
+      await fitnessGeekService.deleteMeal(mealToDelete._id || mealToDelete.id);
       await loadMeals();
       setMealToDelete(null);
     } catch (e) {
@@ -91,7 +91,7 @@ const MyMeals = () => {
     if (!editingMeal) return;
     try {
       setSaving(true);
-      await fitnessGeekService.updateMeal(editingMeal._id, payload);
+      await fitnessGeekService.updateMeal(editingMeal._id || editingMeal.id, payload);
       setEditOpen(false);
       setEditingMeal(null);
       await loadMeals();
@@ -171,7 +171,7 @@ const MyMeals = () => {
               const { itemCount, totalCals } = mealSummary(m);
               return (
                 <ListItem
-                  key={m._id}
+                  key={m._id || m.id}
                   sx={{
                     px: 2.5,
                     py: 1.5,
