@@ -88,7 +88,7 @@ export const typeDefs = gql`
   }
 
   type Mutation {
-    createTask(content: String!, signifier: String, status: String, priority: Int, tags: [String], dueDate: Date, createdAt: Date, updatedAt: Date, recurrencePattern: String): Task!
+    createTask(content: String!, signifier: String, status: String, priority: Int, tags: [String], dueDate: Date, createdAt: Date, updatedAt: Date, note: String, recurrencePattern: String): Task!
     updateTask(id: ID!, input: UpdateTaskInput!): Task!
     deleteTask(id: ID!): DeleteResponse!
     updateTaskStatus(id: ID!, status: String!): Task!
