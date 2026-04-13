@@ -7,12 +7,7 @@ import './index.css';
 import { ApolloProvider } from '@apollo/client';
 import { apolloClient } from './apolloClient';
 
-registerSW({
-  immediate: true,
-  onNeedRefresh() {
-    window.location.reload();
-  },
-});
+registerSW({ immediate: true });
 
 configureUserPlatform();
 
