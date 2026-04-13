@@ -11,7 +11,7 @@ const apolloClient = createApolloClient('fitnessgeek');
 // -------------------------------------------------------------
 
 const GET_USER_SETTINGS = gql`
-  query GetFitnessUserSettings { fitnessUserSettings { id theme influxEnabled dashboard { show_current_weight show_blood_pressure show_calories_today show_login_streak show_nutrition_today show_garmin_summary show_quick_actions show_weight_goal show_nutrition_goal card_order } garmin { enabled username last_connected_at } healthBaselines { weeklyHRV restingHR lastUpdated } notifications { enabled daily_reminder goal_reminders } nutrition_goal { enabled start_date start_weight target_weight activity_level weight_change_rate plan_type calorie_target_mode auto_base_calories fixed_calories activity_eatback_fraction activity_eatback_cap_kcal protein_g_per_lb_goal fat_g_per_lb_goal goal_weight_lbs show_adjustment daily_calorie_target weekly_schedule min_safe_calories bmr tdee timeline_weeks estimated_end_date } weight_goal { enabled startWeight targetWeight startDate goalDate ratePerWeek lastRecalculated unit is_active } units { weight height } ai { enabled features { natural_language_food_logging meal_suggestions nutrition_analysis goal_recommendations } } household { household_id display_name share_food_logs share_weight share_meals } favorite_foods { id name brand } } }
+  query GetFitnessUserSettings { fitnessUserSettings { id theme influxEnabled dashboard { show_current_weight show_blood_pressure show_calories_today show_login_streak show_nutrition_today show_garmin_summary show_quick_actions show_weight_goal show_nutrition_goal card_order } garmin { enabled username last_connected_at } healthBaselines { weeklyHRV restingHR lastUpdated } notifications { enabled daily_reminder goal_reminders } nutrition_goal { enabled start_date start_weight target_weight activity_level weight_change_rate plan_type calorie_target_mode auto_base_calories fixed_calories activity_eatback_fraction activity_eatback_cap_kcal protein_g_per_lb_goal fat_g_per_lb_goal goal_weight_lbs show_adjustment daily_calorie_target weekly_schedule min_safe_calories bmr tdee timeline_weeks estimated_end_date mode keto { net_carb_limit_g track_net_carbs macro_split { preset fat_pct protein_pct carb_pct } } } weight_goal { enabled startWeight targetWeight startDate goalDate ratePerWeek lastRecalculated unit is_active } units { weight height } ai { enabled features { natural_language_food_logging meal_suggestions nutrition_analysis goal_recommendations } } household { household_id display_name share_food_logs share_weight share_meals } favorite_foods { id name brand } } }
 `;
 
 const UPDATE_USER_SETTINGS = gql`
@@ -140,7 +140,7 @@ const GET_DAILY_SUMMARY = gql`
     dailySummary(date: $date) {
       date
       calorieGoal
-      totals { calories protein_grams carbs_grams fat_grams fiber_grams sugar_grams sodium_mg }
+      totals { calories protein_grams carbs_grams fat_grams fiber_grams net_carbs_grams sugar_grams sodium_mg }
       meals {
         breakfast { calories protein_grams carbs_grams fat_grams }
         lunch { calories protein_grams carbs_grams fat_grams }
@@ -276,7 +276,7 @@ const UPDATE_GARMIN_WEIGHT = gql`
 `;
 
 const REFRESH_DAILY_SUMMARY = gql`
-  mutation RefreshDailySummary($date: String) { refreshDailySummary(date: $date) { date totals { calories protein_grams carbs_grams fat_grams } } }
+  mutation RefreshDailySummary($date: String) { refreshDailySummary(date: $date) { date totals { calories protein_grams carbs_grams fat_grams net_carbs_grams } } }
 `;
 
 const LOG_MEAL = gql`
