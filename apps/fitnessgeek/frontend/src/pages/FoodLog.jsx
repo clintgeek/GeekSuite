@@ -7,8 +7,11 @@ import {
   Button,
   Stack,
   Collapse,
-  Tooltip
+  Tooltip,
+  Typography,
+  LinearProgress
 } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import {
   ContentCopy as CopyIcon,
   People as PeopleIcon
@@ -30,8 +33,10 @@ import { fitnessGeekService } from '../services/fitnessGeekService.js';
 import { settingsService } from '../services/settingsService.js';
 import { goalsService } from '../services/goalsService.js';
 import { Surface, SectionLabel, DisplayHeading, StatNumber } from '../components/primitives';
+import { netCarbs as calcNetCarbs, ketoStatus } from '../utils/ketoMath.js';
 
 const FoodLog = () => {
+  const theme = useTheme();
   const [selectedDate, setSelectedDate] = useState(() => fitnessGeekService.formatDate(new Date()));
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [selectedMealType, setSelectedMealType] = useState('snack');
@@ -43,6 +48,11 @@ const FoodLog = () => {
   const [savingMeal, setSavingMeal] = useState(false);
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
 
+  // Keto mode state (Task D2)
+  const [mode, setMode] = useState('standard');
+  const [netCarbLimit, setNetCarbLimit] = useState(20);
+  const [trackNetCarbs, setTrackNetCarbs] = useState(true);
+
   // New dialog states
   const [showCopyDialog, setShowCopyDialog] = useState(false);
   const [copyPrefill, setCopyPrefill] = useState(null);
@@ -50,6 +60,7 @@ const FoodLog = () => {
 
   // Use custom hook for food log operations
   const {
+    logs,
     loading,
     successMessage,
     errorMessage,
@@ -61,12 +72,35 @@ const FoodLog = () => {
     updateFoodLog,
     deleteFoodLog,
     saveMeal,
+    showError,
+    showSuccess,
     clearSuccessMessage,
     clearErrorMessage
   } = useFoodLog(selectedDate);
 
   // Calorie goal adjustment state
   const todayCalorieGoal = useMemo(() => Math.round(nutritionSummary?.calorieGoal || 0), [nutritionSummary]);
+
+  // Keto: compute day-level net carb totals (Tasks D4, D5)
+  const ketoTotals = useMemo(() => {
+    let totalNetCarbs = 0;
+    let anyMissingFiber = false;
+    for (const log of logs) {
+      const food_item = log.food_item || log.food_item_id;
+      if (!food_item) continue;
+      const nutrition = (log.nutrition && Object.keys(log.nutrition || {}).length > 0)
+        ? log.nutrition
+        : food_item.nutrition;
+      if (!nutrition) continue;
+      const servingsCount = typeof log.servings === 'string'
+        ? parseFloat(log.servings) || 1
+        : (log.servings || 1);
+      const { netCarbs: nc, isMissingFiber } = calcNetCarbs(nutrition);
+      totalNetCarbs += nc * servingsCount;
+      if (isMissingFiber) anyMissingFiber = true;
+    }
+    return { totalNetCarbs: Math.round(totalNetCarbs * 10) / 10, anyMissingFiber };
+  }, [logs]);
   const [goalInput, setGoalInput] = useState('');
   const [savingGoal, setSavingGoal] = useState(false);
   const [goalSavedMsg, setGoalSavedMsg] = useState('');
@@ -115,6 +149,17 @@ const FoodLog = () => {
       setSavingGoal(false);
     }
   };
+
+  // Load keto mode settings (Task D2)
+  useEffect(() => {
+    settingsService.getSettings().then(resp => {
+      const data = resp?.data || resp?.data?.data || resp;
+      const ng = data?.nutrition_goal || null;
+      setMode(ng?.mode || 'standard');
+      setNetCarbLimit(ng?.keto?.net_carb_limit_g ?? 20);
+      setTrackNetCarbs(ng?.keto?.track_net_carbs ?? true);
+    }).catch(() => {});
+  }, []);
 
   // Load derived macros to show base(+add)
   useEffect(() => {
@@ -200,6 +245,14 @@ const FoodLog = () => {
     // Single refresh at the end — much cheaper than N reloads
     await refreshLogs();
     await refreshGoals();
+
+    if (fail > 0 && ok === 0) {
+      showError('Failed to log item. Please try again.');
+    } else if (fail > 0) {
+      showError(`${fail} item(s) failed to log.`);
+    } else if (ok > 0) {
+      showSuccess(`Added ${ok} item${ok > 1 ? 's' : ''} to your log.`);
+    }
 
     return { ok, fail };
   };
@@ -315,6 +368,9 @@ const FoodLog = () => {
               });
             }}
             embedded
+            mode={mode}
+            netCarbsConsumed={ketoTotals.totalNetCarbs}
+            netCarbLimit={netCarbLimit}
           />
         }
       />
@@ -420,6 +476,7 @@ const FoodLog = () => {
             onDeleteLog={handleDeleteLog}
             onSaveMeal={handleSaveMeal}
             showActions={true}
+            mode={mode}
           />
         </Box>
       ))}
@@ -440,6 +497,106 @@ const FoodLog = () => {
         }} />
       </Box>
 
+      {/* Keto: Net Carb Day Total (Task D4) */}
+      {mode === 'keto' && (() => {
+        const { totalNetCarbs } = ketoTotals;
+        const status = ketoStatus(totalNetCarbs, netCarbLimit);
+        const barPct = Math.min((totalNetCarbs / netCarbLimit) * 100, 100);
+        const barColor = status === 'over'
+          ? theme.palette.error.main
+          : status === 'approaching'
+            ? theme.palette.warning.main
+            : theme.palette.primary.main;
+        return (
+          <Surface sx={{ mt: 2, p: { xs: 1.5, sm: 2 } }}>
+            <Typography
+              variant="caption"
+              sx={{
+                display: 'block',
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+                color: theme.palette.text.secondary,
+                fontFamily: '"DM Sans", sans-serif',
+                fontSize: '0.7rem',
+                mb: 0.5
+              }}
+            >
+              Net Carbs Today
+            </Typography>
+            <Typography
+              sx={{
+                fontFamily: '"JetBrains Mono", monospace',
+                fontWeight: 700,
+                fontSize: '1.5rem',
+                color: theme.palette.warning.main,
+                lineHeight: 1.2,
+                mb: 1
+              }}
+            >
+              {totalNetCarbs}g
+              <Typography
+                component="span"
+                sx={{
+                  fontFamily: '"JetBrains Mono", monospace',
+                  fontSize: '1rem',
+                  color: theme.palette.text.secondary,
+                  fontWeight: 400,
+                  ml: 0.5
+                }}
+              >
+                / {netCarbLimit}g
+              </Typography>
+            </Typography>
+            <LinearProgress
+              variant="determinate"
+              value={barPct}
+              sx={{
+                height: 8,
+                borderRadius: 4,
+                backgroundColor: theme.palette.mode === 'dark'
+                  ? 'rgba(255,255,255,0.08)'
+                  : theme.palette.grey[200],
+                '& .MuiLinearProgress-bar': {
+                  backgroundColor: barColor,
+                  borderRadius: 4
+                }
+              }}
+            />
+            <Typography
+              variant="caption"
+              sx={{
+                display: 'block',
+                mt: 0.5,
+                color: barColor,
+                fontWeight: 600,
+                fontSize: '0.75rem'
+              }}
+            >
+              {status === 'over'
+                ? `Over limit by ${Math.round(totalNetCarbs - netCarbLimit)}g`
+                : status === 'approaching'
+                  ? `Approaching cap — ${Math.round(netCarbLimit - totalNetCarbs)}g remaining`
+                  : `In range — ${Math.round(netCarbLimit - totalNetCarbs)}g remaining`}
+            </Typography>
+          </Surface>
+        );
+      })()}
+
+      {/* Keto: Asterisk footnote (Task D5) */}
+      {mode === 'keto' && ketoTotals.anyMissingFiber && (
+        <Typography
+          variant="caption"
+          sx={{
+            display: 'block',
+            mt: 1,
+            color: theme.palette.text.secondary,
+            fontSize: '0.75rem'
+          }}
+        >
+          * No fiber data available — shown as total carbs
+        </Typography>
+      )}
+
       {/* Add Food Dialog */}
       <AddFoodDialog
         open={showAddDialog}
@@ -453,6 +610,8 @@ const FoodLog = () => {
           handleFoodSelect(food);
           setShowBarcodeScanner(false);
         }}
+        mode={mode}
+        netCarbLimit={netCarbLimit}
       />
 
       {/* Save Meal Dialog */}

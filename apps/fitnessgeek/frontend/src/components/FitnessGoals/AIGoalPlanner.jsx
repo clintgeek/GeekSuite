@@ -3,6 +3,7 @@ import {
   Box, Paper, Typography, TextField, Button, CircularProgress, Alert, Chip, Card, CardContent,
   Stepper, Step, StepLabel, Divider, FormControl, InputLabel, Select, MenuItem
 } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import {
   Restaurant as FoodIcon, Timeline as TimelineIcon, CheckCircle as CheckCircleIcon,
   Calculate as CalculateIcon, TrendingUp as TrendingUpIcon
@@ -10,11 +11,20 @@ import {
 import { userService } from '../../services/userService.js';
 import { settingsService } from '../../services/settingsService.js';
 import { useAuth } from '@geeksuite/auth';
+import ModeSelector from './ModeSelector';
+import KetoPlanStep from './KetoPlanStep';
 
 const CalorieGoalWizard = () => {
   const { user } = useAuth();
+  const theme = useTheme();
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [activeStep, setActiveStep] = useState(0);
+  const [mode, setMode] = useState('standard');
+  const [ketoConfig, setKetoConfig] = useState({
+    net_carb_limit_g: 20,
+    track_net_carbs: true,
+    macro_split: { preset: 'classic', fat_pct: 70, protein_pct: 25, carb_pct: 5 }
+  });
   const [success, setSuccess] = useState('');
 
   // User profile data
@@ -85,7 +95,9 @@ const CalorieGoalWizard = () => {
         };
         setPlan(derivedPlan);
         setHasExistingGoal(true);
-        setActiveStep(2);
+        setActiveStep(3);
+        if (ng.mode) setMode(ng.mode);
+        if (ng.keto) setKetoConfig(ng.keto);
       }
     } catch {
       // no-op
@@ -240,7 +252,7 @@ const CalorieGoalWizard = () => {
     };
 
     setPlan(plan);
-    setActiveStep(2);
+    setActiveStep(3);
   };
 
   const handleSaveProfile = async () => {
@@ -260,7 +272,7 @@ const CalorieGoalWizard = () => {
     }
   };
 
-  const steps = ['Your Profile', 'Set Your Goal', 'Your Calorie Plan'];
+  const steps = ['Your Approach', 'Your Profile', 'Set Your Goal', 'Your Calorie Plan'];
 
   return (
     <Box sx={{ maxWidth: 800, mx: 'auto', p: 3 }}>
@@ -268,7 +280,7 @@ const CalorieGoalWizard = () => {
       <Box sx={{ textAlign: 'center', mb: 4 }}>
         <FoodIcon sx={{ fontSize: 64, color: 'primary.main', mb: 2 }} />
         <Typography variant="h4" sx={{ fontWeight: 600, mb: 1 }}>Calorie Goal Wizard</Typography>
-        <Typography variant="body1" sx={{ color: '#666', mb: 3 }}>
+        <Typography variant="body1" sx={{ color: 'text.secondary', mb: 3 }}>
           Set your weight goal and get a personalized calorie plan
         </Typography>
       </Box>
@@ -283,8 +295,26 @@ const CalorieGoalWizard = () => {
       {/* Success Display */}
       {success && (<Alert severity="success" sx={{ mb: 3 }}>{success}</Alert>)}
 
-      {/* Step 1: Profile */}
+      {/* Step 0: Mode Selector */}
       {!hasExistingGoal && activeStep === 0 && (
+        <Box sx={{ mt: 2 }}>
+          <Typography variant="h5" sx={{ fontFamily: '"DM Serif Display", serif', mb: 1 }}>
+            Choose your approach
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            This shapes how your goals and dashboard are displayed.
+          </Typography>
+          <ModeSelector value={mode} onChange={setMode} />
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
+            <Button variant="contained" onClick={() => setActiveStep(1)}>
+              Continue
+            </Button>
+          </Box>
+        </Box>
+      )}
+
+      {/* Step 1: Profile */}
+      {!hasExistingGoal && activeStep === 1 && (
         <Paper sx={{ p: 3, mb: 3 }}>
           <Typography variant="h6" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
             <CalculateIcon sx={{ color: 'primary.main' }} />
@@ -359,7 +389,7 @@ const CalorieGoalWizard = () => {
             </Button>
             <Button
               variant="contained"
-              onClick={() => setActiveStep(1)}
+              onClick={() => setActiveStep(2)}
               disabled={!profile.age || !profile.weight || !profile.height || !profile.gender}
               sx={{ bgcolor: 'primary.main', '&:hover': { bgcolor: 'primary.dark' } }}
             >
@@ -370,7 +400,7 @@ const CalorieGoalWizard = () => {
       )}
 
       {/* Step 2: Goal Setting */}
-      {!hasExistingGoal && activeStep === 1 && (
+      {!hasExistingGoal && activeStep === 2 && (
         <Paper sx={{ p: 3, mb: 3 }}>
           <Typography variant="h6" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
             <TrendingUpIcon sx={{ color: 'primary.main' }} />
@@ -416,28 +446,28 @@ const CalorieGoalWizard = () => {
 
           {/* Preview calculations */}
           {profile.weight && goal.targetWeight && (
-            <Card sx={{ mb: 3, bgcolor: '#f8f9fa' }}>
+            <Card sx={{ mb: 3, bgcolor: 'background.default' }}>
               <CardContent>
                 <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
                   Goal Preview
                 </Typography>
                 <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
                   <Box>
-                    <Typography variant="body2" sx={{ color: '#666' }}>Current Weight</Typography>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>Current Weight</Typography>
                     <Typography variant="h6">{profile.weight} lbs</Typography>
                   </Box>
                   <Box>
-                    <Typography variant="body2" sx={{ color: '#666' }}>Target Weight</Typography>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>Target Weight</Typography>
                     <Typography variant="h6">{goal.targetWeight} lbs</Typography>
                   </Box>
                   <Box>
-                    <Typography variant="body2" sx={{ color: '#666' }}>Weight to Lose</Typography>
-                    <Typography variant="h6" sx={{ color: '#d32f2f' }}>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>Weight to Lose</Typography>
+                    <Typography variant="h6" sx={{ color: theme.palette.error.main }}>
                       {Math.abs(parseFloat(profile.weight) - parseFloat(goal.targetWeight)).toFixed(1)} lbs
                     </Typography>
                   </Box>
                   <Box>
-                    <Typography variant="body2" sx={{ color: '#666' }}>Timeline</Typography>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>Timeline</Typography>
                     <Typography variant="h6">
                       {Math.ceil(Math.abs(parseFloat(profile.weight) - parseFloat(goal.targetWeight)) / parseFloat(goal.weightChangeRate))} weeks
                     </Typography>
@@ -450,7 +480,7 @@ const CalorieGoalWizard = () => {
           <Box sx={{ display: 'flex', gap: 2 }}>
             <Button
               variant="outlined"
-              onClick={() => setActiveStep(0)}
+              onClick={() => setActiveStep(1)}
             >
               Back
             </Button>
@@ -466,11 +496,129 @@ const CalorieGoalWizard = () => {
         </Paper>
       )}
 
-      {/* Step 3: Calorie Plan or Existing Summary */}
-      {plan && activeStep >= 2 && (
+      {/* Step 3b: Keto Plan (shown when mode === 'keto', new goal only) */}
+      {!hasExistingGoal && mode === 'keto' && plan && activeStep === 3 && (
+        <Box sx={{ mt: 2 }}>
+          <Typography variant="h5" sx={{ fontFamily: '"DM Serif Display", serif', mb: 3 }}>
+            Configure Your Keto Plan
+          </Typography>
+          <KetoPlanStep
+            ketoConfig={ketoConfig}
+            onChange={setKetoConfig}
+            calorieTarget={plan?.dailyCalories}
+          />
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
+            <Button onClick={() => setActiveStep(2)}>Back</Button>
+            <Button
+              variant="contained"
+              onClick={async () => {
+                try {
+                  const startDate = new Date();
+                  const estimatedEnd = new Date();
+                  estimatedEnd.setDate(startDate.getDate() + (plan.timeline * 7));
+                  const weeklyNumbers = plan.schedule.map(d => d.calories);
+                  await settingsService.updateSettings({
+                    nutrition_goal: {
+                      enabled: true,
+                      start_date: startDate.toISOString(),
+                      start_weight: plan.currentWeight,
+                      target_weight: plan.targetWeight,
+                      activity_level: plan.activityLevel,
+                      weight_change_rate: plan.weightChangeRate,
+                      plan_type: plan.planType,
+                      daily_calorie_target: plan.dailyCalories,
+                      weekly_schedule: weeklyNumbers,
+                      min_safe_calories: plan.rules.minSafeCalories,
+                      bmr: plan.bmr,
+                      tdee: plan.tdee,
+                      timeline_weeks: plan.timeline,
+                      estimated_end_date: estimatedEnd.toISOString(),
+                      mode,
+                      keto: ketoConfig
+                    }
+                  });
+                  setSuccess('Keto goal saved. Tracking started!');
+                  setHasExistingGoal(true);
+                  await loadExistingGoal();
+                  setTimeout(() => setSuccess(''), 5000);
+                } catch (e) {
+                  console.error('Failed to save keto goal', e);
+                }
+              }}
+            >
+              Start Tracking
+            </Button>
+          </Box>
+        </Box>
+      )}
+
+      {/* Step 3a: Keto Existing Summary (shown when hasExistingGoal and mode=keto) */}
+      {hasExistingGoal && mode === 'keto' && plan && activeStep >= 3 && (
         <Paper sx={{ p: 3 }}>
           <Typography variant="h6" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
-            <CheckCircleIcon sx={{ color: '#4caf50' }} />
+            <CheckCircleIcon sx={{ color: theme.palette.warning.main }} />
+            Your Keto Plan
+          </Typography>
+          <Card sx={{ mb: 3, bgcolor: 'background.default', border: '2px solid', borderColor: 'warning.main' }}>
+            <CardContent>
+              <Typography variant="h5" sx={{ fontWeight: 600, mb: 1, color: 'warning.main', fontFamily: '"DM Serif Display", serif' }}>
+                {ketoConfig.net_carb_limit_g}g net carbs / day
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
+                {ketoConfig.macro_split?.preset === 'lazy'
+                  ? 'Lazy Keto — watching the carb cap only.'
+                  : `Macro split: ${ketoConfig.macro_split?.fat_pct ?? 70}% fat · ${ketoConfig.macro_split?.protein_pct ?? 25}% protein · ${ketoConfig.macro_split?.carb_pct ?? 5}% carbs`}
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                <Chip label={`${plan.dailyCalories} kcal / day`} variant="outlined" />
+                <Chip label={`${ketoConfig.track_net_carbs ? 'Net carbs' : 'Total carbs'}`} variant="outlined" color="warning" />
+                {plan.weightToLose > 0 && <Chip label={`${plan.weightToLose.toFixed(1)} lbs to goal`} variant="outlined" />}
+              </Box>
+            </CardContent>
+          </Card>
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Button
+              variant="contained"
+              onClick={() => {
+                setGoal(prev => ({
+                  ...prev,
+                  targetWeight: plan.targetWeight?.toString() || prev.targetWeight,
+                  weightChangeRate: plan.weightChangeRate?.toString() || prev.weightChangeRate,
+                  planType: plan.planType || prev.planType
+                }));
+                setHasExistingGoal(false);
+                setActiveStep(0);
+              }}
+              sx={{ bgcolor: 'primary.main', '&:hover': { bgcolor: 'primary.dark' } }}
+            >
+              Update
+            </Button>
+            <Button
+              variant="outlined"
+              color="error"
+              onClick={async () => {
+                try {
+                  await settingsService.updateSettings({ nutrition_goal: { enabled: false } });
+                  setHasExistingGoal(false);
+                  setPlan(null);
+                  setSuccess('Keto goal removed.');
+                  setTimeout(() => setSuccess(''), 3000);
+                } catch (e) {
+                  console.error('Failed to remove keto goal', e);
+                }
+              }}
+            >
+              Remove Goal
+            </Button>
+          </Box>
+        </Paper>
+      )}
+
+      {/* Step 3a: Calorie Plan or Existing Summary (standard mode) */}
+      {(mode === 'standard' || (hasExistingGoal && mode !== 'keto')) && plan && activeStep >= 3 && (
+        <Paper sx={{ p: 3 }}>
+          <Typography variant="h6" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
+            <CheckCircleIcon sx={{ color: 'success.main' }} />
             Your Personalized Calorie Plan
           </Typography>
 
@@ -480,10 +628,10 @@ const CalorieGoalWizard = () => {
               <Typography variant="h5" sx={{ fontWeight: 600, mb: 2, color: 'primary.main' }}>
                 Daily Target: {plan.dailyCalories} calories
               </Typography>
-              <Typography variant="body2" sx={{ mb: 2, color: '#666' }}>
+              <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
                 This will help you lose {plan.weightChangeRate} lb per week safely and sustainably.
               </Typography>
-              <Typography variant="body2" sx={{ mb: 1, color: '#666' }}>
+              <Typography variant="body2" sx={{ mb: 1, color: 'text.secondary' }}>
                 Plan Type: {plan.planType === 'standard' ? 'Standard' : plan.planType === 'weekender' ? 'Weekender' : 'Auto adjust'}
               </Typography>
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
@@ -502,14 +650,14 @@ const CalorieGoalWizard = () => {
               </Typography>
               <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1 }}>
                 {plan.schedule.map((d) => (
-                  <Box key={d.day} sx={{ textAlign: 'center', p: 1, border: '1px solid #eee', borderRadius: 1 }}>
-                    <Typography variant="body2" sx={{ color: '#666' }}>{d.day}</Typography>
+                  <Box key={d.day} sx={{ textAlign: 'center', p: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>{d.day}</Typography>
                     <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>{d.calories}</Typography>
                   </Box>
                 ))}
               </Box>
               {plan.rules?.autoAdjust && (
-                <Typography variant="caption" sx={{ color: '#666', display: 'block', mt: 1 }}>
+                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1 }}>
                   Auto mode: If you go over on a day, remaining days will adjust while staying above {plan.rules.minSafeCalories} kcal.
                 </Typography>
               )}
@@ -524,16 +672,16 @@ const CalorieGoalWizard = () => {
                   Your Metabolism
                 </Typography>
                 <Box sx={{ mb: 2 }}>
-                  <Typography variant="body2" sx={{ color: '#666' }}>Basal Metabolic Rate (BMR)</Typography>
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>Basal Metabolic Rate (BMR)</Typography>
                   <Typography variant="h6">{plan.bmr} calories/day</Typography>
-                  <Typography variant="caption" sx={{ color: '#666' }}>
+                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                     Calories your body burns at rest
                   </Typography>
                 </Box>
                 <Box>
-                  <Typography variant="body2" sx={{ color: '#666' }}>Total Daily Energy Expenditure (TDEE)</Typography>
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>Total Daily Energy Expenditure (TDEE)</Typography>
                   <Typography variant="h6">{plan.tdee} calories/day</Typography>
-                  <Typography variant="caption" sx={{ color: '#666' }}>
+                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                     Calories you burn with activity level: {plan.activityLevel}
                   </Typography>
                 </Box>
@@ -546,20 +694,20 @@ const CalorieGoalWizard = () => {
                   Your Deficit
                 </Typography>
                 <Box sx={{ mb: 2 }}>
-                  <Typography variant="body2" sx={{ color: '#666' }}>Daily Calorie Deficit</Typography>
-                  <Typography variant="h6" sx={{ color: '#d32f2f' }}>
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>Daily Calorie Deficit</Typography>
+                  <Typography variant="h6" sx={{ color: theme.palette.error.main }}>
                     {plan.weeklyDeficit} calories/day
                   </Typography>
-                  <Typography variant="caption" sx={{ color: '#666' }}>
+                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                     {plan.weeklyDeficit * 7} calories/week = {plan.weightChangeRate} lb/week
                   </Typography>
                 </Box>
                 <Box>
-                  <Typography variant="body2" sx={{ color: '#666' }}>Safety Check</Typography>
-                  <Typography variant="h6" sx={{ color: plan.dailyCalories >= 1200 ? '#4caf50' : '#f57c00' }}>
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>Safety Check</Typography>
+                  <Typography variant="h6" sx={{ color: plan.dailyCalories >= 1200 ? theme.palette.success.main : theme.palette.warning.main }}>
                     {plan.dailyCalories >= 1200 ? 'Safe' : 'Below minimum'}
                   </Typography>
-                  <Typography variant="caption" sx={{ color: '#666' }}>
+                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                     Minimum recommended: 1,200 calories/day
                   </Typography>
                 </Box>
@@ -609,7 +757,7 @@ const CalorieGoalWizard = () => {
                 <Button
                   variant="contained"
                   onClick={() => {
-                    // Prefill wizard from existing plan and re-run
+                    // Prefill wizard from existing plan and return to step 0 so mode can be changed
                     setGoal(prev => ({
                       ...prev,
                       targetWeight: plan.targetWeight?.toString() || prev.targetWeight,
@@ -617,7 +765,7 @@ const CalorieGoalWizard = () => {
                       planType: plan.planType || prev.planType
                     }));
                     setHasExistingGoal(false);
-                    setActiveStep(1);
+                    setActiveStep(0);
                   }}
                   sx={{ bgcolor: 'primary.main', '&:hover': { bgcolor: 'primary.dark' } }}
                 >
@@ -645,7 +793,7 @@ const CalorieGoalWizard = () => {
               <>
                 <Button
                   variant="outlined"
-                  onClick={() => setActiveStep(1)}
+                  onClick={() => setActiveStep(2)}
                 >
                   Back
                 </Button>
@@ -672,7 +820,9 @@ const CalorieGoalWizard = () => {
                           bmr: plan.bmr,
                           tdee: plan.tdee,
                           timeline_weeks: plan.timeline,
-                          estimated_end_date: estimatedEnd.toISOString()
+                          estimated_end_date: estimatedEnd.toISOString(),
+                          mode,
+                          keto: mode === 'keto' ? ketoConfig : undefined
                         }
                       });
                       setSuccess('Calorie goal saved. Tracking started!');
@@ -684,7 +834,7 @@ const CalorieGoalWizard = () => {
                       console.error('Failed to save nutrition goal', e);
                     }
                   }}
-                  sx={{ bgcolor: '#4caf50', '&:hover': { bgcolor: '#45a049' } }}
+                  sx={{ bgcolor: 'success.main', '&:hover': { bgcolor: 'success.dark' } }}
                 >
                   Start Tracking
                 </Button>

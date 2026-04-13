@@ -8,6 +8,7 @@ import {
   ArrowForward as CommitIcon
 } from '@mui/icons-material';
 import { useTheme, alpha, keyframes } from '@mui/material/styles';
+import { netCarbs as calcNetCarbs } from '../../utils/ketoMath';
 
 // ─── Physical slide-up: tray rises from below, overshoots slightly, settles ───
 const riseIn = keyframes`
@@ -63,7 +64,9 @@ const StagingTray = ({
   onRemove,
   onClear,
   onCommit,
-  committing = false
+  committing = false,
+  ketoMode = false,
+  netCarbLimit = 20,
 }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
@@ -90,6 +93,12 @@ const StagingTray = ({
 
   const totalCalories = items.reduce((sum, item) => sum + computeItemCalories(item), 0);
   const animatedTotal = useCountUp(totalCalories);
+  const totalNetCarbs = ketoMode
+    ? Math.round(items.reduce((sum, item) => {
+        const { netCarbs: nc } = calcNetCarbs(item.nutrition || {});
+        return sum + nc * (Number(item.servings) || 1);
+      }, 0) * 10) / 10
+    : 0;
   const itemCount = items.length;
 
   if (itemCount === 0) return null;
@@ -192,33 +201,64 @@ const StagingTray = ({
           </Box>
         </Box>
 
-        {/* Running calorie total — monospaced odometer */}
+        {/* Running totals — calorie odometer + optional keto net carb */}
         <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
-          <Typography
-            sx={{
-              fontFamily: "'JetBrains Mono', monospace",
-              fontVariantNumeric: 'tabular-nums',
-              fontSize: { xs: '1.625rem', sm: '2rem' },
-              fontWeight: 600,
-              lineHeight: 1,
-              color: ink,
-              letterSpacing: '-0.02em'
-            }}
-          >
-            {animatedTotal}
-          </Typography>
-          <Typography
-            sx={{
-              fontSize: '0.6875rem',
-              fontWeight: 600,
-              textTransform: 'uppercase',
-              letterSpacing: '0.14em',
-              color: muted,
-              mt: 0.5
-            }}
-          >
-            kcal total
-          </Typography>
+          {ketoMode && (
+            <>
+              <Typography
+                sx={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontVariantNumeric: 'tabular-nums',
+                  fontSize: { xs: '1.375rem', sm: '1.625rem' },
+                  fontWeight: 700,
+                  lineHeight: 1,
+                  color: totalNetCarbs >= netCarbLimit
+                    ? theme.palette.error.main
+                    : totalNetCarbs >= netCarbLimit * 0.7
+                      ? theme.palette.warning.main
+                      : theme.palette.warning.dark,
+                  letterSpacing: '-0.02em'
+                }}
+              >
+                {totalNetCarbs}g
+              </Typography>
+              <Typography sx={{ fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: muted, mt: 0.25 }}>
+                net carbs
+              </Typography>
+              <Typography sx={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.875rem', color: muted, mt: 0.25, lineHeight: 1 }}>
+                {animatedTotal} kcal
+              </Typography>
+            </>
+          )}
+          {!ketoMode && (
+            <>
+              <Typography
+                sx={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontVariantNumeric: 'tabular-nums',
+                  fontSize: { xs: '1.625rem', sm: '2rem' },
+                  fontWeight: 600,
+                  lineHeight: 1,
+                  color: ink,
+                  letterSpacing: '-0.02em'
+                }}
+              >
+                {animatedTotal}
+              </Typography>
+              <Typography
+                sx={{
+                  fontSize: '0.6875rem',
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.14em',
+                  color: muted,
+                  mt: 0.5
+                }}
+              >
+                kcal total
+              </Typography>
+            </>
+          )}
         </Box>
       </Box>
 

@@ -27,13 +27,17 @@ import { goalsService } from '../services/goalsService.js';
 import { weightService } from '../services/weightService.js';
 import { bpService } from '../services/bpService.js';
 import { streakService } from '../services/streakService.js';
+import { settingsService } from '../services/settingsService.js';
 
 const DashboardNew = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [removingLogIds, setRemovingLogIds] = useState(new Set());
+  // Keto mode state
+  const [nutritionGoal, setNutritionGoal] = useState(null);
   const [dashboardData, setDashboardData] = useState({
     calories: { consumed: 0, goal: 2000, remaining: 2000 },
+    netCarbs: { consumed: 0 },
     macros: {
       protein: { current: 0, goal: 150 },
       carbs: { current: 0, goal: 250 },
@@ -56,6 +60,20 @@ const DashboardNew = () => {
   useEffect(() => {
     loadDashboardData();
   }, []);
+
+  // Load nutrition goal (mode + keto config) independently from dashboard data
+  useEffect(() => {
+    settingsService.getSettings().then(resp => {
+      const data = resp?.data || resp?.data?.data || resp;
+      setNutritionGoal(data?.nutrition_goal || null);
+    }).catch(() => {
+      // Non-fatal — standard mode is the safe fallback
+    });
+  }, []);
+
+  // Derive mode and keto config from loaded nutritionGoal
+  const mode = nutritionGoal?.mode || 'standard';
+  const netCarbLimit = nutritionGoal?.keto?.net_carb_limit_g ?? 20;
 
   // Get time-based greeting
   const getGreeting = () => {
@@ -149,6 +167,9 @@ const DashboardNew = () => {
             consumed: summary.totals?.calories || 0,
             goal: summary.calorieGoal || 2000,
             remaining: (summary.calorieGoal || 2000) - (summary.totals?.calories || 0),
+          },
+          netCarbs: {
+            consumed: summary.totals?.net_carbs_grams || 0,
           },
           macros: {
             protein: {
@@ -385,6 +406,9 @@ const DashboardNew = () => {
           protein={dashboardData.macros.protein}
           carbs={dashboardData.macros.carbs}
           fat={dashboardData.macros.fat}
+          mode={mode}
+          netCarbsConsumed={dashboardData.netCarbs?.consumed ?? 0}
+          netCarbLimit={netCarbLimit}
         />
 
         {/* Stat Cards — 4-up row */}

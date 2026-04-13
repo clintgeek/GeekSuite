@@ -2,6 +2,7 @@ import React from 'react';
 import { Box, Typography, LinearProgress } from '@mui/material';
 import { useTheme, alpha, keyframes } from '@mui/material/styles';
 import { Surface, StatNumber, SectionLabel } from '../primitives';
+import NetCarbMeter from './NetCarbMeter';
 
 // ─── Subtle "printed" fade-in for the ticket on mount ───
 const ticketEnter = keyframes`
@@ -118,6 +119,10 @@ const DailyTicket = ({
   protein = { current: 0, goal: 150 },
   carbs = { current: 0, goal: 250 },
   fat = { current: 0, goal: 65 },
+  // Keto mode props
+  mode = 'standard',
+  netCarbsConsumed = 0,
+  netCarbLimit = 20,
 }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
@@ -270,22 +275,42 @@ const DailyTicket = ({
         </Box>
       </Box>
 
-      {/* Progress bar — full width, thicker */}
+      {/* Progress bar / keto meter — full width */}
       <Box sx={{ px: { xs: 2.5, sm: 3.5 }, pb: 2 }}>
-        <LinearProgress
-          variant="determinate"
-          value={percentage}
-          sx={{
-            height: 8,
-            borderRadius: 4,
-            backgroundColor: alpha(ink, isDark ? 0.08 : 0.06),
-            '& .MuiLinearProgress-bar': {
+        {mode === 'keto' ? (
+          <>
+            <NetCarbMeter consumed={netCarbsConsumed} limitG={netCarbLimit} />
+            {/* Calories demoted to a secondary caption line */}
+            <Typography
+              variant="caption"
+              sx={{
+                display: 'block',
+                mt: 1.5,
+                fontFamily: "'JetBrains Mono', monospace",
+                fontVariantNumeric: 'tabular-nums',
+                fontSize: '0.75rem',
+                color: theme.palette.text.secondary,
+              }}
+            >
+              {consumedRounded.toLocaleString()} / {goalRounded.toLocaleString()} kcal
+            </Typography>
+          </>
+        ) : (
+          <LinearProgress
+            variant="determinate"
+            value={percentage}
+            sx={{
+              height: 8,
               borderRadius: 4,
-              backgroundColor: isOver ? theme.palette.error.main : primary,
-              transition: 'transform 800ms cubic-bezier(0.22, 1, 0.36, 1)',
-            },
-          }}
-        />
+              backgroundColor: alpha(ink, isDark ? 0.08 : 0.06),
+              '& .MuiLinearProgress-bar': {
+                borderRadius: 4,
+                backgroundColor: isOver ? theme.palette.error.main : primary,
+                transition: 'transform 800ms cubic-bezier(0.22, 1, 0.36, 1)',
+              },
+            }}
+          />
+        )}
       </Box>
 
       {/* Macro strip — perforated separator + 3 micro bars */}
@@ -300,24 +325,49 @@ const DailyTicket = ({
           gap: { xs: 1.25, sm: 2.5 },
         }}
       >
-        <MacroMicroBar
-          label="Protein"
-          current={protein.current}
-          goal={protein.goal}
-          color="#10B981"
-        />
-        <MacroMicroBar
-          label="Carbs"
-          current={carbs.current}
-          goal={carbs.goal}
-          color="#F59E0B"
-        />
-        <MacroMicroBar
-          label="Fat"
-          current={fat.current}
-          goal={fat.goal}
-          color="#EF4444"
-        />
+        {mode === 'keto' ? (
+          <>
+            <MacroMicroBar
+              label="Fat"
+              current={fat.current}
+              goal={fat.goal}
+              color={theme.palette.error.main}
+            />
+            <MacroMicroBar
+              label="Protein"
+              current={protein.current}
+              goal={protein.goal}
+              color={theme.palette.success.main}
+            />
+            <MacroMicroBar
+              label="Net Carbs"
+              current={netCarbsConsumed}
+              goal={netCarbLimit}
+              color={theme.palette.warning.main}
+            />
+          </>
+        ) : (
+          <>
+            <MacroMicroBar
+              label="Protein"
+              current={protein.current}
+              goal={protein.goal}
+              color={theme.palette.success.main}
+            />
+            <MacroMicroBar
+              label="Carbs"
+              current={carbs.current}
+              goal={carbs.goal}
+              color={theme.palette.warning.main}
+            />
+            <MacroMicroBar
+              label="Fat"
+              current={fat.current}
+              goal={fat.goal}
+              color={theme.palette.error.main}
+            />
+          </>
+        )}
       </Box>
     </Surface>
   );

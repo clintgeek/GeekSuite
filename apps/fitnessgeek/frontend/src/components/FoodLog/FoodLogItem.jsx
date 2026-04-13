@@ -16,6 +16,7 @@ import {
 } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import { foodService } from '../../services/foodService.js';
+import { netCarbs as calcNetCarbs } from '../../utils/ketoMath.js';
 
 const SWIPE_THRESHOLD = 60;
 
@@ -26,7 +27,8 @@ const FoodLogItem = ({
   showActions = true,
   swipeEnabled = true,
   isFavorite: initialFavorite = false,
-  onFavoriteChange
+  onFavoriteChange,
+  mode = 'standard'
 }) => {
   const theme = useTheme();
   const [isFavorite, setIsFavorite] = useState(initialFavorite);
@@ -56,6 +58,10 @@ const FoodLogItem = ({
   const totalProtein = Math.round(nutrition.protein_grams * servingsCount * 10) / 10;
   const totalCarbs = Math.round(nutrition.carbs_grams * servingsCount * 10) / 10;
   const totalFat = Math.round(nutrition.fat_grams * servingsCount * 10) / 10;
+
+  // Keto: compute net carbs from the resolved nutrition snapshot (scaled by servings)
+  const { netCarbs: rawNetCarbs, isMissingFiber } = calcNetCarbs(nutrition);
+  const totalNetCarbs = Math.round(rawNetCarbs * servingsCount * 10) / 10;
 
   const handleDelete = () => {
     if (onDelete && (log.id || log._id)) {
@@ -358,6 +364,23 @@ const FoodLogItem = ({
               '& .MuiChip-label': { px: 1.25 }
             }}
           />
+          {mode === 'keto' && (
+            <Chip
+              label={`${totalNetCarbs}g nc${isMissingFiber ? '*' : ''}`}
+              size="small"
+              sx={{
+                height: 24,
+                borderRadius: '999px',
+                backgroundColor: `${theme.palette.warning.main}1a`,
+                color: theme.palette.warning.main,
+                fontWeight: 700,
+                fontSize: '0.75rem',
+                fontFamily: '"JetBrains Mono", monospace',
+                border: `1px solid ${theme.palette.warning.main}33`,
+                '& .MuiChip-label': { px: 1.25 }
+              }}
+            />
+          )}
         </Box>
         {/* Mobile condensed nutrition display */}
         <Box sx={{
@@ -389,6 +412,19 @@ const FoodLogItem = ({
           >
             {totalProtein}P / {totalCarbs}C / {totalFat}F
           </Typography>
+          {mode === 'keto' && (
+            <Typography
+              variant="caption"
+              sx={{
+                color: theme.palette.warning.main,
+                fontSize: '0.7rem',
+                fontWeight: 700,
+                fontFamily: '"JetBrains Mono", monospace'
+              }}
+            >
+              · {totalNetCarbs}g nc{isMissingFiber ? '*' : ''}
+            </Typography>
+          )}
         </Box>
 
         {/* Serving Indicator */}

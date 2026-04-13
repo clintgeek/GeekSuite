@@ -111,7 +111,11 @@ const UnifiedFoodSearch = ({
   // Customization
   placeholder = "Search foods or describe your meal (e.g., '2 tacos and a beer')...",
   maxResults = 25,
-  className
+  className,
+
+  // Keto
+  ketoMode = false,
+  netCarbLimit = 20,
 }) => {
   const theme = useTheme();
   const ink = theme.palette.text.primary;
@@ -122,6 +126,10 @@ const UnifiedFoodSearch = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [recentFoods, setRecentFoods] = useState([]);
+  const [myMeals, setMyMeals] = useState([]);
+  const [myFoods, setMyFoods] = useState([]);
+  const [showMyMealsSection, setShowMyMealsSection] = useState(true);
+  const [showMyFoodsSection, setShowMyFoodsSection] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [hasAIResults, setHasAIResults] = useState(false);
@@ -203,9 +211,11 @@ const UnifiedFoodSearch = ({
     });
   }, [compositeGroups, searchQuery]);
 
-  // Load recent foods
+  // Load recent foods + My Meals + My Foods
   useEffect(() => {
     if (showRecent) loadRecentFoods();
+    loadMyMeals();
+    loadMyFoods();
   }, [showRecent]);
 
   const loadRecentFoods = async () => {
@@ -223,6 +233,38 @@ const UnifiedFoodSearch = ({
       }
     } catch (err) {
       console.error('Failed to load recent foods:', err);
+    }
+  };
+
+  const loadMyMeals = async () => {
+    try {
+      const meals = await fitnessGeekService.getMeals();
+      const arr = Array.isArray(meals) ? meals : (meals?.data || []);
+      const mapped = arr.map((m) => {
+        const totalCals = (m.food_items || []).reduce((sum, it) => {
+          const f = it.food_item_id || it.food_item || {};
+          return sum + (f?.nutrition?.calories_per_serving || 0) * (it.servings || 1);
+        }, 0);
+        return {
+          _id: m._id || m.id,   // GQL serializes as 'id'; REST returns '_id'
+          name: m.name,
+          source: 'meal',
+          type: 'meal',
+          nutrition: { calories_per_serving: Math.round(totalCals) }
+        };
+      });
+      setMyMeals(mapped);
+    } catch (err) {
+      console.error('Failed to load my meals:', err);
+    }
+  };
+
+  const loadMyFoods = async () => {
+    try {
+      const foods = await foodService.getCustomFoods(50);
+      setMyFoods(Array.isArray(foods) ? foods : []);
+    } catch (err) {
+      console.error('Failed to load my foods:', err);
     }
   };
 
@@ -259,7 +301,7 @@ const UnifiedFoodSearch = ({
           return sum + c * (it.servings || 1);
         }, 0);
         return {
-          _id: m._id,
+          _id: m._id || m.id,   // GQL serializes as 'id'; REST returns '_id'
           name: m.name,
           source: 'meal',
           type: 'meal',
@@ -491,6 +533,7 @@ const UnifiedFoodSearch = ({
           staged={stagedCount > 0}
           stagedCount={stagedCount}
           animationDelay={index * 40}
+          ketoMode={ketoMode}
         />
       </Grid>
     );
@@ -734,6 +777,25 @@ const UnifiedFoodSearch = ({
         </Box>
       )}
 
+      {/* My Meals — pre-search browse */}
+      {myMeals.length > 0 && searchQuery.length < 2 && (
+        <Box sx={{ mt: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+            <Typography component="h3" sx={{ fontFamily: "'DM Serif Display', serif", fontSize: '1.125rem', fontWeight: 400, color: ink, letterSpacing: '-0.01em' }}>
+              My Meals
+            </Typography>
+            <Button
+              onClick={() => setShowMyMealsSection(!showMyMealsSection)}
+              endIcon={showMyMealsSection ? <CollapseIcon /> : <ExpandIcon />}
+              sx={{ color: muted, textTransform: 'uppercase', fontWeight: 700, fontSize: '0.6875rem', letterSpacing: '0.12em' }}
+            >
+              {showMyMealsSection ? 'Hide' : 'Show'}
+            </Button>
+          </Box>
+          <Collapse in={showMyMealsSection}>{renderFoodGrid(myMeals, '', false, 0)}</Collapse>
+        </Box>
+      )}
+
       {/* Recent foods */}
       {showRecent && recentFoods.length > 0 && searchQuery.length < 2 && (
         <Box sx={{ mt: 2 }}>
@@ -776,6 +838,25 @@ const UnifiedFoodSearch = ({
         </Box>
       )}
 
+      {/* My Foods (custom) — pre-search browse */}
+      {myFoods.length > 0 && searchQuery.length < 2 && (
+        <Box sx={{ mt: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+            <Typography component="h3" sx={{ fontFamily: "'DM Serif Display', serif", fontSize: '1.125rem', fontWeight: 400, color: ink, letterSpacing: '-0.01em' }}>
+              My Foods
+            </Typography>
+            <Button
+              onClick={() => setShowMyFoodsSection(!showMyFoodsSection)}
+              endIcon={showMyFoodsSection ? <CollapseIcon /> : <ExpandIcon />}
+              sx={{ color: muted, textTransform: 'uppercase', fontWeight: 700, fontSize: '0.6875rem', letterSpacing: '0.12em' }}
+            >
+              {showMyFoodsSection ? 'Hide' : 'Show'}
+            </Button>
+          </Box>
+          <Collapse in={showMyFoodsSection}>{renderFoodGrid(myFoods, '', false, 0)}</Collapse>
+        </Box>
+      )}
+
       {/* ─── The staging tray (bottom dock) ─── */}
       <StagingTray
         items={trayItems}
@@ -785,6 +866,8 @@ const UnifiedFoodSearch = ({
         onClear={clearTray}
         onCommit={commitTray}
         committing={committing}
+        ketoMode={ketoMode}
+        netCarbLimit={netCarbLimit}
       />
 
       {/* Legacy modal — kept for precision macro editing flows (not used by search tap) */}

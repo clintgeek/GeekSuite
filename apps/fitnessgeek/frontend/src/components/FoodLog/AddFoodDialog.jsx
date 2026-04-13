@@ -36,7 +36,9 @@ const AddFoodDialog = ({
   onCommitBatch,  // New: batch commit for Search tab's staging tray
   mealType,
   showBarcodeScanner,
-  onShowBarcodeScanner
+  onShowBarcodeScanner,
+  mode = 'standard',
+  netCarbLimit = 20,
 }) => {
   const theme = useTheme();
   const primaryGradient = `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`;
@@ -296,6 +298,8 @@ const AddFoodDialog = ({
                 }}
                 placeholder="Search foods or describe your meal…"
                 maxResults={25}
+                ketoMode={mode === 'keto'}
+                netCarbLimit={netCarbLimit}
               />
             </Box>
           )}
