@@ -78,7 +78,7 @@ export default function HealthDashboard() {
       const settings = response?.data || response || {};
       setInfluxEnabled(settings.influxEnabled || false);
     } catch (err) {
-      console.error('Error checking InfluxDB status:', err);
+      console.warn('Could not load InfluxDB settings:', err.message);
     } finally {
       setCheckingInflux(false);
     }

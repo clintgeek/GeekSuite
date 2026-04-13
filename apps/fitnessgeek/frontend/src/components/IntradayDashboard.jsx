@@ -279,7 +279,6 @@ export default function IntradayDashboard({
 }) {
   const theme = useTheme();
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [data, setData] = useState({
     heartRate: [],
     stress: [],
@@ -293,35 +292,40 @@ export default function IntradayDashboard({
 
     async function fetchData() {
       setLoading(true);
-      setError(null);
 
       try {
         const response = await influxService.getIntraday(date, date);
 
-        // Transform data for charts
-        const transformedData = {
-          heartRate: response.heartRate.map(point => ({
-            time: point.time,
-            value: point.HeartRate
-          })),
-          stress: response.stress.map(point => ({
-            time: point.time,
-            value: point.stressLevel
-          })),
-          bodyBattery: response.bodyBattery.map(point => ({
-            time: point.time,
-            value: point.BodyBatteryLevel
-          })),
-          breathing: response.breathing.map(point => ({
-            time: point.time,
-            value: point.BreathingRate
-          }))
-        };
-
-        setData(transformedData);
+        // Backend returns { available: false, reason, message } when InfluxDB is
+        // unavailable or has no data for this date — treat as empty, not an error.
+        if (!response || response.available === false) {
+          setData({ heartRate: [], stress: [], bodyBattery: [], breathing: [] });
+        } else {
+          // Transform data for charts
+          const transformedData = {
+            heartRate: (response.heartRate || []).map(point => ({
+              time: point.time,
+              value: point.HeartRate
+            })),
+            stress: (response.stress || []).map(point => ({
+              time: point.time,
+              value: point.stressLevel
+            })),
+            bodyBattery: (response.bodyBattery || []).map(point => ({
+              time: point.time,
+              value: point.BodyBatteryLevel
+            })),
+            breathing: (response.breathing || []).map(point => ({
+              time: point.time,
+              value: point.BreathingRate
+            }))
+          };
+          setData(transformedData);
+        }
       } catch (err) {
-        console.error('Error fetching intraday data:', err);
-        setError(err.response?.data?.error || 'Failed to fetch intraday metrics');
+        // Defensive: backend should no longer 500, but handle it quietly.
+        console.warn('Intraday health data unavailable:', err.message);
+        setData({ heartRate: [], stress: [], bodyBattery: [], breathing: [] });
       } finally {
         setLoading(false);
       }
@@ -335,14 +339,6 @@ export default function IntradayDashboard({
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200 }}>
         <CircularProgress />
       </Box>
-    );
-  }
-
-  if (error) {
-    return (
-      <Alert severity="error">
-        {error}
-      </Alert>
     );
   }
 
