@@ -268,6 +268,12 @@ await apolloServer.start();
 
 // Mount GraphQL BEFORE the SPA catch-all
 app.use('/graphql', optionalUser());
+app.use('/graphql', (req, _res, next) => {
+  if (req.method === 'POST' && req.body?.operationName) {
+    console.log(`[GQL] ${req.body.operationName} | vars: ${JSON.stringify(Object.keys(req.body.variables || {}))}`);
+  }
+  next();
+});
 app.use('/graphql', expressMiddleware(apolloServer, {
   context: async ({ req }) => ({
     user: req.user || null,

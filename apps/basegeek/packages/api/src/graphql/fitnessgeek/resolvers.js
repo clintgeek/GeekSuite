@@ -341,8 +341,8 @@ export const resolvers = {
     },
     fitnessMeals: async (_, { mealType }, { user }) => {
       if (!user) throw new Error('Unauthorized');
-      if (mealType) return Meal.getMealsByType(mealType);
-      return Meal.getActiveMeals();
+      if (mealType) return Meal.getMealsByType(mealType, user.id);
+      return Meal.getActiveMeals(user.id);
     },
     fitnessMeal: async (_, { id }, { user }) => {
       if (!user) throw new Error('Unauthorized');

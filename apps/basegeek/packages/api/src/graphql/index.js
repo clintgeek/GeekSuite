@@ -34,14 +34,29 @@ const dateScalarResolver = {
   Date: new GraphQLScalarType({
     name: 'Date',
     description: 'ISO-8601 Date/DateTime scalar',
-    parseValue: (value) => new Date(value),
+    parseValue: (value) => {
+      if (value == null) return null;
+      const d = new Date(value);
+      if (isNaN(d.getTime())) throw new Error(`Date scalar: invalid value "${value}"`);
+      return d;
+    },
     serialize: (value) => {
-      if (value instanceof Date) return value.toISOString();
-      return new Date(value).toISOString();
+      if (value == null) return null;
+      if (value instanceof Date) {
+        if (isNaN(value.getTime())) return null;
+        return value.toISOString();
+      }
+      const d = new Date(value);
+      if (isNaN(d.getTime())) return null;
+      return d.toISOString();
     },
     parseLiteral: (ast) => {
       if (ast.kind === Kind.INT) return new Date(parseInt(ast.value, 10));
-      if (ast.kind === Kind.STRING) return new Date(ast.value);
+      if (ast.kind === Kind.STRING) {
+        const d = new Date(ast.value);
+        if (isNaN(d.getTime())) return null;
+        return d;
+      }
       return null;
     },
   }),
