@@ -336,7 +336,7 @@ const FoodLog = () => {
   };
 
   return (
-    <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 960, mx: 'auto' }}>
+    <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 960, mx: 'auto', display: 'flex', flexDirection: 'column' }}>
       {/* Editorial header */}
       <Box sx={{ mb: 2.5 }}>
         <SectionLabel sx={{ mb: 0.75 }}>Today · Food Log</SectionLabel>
@@ -375,8 +375,8 @@ const FoodLog = () => {
         }
       />
 
-      {/* Quick Actions */}
-      <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+      {/* Quick Actions — first on mobile, original position on desktop */}
+      <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap', order: { xs: -1, md: 0 } }}>
         <Tooltip title="Copy meals from another day">
           <Button
             variant="outlined"

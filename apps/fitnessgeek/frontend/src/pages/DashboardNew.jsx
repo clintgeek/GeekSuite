@@ -458,8 +458,8 @@ const DashboardNew = () => {
           />
         </Box>
 
-        {/* Quick Actions */}
-        <Surface sx={{ py: 1.5 }}>
+        {/* Quick Actions — first on mobile, original position on desktop */}
+        <Surface sx={{ py: 1.5, order: { xs: -1, md: 0 } }}>
           <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1 }}>
             <QuickActionButton
               icon={AddIcon}
