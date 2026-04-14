@@ -255,6 +255,20 @@ console.log('SSO Token:', token ? 'Present' : 'Missing');
 
 ---
 
+## 🏚️ Architecture Debt
+
+### Duplicated `UserSettings` schema (fitnessgeek)
+The Mongoose `UserSettings` schema for fitnessgeek lives in **two parallel places** and the two copies have drifted:
+
+- `apps/fitnessgeek/backend/src/models/UserSettings.js` — used by fitnessgeek's own REST routes
+- `apps/basegeek/packages/api/src/graphql/fitnessgeek/models/UserSettings.js` — used by basegeek's GraphQL resolvers
+
+Most of the frontend's "REST" calls actually get rewritten to GraphQL by `apps/fitnessgeek/frontend/src/services/apiService.js` and hit the **basegeek** copy. So if you add a field to the fitnessgeek-backend copy and forget the basegeek copy, Mongoose will silently strip it on `$set` (default strict mode) and the field never persists.
+
+This bit us once already — keto fields (`nutrition_goal.mode`, `nutrition_goal.keto`) were added to fitnessgeek's copy but not basegeek's, so the keto wizard appeared to save but nothing stuck. Fix: keep the two schemas in sync, or consolidate to one source of truth (preferred).
+
+---
+
 ## 📚 Reference Documentation
 
 - `baseGeek/DOCS/SSO_IMPLEMENTATION.md` - Full SSO architecture
