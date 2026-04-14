@@ -1,27 +1,26 @@
 import mongoose from 'mongoose';
 
-// AI Geek Database Connection
 const AIGEEK_MONGODB_URI = process.env.AIGEEK_MONGODB_URI || 'mongodb://localhost:27017/aiGeek?authSource=admin';
 
-export const connectAIGeekDB = async () => {
-  try {
-    await mongoose.createConnection(AIGEEK_MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true
-    });
-    console.log('Connected to aiGeek database');
-  } catch (error) {
-    console.error('Failed to connect to aiGeek database:', error);
-    throw error;
-  }
-};
+// Cached singleton — the previous `mongoose.connections.find(c => c.name === 'aiGeek')`
+// check was racy: connection.name is undefined until the connection finishes the
+// handshake, so every model file imported at startup created its own orphan
+// connection, and queries buffered forever against connections nothing was bound to.
+let _aiGeekConnection = null;
 
 export const getAIGeekConnection = () => {
-  const existingConnection = mongoose.connections.find(conn => conn.name === 'aiGeek');
-  if (existingConnection) {
-    console.log('🔗 Using existing aiGeek connection');
-    return existingConnection;
-  }
-  console.log('🔗 Creating new aiGeek connection');
-  return mongoose.createConnection(AIGEEK_MONGODB_URI);
+  if (_aiGeekConnection) return _aiGeekConnection;
+  console.log('🔗 Creating aiGeek connection');
+  _aiGeekConnection = mongoose.createConnection(AIGEEK_MONGODB_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  });
+  return _aiGeekConnection;
+};
+
+export const connectAIGeekDB = async () => {
+  const conn = getAIGeekConnection();
+  await conn.asPromise();
+  console.log('Connected to aiGeek database');
+  return conn;
 };
