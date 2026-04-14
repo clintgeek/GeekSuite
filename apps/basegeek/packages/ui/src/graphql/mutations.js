@@ -80,6 +80,22 @@ export const UPDATE_MODEL_FREE_TIER = gql`
   }
 `;
 
+export const RESET_ALL_FREE_TIERS = gql`
+  mutation ResetAllFreeTiers {
+    resetAllFreeTiers
+  }
+`;
+
+export const BULK_UPDATE_FREE_TIERS = gql`
+  mutation BulkUpdateFreeTiers($updates: [FreeTierUpdateInput!]!) {
+    bulkUpdateFreeTiers(updates: $updates) {
+      provider
+      modelId
+      isFree
+    }
+  }
+`;
+
 export const SAVE_AI_APP_CONFIG = gql`
   mutation SaveAIAppConfig($appName: String!, $config: JSON!) {
     saveAIAppConfig(appName: $appName, config: $config)
