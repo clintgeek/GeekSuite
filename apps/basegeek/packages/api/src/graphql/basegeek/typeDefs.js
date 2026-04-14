@@ -1,6 +1,40 @@
 import { gql } from 'graphql-tag';
 
 export const typeDefs = gql`
+  type FreeTierLimits {
+    requestsPerMinute: Int
+    requestsPerDay: Int
+    tokensPerMinute: Int
+    tokensPerDay: Int
+    audioSecondsPerHour: Int
+    audioSecondsPerDay: Int
+  }
+
+  type FreeTierUpdate {
+    provider: String!
+    modelId: String!
+    isFree: Boolean!
+    freeLimits: FreeTierLimits
+    notes: String
+  }
+
+  input FreeTierLimitsInput {
+    requestsPerMinute: Int
+    requestsPerDay: Int
+    tokensPerMinute: Int
+    tokensPerDay: Int
+    audioSecondsPerHour: Int
+    audioSecondsPerDay: Int
+  }
+
+  input FreeTierUpdateInput {
+    provider: String!
+    modelId: String!
+    isFree: Boolean!
+    freeLimits: FreeTierLimitsInput
+    notes: String
+  }
+
   type APIKey {
     id: ID!
     name: String!
@@ -61,6 +95,8 @@ export const typeDefs = gql`
     deleteModelPricing(provider: String!, modelId: String!): Boolean
     updateModelFreeTier(provider: String!, modelId: String!, isFree: Boolean!, freeLimits: JSON, notes: String): JSON
     deleteModelFreeTier(provider: String!, modelId: String!): Boolean
+    resetAllFreeTiers: Int!
+    bulkUpdateFreeTiers(updates: [FreeTierUpdateInput!]!): [FreeTierUpdate!]!
 
     # App Routing
     saveAIAppConfig(appName: String!, config: JSON!): JSON
