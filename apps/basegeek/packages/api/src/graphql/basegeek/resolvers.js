@@ -443,6 +443,32 @@ export const resolvers = {
       return true;
     },
 
+    resetAllFreeTiers: async (_, __, { user }) => {
+      requireAuth(user);
+      const result = await AIFreeTier.updateMany({}, { isFree: false, lastUpdated: new Date() });
+      return result.modifiedCount;
+    },
+
+    bulkUpdateFreeTiers: async (_, { updates }, { user }) => {
+      requireAuth(user);
+      const results = await Promise.all(
+        updates.map(({ provider, modelId, isFree, freeLimits, notes }) =>
+          AIFreeTier.findOneAndUpdate(
+            { provider, modelId },
+            { isFree, freeLimits: freeLimits || {}, notes: notes || '', lastUpdated: new Date() },
+            { upsert: true, new: true }
+          )
+        )
+      );
+      return results.map(doc => ({
+        provider: doc.provider,
+        modelId: doc.modelId,
+        isFree: doc.isFree,
+        freeLimits: doc.freeLimits || null,
+        notes: doc.notes || null
+      }));
+    },
+
     // App Routing
     saveAIAppConfig: async (_, { appName, config }, { user }) => {
       requireAuth(user);

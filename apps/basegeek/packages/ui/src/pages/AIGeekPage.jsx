@@ -12,6 +12,7 @@ import {
   Alert,
   CircularProgress,
   Chip,
+  Checkbox,
   Table,
   TableBody,
   TableCell,
@@ -51,7 +52,7 @@ import {
 import useSharedAuthStore from '../store/sharedAuthStore';
 import { apolloClient } from '../apolloClient';
 import { GET_AI_CONFIG, GET_AI_STATS, GET_AI_DIRECTOR_MODELS, GET_AI_USAGE, GET_AI_APP_CONFIGS } from '../graphql/queries';
-import { SAVE_AI_CONFIG, TEST_AI_PROVIDER, RESET_AI_STATS, SEED_DIRECTOR_PRICING, SEED_DIRECTOR_FREE_TIER, SYNC_PROVIDER_MODELS, UPDATE_MODEL_PRICING, UPDATE_MODEL_FREE_TIER, SAVE_AI_APP_CONFIG, DELETE_AI_APP_CONFIG } from '../graphql/mutations';
+import { SAVE_AI_CONFIG, TEST_AI_PROVIDER, RESET_AI_STATS, SEED_DIRECTOR_PRICING, SEED_DIRECTOR_FREE_TIER, SYNC_PROVIDER_MODELS, UPDATE_MODEL_PRICING, UPDATE_MODEL_FREE_TIER, RESET_ALL_FREE_TIERS, BULK_UPDATE_FREE_TIERS, SAVE_AI_APP_CONFIG, DELETE_AI_APP_CONFIG } from '../graphql/mutations';
 
 
 const AIGeekPage = () => {
@@ -102,6 +103,12 @@ const AIGeekPage = () => {
   const [syncingProvider, setSyncingProvider] = useState(null);
   const [editingPricing, setEditingPricing] = useState(null);
   const [editingFreeTier, setEditingFreeTier] = useState(null);
+
+  // Bulk free tier edit state
+  const [freeTierEdits, setFreeTierEdits] = useState({}); // { "provider::modelId": { isFree, freeLimits } }
+  const [savingBulk, setSavingBulk] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showRestoreDefaultsConfirm, setShowRestoreDefaultsConfirm] = useState(false);
 
   // App routing state
   const [appConfigs, setAppConfigs] = useState([]);
@@ -155,21 +162,6 @@ const AIGeekPage = () => {
       setDirectorLoading(true);
       console.log('Token for AI Director:', token ? 'Present' : 'Missing');
 
-      // First, seed pricing data if needed
-      try {
-        await apolloClient.mutate({ mutation: SEED_DIRECTOR_PRICING });
-      } catch (error) {
-        console.log('Pricing already seeded or error:', error);
-      }
-
-      // Then, seed free tier information if needed
-      try {
-        await apolloClient.mutate({ mutation: SEED_DIRECTOR_FREE_TIER });
-      } catch (error) {
-        console.log('Free tier already seeded or error:', error);
-      }
-
-      // Then load the comprehensive model data
       const { data } = await apolloClient.query({ query: GET_AI_DIRECTOR_MODELS, fetchPolicy: 'network-only' });
       if (data && data.aiDirectorModels) {
         setDirectorData(data.aiDirectorModels);
@@ -178,6 +170,23 @@ const AIGeekPage = () => {
       setError(`Failed to load AI Director data: ${error.message}`);
     } finally {
       setDirectorLoading(false);
+    }
+  };
+
+  const restoreHardcodedDefaults = async () => {
+    try {
+      setSavingBulk(true);
+      setError('');
+      await apolloClient.mutate({ mutation: SEED_DIRECTOR_PRICING });
+      await apolloClient.mutate({ mutation: SEED_DIRECTOR_FREE_TIER });
+      setSuccess('Hardcoded defaults restored. Your manual selections have been overwritten.');
+      setShowRestoreDefaultsConfirm(false);
+      setFreeTierEdits({});
+      await loadDirectorData();
+    } catch (error) {
+      setError(`Failed to restore defaults: ${error.message}`);
+    } finally {
+      setSavingBulk(false);
     }
   };
 
@@ -304,7 +313,7 @@ const AIGeekPage = () => {
     }
   };
 
-  // Save free tier for a model
+  // Save free tier for a model (single-model — advanced dialog for audio limits + notes)
   const saveFreeTier = async () => {
     if (!editingFreeTier) return;
     try {
@@ -320,10 +329,106 @@ const AIGeekPage = () => {
         }
       });
       setSuccess(`Free tier updated for ${editingFreeTier.modelId}`);
+      // Clear dirty state for this model since backend now has truth
+      const key = getFreeTierKey(editingFreeTier.provider, editingFreeTier.modelId);
+      setFreeTierEdits(prev => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
       setEditingFreeTier(null);
       await loadDirectorData();
     } catch (error) {
       setError(`Failed to update free tier: ${error.message}`);
+    }
+  };
+
+  // Bulk free tier helpers
+  const getFreeTierKey = (providerName, modelId) => `${providerName}::${modelId}`;
+
+  const getModelFreeTierValue = (providerName, model) => {
+    const key = getFreeTierKey(providerName, model.id);
+    if (freeTierEdits[key] !== undefined) return freeTierEdits[key];
+    return {
+      isFree: model.freeTier?.isFree || false,
+      freeLimits: model.freeTier?.limits || {}
+    };
+  };
+
+  const updateFreeTierEdit = (providerName, modelId, field, value) => {
+    const key = getFreeTierKey(providerName, modelId);
+    setFreeTierEdits(prev => ({
+      ...prev,
+      [key]: {
+        ...(prev[key] || {}),
+        [field]: value
+      }
+    }));
+  };
+
+  const updateFreeTierLimit = (providerName, modelId, limitField, value) => {
+    const key = getFreeTierKey(providerName, modelId);
+    setFreeTierEdits(prev => {
+      const existing = prev[key] || {};
+      return {
+        ...prev,
+        [key]: {
+          ...existing,
+          freeLimits: {
+            ...(existing.freeLimits || {}),
+            [limitField]: value === '' ? undefined : parseInt(value) || 0
+          }
+        }
+      };
+    });
+  };
+
+  const saveAllFreeTiers = async () => {
+    if (Object.keys(freeTierEdits).length === 0) return;
+    try {
+      setSavingBulk(true);
+      setError('');
+      const updates = Object.entries(freeTierEdits).map(([key, edit]) => {
+        const [provider, modelId] = key.split('::');
+        // Find original model to merge limits
+        const providerData = directorData?.providers?.[provider];
+        const model = providerData?.models?.find(m => m.id === modelId);
+        const originalLimits = model?.freeTier?.limits || {};
+        return {
+          provider,
+          modelId,
+          isFree: edit.isFree ?? false,
+          freeLimits: edit.freeLimits ? { ...originalLimits, ...edit.freeLimits } : originalLimits
+        };
+      });
+      await apolloClient.mutate({
+        mutation: BULK_UPDATE_FREE_TIERS,
+        variables: { updates }
+      });
+      setSuccess(`${updates.length} model${updates.length !== 1 ? 's' : ''} updated`);
+      setFreeTierEdits({});
+      await loadDirectorData();
+    } catch (error) {
+      setError(`Failed to save free tier changes: ${error.message}`);
+    } finally {
+      setSavingBulk(false);
+    }
+  };
+
+  const resetAllFreeTiers = async () => {
+    try {
+      setSavingBulk(true);
+      setError('');
+      const { data } = await apolloClient.mutate({ mutation: RESET_ALL_FREE_TIERS });
+      const count = data?.resetAllFreeTiers ?? 0;
+      setSuccess(`Reset ${count} model${count !== 1 ? 's' : ''} to non-free`);
+      setShowResetConfirm(false);
+      setFreeTierEdits({});
+      await loadDirectorData();
+    } catch (error) {
+      setError(`Failed to reset free tiers: ${error.message}`);
+    } finally {
+      setSavingBulk(false);
     }
   };
 
@@ -404,6 +509,14 @@ const AIGeekPage = () => {
     return `$${cost.toFixed(4)}`;
   };
 
+  const formatPricingCell = (value) => {
+    if (value === undefined || value === null || value === 'Unknown' || value === '') return '—';
+    const num = typeof value === 'number' ? value : parseFloat(value);
+    if (isNaN(num)) return '—';
+    // pricing stored as $/1M tokens
+    return `$${num}/M`;
+  };
+
   const formatTokens = (tokens) => {
     if (tokens === undefined || tokens === null) {
       return '0';
@@ -453,7 +566,7 @@ const AIGeekPage = () => {
                                               <Tabs value={activeTab} onChange={(e, newValue) => setActiveTab(newValue)} sx={{ mb: 3 }}>
                         <Tab label="Configuration" icon={<SettingsIcon />} />
                         <Tab label="Usage & Cost" icon={<AnalyticsIcon />} />
-                        <Tab label="Free Tier Monitoring" icon={<WarningIcon />} />
+                        <Tab label="Free Tier Config" icon={<WarningIcon />} />
                         <Tab label="AI Catalog" icon={<KeyIcon />} />
                         <Tab label="App Routing" icon={<AppsIcon />} />
                       </Tabs>
@@ -685,97 +798,239 @@ const AIGeekPage = () => {
                             {activeTab === 2 && (
                         <Card>
                           <CardContent>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                              <Typography variant="h6">Free Tier Monitoring</Typography>
-                              <Button
-                                variant="outlined"
-                                startIcon={<RefreshIcon />}
-                                onClick={loadUsageData}
-                                disabled={usageLoading}
-                              >
-                                Refresh Usage
-                              </Button>
+                            {/* Tab header bar */}
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Typography variant="h6">Free Tier Editor</Typography>
+                                {Object.keys(freeTierEdits).length > 0 && (
+                                  <Chip
+                                    label={`${Object.keys(freeTierEdits).length} unsaved`}
+                                    color="warning"
+                                    size="small"
+                                  />
+                                )}
+                              </Box>
+                              <Box sx={{ display: 'flex', gap: 1 }}>
+                                <Button
+                                  variant="outlined"
+                                  startIcon={<RefreshIcon />}
+                                  onClick={loadDirectorData}
+                                  disabled={directorLoading || savingBulk}
+                                >
+                                  Refresh
+                                </Button>
+                                <Button
+                                  variant="outlined"
+                                  color="error"
+                                  onClick={() => setShowResetConfirm(true)}
+                                  disabled={savingBulk || directorLoading}
+                                >
+                                  Reset All Free Tiers
+                                </Button>
+                                <Button
+                                  variant="outlined"
+                                  color="warning"
+                                  onClick={() => setShowRestoreDefaultsConfirm(true)}
+                                  disabled={savingBulk || directorLoading}
+                                >
+                                  Restore Hardcoded Defaults
+                                </Button>
+                                <Button
+                                  variant="contained"
+                                  startIcon={savingBulk ? <CircularProgress size={16} color="inherit" /> : <SaveIcon />}
+                                  onClick={saveAllFreeTiers}
+                                  disabled={savingBulk || Object.keys(freeTierEdits).length === 0}
+                                >
+                                  Save All
+                                </Button>
+                              </Box>
                             </Box>
 
-                            {usageLoading ? (
+                            <Alert severity="info" sx={{ mb: 2 }}>
+                              Check the <strong>Free</strong> checkbox to enable free tier for a model. Limit fields are disabled when unchecked. Click <strong>Save All</strong> to persist all changes in one go. Use the <EditIcon sx={{ fontSize: 14, verticalAlign: 'middle' }} /> button for rate limits.
+                            </Alert>
+
+                            {directorLoading ? (
                               <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
                                 <CircularProgress />
                               </Box>
-                            ) : (
-                              <Grid container spacing={2}>
-                                {Object.entries(usageData).map(([provider, data]) => (
-                                  <Grid item xs={12} md={6} key={provider}>
+                            ) : directorData ? (
+                              <Grid container spacing={3}>
+                                {Object.entries(directorData.providers || {}).map(([providerName, provider]) => (
+                                  <Grid item xs={12} key={providerName}>
                                     <Card variant="outlined">
-                                      <CardContent>
-                                        <Typography variant="h6" sx={{ textTransform: 'capitalize', mb: 2 }}>
-                                          {provider} Usage
-                                        </Typography>
-
-                                        <Box sx={{ mb: 2 }}>
-                                          <Typography variant="body2" color="text.secondary">
-                                            Today's Usage:
+                                      <CardContent sx={{ pb: '8px !important' }}>
+                                        {/* Provider header */}
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+                                          <Typography variant="subtitle1" fontWeight="bold" sx={{ textTransform: 'capitalize' }}>
+                                            {providerName}
                                           </Typography>
-                                          <Typography variant="body1">
-                                            Requests: {data.totalRequests || 0}
-                                          </Typography>
-                                          <Typography variant="body1">
-                                            Tokens: {formatTokens(data.totalTokens || 0)}
-                                          </Typography>
+                                          <Chip
+                                            label={`${provider.models.filter(m => getModelFreeTierValue(providerName, m).isFree).length} free`}
+                                            size="small"
+                                            color="success"
+                                            variant="outlined"
+                                          />
+                                          <Chip label={`${provider.totalModels} total`} size="small" variant="outlined" />
                                         </Box>
 
-                                        {data.isNearAnyLimit && (
-                                          <Alert severity="warning" sx={{ mb: 2 }}>
-                                            Approaching free tier limits
-                                          </Alert>
-                                        )}
+                                        {/* Column header row */}
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 0.5, mb: 0.5 }}>
+                                          <Box sx={{ width: 36 }} />
+                                          <Typography variant="caption" color="text.secondary" sx={{ flex: 1, minWidth: 0 }}>Model</Typography>
+                                          <Typography variant="caption" color="text.secondary" sx={{ width: 72, textAlign: 'right' }}>$/M in</Typography>
+                                          <Typography variant="caption" color="text.secondary" sx={{ width: 72, textAlign: 'right' }}>$/M out</Typography>
+                                          <Typography variant="caption" color="text.secondary" sx={{ width: 80, textAlign: 'center' }}>RPM</Typography>
+                                          <Typography variant="caption" color="text.secondary" sx={{ width: 80, textAlign: 'center' }}>RPD</Typography>
+                                          <Typography variant="caption" color="text.secondary" sx={{ width: 80, textAlign: 'center' }}>TPM</Typography>
+                                          <Typography variant="caption" color="text.secondary" sx={{ width: 80, textAlign: 'center' }}>TPD</Typography>
+                                          <Box sx={{ width: 32 }} />
+                                        </Box>
 
-                                        {data.isAtAnyLimit && (
-                                          <Alert severity="error" sx={{ mb: 2 }}>
-                                            Free tier limits reached!
-                                          </Alert>
-                                        )}
+                                        {/* Model rows */}
+                                        {provider.models.length > 0 ? provider.models.map((model, index) => {
+                                          const ftv = getModelFreeTierValue(providerName, model);
+                                          const isDirty = freeTierEdits[getFreeTierKey(providerName, model.id)] !== undefined;
+                                          return (
+                                            <Box
+                                              key={index}
+                                              sx={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: 1,
+                                                px: 0.5,
+                                                py: 0.25,
+                                                borderRadius: 1,
+                                                bgcolor: isDirty ? 'warning.50' : 'transparent',
+                                                '&:hover': { bgcolor: isDirty ? 'warning.100' : 'action.hover' }
+                                              }}
+                                            >
+                                              {/* Free checkbox */}
+                                              <Tooltip title={ftv.isFree ? 'Mark as not free' : 'Mark as free'}>
+                                                <Checkbox
+                                                  size="small"
+                                                  checked={ftv.isFree}
+                                                  onChange={(e) => updateFreeTierEdit(providerName, model.id, 'isFree', e.target.checked)}
+                                                  sx={{ p: 0.5 }}
+                                                />
+                                              </Tooltip>
 
-                                        {data.models && data.models.length > 0 && (
-                                          <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
-                                            Model Details:
+                                              {/* Model name */}
+                                              <Box sx={{ flex: 1, minWidth: 0 }}>
+                                                <Typography variant="body2" noWrap title={model.id}>
+                                                  {model.name}
+                                                </Typography>
+                                                <Typography variant="caption" color="text.secondary" noWrap display="block">
+                                                  {model.id}
+                                                </Typography>
+                                              </Box>
+
+                                              {/* Pricing: input */}
+                                              <Typography
+                                                variant="caption"
+                                                color={model.pricing?.input && model.pricing.input !== 'Unknown' ? 'text.primary' : 'text.disabled'}
+                                                sx={{ width: 72, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}
+                                              >
+                                                {formatPricingCell(model.pricing?.input)}
+                                              </Typography>
+
+                                              {/* Pricing: output */}
+                                              <Typography
+                                                variant="caption"
+                                                color={model.pricing?.output && model.pricing.output !== 'Unknown' ? 'text.primary' : 'text.disabled'}
+                                                sx={{ width: 72, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}
+                                              >
+                                                {formatPricingCell(model.pricing?.output)}
+                                              </Typography>
+
+                                              {/* RPM */}
+                                              <TextField
+                                                size="small"
+                                                type="number"
+                                                placeholder="RPM"
+                                                disabled={!ftv.isFree}
+                                                value={ftv.freeLimits?.requestsPerMinute ?? ''}
+                                                onChange={(e) => updateFreeTierLimit(providerName, model.id, 'requestsPerMinute', e.target.value)}
+                                                sx={{ width: 80 }}
+                                                inputProps={{ style: { textAlign: 'right', padding: '4px 6px' } }}
+                                              />
+
+                                              {/* RPD */}
+                                              <TextField
+                                                size="small"
+                                                type="number"
+                                                placeholder="RPD"
+                                                disabled={!ftv.isFree}
+                                                value={ftv.freeLimits?.requestsPerDay ?? ''}
+                                                onChange={(e) => updateFreeTierLimit(providerName, model.id, 'requestsPerDay', e.target.value)}
+                                                sx={{ width: 80 }}
+                                                inputProps={{ style: { textAlign: 'right', padding: '4px 6px' } }}
+                                              />
+
+                                              {/* TPM */}
+                                              <TextField
+                                                size="small"
+                                                type="number"
+                                                placeholder="TPM"
+                                                disabled={!ftv.isFree}
+                                                value={ftv.freeLimits?.tokensPerMinute ?? ''}
+                                                onChange={(e) => updateFreeTierLimit(providerName, model.id, 'tokensPerMinute', e.target.value)}
+                                                sx={{ width: 80 }}
+                                                inputProps={{ style: { textAlign: 'right', padding: '4px 6px' } }}
+                                              />
+
+                                              {/* TPD */}
+                                              <TextField
+                                                size="small"
+                                                type="number"
+                                                placeholder="TPD"
+                                                disabled={!ftv.isFree}
+                                                value={ftv.freeLimits?.tokensPerDay ?? ''}
+                                                onChange={(e) => updateFreeTierLimit(providerName, model.id, 'tokensPerDay', e.target.value)}
+                                                sx={{ width: 80 }}
+                                                inputProps={{ style: { textAlign: 'right', padding: '4px 6px' } }}
+                                              />
+
+                                              {/* Advanced edit button (rate limits) */}
+                                              <Tooltip title="Edit rate limits">
+                                                <IconButton
+                                                  size="small"
+                                                  sx={{ p: 0.5 }}
+                                                  onClick={() => setEditingFreeTier({
+                                                    provider: providerName,
+                                                    modelId: model.id,
+                                                    modelName: model.name,
+                                                    isFree: ftv.isFree,
+                                                    freeLimits: ftv.freeLimits || {
+                                                      requestsPerMinute: 30,
+                                                      requestsPerDay: 14400,
+                                                      tokensPerMinute: 18000,
+                                                      tokensPerDay: 5184000
+                                                    },
+                                                    notes: model.freeTier?.notes || ''
+                                                  })}
+                                                >
+                                                  <EditIcon fontSize="small" />
+                                                </IconButton>
+                                              </Tooltip>
+                                            </Box>
+                                          );
+                                        }) : (
+                                          <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
+                                            No models — click Sync on the AI Catalog tab
                                           </Typography>
                                         )}
-
-                                        {data.models?.map((model, index) => (
-                                          <Box key={index} sx={{ mb: 1, p: 1, bgcolor: 'grey.50', borderRadius: 1 }}>
-                                            <Typography variant="caption" display="block">
-                                              {model.modelId}
-                                            </Typography>
-                                            <Typography variant="caption" display="block">
-                                              {provider === 'gemini' ? (
-                                                // Gemini: Show daily limits (more restrictive)
-                                                `RPD: ${model.percentages?.requestsPerDay?.toFixed(1) || 0}% | TPD: ${model.percentages?.tokensPerDay?.toFixed(1) || 0}%`
-                                              ) : (
-                                                // Groq & Together: Show minute limits (more restrictive)
-                                                `RPM: ${model.percentages?.requestsPerMinute?.toFixed(1) || 0}% | TPM: ${model.percentages?.tokensPerMinute?.toFixed(1) || 0}%`
-                                              )}
-                                            </Typography>
-                                            {(() => {
-                                              const isNearLimit = provider === 'gemini'
-                                                ? (model.isNearLimit?.requestsPerDay || model.isAtLimit?.requestsPerDay)
-                                                : (model.isNearLimit?.requestsPerMinute || model.isAtLimit?.requestsPerMinute);
-
-                                              return isNearLimit ? (
-                                                <Chip
-                                                  label="Near Limit"
-                                                  color="warning"
-                                                  size="small"
-                                                  sx={{ mt: 0.5 }}
-                                                />
-                                              ) : null;
-                                            })()}
-                                          </Box>
-                                        ))}
                                       </CardContent>
                                     </Card>
                                   </Grid>
                                 ))}
                               </Grid>
+                            ) : (
+                              <Box sx={{ textAlign: 'center', py: 4 }}>
+                                <Typography variant="body1" color="text.secondary">
+                                  Click "Refresh" to load model data
+                                </Typography>
+                              </Box>
                             )}
                           </CardContent>
                         </Card>
@@ -1274,7 +1529,54 @@ const AIGeekPage = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Free Tier Edit Dialog */}
+      {/* Reset All Free Tiers Confirm Dialog */}
+      <Dialog open={showResetConfirm} onClose={() => setShowResetConfirm(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Reset All Free Tiers?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1">
+            This will uncheck every model's free tier flag. Limits are preserved and can be re-applied after. Continue?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowResetConfirm(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={resetAllFreeTiers}
+            disabled={savingBulk}
+            startIcon={savingBulk ? <CircularProgress size={16} color="inherit" /> : null}
+          >
+            Reset All
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Restore Hardcoded Defaults Confirm Dialog */}
+      <Dialog open={showRestoreDefaultsConfirm} onClose={() => setShowRestoreDefaultsConfirm(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Restore Hardcoded Defaults?</DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            This will overwrite your manual free-tier selections for all known models with the hardcoded defaults baked into the seed data.
+          </Alert>
+          <Typography variant="body2">
+            Any models you manually checked or unchecked will be reset. This is useful for recovering from an accidental bulk-change, but cannot be undone. Continue?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowRestoreDefaultsConfirm(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            color="warning"
+            onClick={restoreHardcodedDefaults}
+            disabled={savingBulk}
+            startIcon={savingBulk ? <CircularProgress size={16} color="inherit" /> : null}
+          >
+            Restore Defaults
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Free Tier Edit Dialog (audio limits + notes — advanced) */}
       <Dialog open={!!editingFreeTier} onClose={() => setEditingFreeTier(null)} maxWidth="sm" fullWidth>
         <DialogTitle>Edit Free Tier — {editingFreeTier?.modelName}</DialogTitle>
         <DialogContent>
@@ -1341,6 +1643,36 @@ const AIGeekPage = () => {
                     onChange={(e) => setEditingFreeTier(prev => ({
                       ...prev,
                       freeLimits: { ...prev.freeLimits, tokensPerDay: parseInt(e.target.value) || 0 }
+                    }))}
+                    size="small"
+                  />
+                </Grid>
+              </Grid>
+              <Divider sx={{ my: 1 }} />
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>Audio Limits (optional)</Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={6}>
+                  <TextField
+                    fullWidth
+                    label="Audio Seconds/Hour"
+                    type="number"
+                    value={editingFreeTier?.freeLimits?.audioSecondsPerHour ?? ''}
+                    onChange={(e) => setEditingFreeTier(prev => ({
+                      ...prev,
+                      freeLimits: { ...prev.freeLimits, audioSecondsPerHour: parseInt(e.target.value) || 0 }
+                    }))}
+                    size="small"
+                  />
+                </Grid>
+                <Grid item xs={6}>
+                  <TextField
+                    fullWidth
+                    label="Audio Seconds/Day"
+                    type="number"
+                    value={editingFreeTier?.freeLimits?.audioSecondsPerDay ?? ''}
+                    onChange={(e) => setEditingFreeTier(prev => ({
+                      ...prev,
+                      freeLimits: { ...prev.freeLimits, audioSecondsPerDay: parseInt(e.target.value) || 0 }
                     }))}
                     size="small"
                   />
