@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
-  Card,
-  CardContent,
   List,
   Alert,
   CircularProgress,
@@ -17,6 +15,13 @@ import { useFoodManagement } from '../hooks/useFoodManagement.js';
 import FoodListItem from '../components/MyFoods/FoodListItem.jsx';
 import FoodEditDialog from '../components/MyFoods/FoodEditDialog.jsx';
 import FoodDeleteDialog from '../components/MyFoods/FoodDeleteDialog.jsx';
+import {
+  Surface,
+  SectionLabel,
+  DisplayHeading,
+  EmptyState,
+  SurfaceSkeleton
+} from '../components/primitives';
 
 const MyFoods = () => {
   const {
@@ -122,21 +127,24 @@ const MyFoods = () => {
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
-        <CircularProgress />
+      <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 900, mx: 'auto' }}>
+        <Box sx={{ mb: 3 }}>
+          <SectionLabel sx={{ mb: 0.75 }}>Library · Foods</SectionLabel>
+          <DisplayHeading size="page">My Foods</DisplayHeading>
+        </Box>
+        <SurfaceSkeleton rows={5} />
       </Box>
     );
   }
 
   return (
-    <Box sx={{ p: 2 }}>
-      {/* Header */}
+    <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 900, mx: 'auto' }}>
+      {/* Editorial header */}
       <Box sx={{ mb: 3 }}>
-        <Typography variant="h4" component="h1" sx={{ fontWeight: 600, mb: 0.5, color: 'text.primary' }}>
-          My Foods
-        </Typography>
-        <Typography variant="body1" color="text.secondary">
-          Manage your saved foods and custom entries
+        <SectionLabel sx={{ mb: 0.75 }}>Library · Foods</SectionLabel>
+        <DisplayHeading size="page">My Foods</DisplayHeading>
+        <Typography sx={{ color: 'text.secondary', mt: 0.5, fontSize: '0.9375rem' }}>
+          Your custom entries and everything you've saved for quick access.
         </Typography>
       </Box>
 
@@ -153,53 +161,57 @@ const MyFoods = () => {
         </Alert>
       )}
 
-      {/* Search */}
+      {/* Search — theme-aware, no hardcoded colors */}
       <TextField
         fullWidth
-        placeholder="Search your foods..."
+        size="small"
+        placeholder="Search your foods…"
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
         InputProps={{
           startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
         }}
-        sx={{
-          mb: 2,
-          '& .MuiOutlinedInput-root': {
-            backgroundColor: '#fafafa',
-            border: '1px solid #e0e0e0',
-            borderRadius: 1
-          }
-        }}
+        sx={{ mb: 2 }}
       />
 
-      {/* Foods List */}
-      <Card sx={{ width: '100%', backgroundColor: '#fafafa', border: '1px solid #e0e0e0' }}>
-        <CardContent sx={{ p: 1.5 }}>
-          <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
-            Saved Foods ({filteredFoods.length})
-          </Typography>
-
-          {filteredFoods.length > 0 ? (
-            <List sx={{ p: 0 }}>
-              {filteredFoods.map((food) => (
-                <FoodListItem
-                  key={food._id}
-                  food={food}
-                  onEdit={handleEditFood}
-                  onDelete={handleDeleteFood}
-                />
-              ))}
-            </List>
-          ) : (
-            <Box sx={{ textAlign: 'center', py: 3 }}>
-              <FoodIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 1 }} />
-              <Typography variant="body2" color="text.secondary">
-                {searchQuery ? 'No foods match your search.' : 'No saved foods yet. Start by searching and adding foods!'}
-              </Typography>
-            </Box>
-          )}
-        </CardContent>
-      </Card>
+      {/* Foods list or empty state */}
+      {filteredFoods.length === 0 ? (
+        <EmptyState
+          icon={FoodIcon}
+          title={searchQuery ? 'Nothing matches that' : 'Your library is empty'}
+          copy={
+            searchQuery
+              ? 'Try a different word, or clear the search to see everything in your library.'
+              : "Anything you search and log builds up here. Add a custom food, or log something from the Food Log — we'll remember it."
+          }
+        />
+      ) : (
+        <Surface padded={false}>
+          <Box
+            sx={{
+              px: 2.5,
+              pt: 2,
+              pb: 1.25,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              borderBottom: (theme) => `1px dashed ${theme.palette.divider}`,
+            }}
+          >
+            <SectionLabel count={filteredFoods.length}>Saved Foods</SectionLabel>
+          </Box>
+          <List sx={{ p: 0 }}>
+            {filteredFoods.map((food) => (
+              <FoodListItem
+                key={food._id}
+                food={food}
+                onEdit={handleEditFood}
+                onDelete={handleDeleteFood}
+              />
+            ))}
+          </List>
+        </Surface>
+      )}
 
       {/* Edit Dialog */}
       <FoodEditDialog

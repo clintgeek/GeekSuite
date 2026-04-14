@@ -1,6 +1,20 @@
 const { InfluxDB } = require('influx');
 const logger = require('../config/logger');
 
+/**
+ * Thrown when InfluxDB is unreachable, returns an auth error, or any
+ * connection-level failure occurs.  Routes catch this type specifically
+ * so they can return 200 + { available: false } instead of 500.
+ */
+class InfluxUnavailableError extends Error {
+  constructor(message, originalError) {
+    super(message);
+    this.name = 'InfluxUnavailableError';
+    this.code = 'INFLUX_UNAVAILABLE';
+    this.originalError = originalError || null;
+  }
+}
+
 const config = {
   protocol: process.env.INFLUXDB_PROTOCOL || 'http',
   host: process.env.INFLUXDB_HOST || 'localhost',
@@ -32,8 +46,23 @@ async function query(queryString) {
     const results = await influx.query(queryString);
     return results;
   } catch (err) {
-    logger.error('InfluxDB query error', { query: queryString, error: err.message });
-    throw new Error(`InfluxDB query failed: ${err.message}`);
+    // Build a useful diagnostic string even when err.message is empty
+    // (the influx Node client often omits .message on auth/connect failures).
+    const diagnostic =
+      err.message ||
+      (err.statusCode ? `HTTP ${err.statusCode}` : null) ||
+      (err.status ? `HTTP ${err.status}` : null) ||
+      err.name ||
+      'unknown influx error';
+
+    logger.error('InfluxDB query error', {
+      query: queryString,
+      diagnostic,
+      statusCode: err.statusCode || err.status || null,
+      errName: err.name || null
+    });
+
+    throw new InfluxUnavailableError(`InfluxDB query failed: ${diagnostic}`, err);
   }
 }
 
@@ -276,6 +305,7 @@ async function ping() {
 }
 
 module.exports = {
+  InfluxUnavailableError,
   query,
   getSleepIntraday,
   getSleepSummary,

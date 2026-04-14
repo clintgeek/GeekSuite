@@ -32,6 +32,19 @@ export const typeDefs = gql`
     goal_reminders: Boolean
   }
 
+  type KetoMacroSplit {
+    preset: String
+    fat_pct: Float
+    protein_pct: Float
+    carb_pct: Float
+  }
+
+  type KetoSettings {
+    net_carb_limit_g: Float
+    track_net_carbs: Boolean
+    macro_split: KetoMacroSplit
+  }
+
   type NutritionGoalSettings {
     enabled: Boolean
     start_date: Date
@@ -56,6 +69,8 @@ export const typeDefs = gql`
     tdee: Float
     timeline_weeks: Float
     estimated_end_date: Date
+    mode: String
+    keto: KetoSettings
   }
 
   type WeightGoalSettings {
@@ -361,6 +376,7 @@ export const typeDefs = gql`
     carbs_grams: Float
     fat_grams: Float
     fiber_grams: Float
+    net_carbs_grams: Float
     sugar_grams: Float
     sodium_mg: Float
   }

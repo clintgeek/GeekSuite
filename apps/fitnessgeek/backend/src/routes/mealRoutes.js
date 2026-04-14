@@ -26,11 +26,11 @@ router.get('/', async (req, res) => {
     let meals;
 
     if (search) {
-      meals = await Meal.searchMeals(search);
+      meals = await Meal.searchMeals(search, userId);
     } else if (meal_type) {
-      meals = await Meal.getMealsByType(meal_type);
+      meals = await Meal.getMealsByType(meal_type, userId);
     } else {
-      meals = await Meal.getActiveMeals();
+      meals = await Meal.getActiveMeals(userId);
     }
 
     logger.info('Meals retrieved', {

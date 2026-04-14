@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { apiService } from '../services/apiService';
+import { influxService } from '../services/influxService';
 import {
   Box,
   Card,
@@ -68,9 +69,10 @@ export default function InfluxDBSettings({ onSettingsChange }) {
 
     try {
       const response = await apiService.get('/user/settings');
+      const s = response?.data || response || {};
       setSettings({
-        influxEnabled: response.influxEnabled || false,
-        healthBaselines: response.healthBaselines || {
+        influxEnabled: s.influxEnabled || false,
+        healthBaselines: s.healthBaselines || {
           weeklyHRV: null,
           restingHR: null,
           lastUpdated: null
@@ -90,7 +92,7 @@ export default function InfluxDBSettings({ onSettingsChange }) {
     setError(null);
 
     try {
-      const response = await apiService.get('/influx/status');
+      const response = await influxService.getStatus();
       setConnectionStatus({
         success: response.connected,
         database: response.database,

@@ -1,10 +1,24 @@
 const express = require('express');
 const router = express.Router();
 const influxService = require('../services/influxService');
+const { InfluxUnavailableError } = influxService;
 const sleepAnalysisService = require('../services/sleepAnalysisService');
 const UserSettings = require('../models/UserSettings');
 const { authenticateToken } = require('../middleware/auth');
 const logger = require('../config/logger');
+
+/**
+ * Build a uniform "influx unavailable" 200 response body.
+ * `extra` can carry route-specific keys (date, startDate, etc.)
+ */
+function influxUnavailableResponse(err, extra = {}) {
+  return {
+    ...extra,
+    available: false,
+    reason: 'influx_unavailable',
+    message: err.message || 'InfluxDB is unavailable'
+  };
+}
 
 /**
  * Check if user has InfluxDB enabled
@@ -58,6 +72,10 @@ router.get('/daily/:date', authenticateToken, checkInfluxEnabled, async (req, re
     const data = await influxService.getComprehensiveDaily(date);
     res.json(data);
   } catch (err) {
+    if (err instanceof InfluxUnavailableError) {
+      logger.warn('Influx unavailable for daily data', { userId: req.user.id, date: req.params.date, message: err.message });
+      return res.json(influxUnavailableResponse(err, { date }));
+    }
     logger.error('Error fetching daily influx data', {
       userId: req.user.id,
       date: req.params.date,
@@ -90,6 +108,10 @@ router.get('/sleep-analysis/:date', authenticateToken, checkInfluxEnabled, async
     const analysis = await sleepAnalysisService.analyzeSleep(date, baselines);
     res.json(analysis);
   } catch (err) {
+    if (err instanceof InfluxUnavailableError) {
+      logger.warn('Influx unavailable for sleep analysis', { userId: req.user.id, date: req.params.date, message: err.message });
+      return res.json(influxUnavailableResponse(err, { date }));
+    }
     logger.error('Error analyzing sleep data', {
       userId: req.user.id,
       date: req.params.date,
@@ -115,6 +137,10 @@ router.get('/intraday/:startDate/:endDate', authenticateToken, checkInfluxEnable
     const data = await influxService.getIntradayMetrics(startDate, endDate);
     res.json(data);
   } catch (err) {
+    if (err instanceof InfluxUnavailableError) {
+      logger.warn('Influx unavailable for intraday metrics', { userId: req.user.id, startDate, endDate, message: err.message });
+      return res.json(influxUnavailableResponse(err, { startDate, endDate }));
+    }
     logger.error('Error fetching intraday metrics', {
       userId: req.user.id,
       startDate: req.params.startDate,
@@ -140,6 +166,10 @@ router.get('/heart-rate/:date', authenticateToken, checkInfluxEnabled, async (re
     const data = await influxService.getHeartRateIntraday(date, date);
     res.json({ date, heartRate: data });
   } catch (err) {
+    if (err instanceof InfluxUnavailableError) {
+      logger.warn('Influx unavailable for heart rate data', { userId: req.user.id, date: req.params.date, message: err.message });
+      return res.json(influxUnavailableResponse(err, { date }));
+    }
     logger.error('Error fetching heart rate data', {
       userId: req.user.id,
       date: req.params.date,
@@ -164,6 +194,10 @@ router.get('/stress/:date', authenticateToken, checkInfluxEnabled, async (req, r
     const data = await influxService.getStressIntraday(date, date);
     res.json({ date, stress: data });
   } catch (err) {
+    if (err instanceof InfluxUnavailableError) {
+      logger.warn('Influx unavailable for stress data', { userId: req.user.id, date: req.params.date, message: err.message });
+      return res.json(influxUnavailableResponse(err, { date }));
+    }
     logger.error('Error fetching stress data', {
       userId: req.user.id,
       date: req.params.date,
@@ -188,6 +222,10 @@ router.get('/body-battery/:date', authenticateToken, checkInfluxEnabled, async (
     const data = await influxService.getBodyBatteryIntraday(date, date);
     res.json({ date, bodyBattery: data });
   } catch (err) {
+    if (err instanceof InfluxUnavailableError) {
+      logger.warn('Influx unavailable for body battery data', { userId: req.user.id, date: req.params.date, message: err.message });
+      return res.json(influxUnavailableResponse(err, { date }));
+    }
     logger.error('Error fetching body battery data', {
       userId: req.user.id,
       date: req.params.date,
@@ -213,6 +251,10 @@ router.get('/recovery-context/:date', authenticateToken, checkInfluxEnabled, asy
     const data = await aiRecoveryService.generateRecoveryContext(req.user.id, date);
     res.json(data);
   } catch (err) {
+    if (err instanceof InfluxUnavailableError) {
+      logger.warn('Influx unavailable for recovery context', { userId: req.user.id, date: req.params.date, message: err.message });
+      return res.json(influxUnavailableResponse(err, { date }));
+    }
     logger.error('Error generating recovery context', {
       userId: req.user.id,
       date: req.params.date,
@@ -238,6 +280,10 @@ router.get('/recovery-recommendations/:date', authenticateToken, checkInfluxEnab
     const data = await aiRecoveryService.getRecoveryRecommendations(req.user.id, date);
     res.json(data);
   } catch (err) {
+    if (err instanceof InfluxUnavailableError) {
+      logger.warn('Influx unavailable for recovery recommendations', { userId: req.user.id, date: req.params.date, message: err.message });
+      return res.json(influxUnavailableResponse(err, { date }));
+    }
     logger.error('Error getting recovery recommendations', {
       userId: req.user.id,
       date: req.params.date,

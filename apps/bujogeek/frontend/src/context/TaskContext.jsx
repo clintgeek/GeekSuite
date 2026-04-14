@@ -46,7 +46,7 @@ const TaskProvider = ({ children }) => {
 
   // Main state
   const [tasks, setTasks] = useState([]);
-  const [loading, setLoading] = useState('IDLE');
+  const [loading, setLoading] = useState(LoadingState.IDLE);
   const [error, setError] = useState(null);
   const fetchTimeoutRef = useRef(null);
   const lastFetchRef = useRef(null);
@@ -363,8 +363,7 @@ const TaskProvider = ({ children }) => {
       setError(err.response?.data?.message || 'Failed to create task');
       throw err;
     } finally {
-      console.log('Setting loading to IDLE after task creation');
-      setLoading('IDLE');
+      setLoading(LoadingState.IDLE);
     }
   }, []);
 
@@ -372,13 +371,18 @@ const TaskProvider = ({ children }) => {
     try {
       setLoading(LoadingState.UPDATING);
 
-      // Need to strip __typename and unupdatable fields from updates before sending
-      const cleanUpdates = { ...updates };
-      delete cleanUpdates.__typename;
-      delete cleanUpdates.id;
-      delete cleanUpdates._id;
-      delete cleanUpdates.parentTask;
-      delete cleanUpdates.subtasks;
+      // Only send fields that UpdateTaskInput actually accepts.
+      // taskType is a Mongoose virtual (not a real schema field) — never send it.
+      const ALLOWED_UPDATE_FIELDS = [
+        'content', 'signifier', 'status', 'priority', 'note',
+        'tags', 'dueDate', 'isBacklog', 'recurrencePattern',
+      ];
+      const cleanUpdates = {};
+      for (const key of ALLOWED_UPDATE_FIELDS) {
+        if (key in updates) {
+          cleanUpdates[key] = updates[key];
+        }
+      }
 
       const response = await apolloClient.mutate({
         mutation: UPDATE_TASK,
@@ -460,8 +464,13 @@ const TaskProvider = ({ children }) => {
       setLoading(LoadingState.IDLE);
       return updatedTask;
     } catch (err) {
-      console.error('Error updating task:', err);
-      setError(err.response?.data?.message || 'Failed to update task');
+      // Surface the real error — Apollo errors live on graphQLErrors/networkError,
+      // not on err.response (which is the axios/REST pattern).
+      const gqlMsg = err.graphQLErrors?.map((e) => e.message).join('; ');
+      const netMsg = err.networkError?.result?.errors?.map((e) => e.message).join('; ');
+      const detail = gqlMsg || netMsg || err.message || 'Failed to update task';
+      console.error('Error updating task:', detail, err);
+      setError(detail);
       setLoading(LoadingState.ERROR);
       throw err;
     }

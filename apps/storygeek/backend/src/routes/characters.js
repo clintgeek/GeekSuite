@@ -1,21 +1,15 @@
-const express = require('express');
-const router = express.Router();
-const Story = require('../models/Story');
-const { authenticateToken } = require('../middleware/auth');
+import express from 'express';
+import Story from '../models/Story.js';
+import { authenticateToken } from '../middleware/auth.js';
 
-// Protected routes - require authentication
+const router = express.Router();
+
 router.use(authenticateToken);
 
-// Get all characters for a story
 router.get('/story/:storyId', async (req, res) => {
   try {
-    const { storyId } = req.params;
-
-    const story = await Story.findById(storyId);
-    if (!story) {
-      return res.status(404).json({ error: 'Story not found' });
-    }
-
+    const story = await Story.findById(req.params.storyId);
+    if (!story) return res.status(404).json({ error: 'Story not found' });
     res.json(story.characters);
   } catch (error) {
     console.error('Error getting characters:', error);
@@ -23,24 +17,12 @@ router.get('/story/:storyId', async (req, res) => {
   }
 });
 
-// Get specific character
 router.get('/story/:storyId/character/:characterName', async (req, res) => {
   try {
-    const { storyId, characterName } = req.params;
-
-    const story = await Story.findById(storyId);
-    if (!story) {
-      return res.status(404).json({ error: 'Story not found' });
-    }
-
-    const character = story.characters.find(char =>
-      char.name.toLowerCase() === characterName.toLowerCase()
-    );
-
-    if (!character) {
-      return res.status(404).json({ error: 'Character not found' });
-    }
-
+    const story = await Story.findById(req.params.storyId);
+    if (!story) return res.status(404).json({ error: 'Story not found' });
+    const character = story.characters.find(char => char.name.toLowerCase() === req.params.characterName.toLowerCase());
+    if (!character) return res.status(404).json({ error: 'Character not found' });
     res.json(character);
   } catch (error) {
     console.error('Error getting character:', error);
@@ -48,93 +30,44 @@ router.get('/story/:storyId/character/:characterName', async (req, res) => {
   }
 });
 
-// Add character to story
 router.post('/story/:storyId', async (req, res) => {
   try {
-    const { storyId } = req.params;
-    const characterData = req.body;
-
-    const story = await Story.findById(storyId);
-    if (!story) {
-      return res.status(404).json({ error: 'Story not found' });
-    }
-
-    // Check if character already exists
-    const existingCharacter = story.characters.find(char =>
-      char.name.toLowerCase() === characterData.name.toLowerCase()
-    );
-
-    if (existingCharacter) {
-      return res.status(400).json({ error: 'Character already exists' });
-    }
-
-    // Add character
-    story.characters.push(characterData);
+    const story = await Story.findById(req.params.storyId);
+    if (!story) return res.status(404).json({ error: 'Story not found' });
+    const existingCharacter = story.characters.find(char => char.name.toLowerCase() === req.body.name.toLowerCase());
+    if (existingCharacter) return res.status(400).json({ error: 'Character already exists' });
+    story.characters.push(req.body);
     await story.save();
-
-    res.json(characterData);
+    res.json(req.body);
   } catch (error) {
     console.error('Error adding character:', error);
     res.status(500).json({ error: 'Failed to add character' });
   }
 });
 
-// Update character
 router.put('/story/:storyId/character/:characterName', async (req, res) => {
   try {
-    const { storyId, characterName } = req.params;
-    const updates = req.body;
-
-    const story = await Story.findById(storyId);
-    if (!story) {
-      return res.status(404).json({ error: 'Story not found' });
-    }
-
-    const characterIndex = story.characters.findIndex(char =>
-      char.name.toLowerCase() === characterName.toLowerCase()
-    );
-
-    if (characterIndex === -1) {
-      return res.status(404).json({ error: 'Character not found' });
-    }
-
-    // Update character
-    story.characters[characterIndex] = {
-      ...story.characters[characterIndex],
-      ...updates
-    };
-
+    const story = await Story.findById(req.params.storyId);
+    if (!story) return res.status(404).json({ error: 'Story not found' });
+    const idx = story.characters.findIndex(char => char.name.toLowerCase() === req.params.characterName.toLowerCase());
+    if (idx === -1) return res.status(404).json({ error: 'Character not found' });
+    story.characters[idx] = { ...story.characters[idx], ...req.body };
     await story.save();
-
-    res.json(story.characters[characterIndex]);
+    res.json(story.characters[idx]);
   } catch (error) {
     console.error('Error updating character:', error);
     res.status(500).json({ error: 'Failed to update character' });
   }
 });
 
-// Remove character from story
 router.delete('/story/:storyId/character/:characterName', async (req, res) => {
   try {
-    const { storyId, characterName } = req.params;
-
-    const story = await Story.findById(storyId);
-    if (!story) {
-      return res.status(404).json({ error: 'Story not found' });
-    }
-
-    const characterIndex = story.characters.findIndex(char =>
-      char.name.toLowerCase() === characterName.toLowerCase()
-    );
-
-    if (characterIndex === -1) {
-      return res.status(404).json({ error: 'Character not found' });
-    }
-
-    // Remove character
-    story.characters.splice(characterIndex, 1);
+    const story = await Story.findById(req.params.storyId);
+    if (!story) return res.status(404).json({ error: 'Story not found' });
+    const idx = story.characters.findIndex(char => char.name.toLowerCase() === req.params.characterName.toLowerCase());
+    if (idx === -1) return res.status(404).json({ error: 'Character not found' });
+    story.characters.splice(idx, 1);
     await story.save();
-
     res.json({ message: 'Character removed successfully' });
   } catch (error) {
     console.error('Error removing character:', error);
@@ -142,65 +75,30 @@ router.delete('/story/:storyId/character/:characterName', async (req, res) => {
   }
 });
 
-// Toggle character active status
 router.patch('/story/:storyId/character/:characterName/toggle', async (req, res) => {
   try {
-    const { storyId, characterName } = req.params;
-
-    const story = await Story.findById(storyId);
-    if (!story) {
-      return res.status(404).json({ error: 'Story not found' });
-    }
-
-    const character = story.characters.find(char =>
-      char.name.toLowerCase() === characterName.toLowerCase()
-    );
-
-    if (!character) {
-      return res.status(404).json({ error: 'Character not found' });
-    }
-
-    // Toggle active status
+    const story = await Story.findById(req.params.storyId);
+    if (!story) return res.status(404).json({ error: 'Story not found' });
+    const character = story.characters.find(char => char.name.toLowerCase() === req.params.characterName.toLowerCase());
+    if (!character) return res.status(404).json({ error: 'Character not found' });
     character.isActive = !character.isActive;
     await story.save();
-
-    res.json({
-      character: character,
-      message: `Character ${character.name} is now ${character.isActive ? 'active' : 'inactive'}`
-    });
+    res.json({ character, message: `Character ${character.name} is now ${character.isActive ? 'active' : 'inactive'}` });
   } catch (error) {
     console.error('Error toggling character status:', error);
     res.status(500).json({ error: 'Failed to toggle character status' });
   }
 });
 
-// Add item to character inventory
 router.post('/story/:storyId/character/:characterName/inventory', async (req, res) => {
   try {
-    const { storyId, characterName } = req.params;
-    const item = req.body;
-
-    const story = await Story.findById(storyId);
-    if (!story) {
-      return res.status(404).json({ error: 'Story not found' });
-    }
-
-    const character = story.characters.find(char =>
-      char.name.toLowerCase() === characterName.toLowerCase()
-    );
-
-    if (!character) {
-      return res.status(404).json({ error: 'Character not found' });
-    }
-
-    // Add item to inventory
-    if (!character.inventory) {
-      character.inventory = [];
-    }
-
-    character.inventory.push(item);
+    const story = await Story.findById(req.params.storyId);
+    if (!story) return res.status(404).json({ error: 'Story not found' });
+    const character = story.characters.find(char => char.name.toLowerCase() === req.params.characterName.toLowerCase());
+    if (!character) return res.status(404).json({ error: 'Character not found' });
+    if (!character.inventory) character.inventory = [];
+    character.inventory.push(req.body);
     await story.save();
-
     res.json(character.inventory);
   } catch (error) {
     console.error('Error adding item to inventory:', error);
@@ -208,36 +106,16 @@ router.post('/story/:storyId/character/:characterName/inventory', async (req, re
   }
 });
 
-// Remove item from character inventory
 router.delete('/story/:storyId/character/:characterName/inventory/:itemName', async (req, res) => {
   try {
-    const { storyId, characterName, itemName } = req.params;
-
-    const story = await Story.findById(storyId);
-    if (!story) {
-      return res.status(404).json({ error: 'Story not found' });
-    }
-
-    const character = story.characters.find(char =>
-      char.name.toLowerCase() === characterName.toLowerCase()
-    );
-
-    if (!character) {
-      return res.status(404).json({ error: 'Character not found' });
-    }
-
-    const itemIndex = character.inventory.findIndex(item =>
-      item.name.toLowerCase() === itemName.toLowerCase()
-    );
-
-    if (itemIndex === -1) {
-      return res.status(404).json({ error: 'Item not found' });
-    }
-
-    // Remove item
-    character.inventory.splice(itemIndex, 1);
+    const story = await Story.findById(req.params.storyId);
+    if (!story) return res.status(404).json({ error: 'Story not found' });
+    const character = story.characters.find(char => char.name.toLowerCase() === req.params.characterName.toLowerCase());
+    if (!character) return res.status(404).json({ error: 'Character not found' });
+    const itemIdx = character.inventory.findIndex(item => item.name.toLowerCase() === req.params.itemName.toLowerCase());
+    if (itemIdx === -1) return res.status(404).json({ error: 'Item not found' });
+    character.inventory.splice(itemIdx, 1);
     await story.save();
-
     res.json({ message: 'Item removed successfully' });
   } catch (error) {
     console.error('Error removing item from inventory:', error);
@@ -245,4 +123,4 @@ router.delete('/story/:storyId/character/:characterName/inventory/:itemName', as
   }
 });
 
-module.exports = router;
+export default router;

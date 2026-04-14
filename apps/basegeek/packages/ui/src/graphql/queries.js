@@ -54,3 +54,9 @@ export const GET_AI_USAGE = gql`
     aiUsage(provider: $provider)
   }
 `;
+
+export const GET_AI_APP_CONFIGS = gql`
+  query GetAIAppConfigs {
+    aiAppConfigs
+  }
+`;

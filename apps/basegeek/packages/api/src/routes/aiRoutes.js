@@ -115,8 +115,8 @@ router.post('/conversation/message', async (req, res) => {
     const permissionError = requirePermission(req, res, 'ai:call');
     if (permissionError) return;
 
-    const { 
-      conversationId, 
+    const {
+      conversationId,
       messages: newMessages,
       systemPrompt,
       stream = false,
@@ -124,6 +124,7 @@ router.post('/conversation/message', async (req, res) => {
       contextWindow,
       provider,
       model,
+      freeOnly = false,
       appName = 'unknown'
     } = req.body;
     const userId = req.user.id;
@@ -163,6 +164,7 @@ router.post('/conversation/message', async (req, res) => {
       taskTypeHint: metadata?.taskTypeHint,
       userId,
       appName,
+      freeOnly: freeOnly || provider === 'free',
     };
 
     if (stream) {
@@ -438,6 +440,22 @@ router.post('/call', async (req, res) => {
     let prompt = req.body.prompt;
     let config = req.body.config || {};
 
+    // Support freeOnly flag — apps can request provider: "free" or freeOnly: true
+    if (config.provider === 'free' || config.freeOnly || req.body.freeOnly) {
+      config.freeOnly = true;
+      delete config.provider;
+    }
+
+    // Support app config routing — apps can omit provider/model to use server-side config
+    // Triggered when: no provider specified, or provider: "basegeek-app", or useAppConfig: true
+    if (config.provider === 'basegeek-app' || config.useAppConfig || req.body.useAppConfig) {
+      config.useAppConfig = true;
+      delete config.provider;
+    } else if (!config.provider && !config.freeOnly && config.appName && config.appName !== 'unknown') {
+      // Auto-trigger app config when app identifies itself but doesn't specify routing
+      config.useAppConfig = true;
+    }
+
     // If messages provided, use them directly (don't convert to string yet)
     if (Array.isArray(messages) && messages.length > 0) {
       config = { ...config, messages: messages };
@@ -545,7 +563,15 @@ router.post('/call', async (req, res) => {
   } catch (error) {
     console.error('Error in /api/ai/call:', error);
     if (!res.headersSent) {
-      res.status(400).json({ error: error.message || 'AI call failed' });
+      // Use 502 for upstream AI failures, 400 only for bad requests
+      const status = error.message?.includes('required') || error.message?.includes('Missing') ? 400 : 502;
+      res.status(status).json({
+        success: false,
+        error: {
+          message: error.message || 'AI call failed',
+          code: 'AI_CALL_ERROR'
+        }
+      });
     }
   }
 });

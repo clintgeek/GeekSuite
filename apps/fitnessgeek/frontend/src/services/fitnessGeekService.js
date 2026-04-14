@@ -1,6 +1,17 @@
+import axios from 'axios';
 import { apiService } from './apiService.js';
 import { formatDateLocal } from '../utils/dateUtils.js';
 import logger from '../utils/logger.js';
+
+// Direct REST client for operations that need the fitnessgeek backend's
+// richer logic (AI food creation, composite meal handling, etc.)
+// Bypasses the GraphQL proxy.
+const restApi = axios.create({ baseURL: '/api', timeout: 30000, withCredentials: true });
+restApi.interceptors.request.use((config) => {
+  const token = localStorage.getItem('geek_token');
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
 
 // FitnessGeek service for food logging and nutrition tracking
 export const fitnessGeekService = {
@@ -104,35 +115,35 @@ export const fitnessGeekService = {
     }
   },
 
-  // Add food to log
+  // Add food to log — uses REST so backend can create FoodItem from AI/API results
   addFoodToLog: async (logData) => {
     try {
-      const response = await apiService.post('/logs', logData);
-      return response; // Return full response, not response.data
+      const response = await restApi.post('/logs', logData);
+      return response.data; // { success, data, message }
     } catch (error) {
-      logger.error('Error adding food to log:', error);
+      logger.error('Error adding food to log:', error.response?.data || error.message);
       throw error;
     }
   },
 
-  // Update food log
+  // Update food log — uses REST for consistency with add
   updateFoodLog: async (logId, updateData) => {
     try {
-      const response = await apiService.put(`/logs/${logId}`, updateData);
-      return response; // Return full response, not response.data
+      const response = await restApi.put(`/logs/${logId}`, updateData);
+      return response.data;
     } catch (error) {
-      logger.error('Error updating food log:', error);
+      logger.error('Error updating food log:', error.response?.data || error.message);
       throw error;
     }
   },
 
-  // Delete food log
+  // Delete food log — uses REST for consistency
   deleteFoodLog: async (logId) => {
     try {
-      const response = await apiService.delete(`/logs/${logId}`);
-      return response; // Return full response, not response.data
+      const response = await restApi.delete(`/logs/${logId}`);
+      return response.data;
     } catch (error) {
-      logger.error('Error deleting food log:', error);
+      logger.error('Error deleting food log:', error.response?.data || error.message);
       throw error;
     }
   },
@@ -248,10 +259,11 @@ export const fitnessGeekService = {
 
   getGarminHeartRate: async (date) => {
     try {
-      const response = await apiService.get(`/fitness/garmin/heart-rate/${date || ''}`);
-      return response.data || response;
+      // No GraphQL equivalent — goes direct to REST on the fitnessgeek backend
+      const response = await restApi.get(`/fitness/garmin/heart-rate/${date || ''}`);
+      return response.data?.data || response.data || null;
     } catch (error) {
-      logger.error('Error getting Garmin heart rate:', error);
+      logger.error('Error getting Garmin heart rate:', error.response?.data || error.message);
       throw error;
     }
   },
@@ -277,6 +289,7 @@ export const fitnessGeekService = {
   },
 
   get: (path, config) => apiService.get(path, config),
+  post: (path, data, config) => apiService.post(path, data, config),
 
   pushWeightToGarmin: async ({ date, weightLbs, timezone }) => {
     try {
@@ -355,7 +368,8 @@ export const fitnessGeekService = {
   // Add meal to log
   addMealToLog: async (mealId, logDate, mealType) => {
     try {
-      const response = await apiService.post(`/meals/${mealId}/add-to-log`, {
+      // REST endpoint — expects log_date + meal_type in body (not the GQL apiService path)
+      const response = await restApi.post(`/meals/${mealId}/add-to-log`, {
         log_date: logDate,
         meal_type: mealType
       });

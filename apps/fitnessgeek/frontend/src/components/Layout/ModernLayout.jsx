@@ -38,6 +38,13 @@ import {
 import { useAuth } from '@geeksuite/auth';
 import ThemeToggle from '../ThemeToggle';
 import BottomNav from './BottomNavigation.jsx';
+import { keyframes } from '@mui/material/styles';
+
+// Page-transition fade/rise — applied to the <main> wrapper, re-runs on route change
+const pageEnter = keyframes`
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+`;
 
 const DRAWER_WIDTH = 232;
 
@@ -321,13 +328,38 @@ export default function ModernLayout() {
         borderBottom: `1px solid ${ theme.palette.divider }`,
       }}
     >
-      <Toolbar sx={{ justifyContent: 'flex-end', minHeight: '56px !important' }}>
+      <Toolbar sx={{ justifyContent: 'flex-end', minHeight: '56px !important', gap: 1 }}>
         <ThemeToggle />
-        <Typography variant="caption" sx={{ color: theme.palette.text.secondary, mr: 2, ml: 2 }}>
-          {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+        <Typography
+          sx={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: '0.6875rem',
+            fontWeight: 600,
+            textTransform: 'uppercase',
+            letterSpacing: '0.14em',
+            color: theme.palette.text.secondary,
+            mx: 1.5,
+          }}
+        >
+          {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
         </Typography>
-        <IconButton onClick={() => navigate('/settings')} sx={{ ml: 1 }}>
-          <Avatar sx={{ width: 32, height: 32, backgroundColor: theme.palette.primary.main }}>
+        <IconButton
+          onClick={() => navigate('/settings')}
+          sx={{
+            transition: 'transform 180ms ease',
+            '&:hover': { transform: 'scale(1.05)' },
+          }}
+        >
+          <Avatar
+            sx={{
+              width: 32,
+              height: 32,
+              backgroundColor: theme.palette.primary.main,
+              fontFamily: "'DM Serif Display', serif",
+              fontWeight: 400,
+              fontSize: '1rem',
+            }}
+          >
             {user?.username?.[0]?.toUpperCase() || 'U'}
           </Avatar>
         </IconButton>
@@ -430,7 +462,7 @@ export default function ModernLayout() {
       {/* Top Bars */}
       {isMobile ? <MobileTopBar /> : <DesktopTopBar />}
 
-      {/* Main Content */}
+      {/* Main Content — page entry animation keyed by route */}
       <Box
         component="main"
         sx={{
@@ -442,7 +474,17 @@ export default function ModernLayout() {
           backgroundColor: theme.palette.background.default,
         }}
       >
-        <Outlet />
+        <Box
+          key={location.pathname}
+          sx={{
+            animation: `${pageEnter} 380ms cubic-bezier(0.22, 1, 0.36, 1)`,
+            '@media (prefers-reduced-motion: reduce)': {
+              animation: 'none',
+            },
+          }}
+        >
+          <Outlet />
+        </Box>
       </Box>
 
       {/* Mobile Menu */}

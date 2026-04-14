@@ -283,6 +283,9 @@ export const useFoodLog = (selectedDate) => {
     loadGoals();
   }, [selectedDate]);
 
+  const showError = (msg) => setAutoCloseMessage(msg, setErrorMessage);
+  const showSuccess = (msg) => setAutoCloseMessage(msg, setSuccessMessage);
+
   return {
     logs,
     goals,
@@ -295,6 +298,8 @@ export const useFoodLog = (selectedDate) => {
     updateFoodLog,
     deleteFoodLog,
     saveMeal,
+    showError,
+    showSuccess,
     clearSuccessMessage,
     clearErrorMessage,
     refreshGoals: loadGoals,

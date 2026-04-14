@@ -11,7 +11,8 @@ import {
   CircularProgress,
   Card,
   CardContent,
-  Button
+  Button,
+  TextField
 } from '@mui/material';
 import {
   TrendingUp as DashboardIcon,
@@ -27,6 +28,15 @@ import SleepAnalysis from '../components/SleepAnalysis';
 import MealImpactVisualization from '../components/MealImpactVisualization';
 import RecoveryCoach from '../components/RecoveryCoach';
 import InfluxDBSettings from '../components/InfluxDBSettings';
+import { SectionLabel, DisplayHeading } from '../components/primitives';
+
+const TAB_TITLES = [
+  'Overview',
+  'Sleep Analysis',
+  'Meal Impact',
+  'Recovery Coach',
+  'Settings',
+];
 
 /**
  * Comprehensive Health Dashboard
@@ -35,6 +45,16 @@ import InfluxDBSettings from '../components/InfluxDBSettings';
 export default function HealthDashboard() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState(0);
+
+  // Reflect the current tab in document.title so browser history is readable
+  useEffect(() => {
+    const tabName = TAB_TITLES[activeTab] || 'Health Dashboard';
+    const previousTitle = document.title;
+    document.title = `${tabName} · Health Dashboard · FitnessGeek`;
+    return () => {
+      document.title = previousTitle;
+    };
+  }, [activeTab]);
   const [selectedDate, setSelectedDate] = useState(() => {
     const today = new Date();
     // Use local date format (YYYY-MM-DD) instead of UTC
@@ -55,9 +75,10 @@ export default function HealthDashboard() {
     setCheckingInflux(true);
     try {
       const response = await apiService.get('/user/settings');
-      setInfluxEnabled(response.influxEnabled || false);
+      const settings = response?.data || response || {};
+      setInfluxEnabled(settings.influxEnabled || false);
     } catch (err) {
-      console.error('Error checking InfluxDB status:', err);
+      console.warn('Could not load InfluxDB settings:', err.message);
     } finally {
       setCheckingInflux(false);
     }
@@ -91,12 +112,12 @@ export default function HealthDashboard() {
 
   if (!influxEnabled) {
     return (
-      <Container maxWidth="lg" sx={{ mt: 4 }}>
+      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
         <Stack spacing={3}>
-          <Typography variant="h4">
-            <DashboardIcon sx={{ verticalAlign: 'middle', mr: 1 }} />
-            Health Dashboard
-          </Typography>
+          <Box>
+            <SectionLabel sx={{ mb: 0.75 }}>Integrations · Advanced</SectionLabel>
+            <DisplayHeading size="page">Health Dashboard</DisplayHeading>
+          </Box>
 
           <Alert severity="info">
             <AlertTitle>InfluxDB Integration Required</AlertTitle>
@@ -127,12 +148,15 @@ export default function HealthDashboard() {
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Stack spacing={3}>
-        {/* Header */}
-        <Stack direction="row" justifyContent="space-between" alignItems="center">
-          <Typography variant="h4">
-            <DashboardIcon sx={{ verticalAlign: 'middle', mr: 1 }} />
-            Health Dashboard
-          </Typography>
+        {/* Editorial header */}
+        <Stack direction="row" justifyContent="space-between" alignItems="flex-end" spacing={2}>
+          <Box>
+            <SectionLabel sx={{ mb: 0.75 }}>Integrations · Advanced</SectionLabel>
+            <DisplayHeading size="page">Health Dashboard</DisplayHeading>
+            <Typography sx={{ color: 'text.secondary', mt: 0.5, fontSize: '0.9375rem' }}>
+              Deep analytics powered by your InfluxDB health data.
+            </Typography>
+          </Box>
           <Button
             variant="outlined"
             size="small"
@@ -146,44 +170,50 @@ export default function HealthDashboard() {
         {/* Date Selector */}
         <Card variant="outlined">
           <CardContent>
-            <Stack direction="row" spacing={2} alignItems="center">
-              <Typography variant="body1">Viewing Data For:</Typography>
-              <input
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={2}
+              alignItems={{ xs: 'stretch', sm: 'center' }}
+            >
+              <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                Viewing:
+              </Typography>
+              <TextField
                 type="date"
+                size="small"
                 value={selectedDate}
                 onChange={(e) => handleDateChange(e.target.value)}
-                max={(() => {
-                  const today = new Date();
-                  return `${ today.getFullYear() }-${ String(today.getMonth() + 1).padStart(2, '0') }-${ String(today.getDate()).padStart(2, '0') }`;
-                })()}
-                style={{
-                  padding: '8px',
-                  borderRadius: '4px',
-                  border: '1px solid #ccc',
-                  fontSize: '14px'
+                inputProps={{
+                  max: (() => {
+                    const today = new Date();
+                    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+                  })()
                 }}
+                sx={{ minWidth: { xs: '100%', sm: 180 } }}
               />
-              <Button
-                variant="text"
-                size="small"
-                onClick={() => {
-                  const yesterday = new Date();
-                  yesterday.setDate(yesterday.getDate() - 1);
-                  handleDateChange(`${ yesterday.getFullYear() }-${ String(yesterday.getMonth() + 1).padStart(2, '0') }-${ String(yesterday.getDate()).padStart(2, '0') }`);
-                }}
-              >
-                Yesterday
-              </Button>
-              <Button
-                variant="text"
-                size="small"
-                onClick={() => {
-                  const today = new Date();
-                  handleDateChange(`${ today.getFullYear() }-${ String(today.getMonth() + 1).padStart(2, '0') }-${ String(today.getDate()).padStart(2, '0') }`);
-                }}
-              >
-                Today
-              </Button>
+              <Stack direction="row" spacing={1}>
+                <Button
+                  variant="text"
+                  size="small"
+                  onClick={() => {
+                    const yesterday = new Date();
+                    yesterday.setDate(yesterday.getDate() - 1);
+                    handleDateChange(`${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`);
+                  }}
+                >
+                  Yesterday
+                </Button>
+                <Button
+                  variant="text"
+                  size="small"
+                  onClick={() => {
+                    const today = new Date();
+                    handleDateChange(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`);
+                  }}
+                >
+                  Today
+                </Button>
+              </Stack>
             </Stack>
           </CardContent>
         </Card>
@@ -199,42 +229,16 @@ export default function HealthDashboard() {
           </Tabs>
         </Box>
 
-        {/* Tab Panels */}
+        {/* Tab Panels — no redundant heading, tab label already names the section */}
         <Box>
-          {activeTab === 0 && (
-            <Stack spacing={3}>
-              <Typography variant="h5">Daily Overview</Typography>
-              <IntradayDashboard
-                date={selectedDate}
-              />
-            </Stack>
-          )}
-
-          {activeTab === 1 && (
-            <Stack spacing={3}>
-              <Typography variant="h5">Sleep Analysis</Typography>
-              <SleepAnalysis
-                date={selectedDate}
-              />
-            </Stack>
-          )}
-
-          {activeTab === 2 && (
-            <Stack spacing={3}>
-              <Typography variant="h5">Meal Impact Analysis</Typography>
-              <MealImpactVisualization
-                date={selectedDate}
-              />
-            </Stack>
-          )}
-
+          {activeTab === 0 && <IntradayDashboard date={selectedDate} />}
+          {activeTab === 1 && <SleepAnalysis date={selectedDate} />}
+          {activeTab === 2 && <MealImpactVisualization date={selectedDate} />}
           {activeTab === 3 && (
-            <Stack spacing={3}>
-              <RecoveryCoach
-                date={selectedDate}
-                onRequestAIAnalysis={handleAIAnalysisRequest}
-              />
-            </Stack>
+            <RecoveryCoach
+              date={selectedDate}
+              onRequestAIAnalysis={handleAIAnalysisRequest}
+            />
           )}
 
           {activeTab === 4 && (

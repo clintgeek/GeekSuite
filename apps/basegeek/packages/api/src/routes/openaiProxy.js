@@ -2,11 +2,14 @@ import express from 'express';
 import crypto from 'crypto';
 import { authenticateAPIKey } from '../middleware/apiKeyAuth.js';
 import aiService from '../services/aiService.js';
+import AIModel from '../models/AIModel.js';
 import { countMessageTokens, countTextTokens } from '../services/tokenCounter.js';
 import { formatResponse } from '../utils/responseFormatter.js';
 
 const router = express.Router();
 const ROTATION_MODEL_ALIAS = 'basegeek-rotation';
+const FREE_MODEL_ALIAS = 'basegeek-free';
+const APP_MODEL_ALIAS = 'basegeek-app';
 
 function extractModeFromMessages(messages) {
   if (!Array.isArray(messages)) return null;
@@ -42,9 +45,121 @@ function extractModeFromMessages(messages) {
   return null;
 }
 
-// All OpenAI-compatible requests must use a baseGeek API key with ai:call permission
-router.use(authenticateAPIKey('ai:call'));
+// OpenAI-compatible error helper
+function openAIError(res, status, message, type = 'invalid_request_error', code = null) {
+  return res.status(status).json({
+    error: { message, type, ...(code && { code }) }
+  });
+}
 
+// Wrap auth middleware to return OpenAI-compatible errors
+const openaiAuth = (req, res, next) => {
+  const middleware = authenticateAPIKey('ai:call');
+  // Intercept the response to reformat errors
+  const originalJson = res.json.bind(res);
+  const originalStatus = res.status.bind(res);
+  let capturedStatus = 200;
+
+  res.status = (code) => {
+    capturedStatus = code;
+    return originalStatus(code);
+  };
+
+  res.json = (body) => {
+    // If auth middleware is returning an error, reformat to OpenAI spec
+    if (capturedStatus >= 400 && body?.success === false && body?.error) {
+      return originalJson({
+        error: {
+          message: body.error.message,
+          type: capturedStatus === 401 ? 'authentication_error'
+            : capturedStatus === 429 ? 'rate_limit_error'
+            : capturedStatus === 403 ? 'permission_error'
+            : 'api_error',
+          code: body.error.code || null
+        }
+      });
+    }
+    return originalJson(body);
+  };
+
+  middleware(req, res, next);
+};
+
+// All OpenAI-compatible requests must use a baseGeek API key with ai:call permission
+router.use(openaiAuth);
+
+// GET /v1/models — OpenAI-compatible models list
+router.get('/models', async (req, res) => {
+  try {
+    const allProviders = Object.keys(aiService.providers).filter(p =>
+      aiService.providers[p]?.apiKey && aiService.providers[p]?.enabled !== false
+    );
+    const allModels = [];
+
+    for (const provider of allProviders) {
+      const models = await aiService.getModels(provider);
+      models.forEach(model => {
+        allModels.push({
+          id: model.id,
+          object: 'model',
+          created: Math.floor(Date.now() / 1000),
+          owned_by: provider
+        });
+      });
+    }
+
+    // Add our virtual model aliases
+    const now = Math.floor(Date.now() / 1000);
+    allModels.unshift(
+      { id: ROTATION_MODEL_ALIAS, object: 'model', created: now, owned_by: 'basegeek' },
+      { id: FREE_MODEL_ALIAS, object: 'model', created: now, owned_by: 'basegeek' },
+      { id: APP_MODEL_ALIAS, object: 'model', created: now, owned_by: 'basegeek' }
+    );
+
+    res.json({ object: 'list', data: allModels });
+  } catch (error) {
+    console.error('[OpenAI Proxy] Models list error:', error);
+    openAIError(res, 500, 'Failed to list models', 'server_error', 'models_list_error');
+  }
+});
+
+// GET /v1/models/:model — Single model lookup
+router.get('/models/:modelId', async (req, res) => {
+  try {
+    const { modelId } = req.params;
+
+    // Check virtual aliases
+    if (modelId === ROTATION_MODEL_ALIAS || modelId === FREE_MODEL_ALIAS || modelId === APP_MODEL_ALIAS) {
+      return res.json({
+        id: modelId,
+        object: 'model',
+        created: Math.floor(Date.now() / 1000),
+        owned_by: 'basegeek'
+      });
+    }
+
+    // Search across providers
+    const allProviders = Object.keys(aiService.providers);
+    for (const provider of allProviders) {
+      const models = await aiService.getModels(provider);
+      const found = models.find(m => m.id === modelId);
+      if (found) {
+        return res.json({
+          id: found.id,
+          object: 'model',
+          created: Math.floor(Date.now() / 1000),
+          owned_by: provider
+        });
+      }
+    }
+
+    openAIError(res, 404, `Model '${modelId}' not found`, 'invalid_request_error', 'model_not_found');
+  } catch (error) {
+    openAIError(res, 500, 'Failed to retrieve model', 'server_error');
+  }
+});
+
+// POST /v1/chat/completions — Main chat endpoint
 router.post('/chat/completions', async (req, res) => {
   try {
     const {
@@ -54,23 +169,32 @@ router.post('/chat/completions', async (req, res) => {
       max_tokens: maxTokens,
       stream = false,
       top_p: topP,
-      user: userId
+      user: userId,
+      // Pass-through params for providers that support them
+      stop,
+      presence_penalty: presencePenalty,
+      frequency_penalty: frequencyPenalty,
+      response_format: responseFormat,
+      n,
+      seed
     } = req.body || {};
 
     if (!Array.isArray(messages) || messages.length === 0) {
-      return res.status(400).json({
-        error: {
-          message: 'The request must include a non-empty messages array.',
-          type: 'invalid_request_error'
-        }
-      });
+      return openAIError(res, 400, 'The request must include a non-empty messages array.', 'invalid_request_error', 'missing_messages');
+    }
+
+    // Validate n — we only support n=1
+    if (n && n !== 1) {
+      return openAIError(res, 400, 'Only n=1 is supported.', 'invalid_request_error', 'unsupported_parameter');
     }
 
     const lastUserMessage = [...messages].reverse().find(msg => msg.role === 'user');
     const promptForRouting = lastUserMessage?.content || JSON.stringify(messages);
 
     const requestedModel = typeof model === 'string' ? model : null;
-    const useRotationAlias = !requestedModel || requestedModel === ROTATION_MODEL_ALIAS;
+    const useFreeAlias = requestedModel === FREE_MODEL_ALIAS;
+    const useAppAlias = requestedModel === APP_MODEL_ALIAS;
+    const useRotationAlias = !requestedModel || requestedModel === ROTATION_MODEL_ALIAS || useFreeAlias || useAppAlias;
 
     const headerNamespace = req.get('x-cache-namespace');
     const bodyNamespace = typeof req.body?.cache_namespace === 'string' ? req.body.cache_namespace : null;
@@ -106,17 +230,23 @@ router.post('/chat/completions', async (req, res) => {
       cacheNamespace = `${cacheNamespace}|${promptHash}`;
     }
 
-    console.log(`[OpenAI Proxy] Using cache namespace: ${cacheNamespace}`);
-
     const callConfig = {
       temperature,
       maxTokens,
       topP,
       messages,
       userId,
-      autoRotate: true,
+      autoRotate: !useFreeAlias && !useAppAlias,
+      freeOnly: useFreeAlias,
+      useAppConfig: useAppAlias,
       appName: req.apiKey?.appName || 'openai-proxy',
-      cacheNamespace
+      cacheNamespace,
+      // Pass through standard OpenAI params
+      ...(stop !== undefined && { stop }),
+      ...(presencePenalty !== undefined && { presencePenalty }),
+      ...(frequencyPenalty !== undefined && { frequencyPenalty }),
+      ...(responseFormat !== undefined && { responseFormat }),
+      ...(seed !== undefined && { seed })
     };
 
     if (!useRotationAlias) {
@@ -134,61 +264,62 @@ router.post('/chat/completions', async (req, res) => {
         const created = Math.floor(Date.now() / 1000);
         const providerInfo = aiService.lastProviderInfo || {};
         const responseModel = useRotationAlias
-          ? ROTATION_MODEL_ALIAS
+          ? (useFreeAlias ? FREE_MODEL_ALIAS : ROTATION_MODEL_ALIAS)
           : providerInfo.model || requestedModel || providerInfo.provider || 'unknown';
 
-        const chunkPayload = {
-          id: `chatcmpl-${Date.now()}`,
+        const id = `chatcmpl-${Date.now()}`;
+
+        // Stream content in chunks
+        const chunkSize = 50;
+        for (let i = 0; i < formatted.length; i += chunkSize) {
+          const content = formatted.slice(i, i + chunkSize);
+          res.write(`data: ${JSON.stringify({
+            id,
+            object: 'chat.completion.chunk',
+            created,
+            model: responseModel,
+            choices: [{ index: 0, delta: { content }, finish_reason: null }]
+          })}\n\n`);
+        }
+
+        // Final chunk
+        res.write(`data: ${JSON.stringify({
+          id,
           object: 'chat.completion.chunk',
           created,
           model: responseModel,
-          choices: [
-            {
-              index: 0,
-              delta: { content: formatted },
-              finish_reason: null
-            }
-          ]
-        };
-
-        res.write(`data: ${JSON.stringify(chunkPayload)}\n\n`);
-
-        const finalPayload = {
-          ...chunkPayload,
-          choices: [
-            {
-              index: 0,
-              delta: {},
-              finish_reason: 'stop'
-            }
-          ],
-          provider: providerInfo
-        };
-
-        res.write(`data: ${JSON.stringify(finalPayload)}\n\n`);
+          choices: [{ index: 0, delta: {}, finish_reason: 'stop' }]
+        })}\n\n`);
         res.write('data: [DONE]\n\n');
         res.end();
       } catch (error) {
         console.error('[OpenAI Proxy] Streaming error:', error);
-        res.write(`data: ${JSON.stringify({ error: { message: error.message } })}\n\n`);
+        res.write(`data: ${JSON.stringify({
+          error: {
+            message: error.message || 'Internal server error',
+            type: 'server_error',
+            code: 'stream_error'
+          }
+        })}\n\n`);
         res.write('data: [DONE]\n\n');
         res.end();
       }
       return;
     }
 
+    // Non-streaming response
     const result = await aiService.callAI(promptForRouting, callConfig);
     const formatted = formatResponse(result);
     const created = Math.floor(Date.now() / 1000);
     const providerInfo = aiService.lastProviderInfo || {};
     const responseModel = useRotationAlias
-      ? ROTATION_MODEL_ALIAS
+      ? (useFreeAlias ? FREE_MODEL_ALIAS : ROTATION_MODEL_ALIAS)
       : providerInfo.model || requestedModel || providerInfo.provider || 'unknown';
 
     const promptTokens = countMessageTokens(messages);
     const completionTokens = countTextTokens(formatted);
 
-    const responsePayload = {
+    res.json({
       id: `chatcmpl-${Date.now()}`,
       object: 'chat.completion',
       created,
@@ -196,10 +327,7 @@ router.post('/chat/completions', async (req, res) => {
       choices: [
         {
           index: 0,
-          message: {
-            role: 'assistant',
-            content: formatted
-          },
+          message: { role: 'assistant', content: formatted },
           finish_reason: 'stop'
         }
       ],
@@ -207,19 +335,11 @@ router.post('/chat/completions', async (req, res) => {
         prompt_tokens: promptTokens,
         completion_tokens: completionTokens,
         total_tokens: promptTokens + completionTokens
-      },
-      provider: providerInfo
-    };
-
-    res.json(responsePayload);
-  } catch (error) {
-    console.error('[OpenAI Proxy] Error:', error);
-    res.status(500).json({
-      error: {
-        message: error.message || 'Internal server error',
-        type: 'internal_error'
       }
     });
+  } catch (error) {
+    console.error('[OpenAI Proxy] Error:', error);
+    openAIError(res, 500, error.message || 'Internal server error', 'server_error', 'ai_call_error');
   }
 });
 

@@ -88,13 +88,13 @@ const TagsPage = () => {
 
   const handleStatusToggle = useCallback(async (task) => {
     const newStatus = task.status === 'completed' ? 'pending' : 'completed';
-    await updateTaskStatus(task._id, newStatus);
+    await updateTaskStatus(task.id || task._id, newStatus);
     refreshTagTasks();
   }, [updateTaskStatus, refreshTagTasks]);
 
   const handleDelete = useCallback(async (task) => {
     if (window.confirm('Delete this task?')) {
-      await deleteTask(task._id);
+      await deleteTask(task.id || task._id);
       refreshTagTasks();
     }
   }, [deleteTask, refreshTagTasks]);
@@ -468,7 +468,7 @@ const TagsPage = () => {
                       >
                         {sectionTasks.map((task, i) => (
                           <Box
-                            key={task._id}
+                            key={task.id || task._id}
                             sx={{
                               borderBottom: i < sectionTasks.length - 1
                                 ? `1px solid ${isDark ? 'rgba(255,255,255,0.04)' : colors.ink[50]}`

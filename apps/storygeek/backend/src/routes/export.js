@@ -1,8 +1,9 @@
-const express = require('express');
+import express from 'express';
+import bookService from '../services/bookService.js';
+import { createEpub } from '../services/epubService.js';
+import { authenticateToken } from '../middleware/auth.js';
+
 const router = express.Router();
-const bookService = require('../services/bookService');
-const { createEpub } = require('../services/epubService');
-const { authenticateToken } = require('../middleware/auth');
 
 router.use(authenticateToken);
 
@@ -12,15 +13,12 @@ router.post('/stories/:storyId/bookify', async (req, res) => {
     const { storyId } = req.params;
     const authHeader = req.headers['authorization'];
     const userToken = authHeader && authHeader.split(' ')[1];
-
     const result = await bookService.bookify(storyId, userToken);
     res.json({ success: true, data: result });
   } catch (error) {
     res.status(500).json({ success: false, error: { message: error.message } });
   }
 });
-
-module.exports = router;
 
 // POST /api/export/stories/:storyId/epub
 router.post('/stories/:storyId/epub', async (req, res) => {
@@ -39,4 +37,4 @@ router.post('/stories/:storyId/epub', async (req, res) => {
   }
 });
 
-
+export default router;

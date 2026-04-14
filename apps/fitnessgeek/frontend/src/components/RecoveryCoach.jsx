@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { apiService } from '../services/apiService';
+import { influxService } from '../services/influxService';
 import {
   Box,
   Card,
@@ -133,7 +133,6 @@ function RecommendationCard({ recommendation }) {
  */
 export default function RecoveryCoach({ date, onRequestAIAnalysis }) {
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [data, setData] = useState(null);
 
   useEffect(() => {
@@ -141,14 +140,16 @@ export default function RecoveryCoach({ date, onRequestAIAnalysis }) {
 
     async function fetchRecommendations() {
       setLoading(true);
-      setError(null);
 
       try {
-        const response = await apiService.get(`/influx/recovery-recommendations/${date}`);
+        const response = await influxService.getRecoveryRecommendations(date);
+        // { available: false } from either "no data" or "influx unavailable" —
+        // the existing !data.available empty-state covers both.
         setData(response);
       } catch (err) {
-        console.error('Error fetching recovery recommendations:', err);
-        setError(err.response?.data?.error || 'Failed to fetch recovery recommendations');
+        // Defensive: backend should no longer 500, but handle it quietly.
+        console.warn('Recovery recommendations unavailable:', err.message);
+        setData({ available: false });
       } finally {
         setLoading(false);
       }
@@ -161,13 +162,12 @@ export default function RecoveryCoach({ date, onRequestAIAnalysis }) {
     if (!onRequestAIAnalysis) return;
 
     try {
-      // Get the full recovery context
-      const response = await apiService.get(`/influx/recovery-context/${date}`);
+      const response = await influxService.getRecoveryContext(date);
       if (response.available) {
         onRequestAIAnalysis(response.promptText);
       }
     } catch (err) {
-      console.error('Error fetching recovery context:', err);
+      console.warn('Recovery context unavailable:', err.message);
     }
   };
 
@@ -176,15 +176,6 @@ export default function RecoveryCoach({ date, onRequestAIAnalysis }) {
       <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
         <CircularProgress />
       </Box>
-    );
-  }
-
-  if (error) {
-    return (
-      <Alert severity="error">
-        <AlertTitle>Error</AlertTitle>
-        {error}
-      </Alert>
     );
   }
 

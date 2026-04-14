@@ -1,50 +1,42 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Box,
-  Typography,
-  TextField,
-  Button,
-  Paper,
-  CircularProgress,
-  Alert,
-  Chip,
-  IconButton,
-  Tooltip,
-  Divider,
-  Grid,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  LinearProgress
+  Box, Typography, TextField, Button, Paper, CircularProgress,
+  Alert, Chip, IconButton, Tooltip, Divider, Dialog, DialogTitle,
+  DialogContent, DialogActions, LinearProgress, alpha,
 } from '@mui/material';
 import { useTheme, useMediaQuery, ButtonGroup } from '@mui/material';
 import {
-  Send as SendIcon,
-  Casino as CasinoIcon,
-  Refresh as RefreshIcon,
-  Save as SaveIcon,
-  Bookmark as BookmarkIcon
+  Send as SendIcon, Casino as CasinoIcon, MenuBook as ExportIcon,
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import useSharedAuthStore from '../store/sharedAuthStore';
 import useAISettingsStore from '../store/aiSettingsStore';
+import api from '../api';
 
-const API_URL = import.meta.env.VITE_API_URL;
+// Dice result color based on d20 roll
+const getDiceColor = (result) => {
+  if (result === 20) return '#ffd700';
+  if (result === 1) return '#ff4444';
+  if (result >= 15) return '#4caf50';
+  if (result >= 10) return '#c9a84c';
+  if (result >= 5) return '#ff9800';
+  return '#e57373';
+};
 
 function StoryPlay() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { storyId } = useParams();
   const navigate = useNavigate();
-  const { user, token } = useSharedAuthStore();
+  const { user } = useSharedAuthStore();
   const { selectedProvider, selectedModelId } = useAISettingsStore();
+  const gold = theme.palette.codex?.gold || '#c9a84c';
+
   const [story, setStory] = useState(null);
   const [messages, setMessages] = useState([]);
   const [userInput, setUserInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [showCommands, setShowCommands] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState('');
   const [exportOpen, setExportOpen] = useState(false);
@@ -54,93 +46,44 @@ function StoryPlay() {
   const inputRef = useRef(null);
 
   const scrollToBottom = () => {
-    if (endRef.current) {
-      endRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
-    } else if (containerRef.current) {
-      const el = containerRef.current;
-      el.scrollTop = el.scrollHeight;
-    }
-  };
-
-  const scrollToTopOfNewResponse = () => {
-    if (containerRef.current) {
-      containerRef.current.scrollTop = containerRef.current.scrollHeight;
-    }
+    endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   };
 
   useEffect(() => {
     scrollToBottom();
-    // Keep the composer focused so the player can quickly respond after AI messages
-    if (inputRef.current) {
-      try { inputRef.current.focus(); } catch (_) {}
-    }
+    if (inputRef.current) try { inputRef.current.focus(); } catch (_) {}
   }, [messages]);
 
   useEffect(() => {
-    if (user && user.id) {
-      loadStory();
-    }
+    if (user && user.id) loadStory();
   }, [storyId, user]);
 
   const loadStory = async () => {
     try {
-      if (!user || !user.id || !token) {
-        setError('Authentication required');
-        return;
-      }
-
-      const response = await fetch(`${API_URL}/stories/${storyId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to load story');
-      }
-
-      const storyData = await response.json();
+      if (!user || !user.id) { setError('Authentication required'); return; }
+      const response = await api.get(`/stories/${storyId}`);
+      const storyData = response.data;
       setStory(storyData);
-
-      // Convert story events to messages
-      const storyMessages = storyData.events.map(event => ({
-        type: 'ai',
-        content: event.description,
+      setMessages(storyData.events.map(event => ({
+        type: 'ai', content: event.description,
         timestamp: new Date(event.timestamp),
         diceResults: event.diceResults || []
-      }));
-
-      setMessages(storyMessages);
-
-    } catch (error) {
+      })));
+    } catch (err) {
       setError('Failed to load story');
-      console.error('Error loading story:', error);
+      console.error('Error loading story:', err);
     }
   };
 
   const handleBookify = async () => {
-    if (!storyId || !token) return;
-    setExporting(true);
-    setExportError('');
-    setExportOpen(true);
+    if (!storyId) return;
+    setExporting(true); setExportError(''); setExportOpen(true);
     try {
-      const res = await fetch(`${API_URL}/export/stories/${storyId}/bookify`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      if (!res.ok) throw new Error('Failed to bookify story');
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error?.message || 'Bookify failed');
-      setExportData(json.data);
-    } catch (e) {
-      setExportError(e.message || 'Bookify failed');
-    } finally {
-      setExporting(false);
-    }
+      const res = await api.post(`/export/stories/${storyId}/bookify`);
+      if (!res.data.success) throw new Error(res.data.error?.message || 'Bookify failed');
+      setExportData(res.data.data);
+    } catch (e) { setExportError(e.message || 'Bookify failed'); }
+    finally { setExporting(false); }
   };
 
   const handleDownloadTxt = () => {
@@ -148,284 +91,192 @@ function StoryPlay() {
     const blob = new Blob([exportData.content || ''], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    const safeTitle = (exportData.title || 'story').replace(/[^a-z0-9\-_]+/gi, '_');
-    a.href = url;
-    a.download = `${safeTitle}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    a.href = url; a.download = `${(exportData.title || 'story').replace(/[^a-z0-9\-_]+/gi, '_')}.txt`;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     if (!userInput.trim() || loading) return;
-
     const input = userInput.trim();
     setUserInput('');
-
-    // Add user message
-    const userMessage = {
-      type: 'user',
-      content: input,
-      timestamp: new Date()
-    };
-
-    setMessages(prev => [...prev, userMessage]);
-    setLoading(true);
-    setError('');
+    setMessages(prev => [...prev, { type: 'user', content: input, timestamp: new Date() }]);
+    setLoading(true); setError('');
 
     try {
-      const response = await fetch(`${API_URL}/stories/${storyId}/continue`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          userInput: input,
-          provider: selectedProvider || 'groq',
-          model: selectedModelId || 'llama3-70b-8192'
-        }),
+      const response = await api.post(`/stories/${storyId}/continue`, {
+        userInput: input,
+        provider: selectedProvider || 'gemini',
+        model: selectedModelId || 'gemini-1.5-flash-latest'
       });
+      const data = response.data;
 
-      if (!response.ok) {
-        throw new Error('Failed to continue story');
-      }
+      if (data.type) { handleSpecialResponse(data); return; }
 
-      const data = await response.json();
-
-      // Handle special command responses
-      if (data.type) {
-        handleSpecialResponse(data);
-        return;
-      }
-
-      // Add AI response
-      const aiMessage = {
-        type: 'ai',
-        content: data.aiResponse,
-        timestamp: new Date(),
+      setMessages(prev => [...prev, {
+        type: 'ai', content: data.aiResponse, timestamp: new Date(),
         diceResults: data.diceResult ? [data.diceResult] : [],
         diceMeta: data.diceMeta || null
-      };
-
-      setMessages(prev => [...prev, aiMessage]);
-
-      // Update story data
-      if (story) {
-        setStory(prev => ({
-          ...prev,
-          stats: {
-            ...prev.stats,
-            totalInteractions: data.totalInteractions
-          }
-        }));
-      }
-
-    } catch (error) {
+      }]);
+    } catch (err) {
       setError('Failed to continue story');
-      console.error('Error continuing story:', error);
-    } finally {
-      setLoading(false);
-    }
+      console.error('Error continuing story:', err);
+    } finally { setLoading(false); }
   };
 
   const handleSpecialResponse = (data) => {
+    const systemMsg = (content) => setMessages(prev => [...prev, { type: 'system', content, timestamp: new Date() }]);
     switch (data.type) {
       case 'character_list':
-        setMessages(prev => [...prev, {
-          type: 'system',
-          content: `Available characters:\n${data.characters.map(char =>
-            `- ${char.name}: ${char.description}${char.isActive ? ' (Active)' : ' (Inactive)'}`
-          ).join('\n')}`,
-          timestamp: new Date()
-        }]);
+        systemMsg(`Characters:\n${data.characters.map(c => `  ${c.name} — ${c.description}${c.isActive ? '' : ' (inactive)'}`).join('\n')}`);
         break;
-
       case 'character_info':
-        setMessages(prev => [...prev, {
-          type: 'system',
-          content: `Character: ${data.character.name}\nDescription: ${data.character.description}\nPersonality: ${data.character.personality || 'Not specified'}\nBackground: ${data.character.background || 'Not specified'}\nCurrent State: ${data.character.currentState || 'Not specified'}`,
-          timestamp: new Date()
-        }]);
+        systemMsg(`${data.character.name}\n${data.character.description}\n${data.character.personality ? `Personality: ${data.character.personality}` : ''}`);
         break;
-
       case 'checkpoint_created':
-        setMessages(prev => [...prev, {
-          type: 'system',
-          content: `✅ ${data.message}`,
-          timestamp: new Date()
-        }]);
-        break;
-
       case 'checkpoint_restored':
-        setMessages(prev => [...prev, {
-          type: 'system',
-          content: `🔄 ${data.message}`,
-          timestamp: new Date()
-        }]);
-        // Reload story to reflect restored state
-        loadStory();
+        systemMsg(data.message);
+        if (data.type === 'checkpoint_restored') loadStory();
         break;
-
       case 'checkpoint_list':
-        setMessages(prev => [...prev, {
-          type: 'system',
-          content: `Available checkpoints:\n${data.checkpoints.map(cp =>
-            `- ${cp.description} (${cp.id}) - ${new Date(cp.timestamp).toLocaleString()} - ${cp.eventCount} events`
-          ).join('\n')}`,
-          timestamp: new Date()
-        }]);
+        systemMsg(`Checkpoints:\n${data.checkpoints.map(cp => `  ${cp.description} — ${new Date(cp.timestamp).toLocaleString()}`).join('\n')}`);
         break;
-
-      case 'info':
-        setMessages(prev => [...prev, {
-          type: 'system',
-          content: `Information about "${data.query}":\n${JSON.stringify(data.details, null, 2)}`,
-          timestamp: new Date()
-        }]);
-        break;
-
-      case 'timeout':
-        setMessages(prev => [...prev, {
-          type: 'ai',
-          content: data.aiResponse,
-          timestamp: new Date(),
-          isTimeout: true
-        }]);
-        break;
-
-
-
       case 'scene_reset':
-        setMessages(prev => [...prev, {
-          type: 'system',
-          content: `🔄 ${data.message}`,
-          timestamp: new Date()
-        }]);
-
-        // Add the new AI response after the reset
-        if (data.aiResponse) {
-          setMessages(prev => [...prev, {
-            type: 'ai',
-            content: data.aiResponse,
-            timestamp: new Date(),
-            diceResults: []
-          }]);
-        }
-
-        // Update story data
-        if (story) {
-          setStory(prev => ({
-            ...prev,
-            stats: {
-              ...prev.stats,
-              totalInteractions: data.currentChapter
-            },
-            worldState: {
-              ...prev.worldState,
-              currentChapter: data.currentChapter
-            }
-          }));
-        }
+        systemMsg(data.message);
+        if (data.aiResponse) setMessages(prev => [...prev, { type: 'ai', content: data.aiResponse, timestamp: new Date(), diceResults: [] }]);
         break;
-
       case 'story_ended':
-        setMessages(prev => [...prev, {
-          type: 'system',
-          content: `Story ended. Final stats: ${data.finalStats.totalInteractions} interactions.`,
-          timestamp: new Date()
-        }]);
+        systemMsg('The tale has reached its end.');
         break;
-
       case 'error':
-        setMessages(prev => [...prev, {
-          type: 'system',
-          content: `Error: ${data.message}`,
-          timestamp: new Date()
-        }]);
+        systemMsg(data.message);
         break;
-
       default:
-        setMessages(prev => [...prev, {
-          type: 'system',
-          content: `Unknown response type: ${data.type}`,
-          timestamp: new Date()
-        }]);
+        systemMsg(`Response: ${JSON.stringify(data)}`);
     }
   };
 
-  const handleCommand = (command) => {
-    setUserInput(command);
-    inputRef.current?.focus();
-  };
-
-  const formatMessage = (message) => {
+  const renderMessage = (message, index) => {
     const isUser = message.type === 'user';
     const isSystem = message.type === 'system';
-    const isTimeout = message.isTimeout;
 
     return (
       <Box
-        key={message.timestamp.getTime()}
+        key={index}
+        className="fade-in-up"
         sx={{
           display: 'flex',
           justifyContent: isUser ? 'flex-end' : 'flex-start',
-          mb: 2,
+          mb: 2.5,
+          animationDelay: '0.05s',
         }}
       >
         <Paper
+          elevation={0}
           sx={{
-            p: 2,
-            maxWidth: { xs: '100%', md: '70%' },
-            backgroundColor: isUser ? 'primary.main' : 'background.paper',
-            color: isUser ? 'white' : 'text.primary',
-            border: isTimeout ? 2 : 1,
-            borderColor: isTimeout ? 'warning.main' : 'divider',
+            p: { xs: 2, md: 2.5 },
+            maxWidth: isUser ? { xs: '85%', md: '50%' } : { xs: '100%', md: '80%' },
+            borderRadius: isUser ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+            ...(isUser ? {
+              background: `linear-gradient(135deg, ${alpha(gold, 0.15)} 0%, ${alpha(gold, 0.08)} 100%)`,
+              border: `1px solid ${alpha(gold, 0.2)}`,
+            } : isSystem ? {
+              background: alpha(theme.palette.info.main, 0.06),
+              border: `1px solid ${alpha(theme.palette.info.main, 0.15)}`,
+              fontStyle: 'italic',
+            } : {
+              background: theme.palette.mode === 'dark'
+                ? `linear-gradient(160deg, ${alpha('#2a2420', 0.8)} 0%, ${alpha('#1a1614', 0.6)} 100%)`
+                : alpha(theme.palette.background.paper, 0.8),
+              border: `1px solid ${theme.palette.divider}`,
+            }),
           }}
         >
-          <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
+          {/* Narrator label for AI messages */}
+          {!isUser && !isSystem && (
+            <Typography variant="caption" sx={{
+              color: gold, fontWeight: 600, display: 'block', mb: 0.75,
+            }}>
+              {'\u{270D}'} NARRATOR
+            </Typography>
+          )}
+          {isSystem && (
+            <Typography variant="caption" sx={{
+              color: 'info.main', fontWeight: 600, display: 'block', mb: 0.75,
+            }}>
+              SYSTEM
+            </Typography>
+          )}
+
+          <Typography variant="body1" sx={{
+            whiteSpace: 'pre-wrap',
+            lineHeight: 1.8,
+            ...(isUser ? { fontWeight: 500 } : {}),
+            ...(!isUser && !isSystem ? {
+              fontFamily: '"Crimson Pro", serif',
+              fontSize: '1.05rem',
+            } : {}),
+          }}>
             {message.content}
           </Typography>
 
-          {message.diceResults && message.diceResults.length > 0 && (
-            (() => {
-              const d = message.diceResults[0];
-              const situation = message.diceMeta?.situation
-                ? message.diceMeta.situation.charAt(0).toUpperCase() + message.diceMeta.situation.slice(1)
-                : null;
-              const reason = message.diceMeta?.reason || '';
-              const interpretation = d.interpretation || '';
-              return (
-                <Box sx={{ mt: 1.25, display: 'flex', alignItems: 'center', gap: 1.25 }} aria-label={`Dice roll d20 ${d.result}${situation ? ` for ${situation}` : ''}`}>
-                  <CasinoIcon fontSize="small" sx={{ opacity: 0.8 }} />
-                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                    d20: {d.result}
+          {/* Dice Result */}
+          {message.diceResults?.length > 0 && (() => {
+            const d = message.diceResults[0];
+            const sit = message.diceMeta?.situation;
+            const reason = message.diceMeta?.reason;
+            const dColor = getDiceColor(d.result);
+            const isCrit = d.result === 20 || d.result === 1;
+            return (
+              <Box sx={{
+                mt: 1.5, p: 1.25, borderRadius: 2,
+                background: alpha(dColor, 0.08),
+                border: `1px solid ${alpha(dColor, 0.2)}`,
+                display: 'flex', alignItems: 'center', gap: 1.5,
+              }}>
+                <Box sx={{
+                  width: 40, height: 40, borderRadius: 1.5,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: alpha(dColor, 0.15),
+                  border: `2px solid ${alpha(dColor, 0.4)}`,
+                  ...(isCrit ? { animation: 'glowPulse 2s ease-in-out infinite' } : {}),
+                }}>
+                  <Typography sx={{
+                    fontFamily: '"JetBrains Mono", monospace',
+                    fontWeight: 700, fontSize: '1.1rem', color: dColor,
+                  }}>
+                    {d.result}
                   </Typography>
-                  {situation && (
-                    <Tooltip title={interpretation} arrow>
-                      <Chip size="small" label={situation} variant="outlined" />
-                    </Tooltip>
-                  )}
-                  {interpretation && !situation && (
-                    <Typography variant="body2" color="text.secondary">
-                      {interpretation}
-                    </Typography>
-                  )}
-                  {reason && (
-                    <Typography variant="caption" color="text.secondary">
-                      • {reason}
-                    </Typography>
-                  )}
                 </Box>
-              );
-            })()
-          )}
+                <Box sx={{ flex: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="caption" sx={{ color: dColor, fontWeight: 700 }}>
+                      D20 {isCrit ? (d.result === 20 ? '// CRITICAL' : '// FUMBLE') : ''}
+                    </Typography>
+                    {sit && (
+                      <Chip size="small" label={sit.toUpperCase()}
+                        sx={{
+                          height: 20, fontSize: '0.6rem', fontWeight: 700,
+                          backgroundColor: alpha(dColor, 0.12), color: dColor,
+                          borderRadius: 1,
+                        }}
+                      />
+                    )}
+                  </Box>
+                  <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.8rem', mt: 0.25 }}>
+                    {d.interpretation}{reason ? ` — ${reason}` : ''}
+                  </Typography>
+                </Box>
+              </Box>
+            );
+          })()}
 
-          <Typography variant="caption" sx={{ display: 'block', mt: 1, opacity: 0.5 }}>
-            {message.timestamp.toLocaleTimeString()}
+          {/* Timestamp */}
+          <Typography variant="caption" sx={{
+            display: 'block', mt: 1, opacity: 0.35,
+            fontSize: '0.65rem',
+          }}>
+            {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </Typography>
         </Paper>
       </Box>
@@ -435,7 +286,7 @@ function StoryPlay() {
   if (!story) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
-        <CircularProgress />
+        <CircularProgress sx={{ color: gold }} />
       </Box>
     );
   }
@@ -443,188 +294,152 @@ function StoryPlay() {
   return (
     <Box sx={{ height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column' }}>
       {/* Story Header */}
-      <Box sx={{ mb: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
-          <Box>
-            <Typography variant="h5">{story.title}</Typography>
-            <Typography variant="body2" color="text.secondary">
-              {story.genre} • Chapter {story.worldState.currentChapter} • {story.status}
+      <Box sx={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        mb: 2, pb: 1.5, borderBottom: `1px solid ${alpha(gold, 0.1)}`,
+      }}>
+        <Box>
+          <Typography variant="h4" sx={{ lineHeight: 1.2 }}>{story.title}</Typography>
+          <Box sx={{ display: 'flex', gap: 1.5, mt: 0.5, alignItems: 'center' }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+              {story.genre}
             </Typography>
-          </Box>
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <ButtonGroup size={isMobile ? 'small' : 'medium'}>
-              <Button variant="outlined" onClick={handleBookify} disabled={exporting}>
-                {exporting ? 'Bookifying…' : 'Bookify (Free)'}
-              </Button>
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={async () => {
-                if (!storyId || !token) return;
-                setExporting(true);
-                try {
-                  const res = await fetch(`${API_URL}/export/stories/${storyId}/epub`, {
-                    method: 'POST',
-                    headers: {
-                      'Authorization': `Bearer ${token}`
-                    }
-                  });
-                  if (!res.ok) throw new Error('EPUB export failed');
-                  const blob = await res.blob();
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  const safeTitle = (story.title || 'story').replace(/[^a-z0-9\-_]+/gi, '_');
-                  a.href = url;
-                  a.download = `${safeTitle}.epub`;
-                  document.body.appendChild(a);
-                  a.click();
-                  a.remove();
-                  URL.revokeObjectURL(url);
-                } catch (e) {
-                  setError(e.message || 'EPUB export failed');
-                } finally {
-                  setExporting(false);
-                }
-                }}
-              >
-                Export EPUB
-              </Button>
-            </ButtonGroup>
+            <Typography variant="caption" sx={{ color: alpha(gold, 0.4) }}>|</Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+              {story.stats?.totalInteractions || 0} turns
+            </Typography>
+            <Typography variant="caption" sx={{ color: alpha(gold, 0.4) }}>|</Typography>
+            <Chip label={story.status} size="small"
+              sx={{ height: 20, fontSize: '0.6rem', textTransform: 'uppercase' }}
+              color={story.status === 'active' ? 'success' : 'default'}
+            />
           </Box>
         </Box>
+        <ButtonGroup size="small" variant="outlined">
+          <Button onClick={handleBookify} disabled={exporting} startIcon={<ExportIcon sx={{ fontSize: '16px !important' }} />}>
+            {exporting ? 'Working...' : 'Bookify'}
+          </Button>
+          <Button onClick={async () => {
+            if (!storyId) return;
+            setExporting(true);
+            try {
+              const res = await api.post(`/export/stories/${storyId}/epub`, null, { responseType: 'blob' });
+              const url = URL.createObjectURL(res.data);
+              const a = document.createElement('a');
+              a.href = url; a.download = `${(story.title || 'story').replace(/[^a-z0-9\-_]+/gi, '_')}.epub`;
+              document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+            } catch (e) { setError(e.message || 'EPUB export failed'); }
+            finally { setExporting(false); }
+          }}>
+            EPUB
+          </Button>
+        </ButtonGroup>
       </Box>
 
-      {/* Commands Panel */}
-      {showCommands && (
-        <Paper sx={{ p: 2, mb: 2 }}>
-          <Typography variant="h6" gutterBottom>
-            Available Commands
-          </Typography>
-          <Grid container spacing={1}>
-            <Grid item>
-              <Button
-                variant="outlined"
-                size="small"
-                onClick={() => handleCommand('/char')}
-                startIcon={<PersonIcon />}
-              >
-                List Characters
-              </Button>
-            </Grid>
-            <Grid item>
-              <Button
-                variant="outlined"
-                size="small"
-                onClick={() => handleCommand('/info')}
-                startIcon={<InfoIcon />}
-              >
-                Get Info
-              </Button>
-            </Grid>
-            <Grid item>
-              <Button
-                variant="outlined"
-                size="small"
-                onClick={() => handleCommand('/timeout')}
-                startIcon={<PauseIcon />}
-              >
-                Timeout
-              </Button>
-            </Grid>
-            <Grid item>
-
-            </Grid>
-            <Grid item>
-              <Button
-                variant="outlined"
-                size="small"
-                onClick={() => handleCommand('/end')}
-                color="error"
-              >
-                End Story
-              </Button>
-            </Grid>
-          </Grid>
-        </Paper>
-      )}
-
       {/* Messages */}
-      <Box sx={{ flex: 1, overflow: 'auto', p: { xs: 1.5, md: 2 } }} ref={containerRef} id="message-container">
-        {messages.map(formatMessage)}
+      <Box
+        ref={containerRef}
+        sx={{
+          flex: 1, overflow: 'auto',
+          px: { xs: 0.5, md: 2 }, py: 2,
+        }}
+      >
+        {messages.map(renderMessage)}
+
         {loading && (
           <Box sx={{ display: 'flex', justifyContent: 'flex-start', mb: 2 }}>
-            <Paper sx={{ p: 2 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <CircularProgress size={20} sx={{ mr: 1 }} />
-                <Typography>AI is thinking...</Typography>
-              </Box>
+            <Paper sx={{
+              p: 2, display: 'flex', alignItems: 'center', gap: 1.5,
+              border: `1px solid ${theme.palette.divider}`,
+              borderRadius: '16px 16px 16px 4px',
+            }}>
+              <Box sx={{
+                width: 8, height: 8, borderRadius: '50%',
+                backgroundColor: gold, animation: 'glowPulse 1.5s ease-in-out infinite',
+              }} />
+              <Typography variant="body2" sx={{
+                color: 'text.secondary', fontFamily: '"Cinzel", serif',
+                fontSize: '0.8rem', letterSpacing: '0.05em',
+              }}>
+                The narrator contemplates...
+              </Typography>
             </Paper>
           </Box>
         )}
         <div ref={endRef} />
       </Box>
 
-      {/* Error Alert */}
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
+      {/* Error */}
+      {error && <Alert severity="error" sx={{ mb: 1, mx: 1 }} onClose={() => setError('')}>{error}</Alert>}
 
-      {/* Input Form */}
-      <Paper sx={{ p: { xs: 1, md: 2 }, position: { xs: 'sticky', md: 'static' }, bottom: 0, left: 0, right: 0 }}>
-        <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', gap: 1 }}>
+      {/* Input */}
+      <Paper sx={{
+        p: { xs: 1.5, md: 2 },
+        borderTop: `1px solid ${alpha(gold, 0.1)}`,
+        borderRadius: 0,
+        position: 'sticky', bottom: 0,
+        background: theme.palette.mode === 'dark'
+          ? alpha(theme.palette.background.default, 0.95)
+          : alpha(theme.palette.background.paper, 0.95),
+        backdropFilter: 'blur(8px)',
+      }}>
+        <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', gap: 1, alignItems: 'flex-end' }}>
           <TextField
-            fullWidth
-            value={userInput}
+            fullWidth value={userInput}
             onChange={(e) => setUserInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                if (!loading && userInput.trim()) {
-                  handleSubmit(e);
-                }
+                if (!loading && userInput.trim()) handleSubmit(e);
               }
             }}
-            placeholder="Type your action, choice, or command... (Enter to send, Shift+Enter for new line)"
-            disabled={loading}
-            inputRef={inputRef}
-            multiline
-            maxRows={4}
+            placeholder="What do you do?"
+            disabled={loading} inputRef={inputRef}
+            multiline maxRows={4}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                fontFamily: '"Crimson Pro", serif',
+                fontSize: '1rem',
+              },
+            }}
           />
           <Button
-            type="submit"
-            variant="contained"
+            type="submit" variant="contained"
             disabled={loading || !userInput.trim()}
-            startIcon={loading ? <CircularProgress size={20} /> : <SendIcon />}
+            sx={{
+              minWidth: 48, height: 48, borderRadius: 2, px: 0,
+            }}
           >
-            Send
+            {loading ? <CircularProgress size={20} sx={{ color: 'inherit' }} /> : <SendIcon />}
           </Button>
         </Box>
+        <Typography variant="body2" sx={{
+          mt: 0.75, fontSize: '0.7rem', color: 'text.disabled', textAlign: 'center',
+        }}>
+          /checkpoint /back /char /info /end
+        </Typography>
       </Paper>
 
       {/* Bookify Dialog */}
       <Dialog open={exportOpen} onClose={() => setExportOpen(false)} fullWidth maxWidth="md">
-        <DialogTitle>{exportData?.title || 'Bookify'}</DialogTitle>
+        <DialogTitle sx={{ fontFamily: '"Cinzel", serif' }}>{exportData?.title || 'Bookify'}</DialogTitle>
         <DialogContent dividers>
           {exporting && <LinearProgress sx={{ mb: 2 }} />}
           {exportError && <Alert severity="error" sx={{ mb: 2 }}>{exportError}</Alert>}
           {exportData && (
-            <Typography component="pre" sx={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>
+            <Typography component="pre" sx={{
+              whiteSpace: 'pre-wrap', fontFamily: '"Crimson Pro", serif',
+              fontSize: '1.05rem', lineHeight: 1.8,
+            }}>
               {exportData.content}
             </Typography>
           )}
-          {!exporting && !exportData && !exportError && (
-            <Typography variant="body2" color="text.secondary">Preparing…</Typography>
-          )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setExportOpen(false)}>Close</Button>
+          <Button onClick={() => setExportOpen(false)} sx={{ color: 'text.secondary' }}>Close</Button>
           <Button onClick={handleDownloadTxt} disabled={!exportData} variant="contained">Download .txt</Button>
         </DialogActions>
       </Dialog>
-
-
     </Box>
   );
 }

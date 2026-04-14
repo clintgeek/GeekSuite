@@ -35,6 +35,10 @@ export const typeDefs = gql`
     aiStats: JSON
     aiDirectorModels: JSON
     aiUsage(provider: String!): JSON
+
+    # App Routing
+    aiAppConfigs: JSON
+    aiAppConfig(appName: String!): JSON
   }
 
   extend type Mutation {
@@ -50,5 +54,16 @@ export const typeDefs = gql`
     resetAIStats: Boolean
     seedDirectorPricing: Boolean
     seedDirectorFreeTier: Boolean
+
+    # Model Management
+    syncProviderModels(provider: String!): JSON
+    updateModelPricing(provider: String!, modelId: String!, inputPrice: Float!, outputPrice: Float!): JSON
+    deleteModelPricing(provider: String!, modelId: String!): Boolean
+    updateModelFreeTier(provider: String!, modelId: String!, isFree: Boolean!, freeLimits: JSON, notes: String): JSON
+    deleteModelFreeTier(provider: String!, modelId: String!): Boolean
+
+    # App Routing
+    saveAIAppConfig(appName: String!, config: JSON!): JSON
+    deleteAIAppConfig(appName: String!): Boolean
   }
 `;

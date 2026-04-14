@@ -15,6 +15,7 @@ export const typeDefs = gql`
     migratedTo: String
     isBacklog: Boolean
     taskType: String
+    recurrencePattern: String
     parentTask: Task
     subtasks: [Task]
     completedAt: Date
@@ -68,9 +69,7 @@ export const typeDefs = gql`
     tags: [String]
     dueDate: Date
     isBacklog: Boolean
-    taskType: String
-    createdAt: Date
-    updatedAt: Date
+    recurrencePattern: String
   }
 
   type Query {
@@ -89,7 +88,7 @@ export const typeDefs = gql`
   }
 
   type Mutation {
-    createTask(content: String!, signifier: String, status: String, priority: Int, tags: [String], dueDate: Date, createdAt: Date, updatedAt: Date): Task!
+    createTask(content: String!, signifier: String, status: String, priority: Int, tags: [String], dueDate: Date, createdAt: Date, updatedAt: Date, note: String, recurrencePattern: String): Task!
     updateTask(id: ID!, input: UpdateTaskInput!): Task!
     deleteTask(id: ID!): DeleteResponse!
     updateTaskStatus(id: ID!, status: String!): Task!

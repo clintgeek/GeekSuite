@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { apiService } from '../services/apiService';
+import { influxService } from '../services/influxService';
 import {
   Box,
   Card,
@@ -167,7 +167,6 @@ function RecommendationItem({ recommendation }) {
 export default function SleepAnalysis({ date }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [expanded, setExpanded] = useState({
     architecture: false,
     cardiovascular: false,
@@ -181,14 +180,18 @@ export default function SleepAnalysis({ date }) {
       if (!date) return;
 
       setLoading(true);
-      setError(null);
 
       try {
-        const response = await apiService.get(`/influx/sleep-analysis/${date}`);
+        const response = await influxService.getSleepAnalysis(date);
+        // Backend returns { available: false, reason, message } for both "no data"
+        // and "influx unavailable" cases — treat both as empty-state, not an error.
         setData(response);
       } catch (err) {
-        console.error('Error fetching sleep data:', err);
-        setError(err.response?.data?.error || err.message || 'Failed to load sleep data');
+        // Defensive: backend should no longer 500, but handle it quietly.
+        console.warn('Sleep analysis unavailable:', err.message);
+        // Synthesize the same shape as a backend "unavailable" response so the
+        // existing !data.available empty-state renders instead of an error alert.
+        setData({ available: false, message: 'Sleep data could not be loaded.' });
       } finally {
         setLoading(false);
       }
@@ -206,19 +209,6 @@ export default function SleepAnalysis({ date }) {
       <Card>
         <CardContent>
           <Typography>Loading sleep analysis...</Typography>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (error) {
-    return (
-      <Card>
-        <CardContent>
-          <Alert severity="error">
-            <AlertTitle>Error Loading Sleep Data</AlertTitle>
-            {error}
-          </Alert>
         </CardContent>
       </Card>
     );

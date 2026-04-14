@@ -3,107 +3,145 @@ import {
   Box,
   Typography,
   ListItem,
-  ListItemAvatar,
-  ListItemText,
-  ListItemSecondaryAction,
-  Avatar,
   IconButton,
-  Chip
 } from '@mui/material';
 import {
   Edit as EditIcon,
-  Delete as DeleteIcon
+  Delete as DeleteIcon,
 } from '@mui/icons-material';
-import { getSourceIcon, getSourceColor, getSourceName } from './FoodSourceUtils.jsx';
+import { getSourceColor, getSourceName } from './FoodSourceUtils.jsx';
 
+/**
+ * FoodListItem — a clean row rendered inside the parent Surface list.
+ *
+ * Matches the row pattern used by MyMeals.jsx: no per-row border, no hardcoded
+ * colors. Source color appears as a 6px accent dot, not an avatar. Numbers use
+ * JetBrains Mono with tabular-nums.
+ */
 const FoodListItem = ({ food, onEdit, onDelete }) => {
   const sourceColor = getSourceColor(food.source);
-  const sourceIcon = getSourceIcon(food.source);
+  const sourceName = getSourceName(food.source);
+  const nutrition = food.nutrition || {};
+  const calories = Math.round(nutrition.calories_per_serving || 0);
 
   return (
     <ListItem
       sx={{
-        border: '1px solid #e0e0e0',
-        borderRadius: 1,
-        mb: 1,
-        backgroundColor: '#ffffff',
-        '&:hover': {
-          backgroundColor: '#f5f5f5'
-        }
+        px: 2.5,
+        py: 1.5,
+        borderBottom: (theme) => `1px solid ${theme.palette.divider}`,
+        '&:last-child': { borderBottom: 'none' },
       }}
-    >
-      <ListItemAvatar>
-        <Avatar sx={{ bgcolor: `${sourceColor}20`, color: sourceColor }}>
-          {sourceIcon}
-        </Avatar>
-      </ListItemAvatar>
-
-      <ListItemText
-        primary={
-          <Box>
-            <Typography variant="body2" fontWeight={600} noWrap>
-              {food.name}
-            </Typography>
-            {food.brand && (
-              <Typography variant="caption" color="text.secondary" noWrap>
-                {food.brand}
-              </Typography>
-            )}
-          </Box>
-        }
-        secondaryTypographyProps={{
-          component: 'div'
-        }}
-        secondary={
-          <Box sx={{ mt: 0.5 }}>
-            <Box sx={{ display: 'flex', gap: 1, mb: 0.5 }}>
-              <Typography variant="caption" fontWeight={600}>
-                {Math.round(food.nutrition.calories_per_serving)} cal
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                P: {food.nutrition.protein_grams}g
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                C: {food.nutrition.carbs_grams}g
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                F: {food.nutrition.fat_grams}g
-              </Typography>
-            </Box>
-            <Chip
-              label={getSourceName(food.source)}
-              size="small"
-              sx={{
-                backgroundColor: `${sourceColor}15`,
-                color: sourceColor,
-                fontSize: '0.625rem',
-                height: 20
-              }}
-            />
-          </Box>
-        }
-      />
-
-      <ListItemSecondaryAction>
+      secondaryAction={
         <Box sx={{ display: 'flex', gap: 0.5 }}>
           <IconButton
-            edge="end"
+            aria-label={`Edit ${food.name}`}
             onClick={() => onEdit(food)}
-            sx={{ color: 'primary.main' }}
             size="small"
           >
             <EditIcon fontSize="small" />
           </IconButton>
           <IconButton
-            edge="end"
+            aria-label={`Delete ${food.name}`}
             onClick={() => onDelete(food)}
-            sx={{ color: 'error.main' }}
+            color="error"
             size="small"
           >
             <DeleteIcon fontSize="small" />
           </IconButton>
         </Box>
-      </ListItemSecondaryAction>
+      }
+    >
+      {/* Accent dot indicating source */}
+      <Box
+        sx={{
+          width: 8,
+          height: 8,
+          borderRadius: '50%',
+          backgroundColor: sourceColor,
+          flexShrink: 0,
+          mr: 1.75,
+          alignSelf: 'center',
+        }}
+      />
+
+      <Box sx={{ flex: 1, minWidth: 0, pr: 2 }}>
+        {/* Name + brand */}
+        <Typography
+          sx={{
+            fontWeight: 600,
+            fontSize: '1rem',
+            color: 'text.primary',
+            lineHeight: 1.3,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+          title={food.name}
+        >
+          {food.name}
+        </Typography>
+
+        {/* Meta row — source · calories · P/C/F (mono + dots) */}
+        <Typography
+          component="span"
+          sx={{
+            fontSize: '0.8125rem',
+            color: 'text.secondary',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            mt: 0.25,
+            flexWrap: 'wrap',
+          }}
+        >
+          {food.brand && (
+            <>
+              <Box
+                component="span"
+                sx={{
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  maxWidth: 160,
+                }}
+              >
+                {food.brand}
+              </Box>
+              <Box component="span" sx={{ opacity: 0.5 }}>·</Box>
+            </>
+          )}
+          <Box
+            component="span"
+            sx={{ color: sourceColor, fontWeight: 600, letterSpacing: '0.02em' }}
+          >
+            {sourceName}
+          </Box>
+          <Box component="span" sx={{ opacity: 0.5 }}>·</Box>
+          <Box
+            component="span"
+            sx={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {calories} kcal
+          </Box>
+          <Box component="span" sx={{ opacity: 0.5 }}>·</Box>
+          <Box
+            component="span"
+            sx={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontVariantNumeric: 'tabular-nums',
+              fontSize: '0.75rem',
+            }}
+          >
+            {Math.round(nutrition.protein_grams || 0)}P/
+            {Math.round(nutrition.carbs_grams || 0)}C/
+            {Math.round(nutrition.fat_grams || 0)}F
+          </Box>
+        </Typography>
+      </Box>
     </ListItem>
   );
 };

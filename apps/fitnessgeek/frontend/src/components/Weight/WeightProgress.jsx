@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Box, Typography, Card, CardContent, LinearProgress, Chip, Button } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
+import { useTheme, alpha } from '@mui/material/styles';
 import {
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
@@ -8,9 +8,11 @@ import {
   Flag as GoalIcon,
   Edit as EditIcon,
   CalendarToday as CalendarIcon,
-  Speed as SpeedIcon
+  Speed as SpeedIcon,
+  ArrowForward as ArrowIcon
 } from '@mui/icons-material';
 import { differenceInWeeks, differenceInDays, parseISO, format } from 'date-fns';
+import { StatNumber, SectionLabel } from '../primitives';
 
 const WeightProgress = ({
   weightLogs = [],
@@ -185,28 +187,42 @@ const WeightProgress = ({
       boxShadow: theme.shadows[1],
       border: `1px solid ${theme.palette.divider}`
     }}>
-      <CardContent sx={{ p: 3 }}>
-        {/* Header */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <Box sx={{
-              width: 44,
-              height: 44,
-              borderRadius: '12px',
-              backgroundColor: theme.palette.primary.main,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}>
-              <GoalIcon sx={{ color: '#ffffff', fontSize: 24 }} />
-            </Box>
-            <Box>
-              <Typography variant="h6" sx={{ fontWeight: 700, color: theme.palette.text.primary }}>
-                Weight Goal Progress
-              </Typography>
-              <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                {goal.startWeight} → {goal.targetWeight} {unit}
-              </Typography>
+      <CardContent sx={{ p: { xs: 2.5, sm: 3 } }}>
+        {/* Editorial header — goal values as primary display */}
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+            mb: 3,
+            gap: 2,
+          }}
+        >
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <SectionLabel sx={{ mb: 1 }}>Active Weight Goal</SectionLabel>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'baseline',
+                gap: { xs: 1, sm: 1.5 },
+                flexWrap: 'wrap',
+              }}
+            >
+              <StatNumber
+                value={goal.startWeight}
+                unit={unit}
+                size="display"
+                decimals={0}
+                color={alpha(theme.palette.text.primary, 0.5)}
+              />
+              <ArrowIcon sx={{ color: 'text.secondary', fontSize: 20, alignSelf: 'center' }} />
+              <StatNumber
+                value={goal.targetWeight}
+                unit={unit}
+                size="display"
+                decimals={0}
+                color={theme.palette.primary.main}
+              />
             </Box>
           </Box>
           {onEditGoal && (
@@ -216,12 +232,15 @@ const WeightProgress = ({
               onClick={onEditGoal}
               sx={{
                 borderRadius: '999px',
-                textTransform: 'none',
-                fontWeight: 600,
+                textTransform: 'uppercase',
+                fontWeight: 700,
+                fontSize: '0.6875rem',
+                letterSpacing: '0.1em',
                 color: theme.palette.primary.main,
+                flexShrink: 0,
                 '&:hover': {
-                  backgroundColor: `${theme.palette.primary.main}1a`
-                }
+                  backgroundColor: alpha(theme.palette.primary.main, 0.1),
+                },
               }}
             >
               Edit

@@ -62,7 +62,8 @@ const MealSection = ({
   onDeleteLog,
   onSaveMeal,
   showActions = true,
-  compact = false
+  compact = false,
+  mode = 'standard'
 }) => {
   const theme = useTheme();
   const config = MEAL_CONFIG[mealType];
@@ -233,6 +234,7 @@ const MealSection = ({
                 onDelete={onDeleteLog}
                 showActions={showActions}
                 compact={compact}
+                mode={mode}
               />
             ))}
           </Box>

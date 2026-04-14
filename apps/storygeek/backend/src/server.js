@@ -1,59 +1,59 @@
-const express = require('express');
-const mongoose = require('mongoose');
-const cors = require('cors');
-const helmet = require('helmet');
-const compression = require('compression');
-const morgan = require('morgan');
-const rateLimit = require('express-rate-limit');
-require('dotenv').config();
+import express from 'express';
+import mongoose from 'mongoose';
+import cors from 'cors';
+import helmet from 'helmet';
+import compression from 'compression';
+import morgan from 'morgan';
+import rateLimit from 'express-rate-limit';
+import cookieParser from 'cookie-parser';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
+import { attachUser, meHandler } from '@geeksuite/user/server';
 
-const storyRoutes = require('./routes/stories');
-const exportRoutes = require('./routes/export');
-const characterRoutes = require('./routes/characters');
+dotenv.config();
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+import authRoutes from './routes/auth.js';
+import storyRoutes from './routes/stories.js';
+import exportRoutes from './routes/export.js';
+import characterRoutes from './routes/characters.js';
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 9977;
 
 // Security middleware
-app.use(helmet());
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(cookieParser());
+
 // CORS configuration
 const allowedOrigins = [
-  'http://localhost:3000',           // StoryGeek frontend (default)
-  'http://localhost:5173',           // Vite dev server
-  'http://localhost:5174',           // Vite dev server (alternative)
-  'http://192.168.1.17:9977',       // StoryGeek local network
-  'http://192.168.1.17:3000',       // StoryGeek local network (alternative)
-  'https://storygeek.clintgeek.com', // StoryGeek production
-  process.env.FRONTEND_URL           // Environment variable override
-].filter(Boolean); // Remove any undefined values
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://192.168.1.17:9977',
+  'http://192.168.1.17:3000',
+  'https://storygeek.clintgeek.com',
+  process.env.FRONTEND_URL
+].filter(Boolean);
 
 app.use(cors({
   origin: function(origin, callback) {
-    // Allow requests with no origin (like mobile apps, curl, etc.)
     if (!origin) return callback(null, true);
-
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      return callback(null, true);
-    }
-
+    if (allowedOrigins.indexOf(origin) !== -1) return callback(null, true);
     console.log('CORS blocked origin:', origin);
     return callback(new Error('Not allowed by CORS'), false);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: [
-    'Content-Type',
-    'Authorization',
-    'X-Requested-With',
-    'Accept',
-    'Origin'
-  ]
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
 }));
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  windowMs: 15 * 60 * 1000,
+  max: 100,
   message: 'Too many requests from this IP, please try again later.'
 });
 app.use('/api/', limiter);
@@ -72,18 +72,32 @@ mongoose.connect(process.env.DB_URI, {
 .then(() => console.log('Connected to MongoDB (DataGeek instance)'))
 .catch(err => console.error('MongoDB connection error:', err));
 
-// Routes
+// Auth proxy routes (me, refresh, logout → baseGeek)
+app.use('/api/auth', authRoutes);
+
+// /api/me endpoint via @geeksuite/user/server
+app.get('/api/me', attachUser({ basegeekUrl: process.env.BASEGEEK_URL || 'https://basegeek.clintgeek.com' }), meHandler());
+
+// API Routes
 app.use('/api/stories', storyRoutes);
 app.use('/api/export', exportRoutes);
 app.use('/api/characters', characterRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({
-    status: 'OK',
-    timestamp: new Date().toISOString(),
-    service: 'StoryGeek Backend'
-  });
+  res.json({ status: 'OK', timestamp: new Date().toISOString(), service: 'StoryGeek Backend' });
+});
+
+// Serve static frontend from /public
+const publicDir = path.join(__dirname, '..', 'public');
+app.use(express.static(publicDir));
+
+// SPA catch-all — serve index.html for non-API routes
+app.get('*', (req, res) => {
+  if (req.path.startsWith('/api/') || req.path.startsWith('/graphql')) {
+    return res.status(404).json({ error: 'Route not found' });
+  }
+  res.sendFile(path.join(publicDir, 'index.html'));
 });
 
 // Error handling middleware
@@ -93,11 +107,6 @@ app.use((err, req, res, next) => {
     error: 'Something went wrong!',
     message: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
   });
-});
-
-// 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({ error: 'Route not found' });
 });
 
 app.listen(PORT, () => {

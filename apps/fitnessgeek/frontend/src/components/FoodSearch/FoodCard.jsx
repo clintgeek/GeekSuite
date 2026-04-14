@@ -11,9 +11,12 @@ import {
 } from '@mui/material';
 import {
   Add as AddIcon,
-  Restaurant as FoodIcon
+  Restaurant as FoodIcon,
+  CheckCircle as StagedIcon,
+  Warning as WarningIcon
 } from '@mui/icons-material';
 import { useTheme, alpha } from '@mui/material/styles';
+import { netCarbs as calcNetCarbs } from '../../utils/ketoMath';
 
 const getSourceName = (source) => {
   switch (source?.toLowerCase()) {
@@ -55,9 +58,15 @@ const FoodCard = ({
   onQuickAdd,
   showQuickAdd = false,
   compact = false,
+  // Legacy selection (still used by non-stage flows)
   selectable = false,
   selected = false,
-  onSelectToggle
+  onSelectToggle,
+  // New: stage-on-tap mode. When staged=true, card shows "in tray" state.
+  staged = false,
+  stagedCount = 0,
+  animationDelay = 0,
+  ketoMode = false,
 }) => {
   const theme = useTheme();
   const primary = theme.palette.primary.main;
@@ -66,6 +75,9 @@ const FoodCard = ({
   const selectedBorder = primary;
   const baseBg = theme.palette.background.paper;
   const selectedBg = alpha(primary, theme.palette.mode === 'dark' ? 0.25 : 0.08);
+  const isDark = theme.palette.mode === 'dark';
+  const stagedBg = alpha(primary, isDark ? 0.22 : 0.09);
+  const stagedBorder = primary;
 
   const handleClick = (e) => {
     // Don't trigger card click if quick add button was clicked
@@ -90,6 +102,15 @@ const FoodCard = ({
   const protein = nutrition.protein_grams || 0;
   const carbs = nutrition.carbs_grams || 0;
   const fat = nutrition.fat_grams || 0;
+  const { netCarbs: nc, isMissingFiber } = calcNetCarbs(nutrition);
+  const netCarbsDisplay = Math.round(nc * 10) / 10;
+  // 0-cal warning: flag if calories is 0 but there's other macro data suggesting it shouldn't be
+  const hasZeroCalWarning = calories === 0 && (protein > 0 || carbs > 0 || fat > 0);
+
+  // Determine visual state
+  const isActive = staged || selected;
+  const activeBorder = staged ? stagedBorder : (selected ? selectedBorder : baseBorder);
+  const activeBg = staged ? stagedBg : (selected ? selectedBg : baseBg);
 
   return (
     <Card
@@ -98,14 +119,27 @@ const FoodCard = ({
         borderRadius: '16px',
         overflow: 'hidden',
         cursor: 'pointer',
-        transition: 'all 0.2s ease',
-        border: '1px solid',
-        borderColor: selected ? selectedBorder : baseBorder,
-        backgroundColor: selected ? selectedBg : baseBg,
+        transition: 'transform 220ms cubic-bezier(0.22, 1, 0.36, 1), border-color 180ms ease, background-color 180ms ease, box-shadow 220ms ease',
+        border: `1.5px solid ${activeBorder}`,
+        backgroundColor: activeBg,
         position: 'relative',
+        // Staggered fade-in for first paint
+        animation: 'foodCardEnter 460ms cubic-bezier(0.22, 1, 0.36, 1) both',
+        animationDelay: `${animationDelay}ms`,
+        '@keyframes foodCardEnter': {
+          from: { opacity: 0, transform: 'translateY(12px)' },
+          to: { opacity: 1, transform: 'translateY(0)' }
+        },
+        // Staged cards get a subtle inset glow + lifted rest state
+        ...(staged && {
+          boxShadow: `inset 0 0 0 1px ${alpha(primary, 0.35)}, 0 8px 20px -12px ${alpha(primary, 0.5)}`,
+          transform: 'translateY(-2px)'
+        }),
         '&:hover': {
           transform: 'translateY(-4px)',
-          boxShadow: theme.shadows[6],
+          boxShadow: staged
+            ? `inset 0 0 0 1px ${alpha(primary, 0.5)}, 0 14px 30px -12px ${alpha(primary, 0.55)}`
+            : theme.shadows[6],
           borderColor: selectedBorder,
           '& .quick-add-button': {
             opacity: 1,
@@ -114,7 +148,41 @@ const FoodCard = ({
         }
       }}
     >
-      {selectable && (
+      {/* Staged badge — top-right checkmark with count */}
+      {staged && (
+        <Box
+          aria-label={`Staged ${stagedCount > 1 ? `(${stagedCount})` : ''}`}
+          sx={{
+            position: 'absolute',
+            top: 10,
+            right: 10,
+            zIndex: 2,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 0.5,
+            px: 0.75,
+            py: 0.25,
+            borderRadius: 999,
+            backgroundColor: primary,
+            color: theme.palette.primary.contrastText,
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: '0.6875rem',
+            fontWeight: 700,
+            letterSpacing: '0.04em',
+            boxShadow: `0 6px 14px -4px ${alpha(primary, 0.55)}`,
+            animation: 'stagedBadgePop 320ms cubic-bezier(0.34, 1.56, 0.64, 1)',
+            '@keyframes stagedBadgePop': {
+              from: { transform: 'scale(0.6)', opacity: 0 },
+              to: { transform: 'scale(1)', opacity: 1 }
+            }
+          }}
+        >
+          <StagedIcon sx={{ fontSize: 14 }} />
+          {stagedCount > 1 ? `×${stagedCount}` : 'STAGED'}
+        </Box>
+      )}
+
+      {selectable && !staged && (
         <Checkbox
           checked={selected}
           onChange={handleSelectToggle}
@@ -223,22 +291,41 @@ const FoodCard = ({
         </Box>
 
         {/* Nutrition Badges - Full display on larger screens */}
-        <Box sx={{ display: { xs: 'none', sm: 'flex' }, gap: 0.75, flexWrap: 'wrap', mb: 1 }}>
+        <Box sx={{ display: { xs: 'none', sm: 'flex' }, gap: 0.75, flexWrap: 'wrap', mb: 1, alignItems: 'center' }}>
           <Chip
-            label={`${calories} cal`}
+            label={hasZeroCalWarning ? '0 cal ?' : `${calories} cal`}
             size="small"
+            icon={hasZeroCalWarning ? <WarningIcon sx={{ fontSize: '12px !important', color: `${theme.palette.warning.main} !important` }} /> : undefined}
             sx={{
               borderRadius: '999px',
-              background: `linear-gradient(135deg, ${primary}, ${theme.palette.primary.dark})`,
-              color: theme.palette.primary.contrastText,
+              background: hasZeroCalWarning
+                ? alpha(theme.palette.warning.main, 0.15)
+                : `linear-gradient(135deg, ${primary}, ${theme.palette.primary.dark})`,
+              color: hasZeroCalWarning ? theme.palette.warning.dark : theme.palette.primary.contrastText,
+              border: hasZeroCalWarning ? `1px solid ${alpha(theme.palette.warning.main, 0.4)}` : 'none',
               fontWeight: 700,
               fontSize: '0.75rem',
               height: 24,
-              '& .MuiChip-label': {
-                px: 1.5
-              }
+              '& .MuiChip-label': { px: 1.5 }
             }}
           />
+          {ketoMode && (
+            <Chip
+              label={`NC: ${netCarbsDisplay}g${isMissingFiber ? '*' : ''}`}
+              size="small"
+              sx={{
+                borderRadius: '999px',
+                backgroundColor: alpha(theme.palette.warning.main, 0.15),
+                color: theme.palette.warning.dark,
+                fontWeight: 700,
+                fontSize: '0.75rem',
+                height: 24,
+                border: `1px solid ${alpha(theme.palette.warning.main, 0.35)}`,
+                fontFamily: "'JetBrains Mono', monospace",
+                '& .MuiChip-label': { px: 1.5 }
+              }}
+            />
+          )}
           <Chip
             label={`P: ${protein}g`}
             size="small"
@@ -252,19 +339,21 @@ const FoodCard = ({
               border: `1px solid ${alpha(primary, 0.25)}`
             }}
           />
-          <Chip
-            label={`C: ${carbs}g`}
-            size="small"
-            sx={{
-              borderRadius: '999px',
-              backgroundColor: 'rgba(13, 148, 136, 0.1)',
-              color: 'primary.main',
-              fontWeight: 600,
-              fontSize: '0.75rem',
-              height: 24,
-              border: '1px solid rgba(6, 182, 212, 0.2)'
-            }}
-          />
+          {!ketoMode && (
+            <Chip
+              label={`C: ${carbs}g`}
+              size="small"
+              sx={{
+                borderRadius: '999px',
+                backgroundColor: 'rgba(13, 148, 136, 0.1)',
+                color: 'primary.main',
+                fontWeight: 600,
+                fontSize: '0.75rem',
+                height: 24,
+                border: '1px solid rgba(6, 182, 212, 0.2)'
+              }}
+            />
+          )}
           <Chip
             label={`F: ${fat}g`}
             size="small"
@@ -280,30 +369,39 @@ const FoodCard = ({
           />
         </Box>
         {/* Condensed nutrition display on mobile */}
-        <Box sx={{ display: { xs: 'flex', sm: 'none' }, gap: 0.5, alignItems: 'center', mb: 1 }}>
+        <Box sx={{ display: { xs: 'flex', sm: 'none' }, gap: 0.5, alignItems: 'center', mb: 1, flexWrap: 'wrap' }}>
           <Chip
-            label={`${calories} cal`}
+            label={hasZeroCalWarning ? '0 ?' : `${calories} cal`}
             size="small"
             sx={{
               borderRadius: '999px',
-              background: `linear-gradient(135deg, ${primary}, ${theme.palette.primary.dark})`,
-              color: theme.palette.primary.contrastText,
+              background: hasZeroCalWarning
+                ? alpha(theme.palette.warning.main, 0.15)
+                : `linear-gradient(135deg, ${primary}, ${theme.palette.primary.dark})`,
+              color: hasZeroCalWarning ? theme.palette.warning.dark : theme.palette.primary.contrastText,
+              border: hasZeroCalWarning ? `1px solid ${alpha(theme.palette.warning.main, 0.4)}` : 'none',
               fontWeight: 700,
               fontSize: '0.7rem',
               height: 22,
               '& .MuiChip-label': { px: 1 }
             }}
           />
-          <Typography
-            variant="caption"
-            sx={{
-              color: secondary,
-              fontSize: '0.7rem',
-              fontWeight: 500
-            }}
-          >
-            {Math.round(protein)}P / {Math.round(carbs)}C / {Math.round(fat)}F
-          </Typography>
+          {ketoMode ? (
+            <Typography variant="caption" sx={{ color: theme.palette.warning.dark, fontSize: '0.7rem', fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>
+              NC: {netCarbsDisplay}g{isMissingFiber ? '*' : ''} · F: {Math.round(fat)}g
+            </Typography>
+          ) : (
+            <Typography
+              variant="caption"
+              sx={{
+                color: secondary,
+                fontSize: '0.7rem',
+                fontWeight: 500
+              }}
+            >
+              {Math.round(protein)}P / {Math.round(carbs)}C / {Math.round(fat)}F
+            </Typography>
+          )}
         </Box>
 
         {/* Source Badge (if no image) */}

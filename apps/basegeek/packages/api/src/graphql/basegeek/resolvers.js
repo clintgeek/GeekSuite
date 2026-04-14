@@ -1,5 +1,8 @@
 import APIKey from '../../models/APIKey.js';
 import AIConfig from '../../models/AIConfig.js';
+import AIPricing from '../../models/AIPricing.js';
+import AIFreeTier from '../../models/AIFreeTier.js';
+import AIAppConfig from '../../models/AIAppConfig.js';
 import aiService from '../../services/aiService.js';
 import aiDirectorService from '../../services/aiDirectorService.js';
 import aiUsageService from '../../services/aiUsageService.js';
@@ -152,6 +155,44 @@ export const resolvers = {
       const usageSummary = await aiUsageService.getProviderUsageSummary(provider, 'session');
       if (!usageSummary.success) throw new GraphQLError(usageSummary.error || 'Failed to get usage summary');
       return usageSummary.summary;
+    },
+
+    // App Routing
+    aiAppConfigs: async (_, __, { user }) => {
+      requireAuth(user);
+      const configs = await AIAppConfig.find().sort({ appName: 1 });
+      const knownApps = new Set(configs.map(c => c.appName));
+      const discoveredApps = [];
+
+      // Discover apps from API keys (persistent — survives restarts)
+      const apiKeys = await APIKey.find({ isActive: true }).select('appName');
+      for (const key of apiKeys) {
+        if (key.appName && key.appName !== 'unknown' && !knownApps.has(key.appName)) {
+          knownApps.add(key.appName);
+          discoveredApps.push(key.appName);
+        }
+      }
+
+      // Also check session stats for apps that called without API keys (JWT auth)
+      const stats = aiService.getSessionStats();
+      if (stats?.providerUsage) {
+        for (const providerData of Object.values(stats.providerUsage)) {
+          if (providerData.appUsage) {
+            for (const appName of Object.keys(providerData.appUsage)) {
+              if (appName !== 'unknown' && !knownApps.has(appName)) {
+                knownApps.add(appName);
+                discoveredApps.push(appName);
+              }
+            }
+          }
+        }
+      }
+      return { configs, discoveredApps };
+    },
+
+    aiAppConfig: async (_, { appName }, { user }) => {
+      requireAuth(user);
+      return await AIAppConfig.findOne({ appName });
     }
   },
 
@@ -349,6 +390,86 @@ export const resolvers = {
     seedDirectorFreeTier: async (_, __, { user }) => {
       requireAuth(user);
       await aiDirectorService.seedFreeTierInformation();
+      return true;
+    },
+
+    // Model Management
+    syncProviderModels: async (_, { provider }, { user }) => {
+      requireAuth(user);
+      try {
+        const models = await aiService.refreshModels(provider);
+        // Also update pricing for any new models
+        await aiDirectorService.updatePricingForNewModels();
+        return { success: true, provider, modelsFound: models.length, models };
+      } catch (error) {
+        throw new GraphQLError(`Failed to sync models for ${provider}: ${error.message}`);
+      }
+    },
+
+    updateModelPricing: async (_, { provider, modelId, inputPrice, outputPrice }, { user }) => {
+      requireAuth(user);
+      const pricing = await AIPricing.findOneAndUpdate(
+        { provider, modelId },
+        { inputPrice, outputPrice, lastUpdated: new Date(), isActive: true },
+        { upsert: true, new: true }
+      );
+      return { success: true, pricing: { provider, modelId, inputPrice: pricing.inputPrice, outputPrice: pricing.outputPrice } };
+    },
+
+    deleteModelPricing: async (_, { provider, modelId }, { user }) => {
+      requireAuth(user);
+      await AIPricing.deleteOne({ provider, modelId });
+      return true;
+    },
+
+    updateModelFreeTier: async (_, { provider, modelId, isFree, freeLimits, notes }, { user }) => {
+      requireAuth(user);
+      const freeTier = await AIFreeTier.findOneAndUpdate(
+        { provider, modelId },
+        {
+          isFree,
+          freeLimits: freeLimits || {},
+          notes: notes || '',
+          lastUpdated: new Date()
+        },
+        { upsert: true, new: true }
+      );
+      return { success: true, freeTier: { provider, modelId, isFree: freeTier.isFree, freeLimits: freeTier.freeLimits, notes: freeTier.notes } };
+    },
+
+    deleteModelFreeTier: async (_, { provider, modelId }, { user }) => {
+      requireAuth(user);
+      await AIFreeTier.deleteOne({ provider, modelId });
+      return true;
+    },
+
+    // App Routing
+    saveAIAppConfig: async (_, { appName, config }, { user }) => {
+      requireAuth(user);
+      if (!appName?.trim()) throw new GraphQLError('appName is required');
+      const update = {
+        appName: appName.trim(),
+        displayName: config.displayName || '',
+        tier: config.tier || 'free',
+        provider: config.tier === 'specific' ? (config.provider || null) : null,
+        model: config.tier === 'specific' ? (config.model || null) : null,
+        fallbackOrder: config.fallbackOrder || [],
+        maxTokens: config.maxTokens || null,
+        temperature: config.temperature != null ? config.temperature : null,
+        notes: config.notes || '',
+        enabled: config.enabled !== false
+      };
+      const result = await AIAppConfig.findOneAndUpdate(
+        { appName: appName.trim() },
+        update,
+        { upsert: true, new: true }
+      );
+      return result;
+    },
+
+    deleteAIAppConfig: async (_, { appName }, { user }) => {
+      requireAuth(user);
+      await AIAppConfig.deleteOne({ appName });
       return true;
     }
   }

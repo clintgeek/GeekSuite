@@ -1,9 +1,33 @@
+import { useCallback } from 'react';
 import { Box } from '@mui/material';
+import { Reorder } from 'framer-motion';
 import SectionHeader from '../shared/SectionHeader';
 import TaskRow from '../tasks/TaskRow';
 import EmptyState from '../shared/EmptyState';
 
-const TodaySection = ({ tasks, onStatusToggle, onEdit, onDelete, onSaveAsNote }) => {
+/**
+ * TodaySection — the primary task list with drag-and-drop reorder.
+ *
+ * Uses framer-motion's Reorder components (already installed — no extra
+ * dependency needed). On reorder, calls onReorder(newOrder) which the
+ * parent uses to persist via saveDailyOrder.
+ */
+const TodaySection = ({
+  tasks,
+  onStatusToggle,
+  onEdit,
+  onDelete,
+  onSaveAsNote,
+  focusedTaskId,
+  onReorder,
+}) => {
+  const handleReorder = useCallback(
+    (newOrder) => {
+      onReorder?.(newOrder);
+    },
+    [onReorder]
+  );
+
   if (!tasks || tasks.length === 0) {
     return (
       <EmptyState
@@ -15,24 +39,45 @@ const TodaySection = ({ tasks, onStatusToggle, onEdit, onDelete, onSaveAsNote })
 
   return (
     <Box>
-      <SectionHeader title="Today" count={tasks.length} />
-      <Box
-        sx={{
+      <SectionHeader title="Today" count={tasks.length} size="display" />
+      <Reorder.Group
+        axis="y"
+        values={tasks}
+        onReorder={handleReorder}
+        as="div"
+        style={{
+          listStyle: 'none',
+          padding: 0,
+          margin: 0,
           borderRadius: '8px',
           overflow: 'hidden',
         }}
       >
         {tasks.map((task) => (
-          <TaskRow
-            key={(task.id || task._id)}
-            task={task}
-            onStatusToggle={onStatusToggle}
-            onEdit={onEdit}
-            onDelete={onDelete}
-            onSaveAsNote={onSaveAsNote}
-          />
+          <Reorder.Item
+            key={task.id || task._id}
+            value={task}
+            as="div"
+            style={{ cursor: 'grab' }}
+            whileDrag={{
+              scale: 1.015,
+              boxShadow: '0 6px 20px rgba(28,20,14,0.16)',
+              cursor: 'grabbing',
+              zIndex: 10,
+            }}
+            transition={{ duration: 0.2 }}
+          >
+            <TaskRow
+              task={task}
+              onStatusToggle={onStatusToggle}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onSaveAsNote={onSaveAsNote}
+              focused={focusedTaskId === (task.id || task._id)}
+            />
+          </Reorder.Item>
         ))}
-      </Box>
+      </Reorder.Group>
     </Box>
   );
 };

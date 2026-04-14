@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Box, Typography, TextField, Button, Chip, Divider, Paper, Stack, IconButton, ToggleButton, ToggleButtonGroup, FormControl, InputLabel, Select, MenuItem, Card, CardContent, Alert } from '@mui/material';
+import { Box, Typography, TextField, Button, Chip, Stack, IconButton, ToggleButton, ToggleButtonGroup, FormControl, InputLabel, Select, MenuItem, Alert } from '@mui/material';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import SearchIcon from '@mui/icons-material/Search';
@@ -10,6 +10,7 @@ import MedicationIcon from '@mui/icons-material/Medication';
 import LocalPharmacyIcon from '@mui/icons-material/LocalPharmacy';
 import WarningIcon from '@mui/icons-material/Warning';
 import medsService from '../services/medsService.js';
+import { Surface, SectionLabel, DisplayHeading, EmptyState } from '../components/primitives';
 
 const TIME_OPTIONS = ['morning', 'afternoon', 'evening', 'bedtime'];
 
@@ -379,26 +380,13 @@ export default function Medications() {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
-      {/* Header */}
-      <Box sx={{ mb: 4 }}>
-        <Typography
-          variant="h4"
-          component="h1"
-          sx={{
-            fontWeight: 700,
-            color: 'text.primary',
-            mb: 1,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1
-          }}
-        >
-          <LocalPharmacyIcon sx={{ fontSize: 32, color: 'primary.main' }} />
-          Medications & Supplements
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Manage your medications and track supply
+    <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 960, mx: 'auto' }}>
+      {/* Editorial header */}
+      <Box sx={{ mb: 3 }}>
+        <SectionLabel sx={{ mb: 0.75 }}>Tracking · Medications</SectionLabel>
+        <DisplayHeading size="page">Medications & Supplements</DisplayHeading>
+        <Typography sx={{ color: 'text.secondary', mt: 0.5, fontSize: '0.9375rem' }}>
+          Manage your medications, track supply, and export a list for your doctor.
         </Typography>
       </Box>
 
@@ -409,64 +397,64 @@ export default function Medications() {
         <Button size="small" variant="outlined" onClick={handleDownloadPdf}>Download PDF</Button>
       </Box>
 
-      {/* Search Card */}
-      <Card sx={{
-        borderRadius: 2,
-        boxShadow: 1,
-        border: 'none',
-        mb: 3
-      }}>
-        <CardContent sx={{ p: 3 }}>
-          <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-            <SearchIcon /> Search Medications
-          </Typography>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
-            <TextField
-              fullWidth
-              label="Search medication (brand or generic)"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-            />
-            <Button
-              variant="contained"
-              startIcon={<SearchIcon />}
-              onClick={handleSearch}
-              disabled={searching}
-              sx={{ minWidth: 120 }}
-            >
-              Search
-            </Button>
-          </Stack>
-          {results.length > 0 && (
-            <Stack spacing={1} sx={{ mt: 2, maxHeight: 220, overflowY: 'auto' }}>
-              {results.map((r, idx) => (
-                <Card
-                  key={`${r.rxcui}-${idx}`}
+      {/* Search Surface */}
+      <Surface sx={{ mb: 3 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 2 }}>
+          <SearchIcon sx={{ color: 'primary.main' }} />
+          <SectionLabel>Search Medications</SectionLabel>
+        </Box>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
+          <TextField
+            fullWidth
+            size="small"
+            label="Search medication (brand or generic)"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+          />
+          <Button
+            variant="contained"
+            startIcon={<SearchIcon />}
+            onClick={handleSearch}
+            disabled={searching}
+            sx={{ minWidth: 120, flexShrink: 0 }}
+          >
+            Search
+          </Button>
+        </Stack>
+        {results.length > 0 && (
+          <Stack spacing={0.5} sx={{ mt: 2, maxHeight: 220, overflowY: 'auto' }}>
+            {results.map((r, idx) => (
+              <Surface
+                key={`${r.rxcui}-${idx}`}
+                variant="inset"
+                interactive
+                onClick={() => selectCandidate(r)}
+                sx={{ py: 1.25, px: 1.5 }}
+              >
+                <Typography sx={{ fontWeight: 600, fontSize: '0.9375rem' }}>{r.name}</Typography>
+                <Typography
                   sx={{
-                    cursor: 'pointer',
-                    '&:hover': { bgcolor: 'action.hover' },
-                    transition: 'background-color 0.2s'
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: '0.6875rem',
+                    color: 'text.secondary',
+                    mt: 0.25,
                   }}
-                  onClick={() => selectCandidate(r)}
                 >
-                  <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-                    <Typography variant="body1" sx={{ fontWeight: 500 }}>{r.name}</Typography>
-                    <Typography variant="caption" color="text.secondary">RxCUI {r.rxcui}</Typography>
-                  </CardContent>
-                </Card>
-              ))}
-            </Stack>
-          )}
-        </CardContent>
-      </Card>
+                  RxCUI {r.rxcui}
+                </Typography>
+              </Surface>
+            ))}
+          </Stack>
+        )}
+      </Surface>
 
       {(selected || editingMed) && (
-        <Card ref={editorRef} sx={{ borderRadius: 2, boxShadow: 1, border: 'none', mb: 3 }}>
-          <CardContent sx={{ p: 3 }}>
-            <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-              <MedicationIcon /> {editingMed ? 'Edit Medication' : 'Add Medication'}
-            </Typography>
+        <Surface ref={editorRef} sx={{ mb: 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 2 }}>
+            <MedicationIcon sx={{ color: 'primary.main' }} />
+            <SectionLabel>{editingMed ? 'Edit Medication' : 'Add Medication'}</SectionLabel>
+          </Box>
           <Stack spacing={2}>
             <TextField inputRef={nameInputRef} label="Display name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
             {Array.isArray(details?.strengths) && details.strengths.length > 0 && (
@@ -555,19 +543,28 @@ export default function Medications() {
               <Button variant="outlined" onClick={cancelEdit}>Cancel</Button>
             </Stack>
           </Stack>
-          </CardContent>
-        </Card>
+        </Surface>
       )}
 
       {/* Medications List */}
-      <Card sx={{ borderRadius: 2, boxShadow: 1, border: 'none', mb: 3 }}>
-        <CardContent sx={{ p: 3 }}>
-          <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>My Medications</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Grouped by time of day</Typography>
+      {myMeds.length === 0 ? (
+        <Box sx={{ mb: 3 }}>
+          <EmptyState
+            icon={MedicationIcon}
+            title="No medications yet"
+            copy="Search for a medication above to add it to your list. You'll be able to group by time of day, track supply, and export the list for your doctor."
+          />
+        </Box>
+      ) : (
+      <Surface sx={{ mb: 3 }}>
+        <Box sx={{ mb: 2.5 }}>
+          <SectionLabel sx={{ mb: 0.75 }}>My Medications</SectionLabel>
+          <DisplayHeading size="card">Grouped by Time of Day</DisplayHeading>
+        </Box>
         <Stack spacing={2}>
           {TIME_OPTIONS.map(slot => (
             <Box key={slot}>
-              <Typography variant="body2" sx={{ fontWeight: 600, textTransform: 'capitalize' }}>{slot}</Typography>
+              <SectionLabel dot sx={{ mb: 1, textTransform: 'capitalize' }}>{slot}</SectionLabel>
               <Stack spacing={1} sx={{ mt: 1 }}>
                 {myMeds
                   .filter(m => (m.times_of_day || []).includes(slot))
@@ -584,78 +581,93 @@ export default function Medications() {
                     const isLowSupply = remaining != null && remaining < 7;
 
                     return (
-                      <Card
+                      <Surface
                         key={m._id}
+                        variant="inset"
                         sx={{
-                          border: isLowSupply ? '2px solid #ef4444' : '1px solid #e2e8f0',
-                          borderRadius: 2,
-                          boxShadow: 0,
-                          '&:hover': { boxShadow: 1 },
-                          transition: 'box-shadow 0.2s'
+                          py: 1.75,
+                          px: 2,
+                          border: (theme) => isLowSupply
+                            ? `2px solid ${theme.palette.error.main}`
+                            : 'none',
                         }}
                       >
-                        <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
-                            {/* Icon */}
-                            <MedicationIcon sx={{ color: typeInfo.color, fontSize: 28, mt: 0.5 }} />
+                        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+                          <MedicationIcon sx={{ color: typeInfo.color, fontSize: 26, mt: 0.25 }} />
 
-                            {/* Content */}
-                            <Box sx={{ flex: 1, minWidth: 0 }}>
-                              <Typography variant="body1" sx={{ fontWeight: 600, mb: 0.5 }}>
-                                {m.display_name}
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Typography sx={{ fontWeight: 600, fontSize: '0.9375rem', mb: 0.25 }}>
+                              {m.display_name}
+                            </Typography>
+
+                            {m.strength && (
+                              <Typography
+                                sx={{
+                                  fontFamily: "'JetBrains Mono', monospace",
+                                  fontSize: '0.75rem',
+                                  color: 'text.secondary',
+                                  mb: 0.75,
+                                }}
+                              >
+                                {m.strength}
                               </Typography>
+                            )}
 
-                              {m.strength && (
-                                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                                  {m.strength}
-                                </Typography>
-                              )}
+                            {(m.user_indications||[]).length > 0 && (
+                              <Typography
+                                sx={{
+                                  fontSize: '0.75rem',
+                                  color: 'text.secondary',
+                                  display: 'block',
+                                  mb: 1,
+                                }}
+                              >
+                                {(m.user_indications||[]).join(', ')}
+                              </Typography>
+                            )}
 
-                              {(m.user_indications||[]).length > 0 && (
-                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                                  {(m.user_indications||[]).join(', ')}
-                                </Typography>
-                              )}
-
-                              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+                            <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', alignItems: 'center' }}>
+                              <Chip
+                                size="small"
+                                label={typeInfo.label}
+                                sx={{
+                                  bgcolor: typeInfo.bg,
+                                  color: typeInfo.color,
+                                  fontWeight: 700,
+                                  fontSize: '0.625rem',
+                                  letterSpacing: '0.06em',
+                                  height: 20,
+                                }}
+                              />
+                              {remaining != null && (
                                 <Chip
                                   size="small"
-                                  label={typeInfo.label}
+                                  icon={isLowSupply ? <WarningIcon sx={{ fontSize: 14 }} /> : undefined}
+                                  label={`${remaining} days left`}
+                                  color={remaining > 30 ? 'success' : remaining >= 7 ? 'warning' : 'error'}
+                                  variant="outlined"
                                   sx={{
-                                    bgcolor: typeInfo.bg,
-                                    color: typeInfo.color,
+                                    fontFamily: "'JetBrains Mono', monospace",
+                                    fontVariantNumeric: 'tabular-nums',
                                     fontWeight: 600,
-                                    fontSize: '0.7rem'
+                                    fontSize: '0.6875rem',
+                                    height: 20,
                                   }}
                                 />
-                                {remaining != null && (
-                                  <Chip
-                                    size="small"
-                                    icon={isLowSupply ? <WarningIcon sx={{ fontSize: 16 }} /> : undefined}
-                                    label={`${remaining} days left`}
-                                    sx={{
-                                      bgcolor: remaining > 30 ? '#dcfce7' : remaining >= 7 ? '#fef3c7' : '#fee2e2',
-                                      color: remaining > 30 ? '#166534' : remaining >= 7 ? '#92400e' : '#991b1b',
-                                      fontWeight: 600,
-                                      fontSize: '0.7rem'
-                                    }}
-                                  />
-                                )}
-                              </Box>
+                              )}
                             </Box>
-
-                            {/* Actions */}
-                            <Stack direction="row" spacing={0.5}>
-                              <IconButton size="small" color="primary" onClick={() => startEdit(m)}>
-                                <EditIcon fontSize="small" />
-                              </IconButton>
-                              <IconButton size="small" color="error" onClick={() => removeMed(m)}>
-                                <DeleteIcon fontSize="small" />
-                              </IconButton>
-                            </Stack>
                           </Box>
-                        </CardContent>
-                      </Card>
+
+                          <Stack direction="row" spacing={0.5}>
+                            <IconButton size="small" color="primary" onClick={() => startEdit(m)}>
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                            <IconButton size="small" color="error" onClick={() => removeMed(m)}>
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Stack>
+                        </Box>
+                      </Surface>
                     );
                   })}
                 {myMeds.filter(m => (m.times_of_day || []).includes(slot)).length === 0 && (
@@ -665,9 +677,8 @@ export default function Medications() {
             </Box>
           ))}
         </Stack>
-        </CardContent>
-      </Card>
-
+      </Surface>
+      )}
 
     </Box>
   );

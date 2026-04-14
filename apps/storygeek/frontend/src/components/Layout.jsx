@@ -1,44 +1,24 @@
 import React, { useState } from 'react';
 import {
-  AppBar,
-  Box,
-  Drawer,
-  IconButton,
-  List,
-  ListItem,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
-  Toolbar,
-  Typography,
-  useTheme,
-  useMediaQuery,
-  Container,
-  Divider,
-  Menu,
-  MenuItem,
-  Avatar,
+  AppBar, Box, Drawer, IconButton, List, ListItem, ListItemButton,
+  ListItemIcon, ListItemText, Toolbar, Typography, useTheme,
+  useMediaQuery, Container, Divider, Menu, MenuItem, Avatar, alpha,
 } from '@mui/material';
 import {
-  Menu as MenuIcon,
-  Book as BookIcon,
-  Add as AddIcon,
-  People as PeopleIcon,
-  Settings as SettingsIcon,
-  DarkMode as DarkModeIcon,
-  LightMode as LightModeIcon,
-  AutoStories as AutoStoriesIcon,
-  Logout as LogoutIcon,
+  Menu as MenuIcon, Book as BookIcon, Add as AddIcon,
+  People as PeopleIcon, Settings as SettingsIcon,
+  DarkMode as DarkModeIcon, LightMode as LightModeIcon,
+  AutoStories as AutoStoriesIcon, Logout as LogoutIcon,
   AccountCircle as AccountIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import useSharedAuthStore from '../store/sharedAuthStore';
 
-const drawerWidth = 220;
+const drawerWidth = 240;
 
 const baseMenuItems = [
   { text: 'My Stories', icon: <BookIcon />, path: '/' },
-  { text: 'Create Story', icon: <AddIcon />, path: '/create' },
+  { text: 'Begin a Tale', icon: <AddIcon />, path: '/create' },
   { text: 'Settings', icon: <SettingsIcon />, path: '/settings' },
 ];
 
@@ -52,217 +32,235 @@ function Layout({ children, onThemeToggle, isDarkMode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useSharedAuthStore();
-
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
 
-  // Check if we're in a story context (play or characters route)
   const isInStoryContext = location.pathname.startsWith('/play/') || location.pathname.startsWith('/characters/');
-
-  // Combine menu items based on context
   const menuItems = isInStoryContext ? [...baseMenuItems, ...storyMenuItems] : baseMenuItems;
 
-  const handleDrawerToggle = () => {
-    setMobileOpen(!mobileOpen);
-  };
-
-  const handleMenuOpen = (event) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleMenuClose = () => {
-    setAnchorEl(null);
+  const handleNavigation = (path) => {
+    if (path === '/characters' && isInStoryContext) {
+      const storyId = location.pathname.match(/\/(play|characters)\/([^/]+)/)?.[2];
+      if (storyId) { navigate(`/characters/${storyId}`); } else { navigate(path); }
+    } else {
+      navigate(path);
+    }
+    if (isMobile) setMobileOpen(false);
   };
 
   const handleLogout = () => {
     logout();
     navigate('/login');
-    handleMenuClose();
+    setAnchorEl(null);
   };
 
-  const handleNavigation = (path) => {
-    // If navigating to characters from a story context, include the storyId
-    if (path === '/characters' && isInStoryContext) {
-      const storyId = location.pathname.match(/\/(play|characters)\/([^\/]+)/)?.[2];
-      if (storyId) {
-        navigate(`/characters/${storyId}`);
-      } else {
-        navigate(path);
-      }
-    } else {
-      navigate(path);
-    }
-
-    if (isMobile) {
-      setMobileOpen(false);
-    }
-  };
+  const gold = theme.palette.codex?.gold || '#c9a84c';
 
   const drawer = (
-    <Box>
-      <List>
-        {menuItems.map((item) => (
-          <ListItem key={item.text} disablePadding>
-            <ListItemButton
-              selected={location.pathname === item.path}
-              onClick={() => handleNavigation(item.path)}
-              sx={{
-                '&.Mui-selected': {
-                  backgroundColor: 'primary.main',
-                  color: 'primary.contrastText',
-                  '&:hover': {
-                    backgroundColor: 'primary.dark',
+    <Box sx={{ pt: 2.5, px: 1 }}>
+      {/* Drawer Header */}
+      <Box sx={{ px: 2, mb: 3, textAlign: 'center' }}>
+        <Typography variant="overline" sx={{
+          color: alpha(gold, 0.6),
+          display: 'block',
+          mb: 0.5,
+        }}>
+          Chapters
+        </Typography>
+        <Divider sx={{ borderColor: alpha(gold, 0.15) }} />
+      </Box>
+
+      <List sx={{ px: 0.5 }}>
+        {menuItems.map((item, i) => {
+          const isActive = location.pathname === item.path;
+          return (
+            <ListItem key={item.text} disablePadding sx={{ mb: 0.5 }}>
+              <ListItemButton
+                selected={isActive}
+                onClick={() => handleNavigation(item.path)}
+                sx={{
+                  borderRadius: 1.5,
+                  py: 1.25,
+                  transition: 'all 0.2s ease',
+                  '&.Mui-selected': {
+                    backgroundColor: alpha(gold, 0.12),
+                    borderLeft: `3px solid ${gold}`,
+                    '&:hover': { backgroundColor: alpha(gold, 0.18) },
                   },
-                },
-              }}
-            >
-              <ListItemIcon sx={{ color: 'inherit' }}>
-                {item.icon}
-              </ListItemIcon>
-              <ListItemText primary={item.text} />
-            </ListItemButton>
-          </ListItem>
-        ))}
+                  '&:hover': {
+                    backgroundColor: alpha(gold, 0.06),
+                  },
+                }}
+              >
+                <ListItemIcon sx={{
+                  color: isActive ? gold : 'text.secondary',
+                  minWidth: 38,
+                  transition: 'color 0.2s',
+                }}>
+                  {item.icon}
+                </ListItemIcon>
+                <ListItemText
+                  primary={item.text}
+                  primaryTypographyProps={{
+                    fontFamily: '"Cinzel", serif',
+                    fontSize: '0.8rem',
+                    fontWeight: isActive ? 600 : 400,
+                    letterSpacing: '0.03em',
+                    color: isActive ? gold : 'text.primary',
+                  }}
+                />
+              </ListItemButton>
+            </ListItem>
+          );
+        })}
       </List>
     </Box>
   );
 
   return (
     <Box sx={{ display: 'flex' }}>
-      {/* App Bar */}
+      {/* Header */}
       <AppBar
         position="fixed"
         sx={{
-          width: '100%',
-          backgroundColor: 'primary.main',
-          color: 'primary.contrastText',
-          boxShadow: '0px 2px 8px rgba(0,0,0,0.1)',
-          borderBottom: '1px solid rgba(0,0,0,0.1)',
+          background: theme.palette.mode === 'dark'
+            ? `linear-gradient(90deg, ${alpha('#1a1614', 0.95)} 0%, ${alpha('#2a2420', 0.95)} 100%)`
+            : `linear-gradient(90deg, ${alpha('#fff8ef', 0.95)} 0%, ${alpha('#f4ece1', 0.95)} 100%)`,
+          color: 'text.primary',
           zIndex: theme.zIndex.drawer + 1,
         }}
       >
-        <Toolbar sx={{ minHeight: isMobile ? '56px !important' : '60px !important' }}>
+        <Toolbar sx={{ minHeight: isMobile ? '56px !important' : '64px !important' }}>
           <IconButton
             color="inherit"
-            aria-label="open drawer"
             edge="start"
-            onClick={handleDrawerToggle}
-            sx={{ mr: 2 }}
+            onClick={() => setMobileOpen(!mobileOpen)}
+            sx={{
+              mr: 2,
+              color: 'text.secondary',
+              '&:hover': { color: gold, backgroundColor: alpha(gold, 0.08) },
+            }}
           >
             <MenuIcon />
           </IconButton>
 
-          {/* Logo/Brand */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexGrow: 1 }}>
-            <AutoStoriesIcon sx={{ fontSize: 20 }} />
-            <Typography variant="h6" noWrap component="div" sx={{
-              fontWeight: 800,
-              fontSize: '1.25rem',
-              ml: 0.5
-            }}>
-              StoryGeek
-            </Typography>
-            <Typography variant="caption" sx={{
-              opacity: 0.9,
-              fontFamily: '"Roboto Mono", monospace',
-              fontSize: '1rem',
+          {/* Brand */}
+          <Box sx={{
+            display: 'flex', alignItems: 'baseline', gap: 0.75, flexGrow: 1,
+            cursor: 'pointer',
+          }}
+            onClick={() => navigate('/')}
+          >
+            <AutoStoriesIcon sx={{
+              fontSize: 22,
+              color: gold,
+              alignSelf: 'center',
+              filter: `drop-shadow(0 0 4px ${alpha(gold, 0.3)})`,
+            }} />
+            <Typography sx={{
+              fontFamily: '"Cinzel Decorative", serif',
               fontWeight: 700,
-              ml: 0.5
+              fontSize: '1.3rem',
+              letterSpacing: '0.06em',
+              color: 'text.primary',
             }}>
-              &lt;/&gt;
+              Story
+            </Typography>
+            <Typography sx={{
+              fontFamily: '"Cinzel Decorative", serif',
+              fontWeight: 700,
+              fontSize: '1.3rem',
+              letterSpacing: '0.06em',
+              color: gold,
+            }}>
+              Geek
             </Typography>
           </Box>
 
-          {/* Right side actions */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            {/* Theme Toggle */}
+          {/* Right actions */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
             <IconButton
               onClick={onThemeToggle}
-              color="inherit"
               sx={{
-                backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                '&:hover': {
-                  backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                }
+                color: 'text.secondary',
+                '&:hover': { color: gold, backgroundColor: alpha(gold, 0.08) },
               }}
             >
               {isDarkMode ? <LightModeIcon /> : <DarkModeIcon />}
             </IconButton>
 
-            {/* User Menu */}
             <IconButton
-              onClick={handleMenuOpen}
-              color="inherit"
+              onClick={(e) => setAnchorEl(e.currentTarget)}
+              sx={{ '&:hover': { backgroundColor: alpha(gold, 0.08) } }}
             >
-              <Avatar sx={{ width: 32, height: 32, bgcolor: 'rgba(255, 255, 255, 0.2)' }}>
-                <AccountIcon />
+              <Avatar sx={{
+                width: 30, height: 30,
+                bgcolor: alpha(gold, 0.15),
+                color: gold,
+                fontSize: '0.8rem',
+                fontFamily: '"Cinzel", serif',
+                fontWeight: 700,
+              }}>
+                {user?.username?.[0]?.toUpperCase() || 'G'}
               </Avatar>
             </IconButton>
 
-            {/* User Menu */}
             <Menu
               anchorEl={anchorEl}
               open={Boolean(anchorEl)}
-              onClose={handleMenuClose}
+              onClose={() => setAnchorEl(null)}
               PaperProps={{
                 sx: {
-                  backgroundColor: 'background.paper',
-                  border: '1px solid',
-                  borderColor: 'divider',
                   mt: 1,
+                  border: `1px solid ${alpha(gold, 0.15)}`,
+                  minWidth: 180,
                 },
               }}
             >
-              <MenuItem onClick={handleMenuClose}>
-                <AccountIcon sx={{ mr: 1 }} />
-                {user?.username || 'User'}
+              <MenuItem disabled sx={{ opacity: '0.7 !important' }}>
+                <AccountIcon sx={{ mr: 1, fontSize: 18 }} />
+                <Typography variant="body2">{user?.username || 'Adventurer'}</Typography>
               </MenuItem>
-              <Divider />
+              <Divider sx={{ borderColor: alpha(gold, 0.1) }} />
               <MenuItem onClick={handleLogout}>
-                <LogoutIcon sx={{ mr: 1 }} />
-                Logout
+                <LogoutIcon sx={{ mr: 1, fontSize: 18 }} />
+                <Typography variant="body2">Depart</Typography>
               </MenuItem>
             </Menu>
           </Box>
         </Toolbar>
       </AppBar>
 
-      {/* Navigation Drawer - Temporary overlay */}
+      {/* Drawer */}
       <Drawer
         variant="temporary"
         open={mobileOpen}
-        onClose={handleDrawerToggle}
-        ModalProps={{
-          keepMounted: true, // Better open performance on mobile.
-        }}
+        onClose={() => setMobileOpen(false)}
+        ModalProps={{ keepMounted: true }}
         sx={{
           '& .MuiDrawer-paper': {
             boxSizing: 'border-box',
             width: drawerWidth,
-            backgroundColor: 'background.paper',
-            borderRight: '1px solid',
-            borderColor: 'divider',
-            mt: '60px', // Position below header
-            height: 'calc(100vh - 60px)', // Full height minus header
+            mt: isMobile ? '56px' : '64px',
+            height: isMobile ? 'calc(100vh - 56px)' : 'calc(100vh - 64px)',
           },
         }}
       >
         {drawer}
       </Drawer>
 
-      {/* Main content */}
+      {/* Main Content */}
       <Box
         component="main"
         sx={{
           flexGrow: 1,
-          p: { xs: 1.5, md: 3 },
+          p: { xs: 2, md: 3 },
           width: '100%',
-          mt: isMobile ? '56px' : '60px', // AppBar height
-          backgroundColor: 'background.default',
-          minHeight: 'calc(100vh - 60px)',
+          mt: isMobile ? '56px' : '64px',
+          minHeight: isMobile ? 'calc(100vh - 56px)' : 'calc(100vh - 64px)',
         }}
       >
-        <Container maxWidth={isMobile ? 'md' : 'xl'}>
+        <Container maxWidth="xl">
           {children}
         </Container>
       </Box>

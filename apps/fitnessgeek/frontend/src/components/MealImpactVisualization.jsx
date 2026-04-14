@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { apiService } from '../services/apiService';
+import { influxService } from '../services/influxService';
 import {
   Box,
   Card,
@@ -224,7 +225,6 @@ export default function MealImpactVisualization({ date }) {
   const theme = useTheme();
   const [selectedMetric, setSelectedMetric] = useState('heartRate');
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [intradayData, setIntradayData] = useState(null);
   const [meals, setMeals] = useState([]);
   const [mealImpacts, setMealImpacts] = useState([]);
@@ -235,16 +235,20 @@ export default function MealImpactVisualization({ date }) {
       if (!date) return;
 
       setLoading(true);
-      setError(null);
 
       try {
-        // Fetch intraday health data and meals in parallel
+        // Fetch intraday health data (direct REST) and meals (GraphQL) in parallel
         const [intradayResponse, mealsResponse] = await Promise.all([
-          apiService.get(`/influx/intraday/${date}/${date}`),
+          influxService.getIntraday(date, date),
           apiService.get(`/logs?date=${date}`)
         ]);
 
-        setIntradayData(intradayResponse);
+        // Backend returns { available: false, reason, message } when InfluxDB is
+        // unavailable or has no data — treat as no intraday data, not an error.
+        if (intradayResponse && intradayResponse.available !== false) {
+          setIntradayData(intradayResponse);
+        }
+        // (if available===false we leave intradayData null — chart just won't render)
 
         // Transform meals to have time property (response format: { success, data: [...] })
         const logs = mealsResponse.data || mealsResponse.entries || [];
@@ -261,8 +265,9 @@ export default function MealImpactVisualization({ date }) {
         });
         setMeals(mealsWithTime);
       } catch (err) {
-        console.error('Error fetching meal impact data:', err);
-        setError(err.response?.data?.error || err.message || 'Failed to load data');
+        // Defensive: backend should no longer 500, but handle it quietly.
+        console.warn('Meal impact data unavailable:', err.message);
+        // Don't set error — the meals section may still work; leave both null.
       } finally {
         setLoading(false);
       }
@@ -298,10 +303,6 @@ export default function MealImpactVisualization({ date }) {
         <CircularProgress />
       </Box>
     );
-  }
-
-  if (error) {
-    return <Alert severity="error">{error}</Alert>;
   }
 
   if (!meals || meals.length === 0) {

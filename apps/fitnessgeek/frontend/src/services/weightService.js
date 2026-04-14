@@ -53,17 +53,45 @@ export const weightService = {
   },
 
   /**
-   * Get weight statistics for the current user
+   * Get weight statistics for the current user.
+   * Computed client-side from weight logs — no dedicated stats endpoint exists.
+   * Returns { data: { totalChange, latestWeight, referenceWeight, periodDays } }
    */
-  async getWeightStats(params = {}) {
-    const queryParams = new URLSearchParams();
+  async getWeightStats({ periodDays = 30 } = {}) {
+    const response = await apiService.get(BASE_URL);
+    const logs = response?.data;
+    if (!Array.isArray(logs) || logs.length === 0) {
+      return { success: true, data: { totalChange: null, latestWeight: null } };
+    }
 
-    if (params.startDate) queryParams.append('startDate', params.startDate);
-    if (params.endDate) queryParams.append('endDate', params.endDate);
+    // Sort newest first
+    const sorted = [...logs].sort(
+      (a, b) => new Date(b.log_date) - new Date(a.log_date)
+    );
 
-    const url = queryParams.toString() ? `${BASE_URL}/stats?${queryParams}` : `${BASE_URL}/stats`;
-    const response = await apiService.get(url);
-    return response;
+    const latest = sorted[0];
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - periodDays);
+
+    // Find the oldest entry within the period window, fall back to oldest overall
+    const withinPeriod = sorted.filter(l => new Date(l.log_date) >= cutoff);
+    const reference = withinPeriod.length > 1
+      ? withinPeriod[withinPeriod.length - 1]  // oldest within window
+      : sorted[sorted.length - 1];              // oldest available
+
+    const totalChange = parseFloat(
+      (latest.weight_value - reference.weight_value).toFixed(1)
+    );
+
+    return {
+      success: true,
+      data: {
+        totalChange,
+        latestWeight: latest.weight_value,
+        referenceWeight: reference.weight_value,
+        periodDays: withinPeriod.length > 1 ? periodDays : null,
+      },
+    };
   },
 
   /**

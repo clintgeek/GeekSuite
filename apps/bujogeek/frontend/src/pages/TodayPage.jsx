@@ -10,12 +10,19 @@ import CompletedSection from '../components/today/CompletedSection';
 import InlineQuickAdd from '../components/today/InlineQuickAdd';
 import SkeletonLoader from '../components/shared/SkeletonLoader';
 import TaskEditor from '../components/tasks/TaskEditor';
+import useKeyboardNav from '../hooks/useKeyboardNav';
+import useGlobalShortcuts from '../hooks/useGlobalShortcuts';
 import { CREATE_NOTE } from '../graphql/notegeekMutations';
 import { getTaskAge } from '../utils/taskAging';
 
 const TodayPage = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [editingTask, setEditingTask] = useState(null);
+  // Track whether fetchTasks has resolved for the current date.
+  // Separate from context loading state because: (a) context starts as 'IDLE' string
+  // not matching LoadingState enum, and (b) other views (Review, Plan) mutate the
+  // shared tasks array, so Today renders stale foreign tasks until its own fetch completes.
+  const [todayLoaded, setTodayLoaded] = useState(false);
   const toast = useToast();
   const [createNote] = useMutation(CREATE_NOTE);
   const {
@@ -25,11 +32,13 @@ const TodayPage = () => {
     createTask,
     updateTaskStatus,
     deleteTask,
+    saveDailyOrder,
     LoadingState,
   } = useTaskContext();
 
   useEffect(() => {
-    fetchTasks('daily', currentDate);
+    setTodayLoaded(false);
+    fetchTasks('daily', currentDate).finally(() => setTodayLoaded(true));
   }, [currentDate, fetchTasks]);
 
   const handleDateChange = useCallback((newDate) => {
@@ -106,13 +115,54 @@ const TodayPage = () => {
     return { overdueTasks: overdue, activeTasks: active, completedTasks: completed };
   }, [tasks]);
 
+  // ─── Drag-and-drop reorder for Today's active tasks ───
+  const [orderedActiveTasks, setOrderedActiveTasks] = useState(null);
+
+  // Reset custom order when tasks change from server (new task added, status toggled, etc.)
+  useEffect(() => {
+    setOrderedActiveTasks(null);
+  }, [tasks]);
+
+  // The display list: custom order if user has reordered, otherwise the default
+  const displayActiveTasks = orderedActiveTasks || activeTasks;
+
+  const handleReorder = useCallback(
+    (reordered) => {
+      setOrderedActiveTasks(reordered);
+      // Persist the order to the backend
+      const dateKey = currentDate.toISOString().split('T')[0];
+      const ids = reordered.map((t) => t.id || t._id);
+      saveDailyOrder(dateKey, ids).catch((err) =>
+        console.error('Failed to save task order:', err)
+      );
+    },
+    [currentDate, saveDailyOrder]
+  );
+
   const stats = useMemo(() => ({
     total: Array.isArray(tasks) ? tasks.length : 0,
     overdue: overdueTasks.length,
     completed: completedTasks.length,
   }), [tasks, overdueTasks, completedTasks]);
 
-  const isLoading = loading === LoadingState.FETCHING;
+  const isLoading = !todayLoaded || loading === LoadingState.FETCHING;
+
+  // ─── Keyboard navigation ───────────────────────────���─────
+  // Flat list of navigable tasks: overdue then active (completed is collapsed)
+  const navigableTasks = useMemo(
+    () => [...overdueTasks, ...displayActiveTasks],
+    [overdueTasks, displayActiveTasks]
+  );
+
+  const { focusedTaskId, clearFocus } = useKeyboardNav({
+    tasks: navigableTasks,
+    onToggle: handleStatusToggle,
+    onEdit: handleEdit,
+    onDelete: handleDelete,
+    enabled: !isLoading && !editingTask,
+  });
+
+  useGlobalShortcuts();
 
   return (
     <Box
@@ -129,32 +179,35 @@ const TodayPage = () => {
         stats={stats}
       />
 
+      {/* Writing surface — always visible, never gated on loading */}
+      <InlineQuickAdd
+        onAdd={handleQuickAdd}
+        autoFocus={!isLoading && displayActiveTasks.length === 0 && overdueTasks.length === 0}
+      />
+
       {isLoading ? (
-        <Box sx={{ mt: 3 }}>
+        <Box sx={{ mt: 1 }}>
           <SkeletonLoader rows={6} />
         </Box>
       ) : (
         <>
-          {/* Writing surface — always first. This is the start of the day. */}
-          <InlineQuickAdd
-            onAdd={handleQuickAdd}
-            autoFocus={activeTasks.length === 0 && overdueTasks.length === 0}
-          />
-
           <OverdueSection
             tasks={overdueTasks}
             onStatusToggle={handleStatusToggle}
             onEdit={handleEdit}
             onDelete={handleDelete}
             onSaveAsNote={handleSaveAsNote}
+            focusedTaskId={focusedTaskId}
           />
 
           <TodaySection
-            tasks={activeTasks}
+            tasks={displayActiveTasks}
             onStatusToggle={handleStatusToggle}
             onEdit={handleEdit}
             onDelete={handleDelete}
             onSaveAsNote={handleSaveAsNote}
+            focusedTaskId={focusedTaskId}
+            onReorder={handleReorder}
           />
 
           <CompletedSection

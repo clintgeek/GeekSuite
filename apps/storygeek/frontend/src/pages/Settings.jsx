@@ -1,143 +1,104 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Box, Typography, Card, CardContent, Grid, FormControl, InputLabel, Select, MenuItem, Chip, Alert, CircularProgress, Button } from '@mui/material';
-import useSharedAuthStore from '../store/sharedAuthStore';
+import {
+  Box, Typography, Card, CardContent, Grid, FormControl, InputLabel,
+  Select, MenuItem, Chip, Alert, CircularProgress, alpha,
+} from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import useAISettingsStore from '../store/aiSettingsStore';
+import axios from 'axios';
 
 const BASE_API = 'https://basegeek.clintgeek.com/api';
 
 function Settings() {
-  const { token } = useSharedAuthStore();
+  const theme = useTheme();
+  const gold = theme.palette.codex?.gold || '#c9a84c';
   const { selectedProvider, selectedModelId, setSelection } = useAISettingsStore();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [providers, setProviders] = useState([]);
   const [modelsByProvider, setModelsByProvider] = useState({});
 
-  const headers = useMemo(() => ({
-    'Content-Type': 'application/json',
-    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-  }), [token]);
+  const headers = useMemo(() => {
+    const token = localStorage.getItem('geek_token');
+    return { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) };
+  }, []);
 
   useEffect(() => {
     const load = async () => {
       try {
-        setLoading(true);
-        setError('');
-        // Load director models (includes free-tier flags, pricing) and providers
+        setLoading(true); setError('');
         const [providersRes, directorRes] = await Promise.all([
-          fetch(`${BASE_API}/ai/providers`, { headers }),
-          fetch(`${BASE_API}/ai/director/models`, { headers })
+          axios.get(`${BASE_API}/ai/providers`, { headers }),
+          axios.get(`${BASE_API}/ai/director/models`, { headers })
         ]);
-
-        if (!providersRes.ok) throw new Error('Failed to load providers');
-        if (!directorRes.ok) throw new Error('Failed to load models');
-
-        const providersJson = await providersRes.json();
-        const directorJson = await directorRes.json();
-
-        const enabledProviders = providersJson?.data?.providers || [];
+        const enabledProviders = providersRes.data?.data?.providers || [];
         setProviders(enabledProviders);
-
-        const modelInfo = directorJson?.data?.providers || {};
+        const modelInfo = directorRes.data?.data?.providers || {};
         const mapped = {};
         for (const [prov, info] of Object.entries(modelInfo)) {
-          mapped[prov] = (info.models || []).map(m => ({
-            id: m.id,
-            name: m.name,
-            isFree: !!m.freeTier?.isFree
-          }));
+          mapped[prov] = (info.models || []).map(m => ({ id: m.id, name: m.name, isFree: !!m.freeTier?.isFree }));
         }
         setModelsByProvider(mapped);
-
-        // Initialize selection if empty (prefer Groq llama3-70b-8192)
         if (!selectedProvider && enabledProviders.length > 0) {
-          const groqAvailable = enabledProviders.some(p => p.name === 'groq');
-          if (groqAvailable && mapped['groq'] && mapped['groq'].length > 0) {
-            const preferred = mapped['groq'].find(m => m.id === 'llama3-70b-8192');
-            if (preferred) {
-              setSelection('groq', preferred.id);
-            } else {
-              setSelection('groq', mapped['groq'][0].id);
-            }
+          const geminiAvailable = enabledProviders.some(p => p.name === 'gemini');
+          if (geminiAvailable && mapped['gemini']?.length > 0) {
+            const preferred = mapped['gemini'].find(m => m.id === 'gemini-1.5-flash-latest');
+            setSelection('gemini', preferred ? preferred.id : mapped['gemini'][0].id);
           } else {
             const provKey = enabledProviders[0].name;
-            const firstModel = mapped[provKey]?.[0]?.id || null;
-            setSelection(provKey, firstModel);
+            setSelection(provKey, mapped[provKey]?.[0]?.id || null);
           }
         }
-      } catch (e) {
-        setError(e.message || 'Failed to load AI settings');
-      } finally {
-        setLoading(false);
-      }
+      } catch (e) { setError(e.message || 'Failed to load AI settings'); }
+      finally { setLoading(false); }
     };
     load();
   }, [headers, selectedProvider, setSelection]);
 
   const currentModels = useMemo(() => modelsByProvider[selectedProvider] || [], [modelsByProvider, selectedProvider]);
 
-  const handleProviderChange = (e) => {
-    const prov = e.target.value;
-    const firstModel = (modelsByProvider[prov] && modelsByProvider[prov][0]?.id) || null;
-    setSelection(prov, firstModel);
-  };
-
-  const handleModelChange = (e) => setSelection(selectedProvider, e.target.value);
-
   return (
     <Box>
-      <Typography variant="h4" gutterBottom>
-        Settings
-      </Typography>
+      <Box sx={{ mb: 4, mt: 1 }}>
+        <Typography variant="overline" sx={{ color: alpha(gold, 0.6) }}>Configuration</Typography>
+        <Typography variant="h2" sx={{ mt: 0.5 }}>Settings</Typography>
+      </Box>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>
-      )}
+      {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
 
       <Card>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>
-            AI Model
+        <CardContent sx={{ p: 3 }}>
+          <Typography variant="h5" sx={{ mb: 2.5 }}>AI Oracle</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            Choose which intelligence powers your Game Master. Free-tier models are marked.
           </Typography>
 
           {loading ? (
-            <Box sx={{ py: 2 }}>
-              <CircularProgress size={20} />
-            </Box>
+            <Box sx={{ py: 3, textAlign: 'center' }}><CircularProgress size={24} sx={{ color: gold }} /></Box>
           ) : (
-            <Grid container spacing={2}>
+            <Grid container spacing={2.5}>
               <Grid item xs={12} md={6}>
                 <FormControl fullWidth>
-                  <InputLabel id="provider-label">Provider</InputLabel>
-                  <Select
-                    labelId="provider-label"
-                    label="Provider"
-                    value={selectedProvider || ''}
-                    onChange={handleProviderChange}
-                  >
-                    {providers.map((p) => (
-                      <MenuItem key={p.name} value={p.name}>
-                        {p.displayName || p.name}
-                      </MenuItem>
-                    ))}
+                  <InputLabel>Provider</InputLabel>
+                  <Select label="Provider" value={selectedProvider || ''}
+                    onChange={(e) => {
+                      const prov = e.target.value;
+                      setSelection(prov, (modelsByProvider[prov]?.[0]?.id) || null);
+                    }}>
+                    {providers.map(p => <MenuItem key={p.name} value={p.name}>{p.displayName || p.name}</MenuItem>)}
                   </Select>
                 </FormControl>
               </Grid>
-
               <Grid item xs={12} md={6}>
                 <FormControl fullWidth disabled={!selectedProvider}>
-                  <InputLabel id="model-label">Model</InputLabel>
-                  <Select
-                    labelId="model-label"
-                    label="Model"
-                    value={selectedModelId || ''}
-                    onChange={handleModelChange}
-                  >
-                    {currentModels.map((m) => (
+                  <InputLabel>Model</InputLabel>
+                  <Select label="Model" value={selectedModelId || ''}
+                    onChange={(e) => setSelection(selectedProvider, e.target.value)}>
+                    {currentModels.map(m => (
                       <MenuItem key={m.id} value={m.id}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <span>{m.name || m.id}</span>
-                          {m.isFree && <Chip label="Free" size="small" color="success" />}
+                          {m.isFree && <Chip label="Free" size="small" color="success" sx={{ height: 20, fontSize: '0.6rem' }} />}
                         </Box>
                       </MenuItem>
                     ))}

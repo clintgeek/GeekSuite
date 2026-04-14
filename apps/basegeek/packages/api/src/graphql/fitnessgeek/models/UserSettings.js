@@ -155,7 +155,26 @@ const userSettingsSchema = new mongoose.Schema({
     bmr: { type: Number },
     tdee: { type: Number },
     timeline_weeks: { type: Number },
-    estimated_end_date: { type: Date }
+    estimated_end_date: { type: Date },
+    mode: {
+      type: String,
+      enum: ['standard', 'keto'],
+      default: 'standard'
+    },
+    keto: {
+      net_carb_limit_g: { type: Number, default: 20 },
+      track_net_carbs: { type: Boolean, default: true },
+      macro_split: {
+        preset: {
+          type: String,
+          enum: ['classic', 'high_protein', 'lazy'],
+          default: 'classic'
+        },
+        fat_pct:     { type: Number, default: 70 },
+        protein_pct: { type: Number, default: 25 },
+        carb_pct:    { type: Number, default: 5  }
+      }
+    }
   },
   // Weight goal
   weight_goal: {

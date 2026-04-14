@@ -3,16 +3,15 @@ import {
   Box,
   Alert,
   CircularProgress,
-  Card,
-  CardContent,
-  Typography,
   TextField,
   Button,
   Stack,
   Collapse,
-  IconButton,
-  Tooltip
+  Tooltip,
+  Typography,
+  LinearProgress
 } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import {
   ContentCopy as CopyIcon,
   People as PeopleIcon
@@ -33,8 +32,11 @@ import { useFoodLog } from '../hooks/useFoodLog.js';
 import { fitnessGeekService } from '../services/fitnessGeekService.js';
 import { settingsService } from '../services/settingsService.js';
 import { goalsService } from '../services/goalsService.js';
+import { Surface, SectionLabel, DisplayHeading, StatNumber } from '../components/primitives';
+import { netCarbs as calcNetCarbs, ketoStatus } from '../utils/ketoMath.js';
 
 const FoodLog = () => {
+  const theme = useTheme();
   const [selectedDate, setSelectedDate] = useState(() => fitnessGeekService.formatDate(new Date()));
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [selectedMealType, setSelectedMealType] = useState('snack');
@@ -46,6 +48,11 @@ const FoodLog = () => {
   const [savingMeal, setSavingMeal] = useState(false);
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
 
+  // Keto mode state (Task D2)
+  const [mode, setMode] = useState('standard');
+  const [netCarbLimit, setNetCarbLimit] = useState(20);
+  const [trackNetCarbs, setTrackNetCarbs] = useState(true);
+
   // New dialog states
   const [showCopyDialog, setShowCopyDialog] = useState(false);
   const [copyPrefill, setCopyPrefill] = useState(null);
@@ -53,6 +60,7 @@ const FoodLog = () => {
 
   // Use custom hook for food log operations
   const {
+    logs,
     loading,
     successMessage,
     errorMessage,
@@ -64,12 +72,35 @@ const FoodLog = () => {
     updateFoodLog,
     deleteFoodLog,
     saveMeal,
+    showError,
+    showSuccess,
     clearSuccessMessage,
     clearErrorMessage
   } = useFoodLog(selectedDate);
 
   // Calorie goal adjustment state
   const todayCalorieGoal = useMemo(() => Math.round(nutritionSummary?.calorieGoal || 0), [nutritionSummary]);
+
+  // Keto: compute day-level net carb totals (Tasks D4, D5)
+  const ketoTotals = useMemo(() => {
+    let totalNetCarbs = 0;
+    let anyMissingFiber = false;
+    for (const log of logs) {
+      const food_item = log.food_item || log.food_item_id;
+      if (!food_item) continue;
+      const nutrition = (log.nutrition && Object.keys(log.nutrition || {}).length > 0)
+        ? log.nutrition
+        : food_item.nutrition;
+      if (!nutrition) continue;
+      const servingsCount = typeof log.servings === 'string'
+        ? parseFloat(log.servings) || 1
+        : (log.servings || 1);
+      const { netCarbs: nc, isMissingFiber } = calcNetCarbs(nutrition);
+      totalNetCarbs += nc * servingsCount;
+      if (isMissingFiber) anyMissingFiber = true;
+    }
+    return { totalNetCarbs: Math.round(totalNetCarbs * 10) / 10, anyMissingFiber };
+  }, [logs]);
   const [goalInput, setGoalInput] = useState('');
   const [savingGoal, setSavingGoal] = useState(false);
   const [goalSavedMsg, setGoalSavedMsg] = useState('');
@@ -119,6 +150,17 @@ const FoodLog = () => {
     }
   };
 
+  // Load keto mode settings (Task D2)
+  useEffect(() => {
+    settingsService.getSettings().then(resp => {
+      const data = resp?.data || resp?.data?.data || resp;
+      const ng = data?.nutrition_goal || null;
+      setMode(ng?.mode || 'standard');
+      setNetCarbLimit(ng?.keto?.net_carb_limit_g ?? 20);
+      setTrackNetCarbs(ng?.keto?.track_net_carbs ?? true);
+    }).catch(() => {});
+  }, []);
+
   // Load derived macros to show base(+add)
   useEffect(() => {
     (async () => {
@@ -139,10 +181,10 @@ const FoodLog = () => {
     setShowAddDialog(true);
   };
 
+  // Legacy single-item callback — used by Barcode and Custom tabs
   const handleFoodSelect = async (food, meta = {}) => {
     try {
       if (food && food.type === 'meal' && food._id) {
-        // Saved meal: add entire meal to the selected meal type on the selected date
         await fitnessGeekService.addMealToLog(food._id, selectedDate, selectedMealType || 'snack');
         setShowAddDialog(false);
         await refreshGoals();
@@ -160,6 +202,59 @@ const FoodLog = () => {
     } catch (e) {
       console.error('Failed to add selection to log', e);
     }
+  };
+
+  // Batch commit from the staging tray. Fires all adds in parallel (one transaction
+  // per item, since the REST backend needs to create FoodItems for AI results),
+  // then does a single refresh at the end. Tracks partial failures.
+  const handleCommitBatch = async (items) => {
+    if (!items || items.length === 0) return { ok: 0, fail: 0 };
+
+    const meal = selectedMealType || 'snack';
+
+    const results = await Promise.allSettled(
+      items.map(async (item) => {
+        if (item.type === 'meal' && item._id) {
+          return fitnessGeekService.addMealToLog(item._id, selectedDate, meal);
+        }
+        // Go direct to the service so we skip the hook's per-item toast + reload
+        const parsedServings = Number(item.servings);
+        const safeServings = Number.isFinite(parsedServings) && parsedServings > 0 ? parsedServings : 1;
+        const logData = {
+          food_item: item,
+          meal_type: meal,
+          servings: Math.max(0.1, safeServings),
+          log_date: selectedDate,
+          nutrition: item.nutrition
+        };
+        const resp = await fitnessGeekService.addFoodToLog(logData);
+        if (!(resp && resp.success)) {
+          throw new Error(resp?.error?.message || 'Failed to log item');
+        }
+        return true;
+      })
+    );
+
+    let ok = 0;
+    let fail = 0;
+    for (const r of results) {
+      if (r.status === 'fulfilled') ok += 1;
+      else fail += 1;
+    }
+
+    // Single refresh at the end — much cheaper than N reloads
+    await refreshLogs();
+    await refreshGoals();
+
+    if (fail > 0 && ok === 0) {
+      showError('Failed to log item. Please try again.');
+    } else if (fail > 0) {
+      showError(`${fail} item(s) failed to log.`);
+    } else if (ok > 0) {
+      showSuccess(`Added ${ok} item${ok > 1 ? 's' : ''} to your log.`);
+    }
+
+    return { ok, fail };
   };
 
   const handleEditLog = (log) => {
@@ -241,7 +336,13 @@ const FoodLog = () => {
   };
 
   return (
-    <Box sx={{ p: { xs: 2, sm: 3 } }}>
+    <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 960, mx: 'auto', display: 'flex', flexDirection: 'column' }}>
+      {/* Editorial header */}
+      <Box sx={{ mb: 2.5 }}>
+        <SectionLabel sx={{ mb: 0.75 }}>Today · Food Log</SectionLabel>
+        <DisplayHeading size="page">Food Log</DisplayHeading>
+      </Box>
+
       {/* Date Navigation with compact calorie card */}
       <DateNavigator
         selectedDate={selectedDate}
@@ -267,12 +368,15 @@ const FoodLog = () => {
               });
             }}
             embedded
+            mode={mode}
+            netCarbsConsumed={ketoTotals.totalNetCarbs}
+            netCarbLimit={netCarbLimit}
           />
         }
       />
 
-      {/* Quick Actions */}
-      <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+      {/* Quick Actions — first on mobile, original position on desktop */}
+      <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap', order: { xs: -1, md: 0 } }}>
         <Tooltip title="Copy meals from another day">
           <Button
             variant="outlined"
@@ -317,34 +421,32 @@ const FoodLog = () => {
 
       {/* Calorie Goal Panel (toggle) */}
       <Collapse in={showCaloriePanel} unmountOnExit>
-        <Card id="calorie-goal-panel" sx={{ mb: 2 }}>
-          <CardContent>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }}>
-              <Box sx={{ flex: 1 }}>
-                <Typography variant="subtitle2" color="text.secondary">Calorie Goal Today</Typography>
-                <Typography variant="h6">{todayCalorieGoal || '—'} kcal</Typography>
-              </Box>
-              <TextField
-                label="Adjust today"
-                type="number"
-                size="small"
-                value={goalInput}
-                onChange={(e) => setGoalInput(e.target.value)}
-                sx={{ width: 180 }}
-              />
-              <Button
-                variant="contained"
-                onClick={handleSaveTodayGoal}
-                disabled={savingGoal || !goalInput}
-              >
+        <Surface id="calorie-goal-panel" sx={{ mb: 2 }}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }}>
+            <Box sx={{ flex: 1 }}>
+              <SectionLabel sx={{ mb: 0.75 }}>Calorie Goal Today</SectionLabel>
+              <StatNumber value={todayCalorieGoal} unit="kcal" size="display" />
+            </Box>
+            <TextField
+              label="Adjust today"
+              type="number"
+              size="small"
+              value={goalInput}
+              onChange={(e) => setGoalInput(e.target.value)}
+              sx={{ width: 180 }}
+            />
+            <Button
+              variant="contained"
+              onClick={handleSaveTodayGoal}
+              disabled={savingGoal || !goalInput}
+            >
                 Save
               </Button>
-            </Stack>
-            {goalSavedMsg && (
-              <Alert severity="success" sx={{ mt: 2 }}>{goalSavedMsg}</Alert>
-            )}
-          </CardContent>
-        </Card>
+          </Stack>
+          {goalSavedMsg && (
+            <Alert severity="success" sx={{ mt: 2 }}>{goalSavedMsg}</Alert>
+          )}
+        </Surface>
       </Collapse>
 
       {/* Removed standalone top calorie card; it's now embedded under the date picker */}
@@ -374,6 +476,7 @@ const FoodLog = () => {
             onDeleteLog={handleDeleteLog}
             onSaveMeal={handleSaveMeal}
             showActions={true}
+            mode={mode}
           />
         </Box>
       ))}
@@ -394,11 +497,112 @@ const FoodLog = () => {
         }} />
       </Box>
 
+      {/* Keto: Net Carb Day Total (Task D4) */}
+      {mode === 'keto' && (() => {
+        const { totalNetCarbs } = ketoTotals;
+        const status = ketoStatus(totalNetCarbs, netCarbLimit);
+        const barPct = Math.min((totalNetCarbs / netCarbLimit) * 100, 100);
+        const barColor = status === 'over'
+          ? theme.palette.error.main
+          : status === 'approaching'
+            ? theme.palette.warning.main
+            : theme.palette.primary.main;
+        return (
+          <Surface sx={{ mt: 2, p: { xs: 1.5, sm: 2 } }}>
+            <Typography
+              variant="caption"
+              sx={{
+                display: 'block',
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+                color: theme.palette.text.secondary,
+                fontFamily: '"DM Sans", sans-serif',
+                fontSize: '0.7rem',
+                mb: 0.5
+              }}
+            >
+              Net Carbs Today
+            </Typography>
+            <Typography
+              sx={{
+                fontFamily: '"JetBrains Mono", monospace',
+                fontWeight: 700,
+                fontSize: '1.5rem',
+                color: theme.palette.warning.main,
+                lineHeight: 1.2,
+                mb: 1
+              }}
+            >
+              {totalNetCarbs}g
+              <Typography
+                component="span"
+                sx={{
+                  fontFamily: '"JetBrains Mono", monospace',
+                  fontSize: '1rem',
+                  color: theme.palette.text.secondary,
+                  fontWeight: 400,
+                  ml: 0.5
+                }}
+              >
+                / {netCarbLimit}g
+              </Typography>
+            </Typography>
+            <LinearProgress
+              variant="determinate"
+              value={barPct}
+              sx={{
+                height: 8,
+                borderRadius: 4,
+                backgroundColor: theme.palette.mode === 'dark'
+                  ? 'rgba(255,255,255,0.08)'
+                  : theme.palette.grey[200],
+                '& .MuiLinearProgress-bar': {
+                  backgroundColor: barColor,
+                  borderRadius: 4
+                }
+              }}
+            />
+            <Typography
+              variant="caption"
+              sx={{
+                display: 'block',
+                mt: 0.5,
+                color: barColor,
+                fontWeight: 600,
+                fontSize: '0.75rem'
+              }}
+            >
+              {status === 'over'
+                ? `Over limit by ${Math.round(totalNetCarbs - netCarbLimit)}g`
+                : status === 'approaching'
+                  ? `Approaching cap — ${Math.round(netCarbLimit - totalNetCarbs)}g remaining`
+                  : `In range — ${Math.round(netCarbLimit - totalNetCarbs)}g remaining`}
+            </Typography>
+          </Surface>
+        );
+      })()}
+
+      {/* Keto: Asterisk footnote (Task D5) */}
+      {mode === 'keto' && ketoTotals.anyMissingFiber && (
+        <Typography
+          variant="caption"
+          sx={{
+            display: 'block',
+            mt: 1,
+            color: theme.palette.text.secondary,
+            fontSize: '0.75rem'
+          }}
+        >
+          * No fiber data available — shown as total carbs
+        </Typography>
+      )}
+
       {/* Add Food Dialog */}
       <AddFoodDialog
         open={showAddDialog}
         onClose={() => setShowAddDialog(false)}
         onFoodSelect={handleFoodSelect}
+        onCommitBatch={handleCommitBatch}
         mealType={selectedMealType}
         showBarcodeScanner={showBarcodeScanner}
         onShowBarcodeScanner={setShowBarcodeScanner}
@@ -406,6 +610,8 @@ const FoodLog = () => {
           handleFoodSelect(food);
           setShowBarcodeScanner(false);
         }}
+        mode={mode}
+        netCarbLimit={netCarbLimit}
       />
 
       {/* Save Meal Dialog */}

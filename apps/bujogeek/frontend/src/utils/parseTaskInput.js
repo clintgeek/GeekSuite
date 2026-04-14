@@ -6,6 +6,7 @@
  *   Signifier (first char):  * (task, default)  @ (event)  - (note)  ? (question)  ! (important)
  *   Priority:                 !high  !medium  !low
  *   Tags:                     #work  #my-tag  (letters, digits, hyphens, underscores)
+ *   Recurrence:               (daily)  (weekly)  (monthly)
  *   Note:                     ^some note text  (must be last token)
  *   NoteGeek note:            $^note text  (saves to NoteGeek; must be last token)
  *   Date:                     /today  /tomorrow  /next-week  /next-month
@@ -15,7 +16,7 @@
  *                             /mar 5th  /january 15
  *   Time (after a date):      9am  14:30  2:30pm  2 p.m.
  *
- * Returns: { content, signifier, priority, dueDate, tags, note, noteGeekNote }
+ * Returns: { content, signifier, priority, dueDate, tags, note, noteGeekNote, recurrencePattern }
  */
 
 const DAY_NAMES = {
@@ -63,6 +64,7 @@ function defaultTime(date) {
 /* ---------- core patterns ---------- */
 
 const PATTERNS = {
+  recurrence: /\((daily|weekly|monthly)\)/i,
   priority: /!(high|medium|low)/i,
   dateTime:
     /\/(today|tomorrow|next-week|next-month|next-(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|(?:mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)|(?:\d{4}-\d{2}-\d{2})|(?:\d{2}-\d{2}-\d{4})|(?:\d{2}-\d{2})|(?:\d{1,2})(?:st|nd|rd|th)?|(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}(?:st|nd|rd|th)?)(?:\s+(\d{1,2})(?::(\d{2}))?\s*(?:([ap]\.?m\.?))?)?/i,
@@ -82,7 +84,15 @@ export default function parseTaskInput(text) {
   let signifier = null;
   let note = null;
   let noteGeekNote = null;
+  let recurrencePattern = null;
   const tags = [];
+
+  // 0. Recurrence — (daily) / (weekly) / (monthly)
+  const recurrenceMatch = content.match(PATTERNS.recurrence);
+  if (recurrenceMatch) {
+    recurrencePattern = recurrenceMatch[1].toLowerCase();
+    content = content.replace(recurrenceMatch[0], '').trim();
+  }
 
   // 1. Tags — extract first so # tokens don't interfere with other parsing
   let tagMatch;
@@ -211,5 +221,6 @@ export default function parseTaskInput(text) {
     tags: tags.length > 0 ? tags : undefined,
     note: note || undefined,
     noteGeekNote: noteGeekNote || undefined,
+    recurrencePattern: recurrencePattern || undefined,
   };
 }

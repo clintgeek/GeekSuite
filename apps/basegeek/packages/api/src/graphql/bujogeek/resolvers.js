@@ -88,7 +88,12 @@ export const resolvers = {
       if (args.updatedAt) taskData.updatedAt = new Date(args.updatedAt);
       return taskService.createTask(taskData);
     },
-    updateTask: async (_, { id, input }) => taskService.updateTask(id, input),
+    updateTask: async (_, { id, input }) => {
+      // Sanitize: only pass fields that exist on the Task schema.
+      // taskType is a virtual, createdAt/updatedAt are managed server-side.
+      const { taskType, createdAt, updatedAt, __typename, ...safeInput } = input || {};
+      return taskService.updateTask(id, safeInput);
+    },
 
     // Add preference sync mutation if needed, or stick to the central /api/users/preferences
     updateBujoPreferences: async (_, { theme }, context) => {

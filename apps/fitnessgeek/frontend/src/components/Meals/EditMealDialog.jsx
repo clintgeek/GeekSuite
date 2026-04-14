@@ -25,7 +25,7 @@ const EditMealDialog = ({ open, onClose, meal, onSave, loading = false }) => {
         name: meal.name || '',
         meal_type: meal.meal_type || 'breakfast',
         food_items: (meal.food_items || []).map((it) => ({
-          food_item_id: (it.food_item_id && it.food_item_id._id) || it.food_item_id,
+          food_item_id: (it.food_item_id && (it.food_item_id._id || it.food_item_id.id)) || it.food_item_id,
           displayName: it.food_item_id?.name || it.food_item?.name || 'Unknown',
           servings: it.servings || 1,
         }))

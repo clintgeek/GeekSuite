@@ -10,7 +10,7 @@ import { ThemeProvider, useThemeMode } from './context/ThemeContext';
 import { ToastProvider } from './components/shared/Toast';
 import AppShell from './components/layout/AppShell';
 import ProtectedRoute from './components/ProtectedRoute';
-import CommandPalette from './components/shared/CommandPalette';
+import KeyboardHelp from './components/shared/KeyboardHelp';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import TodayPage from './pages/TodayPage';
@@ -18,20 +18,25 @@ import ReviewPage from './pages/ReviewPage';
 import PlanPage from './pages/PlanPage';
 import TemplatesPage from './pages/TemplatesPage';
 import TagsPage from './pages/TagsPage';
-import { useTaskContext } from './context/TaskContext.jsx';
 import { useMemo, useState, useEffect } from 'react';
 
 function AppWithAuth() {
   const { user, loading } = useAuth();
-  const { createTask } = useTaskContext();
-  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   useEffect(() => {
     const handleKeyPress = (event) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+      // ? → keyboard help (only when not typing)
+      const tag = event.target.tagName;
+      if (
+        event.key === '?' &&
+        tag !== 'INPUT' &&
+        tag !== 'TEXTAREA' &&
+        !event.target.isContentEditable &&
+        !event.target.closest('[role="dialog"]')
+      ) {
         event.preventDefault();
-        event.stopPropagation();
-        setPaletteOpen(true);
+        setHelpOpen(true);
       }
     };
 
@@ -71,10 +76,9 @@ function AppWithAuth() {
       </Routes>
 
       {user && (
-        <CommandPalette
-          open={paletteOpen}
-          onClose={() => setPaletteOpen(false)}
-          onCreateTask={createTask}
+        <KeyboardHelp
+          open={helpOpen}
+          onClose={() => setHelpOpen(false)}
         />
       )}
     </AppShell>
