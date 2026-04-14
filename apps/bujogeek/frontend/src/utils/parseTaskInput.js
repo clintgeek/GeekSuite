@@ -65,7 +65,7 @@ function defaultTime(date) {
 
 const PATTERNS = {
   recurrence: /\((daily|weekly|monthly)\)/i,
-  priority: /!(high|medium|low)/i,
+  priority: /!(high|medium|low)\b/i,
   dateTime:
     /\/(today|tomorrow|next-week|next-month|next-(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|(?:mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)|(?:\d{4}-\d{2}-\d{2})|(?:\d{2}-\d{2}-\d{4})|(?:\d{2}-\d{2})|(?:\d{1,2})(?:st|nd|rd|th)?|(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}(?:st|nd|rd|th)?)(?:\s+(\d{1,2})(?::(\d{2}))?\s*(?:([ap]\.?m\.?))?)?/i,
   timeMarker: /\b([ap]\.?m\.?)\b/i,
@@ -115,21 +115,22 @@ export default function parseTaskInput(text) {
     content = content.replace(noteMatch[0], '').trim();
   }
 
-  // 3. Signifier (first special char)
+  // 3. Priority — parsed BEFORE signifier so `!high` isn't mistaken for the
+  //    `!` signifier followed by the word `high`.
+  const priorityMatch = content.match(PATTERNS.priority);
+  if (priorityMatch) {
+    const level = priorityMatch[1].toLowerCase();
+    priority = level === 'high' ? 1 : level === 'low' ? 3 : 2;
+    content = content.replace(PATTERNS.priority, '').trim();
+  }
+
+  // 4. Signifier (first special char)
   const typeMatch = content.match(PATTERNS.type);
   if (typeMatch) {
     signifier = typeMatch[0];
     content = content.replace(typeMatch[0], '').trim();
   } else {
     signifier = '*'; // default = task
-  }
-
-  // 4. Priority
-  const priorityMatch = content.match(PATTERNS.priority);
-  if (priorityMatch) {
-    const level = priorityMatch[1].toLowerCase();
-    priority = level === 'high' ? 1 : level === 'low' ? 3 : 2;
-    content = content.replace(PATTERNS.priority, '').trim();
   }
 
   // 5. Date + optional time
