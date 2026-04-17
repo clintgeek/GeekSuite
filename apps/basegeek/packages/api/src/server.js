@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { randomUUID } from 'node:crypto';
 import dotenv from 'dotenv';
 
 // Load environment variables
@@ -54,7 +55,7 @@ try {
 }
 
 // Middleware
-const allowedOrigins = [
+const hardcodedOrigins = [
   'http://localhost:5173',    // Vite dev server
   'http://localhost:5174',    // Vite dev server (alternative port)
   'http://localhost:5001',    // Backend dev server
@@ -78,6 +79,9 @@ const allowedOrigins = [
   'http://192.168.1.17:5174',   // Local network access (alternative port)
   'http://192.168.1.17:9977'   // StoryGeek local network access
 ];
+const allowedOrigins = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
+  : hardcodedOrigins;
 
 app.use(cors({
   origin: function (origin, callback) {
@@ -110,6 +114,13 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(cookieParser());
+
+// Attach a request ID to every request for log correlation
+app.use((req, res, next) => {
+  req.id = req.headers['x-request-id'] || randomUUID();
+  res.setHeader('X-Request-Id', req.id);
+  next();
+});
 
 // HTTP request logger middleware (only in development)
 if (process.env.NODE_ENV === 'development') {
@@ -302,10 +313,10 @@ app.get('*', (req, res) => {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error('Error:', err.stack);
+  console.error('[' + req.id + '] 500:', err.stack);
   res.status(500).json({
     message: 'Internal Server Error',
-    error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    requestId: req.id
   });
 });
 

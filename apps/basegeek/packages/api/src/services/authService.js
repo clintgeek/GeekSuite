@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { User } from '../models/user.js';
 import bcrypt from 'bcryptjs';
+import { VALID_APPS } from '../config/validApps.js';
 
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
   throw new Error('JWT_SECRET must be set and at least 32 characters long');
@@ -12,7 +13,6 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1h';
 const REFRESH_TOKEN_EXPIRES_IN = process.env.REFRESH_TOKEN_EXPIRES_IN || '30d';
-const VALID_APPS = ['basegeek', 'notegeek', 'bujogeek', 'fitnessgeek', 'storygeek', 'startgeek', 'flockgeek', 'musicgeek', 'babelgeek', 'bookgeek', 'gamegeek', 'photogeek', 'dashgeek'];
 
 // Token generation with app context
 export const generateToken = (user, app = null) => {

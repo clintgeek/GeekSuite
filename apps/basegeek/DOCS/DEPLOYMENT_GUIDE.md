@@ -44,7 +44,7 @@ INFLUXDB_SETUP_PASSWORD=CHANGE_ME_SET_INFLUXDB_PASSWORD
 INFLUXDB_ADMIN_TOKEN=<bootstrap_setup_token>
 ```
 
-> Tip: use `example.env` as the canonical template when updating per-environment files.
+> Tip: use `.env.example` as the canonical template when updating per-environment files.
 
 ---
 
