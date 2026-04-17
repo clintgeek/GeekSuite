@@ -338,7 +338,7 @@ router.post('/reset-password', authenticateToken, async (req, res) => {
         }
 
         // Update password
-        user.password = newPassword;
+        user.passwordHash = newPassword;
         await user.save();
 
         res.json({

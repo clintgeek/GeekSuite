@@ -23,37 +23,6 @@ userGeekConn.on('disconnected', () => {
     console.log('Disconnected from userGeek database');
 });
 
-// Test the connection
-userGeekConn.once('open', async () => {
-    try {
-        console.log('Testing userGeek database connection...');
-        const collections = await userGeekConn.db.listCollections().toArray();
-        console.log('Available collections:', collections.map(c => c.name));
-
-        // Get detailed collection info
-        const collectionInfo = await userGeekConn.db.collection('users').findOne({});
-        console.log('Collection sample document:', {
-            fields: Object.keys(collectionInfo || {}),
-            hasPasswordHash: collectionInfo ? 'passwordHash' in collectionInfo : false,
-            rawFields: collectionInfo ? Object.keys(collectionInfo) : []
-        });
-
-        // Check if we can find the user directly
-        const testUser = await userGeekConn.db.collection('users').findOne(
-            { email: 'clint@clintgeek.com' },
-            { projection: { _id: 1, email: 1, passwordHash: 1 } }
-        );
-        console.log('Test user query result:', testUser ? {
-            id: testUser._id,
-            email: testUser.email,
-            hasPasswordHash: 'passwordHash' in testUser,
-            rawFields: Object.keys(testUser)
-        } : 'No users found');
-    } catch (error) {
-        console.error('Error testing connection:', error);
-    }
-});
-
 // ─── Layer 1: Profile (human-facing info) ───
 const profileSchema = new mongoose.Schema({
     displayName: { type: String, default: '' },

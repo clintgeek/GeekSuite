@@ -36,14 +36,22 @@ app.set('trust proxy', 1);
 
 // Connect to MongoDB
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/datageek?authSource=admin';
-mongoose.connect(MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
-  .then(() => console.log('MongoDB connected'))
-  .catch(err => console.error('MongoDB connection error:', err));
+try {
+  await mongoose.connect(MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+  console.log('MongoDB connected')
+} catch (err) {
+  console.error('MongoDB connection error:', err)
+  process.exit(1)
+}
 
 // Connect to aiGeek database
-connectAIGeekDB()
-  .then(() => console.log('aiGeek database connected'))
-  .catch(err => console.error('aiGeek database connection error:', err));
+try {
+  await connectAIGeekDB()
+  console.log('aiGeek database connected')
+} catch (err) {
+  console.error('aiGeek database connection error:', err)
+  process.exit(1)
+}
 
 // Middleware
 const allowedOrigins = [
@@ -302,7 +310,7 @@ app.use((err, req, res, next) => {
 });
 
 
-app.listen(PORT, '0.0.0.0', async () => {
+const server = app.listen(PORT, '0.0.0.0', async () => {
   console.log(`API server running on port ${ PORT }`);
   console.log(`🔷 GraphQL available at http://localhost:${ PORT }/graphql`);
   console.log(`Health check available at http://localhost:${ PORT }/api/health`);
@@ -330,3 +338,32 @@ app.listen(PORT, '0.0.0.0', async () => {
     console.error('⚠️ Phase 3: Conversation service failed to initialize:', error.message);
   }
 });
+
+// Graceful shutdown
+let shuttingDown = false
+const shutdown = (signal) => {
+  if (shuttingDown) {
+    console.log(`${ signal } received during shutdown — forcing exit`)
+    process.exit(1)
+  }
+  shuttingDown = true
+  console.log(`${ signal } received — shutting down`)
+
+  const forceTimer = setTimeout(() => {
+    console.error('Shutdown timed out after 15s — forcing exit')
+    process.exit(0)
+  }, 15_000)
+  forceTimer.unref()
+
+  server.close(async () => {
+    try {
+      await mongoose.disconnect()
+    } catch (err) {
+      console.error('Error disconnecting mongoose:', err)
+    }
+    process.exit(0)
+  })
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'))
+process.on('SIGINT',  () => shutdown('SIGINT'))
