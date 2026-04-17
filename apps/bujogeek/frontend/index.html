@@ -24,24 +24,9 @@
       :root[data-theme="dark"] { background-color: #221F1B; color: #EDE8E2; }
       body                     { margin: 0; background-color: inherit; color: inherit; }
     </style>
-    <!-- Sync theme before React boots to prevent flash of wrong mode.
-         Reads the shared `geek_theme` cookie set by any GeekSuite app on
-         .clintgeek.com. Logic kept in lockstep with `themePrebootScript`
-         exported from @geeksuite/user. -->
-    <script>
-      (function () {
-        try {
-          var m = document.cookie.match(/(?:^|; )geek_theme=([^;]*)/);
-          var p = m ? decodeURIComponent(m[1]) : 'auto';
-          if (p === 'system') p = 'auto';
-          if (p !== 'light' && p !== 'dark' && p !== 'auto') p = 'auto';
-          var t = p === 'auto'
-            ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-            : p;
-          document.documentElement.dataset.theme = t;
-        } catch (e) {}
-      })();
-    </script>
+    <!-- Theme preboot script is injected by the themePreboot() Vite plugin
+         from @geeksuite/user — sets <html data-theme> from the shared
+         `geek_theme` cookie before React mounts. -->
   </head>
   <body>
     <div id="root"></div>

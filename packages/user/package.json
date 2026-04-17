@@ -5,7 +5,8 @@
   "main": "src/index.js",
   "exports": {
     ".": "./src/index.js",
-    "./server": "./src/server/index.js"
+    "./server": "./src/server/index.js",
+    "./vite": "./src/vitePlugin.js"
   },
   "peerDependencies": {
     "react": ">=18",

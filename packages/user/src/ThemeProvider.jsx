@@ -137,6 +137,7 @@ export function useThemeMode() {
   return useContext(ThemeContext);
 }
 
-// Inline this into each app's <head> before React mounts, so the cookie's
-// theme is applied to <html data-theme> on the very first paint.
-export const themePrebootScript = `(function(){try{var m=document.cookie.match(/(?:^|; )geek_theme=([^;]*)/);var p=m?decodeURIComponent(m[1]):'auto';if(p==='system')p='auto';if(p!=='light'&&p!=='dark'&&p!=='auto')p='auto';var t=p==='auto'?(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):p;document.documentElement.dataset.theme=t;}catch(e){}})();`;
+// Re-export so existing `@geeksuite/user` consumers can still import
+// `themePrebootScript` from the package root. New code should prefer
+// the Vite plugin (`@geeksuite/user/vite`) which injects it for you.
+export { themePrebootScript } from './themePreboot.js';
