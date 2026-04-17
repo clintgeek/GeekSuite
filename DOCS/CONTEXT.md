@@ -267,6 +267,17 @@ Most of the frontend's "REST" calls actually get rewritten to GraphQL by `apps/f
 
 This bit us once already — keto fields (`nutrition_goal.mode`, `nutrition_goal.keto`) were added to fitnessgeek's copy but not basegeek's, so the keto wizard appeared to save but nothing stuck. Fix: keep the two schemas in sync, or consolidate to one source of truth (preferred).
 
+### Stale hardcoded AI models (basegeek)
+basegeek's AI service has hardcoded default models scattered through `apps/basegeek/packages/api/src/services/aiService.js` — e.g. `gemini-1.5-flash-latest`, which Google has deprecated and now returns 404 on. When it came up, the fallback chain correctly routed to groq so the user got their response, but the log noise is misleading.
+
+Low priority now that the AI Geek UI supports:
+- Per-app default model selection
+- Explicit curation of the "free" pool
+
+The hardcoded defaults only matter when neither of those is configured — so the remaining work is a polish pass to remove or update the defaults, not a real bug.
+
+Polish ticket, not a fire.
+
 ---
 
 ## 📚 Reference Documentation

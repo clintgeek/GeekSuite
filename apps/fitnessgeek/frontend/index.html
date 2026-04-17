@@ -23,6 +23,24 @@
     <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-192x192.svg" />
     <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-192x192.svg" />
     <link rel="apple-touch-icon" sizes="167x167" href="/icons/icon-192x192.svg" />
+
+    <!-- Sync theme before React boots. Reads the shared `geek_theme` cookie
+         set by any GeekSuite app on .clintgeek.com. Mirrors the logic in
+         `themePrebootScript` exported from @geeksuite/user. -->
+    <script>
+      (function () {
+        try {
+          var m = document.cookie.match(/(?:^|; )geek_theme=([^;]*)/);
+          var p = m ? decodeURIComponent(m[1]) : 'auto';
+          if (p === 'system') p = 'auto';
+          if (p !== 'light' && p !== 'dark' && p !== 'auto') p = 'auto';
+          var t = p === 'auto'
+            ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+            : p;
+          document.documentElement.dataset.theme = t;
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

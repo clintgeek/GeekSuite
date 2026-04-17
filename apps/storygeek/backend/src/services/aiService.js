@@ -30,12 +30,20 @@ class AIService {
         timeout: 30000
       });
 
-      if (response.data.success) {
-        this.updateStats(response.data.data.provider);
-        return response.data.data.response;
-      } else {
-        throw new Error(response.data.error?.message || 'AI call failed');
+      // basegeek's /api/ai/call returns an OpenAI-compatible chat.completion
+      // response. Keep a fallback for the older { success, data } envelope in
+      // case any endpoint still uses it.
+      const data = response.data;
+      const openAIContent = data?.choices?.[0]?.message?.content;
+      if (openAIContent != null) {
+        this.updateStats(data?.model || finalConfig.provider);
+        return openAIContent;
       }
+      if (data?.success && data?.data?.response != null) {
+        this.updateStats(data.data.provider);
+        return data.data.response;
+      }
+      throw new Error(data?.error?.message || 'AI call failed');
     } catch (error) {
       console.error('BaseGeek AI call failed:', error.message);
       throw error;
