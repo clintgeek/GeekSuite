@@ -25,6 +25,7 @@ import openaiProxyRoutes from './routes/openaiProxy.js';
 import apiKeyRoutes from './routes/apiKeys.js';
 import appsRoutes from './routes/apps.js';
 import { connectAIGeekDB } from './config/database.js';
+import { initRefreshTokenStore, closeRefreshTokenStore } from './services/refreshTokenStore.js';
 import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@as-integrations/express4';
 import { typeDefs, resolvers } from './graphql/index.js';
@@ -53,6 +54,14 @@ try {
   logger.info('aiGeek database connected')
 } catch (err) {
   logger.error({ err }, 'aiGeek database connection error')
+  process.exit(1)
+}
+
+// Connect to Redis (refresh-token store)
+try {
+  await initRefreshTokenStore()
+} catch (err) {
+  logger.error({ err }, 'Redis (refresh-token store) connection error')
   process.exit(1)
 }
 
@@ -371,6 +380,11 @@ const shutdown = (signal) => {
       await mongoose.disconnect()
     } catch (err) {
       logger.error({ err }, 'Error disconnecting mongoose')
+    }
+    try {
+      await closeRefreshTokenStore()
+    } catch (err) {
+      logger.error({ err }, 'Error closing refresh-token store')
     }
     process.exit(0)
   })

@@ -3,9 +3,7 @@ import rateLimit from 'express-rate-limit';
 import authService from '../services/authService.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { User } from '../models/user.js';
-import jwt from 'jsonwebtoken';
 import { VALID_APPS } from '../config/validApps.js';
-import logger from '../lib/logger.js';
 
 // SSO Cookie Configuration
 // In local/dev we omit domain so cookies apply to localhost redirects.
@@ -131,7 +129,7 @@ router.post('/login', authLimiter, async (req, res) => {
 // @access  Public
 router.post('/validate', async (req, res) => {
     try {
-        const { token, app } = req.body;
+        const { token } = req.body;
         const result = await authService.validateToken(token);
         res.json({
             valid: true,
@@ -158,49 +156,35 @@ router.post('/refresh', async (req, res) => {
     try {
         const bodyRefreshToken = req.body?.refreshToken;
         const cookieRefreshToken = req.cookies?.geek_refresh_token;
-        const refreshToken = bodyRefreshToken || cookieRefreshToken;
+        const incomingRefreshToken = bodyRefreshToken || cookieRefreshToken;
         const app = req.body?.app;
 
-        if (!refreshToken) {
+        if (!incomingRefreshToken) {
             return res.status(400).json({
                 message: 'Refresh token is required',
                 code: 'TOKEN_REFRESH_ERROR'
             });
         }
 
-        // Validate the refresh token
-        const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
-        const user = await User.findById(decoded.userId);
+        const result = await authService.rotateRefreshToken(incomingRefreshToken, app);
 
-        if (!user) {
-            throw new Error('User not found');
+        if (result.reuse) {
+            req.log.warn({ family: result.family }, 'Refresh-token reuse detected');
+            clearSSOCookies(res);
+            return res.status(401).json({
+                message: 'Refresh token has already been used',
+                code: 'REFRESH_REUSE'
+            });
         }
 
-        // Generate new access token
-        const accessToken = authService.generateToken(user, app);
+        // Successful rotation — set new cookies
+        setSSOCookies(res, result.token, result.refreshToken);
 
-        // Generate new refresh token
-        const newRefreshToken = jwt.sign(
-            { userId: user._id },
-            process.env.JWT_REFRESH_SECRET,
-            { expiresIn: '7d' }
-        );
-
-        const responseData = {
-            token: accessToken,
-            refreshToken: newRefreshToken,
-            user: {
-                id: user._id,
-                username: user.username,
-                email: user.email,
-                app
-            }
-        };
-
-        // Set SSO cookies for cross-subdomain auth (backward compatible)
-        setSSOCookies(res, accessToken, newRefreshToken);
-
-        res.json(responseData);
+        res.json({
+            token: result.token,
+            refreshToken: result.refreshToken,
+            user: result.user
+        });
     } catch (error) {
         req.log.error({ err: error }, 'Token refresh error');
         res.status(401).json({
@@ -256,9 +240,9 @@ router.post('/register', async (req, res) => {
 
         await user.save();
 
-        // Generate tokens
+        // Generate tokens — fresh family for new registration
         const token = authService.generateToken(user, app);
-        const refreshToken = authService.generateRefreshToken(user);
+        const refreshToken = await authService.generateRefreshToken(user, app); // new family
 
         const responseData = {
             token,
@@ -326,11 +310,19 @@ router.post('/reset-password', authenticateToken, async (req, res) => {
     }
 });
 
-// @desc    Logout user (clears SSO cookies)
+// @desc    Logout user (revokes refresh-token family + clears SSO cookies)
 // @route   POST /api/auth/logout
 // @access  Public
-router.post('/logout', (req, res) => {
-    // Clear SSO cookies
+router.post('/logout', async (req, res) => {
+    const refreshToken = req.cookies?.geek_refresh_token || req.body?.refreshToken;
+
+    // Revoke the family server-side (best-effort; always 200)
+    try {
+        await authService.revokeRefreshTokenFromCookie(refreshToken);
+    } catch (err) {
+        req.log.warn({ err }, 'Failed to revoke refresh-token family on logout');
+    }
+
     clearSSOCookies(res);
 
     res.json({
