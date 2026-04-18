@@ -4,6 +4,7 @@ import authService from '../services/authService.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { User } from '../models/user.js';
 import jwt from 'jsonwebtoken';
+import { VALID_APPS } from '../config/validApps.js';
 
 // SSO Cookie Configuration
 // In local/dev we omit domain so cookies apply to localhost redirects.
@@ -94,11 +95,8 @@ router.post('/login', authLimiter, async (req, res) => {
         }
 
         // Validate app
-        if (!app || !['basegeek', 'notegeek', 'bujogeek', 'fitnessgeek', 'storygeek', 'startgeek', 'flockgeek', 'musicgeek', 'babelgeek', 'bookgeek', 'gamegeek', 'photogeek', 'dashgeek'].includes(app.toLowerCase())) {
-            console.error('Invalid app:', {
-                app,
-                validApps: ['basegeek', 'notegeek', 'bujogeek', 'fitnessgeek', 'storygeek', 'startgeek', 'flockgeek', 'musicgeek', 'babelgeek', 'bookgeek', 'gamegeek', 'photogeek', 'dashgeek']
-            });
+        if (!app || !VALID_APPS.includes(app.toLowerCase())) {
+            console.error('Invalid app:', { app, validApps: VALID_APPS });
             return res.status(400).json({
                 message: 'Invalid app',
                 code: 'LOGIN_ERROR'
@@ -338,7 +336,7 @@ router.post('/reset-password', authenticateToken, async (req, res) => {
         }
 
         // Update password
-        user.password = newPassword;
+        user.passwordHash = newPassword;
         await user.save();
 
         res.json({

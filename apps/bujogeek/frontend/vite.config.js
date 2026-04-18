@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import { VitePWA } from 'vite-plugin-pwa';
+import { themePreboot } from '@geeksuite/user/vite';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ command, mode }) => {
@@ -10,6 +11,7 @@ export default defineConfig(({ command, mode }) => {
   return {
     plugins: [
       react(),
+      themePreboot(),
       VitePWA({
         injectRegister: false,
         registerType: 'autoUpdate',

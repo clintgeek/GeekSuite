@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { randomUUID } from 'node:crypto';
 import dotenv from 'dotenv';
 
 // Load environment variables
@@ -36,17 +37,25 @@ app.set('trust proxy', 1);
 
 // Connect to MongoDB
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/datageek?authSource=admin';
-mongoose.connect(MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
-  .then(() => console.log('MongoDB connected'))
-  .catch(err => console.error('MongoDB connection error:', err));
+try {
+  await mongoose.connect(MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+  console.log('MongoDB connected')
+} catch (err) {
+  console.error('MongoDB connection error:', err)
+  process.exit(1)
+}
 
 // Connect to aiGeek database
-connectAIGeekDB()
-  .then(() => console.log('aiGeek database connected'))
-  .catch(err => console.error('aiGeek database connection error:', err));
+try {
+  await connectAIGeekDB()
+  console.log('aiGeek database connected')
+} catch (err) {
+  console.error('aiGeek database connection error:', err)
+  process.exit(1)
+}
 
 // Middleware
-const allowedOrigins = [
+const hardcodedOrigins = [
   'http://localhost:5173',    // Vite dev server
   'http://localhost:5174',    // Vite dev server (alternative port)
   'http://localhost:5001',    // Backend dev server
@@ -70,6 +79,9 @@ const allowedOrigins = [
   'http://192.168.1.17:5174',   // Local network access (alternative port)
   'http://192.168.1.17:9977'   // StoryGeek local network access
 ];
+const allowedOrigins = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
+  : hardcodedOrigins;
 
 app.use(cors({
   origin: function (origin, callback) {
@@ -102,6 +114,13 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(cookieParser());
+
+// Attach a request ID to every request for log correlation
+app.use((req, res, next) => {
+  req.id = req.headers['x-request-id'] || randomUUID();
+  res.setHeader('X-Request-Id', req.id);
+  next();
+});
 
 // HTTP request logger middleware (only in development)
 if (process.env.NODE_ENV === 'development') {
@@ -294,15 +313,15 @@ app.get('*', (req, res) => {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error('Error:', err.stack);
+  console.error('[' + req.id + '] 500:', err.stack);
   res.status(500).json({
     message: 'Internal Server Error',
-    error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    requestId: req.id
   });
 });
 
 
-app.listen(PORT, '0.0.0.0', async () => {
+const server = app.listen(PORT, '0.0.0.0', async () => {
   console.log(`API server running on port ${ PORT }`);
   console.log(`🔷 GraphQL available at http://localhost:${ PORT }/graphql`);
   console.log(`Health check available at http://localhost:${ PORT }/api/health`);
@@ -330,3 +349,32 @@ app.listen(PORT, '0.0.0.0', async () => {
     console.error('⚠️ Phase 3: Conversation service failed to initialize:', error.message);
   }
 });
+
+// Graceful shutdown
+let shuttingDown = false
+const shutdown = (signal) => {
+  if (shuttingDown) {
+    console.log(`${ signal } received during shutdown — forcing exit`)
+    process.exit(1)
+  }
+  shuttingDown = true
+  console.log(`${ signal } received — shutting down`)
+
+  const forceTimer = setTimeout(() => {
+    console.error('Shutdown timed out after 15s — forcing exit')
+    process.exit(0)
+  }, 15_000)
+  forceTimer.unref()
+
+  server.close(async () => {
+    try {
+      await mongoose.disconnect()
+    } catch (err) {
+      console.error('Error disconnecting mongoose:', err)
+    }
+    process.exit(0)
+  })
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'))
+process.on('SIGINT',  () => shutdown('SIGINT'))

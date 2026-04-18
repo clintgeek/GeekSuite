@@ -256,13 +256,23 @@ router.patch('/preferences/:app', authenticateToken, async (req, res) => {
 // @access  Private
 router.get('/', authenticateToken, async (req, res) => {
     try {
-        const users = await User.find({}, '-passwordHash').lean();
+        const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 100);
+        const skip = Math.max(parseInt(req.query.skip, 10) || 0, 0);
+
+        const [users, total] = await Promise.all([
+            User.find({}, '-passwordHash').skip(skip).limit(limit).lean(),
+            User.countDocuments({}),
+        ]);
+
         res.json({
             users: users.map(user => ({
                 ...formatIdentity(user),
                 profile: user.profile,
                 preferences: user.preferences,
-            }))
+            })),
+            limit,
+            skip,
+            total,
         });
     } catch (err) {
         console.error('Get all users error:', err);

@@ -1285,7 +1285,12 @@ class AIService {
         continue;
       }
 
-      let providerModel = model || providerConfig.model;
+      // Only honor the caller-specified model on the originally requested provider —
+      // fallback providers (different family) reject it (e.g. gemini model on groq → 404).
+      const isRequestedProvider = currentProvider === requestedProvider;
+      let providerModel = isRequestedProvider
+        ? (model || providerConfig.model)
+        : providerConfig.model;
       if (autoRotate) {
         const rotationOverride = this.rotationProviderOverrides[currentProvider];
         if (rotationOverride?.model) {
@@ -1539,6 +1544,8 @@ class AIService {
         return await this.callClaude(prompt, callConfig);
       case 'groq':
         return await this.callGroq(prompt, callConfig);
+      case 'gemini':
+        return await this.callGemini(prompt, callConfig);
       case 'together':
         return await this.callTogether(prompt, callConfig);
       case 'openrouter':
