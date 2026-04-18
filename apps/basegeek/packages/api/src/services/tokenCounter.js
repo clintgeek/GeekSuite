@@ -1,4 +1,5 @@
 import { encoding_for_model } from 'tiktoken'
+import logger from '../lib/logger.js'
 
 let encoder = null
 let encoderLoadErrorLogged = false
@@ -12,7 +13,7 @@ function getEncoder() {
 		encoder = encoding_for_model('gpt-4o-mini')
 	} catch (error) {
 		if (!encoderLoadErrorLogged) {
-			console.warn('[TokenCounter] Failed to load tiktoken encoder, using heuristic fallback:', error?.message || error)
+			logger.warn({ err: error }, '[TokenCounter] Failed to load tiktoken encoder, using heuristic fallback')
 			encoderLoadErrorLogged = true
 		}
 		encoder = null
@@ -33,7 +34,7 @@ export function countTextTokens(text = '') {
 			return encoderInstance.encode(text).length
 		} catch (error) {
 			if (!encoderLoadErrorLogged) {
-				console.warn('[TokenCounter] Encoding failed, using heuristic fallback:', error?.message || error)
+				logger.warn({ err: error }, '[TokenCounter] Encoding failed, using heuristic fallback')
 				encoderLoadErrorLogged = true
 			}
 		}

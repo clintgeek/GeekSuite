@@ -1,6 +1,7 @@
 import express from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { authenticateJWTOrAPIKey, requirePermission } from '../middleware/apiKeyAuth.js';
+import logger from '../lib/logger.js';
 import aiService from '../services/aiService.js';
 import aiDirectorService from '../services/aiDirectorService.js';
 import aiUsageService from '../services/aiUsageService.js';
@@ -86,7 +87,7 @@ router.get('/capabilities', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error in /api/ai/capabilities:', error);
+    req.log.error({ err: error }, 'Error in /api/ai/capabilities');
     res.status(500).json({
       success: false,
       error: {
@@ -109,7 +110,7 @@ router.get('/capabilities', async (req, res) => {
  * Only sends new messages, baseGeek manages full context.
  */
 router.post('/conversation/message', async (req, res) => {
-  console.log('--- /api/ai/conversation/message invoked (Phase 3) ---');
+  req.log.info('--- /api/ai/conversation/message invoked (Phase 3) ---');
   
   try {
     const permissionError = requirePermission(req, res, 'ai:call');
@@ -152,7 +153,7 @@ router.post('/conversation/message', async (req, res) => {
       { systemPrompt, contextWindow, provider, model, appName, autoSummarize }
     );
 
-    console.log(`[Phase3] Conversation ${conversationId}: ${addResult.messageCount} messages, ${addResult.currentTokens} tokens`);
+    req.log.debug({ conversationId, messageCount: addResult.messageCount, currentTokens: addResult.currentTokens }, '[Phase3] Conversation state');
 
     // Get full context for API call
     const { systemPrompt: fullSystemPrompt, messages: allMessages, metadata } = 
@@ -240,7 +241,7 @@ router.post('/conversation/message', async (req, res) => {
         res.write('data: [DONE]\n\n');
         res.end();
       } catch (streamError) {
-        console.error('[Phase3] Streaming error:', streamError);
+        req.log.error({ err: streamError }, '[Phase3] Streaming error');
         res.write(`data: ${JSON.stringify({ error: { message: streamError.message }})}\n\n`);
         res.end();
       }
@@ -284,7 +285,7 @@ router.post('/conversation/message', async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('[Phase3] Error:', error);
+    req.log.error({ err: error }, '[Phase3] Error');
     if (!res.headersSent) {
       res.status(500).json({
         success: false,
@@ -317,7 +318,7 @@ router.get('/conversation/:conversationId', async (req, res) => {
 
     res.json({ success: true, data: stats });
   } catch (error) {
-    console.error('[Phase3] Get conversation error:', error);
+    req.log.error({ err: error }, '[Phase3] Get conversation error');
     res.status(500).json({
       success: false,
       error: { message: error.message, code: 'GET_CONVERSATION_ERROR' }
@@ -345,7 +346,7 @@ router.get('/conversations', async (req, res) => {
       count: conversations.length
     });
   } catch (error) {
-    console.error('[Phase3] List conversations error:', error);
+    req.log.error({ err: error }, '[Phase3] List conversations error');
     res.status(500).json({
       success: false,
       error: { message: error.message, code: 'LIST_CONVERSATIONS_ERROR' }
@@ -369,7 +370,7 @@ router.delete('/conversation/:conversationId', async (req, res) => {
     
     res.json({ success: true, data: result });
   } catch (error) {
-    console.error('[Phase3] Delete conversation error:', error);
+    req.log.error({ err: error }, '[Phase3] Delete conversation error');
     res.status(500).json({
       success: false,
       error: { message: error.message, code: 'DELETE_CONVERSATION_ERROR' }
@@ -393,7 +394,7 @@ router.post('/conversation/:conversationId/archive', async (req, res) => {
     
     res.json({ success: true, data: result });
   } catch (error) {
-    console.error('[Phase3] Archive conversation error:', error);
+    req.log.error({ err: error }, '[Phase3] Archive conversation error');
     res.status(500).json({
       success: false,
       error: { message: error.message, code: 'ARCHIVE_CONVERSATION_ERROR' }
@@ -420,12 +421,12 @@ router.post('/conversation/:conversationId/archive', async (req, res) => {
 // POST /api/ai/call - Generic AI call endpoint with streaming support
 router.post('/call', async (req, res) => {
   // Debug logging for incoming request
-  console.log('--- /api/ai/call invoked (DEPRECATED) ---');
-  console.log('Method:', req.method);
-  console.log('Path:', req.originalUrl);
-  console.log('Headers:', JSON.stringify(req.headers, null, 2));
-  console.log('Body (truncated):', JSON.stringify({...req.body, messages: req.body.messages ? `[${req.body.messages.length} messages]` : undefined}, null, 2));
-  console.log('Stream requested:', req.body.stream);
+  req.log.debug({
+    method: req.method,
+    path: req.originalUrl,
+    stream: req.body.stream,
+    messageCount: req.body.messages?.length,
+  }, '--- /api/ai/call invoked (DEPRECATED) ---');
 
   try {
     // Check permission for API key users
@@ -477,9 +478,7 @@ router.post('/call', async (req, res) => {
 
       try {
         const result = await aiService.callAI(prompt, config);
-        console.log('AI result received, length:', result?.length || 0);
-        console.log('AI result type:', typeof result);
-        console.log('AI result FULL:', result);
+        req.log.debug({ resultLength: result?.length || 0, resultType: typeof result }, 'AI result received');
 
         const timestamp = Math.floor(Date.now() / 1000);
         const id = `chatcmpl-${Date.now()}`;
@@ -519,7 +518,7 @@ router.post('/call', async (req, res) => {
         res.write('data: [DONE]\n\n');
         res.end();
       } catch (streamError) {
-        console.error('Error in streaming response:', streamError);
+        req.log.error({ err: streamError }, 'Error in streaming response');
         const errorChunk = {
           error: {
             message: streamError.message,
@@ -535,7 +534,7 @@ router.post('/call', async (req, res) => {
       const result = await aiService.callAI(prompt, config);
       const model = config.model || aiService.currentProvider;
 
-      console.log('Sending non-streaming response, length:', result?.length);
+      req.log.debug({ resultLength: result?.length }, 'Sending non-streaming response');
 
       res.json({
         id: `chatcmpl-${Date.now()}`,
@@ -561,7 +560,7 @@ router.post('/call', async (req, res) => {
     }
 
   } catch (error) {
-    console.error('Error in /api/ai/call:', error);
+    req.log.error({ err: error }, 'Error in /api/ai/call');
     if (!res.headersSent) {
       // Use 502 for upstream AI failures, 400 only for bad requests
       const status = error.message?.includes('required') || error.message?.includes('Missing') ? 400 : 502;
@@ -755,12 +754,12 @@ router.post('/models/:provider/refresh', async (req, res) => {
       });
     }
 
-    console.log(`Refreshing models for ${provider}...`);
+    req.log.info({ provider }, 'Refreshing models');
 
     // Refresh models from provider API
     const models = await aiService.refreshModels(provider);
 
-    console.log(`Successfully refreshed ${models.length} models for ${provider}`);
+    req.log.info({ provider, modelCount: models.length }, 'Successfully refreshed models');
 
     res.json({
       success: true,
@@ -772,7 +771,7 @@ router.post('/models/:provider/refresh', async (req, res) => {
     });
 
   } catch (error) {
-    console.error(`Error refreshing models for ${req.params.provider}:`, error);
+    req.log.error({ err: error, provider: req.params.provider }, 'Error refreshing models');
     res.status(500).json({
       success: false,
       error: {
@@ -791,11 +790,10 @@ router.get('/director/models', async (req, res) => {
     const permissionError = requirePermission(req, res, 'ai:director');
     if (permissionError) return;
 
-    console.log('AI Director models endpoint called');
+    req.log.info('AI Director models endpoint called');
     const result = await aiDirectorService.collectModelInformation();
 
-    console.log('AI Director result success:', result.success);
-    console.log('AI Director result data keys:', result.data ? Object.keys(result.data) : 'No data');
+    req.log.debug({ success: result.success, dataKeys: result.data ? Object.keys(result.data) : null }, 'AI Director result');
 
     if (result.success) {
       res.json({
@@ -803,7 +801,7 @@ router.get('/director/models', async (req, res) => {
         data: result.data
       });
     } else {
-      console.error('AI Director failed:', result.error);
+      req.log.error({ err: result.error }, 'AI Director failed');
       res.status(500).json({
         success: false,
         error: {
@@ -814,7 +812,7 @@ router.get('/director/models', async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('AI Director models endpoint error:', error);
+    req.log.error({ err: error }, 'AI Director models endpoint error');
     res.status(500).json({
       success: false,
       error: {
@@ -952,14 +950,14 @@ router.post('/director/force-refresh', async (req, res) => {
         const isEnabled = aiService.providers[provider]?.enabled || false;
 
         if (hasApiKey && isEnabled) {
-          console.log(`Force refreshing ${provider}...`);
+          req.log.info({ provider }, 'Force refreshing');
           await aiService.refreshModels(provider);
           results[provider] = 'success';
         } else {
           results[provider] = 'skipped (no API key or disabled)';
         }
       } catch (error) {
-        console.error(`Failed to force refresh ${provider}:`, error);
+        req.log.error({ err: error, provider }, 'Failed to force refresh');
         results[provider] = `error: ${error.message}`;
       }
     }
@@ -1186,10 +1184,10 @@ router.post('/config', async (req, res) => {
 router.post('/test', async (req, res) => {
   try {
     const { provider, appName = 'test' } = req.body;
-    console.log(`[AI Test] Testing provider: ${provider}`);
+    req.log.info({ provider }, '[AI Test] Testing provider');
 
     if (!provider) {
-      console.log('[AI Test] ❌ No provider specified');
+      req.log.warn('[AI Test] No provider specified');
       return res.status(400).json({
         success: false,
         error: {
@@ -1202,7 +1200,7 @@ router.post('/test', async (req, res) => {
     // Check if API key is configured
     const providerConfig = aiService.providers[provider];
     if (!providerConfig) {
-      console.log(`[AI Test] ❌ Provider '${provider}' not found in configuration`);
+      req.log.warn({ provider }, '[AI Test] Provider not found in configuration');
       return res.status(400).json({
         success: false,
         error: {
@@ -1213,7 +1211,7 @@ router.post('/test', async (req, res) => {
     }
 
     if (!providerConfig.apiKey) {
-      console.log(`[AI Test] ❌ ${provider} API key is not configured`);
+      req.log.warn({ provider }, '[AI Test] API key is not configured');
       return res.status(400).json({
         success: false,
         error: {
@@ -1224,18 +1222,16 @@ router.post('/test', async (req, res) => {
     }
 
     const maskedKey = providerConfig.apiKey.substring(0, 8) + '...' + providerConfig.apiKey.substring(providerConfig.apiKey.length - 4);
-    console.log(`[AI Test] ✓ ${provider} API key found: ${maskedKey}`);
-    console.log(`[AI Test] Making test API call to ${provider}...`);
+    req.log.info({ provider, maskedKey }, '[AI Test] API key found, making test call');
 
     // Test the provider with a simple prompt
     const testPrompt = 'Hello, this is a test message. Please respond with "OK" if you receive this.';
     const result = await aiService.callProvider(provider, testPrompt, { maxTokens: 10, appName });
 
-    console.log(`[AI Test] ✓ ${provider} API call successful`);
-    console.log(`[AI Test] Response content: ${result.content?.substring(0, 50)}...`);
+    req.log.info({ provider, preview: result.content?.substring(0, 50) }, '[AI Test] API call successful');
 
     if (result && result.content && result.content.toLowerCase().includes('ok')) {
-      console.log(`[AI Test] ✅ ${provider} API key is VALID`);
+      req.log.info({ provider }, '[AI Test] API key is VALID');
       res.json({
         success: true,
         data: {
@@ -1245,7 +1241,7 @@ router.post('/test', async (req, res) => {
         }
       });
     } else {
-      console.log(`[AI Test] ⚠️ ${provider} responded but didn't include "OK"`);
+      req.log.info({ provider }, '[AI Test] API key valid (response received, no "OK")');
       res.json({
         success: true,
         data: {
@@ -1257,8 +1253,7 @@ router.post('/test', async (req, res) => {
     }
 
   } catch (error) {
-    console.error(`[AI Test] ❌ Test failed:`, error.message);
-    console.error(`[AI Test] Error details:`, error);
+    req.log.error({ err: error }, '[AI Test] Test failed');
     res.status(500).json({
       success: false,
       error: {
@@ -1345,7 +1340,7 @@ router.post('/v1/chat/completions', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('OpenAI-compatible endpoint error:', error);
+    req.log.error({ err: error }, 'OpenAI-compatible endpoint error');
     res.status(500).json({
       error: {
         message: error.message || 'AI call failed',
@@ -1401,7 +1396,7 @@ router.get('/v1/models', async (req, res) => {
  * Smart AI call with Phase 2A family-based routing
  */
 router.post('/call-smart', async (req, res) => {
-  console.log('--- /api/ai/call-smart invoked (Phase 2A) ---');
+  req.log.info('--- /api/ai/call-smart invoked (Phase 2A) ---');
 
   try {
     // Check permission for API key users
@@ -1433,7 +1428,7 @@ router.post('/call-smart', async (req, res) => {
     res.json(result);
 
   } catch (error) {
-    console.error('[API] Smart routing error:', error);
+    req.log.error({ err: error }, '[API] Smart routing error');
     res.status(500).json({
       success: false,
       error: {
@@ -1466,7 +1461,7 @@ router.get('/families', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('[API] Families error:', error);
+    req.log.error({ err: error }, '[API] Families error');
     res.status(500).json({
       success: false,
       error: {
@@ -1509,7 +1504,7 @@ router.get('/provider-health', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('[API] Provider health error:', error);
+    req.log.error({ err: error }, '[API] Provider health error');
     res.status(500).json({
       success: false,
       error: {
@@ -1552,7 +1547,7 @@ router.post('/context/reset/:conversationId', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('[API] Context reset error:', error);
+    req.log.error({ err: error }, '[API] Context reset error');
     res.status(500).json({
       success: false,
       error: {
@@ -1572,7 +1567,7 @@ router.get('/stats', async (req, res) => {
       stats
     });
   } catch (error) {
-    console.error('[API] Stats error:', error);
+    req.log.error({ err: error }, '[API] Stats error');
     res.status(500).json({
       success: false,
       error: {
@@ -1592,7 +1587,7 @@ router.post('/cache/clear', async (req, res) => {
       message: 'Cache cleared successfully'
     });
   } catch (error) {
-    console.error('[API] Cache clear error:', error);
+    req.log.error({ err: error }, '[API] Cache clear error');
     res.status(500).json({
       success: false,
       error: {
@@ -1624,7 +1619,7 @@ router.post('/summarization', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('[API] Summarization config error:', error);
+    req.log.error({ err: error }, '[API] Summarization config error');
     res.status(500).json({
       success: false,
       error: {

@@ -1,5 +1,6 @@
 import { GraphQLScalarType, Kind } from 'graphql';
 import crypto from 'crypto';
+import logger from '../../lib/logger.js';
 import { format, subDays } from 'date-fns';
 import pkg from 'garmin-connect';
 const { GarminConnect } = pkg;
@@ -261,7 +262,7 @@ async function buildGarminClient(userId) {
   const client = new GarminConnect({ username: settings.garmin.username, password: settings.garmin.password });
   if (settings.garmin.oauth1_token && settings.garmin.oauth2_token) {
     try { client.loadToken(settings.garmin.oauth1_token, settings.garmin.oauth2_token); return { client, settings }; }
-    catch (err) { console.warn('Failed to load saved Garmin tokens', err.message); }
+    catch (err) { logger.warn({ err }, 'Failed to load saved Garmin tokens'); }
   }
   await client.login();
   await persistGarminTokens(userId, client);

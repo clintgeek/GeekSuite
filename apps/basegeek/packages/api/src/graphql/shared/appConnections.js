@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import logger from '../../lib/logger.js';
 
 // Each GeekSuite app stores data in its own MongoDB database on the same server.
 // The default mongoose.connect() in server.js goes to 'datageek'.
@@ -32,8 +33,8 @@ export function getAppConnection(appName) {
     useUnifiedTopology: true,
   });
 
-  conn.on('error', (err) => console.error(`[${ actualDbName }] MongoDB connection error:`, err));
-  conn.on('connected', () => console.log(`[${ actualDbName }] MongoDB connected`));
+  conn.on('error', (err) => logger.error({ err }, `[${ actualDbName }] MongoDB connection error`));
+  conn.on('connected', () => logger.info(`[${ actualDbName }] MongoDB connected`));
 
   connections[appName] = conn;
   return conn;

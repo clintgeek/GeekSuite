@@ -2,6 +2,7 @@
  * Response Formatter Utility
  * Ensures AI responses are properly formatted for CodeGeek's UI
  */
+import logger from '../lib/logger.js';
 
 // Known tool tags from CodeGeek's system prompt
 // Also includes common aliases/variants that models tend to hallucinate
@@ -102,7 +103,7 @@ function convertFunctionCallToXML(response) {
     }
     
     hasConversions = true;
-    console.log(`[ResponseFormatter] Converting function call: ${toolName}(...) to XML`);
+    logger.debug({ toolName }, '[ResponseFormatter] Converting function call to XML');
     
     // Parse keyword arguments (key="value") or positional ("value")
     const kwargs = {};
@@ -172,7 +173,7 @@ function convertFunctionCallToXML(response) {
   }
   
   if (hasConversions) {
-    console.log(`[ResponseFormatter] Converted function-style calls to XML format`);
+    logger.debug('[ResponseFormatter] Converted function-style calls to XML format');
   }
   
   return converted;
@@ -194,7 +195,7 @@ export function formatResponse(response) {
   const toolName = startsWithBareToolCall(formatted);
   
   if (toolName) {
-    console.log(`[ResponseFormatter] Detected bare <${toolName}> tag, adding context`);
+    logger.debug({ toolName }, '[ResponseFormatter] Detected bare tag, adding context');
     const contextText = getToolContextText(toolName);
     formatted = `${contextText}\n\n${formatted}`;
   }
@@ -217,7 +218,7 @@ export function formatStreamChunk(chunk, isFirstChunk, previousContent = '') {
   
   if (toolName && !previousContent.trim()) {
     // Only add context if we haven't already started sending content
-    console.log(`[ResponseFormatter] Stream detected bare <${toolName}> tag, adding context`);
+    logger.debug({ toolName }, '[ResponseFormatter] Stream detected bare tag, adding context');
     const contextText = getToolContextText(toolName);
     return `${contextText}\n\n${chunk}`;
   }

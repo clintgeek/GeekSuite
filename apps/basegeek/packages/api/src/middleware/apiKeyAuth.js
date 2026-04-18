@@ -1,4 +1,5 @@
 import APIKey from '../models/APIKey.js';
+import logger from '../lib/logger.js';
 
 export const authenticateAPIKey = (requiredPermission = null) => {
   return async (req, res, next) => {
@@ -115,7 +116,7 @@ export const authenticateAPIKey = (requiredPermission = null) => {
 
       next();
     } catch (error) {
-      console.error('API key authentication error:', error);
+      logger.error({ err: error }, 'API key authentication error');
       return res.status(500).json({
         success: false,
         error: {

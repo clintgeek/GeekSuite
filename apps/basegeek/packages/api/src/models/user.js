@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
+import logger from '../lib/logger.js';
 
 // Use the same connection as the main app
 const userGeekUri = process.env.USERGEEK_MONGODB_URI || 'mongodb://localhost:27017/userGeek?authSource=admin';
@@ -12,15 +13,15 @@ const userGeekConn = mongoose.createConnection(userGeekUri, {
 
 // Log connection status
 userGeekConn.on('error', (err) => {
-    console.error('MongoDB connection error:', err);
+    logger.error({ err }, 'MongoDB connection error');
 });
 
 userGeekConn.on('connected', () => {
-    console.log('Connected to userGeek database');
+    logger.info('Connected to userGeek database');
 });
 
 userGeekConn.on('disconnected', () => {
-    console.log('Disconnected from userGeek database');
+    logger.info('Disconnected from userGeek database');
 });
 
 // ─── Layer 1: Profile (human-facing info) ───
@@ -112,7 +113,7 @@ userSchema.pre('save', async function(next) {
         this.passwordHash = await bcrypt.hash(this.passwordHash, salt);
         next();
     } catch (error) {
-        console.error('Password hashing error:', error);
+        logger.error({ err: error }, 'Password hashing error');
         next(error);
     }
 });
@@ -124,18 +125,18 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
             throw new Error('No password provided for comparison');
         }
         if (!this.passwordHash) {
-            console.error('User object:', {
+            logger.error({
                 id: this._id,
                 username: this.username,
                 email: this.email,
                 hasPasswordHash: !!this.passwordHash,
                 passwordHashLength: this.passwordHash ? this.passwordHash.length : 0
-            });
+            }, 'User object missing password hash');
             throw new Error('No stored password found for user');
         }
         return await bcrypt.compare(candidatePassword, this.passwordHash);
     } catch (error) {
-        console.error('Password comparison error:', error);
+        logger.error({ err: error }, 'Password comparison error');
         throw error;
     }
 };

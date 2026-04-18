@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { MongoClient } from 'mongodb';
 import dotenv from 'dotenv';
 import { authenticateToken } from '../middleware/auth.js';
+import logger from '../lib/logger.js';
 
 // Load environment variables
 dotenv.config();
@@ -72,7 +73,7 @@ router.get('/status', async (req, res) => {
       databases
     });
   } catch (error) {
-    console.error('MongoDB Status Error:', error);
+    req.log.error({ err: error }, 'MongoDB Status Error');
     res.status(500).json({
       message: 'Failed to fetch MongoDB status',
       error: error.message

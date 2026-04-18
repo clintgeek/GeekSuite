@@ -1,7 +1,7 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { randomUUID } from 'node:crypto';
+import crypto from 'node:crypto';
 import dotenv from 'dotenv';
 
 // Load environment variables
@@ -10,6 +10,8 @@ dotenv.config();
 import cors from 'cors';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
+import pinoHttp from 'pino-http';
+import logger from './lib/logger.js';
 import mongoose from 'mongoose';
 import mongoRoutes from './routes/mongo.js';
 import redisRoutes from './routes/redis.js';
@@ -39,18 +41,18 @@ app.set('trust proxy', 1);
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/datageek?authSource=admin';
 try {
   await mongoose.connect(MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
-  console.log('MongoDB connected')
+  logger.info('MongoDB connected')
 } catch (err) {
-  console.error('MongoDB connection error:', err)
+  logger.error({ err }, 'MongoDB connection error')
   process.exit(1)
 }
 
 // Connect to aiGeek database
 try {
   await connectAIGeekDB()
-  console.log('aiGeek database connected')
+  logger.info('aiGeek database connected')
 } catch (err) {
-  console.error('aiGeek database connection error:', err)
+  logger.error({ err }, 'aiGeek database connection error')
   process.exit(1)
 }
 
@@ -115,9 +117,13 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(cookieParser());
 
-// Attach a request ID to every request for log correlation
+// Attach request ID and structured logger to every request
+const httpLogger = pinoHttp({
+  logger,
+  genReqId: (req) => req.headers['x-request-id'] || crypto.randomUUID(),
+});
 app.use((req, res, next) => {
-  req.id = req.headers['x-request-id'] || randomUUID();
+  httpLogger(req, res);
   res.setHeader('X-Request-Id', req.id);
   next();
 });
@@ -126,12 +132,6 @@ app.use((req, res, next) => {
 if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
-
-// Log all requests
-app.use((req, res, next) => {
-  console.log(`${ new Date().toISOString() } - ${ req.method } ${ req.url }`);
-  next();
-});
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -289,7 +289,7 @@ await apolloServer.start();
 app.use('/graphql', optionalUser());
 app.use('/graphql', (req, _res, next) => {
   if (req.method === 'POST' && req.body?.operationName) {
-    console.log(`[GQL] ${req.body.operationName} | vars: ${JSON.stringify(Object.keys(req.body.variables || {}))}`);
+    req.log.info(`[GQL] ${req.body.operationName} | vars: ${JSON.stringify(Object.keys(req.body.variables || {}))}`);
   }
   next();
 });
@@ -303,7 +303,7 @@ app.use('/graphql', expressMiddleware(apolloServer, {
 app.get('*', (req, res) => {
   res.sendFile(path.join(uiBuildPath, 'index.html'), (err) => {
     if (err) {
-      console.error('Error serving index.html:', err);
+      req.log.error({ err }, 'Error serving index.html');
       if (!res.headersSent) {
         res.status(404).send('UI not found. Is it built?');
       }
@@ -313,7 +313,7 @@ app.get('*', (req, res) => {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error('[' + req.id + '] 500:', err.stack);
+  req.log.error({ err }, '500 handler');
   res.status(500).json({
     message: 'Internal Server Error',
     requestId: req.id
@@ -322,31 +322,31 @@ app.use((err, req, res, next) => {
 
 
 const server = app.listen(PORT, '0.0.0.0', async () => {
-  console.log(`API server running on port ${ PORT }`);
-  console.log(`🔷 GraphQL available at http://localhost:${ PORT }/graphql`);
-  console.log(`Health check available at http://localhost:${ PORT }/api/health`);
-  console.log(`MongoDB status available at http://localhost:${ PORT }/api/mongo/status`);
-  console.log(`Redis status available at http://localhost:${ PORT }/api/redis/status`);
-  console.log(`Postgres status available at http://localhost:${ PORT }/api/postgres/status`);
-  console.log(`User API available at http://localhost:${ PORT }/api/users/`);
-  console.log(`NoteGeek API available at http://localhost:${ PORT }/api/notes/`);
+  logger.info(`API server running on port ${ PORT }`);
+  logger.info(`🔷 GraphQL available at http://localhost:${ PORT }/graphql`);
+  logger.info(`Health check available at http://localhost:${ PORT }/api/health`);
+  logger.info(`MongoDB status available at http://localhost:${ PORT }/api/mongo/status`);
+  logger.info(`Redis status available at http://localhost:${ PORT }/api/redis/status`);
+  logger.info(`Postgres status available at http://localhost:${ PORT }/api/postgres/status`);
+  logger.info(`User API available at http://localhost:${ PORT }/api/users/`);
+  logger.info(`NoteGeek API available at http://localhost:${ PORT }/api/notes/`);
 
   // Phase 2A: Start provider health background job
   try {
     const { startHealthJob } = await import('./services/aiHealthJobService.js');
     await startHealthJob();
-    console.log('✅ Phase 2A health monitoring started');
+    logger.info('✅ Phase 2A health monitoring started');
   } catch (error) {
-    console.error('⚠️ Phase 2A health job failed to start:', error.message);
+    logger.error({ err: error }, '⚠️ Phase 2A health job failed to start');
   }
 
   // Phase 3: Initialize conversation service
   try {
     const conversationService = (await import('./services/conversationService.js')).default;
     await conversationService.initialize();
-    console.log('✅ Phase 3: Conversation service initialized');
+    logger.info('✅ Phase 3: Conversation service initialized');
   } catch (error) {
-    console.error('⚠️ Phase 3: Conversation service failed to initialize:', error.message);
+    logger.error({ err: error }, '⚠️ Phase 3: Conversation service failed to initialize');
   }
 });
 
@@ -354,14 +354,14 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
 let shuttingDown = false
 const shutdown = (signal) => {
   if (shuttingDown) {
-    console.log(`${ signal } received during shutdown — forcing exit`)
+    logger.info(`${ signal } received during shutdown — forcing exit`)
     process.exit(1)
   }
   shuttingDown = true
-  console.log(`${ signal } received — shutting down`)
+  logger.info(`${ signal } received — shutting down`)
 
   const forceTimer = setTimeout(() => {
-    console.error('Shutdown timed out after 15s — forcing exit')
+    logger.error('Shutdown timed out after 15s — forcing exit')
     process.exit(0)
   }, 15_000)
   forceTimer.unref()
@@ -370,7 +370,7 @@ const shutdown = (signal) => {
     try {
       await mongoose.disconnect()
     } catch (err) {
-      console.error('Error disconnecting mongoose:', err)
+      logger.error({ err }, 'Error disconnecting mongoose')
     }
     process.exit(0)
   })

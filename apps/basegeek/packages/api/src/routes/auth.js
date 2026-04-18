@@ -5,6 +5,7 @@ import { authenticateToken } from '../middleware/auth.js';
 import { User } from '../models/user.js';
 import jwt from 'jsonwebtoken';
 import { VALID_APPS } from '../config/validApps.js';
+import logger from '../lib/logger.js';
 
 // SSO Cookie Configuration
 // In local/dev we omit domain so cookies apply to localhost redirects.
@@ -73,21 +74,13 @@ const authLimiter = rateLimit({
 // @access  Public
 router.post('/login', authLimiter, async (req, res) => {
     try {
-        console.log('Login request received:', {
-            body: req.body,
-            headers: req.headers,
-            ip: req.ip
-        });
+        req.log.info({ ip: req.ip, app: req.body.app }, 'Login request received');
 
         const { identifier, password, app } = req.body;
 
         // Validate required fields
         if (!identifier || !password) {
-            console.error('Missing credentials:', {
-                identifier: !!identifier,
-                password: !!password,
-                body: req.body
-            });
+            req.log.warn({ hasIdentifier: !!identifier, hasPassword: !!password }, 'Missing credentials');
             return res.status(400).json({
                 message: 'Missing credentials',
                 code: 'LOGIN_ERROR'
@@ -96,37 +89,24 @@ router.post('/login', authLimiter, async (req, res) => {
 
         // Validate app
         if (!app || !VALID_APPS.includes(app.toLowerCase())) {
-            console.error('Invalid app:', { app, validApps: VALID_APPS });
+            req.log.warn({ app }, 'Invalid app');
             return res.status(400).json({
                 message: 'Invalid app',
                 code: 'LOGIN_ERROR'
             });
         }
 
-        console.log('Attempting login for:', {
-            identifier,
-            app: app.toLowerCase(),
-            timestamp: new Date().toISOString()
-        });
+        req.log.info({ identifier, app: app.toLowerCase() }, 'Attempting login');
 
         const result = await authService.login(identifier, password, app.toLowerCase());
 
-        console.log('Auth service result:', result);
-        console.log('Result user object:', result.user);
-        console.log('Result user keys:', Object.keys(result.user));
-
-        console.log('Login successful for:', {
-            identifier,
-            app: app.toLowerCase(),
-            userId: result.user.id,
-            timestamp: new Date().toISOString()
-        });
+        req.log.info({ identifier, app: app.toLowerCase(), userId: result.user.id }, 'Login successful');
 
         // Track last login
         try {
             await User.findByIdAndUpdate(result.user.id, { lastLogin: new Date() });
         } catch (loginTrackErr) {
-            console.error('Failed to update lastLogin:', loginTrackErr.message);
+            req.log.warn({ err: loginTrackErr }, 'Failed to update lastLogin');
         }
 
         // Set SSO cookies for cross-subdomain auth (backward compatible)
@@ -134,13 +114,7 @@ router.post('/login', authLimiter, async (req, res) => {
 
         res.json(result);
     } catch (error) {
-        console.error('Login error:', {
-            message: error.message,
-            stack: error.stack,
-            identifier: req.body.identifier,
-            app: req.body.app,
-            timestamp: new Date().toISOString()
-        });
+        req.log.error({ err: error, identifier: req.body.identifier, app: req.body.app }, 'Login error');
 
         // Determine appropriate status code
         const statusCode = error.message.includes('Invalid credentials') ? 401 : 500;
@@ -228,7 +202,7 @@ router.post('/refresh', async (req, res) => {
 
         res.json(responseData);
     } catch (error) {
-        console.error('Token refresh error:', error);
+        req.log.error({ err: error }, 'Token refresh error');
         res.status(401).json({
             message: error.message,
             code: 'TOKEN_REFRESH_ERROR'
@@ -303,7 +277,7 @@ router.post('/register', async (req, res) => {
 
         res.status(201).json(responseData);
     } catch (error) {
-        console.error('Registration error:', error);
+        req.log.error({ err: error }, 'Registration error');
         res.status(400).json({
             message: error.message,
             code: 'REGISTER_ERROR'
@@ -344,7 +318,7 @@ router.post('/reset-password', authenticateToken, async (req, res) => {
             code: 'PASSWORD_UPDATED'
         });
     } catch (error) {
-        console.error('Password reset error:', error);
+        req.log.error({ err: error }, 'Password reset error');
         res.status(500).json({
             message: error.message,
             code: 'RESET_ERROR'

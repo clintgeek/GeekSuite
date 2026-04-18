@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import logger from '../lib/logger.js';
 
 const AIGEEK_MONGODB_URI = process.env.AIGEEK_MONGODB_URI || 'mongodb://localhost:27017/aiGeek?authSource=admin';
 
@@ -10,7 +11,7 @@ let _aiGeekConnection = null;
 
 export const getAIGeekConnection = () => {
   if (_aiGeekConnection) return _aiGeekConnection;
-  console.log('🔗 Creating aiGeek connection');
+  logger.info('🔗 Creating aiGeek connection');
   _aiGeekConnection = mongoose.createConnection(AIGEEK_MONGODB_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
@@ -21,6 +22,6 @@ export const getAIGeekConnection = () => {
 export const connectAIGeekDB = async () => {
   const conn = getAIGeekConnection();
   await conn.asPromise();
-  console.log('Connected to aiGeek database');
+  logger.info('Connected to aiGeek database');
   return conn;
 };

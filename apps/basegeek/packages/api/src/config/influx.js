@@ -1,5 +1,6 @@
 import { InfluxDB } from '@influxdata/influxdb-client';
 import axios from 'axios';
+import logger from '../lib/logger.js';
 
 const {
   INFLUXDB_URL = 'http://localhost:8086',
@@ -13,7 +14,7 @@ let influxInstance;
 const getInfluxInstance = () => {
   if (!influxInstance) {
     if (!INFLUXDB_TOKEN) {
-      console.warn('⚠️  INFLUXDB_TOKEN not set. Influx queries will likely fail.');
+      logger.warn('⚠️  INFLUXDB_TOKEN not set. Influx queries will likely fail.');
     }
     influxInstance = new InfluxDB({ url: INFLUXDB_URL, token: INFLUXDB_TOKEN });
   }
@@ -28,7 +29,7 @@ export const pingInflux = async (timeout = 5000) => {
     return response.data.status === 'pass';
   } catch (error) {
     const message = error.response?.data?.message || error.message;
-    console.error('InfluxDB health check failed:', message);
+    logger.error({ err: error }, 'InfluxDB health check failed');
     throw new Error(message);
   }
 };

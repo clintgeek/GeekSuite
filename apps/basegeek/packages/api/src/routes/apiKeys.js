@@ -1,6 +1,7 @@
 import express from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import APIKey from '../models/APIKey.js';
+import logger from '../lib/logger.js';
 
 const router = express.Router();
 
@@ -38,7 +39,7 @@ router.get('/', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching API keys:', error);
+    req.log.error({ err: error }, 'Error fetching API keys');
     res.status(500).json({
       success: false,
       error: {
@@ -125,7 +126,7 @@ router.post('/', async (req, res) => {
       message: 'API key created successfully. Please save the key securely as it will not be shown again.'
     });
   } catch (error) {
-    console.error('Error creating API key:', error);
+    req.log.error({ err: error }, 'Error creating API key');
 
     if (error.code === 11000) {
       return res.status(409).json({
@@ -188,7 +189,7 @@ router.get('/:keyId', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching API key:', error);
+    req.log.error({ err: error }, 'Error fetching API key');
     res.status(500).json({
       success: false,
       error: {
@@ -269,7 +270,7 @@ router.put('/:keyId', async (req, res) => {
       message: 'API key updated successfully'
     });
   } catch (error) {
-    console.error('Error updating API key:', error);
+    req.log.error({ err: error }, 'Error updating API key');
     res.status(500).json({
       success: false,
       error: {
@@ -312,7 +313,7 @@ router.delete('/:keyId', async (req, res) => {
       message: 'API key deleted successfully'
     });
   } catch (error) {
-    console.error('Error deleting API key:', error);
+    req.log.error({ err: error }, 'Error deleting API key');
     res.status(500).json({
       success: false,
       error: {
@@ -382,7 +383,7 @@ router.post('/:keyId/regenerate', async (req, res) => {
       message: 'API key regenerated successfully. Please save the new key securely as it will not be shown again.'
     });
   } catch (error) {
-    console.error('Error regenerating API key:', error);
+    req.log.error({ err: error }, 'Error regenerating API key');
     res.status(500).json({
       success: false,
       error: {
@@ -432,7 +433,7 @@ router.get('/apps/list', async (req, res) => {
       data: { apps }
     });
   } catch (error) {
-    console.error('Error fetching app list:', error);
+    req.log.error({ err: error }, 'Error fetching app list');
     res.status(500).json({
       success: false,
       error: {

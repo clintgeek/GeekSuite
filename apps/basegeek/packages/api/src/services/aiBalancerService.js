@@ -12,6 +12,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import logger from '../lib/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -33,15 +34,15 @@ const stateClient = redis.createClient({
   database: config.redis.stateDB
 });
 
-stateClient.on('error', (err) => console.error('[LoadBalancer] Redis state error:', err));
-stateClient.on('connect', () => console.log('[LoadBalancer] Redis state connected (DB 1)'));
+stateClient.on('error', (err) => logger.error({ err }, '[LoadBalancer] Redis state error'));
+stateClient.on('connect', () => logger.info('[LoadBalancer] Redis state connected (DB 1)'));
 
 // Connection promise for lazy initialization
 let connectionPromise = null;
 function ensureConnection() {
   if (!connectionPromise) {
     connectionPromise = stateClient.connect().catch(err => {
-      console.error('[LoadBalancer] Failed to connect to Redis:', err.message);
+      logger.error({ err }, '[LoadBalancer] Failed to connect to Redis');
       connectionPromise = null; // Reset to allow retry
       throw err;
     });
@@ -81,7 +82,7 @@ class LoadBalancer {
     }
 
     if (availableProviders.length === 0) {
-      console.warn(`[LoadBalancer] No available providers in family ${familyName}, using all`);
+      logger.warn(`[LoadBalancer] No available providers in family ${familyName}, using all`);
       // Fallback: use all providers even if on cooldown
       return providers[0];
     }
@@ -93,7 +94,7 @@ class LoadBalancer {
     const provider = availableProviders[wrappedIndex];
 
     if (config.debug) {
-      console.log(`[LoadBalancer] Family: ${familyName}, Index: ${index}, Provider: ${provider}`);
+      logger.debug(`[LoadBalancer] Family: ${familyName}, Index: ${index}, Provider: ${provider}`);
     }
 
     return provider;
@@ -125,7 +126,7 @@ class LoadBalancer {
     await this.updateProviderScore(provider, 'failure');
 
     if (config.telemetry.logToConsole) {
-      console.log(`[LoadBalancer] Provider ${provider} marked unavailable for ${cooldownSeconds}s`);
+      logger.info(`[LoadBalancer] Provider ${provider} marked unavailable for ${cooldownSeconds}s`);
     }
   }
 
@@ -195,7 +196,7 @@ class LoadBalancer {
     await stateClient.hSet(key, provider, JSON.stringify(scoreData));
 
     if (config.debug) {
-      console.log(`[LoadBalancer] Updated score for ${provider}:`, scoreData);
+      logger.debug({ scoreData }, `[LoadBalancer] Updated score for ${provider}`);
     }
   }
 
@@ -208,7 +209,7 @@ class LoadBalancer {
     await this.updateProviderScore(provider, 'success', latency);
 
     if (config.telemetry.includeLatency && config.telemetry.logToConsole) {
-      console.log(`[LoadBalancer] Provider ${provider} latency: ${latency}ms`);
+      logger.info(`[LoadBalancer] Provider ${provider} latency: ${latency}ms`);
     }
   }
 
@@ -260,7 +261,7 @@ class LoadBalancer {
     const key = `roundrobin:${familyName}:index`;
     await stateClient.set(key, '0');
 
-    console.log(`[LoadBalancer] Reset round-robin for family ${familyName}`);
+    logger.info(`[LoadBalancer] Reset round-robin for family ${familyName}`);
   }
 }
 

@@ -12,6 +12,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import logger from '../lib/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -34,19 +35,19 @@ const familiesConfig = JSON.parse(fs.readFileSync(familiesPath, 'utf-8'));class 
    */
   start() {
     if (!config.healthTracking.enabled || !config.healthTracking.backgroundJobEnabled) {
-      console.log('[HealthJob] Background health job disabled in config');
+      logger.info('[HealthJob] Background health job disabled in config');
       return;
     }
 
     if (this.isRunning) {
-      console.warn('[HealthJob] Health job already running');
+      logger.warn('[HealthJob] Health job already running');
       return;
     }
 
     this.isRunning = true;
     const intervalMs = config.healthTracking.backgroundJobInterval;
 
-    console.log(`[HealthJob] Starting background health job (interval: ${intervalMs}ms)`);
+    logger.info(`[HealthJob] Starting background health job (interval: ${intervalMs}ms)`);
 
     // Run immediately on start
     this.checkProviderHealth();
@@ -62,7 +63,7 @@ const familiesConfig = JSON.parse(fs.readFileSync(familiesPath, 'utf-8'));class 
    */
   stop() {
     if (!this.isRunning) {
-      console.warn('[HealthJob] Health job not running');
+      logger.warn('[HealthJob] Health job not running');
       return;
     }
 
@@ -72,7 +73,7 @@ const familiesConfig = JSON.parse(fs.readFileSync(familiesPath, 'utf-8'));class 
     }
 
     this.isRunning = false;
-    console.log('[HealthJob] Stopped background health job');
+    logger.info('[HealthJob] Stopped background health job');
   }
 
   /**
@@ -84,7 +85,7 @@ const familiesConfig = JSON.parse(fs.readFileSync(familiesPath, 'utf-8'));class 
       const allProviders = this.getAllProviders();
       const scores = await this.loadBalancer.getAllProviderScores();
 
-      console.log(`[HealthJob] Checking health for ${allProviders.length} providers...`);
+      logger.info(`[HealthJob] Checking health for ${allProviders.length} providers...`);
 
       let clearedCount = 0;
       const healthStatus = {};
@@ -112,7 +113,7 @@ const familiesConfig = JSON.parse(fs.readFileSync(familiesPath, 'utf-8'));class 
           await this.loadBalancer.updateProviderScore(provider, 'recovery');
           clearedCount++;
 
-          console.log(`[HealthJob] ✓ Cleared cooldown for ${provider}`);
+          logger.info(`[HealthJob] ✓ Cleared cooldown for ${provider}`);
         }
 
         // Check provider availability
@@ -129,13 +130,13 @@ const familiesConfig = JSON.parse(fs.readFileSync(familiesPath, 'utf-8'));class 
         };
       }
 
-      console.log(`[HealthJob] Health check complete. Cleared ${clearedCount} cooldowns.`);
+      logger.info(`[HealthJob] Health check complete. Cleared ${clearedCount} cooldowns.`);
 
       // Log detailed status if debug enabled
       if (config.debug) {
-        console.log('[HealthJob] Provider health status:');
+        logger.info('[HealthJob] Provider health status:');
         for (const [provider, status] of Object.entries(healthStatus)) {
-          console.log(`  - ${provider}: ${status.status} (score: ${status.score}, latency: ${status.avgLatency}ms)`);
+          logger.info(`  - ${provider}: ${status.status} (score: ${status.score}, latency: ${status.avgLatency}ms)`);
         }
       }
 
@@ -149,11 +150,11 @@ const familiesConfig = JSON.parse(fs.readFileSync(familiesPath, 'utf-8'));class 
           avgScore: this.calculateAvgScore(healthStatus),
           avgLatency: this.calculateAvgLatency(healthStatus)
         };
-        console.log('[HealthJob] Summary:', JSON.stringify(summary, null, 2));
+        logger.info({ summary }, '[HealthJob] Summary');
       }
 
     } catch (error) {
-      console.error('[HealthJob] Error during health check:', error);
+      logger.error({ err: error }, '[HealthJob] Error during health check');
     }
   }
 
