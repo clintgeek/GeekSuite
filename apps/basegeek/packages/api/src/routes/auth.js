@@ -64,7 +64,9 @@ const authLimiter = rateLimit({
     message: {
         message: 'Too many login attempts, please try again later',
         code: 'AUTH_RATE_LIMIT'
-    }
+    },
+    // Disable in test environment so test suites aren't capped at 5 logins.
+    skip: () => process.env.NODE_ENV === 'test',
 });
 
 // @desc    Login user
