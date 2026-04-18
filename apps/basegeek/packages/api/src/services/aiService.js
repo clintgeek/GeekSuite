@@ -378,7 +378,8 @@ class AIService {
       for (const config of configs) {
         logger.debug(`  ${config.provider}: enabled=${config.enabled}, apiKey=${config.apiKey ? 'Set' : 'Not Set'}`);
         if (this.providers[config.provider]) {
-          this.providers[config.provider].apiKey = config.apiKey ? config.apiKey.trim() : '';
+          const decryptedKey = config.getDecryptedKey();
+          this.providers[config.provider].apiKey = decryptedKey ? decryptedKey.trim() : '';
           this.providers[config.provider].enabled = config.enabled;
           this.providers[config.provider].model = this.rotationProviderOverrides[config.provider]?.model || this.providers[config.provider].model;
           this.providers[config.provider].maxTokens = config.maxTokens || this.providers[config.provider].maxTokens;

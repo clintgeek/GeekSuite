@@ -8,6 +8,7 @@ import aiUsageService from '../services/aiUsageService.js';
 import conversationService from '../services/conversationService.js';
 import { countTextTokens, countMessageTokens } from '../services/tokenCounter.js';
 import AIConfig from '../models/AIConfig.js';
+import { encrypt } from '../lib/cryptoVault.js';
 import AIModel from '../models/AIModel.js';
 import jwt from 'jsonwebtoken';
 import { formatResponse, formatStreamChunk } from '../utils/responseFormatter.js';
@@ -1093,10 +1094,10 @@ router.get('/config', async (req, res) => {
       onemin: { apiKey: '', enabled: false }
     };
 
-    // Load configurations from database
+    // Load configurations from database — decrypt key before sending to client
     for (const dbConfig of configs) {
       if (config[dbConfig.provider]) {
-        config[dbConfig.provider].apiKey = dbConfig.apiKey;
+        config[dbConfig.provider].apiKey = dbConfig.getDecryptedKey() ?? '';
         config[dbConfig.provider].enabled = dbConfig.enabled;
 
         // Handle Cloudflare-specific fields
@@ -1142,7 +1143,7 @@ router.post('/config', async (req, res) => {
     for (const config of configs) {
       if (config.apiKey && config.apiKey !== '***') {
         const updateData = {
-          apiKey: config.apiKey.trim(), // Remove whitespace
+          apiKey: encrypt(config.apiKey.trim()), // encrypt before persisting
           enabled: config.enabled || false
         };
 
