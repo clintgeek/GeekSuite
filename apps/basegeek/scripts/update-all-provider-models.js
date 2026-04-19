@@ -100,7 +100,7 @@ async function updateAllProviderModels() {
 
     if (updatedCount > 0) {
       console.log('🔄 Restart baseGeek to apply changes:');
-      console.log('   docker-compose restart basegeek_app');
+      console.log('   docker-compose restart basegeek');
     } else {
       console.log('No updates needed - all providers are current!');
     }

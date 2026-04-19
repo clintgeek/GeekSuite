@@ -5,7 +5,7 @@ Add an InfluxDB instance to the DataGeek stack and expose its health/metrics thr
 
 ## 1. Infrastructure & Configuration
 - [ ] Extend `docker-compose.yml` with an `influxdb` service (InfluxDB 2.x image, host port 8086, bound data/config volumes, admin credentials via env).
-- [ ] Update `basegeek_app` service `depends_on` to include the new Influx service.
+- [ ] Update `basegeek` service `depends_on` to include the new Influx service.
 - [ ] Define `INFLUXDB_URL`, `INFLUXDB_ORG`, `INFLUXDB_BUCKET`, `INFLUXDB_TOKEN`, and any setup username/password fields across `.env`, `.env.local`, `.env.production` with safe defaults/placeholders.
 - [ ] Capture the new environment variables and service notes in `DOCS/CURSOR-CONTEXT.md` (and any env/setup docs) so Chef has canonical references.
 
