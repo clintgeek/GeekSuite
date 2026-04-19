@@ -12,13 +12,8 @@ const UserSchema = new mongoose.Schema({
     required: [true, 'Please provide an email'],
     unique: true,
     lowercase: true,
-    match: [/^\S+@\S+\.\S+$/, 'Please provide a valid email'], // Basic email format validation
-    index: true, // Index for faster lookups
-  },
-  passwordHash: {
-    type: String,
-    required: [true, 'Please provide a password hash'],
-    minlength: 6, // Store the hash, but good practice to enforce minimum password length elsewhere
+    match: [/^\S+@\S+\.\S+$/, 'Please provide a valid email'],
+    index: true,
   },
   createdAt: {
     type: Date,

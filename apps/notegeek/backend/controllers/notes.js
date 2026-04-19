@@ -1,5 +1,6 @@
 import Note from '../models/Note.js';
 import bcrypt from 'bcryptjs';
+import { logger } from '../lib/logger.js';
 
 // --- Helper Functions (Consider moving to a service/util file later) ---
 
@@ -56,7 +57,7 @@ export const createNote = async (req, res) => {
       const salt = await bcrypt.genSalt(10);
       lockHash = await bcrypt.hash(lockPassword, salt);
     } catch (error) {
-      console.error('Error hashing lock password:', error);
+      req.log.error({ err: error }, 'Error hashing lock password');
       return res.status(500).json({ message: 'Server error handling lock password' });
     }
   }
@@ -75,7 +76,7 @@ export const createNote = async (req, res) => {
 
     res.status(201).json(note);
   } catch (error) {
-    console.error('Error creating note:', error);
+    req.log.error({ err: error }, 'Error creating note');
     if (error.name === 'ValidationError') {
       return res.status(400).json({ message: 'Validation Error', errors: error.errors });
     }
@@ -140,7 +141,7 @@ export const getNotes = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Error fetching notes:', error);
+    req.log.error({ err: error }, 'Error fetching notes');
     res.status(500).json({ message: 'Server error fetching notes' });
   }
 };
@@ -179,7 +180,7 @@ export const getNoteById = async (req, res) => {
 
     res.status(200).json(note);
   } catch (error) {
-    console.error('Error fetching note by ID:', error);
+    req.log.error({ err: error }, 'Error fetching note by ID');
     res.status(500).json({ message: 'Server error fetching note' });
   }
 };
@@ -225,7 +226,7 @@ export const updateNote = async (req, res) => {
     const updatedNote = await note.save();
     res.status(200).json(updatedNote);
   } catch (error) {
-    console.error('Error updating note:', error);
+    req.log.error({ err: error }, 'Error updating note');
     if (error.name === 'ValidationError') {
       return res.status(400).json({ message: 'Validation Error', errors: error.errors });
     }
@@ -262,7 +263,7 @@ export const deleteNote = async (req, res) => {
     await note.deleteOne(); // Use the instance method for deletion
     res.status(200).json({ message: 'Note deleted successfully' });
   } catch (error) {
-    console.error('Error deleting note:', error);
+    req.log.error({ err: error }, 'Error deleting note');
     res.status(500).json({ message: 'Server error deleting note' });
   }
 };
@@ -298,7 +299,7 @@ export const getTagHierarchy = async (req, res) => {
 
     res.status(200).json(hierarchy);
   } catch (error) {
-    console.error('Error fetching tag hierarchy:', error);
+    req.log.error({ err: error }, 'Error fetching tag hierarchy');
     res.status(500).json({ message: 'Server error fetching tag hierarchy' });
   }
 };

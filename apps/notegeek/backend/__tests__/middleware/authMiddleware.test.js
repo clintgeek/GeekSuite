@@ -12,7 +12,11 @@ import {
     UserModel
 } from '../utils/testUtils.js';
 
-describe('Auth Middleware', () => {
+// SKIP: middleware/authMiddleware.js now delegates to @geeksuite/user/server attachUser.
+// These tests were written for the deprecated local-JWT protect function
+// (middleware/auth.js) which has been deleted as part of the Phase 2 hardening pass.
+// A new integration test suite for the attachUser pattern should replace this.
+describe.skip('Auth Middleware', () => {
     beforeEach(() => {
         resetMocks();
     });

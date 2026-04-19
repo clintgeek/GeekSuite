@@ -1,7 +1,4 @@
 import express from 'express';
-import { registerUser, loginUser } from '../controllers/auth.js'; // Import loginUser
-import jwt from 'jsonwebtoken';
-import User from '../models/User.js';
 import axios from 'axios';
 
 const router = express.Router();
@@ -38,16 +35,6 @@ function forwardSetCookieHeaders(res, upstreamHeaders) {
 
   res.setHeader('Set-Cookie', [setCookie]);
 }
-
-// @desc    Register a new user
-// @route   POST /api/auth/register
-// @access  Public
-router.post('/register', registerUser);
-
-// @desc    Authenticate user & get token
-// @route   POST /api/auth/login
-// @access  Public
-router.post('/login', loginUser);
 
 /**
  * @route GET /api/auth/me
@@ -117,9 +104,11 @@ router.post('/logout', async (req, res) => {
   }
 });
 
-// @desc    Refresh token (proxy to baseGeek)
-// @route   POST /api/auth/refresh
-// @access  Public
+/**
+ * @route POST /api/auth/refresh
+ * @desc Refresh token (proxy to baseGeek)
+ * @access Public
+ */
 router.post('/refresh', async (req, res) => {
   try {
     const refreshToken = req.body?.refreshToken;
@@ -136,7 +125,7 @@ router.post('/refresh', async (req, res) => {
       {
         headers: {
           Cookie: req.headers.cookie || '',
-          Authorization: req.headers.authorization || ''
+          Authorization: req.headers.authorization || '',
         },
       }
     );
@@ -152,53 +141,6 @@ router.post('/refresh', async (req, res) => {
       });
     }
     return res.status(error.response.status || 500).json(error.response.data);
-  }
-});
-
-// @desc    Validate SSO token from GeekBase
-// @route   POST /api/auth/validate-sso
-// @access  Public
-router.post('/validate-sso', async (req, res) => {
-  try {
-    const { token } = req.body;
-
-    if (!token) {
-      return res.status(400).json({ message: 'Token is required' });
-    }
-
-    // Verify the token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    console.log('Decoded SSO token:', decoded);
-
-    // Find the user by ID
-    let user = await User.findById(decoded.id).select('-password');
-
-    // If user doesn't exist, create them
-    if (!user) {
-      console.log('User not found, creating new user from SSO data');
-      user = await User.create({
-        email: decoded.email,
-        // Don't set password since this is SSO
-        passwordHash: 'SSO_USER',
-      });
-    }
-
-    // Return user data
-    res.json({
-      _id: user._id,
-      email: user.email,
-      createdAt: user.createdAt,
-      token: token, // Return the same token
-    });
-  } catch (error) {
-    console.error('SSO validation error:', error);
-    if (error.name === 'JsonWebTokenError') {
-      return res.status(401).json({ message: 'Invalid token' });
-    }
-    if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({ message: 'Token expired' });
-    }
-    res.status(401).json({ message: 'Invalid token' });
   }
 });
 

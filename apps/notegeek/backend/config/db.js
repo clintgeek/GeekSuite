@@ -1,15 +1,11 @@
 import mongoose from 'mongoose';
+import { logger } from '../lib/logger.js';
 
 const connectDB = async () => {
-  try {
-    const conn = await mongoose.connect(process.env.DB_URI, {
-        authSource: "admin"
-    });
-    console.log(`MongoDB Connected: ${conn.connection.host}`);
-  } catch (error) {
-    console.error(`Error connecting to MongoDB: ${error.message}`);
-    process.exit(1); // Exit process with failure
-  }
+  const conn = await mongoose.connect(process.env.DB_URI, {
+    authSource: 'admin',
+  });
+  logger.info({ host: conn.connection.host }, 'MongoDB connected');
 };
 
 export default connectDB;

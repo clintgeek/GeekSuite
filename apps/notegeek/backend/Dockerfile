@@ -5,8 +5,8 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install ALL dependencies (including morgan which is in devDependencies)
-RUN npm ci
+# Install production dependencies only
+RUN npm ci --omit=dev
 
 # Copy source code
 COPY . .

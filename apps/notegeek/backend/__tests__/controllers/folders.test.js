@@ -32,7 +32,10 @@ const VALID_ID = 'aabbccddeeff00112233aabb';
 const INVALID_ID = 'not-valid';
 const MOCK_USER_ID = 'ffeeddccbbaa99887766ffee';
 
-describe('Folders Controller', () => {
+// SKIP: controllers/folders.js deleted in Phase 2 hardening pass.
+// Folders were never mounted in server.js and were superseded by the
+// tag-based folder migration (migrations/convertFoldersToTags.js).
+describe.skip('Folders Controller', () => {
     beforeEach(() => {
         resetMocks();
         jest.clearAllMocks();

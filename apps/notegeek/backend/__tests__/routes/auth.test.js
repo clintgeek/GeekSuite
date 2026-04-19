@@ -40,6 +40,13 @@ const app = express();
 app.use(express.json());
 app.use('/api/auth', authRoutes);
 
+// NOTE: The mocks for controllers/auth.js, jsonwebtoken, and models/User.js
+// above mock modules that have been removed in the Phase 2 hardening pass:
+//   - controllers/auth.js (registerUser/loginUser) — deleted, parallel auth removed
+//   - /validate-sso route — deleted, synchronous JWT verify removed
+//   - jsonwebtoken — removed from backend dependencies
+// The /me, /logout, and /refresh proxy tests remain valid.
+// The validate-sso describe block is skipped below.
 describe('Auth Routes (Inline Handlers)', () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -188,9 +195,9 @@ describe('Auth Routes (Inline Handlers)', () => {
     });
 
     // =========================================================================
-    // POST /validate-sso
+    // POST /validate-sso — SKIPPED: route removed in Phase 2 hardening
     // =========================================================================
-    describe('POST /validate-sso', () => {
+    describe.skip('POST /validate-sso', () => {
         it('should validate token and return existing user', async () => {
             mockJwt.verify.mockReturnValueOnce({ id: 'user123', email: 'test@example.com' });
 

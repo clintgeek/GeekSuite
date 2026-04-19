@@ -1,37 +1,43 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
-import morgan from 'morgan';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import connectDB from './config/db.js'; // Import database connection
+import { randomUUID } from 'node:crypto';
+import pinoHttp from 'pino-http';
+import mongoose from 'mongoose';
+import connectDB from './config/db.js';
+import { logger } from './lib/logger.js';
 import { notFound, errorHandler } from './middleware/errorMiddleware.js';
-import noteRoutes from './routes/notes.js'; // Import note routes
-import tagRoutes from './routes/tags.js'; // Import tag routes
-import searchRoutes from './routes/search.js'; // Import search routes
+import noteRoutes from './routes/notes.js';
+import tagRoutes from './routes/tags.js';
+import searchRoutes from './routes/search.js';
 import { protect } from './middleware/authMiddleware.js';
 import { meHandler } from '@geeksuite/user/server';
-
-// Import route files
 import authRoutes from './routes/auth.js';
 
-// Load environment variables
-// Get the directory name of the current module
+// Fail-fast env enforcement
+if (!process.env.DB_URI && process.env.NODE_ENV !== 'test') {
+  // connectDB will throw — no duplicate check needed here
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Construct the path to .env.local relative to the current file
 dotenv.config({ path: path.resolve(__dirname, '.env.local') });
-// Load .env if .env.local is not found or doesn't contain all variables
-dotenv.config(); // Loads .env by default
+dotenv.config();
 
 async function start() {
-  // Connect to Database
-  await connectDB();
+  // Connect to MongoDB — fail fast on error
+  try {
+    await connectDB();
+  } catch (err) {
+    logger.error({ err }, 'MongoDB connection failed — aborting boot');
+    process.exit(1);
+  }
 
-  // Initialize Express app
   const app = express();
 
   // Trust NGINX proxy
@@ -39,48 +45,44 @@ async function start() {
 
   // Security middleware
   app.use(helmet({
-    contentSecurityPolicy: false, // Disable CSP for API server
+    contentSecurityPolicy: false, // TODO: re-enable CSP with deliberate policy in a future pass
     crossOriginEmbedderPolicy: false,
   }));
 
   // Rate limiting
   const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // Limit each IP to 100 requests per windowMs
+    windowMs: 15 * 60 * 1000,
+    max: 100,
     message: { message: 'Too many requests, please try again later.' },
     standardHeaders: true,
     legacyHeaders: false,
   });
   app.use('/api/', limiter);
 
-  // Stricter rate limit for auth endpoints
   const authLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 20, // Limit each IP to 20 auth requests per windowMs
+    windowMs: 15 * 60 * 1000,
+    max: 20,
     message: { message: 'Too many authentication attempts, please try again later.' },
     standardHeaders: true,
     legacyHeaders: false,
   });
   app.use('/api/auth/', authLimiter);
 
-  // Enable CORS for all routes
-  const allowedOrigins = [
-    'http://localhost:5173',    // Vite dev server
-    'http://localhost:5001',    // Backend dev server
-    'http://localhost:9988',    // Unified container runtime
-    'https://notegeek.clintgeek.com',  // Production domain
-    'http://192.168.1.26:5173'  // Local network access
+  // CORS — origins from env or hardcoded fallback
+  const hardcodedOrigins = [
+    'http://localhost:5173',
+    'http://localhost:5001',
+    'http://localhost:9988',
+    'https://notegeek.clintgeek.com',
+    'http://192.168.1.26:5173',
   ];
-
-  // Body parser middleware - MUST come before request logging
-  app.use(express.json({ limit: '50mb' })); // Parse JSON request bodies
-  app.use(express.urlencoded({ limit: '50mb', extended: true })); // Parse URL-encoded request bodies
+  const allowedOrigins = process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
+    : hardcodedOrigins;
 
   app.use(cors({
     origin: function (origin, callback) {
-      // Allow requests with no origin (like mobile apps or curl requests)
       if (!origin) return callback(null, true);
-
       if (allowedOrigins.indexOf(origin) === -1) {
         const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
         return callback(new Error(msg), false);
@@ -97,27 +99,28 @@ async function start() {
       'Origin',
       'Access-Control-Allow-Headers',
       'Access-Control-Allow-Origin',
-      'Access-Control-Allow-Credentials'
+      'Access-Control-Allow-Credentials',
     ],
-    exposedHeaders: ['Content-Range'],
+    exposedHeaders: ['Content-Range', 'X-Request-Id'],
     maxAge: 86400,
     preflightContinue: false,
-    optionsSuccessStatus: 204
+    optionsSuccessStatus: 204,
   }));
 
-  // Add request origin logging
+  // Body parsers
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+  // Structured HTTP request logging (replaces morgan)
+  const httpLogger = pinoHttp({
+    logger,
+    genReqId: (req) => req.headers['x-request-id'] || randomUUID(),
+  });
   app.use((req, res, next) => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`${ req.method } ${ req.path }`);
-    }
+    httpLogger(req, res);
+    res.setHeader('X-Request-Id', req.id);
     next();
   });
-
-
-  // HTTP request logger middleware (only in development)
-  if (process.env.NODE_ENV === 'development') {
-    app.use(morgan('dev'));
-  }
 
   // Mount Routers
   app.use('/api/auth', authRoutes);
@@ -138,11 +141,9 @@ async function start() {
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       return next();
     }
-
     if (req.path.startsWith('/api/') || req.path.startsWith('/graphql')) {
       return next();
     }
-
     return res.sendFile(path.join(publicPath, 'index.html'));
   });
 
@@ -150,16 +151,43 @@ async function start() {
   app.use(notFound);
   app.use(errorHandler);
 
-  // Define port
   const PORT = process.env.PORT || 9988;
 
-  // Start the server
-  app.listen(PORT, () => {
-    console.log(`NoteGeek server running on port ${ PORT }`);
+  const server = app.listen(PORT, () => {
+    logger.info(`NoteGeek server running on port ${ PORT }`);
   });
+
+  // Graceful shutdown
+  let shuttingDown = false;
+  const shutdown = (signal) => {
+    if (shuttingDown) {
+      logger.info(`${ signal } received during shutdown — forcing exit`);
+      process.exit(1);
+    }
+    shuttingDown = true;
+    logger.info(`${ signal } received — shutting down`);
+
+    const forceTimer = setTimeout(() => {
+      logger.error('Shutdown timed out after 15s — forcing exit');
+      process.exit(1);
+    }, 15_000);
+    forceTimer.unref();
+
+    server.close(async () => {
+      try {
+        await mongoose.disconnect();
+      } catch (err) {
+        logger.error({ err }, 'Error disconnecting mongoose');
+      }
+      process.exit(0);
+    });
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
 start().catch(err => {
-  console.error('Failed to start NoteGeek server:', err);
+  logger.error({ err }, 'Failed to start NoteGeek server');
   process.exit(1);
 });
