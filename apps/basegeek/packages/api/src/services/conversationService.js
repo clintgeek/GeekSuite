@@ -1,6 +1,7 @@
 import Conversation from '../models/Conversation.js';
 import aiService from './aiService.js';
 import { countMessageTokens, extractTextContent, countTextTokens } from './tokenCounter.js';
+import logger from '../lib/logger.js';
 
 /**
  * ConversationService
@@ -38,17 +39,17 @@ class ConversationService {
   async initialize() {
     if (this.initialized) return;
     
-    console.log('[ConversationService] Initializing...');
-    
+    logger.info('[ConversationService] Initializing...');
+
     try {
       // Test database connection
       const count = await Conversation.countDocuments();
-      console.log(`[ConversationService] Found ${count} existing conversations`);
-      
+      logger.info(`[ConversationService] Found ${count} existing conversations`);
+
       this.initialized = true;
-      console.log('[ConversationService] ✅ Initialized');
+      logger.info('[ConversationService] ✅ Initialized');
     } catch (error) {
-      console.error('[ConversationService] ❌ Initialization failed:', error.message);
+      logger.error({ err: error }, '[ConversationService] ❌ Initialization failed');
       throw error;
     }
   }
@@ -96,7 +97,7 @@ class ConversationService {
     // Check if we need to summarize
     const needsSummary = this.shouldSummarize(conversation);
     if (needsSummary && options.autoSummarize !== false) {
-      console.log(`[ConversationService] Context at ${conversation.currentContextTokens}/${conversation.contextWindow} tokens, triggering summarization`);
+      logger.info(`[ConversationService] Context at ${conversation.currentContextTokens}/${conversation.contextWindow} tokens, triggering summarization`);
       await this.summarizeConversation(conversation);
     }
 
@@ -162,7 +163,7 @@ class ConversationService {
     const currentTokens = conversation.currentContextTokens;
     
     if (currentTokens <= targetTokens) {
-      console.log(`[ConversationService] No summarization needed (${currentTokens} <= ${targetTokens})`);
+      logger.info(`[ConversationService] No summarization needed (${currentTokens} <= ${targetTokens})`);
       return;
     }
 
@@ -172,7 +173,7 @@ class ConversationService {
     const messagesToSummarize = conversation.messages.length - messagesToKeep;
     
     if (messagesToSummarize <= 0) {
-      console.log('[ConversationService] Too few messages to summarize, keeping all');
+      logger.info('[ConversationService] Too few messages to summarize, keeping all');
       return;
     }
 
@@ -205,10 +206,10 @@ class ConversationService {
         this.selectSummarizationProvider()
       );
 
-      console.log(`[ConversationService] ✅ Summarized ${messagesToSummarize} messages: ${originalTokens} → ${Math.ceil(summary.length / 4)} tokens`);
-      
+      logger.info(`[ConversationService] ✅ Summarized ${messagesToSummarize} messages: ${originalTokens} → ${Math.ceil(summary.length / 4)} tokens`);
+
     } catch (error) {
-      console.error('[ConversationService] ❌ Summarization failed:', error.message);
+      logger.error({ err: error }, '[ConversationService] ❌ Summarization failed');
       // Fall back to simple truncation
       this.truncateConversation(conversation, messagesToKeep);
     }
@@ -239,7 +240,7 @@ class ConversationService {
     if (messagesToRemove > 0) {
       conversation.messages.splice(0, messagesToRemove);
       conversation.recalculateTokens();
-      console.log(`[ConversationService] Truncated ${messagesToRemove} messages (fallback)`);
+      logger.info(`[ConversationService] Truncated ${messagesToRemove} messages (fallback)`);
     }
   }
 
@@ -336,11 +337,11 @@ class ConversationService {
     try {
       const deletedCount = await Conversation.cleanupExpired();
       if (deletedCount > 0) {
-        console.log(`[ConversationService] 🧹 Cleaned up ${deletedCount} expired conversations`);
+        logger.info(`[ConversationService] 🧹 Cleaned up ${deletedCount} expired conversations`);
       }
       return deletedCount;
     } catch (error) {
-      console.error('[ConversationService] Cleanup error:', error.message);
+      logger.error({ err: error }, '[ConversationService] Cleanup error');
       return 0;
     }
   }
@@ -354,11 +355,11 @@ class ConversationService {
       try {
         await this.cleanupExpired();
       } catch (error) {
-        console.error('[ConversationService] Cleanup job error:', error.message);
+        logger.error({ err: error }, '[ConversationService] Cleanup job error');
       }
     }, 60 * 60 * 1000); // 1 hour
 
-    console.log('[ConversationService] Cleanup job started (runs every hour)');
+    logger.info('[ConversationService] Cleanup job started (runs every hour)');
   }
 
   /**

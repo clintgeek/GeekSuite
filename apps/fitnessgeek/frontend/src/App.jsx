@@ -32,7 +32,7 @@ const HealthDashboard = lazy(() => import('./pages/HealthDashboard.jsx'));
 import { AuthProvider } from '@geeksuite/auth';
 import AuthListener from './components/AuthListener.jsx';
 import { SettingsProvider } from './contexts/SettingsContext.jsx';
-import { ThemeProvider, useTheme } from './contexts/ThemeContext.jsx';
+import { ThemeProvider, useThemeMode as useTheme } from '@geeksuite/user';
 
 // Loading component for Suspense fallback
 const LoadingFallback = () => (

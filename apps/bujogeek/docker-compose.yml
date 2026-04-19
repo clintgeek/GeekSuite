@@ -1,46 +1,30 @@
 services:
-  backend:
+  bujogeek:
     image: geeksuite/bujogeek:latest
     container_name: bujogeek
-    environment:
-      - TZ=America/Chicago
-      - NODE_ENV=production
-      - PORT=5005
-      - DB_URI=${DB_URI}
-      - JWT_SECRET=${JWT_SECRET}
-      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
-      - BASEGEEK_URL=${BASEGEEK_URL}
-      - APP_NAME=bujogeek
-      - GATEWAY_URL=http://host.docker.internal:4100
+    restart: unless-stopped
+
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
+    # All runtime env (DB_URI, JWT_SECRET, JWT_REFRESH_SECRET, SECRET_KEY,
+    # BASEGEEK_URL, PORT, etc.) is loaded from .env.production by env_file.
+    # Don't list those vars here as ${VAR} substitutions — that pulls from
+    # docker compose's .env file (different lookup path) and breaks when
+    # only .env.production exists.
+    env_file:
+      - .env.production
+
+    # Compose-fixed values that don't vary per environment.
+    environment:
+      APP_NAME: bujogeek
+      GATEWAY_URL: http://host.docker.internal:4100
+
     ports:
       - "5005:5005"
-    volumes:
-      - /mnt/Media/Projects/GeekSuite/apps/bujogeek/backend:/app/apps/bujogeek/backend
-      - /app/apps/bujogeek/backend/node_modules
-      - /app/apps/bujogeek/backend/public
-    working_dir: /app/apps/bujogeek/backend
-    command: node server.js
-    networks:
-      - bujogeek_network
-    restart: always
 
-#  frontend:
-#    build:
-#      context: ./client
-#      dockerfile: Dockerfile
-#    container_name: bujogeek-frontend
-#    environment:
-#      - BACKEND_PORT=5005
-#    ports:
-#      - "9989:80"
-#    depends_on:
-#      - backend
-#    networks:
-#      - bujogeek_network
-#    restart: always
-
-networks:
-  bujogeek_network:
-    driver: bridge
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:5005/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

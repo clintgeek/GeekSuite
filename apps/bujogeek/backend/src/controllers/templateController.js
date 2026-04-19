@@ -29,8 +29,16 @@ export const createTemplate = async (req, res) => {
 // Get all templates with filtering
 export const getTemplates = async (req, res) => {
   try {
-    const { type, tags, isPublic, search } = req.query;
-    const query = {};
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const { type, tags, search } = req.query;
+
+    // Ownership gate: user owns it OR it is public
+    const query = {
+      $or: [{ createdBy: req.user._id }, { isPublic: true }]
+    };
 
     // Add type filter if provided
     if (type) {
@@ -42,21 +50,21 @@ export const getTemplates = async (req, res) => {
       query.tags = { $in: tags.split(',') };
     }
 
-    // Add public/private filter if provided
-    if (isPublic !== undefined) {
-      query.isPublic = isPublic === 'true';
-    }
-
     // Add search filter if provided
     if (search) {
-      query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
-        { content: { $regex: search, $options: 'i' } }
+      query.$and = [
+        { $or: query.$or },
+        {
+          $or: [
+            { name: { $regex: search, $options: 'i' } },
+            { description: { $regex: search, $options: 'i' } },
+            { content: { $regex: search, $options: 'i' } }
+          ]
+        }
       ];
+      delete query.$or;
     }
 
-    // Temporarily return all templates without authentication checks
     const templates = await Template.find(query)
       .sort({ updatedAt: -1 });
 

@@ -1,5 +1,6 @@
 import express from 'express';
 import App from '../models/App.js';
+import logger from '../lib/logger.js';
 
 const router = express.Router();
 
@@ -11,7 +12,7 @@ router.get('/', async (req, res) => {
     const apps = await App.find(filter).sort({ sortOrder: 1, name: 1 });
     res.json({ apps });
   } catch (err) {
-    console.error('Error fetching apps:', err);
+    req.log.error({ err }, 'Error fetching apps');
     res.status(500).json({ message: 'Error fetching apps', error: err.message });
   }
 });

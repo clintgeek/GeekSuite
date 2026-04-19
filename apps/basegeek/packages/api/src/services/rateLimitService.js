@@ -1,9 +1,11 @@
 /**
  * Rate Limit Service (Enhanced)
- * 
+ *
  * Intelligent rate limit management with predictive throttling,
  * load balancing, and automatic provider selection.
  */
+
+import logger from '../lib/logger.js';
 
 class RateLimitService {
   constructor() {
@@ -283,7 +285,7 @@ class RateLimitService {
     // If failure rate is high, temporarily rate limit
     const recentFailures = state.recentRequestTimes.filter(r => !r.success).length;
     if (recentFailures >= 3) {
-      console.log(`⚠️ ${provider} has ${recentFailures}/10 recent failures, applying cooldown`);
+      logger.info(`⚠️ ${provider} has ${recentFailures}/10 recent failures, applying cooldown`);
       state.rateLimitedUntil = Date.now() + 30000; // 30 second cooldown
     }
   }
@@ -296,7 +298,7 @@ class RateLimitService {
     if (!state) return;
 
     state.rateLimitedUntil = Date.now() + (retryAfterSeconds * 1000);
-    console.log(`⏸️ ${provider} marked as rate limited for ${retryAfterSeconds}s`);
+    logger.info(`⏸️ ${provider} marked as rate limited for ${retryAfterSeconds}s`);
 
     // Lower weight significantly
     this.loadBalancer.providerWeights[provider] *= 0.5;
@@ -396,7 +398,7 @@ class RateLimitService {
 
     // Reset per-minute counters
     if (now - state.lastReset > 60000) {
-      console.log(`🔄 Resetting minute counters for ${provider}`);
+      logger.info(`🔄 Resetting minute counters for ${provider}`);
       state.tokensUsed = 0;
       state.requestsUsed = 0;
       state.lastReset = now;
@@ -412,14 +414,14 @@ class RateLimitService {
 
     // Reset daily counters
     if (now - state.lastDailyReset > 86400000) {
-      console.log(`🔄 Resetting daily counters for ${provider}`);
+      logger.info(`🔄 Resetting daily counters for ${provider}`);
       state.dailyRequestsUsed = 0;
       state.lastDailyReset = now;
     }
 
     // Reset monthly counters
     if (now - state.lastMonthlyReset > 2592000000) {
-      console.log(`🔄 Resetting monthly counters for ${provider}`);
+      logger.info(`🔄 Resetting monthly counters for ${provider}`);
       state.monthlyRequestsUsed = 0;
       state.monthlyCreditsUsed = 0;
       state.lastMonthlyReset = now;

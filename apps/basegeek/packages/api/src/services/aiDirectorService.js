@@ -3,6 +3,7 @@ import AIModel from '../models/AIModel.js';
 import AIPricing from '../models/AIPricing.js';
 import AIFreeTier from '../models/AIFreeTier.js';
 import aiModelCapabilitiesService from './aiModelCapabilitiesService.js';
+import logger from '../lib/logger.js';
 
 class AIDirectorService {
   constructor() {
@@ -84,7 +85,7 @@ class AIDirectorService {
     try {
       // Wait for aiService to finish loading configs from DB
       if (!aiService.initialized) {
-        console.log('AI Director waiting for aiService to initialize...');
+        logger.info('AI Director waiting for aiService to initialize...');
         let attempts = 0;
         while (!aiService.initialized && attempts < 20) {
           await new Promise(resolve => setTimeout(resolve, 250));
@@ -92,23 +93,23 @@ class AIDirectorService {
         }
         if (!aiService.initialized) {
           // Force a reload as a last resort
-          console.warn('aiService not initialized after 5s, forcing config reload...');
+          logger.warn('aiService not initialized after 5s, forcing config reload...');
           await aiService.loadConfigurations();
         }
       }
 
-      console.log('Starting AI Director collectModelInformation...');
+      logger.info('Starting AI Director collectModelInformation...');
       const providers = ['anthropic', 'groq', 'gemini', 'together', 'cohere', 'openrouter', 'cerebras', 'cloudflare', 'ollama', 'llm7', 'llmgateway'];
       const modelInfo = {};
 
       for (const provider of providers) {
-        console.log(`Processing provider: ${provider}`);
+        logger.info(`Processing provider: ${provider}`);
 
         // Check if provider has API key and is enabled
         const hasApiKey = !!aiService.providers[provider]?.apiKey;
         const isEnabled = aiService.providers[provider]?.enabled === true;
 
-        console.log(`${provider} - hasApiKey: ${hasApiKey}, isEnabled: ${isEnabled}`);
+        logger.info(`${provider} - hasApiKey: ${hasApiKey}, isEnabled: ${isEnabled}`);
 
         // Only refresh from API if we have no models in database or if it's been more than 24 hours
         const existingModels = await aiService.getModels(provider);
@@ -116,25 +117,25 @@ class AIDirectorService {
 
         if (hasApiKey && isEnabled && shouldRefresh) {
           try {
-            console.log(`Refreshing models for ${provider} from API...`);
+            logger.info(`Refreshing models for ${provider} from API...`);
             await aiService.refreshModels(provider);
           } catch (error) {
-            console.log(`Failed to refresh ${provider} models:`, error.message);
+            logger.info({ err: error }, `Failed to refresh ${provider} models`);
           }
         } else {
-          console.log(`Using cached models for ${provider} (${existingModels.length} models found)`);
+          logger.info(`Using cached models for ${provider} (${existingModels.length} models found)`);
         }
 
         // Get models from database (now potentially updated)
         const models = await aiService.getModels(provider);
-        console.log(`${provider} - found ${models.length} models`);
+        logger.info(`${provider} - found ${models.length} models`);
 
         // Get pricing from database
         const pricingData = await AIPricing.find({
           provider,
           isActive: true
         });
-        console.log(`${provider} - found ${pricingData.length} pricing records`);
+        logger.info(`${provider} - found ${pricingData.length} pricing records`);
 
         const pricingMap = {};
         pricingData.forEach(pricing => {
@@ -154,7 +155,7 @@ class AIDirectorService {
 
         // Get free tier information
         const freeTierData = await AIFreeTier.find({ provider });
-        console.log(`${provider} - found ${freeTierData.length} free tier records`);
+        logger.info(`${provider} - found ${freeTierData.length} free tier records`);
 
         const freeTierMap = {};
         freeTierData.forEach(freeTier => {
@@ -167,7 +168,7 @@ class AIDirectorService {
 
         modelInfo[provider] = {
           models: models.map(model => {
-            console.log(`Processing model: ${model.id} (${typeof model.id})`);
+            logger.debug(`Processing model: ${model.id} (${typeof model.id})`);
             const capabilities = model.capabilities || aiModelCapabilitiesService.inferCapabilities(model.id);
             return {
               id: model.id,
@@ -196,16 +197,16 @@ class AIDirectorService {
         }
       };
 
-      console.log('AI Director result structure:', {
+      logger.info({
         success: result.success,
         dataKeys: Object.keys(result.data),
         providersCount: Object.keys(result.data.providers).length,
         summary: result.data.summary
-      });
+      }, 'AI Director result structure');
 
       return result;
     } catch (error) {
-      console.error('Failed to collect model information:', error);
+      logger.error({ err: error }, 'Failed to collect model information');
       return {
         success: false,
         error: {
@@ -281,9 +282,9 @@ class AIDirectorService {
         );
       }
 
-      console.log('Initial AI pricing seeded successfully');
+      logger.info('Initial AI pricing seeded successfully');
     } catch (error) {
-      console.error('Failed to seed initial pricing:', error);
+      logger.error({ err: error }, 'Failed to seed initial pricing');
     }
   }
 
@@ -311,12 +312,12 @@ class AIDirectorService {
               outputPrice: hardcodedPricing.output,
               isActive: true
             });
-            console.log(`Added pricing for ${model.provider}/${model.modelId}`);
+            logger.info(`Added pricing for ${model.provider}/${model.modelId}`);
           }
         }
       }
     } catch (error) {
-      console.error('Failed to update pricing for new models:', error);
+      logger.error({ err: error }, 'Failed to update pricing for new models');
     }
   }
 
@@ -338,17 +339,17 @@ class AIDirectorService {
       const hoursSinceLastRefresh = (Date.now() - oldestModel.createdAt.getTime()) / (1000 * 60 * 60);
       const shouldRefresh = hoursSinceLastRefresh > 24;
 
-      console.log(`${provider} last refresh: ${hoursSinceLastRefresh.toFixed(1)} hours ago, should refresh: ${shouldRefresh}`);
+      logger.info(`${provider} last refresh: ${hoursSinceLastRefresh.toFixed(1)} hours ago, should refresh: ${shouldRefresh}`);
       return shouldRefresh;
     } catch (error) {
-      console.error(`Error checking refresh status for ${provider}:`, error);
+      logger.error({ err: error }, `Error checking refresh status for ${provider}`);
       return true; // Default to refreshing if there's an error
     }
   }
 
   async seedFreeTierInformation() {
     try {
-      console.log('Seeding free tier information...');
+      logger.info('Seeding free tier information...');
       const freeTierData = [
         // Groq Free Tier - ALL models are free
         // UPDATED: Real-world testing shows ~30 req/min throttle (not 50)
@@ -736,10 +737,10 @@ class AIDirectorService {
         );
       }
 
-      console.log('Free tier information seeded successfully');
-      console.log(`Seeded ${freeTierData.length} free tier records`);
+      logger.info('Free tier information seeded successfully');
+      logger.info(`Seeded ${freeTierData.length} free tier records`);
     } catch (error) {
-      console.error('Failed to seed free tier information:', error);
+      logger.error({ err: error }, 'Failed to seed free tier information');
     }
   }
 
@@ -786,7 +787,7 @@ class AIDirectorService {
         }
       };
     } catch (error) {
-      console.error('Failed to analyze costs:', error);
+      logger.error({ err: error }, 'Failed to analyze costs');
       return {
         success: false,
         error: {
@@ -908,7 +909,7 @@ class AIDirectorService {
         }
       };
     } catch (error) {
-      console.error('Failed to recommend provider:', error);
+      logger.error({ err: error }, 'Failed to recommend provider');
       return {
         success: false,
         error: {

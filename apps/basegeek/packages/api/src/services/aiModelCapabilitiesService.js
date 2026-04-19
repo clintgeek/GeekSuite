@@ -1,4 +1,5 @@
 import AIModel from '../models/AIModel.js';
+import logger from '../lib/logger.js';
 
 class AIModelCapabilitiesService {
   constructor() {
@@ -1084,7 +1085,7 @@ class AIModelCapabilitiesService {
 
       return { success: true, capabilities };
     } catch (error) {
-      console.error('Error updating model capabilities:', error);
+      logger.error({ err: error }, 'Error updating model capabilities');
       return { success: false, error: error.message };
     }
   }
@@ -1265,7 +1266,7 @@ class AIModelCapabilitiesService {
         total: sortedModels.length
       };
     } catch (error) {
-      console.error('Failed to get models for task:', error);
+      logger.error({ err: error }, 'Failed to get models for task');
       return {
         success: false,
         error: error.message
@@ -1287,13 +1288,13 @@ class AIModelCapabilitiesService {
         }
       }
 
-      console.log(`Updated capabilities for ${updatedCount} models`);
+      logger.info(`Updated capabilities for ${updatedCount} models`);
       return {
         success: true,
         updatedCount
       };
     } catch (error) {
-      console.error('Failed to update all model capabilities:', error);
+      logger.error({ err: error }, 'Failed to update all model capabilities');
       return {
         success: false,
         error: error.message

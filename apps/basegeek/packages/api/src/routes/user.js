@@ -1,6 +1,8 @@
 import express from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { User } from '../models/user.js';
+import logger from '../lib/logger.js';
+import { setThemeCookie } from '../lib/themeCookie.js';
 
 const router = express.Router();
 
@@ -30,6 +32,9 @@ router.get('/bootstrap', authenticateToken, async (req, res) => {
         if (!user) {
             return res.status(404).json({ message: 'User not found', code: 'USER_NOT_FOUND' });
         }
+        // Refresh the shared theme cookie on every bootstrap so a pref
+        // change made in another device/browser propagates to this one.
+        setThemeCookie(res, user.preferences?.theme);
         res.json({
             identity: formatIdentity(user),
             profile: user.profile,
@@ -39,7 +44,7 @@ router.get('/bootstrap', authenticateToken, async (req, res) => {
                 : (user.appPreferences || {}),
         });
     } catch (err) {
-        console.error('Bootstrap error:', err);
+        req.log.error({ err }, 'Bootstrap error');
         res.status(500).json({ message: err.message, code: 'BOOTSTRAP_ERROR' });
     }
 });
@@ -65,7 +70,7 @@ router.get('/me', authenticateToken, async (req, res) => {
             }
         });
     } catch (err) {
-        console.error('Get user error:', err);
+        req.log.error({ err }, 'Get user error');
         res.status(500).json({ message: err.message, code: 'GET_USER_ERROR' });
     }
 });
@@ -116,7 +121,7 @@ router.patch('/profile', authenticateToken, async (req, res) => {
             profile: user.profile,
         });
     } catch (err) {
-        console.error('Update profile error:', err);
+        req.log.error({ err }, 'Update profile error');
         res.status(500).json({ message: err.message, code: 'UPDATE_PROFILE_ERROR' });
     }
 });
@@ -184,9 +189,13 @@ router.patch('/preferences', authenticateToken, async (req, res) => {
         }
         user.markModified('preferences');
         await user.save();
+        // Keep the shared theme cookie in lockstep when theme changes here.
+        if (req.body.theme !== undefined) {
+            setThemeCookie(res, user.preferences?.theme);
+        }
         res.json({ preferences: user.preferences });
     } catch (err) {
-        console.error('Update preferences error:', err);
+        req.log.error({ err }, 'Update preferences error');
         res.status(500).json({ message: err.message, code: 'UPDATE_PREFERENCES_ERROR' });
     }
 });
@@ -242,7 +251,7 @@ router.patch('/preferences/:app', authenticateToken, async (req, res) => {
         await user.save();
         res.json({ app: appName, preferences: merged });
     } catch (err) {
-        console.error('Update app preferences error:', err);
+        req.log.error({ err }, 'Update app preferences error');
         res.status(500).json({ message: err.message, code: 'UPDATE_APP_PREFS_ERROR' });
     }
 });
@@ -275,7 +284,7 @@ router.get('/', authenticateToken, async (req, res) => {
             total,
         });
     } catch (err) {
-        console.error('Get all users error:', err);
+        req.log.error({ err }, 'Get all users error');
         res.status(500).json({ message: err.message, code: 'GET_ALL_USERS_ERROR' });
     }
 });
@@ -310,7 +319,7 @@ router.post('/', authenticateToken, async (req, res) => {
             preferences: user.preferences,
         });
     } catch (err) {
-        console.error('Create user error:', err);
+        req.log.error({ err }, 'Create user error');
         res.status(500).json({ message: err.message, code: 'CREATE_USER_ERROR' });
     }
 });
@@ -327,7 +336,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
         await user.deleteOne();
         res.json({ message: 'User deleted successfully' });
     } catch (err) {
-        console.error('Delete user error:', err);
+        req.log.error({ err }, 'Delete user error');
         res.status(500).json({ message: err.message, code: 'DELETE_USER_ERROR' });
     }
 });

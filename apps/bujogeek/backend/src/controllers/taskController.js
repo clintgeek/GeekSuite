@@ -49,7 +49,7 @@ export const getTasks = async (req, res) => {
 // Get a single task by ID
 export const getTaskById = async (req, res) => {
   try {
-    const task = await taskService.getTaskById(req.params.id);
+    const task = await taskService.getTaskById(req.params.id, req.user._id);
     if (!task) {
       return res.status(404).json({ message: 'Task not found' });
     }
@@ -62,7 +62,7 @@ export const getTaskById = async (req, res) => {
 // Update a task
 export const updateTask = async (req, res) => {
   try {
-    const task = await taskService.updateTask(req.params.id, req.body);
+    const task = await taskService.updateTask(req.params.id, req.body, req.user._id);
     if (!task) {
       return res.status(404).json({ message: 'Task not found' });
     }
@@ -75,7 +75,7 @@ export const updateTask = async (req, res) => {
 // Delete a task
 export const deleteTask = async (req, res) => {
   try {
-    const result = await taskService.deleteTask(req.params.id);
+    const result = await taskService.deleteTask(req.params.id, req.user._id);
     if (!result) {
       return res.status(404).json({ message: 'Task not found' });
     }
@@ -89,7 +89,7 @@ export const deleteTask = async (req, res) => {
 export const updateTaskStatus = async (req, res) => {
   try {
     const { status } = req.body;
-    const task = await taskService.updateTaskStatus(req.params.id, status);
+    const task = await taskService.updateTaskStatus(req.params.id, status, req.user._id);
     if (!task) {
       return res.status(404).json({ message: 'Task not found' });
     }
@@ -102,7 +102,7 @@ export const updateTaskStatus = async (req, res) => {
 // Add subtask
 export const addSubtask = async (req, res) => {
   try {
-    const parentTask = await taskService.getTaskById(req.params.id);
+    const parentTask = await taskService.getTaskById(req.params.id, req.user._id);
     if (!parentTask) {
       return res.status(404).json({ message: 'Parent task not found' });
     }
@@ -192,7 +192,7 @@ export const migrateTaskToFuture = async (req, res) => {
     const task = await taskService.updateTask(req.params.id, {
       dueDate: new Date(futureDate),
       updatedAt: new Date()
-    });
+    }, req.user._id);
 
     if (!task) {
       return res.status(404).json({ message: 'Task not found' });

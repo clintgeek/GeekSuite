@@ -3,6 +3,7 @@
 // import '../wasm-backend-init.js';
 
 import axios from 'axios';
+import logger from '../lib/logger.js';
 import AIConfig from '../models/AIConfig.js';
 import AIModel from '../models/AIModel.js';
 import AIPricing from '../models/AIPricing.js';
@@ -132,7 +133,7 @@ class AIService {
     try {
       fs.mkdirSync(rotationStateDir, { recursive: true });
     } catch (error) {
-      console.warn('[AIService] Failed to ensure rotation state directory:', error.message);
+      logger.warn({ err: error }, '[AIService] Failed to ensure rotation state directory');
     }
     this.rotationManager = new RotationManager(path.join(rotationStateDir, 'rotation-state.json'));
 
@@ -357,9 +358,9 @@ class AIService {
     try {
       await this.loadConfigurations();
       await this.seedInitialModels();
-      console.log('AI Service initialized with configurations from database');
+      logger.info('AI Service initialized with configurations from database');
     } catch (error) {
-      console.error('Failed to initialize AI service:', error);
+      logger.error({ err: error }, 'Failed to initialize AI service');
     } finally {
       // Always mark as initialized so we don't block forever
       // Even on partial failure, the service can function with defaults
@@ -370,14 +371,15 @@ class AIService {
   // Load configurations from database
   async loadConfigurations() {
     try {
-      console.log('🔍 Loading AI configurations from database...');
+      logger.info('🔍 Loading AI configurations from database...');
       const configs = await AIConfig.find({});
-      console.log(`📊 Found ${configs.length} configurations in database`);
+      logger.info(`📊 Found ${configs.length} configurations in database`);
 
       for (const config of configs) {
-        console.log(`  ${config.provider}: enabled=${config.enabled}, apiKey=${config.apiKey ? 'Set' : 'Not Set'}`);
+        logger.debug(`  ${config.provider}: enabled=${config.enabled}, apiKey=${config.apiKey ? 'Set' : 'Not Set'}`);
         if (this.providers[config.provider]) {
-          this.providers[config.provider].apiKey = config.apiKey ? config.apiKey.trim() : '';
+          const decryptedKey = config.getDecryptedKey();
+          this.providers[config.provider].apiKey = decryptedKey ? decryptedKey.trim() : '';
           this.providers[config.provider].enabled = config.enabled;
           this.providers[config.provider].model = this.rotationProviderOverrides[config.provider]?.model || this.providers[config.provider].model;
           this.providers[config.provider].maxTokens = config.maxTokens || this.providers[config.provider].maxTokens;
@@ -391,8 +393,7 @@ class AIService {
       }
       this.logApiKeyStatus();
     } catch (error) {
-      console.error('Failed to load AI configurations:', error);
-      console.error('Error details:', error.stack);
+      logger.error({ err: error }, 'Failed to load AI configurations');
     }
   }
 
@@ -413,12 +414,12 @@ class AIService {
         case 'together':
           if (this.providers.together.apiKey) {
             try {
-              console.log('Fetching Together.ai models...');
+              logger.info('Fetching Together.ai models...');
               const response = await axios.get('https://api.together.xyz/v1/models', {
                 headers: { 'Authorization': `Bearer ${this.providers.together.apiKey}` },
                 timeout: 10000
               });
-              console.log('Together.ai response:', response.data);
+              logger.debug({ data: response.data }, 'Together.ai response');
               // Together.ai returns an array directly, not wrapped in data property
               const togetherModels = response.data || [];
               // Transform to match our expected format and save pricing
@@ -435,7 +436,7 @@ class AIService {
                     },
                     { upsert: true, new: true }
                   ).catch(error => {
-                    console.error(`Failed to save pricing for ${model.id}:`, error);
+                      logger.error({ err: error }, `Failed to save pricing for ${model.id}`);
                   });
                 }
 
@@ -444,17 +445,16 @@ class AIService {
                   name: model.display_name
                 };
               });
-              console.log('Transformed Together.ai models:', models);
+              logger.debug({ count: models.length }, 'Transformed Together.ai models');
             } catch (error) {
-              console.error('Together.ai API error:', error.message);
+              logger.error({ err: error }, 'Together.ai API error');
               if (error.response) {
-                console.error('Response status:', error.response.status);
-                console.error('Response data:', error.response.data);
+                logger.error({ status: error.response.status, data: error.response.data }, 'Together.ai response error details');
               }
               throw new Error(`Together.ai API error: ${error.message}`);
             }
           } else {
-            console.log('Together.ai API key not configured');
+            logger.info('Together.ai API key not configured');
             throw new Error('Together.ai API key not configured');
           }
           break;
@@ -462,7 +462,7 @@ class AIService {
         case 'anthropic':
           if (this.providers.anthropic.apiKey) {
             try {
-              console.log('Fetching Anthropic models via API...');
+              logger.info('Fetching Anthropic models via API...');
               const response = await axios.get('https://api.anthropic.com/v1/models', {
                 headers: {
                   'x-api-key': this.providers.anthropic.apiKey,
@@ -475,9 +475,9 @@ class AIService {
                 id: m.id,
                 name: m.display_name || m.id
               }));
-              console.log(`Fetched ${models.length} Anthropic models from API`);
+              logger.info(`Fetched ${models.length} Anthropic models from API`);
             } catch (apiError) {
-              console.log('Anthropic models API failed, using hardcoded fallback:', apiError.message);
+              logger.info({ err: apiError }, 'Anthropic models API failed, using hardcoded fallback');
               models = [
                 { id: 'claude-opus-4-1-20250805', name: 'Claude Opus 4.1' },
                 { id: 'claude-opus-4-20250514', name: 'Claude Opus 4' },
@@ -505,7 +505,7 @@ class AIService {
         case 'gemini':
           if (this.providers.gemini.apiKey) {
             try {
-              console.log('Fetching Gemini models via API...');
+              logger.info('Fetching Gemini models via API...');
               const response = await axios.get(
                 `https://generativelanguage.googleapis.com/v1beta/models?key=${this.providers.gemini.apiKey}`,
                 { timeout: 10000 }
@@ -518,9 +518,9 @@ class AIService {
                   id: m.name.replace('models/', ''),
                   name: m.displayName || m.name.replace('models/', '')
                 }));
-              console.log(`Fetched ${models.length} Gemini models from API (filtered for generateContent)`);
+              logger.info(`Fetched ${models.length} Gemini models from API (filtered for generateContent)`);
             } catch (apiError) {
-              console.log('Gemini models API failed, using hardcoded fallback:', apiError.message);
+              logger.info({ err: apiError }, 'Gemini models API failed, using hardcoded fallback');
               models = [
                 { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' },
                 { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash' },
@@ -561,7 +561,7 @@ class AIService {
 
       return models;
     } catch (error) {
-      console.error(`Failed to refresh models for ${provider}:`, error);
+      logger.error({ err: error }, `Failed to refresh models for ${provider}`);
       throw error;
     }
   }
@@ -579,7 +579,7 @@ class AIService {
         name: model.name
       }));
     } catch (error) {
-      console.error(`Failed to get models for ${provider}:`, error);
+      logger.error({ err: error }, `Failed to get models for ${provider}`);
       return [];
     }
   }
@@ -679,9 +679,9 @@ class AIService {
         }
       }
 
-      console.log('Initial AI models seeded successfully');
+      logger.info('Initial AI models seeded successfully');
     } catch (error) {
-      console.error('Failed to seed initial models:', error);
+      logger.error({ err: error }, 'Failed to seed initial models');
     }
   }
 
@@ -710,7 +710,7 @@ class AIService {
       try {
         return countTextTokens(JSON.stringify(input));
       } catch (error) {
-        console.warn('[AIService] Failed to stringify input for token count, falling back to heuristic:', error?.message || error);
+        logger.warn({ err: error }, '[AIService] Failed to stringify input for token count, falling back to heuristic');
       }
     }
 
@@ -737,7 +737,7 @@ class AIService {
       // Move to end (LRU)
       this.responseCache.delete(cacheKey);
       this.responseCache.set(cacheKey, cached);
-      console.log(`💾 Cache HIT (${this.cacheHits}/${this.cacheHits + this.cacheMisses} = ${Math.round(this.cacheHits / (this.cacheHits + this.cacheMisses) * 100)}%)`);
+      logger.debug(`💾 Cache HIT (${this.cacheHits}/${this.cacheHits + this.cacheMisses} = ${Math.round(this.cacheHits / (this.cacheHits + this.cacheMisses) * 100)}%)`);
       return cached;
     }
     this.cacheMisses++;
@@ -765,7 +765,7 @@ class AIService {
   clearCache() {
     const size = this.responseCache.size;
     this.responseCache.clear();
-    console.log(`🗑️  Cleared ${size} cached responses`);
+    logger.info(`🗑️  Cleared ${size} cached responses`);
   }
 
   /**
@@ -793,7 +793,7 @@ class AIService {
       return text; // No need to summarize
     }
 
-    console.log(`📉 Summarizing ${currentTokens} tokens → target ${targetTokens} tokens (cloud-based)`);
+    logger.info(`📉 Summarizing ${currentTokens} tokens → target ${targetTokens} tokens (cloud-based)`);
     const startTime = Date.now();
 
     try {
@@ -817,7 +817,7 @@ class AIService {
       }
 
       if (!summarizationProvider) {
-        console.log('⚠️  No summarization provider available, using truncation');
+        logger.info('⚠️  No summarization provider available, using truncation');
         return text.substring(0, Math.floor(targetTokens / 0.75));
       }
 
@@ -854,13 +854,13 @@ class AIService {
       const result = response.data.choices[0].message.content;
       const resultTokens = this.estimateTokens(result);
 
-      console.log(`✅ Summarized in ${Date.now() - startTime}ms using ${summarizationProvider}: ${currentTokens} → ${resultTokens} tokens (${Math.round((1 - resultTokens/currentTokens) * 100)}% reduction)`);
+      logger.info(`✅ Summarized in ${Date.now() - startTime}ms using ${summarizationProvider}: ${currentTokens} → ${resultTokens} tokens (${Math.round((1 - resultTokens/currentTokens) * 100)}% reduction)`);
 
       return result;
     } catch (error) {
-      console.error('❌ Cloud summarization failed:', error.message);
+      logger.error({ err: error }, '❌ Cloud summarization failed');
       // Fallback: simple truncation
-      console.log('⚠️  Using truncation fallback');
+      logger.info('⚠️  Using truncation fallback');
       return text.substring(0, Math.floor(targetTokens / 0.75));
     }
   }  /**
@@ -876,7 +876,7 @@ class AIService {
       return messages; // No need to summarize
     }
 
-    console.log(`📉 Summarizing ${messages.length} messages (${totalTokens} tokens) → target ${targetTokens} tokens`);
+    logger.info(`📉 Summarizing ${messages.length} messages (${totalTokens} tokens) → target ${targetTokens} tokens`);
 
     // Preserve system message if exists
     const systemMsg = messages.find(m => m.role === 'system');
@@ -927,14 +927,14 @@ class AIService {
       return { prompt, messages }; // Within limits
     }
 
-    console.log(`📊 Context (${estimatedTokens} tokens) exceeds ${targetProvider} threshold (${threshold} tokens)`);
+    logger.info(`📊 Context (${estimatedTokens} tokens) exceeds ${targetProvider} threshold (${threshold} tokens)`);
 
     // Summarize
     if (messages) {
-      console.log(`🔄 Attempting to summarize ${messages.length} messages from ${estimatedTokens} → ${threshold} tokens`);
+      logger.info(`🔄 Attempting to summarize ${messages.length} messages from ${estimatedTokens} → ${threshold} tokens`);
       const summarizedMessages = await this.summarizeMessages(messages, threshold);
       const newEstimate = countMessageTokens(summarizedMessages);
-      console.log(`✅ Summarization complete: ${estimatedTokens} → ${newEstimate} tokens (${messages.length} → ${summarizedMessages.length} messages)`);
+      logger.info(`✅ Summarization complete: ${estimatedTokens} → ${newEstimate} tokens (${messages.length} → ${summarizedMessages.length} messages)`);
       const newPrompt = summarizedMessages.map(m => `${m.role}: ${m.content}`).join('\n');
       return { prompt: newPrompt, messages: summarizedMessages };
     } else {
@@ -947,17 +947,17 @@ class AIService {
 
   // Log API key status for debugging
   logApiKeyStatus() {
-    console.log('\n=== AI Service API Key Status ===');
+    logger.info('=== AI Service API Key Status ===');
     for (const [provider, config] of Object.entries(this.providers)) {
       const apiKey = config.apiKey;
       if (apiKey && apiKey.length > 10) {
         const maskedKey = `${apiKey.substring(0, 12)}...${apiKey.substring(apiKey.length - 8)}`;
-        console.log(`${provider.toUpperCase()} API = ${maskedKey} ✅`);
+        logger.info(`${provider.toUpperCase()} API = ${maskedKey} ✅`);
       } else {
-        console.log(`${provider.toUpperCase()} API = Not configured ❌`);
+        logger.info(`${provider.toUpperCase()} API = Not configured ❌`);
       }
     }
-    console.log('================================\n');
+    logger.info('================================');
   }
 
   /**
@@ -966,20 +966,20 @@ class AIService {
   loadFamilies() {
     try {
       const familiesPath = path.resolve(__dirname, '../../../../families.json');
-      console.log(`[AIService] Loading families from: ${familiesPath}`);
+      logger.debug(`[AIService] Loading families from: ${familiesPath}`);
       const familiesConfig = JSON.parse(fs.readFileSync(familiesPath, 'utf-8'));
-      console.log(`[AIService] Loaded ${Object.keys(familiesConfig.families || {}).length} families`);
-      
+      logger.debug(`[AIService] Loaded ${Object.keys(familiesConfig.families || {}).length} families`);
+
       // Debug: Log which family cerebras belongs to
       for (const [familyName, familyConfig] of Object.entries(familiesConfig.families || {})) {
         if (familyConfig.providers && familyConfig.providers.includes('cerebras')) {
-          console.log(`[AIService] cerebras found in family: ${familyName} (strategy: ${familyConfig.promptStrategy})`);
+          logger.debug(`[AIService] cerebras found in family: ${familyName} (strategy: ${familyConfig.promptStrategy})`);
         }
       }
-      
+
       return familiesConfig.families || {};
     } catch (error) {
-      console.warn('[AIService] Could not load families.json, using default behavior:', error.message);
+      logger.warn({ err: error }, '[AIService] Could not load families.json, using default behavior');
       return {};
     }
   }
@@ -1013,7 +1013,7 @@ class AIService {
     // Check if we're currently rate limited
     if (limits.rateLimitedUntil && now < limits.rateLimitedUntil) {
       const waitSeconds = Math.ceil((limits.rateLimitedUntil - now) / 1000);
-      console.log(`⏳ ${provider} is rate limited, wait ${waitSeconds}s`);
+      logger.info(`⏳ ${provider} is rate limited, wait ${waitSeconds}s`);
       return false;
     }
 
@@ -1046,13 +1046,13 @@ class AIService {
       if (limits.tokensUsed > 0 && limits.tokensUsed + estimatedTokens > limits.tokensPerMinute) {
         limits.rateLimitedUntil = limits.lastReset + 60000;
         const waitSeconds = Math.ceil((limits.rateLimitedUntil - now) / 1000);
-        console.log(`🚫 ${provider} would exceed token limit (${limits.tokensUsed}/${limits.tokensPerMinute} tokens, trying to add ${estimatedTokens}), pausing for ${waitSeconds}s`);
+        logger.info(`🚫 ${provider} would exceed token limit (${limits.tokensUsed}/${limits.tokensPerMinute} tokens, trying to add ${estimatedTokens}), pausing for ${waitSeconds}s`);
         return false;
       }
 
       // If this single request is MUCH larger than the per-minute limit (2X), reject it
       if (estimatedTokens > limits.tokensPerMinute * 2) {
-        console.log(`🚫 ${provider} single request too large (${estimatedTokens} tokens exceeds 2x limit of ${limits.tokensPerMinute})`);
+        logger.info(`🚫 ${provider} single request too large (${estimatedTokens} tokens exceeds 2x limit of ${limits.tokensPerMinute})`);
         return false;
       }
     }
@@ -1061,7 +1061,7 @@ class AIService {
     if (limits.requestsUsed + 1 > limits.requestsPerMinute) {
       limits.rateLimitedUntil = limits.lastReset + 60000;
       const waitSeconds = Math.ceil((limits.rateLimitedUntil - now) / 1000);
-      console.log(`🚫 ${provider} would exceed request limit (${limits.requestsUsed}/${limits.requestsPerMinute} reqs), pausing for ${waitSeconds}s`);
+      logger.info(`🚫 ${provider} would exceed request limit (${limits.requestsUsed}/${limits.requestsPerMinute} reqs), pausing for ${waitSeconds}s`);
       return false;
     }
 
@@ -1069,7 +1069,7 @@ class AIService {
     if (limits.requestsPerDay && limits.dailyRequestsUsed + 1 > limits.requestsPerDay) {
       limits.rateLimitedUntil = limits.lastDailyReset + 86400000; // Rate limited until next day
       const waitHours = Math.ceil((limits.rateLimitedUntil - now) / 3600000);
-      console.log(`🚫 ${provider} would exceed daily limit (${limits.dailyRequestsUsed}/${limits.requestsPerDay} reqs/day), pausing for ${waitHours}h`);
+      logger.info(`🚫 ${provider} would exceed daily limit (${limits.dailyRequestsUsed}/${limits.requestsPerDay} reqs/day), pausing for ${waitHours}h`);
       return false;
     }
 
@@ -1077,7 +1077,7 @@ class AIService {
     if (limits.requestsPerMonth && limits.monthlyRequestsUsed + 1 > limits.requestsPerMonth) {
       limits.rateLimitedUntil = limits.lastMonthlyReset + 2592000000; // Rate limited until next month
       const waitDays = Math.ceil((limits.rateLimitedUntil - now) / 86400000);
-      console.log(`🚫 ${provider} would exceed monthly limit (${limits.monthlyRequestsUsed}/${limits.requestsPerMonth} calls/month), pausing for ${waitDays} days`);
+      logger.info(`🚫 ${provider} would exceed monthly limit (${limits.monthlyRequestsUsed}/${limits.requestsPerMonth} calls/month), pausing for ${waitDays} days`);
       return false;
     }
 
@@ -1085,7 +1085,7 @@ class AIService {
     if (limits.creditsPerMonth && limits.monthlyCreditsUsed + estimatedTokens > limits.creditsPerMonth) {
       limits.rateLimitedUntil = limits.lastMonthlyReset + 2592000000; // Rate limited until next month
       const waitDays = Math.ceil((limits.rateLimitedUntil - now) / 86400000);
-      console.log(`🚫 ${provider} would exceed monthly credit limit (${limits.monthlyCreditsUsed}/${limits.creditsPerMonth} credits/month), pausing for ${waitDays} days`);
+      logger.info(`🚫 ${provider} would exceed monthly credit limit (${limits.monthlyCreditsUsed}/${limits.creditsPerMonth} credits/month), pausing for ${waitDays} days`);
       return false;
     }
 
@@ -1119,7 +1119,7 @@ class AIService {
         limits.monthlyCreditsUsed += tokensUsed; // Approximate: 1 token ≈ 1 credit
       }
 
-      console.log(`📊 ${provider} rate limit: ${limits.tokensUsed || 0}/${limits.tokensPerMinute || 'none'} tokens/min, ${limits.requestsUsed}/${limits.requestsPerMinute} reqs/min${limits.dailyRequestsUsed !== undefined ? `, ${limits.dailyRequestsUsed}/${limits.requestsPerDay} reqs/day` : ''}${limits.monthlyRequestsUsed !== undefined ? `, ${limits.monthlyRequestsUsed}/${limits.requestsPerMonth} calls/month` : ''}${limits.monthlyCreditsUsed !== undefined ? `, ${limits.monthlyCreditsUsed}/${limits.creditsPerMonth} credits/month` : ''}`);
+      logger.debug(`📊 ${provider} rate limit: ${limits.tokensUsed || 0}/${limits.tokensPerMinute || 'none'} tokens/min, ${limits.requestsUsed}/${limits.requestsPerMinute} reqs/min${limits.dailyRequestsUsed !== undefined ? `, ${limits.dailyRequestsUsed}/${limits.requestsPerDay} reqs/day` : ''}${limits.monthlyRequestsUsed !== undefined ? `, ${limits.monthlyRequestsUsed}/${limits.requestsPerMonth} calls/month` : ''}${limits.monthlyCreditsUsed !== undefined ? `, ${limits.monthlyCreditsUsed}/${limits.creditsPerMonth} credits/month` : ''}`);
     }
   }
 
@@ -1130,7 +1130,7 @@ class AIService {
     const limits = this.rateLimits[provider];
     if (limits) {
       limits.rateLimitedUntil = Date.now() + (retryAfterSeconds * 1000);
-      console.log(`⏸️  ${provider} marked as rate limited for ${retryAfterSeconds}s`);
+      logger.info(`⏸️  ${provider} marked as rate limited for ${retryAfterSeconds}s`);
     }
   }
 
@@ -1140,7 +1140,7 @@ class AIService {
   async callAI(prompt, config = {}) {
     // Wait for service to be initialized
     if (!this.initialized) {
-      console.log('Waiting for AI service to initialize...');
+      logger.info('Waiting for AI service to initialize...');
       let attempts = 0;
       while (!this.initialized && attempts < 10) {
         await new Promise(resolve => setTimeout(resolve, 100));
@@ -1180,13 +1180,13 @@ class AIService {
             model = appConfig.model;
             autoRotate = false;
             freeOnly = false;
-            console.log(`[AppConfig] ${appName} → specific: ${appConfig.provider}/${appConfig.model}`);
+            logger.info(`[AppConfig] ${appName} → specific: ${appConfig.provider}/${appConfig.model}`);
           } else if (appConfig.tier === 'free') {
             freeOnly = true;
-            console.log(`[AppConfig] ${appName} → free tier`);
+            logger.info(`[AppConfig] ${appName} → free tier`);
           } else if (appConfig.tier === 'rotation') {
             autoRotate = true;
-            console.log(`[AppConfig] ${appName} → rotation`);
+            logger.info(`[AppConfig] ${appName} → rotation`);
           }
 
           // Apply server-side defaults only if not specified in the request
@@ -1204,10 +1204,10 @@ class AIService {
             { upsert: true, new: true }
           ).catch(() => {});
           freeOnly = true;
-          console.log(`[AppConfig] ${appName} → auto-discovered, defaulting to free tier`);
+          logger.info(`[AppConfig] ${appName} → auto-discovered, defaulting to free tier`);
         }
       } catch (appConfigError) {
-        console.error(`[AppConfig] Failed to resolve config for ${appName}:`, appConfigError.message);
+        logger.error({ err: appConfigError }, `[AppConfig] Failed to resolve config for ${appName}`);
         // Fall through to normal routing
       }
     }
@@ -1236,13 +1236,13 @@ class AIService {
           requestedProvider = pick.provider;
           model = pick.modelId;
           autoRotate = false; // We've already picked
-          console.log(`[FreeOnly] Selected ${pick.provider}/${pick.modelId}`);
+          logger.info(`[FreeOnly] Selected ${pick.provider}/${pick.modelId}`);
         } else {
-          console.warn('[FreeOnly] No free-tier models available with configured API keys, falling back to rotation');
+          logger.warn('[FreeOnly] No free-tier models available with configured API keys, falling back to rotation');
           autoRotate = true;
         }
       } catch (freeError) {
-        console.error('[FreeOnly] Failed to query free tier, falling back to rotation:', freeError.message);
+        logger.error({ err: freeError }, '[FreeOnly] Failed to query free tier, falling back to rotation');
         autoRotate = true;
       }
     }
@@ -1324,12 +1324,12 @@ class AIService {
 
       // Skip if provider context is insufficient
       if (providerConfig.maxContextTokens && estimatedTokens > providerConfig.maxContextTokens) {
-        console.log(`Skipping ${currentProvider}: request size (${estimatedTokens} tokens) exceeds context limit (${providerConfig.maxContextTokens})`);
+        logger.debug(`Skipping ${currentProvider}: request size (${estimatedTokens} tokens) exceeds context limit (${providerConfig.maxContextTokens})`);
         continue;
       }
 
       if (!this.checkRateLimit(currentProvider, estimatedTokens)) {
-        console.log(`Skipping ${currentProvider}: rate limit would be exceeded`);
+        logger.debug(`Skipping ${currentProvider}: rate limit would be exceeded`);
         if (autoRotate) {
           this.rotationManager.markProviderCooling(currentProvider, 60 * 1000);
         }
@@ -1373,7 +1373,7 @@ class AIService {
           }
         }
 
-        console.log(`Provider ${currentProvider} failed:`, error.message);
+        logger.warn({ err: error }, `Provider ${currentProvider} failed`);
       }
     }
 
@@ -1475,16 +1475,11 @@ class AIService {
       await loadBalancer.markProviderUnavailable(provider);
 
       // Log error with routing context
-      console.error('[Smart Routing] Provider failed:', {
-        provider,
-        family: routingDecision.family,
-        taskType: routingDecision.taskType,
-        error: error.message
-      });
+      logger.error({ err: error, provider, family: routingDecision.family, taskType: routingDecision.taskType }, '[Smart Routing] Provider failed');
 
       // Try fallback within the same family
       const family = routingDecision.family;
-      console.log(`[Smart Routing] Trying next provider in ${family} family...`);
+      logger.info(`[Smart Routing] Trying next provider in ${family} family...`);
 
       try {
         const fallbackProvider = await loadBalancer.getNextProvider(family);
@@ -1611,10 +1606,9 @@ class AIService {
         outputTokens: response.data.result?.usage?.completion_tokens || 0
       };
     } catch (error) {
-      console.error('Cloudflare API error:', error.message);
+      logger.error({ err: error }, 'Cloudflare API error');
       if (error.response) {
-        console.error('Response status:', error.response.status);
-        console.error('Response data:', JSON.stringify(error.response.data, null, 2));
+        logger.error({ status: error.response.status, data: error.response.data }, 'Cloudflare response error details');
 
         // Handle 402 (out of neurons)
         if (error.response.status === 402) {
@@ -1660,10 +1654,9 @@ class AIService {
         outputTokens: response.data.eval_count || 0
       };
     } catch (error) {
-      console.error('Ollama Cloud API error:', error.message);
+      logger.error({ err: error }, 'Ollama Cloud API error');
       if (error.response) {
-        console.error('Response status:', error.response.status);
-        console.error('Response data:', JSON.stringify(error.response.data, null, 2));
+        logger.error({ status: error.response.status, data: error.response.data }, 'Ollama response error details');
         throw new Error(`Ollama Cloud API error (${error.response.status}): ${JSON.stringify(error.response.data)}`);
       }
       throw error;
@@ -1700,10 +1693,9 @@ class AIService {
         outputTokens: response.data.usage?.completion_tokens || 0
       };
     } catch (error) {
-      console.error('LLM7 API error:', error.message);
+      logger.error({ err: error }, 'LLM7 API error');
       if (error.response) {
-        console.error('Response status:', error.response.status);
-        console.error('Response data:', JSON.stringify(error.response.data, null, 2));
+        logger.error({ status: error.response.status, data: error.response.data }, 'LLM7 response error details');
         throw new Error(`LLM7 API error (${error.response.status}): ${JSON.stringify(error.response.data)}`);
       }
       throw error;
@@ -1740,10 +1732,9 @@ class AIService {
         outputTokens: response.data.usage?.completion_tokens || 0
       };
     } catch (error) {
-      console.error('LLM Gateway API error:', error.message);
+      logger.error({ err: error }, 'LLM Gateway API error');
       if (error.response) {
-        console.error('Response status:', error.response.status);
-        console.error('Response data:', JSON.stringify(error.response.data, null, 2));
+        logger.error({ status: error.response.status, data: error.response.data }, 'LLM Gateway response error details');
         throw new Error(`LLM Gateway API error (${error.response.status}): ${JSON.stringify(error.response.data)}`);
       }
       throw error;
@@ -1788,7 +1779,7 @@ class AIService {
       const result = response.data?.response || response.data?.content || response.data?.result || response.data?.output || '';
 
       if (!result) {
-        console.warn('1min.ai returned empty response:', JSON.stringify(response.data));
+        logger.warn({ data: response.data }, '1min.ai returned empty response');
         throw new Error('Empty response from 1min.ai API');
       }
 
@@ -1798,10 +1789,9 @@ class AIService {
         outputTokens: response.data?.usage?.completion_tokens || 0
       };
     } catch (error) {
-      console.error('1min.ai API error:', error.message);
+      logger.error({ err: error }, '1min.ai API error');
       if (error.response) {
-        console.error('Response status:', error.response.status);
-        console.error('Response data:', JSON.stringify(error.response.data, null, 2));
+        logger.error({ status: error.response.status, data: error.response.data }, '1min.ai response error details');
         throw new Error(`1min.ai API error (${error.response.status}): ${JSON.stringify(error.response.data)}`);
       }
       throw error;
@@ -1842,10 +1832,9 @@ class AIService {
         outputTokens: response.data.usage?.output_tokens || 0
       };
     } catch (error) {
-      console.error('Claude API error:', error.message);
+      logger.error({ err: error }, 'Claude API error');
       if (error.response) {
-        console.error('Response status:', error.response.status);
-        console.error('Response data:', JSON.stringify(error.response.data, null, 2));
+        logger.error({ status: error.response.status, data: error.response.data }, 'Claude response error details');
         throw new Error(`Anthropic API error (${error.response.status}): ${JSON.stringify(error.response.data)}`);
       }
       throw error;
@@ -1885,10 +1874,9 @@ class AIService {
         outputTokens: response.data.usage?.completion_tokens || 0
       };
     } catch (error) {
-      console.error('Groq API error:', error.message);
+      logger.error({ err: error }, 'Groq API error');
       if (error.response) {
-        console.error('Response status:', error.response.status);
-        console.error('Response data:', JSON.stringify(error.response.data, null, 2));
+        logger.error({ status: error.response.status, data: error.response.data }, 'Groq response error details');
         throw new Error(`Groq API error (${error.response.status}): ${JSON.stringify(error.response.data)}`);
       }
       throw error;
@@ -1931,10 +1919,9 @@ class AIService {
         outputTokens: response.data.usageMetadata?.candidatesTokenCount || 0
       };
     } catch (error) {
-      console.error('Gemini API error:', error.message);
+      logger.error({ err: error }, 'Gemini API error');
       if (error.response) {
-        console.error('Response status:', error.response.status);
-        console.error('Response data:', JSON.stringify(error.response.data, null, 2));
+        logger.error({ status: error.response.status, data: error.response.data }, 'Gemini response error details');
         throw new Error(`Gemini API error (${error.response.status}): ${JSON.stringify(error.response.data)}`);
       }
       throw error;
@@ -1975,10 +1962,9 @@ class AIService {
         outputTokens: response.data.usage?.completion_tokens || 0
       };
     } catch (error) {
-      console.error('Together AI API error:', error.message);
+      logger.error({ err: error }, 'Together AI API error');
       if (error.response) {
-        console.error('Response status:', error.response.status);
-        console.error('Response data:', JSON.stringify(error.response.data, null, 2));
+        logger.error({ status: error.response.status, data: error.response.data }, 'Together AI response error details');
         throw new Error(`Together AI error (${error.response.status}): ${JSON.stringify(error.response.data)}`);
       }
       throw error;
@@ -2013,10 +1999,9 @@ class AIService {
         outputTokens: response.data.meta?.tokens?.output_tokens || 0
       };
     } catch (error) {
-      console.error('Cohere API error:', error.message);
+      logger.error({ err: error }, 'Cohere API error');
       if (error.response) {
-        console.error('Response status:', error.response.status);
-        console.error('Response data:', JSON.stringify(error.response.data, null, 2));
+        logger.error({ status: error.response.status, data: error.response.data }, 'Cohere response error details');
         throw new Error(`Cohere API error (${error.response.status}): ${JSON.stringify(error.response.data)}`);
       }
       throw error;
@@ -2058,10 +2043,9 @@ class AIService {
         outputTokens: response.data.usage?.completion_tokens || 0
       };
     } catch (error) {
-      console.error('OpenRouter API error:', error.message);
+      logger.error({ err: error }, 'OpenRouter API error');
       if (error.response) {
-        console.error('Response status:', error.response.status);
-        console.error('Response data:', JSON.stringify(error.response.data, null, 2));
+        logger.error({ status: error.response.status, data: error.response.data }, 'OpenRouter response error details');
         throw new Error(`OpenRouter API error (${error.response.status}): ${JSON.stringify(error.response.data)}`);
       }
       throw error;
@@ -2085,14 +2069,14 @@ class AIService {
     // Inject prompt strategy based on family configuration
     const promptStrategy = this.getPromptStrategy('cerebras');
     if (promptStrategy) {
-      console.log(`[Cerebras] Applying prompt strategy: ${promptStrategy.substring(0, 50)}...`);
+      logger.debug(`[Cerebras] Applying prompt strategy: ${promptStrategy.substring(0, 50)}...`);
       // Prepend strategy to the first system message, or create one
       const systemIndex = requestMessages.findIndex(m => m.role === 'system');
       if (systemIndex >= 0) {
-        console.log(`[Cerebras] Appending strategy to existing system message (index ${systemIndex})`);
+        logger.debug(`[Cerebras] Appending strategy to existing system message (index ${systemIndex})`);
         requestMessages[systemIndex].content += promptStrategy;
       } else {
-        console.log(`[Cerebras] Creating new system message with strategy`);
+        logger.debug(`[Cerebras] Creating new system message with strategy`);
         // Add as first message
         requestMessages = [
           { role: 'system', content: `System instructions:${promptStrategy}` },
@@ -2102,10 +2086,10 @@ class AIService {
       // Log the final system message for verification
       const finalSystemMsg = requestMessages.find(m => m.role === 'system');
       if (finalSystemMsg) {
-        console.log(`[Cerebras] Final system message length: ${finalSystemMsg.content.length} chars`);
+        logger.debug(`[Cerebras] Final system message length: ${finalSystemMsg.content.length} chars`);
       }
     } else {
-      console.log(`[Cerebras] No prompt strategy found for cerebras provider`);
+      logger.debug(`[Cerebras] No prompt strategy found for cerebras provider`);
     }
 
     try {
@@ -2130,10 +2114,9 @@ class AIService {
         outputTokens: response.data.usage?.completion_tokens || 0
       };
     } catch (error) {
-      console.error('Cerebras API error:', error.message);
+      logger.error({ err: error }, 'Cerebras API error');
       if (error.response) {
-        console.error('Response status:', error.response.status);
-        console.error('Response data:', JSON.stringify(error.response.data, null, 2));
+        logger.error({ status: error.response.status, data: error.response.data }, 'Cerebras response error details');
         throw new Error(`Cerebras API error (${error.response.status}): ${JSON.stringify(error.response.data)}`);
       }
       throw error;
@@ -2153,7 +2136,7 @@ class AIService {
 
       return JSON.parse(jsonMatch[0]);
     } catch (error) {
-      console.error('Failed to parse AI response:', error.message);
+      logger.error({ err: error }, 'Failed to parse AI response');
       throw new Error('Invalid AI response format');
     }
   }
@@ -2205,7 +2188,7 @@ class AIService {
           actualCost = (totalTokens / 1000) * this.providers[provider].costPer1kTokens;
         }
       } catch (error) {
-        console.error('Error checking free tier status:', error);
+        logger.error({ err: error }, 'Error checking free tier status');
         // Fallback to charging
         actualCost = (totalTokens / 1000) * this.providers[provider].costPer1kTokens;
       }
@@ -2218,7 +2201,7 @@ class AIService {
     this.sessionStats.totalTokens += totalTokens;
     this.sessionStats.totalCost += actualCost;
 
-    console.log(`Updated session stats: calls=${this.sessionStats.totalCalls}, tokens=${this.sessionStats.totalTokens}, cost=${this.sessionStats.totalCost}`);
+    logger.debug(`Updated session stats: calls=${this.sessionStats.totalCalls}, tokens=${this.sessionStats.totalTokens}, cost=${this.sessionStats.totalCost}`);
 
         if (!this.sessionStats.providerUsage[provider]) {
       this.sessionStats.providerUsage[provider] = {
@@ -2235,7 +2218,7 @@ class AIService {
     this.sessionStats.providerUsage[provider].tokens += totalTokens;
     this.sessionStats.providerUsage[provider].cost += actualCost;
 
-    console.log(`Updated provider stats for ${provider}: calls=${this.sessionStats.providerUsage[provider].calls}, tokens=${this.sessionStats.providerUsage[provider].tokens}, cost=${this.sessionStats.providerUsage[provider].cost}`);
+    logger.debug(`Updated provider stats for ${provider}: calls=${this.sessionStats.providerUsage[provider].calls}, tokens=${this.sessionStats.providerUsage[provider].tokens}, cost=${this.sessionStats.providerUsage[provider].cost}`);
 
     // Track app usage
     if (!this.sessionStats.providerUsage[provider].appUsage[appName]) {
@@ -2252,7 +2235,7 @@ class AIService {
     this.sessionStats.providerUsage[provider].appUsage[appName].tokens += totalTokens;
     this.sessionStats.providerUsage[provider].appUsage[appName].cost += actualCost;
 
-    console.log(`Updated app stats for ${provider}/${appName}: calls=${this.sessionStats.providerUsage[provider].appUsage[appName].calls}, tokens=${this.sessionStats.providerUsage[provider].appUsage[appName].tokens}, cost=${this.sessionStats.providerUsage[provider].appUsage[appName].cost}`);
+    logger.debug(`Updated app stats for ${provider}/${appName}: calls=${this.sessionStats.providerUsage[provider].appUsage[appName].calls}, tokens=${this.sessionStats.providerUsage[provider].appUsage[appName].tokens}, cost=${this.sessionStats.providerUsage[provider].appUsage[appName].cost}`);
 
     if (isFreeUsage) {
       this.sessionStats.providerUsage[provider].freeCalls =
@@ -2269,7 +2252,7 @@ class AIService {
    * Get session statistics
    */
   getSessionStats() {
-    console.log('Getting session stats:', this.sessionStats);
+    logger.debug({ stats: this.sessionStats }, 'Getting session stats');
     return {
       ...this.sessionStats,
       averageCostPerCall: this.sessionStats.totalCalls > 0 ? this.sessionStats.totalCost / this.sessionStats.totalCalls : 0
@@ -2304,7 +2287,7 @@ class AIService {
    */
   setSummarizationEnabled(enabled) {
     this.summarizationEnabled = enabled;
-    console.log(`📊 Smart summarization ${enabled ? 'enabled' : 'disabled'}`);
+    logger.info(`📊 Smart summarization ${enabled ? 'enabled' : 'disabled'}`);
   }
 
   /**
@@ -2312,7 +2295,7 @@ class AIService {
    */
   setSummarizationThreshold(tokens) {
     this.summarizationThreshold = tokens;
-    console.log(`📊 Summarization threshold set to ${tokens} tokens`);
+    logger.info(`📊 Summarization threshold set to ${tokens} tokens`);
   }
 
   /**

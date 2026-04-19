@@ -1,6 +1,12 @@
 import mongoose from 'mongoose';
 import { getAIGeekConnection } from '../config/database.js';
 import crypto from 'crypto';
+// Note: APIKey docs store only a SHA-256 *hash* of the raw key (keyHash field),
+// never the plaintext.  The raw key is returned to the caller once at creation
+// and is never persisted.  Therefore no AES encryption/decryption is applicable
+// here — the model already satisfies "secrets at rest" by design.
+// getDecryptedKey / setKey are included for interface parity per the hardening
+// spec; they intentionally operate as no-ops / passthroughs on keyHash.
 
 const apiKeySchema = new mongoose.Schema({
   keyId: {
@@ -207,6 +213,28 @@ apiKeySchema.methods.incrementUsage = function() {
 // Method to check permissions
 apiKeySchema.methods.hasPermission = function(permission) {
   return this.permissions.includes(permission);
+};
+
+// ---------------------------------------------------------------------------
+// Interface-parity stubs (see comment at top of file)
+// APIKey stores only a one-way SHA-256 hash; there is no recoverable plaintext.
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns null — the raw key is never stored and cannot be recovered from keyHash.
+ * Exists for interface parity with AIConfig.getDecryptedKey().
+ */
+apiKeySchema.methods.getDecryptedKey = function() {
+  return null;
+};
+
+/**
+ * No-op — raw API key material is never persisted on this model.
+ * The hash is set by generateAPIKey() + direct assignment to keyHash.
+ * Exists for interface parity with AIConfig.setKey().
+ */
+apiKeySchema.methods.setKey = function(_plaintext) {
+  // intentional no-op
 };
 
 // Use aiGeek database connection

@@ -83,7 +83,7 @@ async function switchToClaude() {
 
     console.log('\n✅ Switch complete!');
     console.log('\n📝 Next steps:');
-    console.log('   1. Restart baseGeek: docker-compose restart basegeek_app');
+    console.log('   1. Restart baseGeek: docker-compose restart basegeek');
     console.log('   2. Verify logs show: [onemin] or [1min.ai] or [Claude]');
     console.log('   3. Test with CodeGeek\n');
 

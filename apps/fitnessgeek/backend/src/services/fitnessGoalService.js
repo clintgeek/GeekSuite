@@ -249,7 +249,7 @@ Keep it practical and achievable.`;
 
         return result;
       } catch (parseError) {
-        console.log('JSON parse failed, attempting to fix incomplete response...');
+        logger.info('JSON parse failed, attempting to fix incomplete response...');
 
         // More comprehensive fix for incomplete JSON
         if (jsonString.includes('"nutrition_phases"')) {
@@ -283,12 +283,12 @@ Keep it practical and achievable.`;
 
           return result;
         } catch (secondParseError) {
-          console.error('Failed to parse nutrition goal response:', secondParseError);
+          logger.error({ err: secondParseError }, 'Failed to parse nutrition goal response');
           throw new Error('Failed to parse nutrition goal response');
         }
       }
     } catch (error) {
-      console.error('Failed to parse nutrition goal response:', error);
+      logger.error({ err: error }, 'Failed to parse nutrition goal response');
       throw new Error('Failed to parse nutrition goal response');
     }
   }
@@ -351,12 +351,12 @@ Keep it practical and achievable.`;
 
           return result;
         } catch (secondParseError) {
-          console.error('Failed to parse meal plan response:', secondParseError);
+          logger.error({ err: secondParseError }, 'Failed to parse meal plan response');
           throw new Error('Failed to parse meal plan response');
         }
       }
     } catch (error) {
-      console.error('Failed to parse meal plan response:', error);
+      logger.error({ err: error }, 'Failed to parse meal plan response');
       throw new Error('Failed to parse meal plan response');
     }
   }

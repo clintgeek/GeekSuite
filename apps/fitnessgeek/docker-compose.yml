@@ -1,38 +1,36 @@
 services:
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: fitnessgeek-backend
-    environment:
-      - TZ=America/Chicago
-      - NODE_ENV=production
-      - PORT=5002
-      - MONGODB_URI=${MONGODB_URI}
-      - JWT_SECRET=${JWT_SECRET}
-      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
-      - BASEGEEK_URL=${BASEGEEK_URL}
-      - REDIS_URL=${REDIS_URL}
-      - AI_GEEK_API_KEY=${AI_GEEK_API_KEY}
-      - USDA_API_KEY=${USDA_API_KEY}
-      - NUTRITIONIX_APP_ID=${NUTRITIONIX_APP_ID}
-      - NUTRITIONIX_API_KEY=${NUTRITIONIX_API_KEY}
-      - OPENFOODFACTS_API_URL=${OPENFOODFACTS_API_URL}
-      - CORS_ORIGINS=${CORS_ORIGINS}
-      - LOG_LEVEL=${LOG_LEVEL:-info}
-      - INFLUXDB_HOST=${INFLUXDB_HOST}
-      - INFLUXDB_PORT=${INFLUXDB_PORT}
-      - INFLUXDB_USERNAME=${INFLUXDB_USERNAME}
-      - INFLUXDB_PASSWORD=${INFLUXDB_PASSWORD}
-      - INFLUXDB_DATABASE=${INFLUXDB_DATABASE}
-    ports:
-      - "4080:5002"
-    volumes:
-      - ./frontend/dist:/app/public
-    networks:
-      - fitnessgeek_network
-    restart: always
+  fitnessgeek:
+    image: geeksuite/fitnessgeek:latest
+    container_name: fitnessgeek
+    restart: unless-stopped
 
-networks:
-  fitnessgeek_network:
-    driver: bridge
+    env_file:
+      - .env.production
+
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+
+      MONGODB_URI: ${MONGODB_URI}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      BASEGEEK_URL: ${BASEGEEK_URL}
+      REDIS_URL: ${REDIS_URL}
+      AI_GEEK_API_KEY: ${AI_GEEK_API_KEY}
+
+      USDA_API_KEY: ${USDA_API_KEY}
+      NUTRITIONIX_APP_ID: ${NUTRITIONIX_APP_ID}
+      NUTRITIONIX_API_KEY: ${NUTRITIONIX_API_KEY}
+      OPENFOODFACTS_API_URL: ${OPENFOODFACTS_API_URL}
+
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+
+      INFLUXDB_HOST: ${INFLUXDB_HOST}
+      INFLUXDB_PORT: ${INFLUXDB_PORT}
+      INFLUXDB_USERNAME: ${INFLUXDB_USERNAME}
+      INFLUXDB_PASSWORD: ${INFLUXDB_PASSWORD}
+      INFLUXDB_DATABASE: ${INFLUXDB_DATABASE}
+
+    ports:
+      - "4080:3001"

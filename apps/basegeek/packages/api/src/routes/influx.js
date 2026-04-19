@@ -1,6 +1,7 @@
 import express from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { getInfluxConfig, getInfluxQueryApi, pingInflux } from '../config/influx.js';
+import logger from '../lib/logger.js';
 
 const router = express.Router();
 
@@ -42,7 +43,7 @@ router.get('/status', async (req, res) => {
       statusPayload.measurements.count = measurements.length;
       statusPayload.measurements.samples = measurements.slice(0, 5);
     } catch (error) {
-      console.error('Influx measurements query failed:', error.message);
+      req.log.error({ err: error }, 'Influx measurements query failed');
       statusPayload.measurements.error = error.message;
     }
 
@@ -54,7 +55,7 @@ router.get('/status', async (req, res) => {
       const pointsLastHour = (pointRows || []).reduce((sum, row) => sum + (Number(row?._value) || 0), 0);
       statusPayload.stats.pointsLastHour = pointsLastHour;
     } catch (error) {
-      console.error('Influx point count query failed:', error.message);
+      req.log.error({ err: error }, 'Influx point count query failed');
       statusPayload.stats.pointsLastHour = null;
     }
 
@@ -67,12 +68,12 @@ router.get('/status', async (req, res) => {
       const lastPointRows = await queryApi.collectRows(lastPointFlux);
       statusPayload.stats.lastPointTime = lastPointRows?.[0]?._time || null;
     } catch (error) {
-      console.error('Influx last point query failed:', error.message);
+      req.log.error({ err: error }, 'Influx last point query failed');
     }
 
     return res.json(statusPayload);
   } catch (error) {
-    console.error('Influx status endpoint error:', error);
+    req.log.error({ err: error }, 'Influx status endpoint error');
     return res.status(500).json({
       status: 'error',
       message: error.message,

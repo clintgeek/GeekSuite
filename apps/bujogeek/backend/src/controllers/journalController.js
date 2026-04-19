@@ -169,8 +169,11 @@ export const createFromTemplate = async (req, res) => {
 
     const userId = req.user._id;
 
-    // Find the template
-    const template = await Template.findById(templateId);
+    // Find the template — user must own it or it must be public
+    const template = await Template.findOne({
+      _id: templateId,
+      $or: [{ createdBy: userId }, { isPublic: true }]
+    });
     if (!template) {
       return res.status(404).json({ message: 'Template not found' });
     }

@@ -1,5 +1,3 @@
-import axios from 'axios';
-
 /**
  * Influx Service — direct REST client for the fitnessgeek backend's
  * InfluxDB-powered health endpoints.
@@ -13,18 +11,7 @@ import axios from 'axios';
  * existing consumer expectations.
  */
 
-const restApi = axios.create({
-  baseURL: '/api',
-  timeout: 30000,
-  withCredentials: true,
-});
-
-// Attach auth token from the same localStorage key Apollo uses
-restApi.interceptors.request.use((config) => {
-  const token = localStorage.getItem('geek_token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
+import { restClient as restApi } from './restClient.js';
 
 const unwrap = (response) => response?.data ?? response;
 

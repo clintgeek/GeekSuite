@@ -1,4 +1,5 @@
 const axios = require('axios');
+const logger = require('../config/logger');
 
 class OpenFoodFactsService {
   constructor() {
@@ -36,11 +37,7 @@ class OpenFoodFactsService {
       return transformedProducts;
 
     } catch (error) {
-      console.error('OpenFoodFacts search error:', error.message);
-      if (error.response) {
-        console.error('Response status:', error.response.status);
-        console.error('Response data:', error.response.data);
-      }
+      logger.error({ err: error, status: error.response?.status, data: error.response?.data }, 'OpenFoodFacts search error');
       return [];
     }
   }
@@ -64,7 +61,7 @@ class OpenFoodFactsService {
       return this.transformProduct(response.data.product);
 
     } catch (error) {
-      console.error('OpenFoodFacts barcode lookup error:', error.message);
+      logger.error({ err: error }, 'OpenFoodFacts barcode lookup error');
       return null;
     }
   }

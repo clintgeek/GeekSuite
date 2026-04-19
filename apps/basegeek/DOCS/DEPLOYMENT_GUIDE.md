@@ -66,7 +66,7 @@ docker-compose build
 docker-compose up -d
 
 # Watch logs
-docker-compose logs -f basegeek_app
+docker-compose logs -f basegeek
 docker-compose logs -f datageek_influxdb
 ```
 
@@ -281,7 +281,7 @@ curl -X POST http://192.168.1.17:8987/api/ai/call \
 1. **Request Size Distribution**
    ```bash
    # Check logs for payload sizes
-   grep "Estimated payload size" logs/basegeek_app.log
+   grep "Estimated payload size" logs/basegeek.log
    ```
    - Before: 50K+ common
    - After: <2K typical
@@ -289,7 +289,7 @@ curl -X POST http://192.168.1.17:8987/api/ai/call \
 2. **Provider Success Rate**
    ```bash
    # Check for fallback attempts
-   grep "fallback" logs/basegeek_app.log | wc -l
+   grep "fallback" logs/basegeek.log | wc -l
    ```
    - Before: 5+ attempts per request
    - After: <1 attempt per request
@@ -306,7 +306,7 @@ curl -X POST http://192.168.1.17:8987/api/ai/call \
 4. **Error Rate**
    ```bash
    # Check for errors
-   grep "ERROR\|Failed" logs/basegeek_app.log
+   grep "ERROR\|Failed" logs/basegeek.log
    ```
    - Target: <0.1% error rate
 
@@ -479,13 +479,13 @@ Provider-level rate limits still apply via `aiService.rateLimits`
 
 ```bash
 # BaseGeek logs
-docker-compose logs -f basegeek_app
+docker-compose logs -f basegeek
 
 # Specific service
-docker logs basegeek_app --tail 100 -f
+docker logs basegeek --tail 100 -f
 
 # Save logs to file
-docker logs basegeek_app > logs/basegeek_app.log 2>&1
+docker logs basegeek > logs/basegeek.log 2>&1
 ```
 
 ### Contact
@@ -493,7 +493,7 @@ docker logs basegeek_app > logs/basegeek_app.log 2>&1
 For issues or questions:
 - Check: `/Users/ccrocker/projects/baseGeek/DOCS/PHASE_3_IMPLEMENTATION.md`
 - Review: `/Users/ccrocker/projects/baseGeek/DOCS/CONTEXT_OVERFLOW_ANALYSIS.md`
-- Logs: `docker-compose logs basegeek_app`
+- Logs: `docker-compose logs basegeek`
 
 ---
 

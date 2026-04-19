@@ -15,6 +15,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import logger from '../lib/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -36,15 +37,15 @@ const contextClient = redis.createClient({
   database: config.redis.contextCacheDB
 });
 
-contextClient.on('error', (err) => console.error('[ModelFamilyRouter] Redis context error:', err));
-contextClient.on('connect', () => console.log('[ModelFamilyRouter] Redis context connected (DB 0)'));
+contextClient.on('error', (err) => logger.error({ err }, '[ModelFamilyRouter] Redis context error'));
+contextClient.on('connect', () => logger.info('[ModelFamilyRouter] Redis context connected (DB 0)'));
 
 // Connection promise for lazy initialization
 let connectionPromise = null;
 function ensureConnection() {
   if (!connectionPromise) {
     connectionPromise = contextClient.connect().catch(err => {
-      console.error('[ModelFamilyRouter] Failed to connect to Redis:', err.message);
+      logger.error({ err }, '[ModelFamilyRouter] Failed to connect to Redis');
       connectionPromise = null; // Reset to allow retry
       throw err;
     });
@@ -80,7 +81,7 @@ class ModelFamilyRouter {
 
       if (config.debug) {
         const scores = this.taskDetector.getAllScores(prompt);
-        console.log('[ModelFamilyRouter] Task detection scores:', scores);
+        logger.debug({ scores }, '[ModelFamilyRouter] Task detection scores');
       }
 
       // 2. Get family for task type
@@ -118,7 +119,7 @@ class ModelFamilyRouter {
 
       // 7. Log telemetry
       if (config.telemetry.logToConsole) {
-        console.log('[DRY RUN - Phase 2A]', JSON.stringify(decisionLog, null, 2));
+        logger.info({ decisionLog }, '[DRY RUN - Phase 2A]');
       }
 
       if (config.telemetry.logToFile) {
@@ -142,7 +143,7 @@ class ModelFamilyRouter {
       return decisionLog;
 
     } catch (error) {
-      console.error('[ModelFamilyRouter] Routing error:', error);
+      logger.error({ err: error }, '[ModelFamilyRouter] Routing error');
 
       // Log error telemetry
       const errorLog = {
@@ -153,7 +154,7 @@ class ModelFamilyRouter {
       };
 
       if (config.telemetry.logToConsole) {
-        console.error('[ERROR]', JSON.stringify(errorLog, null, 2));
+        logger.error({ errorLog }, '[ModelFamilyRouter] Routing error log');
       }
 
       throw error;
@@ -197,7 +198,7 @@ class ModelFamilyRouter {
     await contextClient.setEx(key, ttl, JSON.stringify(summary));
 
     if (config.debug) {
-      console.log(`[ModelFamilyRouter] Cached context for ${conversationId} in family ${family}`);
+      logger.debug(`[ModelFamilyRouter] Cached context for ${conversationId} in family ${family}`);
     }
   }
 
@@ -212,7 +213,7 @@ class ModelFamilyRouter {
     // Stub for Phase 2B
     // For now, return messages as-is
     if (config.debug) {
-      console.log(`[ModelFamilyRouter] Context strategy stub: ${strategy} (Phase 2B)`);
+      logger.debug(`[ModelFamilyRouter] Context strategy stub: ${strategy} (Phase 2B)`);
     }
     return messages;
   }
@@ -228,7 +229,7 @@ class ModelFamilyRouter {
     // Stub for Phase 2C
     // For now, use round-robin
     if (config.debug) {
-      console.log(`[ModelFamilyRouter] Optimal model selection stub: ${familyName} (Phase 2C)`);
+      logger.debug(`[ModelFamilyRouter] Optimal model selection stub: ${familyName} (Phase 2C)`);
     }
     return await this.loadBalancer.getNextProvider(familyName);
   }
@@ -259,7 +260,7 @@ class ModelFamilyRouter {
     await contextClient.setEx(key, ttl, JSON.stringify(metadata));
 
     if (config.debug) {
-      console.log(`[ModelFamilyRouter] Cached metadata for provider ${provider}`);
+      logger.debug(`[ModelFamilyRouter] Cached metadata for provider ${provider}`);
     }
   }
 
@@ -277,7 +278,7 @@ class ModelFamilyRouter {
       const logLine = JSON.stringify(log) + '\n';
       fs.appendFileSync(config.telemetry.logPath, logLine);
     } catch (error) {
-      console.error('[ModelFamilyRouter] Failed to write to log file:', error);
+      logger.error({ err: error }, '[ModelFamilyRouter] Failed to write to log file');
     }
   }
 

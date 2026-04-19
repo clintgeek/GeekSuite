@@ -1,5 +1,6 @@
 import AIUsage from '../models/AIUsage.js';
 import AIFreeTier from '../models/AIFreeTier.js';
+import logger from '../lib/logger.js';
 
 class AIUsageService {
   constructor() {
@@ -53,7 +54,7 @@ class AIUsageService {
 
       // Reset counters if time period has changed
       if (usage.currentMinute.timestamp.getTime() !== currentMinute.getTime()) {
-        console.log(`Resetting minute counters for ${provider}/${modelId} - old: ${usage.currentMinute.timestamp}, new: ${currentMinute}`);
+        logger.info(`Resetting minute counters for ${provider}/${modelId} - old: ${usage.currentMinute.timestamp}, new: ${currentMinute}`);
         usage.currentMinute = {
           requests: 0,
           tokens: 0,
@@ -136,7 +137,7 @@ class AIUsageService {
       };
 
     } catch (error) {
-      console.error('Failed to track AI usage:', error);
+      logger.error({ err: error }, 'Failed to track AI usage');
       return {
         success: false,
         error: error.message
@@ -190,7 +191,7 @@ class AIUsageService {
       };
 
     } catch (error) {
-      console.error('Failed to get usage status:', error);
+      logger.error({ err: error }, 'Failed to get usage status');
       return {
         success: false,
         error: error.message
@@ -209,14 +210,15 @@ class AIUsageService {
         date: currentDay
       });
 
-      console.log(`Found ${usageRecords.length} usage records for ${provider}/${userId}`);
+      logger.debug(`Found ${usageRecords.length} usage records for ${provider}/${userId}`);
       usageRecords.forEach(record => {
-        console.log(`Usage record for ${record.modelId}:`, {
+        logger.debug({
+          modelId: record.modelId,
           requests: record.currentDay.requests,
           tokens: record.currentDay.tokens,
           limits: record.freeLimits,
           percentages: record.usagePercentages
-        });
+        }, `Usage record for ${record.modelId}`);
       });
 
       const summary = {
@@ -246,11 +248,12 @@ class AIUsageService {
         summary.models.push(modelSummary);
 
         // Check if any model is near or at limit
-        console.log(`Checking limits for ${record.modelId}:`, {
+        logger.debug({
+          modelId: record.modelId,
           isNearLimit: record.isNearLimit,
           isAtLimit: record.isAtLimit,
           percentages: record.usagePercentages
-        });
+        }, `Checking limits for ${record.modelId}`);
 
         Object.values(record.isNearLimit).forEach(isNear => {
           if (isNear) summary.isNearAnyLimit = true;
@@ -267,7 +270,7 @@ class AIUsageService {
       };
 
     } catch (error) {
-      console.error('Failed to get provider usage summary:', error);
+      logger.error({ err: error }, 'Failed to get provider usage summary');
       return {
         success: false,
         error: error.message
@@ -324,7 +327,7 @@ class AIUsageService {
       };
 
     } catch (error) {
-      console.error('Failed to check if model available:', error);
+      logger.error({ err: error }, 'Failed to check if model available');
       return {
         available: false,
         reason: 'Error checking availability'

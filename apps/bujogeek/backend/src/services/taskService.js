@@ -293,11 +293,12 @@ class TaskService {
    * Update a task
    * @param {string} taskId - Task ID
    * @param {Object} updateData - Update data
-   * @returns {Promise<Object>} Updated task
+   * @param {string} userId - Owner user ID (required — enforces ownership atomically)
+   * @returns {Promise<Object>} Updated task, or null if not found / not owned
    */
-  async updateTask(taskId, updateData) {
-    return this.taskModel.findByIdAndUpdate(
-      taskId,
+  async updateTask(taskId, updateData, userId) {
+    return this.taskModel.findOneAndUpdate(
+      { _id: taskId, createdBy: userId },
       { ...updateData, updatedAt: new Date() },
       { new: true, runValidators: true }
     );
@@ -306,10 +307,11 @@ class TaskService {
   /**
    * Delete a task
    * @param {string} taskId - Task ID
-   * @returns {Promise<Object>} Deletion result
+   * @param {string} userId - Owner user ID (required — enforces ownership atomically)
+   * @returns {Promise<Object>} Deletion result, or null if not found / not owned
    */
-  async deleteTask(taskId) {
-    const task = await this.taskModel.findById(taskId);
+  async deleteTask(taskId, userId) {
+    const task = await this.taskModel.findOne({ _id: taskId, createdBy: userId });
     if (!task) return null;
 
     // Remove from parent's subtasks if exists
@@ -330,9 +332,10 @@ class TaskService {
    * Update task status
    * @param {string} taskId - Task ID
    * @param {string} status - New status
-   * @returns {Promise<Object>} Updated task
+   * @param {string} userId - Owner user ID (required — enforces ownership atomically)
+   * @returns {Promise<Object>} Updated task, or null if not found / not owned
    */
-  async updateTaskStatus(taskId, status) {
+  async updateTaskStatus(taskId, status, userId) {
     const now = new Date();
     const updateData = {
       status,
@@ -346,8 +349,8 @@ class TaskService {
       updateData.completedAt = null;  // Clear completedAt if task is uncompleted
     }
 
-    return this.taskModel.findByIdAndUpdate(
-      taskId,
+    return this.taskModel.findOneAndUpdate(
+      { _id: taskId, createdBy: userId },
       updateData,
       { new: true, runValidators: true }
     );
@@ -356,10 +359,11 @@ class TaskService {
   /**
    * Get a task by ID
    * @param {string} taskId - Task ID
-   * @returns {Promise<Object>} Task object
+   * @param {string} userId - Owner user ID (required — enforces ownership)
+   * @returns {Promise<Object>} Task object, or null if not found / not owned
    */
-  async getTaskById(taskId) {
-    return this.taskModel.findById(taskId)
+  async getTaskById(taskId, userId) {
+    return this.taskModel.findOne({ _id: taskId, createdBy: userId })
       .populate('parentTask', 'content status')
       .populate('subtasks');
   }

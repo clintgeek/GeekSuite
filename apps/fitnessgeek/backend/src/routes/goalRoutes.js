@@ -38,7 +38,7 @@ router.get('/', authenticateToken, async (req, res) => {
       data: goals
     });
   } catch (error) {
-    console.error('Error fetching goals:', error);
+    req.log.error({ err: error }, 'Error fetching goals');
     res.status(500).json({
       success: false,
       error: {
@@ -101,7 +101,7 @@ router.post('/', authenticateToken, async (req, res) => {
 
     res.json({ success: true, message: 'Goals saved successfully' });
   } catch (error) {
-    console.error('Error saving goals:', error);
+    req.log.error({ err: error }, 'Error saving goals');
     res.status(500).json({
       success: false,
       error: {
@@ -219,7 +219,7 @@ router.get('/nutrition/macros', authenticateToken, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error deriving nutrition macros:', error);
+    req.log.error({ err: error }, 'Error deriving nutrition macros');
     res.status(500).json({ success: false, error: { message: 'Failed to derive macros' } });
   }
 });

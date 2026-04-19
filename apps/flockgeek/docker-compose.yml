@@ -1,34 +1,15 @@
 services:
-#   frontend:
-#     build:
-#       context: ./frontend
-#       dockerfile: Dockerfile
-#     command: npm run dev -- --host 0.0.0.0
-#     ports:
-#       - "4081:5173"
-#     environment:
-#       VITE_API_BASE_URL: http://backend:4094/api
-#       VITE_DEV_API_PROXY: http://backend:4094
-#     volumes:
-#       - ./frontend:/app
-#       - /app/node_modules
-#     depends_on:
-#       - backend
-
-  backend:
+  flockgeek:
     image: geeksuite/flockgeek:latest
     container_name: flockgeek
-    command: node src/server.js
-    ports:
-      - "5001:4094"
+    restart: unless-stopped
+
+    env_file:
+      - .env.production
+
     environment:
-      TZ: America/Chicago
-      NODE_ENV: development # Keep existing setting
-      PORT: 4094
-      JWT_SECRET: change-me
-      CORS_ORIGIN: http://localhost:4081,http://localhost:5194,http://localhost:5183,http://localhost:5173,https://flockgeek.clintgeek.com
-      MONGODB_URI: mongodb://localhost:27017/flockgeek?authSource=admin
-    volumes:
-      - /mnt/Media/Projects/GeekSuite/apps/flockgeek/backend:/app/apps/flockgeek/backend
-      - /app/apps/flockgeek/backend/node_modules
-    working_dir: /app/apps/flockgeek/backend
+      NODE_ENV: production
+      PORT: 5001
+
+    ports:
+      - "5001:5001"

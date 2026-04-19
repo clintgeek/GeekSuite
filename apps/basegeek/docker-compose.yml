@@ -48,18 +48,18 @@ services:
     ports:
       - "55432:5432"
     environment:
-      - POSTGRES_USER=datageek_pg_admin
-      - POSTGRES_PASSWORD=CHANGE_ME
-      - POSTGRES_DB=datageek
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
     networks:
       - datageek_network
     restart: unless-stopped
 
-  basegeek_app:
+  basegeek:
     image: geeksuite/basegeek:latest
-    container_name: basegeek_app
+    container_name: basegeek
     env_file:
       - .env.production
     environment:

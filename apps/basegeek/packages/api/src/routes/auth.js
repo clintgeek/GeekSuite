@@ -3,8 +3,8 @@ import rateLimit from 'express-rate-limit';
 import authService from '../services/authService.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { User } from '../models/user.js';
-import jwt from 'jsonwebtoken';
 import { VALID_APPS } from '../config/validApps.js';
+import { setThemeCookie } from '../lib/themeCookie.js';
 
 // SSO Cookie Configuration
 // In local/dev we omit domain so cookies apply to localhost redirects.
@@ -65,7 +65,9 @@ const authLimiter = rateLimit({
     message: {
         message: 'Too many login attempts, please try again later',
         code: 'AUTH_RATE_LIMIT'
-    }
+    },
+    // Disable in test environment so test suites aren't capped at 5 logins.
+    skip: () => process.env.NODE_ENV === 'test',
 });
 
 // @desc    Login user
@@ -73,21 +75,13 @@ const authLimiter = rateLimit({
 // @access  Public
 router.post('/login', authLimiter, async (req, res) => {
     try {
-        console.log('Login request received:', {
-            body: req.body,
-            headers: req.headers,
-            ip: req.ip
-        });
+        req.log.info({ ip: req.ip, app: req.body.app }, 'Login request received');
 
         const { identifier, password, app } = req.body;
 
         // Validate required fields
         if (!identifier || !password) {
-            console.error('Missing credentials:', {
-                identifier: !!identifier,
-                password: !!password,
-                body: req.body
-            });
+            req.log.warn({ hasIdentifier: !!identifier, hasPassword: !!password }, 'Missing credentials');
             return res.status(400).json({
                 message: 'Missing credentials',
                 code: 'LOGIN_ERROR'
@@ -96,51 +90,42 @@ router.post('/login', authLimiter, async (req, res) => {
 
         // Validate app
         if (!app || !VALID_APPS.includes(app.toLowerCase())) {
-            console.error('Invalid app:', { app, validApps: VALID_APPS });
+            req.log.warn({ app }, 'Invalid app');
             return res.status(400).json({
                 message: 'Invalid app',
                 code: 'LOGIN_ERROR'
             });
         }
 
-        console.log('Attempting login for:', {
-            identifier,
-            app: app.toLowerCase(),
-            timestamp: new Date().toISOString()
-        });
+        req.log.info({ identifier, app: app.toLowerCase() }, 'Attempting login');
 
         const result = await authService.login(identifier, password, app.toLowerCase());
 
-        console.log('Auth service result:', result);
-        console.log('Result user object:', result.user);
-        console.log('Result user keys:', Object.keys(result.user));
+        req.log.info({ identifier, app: app.toLowerCase(), userId: result.user.id }, 'Login successful');
 
-        console.log('Login successful for:', {
-            identifier,
-            app: app.toLowerCase(),
-            userId: result.user.id,
-            timestamp: new Date().toISOString()
-        });
-
-        // Track last login
+        // Track last login; grab the user's theme preference in the same round
+        // trip so we can seed the geek_theme cookie without an extra lookup.
+        let themePref;
         try {
-            await User.findByIdAndUpdate(result.user.id, { lastLogin: new Date() });
+            const updated = await User.findByIdAndUpdate(
+                result.user.id,
+                { lastLogin: new Date() },
+                { new: true, projection: { 'preferences.theme': 1 } }
+            ).lean();
+            themePref = updated?.preferences?.theme;
         } catch (loginTrackErr) {
-            console.error('Failed to update lastLogin:', loginTrackErr.message);
+            req.log.warn({ err: loginTrackErr }, 'Failed to update lastLogin');
         }
 
         // Set SSO cookies for cross-subdomain auth (backward compatible)
         setSSOCookies(res, result.token, result.refreshToken);
+        // Seed the shared theme cookie so the next GeekSuite app the user
+        // visits can paint the right theme before React mounts.
+        setThemeCookie(res, themePref);
 
         res.json(result);
     } catch (error) {
-        console.error('Login error:', {
-            message: error.message,
-            stack: error.stack,
-            identifier: req.body.identifier,
-            app: req.body.app,
-            timestamp: new Date().toISOString()
-        });
+        req.log.error({ err: error, identifier: req.body.identifier, app: req.body.app }, 'Login error');
 
         // Determine appropriate status code
         const statusCode = error.message.includes('Invalid credentials') ? 401 : 500;
@@ -157,7 +142,7 @@ router.post('/login', authLimiter, async (req, res) => {
 // @access  Public
 router.post('/validate', async (req, res) => {
     try {
-        const { token, app } = req.body;
+        const { token } = req.body;
         const result = await authService.validateToken(token);
         res.json({
             valid: true,
@@ -184,51 +169,37 @@ router.post('/refresh', async (req, res) => {
     try {
         const bodyRefreshToken = req.body?.refreshToken;
         const cookieRefreshToken = req.cookies?.geek_refresh_token;
-        const refreshToken = bodyRefreshToken || cookieRefreshToken;
+        const incomingRefreshToken = bodyRefreshToken || cookieRefreshToken;
         const app = req.body?.app;
 
-        if (!refreshToken) {
+        if (!incomingRefreshToken) {
             return res.status(400).json({
                 message: 'Refresh token is required',
                 code: 'TOKEN_REFRESH_ERROR'
             });
         }
 
-        // Validate the refresh token
-        const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
-        const user = await User.findById(decoded.userId);
+        const result = await authService.rotateRefreshToken(incomingRefreshToken, app);
 
-        if (!user) {
-            throw new Error('User not found');
+        if (result.reuse) {
+            req.log.warn({ family: result.family }, 'Refresh-token reuse detected');
+            clearSSOCookies(res);
+            return res.status(401).json({
+                message: 'Refresh token has already been used',
+                code: 'REFRESH_REUSE'
+            });
         }
 
-        // Generate new access token
-        const accessToken = authService.generateToken(user, app);
+        // Successful rotation — set new cookies
+        setSSOCookies(res, result.token, result.refreshToken);
 
-        // Generate new refresh token
-        const newRefreshToken = jwt.sign(
-            { userId: user._id },
-            process.env.JWT_REFRESH_SECRET,
-            { expiresIn: '7d' }
-        );
-
-        const responseData = {
-            token: accessToken,
-            refreshToken: newRefreshToken,
-            user: {
-                id: user._id,
-                username: user.username,
-                email: user.email,
-                app
-            }
-        };
-
-        // Set SSO cookies for cross-subdomain auth (backward compatible)
-        setSSOCookies(res, accessToken, newRefreshToken);
-
-        res.json(responseData);
+        res.json({
+            token: result.token,
+            refreshToken: result.refreshToken,
+            user: result.user
+        });
     } catch (error) {
-        console.error('Token refresh error:', error);
+        req.log.error({ err: error }, 'Token refresh error');
         res.status(401).json({
             message: error.message,
             code: 'TOKEN_REFRESH_ERROR'
@@ -282,9 +253,9 @@ router.post('/register', async (req, res) => {
 
         await user.save();
 
-        // Generate tokens
+        // Generate tokens — fresh family for new registration
         const token = authService.generateToken(user, app);
-        const refreshToken = authService.generateRefreshToken(user);
+        const refreshToken = await authService.generateRefreshToken(user, app); // new family
 
         const responseData = {
             token,
@@ -300,10 +271,11 @@ router.post('/register', async (req, res) => {
 
         // Set SSO cookies for cross-subdomain auth (backward compatible)
         setSSOCookies(res, token, refreshToken);
+        setThemeCookie(res, user.preferences?.theme);
 
         res.status(201).json(responseData);
     } catch (error) {
-        console.error('Registration error:', error);
+        req.log.error({ err: error }, 'Registration error');
         res.status(400).json({
             message: error.message,
             code: 'REGISTER_ERROR'
@@ -344,7 +316,7 @@ router.post('/reset-password', authenticateToken, async (req, res) => {
             code: 'PASSWORD_UPDATED'
         });
     } catch (error) {
-        console.error('Password reset error:', error);
+        req.log.error({ err: error }, 'Password reset error');
         res.status(500).json({
             message: error.message,
             code: 'RESET_ERROR'
@@ -352,11 +324,19 @@ router.post('/reset-password', authenticateToken, async (req, res) => {
     }
 });
 
-// @desc    Logout user (clears SSO cookies)
+// @desc    Logout user (revokes refresh-token family + clears SSO cookies)
 // @route   POST /api/auth/logout
 // @access  Public
-router.post('/logout', (req, res) => {
-    // Clear SSO cookies
+router.post('/logout', async (req, res) => {
+    const refreshToken = req.cookies?.geek_refresh_token || req.body?.refreshToken;
+
+    // Revoke the family server-side (best-effort; always 200)
+    try {
+        await authService.revokeRefreshTokenFromCookie(refreshToken);
+    } catch (err) {
+        req.log.warn({ err }, 'Failed to revoke refresh-token family on logout');
+    }
+
     clearSSOCookies(res);
 
     res.json({

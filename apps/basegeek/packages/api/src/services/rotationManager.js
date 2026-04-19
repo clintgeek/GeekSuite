@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import logger from '../lib/logger.js';
 
 const DEFAULT_STATE = {
   providers: {
@@ -40,7 +41,7 @@ export default class RotationManager {
         return { ...DEFAULT_STATE, ...parsed };
       }
     } catch (error) {
-      console.error('[RotationManager] Failed to load state:', error.message);
+      logger.error({ err: error }, '[RotationManager] Failed to load state');
     }
     return { ...DEFAULT_STATE };
   }
@@ -49,7 +50,7 @@ export default class RotationManager {
     try {
       fs.writeFileSync(this.stateFilePath, JSON.stringify(this.state, null, 2), 'utf-8');
     } catch (error) {
-      console.error('[RotationManager] Failed to persist state:', error.message);
+      logger.error({ err: error }, '[RotationManager] Failed to persist state');
     }
   }
 

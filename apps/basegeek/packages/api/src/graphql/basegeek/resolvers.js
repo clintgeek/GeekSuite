@@ -1,5 +1,6 @@
 import APIKey from '../../models/APIKey.js';
 import AIConfig from '../../models/AIConfig.js';
+import { encrypt } from '../../lib/cryptoVault.js';
 import AIPricing from '../../models/AIPricing.js';
 import AIFreeTier from '../../models/AIFreeTier.js';
 import AIAppConfig from '../../models/AIAppConfig.js';
@@ -128,7 +129,7 @@ export const resolvers = {
 
       for (const dbConfig of configs) {
         if (config[dbConfig.provider]) {
-          config[dbConfig.provider].apiKey = dbConfig.apiKey;
+          config[dbConfig.provider].apiKey = dbConfig.getDecryptedKey() ?? '';
           config[dbConfig.provider].enabled = dbConfig.enabled;
           if (dbConfig.provider === 'cloudflare' && dbConfig.accountId) {
             config[dbConfig.provider].accountId = dbConfig.accountId;
@@ -343,7 +344,7 @@ export const resolvers = {
       for (const providerConfig of providersToUpdate) {
         if (providerConfig.apiKey && providerConfig.apiKey !== '***') {
           const updateData = {
-            apiKey: providerConfig.apiKey.trim(),
+            apiKey: encrypt(providerConfig.apiKey.trim()), // encrypt before persisting
             enabled: providerConfig.enabled || false
           };
           if (providerConfig.provider === 'cloudflare' && providerConfig.accountId) {

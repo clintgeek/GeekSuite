@@ -1,5 +1,3 @@
-import axios from 'axios';
-
 /**
  * AI Service — direct REST client for the fitnessgeek backend's /api/ai/* routes.
  *
@@ -8,19 +6,14 @@ import axios from 'axios';
  * part of the GraphQL schema and live only as REST on the fitnessgeek backend.
  *
  * Same pattern as foodService, userService, influxService.
+ *
+ * AI calls can be slow; a per-request timeout override of 60000ms is applied
+ * to each method below rather than using a separate axios instance.
  */
 
-const restApi = axios.create({
-  baseURL: '/api',
-  timeout: 60000, // AI calls can be slow
-  withCredentials: true,
-});
+import { restClient as restApi } from './restClient.js';
 
-restApi.interceptors.request.use((config) => {
-  const token = localStorage.getItem('geek_token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
+const AI_TIMEOUT = { timeout: 60000 };
 
 const unwrap = (response) => response?.data?.data ?? response?.data ?? response;
 
@@ -30,7 +23,7 @@ export const aiService = {
    */
   async getStatus() {
     try {
-      const response = await restApi.get('/ai/status');
+      const response = await restApi.get('/ai/status', AI_TIMEOUT);
       return unwrap(response);
     } catch (error) {
       console.error('Failed to get AI status:', error.response?.data || error.message);
@@ -43,7 +36,7 @@ export const aiService = {
    */
   async parseFoodDescription(description, userContext = {}) {
     try {
-      const response = await restApi.post('/ai/parse-food', { description, userContext });
+      const response = await restApi.post('/ai/parse-food', { description, userContext }, AI_TIMEOUT);
       return unwrap(response);
     } catch (error) {
       console.error('AI food parsing failed:', error.response?.data || error.message);
@@ -56,7 +49,7 @@ export const aiService = {
    */
   async createNutritionGoals(userInput, userProfile = {}) {
     try {
-      const response = await restApi.post('/ai/create-nutrition-goals', { userInput, userProfile });
+      const response = await restApi.post('/ai/create-nutrition-goals', { userInput, userProfile }, AI_TIMEOUT);
       return unwrap(response);
     } catch (error) {
       console.error('AI nutrition goal creation failed:', error.response?.data || error.message);
@@ -69,7 +62,7 @@ export const aiService = {
    */
   async generateMealPlan(goal, userProfile = {}) {
     try {
-      const response = await restApi.post('/ai/generate-meal-plan', { goal, userProfile });
+      const response = await restApi.post('/ai/generate-meal-plan', { goal, userProfile }, AI_TIMEOUT);
       return unwrap(response);
     } catch (error) {
       console.error('AI meal plan generation failed:', error.response?.data || error.message);

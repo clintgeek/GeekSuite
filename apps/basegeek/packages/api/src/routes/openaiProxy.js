@@ -118,7 +118,7 @@ router.get('/models', async (req, res) => {
 
     res.json({ object: 'list', data: allModels });
   } catch (error) {
-    console.error('[OpenAI Proxy] Models list error:', error);
+    req.log.error({ err: error }, '[OpenAI Proxy] Models list error');
     openAIError(res, 500, 'Failed to list models', 'server_error', 'models_list_error');
   }
 });
@@ -293,7 +293,7 @@ router.post('/chat/completions', async (req, res) => {
         res.write('data: [DONE]\n\n');
         res.end();
       } catch (error) {
-        console.error('[OpenAI Proxy] Streaming error:', error);
+        req.log.error({ err: error }, '[OpenAI Proxy] Streaming error');
         res.write(`data: ${JSON.stringify({
           error: {
             message: error.message || 'Internal server error',
@@ -338,7 +338,7 @@ router.post('/chat/completions', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('[OpenAI Proxy] Error:', error);
+    req.log.error({ err: error }, '[OpenAI Proxy] Error');
     openAIError(res, 500, error.message || 'Internal server error', 'server_error', 'ai_call_error');
   }
 });

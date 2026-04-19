@@ -56,14 +56,15 @@ build_app() {
   fi
 }
 
-# Docker Directory Root
-DOCKER_ROOT="/mnt/Media/Docker"
+# Deploy root — each app is deployed from its own source directory under apps/.
+# See DEPLOY.md at the repo root for the full convention (env, data, backups).
+DOCKER_ROOT="$SCRIPT_DIR/apps"
 
 deploy_app() {
   local app="$1"
   local deploy_dir="$DOCKER_ROOT/$app"
 
-  echo -e "${YELLOW}🚀 Deploying ${app} ...${NC}"
+  echo -e "${YELLOW}🚀 Deploying ${app} from ${deploy_dir} ...${NC}"
 
   if [ ! -d "$deploy_dir" ]; then
     echo -e "${RED}✗ Deployment directory not found: ${deploy_dir}${NC}"
@@ -75,8 +76,18 @@ deploy_app() {
     return 1
   fi
 
-  # Deploy: restart container to pick up new image and renew anonymous volumes (-V)
-  (cd "$deploy_dir" && docker compose up -d -V)
+  # Preflight: real deploys need a populated .env.production.
+  # Fail early instead of letting the container crash-loop on missing secrets.
+  if [ ! -f "$deploy_dir/.env.production" ]; then
+    echo -e "${RED}✗ .env.production not found in ${deploy_dir} — see DEPLOY.md${NC}"
+    return 1
+  fi
+
+  # Deploy: bring up (or force-recreate) just the app's own service.
+  # Convention: service name == app dir name. Leaves shared infra
+  # (mongodb/postgres/redis/influxdb) untouched; docker compose only
+  # starts depends_on services if they aren't already running.
+  (cd "$deploy_dir" && docker compose up -d --force-recreate "$app")
 
   if [ $? -eq 0 ]; then
     echo -e "${GREEN}✓ ${app} deployed successfully${NC}"

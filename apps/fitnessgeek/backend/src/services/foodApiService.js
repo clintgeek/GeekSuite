@@ -47,7 +47,7 @@ class FoodApiService {
       }, 7 * 24 * 3600); // 7 days
 
     } catch (error) {
-      console.error('Food search error:', error.message);
+      logger.error({ err: error }, 'Food search error');
       return [];
     }
   }
@@ -80,7 +80,7 @@ class FoodApiService {
         .map(food => this.transformUSDAFood(food));
 
     } catch (error) {
-      console.error('USDA search error:', error.message);
+      logger.error({ err: error }, 'USDA search error');
       return [];
     }
   }
@@ -110,7 +110,7 @@ class FoodApiService {
         .map(product => this.transformOpenFoodFactsProduct(product));
 
     } catch (error) {
-      console.error('OpenFoodFacts search error:', error.message);
+      logger.error({ err: error }, 'OpenFoodFacts search error');
       return [];
     }
   }
@@ -134,7 +134,7 @@ class FoodApiService {
       }, 30 * 24 * 3600); // 30 days
 
     } catch (error) {
-      console.error('Barcode lookup error:', error.message);
+      logger.error({ err: error }, 'Barcode lookup error');
       return null;
     }
   }
@@ -156,7 +156,7 @@ class FoodApiService {
       return this.transformOpenFoodFactsProduct(response.data.product);
 
     } catch (error) {
-      console.error('OpenFoodFacts barcode lookup error:', error.message);
+      logger.error({ err: error }, 'OpenFoodFacts barcode lookup error');
       return null;
     }
   }

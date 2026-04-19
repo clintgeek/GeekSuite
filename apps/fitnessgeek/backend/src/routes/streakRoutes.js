@@ -19,7 +19,7 @@ router.get('/login', authenticateToken, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error getting login streak:', error);
+    req.log.error({ err: error }, 'Error getting login streak');
     res.status(500).json({
       success: false,
       error: {
@@ -47,7 +47,7 @@ router.post('/login', authenticateToken, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error recording login:', error);
+    req.log.error({ err: error }, 'Error recording login');
     res.status(500).json({
       success: false,
       error: {

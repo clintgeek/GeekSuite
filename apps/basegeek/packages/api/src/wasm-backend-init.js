@@ -7,6 +7,7 @@
 process.env.ONNX_RUNTIME_WEB_ONLY = '1';
 
 import { env } from '@xenova/transformers';
+import logger from './lib/logger.js';
 
 // Force WASM backend - disable native
 env.backends.onnx.wasm.numThreads = 1;
@@ -15,6 +16,6 @@ env.useBrowserCache = false;
 env.allowRemoteModels = true;
 env.useFSCache = true;
 
-console.log('✅ WASM backend configured (native disabled)');
+logger.info('WASM backend configured (native disabled)');
 
 export { env };
