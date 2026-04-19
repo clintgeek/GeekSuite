@@ -38,14 +38,44 @@ per-app verification.
 
 - **Garmin password encrypted at rest.** Currently stored plaintext
   in the `UserSettings` document. Response masks it but the DB
-  doesn't. Fix requires promoting `cryptoVault` (currently at
-  `apps/basegeek/packages/api/src/lib/cryptoVault.js`) into a shared
-  package — probably `@geeksuite/crypto-vault` — so fitnessgeek can
-  `encrypt()` before writing and `decrypt()` on read. Two-step:
-  1. Promote `cryptoVault` to shared package, update basegeek to
-     consume it from there (drop the local copy).
-  2. Wire fitnessgeek to encrypt Garmin creds + add a backfill
-     migration script like basegeek's `encrypt-keys.js`.
+  doesn't. See also **geekLock adoption** below — the right move is
+  probably to point fitnessgeek at geekLock's `/encrypt` rather than
+  extending basegeek's in-process `cryptoVault`. If geekLock adoption
+  is deferred, short-term fallback is to promote `cryptoVault` to
+  `@geeksuite/crypto-vault` and have fitnessgeek consume it.
+
+## Suite-wide — geekLock sidecar adoption
+
+`/mnt/Media/Projects/geekLock` is a separate Rust project providing
+envelope-encryption over HTTP (AES-256-GCM, per-record DEKs, master
+key held in a Rust process Node never touches). It's a meaningful
+defense-in-depth upgrade over the current in-process `cryptoVault`:
+if a Node tier is compromised, the attacker gets ciphertext but
+not the DEKs.
+
+If we adopt geekLock suite-wide, it **supersedes** the
+`@geeksuite/crypto-vault` shared-package plan. Instead of a JS
+library, the suite standard becomes "POST /encrypt to geekLock."
+
+Before adopting:
+- **Batch API.** Every `/encrypt` and `/decrypt` is an HTTP hop. For
+  bulk reads (note lists, task lists, food logs) latency compounds.
+  Confirm geekLock supports batched ops or add it.
+- **Availability story.** geekLock down = every encrypted-field
+  read fails. docker-compose `depends_on` + healthcheck + restart
+  policy; every app's boot needs to tolerate a transient outage.
+- **Master key delivery.** The key still has to get into the Rust
+  process somehow — env, mounted file, KMS integration. Pick one
+  and document.
+- **Runtime track record.** It's at 0.1.0. Needs burn-in before
+  production-critical fields (basegeek AIConfig keys, Garmin creds,
+  note bodies) move to it.
+
+Likely rollout order once ready:
+1. Deploy geekLock as a suite sidecar (docker-compose service + healthcheck).
+2. Migrate basegeek's `cryptoVault` callers — `AIConfig.apiKey` — to go through geekLock.
+3. Wire fitnessgeek Garmin creds.
+4. Wire notegeek note body encryption (per the TODO in `Note.js`).
 
 - **Circuit breakers on external APIs.** fitnessgeek calls USDA,
   Nutritionix, OpenFoodFacts, Garmin. Today there's a 30s timeout

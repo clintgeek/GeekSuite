@@ -1,64 +1,27 @@
-
 services:
-  # mongo:
-  #   image: mongo:latest
-  #   container_name: notegeek-mongo
-  #   ports:
-  #     - "27017:27017" # Exposes MongoDB port to the host machine
-  #   environment:
-  #     # Use variables from .env file again
-  #     MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
-  #     MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
-  #   volumes:
-  #     - ./data/db:/data/db # Persists database data on the host
-  #     - ./data/backups:/data/backups # For potential backup service later
-  #   networks:
-  #     - notegeek_network
-  #   restart: always
+  notegeek:
+    image: geeksuite/notegeek:latest
+    container_name: notegeek
+    restart: unless-stopped
 
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-      args:
-        - COMPOSE_BAKE=true
-    container_name: notegeek-backend
+    # All runtime env (DB_URI, JWT_SECRET, JWT_REFRESH_SECRET, PORT, etc.)
+    # is loaded from .env.production by env_file.
+    # Don't list those vars here as ${VAR} substitutions — that pulls from
+    # docker compose's .env file (different lookup path) and breaks when
+    # only .env.production exists.
+    env_file:
+      - .env.production
+
+    # Compose-fixed values that don't vary per environment.
     environment:
-      - TZ=America/Chicago
-      - NODE_ENV=production
-      - PORT=${PORT}
-      - DB_URI=${DB_URI}
-      - JWT_SECRET=${JWT_SECRET}
-      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
-    expose:
-      - "${PORT}"
+      NODE_ENV: production
+      APP_NAME: notegeek
+
+    ports:
+      - "9988:9988"
+
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:${PORT}/"]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9988/"]
       interval: 30s
       timeout: 10s
       retries: 3
-    networks:
-      - notegeek_network
-    restart: always
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        - COMPOSE_BAKE=true
-    container_name: notegeek-frontend
-    environment:
-      - BACKEND_PORT=${PORT}
-    ports:
-      - "9988:80"  # As specified in the plan for reverse proxy
-    depends_on:
-      backend:
-        condition: service_healthy
-    networks:
-      - notegeek_network
-    restart: always
-
-networks:
-  notegeek_network:
-    driver: bridge
