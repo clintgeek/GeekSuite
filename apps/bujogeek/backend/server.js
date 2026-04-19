@@ -1,11 +1,12 @@
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
-import morgan from 'morgan';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { request as httpRequest } from 'node:http';
+import { randomUUID } from 'node:crypto';
+import pinoHttp from 'pino-http';
+import logger from './src/lib/logger.js';
 
 // Import routes
 import templateRoutes from './src/routes/templateRoutes.js';
@@ -54,7 +55,17 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json());
-app.use(morgan('dev'));
+
+// Attach request ID and structured logger to every request
+const httpLogger = pinoHttp({
+  logger,
+  genReqId: (req) => req.headers['x-request-id'] || randomUUID(),
+});
+app.use((req, res, next) => {
+  httpLogger(req, res);
+  res.setHeader('X-Request-Id', req.id);
+  next();
+});
 
 // Serve static files from frontend build
 const publicPath = path.join(__dirname, 'public');
@@ -63,15 +74,7 @@ app.use(express.static(publicPath));
 // Routes
 app.use('/api/auth', authRoutes);
 
-app.get('/api/me', (req, res, next) => {
-  const hasCookie = !!req.headers.cookie?.includes('geek_token');
-  const hasAuth = !!req.headers.authorization;
-  console.log(`[DEBUG /api/me] cookie=${ hasCookie } auth=${ hasAuth }`);
-  next();
-}, authenticate, (req, res, next) => {
-  console.log(`[DEBUG /api/me] after auth: geek.user=${ !!req.geek?.user }`);
-  next();
-}, meHandler());
+app.get('/api/me', authenticate, meHandler());
 
 app.use('/api/templates', templateRoutes);
 app.use('/api/journal', journalRoutes);
@@ -85,8 +88,6 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-
-
 // SPA fallback - serve index.html for all non-API routes (must be LAST)
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/graphql')) {
@@ -97,26 +98,56 @@ app.get('*', (req, res, next) => {
 
 // MongoDB Connection
 const connectDB = async () => {
-  try {
-    console.log('Connecting to MongoDB at:', process.env.DB_URI?.replace(/:\/\/(.*)@/, '://******:******@'));
+  logger.info({ uri: process.env.DB_URI?.replace(/:\/\/(.*)@/, '://******:******@') }, 'Connecting to MongoDB');
 
-    await mongoose.connect(process.env.DB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
+  await mongoose.connect(process.env.DB_URI);
 
-    // Create database if it doesn't exist (MongoDB creates it automatically)
-    console.log('MongoDB connected');
-    console.log('Using database:', mongoose.connection.db.databaseName);
-
-  } catch (error) {
-    console.error('MongoDB connection error:', error);
-    process.exit(1);
-  }
+  logger.info({ db: mongoose.connection.db.databaseName }, 'MongoDB connected');
 };
 
-// Start server
-app.listen(PORT, async () => {
-  await connectDB();
-  console.log(`Server running on port ${ PORT }`);
-});
+// Graceful shutdown
+let shuttingDown = false;
+let server;
+
+const shutdown = (signal) => {
+  if (shuttingDown) {
+    logger.info(`${ signal } received during shutdown — forcing exit`);
+    process.exit(1);
+  }
+  shuttingDown = true;
+  logger.info({ signal }, 'shutting down');
+
+  const forceTimer = setTimeout(() => {
+    logger.error('Shutdown timed out after 15s — forcing exit');
+    process.exit(1);
+  }, 15_000);
+  forceTimer.unref();
+
+  server.close(async () => {
+    try {
+      await mongoose.disconnect();
+    } catch (err) {
+      logger.error({ err }, 'Error disconnecting mongoose');
+    }
+    process.exit(0);
+  });
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
+
+// Start server — connect DB first, then listen
+async function start() {
+  try {
+    await connectDB();
+  } catch (err) {
+    logger.error({ err }, 'Failed to connect to MongoDB');
+    process.exit(1);
+  }
+
+  server = app.listen(PORT, '0.0.0.0', () => {
+    logger.info('API server running on port ' + PORT);
+  });
+}
+
+start();

@@ -1,5 +1,7 @@
+import logger from '../lib/logger.js';
+
 export const handleError = (res, error) => {
-  console.error(error);
+  logger.error({ err: error }, 'handleError');
 
   if (error.name === 'ValidationError') {
     return res.status(400).json({
