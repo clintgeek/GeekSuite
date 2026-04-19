@@ -1,21 +1,22 @@
 import React, { useState } from 'react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
-    Container,
+    Box,
     Paper,
     Typography,
     TextField,
     Button,
-    Box,
     Link,
     Alert,
     IconButton,
-    InputAdornment
+    InputAdornment,
+    useTheme,
 } from '@mui/material';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
 import useAuthStore from '../store/authStore';
 
 function RegisterPage() {
+    const theme = useTheme();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -37,7 +38,7 @@ function RegisterPage() {
             return;
         }
         if (password.length < 6) {
-            setFormError('Password must be at least 6 characters long');
+            setFormError('Password must be at least 6 characters');
             return;
         }
 
@@ -47,45 +48,85 @@ function RegisterPage() {
         }
     };
 
-    const handleClickShowPassword = () => {
-        setShowPassword(!showPassword);
-    };
-
-    const handleClickShowConfirmPassword = () => {
-        setShowConfirmPassword(!showConfirmPassword);
-    };
-
     return (
-        <Container maxWidth="sm" sx={{
-            minHeight: '100vh',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'center',
-            py: 8
-        }}>
-            <Box sx={{ textAlign: 'center', mb: 3 }}>
-                <Typography variant="h4" component="h1" gutterBottom>
-                    Create Account
+        <Box
+            sx={{
+                minHeight: '100vh',
+                bgcolor: 'background.default',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                px: 2,
+                py: 6,
+            }}
+        >
+            {/* ——— Brand splash — mirrors LoginPage exactly ————————— */}
+            <Box sx={{ textAlign: 'center', mb: 4 }}>
+                <Typography
+                    component="div"
+                    sx={{
+                        fontFamily: theme.typography.fontFamilyMono,
+                        fontWeight: 700,
+                        fontSize: { xs: '1.375rem', sm: '1.625rem' },
+                        letterSpacing: '0.14em',
+                        textTransform: 'uppercase',
+                        lineHeight: 1,
+                        mb: 1.25,
+                        userSelect: 'none',
+                    }}
+                >
+                    <Box component="span" sx={{ color: 'text.primary' }}>Note</Box>
+                    <Box component="span" sx={{ color: 'primary.main' }}>Geek</Box>
                 </Typography>
-                <Typography variant="body1" color="text.secondary">
-                    Already have an account?{' '}
-                    <Link component={RouterLink} to="/login" color="primary">
-                        Sign in
-                    </Link>
+                <Typography
+                    variant="caption"
+                    sx={{
+                        color: 'text.disabled',
+                        letterSpacing: '0.06em',
+                        textTransform: 'uppercase',
+                        display: 'block',
+                    }}
+                >
+                    Your writing studio
                 </Typography>
             </Box>
 
+            {/* ——— Auth card ————————————————————————————————————————— */}
             <Paper
-                elevation={2}
+                elevation={0}
                 sx={{
-                    p: 4,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 2,
-                    bgcolor: 'background.paper',
-                    borderRadius: 2
+                    width: '100%',
+                    maxWidth: 440,
+                    p: { xs: 3, sm: 4 },
+                    borderRadius: '10px',
                 }}
             >
+                <Typography
+                    variant="h4"
+                    component="h1"
+                    sx={{
+                        mb: 0.5,
+                        fontSize: { xs: '1.125rem', sm: '1.25rem' },
+                        fontWeight: 700,
+                        letterSpacing: '-0.015em',
+                    }}
+                >
+                    Create account
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                    Already have an account?{' '}
+                    <Link
+                        component={RouterLink}
+                        to="/login"
+                        color="primary"
+                        underline="hover"
+                        sx={{ fontWeight: 500 }}
+                    >
+                        Sign in
+                    </Link>
+                </Typography>
+
                 {(formError || apiError) && (
                     <Alert
                         severity="error"
@@ -93,13 +134,17 @@ function RegisterPage() {
                             setFormError(null);
                             useAuthStore.setState({ error: null });
                         }}
-                        sx={{ mb: 2 }}
+                        sx={{ mb: 2.5 }}
                     >
                         {formError || apiError}
                     </Alert>
                 )}
 
-                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <Box
+                    component="form"
+                    onSubmit={handleSubmit}
+                    sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}
+                >
                     <TextField
                         label="Email"
                         type="email"
@@ -109,6 +154,7 @@ function RegisterPage() {
                         onChange={(e) => setEmail(e.target.value)}
                         placeholder="you@example.com"
                         autoComplete="email"
+                        inputProps={{ 'aria-label': 'email address' }}
                     />
 
                     <TextField
@@ -118,17 +164,24 @@ function RegisterPage() {
                         fullWidth
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        placeholder="Your password"
+                        placeholder="At least 6 characters"
                         autoComplete="new-password"
+                        inputProps={{ 'aria-label': 'password' }}
                         InputProps={{
                             endAdornment: (
                                 <InputAdornment position="end">
                                     <IconButton
-                                        aria-label="toggle password visibility"
-                                        onClick={handleClickShowPassword}
+                                        aria-label={showPassword ? 'hide password' : 'show password'}
+                                        onClick={() => setShowPassword((v) => !v)}
                                         edge="end"
+                                        size="small"
+                                        sx={{ color: 'text.disabled' }}
                                     >
-                                        {showPassword ? <VisibilityOff /> : <Visibility />}
+                                        {showPassword ? (
+                                            <VisibilityOff sx={{ fontSize: 18 }} />
+                                        ) : (
+                                            <Visibility sx={{ fontSize: 18 }} />
+                                        )}
                                     </IconButton>
                                 </InputAdornment>
                             ),
@@ -136,23 +189,30 @@ function RegisterPage() {
                     />
 
                     <TextField
-                        label="Confirm Password"
+                        label="Confirm password"
                         type={showConfirmPassword ? 'text' : 'password'}
                         required
                         fullWidth
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
-                        placeholder="Confirm your password"
+                        placeholder="Repeat your password"
                         autoComplete="new-password"
+                        inputProps={{ 'aria-label': 'confirm password' }}
                         InputProps={{
                             endAdornment: (
                                 <InputAdornment position="end">
                                     <IconButton
-                                        aria-label="toggle password visibility"
-                                        onClick={handleClickShowConfirmPassword}
+                                        aria-label={showConfirmPassword ? 'hide password' : 'show password'}
+                                        onClick={() => setShowConfirmPassword((v) => !v)}
                                         edge="end"
+                                        size="small"
+                                        sx={{ color: 'text.disabled' }}
                                     >
-                                        {showConfirmPassword ? <VisibilityOff /> : <Visibility />}
+                                        {showConfirmPassword ? (
+                                            <VisibilityOff sx={{ fontSize: 18 }} />
+                                        ) : (
+                                            <Visibility sx={{ fontSize: 18 }} />
+                                        )}
                                     </IconButton>
                                 </InputAdornment>
                             ),
@@ -166,19 +226,30 @@ function RegisterPage() {
                         size="large"
                         disabled={isLoading}
                         sx={{
-                            mt: 2,
-                            py: 1.5,
-                            bgcolor: 'primary.main',
-                            '&:hover': {
-                                bgcolor: 'primary.dark',
-                            },
+                            mt: 0.5,
+                            py: 1.25,
+                            fontSize: '0.875rem',
+                            fontWeight: 600,
+                            letterSpacing: '0.01em',
                         }}
                     >
-                        {isLoading ? 'Creating account...' : 'Create account'}
+                        {isLoading ? 'Creating account…' : 'Create account'}
                     </Button>
-                </form>
+                </Box>
             </Paper>
-        </Container>
+
+            <Typography
+                variant="caption"
+                sx={{
+                    mt: 4,
+                    color: 'text.disabled',
+                    textAlign: 'center',
+                    letterSpacing: '0.04em',
+                }}
+            >
+                Part of the GeekSuite
+            </Typography>
+        </Box>
     );
 }
 

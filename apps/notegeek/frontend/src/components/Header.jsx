@@ -8,6 +8,7 @@ import {
   Typography,
   InputBase,
   ButtonBase,
+  Divider,
   useTheme,
   alpha,
 } from '@mui/material';
@@ -29,7 +30,10 @@ function Header({ onMenuClick }) {
   // Global keyboard shortcut: "/" focuses search
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === '/' && !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) {
+      if (
+        e.key === '/' &&
+        !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)
+      ) {
         e.preventDefault();
         searchRef.current?.querySelector('input')?.focus();
       }
@@ -53,58 +57,98 @@ function Header({ onMenuClick }) {
       elevation={0}
       sx={{
         zIndex: theme.zIndex.drawer + 1,
-        bgcolor: theme.palette.background.paper,
+        // bg + bottom border come from MuiAppBar override in theme
         color: 'text.primary',
-        flexDirection: 'row',
-        borderBottom: `1px solid ${theme.palette.divider}`,
       }}
     >
-      <Toolbar sx={{ px: { xs: 1, sm: 1.5 }, width: '100%', minHeight: { xs: 44, sm: 48 }, gap: 0.5 }}>
-        {/* Menu button */}
+      <Toolbar
+        sx={{
+          px: { xs: 1, sm: 1.5 },
+          width: '100%',
+          minHeight: { xs: 44, sm: 48 },
+          gap: 0.5,
+        }}
+      >
+        {/* Hamburger — compact, no distraction */}
         <IconButton
           color="inherit"
-          aria-label="open drawer"
+          aria-label="toggle navigation drawer"
           edge="start"
           onClick={onMenuClick}
           size="small"
           sx={{
             p: 0.75,
             borderRadius: 1.5,
-            transition: 'background 80ms ease',
+            color: 'text.secondary',
+            transition: 'color 80ms ease, background 80ms ease',
             '&:hover': {
-              bgcolor: alpha(theme.palette.text.primary, 0.06),
+              color: 'text.primary',
+              bgcolor: alpha(theme.palette.text.primary, 0.05),
             },
           }}
         >
           <MenuIcon sx={{ fontSize: 20 }} />
         </IconButton>
 
-        {/* Brand — compact */}
+        {/* ——— Wordmark ——————————————————————————————————————————————
+            Mono-uppercase with letterspacing. The two-color split (ink
+            + oxblood) is the app's single strongest branding moment;
+            keep it tight, no glyph decoration. "NOTE" in ink black,
+            "GEEK" in primary oxblood.
+        ——————————————————————————————————————————————————————————————— */}
         <ButtonBase
           onClick={() => navigate('/')}
           disableRipple
+          aria-label="NoteGeek home"
           sx={{
-            px: 0.5,
+            px: 0.75,
             borderRadius: 1,
+            ml: 0.25,
+            '&:focus-visible': {
+              outline: `2px solid ${theme.palette.primary.main}`,
+              outlineOffset: 2,
+            },
           }}
         >
           <Typography
-            noWrap
             component="div"
+            noWrap
             sx={{
-              fontWeight: 800,
-              fontSize: '0.875rem',
-              letterSpacing: '-0.02em',
+              fontFamily: theme.typography.fontFamilyMono,
+              fontWeight: 600,
+              fontSize: { xs: '0.6875rem', sm: '0.75rem' },
+              letterSpacing: '0.12em',
+              textTransform: 'uppercase',
               userSelect: 'none',
               display: 'flex',
+              lineHeight: 1,
             }}
           >
-            <Box component="span" sx={{ color: 'text.primary' }}>note</Box>
-            <Box component="span" sx={{ color: 'primary.main' }}>geek</Box>
+            <Box component="span" sx={{ color: 'text.primary' }}>
+              Note
+            </Box>
+            <Box component="span" sx={{ color: 'primary.main' }}>
+              Geek
+            </Box>
           </Typography>
         </ButtonBase>
 
-        {/* Search — real input, desktop */}
+        {/* Hairline separator between wordmark and search — desktop only */}
+        <Divider
+          orientation="vertical"
+          flexItem
+          sx={{
+            display: { xs: 'none', sm: 'block' },
+            mx: 1,
+            my: 1,
+            borderColor: 'divider',
+          }}
+        />
+
+        {/* ——— Search input — desktop ————————————————————————————————
+            Small and unobtrusive at rest. On focus: primary border +
+            glow.ring shadow. "/" shortcut hint visible in the pill.
+        ——————————————————————————————————————————————————————————————— */}
         <Box
           component="form"
           onSubmit={handleSearchSubmit}
@@ -113,51 +157,74 @@ function Header({ onMenuClick }) {
             display: { xs: 'none', sm: 'flex' },
             alignItems: 'center',
             flex: 1,
-            maxWidth: 360,
-            mx: 2,
-            px: 1.5,
-            height: 32,
-            borderRadius: 1.5,
+            maxWidth: 340,
+            px: 1.25,
+            height: 30,
+            borderRadius: '6px',
             border: `1px solid ${theme.palette.divider}`,
-            bgcolor: alpha(theme.palette.text.primary, 0.02),
+            bgcolor: alpha(theme.palette.text.primary, 0.025),
             transition: 'all 150ms ease',
             '&:focus-within': {
               borderColor: theme.palette.primary.main,
-              bgcolor: 'background.paper',
+              bgcolor: theme.palette.background.paper,
               boxShadow: `0 0 0 3px ${theme.palette.glow.ring}`,
             },
           }}
         >
-          <SearchOutlinedIcon sx={{ fontSize: 15, color: 'text.disabled', mr: 1 }} />
+          <SearchOutlinedIcon
+            sx={{ fontSize: 13, color: 'text.disabled', mr: 0.75, flexShrink: 0 }}
+          />
           <InputBase
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search..."
+            placeholder="Search notes…"
+            inputProps={{ 'aria-label': 'search notes' }}
             sx={{
               flex: 1,
-              fontSize: '0.75rem',
-              '& .MuiInputBase-input': { py: 0, height: 'auto' },
+              fontFamily: theme.typography.fontFamilyMono,
+              fontSize: '0.6875rem',
+              letterSpacing: '0.01em',
+              color: 'text.primary',
+              '& .MuiInputBase-input': {
+                py: 0,
+                height: 'auto',
+                '&::placeholder': { color: 'text.disabled', opacity: 1 },
+              },
             }}
           />
-          <Typography
+          {/* "/" shortcut hint pill */}
+          <Box
+            aria-hidden="true"
             sx={{
-              fontSize: '0.625rem',
-              fontWeight: 600,
-              color: 'text.disabled',
-              fontFamily: '"JetBrains Mono", monospace',
-              bgcolor: alpha(theme.palette.text.primary, 0.05),
-              px: 0.5,
-              borderRadius: 0.5,
-              lineHeight: 1.6,
+              flexShrink: 0,
+              ml: 0.5,
+              px: 0.625,
+              height: 16,
+              display: 'flex',
+              alignItems: 'center',
+              borderRadius: '3px',
+              border: `1px solid ${theme.palette.divider}`,
+              bgcolor: alpha(theme.palette.text.primary, 0.04),
             }}
           >
-            /
-          </Typography>
+            <Typography
+              sx={{
+                fontFamily: theme.typography.fontFamilyMono,
+                fontSize: '0.5625rem',
+                fontWeight: 600,
+                color: 'text.disabled',
+                lineHeight: 1,
+              }}
+            >
+              /
+            </Typography>
+          </Box>
         </Box>
 
-        {/* Search icon — mobile */}
+        {/* Search icon button — mobile only */}
         <IconButton
           onClick={() => navigate('/search')}
+          aria-label="search"
           size="small"
           sx={{
             display: { xs: 'flex', sm: 'none' },
@@ -171,26 +238,33 @@ function Header({ onMenuClick }) {
 
         <Box sx={{ flexGrow: 1 }} />
 
-        {/* Theme toggle */}
-        <Tooltip title={isDark ? 'Light mode' : 'Dark mode'} arrow>
+        {/* ——— Theme toggle — deliberately understated ——————————————
+            Lives at the right edge. Muted at rest, readable on hover.
+        ——————————————————————————————————————————————————————————————— */}
+        <Tooltip title={isDark ? 'Switch to light mode' : 'Switch to dark mode'} arrow>
           <IconButton
             onClick={toggleMode}
-            aria-label="toggle theme"
+            aria-label={isDark ? 'switch to light mode' : 'switch to dark mode'}
             size="small"
             sx={{
               p: 0.75,
               borderRadius: 1.5,
               color: 'text.disabled',
-              transition: 'color 100ms ease',
+              transition: 'color 100ms ease, background 100ms ease',
               '&:hover': {
-                color: 'text.primary',
+                color: 'text.secondary',
+                bgcolor: alpha(theme.palette.text.primary, 0.05),
+              },
+              '&:focus-visible': {
+                outline: `2px solid ${theme.palette.primary.main}`,
+                outlineOffset: 2,
               },
             }}
           >
             {isDark ? (
-              <Brightness7OutlinedIcon sx={{ fontSize: 18 }} />
+              <Brightness7OutlinedIcon sx={{ fontSize: 17 }} />
             ) : (
-              <Brightness4OutlinedIcon sx={{ fontSize: 18 }} />
+              <Brightness4OutlinedIcon sx={{ fontSize: 17 }} />
             )}
           </IconButton>
         </Tooltip>

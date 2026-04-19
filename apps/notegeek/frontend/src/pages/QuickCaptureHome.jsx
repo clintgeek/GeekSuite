@@ -1,37 +1,30 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
   ButtonBase,
   Typography,
   Skeleton,
-  InputBase,
+  TextField,
+  Button,
+  Divider,
   useTheme,
-  alpha,
 } from '@mui/material';
-import {
-  TextFields as TextIcon,
-  Description as MarkdownIcon,
-  Code as CodeIcon,
-  AccountTree as MindMapIcon,
-  Draw as HandwrittenIcon,
-  ArrowForward as ArrowIcon,
-} from '@mui/icons-material';
 import { NOTE_TYPES } from '../components/notes/NoteTypeRouter';
 import useNoteStore from '../store/noteStore';
 import useAuthStore from '../store/authStore';
 import { formatRelativeTime } from '../utils/dateUtils';
 
-// ─── Type shortcuts on the scratch surface ───────────────────────────────────
+// ─── Type pills ──────────────────────────────────────────────────────────────
 const TYPE_PILLS = [
-  { type: NOTE_TYPES.TEXT, label: 'Text', icon: TextIcon },
-  { type: NOTE_TYPES.MARKDOWN, label: 'Markdown', icon: MarkdownIcon },
-  { type: NOTE_TYPES.CODE, label: 'Code', icon: CodeIcon },
-  { type: NOTE_TYPES.MINDMAP, label: 'Mind Map', icon: MindMapIcon },
-  { type: NOTE_TYPES.HANDWRITTEN, label: 'Sketch', icon: HandwrittenIcon },
+  { type: NOTE_TYPES.TEXT,        label: 'TEXT' },
+  { type: NOTE_TYPES.MARKDOWN,    label: 'MARKDOWN' },
+  { type: NOTE_TYPES.CODE,        label: 'CODE' },
+  { type: NOTE_TYPES.MINDMAP,     label: 'MINDMAP' },
+  { type: NOTE_TYPES.HANDWRITTEN, label: 'SKETCH' },
 ];
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -44,129 +37,133 @@ function getTypeColor(type, palette) {
   return palette.noteTypes?.[type] || palette.noteTypes?.text || palette.primary.main;
 }
 
-function getPreview(content, maxLen = 120) {
+function getPreview(content, maxLen = 100) {
   if (!content) return '';
   if (typeof content === 'string' && content.startsWith('data:image/')) return '';
   const plain = String(content).replace(/<[^>]+>/g, '');
-  return plain.split(/\r?\n/).filter(Boolean).slice(0, 3).join(' ').slice(0, maxLen);
+  return plain.split(/\r?\n/).filter(Boolean).slice(0, 2).join(' ').slice(0, maxLen);
 }
 
-// ─── NoteCard: a note as an object on the desk ──────────────────────────────
+// ─── NoteRow: editorial list row ─────────────────────────────────────────────
 
-function NoteCard({ note, featured, onClick, theme }) {
+function NoteRow({ note, theme, onClick }) {
   const typeColor = getTypeColor(note.type || 'text', theme.palette);
-  const preview = getPreview(note.content, featured ? 200 : 100);
+  const preview = getPreview(note.content);
 
   return (
     <ButtonBase
       onClick={onClick}
       sx={{
         display: 'flex',
-        textAlign: 'left',
-        borderRadius: 2.5,
-        border: `1px solid ${ theme.palette.divider }`,
-        bgcolor: 'background.paper',
-        overflow: 'hidden',
+        alignItems: 'flex-start',
+        gap: 1.5,
         width: '100%',
-        transition: 'all 150ms ease',
-        minHeight: featured ? { xs: 110, sm: 130 } : { xs: 88, sm: 100 },
+        textAlign: 'left',
+        py: 1.25,
+        px: { xs: 0, sm: 0.5 },
+        borderRadius: 0,
+        color: 'inherit',
+        transition: 'background 120ms ease',
         '&:hover': {
-          borderColor: theme.palette.glow.border,
-          boxShadow: `0 0 0 3px ${ theme.palette.glow.ring }`,
-          transform: 'translateY(-1px)',
-          '& .card-bar': { width: 4 },
+          bgcolor: theme.palette.glow.soft,
+          '& .type-dot': { transform: 'scale(1.5)' },
         },
       }}
     >
-      {/* Left accent — type identity */}
+      {/* Type-color identity dot */}
       <Box
-        className="card-bar"
+        className="type-dot"
         sx={{
-          width: 3,
+          width: 7,
+          height: 7,
+          borderRadius: '50%',
           bgcolor: typeColor,
           flexShrink: 0,
-          transition: 'width 150ms ease',
+          mt: preview ? '7px' : '6px',
+          transition: 'transform 120ms ease',
         }}
       />
 
-      <Box
-        sx={{
-          p: featured ? { xs: 2, sm: 2.5 } : { xs: 1.5, sm: 1.75 },
-          display: 'flex',
-          flexDirection: 'column',
-          flex: 1,
-          minWidth: 0,
-          minHeight: 0,
-        }}
-      >
-        {/* Title */}
+      {/* Main content */}
+      <Box sx={{ flex: 1, minWidth: 0 }}>
         <Typography
+          variant="body1"
           sx={{
-            fontWeight: featured ? 700 : 600,
-            fontSize: featured
-              ? { xs: '0.9375rem', sm: '1rem' }
-              : { xs: '0.8rem', sm: '0.8125rem' },
             color: 'text.primary',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
-            letterSpacing: featured ? '-0.01em' : 0,
-            mb: preview ? 0.5 : 'auto',
+            lineHeight: 1.45,
           }}
         >
           {note.title || 'Untitled'}
         </Typography>
-
-        {/* Preview */}
         {preview && (
           <Typography
+            variant="caption"
             sx={{
-              fontSize: featured ? '0.8rem' : '0.6875rem',
+              display: 'block',
               color: 'text.secondary',
-              lineHeight: 1.5,
-              display: '-webkit-box',
-              WebkitLineClamp: featured ? 3 : 2,
-              WebkitBoxOrient: 'vertical',
               overflow: 'hidden',
-              mb: 'auto',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              lineHeight: 1.5,
+              mt: 0.25,
             }}
           >
             {preview}
           </Typography>
         )}
+      </Box>
 
-        {/* Meta */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, pt: 1 }}>
-          <Typography sx={{ fontSize: '0.5625rem', color: 'text.disabled' }}>
-            {formatRelativeTime(note.updatedAt || note.createdAt)}
-          </Typography>
-          {note.type && note.type !== 'text' && (
+      {/* Tag pills — hidden on xs */}
+      {note.tags && note.tags.length > 0 && (
+        <Box
+          sx={{
+            display: { xs: 'none', sm: 'flex' },
+            gap: 0.5,
+            flexShrink: 0,
+            alignSelf: 'center',
+          }}
+        >
+          {note.tags.slice(0, 2).map((tag) => (
             <Typography
+              key={tag}
+              variant="caption"
               sx={{
-                fontSize: '0.5rem',
-                fontWeight: 600,
-                color: typeColor,
-                bgcolor: alpha(typeColor, 0.08),
-                px: 0.375,
-                py: 0.0625,
-                borderRadius: 0.375,
+                px: 0.75,
+                py: 0.125,
+                borderRadius: '4px',
+                border: `1px solid ${theme.palette.border}`,
+                bgcolor: theme.palette.glow.soft,
+                color: 'text.secondary',
+                lineHeight: '18px',
               }}
             >
-              {note.type}
+              {tag.split('/').pop()}
             </Typography>
-          )}
-          {note.tags && note.tags.length > 0 && (
-            <Typography sx={{ fontSize: '0.5rem', color: 'text.disabled' }}>
-              {note.tags[0].split('/').pop()}
-            </Typography>
-          )}
+          ))}
         </Box>
-      </Box>
+      )}
+
+      {/* Timestamp */}
+      <Typography
+        variant="caption"
+        sx={{
+          flexShrink: 0,
+          minWidth: 44,
+          textAlign: 'right',
+          color: 'text.disabled',
+          alignSelf: 'center',
+        }}
+      >
+        {formatRelativeTime(note.updatedAt || note.createdAt)}
+      </Typography>
     </ButtonBase>
   );
 }
 
-// ─── QuickCaptureHome: the thinking workbench ────────────────────────────────
+// ─── QuickCaptureHome ────────────────────────────────────────────────────────
 
 function QuickCaptureHome() {
   const navigate = useNavigate();
@@ -174,7 +171,6 @@ function QuickCaptureHome() {
   const { user } = useAuthStore();
   const { notes, fetchNotes, isLoadingList, createNote } = useNoteStore();
   const [captureText, setCaptureText] = useState('');
-  const inputRef = useRef(null);
 
   useEffect(() => {
     fetchNotes({ limit: 50 });
@@ -190,7 +186,7 @@ function QuickCaptureHome() {
     });
     if (created) {
       setCaptureText('');
-      navigate(`/notes/${ created.id || created._id }/edit`);
+      navigate(`/notes/${created.id || created._id}/edit`);
     }
   };
 
@@ -200,175 +196,166 @@ function QuickCaptureHome() {
     return dateB - dateA;
   });
 
-  const featuredNote = sortedNotes[0];
-  const deskNotes = sortedNotes.slice(1, 9);
   const firstName = user?.name?.split(' ')[0] || user?.email?.split('@')[0] || '';
 
-  return (
-    <Box sx={{ width: '100%', maxWidth: 960, mx: 'auto', py: { xs: 1.5, sm: 3 } }}>
+  // Compact note-count caption (e.g. "12 notes · last edited 4h ago")
+  const lastEdited = sortedNotes[0]
+    ? formatRelativeTime(sortedNotes[0].updatedAt || sortedNotes[0].createdAt)
+    : null;
+  const countCaption = notes.length > 0
+    ? `${notes.length} ${notes.length === 1 ? 'note' : 'notes'}${lastEdited ? ` · last edited ${lastEdited}` : ''}`
+    : null;
 
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* GREETING — calm context, not a dashboard header                   */}
-      {/* ═══════════════════════════════════════════════════════════════════ */}
+  return (
+    <Box sx={{ width: '100%', maxWidth: 720, mx: 'auto', py: { xs: 2, sm: 4 }, px: { xs: 2, sm: 0 } }}>
+
+      {/* ──────────────────────────────────────────────────────────────── */}
+      {/* GREETING                                                        */}
+      {/* ──────────────────────────────────────────────────────────────── */}
       {!isLoadingList && (
-        <Box sx={{ mb: { xs: 2, sm: 2.5 }, px: { xs: 0.5, sm: 0 } }}>
-          <Typography
-            sx={{
-              fontSize: { xs: '1.125rem', sm: '1.3125rem' },
-              fontWeight: 700,
-              color: 'text.primary',
-              letterSpacing: '-0.025em',
-              lineHeight: 1.2,
-            }}
-          >
-            {getGreeting()}{firstName ? `, ${ firstName }` : ''}
+        <Box sx={{ mb: { xs: 2.5, sm: 3 } }}>
+          <Typography variant="h2" sx={{ color: 'text.primary', mb: 0.5 }}>
+            {getGreeting()}{firstName ? `, ${firstName}` : ''}
           </Typography>
-          {notes.length > 0 && (
-            <Typography
-              sx={{
-                fontSize: '0.75rem',
-                color: 'text.disabled',
-                mt: 0.375,
-                letterSpacing: '0.005em',
-              }}
-            >
-              {notes.length} {notes.length === 1 ? 'note' : 'notes'} in your notebook
+          {countCaption && (
+            <Typography variant="caption" sx={{ color: 'text.disabled' }}>
+              {countCaption}
             </Typography>
           )}
         </Box>
       )}
 
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* THE SCRATCH SURFACE — center of gravity, impossible to miss       */}
-      {/* This is a scratchpad surface, not a search field.                 */}
-      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {/* ──────────────────────────────────────────────────────────────── */}
+      {/* TYPEWRITER STRIP — quick capture                                */}
+      {/* ──────────────────────────────────────────────────────────────── */}
       <Box
+        component="form"
+        onSubmit={handleQuickCapture}
         sx={{
-          mb: { xs: 3, sm: 4 },
-          borderRadius: 3,
-          border: `1px solid ${ theme.palette.divider }`,
-          bgcolor: 'background.paper',
-          overflow: 'hidden',
-          transition: 'border-color 180ms ease, box-shadow 180ms ease',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
+          mb: 2,
+          borderRadius: '6px',
+          border: `1px solid ${theme.palette.border}`,
+          bgcolor: theme.palette.surfaces.elevated,
+          px: 1.5,
+          py: 0.75,
+          transition: 'border-color 120ms ease, box-shadow 120ms ease',
           '&:focus-within': {
-            borderColor: theme.palette.glow.border,
-            boxShadow: `0 0 0 3px ${ theme.palette.glow.ring }`,
+            borderColor: theme.palette.primary.main,
+            boxShadow: `0 0 0 3px ${theme.palette.glow.ring}`,
           },
         }}
       >
-        <Box
-          component="form"
-          onSubmit={handleQuickCapture}
-          sx={{ px: { xs: 2.5, sm: 3.5 }, pt: { xs: 2.5, sm: 3.5 }, pb: { xs: 1.5, sm: 2 } }}
-        >
-          <InputBase
-            ref={inputRef}
-            value={captureText}
-            onChange={(e) => setCaptureText(e.target.value)}
-            placeholder="What's on your mind?"
-            fullWidth
-            sx={{
-              fontSize: { xs: '1rem', sm: '1.1875rem' },
-              fontWeight: 500,
-              color: 'text.primary',
-              '& .MuiInputBase-input': {
-                py: 0,
-                '&::placeholder': {
-                  color: alpha(theme.palette.text.primary, 0.22),
-                  opacity: 1,
-                },
-              },
-            }}
-          />
-        </Box>
-
-        {/* Type pills + keyboard hint */}
-        <Box
+        <TextField
+          value={captureText}
+          onChange={(e) => setCaptureText(e.target.value)}
+          placeholder="type a thought…"
+          fullWidth
+          variant="standard"
+          InputProps={{ disableUnderline: true }}
+          inputProps={{ 'aria-label': 'Quick capture' }}
           sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 0.5,
-            px: { xs: 2.5, sm: 3.5 },
-            pb: { xs: 2, sm: 2.5 },
-            pt: 0.5,
-            flexWrap: 'wrap',
+            '& .MuiInputBase-root': {
+              fontFamily: theme.typography.fontFamilyMono,
+              fontSize: '0.9375rem',
+              fontWeight: 400,
+              color: 'text.primary',
+            },
+            '& .MuiInputBase-input::placeholder': {
+              color: 'text.disabled',
+              opacity: 1,
+              fontStyle: 'italic',
+            },
           }}
+        />
+        <Button
+          type="submit"
+          variant="contained"
+          size="small"
+          disabled={!captureText.trim()}
+          sx={{ flexShrink: 0, borderRadius: '6px', px: 2 }}
         >
-          {TYPE_PILLS.map((pill) => {
-            const color = getTypeColor(pill.type, theme.palette);
-            return (
-              <ButtonBase
-                key={pill.type}
-                onClick={() => navigate(`/notes/new?type=${ encodeURIComponent(pill.type) }`)}
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 0.5,
-                  px: 1,
-                  py: 0.375,
-                  borderRadius: 1.25,
-                  fontSize: '0.6875rem',
-                  fontWeight: 500,
-                  color: 'text.disabled',
-                  bgcolor: alpha(theme.palette.text.primary, 0.03),
-                  transition: 'all 120ms ease',
-                  '&:hover': {
-                    color,
-                    bgcolor: alpha(color, 0.08),
-                  },
-                }}
-              >
-                <pill.icon sx={{ fontSize: 13 }} />
-                {pill.label}
-              </ButtonBase>
-            );
-          })}
-          <Typography
-            sx={{
-              fontSize: '0.5625rem',
-              color: alpha(theme.palette.text.primary, 0.15),
-              ml: 'auto',
-              display: { xs: 'none', sm: 'block' },
-            }}
-          >
-            ↵ to create
-          </Typography>
-        </Box>
+          Capture
+        </Button>
       </Box>
 
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* ON YOUR DESK — active artifacts, not a file list                  */}
-      {/* Notes as objects in a spatial grid, not rows in a table.          */}
-      {/* Featured card = the note you were just working on (largest).      */}
-      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {/* ──────────────────────────────────────────────────────────────── */}
+      {/* TYPE PILLS ROW                                                  */}
+      {/* ──────────────────────────────────────────────────────────────── */}
+      <Box
+        sx={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 0.75,
+          mb: { xs: 3, sm: 4 },
+        }}
+      >
+        {TYPE_PILLS.map((pill) => {
+          const color = getTypeColor(pill.type, theme.palette);
+          return (
+            <ButtonBase
+              key={pill.type}
+              onClick={() => navigate(`/notes/new?type=${encodeURIComponent(pill.type)}`)}
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.625,
+                px: 1,
+                py: 0.375,
+                borderRadius: '4px',
+                border: `1px solid ${theme.palette.border}`,
+                bgcolor: 'transparent',
+                fontFamily: theme.typography.fontFamilyMono,
+                fontSize: '0.6875rem',
+                fontWeight: 500,
+                letterSpacing: '0.04em',
+                color: 'text.secondary',
+                transition: 'all 120ms ease',
+                '&:hover': {
+                  bgcolor: theme.palette.glow.soft,
+                  borderColor: color,
+                  color,
+                },
+              }}
+            >
+              {/* type-color dot */}
+              <Box
+                sx={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  bgcolor: color,
+                  flexShrink: 0,
+                }}
+              />
+              {pill.label}
+            </ButtonBase>
+          );
+        })}
+      </Box>
+
+      {/* ──────────────────────────────────────────────────────────────── */}
+      {/* RECENT NOTES                                                    */}
+      {/* ──────────────────────────────────────────────────────────────── */}
       {isLoadingList ? (
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' },
-            gap: 2,
-          }}
-        >
+        <Box>
           {[1, 2, 3, 4, 5].map((i) => (
             <Skeleton
               key={i}
+              height={44}
+              sx={{ borderRadius: 1, mb: 0.5 }}
               variant="rounded"
-              height={i === 1 ? 130 : 100}
-              sx={{
-                borderRadius: 2.5,
-                gridColumn: i === 1 ? { sm: 'span 2' } : undefined,
-              }}
             />
           ))}
         </Box>
       ) : sortedNotes.length === 0 ? (
         <Box sx={{ py: { xs: 4, sm: 6 }, textAlign: 'center' }}>
-          <Typography
-            sx={{ fontSize: '0.9375rem', color: 'text.disabled', fontWeight: 500, mb: 0.5 }}
-          >
-            Your desk is empty
+          <Typography variant="body1" sx={{ color: 'text.disabled', mb: 0.5 }}>
+            Nothing here yet
           </Typography>
-          <Typography sx={{ fontSize: '0.75rem', color: 'text.disabled' }}>
+          <Typography variant="caption" sx={{ color: 'text.disabled' }}>
             Start typing above to capture your first thought
           </Typography>
         </Box>
@@ -380,67 +367,41 @@ function QuickCaptureHome() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              mb: 1.5,
-              px: { xs: 0.5, sm: 0 },
+              mb: 1,
             }}
           >
-            <Typography
-              sx={{
-                fontSize: '0.625rem',
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: '0.08em',
-                color: 'text.disabled',
-              }}
-            >
-              On your desk
+            <Typography variant="h6" sx={{ color: 'text.disabled' }}>
+              Recent
             </Typography>
             <ButtonBase
               onClick={() => navigate('/notes')}
               sx={{
-                fontSize: '0.5625rem',
-                fontWeight: 600,
+                fontFamily: theme.typography.fontFamilyMono,
+                fontSize: '0.6875rem',
+                fontWeight: 500,
                 color: 'text.disabled',
-                transition: 'color 80ms ease',
+                letterSpacing: '0.03em',
+                transition: 'color 100ms ease',
                 '&:hover': { color: 'primary.main' },
               }}
             >
-              All notes <ArrowIcon sx={{ fontSize: 10, ml: 0.25 }} />
+              all notes →
             </ButtonBase>
           </Box>
 
-          {/* Spatial card grid */}
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: {
-                xs: '1fr',
-                sm: 'repeat(2, 1fr)',
-                md: 'repeat(3, 1fr)',
-              },
-              gap: { xs: 1.5, sm: 2 },
-            }}
-          >
-            {/* Featured: the note you were just in — spans 2 cols on sm+ */}
-            {featuredNote && (
-              <Box sx={{ gridColumn: { sm: 'span 2' } }}>
-                <NoteCard
-                  note={featuredNote}
-                  featured
-                  onClick={() => navigate(`/notes/${ featuredNote.id || featuredNote._id }`)}
+          {/* Editorial rows with hairline dividers */}
+          <Box>
+            {sortedNotes.slice(0, 12).map((note, idx) => (
+              <React.Fragment key={note.id || note._id}>
+                {idx > 0 && (
+                  <Divider sx={{ borderColor: theme.palette.divider }} />
+                )}
+                <NoteRow
+                  note={note}
                   theme={theme}
+                  onClick={() => navigate(`/notes/${note.id || note._id}`)}
                 />
-              </Box>
-            )}
-
-            {/* Rest of desk */}
-            {deskNotes.map((note) => (
-              <NoteCard
-                key={note.id || note._id}
-                note={note}
-                onClick={() => navigate(`/notes/${ note.id || note._id }`)}
-                theme={theme}
-              />
+              </React.Fragment>
             ))}
           </Box>
         </Box>

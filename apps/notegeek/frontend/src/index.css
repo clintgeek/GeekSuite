@@ -1,4 +1,4 @@
-/* Remove or replace default Vite styles */
+/* Reset + root layout */
 html,
 body,
 #root {
@@ -8,19 +8,29 @@ body,
   width: 100%;
 }
 
-
-/* TipTap Editor — Thinking Workspace */
+/*
+ * TipTap editor surface — Ink Studio.
+ * Colors here mirror the MUI theme (createAppTheme.js) so the rich-text
+ * editor reads as part of the same paper, not a glued-in widget.
+ *
+ *   Light:  oxblood #8B2C2A (caret/links/blockquote rule)
+ *           cream  #FBF7EE / surface #FFFCF5 (code block bg)
+ *           ink    #1F1C16 / muted #6B6258 (text/blockquote color)
+ *   Dark:   oxblood #C97570 (caret/links/blockquote rule)
+ *           ink    #1F1C16 / muted #998F80
+ *           code bg #1F1C16, hairline #3A352D
+ */
 .ProseMirror {
   outline: none;
   min-height: 200px;
   padding: 0.75rem 1rem;
   line-height: 1.65;
   font-size: 0.9375rem;
-  caret-color: #5B50A8;
+  caret-color: #8B2C2A;
 }
 
 .ProseMirror ::selection {
-  background: rgba(91, 80, 168, 0.14);
+  background: rgba(139, 44, 42, 0.18);
 }
 
 .ProseMirror > * + * {
@@ -73,26 +83,26 @@ body,
 }
 
 .ProseMirror blockquote {
-  border-left: 2px solid #5B50A8;
+  border-left: 2px solid #8B2C2A;
   margin-left: 0;
   padding-left: 0.875em;
-  color: #78716C;
+  color: #6B6258;
 }
 
 .ProseMirror code {
-  background-color: rgba(0,0,0,0.04);
+  background-color: rgba(31, 28, 22, 0.06);
   border-radius: 3px;
   padding: 0.1em 0.3em;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'JetBrains Mono', 'Geist Mono', ui-monospace, monospace;
   font-size: 0.85em;
 }
 
 .ProseMirror pre {
-  background-color: #F0EEEB;
-  border: 1px solid #E7E5E4;
-  border-radius: 6px;
+  background-color: #FBF7EE;
+  border: 1px solid #D8D0BD;
+  border-radius: 4px;
   padding: 0.75rem 1rem;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'JetBrains Mono', 'Geist Mono', ui-monospace, monospace;
   font-size: 0.8125rem;
   line-height: 1.6;
   overflow-x: auto;
@@ -105,14 +115,14 @@ body,
 }
 
 .ProseMirror a {
-  color: #5B50A8;
+  color: #8B2C2A;
   text-decoration: underline;
   text-underline-offset: 2px;
-  text-decoration-color: rgba(91, 80, 168, 0.3);
+  text-decoration-color: rgba(139, 44, 42, 0.35);
 }
 
 .ProseMirror a:hover {
-  text-decoration-color: #5B50A8;
+  text-decoration-color: #8B2C2A;
 }
 
 .ProseMirror img {
@@ -123,53 +133,59 @@ body,
 .ProseMirror hr {
   border: none;
   height: 1px;
-  background: #E7E5E4;
+  background: #E5DDC8;
   margin: 1.25em 0;
 }
 
 .ProseMirror p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
   float: left;
-  color: #A8A29E;
+  color: #A8A09A;
   pointer-events: none;
   height: 0;
+  font-style: italic;
 }
 
-/* Dark mode */
+/* Dark mode — "ink desk lamp" */
 [data-theme="dark"] .ProseMirror,
 .dark .ProseMirror {
-  caret-color: #A99DF0;
+  caret-color: #C97570;
 }
 
 [data-theme="dark"] .ProseMirror ::selection,
 .dark .ProseMirror ::selection {
-  background: rgba(169, 157, 240, 0.16);
+  background: rgba(201, 117, 112, 0.22);
 }
 
 [data-theme="dark"] .ProseMirror pre,
 .dark .ProseMirror pre {
-  background-color: #23211F;
-  border-color: #373432;
+  background-color: #1F1C16;
+  border-color: #3A352D;
 }
 
 [data-theme="dark"] .ProseMirror code,
 .dark .ProseMirror code {
-  background-color: rgba(255,255,255,0.06);
+  background-color: rgba(237, 230, 214, 0.08);
 }
 
 [data-theme="dark"] .ProseMirror blockquote,
 .dark .ProseMirror blockquote {
-  border-left-color: #A99DF0;
-  color: #A8A29E;
+  border-left-color: #C97570;
+  color: #998F80;
 }
 
 [data-theme="dark"] .ProseMirror a,
 .dark .ProseMirror a {
-  color: #A99DF0;
-  text-decoration-color: rgba(169, 157, 240, 0.3);
+  color: #C97570;
+  text-decoration-color: rgba(201, 117, 112, 0.35);
 }
 
 [data-theme="dark"] .ProseMirror hr,
 .dark .ProseMirror hr {
-  background: #373432;
+  background: #2D2A24;
+}
+
+[data-theme="dark"] .ProseMirror p.is-editor-empty:first-child::before,
+.dark .ProseMirror p.is-editor-empty:first-child::before {
+  color: #5C544A;
 }

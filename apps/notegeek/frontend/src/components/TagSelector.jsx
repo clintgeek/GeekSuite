@@ -45,8 +45,8 @@ function TagSelector({ selectedTags, onChange, disabled }) {
       )}
       size="small"
       sx={{
-        minWidth: '200px',
-        maxWidth: '300px',
+        minWidth: 160,
+        maxWidth: 320,
       }}
     />
   );

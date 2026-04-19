@@ -20,18 +20,15 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
-import {
-    TextFields as TextIcon,
-    Description as MarkdownIcon,
-    Code as CodeIcon,
-} from '@mui/icons-material';
 import DeleteNoteDialog from './DeleteNoteDialog';
 
-// Note type configuration
+// Note type configuration — type color comes from theme.palette.noteTypes
 const NOTE_TYPE_CONFIG = {
-    text: { icon: TextIcon, color: '#5B50A8', darkColor: '#A99DF0', label: 'Text' },
-    markdown: { icon: MarkdownIcon, color: '#7B5DAE', darkColor: '#B89BD8', label: 'Markdown' },
-    code: { icon: CodeIcon, color: '#4A8C6F', darkColor: '#7DB99A', label: 'Code' },
+    text:        { label: 'Text' },
+    markdown:    { label: 'Markdown' },
+    code:        { label: 'Code' },
+    mindmap:     { label: 'Mindmap' },
+    handwritten: { label: 'Sketch' },
 };
 
 function NoteViewer() {
@@ -101,8 +98,8 @@ function NoteViewer() {
 
     const noteType = noteToView.type || 'text';
     const typeConfig = NOTE_TYPE_CONFIG[noteType] || NOTE_TYPE_CONFIG.text;
-    const TypeIcon = typeConfig.icon;
-    const typeColor = isDark ? typeConfig.darkColor : typeConfig.color;
+    // Use theme tokens — same source of truth as the rest of the app
+    const typeColor = theme.palette.noteTypes?.[noteType] || theme.palette.primary.main;
 
     const formatDate = (date) => {
         return new Date(date).toLocaleDateString(undefined, {
@@ -141,19 +138,27 @@ function NoteViewer() {
                         <ArrowBackIcon sx={{ fontSize: 18 }} />
                     </IconButton>
 
-                    <Typography
+                    {/* Type pill — mono ink-stamp */}
+                    <Box
                         sx={{
-                            fontSize: '0.625rem',
-                            fontWeight: 600,
-                            color: typeColor,
-                            bgcolor: alpha(typeColor, 0.08),
-                            px: 0.625,
-                            py: 0.125,
-                            borderRadius: 0.5,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 0.625,
+                            px: 0.875,
+                            py: 0.25,
+                            borderRadius: '4px',
+                            border: `1px solid ${theme.palette.border}`,
+                            bgcolor: theme.palette.glow.soft,
                         }}
                     >
-                        {typeConfig.label}
-                    </Typography>
+                        <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: typeColor, flexShrink: 0 }} />
+                        <Typography
+                            variant="caption"
+                            sx={{ color: typeColor, letterSpacing: '0.04em', lineHeight: 1 }}
+                        >
+                            {typeConfig.label.toUpperCase()}
+                        </Typography>
+                    </Box>
 
                     <Box sx={{ flex: 1 }} />
 
@@ -189,13 +194,14 @@ function NoteViewer() {
                     </Tooltip>
                 </Box>
 
-                {/* The reading room — you've entered a space */}
+                {/* The reading room — the editor-paper surface */}
                 <Paper
                     elevation={0}
                     sx={{
-                        borderRadius: 2.5,
+                        borderRadius: '4px',
                         overflow: 'hidden',
-                        border: `1px solid ${ theme.palette.divider }`,
+                        border: `1px solid ${theme.palette.border}`,
+                        bgcolor: theme.palette.surfaces.elevated,
                         display: 'flex',
                     }}
                 >
@@ -226,27 +232,35 @@ function NoteViewer() {
                                 )}
                             </Typography>
 
-                            {/* Meta — quiet, subordinate */}
+                            {/* Meta — quiet mono timestamp + tag chips */}
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                                <Typography sx={{ fontSize: '0.6875rem', color: 'text.disabled', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                <Typography
+                                    variant="caption"
+                                    sx={{ color: 'text.disabled', display: 'flex', alignItems: 'center', gap: 0.5 }}
+                                >
                                     <AccessTimeIcon sx={{ fontSize: 12 }} />
                                     {formatDate(noteToView.updatedAt || noteToView.createdAt)}
                                 </Typography>
                                 {noteToView.tags && noteToView.tags.length > 0 && (
                                     <>
                                         <Box sx={{ width: 3, height: 3, borderRadius: '50%', bgcolor: 'text.disabled' }} />
-                                        <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                        <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
                                             {noteToView.tags.map(tag => (
                                                 <Typography
                                                     key={tag}
+                                                    variant="caption"
                                                     component="span"
-                                                    onClick={() => navigate(`/tags/${ encodeURIComponent(tag) }`)}
+                                                    onClick={() => navigate(`/tags/${encodeURIComponent(tag)}`)}
                                                     sx={{
-                                                        fontSize: '0.625rem',
-                                                        color: 'text.disabled',
+                                                        px: 0.75,
+                                                        py: 0.125,
+                                                        borderRadius: '4px',
+                                                        border: `1px solid ${theme.palette.border}`,
+                                                        color: 'text.secondary',
                                                         cursor: 'pointer',
-                                                        transition: 'color 100ms ease',
-                                                        '&:hover': { color: 'primary.main' },
+                                                        lineHeight: '18px',
+                                                        transition: 'color 100ms ease, border-color 100ms ease',
+                                                        '&:hover': { color: 'primary.main', borderColor: theme.palette.primary.main },
                                                     }}
                                                 >
                                                     {tag}
@@ -272,7 +286,7 @@ function NoteViewer() {
                                 letterSpacing: '0.01em',
                                 '& p': { mb: 2 },
                                 '& h1': {
-                                    fontFamily: '"Plus Jakarta Sans", sans-serif',
+                                    fontFamily: '"Geist", -apple-system, BlinkMacSystemFont, sans-serif',
                                     fontWeight: 700,
                                     fontSize: '1.75rem',
                                     mt: 4,
@@ -280,7 +294,7 @@ function NoteViewer() {
                                     lineHeight: 1.2,
                                 },
                                 '& h2': {
-                                    fontFamily: '"Plus Jakarta Sans", sans-serif',
+                                    fontFamily: '"Geist", -apple-system, BlinkMacSystemFont, sans-serif',
                                     fontWeight: 600,
                                     fontSize: '1.4rem',
                                     mt: 3.5,
@@ -288,7 +302,7 @@ function NoteViewer() {
                                     lineHeight: 1.25,
                                 },
                                 '& h3': {
-                                    fontFamily: '"Plus Jakarta Sans", sans-serif',
+                                    fontFamily: '"Geist", -apple-system, BlinkMacSystemFont, sans-serif',
                                     fontWeight: 700,
                                     fontSize: '1.15rem',
                                     mt: 3,
@@ -296,7 +310,7 @@ function NoteViewer() {
                                     lineHeight: 1.3,
                                 },
                                 '& h4, & h5, & h6': {
-                                    fontFamily: '"Plus Jakarta Sans", sans-serif',
+                                    fontFamily: '"Geist", -apple-system, BlinkMacSystemFont, sans-serif',
                                     fontWeight: 700,
                                     fontSize: '1rem',
                                     mt: 2.5,
@@ -325,8 +339,8 @@ function NoteViewer() {
                                     fontFamily: '"JetBrains Mono", monospace',
                                     fontSize: '0.825rem',
                                     lineHeight: 1.7,
-                                    bgcolor: isDark ? '#23211F' : '#F0EEEB',
-                                    border: `1px solid ${ alpha(theme.palette.divider, 0.5) }`,
+                                    bgcolor: theme.palette.background.default,
+                                    border: `1px solid ${theme.palette.divider}`,
                                     p: 2.5,
                                     borderRadius: 3,
                                     overflow: 'auto',

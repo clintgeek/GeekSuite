@@ -4,13 +4,13 @@ import {
     Drawer,
     useTheme,
     useMediaQuery,
-    Container,
 } from '@mui/material';
 import Sidebar from './Sidebar';
 import MobileBottomNav from './MobileBottomNav';
 import Header from './Header';
 
-const DRAWER_WIDTH = 220;
+// Design spec: sidebar 240px, header 48px (xs: 44px), bottom nav 56px
+const DRAWER_WIDTH = 240;
 
 function Layout({ children }) {
     const theme = useTheme();
@@ -24,7 +24,6 @@ function Layout({ children }) {
             setMobileOpen(false);
             return;
         }
-
         setMobileOpen((prev) => !prev);
     };
 
@@ -35,69 +34,82 @@ function Layout({ children }) {
     }, [isDesktop, mobileOpen]);
 
     return (
-        <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+        <Box
+            sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                minHeight: '100vh',
+                bgcolor: 'background.default',
+            }}
+        >
             <Header onMenuClick={handleDrawerToggle} />
 
-            {/* Content Area - Below AppBar */}
+            {/* Content area — below the fixed AppBar */}
             <Box
                 sx={{
                     display: 'flex',
                     flexGrow: 1,
+                    // xs/sm: clear the 44/48px header + leave room for 56px bottom nav
                     mt: { xs: '44px', sm: '48px' },
                     height: {
-                        xs: 'calc(100vh - 44px - 60px - env(safe-area-inset-bottom))',
-                        sm: 'calc(100vh - 48px - 60px - env(safe-area-inset-bottom))',
+                        xs: 'calc(100vh - 44px - 56px - env(safe-area-inset-bottom))',
+                        sm: 'calc(100vh - 48px - 56px - env(safe-area-inset-bottom))',
                         md: 'calc(100vh - 48px)',
                     },
                     overflow: 'hidden',
                 }}
             >
-                {/* Mobile Drawer */}
+                {/* Mobile Drawer — temporary overlay */}
                 <Drawer
                     variant="temporary"
                     open={mobileOpen}
                     onClose={() => setMobileOpen(false)}
-                    ModalProps={{
-                        keepMounted: false,
-                    }}
+                    ModalProps={{ keepMounted: false }}
                     sx={{
                         display: { xs: 'block', md: 'none' },
                         '& .MuiDrawer-paper': {
                             boxSizing: 'border-box',
                             width: DRAWER_WIDTH,
-                            bgcolor: 'background.paper',
-                            borderRight: '1px solid',
-                            borderColor: 'divider',
+                            // Aligns drawer paper below the fixed header
                             mt: { xs: '44px', sm: '48px' },
+                            height: {
+                                xs: 'calc(100% - 44px)',
+                                sm: 'calc(100% - 48px)',
+                            },
+                            // Theme override in createAppTheme handles bg + borderRight;
+                            // nothing to override here — keeps it clean.
                         },
                     }}
                 >
                     <Sidebar closeNavbar={() => setMobileOpen(false)} />
                 </Drawer>
 
-                {/* Desktop Drawer */}
+                {/* Desktop Drawer — persistent push */}
                 <Drawer
                     variant="persistent"
                     open={desktopOpen}
                     sx={{
                         display: { xs: 'none', md: 'block' },
-                        width: DRAWER_WIDTH,
+                        width: desktopOpen ? DRAWER_WIDTH : 0,
                         flexShrink: 0,
+                        transition: theme.transitions.create('width', {
+                            easing: theme.transitions.easing.sharp,
+                            duration: theme.transitions.duration.leavingScreen,
+                        }),
                         '& .MuiDrawer-paper': {
                             width: DRAWER_WIDTH,
                             boxSizing: 'border-box',
-                            bgcolor: 'background.paper',
-                            borderRight: '1px solid',
-                            borderColor: 'divider',
                             boxShadow: 'none',
-                            mt: { xs: '44px', sm: '48px' },
+                            mt: '48px',
+                            height: 'calc(100% - 48px)',
+                            // bg + hairline right border come from MuiDrawer override in theme
                         },
                     }}
                 >
                     <Sidebar />
                 </Drawer>
 
-                {/* Main Content */}
+                {/* Main content surface */}
                 <Box
                     component="main"
                     sx={{
@@ -106,31 +118,23 @@ function Layout({ children }) {
                         minWidth: 0,
                         height: '100%',
                         bgcolor: 'background.default',
-                        pt: 0,
-                        pb: 0,
-                        ml: { sm: desktopOpen ? 0 : `-${DRAWER_WIDTH}px` },
+                        overflow: 'auto',
+                        // Smooth push when desktop drawer opens/closes
+                        ml: {
+                            md: desktopOpen ? 0 : `-${DRAWER_WIDTH}px`,
+                        },
                         transition: theme.transitions.create('margin', {
                             easing: theme.transitions.easing.sharp,
                             duration: theme.transitions.duration.leavingScreen,
                         }),
+                        // Mindmap editor wants overflow: hidden — applied by NoteShell
+                        // via className; preserve the hook here.
                         '&.mindmap-container': {
                             overflow: 'hidden',
                         },
-                        display: 'flex',
-                        justifyContent: 'center',
-                        overflow: 'auto'
                     }}
                 >
-                    <Container
-                        maxWidth={false}
-                        sx={{
-                            px: { xs: 1.5, sm: 2.5 },
-                            width: '100%',
-                            maxWidth: '100%'
-                        }}
-                    >
-                        {children}
-                    </Container>
+                    {children}
                 </Box>
             </Box>
 

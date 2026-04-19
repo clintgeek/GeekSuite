@@ -9,13 +9,14 @@ import {
 } from '@mui/icons-material';
 import { NOTE_TYPES } from './notes/NoteTypeRouter';
 
-// Type configuration with colors matching NoteList
-const TYPE_CONFIG = {
-    [NOTE_TYPES.TEXT]: { icon: TextIcon, label: 'Text', color: '#5B50A8' },
-    [NOTE_TYPES.MARKDOWN]: { icon: MarkdownIcon, label: 'Markdown', color: '#7B5DAE' },
-    [NOTE_TYPES.CODE]: { icon: CodeIcon, label: 'Code', color: '#4A8C6F' },
-    [NOTE_TYPES.MINDMAP]: { icon: MindMapIcon, label: 'Mind Map', color: '#3D8493' },
-    [NOTE_TYPES.HANDWRITTEN]: { icon: HandwrittenIcon, label: 'Handwritten', color: '#A85C73' },
+// Icon + label per type. Colors come from theme.palette.noteTypes so the
+// type swatch matches NoteRow / NoteMetaBar / NoteViewer in both modes.
+const TYPE_META = {
+    [NOTE_TYPES.TEXT]:        { icon: TextIcon,        label: 'Text',        themeKey: 'text' },
+    [NOTE_TYPES.MARKDOWN]:    { icon: MarkdownIcon,    label: 'Markdown',    themeKey: 'markdown' },
+    [NOTE_TYPES.CODE]:        { icon: CodeIcon,        label: 'Code',        themeKey: 'code' },
+    [NOTE_TYPES.MINDMAP]:     { icon: MindMapIcon,     label: 'Mind Map',    themeKey: 'mindmap' },
+    [NOTE_TYPES.HANDWRITTEN]: { icon: HandwrittenIcon, label: 'Handwritten', themeKey: 'handwritten' },
 };
 
 function NoteTypeSelector({ value, onChange }) {
@@ -31,16 +32,17 @@ function NoteTypeSelector({ value, onChange }) {
                 borderRadius: 2,
             }}
         >
-            {Object.entries(TYPE_CONFIG).map(([type, config]) => {
-                const Icon = config.icon;
+            {Object.entries(TYPE_META).map(([type, meta]) => {
+                const Icon = meta.icon;
                 const isActive = value === type;
+                const typeColor = theme.palette.noteTypes?.[meta.themeKey] || theme.palette.text.primary;
 
                 return (
-                    <Tooltip key={type} title={config.label} arrow>
+                    <Tooltip key={type} title={meta.label} arrow>
                         <Box
                             component="button"
                             onClick={() => onChange(type)}
-                            aria-label={config.label}
+                            aria-label={meta.label}
                             aria-pressed={isActive}
                             sx={{
                                 display: 'flex',
@@ -49,19 +51,17 @@ function NoteTypeSelector({ value, onChange }) {
                                 width: 36,
                                 height: 32,
                                 border: 'none',
-                                borderRadius: 1.5,
+                                borderRadius: 1,
                                 cursor: 'pointer',
-                                transition: 'all 0.2s ease',
-                                bgcolor: isActive ? config.color : 'transparent',
-                                color: isActive ? '#fff' : 'text.secondary',
+                                transition: 'all 0.15s ease',
+                                bgcolor: isActive ? typeColor : 'transparent',
+                                color: isActive ? theme.palette.background.paper : 'text.secondary',
                                 '&:hover': {
-                                    bgcolor: isActive
-                                        ? config.color
-                                        : alpha(config.color, 0.15),
-                                    color: isActive ? '#fff' : config.color,
+                                    bgcolor: isActive ? typeColor : alpha(typeColor, 0.12),
+                                    color: isActive ? theme.palette.background.paper : typeColor,
                                 },
                                 '&:focus-visible': {
-                                    outline: `2px solid ${config.color}`,
+                                    outline: `2px solid ${typeColor}`,
                                     outlineOffset: 2,
                                 },
                             }}

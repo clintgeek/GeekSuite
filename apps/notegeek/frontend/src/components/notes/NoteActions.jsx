@@ -1,10 +1,17 @@
 import React from 'react';
-import { Box, Button, IconButton, CircularProgress, alpha, useTheme, Tooltip } from '@mui/material';
+import { Box, Button, IconButton, CircularProgress, Tooltip, useTheme } from '@mui/material';
 import { Save, DeleteOutline, Edit, Visibility, Check } from '@mui/icons-material';
 
 /**
- * NoteActions - Save, delete, edit/view toggle
- * Can be used inline (desktop) or in bottom bar (mobile)
+ * NoteActions — Save, delete, edit/view toggle.
+ *
+ * Design:
+ *   - Save: contained primary (oxblood)
+ *   - Cancel / View: text button
+ *   - Delete: text button, error color, confirm dialog handled upstream
+ *
+ * Desktop inline: right-aligned row of compact buttons.
+ * Mobile bottom-bar: full-width buttons, thumb-reachable.
  */
 function NoteActions({
   onSave,
@@ -21,59 +28,44 @@ function NoteActions({
   const isBottomBar = variant === 'bottom-bar';
   const isSaved = saveStatus === 'Saved';
 
+  // ── Save ──────────────────────────────────────────────────────────────
   const SaveButton = () => (
     <Button
       variant="contained"
-      color="primary"
+      color={isSaved ? 'success' : 'primary'}
       startIcon={isSaving ? null : isSaved ? <Check /> : <Save />}
       onClick={onSave}
       disabled={isSaving}
       size={isBottomBar ? 'medium' : 'small'}
       sx={{
-        ...(isBottomBar ? {
-          flex: 1,
-          borderRadius: 2.5,
-          py: 1.25,
-          fontWeight: 600,
-        } : {
-          minWidth: 90,
-          borderRadius: 2,
-          fontWeight: 600,
-        }),
+        ...(isBottomBar
+          ? { flex: 1 }
+          : { minWidth: 80 }),
         boxShadow: 'none',
-        bgcolor: isSaved ? 'success.main' : 'primary.main',
-        '&:hover': {
-          boxShadow: theme.shadows[2],
-          bgcolor: isSaved ? 'success.dark' : 'primary.dark',
-        },
-        transition: 'all 0.2s ease',
+        '&:hover': { boxShadow: 'none' },
+        transition: 'background-color 120ms ease',
       }}
     >
       {isSaving ? (
-        <CircularProgress size={20} color="inherit" />
-      ) : isSaved ? 'Saved!' : 'Save'}
+        <CircularProgress size={16} color="inherit" />
+      ) : isSaved ? (
+        'Saved'
+      ) : (
+        'Save'
+      )}
     </Button>
   );
 
-  const DeleteButton = () => (
+  // ── Delete ────────────────────────────────────────────────────────────
+  const DeleteButton = () =>
     isBottomBar ? (
       <Button
-        variant="outlined"
+        variant="text"
         color="error"
         startIcon={<DeleteOutline />}
         onClick={onDelete}
         size="medium"
-        sx={{
-          flex: 0.6,
-          borderRadius: 2.5,
-          py: 1.25,
-          fontWeight: 600,
-          borderWidth: 1.5,
-          '&:hover': {
-            borderWidth: 1.5,
-            bgcolor: alpha(theme.palette.error.main, 0.08),
-          },
-        }}
+        sx={{ flex: 0.55 }}
       >
         Delete
       </Button>
@@ -84,58 +76,46 @@ function NoteActions({
           onClick={onDelete}
           size="small"
           sx={{
-            bgcolor: alpha(theme.palette.error.main, 0.08),
+            borderRadius: '6px',
+            transition: 'background 120ms ease',
             '&:hover': {
-              bgcolor: alpha(theme.palette.error.main, 0.15),
-              transform: 'scale(1.05)',
+              bgcolor: theme.palette.glow.soft,
             },
-            transition: 'all 0.2s ease',
+            '&:focus-visible': {
+              boxShadow: `0 0 0 3px ${theme.palette.glow.ring}`,
+            },
           }}
         >
           <DeleteOutline fontSize="small" />
         </IconButton>
       </Tooltip>
-    )
-  );
+    );
 
+  // ── Toggle edit/view ──────────────────────────────────────────────────
   const ToggleEditButton = () => (
     <Button
-      variant={isEditMode ? 'outlined' : 'contained'}
+      variant="text"
       color="primary"
       startIcon={isEditMode ? <Visibility /> : <Edit />}
       onClick={onToggleEdit}
       size={isBottomBar ? 'medium' : 'small'}
       sx={{
-        ...(isBottomBar ? {
-          flex: 0.8,
-          borderRadius: 2.5,
-          py: 1.25,
-          fontWeight: 600,
-        } : {
-          minWidth: 90,
-          borderRadius: 2,
-          fontWeight: 600,
-        }),
-        ...(isEditMode && {
-          borderWidth: 1.5,
-          '&:hover': {
-            borderWidth: 1.5,
-          },
-        }),
+        ...(isBottomBar ? { flex: 0.7 } : {}),
       }}
     >
       {isEditMode ? 'View' : 'Edit'}
     </Button>
   );
 
+  // ── Bottom-bar layout (mobile) ────────────────────────────────────────
   if (isBottomBar) {
     return (
       <Box
         sx={{
           display: 'flex',
-          gap: 1.5,
-          p: 2,
-          pt: 1.5,
+          gap: 1,
+          px: 2,
+          py: 1.25,
         }}
       >
         {canToggleEdit && <ToggleEditButton />}
@@ -145,7 +125,7 @@ function NoteActions({
     );
   }
 
-  // Inline variant
+  // ── Inline layout (desktop) — rendered as fragments, parent aligns them
   return (
     <>
       {canToggleEdit && <ToggleEditButton />}

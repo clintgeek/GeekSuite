@@ -5,10 +5,28 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>NoteGeek</title>
-    <!-- Google Fonts: Fraunces (display), Plus Jakarta Sans (body), JetBrains Mono (code) -->
+    <meta name="theme-color" content="#FBF7EE" />
+    <!-- Geist (display + body) — matches basegeek for suite typeface continuity.
+         JetBrains Mono — used for all metadata (timestamps, tags, type indicators)
+         and the actual editor surface. The "Ink Studio" identity rides on this
+         sans/mono pair; do not add a third typeface without revisiting the design. -->
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/geist@1.3.1/dist/fonts/geist-sans/style.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/geist@1.3.1/dist/fonts/geist-mono/style.css" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <!-- Baseline cream/ink colors that snap before MUI mounts.
+         Must EXACTLY match createAppTheme.js's surfaces.default + text.primary,
+         or you'll get a brief repaint when React boots. -->
+    <style>
+      :root                    { background-color: #FBF7EE; color: #1F1C16; }
+      :root[data-theme="dark"] { background-color: #16140F; color: #EDE6D6; }
+      body                     { margin: 0; background-color: inherit; color: inherit; }
+    </style>
   </head>
   <body>
     <div id="root"></div>

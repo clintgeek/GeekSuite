@@ -15,56 +15,21 @@ import { CREATE_NOTE, UPDATE_NOTE } from '../graphql/mutations';
 import { NoteShell, NoteMetaBar, NoteActions, NoteTypeRouter, NOTE_TYPES } from '../components/notes';
 import DeleteNoteDialog from '../components/DeleteNoteDialog';
 
-// Type card configuration — Studio Ink palette
+// Type card configuration. Colors come from theme.palette.noteTypes so light
+// and dark modes stay in sync with NoteRow / NoteMetaBar / NoteViewer / sidebar.
 const NOTE_TYPE_CARDS = [
-  {
-    type: NOTE_TYPES.TEXT,
-    icon: TextIcon,
-    title: 'Rich Text',
-    description: 'Format with bold, italic, lists, and more',
-    color: '#5B50A8',
-    darkColor: '#A99DF0',
-  },
-  {
-    type: NOTE_TYPES.MARKDOWN,
-    icon: MarkdownIcon,
-    title: 'Markdown',
-    description: 'Write in Markdown with live preview',
-    color: '#7B5DAE',
-    darkColor: '#B89BD8',
-  },
-  {
-    type: NOTE_TYPES.CODE,
-    icon: CodeIcon,
-    title: 'Code Snippet',
-    description: 'Syntax highlighting for any language',
-    color: '#4A8C6F',
-    darkColor: '#7DB99A',
-  },
-  {
-    type: NOTE_TYPES.MINDMAP,
-    icon: MindMapIcon,
-    title: 'Mind Map',
-    description: 'Visual brainstorming and idea mapping',
-    color: '#3D8493',
-    darkColor: '#6DB5C0',
-  },
-  {
-    type: NOTE_TYPES.HANDWRITTEN,
-    icon: HandwrittenIcon,
-    title: 'Sketch',
-    description: 'Draw and write with stylus or touch',
-    color: '#A85C73',
-    darkColor: '#D49AAE',
-  },
+  { type: NOTE_TYPES.TEXT,        icon: TextIcon,        title: 'Rich Text',     description: 'Format with bold, italic, lists, and more',  themeKey: 'text' },
+  { type: NOTE_TYPES.MARKDOWN,    icon: MarkdownIcon,    title: 'Markdown',      description: 'Write in Markdown with live preview',         themeKey: 'markdown' },
+  { type: NOTE_TYPES.CODE,        icon: CodeIcon,        title: 'Code Snippet',  description: 'Syntax highlighting for any language',        themeKey: 'code' },
+  { type: NOTE_TYPES.MINDMAP,     icon: MindMapIcon,     title: 'Mind Map',      description: 'Visual brainstorming and idea mapping',       themeKey: 'mindmap' },
+  { type: NOTE_TYPES.HANDWRITTEN, icon: HandwrittenIcon, title: 'Sketch',        description: 'Draw and write with stylus or touch',         themeKey: 'handwritten' },
 ];
 
 // Type card — workspace style
 function TypeCard({ config, onSelect }) {
   const theme = useTheme();
-  const isDark = theme.palette.mode === 'dark';
   const Icon = config.icon;
-  const color = isDark ? config.darkColor : config.color;
+  const color = theme.palette.noteTypes?.[config.themeKey] || theme.palette.text.primary;
 
   return (
     <Box
@@ -343,7 +308,7 @@ function NoteEditorPage() {
         <Box sx={{ mb: 4, textAlign: 'center' }}>
           <Typography
             sx={{
-              fontFamily: '"Plus Jakarta Sans", sans-serif',
+              fontFamily: '"Geist", -apple-system, BlinkMacSystemFont, sans-serif',
               fontWeight: 700,
               fontSize: { xs: '1.75rem', sm: '2rem' },
               color: 'text.primary',
@@ -396,7 +361,7 @@ function NoteEditorPage() {
       >
         <Typography
           sx={{
-            fontFamily: '"Plus Jakarta Sans", sans-serif',
+            fontFamily: '"Geist", -apple-system, BlinkMacSystemFont, sans-serif',
             fontSize: '1.25rem',
             fontWeight: 600,
             color: 'error.main',

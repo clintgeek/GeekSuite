@@ -52,11 +52,11 @@ function DeleteNoteDialog({ open, onClose, noteId, noteTitle, isUnsavedNote }) {
           )}
         </DialogContentText>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} color="primary">
+      <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+        <Button onClick={onClose} variant="text" color="inherit">
           Cancel
         </Button>
-        <Button onClick={handleDelete} color="error" autoFocus>
+        <Button onClick={handleDelete} variant="contained" color="error" autoFocus>
           {isUnsavedNote ? 'Discard' : 'Delete'}
         </Button>
       </DialogActions>

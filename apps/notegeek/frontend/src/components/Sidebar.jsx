@@ -10,7 +10,7 @@ import {
     Alert,
     CircularProgress,
     Box,
-    Collapse,
+    Divider,
     TextField,
     InputAdornment,
     useTheme,
@@ -38,19 +38,19 @@ const GET_TAGS = gql`
   }
 `;
 
-// Color palette for tag indicators — earthy, muted
+// Earthy, editorial tag accent colors — warm tones that feel at home
+// against cream paper. Mapped deterministically from tag name hash.
 const TAG_COLORS = [
-    '#5B50A8', // warm indigo
-    '#7B5DAE', // dusty violet
-    '#A85C73', // dusty rose
-    '#3A7058', // forest
-    '#3D8493', // muted teal
-    '#96682A', // warm amber
-    '#A33529', // brick
-    '#4A6B8A', // slate blue
+    '#3D6B7A',  // muted teal   (matches noteTypes.markdown)
+    '#5B7A4A',  // moss          (matches noteTypes.code)
+    '#A8782F',  // ochre         (matches noteTypes.mindmap)
+    '#8B2C2A',  // oxblood       (matches primary)
+    '#6B5A3A',  // warm umber
+    '#4A6B8A',  // slate blue
+    '#7A5A3D',  // leather
+    '#3A5C4A',  // dark sage
 ];
 
-// Get consistent color for a tag based on its name
 function getTagColor(tagName) {
     let hash = 0;
     for (let i = 0; i < tagName.length; i++) {
@@ -59,19 +59,37 @@ function getTagColor(tagName) {
     return TAG_COLORS[Math.abs(hash) % TAG_COLORS.length];
 }
 
+// ——— Section label ————————————————————————————————————————————————————
+// h6 variant: mono caps, letterspaced — the "Ink Studio" panel header.
+function SectionLabel({ children, sx }) {
+    return (
+        <Typography
+            variant="h6"
+            sx={{
+                color: 'text.disabled',
+                px: 1.5,
+                pt: 1.5,
+                pb: 0.5,
+                ...sx,
+            }}
+        >
+            {children}
+        </Typography>
+    );
+}
+
 function Sidebar({ closeNavbar }) {
     const location = useLocation();
     const navigate = useNavigate();
     const theme = useTheme();
     const isDark = theme.palette.mode === 'dark';
-    // Still import clearTags for logout
     const { clearTags } = useTagStore();
     const { logout } = useAuthStore();
     const { clearNotes } = useNoteStore();
     const [tagFilter, setTagFilter] = useState('');
 
     const { data, loading: tagsLoading, error } = useQuery(GET_TAGS, {
-        fetchPolicy: 'cache-and-network'
+        fetchPolicy: 'cache-and-network',
     });
     const tags = data?.noteTags || [];
     const tagsError = error?.message;
@@ -88,20 +106,17 @@ function Sidebar({ closeNavbar }) {
         navigate('/login');
     };
 
-    // Function to build hierarchical tag structure
-    const buildTagHierarchy = (tags) => {
+    // Build hierarchical tag structure
+    const buildTagHierarchy = (tagList) => {
         const hierarchy = {};
-        tags.forEach(tag => {
+        tagList.forEach((tag) => {
             const parts = tag.split('/');
             let current = hierarchy;
             let currentPath = '';
-            parts.forEach(part => {
-                currentPath = currentPath ? `${ currentPath }/${ part }` : part;
+            parts.forEach((part) => {
+                currentPath = currentPath ? `${currentPath}/${part}` : part;
                 if (!current[part]) {
-                    current[part] = {
-                        path: currentPath,
-                        children: {}
-                    };
+                    current[part] = { path: currentPath, children: {} };
                 }
                 current = current[part].children;
             });
@@ -109,7 +124,7 @@ function Sidebar({ closeNavbar }) {
         return hierarchy;
     };
 
-    // Recursive component to render tag hierarchy
+    // Recursive tag-tree renderer
     const RenderTagHierarchy = ({ hierarchy, level = 0 }) => {
         const [contextMenu, setContextMenu] = useState(null);
         const [selectedTag, setSelectedTag] = useState(null);
@@ -128,58 +143,72 @@ function Sidebar({ closeNavbar }) {
         return (
             <>
                 {Object.entries(hierarchy).map(([tag, data]) => {
-                    const isSelected = location.pathname === `/tags/${ encodeURIComponent(data.path) }`;
+                    const isSelected =
+                        location.pathname === `/tags/${encodeURIComponent(data.path)}`;
                     const tagColor = getTagColor(data.path);
 
                     return (
                         <div key={data.path}>
                             <ListItemButton
                                 component={Link}
-                                to={`/tags/${ encodeURIComponent(data.path) }`}
+                                to={`/tags/${encodeURIComponent(data.path)}`}
                                 selected={isSelected}
                                 onClick={handleLinkClick}
                                 onContextMenu={(e) => handleContextMenu(e, data.path)}
                                 sx={{
-                                    pl: level * 2 + 2,
-                                    py: 0.75,
-                                    mx: 1,
-                                    my: 0.25,
-                                    borderRadius: 2,
-                                    transition: 'all 150ms ease-out',
-                                    '&:hover': {
-                                        bgcolor: alpha(tagColor, 0.08),
-                                    },
+                                    // Level indent: each nesting level adds 12px
+                                    pl: level * 1.5 + 2,
+                                    pr: 1.25,
+                                    py: 0.625,
+                                    mx: 0.75,
+                                    my: 0.125,
+                                    borderRadius: '6px',
+                                    transition: 'all 100ms ease',
+                                    // Override MuiListItemButton selected state: use tag color
+                                    // (rather than global oxblood) for the glow bg, but keep
+                                    // the 2px left-border in tag color for visual anchoring.
                                     '&.Mui-selected': {
-                                        bgcolor: alpha(tagColor, 0.12),
+                                        backgroundColor: alpha(tagColor, 0.08),
+                                        borderLeft: `2px solid ${tagColor}`,
+                                        paddingLeft: `calc(${level * 1.5 + 2} * 8px - 2px)`,
                                         '&:hover': {
-                                            bgcolor: alpha(tagColor, 0.16),
+                                            backgroundColor: alpha(tagColor, 0.12),
                                         },
+                                    },
+                                    '&:hover': {
+                                        backgroundColor: alpha(tagColor, 0.06),
                                     },
                                 }}
                             >
+                                {/* Tag color dot */}
                                 <Box
                                     sx={{
-                                        width: 8,
-                                        height: 8,
+                                        width: 6,
+                                        height: 6,
                                         borderRadius: '50%',
                                         bgcolor: tagColor,
-                                        mr: 1.5,
+                                        mr: 1.25,
                                         flexShrink: 0,
-                                        opacity: isSelected ? 1 : 0.7,
-                                        transition: 'opacity 150ms ease-out',
+                                        opacity: isSelected ? 1 : 0.55,
+                                        transition: 'opacity 100ms ease',
                                     }}
                                 />
                                 <ListItemText
                                     primary={tag}
                                     primaryTypographyProps={{
-                                        fontSize: '0.875rem',
-                                        fontWeight: isSelected ? 600 : 500,
+                                        fontFamily: theme.typography.fontFamilyMono,
+                                        fontSize: '0.75rem',
+                                        fontWeight: isSelected ? 600 : 400,
                                         color: isSelected ? 'text.primary' : 'text.secondary',
+                                        letterSpacing: '0.01em',
                                     }}
                                 />
                             </ListItemButton>
                             {Object.keys(data.children).length > 0 && (
-                                <RenderTagHierarchy hierarchy={data.children} level={level + 1} />
+                                <RenderTagHierarchy
+                                    hierarchy={data.children}
+                                    level={level + 1}
+                                />
                             )}
                         </div>
                     );
@@ -194,45 +223,46 @@ function Sidebar({ closeNavbar }) {
         );
     };
 
-    // Filter tags based on search input
-    const filteredTags = tags.filter(tag =>
+    const filteredTags = tags.filter((tag) =>
         tag.toLowerCase().includes(tagFilter.toLowerCase())
     );
-
     const tagHierarchy = buildTagHierarchy(tags);
+    const filteredHierarchy = buildTagHierarchy(filteredTags);
 
     return (
-        <Box sx={{
-            height: '100vh',
-            maxHeight: { xs: 'calc(100vh - 44px)', sm: 'calc(100vh - 48px)' },
-            display: 'flex',
-            flexDirection: 'column',
-            position: 'relative',
-            overflow: 'hidden',
-            bgcolor: 'background.paper',
-        }}>
-            {/* Main Navigation */}
-            <List sx={{ pt: 1, pb: 0.5, px: 0.5 }}>
-                {/* New Note */}
-                <ListItem disablePadding>
+        <Box
+            sx={{
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+                bgcolor: 'background.paper',
+            }}
+        >
+            {/* ——— Primary actions ——————————————————————————————————— */}
+            <List sx={{ pt: 1.25, pb: 0.5, px: 0.75 }}>
+                {/* New Note — primary oxblood contained */}
+                <ListItem disablePadding sx={{ mb: 0.25 }}>
                     <ListItemButton
                         onClick={() => {
                             handleLinkClick();
                             navigate('/notes/new');
                         }}
                         sx={{
-                            borderRadius: 1.5,
+                            borderRadius: '6px',
                             py: 0.625,
                             bgcolor: 'primary.main',
                             color: 'primary.contrastText',
                             transition: 'background 100ms ease',
-                            '&:hover': {
-                                bgcolor: 'primary.dark',
+                            '&:hover': { bgcolor: 'primary.dark' },
+                            '&:focus-visible': {
+                                outline: `2px solid ${theme.palette.primary.main}`,
+                                outlineOffset: 2,
                             },
                         }}
                     >
-                        <ListItemIcon sx={{ minWidth: 28 }}>
-                            <AddIcon sx={{ color: 'inherit', fontSize: 18 }} />
+                        <ListItemIcon sx={{ minWidth: 26 }}>
+                            <AddIcon sx={{ color: 'inherit', fontSize: 17 }} />
                         </ListItemIcon>
                         <ListItemText
                             primary="New Note"
@@ -240,27 +270,38 @@ function Sidebar({ closeNavbar }) {
                                 fontWeight: 600,
                                 fontSize: '0.8125rem',
                                 color: 'inherit',
+                                letterSpacing: '0.01em',
                             }}
                         />
                     </ListItemButton>
                 </ListItem>
 
                 {/* Home */}
-                <ListItem disablePadding sx={{ mt: 0.5 }}>
+                <ListItem disablePadding>
                     <ListItemButton
                         component={Link}
                         to="/"
                         selected={location.pathname === '/'}
                         onClick={handleLinkClick}
+                        sx={{
+                            '&.Mui-selected .sidebar-icon': { color: 'primary.main' },
+                        }}
                     >
-                        <ListItemIcon sx={{ minWidth: 28 }}>
-                            <HomeIcon sx={{ fontSize: 17, color: location.pathname === '/' ? 'primary.main' : 'text.secondary' }} />
+                        <ListItemIcon sx={{ minWidth: 26 }}>
+                            <HomeIcon
+                                className="sidebar-icon"
+                                sx={{
+                                    fontSize: 17,
+                                    color: location.pathname === '/' ? 'primary.main' : 'text.secondary',
+                                    transition: 'color 100ms ease',
+                                }}
+                            />
                         </ListItemIcon>
                         <ListItemText
                             primary="Home"
                             primaryTypographyProps={{
                                 fontSize: '0.8125rem',
-                                fontWeight: location.pathname === '/' ? 600 : 500,
+                                fontWeight: location.pathname === '/' ? 600 : 400,
                             }}
                         />
                     </ListItemButton>
@@ -274,94 +315,94 @@ function Sidebar({ closeNavbar }) {
                         selected={location.pathname === '/search'}
                         onClick={handleLinkClick}
                     >
-                        <ListItemIcon sx={{ minWidth: 28 }}>
-                            <SearchIcon sx={{ fontSize: 17, color: location.pathname === '/search' ? 'primary.main' : 'text.secondary' }} />
+                        <ListItemIcon sx={{ minWidth: 26 }}>
+                            <SearchIcon
+                                sx={{
+                                    fontSize: 17,
+                                    color: location.pathname === '/search' ? 'primary.main' : 'text.secondary',
+                                    transition: 'color 100ms ease',
+                                }}
+                            />
                         </ListItemIcon>
                         <ListItemText
                             primary="Search"
                             primaryTypographyProps={{
                                 fontSize: '0.8125rem',
-                                fontWeight: location.pathname === '/search' ? 600 : 500,
+                                fontWeight: location.pathname === '/search' ? 600 : 400,
                             }}
                         />
                     </ListItemButton>
                 </ListItem>
             </List>
 
-            {/* Section label */}
-            <Box sx={{ px: 1.5, pt: 1.5, pb: 0.5 }}>
-                <Typography
-                    variant="overline"
-                    sx={{
-                        color: 'text.disabled',
-                    }}
-                >
-                    Collections
-                </Typography>
-            </Box>
+            {/* Hairline rule between nav and collections */}
+            <Divider />
 
-            {/* Tags Section */}
-            <List sx={{
-                flex: 1,
-                overflowY: 'auto',
-                mb: '72px',
-                pt: 0,
-                scrollbarWidth: 'thin',
-                scrollbarColor: isDark
-                    ? 'rgba(148, 163, 184, 0.25) transparent'
-                    : 'rgba(100, 116, 139, 0.25) transparent',
-                '&::-webkit-scrollbar': {
-                    width: 6,
-                },
-                '&::-webkit-scrollbar-track': {
-                    backgroundColor: 'transparent',
-                },
-                '&::-webkit-scrollbar-thumb': {
-                    backgroundColor: isDark
-                        ? 'rgba(148, 163, 184, 0.25)'
-                        : 'rgba(100, 116, 139, 0.25)',
-                    borderRadius: 3,
-                    '&:hover': {
+            {/* ——— Collections / Tags ——————————————————————————————— */}
+            <SectionLabel>Collections</SectionLabel>
+
+            {/* Scrollable tag area */}
+            <Box
+                sx={{
+                    flex: 1,
+                    overflowY: 'auto',
+                    // Leave room for the fixed bottom bar (~72px)
+                    pb: '72px',
+                    scrollbarWidth: 'thin',
+                    scrollbarColor: isDark
+                        ? 'rgba(237, 230, 214, 0.15) transparent'
+                        : 'rgba(31, 28, 22, 0.15) transparent',
+                    '&::-webkit-scrollbar': { width: 4 },
+                    '&::-webkit-scrollbar-track': { backgroundColor: 'transparent' },
+                    '&::-webkit-scrollbar-thumb': {
                         backgroundColor: isDark
-                            ? 'rgba(148, 163, 184, 0.4)'
-                            : 'rgba(100, 116, 139, 0.4)',
+                            ? 'rgba(237, 230, 214, 0.15)'
+                            : 'rgba(31, 28, 22, 0.15)',
+                        borderRadius: 2,
+                        '&:hover': {
+                            backgroundColor: isDark
+                                ? 'rgba(237, 230, 214, 0.25)'
+                                : 'rgba(31, 28, 22, 0.25)',
+                        },
                     },
-                },
-            }}>
-                {/* Tag Filter Input */}
-                <ListItem sx={{ pb: 1, px: 1.5 }}>
+                }}
+            >
+                {/* Tag filter input */}
+                <Box sx={{ px: 1.25, pt: 0.25, pb: 0.75 }}>
                     <TextField
                         size="small"
                         fullWidth
-                        placeholder="Filter tags..."
+                        placeholder="Filter tags…"
                         value={tagFilter}
                         onChange={(e) => setTagFilter(e.target.value)}
+                        inputProps={{ 'aria-label': 'filter tags' }}
                         sx={{
                             '& .MuiOutlinedInput-root': {
-                                borderRadius: 2,
-                                fontSize: '0.8125rem',
-                                bgcolor: alpha(theme.palette.text.primary, 0.03),
-                                transition: 'all 150ms ease',
+                                borderRadius: '6px',
+                                fontSize: '0.75rem',
+                                fontFamily: theme.typography.fontFamilyMono,
+                                bgcolor: alpha(theme.palette.text.primary, 0.025),
+                                transition: 'all 120ms ease',
                                 '&:hover': {
-                                    bgcolor: alpha(theme.palette.text.primary, 0.05),
+                                    bgcolor: alpha(theme.palette.text.primary, 0.04),
                                 },
                                 '&.Mui-focused': {
                                     bgcolor: 'background.paper',
-                                    boxShadow: `0 0 0 3px ${ theme.palette.glow.ring }`,
+                                    boxShadow: `0 0 0 3px ${theme.palette.glow.ring}`,
                                 },
                             },
                         }}
                         InputProps={{
                             startAdornment: (
                                 <InputAdornment position="start">
-                                    <SearchIcon sx={{ fontSize: 18, color: 'text.disabled' }} />
+                                    <SearchIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
                                 </InputAdornment>
                             ),
                             endAdornment: tagFilter && (
                                 <InputAdornment position="end">
                                     <ClearIcon
                                         sx={{
-                                            fontSize: 16,
+                                            fontSize: 14,
                                             cursor: 'pointer',
                                             color: 'text.disabled',
                                             '&:hover': { color: 'text.secondary' },
@@ -372,78 +413,89 @@ function Sidebar({ closeNavbar }) {
                             ),
                         }}
                     />
-                </ListItem>
+                </Box>
 
-                {/* All Notes link */}
-                <ListItemButton
-                    component={Link}
-                    to="/notes"
-                    selected={location.pathname === '/notes'}
-                    onClick={handleLinkClick}
-                    sx={{
-                        mx: 1,
-                        my: 0.25,
-                        py: 0.75,
-                        borderRadius: 2,
-                        transition: 'all 150ms ease-out',
-                        '&:hover': {
-                            bgcolor: alpha(theme.palette.primary.main, 0.08),
-                        },
-                        '&.Mui-selected': {
-                            bgcolor: alpha(theme.palette.primary.main, 0.12),
-                        },
-                    }}
-                >
-                    <AllNotesIcon sx={{ fontSize: 18, mr: 1.5, color: 'text.secondary' }} />
-                    <ListItemText
-                        primary="All Notes"
-                        primaryTypographyProps={{
-                            fontSize: '0.875rem',
-                            fontWeight: location.pathname === '/notes' ? 600 : 500,
-                        }}
-                    />
-                </ListItemButton>
+                {/* All Notes */}
+                <List sx={{ pt: 0, px: 0.75 }}>
+                    <ListItemButton
+                        component={Link}
+                        to="/notes"
+                        selected={location.pathname === '/notes'}
+                        onClick={handleLinkClick}
+                    >
+                        <ListItemIcon sx={{ minWidth: 26 }}>
+                            <AllNotesIcon
+                                sx={{
+                                    fontSize: 17,
+                                    color: location.pathname === '/notes' ? 'primary.main' : 'text.secondary',
+                                    transition: 'color 100ms ease',
+                                }}
+                            />
+                        </ListItemIcon>
+                        <ListItemText
+                            primary="All Notes"
+                            primaryTypographyProps={{
+                                fontSize: '0.8125rem',
+                                fontWeight: location.pathname === '/notes' ? 600 : 400,
+                            }}
+                        />
+                    </ListItemButton>
+                </List>
 
+                {/* Tag tree */}
                 {tagsLoading && (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
-                        <CircularProgress size={20} />
+                    <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+                        <CircularProgress
+                            size={16}
+                            sx={{ color: 'text.disabled' }}
+                        />
                     </Box>
                 )}
                 {tagsError && (
-                    <Alert severity="error" sx={{ mx: 2, my: 1, borderRadius: 2 }}>
+                    <Alert severity="error" sx={{ mx: 1.5, my: 1, borderRadius: '6px' }}>
                         {tagsError}
                     </Alert>
                 )}
                 {!tagsLoading && !tagsError && Object.keys(tagHierarchy).length === 0 && (
                     <Box sx={{ px: 2, py: 3, textAlign: 'center' }}>
-                        <TagIcon sx={{ fontSize: 32, color: 'text.disabled', mb: 1 }} />
-                        <Typography variant="body2" color="text.secondary">
+                        <TagIcon sx={{ fontSize: 24, color: 'text.disabled', mb: 0.75 }} />
+                        <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ mb: 0.25 }}
+                        >
                             No tags yet
                         </Typography>
                         <Typography variant="caption" color="text.disabled">
-                            Add tags to organize your notes
+                            Add tags to your notes to organize them here
                         </Typography>
                     </Box>
                 )}
-                {!tagsLoading && !tagsError && (
-                    <RenderTagHierarchy
-                        hierarchy={buildTagHierarchy(filteredTags)}
-                    />
+                {!tagsLoading && !tagsError && Object.keys(filteredHierarchy).length > 0 && (
+                    <RenderTagHierarchy hierarchy={filteredHierarchy} />
                 )}
-            </List>
+                {!tagsLoading && !tagsError && tagFilter && Object.keys(filteredHierarchy).length === 0 && (
+                    <Box sx={{ px: 2, py: 2, textAlign: 'center' }}>
+                        <Typography variant="caption" color="text.disabled">
+                            No tags match "{tagFilter}"
+                        </Typography>
+                    </Box>
+                )}
+            </Box>
 
-            {/* Bottom Actions */}
-            <Box sx={{
-                position: 'absolute',
-                bottom: 0,
-                left: 0,
-                right: 0,
-                bgcolor: 'background.paper',
-                borderTop: `1px solid`,
-                borderColor: 'divider',
-                zIndex: 1,
-            }}>
-                <List sx={{ py: 0.25, px: 0.5 }}>
+            {/* ——— Bottom bar: Settings + Sign out ——————————————————— */}
+            <Box
+                sx={{
+                    position: 'absolute',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    bgcolor: 'background.paper',
+                    borderTop: `1px solid ${theme.palette.divider}`,
+                    zIndex: 1,
+                }}
+            >
+                <List sx={{ py: 0.375, px: 0.75 }}>
                     <ListItem disablePadding>
                         <ListItemButton
                             component={Link}
@@ -451,15 +503,24 @@ function Sidebar({ closeNavbar }) {
                             selected={location.pathname === '/settings'}
                             onClick={handleLinkClick}
                         >
-                            <ListItemIcon sx={{ minWidth: 28 }}>
-                                <SettingsIcon sx={{ fontSize: 16, color: location.pathname === '/settings' ? 'primary.main' : 'text.disabled' }} />
+                            <ListItemIcon sx={{ minWidth: 26 }}>
+                                <SettingsIcon
+                                    sx={{
+                                        fontSize: 15,
+                                        color: location.pathname === '/settings'
+                                            ? 'primary.main'
+                                            : 'text.disabled',
+                                    }}
+                                />
                             </ListItemIcon>
                             <ListItemText
                                 primary="Settings"
                                 primaryTypographyProps={{
                                     fontSize: '0.75rem',
-                                    fontWeight: location.pathname === '/settings' ? 600 : 500,
-                                    color: location.pathname === '/settings' ? 'text.primary' : 'text.secondary',
+                                    fontWeight: location.pathname === '/settings' ? 600 : 400,
+                                    color: location.pathname === '/settings'
+                                        ? 'text.primary'
+                                        : 'text.secondary',
                                 }}
                             />
                         </ListItemButton>
@@ -467,22 +528,32 @@ function Sidebar({ closeNavbar }) {
                     <ListItem disablePadding>
                         <ListItemButton
                             onClick={handleLogout}
+                            aria-label="sign out"
                             sx={{
+                                transition: 'all 100ms ease',
                                 '&:hover': {
                                     bgcolor: alpha(theme.palette.error.main, 0.04),
-                                    '& .MuiListItemIcon-root': { color: 'error.main' },
-                                    '& .MuiListItemText-primary': { color: 'error.main' },
+                                    '& .logout-icon': { color: 'error.main' },
+                                    '& .logout-text': { color: 'error.main' },
                                 },
                             }}
                         >
-                            <ListItemIcon sx={{ minWidth: 28 }}>
-                                <LogoutIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
+                            <ListItemIcon sx={{ minWidth: 26 }}>
+                                <LogoutIcon
+                                    className="logout-icon"
+                                    sx={{
+                                        fontSize: 15,
+                                        color: 'text.disabled',
+                                        transition: 'color 100ms ease',
+                                    }}
+                                />
                             </ListItemIcon>
                             <ListItemText
                                 primary="Sign out"
                                 primaryTypographyProps={{
+                                    className: 'logout-text',
                                     fontSize: '0.75rem',
-                                    fontWeight: 500,
+                                    fontWeight: 400,
                                     color: 'text.secondary',
                                 }}
                             />

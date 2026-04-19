@@ -9,8 +9,8 @@ import {
     InputAdornment,
     IconButton,
     Skeleton,
+    Divider,
     useTheme,
-    alpha,
 } from '@mui/material';
 import {
     Search as SearchIcon,
@@ -19,92 +19,127 @@ import {
 import useNoteStore from '../store/noteStore';
 import { formatRelativeTime } from '../utils/dateUtils';
 
-const TYPE_COLORS = {
-    text: { light: '#5B50A8', dark: '#A99DF0' },
-    markdown: { light: '#7B5DAE', dark: '#B89BD8' },
-    code: { light: '#4A8C6F', dark: '#7DB99A' },
-    mindmap: { light: '#3D8493', dark: '#6DB5C0' },
-    handwritten: { light: '#A85C73', dark: '#D49AAE' },
-};
+function getTypeColor(type, palette) {
+    return palette.noteTypes?.[type] || palette.noteTypes?.text || palette.primary.main;
+}
 
 function getPreview(content) {
     if (!content) return '';
     if (typeof content === 'string' && content.startsWith('data:image/')) return '';
     const plain = String(content).replace(/<[^>]+>/g, '');
-    return plain.split(/\r?\n/).filter(Boolean).slice(0, 1).join(' ').slice(0, 120);
+    return plain.split(/\r?\n/).filter(Boolean).slice(0, 2).join(' ').slice(0, 180);
 }
 
-function ResultRow({ note }) {
+// ─── ResultRow ────────────────────────────────────────────────────────────────
+
+function ResultRow({ note, query }) {
     const theme = useTheme();
     const navigate = useNavigate();
-    const isDark = theme.palette.mode === 'dark';
     const type = note.type || 'text';
-    const tc = TYPE_COLORS[type] || TYPE_COLORS.text;
-    const typeColor = isDark ? tc.dark : tc.light;
-    const preview = (type === 'handwritten' || type === 'mindmap') ? '' : getPreview(note.content);
+    const typeColor = getTypeColor(type, theme.palette);
+    const isVisual = type === 'handwritten' || type === 'mindmap';
+    const preview = isVisual ? '' : getPreview(note.content);
+
+    // Highlight matched terms in primary color
+    function highlightQuery(text) {
+        if (!query || !text) return text;
+        const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
+        return parts.map((part, i) =>
+            part.toLowerCase() === query.toLowerCase()
+                ? <span key={i} style={{ color: theme.palette.primary.main }}>{part}</span>
+                : part
+        );
+    }
 
     return (
         <ButtonBase
-            onClick={() => navigate(`/notes/${ note.id || note._id }`)}
+            onClick={() => navigate(`/notes/${note.id || note._id}`)}
             sx={{
                 display: 'flex',
-                alignItems: 'center',
+                alignItems: 'flex-start',
                 gap: 1.5,
                 width: '100%',
                 textAlign: 'left',
-                py: 0.875,
-                px: 1.5,
-                borderRadius: 1.5,
-                transition: 'background 80ms ease',
+                py: 1.25,
+                px: 0.5,
+                borderRadius: 0,
+                transition: 'background 120ms ease',
                 '&:hover': {
-                    bgcolor: alpha(theme.palette.text.primary, 0.03),
+                    bgcolor: theme.palette.glow.soft,
+                    '& .type-dot': { transform: 'scale(1.5)' },
                 },
             }}
         >
-            <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: typeColor, flexShrink: 0, mt: 0.25 }} />
+            {/* Type dot */}
+            <Box
+                className="type-dot"
+                sx={{
+                    width: 7,
+                    height: 7,
+                    borderRadius: '50%',
+                    bgcolor: typeColor,
+                    flexShrink: 0,
+                    mt: '7px',
+                    transition: 'transform 120ms ease',
+                }}
+            />
 
+            {/* Content */}
             <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography
+                    variant="body1"
                     sx={{
-                        fontWeight: 500,
-                        fontSize: '0.8125rem',
                         color: 'text.primary',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
-                        lineHeight: 1.4,
+                        lineHeight: 1.45,
                     }}
                 >
-                    {note.title || 'Untitled'}
+                    {highlightQuery(note.title || 'Untitled')}
                 </Typography>
                 {preview && (
                     <Typography
+                        variant="caption"
+                        component="div"
                         sx={{
-                            fontSize: '0.6875rem',
-                            color: 'text.disabled',
+                            color: 'text.secondary',
                             overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            lineHeight: 1.4,
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            lineHeight: 1.5,
+                            mt: 0.25,
                         }}
                     >
-                        {preview}
+                        {highlightQuery(preview)}
                     </Typography>
                 )}
             </Box>
 
+            {/* Tag pills — hidden on xs */}
             {note.tags && note.tags.length > 0 && (
-                <Box sx={{ display: { xs: 'none', sm: 'flex' }, gap: 0.5, flexShrink: 0 }}>
+                <Box
+                    sx={{
+                        display: { xs: 'none', sm: 'flex' },
+                        gap: 0.5,
+                        flexShrink: 0,
+                        alignSelf: 'center',
+                    }}
+                >
                     {note.tags.slice(0, 2).map((tag) => (
                         <Typography
                             key={tag}
+                            variant="caption"
                             sx={{
-                                fontSize: '0.625rem',
-                                color: 'text.disabled',
-                                bgcolor: alpha(theme.palette.text.primary, 0.04),
-                                px: 0.625,
+                                px: 0.75,
                                 py: 0.125,
-                                borderRadius: 0.75,
+                                borderRadius: '4px',
+                                border: `1px solid ${theme.palette.border}`,
+                                bgcolor: theme.palette.glow.soft,
+                                color: 'text.secondary',
+                                lineHeight: '18px',
                             }}
                         >
                             {tag.split('/').pop()}
@@ -113,13 +148,15 @@ function ResultRow({ note }) {
                 </Box>
             )}
 
+            {/* Timestamp */}
             <Typography
+                variant="caption"
                 sx={{
-                    fontSize: '0.625rem',
-                    color: 'text.disabled',
                     flexShrink: 0,
                     minWidth: 44,
                     textAlign: 'right',
+                    color: 'text.disabled',
+                    alignSelf: 'center',
                 }}
             >
                 {formatRelativeTime(note.updatedAt || note.createdAt)}
@@ -128,7 +165,10 @@ function ResultRow({ note }) {
     );
 }
 
+// ─── SearchResults ────────────────────────────────────────────────────────────
+
 function SearchResults() {
+    const theme = useTheme();
     const [searchParams, setSearchParams] = useSearchParams();
     const query = searchParams.get('q') || '';
     const [searchTerm, setSearchTerm] = useState(query);
@@ -157,35 +197,33 @@ function SearchResults() {
     };
 
     return (
-        <Box sx={{ maxWidth: 680, mx: 'auto', py: { xs: 1.5, sm: 2 } }}>
-            {/* Search input */}
+        <Box sx={{ maxWidth: 720, mx: 'auto', py: { xs: 1.5, sm: 2 } }}>
+            {/* Search input — aligned with the Ink Studio aesthetic */}
             <TextField
                 inputRef={inputRef}
                 fullWidth
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 variant="outlined"
-                placeholder="Search titles, content, tags..."
+                placeholder="Search titles, content, tags…"
                 autoFocus
                 size="small"
-                sx={{
-                    mb: 2,
-                    '& .MuiOutlinedInput-root': {
-                        fontSize: '0.8125rem',
-                    },
-                }}
+                sx={{ mb: 2.5 }}
                 InputProps={{
                     startAdornment: (
                         <InputAdornment position="start">
-                            <SearchIcon sx={{ color: 'text.disabled', fontSize: 18 }} />
+                            <SearchIcon sx={{ color: 'text.disabled', fontSize: 17 }} />
                         </InputAdornment>
                     ),
                     endAdornment: searchTerm ? (
                         <InputAdornment position="end">
-                            <IconButton onClick={handleClear} edge="end" size="small"
+                            <IconButton
+                                onClick={handleClear}
+                                edge="end"
+                                size="small"
                                 sx={{ color: 'text.disabled', '&:hover': { color: 'text.secondary' } }}
                             >
-                                <ClearIcon sx={{ fontSize: 16 }} />
+                                <ClearIcon sx={{ fontSize: 15 }} />
                             </IconButton>
                         </InputAdornment>
                     ) : null,
@@ -194,39 +232,43 @@ function SearchResults() {
 
             {/* Results */}
             {isSearching ? (
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+                <Box>
                     {[1, 2, 3, 4].map((i) => (
-                        <Skeleton key={i} height={36} sx={{ borderRadius: 1.5 }} />
+                        <Skeleton key={i} height={52} sx={{ borderRadius: 1, mb: 0.5 }} variant="rounded" />
                     ))}
                 </Box>
             ) : searchError ? (
                 <Alert severity="error">{searchError}</Alert>
             ) : searchResults.length > 0 ? (
                 <Box>
-                    <Typography
-                        variant="overline"
-                        sx={{ display: 'block', color: 'text.disabled', mb: 0.5, px: 0.5 }}
-                    >
-                        {searchResults.length} {searchResults.length === 1 ? 'result' : 'results'}
-                    </Typography>
-                    <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                        {searchResults.map((note) => (
-                            <ResultRow key={note.id || note._id} note={note} />
+                    <Box sx={{ mb: 1.5, px: 0.5 }}>
+                        <Typography variant="h6" sx={{ color: 'text.disabled' }}>
+                            {searchResults.length} {searchResults.length === 1 ? 'result' : 'results'}
+                        </Typography>
+                    </Box>
+                    <Box>
+                        {searchResults.map((note, idx) => (
+                            <React.Fragment key={note.id || note._id}>
+                                {idx > 0 && (
+                                    <Divider sx={{ borderColor: theme.palette.divider }} />
+                                )}
+                                <ResultRow note={note} query={query} />
+                            </React.Fragment>
                         ))}
                     </Box>
                 </Box>
             ) : query ? (
                 <Box sx={{ py: 6, textAlign: 'center' }}>
-                    <Typography sx={{ fontSize: '0.8125rem', color: 'text.disabled', mb: 0.5 }}>
+                    <Typography variant="body1" sx={{ color: 'text.disabled', mb: 0.5 }}>
                         No matches for &ldquo;{query}&rdquo;
                     </Typography>
-                    <Typography sx={{ fontSize: '0.75rem', color: 'text.disabled' }}>
+                    <Typography variant="caption" sx={{ color: 'text.disabled' }}>
                         Try different keywords or check spelling
                     </Typography>
                 </Box>
             ) : (
                 <Box sx={{ py: 6, textAlign: 'center' }}>
-                    <Typography sx={{ fontSize: '0.8125rem', color: 'text.disabled' }}>
+                    <Typography variant="body1" sx={{ color: 'text.disabled' }}>
                         Search by title, content, or tags
                     </Typography>
                 </Box>
