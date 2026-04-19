@@ -30,22 +30,31 @@ const PORT = process.env.PORT || 5001;
 app.set('trust proxy', 1);
 
 // Middleware
-app.use(
-  cors({
-    origin: true,
-    credentials: true
-  })
-);
+const hardcodedOrigins = [
+  'https://bujogeek.clintgeek.com',
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:5001',
+  'http://localhost:3000',
+];
+const allowedOrigins = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
+  : hardcodedOrigins;
+
+app.use(cors({
+  origin: function (origin, callback) {
+    // allow requests with no origin (mobile apps, curl, server-to-server)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
+  credentials: true,
+}));
 app.use(express.json());
 app.use(morgan('dev'));
-
-// Debug logging for auth headers
-app.use((req, res, next) => {
-  console.log(`[DEBUG] ${ req.method } ${ req.url }`);
-  console.log(`[DEBUG] Headers:`, JSON.stringify(req.headers, null, 2));
-  console.log(`[DEBUG] Cookies:`, req.headers.cookie);
-  next();
-});
 
 // Serve static files from frontend build
 const publicPath = path.join(__dirname, 'public');
