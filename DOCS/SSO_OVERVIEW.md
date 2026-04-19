@@ -2,7 +2,8 @@
 
 > **Author**: Sage  
 > **Date**: February 2026  
-> **Status**: Architecture & Analysis (no code changes yet)
+> **Status**: Reference — auth hardening (Steps 0–3 for basegeek) completed April 2026.
+> Consumer-app migration (Step 4) in progress. CSRF + HttpOnly rollout deferred (see `DOCS/DEFERRED_WORK.md`).
 
 ---
 
@@ -716,3 +717,14 @@ For each app:
 *"Login once, stay logged in everywhere, tokens refresh silently. That's the promise. Let's deliver it."*
 
 — Sage
+
+---
+
+## See also
+
+- `apps/basegeek/DOCS/SSO_IMPLEMENTATION.md` — basegeek server-side auth implementation (routes, middleware, token flow)
+- `apps/basegeek/DOCS/AUTH_SYSTEM.md` — auth system overview (tokens, refresh rotation, Redis reuse detection, encrypted API keys)
+- `apps/basegeek/DOCS/AUTH_HARDENING_2026-04.md` — April 2026 hardening pass detail (pino logging, refresh-token rotation, AES-GCM key encryption, 33 auth tests)
+- `apps/basegeek/DOCS/SSO_CLIENT_MIGRATION_PLAYBOOK.md` — per-app migration checklist
+- `DOCS/CONTEXT.md` — suite-level SSO context summary
+- `DOCS/DEFERRED_WORK.md` — CSRF protection and HttpOnly cookie rollout (deferred)

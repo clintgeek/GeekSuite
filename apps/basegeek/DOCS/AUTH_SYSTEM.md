@@ -1,299 +1,124 @@
-# BaseGeek Authentication System
+# basegeek Auth System
 
-## Overview
-The BaseGeek authentication system is a centralized authentication solution designed to work across all GeekSuite applications. It provides a unified login experience, shared user management, and secure token-based authentication with refresh token support.
+basegeek is the central auth authority for all GeekSuite apps. Every app validates JWTs issued here; no app mints its own tokens.
 
-## Core Components
+---
 
-### 1. Shared Auth Store (Frontend)
-Location: `baseGeek/packages/ui/src/store/sharedAuthStore.js`
+## Token model
 
-The shared auth store is a Zustand-based state management solution that handles:
-- Authentication state persistence
-- Token management (access and refresh tokens)
-- User session management
-- Cross-app authentication synchronization
-- Automatic token refresh
+| Token | Lifetime | Storage |
+|-------|----------|---------|
+| Access token (JWT) | 1 hour | `geek_token` cookie + JSON response body |
+| Refresh token (JWT with `jti` + `family`) | 30 days | `geek_refresh_token` cookie + JSON response body |
 
-Key features:
-- Persistent storage of auth state
-- Automatic token validation and refresh
-- Cross-app auth state broadcasting
-- Rate limiting protection
-- Error handling
+Cookies are set for `SSO_COOKIE_DOMAIN` (e.g. `.clintgeek.com`) so all subdomains share the session. Cookies are **not** HttpOnly — JavaScript must be able to read them during the cookie-first rollout. See `SSO_IMPLEMENTATION.md` for the full cookie spec.
 
-### 2. Authentication Middleware (Backend)
-Location: `baseGeek/packages/api/src/middleware/auth.js`
+---
 
-The authentication middleware provides:
-- JWT token validation
-- App-specific access control
-- Request authentication
-- Error handling
+## Refresh-token rotation + reuse detection
 
-### 3. Auth Service (Backend)
-Location: `baseGeek/packages/api/src/services/authService.js`
+Every refresh token carries a `jti` (UUID) and a `family` ID. On each refresh:
 
-Handles core authentication operations:
-- User login
-- Token generation (access and refresh tokens)
-- Token validation
-- Token refresh
-- Password hashing
+1. The old token's Redis entry (`refresh:{jti}`) is consumed (deleted, one-time-use).
+2. A new access + refresh pair is issued under the same `family`, stored in Redis.
+3. If a token is presented but not found in Redis, it has already been rotated — this means a possible theft replay. The entire `family` is immediately revoked; any subsequent request with a token from that family gets a 401.
 
-## Authentication Flow
+On logout, the family is revoked server-side. Client-side cookie clearing is secondary.
 
-### 1. Login Process
-```mermaid
-sequenceDiagram
-    Client->>+Auth Store: login(identifier, password, app)
-    Auth Store->>+API: POST /api/auth/login
-    API->>+Auth Service: validateCredentials()
-    Auth Service->>+Database: findUser()
-    Database-->>-Auth Service: user
-    Auth Service->>Auth Service: generateTokens()
-    Auth Service-->>-API: {token, refreshToken, user}
-    API-->>-Auth Store: {token, refreshToken, user}
-    Auth Store->>Auth Store: persistState()
-    Auth Store-->>-Client: success
-```
+Redis keys:
+- `refresh:{jti}` → `{ userId, family, expiresAt }` (TTL = remaining token lifetime)
+- `family:{family}` → `"revoked"` (sticky; TTL slightly beyond max token life)
 
-### 2. Token Refresh
-```mermaid
-sequenceDiagram
-    Client->>+Auth Store: refreshToken()
-    Auth Store->>+API: POST /api/auth/refresh
-    API->>+Auth Service: refreshToken()
-    Auth Service->>Auth Service: generateTokens()
-    Auth Service-->>-API: {token, refreshToken, user}
-    API-->>-Auth Store: {token, refreshToken, user}
-    Auth Store->>Auth Store: updateTokens()
-    Auth Store-->>-Client: success
-```
+Implementation: `packages/api/src/services/refreshTokenStore.js`
 
-## API Endpoints
+---
 
-### Authentication Endpoints
+## Fail-fast env enforcement
 
-#### Login
-```http
-POST /api/auth/login
-```
-Request:
+At boot, `authService.js` and `cryptoVault.js` throw immediately if any of these are missing or too short (< 32 chars for secrets, ≠ 32 hex bytes for vault key):
+
+- `JWT_SECRET`
+- `JWT_REFRESH_SECRET`
+- `KEY_VAULT_SECRET`
+
+The server will not start in a degraded state.
+
+---
+
+## API key authentication (AI proxy endpoints)
+
+Separately from JWT, basegeek supports `bg_`-prefixed API keys for machine-to-machine access to AI routes. Keys are:
+- Stored as SHA-256 hashes in MongoDB (never plaintext)
+- The underlying provider API keys they manage are AES-256-GCM encrypted at rest via `cryptoVault.js`
+- Subject to per-key rate limits and permission scopes
+
+See `DOCS/API_KEYS.md` for management and integration details.
+
+---
+
+## Auth endpoints
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/api/auth/login` | Returns access + refresh tokens; sets cookies |
+| POST | `/api/auth/register` | Creates user, same response as login |
+| POST | `/api/auth/refresh` | Rotates refresh token; issues new pair |
+| POST | `/api/auth/logout` | Revokes refresh-token family; clears cookies |
+| POST | `/api/auth/validate` | Validates an access token; returns user |
+| POST | `/api/auth/forgot-password` | Sends reset email |
+| POST | `/api/auth/reset-password` | Applies new password (bcrypt via pre-save hook) |
+
+Login request shape:
 ```json
 {
-    "identifier": "string",  // username or email
-    "password": "string",
-    "app": "string"         // 'basegeek', 'notegeek', 'bujogeek', 'fitnessgeek', or 'storygeek'
-}
-```
-Response:
-```json
-{
-    "token": "string",          // Access token
-    "refreshToken": "string",   // Refresh token
-    "user": {
-        "id": "string",
-        "username": "string",
-        "email": "string",
-        "app": "string"
-    }
+  "identifier": "username or email",
+  "password": "string",
+  "app": "basegeek"
 }
 ```
 
-#### Register
-```http
-POST /api/auth/register
-```
-Request:
-```json
-{
-    "username": "string",
-    "email": "string",
-    "password": "string",
-    "app": "string"
-}
-```
-Response: Same as login
+The `app` field must be a value in the canonical `VALID_APPS` list (`packages/api/src/config/validApps.js`).
 
-#### Validate Token
-```http
-POST /api/auth/validate
-```
-Request:
-```json
-{
-    "token": "string",
-    "app": "string"
-}
-```
-Response:
-```json
-{
-    "valid": true,
-    "user": {
-        "id": "string",
-        "username": "string",
-        "email": "string",
-        "app": "string"
-    }
-}
+---
+
+## Middleware
+
+`packages/api/src/middleware/auth.js` — `authenticateToken`:
+- Reads token cookie-first (`geek_token`), then `Authorization: Bearer` header.
+- Verifies JWT signature against `JWT_SECRET`.
+- Validates `app` claim against `VALID_APPS` if present.
+- Attaches decoded payload to `req.user`.
+
+---
+
+## Logging
+
+All auth events use structured pino logging (see `packages/api/src/lib/logger.js`):
+- Successful logins: `info`
+- Failed logins: `warn` with IP
+- Refresh-token reuse detection: `warn` with `userId` and `family`
+- Boot-time secret failures: `fatal` then exit
+
+Every request has a `req.id` (from `pino-http`; reuses `X-Request-Id` header if present). Auth errors include `req.id` so log entries are correlatable.
+
+---
+
+## Tests
+
+33 auth-flow tests in `packages/api/src/__tests__/auth.test.js`, run against mongodb-memory-server + a Redis fake:
+
+```bash
+cd apps/basegeek/packages/api
+pnpm test
 ```
 
-#### Refresh Token
-```http
-POST /api/auth/refresh
-```
-Request:
-```json
-{
-    "refreshToken": "string",
-    "app": "string"
-}
-```
-Response:
-```json
-{
-    "token": "string",          // New access token
-    "refreshToken": "string",   // New refresh token
-    "user": {
-        "id": "string",
-        "username": "string",
-        "email": "string",
-        "app": "string"
-    }
-}
-```
+Key coverage: login happy path, wrong password, refresh rotation, replay detection, family revocation after replay, logout revocation, password-reset hash correctness, JWT secret length enforcement, cryptoVault round-trip.
 
-## Security Features
+---
 
-### 1. Token Security
-- JWT-based authentication with separate access and refresh tokens
-- Short-lived access tokens (1 hour by default)
-- Long-lived refresh tokens (7 days by default)
-- App-specific token claims
-- Secure token storage
+## Further reading
 
-### 2. Rate Limiting
-- Login attempts: 5 per 15 minutes
-- IP-based rate limiting
-- Configurable limits per endpoint
-
-### 3. Password Security
-- Bcrypt password hashing
-- Minimum password requirements
-- Secure password storage
-
-### 4. Cross-App Security
-- App-specific token validation
-- Secure cross-app communication
-- Protected API endpoints
-
-## Environment Variables
-
-Required environment variables:
-```env
-# JWT Configuration
-JWT_SECRET=your-secure-secret-key
-JWT_REFRESH_SECRET=your-secure-refresh-secret-key
-JWT_EXPIRES_IN=1h
-REFRESH_TOKEN_EXPIRES_IN=7d
-
-# Rate Limiting
-AUTH_RATE_LIMIT=5
-AUTH_RATE_WINDOW=900000
-```
-
-## Best Practices
-
-1. **Token Management**
-   - Store tokens securely
-   - Implement automatic token refresh
-   - Handle token expiration
-   - Use refresh tokens for long-term sessions
-
-2. **Error Handling**
-   - Implement proper error boundaries
-   - Handle network errors
-   - Provide user feedback
-   - Log authentication failures
-
-3. **Security**
-   - Use HTTPS
-   - Implement CSRF protection
-   - Follow OWASP guidelines
-   - Validate all inputs
-
-4. **Performance**
-   - Implement caching
-   - Optimize token validation
-   - Use efficient storage
-   - Monitor token usage
-
-## Migration Guide
-
-To migrate an existing app to use BaseGeek auth:
-
-1. **Frontend Migration**
-   - Install BaseGeek UI package
-   - Replace existing auth store
-   - Update components to use shared store
-   - Implement refresh token handling
-
-2. **Backend Migration**
-   - Configure JWT secrets
-   - Update token validation
-   - Implement refresh token endpoints
-   - Update rate limiting
-
-3. **Security Updates**
-   - Implement CSRF protection
-   - Update CORS configuration
-   - Add rate limiting
-   - Configure secure headers
-
-## Error Handling
-
-### Common Error Codes
-| Code | Description | HTTP Status |
-|------|-------------|-------------|
-| `AUTH_RATE_LIMIT` | Too many login attempts | 429 |
-| `LOGIN_ERROR` | Invalid credentials | 401 |
-| `TOKEN_VALIDATION_ERROR` | Invalid token | 401 |
-| `TOKEN_REFRESH_ERROR` | Refresh failed | 401 |
-| `PROFILE_ERROR` | User not found | 404 |
-
-### Error Response Format
-```json
-{
-    "message": "string",
-    "code": "string",
-    "details": {} // Optional
-}
-```
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Token Validation Fails**
-   - Check JWT_SECRET
-   - Verify token format
-   - Check expiration
-
-2. **Cross-App Auth Issues**
-   - Verify app names
-   - Check token claims
-   - Validate permissions
-
-3. **Rate Limiting**
-   - Check rate limit settings
-   - Verify IP tracking
-   - Monitor limits
-
-## Support
-
-For issues and support:
-1. Check the BaseGeek documentation
-2. Open an issue in the BaseGeek repository
-3. Contact the GeekSuite team
+- `DOCS/SSO_IMPLEMENTATION.md` — cookie spec, cross-subdomain SSO details
+- `DOCS/SSO_CLIENT_MIGRATION_PLAYBOOK.md` — how client apps integrate with SSO
+- `DOCS/AUTH_HARDENING_2026-04.md` — plan doc for the April 2026 hardening pass (rotation, encryption, tests)
+- `DOCS/CLEANUP_PASS_2026-04.md` — plan doc for the prior critical-fix pass

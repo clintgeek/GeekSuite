@@ -113,6 +113,32 @@ per-app verification.
   Either combine into one container or teach `build.sh` about apps
   with multiple services. Hardest of the remaining migrations.
 
+## bookgeek — format conversion feature (not yet implemented)
+
+Current bookgeek only uses calibre's `ebook-meta` CLI — metadata reads
+and cover extraction. No format conversion has been wired up.
+
+Intended feature: drop a file in with rough title/author, have bookgeek
+locate the cover + metadata, and **ensure at least an EPUB exists**
+for every book (convert from PDF / MOBI / AZW / future formats as
+needed). Investigate lighter alternatives to a full calibre install
+before just adding `ebook-convert`:
+
+- `pandoc` — handles some conversions but not the proprietary Amazon
+  formats.
+- `kindlegen` — deprecated by Amazon, no longer available.
+- `mobi-python` / `epubcheck` / targeted libraries for specific
+  format pairs — may work for subsets without 500MB of calibre.
+- Just use `ebook-convert` from calibre — already installed in
+  bookgeek's image, would be zero additional footprint.
+
+Most likely outcome: reuse `ebook-convert` since calibre is already
+in the image anyway. But the abstraction boundary (a FormatConverter
+service) should be clean enough that the underlying tool can swap
+later if a lighter option appears.
+
+Out of scope until bookgeek enters the consolidation+hardening cycle.
+
 ## Apps still to harden (after consolidation)
 
 `storygeek`, `flockgeek`, `bujogeek`, `notegeek` — migrated (or will
