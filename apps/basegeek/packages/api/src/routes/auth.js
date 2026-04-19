@@ -4,6 +4,7 @@ import authService from '../services/authService.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { User } from '../models/user.js';
 import { VALID_APPS } from '../config/validApps.js';
+import { setThemeCookie } from '../lib/themeCookie.js';
 
 // SSO Cookie Configuration
 // In local/dev we omit domain so cookies apply to localhost redirects.
@@ -102,15 +103,25 @@ router.post('/login', authLimiter, async (req, res) => {
 
         req.log.info({ identifier, app: app.toLowerCase(), userId: result.user.id }, 'Login successful');
 
-        // Track last login
+        // Track last login; grab the user's theme preference in the same round
+        // trip so we can seed the geek_theme cookie without an extra lookup.
+        let themePref;
         try {
-            await User.findByIdAndUpdate(result.user.id, { lastLogin: new Date() });
+            const updated = await User.findByIdAndUpdate(
+                result.user.id,
+                { lastLogin: new Date() },
+                { new: true, projection: { 'preferences.theme': 1 } }
+            ).lean();
+            themePref = updated?.preferences?.theme;
         } catch (loginTrackErr) {
             req.log.warn({ err: loginTrackErr }, 'Failed to update lastLogin');
         }
 
         // Set SSO cookies for cross-subdomain auth (backward compatible)
         setSSOCookies(res, result.token, result.refreshToken);
+        // Seed the shared theme cookie so the next GeekSuite app the user
+        // visits can paint the right theme before React mounts.
+        setThemeCookie(res, themePref);
 
         res.json(result);
     } catch (error) {
@@ -260,6 +271,7 @@ router.post('/register', async (req, res) => {
 
         // Set SSO cookies for cross-subdomain auth (backward compatible)
         setSSOCookies(res, token, refreshToken);
+        setThemeCookie(res, user.preferences?.theme);
 
         res.status(201).json(responseData);
     } catch (error) {

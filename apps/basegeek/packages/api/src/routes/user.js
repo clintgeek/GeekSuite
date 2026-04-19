@@ -2,6 +2,7 @@ import express from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { User } from '../models/user.js';
 import logger from '../lib/logger.js';
+import { setThemeCookie } from '../lib/themeCookie.js';
 
 const router = express.Router();
 
@@ -31,6 +32,9 @@ router.get('/bootstrap', authenticateToken, async (req, res) => {
         if (!user) {
             return res.status(404).json({ message: 'User not found', code: 'USER_NOT_FOUND' });
         }
+        // Refresh the shared theme cookie on every bootstrap so a pref
+        // change made in another device/browser propagates to this one.
+        setThemeCookie(res, user.preferences?.theme);
         res.json({
             identity: formatIdentity(user),
             profile: user.profile,
@@ -185,6 +189,10 @@ router.patch('/preferences', authenticateToken, async (req, res) => {
         }
         user.markModified('preferences');
         await user.save();
+        // Keep the shared theme cookie in lockstep when theme changes here.
+        if (req.body.theme !== undefined) {
+            setThemeCookie(res, user.preferences?.theme);
+        }
         res.json({ preferences: user.preferences });
     } catch (err) {
         req.log.error({ err }, 'Update preferences error');
