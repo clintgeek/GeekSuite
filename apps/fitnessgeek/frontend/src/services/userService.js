@@ -1,15 +1,5 @@
-import axios from 'axios';
 import { apiService } from './apiService.js';
-
-// Direct REST client for baseGeek SSO endpoints that aren't part of the
-// fitnessgeek GraphQL schema (e.g. /me, /user/profile). These are served
-// by basegeek via the same origin.
-const restApi = axios.create({ baseURL: '/api', timeout: 15000, withCredentials: true });
-restApi.interceptors.request.use((config) => {
-  const token = localStorage.getItem('geek_token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
+import { restClient as restApi } from './restClient.js';
 
 export const userService = {
   /**

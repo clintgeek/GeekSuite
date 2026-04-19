@@ -1,17 +1,7 @@
-import axios from 'axios';
 import { apiService } from './apiService.js';
 import { formatDateLocal } from '../utils/dateUtils.js';
 import logger from '../utils/logger.js';
-
-// Direct REST client for operations that need the fitnessgeek backend's
-// richer logic (AI food creation, composite meal handling, etc.)
-// Bypasses the GraphQL proxy.
-const restApi = axios.create({ baseURL: '/api', timeout: 30000, withCredentials: true });
-restApi.interceptors.request.use((config) => {
-  const token = localStorage.getItem('geek_token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
+import { restClient as restApi } from './restClient.js';
 
 // FitnessGeek service for food logging and nutrition tracking
 export const fitnessGeekService = {

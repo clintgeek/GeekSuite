@@ -1,9 +1,11 @@
 const express = require('express');
 const cors = require('cors');
-const morgan = require('morgan');
 const cookieParser = require('cookie-parser');
 const axios = require('axios');
 const dotenv = require('dotenv');
+const crypto = require('crypto');
+const mongoose = require('mongoose');
+const pinoHttp = require('pino-http');
 const connectDB = require('./config/database');
 const redisClient = require('./config/redis');
 const logger = require('./config/logger');
@@ -12,14 +14,6 @@ const { meHandler } = require('@geeksuite/user/server');
 
 // Load environment variables
 dotenv.config();
-
-// Connect to MongoDB
-connectDB();
-
-// Connect to Redis (non-blocking - app continues if Redis fails)
-redisClient.connect().catch(err => {
-  logger.warn('Redis connection failed - caching disabled', { error: err.message });
-});
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -38,13 +32,19 @@ const defaultCorsOrigins = [
   'https://fitnessgeek.clintgeek.com',
   'http://192.168.1.17:4080'
 ];
-const corsOrigins = (process.env.CORS_ORIGINS || '')
-  .split(',')
-  .map(origin => origin.trim())
-  .filter(Boolean);
+const allowedOrigins = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
+  : defaultCorsOrigins;
 
 app.use(cors({
-  origin: corsOrigins.length > 0 ? corsOrigins : defaultCorsOrigins,
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: [
@@ -60,10 +60,16 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// Logging middleware
-if (process.env.NODE_ENV !== 'production') {
-  app.use(morgan('dev'));
-}
+// Attach request ID and structured logger to every request
+const httpLogger = pinoHttp({
+  logger,
+  genReqId: (req) => req.headers['x-request-id'] || crypto.randomUUID(),
+});
+app.use((req, res, next) => {
+  httpLogger(req, res);
+  res.setHeader('X-Request-Id', req.id);
+  next();
+});
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -150,7 +156,7 @@ app.use('*', (req, res) => {
 
 // Error handling middleware
 app.use((error, req, res, next) => {
-  console.error('Error:', error);
+  req.log.error({ err: error }, 'Unhandled error');
   res.status(error.statusCode || 500).json({
     success: false,
     error: {
@@ -161,26 +167,65 @@ app.use((error, req, res, next) => {
   });
 });
 
-// Graceful shutdown
-process.on('SIGTERM', async () => {
-  logger.info('SIGTERM received, shutting down gracefully');
-  await redisClient.disconnect();
-  process.exit(0);
-});
+// Boot sequence
+async function start() {
+  // Connect to MongoDB — fail fast on error
+  try {
+    await connectDB();
+  } catch (err) {
+    logger.error({ err }, 'MongoDB connection failed — aborting boot');
+    process.exit(1);
+  }
 
-process.on('SIGINT', async () => {
-  logger.info('SIGINT received, shutting down gracefully');
-  await redisClient.disconnect();
-  process.exit(0);
-});
+  // Connect to Redis (non-blocking — app continues if Redis fails)
+  redisClient.connect().catch(err => {
+    logger.warn({ err: err.message }, 'Redis connection failed — caching disabled');
+  });
 
-// Start server
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 FitnessGeek API server running on port ${ PORT }`);
-  console.log(`📊 Health check available at http://localhost:${ PORT }/health`);
-  console.log(`🔗 Environment: ${ process.env.NODE_ENV || 'development' }`);
-  console.log(`🤖 AI features enabled`);
-  console.log(`💾 Redis caching: ${ redisClient.isReady() ? 'enabled' : 'disabled' }`);
-});
+  const server = app.listen(PORT, '0.0.0.0', () => {
+    logger.info(`FitnessGeek API server running on port ${ PORT }`);
+    logger.info(`Health check available at http://localhost:${ PORT }/health`);
+    logger.info(`Environment: ${ process.env.NODE_ENV || 'development' }`);
+    logger.info(`Redis caching: ${ redisClient.isReady() ? 'enabled' : 'disabled' }`);
+  });
+
+  // Graceful shutdown
+  let shuttingDown = false;
+  const shutdown = (signal) => {
+    if (shuttingDown) {
+      logger.info(`${ signal } received during shutdown — forcing exit`);
+      process.exit(1);
+    }
+    shuttingDown = true;
+    logger.info(`${ signal } received — shutting down`);
+
+    const forceTimer = setTimeout(() => {
+      logger.error('Shutdown timed out after 15s — forcing exit');
+      process.exit(0);
+    }, 15_000);
+    forceTimer.unref();
+
+    server.close(async () => {
+      try {
+        await mongoose.disconnect();
+      } catch (err) {
+        logger.error({ err }, 'Error disconnecting mongoose');
+      }
+      try {
+        if (typeof redisClient.quit === 'function') {
+          await redisClient.quit();
+        }
+      } catch (err) {
+        logger.error({ err }, 'Error closing Redis client');
+      }
+      process.exit(0);
+    });
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+}
+
+start();
 
 module.exports = app;

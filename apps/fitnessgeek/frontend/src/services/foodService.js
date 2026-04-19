@@ -5,19 +5,8 @@
  * Backend handles smart routing (APIs + AI fallback).
  */
 
-import axios from 'axios';
 import { apiService } from './apiService.js';
-
-// Direct REST client for food search (bypasses GraphQL proxy)
-// The fitnessgeek backend has unifiedFoodService with AI, FatSecret, USDA etc.
-const restApi = axios.create({ baseURL: '/api', timeout: 30000, withCredentials: true });
-
-// Attach auth token to REST calls (same key used by Apollo client)
-restApi.interceptors.request.use((config) => {
-  const token = localStorage.getItem('geek_token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
+import { restClient as restApi } from './restClient.js';
 
 export const foodService = {
   /**

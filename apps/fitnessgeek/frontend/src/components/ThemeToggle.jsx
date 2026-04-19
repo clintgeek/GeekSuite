@@ -1,6 +1,6 @@
 import { IconButton, Tooltip } from '@mui/material';
 import { Brightness4, Brightness7 } from '@mui/icons-material';
-import { useTheme } from '../contexts/ThemeContext';
+import { useThemeMode as useTheme } from '@geeksuite/user';
 
 export default function ThemeToggle() {
   const { theme, toggleTheme } = useTheme();

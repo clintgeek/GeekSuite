@@ -167,7 +167,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
     }
     res.json({ success: true, data: med });
   } catch (error) {
-    console.error('[GET /meds/:id] Error:', error);
+    req.log.error({ err: error }, '[GET /meds/:id] Error');
     res.status(500).json({ success: false, error: { message: error.message } });
   }
 });
@@ -211,7 +211,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     const saved = await med.save();
     res.json({ success: true, data: saved });
   } catch (error) {
-    console.error('[PUT /meds/:id] Error:', error);
+    req.log.error({ err: error }, '[PUT /meds/:id] Error');
     res.status(500).json({ success: false, error: { message: error.message, stack: error.stack } });
   }
 });

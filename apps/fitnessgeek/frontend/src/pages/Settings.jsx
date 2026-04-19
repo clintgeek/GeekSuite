@@ -25,7 +25,7 @@ import {
 import { useTheme, alpha } from '@mui/material/styles';
 import { settingsService } from '../services/settingsService.js';
 import logger from '../utils/logger.js';
-import { useTheme as useAppTheme } from '../contexts/ThemeContext.jsx';
+import { useThemeMode as useAppTheme } from '@geeksuite/user';
 import HouseholdSettings from '../components/Settings/HouseholdSettings';
 import {
   Surface,

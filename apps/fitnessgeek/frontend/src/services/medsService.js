@@ -1,5 +1,5 @@
-import axios from 'axios';
 import { apiService } from './apiService.js';
+import { restClient as restApi } from './restClient.js';
 
 /**
  * Medications Service
@@ -13,18 +13,6 @@ import { apiService } from './apiService.js';
  *
  * RxNorm search, detail lookup, and dose-logging go direct to REST.
  */
-
-const restApi = axios.create({
-  baseURL: '/api',
-  timeout: 15000,
-  withCredentials: true,
-});
-
-restApi.interceptors.request.use((config) => {
-  const token = localStorage.getItem('geek_token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
 
 const unwrap = (response) => response?.data?.data ?? response?.data ?? response;
 
