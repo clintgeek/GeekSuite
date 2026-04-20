@@ -15,7 +15,6 @@
     "@emotion/styled": "^11.14.0",
     "@geeksuite/api-client": "workspace:*",
     "@geeksuite/auth": "workspace:*",
-    "@geeksuite/ui": "workspace:*",
     "@geeksuite/user": "workspace:*",
     "@mui/icons-material": "^7.0.1",
     "@mui/material": "^7.0.1",

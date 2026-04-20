@@ -1,25 +1,48 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Box } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 import { useLazyQuery } from '@apollo/client';
+import { useTheme } from '@mui/material/styles';
 import useAuthStore from '../store/authStore';
 import Brand from '../components/Brand';
+import LedgerCard from '../components/LedgerCard';
 import { DASH_SEARCH } from '../graphql/queries';
-import { tokens } from '../theme';
 
 const APP_CHANNELS = [
-  { key: 'all', label: 'All' },
-  { key: 'bujogeek', label: 'Bujo' },
-  { key: 'notegeek', label: 'Notes' },
-  { key: 'bookgeek', label: 'Books' },
-  { key: 'fitnessgeek', label: 'Fitness' },
-  { key: 'flockgeek', label: 'Flock' },
+  { key: 'all',        label: 'All',     domain: null         },
+  { key: 'bujogeek',   label: 'Bujo',    domain: 'bujogeek'   },
+  { key: 'notegeek',   label: 'Notes',   domain: 'notegeek'   },
+  { key: 'bookgeek',   label: 'Books',   domain: 'bookgeek'   },
+  { key: 'fitnessgeek',label: 'Fitness', domain: 'fitnessgeek'},
+  { key: 'flockgeek',  label: 'Flock',   domain: 'flockgeek'  },
 ];
+
+// Map search-result app keys to LedgerCard domain prop values
+const APP_TO_DOMAIN = {
+  bujogeek:    'bujogeek',
+  notegeek:    'notegeek',
+  bookgeek:    'bookgeek',
+  fitnessgeek: 'fitnessgeek',
+  flockgeek:   'flockgeek',
+};
+
+const APP_LABELS = {
+  bujogeek:    'Bujo',
+  notegeek:    'Notes',
+  bookgeek:    'Books',
+  fitnessgeek: 'Fitness',
+  flockgeek:   'Flock',
+};
 
 export default function SearchPage() {
   const { logout } = useAuthStore();
+  const theme = useTheme();
   const [query, setQuery] = useState('');
   const [channel, setChannel] = useState('all');
   const inputRef = useRef(null);
+
+  const monoStack =
+    theme.typography.fontFamilyMono ??
+    '"JetBrains Mono", "Geist Mono", ui-monospace, monospace';
 
   const [runSearch, { data, loading, called }] = useLazyQuery(DASH_SEARCH, {
     fetchPolicy: 'network-only',
@@ -55,7 +78,7 @@ export default function SearchPage() {
 
   const results = data?.dashSearch || [];
 
-  // Group by app for the editorial columns layout
+  // Group by app for the domain-card columns layout
   const grouped = useMemo(() => {
     const map = {};
     results.forEach((r) => {
@@ -65,115 +88,134 @@ export default function SearchPage() {
   }, [results]);
 
   return (
-    <Box sx={{ minHeight: '100vh' }}>
+    <Box sx={{ minHeight: '100vh', backgroundColor: 'background.default' }}>
       <Brand onLogout={logout} />
 
-      <Box sx={{ px: { xs: 2, md: 4 }, pt: { xs: 5, md: 8 }, pb: 8, maxWidth: 1480, mx: 'auto' }}>
-        {/* Section masthead */}
+      <Box
+        sx={{
+          px: { xs: 2, sm: 3, md: 4 },
+          pt: { xs: 3, md: 4 },
+          pb: { xs: 6, md: 8 },
+          maxWidth: 1280,
+          mx: 'auto',
+        }}
+      >
+        {/* Compact page header */}
         <Box
-          className="rise"
           sx={{
             display: 'flex',
             alignItems: 'center',
             gap: 2,
-            fontFamily: tokens.fontMono,
-            fontSize: '0.58rem',
-            letterSpacing: '0.24em',
-            textTransform: 'uppercase',
-            color: tokens.boneFaint,
-            mb: 4,
+            py: { xs: 1.5, md: 2 },
+            mb: { xs: 2, md: 3 },
           }}
         >
-          <span style={{ color: tokens.brass }}>§ II · Search</span>
-          <Box sx={{ flex: 1, height: '1px', background: tokens.rule }} />
-          <span>The index of everything</span>
+          <Typography
+            variant="h6"
+            sx={{ color: 'text.primary', lineHeight: 1 }}
+          >
+            SEARCH
+          </Typography>
+          <Box
+            sx={{
+              flex: 1,
+              height: '1px',
+              backgroundColor: 'divider',
+            }}
+          />
         </Box>
 
-        <Box
-          className="rise"
-          sx={{
-            fontFamily: tokens.fontDisplay,
-            fontSize: { xs: '2.75rem', md: '5rem', lg: '6rem' },
-            lineHeight: 0.95,
-            letterSpacing: '-0.035em',
-            fontWeight: 300,
-            mb: 4,
-            animationDelay: '80ms',
-          }}
-        >
-          Look something{' '}
-          <Box component="span" sx={{ fontFamily: tokens.fontItalic, fontStyle: 'italic', color: tokens.brass }}>
-            up
-          </Box>
-          <Box component="span" sx={{ color: tokens.brass }}>.</Box>
-        </Box>
-
-        {/* Search form — unadorned, huge serif input */}
+        {/* Search form — large, borderless, mono placeholder */}
         <Box
           component="form"
           onSubmit={handleSubmit}
-          className="rise"
           sx={{
             position: 'relative',
-            borderTop: `1px solid ${tokens.brass}`,
-            borderBottom: `1px solid ${tokens.rule}`,
-            py: 2,
+            borderTop: `1px solid ${theme.palette.border ?? theme.palette.divider}`,
+            borderBottom: `1px solid ${theme.palette.border ?? theme.palette.divider}`,
+            py: { xs: 1.5, md: 2 },
             mb: 2,
-            animationDelay: '220ms',
+            transition: 'border-color 120ms ease',
+            '&:focus-within': {
+              borderColor: theme.palette.primary.main,
+              boxShadow: `0 0 0 3px ${theme.palette.glow?.ring ?? 'transparent'}`,
+            },
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Box sx={{ color: tokens.brass, fontFamily: tokens.fontMono, fontSize: '0.7rem', letterSpacing: '0.2em' }}>
+            <Box
+              sx={{
+                color: 'text.disabled',
+                fontFamily: monoStack,
+                fontSize: '0.7rem',
+                letterSpacing: '0.2em',
+                flexShrink: 0,
+              }}
+            >
               ▸
             </Box>
             <input
               ref={inputRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Type a word, a phrase, a fragment…"
+              placeholder="search every app…"
               style={{
                 flex: 1,
                 background: 'transparent',
                 border: 'none',
                 outline: 'none',
-                color: tokens.bone,
-                fontFamily: tokens.fontDisplay,
-                fontSize: 'clamp(1.4rem, 3vw, 2.25rem)',
-                letterSpacing: '-0.015em',
-                fontWeight: 300,
+                color: theme.palette.text.primary,
+                fontFamily: monoStack,
+                fontSize: 'clamp(1.1rem, 2.5vw, 1.75rem)',
+                letterSpacing: '-0.01em',
+                fontWeight: 400,
                 padding: 0,
               }}
             />
             <Box
               sx={{
-                fontFamily: tokens.fontMono,
+                fontFamily: monoStack,
                 fontSize: '0.55rem',
                 letterSpacing: '0.18em',
                 textTransform: 'uppercase',
-                color: tokens.boneFaint,
-                border: `1px solid ${tokens.rule}`,
+                color: 'text.disabled',
+                border: `1px solid ${theme.palette.border ?? theme.palette.divider}`,
+                borderRadius: '4px',
                 px: 1,
                 py: 0.5,
+                flexShrink: 0,
               }}
             >
-              Press /
+              /
             </Box>
           </Box>
         </Box>
 
-        {/* Channel tabs */}
+        {/* Zero state hint */}
+        {!called && !query && (
+          <Typography
+            variant="caption"
+            sx={{ display: 'block', color: 'text.disabled', mb: 3 }}
+          >
+            type to search · or press / from anywhere
+          </Typography>
+        )}
+
+        {/* Channel pills */}
         <Box
-          className="rise"
           sx={{
             display: 'flex',
-            gap: 3,
+            gap: '6px',
             flexWrap: 'wrap',
-            mb: 6,
-            animationDelay: '320ms',
+            mb: { xs: 4, md: 5 },
           }}
         >
           {APP_CHANNELS.map((c) => {
             const active = channel === c.key;
+            const domainColor = c.domain
+              ? (theme.palette.domains?.[c.domain] ?? null)
+              : null;
+
             return (
               <Box
                 key={c.key}
@@ -184,201 +226,188 @@ export default function SearchPage() {
                   if (e.key === 'Enter' || e.key === ' ') setChannel(c.key);
                 }}
                 sx={{
-                  cursor: 'pointer',
-                  position: 'relative',
-                  fontFamily: tokens.fontMono,
-                  fontSize: '0.6rem',
-                  letterSpacing: '0.2em',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  fontFamily: monoStack,
+                  fontWeight: 500,
+                  fontSize: '0.625rem',
+                  letterSpacing: '0.08em',
                   textTransform: 'uppercase',
-                  color: active ? tokens.brass : tokens.boneDim,
-                  pb: 0.5,
-                  transition: 'color 200ms var(--ease)',
-                  '&:hover': { color: tokens.bone },
-                  '&::after': {
-                    content: '""',
-                    position: 'absolute',
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    height: '1px',
-                    background: tokens.brass,
-                    transform: active ? 'scaleX(1)' : 'scaleX(0)',
-                    transformOrigin: 'left',
-                    transition: 'transform 240ms var(--ease)',
+                  cursor: 'pointer',
+                  px: '10px',
+                  py: '5px',
+                  borderRadius: '4px',
+                  lineHeight: 1,
+                  transition: 'all 120ms ease',
+                  outline: 'none',
+                  userSelect: 'none',
+                  // Active: domain color border + glow bg + domain-colored text
+                  ...(active
+                    ? {
+                        border: `1px solid ${domainColor ?? theme.palette.primary.main}`,
+                        borderLeftWidth: 3,
+                        backgroundColor: theme.palette.glow?.soft ?? 'transparent',
+                        color: domainColor ?? theme.palette.primary.main,
+                      }
+                    : {
+                        border: `1px solid ${theme.palette.border ?? theme.palette.divider}`,
+                        color: 'text.secondary',
+                        '&:hover': {
+                          backgroundColor: theme.palette.glow?.soft ?? 'action.hover',
+                          color: 'text.primary',
+                        },
+                      }),
+                  '&:focus-visible': {
+                    boxShadow: `0 0 0 2px ${theme.palette.glow?.ring ?? 'currentColor'}`,
                   },
                 }}
               >
+                {/* Domain dot — skip for "All" */}
+                {c.domain && (
+                  <Box
+                    sx={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: '50%',
+                      backgroundColor: domainColor ?? 'text.disabled',
+                      flexShrink: 0,
+                    }}
+                  />
+                )}
                 {c.label}
               </Box>
             );
           })}
         </Box>
 
-        {/* Results */}
+        {/* Loading */}
         {loading && (
-          <Box
-            sx={{
-              fontFamily: tokens.fontItalic,
-              fontStyle: 'italic',
-              fontSize: '1.2rem',
-              color: tokens.boneDim,
-            }}
-          >
-            Consulting the index…
-          </Box>
+          <Typography variant="body2" color="text.secondary">
+            Searching…
+          </Typography>
         )}
 
+        {/* Empty state — query typed, no results */}
         {!loading && called && results.length === 0 && (
-          <Box
-            sx={{
-              fontFamily: tokens.fontItalic,
-              fontStyle: 'italic',
-              fontSize: '1.2rem',
-              color: tokens.boneDim,
-            }}
-          >
-            Nothing matches that fragment. Try another word.
-          </Box>
+          <Typography variant="body2" color="text.secondary">
+            No matches. Try a tag path or a partial word.
+          </Typography>
         )}
 
-        {!loading && !called && (
-          <Box
-            sx={{
-              fontFamily: tokens.fontItalic,
-              fontStyle: 'italic',
-              fontSize: '1.1rem',
-              color: tokens.boneFaint,
-              maxWidth: 640,
-              lineHeight: 1.6,
-            }}
-          >
-            Every department — tasks, notes, books, meals, birds — is catalogued in
-            the same index. Type anything and the relevant drawers will slide open.
-          </Box>
-        )}
-
+        {/* Results — 2-column grouped grid using LedgerCard per domain */}
         {!loading && results.length > 0 && (
           <Box
             sx={{
               display: 'grid',
               gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
-              gap: 0,
-              '& > *': { marginRight: '-1px', marginBottom: '-1px' },
+              gap: 2,
             }}
           >
-            {Object.entries(grouped).map(([app, items], groupIdx) => (
-              <Box
-                key={app}
-                className="rise"
-                sx={{
-                  borderTop: `1px solid ${tokens.rule}`,
-                  borderLeft: `1px solid ${tokens.rule}`,
-                  borderRight: `1px solid ${tokens.rule}`,
-                  borderBottom: `1px solid ${tokens.rule}`,
-                  p: 3,
-                  animationDelay: `${groupIdx * 80}ms`,
-                }}
-              >
-                <Box
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'baseline',
-                    justifyContent: 'space-between',
-                    mb: 2,
-                    pb: 1.5,
-                    borderBottom: `1px solid ${tokens.rule}`,
-                  }}
-                >
-                  <Box
-                    sx={{
-                      fontFamily: tokens.fontMono,
-                      fontSize: '0.6rem',
-                      letterSpacing: '0.22em',
-                      textTransform: 'uppercase',
-                      color: tokens.brass,
-                    }}
-                  >
-                    {app}
-                  </Box>
-                  <Box
-                    sx={{
-                      fontFamily: tokens.fontMono,
-                      fontSize: '0.55rem',
-                      letterSpacing: '0.18em',
-                      color: tokens.boneFaint,
-                    }}
-                  >
-                    {items.length} entr{items.length === 1 ? 'y' : 'ies'}
-                  </Box>
-                </Box>
+            {Object.entries(grouped).map(([app, items], groupIdx) => {
+              const domain = APP_TO_DOMAIN[app];
+              const appLabel = APP_LABELS[app] ?? app;
 
-                {items.slice(0, 8).map((r, i) => (
-                  <Box
-                    key={r.id}
-                    component="a"
-                    href={r.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    sx={{
-                      display: 'block',
-                      textDecoration: 'none',
-                      color: tokens.bone,
-                      py: 1.5,
-                      borderBottom:
-                        i < Math.min(items.length, 8) - 1 ? `1px solid ${tokens.rule}` : 'none',
-                      cursor: 'pointer',
-                      transition: 'transform 200ms var(--ease)',
-                      '&:hover': {
-                        transform: 'translateX(4px)',
-                        '& .result-title': { color: tokens.brass },
-                      },
+              return (
+                <Box
+                  key={app}
+                  className="rise"
+                  sx={{ animationDelay: `${groupIdx * 60}ms` }}
+                >
+                  <LedgerCard
+                    domain={domain}
+                    title={appLabel}
+                    action={{
+                      label: `${items.length} result${items.length === 1 ? '' : 's'}`,
                     }}
                   >
-                    <Box
-                      className="result-title"
-                      sx={{
-                        fontFamily: tokens.fontDisplay,
-                        fontSize: '1.05rem',
-                        fontWeight: 400,
-                        mb: 0.5,
-                        transition: 'color 200ms var(--ease)',
-                      }}
-                    >
-                      {r.title}
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                      {items.slice(0, 8).map((r, i) => (
+                        <Box
+                          key={r.id}
+                          component="a"
+                          href={r.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          sx={{
+                            display: 'block',
+                            textDecoration: 'none',
+                            color: 'inherit',
+                            py: 1.25,
+                            px: 0.5,
+                            borderBottom:
+                              i < Math.min(items.length, 8) - 1
+                                ? `1px solid ${theme.palette.divider}`
+                                : 'none',
+                            borderRadius: '4px',
+                            transition: 'background-color 120ms ease',
+                            '&:hover': {
+                              backgroundColor: theme.palette.glow?.soft ?? 'action.hover',
+                            },
+                          }}
+                        >
+                          {/* Title */}
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'flex-start',
+                              gap: 1,
+                              mb: r.snippet ? 0.5 : 0,
+                            }}
+                          >
+                            <Typography
+                              variant="body1"
+                              sx={{
+                                fontWeight: 500,
+                                lineHeight: 1.4,
+                                color: 'text.primary',
+                                minWidth: 0,
+                                flex: 1,
+                              }}
+                            >
+                              {r.title}
+                            </Typography>
+                            {/* Type label — right-aligned mono caption */}
+                            {r.type && (
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  color: 'text.disabled',
+                                  letterSpacing: '0.08em',
+                                  textTransform: 'uppercase',
+                                  flexShrink: 0,
+                                  lineHeight: 1.6,
+                                }}
+                              >
+                                {r.type}
+                              </Typography>
+                            )}
+                          </Box>
+
+                          {/* Snippet — 2-line clamp */}
+                          {r.snippet && (
+                            <Typography
+                              variant="body2"
+                              color="text.secondary"
+                              sx={{
+                                overflow: 'hidden',
+                                display: '-webkit-box',
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: 'vertical',
+                                lineHeight: 1.5,
+                              }}
+                            >
+                              {r.snippet}
+                            </Typography>
+                          )}
+                        </Box>
+                      ))}
                     </Box>
-                    {r.snippet && (
-                      <Box
-                        sx={{
-                          fontFamily: tokens.fontItalic,
-                          fontStyle: 'italic',
-                          fontSize: '0.85rem',
-                          color: tokens.boneDim,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          display: '-webkit-box',
-                          WebkitLineClamp: 2,
-                          WebkitBoxOrient: 'vertical',
-                        }}
-                      >
-                        {r.snippet}
-                      </Box>
-                    )}
-                    <Box
-                      sx={{
-                        mt: 0.75,
-                        fontFamily: tokens.fontMono,
-                        fontSize: '0.5rem',
-                        letterSpacing: '0.16em',
-                        textTransform: 'uppercase',
-                        color: tokens.boneFaint,
-                      }}
-                    >
-                      {r.type}
-                    </Box>
-                  </Box>
-                ))}
-              </Box>
-            ))}
+                  </LedgerCard>
+                </Box>
+              );
+            })}
           </Box>
         )}
       </Box>

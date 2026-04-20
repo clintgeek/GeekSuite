@@ -1,13 +1,18 @@
 import React from 'react';
 import { useQuery } from '@apollo/client';
-import { Box, Skeleton } from '@mui/material';
-import EditorialCard from '../EditorialCard';
+import { Box, LinearProgress, Skeleton, Typography } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
+import LedgerCard from '../LedgerCard';
 import CountUp from '../CountUp';
 import { DASH_BUJO_SUMMARY } from '../../graphql/queries';
-import { tokens } from '../../theme';
 
-export default function BujoWidget({ delay = 0 }) {
+const DOMAIN = 'bujogeek';
+
+export default function BujoWidget() {
+  const theme = useTheme();
+  const domainColor = theme.palette.domains[DOMAIN];
   const today = new Date().toISOString().split('T')[0];
+
   const { data, loading, error } = useQuery(DASH_BUJO_SUMMARY, {
     variables: { date: today },
     fetchPolicy: 'cache-and-network',
@@ -15,123 +20,159 @@ export default function BujoWidget({ delay = 0 }) {
 
   if (loading && !data) {
     return (
-      <EditorialCard index="01" dept="BujoGeek" kicker="Tasks & events" delay={delay}>
-        <Skeleton variant="rectangular" height={72} sx={{ mb: 2 }} />
-        <Skeleton variant="text" width="60%" />
-      </EditorialCard>
+      <LedgerCard domain={DOMAIN} title="Bujo" loading />
     );
   }
 
   if (error || !data?.dashBujoSummary) {
     return (
-      <EditorialCard index="01" dept="BujoGeek" kicker="Tasks & events" delay={delay}>
-        <Box sx={{ fontFamily: tokens.fontItalic, fontStyle: 'italic', color: tokens.boneFaint, fontSize: '1.05rem' }}>
-          Desk is quiet. Department unreachable.
+      <LedgerCard
+        domain={DOMAIN}
+        title="Bujo"
+        action={{ label: 'open →', href: 'https://bujogeek.clintgeek.com' }}
+      >
+        <Typography variant="caption" sx={{ color: 'text.disabled' }}>
+          couldn't load
+        </Typography>
+        <Box
+          component="a"
+          href="https://bujogeek.clintgeek.com"
+          target="_blank"
+          rel="noreferrer"
+          sx={{
+            display: 'block',
+            mt: 0.5,
+            fontFamily: theme.typography.fontFamilyMono,
+            fontSize: '0.6875rem',
+            color: 'text.secondary',
+            textDecoration: 'none',
+            '&:hover': { color: 'text.primary' },
+          }}
+        >
+          open bujogeek →
         </Box>
-      </EditorialCard>
+      </LedgerCard>
     );
   }
 
   const s = data.dashBujoSummary;
-  const pct =
-    s.totalTasks > 0 ? Math.round((s.completedToday / s.totalTasks) * 100) : 0;
+  const pct = s.totalTasks > 0 ? Math.round((s.completedToday / s.totalTasks) * 100) : 0;
 
+  // 7-point trend for header: completed tasks today vs. open (compact signal)
+  // We don't have historical data in this query, so action slot is more useful.
   return (
-    <EditorialCard
-      index="01"
-      dept="BujoGeek"
-      kicker="Tasks &amp; events"
-      href="https://bujogeek.clintgeek.com"
-      delay={delay}
-      meta={
-        <>
-          <span>{s.openTasks} open · {s.completedToday} closed</span>
-          <span style={{ color: tokens.brass }}>{pct}% today</span>
-        </>
-      }
+    <LedgerCard
+      domain={DOMAIN}
+      title="Bujo"
+      action={{ label: 'open →', href: 'https://bujogeek.clintgeek.com' }}
     >
-      {/* Hero numeral */}
-      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mb: 1 }}>
+      {/* Hero: completed / total */}
+      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: '10px' }}>
         <Box
           sx={{
-            fontFamily: tokens.fontDisplay,
-            fontSize: { xs: '3.5rem', md: '4.5rem' },
-            lineHeight: 0.9,
-            fontWeight: 300,
-            color: tokens.bone,
-            letterSpacing: '-0.04em',
+            fontFamily: theme.typography.fontFamilyMono,
+            fontSize: '2.25rem',
+            fontWeight: 500,
+            lineHeight: 1,
+            letterSpacing: '-0.01em',
+            fontVariantNumeric: 'tabular-nums',
+            color: 'text.primary',
           }}
         >
           <CountUp value={s.completedToday} />
         </Box>
-        <Box
-          sx={{
-            fontFamily: tokens.fontItalic,
-            fontStyle: 'italic',
-            fontSize: '1.5rem',
-            color: tokens.boneFaint,
-          }}>
-          of {s.totalTasks}
-        </Box>
+        <Typography
+          variant="caption"
+          sx={{ color: 'text.secondary', fontSize: '0.875rem' }}
+        >
+          / {s.totalTasks}
+        </Typography>
       </Box>
 
-      <Box
+      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: '10px' }}>
+        tasks completed today
+      </Typography>
+
+      {/* Completion progress bar */}
+      <LinearProgress
+        variant="determinate"
+        value={pct}
         sx={{
-          fontFamily: tokens.fontDisplay,
-          fontSize: '0.85rem',
-          color: tokens.boneDim,
-          fontStyle: 'italic',
-          mb: 2,
+          mb: '16px',
+          '& .MuiLinearProgress-bar': {
+            backgroundColor: domainColor,
+          },
         }}
-      >
-        tasks struck through today
-      </Box>
+      />
 
+      {/* % label */}
+      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: '16px' }}>
+        {pct}% · {s.openTasks} open
+      </Typography>
+
+      {/* Upcoming events */}
       {s.upcomingEvents?.length > 0 && (
         <Box sx={{ mt: 'auto' }}>
-          <Box
-            sx={{
-              fontFamily: tokens.fontMono,
-              fontSize: '0.52rem',
-              letterSpacing: '0.18em',
-              textTransform: 'uppercase',
-              color: tokens.boneFaint,
-              mb: 1,
-            }}
+          <Typography
+            variant="h6"
+            sx={{ color: 'text.disabled', mb: '8px' }}
           >
-            ── Upcoming
-          </Box>
+            upcoming
+          </Typography>
           {s.upcomingEvents.slice(0, 3).map((evt, i) => (
-            <Box
-              key={evt.id}
-              sx={{
-                display: 'flex',
-                gap: 1.25,
-                alignItems: 'baseline',
-                mb: 0.5,
-                fontFamily: tokens.fontDisplay,
-                fontSize: '0.88rem',
-                color: tokens.boneDim,
-                '&:hover': { color: tokens.bone },
-              }}
-            >
-              <Box
-                sx={{
-                  fontFamily: tokens.fontMono,
-                  fontSize: '0.55rem',
-                  color: tokens.brass,
-                  minWidth: '1.5em',
-                }}
-              >
-                {String(i + 1).padStart(2, '0')}
-              </Box>
-              <Box sx={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {evt.content}
+            <Box key={evt.id}>
+              {i > 0 && (
+                <Box sx={{ height: '1px', backgroundColor: 'divider', my: '6px' }} />
+              )}
+              <Box sx={{ display: 'flex', gap: '10px', alignItems: 'baseline' }}>
+                {evt.date && (
+                  <Typography
+                    variant="caption"
+                    sx={{ color: domainColor, flexShrink: 0 }}
+                  >
+                    {evt.date.slice(5)}
+                  </Typography>
+                )}
+                <Typography
+                  variant="body2"
+                  sx={{
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    color: 'text.primary',
+                    flex: 1,
+                  }}
+                >
+                  {evt.content}
+                </Typography>
               </Box>
             </Box>
           ))}
         </Box>
       )}
-    </EditorialCard>
+
+      {!s.upcomingEvents?.length && s.totalTasks === 0 && (
+        <Box sx={{ mt: 'auto' }}>
+          <Typography variant="caption" sx={{ color: 'text.disabled' }}>
+            no data yet —{' '}
+            <Box
+              component="a"
+              href="https://bujogeek.clintgeek.com"
+              target="_blank"
+              rel="noreferrer"
+              sx={{
+                color: 'text.secondary',
+                textDecoration: 'none',
+                fontFamily: theme.typography.fontFamilyMono,
+                fontSize: '0.75rem',
+                '&:hover': { color: 'text.primary' },
+              }}
+            >
+              add a task →
+            </Box>
+          </Typography>
+        </Box>
+      )}
+    </LedgerCard>
   );
 }

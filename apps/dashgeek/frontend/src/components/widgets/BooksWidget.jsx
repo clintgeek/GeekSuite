@@ -1,20 +1,23 @@
 import React from 'react';
 import { useQuery } from '@apollo/client';
-import { Box, Skeleton } from '@mui/material';
-import EditorialCard from '../EditorialCard';
+import { Box, LinearProgress, Typography } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
+import LedgerCard from '../LedgerCard';
 import { DASH_BOOK_PROGRESS } from '../../graphql/queries';
-import { tokens } from '../../theme';
 
-export default function BooksWidget({ delay = 0 }) {
+const DOMAIN = 'bookgeek';
+
+export default function BooksWidget() {
+  const theme = useTheme();
+  const domainColor = theme.palette.domains[DOMAIN];
+
   const { data, loading, error } = useQuery(DASH_BOOK_PROGRESS, {
     fetchPolicy: 'cache-and-network',
   });
 
   if (loading && !data) {
     return (
-      <EditorialCard index="06" dept="BookGeek" kicker="The reading room" delay={delay}>
-        <Skeleton variant="rectangular" height={80} sx={{ mb: 2 }} />
-      </EditorialCard>
+      <LedgerCard domain={DOMAIN} title="Books" loading />
     );
   }
 
@@ -22,140 +25,158 @@ export default function BooksWidget({ delay = 0 }) {
 
   if (error || books.length === 0) {
     return (
-      <EditorialCard index="06" dept="BookGeek" kicker="The reading room" href="https://bookgeek.clintgeek.com" delay={delay}>
-        <Box sx={{ fontFamily: tokens.fontItalic, fontStyle: 'italic', color: tokens.boneFaint }}>
-          The library is still. Nothing on the nightstand.
-        </Box>
-      </EditorialCard>
+      <LedgerCard
+        domain={DOMAIN}
+        title="Books"
+        action={{ label: 'open →', href: 'https://bookgeek.clintgeek.com' }}
+      >
+        <Typography variant="caption" sx={{ color: 'text.disabled' }}>
+          {error ? "couldn't load" : 'no data yet'}
+          {' — '}
+          <Box
+            component="a"
+            href="https://bookgeek.clintgeek.com"
+            target="_blank"
+            rel="noreferrer"
+            sx={{
+              color: 'text.secondary',
+              fontFamily: theme.typography.fontFamilyMono,
+              fontSize: '0.75rem',
+              textDecoration: 'none',
+              '&:hover': { color: 'text.primary' },
+            }}
+          >
+            open bookgeek →
+          </Box>
+        </Typography>
+      </LedgerCard>
     );
   }
 
   const hero = books[0];
   const rest = books.slice(1, 3);
+  const heroPct = Math.min(100, Math.round(hero.percentComplete || 0));
 
   return (
-    <EditorialCard
-      index="06"
-      dept="BookGeek"
-      kicker="The reading room"
-      href="https://bookgeek.clintgeek.com"
-      delay={delay}
-      meta={
-        <>
-          <span>{books.length} in progress</span>
-          <span style={{ color: tokens.brass }}>
-            {hero.percentComplete?.toFixed?.(0) ?? 0}% complete
-          </span>
-        </>
-      }
+    <LedgerCard
+      domain={DOMAIN}
+      title="Books"
+      action={{ label: 'open →', href: 'https://bookgeek.clintgeek.com' }}
     >
       {/* Hero book */}
-      <Box sx={{ mb: 2.5 }}>
-        <Box
-          sx={{
-            fontFamily: tokens.fontDisplay,
-            fontSize: '1.6rem',
-            fontWeight: 400,
-            color: tokens.bone,
-            letterSpacing: '-0.015em',
-            lineHeight: 1.1,
-            mb: 0.5,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            display: '-webkit-box',
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: 'vertical',
-          }}
-        >
-          {hero.title}
-        </Box>
-        {hero.authors?.length > 0 && (
+      <Box sx={{ display: 'flex', gap: '12px', mb: '16px' }}>
+        {/* Cover thumbnail */}
+        {hero.coverUrl && (
           <Box
+            component="img"
+            src={hero.coverUrl}
+            alt={hero.title}
             sx={{
-              fontFamily: tokens.fontItalic,
-              fontStyle: 'italic',
-              fontSize: '0.88rem',
-              color: tokens.boneDim,
-              mb: 1.5,
+              width: 40,
+              height: 60,
+              objectFit: 'cover',
+              flexShrink: 0,
+              border: `1px solid ${theme.palette.border ?? theme.palette.divider}`,
+              borderRadius: '3px',
             }}
-          >
-            by {hero.authors.join(', ')}
-          </Box>
+          />
         )}
 
-        {hero.totalPages > 0 && (
-          <>
-            <Box sx={{ position: 'relative', height: '2px', background: tokens.boneGhost, mb: 0.75 }}>
-              <Box
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography
+            variant="body1"
+            sx={{
+              fontWeight: 500,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              lineHeight: 1.35,
+              mb: '4px',
+            }}
+          >
+            {hero.title}
+          </Typography>
+
+          {hero.authors?.length > 0 && (
+            <Typography
+              variant="body2"
+              sx={{ color: 'text.secondary', mb: '8px' }}
+            >
+              {hero.authors.join(', ')}
+            </Typography>
+          )}
+
+          {hero.totalPages > 0 && (
+            <>
+              <LinearProgress
+                variant="determinate"
+                value={heroPct}
                 sx={{
-                  position: 'absolute',
-                  left: 0,
-                  top: 0,
-                  height: '100%',
-                  width: `${hero.percentComplete || 0}%`,
-                  background: tokens.brass,
-                  transition: 'width 900ms var(--ease)',
+                  mb: '4px',
+                  '& .MuiLinearProgress-bar': {
+                    backgroundColor: domainColor,
+                  },
                 }}
               />
-            </Box>
-            <Box
-              sx={{
-                fontFamily: tokens.fontMono,
-                fontSize: '0.55rem',
-                letterSpacing: '0.14em',
-                textTransform: 'uppercase',
-                color: tokens.boneFaint,
-                display: 'flex',
-                justifyContent: 'space-between',
-              }}
-            >
-              <span>
-                p.{hero.currentPage} / {hero.totalPages}
-              </span>
-              <span style={{ color: tokens.brass }}>
-                {(hero.percentComplete || 0).toFixed(0)}%
-              </span>
-            </Box>
-          </>
-        )}
+              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                  p.{hero.currentPage} / {hero.totalPages}
+                </Typography>
+                <Typography variant="caption" sx={{ color: domainColor }}>
+                  {heroPct}%
+                </Typography>
+              </Box>
+            </>
+          )}
+        </Box>
       </Box>
 
-      {/* Rest of stack */}
+      {/* Other in-progress books */}
       {rest.length > 0 && (
         <Box sx={{ mt: 'auto' }}>
-          <Box
-            sx={{
-              fontFamily: tokens.fontMono,
-              fontSize: '0.52rem',
-              letterSpacing: '0.18em',
-              textTransform: 'uppercase',
-              color: tokens.boneFaint,
-              mb: 1,
-            }}
-          >
-            ── Also on the nightstand
-          </Box>
-          {rest.map((b) => (
-            <Box
-              key={b.id}
-              sx={{
-                fontFamily: tokens.fontDisplay,
-                fontSize: '0.85rem',
-                color: tokens.boneDim,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                mb: 0.25,
-              }}
-            >
-              <Box component="span" sx={{ color: tokens.brass, mr: 1, fontFamily: tokens.fontMono, fontSize: '0.55rem' }}>
-                ◦
+          <Typography variant="h6" sx={{ color: 'text.disabled', mb: '8px' }}>
+            also in progress
+          </Typography>
+          {rest.map((b, i) => (
+            <Box key={b.id}>
+              {i > 0 && (
+                <Box sx={{ height: '1px', backgroundColor: 'divider', my: '6px' }} />
+              )}
+              <Box sx={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                <Box
+                  sx={{
+                    width: 4,
+                    height: 4,
+                    borderRadius: '50%',
+                    backgroundColor: domainColor,
+                    flexShrink: 0,
+                    alignSelf: 'center',
+                  }}
+                />
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: 'text.secondary',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    flex: 1,
+                  }}
+                >
+                  {b.title}
+                </Typography>
+                {b.totalPages > 0 && (
+                  <Typography variant="caption" sx={{ flexShrink: 0, color: 'text.disabled' }}>
+                    {Math.round(b.percentComplete || 0)}%
+                  </Typography>
+                )}
               </Box>
-              {b.title}
             </Box>
           ))}
         </Box>
       )}
-    </EditorialCard>
+    </LedgerCard>
   );
 }

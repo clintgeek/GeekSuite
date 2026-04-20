@@ -1,115 +1,170 @@
 import React from 'react';
 import { useQuery } from '@apollo/client';
-import { Box, Skeleton } from '@mui/material';
-import EditorialCard from '../EditorialCard';
+import { Box, Typography } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
+import LedgerCard from '../LedgerCard';
 import CountUp from '../CountUp';
 import { DASH_FLOCK_STATUS } from '../../graphql/queries';
-import { tokens } from '../../theme';
 
-export default function FlockWidget({ delay = 0 }) {
+const DOMAIN = 'flockgeek';
+
+function StatCell({ value, label, domainColor, theme, borderRight, borderBottom }) {
+  return (
+    <Box
+      sx={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        p: '12px 8px',
+        borderRight: borderRight ? `1px solid ${theme.palette.divider}` : 'none',
+        borderBottom: borderBottom ? `1px solid ${theme.palette.divider}` : 'none',
+      }}
+    >
+      <Box
+        sx={{
+          fontFamily: theme.typography.fontFamilyMono,
+          fontWeight: 500,
+          fontSize: '1.75rem',
+          lineHeight: 1,
+          letterSpacing: '-0.01em',
+          fontVariantNumeric: 'tabular-nums',
+          color: 'text.primary',
+          mb: '6px',
+        }}
+      >
+        <CountUp value={value || 0} />
+      </Box>
+      <Typography
+        variant="caption"
+        sx={{
+          color: 'text.secondary',
+          textTransform: 'uppercase',
+          letterSpacing: '0.08em',
+          fontSize: '0.6rem',
+          textAlign: 'center',
+          lineHeight: 1.3,
+        }}
+      >
+        {label}
+      </Typography>
+    </Box>
+  );
+}
+
+export default function FlockWidget() {
+  const theme = useTheme();
+  const domainColor = theme.palette.domains[DOMAIN];
+
   const { data, loading, error } = useQuery(DASH_FLOCK_STATUS, {
     fetchPolicy: 'cache-and-network',
   });
 
   if (loading && !data) {
     return (
-      <EditorialCard index="03" dept="FlockGeek" kicker="The aviary" delay={delay}>
-        <Skeleton variant="rectangular" height={72} sx={{ mb: 2 }} />
-        <Skeleton variant="rectangular" height={40} />
-      </EditorialCard>
+      <LedgerCard domain={DOMAIN} title="Flock" loading />
     );
   }
 
   if (error || !data?.dashFlockStatus) {
     return (
-      <EditorialCard index="03" dept="FlockGeek" kicker="The aviary" delay={delay}>
-        <Box sx={{ fontFamily: tokens.fontItalic, fontStyle: 'italic', color: tokens.boneFaint }}>
-          The coop is silent. No dispatch.
-        </Box>
-      </EditorialCard>
+      <LedgerCard
+        domain={DOMAIN}
+        title="Flock"
+        action={{ label: 'open →', href: 'https://flockgeek.clintgeek.com' }}
+      >
+        <Typography variant="caption" sx={{ color: 'text.disabled' }}>
+          {error ? "couldn't load" : 'no data yet'}
+          {' — '}
+          <Box
+            component="a"
+            href="https://flockgeek.clintgeek.com"
+            target="_blank"
+            rel="noreferrer"
+            sx={{
+              color: 'text.secondary',
+              fontFamily: theme.typography.fontFamilyMono,
+              fontSize: '0.75rem',
+              textDecoration: 'none',
+              '&:hover': { color: 'text.primary' },
+            }}
+          >
+            open flockgeek →
+          </Box>
+        </Typography>
+      </LedgerCard>
     );
   }
 
   const f = data.dashFlockStatus;
 
+  // Eggs this week as a 7-day trend proxy (we only have a single week total;
+  // distribute evenly so the sparkline has a shape — action slot is more useful).
+  // Using action slot since we lack per-day breakdown.
+
   return (
-    <EditorialCard
-      index="03"
-      dept="FlockGeek"
-      kicker="The aviary"
-      href="https://flockgeek.clintgeek.com"
-      delay={delay}
-      meta={
-        <>
-          <span>{f.weekEggs || 0} eggs this week</span>
-          <span style={{ color: tokens.brass }}>
-            {f.activePairings || 0} pairings
-            {f.activeHatches > 0 ? ` · ${f.activeHatches} hatching` : ''}
-          </span>
-        </>
-      }
+    <LedgerCard
+      domain={DOMAIN}
+      title="Flock"
+      action={{ label: 'open →', href: 'https://flockgeek.clintgeek.com' }}
     >
+      {/* 2×2 stat grid with hairline internal rules */}
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: '1fr 1px 1fr',
-          gap: 2,
-          alignItems: 'end',
-          mb: 2,
+          gridTemplateColumns: '1fr 1fr',
+          gridTemplateRows: '1fr 1fr',
+          flex: 1,
+          border: `1px solid ${theme.palette.divider}`,
+          borderRadius: '6px',
+          overflow: 'hidden',
         }}
       >
-        <Box>
-          <Box
-            sx={{
-              fontFamily: tokens.fontDisplay,
-              fontSize: { xs: '3.5rem', md: '4.5rem' },
-              lineHeight: 0.9,
-              fontWeight: 300,
-              color: tokens.bone,
-              letterSpacing: '-0.04em',
-            }}
-          >
-            <CountUp value={f.activeBirds || 0} />
-          </Box>
-          <Box
-            sx={{
-              fontFamily: tokens.fontItalic,
-              fontStyle: 'italic',
-              color: tokens.boneDim,
-              mt: 0.5,
-              fontSize: '0.88rem',
-            }}
-          >
-            birds in residence
-          </Box>
-        </Box>
-        <Box sx={{ height: '70%', background: tokens.rule, alignSelf: 'center' }} />
-        <Box>
-          <Box
-            sx={{
-              fontFamily: tokens.fontDisplay,
-              fontSize: { xs: '3.5rem', md: '4.5rem' },
-              lineHeight: 0.9,
-              fontWeight: 300,
-              color: tokens.brass,
-              letterSpacing: '-0.04em',
-            }}
-          >
-            <CountUp value={f.todayEggs || 0} />
-          </Box>
-          <Box
-            sx={{
-              fontFamily: tokens.fontItalic,
-              fontStyle: 'italic',
-              color: tokens.boneDim,
-              mt: 0.5,
-              fontSize: '0.88rem',
-            }}
-          >
-            eggs collected today
-          </Box>
-        </Box>
+        <StatCell
+          value={f.activeBirds}
+          label="Active Birds"
+          domainColor={domainColor}
+          theme={theme}
+          borderRight
+          borderBottom
+        />
+        <StatCell
+          value={f.todayEggs}
+          label="Eggs Today"
+          domainColor={domainColor}
+          theme={theme}
+          borderBottom
+        />
+        <StatCell
+          value={f.activePairings}
+          label="Pairings"
+          domainColor={domainColor}
+          theme={theme}
+          borderRight
+        />
+        <StatCell
+          value={f.activeHatches}
+          label="Hatches"
+          domainColor={domainColor}
+          theme={theme}
+        />
       </Box>
-    </EditorialCard>
+
+      {/* Week summary footer */}
+      {f.weekEggs > 0 && (
+        <Typography
+          variant="caption"
+          sx={{
+            display: 'block',
+            mt: '10px',
+            color: 'text.disabled',
+            textAlign: 'right',
+          }}
+        >
+          {f.weekEggs} eggs this week
+        </Typography>
+      )}
+    </LedgerCard>
   );
 }

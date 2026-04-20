@@ -1,11 +1,13 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { themePreboot } from '@geeksuite/user/vite'
 import path from 'path'
 
 export default defineConfig({
   plugins: [
     react(),
+    themePreboot(),
     VitePWA({
       injectRegister: false,
       registerType: 'autoUpdate',
@@ -15,8 +17,8 @@ export default defineConfig({
         description: 'Your unified dashboard for the GeekSuite ecosystem',
         start_url: '/',
         display: 'standalone',
-        background_color: '#1a1a2e',
-        theme_color: '#16213e',
+        background_color: '#F9F8F6',
+        theme_color: '#2D3138',
         scope: '/',
         icons: [
           {

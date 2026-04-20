@@ -1,12 +1,18 @@
 import React from 'react';
 import { useQuery } from '@apollo/client';
-import { Box, Skeleton } from '@mui/material';
-import EditorialCard from '../EditorialCard';
+import { Box, Typography } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
+import LedgerCard from '../LedgerCard';
+import Sparkline from '../Sparkline';
 import CountUp from '../CountUp';
 import { DASH_WEIGHT_TREND } from '../../graphql/queries';
-import { tokens } from '../../theme';
 
-export default function WeightWidget({ delay = 0 }) {
+const DOMAIN = 'fitnessgeek';
+
+export default function WeightWidget() {
+  const theme = useTheme();
+  const domainColor = theme.palette.domains[DOMAIN];
+
   const { data, loading, error } = useQuery(DASH_WEIGHT_TREND, {
     variables: { days: 14 },
     fetchPolicy: 'cache-and-network',
@@ -14,10 +20,7 @@ export default function WeightWidget({ delay = 0 }) {
 
   if (loading && !data) {
     return (
-      <EditorialCard index="04" dept="Fitness / Ledger" kicker="The scales" delay={delay}>
-        <Skeleton variant="rectangular" height={72} sx={{ mb: 2 }} />
-        <Skeleton variant="rectangular" height={40} />
-      </EditorialCard>
+      <LedgerCard domain={DOMAIN} title="Weight" loading />
     );
   }
 
@@ -27,123 +30,172 @@ export default function WeightWidget({ delay = 0 }) {
 
   if (error || !latest) {
     return (
-      <EditorialCard index="04" dept="Fitness / Ledger" kicker="The scales" delay={delay}>
-        <Box sx={{ fontFamily: tokens.fontItalic, fontStyle: 'italic', color: tokens.boneFaint }}>
-          The scale has not been troubled lately.
-        </Box>
-      </EditorialCard>
+      <LedgerCard
+        domain={DOMAIN}
+        title="Weight"
+        action={{ label: 'open →', href: 'https://fitnessgeek.clintgeek.com' }}
+      >
+        <Typography variant="caption" sx={{ color: 'text.disabled' }}>
+          {error ? "couldn't load" : 'no data yet'}
+          {' — '}
+          <Box
+            component="a"
+            href="https://fitnessgeek.clintgeek.com"
+            target="_blank"
+            rel="noreferrer"
+            sx={{
+              color: 'text.secondary',
+              fontFamily: theme.typography.fontFamilyMono,
+              fontSize: '0.75rem',
+              textDecoration: 'none',
+              '&:hover': { color: 'text.primary' },
+            }}
+          >
+            log weight →
+          </Box>
+        </Typography>
+      </LedgerCard>
     );
   }
 
-  const min = Math.min(...entries.map((x) => x.weight));
-  const max = Math.max(...entries.map((x) => x.weight));
-  const range = max - min || 1;
-
-  const arrow = trend.direction === 'down' ? '↓' : trend.direction === 'up' ? '↑' : '→';
+  // Direction indicator
+  const arrowGlyph =
+    trend.direction === 'down' ? '↓' : trend.direction === 'up' ? '↑' : '→';
   const arrowColor =
     trend.direction === 'down'
-      ? tokens.patina
+      ? theme.palette.success.main
       : trend.direction === 'up'
-        ? tokens.oxblood
-        : tokens.boneDim;
+        ? theme.palette.error.main
+        : theme.palette.text.disabled;
 
-  // Build a smooth SVG line for the trend
-  const w = 100;
-  const h = 100;
-  const pts = entries.map((e, i) => {
-    const x = (i / (entries.length - 1 || 1)) * w;
-    const y = h - ((e.weight - min) / range) * h;
+  const changeSign = trend.changeFromFirst > 0 ? '+' : '';
+  const changeAbs = trend.changeFromFirst?.toFixed?.(1) ?? '0.0';
+
+  // Extract numeric weight values for sparkline
+  const weightValues = entries.map((e) => e.weight);
+  // Pass last 7 entries (or all if fewer) to LedgerCard header trend
+  const headerTrend = weightValues.slice(-7);
+
+  // Build the full 14-day sparkline inline (larger than the header badge)
+  const min = Math.min(...weightValues);
+  const max = Math.max(...weightValues);
+  const range = max - min || 1;
+  const svgW = 100;
+  const svgH = 48;
+  const padX = 2;
+  const padY = 4;
+  const innerW = svgW - padX * 2;
+  const innerH = svgH - padY * 2;
+
+  const pts = weightValues.map((w, i) => {
+    const x = padX + (i / (weightValues.length - 1 || 1)) * innerW;
+    const y = padY + innerH - ((w - min) / range) * innerH;
     return [x, y];
   });
   const pathD = pts
-    .map((p, i) => (i === 0 ? `M ${p[0]} ${p[1]}` : `L ${p[0]} ${p[1]}`))
+    .map((p, i) => (i === 0 ? `M ${p[0].toFixed(2)} ${p[1].toFixed(2)}` : `L ${p[0].toFixed(2)} ${p[1].toFixed(2)}`))
     .join(' ');
-  const areaD = `${pathD} L ${w} ${h} L 0 ${h} Z`;
+  const areaD = `${pathD} L ${(padX + innerW).toFixed(2)} ${(padY + innerH).toFixed(2)} L ${padX.toFixed(2)} ${(padY + innerH).toFixed(2)} Z`;
 
   return (
-    <EditorialCard
-      index="04"
-      dept="Fitness / Ledger"
-      kicker="The scales"
-      href="https://fitnessgeek.clintgeek.com"
-      delay={delay}
-      meta={
-        <>
-          <span>14-day window · {entries.length} entries</span>
-          <span style={{ color: arrowColor }}>
-            {arrow} {trend.changeFromFirst > 0 ? '+' : ''}
-            {trend.changeFromFirst?.toFixed?.(1) ?? 0} lb
-          </span>
-        </>
-      }
+    <LedgerCard
+      domain={DOMAIN}
+      title="Weight"
+      trend={headerTrend}
     >
-      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mb: 2 }}>
+      {/* Latest weight — hero mono */}
+      <Box sx={{ mb: '6px' }}>
+        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+          <Box
+            sx={{
+              fontFamily: theme.typography.fontFamilyMono,
+              fontWeight: 500,
+              fontSize: '2.25rem',
+              lineHeight: 1,
+              letterSpacing: '-0.01em',
+              fontVariantNumeric: 'tabular-nums',
+              color: 'text.primary',
+            }}
+          >
+            <CountUp value={latest.weight} decimals={1} />
+          </Box>
+          <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
+            lb
+          </Typography>
+        </Box>
+
+        {/* Date logged */}
+        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: '2px' }}>
+          recorded {latest.date}
+        </Typography>
+      </Box>
+
+      {/* Delta from first entry */}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: '6px', mb: '16px' }}>
         <Box
+          component="span"
           sx={{
-            fontFamily: tokens.fontDisplay,
-            fontSize: { xs: '3.5rem', md: '4.5rem' },
-            lineHeight: 0.9,
-            fontWeight: 300,
-            color: tokens.bone,
-            letterSpacing: '-0.04em',
+            fontFamily: theme.typography.fontFamilyMono,
+            fontWeight: 500,
+            fontSize: '0.875rem',
+            color: arrowColor,
           }}
         >
-          <CountUp value={latest.weight} decimals={1} />
+          {arrowGlyph}
         </Box>
-        <Box sx={{ fontFamily: tokens.fontItalic, fontStyle: 'italic', fontSize: '1.2rem', color: tokens.boneFaint }}>
-          lb
-        </Box>
+        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+          {changeSign}{changeAbs} lb over {entries.length} entries
+        </Typography>
       </Box>
 
-      <Box
-        sx={{
-          fontFamily: tokens.fontDisplay,
-          fontStyle: 'italic',
-          fontSize: '0.85rem',
-          color: tokens.boneDim,
-          mb: 2,
-        }}
-      >
-        recorded {latest.date}
-      </Box>
+      {/* Weight goal bracket (if available from trend data) */}
+      {trend.weightGoal && (
+        <Typography variant="caption" sx={{ color: 'text.disabled', display: 'block', mb: '12px' }}>
+          goal: {trend.weightGoal} lb
+        </Typography>
+      )}
 
-      {/* Line chart */}
-      <Box sx={{ flex: 1, minHeight: 70, display: 'flex', alignItems: 'end' }}>
-        <svg
-          width="100%"
-          height="70"
-          viewBox={`0 0 ${w} ${h}`}
-          preserveAspectRatio="none"
-          style={{ overflow: 'visible' }}
-        >
-          <defs>
-            <linearGradient id="weight-grad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={tokens.brass} stopOpacity="0.35" />
-              <stop offset="100%" stopColor={tokens.brass} stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          <path d={areaD} fill="url(#weight-grad)" />
-          <path
-            d={pathD}
-            fill="none"
-            stroke={tokens.brass}
-            strokeWidth="0.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            vectorEffect="non-scaling-stroke"
-          />
-          {pts.map((p, i) => (
-            <circle
-              key={i}
-              cx={p[0]}
-              cy={p[1]}
-              r={i === pts.length - 1 ? 1.8 : 0.8}
-              fill={i === pts.length - 1 ? tokens.bone : tokens.brass}
+      {/* 14-day sparkline chart */}
+      {weightValues.length >= 2 && (
+        <Box sx={{ flex: 1, minHeight: 56, display: 'flex', alignItems: 'flex-end' }}>
+          <svg
+            width="100%"
+            height="56"
+            viewBox={`0 0 ${svgW} ${svgH}`}
+            preserveAspectRatio="none"
+            role="img"
+            aria-label="14-day weight trend"
+            style={{ display: 'block', overflow: 'visible' }}
+          >
+            <defs>
+              <linearGradient id="wgt-area-grad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={domainColor} stopOpacity="0.25" />
+                <stop offset="100%" stopColor={domainColor} stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <path d={areaD} fill="url(#wgt-area-grad)" />
+            <path
+              d={pathD}
+              fill="none"
+              stroke={domainColor}
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
               vectorEffect="non-scaling-stroke"
             />
-          ))}
-        </svg>
-      </Box>
-    </EditorialCard>
+            {/* Highlight latest point */}
+            {pts.length > 0 && (
+              <circle
+                cx={pts[pts.length - 1][0]}
+                cy={pts[pts.length - 1][1]}
+                r="2"
+                fill={domainColor}
+                vectorEffect="non-scaling-stroke"
+              />
+            )}
+          </svg>
+        </Box>
+      )}
+    </LedgerCard>
   );
 }

@@ -1,22 +1,28 @@
 services:
-  dashgeek_app:
-    build:
-      context: ../..
-      dockerfile: apps/dashgeek/Dockerfile
-      args:
-        VERDACCIO_URL: ${VERDACCIO_URL}
+  dashgeek:
     image: geeksuite/dashgeek:latest
-    container_name: dashgeek_app
+    container_name: dashgeek
+    restart: unless-stopped
+
     env_file:
       - .env.production
+
     environment:
-      - NODE_ENV=production
-      - PORT=4090
+      NODE_ENV: production
+      PORT: 4090
+
     ports:
       - "4090:4090"
+
     networks:
       - datageek_network
-    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:4090/').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
 networks:
   datageek_network:

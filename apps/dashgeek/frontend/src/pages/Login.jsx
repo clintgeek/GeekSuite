@@ -1,10 +1,10 @@
 import React, { useEffect } from 'react';
-import { Box } from '@mui/material';
+import { Box, Button, Typography, useTheme } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
-import { tokens } from '../theme';
 
 export default function Login() {
+  const theme = useTheme();
   const navigate = useNavigate();
   const { login, isAuthenticated, isLoading } = useAuthStore();
 
@@ -20,139 +20,90 @@ export default function Login() {
         alignItems: 'center',
         justifyContent: 'center',
         px: { xs: 3, md: 6 },
-        position: 'relative',
+        bgcolor: 'background.default',
       }}
     >
-      {/* Top-left meta ticker */}
+      {/* Center card — hairline-bordered paper on cream page */}
       <Box
+        component="section"
         sx={{
-          position: 'absolute',
-          top: { xs: 20, md: 32 },
-          left: { xs: 24, md: 48 },
-          fontFamily: tokens.fontMono,
-          fontSize: '0.55rem',
-          letterSpacing: '0.22em',
-          textTransform: 'uppercase',
-          color: tokens.boneFaint,
-          display: 'flex',
-          gap: 2,
-        }}
-      >
-        <span style={{ color: tokens.brass }}>◆</span>
-        <span>DashGeek · Private Terminal</span>
-      </Box>
-
-      {/* Bottom-right colophon */}
-      <Box
-        sx={{
-          position: 'absolute',
-          bottom: { xs: 20, md: 32 },
-          right: { xs: 24, md: 48 },
-          fontFamily: tokens.fontMono,
-          fontSize: '0.52rem',
-          letterSpacing: '0.2em',
-          textTransform: 'uppercase',
-          color: tokens.boneFaint,
-        }}
-      >
-        Est. MMXXIV · Hand-set in Fraunces
-      </Box>
-
-      {/* Center card */}
-      <Box
-        sx={{
-          maxWidth: 520,
+          maxWidth: 440,
           width: '100%',
           textAlign: 'center',
-          borderTop: `1px solid ${tokens.brass}`,
-          borderBottom: `1px solid ${tokens.rule}`,
-          py: { xs: 6, md: 8 },
-          position: 'relative',
+          bgcolor: 'background.paper',
+          border: `1px solid ${theme.palette.border}`,
+          borderRadius: '10px',
+          p: { xs: 5, md: 6 },
         }}
       >
-        <Box
+        {/* Wordmark */}
+        <Typography
           className="rise"
           sx={{
-            fontFamily: tokens.fontMono,
-            fontSize: '0.58rem',
-            letterSpacing: '0.3em',
+            fontFamily: theme.typography.fontFamilyMono,
+            fontWeight: 700,
+            fontSize: { xs: '1.25rem', md: '1.5rem' },
+            letterSpacing: '0.12em',
+            color: 'text.primary',
+            mb: 0.5,
+          }}
+        >
+          DASHGEEK
+        </Typography>
+
+        {/* Tagline — mono caption, no italic serif */}
+        <Typography
+          variant="caption"
+          className="rise"
+          sx={{
+            display: 'block',
+            color: 'text.disabled',
             textTransform: 'uppercase',
-            color: tokens.brass,
-            mb: 3,
+            letterSpacing: '0.14em',
+            mb: 4,
           }}
         >
-          ── Vol. I ──
-        </Box>
+          GeekSuite · control surface
+        </Typography>
 
-        <Box
+        {/* Lead copy */}
+        <Typography
+          variant="body2"
           className="rise"
           sx={{
-            fontFamily: tokens.fontDisplay,
-            fontSize: { xs: '3.25rem', md: '5rem' },
-            lineHeight: 0.95,
-            letterSpacing: '-0.035em',
-            fontWeight: 300,
-            mb: 2,
-            animationDelay: '100ms',
-          }}
-        >
-          Dash
-          <Box component="span" sx={{ fontFamily: tokens.fontItalic, fontStyle: 'italic', color: tokens.brass }}>
-            geek
-          </Box>
-        </Box>
-
-        <Box
-          className="rise"
-          sx={{
-            fontFamily: tokens.fontItalic,
-            fontStyle: 'italic',
-            fontSize: { xs: '1rem', md: '1.15rem' },
-            color: tokens.boneDim,
-            mb: 5,
-            maxWidth: 380,
+            color: 'text.secondary',
+            mb: 4,
+            maxWidth: 320,
             mx: 'auto',
-            lineHeight: 1.5,
-            animationDelay: '200ms',
+            lineHeight: 1.6,
           }}
         >
-          A private terminal for tasks, notes, books, meals, scales, and a small
-          flock of birds. Please present credentials.
-        </Box>
+          One pane for tasks, notes, books, meals, weight, and flock. Sign in
+          through baseGeek to continue.
+        </Typography>
 
-        <Box
-          component="button"
-          className="rise"
+        {/* Sign-in CTA — primary contained uses ink-slate from theme */}
+        <Button
+          variant="contained"
           onClick={login}
           disabled={isLoading}
+          className="rise"
+          sx={{ minWidth: 220 }}
+        >
+          {isLoading ? 'Opening…' : 'Sign in with baseGeek'}
+        </Button>
+
+        {/* Suite attribution */}
+        <Typography
+          variant="caption"
           sx={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 2,
-            background: 'transparent',
-            border: `1px solid ${tokens.brass}`,
-            color: tokens.brass,
-            fontFamily: tokens.fontMono,
-            fontSize: '0.65rem',
-            letterSpacing: '0.25em',
-            textTransform: 'uppercase',
-            px: 4,
-            py: 1.75,
-            cursor: isLoading ? 'wait' : 'pointer',
-            transition: 'all 300ms var(--ease)',
-            animationDelay: '280ms',
-            '&:hover': {
-              background: tokens.brass,
-              color: tokens.ink,
-              '& .arrow': { transform: 'translateX(4px)' },
-            },
+            display: 'block',
+            mt: 5,
+            color: 'text.disabled',
           }}
         >
-          {isLoading ? 'Opening the vault…' : 'Enter via baseGeek'}
-          <Box component="span" className="arrow" sx={{ transition: 'transform 300ms var(--ease)' }}>
-            →
-          </Box>
-        </Box>
+          Part of the GeekSuite
+        </Typography>
       </Box>
     </Box>
   );
