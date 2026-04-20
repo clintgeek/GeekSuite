@@ -15,7 +15,7 @@ and shared infrastructure. All apps authenticate through **basegeek** and share 
 | **flockgeek** | Running | Poultry flock management and egg production tracking |
 | **storygeek** | Running | Creative writing tool |
 | **bookgeek** | Partial | Book library and reading tracker (format conversion pending) |
-| **notegeek** | Partial | Note-taking app (pending consolidation — dual-service, dual-auth) |
+| **notegeek** | Running | Note-taking app — text, markdown, code, mind map, sketch |
 | **dashgeek** | Stub | Dashboard |
 | **startgeek** | Stub | App launcher (React-only, no backend) |
 
@@ -52,7 +52,7 @@ GeekSuite/
 
 | Package | Purpose |
 |---------|---------|
-| `@geeksuite/auth` | SSO middleware (cookie-first JWT), `requireGeekAuth`, React `useGeekAuth` hook |
+| `@geeksuite/auth` | `AuthProvider` + `useAuth` React hooks, `setupAxiosInterceptors` (attaches SSO cookie + handles refresh rotation), `loginRedirect` / `logout` / `getMe`, `GeekLogin` splash |
 | `@geeksuite/user` | User store, `ThemeProvider`, `themePreboot` Vite plugin, `/users/bootstrap` |
 | `@geeksuite/api-client` | `GeekSuiteApolloProvider` — Apollo Client pointed at basegeek's `/graphql` |
 | `@geeksuite/ui` | Shared MUI-based UI components |
@@ -88,9 +88,10 @@ Each app has its own `README.md` and `DOCS/` directory with app-specific detail.
 
 ## Infrastructure
 
-- **MongoDB** — primary data store (suite-shared instance)
+- **MongoDB** — primary data store (suite-shared instance, per-app databases)
+- **Postgres** — relational store for basegeek's AI config + related tables
 - **Redis** — session caching, rate limiting, refresh-token rotation state
-- **InfluxDB** — time-series data (Garmin health metrics)
+- **InfluxDB** — time-series data (Garmin health metrics, basegeek request metrics)
 - **Docker** — each app builds to a container image via `build.sh`
 - **pnpm** — monorepo package management
 
