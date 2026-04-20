@@ -26,6 +26,7 @@ APPS=(
   musicgeek
   notegeek
   photogeek
+  startgeek
   storygeek
 )
 

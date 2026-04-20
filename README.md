@@ -17,7 +17,7 @@ and shared infrastructure. All apps authenticate through **basegeek** and share 
 | **bookgeek** | Partial | Book library and reading tracker (format conversion pending) |
 | **notegeek** | Running | Note-taking app — text, markdown, code, mind map, sketch |
 | **dashgeek** | Stub | Dashboard |
-| **startgeek** | Stub | App launcher (React-only, no backend) |
+| **startgeek** | Running | Personal-desktop launcher — clock, weather, world clocks, app dock |
 
 ---
 
