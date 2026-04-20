@@ -103,7 +103,7 @@ function Sidebar({ closeNavbar }) {
         logout();
         clearNotes();
         clearTags();
-        navigate('/login');
+        navigate('/login?signedOut=1');
     };
 
     // Build hierarchical tag structure

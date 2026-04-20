@@ -115,6 +115,7 @@ function NoteEditorPage() {
   const [saveStatus, setSaveStatus] = useState('');
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [savedNoteId, setSavedNoteId] = useState(() => (id && id !== 'new' && id !== 'undefined' ? id : null));
+  const [dirty, setDirty] = useState(false);
 
   // Track initialization
   const initialized = useRef(false);
@@ -229,6 +230,7 @@ function NoteEditorPage() {
           setTitle(savedNote.title);
         }
         setSaveStatus('Saved');
+        setDirty(false);
         setTimeout(() => setSaveStatus(''), 2000);
 
         if (isMindMap && !isNewNote) {
@@ -245,10 +247,16 @@ function NoteEditorPage() {
   // Handle content change
   const handleContentChange = useCallback((newContent) => {
     setContent(newContent);
+    setDirty(true);
   }, []);
 
-  // Removed manual fetch inside useEffect since useQuery handles it
-
+  // beforeunload guard — prevents accidental data loss on tab-close / hard-reload
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (e) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [dirty]);
 
   // Loading state
   if (isLoadingSelected && !isNewNote) {
@@ -390,11 +398,12 @@ function NoteEditorPage() {
         header={
           <NoteMetaBar
             title={title}
-            onTitleChange={setTitle}
+            onTitleChange={(v) => { setTitle(v); setDirty(true); }}
             noteType={noteType}
             tags={tags}
-            onTagsChange={setTags}
+            onTagsChange={(v) => { setTags(v); setDirty(true); }}
             readOnly={!isEditMode && isMindMap}
+            dirty={dirty}
             actions={
               <NoteActions
                 onSave={handleSave}

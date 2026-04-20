@@ -9,6 +9,7 @@ import {
     InputAdornment,
     IconButton,
     Skeleton,
+    CircularProgress,
     Divider,
     useTheme,
 } from '@mui/material';
@@ -18,16 +19,14 @@ import {
 } from '@mui/icons-material';
 import useNoteStore from '../store/noteStore';
 import { formatRelativeTime } from '../utils/dateUtils';
+import { previewText } from '../utils/previewText';
 
 function getTypeColor(type, palette) {
     return palette.noteTypes?.[type] || palette.noteTypes?.text || palette.primary.main;
 }
 
-function getPreview(content) {
-    if (!content) return '';
-    if (typeof content === 'string' && content.startsWith('data:image/')) return '';
-    const plain = String(content).replace(/<[^>]+>/g, '');
-    return plain.split(/\r?\n/).filter(Boolean).slice(0, 2).join(' ').slice(0, 180);
+function getPreview(content, type = 'text') {
+    return previewText(content, type, 180);
 }
 
 // ─── ResultRow ────────────────────────────────────────────────────────────────
@@ -38,7 +37,7 @@ function ResultRow({ note, query }) {
     const type = note.type || 'text';
     const typeColor = getTypeColor(type, theme.palette);
     const isVisual = type === 'handwritten' || type === 'mindmap';
-    const preview = isVisual ? '' : getPreview(note.content);
+    const preview = isVisual ? '' : getPreview(note.content, type);
 
     // Highlight matched terms in primary color
     function highlightQuery(text) {
@@ -233,6 +232,13 @@ function SearchResults() {
             {/* Results */}
             {isSearching ? (
                 <Box>
+                    {/* Subtle inline searching indicator */}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5, px: 0.5 }}>
+                        <CircularProgress size={14} thickness={4} sx={{ color: 'text.disabled' }} />
+                        <Typography variant="caption" sx={{ color: 'text.disabled' }}>
+                            Searching…
+                        </Typography>
+                    </Box>
                     {[1, 2, 3, 4].map((i) => (
                         <Skeleton key={i} height={52} sx={{ borderRadius: 1, mb: 0.5 }} variant="rounded" />
                     ))}
@@ -263,13 +269,16 @@ function SearchResults() {
                         No matches for &ldquo;{query}&rdquo;
                     </Typography>
                     <Typography variant="caption" sx={{ color: 'text.disabled' }}>
-                        Try different keywords or check spelling
+                        Try a tag path (e.g. work/ideas) or a partial word
                     </Typography>
                 </Box>
             ) : (
                 <Box sx={{ py: 6, textAlign: 'center' }}>
-                    <Typography variant="body1" sx={{ color: 'text.disabled' }}>
+                    <Typography variant="body1" sx={{ color: 'text.disabled', mb: 0.5 }}>
                         Search by title, content, or tags
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: 'text.disabled' }}>
+                        Press / from anywhere to focus search
                     </Typography>
                 </Box>
             )}

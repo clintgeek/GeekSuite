@@ -27,6 +27,7 @@ function NoteMetaBar({
   tags,
   onTagsChange,
   readOnly = false,
+  dirty = false,
   actions,
 }) {
   const theme = useTheme();
@@ -120,6 +121,21 @@ function NoteMetaBar({
               {typeConfig.label}
             </Typography>
           </Box>
+        )}
+
+        {/* Unsaved-changes indicator */}
+        {dirty && (
+          <Typography
+            variant="caption"
+            sx={{
+              color: 'primary.main',
+              flexShrink: 0,
+              lineHeight: 1,
+              userSelect: 'none',
+            }}
+          >
+            ● Edited
+          </Typography>
         )}
 
         {/* Tag selector */}

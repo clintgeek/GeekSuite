@@ -8,12 +8,16 @@ import {
   TextField,
   Button,
   Divider,
+  Snackbar,
+  Alert,
   useTheme,
 } from '@mui/material';
+import ArrowForward from '@mui/icons-material/ArrowForward';
 import { NOTE_TYPES } from '../components/notes/NoteTypeRouter';
 import useNoteStore from '../store/noteStore';
 import useAuthStore from '../store/authStore';
 import { formatRelativeTime } from '../utils/dateUtils';
+import { previewText } from '../utils/previewText';
 
 // ─── Type pills ──────────────────────────────────────────────────────────────
 const TYPE_PILLS = [
@@ -37,18 +41,15 @@ function getTypeColor(type, palette) {
   return palette.noteTypes?.[type] || palette.noteTypes?.text || palette.primary.main;
 }
 
-function getPreview(content, maxLen = 100) {
-  if (!content) return '';
-  if (typeof content === 'string' && content.startsWith('data:image/')) return '';
-  const plain = String(content).replace(/<[^>]+>/g, '');
-  return plain.split(/\r?\n/).filter(Boolean).slice(0, 2).join(' ').slice(0, maxLen);
+function getPreview(content, type = 'text', maxLen = 100) {
+  return previewText(content, type, maxLen);
 }
 
 // ─── NoteRow: editorial list row ─────────────────────────────────────────────
 
 function NoteRow({ note, theme, onClick }) {
   const typeColor = getTypeColor(note.type || 'text', theme.palette);
-  const preview = getPreview(note.content);
+  const preview = getPreview(note.content, note.type || 'text');
 
   return (
     <ButtonBase
@@ -171,6 +172,7 @@ function QuickCaptureHome() {
   const { user } = useAuthStore();
   const { notes, fetchNotes, isLoadingList, createNote } = useNoteStore();
   const [captureText, setCaptureText] = useState('');
+  const [captureToast, setCaptureToast] = useState(false);
 
   useEffect(() => {
     fetchNotes({ limit: 50 });
@@ -186,6 +188,7 @@ function QuickCaptureHome() {
     });
     if (created) {
       setCaptureText('');
+      setCaptureToast(true);
       navigate(`/notes/${created.id || created._id}/edit`);
     }
   };
@@ -352,11 +355,12 @@ function QuickCaptureHome() {
         </Box>
       ) : sortedNotes.length === 0 ? (
         <Box sx={{ py: { xs: 4, sm: 6 }, textAlign: 'center' }}>
-          <Typography variant="body1" sx={{ color: 'text.disabled', mb: 0.5 }}>
+          <Typography variant="body1" sx={{ color: 'text.disabled', mb: 0.75 }}>
             Nothing here yet
           </Typography>
-          <Typography variant="caption" sx={{ color: 'text.disabled' }}>
-            Start typing above to capture your first thought
+          <Typography variant="body2" sx={{ color: 'text.disabled', maxWidth: 340, mx: 'auto' }}>
+            The strip above is for quick text notes — type a thought and press Capture.
+            For richer formats like Markdown, code, or mind maps, use the type pills below it.
           </Typography>
         </Box>
       ) : (
@@ -373,20 +377,24 @@ function QuickCaptureHome() {
             <Typography variant="h6" sx={{ color: 'text.disabled' }}>
               Recent
             </Typography>
-            <ButtonBase
+            <Button
+              variant="text"
+              size="small"
+              endIcon={<ArrowForward sx={{ fontSize: '14px !important' }} />}
               onClick={() => navigate('/notes')}
               sx={{
                 fontFamily: theme.typography.fontFamilyMono,
                 fontSize: '0.6875rem',
                 fontWeight: 500,
-                color: 'text.disabled',
                 letterSpacing: '0.03em',
-                transition: 'color 100ms ease',
-                '&:hover': { color: 'primary.main' },
+                color: 'text.secondary',
+                minWidth: 0,
+                px: 0.75,
+                '&:hover': { color: 'primary.main', bgcolor: theme.palette.glow.soft },
               }}
             >
-              all notes →
-            </ButtonBase>
+              All notes
+            </Button>
           </Box>
 
           {/* Editorial rows with hairline dividers */}
@@ -406,6 +414,27 @@ function QuickCaptureHome() {
           </Box>
         </Box>
       )}
+
+      {/* Quick-capture success toast */}
+      <Snackbar
+        open={captureToast}
+        autoHideDuration={1800}
+        onClose={() => setCaptureToast(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          severity="success"
+          onClose={() => setCaptureToast(false)}
+          sx={{
+            bgcolor: theme.palette.glow.soft,
+            color: 'text.primary',
+            border: `1px solid ${theme.palette.border}`,
+            '& .MuiAlert-icon': { color: 'primary.main' },
+          }}
+        >
+          Note captured
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

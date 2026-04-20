@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import {
     Box,
     Paper,
@@ -10,6 +10,7 @@ import {
     Alert,
     IconButton,
     InputAdornment,
+    Snackbar,
     useTheme,
 } from '@mui/material';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
@@ -20,10 +21,23 @@ function LoginPage() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
+    const [signedOutToast, setSignedOutToast] = useState(false);
     const login = useAuthStore((state) => state.login);
     const isLoading = useAuthStore((state) => state.isLoading);
     const error = useAuthStore((state) => state.error);
     const navigate = useNavigate();
+    const location = useLocation();
+
+    // Show "Signed out" toast when redirected from logout
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        if (params.get('signedOut') === '1') {
+            setSignedOutToast(true);
+            // Clean the query param from history without re-render loop
+            navigate('/login', { replace: true });
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const handleSubmit = async (event) => {
         event.preventDefault();
@@ -213,6 +227,27 @@ function LoginPage() {
             >
                 Part of the GeekSuite
             </Typography>
+
+            {/* Signed-out confirmation toast */}
+            <Snackbar
+                open={signedOutToast}
+                autoHideDuration={2500}
+                onClose={() => setSignedOutToast(false)}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+            >
+                <Alert
+                    severity="info"
+                    onClose={() => setSignedOutToast(false)}
+                    sx={{
+                        bgcolor: theme.palette.glow.soft,
+                        color: 'text.primary',
+                        border: `1px solid ${theme.palette.border}`,
+                        '& .MuiAlert-icon': { color: 'primary.main' },
+                    }}
+                >
+                    Signed out
+                </Alert>
+            </Snackbar>
         </Box>
     );
 }

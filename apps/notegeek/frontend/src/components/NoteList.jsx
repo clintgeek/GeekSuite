@@ -11,6 +11,7 @@ import {
 } from '@mui/material';
 import useNoteStore from '../store/noteStore';
 import { formatRelativeTime } from '../utils/dateUtils';
+import { previewText } from '../utils/previewText';
 import { gql, useQuery } from '@apollo/client';
 
 const GET_NOTES = gql`
@@ -33,10 +34,7 @@ function getTypeColor(type, palette) {
 
 function getPreview(note) {
     if (note.snippet) return note.snippet;
-    if (!note.content) return '';
-    if (typeof note.content === 'string' && note.content.startsWith('data:image/')) return '';
-    const plain = note.content.replace(/<[^>]+>/g, '');
-    return plain.split(/\r?\n/).filter(Boolean).slice(0, 1).join(' ').slice(0, 120);
+    return previewText(note.content, note.type || 'text', 120);
 }
 
 // ─── NoteRow: one note in the editorial list ─────────────────────────────────
@@ -196,11 +194,13 @@ function NoteList({ tag, prefix }) {
         return (
             <Box sx={{ py: 8, textAlign: 'center', maxWidth: 720, mx: 'auto' }}>
                 <Typography variant="body1" sx={{ color: 'text.disabled', mb: 0.5 }}>
-                    No notes yet
+                    {tag ? 'No notes tagged here yet.' : 'No notes yet'}
                 </Typography>
-                <Typography variant="caption" sx={{ color: 'text.disabled' }}>
-                    Create your first note to get started
-                </Typography>
+                {!tag && (
+                    <Typography variant="caption" sx={{ color: 'text.disabled' }}>
+                        Create your first note to get started
+                    </Typography>
+                )}
             </Box>
         );
     }

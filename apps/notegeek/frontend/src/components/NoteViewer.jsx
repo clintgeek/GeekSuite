@@ -7,7 +7,6 @@ import {
     Box,
     IconButton,
     Tooltip,
-    Button,
     useTheme,
     alpha,
     Fade,
@@ -60,10 +59,6 @@ function NoteViewer() {
 
 
 
-    const handleUnlock = () => {
-        alert('Unlock functionality not implemented yet.');
-    };
-
     if (isLoadingSelected) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
@@ -74,15 +69,7 @@ function NoteViewer() {
 
     if (selectedError && !noteToView?.content) {
         return (
-            <Alert
-                severity="warning"
-                sx={{ borderRadius: 2 }}
-                action={noteToView?.isLocked && (
-                    <Button size="small" onClick={handleUnlock}>
-                        Unlock
-                    </Button>
-                )}
-            >
+            <Alert severity="warning" sx={{ borderRadius: 2 }}>
                 {selectedError}
             </Alert>
         );
@@ -271,6 +258,16 @@ function NoteViewer() {
                                 )}
                             </Box>
                         </Box>
+
+                        {/* Locked note notice — no button, no click target */}
+                        {noteToView.isLocked && (
+                            <Typography
+                                variant="body2"
+                                sx={{ color: 'text.secondary', px: { xs: 2.5, sm: 3.5 }, pb: 1.5 }}
+                            >
+                                Locked notes aren&rsquo;t readable yet — this feature is in progress.
+                            </Typography>
+                        )}
 
                         {/* Divider */}
                         <Box sx={{ mx: { xs: 2.5, sm: 3.5 }, height: '1px', bgcolor: alpha(theme.palette.divider, 0.4) }} />
