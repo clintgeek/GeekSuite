@@ -77,11 +77,15 @@ deploy_app() {
     return 1
   fi
 
-  # Preflight: real deploys need a populated .env.production.
-  # Fail early instead of letting the container crash-loop on missing secrets.
-  if [ ! -f "$deploy_dir/.env.production" ]; then
-    echo -e "${RED}✗ .env.production not found in ${deploy_dir} — see DEPLOY.md${NC}"
-    return 1
+  # Preflight: if the compose references an env_file, it MUST exist.
+  # Fail early instead of letting the container crash-loop on missing
+  # secrets. Apps that take no env at all (e.g. pure static frontends
+  # like startgeek) are allowed to skip .env.production entirely.
+  if grep -qE '^\s*env_file:' "$deploy_dir/docker-compose.yml"; then
+    if [ ! -f "$deploy_dir/.env.production" ]; then
+      echo -e "${RED}✗ .env.production not found in ${deploy_dir} — see DEPLOY.md${NC}"
+      return 1
+    fi
   fi
 
   # Deploy: bring up (or force-recreate) just the app's own service.
