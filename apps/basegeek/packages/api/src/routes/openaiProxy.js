@@ -175,9 +175,15 @@ router.post('/chat/completions', async (req, res) => {
       presence_penalty: presencePenalty,
       frequency_penalty: frequencyPenalty,
       response_format: responseFormat,
+      tools,
+      tool_choice: toolChoice,
       n,
       seed
     } = req.body || {};
+
+    if (tools !== undefined && !Array.isArray(tools)) {
+      return openAIError(res, 400, 'tools must be an array when provided.', 'invalid_request_error', 'invalid_tools');
+    }
 
     if (!Array.isArray(messages) || messages.length === 0) {
       return openAIError(res, 400, 'The request must include a non-empty messages array.', 'invalid_request_error', 'missing_messages');
@@ -246,6 +252,8 @@ router.post('/chat/completions', async (req, res) => {
       ...(presencePenalty !== undefined && { presencePenalty }),
       ...(frequencyPenalty !== undefined && { frequencyPenalty }),
       ...(responseFormat !== undefined && { responseFormat }),
+      ...(tools !== undefined && { tools }),
+      ...(toolChoice !== undefined && { toolChoice }),
       ...(seed !== undefined && { seed })
     };
 
@@ -268,18 +276,50 @@ router.post('/chat/completions', async (req, res) => {
           : providerInfo.model || requestedModel || providerInfo.provider || 'unknown';
 
         const id = `chatcmpl-${Date.now()}`;
+        const hasToolCalls = Array.isArray(providerInfo.toolCalls) && providerInfo.toolCalls.length > 0;
+        const structured = !!responseFormat || hasToolCalls;
+        const finalFinishReason = hasToolCalls
+          ? 'tool_calls'
+          : (providerInfo.finishReason || 'stop');
 
-        // Stream content in chunks
-        const chunkSize = 50;
-        for (let i = 0; i < formatted.length; i += chunkSize) {
-          const content = formatted.slice(i, i + chunkSize);
+        if (hasToolCalls) {
+          // Tool-call response: single chunk with the full tool_calls array.
+          // Arbitrary char-boundary fragmentation would break JSON parsing on
+          // the client, so we emit the whole structure atomically.
           res.write(`data: ${JSON.stringify({
             id,
             object: 'chat.completion.chunk',
             created,
             model: responseModel,
-            choices: [{ index: 0, delta: { content }, finish_reason: null }]
+            choices: [{
+              index: 0,
+              delta: { role: 'assistant', tool_calls: providerInfo.toolCalls },
+              finish_reason: null
+            }]
           })}\n\n`);
+        } else if (structured) {
+          // response_format active: emit full content as one chunk so the
+          // resulting JSON is always parseable by the client as a whole.
+          res.write(`data: ${JSON.stringify({
+            id,
+            object: 'chat.completion.chunk',
+            created,
+            model: responseModel,
+            choices: [{ index: 0, delta: { content: formatted }, finish_reason: null }]
+          })}\n\n`);
+        } else {
+          // Plain text: chunk at 50 chars for responsive streaming UX.
+          const chunkSize = 50;
+          for (let i = 0; i < formatted.length; i += chunkSize) {
+            const content = formatted.slice(i, i + chunkSize);
+            res.write(`data: ${JSON.stringify({
+              id,
+              object: 'chat.completion.chunk',
+              created,
+              model: responseModel,
+              choices: [{ index: 0, delta: { content }, finish_reason: null }]
+            })}\n\n`);
+          }
         }
 
         // Final chunk
@@ -288,7 +328,7 @@ router.post('/chat/completions', async (req, res) => {
           object: 'chat.completion.chunk',
           created,
           model: responseModel,
-          choices: [{ index: 0, delta: {}, finish_reason: 'stop' }]
+          choices: [{ index: 0, delta: {}, finish_reason: finalFinishReason }]
         })}\n\n`);
         res.write('data: [DONE]\n\n');
         res.end();
@@ -319,6 +359,33 @@ router.post('/chat/completions', async (req, res) => {
     const promptTokens = countMessageTokens(messages);
     const completionTokens = countTextTokens(formatted);
 
+    // Surface OpenAI-style tool_calls when the provider returned them.
+    // Anthropic/Gemini emit tool_use/functionCall blocks; the call*() methods
+    // normalize them onto lastProviderInfo.toolCalls.
+    const assistantMessage = { role: 'assistant', content: formatted };
+    let finishReason = 'stop';
+    if (Array.isArray(providerInfo.toolCalls) && providerInfo.toolCalls.length > 0) {
+      let emitted = providerInfo.toolCalls;
+      // Defense-in-depth for single-response-model clients (Instructor, etc.):
+      // when the caller pinned a specific tool via tool_choice:{type:"function"},
+      // the OpenAI contract is exactly one tool_call out. If multiple slipped
+      // through (e.g. a provider ignored disable_parallel_tool_use), collapse
+      // to the first matching call here so downstream clients don't break.
+      const forcedName = toolChoice && typeof toolChoice === 'object'
+        && toolChoice.type === 'function' && toolChoice.function?.name;
+      if (forcedName && emitted.length > 1) {
+        req.log.warn({ count: emitted.length, forcedName },
+          '[OpenAI Proxy] Collapsing multi tool_calls to forced function');
+        const match = emitted.find(tc => tc?.function?.name === forcedName) || emitted[0];
+        emitted = [match];
+      }
+      assistantMessage.tool_calls = emitted;
+      assistantMessage.content = formatted || null;
+      finishReason = 'tool_calls';
+    } else if (providerInfo.finishReason) {
+      finishReason = providerInfo.finishReason;
+    }
+
     res.json({
       id: `chatcmpl-${Date.now()}`,
       object: 'chat.completion',
@@ -327,8 +394,8 @@ router.post('/chat/completions', async (req, res) => {
       choices: [
         {
           index: 0,
-          message: { role: 'assistant', content: formatted },
-          finish_reason: 'stop'
+          message: assistantMessage,
+          finish_reason: finishReason
         }
       ],
       usage: {

@@ -12,6 +12,7 @@ import AIFreeTier from '../models/AIFreeTier.js';
 import AIAppConfig from '../models/AIAppConfig.js';
 import AIUsage from '../models/AIUsage.js';
 import RotationManager from './rotationManager.js';
+import aiModelCapabilitiesService from './aiModelCapabilitiesService.js';
 // Using cloud-based summarization instead of local transformers.js
 import crypto from 'crypto';
 import fs from 'fs';
@@ -718,13 +719,122 @@ class AIService {
   }
 
   /**
-   * Generate cache key for request
+   * Generate cache key for request.
+   *
+   * structuredFingerprint is a stable hash of response_format + tools + tool_choice
+   * (see structuredOutputFingerprint). Included so two identical prompts with
+   * different structured-output requirements don't collide in the cache and
+   * return each other's plaintext.
    */
-  getCacheKey(prompt, provider, model, temperature, namespace = 'default') {
+  getCacheKey(prompt, provider, model, temperature, namespace = 'default', structuredFingerprint = '') {
     const hash = crypto.createHash('md5')
-      .update(`${prompt}:${provider}:${model}:${temperature}:${namespace}`)
+      .update(`${prompt}:${provider}:${model}:${temperature}:${namespace}:${structuredFingerprint}`)
       .digest('hex');
     return hash;
+  }
+
+  /**
+   * Stable hash of structured-output parameters for cache-key segregation.
+   * Returns '' when no structured output requested (so existing cache entries
+   * from before this change still match — they were written with fingerprint '').
+   */
+  structuredOutputFingerprint(responseFormat, tools, toolChoice) {
+    if (!responseFormat && !tools && !toolChoice) return '';
+    const payload = JSON.stringify({
+      rf: responseFormat || null,
+      t: Array.isArray(tools) ? tools.map(t => t?.function?.name || t?.name || '').sort() : null,
+      tc: toolChoice || null
+    });
+    return crypto.createHash('md5').update(payload).digest('hex').slice(0, 12);
+  }
+
+  /**
+   * Structured-output prompt-injection fallback (item 5).
+   *
+   * When a provider/model lacks native response_format support but the caller
+   * wants structured output, wrap the messages with instructions that coax the
+   * model into emitting JSON. The response then goes through repairJSONContent
+   * to strip markdown fences and trailing prose.
+   *
+   * Fired only after the capability check decides native handling isn't
+   * available; preserves rotation (every provider can "do" structured
+   * output this way, so no provider is skipped on capability grounds).
+   */
+  wrapMessagesForStructuredFallback(messages, prompt, responseFormat) {
+    const instruction = this.buildStructuredFallbackInstruction(responseFormat);
+    if (!instruction) return { messages, prompt };
+
+    let nextMessages;
+    if (messages && Array.isArray(messages) && messages.length > 0) {
+      nextMessages = [...messages];
+      const systemIdx = nextMessages.findIndex(m => m.role === 'system');
+      if (systemIdx >= 0) {
+        nextMessages[systemIdx] = {
+          ...nextMessages[systemIdx],
+          content: `${nextMessages[systemIdx].content ?? ''}\n\n${instruction}`
+        };
+      } else {
+        nextMessages.unshift({ role: 'system', content: instruction });
+      }
+    } else {
+      nextMessages = [
+        { role: 'system', content: instruction },
+        { role: 'user', content: prompt }
+      ];
+    }
+
+    const nextPrompt = (nextMessages || []).map(m => `${m.role}: ${m.content ?? ''}`).join('\n');
+    return { messages: nextMessages, prompt: nextPrompt };
+  }
+
+  buildStructuredFallbackInstruction(responseFormat) {
+    if (!responseFormat) return null;
+    if (responseFormat.type === 'json_object') {
+      return 'You MUST respond with a single valid JSON object and nothing else. Do not wrap the response in markdown code fences or add explanatory prose.';
+    }
+    if (responseFormat.type === 'json_schema' && responseFormat.json_schema?.schema) {
+      const name = responseFormat.json_schema.name || 'output';
+      const schemaText = JSON.stringify(responseFormat.json_schema.schema);
+      return `You MUST respond with a single valid JSON object named "${name}" that strictly conforms to this JSON Schema:\n${schemaText}\nRespond with only the JSON object. No markdown fences, no commentary, no trailing text.`;
+    }
+    return null;
+  }
+
+  /**
+   * Repair fallback-produced content into parseable JSON: strip markdown fences,
+   * extract the first balanced {...} or [...] block, trim surrounding prose.
+   * Returns the repaired string (still a string — caller parses). If no JSON
+   * found, returns the original content unchanged.
+   */
+  repairJSONContent(content) {
+    if (typeof content !== 'string') return content;
+    let s = content.trim();
+    // Strip ``` or ```json fences
+    const fenceMatch = s.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
+    if (fenceMatch) s = fenceMatch[1].trim();
+    // Extract first top-level JSON object or array
+    const first = s.search(/[\[{]/);
+    if (first < 0) return content;
+    const opener = s[first];
+    const closer = opener === '{' ? '}' : ']';
+    let depth = 0;
+    let inStr = false;
+    let esc = false;
+    let end = -1;
+    for (let i = first; i < s.length; i++) {
+      const c = s[i];
+      if (inStr) {
+        if (esc) { esc = false; continue; }
+        if (c === '\\') { esc = true; continue; }
+        if (c === '"') { inStr = false; }
+        continue;
+      }
+      if (c === '"') { inStr = true; continue; }
+      if (c === opener) depth++;
+      else if (c === closer) { depth--; if (depth === 0) { end = i; break; } }
+    }
+    if (end < 0) return content;
+    return s.slice(first, end + 1);
   }
 
   /**
@@ -745,18 +855,23 @@ class AIService {
   }
 
   /**
-   * Set cached response (LRU eviction)
+   * Set cached response (LRU eviction).
+   *
+   * Accepts either a plain string (legacy content-only call site) or a
+   * full result object with { content, toolCalls, finishReason } so
+   * tool-call responses survive cache hits. Without storing toolCalls,
+   * the second identical request (e.g. Instructor's internal retry)
+   * would see content='' and zero tool_calls and fail to parse.
    */
   setCachedResponse(cacheKey, response) {
-    // LRU eviction: remove oldest if at max size
     if (this.responseCache.size >= this.maxCacheSize) {
       const firstKey = this.responseCache.keys().next().value;
       this.responseCache.delete(firstKey);
     }
-    this.responseCache.set(cacheKey, {
-      content: response,
-      timestamp: Date.now()
-    });
+    const entry = typeof response === 'object' && response !== null && !Array.isArray(response)
+      ? { ...response, timestamp: Date.now() }
+      : { content: response, toolCalls: null, finishReason: 'stop', timestamp: Date.now() };
+    this.responseCache.set(cacheKey, entry);
   }
 
   /**
@@ -1162,8 +1277,34 @@ class AIService {
       autoRotate = false,
       freeOnly = false,
       useAppConfig = false,
-      cacheNamespace = 'default'
+      cacheNamespace = 'default',
+      responseFormat = null,
+      tools = null,
+      toolChoice = null
     } = config;
+
+    // Fingerprint for structured-output cache-key segregation (item 2).
+    const structuredFingerprint = this.structuredOutputFingerprint(responseFormat, tools, toolChoice);
+
+    // Explicit provider/model pinning (item 7): "<provider>/<model>" pins the
+    // request to that exact provider with no rotation. Useful for workflows
+    // that need a single consistent provider per call (e.g., geekPR PR reviews).
+    // We only split when the prefix is a known provider — otherwise slashes
+    // in real model IDs (e.g., "meta-llama/llama-3.1-70b") are preserved.
+    if (typeof model === 'string' && model.includes('/')) {
+      const KNOWN_PROVIDERS = new Set(Object.keys(this.providers));
+      const slashIdx = model.indexOf('/');
+      const prefix = model.slice(0, slashIdx);
+      const rest = model.slice(slashIdx + 1);
+      if (KNOWN_PROVIDERS.has(prefix) && rest) {
+        requestedProvider = prefix;
+        model = rest;
+        autoRotate = false;
+        freeOnly = false;
+        useAppConfig = false;
+        logger.info(`[ExplicitPin] routed to ${prefix}/${rest} (rotation bypassed)`);
+      }
+    }
 
     // App config resolution: look up server-side routing for this appName
     // Triggered by useAppConfig flag, model "basegeek-app", or when no explicit provider/model is given
@@ -1298,11 +1439,29 @@ class AIService {
         }
       }
 
-      // Check cache per provider/model combination
-      const cacheKeyBase = this.getCacheKey(basePrompt || '', currentProvider, providerModel, temperature, cacheNamespace);
-      const cached = this.getCachedResponse(cacheKeyBase);
+      // Structured / tool-calling requests bypass the cache entirely.
+      // The cache is tuned for idempotent text completions; for tool_use
+      // responses it causes two problems:
+      //   1. max_tokens and similar params aren't in the cache key, so a
+      //      stale truncated response can survive a caller's max_tokens bump.
+      //   2. Instructor's internal retries hit the cache on the second
+      //      attempt and get whatever was wrong with the first — masking
+      //      every real error behind a frozen-bad-response.
+      // Tool-call responses are typically single-use per PR / per session
+      // anyway; the cache saves little and breaks the Instructor contract.
+      const bypassCache = !!(tools || responseFormat);
+      const cacheKeyBase = bypassCache
+        ? null
+        : this.getCacheKey(basePrompt || '', currentProvider, providerModel, temperature, cacheNamespace, structuredFingerprint);
+      const cached = bypassCache ? null : this.getCachedResponse(cacheKeyBase);
       if (cached) {
-        this.lastProviderInfo = { provider: currentProvider, model: providerModel, cached: true };
+        this.lastProviderInfo = {
+          provider: currentProvider,
+          model: providerModel,
+          cached: true,
+          toolCalls: cached.toolCalls || null,
+          finishReason: cached.finishReason || 'stop'
+        };
         if (autoRotate) {
           this.rotationManager.recordUsage(currentProvider, { requests: 1, tokens: 0 });
         }
@@ -1336,17 +1495,73 @@ class AIService {
         continue;
       }
 
+      // Tool-calling capability check: unlike structured output (which has a
+      // prompt-injection fallback), tool calling demands a machine-parseable
+      // tool_calls response shape that can only come from native provider
+      // support. Skip incapable providers — the rotation will try the next.
+      if (tools && Array.isArray(tools) && tools.length > 0 &&
+          !aiModelCapabilitiesService.supportsTools(currentProvider, providerModel)) {
+        logger.debug(`Skipping ${currentProvider}/${providerModel}: tools requested but provider lacks native tool-calling`);
+        continue;
+      }
+
+      // Structured-output dispatch decision (items 4 + 5):
+      // - If responseFormat is requested and the provider/model supports it
+      //   natively (see aiModelCapabilitiesService), pass it through.
+      // - Otherwise, apply the prompt-injection fallback here, strip
+      //   responseFormat from the downstream call, and flag the response for
+      //   JSON repair after it returns. This keeps every provider in rotation.
+      let dispatchPrompt = processedPrompt;
+      let dispatchMessages = processedMessages;
+      let dispatchResponseFormat = responseFormat;
+      let needsJSONRepair = false;
+
+      if (responseFormat) {
+        const wantSchema = responseFormat.type === 'json_schema';
+        const wantObject = responseFormat.type === 'json_object';
+        const native = wantSchema
+          ? aiModelCapabilitiesService.supportsJSONSchema(currentProvider, providerModel)
+          : wantObject
+          ? aiModelCapabilitiesService.supportsJSONMode(currentProvider, providerModel)
+          : false;
+
+        if (!native) {
+          logger.debug(`[structured-output] ${currentProvider}/${providerModel} lacks native ${responseFormat.type}; applying prompt-injection fallback`);
+          const wrapped = this.wrapMessagesForStructuredFallback(processedMessages, processedPrompt, responseFormat);
+          dispatchMessages = wrapped.messages;
+          dispatchPrompt = wrapped.prompt;
+          dispatchResponseFormat = null;
+          needsJSONRepair = true;
+        }
+      }
+
       try {
-        const result = await this.callProvider(currentProvider, processedPrompt, {
+        const result = await this.callProvider(currentProvider, dispatchPrompt, {
           maxTokens,
           temperature,
           model: providerModel,
-          messages: processedMessages
+          messages: dispatchMessages,
+          responseFormat: dispatchResponseFormat,
+          tools,
+          toolChoice
         });
+
+        if (needsJSONRepair && result?.content) {
+          result.content = this.repairJSONContent(result.content);
+        }
 
         const totalTokens = (result.inputTokens || 0) + (result.outputTokens || 0);
 
-        this.setCachedResponse(cacheKeyBase, result.content);
+        // Cache only plain-text responses; structured/tool-call responses
+        // bypassed the cache at lookup (see comment there). cacheKeyBase is
+        // null for those.
+        if (cacheKeyBase) {
+          this.setCachedResponse(cacheKeyBase, {
+            content: result.content,
+            toolCalls: result.toolCalls || null,
+            finishReason: result.finishReason || 'stop'
+          });
+        }
         this.updateRateLimitUsage(currentProvider, totalTokens);
         await this.updateStats(currentProvider, result.inputTokens || 0, result.outputTokens || 0, providerModel, appName);
 
@@ -1361,7 +1576,13 @@ class AIService {
           this.rotationManager.recordUsage(currentProvider, { requests: 1, tokens: totalTokens });
         }
 
-        this.lastProviderInfo = { provider: currentProvider, model: providerModel, cached: false };
+        this.lastProviderInfo = {
+          provider: currentProvider,
+          model: providerModel,
+          cached: false,
+          toolCalls: result.toolCalls || null,
+          finishReason: result.finishReason || 'stop'
+        };
         return result.content;
       } catch (error) {
         lastError = error;
@@ -1529,10 +1750,12 @@ class AIService {
       throw new Error(`${provider} API key not configured`);
     }
 
-    const { maxTokens = providerConfig.maxTokens, temperature = providerConfig.temperature, model = providerConfig.model, messages = null } = config;
+    const { maxTokens = providerConfig.maxTokens, temperature = providerConfig.temperature, model = providerConfig.model, messages = null, responseFormat = null, tools = null, toolChoice = null } = config;
 
-    // Pass messages to all provider calls
-    const callConfig = { maxTokens, temperature, model, messages };
+    // Pass messages + structured-output params to all provider calls.
+    // Providers that don't support them ignore them; native support lives in
+    // the provider-specific call*() methods (items 4 and 6).
+    const callConfig = { maxTokens, temperature, model, messages, responseFormat, tools, toolChoice };
 
     switch (provider) {
       case 'anthropic':
@@ -1802,20 +2025,87 @@ class AIService {
    * Call Claude API
    */
   async callClaude(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = 'claude-3-5-sonnet-20241022' } = config;
+    const { maxTokens = 1000, temperature = 0.7, model = 'claude-3-5-sonnet-20241022', messages = null, responseFormat = null, tools = null, toolChoice = null } = config;
+
+    // Anthropic takes `system` as a top-level field, not a message role.
+    // Extract system turns from the messages array and collapse them into a
+    // single `system` string; pass the remaining user/assistant turns as messages.
+    let systemText = '';
+    let chatMessages;
+    if (messages && Array.isArray(messages) && messages.length > 0) {
+      const systemMsgs = messages.filter(m => m.role === 'system');
+      systemText = systemMsgs.map(m => m.content ?? '').filter(Boolean).join('\n\n');
+      chatMessages = messages
+        .filter(m => m.role !== 'system')
+        .map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content ?? '' }));
+      if (chatMessages.length === 0) {
+        chatMessages = [{ role: 'user', content: prompt }];
+      }
+    } else {
+      chatMessages = [{ role: 'user', content: prompt }];
+    }
 
     try {
-      const response = await axios.post(`${this.providers.anthropic.baseURL}/messages`, {
+      const body = {
         model: model,
         max_tokens: maxTokens,
         temperature: temperature,
-        messages: [
-          {
-            role: 'user',
-            content: prompt
+        messages: chatMessages
+      };
+      if (systemText) body.system = systemText;
+
+      // Translate OpenAI-style response_format into Anthropic's idioms.
+      // Anthropic has no native response_format field, so:
+      //   - json_object: append a "reply with valid JSON only" instruction
+      //     and prefill the assistant turn with '{' to anchor the output.
+      //   - json_schema: synthesize a tool with the schema and force it via
+      //     tool_choice; the response arrives as a tool_use block whose input
+      //     IS the schema-conformant object.
+      let forcedSchemaToolName = null;
+      if (responseFormat?.type === 'json_object') {
+        body.system = (body.system ? body.system + '\n\n' : '') +
+          'Respond with a single valid JSON object and nothing else. Do not wrap in markdown fences.';
+        body.messages = [...chatMessages, { role: 'assistant', content: '{' }];
+      } else if (responseFormat?.type === 'json_schema' && responseFormat.json_schema?.schema) {
+        forcedSchemaToolName = responseFormat.json_schema.name || 'structured_output';
+        body.tools = [{
+          name: forcedSchemaToolName,
+          description: responseFormat.json_schema.description || 'Return the user-requested structured output.',
+          input_schema: responseFormat.json_schema.schema
+        }];
+        body.tool_choice = { type: 'tool', name: forcedSchemaToolName };
+      }
+
+      // Translate OpenAI-style tools/tool_choice into Anthropic format.
+      // OpenAI: { function: { name, description, parameters } }
+      // Anthropic: { name, description, input_schema }
+      if (tools && Array.isArray(tools) && tools.length > 0) {
+        const anthTools = tools.map(t => {
+          const fn = t.function || t;
+          return {
+            name: fn.name,
+            description: fn.description || '',
+            input_schema: fn.parameters || { type: 'object', properties: {} }
+          };
+        });
+        body.tools = body.tools ? [...body.tools, ...anthTools] : anthTools;
+
+        if (!forcedSchemaToolName) {
+          // json_schema already set tool_choice; don't overwrite.
+          if (!toolChoice || toolChoice === 'auto') {
+            body.tool_choice = { type: 'auto' };
+          } else if (toolChoice === 'required') {
+            body.tool_choice = { type: 'any' };
+          } else if (toolChoice === 'none') {
+            delete body.tools;
+            delete body.tool_choice;
+          } else if (toolChoice?.type === 'function' && toolChoice.function?.name) {
+            body.tool_choice = { type: 'tool', name: toolChoice.function.name };
           }
-        ]
-      }, {
+        }
+      }
+
+      const response = await axios.post(`${this.providers.anthropic.baseURL}/messages`, body, {
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': this.providers.anthropic.apiKey,
@@ -1824,12 +2114,57 @@ class AIService {
         timeout: 60000
       });
 
-      const result = response.data.content[0].text;
+      let result;
+      let toolCalls = null;
+      let finishReason = 'stop';
+      const stopReason = response.data.stop_reason;
+
+      if (forcedSchemaToolName) {
+        const toolUse = (response.data.content || []).find(b => b.type === 'tool_use' && b.name === forcedSchemaToolName);
+        if (!toolUse) {
+          throw new Error('Anthropic response missing expected tool_use block for forced schema');
+        }
+        result = JSON.stringify(toolUse.input);
+      } else if (tools && Array.isArray(tools) && tools.length > 0 && stopReason === 'tool_use') {
+        // Caller-provided tools: surface tool_use blocks as OpenAI tool_calls.
+        let useBlocks = (response.data.content || []).filter(b => b.type === 'tool_use');
+
+        // Defensive single-call collapse: when the caller pinned a specific
+        // function via tool_choice (the Instructor pattern, and anything
+        // using OpenAI's `tool_choice: {type: "function", function: {...}}`),
+        // the OpenAI contract expects exactly one entry in tool_calls.
+        // Claude *should* respect disable_parallel_tool_use, but if it ever
+        // returns extras we keep the first matching block (or the first
+        // block if none match) instead of letting multiple leak out.
+        const forcedName = toolChoice?.function?.name;
+        if (forcedName && useBlocks.length > 1) {
+          const match = useBlocks.find(b => b.name === forcedName) || useBlocks[0];
+          useBlocks = [match];
+        }
+
+        toolCalls = useBlocks.map(b => ({
+          id: b.id,
+          type: 'function',
+          function: { name: b.name, arguments: JSON.stringify(b.input) }
+        }));
+        result = (response.data.content || []).find(b => b.type === 'text')?.text ?? '';
+        finishReason = 'tool_calls';
+      } else if (responseFormat?.type === 'json_object') {
+        // Assistant prefill '{' is NOT echoed in response.content — re-attach it.
+        const text = (response.data.content || []).find(b => b.type === 'text')?.text ?? '';
+        result = '{' + text;
+      } else {
+        result = response.data.content[0].text;
+      }
+
+      if (stopReason === 'max_tokens') finishReason = 'length';
 
       return {
         content: result,
         inputTokens: response.data.usage?.input_tokens || 0,
-        outputTokens: response.data.usage?.output_tokens || 0
+        outputTokens: response.data.usage?.output_tokens || 0,
+        toolCalls,
+        finishReason
       };
     } catch (error) {
       logger.error({ err: error }, 'Claude API error');
@@ -1845,19 +2180,18 @@ class AIService {
    * Call Groq API
    */
   async callGroq(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = 'llama-3.3-70b-versatile' } = config;
+    const { maxTokens = 1000, temperature = 0.7, model = 'llama-3.3-70b-versatile', messages = null } = config;
+
+    const requestMessages = (messages && Array.isArray(messages) && messages.length > 0)
+      ? messages
+      : [{ role: 'user', content: prompt }];
 
     try {
       const response = await axios.post(`${this.providers.groq.baseURL}/chat/completions`, {
         model: model,
         max_tokens: maxTokens,
         temperature: temperature,
-        messages: [
-          {
-            role: 'user',
-            content: prompt
-          }
-        ]
+        messages: requestMessages
       }, {
         headers: {
           'Content-Type': 'application/json',
@@ -1887,36 +2221,115 @@ class AIService {
    * Call Gemini API
    */
   async callGemini(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = 'gemini-1.5-flash-latest' } = config;
+    const { maxTokens = 1000, temperature = 0.7, model = 'gemini-1.5-flash-latest', messages = null, responseFormat = null, tools = null, toolChoice = null } = config;
+
+    // Gemini's contents[] takes role 'user' or 'model' (not 'assistant'),
+    // and system messages go into a separate systemInstruction field.
+    let systemInstruction = null;
+    let contents;
+    if (messages && Array.isArray(messages) && messages.length > 0) {
+      const systemMsgs = messages.filter(m => m.role === 'system');
+      const systemText = systemMsgs.map(m => m.content ?? '').filter(Boolean).join('\n\n');
+      if (systemText) {
+        systemInstruction = { parts: [{ text: systemText }] };
+      }
+      contents = messages
+        .filter(m => m.role !== 'system')
+        .map(m => ({
+          role: m.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: m.content ?? '' }]
+        }));
+      if (contents.length === 0) {
+        contents = [{ role: 'user', parts: [{ text: prompt }] }];
+      }
+    } else {
+      contents = [{ role: 'user', parts: [{ text: prompt }] }];
+    }
 
     try {
-      const response = await axios.post(`${this.providers.gemini.baseURL}/models/${model}:generateContent?key=${this.providers.gemini.apiKey}`, {
-        contents: [
-          {
-            parts: [
-              {
-                text: prompt
-              }
-            ]
-          }
-        ],
-        generationConfig: {
-          maxOutputTokens: maxTokens,
-          temperature: temperature
+      const generationConfig = {
+        maxOutputTokens: maxTokens,
+        temperature: temperature
+      };
+      // Native OpenAI-style response_format → Gemini generationConfig mapping.
+      if (responseFormat?.type === 'json_object') {
+        generationConfig.responseMimeType = 'application/json';
+      } else if (responseFormat?.type === 'json_schema' && responseFormat.json_schema?.schema) {
+        generationConfig.responseMimeType = 'application/json';
+        generationConfig.responseSchema = responseFormat.json_schema.schema;
+      }
+
+      const body = { contents, generationConfig };
+      if (systemInstruction) body.systemInstruction = systemInstruction;
+
+      // Translate OpenAI-style tools → Gemini functionDeclarations,
+      // and tool_choice → toolConfig.functionCallingConfig.
+      if (tools && Array.isArray(tools) && tools.length > 0) {
+        const declarations = tools.map(t => {
+          const fn = t.function || t;
+          return {
+            name: fn.name,
+            description: fn.description || '',
+            parameters: fn.parameters || { type: 'object', properties: {} }
+          };
+        });
+        body.tools = [{ functionDeclarations: declarations }];
+
+        let mode = 'AUTO';
+        let allowedFunctionNames;
+        if (toolChoice === 'required') mode = 'ANY';
+        else if (toolChoice === 'none') mode = 'NONE';
+        else if (toolChoice?.type === 'function' && toolChoice.function?.name) {
+          mode = 'ANY';
+          allowedFunctionNames = [toolChoice.function.name];
         }
-      }, {
+        body.toolConfig = {
+          functionCallingConfig: {
+            mode,
+            ...(allowedFunctionNames && { allowedFunctionNames })
+          }
+        };
+      }
+
+      const response = await axios.post(`${this.providers.gemini.baseURL}/models/${model}:generateContent?key=${this.providers.gemini.apiKey}`, body, {
         headers: {
           'Content-Type': 'application/json'
         },
         timeout: 60000
       });
 
-      const result = response.data.candidates[0].content.parts[0].text;
+      const parts = response.data.candidates?.[0]?.content?.parts || [];
+      const functionCallParts = parts.filter(p => p.functionCall);
+
+      let result;
+      let toolCalls = null;
+      let finishReason = 'stop';
+
+      if (functionCallParts.length > 0) {
+        // Gemini doesn't issue tool_call IDs — synthesize stable ones from name+index.
+        toolCalls = functionCallParts.map((p, i) => ({
+          id: `call_${p.functionCall.name}_${i}`,
+          type: 'function',
+          function: {
+            name: p.functionCall.name,
+            arguments: JSON.stringify(p.functionCall.args || {})
+          }
+        }));
+        result = parts.filter(p => p.text).map(p => p.text).join('') || '';
+        finishReason = 'tool_calls';
+      } else {
+        result = parts.filter(p => p.text).map(p => p.text).join('') || '';
+      }
+
+      const geminiFinish = response.data.candidates?.[0]?.finishReason;
+      if (geminiFinish === 'MAX_TOKENS') finishReason = 'length';
 
       return {
         content: result,
         inputTokens: response.data.usageMetadata?.promptTokenCount || 0,
-        outputTokens: response.data.usageMetadata?.candidatesTokenCount || 0
+        outputTokens: response.data.usageMetadata?.candidatesTokenCount || 0,
+        toolCalls,
+        finishReason
       };
     } catch (error) {
       logger.error({ err: error }, 'Gemini API error');
@@ -1932,19 +2345,18 @@ class AIService {
    * Call Together AI API
    */
   async callTogether(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = 'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free' } = config;
+    const { maxTokens = 1000, temperature = 0.7, model = 'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free', messages = null } = config;
+
+    const requestMessages = (messages && Array.isArray(messages) && messages.length > 0)
+      ? messages
+      : [{ role: 'user', content: prompt }];
 
     try {
       const response = await axios.post(`${this.providers.together.baseURL}/chat/completions`, {
         model: model,
         max_tokens: maxTokens,
         temperature: temperature,
-        messages: [
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
+        messages: requestMessages,
         stream: false
       }, {
         headers: {
@@ -1975,15 +2387,38 @@ class AIService {
    * Call Cohere API
    */
   async callCohere(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = 'command-r-plus-08-2024' } = config;
+    const { maxTokens = 1000, temperature = 0.7, model = 'command-r-plus-08-2024', messages = null } = config;
+
+    // Cohere /chat takes a preamble + chat_history + message (current turn).
+    // Fold system messages into preamble, use the last user turn as message,
+    // and place everything between into chat_history.
+    let preamble = '';
+    let currentMessage = prompt;
+    const chatHistory = [];
+    if (messages && Array.isArray(messages) && messages.length > 0) {
+      const systemMsgs = messages.filter(m => m.role === 'system');
+      preamble = systemMsgs.map(m => m.content ?? '').filter(Boolean).join('\n\n');
+      const convo = messages.filter(m => m.role !== 'system');
+      if (convo.length > 0) {
+        const last = convo[convo.length - 1];
+        currentMessage = last.content ?? prompt;
+        for (const m of convo.slice(0, -1)) {
+          chatHistory.push({ role: m.role === 'assistant' ? 'CHATBOT' : 'USER', message: m.content ?? '' });
+        }
+      }
+    }
 
     try {
-      const response = await axios.post(`${this.providers.cohere.baseURL}/chat`, {
+      const body = {
         model: model,
-        message: prompt,
+        message: currentMessage,
         max_tokens: maxTokens,
         temperature: temperature
-      }, {
+      };
+      if (preamble) body.preamble = preamble;
+      if (chatHistory.length > 0) body.chat_history = chatHistory;
+
+      const response = await axios.post(`${this.providers.cohere.baseURL}/chat`, body, {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.providers.cohere.apiKey}`
@@ -2012,19 +2447,18 @@ class AIService {
    * Call OpenRouter API
    */
   async callOpenRouter(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = 'google/gemini-2.0-flash-exp:free' } = config;
+    const { maxTokens = 1000, temperature = 0.7, model = 'google/gemini-2.0-flash-exp:free', messages = null } = config;
+
+    const requestMessages = (messages && Array.isArray(messages) && messages.length > 0)
+      ? messages
+      : [{ role: 'user', content: prompt }];
 
     try {
       const response = await axios.post(`${this.providers.openrouter.baseURL}/chat/completions`, {
         model: model,
         max_tokens: maxTokens,
         temperature: temperature,
-        messages: [
-          {
-            role: 'user',
-            content: prompt
-          }
-        ]
+        messages: requestMessages
       }, {
         headers: {
           'Content-Type': 'application/json',

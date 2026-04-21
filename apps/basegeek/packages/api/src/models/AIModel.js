@@ -41,7 +41,19 @@ const aiModelSchema = new mongoose.Schema({
       type: Boolean,
       default: false
     },
+    supportsToolCalling: {
+      type: Boolean,
+      default: false
+    },
     supportsJSONOutput: {
+      type: Boolean,
+      default: false
+    },
+    supportsJSONMode: {
+      type: Boolean,
+      default: false
+    },
+    supportsJSONSchema: {
       type: Boolean,
       default: false
     },
