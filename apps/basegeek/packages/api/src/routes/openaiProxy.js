@@ -276,18 +276,50 @@ router.post('/chat/completions', async (req, res) => {
           : providerInfo.model || requestedModel || providerInfo.provider || 'unknown';
 
         const id = `chatcmpl-${Date.now()}`;
+        const hasToolCalls = Array.isArray(providerInfo.toolCalls) && providerInfo.toolCalls.length > 0;
+        const structured = !!responseFormat || hasToolCalls;
+        const finalFinishReason = hasToolCalls
+          ? 'tool_calls'
+          : (providerInfo.finishReason || 'stop');
 
-        // Stream content in chunks
-        const chunkSize = 50;
-        for (let i = 0; i < formatted.length; i += chunkSize) {
-          const content = formatted.slice(i, i + chunkSize);
+        if (hasToolCalls) {
+          // Tool-call response: single chunk with the full tool_calls array.
+          // Arbitrary char-boundary fragmentation would break JSON parsing on
+          // the client, so we emit the whole structure atomically.
           res.write(`data: ${JSON.stringify({
             id,
             object: 'chat.completion.chunk',
             created,
             model: responseModel,
-            choices: [{ index: 0, delta: { content }, finish_reason: null }]
+            choices: [{
+              index: 0,
+              delta: { role: 'assistant', tool_calls: providerInfo.toolCalls },
+              finish_reason: null
+            }]
           })}\n\n`);
+        } else if (structured) {
+          // response_format active: emit full content as one chunk so the
+          // resulting JSON is always parseable by the client as a whole.
+          res.write(`data: ${JSON.stringify({
+            id,
+            object: 'chat.completion.chunk',
+            created,
+            model: responseModel,
+            choices: [{ index: 0, delta: { content: formatted }, finish_reason: null }]
+          })}\n\n`);
+        } else {
+          // Plain text: chunk at 50 chars for responsive streaming UX.
+          const chunkSize = 50;
+          for (let i = 0; i < formatted.length; i += chunkSize) {
+            const content = formatted.slice(i, i + chunkSize);
+            res.write(`data: ${JSON.stringify({
+              id,
+              object: 'chat.completion.chunk',
+              created,
+              model: responseModel,
+              choices: [{ index: 0, delta: { content }, finish_reason: null }]
+            })}\n\n`);
+          }
         }
 
         // Final chunk
@@ -296,7 +328,7 @@ router.post('/chat/completions', async (req, res) => {
           object: 'chat.completion.chunk',
           created,
           model: responseModel,
-          choices: [{ index: 0, delta: {}, finish_reason: 'stop' }]
+          choices: [{ index: 0, delta: {}, finish_reason: finalFinishReason }]
         })}\n\n`);
         res.write('data: [DONE]\n\n');
         res.end();
