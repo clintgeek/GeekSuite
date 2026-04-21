@@ -1281,6 +1281,26 @@ class AIService {
     // Fingerprint for structured-output cache-key segregation (item 2).
     const structuredFingerprint = this.structuredOutputFingerprint(responseFormat, tools, toolChoice);
 
+    // Explicit provider/model pinning (item 7): "<provider>/<model>" pins the
+    // request to that exact provider with no rotation. Useful for workflows
+    // that need a single consistent provider per call (e.g., geekPR PR reviews).
+    // We only split when the prefix is a known provider — otherwise slashes
+    // in real model IDs (e.g., "meta-llama/llama-3.1-70b") are preserved.
+    if (typeof model === 'string' && model.includes('/')) {
+      const KNOWN_PROVIDERS = new Set(Object.keys(this.providers));
+      const slashIdx = model.indexOf('/');
+      const prefix = model.slice(0, slashIdx);
+      const rest = model.slice(slashIdx + 1);
+      if (KNOWN_PROVIDERS.has(prefix) && rest) {
+        requestedProvider = prefix;
+        model = rest;
+        autoRotate = false;
+        freeOnly = false;
+        useAppConfig = false;
+        logger.info(`[ExplicitPin] routed to ${prefix}/${rest} (rotation bypassed)`);
+      }
+    }
+
     // App config resolution: look up server-side routing for this appName
     // Triggered by useAppConfig flag, model "basegeek-app", or when no explicit provider/model is given
     if (useAppConfig || requestedProvider === 'basegeek-app') {
