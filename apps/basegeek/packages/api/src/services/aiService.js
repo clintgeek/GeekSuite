@@ -2041,10 +2041,7 @@ class AIService {
           description: responseFormat.json_schema.description || 'Return the user-requested structured output.',
           input_schema: responseFormat.json_schema.schema
         }];
-        // disable_parallel_tool_use ensures exactly one tool_use block in
-        // the response — required for Instructor and other single-
-        // response-model clients that reject multi-tool-call responses.
-        body.tool_choice = { type: 'tool', name: forcedSchemaToolName, disable_parallel_tool_use: true };
+        body.tool_choice = { type: 'tool', name: forcedSchemaToolName };
       }
 
       // Translate OpenAI-style tools/tool_choice into Anthropic format.
@@ -2071,10 +2068,7 @@ class AIService {
             delete body.tools;
             delete body.tool_choice;
           } else if (toolChoice?.type === 'function' && toolChoice.function?.name) {
-            // disable_parallel_tool_use — Instructor and similar clients
-            // require exactly one tool_call in the response when a
-            // specific function is forced.
-            body.tool_choice = { type: 'tool', name: toolChoice.function.name, disable_parallel_tool_use: true };
+            body.tool_choice = { type: 'tool', name: toolChoice.function.name };
           }
         }
       }
