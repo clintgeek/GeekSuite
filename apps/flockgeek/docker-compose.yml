@@ -8,6 +8,7 @@ services:
       - .env.production
 
     environment:
+      TZ: America/Chicago
       NODE_ENV: production
       PORT: 5001
 

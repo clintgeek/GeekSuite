@@ -3,6 +3,8 @@ services:
     image: geeksuite/startgeek:latest
     container_name: startgeek
     restart: unless-stopped
+    environment:
+      TZ: America/Chicago
     ports:
       - "3000:3000"
     healthcheck:

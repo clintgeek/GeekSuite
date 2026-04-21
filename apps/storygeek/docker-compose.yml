@@ -4,6 +4,7 @@ services:
     container_name: storygeek
     restart: unless-stopped
     environment:
+      TZ: America/Chicago
       NODE_ENV: production
       PORT: 9977
       DB_URI: ${DB_URI}
