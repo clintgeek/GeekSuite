@@ -1439,9 +1439,21 @@ class AIService {
         }
       }
 
-      // Check cache per provider/model combination (and structured-output shape)
-      const cacheKeyBase = this.getCacheKey(basePrompt || '', currentProvider, providerModel, temperature, cacheNamespace, structuredFingerprint);
-      const cached = this.getCachedResponse(cacheKeyBase);
+      // Structured / tool-calling requests bypass the cache entirely.
+      // The cache is tuned for idempotent text completions; for tool_use
+      // responses it causes two problems:
+      //   1. max_tokens and similar params aren't in the cache key, so a
+      //      stale truncated response can survive a caller's max_tokens bump.
+      //   2. Instructor's internal retries hit the cache on the second
+      //      attempt and get whatever was wrong with the first — masking
+      //      every real error behind a frozen-bad-response.
+      // Tool-call responses are typically single-use per PR / per session
+      // anyway; the cache saves little and breaks the Instructor contract.
+      const bypassCache = !!(tools || responseFormat);
+      const cacheKeyBase = bypassCache
+        ? null
+        : this.getCacheKey(basePrompt || '', currentProvider, providerModel, temperature, cacheNamespace, structuredFingerprint);
+      const cached = bypassCache ? null : this.getCachedResponse(cacheKeyBase);
       if (cached) {
         this.lastProviderInfo = {
           provider: currentProvider,
@@ -1540,14 +1552,16 @@ class AIService {
 
         const totalTokens = (result.inputTokens || 0) + (result.outputTokens || 0);
 
-        // Cache the full result shape so tool-call responses survive cache
-        // hits — storing only result.content would lose toolCalls and make
-        // retry-of-same-request (e.g. Instructor's internal retries) fail.
-        this.setCachedResponse(cacheKeyBase, {
-          content: result.content,
-          toolCalls: result.toolCalls || null,
-          finishReason: result.finishReason || 'stop'
-        });
+        // Cache only plain-text responses; structured/tool-call responses
+        // bypassed the cache at lookup (see comment there). cacheKeyBase is
+        // null for those.
+        if (cacheKeyBase) {
+          this.setCachedResponse(cacheKeyBase, {
+            content: result.content,
+            toolCalls: result.toolCalls || null,
+            finishReason: result.finishReason || 'stop'
+          });
+        }
         this.updateRateLimitUsage(currentProvider, totalTokens);
         await this.updateStats(currentProvider, result.inputTokens || 0, result.outputTokens || 0, providerModel, appName);
 
