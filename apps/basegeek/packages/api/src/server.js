@@ -26,8 +26,8 @@ import apiKeyRoutes from './routes/apiKeys.js';
 import appsRoutes from './routes/apps.js';
 import oauthConnectionsRoutes from './routes/oauthConnections.js';
 import ambientRoutes from './routes/ambient.js';
-import { connectAIGeekDB } from './config/database.js';
-import { initRefreshTokenStore, closeRefreshTokenStore } from './services/refreshTokenStore.js';
+import { connectAIGeekDB, getAIGeekConnection } from './config/database.js';
+import { initRefreshTokenStore, closeRefreshTokenStore, isRefreshTokenStoreConnected } from './services/refreshTokenStore.js';
 import { startOAuthRefreshJob, stopOAuthRefreshJob } from './services/oauthRefreshJobService.js';
 import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@as-integrations/express4';
@@ -169,15 +169,43 @@ app.use(express.static(uiBuildPath));
 // Track server start time for uptime
 const serverStartTime = Date.now();
 
-// Health check — real status, version, uptime
+// Health check — real status, version, uptime, dependency readiness.
+//
+// Uses cheap already-open pool/client checks (no new connections) so it's
+// safe for orchestrators to hit frequently. For deeper probing (latency,
+// versions, fresh connect), hit /api/health/infra instead.
+//
+// Status semantics:
+//   - "ok"        all critical deps ready → 200
+//   - "degraded"  non-critical dep down (redis / aiGeek) → 200
+//   - "unhealthy" critical dep down (mongo) → 503
 app.get('/api/health', (req, res) => {
   const uptimeSeconds = Math.floor((Date.now() - serverStartTime) / 1000);
-  res.json({
-    status: 'ok',
+
+  const mongoReady = mongoose.connection.readyState === 1;
+  const aiGeekReady = getAIGeekConnection().readyState === 1;
+  const redisReady = isRefreshTokenStoreConnected();
+
+  let status = 'ok';
+  let httpStatus = 200;
+  if (!mongoReady) {
+    status = 'unhealthy';
+    httpStatus = 503;
+  } else if (!redisReady || !aiGeekReady) {
+    status = 'degraded';
+  }
+
+  res.status(httpStatus).json({
+    status,
     version: process.env.npm_package_version || '0.1.0',
     uptime: uptimeSeconds,
     timestamp: new Date().toISOString(),
     app: 'basegeek',
+    dependencies: {
+      mongo: { ready: mongoReady },
+      aiGeek: { ready: aiGeekReady },
+      redis: { ready: redisReady },
+    },
   });
 });
 

@@ -17,6 +17,7 @@ services:
 
     # Compose-fixed values that don't vary per environment.
     environment:
+      TZ: America/Chicago
       APP_NAME: bujogeek
       GATEWAY_URL: http://host.docker.internal:4100
 

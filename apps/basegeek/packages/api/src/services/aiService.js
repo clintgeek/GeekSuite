@@ -117,11 +117,15 @@ class AIService {
     this.summarizationEnabled = true; // Re-enabled with cloud approach
     this.summarizationThreshold = 8000;
 
-    // Response caching (LRU cache with 100 entries)
+    // Response caching (LRU cache with 100 entries, 1h TTL).
+    // TTL keeps long-running processes from serving stale responses
+    // indefinitely when the same prompts recur; LRU caps memory.
     this.responseCache = new Map();
     this.maxCacheSize = 100;
+    this.cacheTtlMs = 60 * 60 * 1000;
     this.cacheHits = 0;
     this.cacheMisses = 0;
+    this.cacheExpirations = 0;
 
     // Request batching
     this.batchQueue = [];
@@ -842,8 +846,16 @@ class AIService {
    */
   getCachedResponse(cacheKey) {
     if (this.responseCache.has(cacheKey)) {
-      this.cacheHits++;
       const cached = this.responseCache.get(cacheKey);
+      // Expire stale entries on read — passive expiration avoids a
+      // background timer and is sufficient for bounded-size caches.
+      if (cached.timestamp && Date.now() - cached.timestamp > this.cacheTtlMs) {
+        this.responseCache.delete(cacheKey);
+        this.cacheExpirations++;
+        this.cacheMisses++;
+        return null;
+      }
+      this.cacheHits++;
       // Move to end (LRU)
       this.responseCache.delete(cacheKey);
       this.responseCache.set(cacheKey, cached);
@@ -890,8 +902,10 @@ class AIService {
     return {
       size: this.responseCache.size,
       maxSize: this.maxCacheSize,
+      ttlMs: this.cacheTtlMs,
       hits: this.cacheHits,
       misses: this.cacheMisses,
+      expirations: this.cacheExpirations,
       hitRate: this.cacheHits + this.cacheMisses > 0
         ? Math.round(this.cacheHits / (this.cacheHits + this.cacheMisses) * 100)
         : 0

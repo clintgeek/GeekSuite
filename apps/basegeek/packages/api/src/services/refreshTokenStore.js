@@ -38,6 +38,10 @@ export async function initRefreshTokenStore() {
   }
 }
 
+export function isRefreshTokenStoreConnected() {
+  return !!(client && client.isOpen);
+}
+
 export async function closeRefreshTokenStore() {
   if (client && client.isOpen) {
     try {
