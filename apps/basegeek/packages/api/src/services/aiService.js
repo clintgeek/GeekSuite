@@ -855,18 +855,23 @@ class AIService {
   }
 
   /**
-   * Set cached response (LRU eviction)
+   * Set cached response (LRU eviction).
+   *
+   * Accepts either a plain string (legacy content-only call site) or a
+   * full result object with { content, toolCalls, finishReason } so
+   * tool-call responses survive cache hits. Without storing toolCalls,
+   * the second identical request (e.g. Instructor's internal retry)
+   * would see content='' and zero tool_calls and fail to parse.
    */
   setCachedResponse(cacheKey, response) {
-    // LRU eviction: remove oldest if at max size
     if (this.responseCache.size >= this.maxCacheSize) {
       const firstKey = this.responseCache.keys().next().value;
       this.responseCache.delete(firstKey);
     }
-    this.responseCache.set(cacheKey, {
-      content: response,
-      timestamp: Date.now()
-    });
+    const entry = typeof response === 'object' && response !== null && !Array.isArray(response)
+      ? { ...response, timestamp: Date.now() }
+      : { content: response, toolCalls: null, finishReason: 'stop', timestamp: Date.now() };
+    this.responseCache.set(cacheKey, entry);
   }
 
   /**
@@ -1438,7 +1443,13 @@ class AIService {
       const cacheKeyBase = this.getCacheKey(basePrompt || '', currentProvider, providerModel, temperature, cacheNamespace, structuredFingerprint);
       const cached = this.getCachedResponse(cacheKeyBase);
       if (cached) {
-        this.lastProviderInfo = { provider: currentProvider, model: providerModel, cached: true, toolCalls: null, finishReason: 'stop' };
+        this.lastProviderInfo = {
+          provider: currentProvider,
+          model: providerModel,
+          cached: true,
+          toolCalls: cached.toolCalls || null,
+          finishReason: cached.finishReason || 'stop'
+        };
         if (autoRotate) {
           this.rotationManager.recordUsage(currentProvider, { requests: 1, tokens: 0 });
         }
@@ -1529,7 +1540,14 @@ class AIService {
 
         const totalTokens = (result.inputTokens || 0) + (result.outputTokens || 0);
 
-        this.setCachedResponse(cacheKeyBase, result.content);
+        // Cache the full result shape so tool-call responses survive cache
+        // hits — storing only result.content would lose toolCalls and make
+        // retry-of-same-request (e.g. Instructor's internal retries) fail.
+        this.setCachedResponse(cacheKeyBase, {
+          content: result.content,
+          toolCalls: result.toolCalls || null,
+          finishReason: result.finishReason || 'stop'
+        });
         this.updateRateLimitUsage(currentProvider, totalTokens);
         await this.updateStats(currentProvider, result.inputTokens || 0, result.outputTokens || 0, providerModel, appName);
 
