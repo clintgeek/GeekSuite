@@ -2101,7 +2101,21 @@ class AIService {
         result = JSON.stringify(toolUse.input);
       } else if (tools && Array.isArray(tools) && tools.length > 0 && stopReason === 'tool_use') {
         // Caller-provided tools: surface tool_use blocks as OpenAI tool_calls.
-        const useBlocks = (response.data.content || []).filter(b => b.type === 'tool_use');
+        let useBlocks = (response.data.content || []).filter(b => b.type === 'tool_use');
+
+        // Defensive single-call collapse: when the caller pinned a specific
+        // function via tool_choice (the Instructor pattern, and anything
+        // using OpenAI's `tool_choice: {type: "function", function: {...}}`),
+        // the OpenAI contract expects exactly one entry in tool_calls.
+        // Claude *should* respect disable_parallel_tool_use, but if it ever
+        // returns extras we keep the first matching block (or the first
+        // block if none match) instead of letting multiple leak out.
+        const forcedName = toolChoice?.function?.name;
+        if (forcedName && useBlocks.length > 1) {
+          const match = useBlocks.find(b => b.name === forcedName) || useBlocks[0];
+          useBlocks = [match];
+        }
+
         toolCalls = useBlocks.map(b => ({
           id: b.id,
           type: 'function',
