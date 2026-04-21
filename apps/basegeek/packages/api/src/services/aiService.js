@@ -12,6 +12,7 @@ import AIFreeTier from '../models/AIFreeTier.js';
 import AIAppConfig from '../models/AIAppConfig.js';
 import AIUsage from '../models/AIUsage.js';
 import RotationManager from './rotationManager.js';
+import aiModelCapabilitiesService from './aiModelCapabilitiesService.js';
 // Using cloud-based summarization instead of local transformers.js
 import crypto from 'crypto';
 import fs from 'fs';
@@ -748,6 +749,95 @@ class AIService {
   }
 
   /**
+   * Structured-output prompt-injection fallback (item 5).
+   *
+   * When a provider/model lacks native response_format support but the caller
+   * wants structured output, wrap the messages with instructions that coax the
+   * model into emitting JSON. The response then goes through repairJSONContent
+   * to strip markdown fences and trailing prose.
+   *
+   * Fired only after the capability check decides native handling isn't
+   * available; preserves rotation (every provider can "do" structured
+   * output this way, so no provider is skipped on capability grounds).
+   */
+  wrapMessagesForStructuredFallback(messages, prompt, responseFormat) {
+    const instruction = this.buildStructuredFallbackInstruction(responseFormat);
+    if (!instruction) return { messages, prompt };
+
+    let nextMessages;
+    if (messages && Array.isArray(messages) && messages.length > 0) {
+      nextMessages = [...messages];
+      const systemIdx = nextMessages.findIndex(m => m.role === 'system');
+      if (systemIdx >= 0) {
+        nextMessages[systemIdx] = {
+          ...nextMessages[systemIdx],
+          content: `${nextMessages[systemIdx].content ?? ''}\n\n${instruction}`
+        };
+      } else {
+        nextMessages.unshift({ role: 'system', content: instruction });
+      }
+    } else {
+      nextMessages = [
+        { role: 'system', content: instruction },
+        { role: 'user', content: prompt }
+      ];
+    }
+
+    const nextPrompt = (nextMessages || []).map(m => `${m.role}: ${m.content ?? ''}`).join('\n');
+    return { messages: nextMessages, prompt: nextPrompt };
+  }
+
+  buildStructuredFallbackInstruction(responseFormat) {
+    if (!responseFormat) return null;
+    if (responseFormat.type === 'json_object') {
+      return 'You MUST respond with a single valid JSON object and nothing else. Do not wrap the response in markdown code fences or add explanatory prose.';
+    }
+    if (responseFormat.type === 'json_schema' && responseFormat.json_schema?.schema) {
+      const name = responseFormat.json_schema.name || 'output';
+      const schemaText = JSON.stringify(responseFormat.json_schema.schema);
+      return `You MUST respond with a single valid JSON object named "${name}" that strictly conforms to this JSON Schema:\n${schemaText}\nRespond with only the JSON object. No markdown fences, no commentary, no trailing text.`;
+    }
+    return null;
+  }
+
+  /**
+   * Repair fallback-produced content into parseable JSON: strip markdown fences,
+   * extract the first balanced {...} or [...] block, trim surrounding prose.
+   * Returns the repaired string (still a string — caller parses). If no JSON
+   * found, returns the original content unchanged.
+   */
+  repairJSONContent(content) {
+    if (typeof content !== 'string') return content;
+    let s = content.trim();
+    // Strip ``` or ```json fences
+    const fenceMatch = s.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
+    if (fenceMatch) s = fenceMatch[1].trim();
+    // Extract first top-level JSON object or array
+    const first = s.search(/[\[{]/);
+    if (first < 0) return content;
+    const opener = s[first];
+    const closer = opener === '{' ? '}' : ']';
+    let depth = 0;
+    let inStr = false;
+    let esc = false;
+    let end = -1;
+    for (let i = first; i < s.length; i++) {
+      const c = s[i];
+      if (inStr) {
+        if (esc) { esc = false; continue; }
+        if (c === '\\') { esc = true; continue; }
+        if (c === '"') { inStr = false; }
+        continue;
+      }
+      if (c === '"') { inStr = true; continue; }
+      if (c === opener) depth++;
+      else if (c === closer) { depth--; if (depth === 0) { end = i; break; } }
+    }
+    if (end < 0) return content;
+    return s.slice(first, end + 1);
+  }
+
+  /**
    * Get cached response
    */
   getCachedResponse(cacheKey) {
@@ -1362,16 +1452,50 @@ class AIService {
         continue;
       }
 
+      // Structured-output dispatch decision (items 4 + 5):
+      // - If responseFormat is requested and the provider/model supports it
+      //   natively (see aiModelCapabilitiesService), pass it through.
+      // - Otherwise, apply the prompt-injection fallback here, strip
+      //   responseFormat from the downstream call, and flag the response for
+      //   JSON repair after it returns. This keeps every provider in rotation.
+      let dispatchPrompt = processedPrompt;
+      let dispatchMessages = processedMessages;
+      let dispatchResponseFormat = responseFormat;
+      let needsJSONRepair = false;
+
+      if (responseFormat) {
+        const wantSchema = responseFormat.type === 'json_schema';
+        const wantObject = responseFormat.type === 'json_object';
+        const native = wantSchema
+          ? aiModelCapabilitiesService.supportsJSONSchema(currentProvider, providerModel)
+          : wantObject
+          ? aiModelCapabilitiesService.supportsJSONMode(currentProvider, providerModel)
+          : false;
+
+        if (!native) {
+          logger.debug(`[structured-output] ${currentProvider}/${providerModel} lacks native ${responseFormat.type}; applying prompt-injection fallback`);
+          const wrapped = this.wrapMessagesForStructuredFallback(processedMessages, processedPrompt, responseFormat);
+          dispatchMessages = wrapped.messages;
+          dispatchPrompt = wrapped.prompt;
+          dispatchResponseFormat = null;
+          needsJSONRepair = true;
+        }
+      }
+
       try {
-        const result = await this.callProvider(currentProvider, processedPrompt, {
+        const result = await this.callProvider(currentProvider, dispatchPrompt, {
           maxTokens,
           temperature,
           model: providerModel,
-          messages: processedMessages,
-          responseFormat,
+          messages: dispatchMessages,
+          responseFormat: dispatchResponseFormat,
           tools,
           toolChoice
         });
+
+        if (needsJSONRepair && result?.content) {
+          result.content = this.repairJSONContent(result.content);
+        }
 
         const totalTokens = (result.inputTokens || 0) + (result.outputTokens || 0);
 

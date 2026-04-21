@@ -5,22 +5,26 @@ import logger from '../lib/logger.js';
 // (supportsFunctionCalling / supportsJSONOutput) flags. Populated by normalize()
 // so every entry in knownCapabilities gets the full set without per-entry edits.
 //
-// JSON_SCHEMA_SUPPORTED: models known to honor response_format:{type:"json_schema",...}
-// natively. Models NOT in this map default to supportsJSONSchema=false, which means
-// aiService.callAI will fall through to the prompt-injection fallback (item 5).
+// JSON_SCHEMA_SUPPORTED / JSON_MODE_SUPPORTED:
+//   Provider/model pairs where aiService has a NATIVE translation implemented
+//   in its call*() method for response_format:{type: "json_schema"|"json_object"}.
+//
+// Pairs NOT in these sets fall through to the prompt-injection fallback
+// (item 5) — which preserves rotation: every provider can "do" structured
+// output one way or the other, just at varying fidelity.
+//
+// Expand these sets as native implementations land in callGroq / callCerebras /
+// callOpenRouter / etc. The legacy supportsJSONOutput flag is a softer "can
+// produce JSON when asked" signal used elsewhere (aiDirectorService model
+// selection); these are the stricter "we forward response_format correctly"
+// signals.
 const JSON_SCHEMA_SUPPORTED = new Set([
   'anthropic:*',
-  'gemini:*',
-  'groq:llama-3.3-70b-versatile',
-  'groq:llama-3.1-70b-versatile',
-  'groq:llama-3.1-8b-instant',
-  'groq:meta-llama/llama-4-scout-17b-16e-instruct',
-  'groq:meta-llama/llama-4-maverick-17b-128e-instruct',
-  'groq:openai/gpt-oss-20b',
-  'groq:openai/gpt-oss-120b',
-  'cerebras:llama-3.3-70b',
-  'cerebras:llama3.1-70b',
-  'cerebras:qwen-3-235b'
+  'gemini:*'
+]);
+const JSON_MODE_SUPPORTED = new Set([
+  'anthropic:*',
+  'gemini:*'
 ]);
 
 // TOOL_CALLING_CORRECTIONS: overrides for supportsFunctionCalling/supportsToolCalling.
@@ -44,6 +48,11 @@ const TOOL_CALLING_CORRECTIONS = new Set([
 function schemaSupportedFor(provider, modelId) {
   return JSON_SCHEMA_SUPPORTED.has(`${provider}:*`) ||
          JSON_SCHEMA_SUPPORTED.has(`${provider}:${modelId}`);
+}
+
+function jsonModeSupportedFor(provider, modelId) {
+  return JSON_MODE_SUPPORTED.has(`${provider}:*`) ||
+         JSON_MODE_SUPPORTED.has(`${provider}:${modelId}`);
 }
 
 function toolCallingCorrectedFor(provider, modelId) {
@@ -1280,7 +1289,11 @@ class AIModelCapabilitiesService {
 
         caps.supportsToolCalling = toolCalling;
         caps.supportsFunctionCalling = toolCalling;
-        caps.supportsJSONMode = !!caps.supportsJSONOutput;
+        // supportsJSONMode / supportsJSONSchema reflect whether aiService has
+        // a native response_format translation for this pair; the legacy
+        // supportsJSONOutput flag is a looser "model is generally JSON-capable"
+        // signal and is left untouched.
+        caps.supportsJSONMode = jsonModeSupportedFor(provider, modelId);
         caps.supportsJSONSchema = schemaSupportedFor(provider, modelId);
       }
     }
@@ -1296,7 +1309,7 @@ class AIModelCapabilitiesService {
     if (known) return known;
     const inferred = this.inferCapabilities(modelId);
     inferred.supportsToolCalling = inferred.supportsFunctionCalling;
-    inferred.supportsJSONMode = !!inferred.supportsJSONOutput;
+    inferred.supportsJSONMode = jsonModeSupportedFor(provider, modelId);
     inferred.supportsJSONSchema = schemaSupportedFor(provider, modelId);
     return inferred;
   }
