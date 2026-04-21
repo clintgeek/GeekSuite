@@ -1,6 +1,55 @@
 import AIModel from '../models/AIModel.js';
 import logger from '../lib/logger.js';
 
+// Canonical OpenAI-compatible capability flags layered on top of the legacy
+// (supportsFunctionCalling / supportsJSONOutput) flags. Populated by normalize()
+// so every entry in knownCapabilities gets the full set without per-entry edits.
+//
+// JSON_SCHEMA_SUPPORTED: models known to honor response_format:{type:"json_schema",...}
+// natively. Models NOT in this map default to supportsJSONSchema=false, which means
+// aiService.callAI will fall through to the prompt-injection fallback (item 5).
+const JSON_SCHEMA_SUPPORTED = new Set([
+  'anthropic:*',
+  'gemini:*',
+  'groq:llama-3.3-70b-versatile',
+  'groq:llama-3.1-70b-versatile',
+  'groq:llama-3.1-8b-instant',
+  'groq:meta-llama/llama-4-scout-17b-16e-instruct',
+  'groq:meta-llama/llama-4-maverick-17b-128e-instruct',
+  'groq:openai/gpt-oss-20b',
+  'groq:openai/gpt-oss-120b',
+  'cerebras:llama-3.3-70b',
+  'cerebras:llama3.1-70b',
+  'cerebras:qwen-3-235b'
+]);
+
+// TOOL_CALLING_CORRECTIONS: overrides for supportsFunctionCalling/supportsToolCalling.
+// The legacy data in knownCapabilities predates Groq's function-calling support — this
+// set patches those entries without rewriting 50 blocks.
+const TOOL_CALLING_CORRECTIONS = new Set([
+  'groq:llama-3.3-70b-versatile',
+  'groq:llama-3.1-70b-versatile',
+  'groq:llama-3.1-8b-instant',
+  'groq:llama3-70b-8192',
+  'groq:llama3-8b-8192',
+  'groq:meta-llama/llama-4-scout-17b-16e-instruct',
+  'groq:meta-llama/llama-4-maverick-17b-128e-instruct',
+  'groq:qwen/qwen3-32b',
+  'groq:moonshotai/kimi-k2-instruct',
+  'groq:openai/gpt-oss-20b',
+  'groq:openai/gpt-oss-120b',
+  'groq:deepseek-r1-distill-llama-70b'
+]);
+
+function schemaSupportedFor(provider, modelId) {
+  return JSON_SCHEMA_SUPPORTED.has(`${provider}:*`) ||
+         JSON_SCHEMA_SUPPORTED.has(`${provider}:${modelId}`);
+}
+
+function toolCallingCorrectedFor(provider, modelId) {
+  return TOOL_CALLING_CORRECTIONS.has(`${provider}:${modelId}`);
+}
+
 class AIModelCapabilitiesService {
   constructor() {
     // Known model capabilities based on provider documentation and AI knowledge
@@ -1062,8 +1111,209 @@ class AIModelCapabilitiesService {
             reasoning: 'excellent'
           }
         }
+      },
+      'cerebras': {
+        'llama-3.3-70b': {
+          maxTokens: 8192,
+          supportsVision: false,
+          supportsAudio: false,
+          supportsFunctionCalling: true,
+          supportsJSONOutput: true,
+          supportsStreaming: true,
+          contextWindow: 8192,
+          tasks: {
+            textGeneration: true, codeGeneration: true, reasoning: true,
+            analysis: true, summarization: true, translation: true,
+            questionAnswering: true, creativeWriting: true, structuredOutput: true
+          },
+          performance: { speed: 'ultra-fast', quality: 'excellent', reasoning: 'excellent' }
+        },
+        'llama3.1-70b': {
+          maxTokens: 8192,
+          supportsVision: false,
+          supportsAudio: false,
+          supportsFunctionCalling: true,
+          supportsJSONOutput: true,
+          supportsStreaming: true,
+          contextWindow: 8192,
+          tasks: {
+            textGeneration: true, codeGeneration: true, reasoning: true,
+            analysis: true, summarization: true, translation: true,
+            questionAnswering: true, creativeWriting: true, structuredOutput: true
+          },
+          performance: { speed: 'ultra-fast', quality: 'excellent', reasoning: 'excellent' }
+        },
+        'qwen-3-235b': {
+          maxTokens: 32768,
+          supportsVision: false,
+          supportsAudio: false,
+          supportsFunctionCalling: false,
+          supportsJSONOutput: true,
+          supportsStreaming: true,
+          contextWindow: 32768,
+          tasks: {
+            textGeneration: true, codeGeneration: true, reasoning: true,
+            analysis: true, summarization: true, translation: true,
+            questionAnswering: true, creativeWriting: true, structuredOutput: true
+          },
+          performance: { speed: 'fast', quality: 'excellent', reasoning: 'state-of-the-art' }
+        }
+      },
+      'cloudflare': {
+        '@cf/meta/llama-3.3-70b-instruct-fp8-fast': {
+          maxTokens: 4096,
+          supportsVision: false,
+          supportsAudio: false,
+          supportsFunctionCalling: false,
+          supportsJSONOutput: false,
+          supportsStreaming: true,
+          contextWindow: 4096,
+          tasks: {
+            textGeneration: true, codeGeneration: true, reasoning: true,
+            analysis: true, summarization: true, translation: true,
+            questionAnswering: true, creativeWriting: true, structuredOutput: false
+          },
+          performance: { speed: 'fast', quality: 'good', reasoning: 'good' }
+        }
+      },
+      'ollama': {
+        'qwen3-coder:480b-cloud': {
+          maxTokens: 32768,
+          supportsVision: false,
+          supportsAudio: false,
+          supportsFunctionCalling: false,
+          supportsJSONOutput: true,
+          supportsStreaming: true,
+          contextWindow: 32768,
+          tasks: {
+            textGeneration: true, codeGeneration: true, reasoning: true,
+            analysis: true, summarization: true, translation: true,
+            questionAnswering: true, creativeWriting: true, structuredOutput: true
+          },
+          performance: { speed: 'medium', quality: 'excellent', reasoning: 'excellent' }
+        }
+      },
+      'openrouter': {
+        'meta-llama/llama-3.1-70b-instruct:free': {
+          maxTokens: 8192,
+          supportsVision: false,
+          supportsAudio: false,
+          supportsFunctionCalling: false,
+          supportsJSONOutput: true,
+          supportsStreaming: true,
+          contextWindow: 8192,
+          tasks: {
+            textGeneration: true, codeGeneration: true, reasoning: true,
+            analysis: true, summarization: true, translation: true,
+            questionAnswering: true, creativeWriting: true, structuredOutput: true
+          },
+          performance: { speed: 'fast', quality: 'excellent', reasoning: 'excellent' }
+        }
+      },
+      'cohere': {
+        'command-r': {
+          maxTokens: 128000,
+          supportsVision: false,
+          supportsAudio: false,
+          supportsFunctionCalling: true,
+          supportsJSONOutput: false,
+          supportsStreaming: true,
+          contextWindow: 128000,
+          tasks: {
+            textGeneration: true, codeGeneration: true, reasoning: true,
+            analysis: true, summarization: true, translation: true,
+            questionAnswering: true, creativeWriting: true, structuredOutput: false
+          },
+          performance: { speed: 'medium', quality: 'excellent', reasoning: 'good' }
+        }
+      },
+      'llmgateway': {
+        'llama-4-maverick-free': {
+          maxTokens: 8192,
+          supportsVision: false,
+          supportsAudio: false,
+          supportsFunctionCalling: false,
+          supportsJSONOutput: false,
+          supportsStreaming: true,
+          contextWindow: 8192,
+          tasks: {
+            textGeneration: true, codeGeneration: true, reasoning: true,
+            analysis: true, summarization: true, translation: true,
+            questionAnswering: true, creativeWriting: true, structuredOutput: false
+          },
+          performance: { speed: 'fast', quality: 'excellent', reasoning: 'excellent' }
+        }
+      },
+      'llm7': {
+        'qwen2.5-coder-32b': {
+          maxTokens: 32768,
+          supportsVision: false,
+          supportsAudio: false,
+          supportsFunctionCalling: false,
+          supportsJSONOutput: false,
+          supportsStreaming: true,
+          contextWindow: 32768,
+          tasks: {
+            textGeneration: true, codeGeneration: true, reasoning: true,
+            analysis: true, summarization: true, translation: true,
+            questionAnswering: true, creativeWriting: true, structuredOutput: false
+          },
+          performance: { speed: 'fast', quality: 'excellent', reasoning: 'good' }
+        }
       }
     };
+
+    this.normalizeCapabilities();
+  }
+
+  /**
+   * Populate canonical OpenAI-compatible capability flags across all entries:
+   *   - supportsToolCalling (mirrors supportsFunctionCalling, with corrections)
+   *   - supportsJSONMode    (mirrors supportsJSONOutput)
+   *   - supportsJSONSchema  (explicit allowlist)
+   */
+  normalizeCapabilities() {
+    for (const [provider, models] of Object.entries(this.knownCapabilities)) {
+      for (const [modelId, caps] of Object.entries(models)) {
+        const toolCallingCorrected = toolCallingCorrectedFor(provider, modelId);
+        const toolCalling = caps.supportsFunctionCalling || toolCallingCorrected;
+
+        caps.supportsToolCalling = toolCalling;
+        caps.supportsFunctionCalling = toolCalling;
+        caps.supportsJSONMode = !!caps.supportsJSONOutput;
+        caps.supportsJSONSchema = schemaSupportedFor(provider, modelId);
+      }
+    }
+  }
+
+  /**
+   * Canonical accessor: returns the full capabilities object for a provider/model,
+   * falling back to inferCapabilities() for unknown models. Always returns an
+   * object with the canonical flag set populated.
+   */
+  getCapabilities(provider, modelId) {
+    const known = this.knownCapabilities[provider]?.[modelId];
+    if (known) return known;
+    const inferred = this.inferCapabilities(modelId);
+    inferred.supportsToolCalling = inferred.supportsFunctionCalling;
+    inferred.supportsJSONMode = !!inferred.supportsJSONOutput;
+    inferred.supportsJSONSchema = schemaSupportedFor(provider, modelId);
+    return inferred;
+  }
+
+  /** True if this provider/model accepts OpenAI-style `tools` parameter. */
+  supportsTools(provider, modelId) {
+    return !!this.getCapabilities(provider, modelId).supportsToolCalling;
+  }
+
+  /** True for response_format: {type: "json_object"}. */
+  supportsJSONMode(provider, modelId) {
+    return !!this.getCapabilities(provider, modelId).supportsJSONMode;
+  }
+
+  /** True for response_format: {type: "json_schema", json_schema: {...}}. */
+  supportsJSONSchema(provider, modelId) {
+    return !!this.getCapabilities(provider, modelId).supportsJSONSchema;
   }
 
   async updateModelCapabilities(provider, modelId) {
@@ -1098,7 +1348,10 @@ class AIModelCapabilitiesService {
         supportsVision: false,
         supportsAudio: false,
         supportsFunctionCalling: false,
+        supportsToolCalling: false,
         supportsJSONOutput: true,
+        supportsJSONMode: true,
+        supportsJSONSchema: false,
         supportsStreaming: true,
         contextWindow: 4096,
         tasks: {
@@ -1125,7 +1378,10 @@ class AIModelCapabilitiesService {
       supportsVision: false,
       supportsAudio: false,
       supportsFunctionCalling: false,
+      supportsToolCalling: false,
       supportsJSONOutput: true,
+      supportsJSONMode: true,
+      supportsJSONSchema: false,
       supportsStreaming: true,
       contextWindow: 4096,
       tasks: {
@@ -1189,6 +1445,8 @@ class AIModelCapabilitiesService {
     // Function calling inference (mainly for Claude models)
     if (modelLower.includes('claude') || modelLower.includes('gemini')) {
       capabilities.supportsFunctionCalling = true;
+      capabilities.supportsToolCalling = true;
+      capabilities.supportsJSONSchema = true;
     }
 
     // Guard models are specialized
