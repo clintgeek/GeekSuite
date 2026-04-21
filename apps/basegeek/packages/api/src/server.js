@@ -86,6 +86,7 @@ const hardcodedOrigins = [
   'https://dash.clintgeek.com',       // DashGeek production
   'https://dashgeek.clintgeek.com',   // DashGeek production (alt)
   'https://babelgeek.clintgeek.com',  // BabelGeek production
+  'https://geekpr.clintgeek.com',  // geekPR — autonomous PR reviewer
   'https://start.clintgeek.com',  // StartGeek production
   'https://clintgeek.com',        // Portfolio (for portal link)
   'http://localhost:1801',    // BookGeek dev server
