@@ -175,9 +175,15 @@ router.post('/chat/completions', async (req, res) => {
       presence_penalty: presencePenalty,
       frequency_penalty: frequencyPenalty,
       response_format: responseFormat,
+      tools,
+      tool_choice: toolChoice,
       n,
       seed
     } = req.body || {};
+
+    if (tools !== undefined && !Array.isArray(tools)) {
+      return openAIError(res, 400, 'tools must be an array when provided.', 'invalid_request_error', 'invalid_tools');
+    }
 
     if (!Array.isArray(messages) || messages.length === 0) {
       return openAIError(res, 400, 'The request must include a non-empty messages array.', 'invalid_request_error', 'missing_messages');
@@ -246,6 +252,8 @@ router.post('/chat/completions', async (req, res) => {
       ...(presencePenalty !== undefined && { presencePenalty }),
       ...(frequencyPenalty !== undefined && { frequencyPenalty }),
       ...(responseFormat !== undefined && { responseFormat }),
+      ...(tools !== undefined && { tools }),
+      ...(toolChoice !== undefined && { toolChoice }),
       ...(seed !== undefined && { seed })
     };
 
@@ -319,6 +327,19 @@ router.post('/chat/completions', async (req, res) => {
     const promptTokens = countMessageTokens(messages);
     const completionTokens = countTextTokens(formatted);
 
+    // Surface OpenAI-style tool_calls when the provider returned them.
+    // Anthropic/Gemini emit tool_use/functionCall blocks; the call*() methods
+    // normalize them onto lastProviderInfo.toolCalls.
+    const assistantMessage = { role: 'assistant', content: formatted };
+    let finishReason = 'stop';
+    if (Array.isArray(providerInfo.toolCalls) && providerInfo.toolCalls.length > 0) {
+      assistantMessage.tool_calls = providerInfo.toolCalls;
+      assistantMessage.content = formatted || null;
+      finishReason = 'tool_calls';
+    } else if (providerInfo.finishReason) {
+      finishReason = providerInfo.finishReason;
+    }
+
     res.json({
       id: `chatcmpl-${Date.now()}`,
       object: 'chat.completion',
@@ -327,8 +348,8 @@ router.post('/chat/completions', async (req, res) => {
       choices: [
         {
           index: 0,
-          message: { role: 'assistant', content: formatted },
-          finish_reason: 'stop'
+          message: assistantMessage,
+          finish_reason: finishReason
         }
       ],
       usage: {

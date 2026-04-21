@@ -1418,7 +1418,7 @@ class AIService {
       const cacheKeyBase = this.getCacheKey(basePrompt || '', currentProvider, providerModel, temperature, cacheNamespace, structuredFingerprint);
       const cached = this.getCachedResponse(cacheKeyBase);
       if (cached) {
-        this.lastProviderInfo = { provider: currentProvider, model: providerModel, cached: true };
+        this.lastProviderInfo = { provider: currentProvider, model: providerModel, cached: true, toolCalls: null, finishReason: 'stop' };
         if (autoRotate) {
           this.rotationManager.recordUsage(currentProvider, { requests: 1, tokens: 0 });
         }
@@ -1449,6 +1449,16 @@ class AIService {
         if (autoRotate) {
           this.rotationManager.markProviderCooling(currentProvider, 60 * 1000);
         }
+        continue;
+      }
+
+      // Tool-calling capability check: unlike structured output (which has a
+      // prompt-injection fallback), tool calling demands a machine-parseable
+      // tool_calls response shape that can only come from native provider
+      // support. Skip incapable providers — the rotation will try the next.
+      if (tools && Array.isArray(tools) && tools.length > 0 &&
+          !aiModelCapabilitiesService.supportsTools(currentProvider, providerModel)) {
+        logger.debug(`Skipping ${currentProvider}/${providerModel}: tools requested but provider lacks native tool-calling`);
         continue;
       }
 
@@ -1514,7 +1524,13 @@ class AIService {
           this.rotationManager.recordUsage(currentProvider, { requests: 1, tokens: totalTokens });
         }
 
-        this.lastProviderInfo = { provider: currentProvider, model: providerModel, cached: false };
+        this.lastProviderInfo = {
+          provider: currentProvider,
+          model: providerModel,
+          cached: false,
+          toolCalls: result.toolCalls || null,
+          finishReason: result.finishReason || 'stop'
+        };
         return result.content;
       } catch (error) {
         lastError = error;
@@ -1957,7 +1973,7 @@ class AIService {
    * Call Claude API
    */
   async callClaude(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = 'claude-3-5-sonnet-20241022', messages = null, responseFormat = null } = config;
+    const { maxTokens = 1000, temperature = 0.7, model = 'claude-3-5-sonnet-20241022', messages = null, responseFormat = null, tools = null, toolChoice = null } = config;
 
     // Anthropic takes `system` as a top-level field, not a message role.
     // Extract system turns from the messages array and collapse them into a
@@ -2008,6 +2024,35 @@ class AIService {
         body.tool_choice = { type: 'tool', name: forcedSchemaToolName };
       }
 
+      // Translate OpenAI-style tools/tool_choice into Anthropic format.
+      // OpenAI: { function: { name, description, parameters } }
+      // Anthropic: { name, description, input_schema }
+      if (tools && Array.isArray(tools) && tools.length > 0) {
+        const anthTools = tools.map(t => {
+          const fn = t.function || t;
+          return {
+            name: fn.name,
+            description: fn.description || '',
+            input_schema: fn.parameters || { type: 'object', properties: {} }
+          };
+        });
+        body.tools = body.tools ? [...body.tools, ...anthTools] : anthTools;
+
+        if (!forcedSchemaToolName) {
+          // json_schema already set tool_choice; don't overwrite.
+          if (!toolChoice || toolChoice === 'auto') {
+            body.tool_choice = { type: 'auto' };
+          } else if (toolChoice === 'required') {
+            body.tool_choice = { type: 'any' };
+          } else if (toolChoice === 'none') {
+            delete body.tools;
+            delete body.tool_choice;
+          } else if (toolChoice?.type === 'function' && toolChoice.function?.name) {
+            body.tool_choice = { type: 'tool', name: toolChoice.function.name };
+          }
+        }
+      }
+
       const response = await axios.post(`${this.providers.anthropic.baseURL}/messages`, body, {
         headers: {
           'Content-Type': 'application/json',
@@ -2018,12 +2063,26 @@ class AIService {
       });
 
       let result;
+      let toolCalls = null;
+      let finishReason = 'stop';
+      const stopReason = response.data.stop_reason;
+
       if (forcedSchemaToolName) {
         const toolUse = (response.data.content || []).find(b => b.type === 'tool_use' && b.name === forcedSchemaToolName);
         if (!toolUse) {
           throw new Error('Anthropic response missing expected tool_use block for forced schema');
         }
         result = JSON.stringify(toolUse.input);
+      } else if (tools && Array.isArray(tools) && tools.length > 0 && stopReason === 'tool_use') {
+        // Caller-provided tools: surface tool_use blocks as OpenAI tool_calls.
+        const useBlocks = (response.data.content || []).filter(b => b.type === 'tool_use');
+        toolCalls = useBlocks.map(b => ({
+          id: b.id,
+          type: 'function',
+          function: { name: b.name, arguments: JSON.stringify(b.input) }
+        }));
+        result = (response.data.content || []).find(b => b.type === 'text')?.text ?? '';
+        finishReason = 'tool_calls';
       } else if (responseFormat?.type === 'json_object') {
         // Assistant prefill '{' is NOT echoed in response.content — re-attach it.
         const text = (response.data.content || []).find(b => b.type === 'text')?.text ?? '';
@@ -2032,10 +2091,14 @@ class AIService {
         result = response.data.content[0].text;
       }
 
+      if (stopReason === 'max_tokens') finishReason = 'length';
+
       return {
         content: result,
         inputTokens: response.data.usage?.input_tokens || 0,
-        outputTokens: response.data.usage?.output_tokens || 0
+        outputTokens: response.data.usage?.output_tokens || 0,
+        toolCalls,
+        finishReason
       };
     } catch (error) {
       logger.error({ err: error }, 'Claude API error');
@@ -2092,7 +2155,7 @@ class AIService {
    * Call Gemini API
    */
   async callGemini(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = 'gemini-1.5-flash-latest', messages = null, responseFormat = null } = config;
+    const { maxTokens = 1000, temperature = 0.7, model = 'gemini-1.5-flash-latest', messages = null, responseFormat = null, tools = null, toolChoice = null } = config;
 
     // Gemini's contents[] takes role 'user' or 'model' (not 'assistant'),
     // and system messages go into a separate systemInstruction field.
@@ -2133,6 +2196,35 @@ class AIService {
       const body = { contents, generationConfig };
       if (systemInstruction) body.systemInstruction = systemInstruction;
 
+      // Translate OpenAI-style tools → Gemini functionDeclarations,
+      // and tool_choice → toolConfig.functionCallingConfig.
+      if (tools && Array.isArray(tools) && tools.length > 0) {
+        const declarations = tools.map(t => {
+          const fn = t.function || t;
+          return {
+            name: fn.name,
+            description: fn.description || '',
+            parameters: fn.parameters || { type: 'object', properties: {} }
+          };
+        });
+        body.tools = [{ functionDeclarations: declarations }];
+
+        let mode = 'AUTO';
+        let allowedFunctionNames;
+        if (toolChoice === 'required') mode = 'ANY';
+        else if (toolChoice === 'none') mode = 'NONE';
+        else if (toolChoice?.type === 'function' && toolChoice.function?.name) {
+          mode = 'ANY';
+          allowedFunctionNames = [toolChoice.function.name];
+        }
+        body.toolConfig = {
+          functionCallingConfig: {
+            mode,
+            ...(allowedFunctionNames && { allowedFunctionNames })
+          }
+        };
+      }
+
       const response = await axios.post(`${this.providers.gemini.baseURL}/models/${model}:generateContent?key=${this.providers.gemini.apiKey}`, body, {
         headers: {
           'Content-Type': 'application/json'
@@ -2140,12 +2232,38 @@ class AIService {
         timeout: 60000
       });
 
-      const result = response.data.candidates[0].content.parts[0].text;
+      const parts = response.data.candidates?.[0]?.content?.parts || [];
+      const functionCallParts = parts.filter(p => p.functionCall);
+
+      let result;
+      let toolCalls = null;
+      let finishReason = 'stop';
+
+      if (functionCallParts.length > 0) {
+        // Gemini doesn't issue tool_call IDs — synthesize stable ones from name+index.
+        toolCalls = functionCallParts.map((p, i) => ({
+          id: `call_${p.functionCall.name}_${i}`,
+          type: 'function',
+          function: {
+            name: p.functionCall.name,
+            arguments: JSON.stringify(p.functionCall.args || {})
+          }
+        }));
+        result = parts.filter(p => p.text).map(p => p.text).join('') || '';
+        finishReason = 'tool_calls';
+      } else {
+        result = parts.filter(p => p.text).map(p => p.text).join('') || '';
+      }
+
+      const geminiFinish = response.data.candidates?.[0]?.finishReason;
+      if (geminiFinish === 'MAX_TOKENS') finishReason = 'length';
 
       return {
         content: result,
         inputTokens: response.data.usageMetadata?.promptTokenCount || 0,
-        outputTokens: response.data.usageMetadata?.candidatesTokenCount || 0
+        outputTokens: response.data.usageMetadata?.candidatesTokenCount || 0,
+        toolCalls,
+        finishReason
       };
     } catch (error) {
       logger.error({ err: error }, 'Gemini API error');
