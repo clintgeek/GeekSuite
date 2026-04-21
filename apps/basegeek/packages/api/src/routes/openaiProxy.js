@@ -365,7 +365,21 @@ router.post('/chat/completions', async (req, res) => {
     const assistantMessage = { role: 'assistant', content: formatted };
     let finishReason = 'stop';
     if (Array.isArray(providerInfo.toolCalls) && providerInfo.toolCalls.length > 0) {
-      assistantMessage.tool_calls = providerInfo.toolCalls;
+      let emitted = providerInfo.toolCalls;
+      // Defense-in-depth for single-response-model clients (Instructor, etc.):
+      // when the caller pinned a specific tool via tool_choice:{type:"function"},
+      // the OpenAI contract is exactly one tool_call out. If multiple slipped
+      // through (e.g. a provider ignored disable_parallel_tool_use), collapse
+      // to the first matching call here so downstream clients don't break.
+      const forcedName = toolChoice && typeof toolChoice === 'object'
+        && toolChoice.type === 'function' && toolChoice.function?.name;
+      if (forcedName && emitted.length > 1) {
+        req.log.warn({ count: emitted.length, forcedName },
+          '[OpenAI Proxy] Collapsing multi tool_calls to forced function');
+        const match = emitted.find(tc => tc?.function?.name === forcedName) || emitted[0];
+        emitted = [match];
+      }
+      assistantMessage.tool_calls = emitted;
       assistantMessage.content = formatted || null;
       finishReason = 'tool_calls';
     } else if (providerInfo.finishReason) {
