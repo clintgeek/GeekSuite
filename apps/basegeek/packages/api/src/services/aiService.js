@@ -718,13 +718,33 @@ class AIService {
   }
 
   /**
-   * Generate cache key for request
+   * Generate cache key for request.
+   *
+   * structuredFingerprint is a stable hash of response_format + tools + tool_choice
+   * (see structuredOutputFingerprint). Included so two identical prompts with
+   * different structured-output requirements don't collide in the cache and
+   * return each other's plaintext.
    */
-  getCacheKey(prompt, provider, model, temperature, namespace = 'default') {
+  getCacheKey(prompt, provider, model, temperature, namespace = 'default', structuredFingerprint = '') {
     const hash = crypto.createHash('md5')
-      .update(`${prompt}:${provider}:${model}:${temperature}:${namespace}`)
+      .update(`${prompt}:${provider}:${model}:${temperature}:${namespace}:${structuredFingerprint}`)
       .digest('hex');
     return hash;
+  }
+
+  /**
+   * Stable hash of structured-output parameters for cache-key segregation.
+   * Returns '' when no structured output requested (so existing cache entries
+   * from before this change still match — they were written with fingerprint '').
+   */
+  structuredOutputFingerprint(responseFormat, tools, toolChoice) {
+    if (!responseFormat && !tools && !toolChoice) return '';
+    const payload = JSON.stringify({
+      rf: responseFormat || null,
+      t: Array.isArray(tools) ? tools.map(t => t?.function?.name || t?.name || '').sort() : null,
+      tc: toolChoice || null
+    });
+    return crypto.createHash('md5').update(payload).digest('hex').slice(0, 12);
   }
 
   /**
@@ -1162,8 +1182,14 @@ class AIService {
       autoRotate = false,
       freeOnly = false,
       useAppConfig = false,
-      cacheNamespace = 'default'
+      cacheNamespace = 'default',
+      responseFormat = null,
+      tools = null,
+      toolChoice = null
     } = config;
+
+    // Fingerprint for structured-output cache-key segregation (item 2).
+    const structuredFingerprint = this.structuredOutputFingerprint(responseFormat, tools, toolChoice);
 
     // App config resolution: look up server-side routing for this appName
     // Triggered by useAppConfig flag, model "basegeek-app", or when no explicit provider/model is given
@@ -1298,8 +1324,8 @@ class AIService {
         }
       }
 
-      // Check cache per provider/model combination
-      const cacheKeyBase = this.getCacheKey(basePrompt || '', currentProvider, providerModel, temperature, cacheNamespace);
+      // Check cache per provider/model combination (and structured-output shape)
+      const cacheKeyBase = this.getCacheKey(basePrompt || '', currentProvider, providerModel, temperature, cacheNamespace, structuredFingerprint);
       const cached = this.getCachedResponse(cacheKeyBase);
       if (cached) {
         this.lastProviderInfo = { provider: currentProvider, model: providerModel, cached: true };
