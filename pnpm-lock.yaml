@@ -497,9 +497,6 @@ importers:
       '@geeksuite/auth':
         specifier: workspace:*
         version: link:../../../packages/auth
-      '@geeksuite/ui':
-        specifier: workspace:*
-        version: link:../../../packages/ui
       '@geeksuite/user':
         specifier: workspace:*
         version: link:../../../packages/user
@@ -512,6 +509,12 @@ importers:
       axios:
         specifier: ^1.8.4
         version: 1.13.5
+      dompurify:
+        specifier: ^3.3.1
+        version: 3.3.1
+      framer-motion:
+        specifier: ^12.34.0
+        version: 12.34.0(@emotion/is-prop-valid@1.4.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       graphql:
         specifier: ^16.13.0
         version: 16.13.2
@@ -16152,7 +16155,6 @@ snapshots:
   dompurify@3.3.1:
     optionalDependencies:
       '@types/trusted-types': 2.0.7
-    optional: true
 
   dotenv@16.6.1: {}
 

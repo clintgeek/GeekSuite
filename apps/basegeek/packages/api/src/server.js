@@ -24,8 +24,11 @@ import aiRoutes from './routes/aiRoutes.js';
 import openaiProxyRoutes from './routes/openaiProxy.js';
 import apiKeyRoutes from './routes/apiKeys.js';
 import appsRoutes from './routes/apps.js';
+import oauthConnectionsRoutes from './routes/oauthConnections.js';
+import ambientRoutes from './routes/ambient.js';
 import { connectAIGeekDB } from './config/database.js';
 import { initRefreshTokenStore, closeRefreshTokenStore } from './services/refreshTokenStore.js';
+import { startOAuthRefreshJob, stopOAuthRefreshJob } from './services/oauthRefreshJobService.js';
 import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@as-integrations/express4';
 import { typeDefs, resolvers } from './graphql/index.js';
@@ -150,6 +153,8 @@ app.use('/api/ai', aiRoutes);
 app.use('/openai/v1', openaiProxyRoutes);
 app.use('/api/api-keys', apiKeyRoutes);
 app.use('/api/apps', appsRoutes);
+app.use('/api/connections', oauthConnectionsRoutes);
+app.use('/api/ambient', ambientRoutes);
 app.use('/api/mongo', mongoRoutes);
 app.use('/api/redis', redisRoutes);
 app.use('/api/postgres', postgresRoutes);
@@ -308,6 +313,16 @@ app.use('/graphql', expressMiddleware(apolloServer, {
   }),
 }));
 
+// Start the household OAuth refresh daemon (every 5 minutes; see
+// services/oauthRefreshJobService.js). Stop is wired into the shutdown path
+// below, mirroring closeRefreshTokenStore.
+try {
+  startOAuthRefreshJob();
+  logger.info('[OAuthRefreshJob] wired into server');
+} catch (err) {
+  logger.error({ err }, '[OAuthRefreshJob] failed to start');
+}
+
 // Fallback route for SPA (MUST be after all API and static routes)
 app.get('*', (req, res) => {
   res.sendFile(path.join(uiBuildPath, 'index.html'), (err) => {
@@ -376,6 +391,11 @@ const shutdown = (signal) => {
   forceTimer.unref()
 
   server.close(async () => {
+    try {
+      stopOAuthRefreshJob()
+    } catch (err) {
+      logger.error({ err }, 'Error stopping OAuth refresh job')
+    }
     try {
       await mongoose.disconnect()
     } catch (err) {

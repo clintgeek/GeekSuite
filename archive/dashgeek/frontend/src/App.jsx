@@ -5,12 +5,12 @@ import { ThemeProvider } from '@mui/material/styles';
 import { theme } from './theme';
 import useAuthStore from './store/authStore';
 import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
+import Ambient from './pages/Ambient';
+import Suite from './pages/Dashboard';
 import Search from './pages/Search';
 import Digest from './pages/Digest';
-
-// Mono stack — matches theme but usable before ThemeProvider context
-const monoStack = '"JetBrains Mono", "Geist Mono", ui-monospace, monospace';
+import Brand from './components/Brand';
+import SwipeShell from './components/SwipeShell';
 
 function LoadingVeil() {
   return (
@@ -25,7 +25,6 @@ function LoadingVeil() {
         backgroundColor: 'background.default',
       }}
     >
-      {/* Wordmark stamp */}
       <Box
         sx={{
           fontFamily: '"Geist", -apple-system, BlinkMacSystemFont, sans-serif',
@@ -39,8 +38,6 @@ function LoadingVeil() {
       >
         DashGeek
       </Box>
-
-      {/* Status caption */}
       <Typography
         variant="caption"
         sx={{
@@ -53,8 +50,6 @@ function LoadingVeil() {
       >
         Authenticating…
       </Typography>
-
-      {/* Progress bar */}
       <Box
         sx={{
           width: 80,
@@ -84,6 +79,23 @@ function LoadingVeil() {
   );
 }
 
+/**
+ * DeskLayout — the shell chrome (Brand header + swipeable body).
+ * Wraps the two swipe screens (`/`, `/suite`).
+ */
+function DeskLayout() {
+  const { logout } = useAuthStore();
+  return (
+    <Box sx={{ minHeight: '100vh', backgroundColor: 'background.default' }}>
+      <Brand onLogout={logout} />
+      <SwipeShell>
+        <Ambient />
+        <Suite />
+      </SwipeShell>
+    </Box>
+  );
+}
+
 export default function App() {
   const { hydrateUser, isAuthenticated, isLoading } = useAuthStore();
   const [isHydrating, setIsHydrating] = useState(true);
@@ -105,20 +117,30 @@ export default function App() {
         ) : (
           <Routes>
             <Route path="/login" element={<Login />} />
+
+            {/* Swipe shell — shared chrome for / and /suite */}
             <Route
               path="/"
-              element={isAuthenticated ? <Dashboard /> : <Navigate to="/login" replace />}
+              element={isAuthenticated ? <DeskLayout /> : <Navigate to="/login" replace />}
             />
+            <Route
+              path="/suite"
+              element={isAuthenticated ? <DeskLayout /> : <Navigate to="/login" replace />}
+            />
+
+            {/* Standalone routes */}
             <Route
               path="/search"
               element={isAuthenticated ? <Search /> : <Navigate to="/login" replace />}
             />
-            {/* /ai 301-style redirect → /digest (preserves bookmarks) */}
-            <Route path="/ai" element={<Navigate to="/digest" replace />} />
             <Route
               path="/digest"
               element={isAuthenticated ? <Digest /> : <Navigate to="/login" replace />}
             />
+
+            {/* /ai 301-style redirect → /digest (preserves bookmarks) */}
+            <Route path="/ai" element={<Navigate to="/digest" replace />} />
+
             <Route
               path="*"
               element={<Navigate to={isAuthenticated ? '/' : '/login'} replace />}

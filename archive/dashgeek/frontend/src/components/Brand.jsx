@@ -37,10 +37,14 @@ export default function Brand({ onLogout }) {
     '"JetBrains Mono", "Geist Mono", ui-monospace, monospace';
 
   const navItems = [
-    { path: '/',       label: 'DASH'   },
-    { path: '/search', label: 'SEARCH' },
-    { path: '/digest', label: 'DIGEST' },
+    { path: '/',       label: 'AMBIENT' },
+    { path: '/suite',  label: 'SUITE'   },
+    { path: '/digest', label: 'DIGEST'  },
   ];
+
+  // Two-dot pager reflects shell position; hidden off-shell (/digest, /login)
+  const isOnShell = location.pathname === '/' || location.pathname.startsWith('/suite');
+  const shellIndex = location.pathname.startsWith('/suite') ? 1 : 0;
 
   return (
     <Box
@@ -144,7 +148,7 @@ export default function Brand({ onLogout }) {
           })}
         </Box>
 
-        {/* Right: clock + logout */}
+        {/* Right: shell pager + clock + logout */}
         <Box
           sx={{
             display: 'flex',
@@ -153,6 +157,38 @@ export default function Brand({ onLogout }) {
             flexShrink: 0,
           }}
         >
+          {/* Two-dot shell pager — only visible on / or /suite */}
+          {isOnShell && (
+            <Box
+              aria-label="Shell position"
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                pr: 0.5,
+              }}
+            >
+              {[0, 1].map((i) => {
+                const active = i === shellIndex;
+                return (
+                  <Box
+                    key={i}
+                    sx={{
+                      width: active ? 16 : 6,
+                      height: 4,
+                      borderRadius: '2px',
+                      backgroundColor: active
+                        ? theme.palette.text.primary
+                        : theme.palette.text.disabled,
+                      transition:
+                        'width 180ms ease, background-color 180ms ease',
+                    }}
+                  />
+                );
+              })}
+            </Box>
+          )}
+
           {/* Clock — hidden on xs */}
           <Box
             sx={{

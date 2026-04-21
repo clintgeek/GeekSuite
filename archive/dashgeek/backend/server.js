@@ -58,6 +58,14 @@ app.use(createProxyMiddleware({
   pathFilter: '/api/users/me',
 }));
 
+// Proxy dashgeek ambient-screen API (weather / spotify / calendar / gmail)
+// to basegeek, which owns the OAuth tokens and auth middleware.
+app.use(createProxyMiddleware({
+  target: BASEGEEK_URL,
+  changeOrigin: true,
+  pathFilter: '/api/ambient',
+}));
+
 // Serve static frontend
 const publicPath = path.join(__dirname, 'public');
 app.use(express.static(publicPath));
