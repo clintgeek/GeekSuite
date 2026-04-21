@@ -1367,7 +1367,10 @@ class AIService {
           maxTokens,
           temperature,
           model: providerModel,
-          messages: processedMessages
+          messages: processedMessages,
+          responseFormat,
+          tools,
+          toolChoice
         });
 
         const totalTokens = (result.inputTokens || 0) + (result.outputTokens || 0);
@@ -1555,10 +1558,12 @@ class AIService {
       throw new Error(`${provider} API key not configured`);
     }
 
-    const { maxTokens = providerConfig.maxTokens, temperature = providerConfig.temperature, model = providerConfig.model, messages = null } = config;
+    const { maxTokens = providerConfig.maxTokens, temperature = providerConfig.temperature, model = providerConfig.model, messages = null, responseFormat = null, tools = null, toolChoice = null } = config;
 
-    // Pass messages to all provider calls
-    const callConfig = { maxTokens, temperature, model, messages };
+    // Pass messages + structured-output params to all provider calls.
+    // Providers that don't support them ignore them; native support lives in
+    // the provider-specific call*() methods (items 4 and 6).
+    const callConfig = { maxTokens, temperature, model, messages, responseFormat, tools, toolChoice };
 
     switch (provider) {
       case 'anthropic':
@@ -1828,7 +1833,7 @@ class AIService {
    * Call Claude API
    */
   async callClaude(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = 'claude-3-5-sonnet-20241022', messages = null } = config;
+    const { maxTokens = 1000, temperature = 0.7, model = 'claude-3-5-sonnet-20241022', messages = null, responseFormat = null } = config;
 
     // Anthropic takes `system` as a top-level field, not a message role.
     // Extract system turns from the messages array and collapse them into a
@@ -1857,6 +1862,28 @@ class AIService {
       };
       if (systemText) body.system = systemText;
 
+      // Translate OpenAI-style response_format into Anthropic's idioms.
+      // Anthropic has no native response_format field, so:
+      //   - json_object: append a "reply with valid JSON only" instruction
+      //     and prefill the assistant turn with '{' to anchor the output.
+      //   - json_schema: synthesize a tool with the schema and force it via
+      //     tool_choice; the response arrives as a tool_use block whose input
+      //     IS the schema-conformant object.
+      let forcedSchemaToolName = null;
+      if (responseFormat?.type === 'json_object') {
+        body.system = (body.system ? body.system + '\n\n' : '') +
+          'Respond with a single valid JSON object and nothing else. Do not wrap in markdown fences.';
+        body.messages = [...chatMessages, { role: 'assistant', content: '{' }];
+      } else if (responseFormat?.type === 'json_schema' && responseFormat.json_schema?.schema) {
+        forcedSchemaToolName = responseFormat.json_schema.name || 'structured_output';
+        body.tools = [{
+          name: forcedSchemaToolName,
+          description: responseFormat.json_schema.description || 'Return the user-requested structured output.',
+          input_schema: responseFormat.json_schema.schema
+        }];
+        body.tool_choice = { type: 'tool', name: forcedSchemaToolName };
+      }
+
       const response = await axios.post(`${this.providers.anthropic.baseURL}/messages`, body, {
         headers: {
           'Content-Type': 'application/json',
@@ -1866,7 +1893,20 @@ class AIService {
         timeout: 60000
       });
 
-      const result = response.data.content[0].text;
+      let result;
+      if (forcedSchemaToolName) {
+        const toolUse = (response.data.content || []).find(b => b.type === 'tool_use' && b.name === forcedSchemaToolName);
+        if (!toolUse) {
+          throw new Error('Anthropic response missing expected tool_use block for forced schema');
+        }
+        result = JSON.stringify(toolUse.input);
+      } else if (responseFormat?.type === 'json_object') {
+        // Assistant prefill '{' is NOT echoed in response.content — re-attach it.
+        const text = (response.data.content || []).find(b => b.type === 'text')?.text ?? '';
+        result = '{' + text;
+      } else {
+        result = response.data.content[0].text;
+      }
 
       return {
         content: result,
@@ -1928,7 +1968,7 @@ class AIService {
    * Call Gemini API
    */
   async callGemini(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = 'gemini-1.5-flash-latest', messages = null } = config;
+    const { maxTokens = 1000, temperature = 0.7, model = 'gemini-1.5-flash-latest', messages = null, responseFormat = null } = config;
 
     // Gemini's contents[] takes role 'user' or 'model' (not 'assistant'),
     // and system messages go into a separate systemInstruction field.
@@ -1954,13 +1994,19 @@ class AIService {
     }
 
     try {
-      const body = {
-        contents,
-        generationConfig: {
-          maxOutputTokens: maxTokens,
-          temperature: temperature
-        }
+      const generationConfig = {
+        maxOutputTokens: maxTokens,
+        temperature: temperature
       };
+      // Native OpenAI-style response_format → Gemini generationConfig mapping.
+      if (responseFormat?.type === 'json_object') {
+        generationConfig.responseMimeType = 'application/json';
+      } else if (responseFormat?.type === 'json_schema' && responseFormat.json_schema?.schema) {
+        generationConfig.responseMimeType = 'application/json';
+        generationConfig.responseSchema = responseFormat.json_schema.schema;
+      }
+
+      const body = { contents, generationConfig };
       if (systemInstruction) body.systemInstruction = systemInstruction;
 
       const response = await axios.post(`${this.providers.gemini.baseURL}/models/${model}:generateContent?key=${this.providers.gemini.apiKey}`, body, {
