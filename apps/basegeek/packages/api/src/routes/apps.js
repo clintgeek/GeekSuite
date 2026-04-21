@@ -79,6 +79,7 @@ router.post('/seed', async (req, res) => {
     { name: 'storygeek', displayName: 'storyGeek', description: 'Story plotting & writing', icon: 'AutoStories', color: '#c76b8e', url: 'https://storygeek.clintgeek.com', tag: 'creative', sortOrder: 4 },
     { name: 'flockgeek', displayName: 'flockGeek', description: 'Flock management', icon: 'NatureOutlined', color: '#7dac8e', url: 'https://flockgeek.clintgeek.com', tag: 'management', sortOrder: 5 },
     { name: 'babelgeek', displayName: 'babelGeek', description: 'Translation & language', icon: 'Translate', color: '#6db5c0', url: 'https://babelgeek.clintgeek.com', tag: 'learning', sortOrder: 6 },
+    { name: 'geekpr', displayName: 'geekPR', description: 'Autonomous code reviewer', icon: 'RateReview', color: '#8ba3d4', url: 'https://geekpr.clintgeek.com', tag: 'tools', sortOrder: 7 },
   ];
 
   try {
