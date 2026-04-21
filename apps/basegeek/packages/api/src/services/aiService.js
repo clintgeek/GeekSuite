@@ -1828,20 +1828,36 @@ class AIService {
    * Call Claude API
    */
   async callClaude(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = 'claude-3-5-sonnet-20241022' } = config;
+    const { maxTokens = 1000, temperature = 0.7, model = 'claude-3-5-sonnet-20241022', messages = null } = config;
+
+    // Anthropic takes `system` as a top-level field, not a message role.
+    // Extract system turns from the messages array and collapse them into a
+    // single `system` string; pass the remaining user/assistant turns as messages.
+    let systemText = '';
+    let chatMessages;
+    if (messages && Array.isArray(messages) && messages.length > 0) {
+      const systemMsgs = messages.filter(m => m.role === 'system');
+      systemText = systemMsgs.map(m => m.content ?? '').filter(Boolean).join('\n\n');
+      chatMessages = messages
+        .filter(m => m.role !== 'system')
+        .map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content ?? '' }));
+      if (chatMessages.length === 0) {
+        chatMessages = [{ role: 'user', content: prompt }];
+      }
+    } else {
+      chatMessages = [{ role: 'user', content: prompt }];
+    }
 
     try {
-      const response = await axios.post(`${this.providers.anthropic.baseURL}/messages`, {
+      const body = {
         model: model,
         max_tokens: maxTokens,
         temperature: temperature,
-        messages: [
-          {
-            role: 'user',
-            content: prompt
-          }
-        ]
-      }, {
+        messages: chatMessages
+      };
+      if (systemText) body.system = systemText;
+
+      const response = await axios.post(`${this.providers.anthropic.baseURL}/messages`, body, {
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': this.providers.anthropic.apiKey,
@@ -1871,19 +1887,18 @@ class AIService {
    * Call Groq API
    */
   async callGroq(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = 'llama-3.3-70b-versatile' } = config;
+    const { maxTokens = 1000, temperature = 0.7, model = 'llama-3.3-70b-versatile', messages = null } = config;
+
+    const requestMessages = (messages && Array.isArray(messages) && messages.length > 0)
+      ? messages
+      : [{ role: 'user', content: prompt }];
 
     try {
       const response = await axios.post(`${this.providers.groq.baseURL}/chat/completions`, {
         model: model,
         max_tokens: maxTokens,
         temperature: temperature,
-        messages: [
-          {
-            role: 'user',
-            content: prompt
-          }
-        ]
+        messages: requestMessages
       }, {
         headers: {
           'Content-Type': 'application/json',
@@ -1913,24 +1928,42 @@ class AIService {
    * Call Gemini API
    */
   async callGemini(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = 'gemini-1.5-flash-latest' } = config;
+    const { maxTokens = 1000, temperature = 0.7, model = 'gemini-1.5-flash-latest', messages = null } = config;
+
+    // Gemini's contents[] takes role 'user' or 'model' (not 'assistant'),
+    // and system messages go into a separate systemInstruction field.
+    let systemInstruction = null;
+    let contents;
+    if (messages && Array.isArray(messages) && messages.length > 0) {
+      const systemMsgs = messages.filter(m => m.role === 'system');
+      const systemText = systemMsgs.map(m => m.content ?? '').filter(Boolean).join('\n\n');
+      if (systemText) {
+        systemInstruction = { parts: [{ text: systemText }] };
+      }
+      contents = messages
+        .filter(m => m.role !== 'system')
+        .map(m => ({
+          role: m.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: m.content ?? '' }]
+        }));
+      if (contents.length === 0) {
+        contents = [{ role: 'user', parts: [{ text: prompt }] }];
+      }
+    } else {
+      contents = [{ role: 'user', parts: [{ text: prompt }] }];
+    }
 
     try {
-      const response = await axios.post(`${this.providers.gemini.baseURL}/models/${model}:generateContent?key=${this.providers.gemini.apiKey}`, {
-        contents: [
-          {
-            parts: [
-              {
-                text: prompt
-              }
-            ]
-          }
-        ],
+      const body = {
+        contents,
         generationConfig: {
           maxOutputTokens: maxTokens,
           temperature: temperature
         }
-      }, {
+      };
+      if (systemInstruction) body.systemInstruction = systemInstruction;
+
+      const response = await axios.post(`${this.providers.gemini.baseURL}/models/${model}:generateContent?key=${this.providers.gemini.apiKey}`, body, {
         headers: {
           'Content-Type': 'application/json'
         },
@@ -1958,19 +1991,18 @@ class AIService {
    * Call Together AI API
    */
   async callTogether(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = 'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free' } = config;
+    const { maxTokens = 1000, temperature = 0.7, model = 'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free', messages = null } = config;
+
+    const requestMessages = (messages && Array.isArray(messages) && messages.length > 0)
+      ? messages
+      : [{ role: 'user', content: prompt }];
 
     try {
       const response = await axios.post(`${this.providers.together.baseURL}/chat/completions`, {
         model: model,
         max_tokens: maxTokens,
         temperature: temperature,
-        messages: [
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
+        messages: requestMessages,
         stream: false
       }, {
         headers: {
@@ -2001,15 +2033,38 @@ class AIService {
    * Call Cohere API
    */
   async callCohere(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = 'command-r-plus-08-2024' } = config;
+    const { maxTokens = 1000, temperature = 0.7, model = 'command-r-plus-08-2024', messages = null } = config;
+
+    // Cohere /chat takes a preamble + chat_history + message (current turn).
+    // Fold system messages into preamble, use the last user turn as message,
+    // and place everything between into chat_history.
+    let preamble = '';
+    let currentMessage = prompt;
+    const chatHistory = [];
+    if (messages && Array.isArray(messages) && messages.length > 0) {
+      const systemMsgs = messages.filter(m => m.role === 'system');
+      preamble = systemMsgs.map(m => m.content ?? '').filter(Boolean).join('\n\n');
+      const convo = messages.filter(m => m.role !== 'system');
+      if (convo.length > 0) {
+        const last = convo[convo.length - 1];
+        currentMessage = last.content ?? prompt;
+        for (const m of convo.slice(0, -1)) {
+          chatHistory.push({ role: m.role === 'assistant' ? 'CHATBOT' : 'USER', message: m.content ?? '' });
+        }
+      }
+    }
 
     try {
-      const response = await axios.post(`${this.providers.cohere.baseURL}/chat`, {
+      const body = {
         model: model,
-        message: prompt,
+        message: currentMessage,
         max_tokens: maxTokens,
         temperature: temperature
-      }, {
+      };
+      if (preamble) body.preamble = preamble;
+      if (chatHistory.length > 0) body.chat_history = chatHistory;
+
+      const response = await axios.post(`${this.providers.cohere.baseURL}/chat`, body, {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.providers.cohere.apiKey}`
@@ -2038,19 +2093,18 @@ class AIService {
    * Call OpenRouter API
    */
   async callOpenRouter(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = 'google/gemini-2.0-flash-exp:free' } = config;
+    const { maxTokens = 1000, temperature = 0.7, model = 'google/gemini-2.0-flash-exp:free', messages = null } = config;
+
+    const requestMessages = (messages && Array.isArray(messages) && messages.length > 0)
+      ? messages
+      : [{ role: 'user', content: prompt }];
 
     try {
       const response = await axios.post(`${this.providers.openrouter.baseURL}/chat/completions`, {
         model: model,
         max_tokens: maxTokens,
         temperature: temperature,
-        messages: [
-          {
-            role: 'user',
-            content: prompt
-          }
-        ]
+        messages: requestMessages
       }, {
         headers: {
           'Content-Type': 'application/json',
