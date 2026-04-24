@@ -23,6 +23,7 @@ services:
 
     working_dir: /app
     command: ["bun", "run", "start"]
+    restart: unless-stopped
 
   web:
     build:
@@ -44,3 +45,4 @@ services:
     command: ["bun", "run", "serve"]
     depends_on:
       - api
+    restart: unless-stopped
