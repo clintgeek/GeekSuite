@@ -1,15 +1,15 @@
 import { useState } from 'react';
 import { Box, TextField, Button, Typography, Alert } from '@mui/material';
 import { useNavigate, useLocation } from 'react-router-dom';
-import useSharedAuthStore from '../store/sharedAuthStore.js';
+import api from '../api';
 
 export default function RegisterPage() {
   const [form, setForm] = useState({ username: '', email: '', password: '' });
+  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const { register, error, isLoading } = useSharedAuthStore();
 
-  // Get redirect param from query string
   const params = new URLSearchParams(location.search);
   const redirectUrl = params.get('redirect') || '/';
   const app = params.get('app') || 'basegeek';
@@ -20,13 +20,15 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
+    setIsLoading(true);
     try {
-      const result = await register(form.username, form.email, form.password, app);
-      if (result.success) {
-        navigate(redirectUrl);
-      }
+      await api.post('/auth/register', { username: form.username, email: form.email, password: form.password, app });
+      window.location.href = decodeURIComponent(redirectUrl);
     } catch (err) {
-      console.error('Registration error:', err);
+      setError(err.response?.data?.message || 'Registration failed. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 

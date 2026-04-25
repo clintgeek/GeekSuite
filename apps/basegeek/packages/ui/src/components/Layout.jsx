@@ -30,7 +30,7 @@ import {
   ChevronLeft as ChevronLeftIcon,
   AccountCircle as AccountIcon
 } from '@mui/icons-material';
-import useSharedAuthStore from '../store/sharedAuthStore';
+import { useBaseGeekAuth } from './AuthContext';
 
 const SIDEBAR_WIDTH = 240;
 const SIDEBAR_COLLAPSED = 68;
@@ -52,7 +52,7 @@ export default function Layout() {
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const { logout, user } = useSharedAuthStore();
+  const { logout, user } = useBaseGeekAuth();
 
   const sidebarWidth = collapsed && !isMobile ? SIDEBAR_COLLAPSED : SIDEBAR_WIDTH;
 

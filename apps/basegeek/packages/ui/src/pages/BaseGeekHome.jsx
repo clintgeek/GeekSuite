@@ -13,7 +13,7 @@ import {
   DataObject as DataObjectIcon,
   Apps as AppsIcon
 } from '@mui/icons-material';
-import useSharedAuthStore from '../store/sharedAuthStore';
+import { useBaseGeekAuth } from '../components/AuthContext';
 import api from '../api';
 
 // Icon resolver — maps DB-stored icon name strings to MUI components
@@ -51,7 +51,7 @@ const services = [
 ];
 
 export default function BaseGeekHome() {
-  const { user } = useSharedAuthStore();
+  const { user } = useBaseGeekAuth();
   const [apps, setApps] = useState(fallbackApps);
   const [serviceStatus, setServiceStatus] = useState({});
   const [appHealth, setAppHealth] = useState({});
