@@ -159,9 +159,11 @@ export const me = async (req, res) => {
 export const refresh = async (req, res) => {
   try {
     const { refreshToken } = req.body;
+    const refreshCookie = req.cookies?.geek_refresh_token;
 
-    // BaseGeek handles token from cookie or body
-    // if (!refreshToken) return 400;
+    if (!refreshToken && !refreshCookie) {
+      return res.status(400).json({ success: false, error: { message: "refreshToken required" } });
+    }
 
     const response = await axios.post(
       `${env.basegeekUrl}/api/auth/refresh`,

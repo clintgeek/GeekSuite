@@ -1,10 +1,11 @@
 import cookieParser from "cookie-parser";
 import cors from "cors";
+import crypto from "crypto";
 import express from "express";
 import helmet from "helmet";
-import morgan from "morgan";
 import mongoose from "mongoose";
 import path from "path";
+import pinoHttp from "pino-http";
 import { fileURLToPath } from "url";
 import { env } from "./config/env.js";
 import apiRouter from "./routes/api.js";
@@ -31,18 +32,15 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-app.use(morgan(env.nodeEnv === "production" ? "combined" : "dev"));
-
-// MongoDB Connection
-mongoose
-  .connect(env.mongodbUri, { useNewUrlParser: true, useUnifiedTopology: true })
-  .then(() => {
-    logger.info(`MongoDB connected to ${ env.mongodbUri.split("@")[0] }...`);
-  })
-  .catch((err) => {
-    logger.error("MongoDB connection error:", err);
-    process.exit(1);
-  });
+const httpLogger = pinoHttp({
+  logger,
+  genReqId: (req) => req.headers["x-request-id"] || crypto.randomUUID(),
+});
+app.use((req, res, next) => {
+  httpLogger(req, res);
+  res.setHeader("X-Request-Id", req.id);
+  next();
+});
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -61,11 +59,58 @@ app.use((req, res) => {
 });
 
 app.use((err, req, res, next) => {
-  logger.error(err);
-  res.status(500).json({ message: "Unexpected server error" });
+  (req.log || logger).error({ err }, "Unhandled error");
+  res.status(err.statusCode || 500).json({
+    success: false,
+    error: {
+      message: env.nodeEnv === "production" ? "Internal Server Error" : err.message,
+    },
+    timestamp: new Date().toISOString(),
+  });
 });
 
-// Start Server
-app.listen(env.port, () => {
-  logger.info(`FlockGeek API listening on port ${ env.port }`);
-});
+// Boot sequence
+async function start() {
+  try {
+    await mongoose.connect(env.mongodbUri);
+    logger.info(`MongoDB connected`);
+  } catch (err) {
+    logger.error({ err }, "MongoDB connection failed — aborting boot");
+    process.exit(1);
+  }
+
+  const server = app.listen(env.port, "0.0.0.0", () => {
+    logger.info(`FlockGeek API listening on port ${ env.port }`);
+    logger.info(`Environment: ${ env.nodeEnv }`);
+  });
+
+  let shuttingDown = false;
+  const shutdown = (signal) => {
+    if (shuttingDown) {
+      logger.info(`${ signal } received during shutdown — forcing exit`);
+      process.exit(1);
+    }
+    shuttingDown = true;
+    logger.info(`${ signal } received — shutting down`);
+
+    const forceTimer = setTimeout(() => {
+      logger.error("Shutdown timed out after 15s — forcing exit");
+      process.exit(0);
+    }, 15_000);
+    forceTimer.unref();
+
+    server.close(async () => {
+      try {
+        await mongoose.disconnect();
+      } catch (err) {
+        logger.error({ err }, "Error disconnecting mongoose");
+      }
+      process.exit(0);
+    });
+  };
+
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
+}
+
+start();
