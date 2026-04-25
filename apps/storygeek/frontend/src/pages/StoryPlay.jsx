@@ -9,7 +9,7 @@ import {
   Send as SendIcon, Casino as CasinoIcon, MenuBook as ExportIcon,
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
-import useSharedAuthStore from '../store/sharedAuthStore';
+import { useAuth } from '@geeksuite/auth';
 import useAISettingsStore from '../store/aiSettingsStore';
 import api from '../api';
 
@@ -28,7 +28,7 @@ function StoryPlay() {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { storyId } = useParams();
   const navigate = useNavigate();
-  const { user } = useSharedAuthStore();
+  const { user } = useAuth();
   const { selectedProvider, selectedModelId } = useAISettingsStore();
   const gold = theme.palette.codex?.gold || '#c9a84c';
 

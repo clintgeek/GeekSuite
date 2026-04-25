@@ -6,7 +6,7 @@ import {
 import { Casino as CasinoIcon, Send as SendIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '@mui/material/styles';
-import useSharedAuthStore from '../store/sharedAuthStore';
+import { useAuth } from '@geeksuite/auth';
 import useAISettingsStore from '../store/aiSettingsStore';
 import api from '../api';
 
@@ -33,7 +33,7 @@ const storyTemplates = [
 function StoryCreation() {
   const theme = useTheme();
   const navigate = useNavigate();
-  const { user } = useSharedAuthStore();
+  const { user } = useAuth();
   const { selectedProvider, selectedModelId } = useAISettingsStore();
   const gold = theme.palette.codex?.gold || '#c9a84c';
 
