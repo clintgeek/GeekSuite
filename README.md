@@ -16,7 +16,6 @@ and shared infrastructure. All apps authenticate through **basegeek** and share 
 | **storygeek** | Running | Creative writing tool |
 | **bookgeek** | Partial | Book library and reading tracker (format conversion pending) |
 | **notegeek** | Running | Note-taking app — text, markdown, code, mind map, sketch |
-| **dashgeek** | Stub | Dashboard |
 | **startgeek** | Running | Personal-desktop launcher — clock, weather, world clocks, app dock |
 
 ---
@@ -25,16 +24,21 @@ and shared infrastructure. All apps authenticate through **basegeek** and share 
 
 ```
 GeekSuite/
-├── apps/                  # Individual applications
+├── apps/                  # Active applications
 │   ├── basegeek/          # Central auth + GraphQL gateway
+│   ├── bookgeek/          # Book tracking
 │   ├── bujogeek/          # Bullet journal
 │   ├── fitnessgeek/       # Fitness tracking
 │   ├── flockgeek/         # Flock management
-│   ├── storygeek/         # Creative writing
-│   ├── bookgeek/          # Book tracking
 │   ├── notegeek/          # Notes
-│   ├── dashgeek/          # Dashboard
-│   └── startgeek/         # App launcher
+│   ├── startgeek/         # App launcher
+│   └── storygeek/         # Creative writing
+├── archive/               # Retired / shelved apps
+│   ├── babelgeek/         # Translation tool
+│   ├── dashgeek/          # Dashboard (stub)
+│   ├── musicgeek/         # Music library
+│   ├── photogeek/         # Photo management
+│   └── stackgeek/         # (stub)
 ├── packages/              # Shared libraries
 │   ├── auth/              # @geeksuite/auth — SSO middleware + React auth hooks
 │   ├── user/              # @geeksuite/user — ThemeProvider, themePreboot Vite plugin, /me handler
