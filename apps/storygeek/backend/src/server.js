@@ -17,6 +17,7 @@ dotenv.config();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+import aiRoutes from './routes/ai.js';
 import authRoutes from './routes/auth.js';
 import storyRoutes from './routes/stories.js';
 import exportRoutes from './routes/export.js';
@@ -84,6 +85,7 @@ app.use('/api/auth', authRoutes);
 app.get('/api/me', attachUser({ basegeekUrl: process.env.BASEGEEK_URL || 'https://basegeek.clintgeek.com' }), meHandler());
 
 // API Routes
+app.use('/api/ai', aiRoutes);
 app.use('/api/stories', storyRoutes);
 app.use('/api/export', exportRoutes);
 app.use('/api/characters', characterRoutes);

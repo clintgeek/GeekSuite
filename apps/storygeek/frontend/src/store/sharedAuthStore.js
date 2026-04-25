@@ -26,11 +26,6 @@ const useSharedAuthStore = create((set, get) => {
     error: null,
     _logoutUnsubscribe: null,
 
-    // Get the token from localStorage (set by @geeksuite/auth)
-    get token() {
-      return localStorage.getItem('geek_token') || null;
-    },
-
     login: async () => {
       set({ error: null, isLoading: true });
       try {
