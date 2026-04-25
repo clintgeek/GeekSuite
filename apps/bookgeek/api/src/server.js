@@ -1,17 +1,19 @@
-import express from "express";
+import cookieParser from "cookie-parser";
 import cors from "cors";
-import morgan from "morgan";
-import dotenv from "dotenv";
-import mongoose from "mongoose";
-import path from "path";
-import fs from "fs";
-import multer from "multer";
 import crypto from "crypto";
+import dotenv from "dotenv";
+import express from "express";
+import fs from "fs";
+import mongoose from "mongoose";
+import multer from "multer";
+import path from "path";
+import pinoHttp from "pino-http";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { fileURLToPath } from "url";
 import { Book } from "./models/book.js";
 import { Profile } from "./models/profile.js";
+import { logger } from "./utils/logger.js";
 import authRouter from "./routes/authRoutes.js";
 import aiRouter from "./routes/aiRoutes.js";
 import importRouter from "./routes/importRoutes.js";
@@ -59,9 +61,18 @@ app.use(
     credentials: true,
   })
 );
+app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
-app.use(morgan("dev"));
+const httpLogger = pinoHttp({
+  logger,
+  genReqId: (req) => req.headers["x-request-id"] || crypto.randomUUID(),
+});
+app.use((req, res, next) => {
+  httpLogger(req, res);
+  res.setHeader("X-Request-Id", req.id);
+  next();
+});
 app.use("/api/auth", authRouter);
 app.use("/api/ai", aiRouter);
 app.use("/api/import", importRouter);
@@ -2868,22 +2879,49 @@ app.get(/^\/(?!api(?:\/|$)|kindle(?:\/|$)).*/, (req, res) => {
 
 async function start() {
   if (!MONGODB_URI) {
-    console.warn(
-      "BASEGEEK_MONGODB_URI is not set; starting API without MongoDB connection."
-    );
+    logger.warn("BASEGEEK_MONGODB_URI is not set; starting API without MongoDB connection.");
   } else {
     await mongoose.connect(MONGODB_URI, {
       serverSelectionTimeoutMS: 5000,
     });
-    console.log("Connected to MongoDB");
+    logger.info("MongoDB connected");
   }
 
-  app.listen(API_PORT, "0.0.0.0", () => {
-    console.log(`bookgeek-api listening on http://0.0.0.0:\${API_PORT}`);
+  const server = app.listen(API_PORT, "0.0.0.0", () => {
+    logger.info(`BookGeek API listening on port ${API_PORT}`);
+    logger.info(`Environment: ${process.env.NODE_ENV || "development"}`);
   });
+
+  let shuttingDown = false;
+  const shutdown = (signal) => {
+    if (shuttingDown) {
+      logger.info(`${signal} received during shutdown — forcing exit`);
+      process.exit(1);
+    }
+    shuttingDown = true;
+    logger.info(`${signal} received — shutting down`);
+
+    const forceTimer = setTimeout(() => {
+      logger.error("Shutdown timed out after 15s — forcing exit");
+      process.exit(0);
+    }, 15_000);
+    forceTimer.unref();
+
+    server.close(async () => {
+      try {
+        await mongoose.disconnect();
+      } catch (err) {
+        logger.error({ err }, "Error disconnecting mongoose");
+      }
+      process.exit(0);
+    });
+  };
+
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 }
 
 start().catch((err) => {
-  console.error("Failed to start bookgeek-api", err);
+  logger.error({ err }, "Failed to start bookgeek-api");
   process.exit(1);
 });

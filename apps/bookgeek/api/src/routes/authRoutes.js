@@ -155,6 +155,11 @@ router.post("/register", async (req, res) => {
 router.post("/refresh", async (req, res) => {
   try {
     const { refreshToken, app } = req.body;
+    const refreshCookie = req.cookies?.geek_refresh_token;
+
+    if (!refreshToken && !refreshCookie) {
+      return res.status(400).json({ success: false, error: { message: "refreshToken required" } });
+    }
 
     const accessToken = getTokenFromRequest(req);
     const response = await axios.post(
