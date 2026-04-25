@@ -1,15 +1,17 @@
-import express from 'express';
-import mongoose from 'mongoose';
-import cors from 'cors';
-import helmet from 'helmet';
-import compression from 'compression';
-import morgan from 'morgan';
-import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import compression from 'compression';
+import cors from 'cors';
+import crypto from 'crypto';
 import dotenv from 'dotenv';
+import express from 'express';
+import helmet from 'helmet';
+import mongoose from 'mongoose';
+import path from 'path';
+import pinoHttp from 'pino-http';
+import rateLimit from 'express-rate-limit';
+import { fileURLToPath } from 'url';
 import { attachUser, meHandler } from '@geeksuite/user/server';
+import { logger } from './utils/logger.js';
 
 dotenv.config();
 
@@ -28,21 +30,22 @@ app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cookieParser());
 
 // CORS configuration
-const allowedOrigins = [
+const defaultCorsOrigins = [
   'http://localhost:3000',
   'http://localhost:5173',
   'http://localhost:5174',
-  'http://192.168.1.17:9977',
-  'http://192.168.1.17:3000',
   'https://storygeek.clintgeek.com',
-  process.env.FRONTEND_URL
-].filter(Boolean);
+];
+const allowedOrigins = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
+  : defaultCorsOrigins;
+logger.info({ origins: allowedOrigins }, 'CORS enabled');
 
 app.use(cors({
   origin: function(origin, callback) {
     if (!origin) return callback(null, true);
     if (allowedOrigins.indexOf(origin) !== -1) return callback(null, true);
-    console.log('CORS blocked origin:', origin);
+    logger.warn({ origin }, 'CORS blocked origin');
     return callback(new Error('Not allowed by CORS'), false);
   },
   credentials: true,
@@ -60,17 +63,19 @@ app.use('/api/', limiter);
 
 // Body parsing middleware
 app.use(compression());
-app.use(morgan('combined'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Database connection
-mongoose.connect(process.env.DB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
-.then(() => console.log('Connected to MongoDB (DataGeek instance)'))
-.catch(err => console.error('MongoDB connection error:', err));
+// Structured request logging + request IDs
+const httpLogger = pinoHttp({
+  logger,
+  genReqId: (req) => req.headers['x-request-id'] || crypto.randomUUID(),
+});
+app.use((req, res, next) => {
+  httpLogger(req, res);
+  res.setHeader('X-Request-Id', req.id);
+  next();
+});
 
 // Auth proxy routes (me, refresh, logout → baseGeek)
 app.use('/api/auth', authRoutes);
@@ -102,14 +107,58 @@ app.get('*', (req, res) => {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({
-    error: 'Something went wrong!',
-    message: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
+  (req.log || logger).error({ err }, 'Unhandled error');
+  res.status(err.statusCode || 500).json({
+    success: false,
+    error: {
+      message: process.env.NODE_ENV === 'production' ? 'Internal Server Error' : err.message,
+    },
+    timestamp: new Date().toISOString(),
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`StoryGeek backend running on port ${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-});
+// Boot sequence
+async function start() {
+  try {
+    await mongoose.connect(process.env.DB_URI);
+    logger.info('MongoDB connected');
+  } catch (err) {
+    logger.error({ err }, 'MongoDB connection failed — aborting boot');
+    process.exit(1);
+  }
+
+  const server = app.listen(PORT, '0.0.0.0', () => {
+    logger.info(`StoryGeek backend listening on port ${PORT}`);
+    logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  });
+
+  let shuttingDown = false;
+  const shutdown = (signal) => {
+    if (shuttingDown) {
+      logger.info(`${signal} received during shutdown — forcing exit`);
+      process.exit(1);
+    }
+    shuttingDown = true;
+    logger.info(`${signal} received — shutting down`);
+
+    const forceTimer = setTimeout(() => {
+      logger.error('Shutdown timed out after 15s — forcing exit');
+      process.exit(0);
+    }, 15_000);
+    forceTimer.unref();
+
+    server.close(async () => {
+      try {
+        await mongoose.disconnect();
+      } catch (err) {
+        logger.error({ err }, 'Error disconnecting mongoose');
+      }
+      process.exit(0);
+    });
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+}
+
+start();
