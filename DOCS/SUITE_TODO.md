@@ -8,8 +8,8 @@ Pull from here when planning the next pass; update as work lands or priorities s
 
 ## In flight
 
-Nothing blocked right now. The `basegeek-auth-hardening` branch is mid-flight with basegeek,
-fitnessgeek, and bujogeek hardening complete. Consumer-app hardening passes are next.
+All 8 apps consolidated and hardened (April 2026). `storygeek-auth-hardening` branch open —
+StoryGeek SSO alignment + Settings page fix + AuthProvider refactor. Pending merge.
 
 ---
 
@@ -66,11 +66,10 @@ Hardening = pino logging, request IDs, graceful shutdown, env-driven CORS, data-
   for the refresh cookie + CSRF middleware in basegeek + per-app axios interceptor. Own branch,
   per-app verification. (`DEFERRED_WORK.md`)
 
-- **HttpOnly cookies + stop persisting tokens in localStorage** — refresh-token rotation landed in
-  basegeek (April 2026). Frontends still read cookies in some apps; Zustand stores persist JWTs to
-  localStorage in others. Coordinated rollout: server sets `HttpOnly: true`, frontends call
-  `/api/users/bootstrap` for identity, stop reading `document.cookie`. (`DEFERRED_WORK.md`,
-  `DOCS/SSO_OVERVIEW.md` Step 4 + 5)
+- **HttpOnly cookies + stop persisting tokens in localStorage** — ✅ resolved across all apps
+  (April 2026). Dead localStorage token reads removed from all frontends; StoryGeek's Zustand
+  auth store replaced with `AuthProvider`/`useAuth`. Remaining: verify no app reads
+  `document.cookie` directly for `geek_token`. (`DEFERRED_WORK.md`, `DOCS/SSO_OVERVIEW.md`)
 
 - **BroadcastChannel inconsistencies** — `bookgeek` uses `geek-auth`/`logout`; several apps use
   lowercase `logout`; basegeek uses `postMessage`. Cross-tab logout is fragmented.
