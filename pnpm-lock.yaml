@@ -883,9 +883,6 @@ importers:
       axios:
         specifier: ^1.13.2
         version: 1.13.5
-      bcryptjs:
-        specifier: ^2.4.3
-        version: 2.4.3
       cors:
         specifier: ^2.8.5
         version: 2.8.6

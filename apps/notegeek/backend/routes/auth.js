@@ -112,6 +112,12 @@ router.post('/logout', async (req, res) => {
 router.post('/refresh', async (req, res) => {
   try {
     const refreshToken = req.body?.refreshToken;
+    const hasRefreshCookie = (req.headers.cookie || '').includes('geek_refresh_token=');
+
+    if (!refreshToken && !hasRefreshCookie) {
+      return res.status(400).json({ success: false, error: { message: 'refreshToken required' } });
+    }
+
     const app = req.body?.app || 'notegeek';
 
     const payload = { app };

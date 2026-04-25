@@ -53,7 +53,7 @@ Hardening = pino logging, request IDs, graceful shutdown, env-driven CORS, data-
 | bujogeek | ✅ | ✅ | |
 | flockgeek | ✅ | ✅ | |
 | storygeek | ✅ | ✅ | |
-| notegeek | ❌ | ❌ | Two services (backend + frontend); either combine or teach `build.sh` about multi-service apps. Dual auth system (local bcrypt + SSO) must be removed. Hardest remaining migration. |
+| notegeek | ✅ | ✅ | |
 | bookgeek | ✅ | ✅ | Format-conversion feature also pending (see Features section below) |
 | startgeek | ✅ | ✅ | Static Vite app — no backend, no auth. Already in build.sh + docker-compose. |
 
