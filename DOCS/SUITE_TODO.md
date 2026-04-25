@@ -52,7 +52,7 @@ Hardening = pino logging, request IDs, graceful shutdown, env-driven CORS, data-
 | fitnessgeek | ✅ | ✅ | |
 | bujogeek | ✅ | ✅ | |
 | flockgeek | ✅ | ✅ | |
-| storygeek | ✅ | ❌ | Hardening pass needed |
+| storygeek | ✅ | ✅ | |
 | notegeek | ❌ | ❌ | Two services (backend + frontend); either combine or teach `build.sh` about multi-service apps. Dual auth system (local bcrypt + SSO) must be removed. Hardest remaining migration. |
 | bookgeek | ❌ | ❌ | Format-conversion feature also pending (see Features section below) |
 | dashgeek | ❌ | ❌ | |
