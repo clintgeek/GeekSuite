@@ -3,10 +3,8 @@ import { Box, Paper, Typography, List, ListItem, ListItemText, IconButton, Circu
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import api from '../api';
-import useSharedAuthStore from '../store/sharedAuthStore.js';
 
 export default function UserGeekPage() {
-  console.log('UserGeekPage component rendering');
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -14,18 +12,14 @@ export default function UserGeekPage() {
   const [openCreate, setOpenCreate] = useState(false);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ username: '', email: '', password: '' });
-  const { token } = useSharedAuthStore();
 
   const fetchUsers = async () => {
     setLoading(true);
     setError('');
     try {
-      const res = await api.get('/users', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await api.get('/users');
       setUsers(res.data.users);
     } catch (err) {
-      console.error('Error fetching users:', err);
       setError(err.response?.data?.message || 'Error fetching users');
     } finally {
       setLoading(false);
@@ -33,10 +27,8 @@ export default function UserGeekPage() {
   };
 
   useEffect(() => {
-    if (token) {
-      fetchUsers();
-    }
-  }, [token]);
+    fetchUsers();
+  }, []);
 
   const handleDelete = async (id) => {
     setDeleting(id);
@@ -45,7 +37,6 @@ export default function UserGeekPage() {
       await api.delete(`/users/${id}`);
       fetchUsers();
     } catch (err) {
-      console.error('Error deleting user:', err);
       setError(err.response?.data?.message || 'Error deleting user');
     } finally {
       setDeleting(null);
@@ -61,11 +52,10 @@ export default function UserGeekPage() {
     try {
       setCreating(true);
       setError('');
-      await api.post('/users', form, { headers: { Authorization: `Bearer ${token}` } });
+      await api.post('/users', form);
       setOpenCreate(false);
       await fetchUsers();
     } catch (err) {
-      console.error('Error creating user:', err);
       setError(err.response?.data?.message || 'Error creating user');
     } finally {
       setCreating(false);

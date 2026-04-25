@@ -49,16 +49,14 @@ import {
   Add as AddIcon,
   Delete as DeleteIcon
 } from '@mui/icons-material';
-import useSharedAuthStore from '../store/sharedAuthStore';
+import { useBaseGeekAuth } from '../components/AuthContext';
 import { apolloClient } from '../apolloClient';
 import { GET_AI_CONFIG, GET_AI_STATS, GET_AI_DIRECTOR_MODELS, GET_AI_USAGE, GET_AI_APP_CONFIGS } from '../graphql/queries';
 import { SAVE_AI_CONFIG, TEST_AI_PROVIDER, RESET_AI_STATS, SEED_DIRECTOR_PRICING, SEED_DIRECTOR_FREE_TIER, SYNC_PROVIDER_MODELS, UPDATE_MODEL_PRICING, UPDATE_MODEL_FREE_TIER, RESET_ALL_FREE_TIERS, BULK_UPDATE_FREE_TIERS, SAVE_AI_APP_CONFIG, DELETE_AI_APP_CONFIG } from '../graphql/mutations';
 
 
 const AIGeekPage = () => {
-  console.log('AIGeekPage component rendering');
-  const { token, user } = useSharedAuthStore();
-  console.log('Auth state:', { token: token ? 'Present' : 'Missing', user: user ? 'Present' : 'Missing' });
+  const { user } = useBaseGeekAuth();
   const [activeTab, setActiveTab] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -118,15 +116,12 @@ const AIGeekPage = () => {
   const [newAppName, setNewAppName] = useState('');
 
   useEffect(() => {
-    console.log('AIGeekPage useEffect running');
-    if (token) {
-      loadConfiguration();
-      loadStatistics();
-      loadDirectorData(); // Load AI Director data on mount
-      loadUsageData(); // Load usage tracking data on mount
-      loadAppConfigs(); // Load app routing configs on mount
-    }
-  }, [token]);
+    loadConfiguration();
+    loadStatistics();
+    loadDirectorData();
+    loadUsageData();
+    loadAppConfigs();
+  }, []);
 
   const loadConfiguration = async () => {
     try {
@@ -144,14 +139,12 @@ const AIGeekPage = () => {
 
   const loadStatistics = async () => {
     try {
-      console.log('Loading statistics...');
       const { data } = await apolloClient.query({ query: GET_AI_STATS, fetchPolicy: 'network-only' });
       if (data && data.aiStats) {
-        console.log('Received stats:', data.aiStats);
         setStats(data.aiStats.data || data.aiStats);
       }
     } catch (error) {
-      console.error('Failed to load statistics:', error);
+      setError(`Failed to load statistics: ${error.message}`);
     }
   };
 
@@ -160,7 +153,6 @@ const AIGeekPage = () => {
   const loadDirectorData = async () => {
     try {
       setDirectorLoading(true);
-      console.log('Token for AI Director:', token ? 'Present' : 'Missing');
 
       const { data } = await apolloClient.query({ query: GET_AI_DIRECTOR_MODELS, fetchPolicy: 'network-only' });
       if (data && data.aiDirectorModels) {
@@ -193,7 +185,6 @@ const AIGeekPage = () => {
   const loadUsageData = async () => {
     try {
       setUsageLoading(true);
-      console.log('Loading usage data...');
       // Only track providers with free tiers
       const providers = ['cerebras', 'groq', 'together', 'gemini', 'openrouter', 'cloudflare', 'ollama', 'llm7', 'llmgateway', 'cohere'];
       const usageSummary = {};
@@ -202,15 +193,12 @@ const AIGeekPage = () => {
         try {
           const { data } = await apolloClient.query({ query: GET_AI_USAGE, variables: { provider }, fetchPolicy: 'network-only' });
           if (data && data.aiUsage) {
-            console.log(`Usage data for ${provider}:`, data.aiUsage);
             usageSummary[provider] = data.aiUsage;
           }
-        } catch (error) {
-          console.log(`Failed to load usage for ${provider}:`, error);
+        } catch {
         }
       }
 
-      console.log('Final usage summary:', usageSummary);
       setUsageData(usageSummary);
     } catch (error) {
       setError(`Failed to load usage data: ${error.message}`);

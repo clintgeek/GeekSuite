@@ -1,35 +1,24 @@
 import { useState, useEffect } from 'react';
 import { Box, TextField, Button, Typography, Alert, Tabs, Tab } from '@mui/material';
 import { useNavigate, useLocation } from 'react-router-dom';
-import useSharedAuthStore from '../store/sharedAuthStore.js';
+import api from '../api';
 
 export default function LoginPage() {
   const [tab, setTab] = useState(0);
   const [form, setForm] = useState({ identifier: '', email: '', password: '' });
+  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, register, error, isLoading } = useSharedAuthStore();
 
   const params = new URLSearchParams(location.search);
   const redirectUrl = params.get('redirect') || '/';
-  const callbackUrl = params.get('callback') || null;
   const app = params.get('app') || 'basegeek';
-  const state = params.get('state') || null;
-
-  console.log('LoginPage initialized with:', {
-    redirectUrl,
-    callbackUrl: callbackUrl ? decodeURIComponent(callbackUrl) : null,
-    app,
-    state
-  });
 
   const [appInfo, setAppInfo] = useState(null);
   useEffect(() => {
     if (app && app !== 'basegeek') {
-      setAppInfo({
-        name: app.charAt(0).toUpperCase() + app.slice(1),
-        description: `Sign in to access ${app.charAt(0).toUpperCase() + app.slice(1)}`
-      });
+      setAppInfo({ name: app.charAt(0).toUpperCase() + app.slice(1) });
     }
   }, [app]);
 
@@ -39,77 +28,19 @@ export default function LoginPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
+    setIsLoading(true);
     try {
-      let result;
-
       if (tab === 0) {
-        console.log('Login attempt:', form.identifier, form.password, app);
-        result = await login(form.identifier, form.password, app);
+        await api.post('/auth/login', { identifier: form.identifier, password: form.password, app });
       } else {
-        console.log('Register attempt:', form.identifier, form.email, form.password, app);
-        result = await register(form.identifier, form.email, form.password, app);
+        await api.post('/auth/register', { username: form.identifier, email: form.email, password: form.password, app });
       }
-
-      console.log('Auth result:', result);
-
-      if (result && result.token) {
-        console.log('Authentication successful, token received');
-
-        if (callbackUrl) {
-          const decodedCallbackUrl = decodeURIComponent(callbackUrl);
-          console.log('Decoded callback URL:', decodedCallbackUrl);
-
-          try {
-            const url = new URL(decodedCallbackUrl);
-            url.searchParams.set('token', result.token);
-
-            if (result.refreshToken) {
-              url.searchParams.set('refreshToken', result.refreshToken);
-            }
-
-            url.searchParams.set('app', app);
-
-            if (state) {
-              url.searchParams.set('state', state);
-            }
-
-            console.log('Redirecting to callback URL:', url.toString());
-            window.location.href = url.toString();
-          } catch (urlError) {
-            console.error('Invalid callback URL:', decodedCallbackUrl, urlError);
-            alert('Invalid callback URL. Please try again.');
-          }
-        } else if (redirectUrl && redirectUrl !== '/') {
-          try {
-            const url = new URL(decodeURIComponent(redirectUrl));
-            // Append tokens to the redirect URL to ensure they are available even if cookies fail (e.g. on mobile)
-            url.searchParams.set('token', result.token);
-            if (result.refreshToken) {
-              url.searchParams.set('refreshToken', result.refreshToken);
-            }
-            // Also include app and state if present
-            url.searchParams.set('app', app);
-            if (state) {
-              url.searchParams.set('state', state);
-            }
-            
-            console.log('Redirecting to custom URL with tokens:', url.toString());
-            window.location.href = url.toString();
-          } catch (urlError) {
-            console.error('Invalid redirect URL:', redirectUrl, urlError);
-            // Fallback to simple redirect if URL parsing fails
-            window.location.href = decodeURIComponent(redirectUrl);
-          }
-        } else {
-          navigate('/');
-        }
-      } else {
-        console.warn('No token in auth result:', result);
-        alert('Authentication failed. Please try again.');
-      }
+      window.location.href = decodeURIComponent(redirectUrl);
     } catch (err) {
-      console.error('Form submission error:', err);
-      alert('Auth error: ' + (err?.message || err));
+      setError(err.response?.data?.message || 'Authentication failed. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 

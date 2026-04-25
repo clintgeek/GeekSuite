@@ -5,7 +5,6 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import Layout from './components/Layout';
 import RequireAuth from './components/RequireAuth';
-import AuthCallback from './pages/AuthCallback';
 import BaseGeekHome from './pages/BaseGeekHome';
 import DataGeekPage from './pages/DataGeekPage';
 import UserGeekPage from './pages/UserGeekPage';
@@ -13,22 +12,20 @@ import AIGeekPage from './pages/AIGeekPage';
 import APIKeysPage from './pages/APIKeysPage';
 import Settings from './pages/Settings';
 import AccountPage from './pages/AccountPage';
-import SharedAuthProvider from './components/SharedAuthProvider';
+import { AuthProvider } from './components/AuthContext';
 import PortalPage from './pages/PortalPage';
 
 function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <SharedAuthProvider app="basegeek">
+      <AuthProvider>
         <Router>
           <Routes>
             {/* Public routes — no auth required */}
             <Route path="/portal" element={<PortalPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
-            <Route path="/auth/callback" element={<AuthCallback />} />
-            {/* Protected routes */}
             <Route path="/" element={<RequireAuth><Layout /></RequireAuth>}>
               <Route index element={<BaseGeekHome />} />
               <Route path="datageek" element={<DataGeekPage />} />
@@ -41,7 +38,7 @@ function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Router>
-      </SharedAuthProvider>
+      </AuthProvider>
     </ThemeProvider>
   );
 }
