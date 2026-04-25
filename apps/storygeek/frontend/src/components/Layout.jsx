@@ -12,7 +12,7 @@ import {
   AccountCircle as AccountIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
-import useSharedAuthStore from '../store/sharedAuthStore';
+import { useAuth } from '@geeksuite/auth';
 
 const drawerWidth = 240;
 
@@ -31,7 +31,7 @@ function Layout({ children, onThemeToggle, isDarkMode }) {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, logout } = useSharedAuthStore();
+  const { user, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
 

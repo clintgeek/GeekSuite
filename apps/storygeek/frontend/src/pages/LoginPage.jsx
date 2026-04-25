@@ -1,17 +1,17 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LoginSplash } from '@geeksuite/ui';
-import useSharedAuthStore from '../store/sharedAuthStore.js';
+import { useAuth } from '@geeksuite/auth';
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const { login, isAuthenticated, isLoading } = useSharedAuthStore();
+  const { login, isAuthenticated, loading } = useAuth();
 
   useEffect(() => {
-    if (!isLoading && isAuthenticated) {
+    if (!loading && isAuthenticated) {
       navigate('/', { replace: true });
     }
-  }, [isLoading, isAuthenticated, navigate]);
+  }, [loading, isAuthenticated, navigate]);
 
   const handleLogin = async () => {
     await login();
@@ -26,7 +26,7 @@ export default function LoginPage() {
       description="AI-powered collaborative storytelling with DnD mechanics"
       features={['AI Game Master', 'Dice Mechanics', 'Character Tracking', 'Story Export']}
       onLogin={handleLogin}
-      loading={isLoading}
+      loading={loading}
       logoColor="#7c4dff"
       logoSuffixColor="#ff6d00"
     />

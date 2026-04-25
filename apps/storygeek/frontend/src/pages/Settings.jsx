@@ -5,9 +5,7 @@ import {
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import useAISettingsStore from '../store/aiSettingsStore';
-import axios from 'axios';
-
-const BASE_API = 'https://basegeek.clintgeek.com/api';
+import api from '../api';
 
 function Settings() {
   const theme = useTheme();
@@ -18,18 +16,13 @@ function Settings() {
   const [providers, setProviders] = useState([]);
   const [modelsByProvider, setModelsByProvider] = useState({});
 
-  const headers = useMemo(() => {
-    const token = localStorage.getItem('geek_token');
-    return { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) };
-  }, []);
-
   useEffect(() => {
     const load = async () => {
       try {
         setLoading(true); setError('');
         const [providersRes, directorRes] = await Promise.all([
-          axios.get(`${BASE_API}/ai/providers`, { headers }),
-          axios.get(`${BASE_API}/ai/director/models`, { headers })
+          api.get('/ai/providers'),
+          api.get('/ai/director/models'),
         ]);
         const enabledProviders = providersRes.data?.data?.providers || [];
         setProviders(enabledProviders);
@@ -53,7 +46,7 @@ function Settings() {
       finally { setLoading(false); }
     };
     load();
-  }, [headers, selectedProvider, setSelection]);
+  }, [selectedProvider, setSelection]);
 
   const currentModels = useMemo(() => modelsByProvider[selectedProvider] || [], [modelsByProvider, selectedProvider]);
 

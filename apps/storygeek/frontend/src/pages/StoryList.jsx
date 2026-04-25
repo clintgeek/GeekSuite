@@ -9,7 +9,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '@mui/material/styles';
-import useSharedAuthStore from '../store/sharedAuthStore';
+import { useAuth } from '@geeksuite/auth';
 import api from '../api';
 
 const genreAccents = {
@@ -40,7 +40,7 @@ const statusStyles = {
 function StoryList() {
   const theme = useTheme();
   const navigate = useNavigate();
-  const { user } = useSharedAuthStore();
+  const { user } = useAuth();
   const gold = theme.palette.codex?.gold || '#c9a84c';
 
   const [stories, setStories] = useState([]);
