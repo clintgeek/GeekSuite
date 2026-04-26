@@ -1,5 +1,4 @@
 import Note from '../models/Note.js';
-import bcrypt from 'bcryptjs';
 import { logger } from '../lib/logger.js';
 
 // --- Helper Functions (Consider moving to a service/util file later) ---
