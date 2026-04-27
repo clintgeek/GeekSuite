@@ -24,7 +24,7 @@ export default function useHomeData() {
   const eggsList = eggsData?.eggProductions || [];
   const hatchesList = hatchesData?.hatchEvents || [];
 
-  const birdsCount = birdsList.length;
+  const birdsCount = birdsList.filter(b => b.status === 'active').length;
   const groupsCount = groupsList.length;
   const layingHensCount = birdsList.filter(
     b => (b.sex === 'hen' || b.sex === 'pullet') && b.status === 'active'
