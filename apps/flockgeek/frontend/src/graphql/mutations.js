@@ -25,16 +25,16 @@ export const DELETE_ENTITY = gql`
 `;
 
 export const RECORD_EGG_PRODUCTION = gql`
-  mutation RecordEggProduction($date: Date!, $eggsCount: Int!, $locationId: ID, $notes: String) {
-    recordEggProduction(date: $date, eggsCount: $eggsCount, locationId: $locationId, notes: $notes) {
+  mutation RecordEggProduction($date: Date!, $eggsCount: Int!, $daysObserved: Int, $locationId: ID, $notes: String) {
+    recordEggProduction(date: $date, eggsCount: $eggsCount, daysObserved: $daysObserved, locationId: $locationId, notes: $notes) {
       id
     }
   }
 `;
 
 export const UPDATE_EGG_PRODUCTION = gql`
-  mutation UpdateEggProduction($id: ID!, $date: Date, $eggsCount: Int, $locationId: ID, $notes: String) {
-    updateEggProduction(id: $id, date: $date, eggsCount: $eggsCount, locationId: $locationId, notes: $notes) {
+  mutation UpdateEggProduction($id: ID!, $date: Date, $eggsCount: Int, $daysObserved: Int, $locationId: ID, $notes: String) {
+    updateEggProduction(id: $id, date: $date, eggsCount: $eggsCount, daysObserved: $daysObserved, locationId: $locationId, notes: $notes) {
       id
     }
   }

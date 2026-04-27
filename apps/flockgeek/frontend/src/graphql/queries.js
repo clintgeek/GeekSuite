@@ -45,6 +45,7 @@ export const GET_EGG_PRODUCTIONS = gql`
       id
       date
       eggsCount
+      daysObserved
       locationId
       avgEggWeightGrams
       eggColor

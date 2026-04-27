@@ -15,7 +15,7 @@ import QuickHarvestEntry from "../components/QuickHarvestEntry";
 import { GET_EGG_PRODUCTIONS, GET_LOCATIONS } from "../graphql/queries";
 import { RECORD_EGG_PRODUCTION, UPDATE_EGG_PRODUCTION, DELETE_ENTITY } from "../graphql/mutations";
 
-const emptyForm = { date: "", eggsCount: "", locationId: "", notes: "" };
+const emptyForm = { date: "", eggsCount: "", daysObserved: 1, locationId: "", notes: "" };
 
 const EggLogPage = () => {
   const [page, setPage] = useState(0);
@@ -84,6 +84,7 @@ const EggLogPage = () => {
     setEditFormData({
       date: record.date ? record.date.substring(0, 10) : "",
       eggsCount: record.eggsCount || "",
+      daysObserved: record.daysObserved || 1,
       locationId: record.locationId || "",
       notes: record.notes || "",
     });
@@ -96,6 +97,7 @@ const EggLogPage = () => {
       id: editingRecord.id,
       date: editFormData.date,
       eggsCount: parseInt(editFormData.eggsCount),
+      daysObserved: parseInt(editFormData.daysObserved) || 1,
       locationId: editFormData.locationId || undefined,
       notes: editFormData.notes || undefined,
     }});
@@ -106,6 +108,7 @@ const EggLogPage = () => {
     recordEggProduction({ variables: {
       date: addFormData.date,
       eggsCount: parseInt(addFormData.eggsCount),
+      daysObserved: parseInt(addFormData.daysObserved) || 1,
       locationId: addFormData.locationId || undefined,
       notes: addFormData.notes || undefined,
     }});
@@ -134,7 +137,7 @@ const EggLogPage = () => {
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
         <Typography variant="h6" sx={{ color: "text.secondary" }}>Harvest History</Typography>
         <Button variant="outlined" size="small" startIcon={<AddIcon />}
-          onClick={() => { setAddFormData({ date: toLocalDateString(new Date()), eggsCount: "", locationId: locations.length === 1 ? locations[0].id : "", notes: "" }); setAddDialogOpen(true); }}>
+          onClick={() => { setAddFormData({ date: toLocalDateString(new Date()), eggsCount: "", daysObserved: 1, locationId: locations.length === 1 ? locations[0].id : "", notes: "" }); setAddDialogOpen(true); }}>
           Add Detailed Entry
         </Button>
       </Box>
@@ -182,9 +185,9 @@ const EggLogPage = () => {
                     <TableCell>{new Date(record.date).toLocaleDateString(undefined, { timeZone: 'UTC' })}</TableCell>
                     <TableCell>{record.locationId ? getLocationName(record.locationId) : "-"}</TableCell>
                     <TableCell align="center" sx={{ fontWeight: 600 }}>{record.eggsCount}</TableCell>
-                    <TableCell align="center">{record.avgEggWeightGrams || "-"}</TableCell>
+                    <TableCell align="center">{record.daysObserved || 1}</TableCell>
                     <TableCell align="center" sx={{ color: "text.secondary" }}>
-                      {(record.eggsCount / (record.avgEggWeightGrams || 1)).toFixed(1)}/day
+                      {(record.eggsCount / (record.daysObserved || 1)).toFixed(1)}/day
                     </TableCell>
                     <TableCell sx={{ maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {record.notes || "-"}
@@ -213,11 +216,13 @@ const EggLogPage = () => {
         <DialogTitle>Edit Egg Production Record</DialogTitle>
         <DialogContent>
           <Box sx={{ pt: 2, display: "grid", gap: 2 }}>
-            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 2 }}>
               <TextField type="date" label="Date" required fullWidth InputLabelProps={{ shrink: true }}
                 value={editFormData.date} onChange={(e) => setEditFormData(p => ({ ...p, date: e.target.value }))} />
               <TextField type="number" label="Eggs Count" required fullWidth value={editFormData.eggsCount}
                 onChange={(e) => setEditFormData(p => ({ ...p, eggsCount: e.target.value }))} />
+              <TextField type="number" label="Days Observed" required fullWidth value={editFormData.daysObserved}
+                onChange={(e) => setEditFormData(p => ({ ...p, daysObserved: e.target.value }))} />
             </Box>
             {locationSelect(editFormData, setEditFormData)}
             <TextField label="Notes" fullWidth multiline rows={2} value={editFormData.notes}
@@ -235,11 +240,13 @@ const EggLogPage = () => {
         <DialogTitle>Add Egg Production Record</DialogTitle>
         <DialogContent>
           <Box sx={{ pt: 2, display: "grid", gap: 2 }}>
-            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 2 }}>
               <TextField type="date" label="Date" required fullWidth InputLabelProps={{ shrink: true }}
                 value={addFormData.date} onChange={(e) => setAddFormData(p => ({ ...p, date: e.target.value }))} />
               <TextField type="number" label="Eggs Count" required fullWidth value={addFormData.eggsCount}
                 onChange={(e) => setAddFormData(p => ({ ...p, eggsCount: e.target.value }))} />
+              <TextField type="number" label="Days Observed" required fullWidth value={addFormData.daysObserved}
+                onChange={(e) => setAddFormData(p => ({ ...p, daysObserved: e.target.value }))} />
             </Box>
             {locationSelect(addFormData, setAddFormData)}
             <TextField label="Notes" fullWidth multiline rows={2} value={addFormData.notes}

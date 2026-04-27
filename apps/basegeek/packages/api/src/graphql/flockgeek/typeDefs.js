@@ -79,6 +79,7 @@ export const typeDefs = gql`
     locationId: ID
     date: Date!
     eggsCount: Int!
+    daysObserved: Int
     avgEggWeightGrams: Float
     eggColor: String
     eggSize: String
@@ -254,8 +255,8 @@ export const typeDefs = gql`
     updateFlockGroup(id: ID!, name: String, purpose: String, type: String, startDate: Date, endDate: Date, description: String, notes: String): FlockGroup!
     createFlockLocation(name: String!, type: String!, capacity: Int, description: String, notes: String): FlockLocation!
     updateFlockLocation(id: ID!, name: String, type: String, capacity: Int, isActive: Boolean, description: String, notes: String): FlockLocation!
-    recordEggProduction(birdId: ID, groupId: ID, locationId: ID, date: Date!, eggsCount: Int!, avgEggWeightGrams: Float, eggColor: String, eggSize: String, notes: String): EggProduction!
-    updateEggProduction(id: ID!, date: Date, eggsCount: Int, locationId: ID, notes: String): EggProduction!
+    recordEggProduction(birdId: ID, groupId: ID, locationId: ID, date: Date!, eggsCount: Int!, daysObserved: Int, avgEggWeightGrams: Float, eggColor: String, eggSize: String, notes: String): EggProduction!
+    updateEggProduction(id: ID!, date: Date, eggsCount: Int, daysObserved: Int, locationId: ID, notes: String): EggProduction!
     createPairing(name: String!, roosterIds: [ID], henIds: [ID], pairingDate: Date, active: Boolean, notes: String): Pairing!
     updatePairing(id: ID!, name: String, roosterIds: [ID], henIds: [ID], pairingDate: Date, active: Boolean, notes: String): Pairing!
     recordHatchEvent(setDate: Date!, hatchDate: Date, eggsSet: Int!, notes: String): HatchEvent!
