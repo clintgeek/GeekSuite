@@ -1,5 +1,7 @@
 import { Box, Typography, Chip, IconButton, Tooltip, useTheme } from '@mui/material';
-import { X, ArrowRight, Archive, CalendarCheck } from 'lucide-react';
+import { X, ArrowRight, Archive, CalendarCheck, Calendar } from 'lucide-react';
+import { useState } from 'react';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { motion } from 'framer-motion';
 import { colors } from '../../theme/colors';
 import { getTaskAge, getAgingColor, getAgingLabel } from '../../utils/taskAging';
@@ -22,13 +24,15 @@ import { getTaskAge, getAgingColor, getAgingLabel } from '../../utils/taskAging'
 const ReviewCard = ({
   task,
   onKeep,
-  onMoveForward,
+  onMoveTomorrow,
+  onMoveTo,
   onBacklog,
   onDelete,
   focused = false,
 }) => {
   const theme  = useTheme();
   const isDark = theme.palette.mode === 'dark';
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const { level, days } = getTaskAge(task);
   const agingColor = getAgingColor(level);
   const agingLabel = getAgingLabel(days);
@@ -242,7 +246,7 @@ const ReviewCard = ({
         {/* Separator */}
         <Box
           sx={{
-            width:  1,
+            width: '1px',
             height: 20,
             backgroundColor: dividerColor,
             flexShrink: 0,
@@ -250,15 +254,43 @@ const ReviewCard = ({
           }}
         />
 
-        {/* Tomorrow — neutral */}
+        {/* Move Tomorrow — neutral */}
         <ActionButton
           icon={ArrowRight}
-          label="Tomorrow"
+          label="Move tomorrow"
           shortcut="2"
-          onClick={() => onMoveForward?.(task)}
+          onClick={() => onMoveTomorrow?.(task)}
           variant="neutral"
           isDark={isDark}
         />
+
+        {/* Move To — date picker */}
+        <Box sx={{ position: 'relative' }}>
+          <ActionButton
+            icon={Calendar}
+            label="Move to"
+            onClick={() => setIsDatePickerOpen(true)}
+            variant="neutral"
+            isDark={isDark}
+          />
+          <Box sx={{ position: 'absolute', visibility: 'hidden', height: 0, width: 0 }}>
+            <DatePicker
+              open={isDatePickerOpen}
+              onClose={() => setIsDatePickerOpen(false)}
+              onChange={(newDate) => {
+                if (newDate) {
+                  onMoveTo?.(task, newDate);
+                }
+                setIsDatePickerOpen(false);
+              }}
+              slotProps={{
+                textField: {
+                  size: 'small',
+                },
+              }}
+            />
+          </Box>
+        </Box>
 
         {/* Backlog — demotion */}
         <ActionButton
@@ -363,22 +395,23 @@ const ActionButton = ({ icon: Icon, label, shortcut, onClick, variant, isDark })
     >
       <Icon size={13} strokeWidth={2} />
       <Box component="span">{label}</Box>
-      {/* Keyboard shortcut indicator */}
-      <Box
-        component="kbd"
-        sx={{
-          fontFamily:      '"IBM Plex Mono", monospace',
-          fontSize:        '0.5rem',
-          fontWeight:      700,
-          color:           'inherit',
-          opacity:         0.45,
-          ml:              0.25,
-          lineHeight:      1,
-          letterSpacing:   '0',
-        }}
-      >
-        {shortcut}
-      </Box>
+      {shortcut && (
+        <Box
+          component="kbd"
+          sx={{
+            fontFamily:      '"IBM Plex Mono", monospace',
+            fontSize:        '0.5rem',
+            fontWeight:      700,
+            color:           'inherit',
+            opacity:         0.45,
+            ml:              0.25,
+            lineHeight:      1,
+            letterSpacing:   '0',
+          }}
+        >
+          {shortcut}
+        </Box>
+      )}
     </Box>
   );
 };

@@ -18,20 +18,20 @@ export const resolvers = {
       const userId = context.user?.id;
       if (!userId) return [];
       const dateStr = date || format(new Date(), 'yyyy-MM-dd');
-      return taskService.getTasksForDateRange({ userId, startDate: new Date(dateStr), endDate: new Date(dateStr), viewType: 'daily' });
+      return taskService.getTasksForDateRange({ userId, startDate: dateStr, endDate: dateStr, viewType: 'daily' });
     },
     weeklyTasks: async (_, { date }, context) => {
       const userId = context.user?.id;
       if (!userId) return [];
       const dateStr = date || format(new Date(), 'yyyy-MM-dd');
-      return taskService.getTasksForDateRange({ userId, startDate: new Date(dateStr), endDate: new Date(dateStr), viewType: 'weekly' });
+      return taskService.getTasksForDateRange({ userId, startDate: dateStr, endDate: dateStr, viewType: 'weekly' });
     },
     monthlyTasks: async (_, { startDate, endDate }, context) => {
       const userId = context.user?.id;
       if (!userId) return [];
       const sDate = startDate || format(new Date(), 'yyyy-MM-dd');
       const eDate = endDate || format(new Date(), 'yyyy-MM-dd');
-      return taskService.getTasksForDateRange({ userId, startDate: new Date(sDate), endDate: new Date(eDate), viewType: 'monthly' });
+      return taskService.getTasksForDateRange({ userId, startDate: sDate, endDate: eDate, viewType: 'monthly' });
     },
     allTasks: async (_, __, context) => {
       const userId = context.user?.id;

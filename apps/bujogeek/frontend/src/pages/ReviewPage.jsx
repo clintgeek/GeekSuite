@@ -80,12 +80,25 @@ const ReviewPage = () => {
     [updateTask, markReviewed]
   );
 
-  const handleMoveForward = useCallback(
+  const handleMoveTomorrow = useCallback(
     async (task) => {
       const tomorrowStr = toLocalDateString(addDays(new Date(), 1));
       await updateTask((task.id || task._id), {
         ...task,
         dueDate: tomorrowStr,
+        status: 'migrated_future',
+      });
+      markReviewed((task.id || task._id));
+    },
+    [updateTask, markReviewed]
+  );
+
+  const handleMoveToDate = useCallback(
+    async (task, date) => {
+      const dateStr = toLocalDateString(date);
+      await updateTask((task.id || task._id), {
+        ...task,
+        dueDate: dateStr,
         status: 'migrated_future',
       });
       markReviewed((task.id || task._id));
@@ -151,7 +164,7 @@ const ReviewPage = () => {
           break;
         case '2':
           e.preventDefault();
-          handleMoveForward(focusedTask);
+          handleMoveTomorrow(focusedTask);
           break;
         case '3':
           e.preventDefault();
@@ -164,7 +177,7 @@ const ReviewPage = () => {
 
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [isLoading, allReviewed, nothingToReview, focusedTaskId, agingTasks, handleKeep, handleMoveForward, handleBacklog]);
+  }, [isLoading, allReviewed, nothingToReview, focusedTaskId, agingTasks, handleKeep, handleMoveTomorrow, handleBacklog]);
 
   useGlobalShortcuts();
 
@@ -343,7 +356,8 @@ const ReviewPage = () => {
                 <ReviewCard
                   task={task}
                   onKeep={handleKeep}
-                  onMoveForward={handleMoveForward}
+                  onMoveTomorrow={handleMoveTomorrow}
+                  onMoveTo={handleMoveToDate}
                   onBacklog={handleBacklog}
                   onDelete={handleDelete}
                   focused={focusedTaskId === (task.id || task._id)}
