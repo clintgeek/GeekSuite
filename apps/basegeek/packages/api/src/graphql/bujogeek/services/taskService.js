@@ -1,7 +1,9 @@
 import Task from '../models/Task.js';
 import TaskOrder from '../models/TaskOrder.js';
 import mongoose from 'mongoose';
-import { RRule, rrulestr } from 'rrule';
+import rrulePkg from 'rrule';
+
+const { rrulestr } = rrulePkg;
 
 class TaskService {
   constructor() {

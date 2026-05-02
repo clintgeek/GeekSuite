@@ -32,7 +32,7 @@ import {
 } from '@mui/icons-material';
 import { useBaseGeekAuth } from './AuthContext';
 
-const SIDEBAR_WIDTH = 240;
+const SIDEBAR_WIDTH = 220;
 const SIDEBAR_COLLAPSED = 68;
 
 const navItems = [
@@ -161,7 +161,7 @@ export default function Layout() {
                 selected={isActive}
                 onClick={() => handleNavigation(item.path)}
                 sx={{
-                  minHeight: 40,
+                  minHeight: 44,
                   justifyContent: collapsed && !isMobile ? 'center' : 'flex-start',
                   px: collapsed && !isMobile ? 1.5 : 1.5,
                   borderRadius: '8px',
@@ -233,7 +233,7 @@ export default function Layout() {
         <ListItemButton
           onClick={handleLogout}
           sx={{
-            minHeight: 36,
+            minHeight: 44,
             justifyContent: collapsed && !isMobile ? 'center' : 'flex-start',
             px: 1.5,
             borderRadius: '8px',
@@ -279,7 +279,7 @@ export default function Layout() {
             borderBottom: `1px solid ${theme.palette.divider}`,
           }}
         >
-          <Toolbar sx={{ minHeight: '56px !important', height: '56px' }}>
+          <Toolbar sx={{ minHeight: '60px !important', height: '60px' }}>
             <IconButton
               color="inherit"
               edge="start"
@@ -371,7 +371,7 @@ export default function Layout() {
         sx={{
           flexGrow: 1,
           p: { xs: 2, sm: 3, md: 4 },
-          mt: isMobile ? '56px' : 0,
+          mt: isMobile ? '60px' : 0,
           width: { md: `calc(100% - ${sidebarWidth}px)` },
           minHeight: '100vh',
           backgroundColor: theme.palette.background.default,

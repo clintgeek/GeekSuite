@@ -188,10 +188,11 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           borderRadius: 8,
-          padding: '8px 18px',
+          padding: '8px 16px',
           transition: 'all 150ms ease',
-          fontSize: '0.8125rem',
-          minHeight: 36,
+          fontSize: '0.875rem',
+          minHeight: 44,
+          minWidth: 44,
         },
         contained: {
           boxShadow: 'none',
@@ -223,7 +224,7 @@ const theme = createTheme({
     MuiCard: {
       styleOverrides: {
         root: {
-          borderRadius: 12,
+          borderRadius: 8,
           border: `1px solid ${stone[700]}`,
           backgroundImage: 'none',
           transition: 'all 150ms ease',
@@ -233,7 +234,7 @@ const theme = createTheme({
     MuiDialog: {
       styleOverrides: {
         paper: {
-          borderRadius: 14,
+          borderRadius: 8,
           border: `1px solid ${stone[600]}`,
           backgroundColor: stone[800],
         },
@@ -242,7 +243,7 @@ const theme = createTheme({
     MuiTooltip: {
       styleOverrides: {
         tooltip: {
-          borderRadius: 6,
+          borderRadius: 4,
           fontWeight: 500,
           fontSize: '0.75rem',
           padding: '6px 12px',
@@ -255,9 +256,9 @@ const theme = createTheme({
     MuiChip: {
       styleOverrides: {
         root: {
-          borderRadius: 6,
+          borderRadius: 4,
           fontWeight: 500,
-          fontSize: '0.6875rem',
+          fontSize: '0.75rem',
           height: 24,
         },
       },
@@ -326,7 +327,7 @@ const theme = createTheme({
     MuiAlert: {
       styleOverrides: {
         root: {
-          borderRadius: 10,
+          borderRadius: 8,
           fontWeight: 500,
           border: '1px solid',
         },
