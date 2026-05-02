@@ -16,6 +16,10 @@ export const typeDefs = gql`
     isBacklog: Boolean
     taskType: String
     recurrencePattern: String
+    recurrenceRule: String
+    seriesId: String
+    isSeriesMaster: Boolean
+    originalDueDate: Date
     parentTask: Task
     subtasks: [Task]
     completedAt: Date
@@ -60,6 +64,12 @@ export const typeDefs = gql`
     preview: String
   }
 
+  enum EditScope {
+    THIS_INSTANCE
+    ALL_INSTANCES
+    FUTURE_INSTANCES
+  }
+
   input UpdateTaskInput {
     content: String
     signifier: String
@@ -88,9 +98,9 @@ export const typeDefs = gql`
   }
 
   type Mutation {
-    createTask(content: String!, signifier: String, status: String, priority: Int, tags: [String], dueDate: Date, createdAt: Date, updatedAt: Date, note: String, recurrencePattern: String): Task!
-    updateTask(id: ID!, input: UpdateTaskInput!): Task!
-    deleteTask(id: ID!): DeleteResponse!
+    createTask(content: String!, signifier: String, status: String, priority: Int, tags: [String], dueDate: Date, createdAt: Date, updatedAt: Date, note: String, recurrencePattern: String, recurrenceRule: String, isSeriesMaster: Boolean): Task!
+    updateTask(id: ID!, input: UpdateTaskInput!, editScope: EditScope): Task!
+    deleteTask(id: ID!, editScope: EditScope): DeleteResponse!
     updateTaskStatus(id: ID!, status: String!): Task!
     addSubtask(parentId: ID!, content: String!, signifier: String, status: String, priority: Int, tags: [String], dueDate: Date): Task!
     migrateTaskToFuture(id: ID!, futureDate: Date!): Task!

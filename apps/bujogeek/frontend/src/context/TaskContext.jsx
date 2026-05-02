@@ -7,6 +7,7 @@ import {
 import {
   CREATE_TASK, UPDATE_TASK, DELETE_TASK, UPDATE_TASK_STATUS, MIGRATE_TASK_TO_FUTURE, SAVE_DAILY_TASK_ORDER
 } from '../graphql/mutations';
+import RecurringEditDialog from '../components/tasks/RecurringEditDialog';
 
 
 const AUTH_CONFIG = { withCredentials: true };
@@ -53,6 +54,9 @@ const TaskProvider = ({ children }) => {
   const [currentView, setCurrentView] = useState('daily');
   const [currentDate, setCurrentDate] = useState(new Date());
 
+  // Recurring dialog state
+  const [recurringDialog, setRecurringDialog] = useState({ open: false, actionType: 'delete', resolve: null });
+
   // Filter state
   const [filters, setFilters] = useState({
     search: '',
@@ -90,6 +94,37 @@ const TaskProvider = ({ children }) => {
 
       return dateA - dateB;
     });
+  };
+
+  const getTaskFromState = useCallback((id) => {
+    // Search in tasks array
+    if (Array.isArray(tasks)) {
+      return tasks.find(t => String(t.id || t._id) === String(id));
+    }
+    // Search in tasks object (grouped by dates)
+    for (const date in tasks) {
+      if (Array.isArray(tasks[date])) {
+        const found = tasks[date].find(t => String(t.id || t._id) === String(id));
+        if (found) return found;
+      }
+    }
+    return null;
+  }, [tasks]);
+
+  const promptRecurringScope = async (actionType) => {
+    return new Promise((resolve) => {
+      setRecurringDialog({ open: true, actionType, resolve });
+    });
+  };
+
+  const handleRecurringDialogClose = () => {
+    if (recurringDialog.resolve) recurringDialog.resolve(null);
+    setRecurringDialog(prev => ({ ...prev, open: false }));
+  };
+
+  const handleRecurringDialogConfirm = (scope) => {
+    if (recurringDialog.resolve) recurringDialog.resolve(scope);
+    setRecurringDialog(prev => ({ ...prev, open: false }));
   };
 
   // Helper function to handle API errors
@@ -367,12 +402,10 @@ const TaskProvider = ({ children }) => {
     }
   }, []);
 
-  const updateTask = useCallback(async (taskId, updates) => {
+  const updateTask = useCallback(async (taskId, updates, editScope = 'THIS_INSTANCE') => {
     try {
       setLoading(LoadingState.UPDATING);
 
-      // Only send fields that UpdateTaskInput actually accepts.
-      // taskType is a Mongoose virtual (not a real schema field) — never send it.
       const ALLOWED_UPDATE_FIELDS = [
         'content', 'signifier', 'status', 'priority', 'note',
         'tags', 'dueDate', 'isBacklog', 'recurrencePattern',
@@ -386,7 +419,7 @@ const TaskProvider = ({ children }) => {
 
       const response = await apolloClient.mutate({
         mutation: UPDATE_TASK,
-        variables: { id: taskId, input: cleanUpdates }
+        variables: { id: taskId, input: cleanUpdates, editScope }
       });
 
       const updatedTask = response.data?.updateTask;
@@ -514,13 +547,24 @@ const TaskProvider = ({ children }) => {
     }
   }, [handleApiError, sortTasks]);
 
-  const deleteTask = useCallback(async (taskId) => {
+  const deleteTask = useCallback(async (taskId, editScopeParam = null) => {
     try {
+      const task = getTaskFromState(taskId);
+      let editScope = editScopeParam;
+      if (!editScope) {
+        if (task && (task.isSeriesMaster || task.seriesId || task.recurrenceRule || String(taskId).startsWith('virtual_'))) {
+          editScope = await promptRecurringScope('delete');
+          if (!editScope) return; // user cancelled
+        } else {
+          editScope = 'THIS_INSTANCE';
+        }
+      }
+
       setLoading(LoadingState.DELETING);
       setError(null);
       await apolloClient.mutate({
         mutation: DELETE_TASK,
-        variables: { id: taskId }
+        variables: { id: taskId, editScope }
       });
 
       setTasks(prev => {
@@ -642,6 +686,12 @@ const TaskProvider = ({ children }) => {
   return (
     <TaskContext.Provider value={value}>
       {children}
+      <RecurringEditDialog
+        open={recurringDialog.open}
+        actionType={recurringDialog.actionType}
+        onClose={handleRecurringDialogClose}
+        onConfirm={handleRecurringDialogConfirm}
+      />
     </TaskContext.Provider>
   );
 };
