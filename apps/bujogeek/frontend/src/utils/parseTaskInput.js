@@ -16,7 +16,7 @@
  *                             /mar 5th  /january 15
  *   Time (after a date):      9am  14:30  2:30pm  2 p.m.
  *
- * Returns: { content, signifier, priority, dueDate, tags, note, noteGeekNote, recurrencePattern }
+ * Returns: { content, signifier, priority, dueDate, tags, note, noteGeekNote, recurrencePattern, recurrenceRule }
  */
 
 const DAY_NAMES = {
@@ -85,6 +85,7 @@ export default function parseTaskInput(text) {
   let note = null;
   let noteGeekNote = null;
   let recurrencePattern = null;
+  let recurrenceRule = null;
   const tags = [];
 
   // 0. Recurrence — (daily) / (weekly) / (monthly)
@@ -92,6 +93,9 @@ export default function parseTaskInput(text) {
   if (recurrenceMatch) {
     recurrencePattern = recurrenceMatch[1].toLowerCase();
     content = content.replace(recurrenceMatch[0], '').trim();
+    if (recurrencePattern === 'daily') recurrenceRule = 'FREQ=DAILY';
+    if (recurrencePattern === 'weekly') recurrenceRule = 'FREQ=WEEKLY';
+    if (recurrencePattern === 'monthly') recurrenceRule = 'FREQ=MONTHLY';
   }
 
   // 1. Tags — extract first so # tokens don't interfere with other parsing
@@ -223,5 +227,6 @@ export default function parseTaskInput(text) {
     note: note || undefined,
     noteGeekNote: noteGeekNote || undefined,
     recurrencePattern: recurrencePattern || undefined,
+    recurrenceRule: recurrenceRule || undefined,
   };
 }

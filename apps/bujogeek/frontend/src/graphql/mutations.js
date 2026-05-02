@@ -47,8 +47,8 @@ export const DELETE_TEMPLATE = gql`
 `;
 
 export const CREATE_TASK = gql`
-  mutation CreateTask($content: String!, $signifier: String, $status: String, $priority: Int, $tags: [String], $dueDate: Date, $createdAt: Date, $updatedAt: Date, $note: String, $recurrencePattern: String) {
-    createTask(content: $content, signifier: $signifier, status: $status, priority: $priority, tags: $tags, dueDate: $dueDate, createdAt: $createdAt, updatedAt: $updatedAt, note: $note, recurrencePattern: $recurrencePattern) {
+  mutation CreateTask($content: String!, $signifier: String, $status: String, $priority: Int, $tags: [String], $dueDate: Date, $createdAt: Date, $updatedAt: Date, $note: String, $recurrencePattern: String, $recurrenceRule: String, $isSeriesMaster: Boolean) {
+    createTask(content: $content, signifier: $signifier, status: $status, priority: $priority, tags: $tags, dueDate: $dueDate, createdAt: $createdAt, updatedAt: $updatedAt, note: $note, recurrencePattern: $recurrencePattern, recurrenceRule: $recurrenceRule, isSeriesMaster: $isSeriesMaster) {
       id
       content
       signifier
@@ -58,11 +58,15 @@ export const CREATE_TASK = gql`
       tags
       dueDate
       originalDate
+      originalDueDate
       migratedFrom
       migratedTo
       isBacklog
       taskType
       recurrencePattern
+      recurrenceRule
+      seriesId
+      isSeriesMaster
       createdAt
       updatedAt
       parentTask {
@@ -76,8 +80,8 @@ export const CREATE_TASK = gql`
 `;
 
 export const UPDATE_TASK = gql`
-  mutation UpdateTask($id: ID!, $input: UpdateTaskInput!) {
-    updateTask(id: $id, input: $input) {
+  mutation UpdateTask($id: ID!, $input: UpdateTaskInput!, $editScope: EditScope) {
+    updateTask(id: $id, input: $input, editScope: $editScope) {
       id
       content
       signifier
@@ -87,10 +91,15 @@ export const UPDATE_TASK = gql`
       tags
       dueDate
       originalDate
+      originalDueDate
       migratedFrom
       migratedTo
       isBacklog
       taskType
+      recurrencePattern
+      recurrenceRule
+      seriesId
+      isSeriesMaster
       createdAt
       updatedAt
     }
@@ -98,8 +107,8 @@ export const UPDATE_TASK = gql`
 `;
 
 export const DELETE_TASK = gql`
-  mutation DeleteTask($id: ID!) {
-    deleteTask(id: $id) {
+  mutation DeleteTask($id: ID!, $editScope: EditScope) {
+    deleteTask(id: $id, editScope: $editScope) {
       success
       message
     }

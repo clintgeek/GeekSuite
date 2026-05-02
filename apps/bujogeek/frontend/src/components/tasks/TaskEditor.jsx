@@ -22,6 +22,7 @@ import { useTaskContext } from '../../context/TaskContext.jsx';
 import { useToast } from '../shared/Toast';
 import { CREATE_NOTE } from '../../graphql/notegeekMutations';
 import { colors } from '../../theme/colors';
+import RecurringEditDialog from './RecurringEditDialog';
 
 const SIGNIFIER_OPTIONS = [
   { value: '*', label: 'Task', mono: '*' },
@@ -68,6 +69,7 @@ const TaskEditor = ({ open, onClose, task = null }) => {
   });
   const [tagInput, setTagInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [recurringDialogOpen, setRecurringDialogOpen] = useState(false);
 
   const isEditing = Boolean(task);
 
@@ -133,11 +135,24 @@ const TaskEditor = ({ open, onClose, task = null }) => {
   };
 
   const handleSubmit = async (event) => {
-    event.preventDefault();
+    event?.preventDefault();
+    if (isEditing && (task.isSeriesMaster || task.seriesId || task.recurrenceRule || task.id?.startsWith('virtual_') || task._id?.startsWith('virtual_'))) {
+      setRecurringDialogOpen(true);
+      return;
+    }
+    await performSubmit('THIS_INSTANCE');
+  };
+
+  const handleRecurringConfirm = async (editScope) => {
+    setRecurringDialogOpen(false);
+    await performSubmit(editScope);
+  };
+
+  const performSubmit = async (editScope) => {
     setLoading(true);
     try {
       if (isEditing) {
-        await updateTask(task.id || task._id, formData);
+        await updateTask(task.id || task._id, formData, editScope);
       } else {
         await createTask(formData);
       }
@@ -473,6 +488,12 @@ const TaskEditor = ({ open, onClose, task = null }) => {
           </Button>
         </DialogActions>
       </form>
+      <RecurringEditDialog
+        open={recurringDialogOpen}
+        actionType="edit"
+        onClose={() => setRecurringDialogOpen(false)}
+        onConfirm={handleRecurringConfirm}
+      />
     </Dialog>
   );
 };

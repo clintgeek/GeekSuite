@@ -1,6 +1,7 @@
 import Task from '../models/Task.js';
 import TaskOrder from '../models/TaskOrder.js';
 import mongoose from 'mongoose';
+import { RRule, rrulestr } from 'rrule';
 
 class TaskService {
   constructor() {
@@ -29,7 +30,7 @@ class TaskService {
   }
 
   async getTasksForDateRange({ userId, startDate, endDate, viewType }) {
-    const query = { createdBy: userId };
+    const query = { createdBy: userId, isSeriesMaster: { $ne: true } };
     if (viewType !== 'all') {
       query.isBacklog = { $ne: true };
     }
@@ -90,7 +91,109 @@ class TaskService {
       .sort({ status: 1, dueDate: -1, priority: 1, createdAt: -1 });
 
     const tasksWithDates = tasks.map(t => t.toObject());
-    const sorted = this.sortTasks(tasksWithDates, viewType);
+
+    // --- RRULE EXPANSION START ---
+    let viewStart, viewEnd;
+    if (viewType === 'daily') {
+      viewStart = startOfDayDate; viewEnd = endOfDayDate;
+    } else if (viewType === 'weekly') {
+      const startOfWeekDate = new Date(startOfDayDate);
+      startOfWeekDate.setUTCDate(startOfWeekDate.getUTCDate() - startOfWeekDate.getUTCDay());
+      startOfWeekDate.setUTCHours(0, 0, 0, 0);
+      const endOfWeekDate = new Date(startOfWeekDate);
+      endOfWeekDate.setUTCDate(endOfWeekDate.getUTCDate() + 6);
+      endOfWeekDate.setUTCHours(23, 59, 59, 999);
+      viewStart = startOfWeekDate; viewEnd = endOfWeekDate;
+    } else if (viewType === 'monthly') {
+      viewStart = new Date(Date.UTC(startOfDayDate.getUTCFullYear(), startOfDayDate.getUTCMonth(), 1, 0, 0, 0, 0));
+      viewEnd = new Date(Date.UTC(startOfDayDate.getUTCFullYear(), startOfDayDate.getUTCMonth() + 1, 0, 23, 59, 59, 999));
+    } else {
+      viewStart = new Date(0); viewEnd = new Date(8640000000000000);
+    }
+
+    const masterTasks = await this.taskModel.find({
+      createdBy: userId,
+      isSeriesMaster: true,
+      status: { $ne: 'completed' }
+    });
+
+    const overrides = await this.taskModel.find({
+      createdBy: userId,
+      seriesId: { $in: masterTasks.map(m => m._id) }
+    });
+    const overrideMap = new Map();
+    for (const ov of overrides) {
+      if (ov.originalDueDate) {
+        overrideMap.set(`${ov.seriesId}_${ov.originalDueDate.getTime()}`, ov);
+      }
+    }
+
+    for (const master of masterTasks) {
+      if (!master.recurrenceRule) continue;
+      try {
+        const rule = rrulestr(master.recurrenceRule);
+        const occurrences = rule.between(viewStart, viewEnd, true);
+
+        for (const date of occurrences) {
+          if (master.exdates && master.exdates.some(ex => ex.getTime() === date.getTime())) continue;
+
+          const key = `${master._id}_${date.getTime()}`;
+          if (!overrideMap.has(key)) {
+            tasksWithDates.push({
+              _id: `virtual_${master._id}_${date.getTime()}`,
+              content: master.content,
+              signifier: master.signifier,
+              status: 'pending',
+              priority: master.priority,
+              note: master.note,
+              tags: master.tags,
+              dueDate: date,
+              originalDueDate: date,
+              seriesId: master._id,
+              recurrenceRule: master.recurrenceRule,
+              isVirtual: true,
+              createdBy: master.createdBy
+            });
+          }
+        }
+
+        // Carry-forward logic for daily/all view
+        if (viewType === 'daily' || viewType === 'all') {
+          const pastDate = rule.before(viewStart, false);
+          if (pastDate) {
+            let skipPast = false;
+            if (master.exdates && master.exdates.some(ex => ex.getTime() === pastDate.getTime())) skipPast = true;
+            
+            if (!skipPast) {
+              const pastKey = `${master._id}_${pastDate.getTime()}`;
+              const pastOverride = overrideMap.get(pastKey);
+              if (!pastOverride) {
+                tasksWithDates.push({
+                  _id: `virtual_${master._id}_${pastDate.getTime()}`,
+                  content: master.content,
+                  signifier: master.signifier,
+                  status: 'pending',
+                  priority: master.priority,
+                  note: master.note,
+                  tags: master.tags,
+                  dueDate: pastDate,
+                  originalDueDate: pastDate,
+                  seriesId: master._id,
+                  recurrenceRule: master.recurrenceRule,
+                  isVirtual: true,
+                  createdBy: master.createdBy
+                });
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Invalid RRULE on task", master._id, e);
+      }
+    }
+    // --- RRULE EXPANSION END ---
+
+    const sorted = this.sortTasks(tasksWithDates);
 
     if (viewType === 'daily') {
       const dateKey = this.formatDateKey(startDate);
@@ -124,37 +227,83 @@ class TaskService {
   }
 
   async createTask(taskData) {
+    if (taskData.recurrenceRule) {
+      taskData.isSeriesMaster = true;
+    }
     return new this.taskModel(taskData).save();
   }
 
-  async updateTask(taskId, updateData) {
-    return this.taskModel.findByIdAndUpdate(taskId, { ...updateData, updatedAt: new Date() }, { new: true, runValidators: true });
+  async updateTask(taskId, updateData, editScope = 'THIS_INSTANCE') {
+    if (taskId.startsWith('virtual_')) {
+      const parts = taskId.split('_');
+      const masterId = parts[1];
+      const originalDueDate = new Date(parseInt(parts[2], 10));
+
+      if (editScope === 'ALL_INSTANCES') {
+        return this.taskModel.findByIdAndUpdate(masterId, { ...updateData, updatedAt: new Date() }, { new: true, runValidators: true });
+      } else {
+        const master = await this.taskModel.findById(masterId);
+        const overrideData = {
+          ...master.toObject(),
+          _id: undefined,
+          ...updateData,
+          seriesId: masterId,
+          isSeriesMaster: false,
+          recurrenceRule: null,
+          originalDueDate,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+        return new this.taskModel(overrideData).save();
+      }
+    } else {
+      const task = await this.taskModel.findById(taskId);
+      if (task && (task.isSeriesMaster || editScope === 'ALL_INSTANCES')) {
+        const targetId = task.seriesId || taskId;
+        return this.taskModel.findByIdAndUpdate(targetId, { ...updateData, updatedAt: new Date() }, { new: true });
+      } else {
+        return this.taskModel.findByIdAndUpdate(taskId, { ...updateData, updatedAt: new Date() }, { new: true, runValidators: true });
+      }
+    }
   }
 
-  async deleteTask(taskId) {
+  async deleteTask(taskId, editScope = 'THIS_INSTANCE') {
+    if (taskId.startsWith('virtual_')) {
+      const parts = taskId.split('_');
+      const masterId = parts[1];
+      const originalDueDate = new Date(parseInt(parts[2], 10));
+
+      if (editScope === 'ALL_INSTANCES') {
+        await this.taskModel.deleteMany({ seriesId: masterId });
+        return this.taskModel.findByIdAndDelete(masterId);
+      } else {
+        return this.taskModel.findByIdAndUpdate(masterId, { $push: { exdates: originalDueDate } }, { new: true });
+      }
+    }
+
     const task = await this.taskModel.findById(taskId);
     if (!task) return null;
-    if (task.parentTask) {
-      await this.taskModel.findByIdAndUpdate(task.parentTask, { $pull: { subtasks: taskId } });
+
+    if (task.isSeriesMaster || editScope === 'ALL_INSTANCES') {
+      const targetId = task.seriesId || taskId;
+      await this.taskModel.deleteMany({ seriesId: targetId });
+      return this.taskModel.findByIdAndDelete(targetId);
+    } else {
+      if (task.parentTask) {
+        await this.taskModel.findByIdAndUpdate(task.parentTask, { $pull: { subtasks: taskId } });
+      }
+      await this.taskModel.deleteMany({ parentTask: taskId });
+      return this.taskModel.findByIdAndDelete(taskId);
     }
-    await this.taskModel.deleteMany({ parentTask: taskId });
-    return this.taskModel.findByIdAndDelete(taskId);
   }
 
   nextRecurrenceDate(baseDate, pattern) {
     const d = new Date(baseDate || Date.now());
     switch (pattern) {
-      case 'daily':
-        d.setUTCDate(d.getUTCDate() + 1);
-        break;
-      case 'weekly':
-        d.setUTCDate(d.getUTCDate() + 7);
-        break;
-      case 'monthly':
-        d.setUTCMonth(d.getUTCMonth() + 1);
-        break;
-      default:
-        return null;
+      case 'daily': d.setUTCDate(d.getUTCDate() + 1); break;
+      case 'weekly': d.setUTCDate(d.getUTCDate() + 7); break;
+      case 'monthly': d.setUTCMonth(d.getUTCMonth() + 1); break;
+      default: return null;
     }
     d.setUTCHours(9, 0, 0, 0);
     return d;
@@ -169,18 +318,33 @@ class TaskService {
       updateData.completedAt = null;
     }
 
+    if (taskId.startsWith('virtual_')) {
+      const parts = taskId.split('_');
+      const masterId = parts[1];
+      const originalDueDate = new Date(parseInt(parts[2], 10));
+      const master = await this.taskModel.findById(masterId);
+      const overrideData = {
+        ...master.toObject(),
+        _id: undefined,
+        ...updateData,
+        seriesId: masterId,
+        isSeriesMaster: false,
+        recurrenceRule: null,
+        originalDueDate,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      return new this.taskModel(overrideData).save();
+    }
+
     const task = await this.taskModel.findByIdAndUpdate(taskId, updateData, { new: true, runValidators: true });
 
-    // Auto-spawn next occurrence when a recurring task is completed
-    if (task && status === 'completed' && task.recurrencePattern && task.recurrencePattern !== 'none') {
+    // Legacy auto-spawn for basic non-rrule recurrences
+    if (task && !task.isSeriesMaster && !task.seriesId && status === 'completed' && task.recurrencePattern && task.recurrencePattern !== 'none') {
       const nextDue = this.nextRecurrenceDate(task.dueDate, task.recurrencePattern);
       if (nextDue) {
-        // Only create if no pending instance already exists for that date
-        const startOfDay = new Date(nextDue);
-        startOfDay.setUTCHours(0, 0, 0, 0);
-        const endOfDay = new Date(nextDue);
-        endOfDay.setUTCHours(23, 59, 59, 999);
-
+        const startOfDay = new Date(nextDue); startOfDay.setUTCHours(0, 0, 0, 0);
+        const endOfDay = new Date(nextDue); endOfDay.setUTCHours(23, 59, 59, 999);
         const existing = await this.taskModel.findOne({
           createdBy: task.createdBy,
           content: task.content,
@@ -188,19 +352,11 @@ class TaskService {
           status: 'pending',
           dueDate: { $gte: startOfDay, $lte: endOfDay },
         });
-
         if (!existing) {
           await this.taskModel.create({
-            content: task.content,
-            signifier: task.signifier,
-            status: 'pending',
-            priority: task.priority,
-            note: task.note,
-            tags: task.tags,
-            dueDate: nextDue,
-            originalDate: nextDue,
-            recurrencePattern: task.recurrencePattern,
-            createdBy: task.createdBy,
+            content: task.content, signifier: task.signifier, status: 'pending', priority: task.priority,
+            note: task.note, tags: task.tags, dueDate: nextDue, originalDate: nextDue,
+            recurrencePattern: task.recurrencePattern, createdBy: task.createdBy,
           });
         }
       }
@@ -210,6 +366,9 @@ class TaskService {
   }
 
   async getTaskById(taskId) {
+    if (taskId.startsWith('virtual_')) {
+      return null;
+    }
     return this.taskModel.findById(taskId).populate('parentTask', 'content status').populate('subtasks');
   }
 
