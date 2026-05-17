@@ -1,25 +1,86 @@
-import { Box } from "@mui/material";
+import React, { useState } from 'react';
+import { Box, Drawer, IconButton, Typography, useTheme, useMediaQuery, alpha } from "@mui/material";
 import { Outlet } from "react-router-dom";
-import Navigation, { SIDEBAR_WIDTH_EXPORT } from "./Navigation";
+import MenuIcon from "@mui/icons-material/Menu";
+import { GeekShell, GeekAppFrame, geekLayout } from "@geeksuite/ui";
+import Sidebar from "./Sidebar";
+import { APP_NAME } from "../utils/constants";
 
-const LayoutShell = () => (
-  <Box sx={{ minHeight: "100vh", display: "flex", bgcolor: "background.default" }}>
-    <Navigation />
+const LayoutShell = () => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const handleDrawerToggle = () => setMobileOpen((prev) => !prev);
+
+  const topBar = isMobile ? (
     <Box
-      component="main"
+      component="header"
       sx={{
-        flex: 1,
-        ml: { xs: 0, md: `${SIDEBAR_WIDTH_EXPORT}px` },
-        mt: { xs: "56px", md: 0 },
-        minHeight: { xs: "calc(100vh - 56px)", md: "100vh" },
-        px: { xs: 2, sm: 3, md: 5 },
-        py: { xs: 3, md: 4 },
-        maxWidth: { md: `calc(100vw - ${SIDEBAR_WIDTH_EXPORT}px)` }
+        display: "flex",
+        height: geekLayout.topBarHeight,
+        px: 2,
+        alignItems: "center",
+        justifyContent: "space-between",
+        bgcolor: alpha(theme.palette.background.paper, 0.92),
+        backdropFilter: "blur(12px)",
+        borderBottom: `1px solid ${theme.palette.divider}`,
+        width: '100%'
       }}
     >
-      <Outlet />
+      <IconButton onClick={handleDrawerToggle} aria-label="open navigation" sx={{ color: "text.primary" }}>
+        <MenuIcon />
+      </IconButton>
+      <Typography
+        variant="h6"
+        sx={{
+          fontFamily: '"DM Serif Display", Georgia, serif',
+          fontWeight: 400,
+          fontSize: "1.05rem"
+        }}
+      >
+        {APP_NAME}
+      </Typography>
+      <Box sx={{ width: 40 }} />
     </Box>
-  </Box>
-);
+  ) : null;
+
+  return (
+    <GeekShell 
+      sidebar={!isMobile ? <Sidebar /> : null} 
+      topBar={topBar}
+    >
+      {/* Mobile Drawer */}
+      <Drawer
+        variant="temporary"
+        open={mobileOpen}
+        onClose={handleDrawerToggle}
+        ModalProps={{ keepMounted: true }}
+        sx={{
+          display: { xs: "block", md: "none" },
+          "& .MuiDrawer-paper": {
+            boxSizing: "border-box",
+            width: 280,
+            backgroundImage: "none",
+            bgcolor: "background.sidebar"
+          }
+        }}
+      >
+        <Sidebar isMobile onClose={handleDrawerToggle} />
+      </Drawer>
+
+      <GeekAppFrame>
+        <Box
+          sx={{
+            px: { xs: 2, sm: 3, md: 5 },
+            py: { xs: 3, md: 4 },
+          }}
+        >
+          <Outlet />
+        </Box>
+      </GeekAppFrame>
+    </GeekShell>
+  );
+};
 
 export default LayoutShell;

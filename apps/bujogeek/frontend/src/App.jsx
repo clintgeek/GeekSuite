@@ -5,8 +5,9 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { TaskProvider } from './context/TaskContext.jsx';
 import AppBootstrapper from './AppBootstrapper.jsx';
-import { createAppTheme } from './theme/theme';
+import { createBuJoTheme } from './theme/theme';
 import { ThemeProvider, useThemeMode } from './context/ThemeContext';
+import { FocusModeProvider } from '@geeksuite/ui';
 import { ToastProvider } from './components/shared/Toast';
 import AppShell from './components/layout/AppShell';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -87,7 +88,7 @@ function AppWithAuth() {
 
 function AppContent() {
   const { theme } = useThemeMode();
-  const muiTheme = useMemo(() => createAppTheme(theme), [theme]);
+  const muiTheme = useMemo(() => createBuJoTheme(theme), [theme]);
 
   return (
     <MuiThemeProvider theme={muiTheme}>
@@ -112,7 +113,9 @@ function AppContent() {
 function App() {
   return (
     <ThemeProvider>
-      <AppContent />
+      <FocusModeProvider storageKey="bujogeek.focusMode">
+        <AppContent />
+      </FocusModeProvider>
     </ThemeProvider>
   );
 }

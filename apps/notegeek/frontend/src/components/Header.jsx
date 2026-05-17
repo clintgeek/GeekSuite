@@ -17,6 +17,7 @@ import Brightness4OutlinedIcon from '@mui/icons-material/Brightness4Outlined';
 import Brightness7OutlinedIcon from '@mui/icons-material/Brightness7Outlined';
 import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined';
 import { useNavigate } from 'react-router-dom';
+import { geekLayout } from '@geeksuite/ui';
 import { useThemeMode } from '../theme/ThemeModeProvider.jsx';
 
 function Header({ onMenuClick }) {
@@ -53,10 +54,9 @@ function Header({ onMenuClick }) {
 
   return (
     <AppBar
-      position="fixed"
+      position="static"
       elevation={0}
       sx={{
-        zIndex: theme.zIndex.drawer + 1,
         // bg + bottom border come from MuiAppBar override in theme
         color: 'text.primary',
       }}
@@ -65,7 +65,7 @@ function Header({ onMenuClick }) {
         sx={{
           px: { xs: 1, sm: 1.5 },
           width: '100%',
-          minHeight: { xs: 44, sm: 48 },
+          minHeight: geekLayout.topBarHeight,
           gap: 0.5,
         }}
       >

@@ -136,13 +136,10 @@ const Sidebar = () => {
       sx={{
         width:           SIDEBAR_WIDTH,
         height:          '100vh',
-        position:        'fixed',
-        left:            0,
-        top:             0,
         backgroundColor: chrome.bg,
         display:         'flex',
         flexDirection:   'column',
-        zIndex:          1200,
+        flexShrink:      0,
         // Subtle inner shadow on the right edge — depth illusion
         boxShadow:       '2px 0 20px rgba(0,0,0,0.28)',
       }}

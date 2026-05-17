@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import ePub from "epubjs";
+import { Box } from "@mui/material";
 import { getMe, loginRedirect, logout as logoutRequest, onLogout, startRefreshTimer, stopRefreshTimer } from "@geeksuite/auth";
 import { useUser, usePreferences, useAppPreferences } from "@geeksuite/user";
 import { registerReset, reset as resetUserStore } from "./utils/resetUserStore";
@@ -7,6 +8,9 @@ import { LoginSplash } from "@geeksuite/ui";
 import { useApolloClient } from "@apollo/client";
 import { GET_BOOKS, GET_SHELVES } from "./graphql/queries.js";
 import { UPDATE_BOOK, DELETE_BOOK, CREATE_BOOK } from "./graphql/mutations.js";
+import { GeekShell, GeekAppFrame, geekLayout } from "@geeksuite/ui";
+import Sidebar from "./components/Sidebar";
+import Header from "./components/Header";
 
 let API_BASE = "http://localhost:1800/api";
 
@@ -195,12 +199,6 @@ export default function App() {
   const [readerError, setReaderError] = useState(null);
 
   const [activeView, setActiveView] = useState("library");
-  const [theme, setTheme] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("bookgeek-theme") || "dark";
-    }
-    return "dark";
-  });
   const [prefSaveLoading, setPrefSaveLoading] = useState(false);
   const [prefSaveError, setPrefSaveError] = useState(null);
   const [prefSaveMessage, setPrefSaveMessage] = useState(null);
@@ -210,24 +208,10 @@ export default function App() {
   const defaultShelfAppliedRef = useRef(false);
 
   useEffect(() => {
-    const root = document.documentElement;
-    root.classList.remove("dark", "light");
-    root.classList.add(theme);
-    localStorage.setItem("bookgeek-theme", theme);
-  }, [theme]);
-
-  useEffect(() => {
     registerReset(resetUser);
   }, [resetUser]);
 
-  useEffect(() => {
-    if (prefsLoaded && preferences?.theme) {
-      const remote = preferences.theme;
-      if (remote === "light" || remote === "dark") {
-        setTheme(remote);
-      }
-    }
-  }, [prefsLoaded, preferences]);
+
 
   useEffect(() => {
     if (!user) {
@@ -1777,355 +1761,48 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen font-sans" style={{ backgroundColor: 'var(--color-bg-page)', color: 'var(--color-text-primary)' }}>
-      <div className="mx-auto flex min-h-screen max-w-6xl flex-col px-4 py-4 md:px-6 md:py-6">
-        {/* Top bar */}
-        <header className="mb-4 flex items-center justify-between gap-3 md:mb-6">
-          <div
-            className="cursor-pointer"
-            onClick={() => setActiveView("library")}
-          >
-            <h1 className="text-lg font-bold tracking-tight md:text-xl font-serif" style={{ color: 'var(--color-text-primary)' }}>
-              BookGeek
-            </h1>
-          </div>
-          <div className="flex items-center gap-2 text-[11px] md:text-xs">
-            <span className="max-w-[180px] truncate" style={{ color: 'var(--color-text-secondary)' }}>
-              {user.email || user.username || "Signed in"}
-            </span>
-            <button
-              type="button"
-              onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-lg transition-colors"
-              style={{ border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-surface)', color: 'var(--color-text-secondary)' }}
-              title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-            >
-              {theme === "dark" ? "☀" : "☾"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveView("profile")}
-              className="inline-flex items-center rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-slate-100 hover:border-slate-500 hover:bg-slate-800"
-            >
-              Profile
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setAddBookOpen(true);
-                setAddBookError(null);
-              }}
-              className="inline-flex items-center rounded-lg border border-emerald-600 bg-emerald-900/40 px-3 py-1.5 text-[11px] font-medium text-emerald-100 hover:border-emerald-400 hover:bg-emerald-800"
-            >
-              + Add book
-            </button>
-          </div>
-        </header>
-
-        <div className="flex flex-1 flex-col gap-3 rounded-2xl p-2 md:flex-row md:p-3" style={{ backgroundColor: 'var(--color-bg-surface)', border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-panel)' }}>
-          {/* Sidebar */}
-          <aside className="hidden w-56 flex-none p-3 pr-4 text-xs md:block" style={{ color: 'var(--color-sidebar-text)' }}>
-            <nav className="space-y-0.5 text-sm">
-              {shelves.map((shelf, idx) => (
-                <button
-                  key={shelf.id}
-                  type="button"
-                  className={
-                    "group flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-xs md:text-sm transition-colors "
-                  }
-                  style={
-                    shelf.id === shelfFilter
-                      ? { backgroundColor: 'var(--color-sidebar-active-bg)', color: 'var(--color-sidebar-active-text)' }
-                      : { color: 'var(--color-sidebar-text)' }
-                  }
-                  onClick={() => {
-                    setShelfFilter(shelf.id);
-                    setActiveView("library");
-                  }}
-                >
-                  <span>{shelf.label}</span>
-                  <span className="rounded-full px-1.5 py-0.5 text-[10px]" style={{ color: 'var(--color-text-faint)', border: '1px solid var(--color-border-subtle)' }}>
-                    {(() => {
-                      if (!shelfSummary) return "--";
-                      if (shelf.id === "all") {
-                        return typeof shelfSummary.total === "number"
-                          ? shelfSummary.total
-                          : "--";
-                      }
-                      const key = shelf.id;
-                      const count = shelfSummary.shelves?.[key];
-                      return typeof count === "number" ? count : 0;
-                    })()}
-                  </span>
-                </button>
-              ))}
-            </nav>
-
-            <div className="mt-5 pt-4 text-[11px]" style={{ borderTop: '1px solid var(--color-border-subtle)', color: 'var(--color-text-faint)' }}>
-              <div className="mb-1 font-medium" style={{ color: 'var(--color-sidebar-text)' }}>
-                Filters
-              </div>
-              <div className="space-y-1.5">
-                <label className="block text-[10px] text-slate-400">
-                  Ownership
-                </label>
-                <select
-                  value={ownedFilter}
-                  onChange={(e) => setOwnedFilter(e.target.value)}
-                  className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100 outline-none focus:border-emerald-500"
-                >
-                  <option value="all">All books</option>
-                  <option value="owned">Owned only</option>
-                  <option value="unowned">Unowned only</option>
-                </select>
-                {(searchQuery.trim() ||
-                  authorFilter.trim() ||
-                  tagFilter.trim() ||
-                  shelfFilter !== "all" ||
-                  ownedFilter !== "all") && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSearchQuery("");
-                        setAuthorFilter("");
-                        setTagFilter("");
-                        setShelfFilter("all");
-                        setOwnedFilter("all");
-                      }}
-                      className="inline-flex w-full items-center justify-center rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-[11px] text-slate-200 hover:border-slate-500 hover:bg-slate-900"
-                    >
-                      Clear all filters
-                    </button>
-                  )}
-                {savedFiltersError && (
-                  <div className="text-[10px] text-rose-400">
-                    {savedFiltersError}
-                  </div>
-                )}
-                {saveFilterError && (
-                  <div className="text-[10px] text-rose-400">
-                    {saveFilterError}
-                  </div>
-                )}
-                {savedFiltersLoading && (
-                  <div className="text-[10px] text-slate-400">
-                    Loading saved filters…
-                  </div>
-                )}
-                {savedFilters.length > 0 && (
-                  <div className="mt-2 pt-2" style={{ borderTop: '1px solid var(--color-border-subtle)' }}>
-                    <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-faint)' }}>
-                      Saved filters
-                    </div>
-                    <div className="space-y-1">
-                      {savedFilters.map((preset) => (
-                        <div
-                          key={preset.id}
-                          className="flex items-center gap-1"
-                        >
-                          <button
-                            type="button"
-                            onClick={() => applySavedFilter(preset)}
-                            className="flex-1 truncate rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-left text-[11px] text-slate-200 hover:border-slate-500 hover:bg-slate-800"
-                          >
-                            {preset.name || "(unnamed)"}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteSavedFilter(preset.id)}
-                            disabled={deleteFilterLoadingId === preset.id}
-                            className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-slate-700 bg-slate-950 text-[11px] text-slate-300 hover:border-rose-500 hover:bg-rose-950/40 hover:text-rose-200 disabled:opacity-60"
-                            title="Delete saved filter"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {addBookOpen && (
-              <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 px-2 py-4">
-                <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-950 p-4 text-sm text-slate-100 shadow-2xl">
-                  <div className="mb-3 flex items-center justify-between">
-                    <div>
-                      <h2 className="text-sm font-semibold text-slate-100">
-                        Add book
-                      </h2>
-                      <p className="text-[11px] text-slate-500">
-                        Create a book entry (useful for want-to-read titles). You can
-                        attach an EPUB later.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (addBookLoading) return;
-                        setAddBookOpen(false);
-                        setAddBookError(null);
-                      }}
-                      className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-700 bg-slate-900 text-sm font-semibold text-slate-300 hover:border-slate-500 hover:text-slate-50"
-                    >
-                      ×
-                    </button>
-                  </div>
-                  <form
-                    className="space-y-2 text-[11px]"
-                    onSubmit={handleCreateBook}
-                  >
-                    <div className="space-y-1">
-                      <label className="block text-slate-300">Title *</label>
-                      <input
-                        type="text"
-                        value={addBookTitle}
-                        onChange={(e) => setAddBookTitle(e.target.value)}
-                        className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100 outline-none focus:border-sky-500"
-                        placeholder="Book title"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="block text-slate-300">Authors</label>
-                      <input
-                        type="text"
-                        value={addBookAuthors}
-                        onChange={(e) => setAddBookAuthors(e.target.value)}
-                        className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100 outline-none focus:border-sky-500"
-                        placeholder="Comma-separated list"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="block text-slate-300">ISBN</label>
-                      <input
-                        type="text"
-                        value={addBookIsbn}
-                        onChange={(e) => setAddBookIsbn(e.target.value)}
-                        className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100 outline-none focus:border-sky-500"
-                        placeholder="Optional"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="block text-slate-300">Optional file</label>
-                      <input
-                        type="file"
-                        accept=".epub,.mobi,.azw3,.pdf,.fb2,.rtf,.txt,.html"
-                        onChange={(e) => {
-                          const file = e.target.files && e.target.files[0];
-                          setAddBookFile(file || null);
-                        }}
-                        className="text-[10px] text-slate-200 file:mr-2 file:rounded file:border-0 file:bg-slate-800 file:px-2 file:py-1 file:text-[10px] file:text-slate-100 hover:file:bg-slate-700"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="block text-slate-300">Shelf</label>
-                      <select
-                        value={addBookShelf}
-                        onChange={(e) => setAddBookShelf(e.target.value)}
-                        className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100 outline-none focus:border-sky-500"
-                      >
-                        <option value="want-to-read">Want to read</option>
-                        <option value="unread">Unread</option>
-                        <option value="reading">Reading</option>
-                        <option value="read">Read</option>
-                        <option value="abandoned">Abandoned</option>
-                        <option value="need-to-find">Need to find</option>
-                      </select>
-                    </div>
-                    {addBookError && (
-                      <div className="text-[11px] text-rose-400">{addBookError}</div>
-                    )}
-                    {token ? (
-                      <div className="mt-2 flex justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (addBookLoading) return;
-                            setAddBookOpen(false);
-                            setAddBookError(null);
-                          }}
-                          className="rounded border border-slate-700 bg-slate-900 px-3 py-1 text-[11px] text-slate-200 hover:border-slate-500"
-                          disabled={addBookLoading}
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="submit"
-                          disabled={addBookLoading}
-                          className="rounded border border-emerald-600 bg-emerald-900/60 px-3 py-1 text-[11px] font-medium text-emerald-100 hover:border-emerald-400 hover:bg-emerald-800 disabled:opacity-60"
-                        >
-                          {addBookLoading ? "Creating…" : "Create book"}
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="text-[11px] text-rose-400">
-                        You must be signed in to add books.
-                      </div>
-                    )}
-                  </form>
-                </div>
-              </div>
-            )}
-
-            <div className="mt-5 pt-4 text-[11px]" style={{ borderTop: '1px solid var(--color-border-subtle)', color: 'var(--color-text-faint)' }}>
-              <div className="mb-1 font-medium" style={{ color: 'var(--color-sidebar-text)' }}>
-                Recommendations
-              </div>
-              {(() => {
-                const candidates = books.filter((b) =>
-                  b.shelf ? b.shelf === "unread" : true
-                );
-                if (candidates.length === 0) {
-                  return <p>No unread books found yet.</p>;
-                }
-                const rec =
-                  candidates[Math.floor(Math.random() * candidates.length)];
-                return (
-                  <div className="space-y-2">
-                    <div
-                      className="flex cursor-pointer items-center gap-2 rounded-lg p-2 transition-colors hover:opacity-90"
-                      style={{ border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-card)' }}
-                      onClick={() => {
-                        setSelectedBook(rec);
-                        setDownloadOpen(false);
-                      }}
-                    >
-                      <div className="h-14 w-10 flex-shrink-0 overflow-hidden rounded" style={{ border: '1px solid var(--color-border-subtle)', backgroundColor: 'var(--color-bg-surface)' }}>
-                        {(rec.id || rec._id) && (
-                          <img
-                            src={`${ API_BASE }/books/${ (rec.id || rec._id) }/cover`}
-                            alt={rec.title || "Book cover"}
-                            className="h-full w-full object-cover"
-                          />
-                        )}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="truncate text-[12px] font-serif font-medium" style={{ color: 'var(--color-text-primary)' }}>
-                          {rec.title || "Untitled"}
-                        </div>
-                        {Array.isArray(rec.authors) && rec.authors.length > 0 && (
-                          <div className="truncate text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
-                            {rec.authors.join(", ")}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-200 hover:border-slate-500"
-                    >
-                      Find books
-                    </button>
-                  </div>
-                );
-              })()}
-            </div>
-
-
-          </aside>
-
+    <GeekShell
+      sidebar={
+        <Sidebar
+          shelves={shelves}
+          shelfFilter={shelfFilter}
+          setShelfFilter={setShelfFilter}
+          shelfSummary={shelfSummary}
+          setActiveView={setActiveView}
+          ownedFilter={ownedFilter}
+          setOwnedFilter={setOwnedFilter}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          authorFilter={authorFilter}
+          setAuthorFilter={setAuthorFilter}
+          tagFilter={tagFilter}
+          setTagFilter={setTagFilter}
+          savedFilters={savedFilters}
+          savedFiltersLoading={savedFiltersLoading}
+          savedFiltersError={savedFiltersError}
+          applySavedFilter={applySavedFilter}
+          handleDeleteSavedFilter={handleDeleteSavedFilter}
+          deleteFilterLoadingId={deleteFilterLoadingId}
+        />
+      }
+      topBar={
+        <Header 
+          user={user} 
+          setActiveView={setActiveView} 
+          setAddBookOpen={setAddBookOpen} 
+        />
+      }
+    >
+      <GeekAppFrame>
+        <Box 
+          sx={{ 
+            p: { xs: 2, md: 3 },
+            maxWidth: '1200px',
+            mx: 'auto'
+          }}
+        >
           {/* Main content */}
+
           <main
             className={
               "flex-1 rounded-xl p-3.5 md:p-4 " +
@@ -2726,8 +2403,6 @@ export default function App() {
               )}
             </section>
           )}
-        </div>
-      </div>
 
       {selectedBook && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 px-2 py-4">
@@ -3542,6 +3217,8 @@ export default function App() {
           </div>
         </div>
       )}
-    </div>
-  );
+      </Box>
+    </GeekAppFrame>
+  </GeekShell>
+);
 }

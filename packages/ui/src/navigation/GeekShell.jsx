@@ -26,7 +26,6 @@ export function GeekShell({
     >
       {focusMode ? null : sidebar}
       <Box
-        component="main"
         sx={{
           minWidth: 0,
           flex: 1,

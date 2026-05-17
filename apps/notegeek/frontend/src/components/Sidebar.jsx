@@ -26,6 +26,7 @@ import {
     HomeOutlined as HomeIcon,
     SettingsOutlined as SettingsIcon,
 } from '@mui/icons-material';
+import { geekLayout } from '@geeksuite/ui';
 import useTagStore from '../store/tagStore';
 import useAuthStore from '../store/authStore';
 import useNoteStore from '../store/noteStore';
@@ -232,11 +233,13 @@ function Sidebar({ closeNavbar }) {
     return (
         <Box
             sx={{
-                height: '100%',
+                width: geekLayout.sidebarWidth,
+                height: '100vh',
                 display: 'flex',
                 flexDirection: 'column',
                 overflow: 'hidden',
                 bgcolor: 'background.paper',
+                flexShrink: 0,
             }}
         >
             {/* ——— Primary actions ——————————————————————————————————— */}

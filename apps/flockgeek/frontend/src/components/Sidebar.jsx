@@ -1,8 +1,21 @@
+import React from 'react';
+import {
+  Box,
+  Divider,
+  IconButton,
+  List,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Tooltip,
+  Typography,
+  alpha,
+  useTheme
+} from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import DarkModeIcon from "@mui/icons-material/DarkMode";
 import LightModeIcon from "@mui/icons-material/LightMode";
 import LogoutIcon from "@mui/icons-material/Logout";
-import MenuIcon from "@mui/icons-material/Menu";
 import HomeIcon from "@mui/icons-material/HomeOutlined";
 import EggIcon from "@mui/icons-material/EggOutlined";
 import PetsIcon from "@mui/icons-material/PetsOutlined";
@@ -10,26 +23,11 @@ import GroupsIcon from "@mui/icons-material/GroupsOutlined";
 import PlaceIcon from "@mui/icons-material/PlaceOutlined";
 import FavoriteIcon from "@mui/icons-material/FavoriteBorderOutlined";
 import HatchIcon from "@mui/icons-material/TrackChangesOutlined";
-import {
-  Box,
-  Divider,
-  Drawer,
-  IconButton,
-  List,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
-  Tooltip,
-  Typography
-} from "@mui/material";
-import { alpha } from "@mui/material/styles";
-import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useColorMode } from "../theme/AppThemeProvider";
 import { APP_NAME } from "../utils/constants";
-
-const SIDEBAR_WIDTH = 240;
+import { geekLayout } from "@geeksuite/ui";
 
 const navItems = [
   { label: "Home", to: "/", icon: <HomeIcon /> },
@@ -41,23 +39,22 @@ const navItems = [
   { label: "Hatch Log", to: "/hatch-log", icon: <HatchIcon /> }
 ];
 
-const Navigation = () => {
-  const [mobileOpen, setMobileOpen] = useState(false);
+const Sidebar = ({ isMobile = false, onClose }) => {
+  const theme = useTheme();
+  const location = useLocation();
   const { isAuthenticated, logout } = useAuth();
   const { mode, toggleColorMode } = useColorMode();
-  const location = useLocation();
 
-  const handleDrawerToggle = () => setMobileOpen((prev) => !prev);
-
-  const sidebarContent = (isMobile = false) => (
+  return (
     <Box
       sx={{
-        width: isMobile ? 280 : SIDEBAR_WIDTH,
-        height: "100%",
+        width: isMobile ? 280 : geekLayout.sidebarWidth,
+        height: "100vh",
         display: "flex",
         flexDirection: "column",
         bgcolor: "background.sidebar",
-        borderRight: (theme) => isMobile ? "none" : `1px solid ${theme.palette.divider}`
+        flexShrink: 0,
+        borderRight: `1px solid ${theme.palette.divider}`
       }}
       role="navigation"
     >
@@ -94,7 +91,7 @@ const Navigation = () => {
           </Typography>
         </NavLink>
         {isMobile && (
-          <IconButton size="small" onClick={handleDrawerToggle} aria-label="close navigation">
+          <IconButton size="small" onClick={onClose} aria-label="close navigation">
             <CloseIcon fontSize="small" />
           </IconButton>
         )}
@@ -117,17 +114,17 @@ const Navigation = () => {
                 component={NavLink}
                 to={to}
                 end={to === "/"}
-                onClick={isMobile ? handleDrawerToggle : undefined}
+                onClick={isMobile ? onClose : undefined}
                 sx={{
                   mb: 0.25,
                   px: 1.5,
                   py: 0.75,
                   borderRadius: 1,
                   color: isActive ? "text.primary" : "text.secondary",
-                  bgcolor: isActive ? (theme) => alpha(theme.palette.primary.main, 0.18) : "transparent",
-                  boxShadow: isActive ? (theme) => `inset 3px 0 0 ${theme.palette.primary.main}` : "none",
+                  bgcolor: isActive ? alpha(theme.palette.primary.main, 0.18) : "transparent",
+                  boxShadow: isActive ? `inset 3px 0 0 ${theme.palette.primary.main}` : "none",
                   "&:hover": {
-                    bgcolor: (theme) => alpha(theme.palette.primary.main, 0.10),
+                    bgcolor: alpha(theme.palette.primary.main, 0.10),
                     color: "text.primary"
                   },
                   transition: "all 0.15s ease"
@@ -167,81 +164,6 @@ const Navigation = () => {
       </Box>
     </Box>
   );
-
-  return (
-    <>
-      {/* Mobile top bar */}
-      <Box
-        component="header"
-        sx={{
-          display: { xs: "flex", md: "none" },
-          position: "fixed",
-          top: 0,
-          left: 0,
-          right: 0,
-          zIndex: (theme) => theme.zIndex.appBar,
-          height: 56,
-          px: 2,
-          alignItems: "center",
-          justifyContent: "space-between",
-          bgcolor: (theme) => alpha(theme.palette.background.paper, 0.92),
-          backdropFilter: "blur(12px)",
-          borderBottom: (theme) => `1px solid ${theme.palette.divider}`
-        }}
-      >
-        <IconButton onClick={handleDrawerToggle} aria-label="open navigation" sx={{ color: "text.primary" }}>
-          <MenuIcon />
-        </IconButton>
-        <Typography
-          variant="h6"
-          sx={{
-            fontFamily: '"DM Serif Display", Georgia, serif',
-            fontWeight: 400,
-            fontSize: "1.05rem"
-          }}
-        >
-          {APP_NAME}
-        </Typography>
-        <Box sx={{ width: 40 }} />
-      </Box>
-
-      {/* Desktop sidebar — persistent */}
-      <Box
-        component="nav"
-        sx={{
-          display: { xs: "none", md: "block" },
-          position: "fixed",
-          top: 0,
-          left: 0,
-          bottom: 0,
-          width: SIDEBAR_WIDTH,
-          zIndex: (theme) => theme.zIndex.drawer
-        }}
-      >
-        {sidebarContent(false)}
-      </Box>
-
-      {/* Mobile drawer */}
-      <Drawer
-        variant="temporary"
-        open={mobileOpen}
-        onClose={handleDrawerToggle}
-        ModalProps={{ keepMounted: true }}
-        sx={{
-          display: { xs: "block", md: "none" },
-          "& .MuiDrawer-paper": {
-            boxSizing: "border-box",
-            width: 280,
-            backgroundImage: "none",
-            bgcolor: "background.sidebar"
-          }
-        }}
-      >
-        {sidebarContent(true)}
-      </Drawer>
-    </>
-  );
 };
 
-export const SIDEBAR_WIDTH_EXPORT = SIDEBAR_WIDTH;
-export default Navigation;
+export default Sidebar;

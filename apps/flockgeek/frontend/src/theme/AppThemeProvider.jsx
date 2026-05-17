@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useMemo, useState } from "react";
 import { ThemeProvider } from "@mui/material/styles";
-import { buildTheme } from "./theme";
+import { FocusModeProvider } from "@geeksuite/ui";
+import { createFlockTheme } from "./theme";
 
 export const ColorModeContext = createContext({ toggleColorMode: () => {} });
 
@@ -11,11 +12,13 @@ export const AppThemeProvider = ({ children }) => {
     setMode((prev) => (prev === "light" ? "dark" : "light"));
   }, []);
 
-  const theme = useMemo(() => buildTheme(mode), [mode]);
+  const theme = useMemo(() => createFlockTheme(mode), [mode]);
 
   return (
     <ColorModeContext.Provider value={{ mode, toggleColorMode }}>
-      <ThemeProvider theme={theme}>{children}</ThemeProvider>
+      <FocusModeProvider storageKey="flockgeek.focusMode">
+        <ThemeProvider theme={theme}>{children}</ThemeProvider>
+      </FocusModeProvider>
     </ColorModeContext.Provider>
   );
 };

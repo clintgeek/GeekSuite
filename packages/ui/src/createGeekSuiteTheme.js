@@ -38,6 +38,12 @@ function buildPalette({ mode, accent }) {
     warning: { main: palette.semantic.warning },
     error: { main: palette.semantic.error },
     info: { main: palette.semantic.info },
+    glow: {
+      ring: alpha(appAccent.main, 0.20),
+      soft: alpha(appAccent.main, 0.06),
+      medium: alpha(appAccent.main, 0.10),
+      border: alpha(appAccent.main, 0.30),
+    },
   };
 }
 

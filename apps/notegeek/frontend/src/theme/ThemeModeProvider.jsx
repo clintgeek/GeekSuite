@@ -2,7 +2,8 @@ import React, { createContext, useContext, useMemo } from 'react';
 import { CssBaseline, GlobalStyles } from '@mui/material';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material/styles';
 import { ThemeProvider as GeekThemeProvider, useThemeMode as useGeekThemeMode } from '@geeksuite/user';
-import { createAppTheme } from './createAppTheme';
+import { FocusModeProvider } from '@geeksuite/ui';
+import { createNoteTheme } from './createAppTheme';
 
 const ThemeModeContext = createContext(null);
 
@@ -20,7 +21,7 @@ export function useThemeMode() {
 
 function InnerProvider({ children }) {
   const { theme, setThemePreference, toggleTheme } = useGeekThemeMode();
-  const muiTheme = useMemo(() => createAppTheme(theme), [theme]);
+  const muiTheme = useMemo(() => createNoteTheme(theme), [theme]);
 
   const value = useMemo(
     () => ({
@@ -33,17 +34,19 @@ function InnerProvider({ children }) {
 
   return (
     <ThemeModeContext.Provider value={value}>
-      <MuiThemeProvider theme={muiTheme}>
-        <CssBaseline />
-        <GlobalStyles
-          styles={{
-            '.MuiInputBase-root, .MuiOutlinedInput-root': {
-              minHeight: 'auto !important',
-            },
-          }}
-        />
-        {children}
-      </MuiThemeProvider>
+      <FocusModeProvider storageKey="notegeek.focusMode">
+        <MuiThemeProvider theme={muiTheme}>
+          <CssBaseline />
+          <GlobalStyles
+            styles={{
+              '.MuiInputBase-root, .MuiOutlinedInput-root': {
+                minHeight: 'auto !important',
+              },
+            }}
+          />
+          {children}
+        </MuiThemeProvider>
+      </FocusModeProvider>
     </ThemeModeContext.Provider>
   );
 }

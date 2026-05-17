@@ -2,6 +2,7 @@ import React, { useMemo, lazy, Suspense } from 'react';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material/styles';
 import { CssBaseline, Box, CircularProgress } from '@mui/material';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { FocusModeProvider } from '@geeksuite/ui';
 import { createAppTheme } from './theme/theme';
 
 // Import components that are needed immediately
@@ -54,53 +55,55 @@ function AppContent() {
   return (
     <MuiThemeProvider theme={muiTheme}>
       <CssBaseline />
-      <OfflineIndicator />
-      <PWAUpdatePrompt />
-      <AuthProvider appName="fitnessgeek">
-        <AuthListener />
-        <SettingsProvider>
-          <Router>
-            <Box sx={{
-              minHeight: '100vh'
-            }}>
-              <Suspense fallback={<LoadingFallback />}>
-                <Routes>
-                  {/* Public routes */}
-                  <Route path="/login" element={<Login />} />
-                  <Route path="/register" element={<Register />} />
+      <FocusModeProvider storageKey="fitnessgeek.focusMode">
+        <OfflineIndicator />
+        <PWAUpdatePrompt />
+        <AuthProvider appName="fitnessgeek">
+          <AuthListener />
+          <SettingsProvider>
+            <Router>
+              <Box sx={{
+                minHeight: '100vh'
+              }}>
+                <Suspense fallback={<LoadingFallback />}>
+                  <Routes>
+                    {/* Public routes */}
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/register" element={<Register />} />
 
-                  {/* Protected routes */}
-                  <Route path="/" element={
-                    <ProtectedRoute>
-                      <Layout />
-                    </ProtectedRoute>
-                  }>
-                    <Route index element={<Navigate to="/dashboard" replace />} />
-                    <Route path="dashboard" element={<Dashboard />} />
-                    <Route path="food-search" element={<FoodSearch />} />
-                    <Route path="food-log" element={<FoodLog />} />
-                    <Route path="my-foods" element={<MyFoods />} />
-                    <Route path="my-meals" element={<MyMeals />} />
-                    <Route path="weight" element={<Weight />} />
-                    <Route path="blood-pressure" element={<BloodPressure />} />
-                    <Route path="medications" element={<Medications />} />
-                    <Route path="activity" element={<Activity />} />
-                    <Route path="reports" element={<Reports />} />
-                    <Route path="health" element={<HealthDashboard />} />
-                    {/* Legacy goals route removed */}
-                    <Route path="calorie-wizard" element={<AIGoalPlanner />} />
-                    <Route path="profile" element={<Profile />} />
-                    <Route path="settings" element={<Settings />} />
-                  </Route>
+                    {/* Protected routes */}
+                    <Route path="/" element={
+                      <ProtectedRoute>
+                        <Layout />
+                      </ProtectedRoute>
+                    }>
+                      <Route index element={<Navigate to="/dashboard" replace />} />
+                      <Route path="dashboard" element={<Dashboard />} />
+                      <Route path="food-search" element={<FoodSearch />} />
+                      <Route path="food-log" element={<FoodLog />} />
+                      <Route path="my-foods" element={<MyFoods />} />
+                      <Route path="my-meals" element={<MyMeals />} />
+                      <Route path="weight" element={<Weight />} />
+                      <Route path="blood-pressure" element={<BloodPressure />} />
+                      <Route path="medications" element={<Medications />} />
+                      <Route path="activity" element={<Activity />} />
+                      <Route path="reports" element={<Reports />} />
+                      <Route path="health" element={<HealthDashboard />} />
+                      {/* Legacy goals route removed */}
+                      <Route path="calorie-wizard" element={<AIGoalPlanner />} />
+                      <Route path="profile" element={<Profile />} />
+                      <Route path="settings" element={<Settings />} />
+                    </Route>
 
-                  {/* Catch all route */}
-                  <Route path="*" element={<Navigate to="/dashboard" replace />} />
-                </Routes>
-              </Suspense>
-            </Box>
-          </Router>
-        </SettingsProvider>
-      </AuthProvider>
+                    {/* Catch all route */}
+                    <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                  </Routes>
+                </Suspense>
+              </Box>
+            </Router>
+          </SettingsProvider>
+        </AuthProvider>
+      </FocusModeProvider>
     </MuiThemeProvider>
   );
 }

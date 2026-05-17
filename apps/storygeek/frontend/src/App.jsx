@@ -5,8 +5,9 @@ import CssBaseline from '@mui/material/CssBaseline';
 import { Box, CircularProgress } from '@mui/material';
 import { ApolloProvider } from '@apollo/client';
 import { AuthProvider, useAuth } from '@geeksuite/auth';
+import { FocusModeProvider } from '@geeksuite/ui';
 import apolloClient from './apolloClient';
-import { lightTheme, darkTheme } from './theme/theme';
+import createStoryTheme from './theme/theme';
 
 import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
@@ -30,7 +31,7 @@ function AppShell() {
     localStorage.setItem('storyGeek-theme', next ? 'dark' : 'light');
   };
 
-  const theme = isDarkMode ? darkTheme : lightTheme;
+  const theme = React.useMemo(() => createStoryTheme(isDarkMode ? 'dark' : 'light'), [isDarkMode]);
 
   if (loading) {
     return (
@@ -51,17 +52,19 @@ function AppShell() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/" element={authed(<StoryList />)} />
-          <Route path="/create" element={authed(<StoryCreation />)} />
-          <Route path="/play/:storyId" element={authed(<StoryPlay />)} />
-          <Route path="/characters/:storyId" element={authed(<CharacterSheet />)} />
-          <Route path="/settings" element={authed(<Settings />)} />
-          <Route path="*" element={<Navigate to={isAuthenticated ? '/' : '/login'} replace />} />
-        </Routes>
-      </BrowserRouter>
+      <FocusModeProvider storageKey="storygeek.focusMode">
+        <BrowserRouter>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/" element={authed(<StoryList />)} />
+            <Route path="/create" element={authed(<StoryCreation />)} />
+            <Route path="/play/:storyId" element={authed(<StoryPlay />)} />
+            <Route path="/characters/:storyId" element={authed(<CharacterSheet />)} />
+            <Route path="/settings" element={authed(<Settings />)} />
+            <Route path="*" element={<Navigate to={isAuthenticated ? '/' : '/login'} replace />} />
+          </Routes>
+        </BrowserRouter>
+      </FocusModeProvider>
     </ThemeProvider>
   );
 }

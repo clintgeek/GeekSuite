@@ -13,8 +13,9 @@ import {
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@geeksuite/auth';
+import { GeekShell, GeekAppFrame, geekLayout } from '@geeksuite/ui';
 
-const drawerWidth = 240;
+const DRAWER_WIDTH = geekLayout.sidebarWidth;
 
 const baseMenuItems = [
   { text: 'My Stories', icon: <BookIcon />, path: '/' },
@@ -45,7 +46,7 @@ function Layout({ children, onThemeToggle, isDarkMode }) {
     } else {
       navigate(path);
     }
-    if (isMobile) setMobileOpen(false);
+    setMobileOpen(false);
   };
 
   const handleLogout = () => {
@@ -56,8 +57,8 @@ function Layout({ children, onThemeToggle, isDarkMode }) {
 
   const gold = theme.palette.codex?.gold || '#c9a84c';
 
-  const drawer = (
-    <Box sx={{ pt: 2.5, px: 1 }}>
+  const sidebarContent = (
+    <Box sx={{ pt: 2.5, px: 1, height: '100vh', display: 'flex', flexDirection: 'column' }}>
       {/* Drawer Header */}
       <Box sx={{ px: 2, mb: 3, textAlign: 'center' }}>
         <Typography variant="overline" sx={{
@@ -70,7 +71,7 @@ function Layout({ children, onThemeToggle, isDarkMode }) {
         <Divider sx={{ borderColor: alpha(gold, 0.15) }} />
       </Box>
 
-      <List sx={{ px: 0.5 }}>
+      <List sx={{ px: 0.5, flex: 1, overflowY: 'auto' }}>
         {menuItems.map((item, i) => {
           const isActive = location.pathname === item.path;
           return (
@@ -117,154 +118,144 @@ function Layout({ children, onThemeToggle, isDarkMode }) {
     </Box>
   );
 
-  return (
-    <Box sx={{ display: 'flex' }}>
-      {/* Header */}
-      <AppBar
-        position="fixed"
-        sx={{
-          background: theme.palette.mode === 'dark'
-            ? `linear-gradient(90deg, ${alpha('#1a1614', 0.95)} 0%, ${alpha('#2a2420', 0.95)} 100%)`
-            : `linear-gradient(90deg, ${alpha('#fff8ef', 0.95)} 0%, ${alpha('#f4ece1', 0.95)} 100%)`,
-          color: 'text.primary',
-          zIndex: theme.zIndex.drawer + 1,
+  const topBar = (
+    <AppBar
+      position="static"
+      elevation={0}
+      sx={{
+        background: theme.palette.mode === 'dark'
+          ? `linear-gradient(90deg, ${alpha('#1a1614', 0.95)} 0%, ${alpha('#2a2420', 0.95)} 100%)`
+          : `linear-gradient(90deg, ${alpha('#fff8ef', 0.95)} 0%, ${alpha('#f4ece1', 0.95)} 100%)`,
+        color: 'text.primary',
+        borderBottom: `1px solid ${alpha(gold, 0.15)}`,
+      }}
+    >
+      <Toolbar sx={{ minHeight: `${geekLayout.topBarHeight}px !important` }}>
+        <IconButton
+          color="inherit"
+          edge="start"
+          onClick={() => setMobileOpen(!mobileOpen)}
+          sx={{
+            mr: 2,
+            color: 'text.secondary',
+            '&:hover': { color: gold, backgroundColor: alpha(gold, 0.08) },
+          }}
+        >
+          <MenuIcon />
+        </IconButton>
+
+        {/* Brand */}
+        <Box sx={{
+          display: 'flex', alignItems: 'baseline', gap: 0.75, flexGrow: 1,
+          cursor: 'pointer',
         }}
-      >
-        <Toolbar sx={{ minHeight: isMobile ? '56px !important' : '64px !important' }}>
+          onClick={() => navigate('/')}
+        >
+          <AutoStoriesIcon sx={{
+            fontSize: 22,
+            color: gold,
+            alignSelf: 'center',
+            filter: `drop-shadow(0 0 4px ${alpha(gold, 0.3)})`,
+          }} />
+          <Typography sx={{
+            fontFamily: '"Cinzel Decorative", serif',
+            fontWeight: 700,
+            fontSize: '1.3rem',
+            letterSpacing: '0.06em',
+            color: 'text.primary',
+          }}>
+            Story
+          </Typography>
+          <Typography sx={{
+            fontFamily: '"Cinzel Decorative", serif',
+            fontWeight: 700,
+            fontSize: '1.3rem',
+            letterSpacing: '0.06em',
+            color: gold,
+          }}>
+            Geek
+          </Typography>
+        </Box>
+
+        {/* Right actions */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
           <IconButton
-            color="inherit"
-            edge="start"
-            onClick={() => setMobileOpen(!mobileOpen)}
+            onClick={onThemeToggle}
             sx={{
-              mr: 2,
               color: 'text.secondary',
               '&:hover': { color: gold, backgroundColor: alpha(gold, 0.08) },
             }}
           >
-            <MenuIcon />
+            {isDarkMode ? <LightModeIcon /> : <DarkModeIcon />}
           </IconButton>
 
-          {/* Brand */}
-          <Box sx={{
-            display: 'flex', alignItems: 'baseline', gap: 0.75, flexGrow: 1,
-            cursor: 'pointer',
-          }}
-            onClick={() => navigate('/')}
+          <IconButton
+            onClick={(e) => setAnchorEl(e.currentTarget)}
+            sx={{ '&:hover': { backgroundColor: alpha(gold, 0.08) } }}
           >
-            <AutoStoriesIcon sx={{
-              fontSize: 22,
+            <Avatar sx={{
+              width: 30, height: 30,
+              bgcolor: alpha(gold, 0.15),
               color: gold,
-              alignSelf: 'center',
-              filter: `drop-shadow(0 0 4px ${alpha(gold, 0.3)})`,
-            }} />
-            <Typography sx={{
-              fontFamily: '"Cinzel Decorative", serif',
+              fontSize: '0.8rem',
+              fontFamily: '"Cinzel", serif',
               fontWeight: 700,
-              fontSize: '1.3rem',
-              letterSpacing: '0.06em',
-              color: 'text.primary',
             }}>
-              Story
-            </Typography>
-            <Typography sx={{
-              fontFamily: '"Cinzel Decorative", serif',
-              fontWeight: 700,
-              fontSize: '1.3rem',
-              letterSpacing: '0.06em',
-              color: gold,
-            }}>
-              Geek
-            </Typography>
-          </Box>
+              {user?.username?.[0]?.toUpperCase() || 'G'}
+            </Avatar>
+          </IconButton>
 
-          {/* Right actions */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <IconButton
-              onClick={onThemeToggle}
-              sx={{
-                color: 'text.secondary',
-                '&:hover': { color: gold, backgroundColor: alpha(gold, 0.08) },
-              }}
-            >
-              {isDarkMode ? <LightModeIcon /> : <DarkModeIcon />}
-            </IconButton>
+          <Menu
+            anchorEl={anchorEl}
+            open={Boolean(anchorEl)}
+            onClose={() => setAnchorEl(null)}
+            PaperProps={{
+              sx: {
+                mt: 1,
+                border: `1px solid ${alpha(gold, 0.15)}`,
+                minWidth: 180,
+              },
+            }}
+          >
+            <MenuItem disabled sx={{ opacity: '0.7 !important' }}>
+              <AccountIcon sx={{ mr: 1, fontSize: 18 }} />
+              <Typography variant="body2">{user?.username || 'Adventurer'}</Typography>
+            </MenuItem>
+            <Divider sx={{ borderColor: alpha(gold, 0.1) }} />
+            <MenuItem onClick={handleLogout}>
+              <LogoutIcon sx={{ mr: 1, fontSize: 18 }} />
+              <Typography variant="body2">Depart</Typography>
+            </MenuItem>
+          </Menu>
+        </Box>
+      </Toolbar>
+    </AppBar>
+  );
 
-            <IconButton
-              onClick={(e) => setAnchorEl(e.currentTarget)}
-              sx={{ '&:hover': { backgroundColor: alpha(gold, 0.08) } }}
-            >
-              <Avatar sx={{
-                width: 30, height: 30,
-                bgcolor: alpha(gold, 0.15),
-                color: gold,
-                fontSize: '0.8rem',
-                fontFamily: '"Cinzel", serif',
-                fontWeight: 700,
-              }}>
-                {user?.username?.[0]?.toUpperCase() || 'G'}
-              </Avatar>
-            </IconButton>
-
-            <Menu
-              anchorEl={anchorEl}
-              open={Boolean(anchorEl)}
-              onClose={() => setAnchorEl(null)}
-              PaperProps={{
-                sx: {
-                  mt: 1,
-                  border: `1px solid ${alpha(gold, 0.15)}`,
-                  minWidth: 180,
-                },
-              }}
-            >
-              <MenuItem disabled sx={{ opacity: '0.7 !important' }}>
-                <AccountIcon sx={{ mr: 1, fontSize: 18 }} />
-                <Typography variant="body2">{user?.username || 'Adventurer'}</Typography>
-              </MenuItem>
-              <Divider sx={{ borderColor: alpha(gold, 0.1) }} />
-              <MenuItem onClick={handleLogout}>
-                <LogoutIcon sx={{ mr: 1, fontSize: 18 }} />
-                <Typography variant="body2">Depart</Typography>
-              </MenuItem>
-            </Menu>
-          </Box>
-        </Toolbar>
-      </AppBar>
-
-      {/* Drawer */}
+  return (
+    <GeekShell topBar={topBar}>
+      {/* Sidebar Drawer (Always temporary in StoryGeek) */}
       <Drawer
         variant="temporary"
         open={mobileOpen}
         onClose={() => setMobileOpen(false)}
         ModalProps={{ keepMounted: true }}
-        sx={{
-          '& .MuiDrawer-paper': {
+        PaperProps={{
+          sx: {
             boxSizing: 'border-box',
-            width: drawerWidth,
-            mt: isMobile ? '56px' : '64px',
-            height: isMobile ? 'calc(100vh - 56px)' : 'calc(100vh - 64px)',
-          },
+            width: DRAWER_WIDTH,
+          }
         }}
       >
-        {drawer}
+        {sidebarContent}
       </Drawer>
 
-      {/* Main Content */}
-      <Box
-        component="main"
-        sx={{
-          flexGrow: 1,
-          p: { xs: 2, md: 3 },
-          width: '100%',
-          mt: isMobile ? '56px' : '64px',
-          minHeight: isMobile ? 'calc(100vh - 56px)' : 'calc(100vh - 64px)',
-        }}
-      >
-        <Container maxWidth="xl">
+      <GeekAppFrame>
+        <Container maxWidth="xl" sx={{ py: { xs: 2, md: 3 } }}>
           {children}
         </Container>
-      </Box>
-    </Box>
+      </GeekAppFrame>
+    </GeekShell>
   );
 }
 

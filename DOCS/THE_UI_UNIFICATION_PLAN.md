@@ -408,7 +408,58 @@ Non-negotiable foundation:
 
 ---
 
-## 9. Anti-Patterns
+## 9. What NOT to Share
+
+Over-extraction is as harmful as under-extraction. The rule is simple:
+
+> DRY the rules. Not the screens.
+
+If a component answers **"how should this look/behave?"** → it belongs in `packages/ui`.
+
+If a component answers **"what is this thing?"** → it belongs in the app.
+
+### Do Not Share Page Layouts
+
+Each app has fundamentally different working surfaces. These must not be extracted into shared packages:
+
+- `GeekDashboardLayout` — does not exist
+- `GeekListPage` — does not exist
+- `GeekDetailPage` — does not exist
+- `GeekGridPage` — does not exist
+
+A fitness dashboard is not a notes editor. A book grid is not a bullet journal. Shared layouts would force artificial structural parity between surfaces that have nothing in common.
+
+Apps own their layouts. The shared system owns the primitives that compose them.
+
+### Do Not Share Domain UI Components
+
+Domain-specific components belong to the app that owns the domain:
+
+| Component | Belongs in |
+|-----------|------------|
+| `TaskCard` | `bujogeek` |
+| `BookTile` | `bookgeek` |
+| `WorkoutPanel` | `fitnessgeek` |
+| `NoteCard` | `notegeek` |
+| `MetricWidget` | `fitnessgeek` |
+| `FlockRecord` | its app |
+
+These are domain expressions, not primitives. Putting them in `packages/ui` would couple every app to every other app's domain model.
+
+### The Litmus Test
+
+Before extracting anything to `packages/ui`, ask:
+
+1. **Would every app use this?** If no — it stays in the app.
+2. **Does it encode a rule (size, focus, spacing, behavior)?** If yes — it belongs shared.
+3. **Does it encode domain knowledge (tasks, books, workouts)?** If yes — it stays in the app.
+4. **Would sharing it force layout or content decisions on other apps?** If yes — do not share it.
+
+The danger is not failing to extract enough. The danger is extracting too much and locking every app into a shared structural decision that only one app needed.
+
+---
+
+## 10. Anti-Patterns
 
 Do not allow:
 
@@ -428,7 +479,7 @@ These are not harmless personality quirks. They are product fragmentation.
 
 ---
 
-## 10. Success Criteria
+## 11. Success Criteria
 
 The UI unification work is successful when a user can:
 
@@ -443,6 +494,7 @@ The UI unification work is successful when a user can:
 ---
 
 ## Implementation Plan
+
 
 ### Phase 1: Token Audit
 

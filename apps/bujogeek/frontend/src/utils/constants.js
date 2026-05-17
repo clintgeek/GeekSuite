@@ -1,7 +1,9 @@
-// Layout
-export const SIDEBAR_WIDTH = 240;
-export const TOPBAR_HEIGHT = 56;
-export const MOBILE_TAB_HEIGHT = 64;
+import { geekLayout } from '@geeksuite/ui';
+
+// Layout — derived from shared tokens so they can never drift
+export const SIDEBAR_WIDTH    = geekLayout.sidebarWidth;   // 220
+export const TOPBAR_HEIGHT    = geekLayout.topBarHeight;   // 60
+export const MOBILE_TAB_HEIGHT = 64; // mobile-specific, no shared equivalent yet
 
 // Breakpoints (match MUI)
 export const MOBILE_BREAKPOINT = 600;
