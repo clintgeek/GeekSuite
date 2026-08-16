@@ -190,7 +190,9 @@ ${userInput}`;
 
       const rollRegex = /^\s*ROLL:\s*d20(?:\s*\|\s*situation=([^|\n\r]+))?(?:\s*\|\s*reason=([^\n\r]*))?\s*$/mi;
       const rollMatch = response.match(rollRegex);
-      let rolled = diceResult;
+      // Only a roll made in THIS call is returned to the caller — a
+      // pre-provided diceResult is context, not a new roll to record.
+      let rolledThisTurn = null;
       let diceMeta = null;
       let cleanedContent = this.stripMechanics(response.replace(rollRegex, ''));
 
@@ -204,12 +206,12 @@ ${userInput}`;
         diceMeta = { requested: true, situation, reason };
 
         try {
-          rolled = ['combat', 'persuasion', 'stealth', 'investigation', 'survival'].includes(situation)
+          rolledThisTurn = ['combat', 'persuasion', 'stealth', 'investigation', 'survival'].includes(situation)
             ? diceService.rollForSituation(situation)
             : { ...diceService.roll('d20'), situation: situation || 'unspecified' };
-          rolled.description = reason || 'AI-requested roll';
+          rolledThisTurn.description = reason || 'AI-requested roll';
         } catch {
-          rolled = { ...diceService.roll('d20'), description: reason || 'AI-requested roll' };
+          rolledThisTurn = { ...diceService.roll('d20'), description: reason || 'AI-requested roll' };
         }
 
         // Second pass: same context + the engine's roll + the model's own
@@ -219,7 +221,7 @@ ${userInput}`;
           const postRollPrompt = `${prompt}
 
 === DICE RESULT (engine-rolled) ===
-The game engine rolled d20 = ${rolled.result} for ${situation} (${rolled.interpretation}).
+The game engine rolled d20 = ${rolledThisTurn.result} for ${situation} (${rolledThisTurn.interpretation}).
 
 === YOUR PRE-ROLL DRAFT ===
 ${preRollDraft}
@@ -234,7 +236,7 @@ Rewrite your response as one final narration that keeps the scene, tone, and det
       }
 
       console.log('StoryGeek AI response generated successfully');
-      return { content: cleanedContent, diceResult: rolled && !diceResult ? rolled : (rollMatch ? rolled : null), diceMeta };
+      return { content: cleanedContent, diceResult: rolledThisTurn, diceMeta };
     } catch (error) {
       console.error('StoryGeek AI generation failed:', error.message);
       throw new Error('Failed to generate story response');
