@@ -290,7 +290,7 @@ Rewrite your response as one final narration that keeps the scene, tone, and det
     if (/(attack|ambush|strike|fight|combat|shoot|swing at|stab)/.test(input)) return 'combat';
     if (/(sneak|stealth|hide|quiet|slip past|avoid notice|pick (the )?lock|lockpick)/.test(input)) return 'stealth';
     if (/(convince|persuade|negotiate|bargain|intimidate|deceive|bluff|talk .{0,20}(down|into|out of))/.test(input)) return 'persuasion';
-    if (/(investigate|search|examine|scan|inspect|analyze|scavenge|loot|rummage)/.test(input)) return 'investigation';
+    if (/(investigate|search|examine|scan|inspect|analyze|scavenge|loot|rummage|find|locate|look for|scout|track down)/.test(input)) return 'investigation';
     if (/(navigate|climb|jump across|leap|escape|outrun|ford|traverse|scale|swim across)/.test(input)) return 'survival';
     return null;
   }

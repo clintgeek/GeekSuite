@@ -194,6 +194,7 @@ describe('dice fallback intent detection (aiService)', () => {
     assert.equal(aiService.detectIntentSituation('I try to persuade the guard to let us through'), 'persuasion');
     assert.equal(aiService.detectIntentSituation('I search the glovebox for a map'), 'investigation');
     assert.equal(aiService.detectIntentSituation('I navigate the truck through the debris field'), 'survival');
+    assert.equal(aiService.detectIntentSituation("Let's keep going west and try and find a gas station"), 'investigation');
     assert.equal(aiService.detectIntentSituation('I order a drink and listen'), null);
     assert.equal(aiService.detectIntentSituation('I tell the kid everything will be okay'), null);
   });
