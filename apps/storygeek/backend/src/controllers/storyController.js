@@ -1,9 +1,9 @@
 import Story from '../models/Story.js';
 import aiService from '../services/aiService.js';
 import contextService from '../services/contextService.js';
-import diceService from '../services/diceService.js';
-import tagService from '../services/tagService.js';
-import characterService from '../services/characterService.js';
+import stateExtractionService from '../services/stateExtractionService.js';
+import stateCommitService from '../services/stateCommitService.js';
+import checkpointService from '../services/checkpointService.js';
 
 const getAuthenticatedUserId = (req) => {
   if (!req.user || !req.user._id) return null;
@@ -80,43 +80,44 @@ class StoryController {
     try {
       const { storyId } = req.params;
       const { userInput } = req.body;
+      const authenticatedUserId = requireAuth(req, res);
+      if (!authenticatedUserId) return;
       const story = await Story.findById(storyId);
       if (!story) return res.status(404).json({ error: 'Story not found' });
+      if (!isStoryOwner(story, authenticatedUserId)) return res.status(403).json({ error: 'Not authorized to continue this story' });
 
       // Handle special commands
       if (userInput.startsWith('/')) {
         const command = userInput.toLowerCase().trim();
 
         if (command.startsWith('/checkpoint')) {
-          const checkpoint = {
-            id: Date.now().toString(), timestamp: new Date(),
-            events: [...story.events], worldState: { ...story.worldState },
-            characters: [...story.characters], locations: [...story.locations],
-            description: userInput.replace('/checkpoint', '').trim() || 'Checkpoint'
-          };
+          const checkpoint = checkpointService.makeCheckpoint(
+            story, userInput.replace('/checkpoint', '').trim() || 'Checkpoint'
+          );
           if (!story.checkpoints) story.checkpoints = [];
           story.checkpoints.push(checkpoint);
           await story.save();
-          return res.json({ type: 'checkpoint_created', checkpoint, message: `Checkpoint "${checkpoint.description}" created.` });
+          return res.json({ type: 'checkpoint_created', checkpoint: { id: checkpoint.id, description: checkpoint.description, timestamp: checkpoint.timestamp, turnNumber: checkpoint.turnNumber }, message: `Checkpoint "${checkpoint.description}" created.` });
         }
 
         if (command.startsWith('/back')) {
           const checkpointId = userInput.replace('/back', '').trim();
           if (!story.checkpoints || story.checkpoints.length === 0) return res.json({ type: 'error', message: 'No checkpoints available. Use /checkpoint to create one.' });
-          let targetCheckpoint;
-          if (checkpointId) {
-            targetCheckpoint = story.checkpoints.find(cp => cp.id === checkpointId || cp.description.toLowerCase().includes(checkpointId.toLowerCase()));
-          } else {
-            targetCheckpoint = story.checkpoints[story.checkpoints.length - 1];
-          }
+          const targetCheckpoint = checkpointService.findCheckpoint(story, checkpointId);
           if (!targetCheckpoint) return res.json({ type: 'error', message: 'Checkpoint not found. Available checkpoints: ' + story.checkpoints.map(cp => `${cp.description} (${cp.id})`).join(', ') });
-          story.events = [...targetCheckpoint.events];
-          story.worldState = { ...targetCheckpoint.worldState };
-          story.characters = [...targetCheckpoint.characters];
-          story.locations = [...targetCheckpoint.locations];
-          story.stats.lastActive = new Date();
+
+          // Deterministic post-restore audit — surface any inconsistency
+          // instead of letting it silently poison the campaign.
+          const violations = checkpointService.restoreCheckpoint(story, targetCheckpoint);
+          if (violations.length > 0) console.warn('Post-restore consistency violations:', violations);
           await story.save();
-          return res.json({ type: 'checkpoint_restored', checkpoint: targetCheckpoint, message: `Restored to checkpoint "${targetCheckpoint.description}".` });
+
+          return res.json({
+            type: 'checkpoint_restored',
+            checkpoint: { id: targetCheckpoint.id, description: targetCheckpoint.description, timestamp: targetCheckpoint.timestamp, turnNumber: targetCheckpoint.turnNumber },
+            consistencyWarnings: violations,
+            message: `Restored to checkpoint "${targetCheckpoint.description}".`
+          });
         }
 
         if (command.startsWith('/list-checkpoints')) {
@@ -125,12 +126,20 @@ class StoryController {
         }
 
         if (command.startsWith('/char')) {
+          // Canonical characters live on the story document now (the old
+          // regex-extracted Character collection is no longer authoritative).
           const characterName = command.replace('/char', '').trim();
+          const canonChars = (story.characters || []).filter(c => c.isActive !== false);
           if (!characterName) {
-            const characters = await characterService.getCharacterContext(story._id);
-            return res.json({ type: 'character_list', characters });
+            return res.json({
+              type: 'character_list',
+              characters: canonChars.map(c => ({
+                name: c.name, description: c.description, personality: c.personality,
+                status: c.status, locationName: c.locationName, isPlayer: c.isPlayer
+              }))
+            });
           }
-          const character = await characterService.getCharacterInfo(story._id, characterName);
+          const character = canonChars.find(c => c.name.toLowerCase().includes(characterName.toLowerCase()));
           if (!character) return res.json({ type: 'error', message: `Character "${characterName}" not found.` });
           return res.json({ type: 'character_info', character });
         }
@@ -191,9 +200,26 @@ class StoryController {
             const aiResponse = await aiService.generateStoryResponse(story, openingPrompt, null, userToken, { provider: req.body.provider, model: req.body.model });
             story.status = 'active';
             story.worldState.currentSituation = 'Story has begun';
-            story.events.push({ type: 'narrative', description: aiResponse.content, timestamp: new Date(), characters: [], locations: [], diceResults: [], playerChoices: [] });
+            story.worldState.turnNumber = 1;
+            story.events.push({ type: 'narrative', description: aiResponse.content, turn: 1, timestamp: new Date(), characters: [], locations: [], diceResults: [], playerChoices: [] });
             story.stats.totalInteractions++;
             story.stats.lastActive = new Date();
+
+            // Seed canon from the opening scene: player character, starting
+            // location, initial NPCs and facts all come from this extraction.
+            try {
+              const proposal = await stateExtractionService.extractChanges(
+                story, userInput, aiResponse.content,
+                { presentCharacterNames: [], liveFactsBlock: '', activeThreadsBlock: '' },
+                userToken
+              );
+              if (proposal) {
+                stateCommitService.applyProposal(story, proposal, { presentCharacterNames: [], turn: 1 });
+              }
+            } catch (seedError) {
+              console.error('Opening-scene canon seeding failed (story continues):', seedError.message);
+            }
+
             await story.save();
             return res.json({ aiResponse: aiResponse.content, status: 'active', storyStarted: true });
           } else {
@@ -205,36 +231,75 @@ class StoryController {
         }
       }
 
-      // Regular story continuation
-      let diceResult = null;
-      story.events.push({ type: 'dialogue', description: `Player chose: ${userInput}`, timestamp: new Date(), diceResults: [] });
-      const context = await contextService.buildContext(story, userInput, diceResult);
-
+      // ── Regular story continuation ─────────────────────────────────
+      // Pipeline: canon → context package → GM narration (+ engine dice)
+      //           → state extraction → validation → commit.
       const authHeader = req.headers['authorization'];
       const userToken = authHeader && authHeader.split(' ')[1];
-      const aiResponse = await aiService.generateStoryResponse(story, userInput, diceResult, userToken, { provider: req.body.provider, model: req.body.model });
 
-      const tags = tagService.extractTags(aiResponse.content, storyId, 'narrative');
-      await tagService.saveTags(storyId, tags);
-      const characters = characterService.extractCharacters(aiResponse.content, storyId);
-      await characterService.saveCharacters(storyId, characters);
+      const turn = (story.worldState.turnNumber || 0) + 1;
+      story.worldState.turnNumber = turn;
+      story.events.push({ type: 'dialogue', description: `Player: ${userInput}`, turn, timestamp: new Date(), diceResults: [] });
+
+      // Canon alerts from the previous turn's conflicts, if any (then cleared).
+      const canonAlerts = story.storyState?.canonAlerts || [];
+
+      const { prompt, turnContext } = await contextService.buildTurnContext(story, userInput, {
+        canonAlerts, userToken
+      });
+
+      const aiResponse = await aiService.generateStoryResponse(
+        story, userInput, null, userToken,
+        { provider: req.body.provider, model: req.body.model },
+        prompt
+      );
 
       if (aiResponse.diceResult) {
         story.diceResults.push(aiResponse.diceResult);
         story.stats.totalDiceRolls++;
       }
 
-      story.events.push({ type: 'narrative', description: aiResponse.content, timestamp: new Date(), diceResults: aiResponse.diceResult ? [aiResponse.diceResult] : [], diceMeta: aiResponse.diceMeta || null });
+      story.events.push({ type: 'narrative', description: aiResponse.content, turn, timestamp: new Date(), diceResults: aiResponse.diceResult ? [aiResponse.diceResult] : [] });
       story.stats.totalInteractions++;
       story.stats.lastActive = new Date();
-      story.worldState.currentSituation = 'Story continues...';
+
+      // Extract → validate → commit. Failure here never breaks the turn;
+      // it just means one turn of state changes goes unrecorded.
+      let commitReport = { applied: 0, rejected: [], conflicts: [] };
+      try {
+        const proposal = await stateExtractionService.extractChanges(
+          story, userInput, aiResponse.content, turnContext, userToken
+        );
+        if (proposal) {
+          commitReport = stateCommitService.applyProposal(story, proposal, {
+            presentCharacterNames: turnContext.presentCharacterNames,
+            turn
+          });
+          if (commitReport.rejected.length > 0) {
+            console.warn(`Turn ${turn}: ${commitReport.rejected.length} state changes rejected:`,
+              commitReport.rejected.map(r => `${r.rule}: ${r.reason}`).filter(r => !r.includes('already known')));
+          }
+        }
+      } catch (extractError) {
+        console.error('State pipeline failed (turn preserved):', extractError.message);
+      }
+
+      // Conflicts feed next turn's CANON ALERTS so the GM course-corrects.
+      if (story.storyState) {
+        story.storyState.canonAlerts = commitReport.conflicts.slice(0, 5).map(c => ({
+          existing: { id: c.existing?.id, fact: c.existing?.fact },
+          proposed: { fact: c.proposed?.fact }
+        }));
+        story.markModified('storyState.canonAlerts');
+      }
       await story.save();
 
       res.json({
         aiResponse: aiResponse.content,
         diceResult: aiResponse.diceResult || null,
         diceMeta: aiResponse.diceMeta || null,
-        currentChapter: story.worldState.currentChapter
+        turnNumber: turn,
+        stateChanges: { applied: commitReport.applied, conflicts: commitReport.conflicts.length }
       });
     } catch (error) {
       console.error('Error continuing story:', error);
@@ -268,11 +333,11 @@ class StoryController {
   async testEndpoint(req, res) {
     try {
       const testStory = await Story.findById('6892311348766ff4a2c3c6c1');
-      const context = await contextService.buildContext(testStory, 'test');
+      const { prompt } = await contextService.buildTurnContext(testStory, 'test');
       const authHeader = req.headers['authorization'];
       const userToken = authHeader && authHeader.split(' ')[1];
-      const aiResponse = await aiService.generateStoryResponse(testStory, 'test', null, userToken);
-      res.json({ status: 'All tests passed', storyFound: !!testStory, contextLength: context.length, aiResponseLength: aiResponse.content.length });
+      const aiResponse = await aiService.generateStoryResponse(testStory, 'test', null, userToken, {}, prompt);
+      res.json({ status: 'All tests passed', storyFound: !!testStory, contextLength: prompt.length, aiResponseLength: aiResponse.content.length });
     } catch (error) {
       console.error('Test endpoint error:', error);
       res.status(500).json({ error: 'Test failed', message: error.message, stack: error.stack });

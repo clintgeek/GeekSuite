@@ -1,0 +1,400 @@
+The current UI can absolutely evolve into something that feels like a game rather than “ChatGPT wearing a wizard hat.”
+
+I looked at what other AI-RPG products are doing right now, and there's a pretty clear pattern: the more convincing ones keep the narrative, character state, quests, dice, and map visible as separate but coordinated surfaces. Friends & Fables, Trismeria, and similar products are all moving in that direction.
+
+But I wouldn't copy the VTT model wholesale. StoryGeek's killer feature is freeform narrative interaction, not tactical combat.
+
+I'd make the primary screen feel like a video game
+
+Something like:
+
+┌──────────────────────────────────────────────────────────────┐
+│  STORYGEEK                           Chapter 3 · Blackwater  │
+├───────────────┬──────────────────────────────────┬───────────┤
+│               │                                  │           │
+│  CHARACTER    │          CURRENT SCENE           │  PARTY    │
+│               │                                  │           │
+│  portrait     │      [visual scene/location]     │  Mira     │
+│  NAME         │                                  │  ♥ 82     │
+│  HP  31/37    │  The rain has finally stopped.  │  Kael     │
+│               │  Someone is watching you from   │  ♥ 34     │
+│  inventory    │  across the square...           │           │
+│               │                                  │  QUESTS   │
+│  abilities    │  ─────────────────────────────   │  ● Find   │
+│               │                                  │  ● Owe    │
+│               │                                  │           │
+├───────────────┴──────────────────────────────────┴───────────┤
+│                                                              │
+│  What do you do?                                             │
+│  >                                                            │
+│                                                              │
+│  [ Send ]                           🎲  [Actions] [Journal]  │
+└──────────────────────────────────────────────────────────────┘
+
+The narration remains the center of gravity.
+
+Everything else answers:
+
+Where am I? Who's here? What do I know? What do I have? What matters right now?
+
+That's the information architecture I'd chase.
+
+1. Give every scene a visual identity
+
+This is probably the biggest upgrade.
+
+Not necessarily a tactical map.
+
+A scene card.
+
+If you're in:
+
+Blackwater Tavern
+
+the UI should look like Blackwater Tavern.
+
+A generated/selected background, lighting, weather, time of day, perhaps a few important objects.
+
+Then as the narrative changes, the visual state changes.
+
+You walk outside:
+
+Tavern → Rainy Street
+
+You enter the alley:
+
+Street → Back Alley
+
+You start a fight:
+
+Back Alley → Combat Scene
+
+This doesn't need to become Skyrim.
+
+Even a beautiful illustrated scene panel would radically change the experience from “text box” to “I'm somewhere.”
+
+There's evidence that current AI-RPG products are leaning heavily into scene maps and visual spatial context, but I think StoryGeek should use that selectively, rather than forcing every scene onto a tactical grid.
+
+2. Make the narration itself feel like a game
+
+Right now, I suspect the UI treats narration as essentially a transcript.
+
+I'd change that.
+
+Imagine:
+
+The guard looks at you for a long moment.
+
+GUARD
+
+“You again.”
+
+Then:
+
+He reaches for his sword.
+
+And the UI subtly indicates:
+
+⚠ HOSTILE
+
+Then:
+
+🎲 Intimidation Check — DC 14
+
+You roll.
+
+17 — SUCCESS
+
+And the narrative continues.
+
+The important thing is that mechanical events become visual events, rather than being buried inside prose.
+
+Trismeria makes this distinction explicitly: narration happens in the scene while dice, character state, inventory, and outcomes remain visible alongside it.
+
+That's exactly right.
+
+3. Don't make the player open their character sheet constantly
+
+Give them a persistent compact character HUD.
+
+Something like:
+
+┌───────────────┐
+│  NOVA         │
+│  Ranger · 7   │
+│               │
+│  ♥ 42 / 48    │
+│  ⚡  3         │
+│               │
+│  Conditions   │
+│  ● Inspired   │
+│  ● Poisoned   │
+└───────────────┘
+
+Click it → full character sheet.
+
+The player should always know:
+
+Who am I?
+How fucked am I?
+What do I have available?
+
+Without opening another page.
+
+4. Make NPCs visible
+
+This is where I'd really lean into the AI aspect.
+
+When an NPC is present, show a little portrait/card.
+
+Not giant anime waifus everywhere.
+
+Just enough visual identity to create recognition.
+
+MIRA
+Blackwater Tavern
+────────────────
+Friendly
+Trust: 72
+Knows: ███████
+
+And if you've got a persistent NPC, their appearance should stay consistent.
+
+Click Mira:
+
+Mira
+
+Tavern keeper
+Known for: dry humor, suspicious nature
+
+Relationship
++72 Friendly
+
+Known history
+• Helped you hide from the guard
+• You owe her 20 gold
+• Her brother disappeared
+
+Current
+At Blackwater Tavern
+
+Now the player doesn't have to remember who the hell Mira is.
+
+The game remembers.
+
+That becomes a major part of the continuity experience.
+
+5. Give the world a map—but don't make it the main UI
+
+I'd have a World button/panel.
+
+When opened:
+
+                    BLACKWATER
+                         │
+             ┌───────────┼───────────┐
+             │           │           │
+          Tavern       Market      Castle
+             │
+          Docks
+
+Eventually we can have actual illustrated maps.
+
+But the important part is that the map is stateful.
+
+Known locations are visible.
+
+Unknown areas aren't.
+
+Important NPCs can appear at their current locations.
+
+Completed events can change the map.
+
+If you burn down the tavern:
+
+the map changes.
+
+That makes consequences tangible.
+
+6. Quests should be living objects
+
+Not:
+
+Quest log → paragraph.
+
+Instead:
+
+┌────────────────────────────────┐
+│ FIND THE MAGISTRATE'S SEAL     │
+│                                │
+│ ● Investigate the market       │
+│ ● Question the dockmaster      │
+│ ○ Find the thief               │
+│                                │
+│ Known clues: 3                 │
+│ Suspects: 2                    │
+│                                │
+│ Last activity: 2 days ago      │
+└────────────────────────────────┘
+
+And crucially:
+
+don't reveal information the character doesn't know.
+
+The quest UI becomes another expression of the game's canonical state.
+
+7. Give the player a Journal
+
+This might become one of StoryGeek's best features.
+
+Not the raw transcript.
+
+A journal that represents what the character actually knows.
+
+BLACKWATER
+
+The magistrate's seal was stolen three days ago.
+
+Mira believes the thief came through the docks.
+
+You have not yet questioned the dockmaster.
+
+Then:
+
+People
+
+Mira
+
+Tavern keeper.
+
+Trusts you.
+
+You owe her 20 gold.
+
+Then:
+
+Rumors
+
+“Someone has been buying maps of the old mines.”
+
+The AI can help maintain the journal, but the application controls what gets committed.
+
+That's a much more immersive way to surface the persistence problem we're trying to solve.
+
+8. Use imagery sparingly
+
+I'd absolutely use generated art, but not every turn.
+
+That would get expensive and visually noisy.
+
+Generate/associate imagery with:
+
+major locations
+important NPCs
+significant discoveries
+major story moments
+chapter transitions
+
+Then reuse it.
+
+You don't need:
+
+“You open the door.”
+
+GENERATING IMAGE...
+
+No.
+
+That's annoying.
+
+But:
+
+The door opens onto the ruined cathedral.
+
+And suddenly the UI transitions to a gorgeous illustration of the cathedral?
+
+Fuck yes.
+
+9. Combat deserves a completely different mode
+
+This is where I'd allow StoryGeek to become a little more game-like.
+
+Normal exploration:
+
+narrative-first.
+
+Combat:
+
+tactical-first.
+
+You get:
+
+┌───────────────────────────────┐
+│                               │
+│       ENEMY                   │
+│           ●                   │
+│                               │
+│    YOU ●          ● GUARD     │
+│                               │
+│              ● BANDIT         │
+│                               │
+├───────────────────────────────┤
+│ Initiative                    │
+│ You 18 → Bandit 15 → Guard 9 │
+├───────────────────────────────┤
+│ [Attack] [Skill] [Item] [Run] │
+└───────────────────────────────┘
+
+But the player can still type natural language.
+
+“I kick the table over and shoot the bandit.”
+
+The engine interprets it.
+
+The dice resolve it.
+
+The combat UI updates.
+
+That's the sweet spot between D&D and an actual game.
+
+10. And one thing I would not do
+
+I wouldn't turn the screen into Foundry/Roll20.
+
+Those products are solving a different problem.
+
+StoryGeek isn't primarily:
+
+“How do I digitally reproduce sitting around a table with five people?”
+
+It's:
+
+“What if I could actually inhabit a persistent RPG world with an AI GM?”
+
+That's closer to a single-player RPG UI with an invisible tabletop engine underneath.
+
+And that's where I think StoryGeek can differentiate.
+
+Current AI-RPG products are already exploring maps, character sheets, quests, and visual campaign surfaces. The opportunity isn't to check those feature boxes. It's to make those surfaces serve the narrative rather than compete with it.
+
+My north star would be:
+
+The player should feel like they're playing a game, not chatting with an AI about a game.
+
+The text remains the heart of it.
+
+But the world around the text should exist.
+
+The character should exist.
+
+The NPCs should exist.
+
+The locations should exist.
+
+The inventory should exist.
+
+The consequences should exist.
+
+And when something changes, the interface should visibly change with it.
+
+That's how I'd take StoryGeek from “really good AI storytelling prototype” to something that feels like an actual game.

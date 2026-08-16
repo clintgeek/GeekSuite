@@ -104,10 +104,13 @@ function StoryPlay() {
     setLoading(true); setError('');
 
     try {
+      // Only send provider/model when the user explicitly picked one —
+      // otherwise the backend's pinned GM model is used.
       const response = await api.post(`/stories/${storyId}/continue`, {
         userInput: input,
-        provider: selectedProvider || 'gemini',
-        model: selectedModelId || 'gemini-1.5-flash-latest'
+        ...(selectedProvider && selectedModelId
+          ? { provider: selectedProvider, model: selectedModelId }
+          : {})
       });
       const data = response.data;
 

@@ -12,6 +12,12 @@ services:
       BASEGEEK_URL: ${BASEGEEK_URL:-https://basegeek.clintgeek.com}
       BASEGEEK_JWT_TOKEN: ${BASEGEEK_JWT_TOKEN}
       STORYGEEK_FREE_ONLY: ${STORYGEEK_FREE_ONLY:-true}
+      # Pinned Game Master model — narrative consistency beats model rotation.
+      STORYGEEK_GM_PROVIDER: ${STORYGEEK_GM_PROVIDER:-gemini}
+      STORYGEEK_GM_MODEL: ${STORYGEEK_GM_MODEL:-gemini-2.0-flash}
+      # Cheap auxiliary model for state extraction / summaries (defaults to GM model).
+      STORYGEEK_AUX_PROVIDER: ${STORYGEEK_AUX_PROVIDER:-}
+      STORYGEEK_AUX_MODEL: ${STORYGEEK_AUX_MODEL:-}
     ports:
       - "9977:9977"
     networks:

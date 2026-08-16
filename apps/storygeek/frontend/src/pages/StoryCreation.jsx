@@ -55,7 +55,7 @@ function StoryCreation() {
     try {
       const response = await api.post('/stories', {
         ...formData, userId: user.id,
-        provider: selectedProvider || 'gemini', model: selectedModelId || 'gemini-1.5-flash-latest'
+        ...(selectedProvider && selectedModelId ? { provider: selectedProvider, model: selectedModelId } : {})
       });
       navigate(`/play/${response.data._id}`);
     } catch (err) { setError(err.message); }

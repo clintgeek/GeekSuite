@@ -2,15 +2,22 @@ import aiService from './aiService.js';
 
 class SummaryService {
   constructor() {
-    this.summaryInterval = 5;
+    // Interactions (turns), not raw events — events grow ~2 per turn, which
+    // made the old event-count cadence fire erratically.
+    this.summaryInterval = 8;
     this.maxSummaries = 10;
   }
 
   shouldGenerateSummary(story) {
-    return story.events.length % this.summaryInterval === 0;
+    const interactions = story.stats?.totalInteractions || 0;
+    if (interactions === 0 || interactions % this.summaryInterval !== 0) return false;
+    // Only if there are actually new events since the last summary.
+    const lastSummary = story.storySummaries?.[story.storySummaries.length - 1];
+    const startIndex = lastSummary ? lastSummary.eventCount : 0;
+    return (story.events?.length || 0) > startIndex;
   }
 
-  async generateSummary(story) {
+  async generateSummary(story, userToken = null) {
     try {
       const lastSummary = story.storySummaries.length > 0
         ? story.storySummaries[story.storySummaries.length - 1]
@@ -45,7 +52,7 @@ IMPORTANT DETAILS:
 
 Keep the summary focused on what's most relevant for future story development.`;
 
-      const aiResponse = await aiService.generateSummaryResponse(summaryPrompt);
+      const aiResponse = await aiService.generateSummaryResponse(summaryPrompt, userToken);
       const parsed = this.parseSummaryResponse(aiResponse.content);
       return {
         summary: parsed.summary,
