@@ -22,6 +22,19 @@ import {
   getPlayer, getPresentNpcs, getActiveThreads, getScene,
 } from '../game/projections';
 
+// Map a persisted story event to a chat message. Player "dialogue" events are
+// stored as "Player: <input>"; render them as the player's own bubble on
+// reload instead of narrator text.
+const eventToMessage = (event) => {
+  const isPlayerLine = event.type === 'dialogue' && /^player:/i.test(event.description || '');
+  return {
+    type: isPlayerLine ? 'user' : 'ai',
+    content: isPlayerLine ? event.description.replace(/^player:\s*/i, '') : event.description,
+    timestamp: new Date(event.timestamp),
+    diceResults: event.diceResults || [],
+  };
+};
+
 // Dice result color based on d20 roll
 const getDiceColor = (result) => {
   if (result === 20) return '#ffd700';
@@ -75,14 +88,22 @@ function StoryPlay() {
       const response = await api.get(`/stories/${storyId}`);
       const storyData = response.data;
       setStory(storyData);
-      setMessages(storyData.events.map(event => ({
-        type: 'ai', content: event.description,
-        timestamp: new Date(event.timestamp),
-        diceResults: event.diceResults || []
-      })));
+      setMessages(storyData.events.map(eventToMessage));
     } catch (err) {
       setError('Failed to load story');
       console.error('Error loading story:', err);
+    }
+  };
+
+  // Refresh only the canonical story (feeds the panels) without rebuilding
+  // the message stream — called after each turn so the HUD/scene/party/
+  // quests/journal stay in sync with the engine as play advances.
+  const refreshStory = async () => {
+    try {
+      const response = await api.get(`/stories/${storyId}`);
+      setStory(response.data);
+    } catch (err) {
+      console.warn('Story refresh failed (panels may lag one turn):', err.message);
     }
   };
 
@@ -132,6 +153,9 @@ function StoryPlay() {
         diceResults: data.diceResult ? [data.diceResult] : [],
         diceMeta: data.diceMeta || null
       }]);
+      // Pull the freshly-committed canonical state so the panels reflect this
+      // turn's changes (new NPCs, location, threads, facts, scene, …).
+      refreshStory();
     } catch (err) {
       setError('Failed to continue story');
       console.error('Error continuing story:', err);
