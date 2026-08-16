@@ -13,8 +13,10 @@ services:
       BASEGEEK_JWT_TOKEN: ${BASEGEEK_JWT_TOKEN}
       STORYGEEK_FREE_ONLY: ${STORYGEEK_FREE_ONLY:-true}
       # Pinned Game Master model — narrative consistency beats model rotation.
+      # gemini-flash-latest is the id the deployed aiGeek free-tier catalog
+      # maintains; set an exact snapshot id here to lock harder.
       STORYGEEK_GM_PROVIDER: ${STORYGEEK_GM_PROVIDER:-gemini}
-      STORYGEEK_GM_MODEL: ${STORYGEEK_GM_MODEL:-gemini-2.0-flash}
+      STORYGEEK_GM_MODEL: ${STORYGEEK_GM_MODEL:-gemini-flash-latest}
       # Cheap auxiliary model for state extraction / summaries (defaults to GM model).
       STORYGEEK_AUX_PROVIDER: ${STORYGEEK_AUX_PROVIDER:-}
       STORYGEEK_AUX_MODEL: ${STORYGEEK_AUX_MODEL:-}

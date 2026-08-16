@@ -46,22 +46,27 @@ class StateExtractionService {
    * @param {string} narration - the GM's narration for this turn
    * @param {object} turnContext - { presentCharacterNames, liveFactsBlock, activeThreadsBlock }
    * @param {string|null} userToken
-   * @returns {object|null} proposal, or null if extraction failed (never throws)
+   * @returns {{proposal: object|null, modelUsed: string|null}} — proposal is
+   *          null if extraction failed (never throws)
    */
   async extractChanges(story, playerInput, narration, turnContext, userToken = null) {
+    let modelUsed = null;
     try {
+      const { provider, model } = await aiService.resolveAuxModel(userToken);
+      modelUsed = `${provider}:${model}`;
       const prompt = this.buildExtractionPrompt(story, playerInput, narration, turnContext);
-      const response = await aiService.callAuxAI(prompt, {
+      const response = await aiService.callBaseGeekAI(prompt, {
         maxTokens: 1500,
-        temperature: 0.1 // extraction wants determinism, not creativity
+        temperature: 0.1, // extraction wants determinism, not creativity
+        provider, model
       }, userToken);
-      return this.parseProposal(response);
+      return { proposal: this.parseProposal(response), modelUsed };
     } catch (error) {
       // Extraction must never break the player's turn. A missed extraction
       // means one turn of changes goes unrecorded — recoverable. A failed
       // turn is not.
       console.error('State extraction failed (turn continues):', error.message);
-      return null;
+      return { proposal: null, modelUsed };
     }
   }
 

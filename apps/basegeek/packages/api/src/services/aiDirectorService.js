@@ -652,10 +652,11 @@ class AIDirectorService {
         },
 
         // Gemini Free Tier
-        // UPDATED Aug 2026: 1.5-family is RETIRED upstream (404s on new
-        // projects) — flipped to isFree:false so free-only routing (e.g.
-        // StoryGeek's pinned GM) never selects a dead model. The upsert
-        // corrects any stale DB record. Current free tier: 2.0/2.5 flash.
+        // UPDATED Aug 2026: 1.5-family is RETIRED upstream (404s) — flipped
+        // to isFree:false so free-only routing never selects a dead model.
+        // The live free entry is gemini-flash-latest, Google's stability
+        // alias for the current GA flash — matches the curated production
+        // records, so a seed re-run cannot corrupt them.
         {
           provider: 'gemini',
           modelId: 'gemini-1.5-flash',
@@ -665,51 +666,17 @@ class AIDirectorService {
         },
         {
           provider: 'gemini',
-          modelId: 'gemini-2.0-flash',
+          modelId: 'gemini-flash-latest',
           isFree: true,
-          freeLimits: {
-            requestsPerMinute: 15,   // AI Studio free tier
-            requestsPerDay: 200,
-            tokensPerMinute: 1000000,
-            tokensPerDay: 1500000
-          },
-          notes: 'Free tier - stable GA flash; StoryGeek pinned GM model'
+          freeLimits: {},
+          notes: 'Free tier - stability alias for current GA flash; StoryGeek pinned GM model'
         },
         {
           provider: 'gemini',
-          modelId: 'gemini-2.0-flash-lite',
+          modelId: 'gemini-flash-lite-latest',
           isFree: true,
-          freeLimits: {
-            requestsPerMinute: 30,
-            requestsPerDay: 200,
-            tokensPerMinute: 1000000,
-            tokensPerDay: 1500000
-          },
-          notes: 'Free tier - lite variant, higher RPM'
-        },
-        {
-          provider: 'gemini',
-          modelId: 'gemini-2.5-flash',
-          isFree: true,
-          freeLimits: {
-            requestsPerMinute: 10,
-            requestsPerDay: 250,
-            tokensPerMinute: 250000,
-            tokensPerDay: 1000000
-          },
-          notes: 'Free tier - newest flash family (conservative limits)'
-        },
-        {
-          provider: 'gemini',
-          modelId: 'gemini-2.5-flash-lite',
-          isFree: true,
-          freeLimits: {
-            requestsPerMinute: 15,
-            requestsPerDay: 1000,
-            tokensPerMinute: 250000,
-            tokensPerDay: 1000000
-          },
-          notes: 'Free tier - lite variant, higher daily quota'
+          freeLimits: {},
+          notes: 'Free tier - lite alias'
         },
 
         // Anthropic - No free tier available

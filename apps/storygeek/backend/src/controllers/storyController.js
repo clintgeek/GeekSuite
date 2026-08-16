@@ -208,7 +208,7 @@ class StoryController {
             // Seed canon from the opening scene: player character, starting
             // location, initial NPCs and facts all come from this extraction.
             try {
-              const proposal = await stateExtractionService.extractChanges(
+              const { proposal } = await stateExtractionService.extractChanges(
                 story, userInput, aiResponse.content,
                 { presentCharacterNames: [], liveFactsBlock: '', activeThreadsBlock: '' },
                 userToken
@@ -266,10 +266,12 @@ class StoryController {
       // Extract → validate → commit. Failure here never breaks the turn;
       // it just means one turn of state changes goes unrecorded.
       let commitReport = { applied: 0, rejected: [], conflicts: [] };
+      let proposal = null;
+      let extractionModel = null;
       try {
-        const proposal = await stateExtractionService.extractChanges(
+        ({ proposal, modelUsed: extractionModel } = await stateExtractionService.extractChanges(
           story, userInput, aiResponse.content, turnContext, userToken
-        );
+        ));
         if (proposal) {
           commitReport = stateCommitService.applyProposal(story, proposal, {
             presentCharacterNames: turnContext.presentCharacterNames,
@@ -294,13 +296,43 @@ class StoryController {
       }
       await story.save();
 
-      res.json({
+      const payload = {
         aiResponse: aiResponse.content,
         diceResult: aiResponse.diceResult || null,
         diceMeta: aiResponse.diceMeta || null,
         turnNumber: turn,
         stateChanges: { applied: commitReport.applied, conflicts: commitReport.conflicts.length }
-      });
+      };
+
+      // Full per-turn diagnostics for playtests: which model actually served
+      // the turn, and proposed vs. accepted vs. rejected state changes — so a
+      // drift incident can be attributed to the GM, the extractor, the
+      // validator, the context builder, or canon itself.
+      if (req.body.debug === true) {
+        const proposedCount = proposal
+          ? Object.values(proposal).reduce((n, v) => n + (Array.isArray(v) ? v.length : (v ? 1 : 0)), 0)
+          : 0;
+        payload.debug = {
+          turn,
+          gmModel: aiResponse.modelUsed || null,
+          extractionModel,
+          extractionFailed: !proposal,
+          proposed: proposedCount,
+          accepted: commitReport.applied,
+          rejected: commitReport.rejected.map(r => ({ rule: r.rule, reason: String(r.reason || '').slice(0, 140) })),
+          conflicts: commitReport.conflicts.map(c => ({
+            existing: String(c.existing?.fact || '').slice(0, 100),
+            proposed: String(c.proposed?.fact || '').slice(0, 100)
+          })),
+          canonAlertsShown: canonAlerts.length,
+          activeThreads: (story.storyThreads || []).filter(t => t.status === 'active').length,
+          liveFacts: (story.storyState?.establishedFacts || []).filter(f => !f.isRetired).length,
+          presentNPCs: turnContext.presentCharacterNames,
+          contextChars: prompt.length
+        };
+      }
+
+      res.json(payload);
     } catch (error) {
       console.error('Error continuing story:', error);
       res.status(500).json({ error: 'Failed to continue story' });

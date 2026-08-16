@@ -105,13 +105,12 @@ async function main() {
   const transcript = [];
   for (let i = 0; i < inputs.length; i++) {
     const input = inputs[i];
-    process.stdout.write(`[${i + 2}/${inputs.length + 1}] ${input.slice(0, 60)}... `);
     try {
       const data = await turn(storyId, input);
-      transcript.push({ turn: i + 2, input, response: data.aiResponse || data.message || '', dice: data.diceResult || null });
-      console.log(data.diceResult ? `(d20=${data.diceResult.result})` : 'ok');
+      transcript.push({ turn: i + 2, input, response: data.aiResponse || data.message || '', dice: data.diceResult || null, debug: data.debug || null });
+      printTurnDiagnostics(i + 2, input, data);
     } catch (e) {
-      console.log(`FAILED: ${e.response?.data?.error || e.message}`);
+      console.log(`\n━━━ TURN ${i + 2} — FAILED: ${e.response?.data?.error || e.message}\n    ACTION: ${input.slice(0, 100)}`);
       transcript.push({ turn: i + 2, input, error: e.message });
     }
     await sleep(1500); // stay polite to free-tier rate limits
@@ -159,8 +158,38 @@ ${lateTranscript}`;
 }
 
 async function turn(storyId, userInput) {
-  const { data } = await api.post(`/stories/${storyId}/continue`, { userInput });
+  const { data } = await api.post(`/stories/${storyId}/continue`, { userInput, debug: true });
   return data;
+}
+
+/**
+ * One block per turn — enough to attribute any drift incident to the GM,
+ * the extractor, the validator, the context builder, or canon itself,
+ * without digging through Mongo afterward.
+ */
+function printTurnDiagnostics(turnNo, input, data) {
+  const d = data.debug;
+  const lines = [`\n━━━ TURN ${d?.turn ?? turnNo}`];
+  if (d) {
+    lines.push(`GM MODEL: ${d.gmModel ?? '?'}`);
+    lines.push(`EXTRACTION MODEL: ${d.extractionModel ?? '?'}${d.extractionFailed ? '  ⚠ EXTRACTION FAILED — turn unrecorded' : ''}`);
+  }
+  lines.push(`PLAYER ACTION: ${input.slice(0, 110)}`);
+  if (data.diceResult) lines.push(`DICE: d20=${data.diceResult.result} (${data.diceResult.situation ?? 'check'}) — ${data.diceResult.interpretation ?? ''}`);
+  if (d) {
+    lines.push(`STATE CHANGES PROPOSED: ${d.proposed}`);
+    lines.push(`STATE CHANGES ACCEPTED: ${d.accepted}`);
+    lines.push(`STATE CHANGES REJECTED: ${d.rejected.length}`);
+    for (const r of d.rejected) lines.push(`  ✖ [${r.rule}] ${r.reason}`);
+    lines.push(`CANON CONFLICTS: ${d.conflicts.length}`);
+    for (const c of d.conflicts) lines.push(`  ⚠ proposed "${c.proposed}" vs canon "${c.existing}"`);
+    lines.push(`CANON ALERTS SHOWN TO GM: ${d.canonAlertsShown}`);
+    lines.push(`ACTIVE THREADS: ${d.activeThreads} | KNOWN FACTS: ${d.liveFacts} | CONTEXT: ${d.contextChars} chars`);
+    lines.push(`PRESENT NPCs: ${(d.presentNPCs || []).join(', ') || '(none)'}`);
+  }
+  const prose = (data.aiResponse || data.message || '').replace(/\s+/g, ' ').slice(0, 220);
+  lines.push(`GM: ${prose}${prose.length >= 220 ? '…' : ''}`);
+  console.log(lines.join('\n'));
 }
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
