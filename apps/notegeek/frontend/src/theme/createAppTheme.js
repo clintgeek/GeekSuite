@@ -9,6 +9,7 @@
  * - Cream paper surfaces (#FBF7EE)
  * - Geist (sans) / JetBrains Mono (mono) typography
  */
+import { alpha } from '@mui/material/styles';
 import { createGeekSuiteTheme } from '@geeksuite/ui';
 
 const noteAccent = {
@@ -137,11 +138,24 @@ function buildNoteOverrides(mode) {
  * Composes shared GeekSuite rules with NoteGeek "Ink Studio" identity.
  */
 export function createNoteTheme(mode = 'light') {
-  return createGeekSuiteTheme({
+  const theme = createGeekSuiteTheme({
     mode,
     accent:    noteAccent,
     overrides: buildNoteOverrides(mode),
   });
+
+  // Failsafe: Ensure theme.palette.glow is always defined even if
+  // Vite is serving an outdated, pre-bundled cache of @geeksuite/ui.
+  if (!theme.palette.glow) {
+    theme.palette.glow = {
+      ring: alpha(noteAccent.main, 0.20),
+      soft: alpha(noteAccent.main, 0.06),
+      medium: alpha(noteAccent.main, 0.10),
+      border: alpha(noteAccent.main, 0.30),
+    };
+  }
+
+  return theme;
 }
 
 // Legacy default export for any direct imports

@@ -162,6 +162,10 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false }) => {
         // Set initial tool to draw for better mobile experience
         editor.setCurrentTool('draw');
 
+        // Apply dark mode preference based on MUI theme mode
+        const isDark = theme.palette.mode === 'dark';
+        editor.user.updateUserPreferences({ isDarkMode: isDark });
+
         if (content) {
             loadSnapshot(content, editor);
         }
@@ -180,7 +184,7 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false }) => {
             });
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- content intentionally excluded; initial load only
-    }, [loadSnapshot, readOnly, debouncedSave]);
+    }, [loadSnapshot, readOnly, debouncedSave, theme.palette.mode]);
 
     // Use ResizeObserver for reliable viewport bounds updates
     useEffect(() => {
@@ -226,6 +230,14 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false }) => {
         if (!content || content === lastSavedSnapshot.current) return;
         loadSnapshot(content, editorRef.current);
     }, [content, loadSnapshot]);
+
+    // Sync dark mode preference with Tldraw when theme changes
+    useEffect(() => {
+        if (editorRef.current) {
+            const isDark = theme.palette.mode === 'dark';
+            editorRef.current.user.updateUserPreferences({ isDarkMode: isDark });
+        }
+    }, [theme.palette.mode, isLoading]);
 
     useEffect(() => {
         return () => {
@@ -282,7 +294,7 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false }) => {
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            bgcolor: 'background.paper',
+                            bgcolor: theme.palette.surfaces.elevated,
                             zIndex: 10,
                         }}
                     >

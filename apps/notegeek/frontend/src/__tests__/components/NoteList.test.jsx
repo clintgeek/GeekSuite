@@ -33,6 +33,13 @@ vi.mock('../../store/noteStore', () => {
 });
 
 vi.mock('@geeksuite/user', () => ({
+    ThemeProvider: ({ children }) => children,
+    useThemeMode: () => ({
+        theme: 'light',
+        themePreference: 'light',
+        setThemePreference: vi.fn(),
+        toggleTheme: vi.fn(),
+    }),
     usePreferences: vi.fn(() => ({ preferences: {}, loaded: true })),
 }));
 

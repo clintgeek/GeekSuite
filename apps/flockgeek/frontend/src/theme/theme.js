@@ -6,6 +6,7 @@
  *
  * Composes createGeekSuiteTheme with FlockGeek-specific identity overrides.
  */
+import { alpha } from '@mui/material/styles';
 import { createGeekSuiteTheme } from '@geeksuite/ui';
 
 /* ─── Field Ledger palette ─── */
@@ -87,11 +88,24 @@ function buildFlockOverrides(mode) {
  * Composes shared GeekSuite rules with FlockGeek "Field Ledger" identity.
  */
 export function createFlockTheme(mode = "dark") {
-  return createGeekSuiteTheme({
+  const theme = createGeekSuiteTheme({
     mode,
     accent:    amber,
     overrides: buildFlockOverrides(mode),
   });
+
+  // Failsafe: Ensure theme.palette.glow is always defined even if
+  // Vite is serving an outdated, pre-bundled cache of @geeksuite/ui.
+  if (!theme.palette.glow) {
+    theme.palette.glow = {
+      ring: alpha(amber.main, 0.20),
+      soft: alpha(amber.main, 0.06),
+      medium: alpha(amber.main, 0.10),
+      border: alpha(amber.main, 0.30),
+    };
+  }
+
+  return theme;
 }
 
 // Legacy export compatibility

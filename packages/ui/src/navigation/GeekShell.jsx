@@ -18,7 +18,9 @@ export function GeekShell({
       data-focus-mode={focusMode ? 'true' : 'false'}
       sx={{
         display: 'flex',
-        minHeight: '100vh',
+        height: '100vh',
+        maxHeight: '100vh',
+        overflow: 'hidden',
         bgcolor: 'background.default',
         color: 'text.primary',
         ...sx,
@@ -31,13 +33,21 @@ export function GeekShell({
           flex: 1,
           display: 'flex',
           flexDirection: 'column',
+          height: '100%',
+          overflow: 'hidden',
+          bgcolor: 'background.default',
         }}
       >
         {focusMode ? null : topBar}
         <Box
           sx={{
-            minHeight: focusMode ? '100vh' : `calc(100vh - ${geekLayout.topBarHeight}px)`,
+            height: focusMode ? '100vh' : `calc(100vh - ${geekLayout.topBarHeight}px)`,
+            minHeight: 0,
             flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            bgcolor: 'background.default',
           }}
         >
           {children}

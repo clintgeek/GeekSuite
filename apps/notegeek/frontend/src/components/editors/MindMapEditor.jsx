@@ -244,7 +244,7 @@ function MindMapEditorInner({ content, setContent, readOnly }) {
             sx={{
                 width: '100%',
                 height: '100%',
-                bgcolor: theme.palette.mode === 'light' ? '#FAFAFA' : theme.palette.background.default,
+                bgcolor: 'transparent',
                 overflow: 'hidden',
                 display: 'flex',
                 flexDirection: 'column',

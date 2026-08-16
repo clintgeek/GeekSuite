@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, TextField, ToggleButton, ToggleButtonGroup, useMediaQuery } from '@mui/material';
+import { Box, TextField, ToggleButton, ToggleButtonGroup, useMediaQuery, useTheme } from '@mui/material';
 import { Edit, Visibility, VerticalSplit } from '@mui/icons-material';
 import ReactMarkdown from 'react-markdown';
 
@@ -9,6 +9,7 @@ import ReactMarkdown from 'react-markdown';
  * Three modes: edit, preview, split (desktop only)
  */
 function MarkdownEditor({ content = '', setContent, isLoading, readOnly = false, fontSize = 14 }) {
+    const theme = useTheme();
     const isMobile = useMediaQuery('(max-width:600px)');
     const [viewMode, setViewMode] = useState(readOnly ? 'preview' : 'edit');
 
@@ -145,7 +146,7 @@ function MarkdownEditor({ content = '', setContent, isLoading, readOnly = false,
                         p: 1,
                         borderBottom: 1,
                         borderColor: 'divider',
-                        bgcolor: 'background.default',
+                        bgcolor: theme.palette.surfaces.paper,
                     }}
                 >
                     <ToggleButtonGroup

@@ -36,6 +36,7 @@ export function GeekAppFrame({ children, sx }) {
         flex:      1,
         overflowY: 'auto',
         overflowX: 'hidden',
+        bgcolor:   'background.default',
         ...sx,
       }}
     >

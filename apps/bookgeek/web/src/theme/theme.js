@@ -6,6 +6,7 @@
  *
  * Composes createGeekSuiteTheme with BookGeek-specific identity overrides.
  */
+import { alpha } from '@mui/material/styles';
 import { createGeekSuiteTheme } from '@geeksuite/ui';
 
 /* ─── Midnight Reader palette ─── */
@@ -88,11 +89,24 @@ function buildBookOverrides(mode) {
  * Composes shared GeekSuite rules with BookGeek "Midnight Reader" identity.
  */
 export function createBookTheme(mode = "dark") {
-  return createGeekSuiteTheme({
+  const theme = createGeekSuiteTheme({
     mode,
     accent:    sky,
     overrides: buildBookOverrides(mode),
   });
+
+  // Failsafe: Ensure theme.palette.glow is always defined even if
+  // Vite is serving an outdated, pre-bundled cache of @geeksuite/ui.
+  if (!theme.palette.glow) {
+    theme.palette.glow = {
+      ring: alpha(sky.main, 0.20),
+      soft: alpha(sky.main, 0.06),
+      medium: alpha(sky.main, 0.10),
+      border: alpha(sky.main, 0.30),
+    };
+  }
+
+  return theme;
 }
 
 export default createBookTheme;

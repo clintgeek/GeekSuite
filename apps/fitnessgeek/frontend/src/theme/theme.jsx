@@ -6,6 +6,7 @@
  *
  * Composes createGeekSuiteTheme with FitnessGeek-specific identity overrides.
  */
+import { alpha } from '@mui/material/styles';
 import { createGeekSuiteTheme } from '@geeksuite/ui';
 
 // ─── Design Tokens ───────────────────────────────────────────────
@@ -105,11 +106,24 @@ export function createFitnessTheme(mode = 'light') {
   const isDark = mode === 'dark';
   const colors = isDark ? darkColors : lightColors;
 
-  return createGeekSuiteTheme({
+  const theme = createGeekSuiteTheme({
     mode,
     accent: colors.primary,
     overrides: buildFitnessOverrides(mode),
   });
+
+  // Failsafe: Ensure theme.palette.glow is always defined even if
+  // Vite is serving an outdated, pre-bundled cache of @geeksuite/ui.
+  if (!theme.palette.glow) {
+    theme.palette.glow = {
+      ring: alpha(colors.primary.main, 0.20),
+      soft: alpha(colors.primary.main, 0.06),
+      medium: alpha(colors.primary.main, 0.10),
+      border: alpha(colors.primary.main, 0.30),
+    };
+  }
+
+  return theme;
 }
 
 // Legacy exports

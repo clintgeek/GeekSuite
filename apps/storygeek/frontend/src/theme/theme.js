@@ -214,11 +214,24 @@ export function createStoryTheme(mode = 'light') {
     ? { main: codex.gold, light: codex.goldLight, dark: codex.goldDark, contrastText: darkPalette.leather }
     : { main: codex.burgundy, light: codex.burgundyLight, dark: '#6d1f2b', contrastText: '#fff' };
 
-  return createGeekSuiteTheme({
+  const theme = createGeekSuiteTheme({
     mode,
     accent: storyAccent,
     overrides: buildStoryOverrides(mode),
   });
+
+  // Failsafe: Ensure theme.palette.glow is always defined even if
+  // Vite is serving an outdated, pre-bundled cache of @geeksuite/ui.
+  if (!theme.palette.glow) {
+    theme.palette.glow = {
+      ring: alpha(storyAccent.main, 0.20),
+      soft: alpha(storyAccent.main, 0.06),
+      medium: alpha(storyAccent.main, 0.10),
+      border: alpha(storyAccent.main, 0.30),
+    };
+  }
+
+  return theme;
 }
 
 export default createStoryTheme('light');

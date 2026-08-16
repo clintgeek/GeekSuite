@@ -156,7 +156,7 @@ const RichTextEditor = ({ content = '', setContent = () => {}, isLoading = false
         sx={{
           width: '99%',
           height: '100%',
-          bgcolor: 'background.paper',
+          bgcolor: 'transparent',
           p: 1.5,
           display: 'flex',
           alignItems: 'center',
@@ -173,7 +173,7 @@ const RichTextEditor = ({ content = '', setContent = () => {}, isLoading = false
       sx={{
         width: '99%',
         height: '100%',
-        bgcolor: 'background.paper',
+        bgcolor: 'transparent',
         p: 1.5,
         overflow: 'auto',
         display: 'flex',

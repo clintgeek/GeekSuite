@@ -95,8 +95,6 @@ function CodeEditor({ content = '', setContent, readOnly = false, fontSize = 14 
     }
   };
 
-  const isDark = theme.palette.mode === 'dark';
-
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Toolbar */}
@@ -108,7 +106,7 @@ function CodeEditor({ content = '', setContent, readOnly = false, fontSize = 14 
           p: 1,
           borderBottom: 1,
           borderColor: 'divider',
-          bgcolor: isDark ? '#1e1e1e' : '#f5f5f5',
+          bgcolor: theme.palette.surfaces.paper,
         }}
       >
         <FormControl variant="outlined" size="small" sx={{ minWidth: 140 }}>
@@ -139,7 +137,7 @@ function CodeEditor({ content = '', setContent, readOnly = false, fontSize = 14 
         sx={{
           flexGrow: 1,
           position: 'relative',
-          bgcolor: isDark ? '#1e1e1e' : '#fafafa',
+          bgcolor: theme.palette.surfaces.elevated,
           overflow: 'hidden',
         }}
       >
@@ -151,7 +149,7 @@ function CodeEditor({ content = '', setContent, readOnly = false, fontSize = 14 
             left: 0,
             bottom: 0,
             width: 48,
-            bgcolor: isDark ? '#252526' : '#f0f0f0',
+            bgcolor: theme.palette.surfaces.paper,
             borderRight: 1,
             borderColor: 'divider',
             overflow: 'hidden',

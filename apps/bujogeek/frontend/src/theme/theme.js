@@ -5,6 +5,7 @@
  * What does NOT live here: button sizing, spacing scale, focus rings,
  * interaction tokens. Those are owned by the shared system.
  */
+import { alpha } from '@mui/material/styles';
 import { createGeekSuiteTheme } from '@geeksuite/ui';
 import { colors, darkColors, lightColors } from './colors';
 
@@ -259,11 +260,24 @@ function buildBujoOverrides(mode) {
  * Shared rules win unless explicitly overridden here.
  */
 export function createBuJoTheme(mode = 'light') {
-  return createGeekSuiteTheme({
+  const theme = createGeekSuiteTheme({
     mode,
     accent:    bujoAccent,
     overrides: buildBujoOverrides(mode),
   });
+
+  // Failsafe: Ensure theme.palette.glow is always defined even if
+  // Vite is serving an outdated, pre-bundled cache of @geeksuite/ui.
+  if (!theme.palette.glow) {
+    theme.palette.glow = {
+      ring: alpha(bujoAccent.main, 0.20),
+      soft: alpha(bujoAccent.main, 0.06),
+      medium: alpha(bujoAccent.main, 0.10),
+      border: alpha(bujoAccent.main, 0.30),
+    };
+  }
+
+  return theme;
 }
 
 // Legacy default export for any remaining direct imports

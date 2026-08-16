@@ -1,7 +1,8 @@
 import React, { memo, useState, useRef, useEffect } from 'react';
 import { Handle, Position } from 'reactflow';
-import { Paper, Typography, IconButton, Box, Tooltip, TextField } from '@mui/material';
+import { Paper, Typography, IconButton, Box, Tooltip, TextField, useTheme } from '@mui/material';
 import { Add as AddIcon, Delete as DeleteIcon, Check as CheckIcon, Close as CloseIcon } from '@mui/icons-material';
+import { alpha } from '@mui/material/styles';
 
 /**
  * MindMapNode - A node in the mind map with inline editing
@@ -11,6 +12,8 @@ function MindMapNode({ data, isConnectable, selected }) {
     const [isEditing, setIsEditing] = useState(false);
     const [editValue, setEditValue] = useState(data.label);
     const inputRef = useRef(null);
+    const theme = useTheme();
+    const isDark = theme.palette.mode === 'dark';
 
     // Determine if this node is in edit mode based on callback presence
     const isEditable = Boolean(data.onEdit || data.onAdd || data.onDelete);
@@ -66,20 +69,30 @@ function MindMapNode({ data, isConnectable, selected }) {
         }
     };
 
+    const nodeBg = data.isRoot
+        ? (isDark ? alpha(theme.palette.primary.main, 0.2) : '#e3f2fd')
+        : theme.palette.surfaces.elevated;
+
+    const nodeBorderColor = selected
+        ? theme.palette.primary.main
+        : theme.palette.border;
+
     return (
         <Paper
-            elevation={selected ? 8 : 1}
+            elevation={selected ? 4 : 1}
             onDoubleClick={handleDoubleClick}
             sx={{
                 minWidth: 120,
                 maxWidth: 280,
                 p: 1,
-                border: selected ? '2px solid #1976d2' : '1px solid #e0e0e0',
+                border: `1.5px solid ${nodeBorderColor}`,
                 borderRadius: 2,
-                backgroundColor: data.isRoot ? '#e3f2fd' : '#fff',
-                color: '#1a1a1a',
+                backgroundColor: nodeBg,
+                color: theme.palette.text.primary,
+                transition: 'border-color 120ms ease, box-shadow 120ms ease',
                 '&:hover': {
-                    boxShadow: (theme) => theme.shadows[4]
+                    boxShadow: theme.shadows[selected ? 4 : 2],
+                    borderColor: selected ? theme.palette.primary.main : alpha(theme.palette.primary.main, 0.4),
                 },
                 userSelect: 'none',
                 position: 'relative',
@@ -90,10 +103,10 @@ function MindMapNode({ data, isConnectable, selected }) {
                 position={Position.Left}
                 isConnectable={isConnectable}
                 style={{
-                    background: '#90caf9',
+                    background: theme.palette.primary.light,
                     width: 8,
                     height: 8,
-                    border: '2px solid #1976d2'
+                    border: `2px solid ${theme.palette.primary.main}`
                 }}
             />
 
@@ -124,7 +137,7 @@ function MindMapNode({ data, isConnectable, selected }) {
                                 '& .MuiInputBase-input': {
                                     fontSize: '0.875rem',
                                     py: 0.25,
-                                    color: '#1a1a1a',
+                                    color: 'text.primary',
                                 },
                             }}
                             onClick={(e) => e.stopPropagation()}
@@ -147,7 +160,7 @@ function MindMapNode({ data, isConnectable, selected }) {
                                 fontWeight: data.isRoot ? 600 : 400,
                                 mr: 0.5,
                                 cursor: isEditable ? 'text' : 'default',
-                                color: '#1a1a1a',
+                                color: 'text.primary',
                             }}
                             title={isEditable ? 'Double-click to edit' : undefined}
                         >
@@ -162,7 +175,7 @@ function MindMapNode({ data, isConnectable, selected }) {
                                         <IconButton
                                             size="small"
                                             onClick={(e) => handleClick(e, data.onAdd)}
-                                            sx={{ p: 0.25 }}
+                                            sx={{ p: 0.25, color: 'text.secondary' }}
                                         >
                                             <AddIcon fontSize="small" />
                                         </IconButton>
@@ -192,10 +205,10 @@ function MindMapNode({ data, isConnectable, selected }) {
                 position={Position.Right}
                 isConnectable={isConnectable}
                 style={{
-                    background: '#90caf9',
+                    background: theme.palette.primary.light,
                     width: 8,
                     height: 8,
-                    border: '2px solid #1976d2'
+                    border: `2px solid ${theme.palette.primary.main}`
                 }}
             />
         </Paper>

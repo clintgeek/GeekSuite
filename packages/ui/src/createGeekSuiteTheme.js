@@ -294,6 +294,23 @@ function buildComponents(themePalette) {
   };
 }
 
+function deepMerge(target, source) {
+  if (!source) return target;
+  const output = { ...target };
+  for (const key of Object.keys(source)) {
+    if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+      if (target[key] && typeof target[key] === 'object') {
+        output[key] = deepMerge(target[key], source[key]);
+      } else {
+        output[key] = { ...source[key] };
+      }
+    } else {
+      output[key] = source[key];
+    }
+  }
+  return output;
+}
+
 export function createGeekSuiteTheme({
   mode = 'light',
   accent,
@@ -301,7 +318,7 @@ export function createGeekSuiteTheme({
 } = {}) {
   const themePalette = buildPalette({ mode, accent });
 
-  return createTheme({
+  const baseOptions = {
     palette: themePalette,
     typography: buildTypography(),
     spacing: spacing.unit,
@@ -319,8 +336,11 @@ export function createGeekSuiteTheme({
       },
     },
     geek: geekDesignTokens,
-    ...overrides,
-  });
+  };
+
+  const mergedOptions = deepMerge(baseOptions, overrides);
+
+  return createTheme(mergedOptions);
 }
 
 export { geekDesignTokens };

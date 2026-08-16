@@ -349,8 +349,7 @@ function Sidebar({ closeNavbar }) {
                 sx={{
                     flex: 1,
                     overflowY: 'auto',
-                    // Leave room for the fixed bottom bar (~72px)
-                    pb: '72px',
+                    pb: 1.5,
                     scrollbarWidth: 'thin',
                     scrollbarColor: isDark
                         ? 'rgba(237, 230, 214, 0.15) transparent'
@@ -489,13 +488,8 @@ function Sidebar({ closeNavbar }) {
             {/* ——— Bottom bar: Settings + Sign out ——————————————————— */}
             <Box
                 sx={{
-                    position: 'absolute',
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
                     bgcolor: 'background.paper',
                     borderTop: `1px solid ${theme.palette.divider}`,
-                    zIndex: 1,
                 }}
             >
                 <List sx={{ py: 0.375, px: 0.75 }}>
