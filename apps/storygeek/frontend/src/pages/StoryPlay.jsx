@@ -2,16 +2,25 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Box, Typography, TextField, Button, Paper, CircularProgress,
   Alert, Chip, IconButton, Tooltip, Divider, Dialog, DialogTitle,
-  DialogContent, DialogActions, LinearProgress, alpha,
+  DialogContent, DialogActions, LinearProgress, Drawer, alpha,
 } from '@mui/material';
 import { useTheme, useMediaQuery, ButtonGroup } from '@mui/material';
 import {
   Send as SendIcon, Casino as CasinoIcon, MenuBook as ExportIcon,
+  AutoStories as JournalIcon, Person as PersonIcon, Groups as PartyIcon,
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@geeksuite/auth';
 import useAISettingsStore from '../store/aiSettingsStore';
 import api from '../api';
+import ScenePanel from '../components/panels/ScenePanel';
+import CharacterPanel from '../components/panels/CharacterPanel';
+import PartyPanel from '../components/panels/PartyPanel';
+import QuestPanel from '../components/panels/QuestPanel';
+import JournalDrawer from '../components/panels/JournalDrawer';
+import {
+  getPlayer, getPresentNpcs, getActiveThreads, getScene,
+} from '../game/projections';
 
 // Dice result color based on d20 roll
 const getDiceColor = (result) => {
@@ -41,6 +50,8 @@ function StoryPlay() {
   const [exportError, setExportError] = useState('');
   const [exportOpen, setExportOpen] = useState(false);
   const [exportData, setExportData] = useState(null);
+  const [journalOpen, setJournalOpen] = useState(false);
+  const [mobilePanel, setMobilePanel] = useState(null); // 'left' | 'right' | null
   const containerRef = useRef(null);
   const endRef = useRef(null);
   const inputRef = useRef(null);
@@ -294,76 +305,89 @@ function StoryPlay() {
     );
   }
 
-  return (
-    <Box sx={{ height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column' }}>
-      {/* Story Header */}
+  // ── Canonical projections for the game panels ──────────────────────
+  const player = getPlayer(story);
+  const npcs = getPresentNpcs(story);
+  const threads = getActiveThreads(story);
+  const scene = getScene(story);
+
+  const leftRail = (
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+      <ScenePanel scene={scene} />
+      <CharacterPanel player={player} />
+    </Box>
+  );
+  const rightRail = (
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+      <PartyPanel npcs={npcs} player={player} story={story} />
+      <QuestPanel threads={threads} />
+    </Box>
+  );
+
+  const centerColumn = (
+    <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: 0, height: '100%' }}>
+      {/* Header */}
       <Box sx={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        mb: 2, pb: 1.5, borderBottom: `1px solid ${alpha(gold, 0.1)}`,
+        gap: 1, mb: 1.5, pb: 1.25, borderBottom: `1px solid ${alpha(gold, 0.1)}`,
       }}>
-        <Box>
-          <Typography variant="h4" sx={{ lineHeight: 1.2 }}>{story.title}</Typography>
-          <Box sx={{ display: 'flex', gap: 1.5, mt: 0.5, alignItems: 'center' }}>
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-              {story.genre}
-            </Typography>
-            <Typography variant="caption" sx={{ color: alpha(gold, 0.4) }}>|</Typography>
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-              {story.stats?.totalInteractions || 0} turns
-            </Typography>
-            <Typography variant="caption" sx={{ color: alpha(gold, 0.4) }}>|</Typography>
-            <Chip label={story.status} size="small"
-              sx={{ height: 20, fontSize: '0.6rem', textTransform: 'uppercase' }}
-              color={story.status === 'active' ? 'success' : 'default'}
-            />
+        <Box sx={{ minWidth: 0 }}>
+          <Typography variant="h4" sx={{ lineHeight: 1.15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {story.title}
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 1, mt: 0.25, alignItems: 'center' }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>{story.genre}</Typography>
+            <Typography variant="caption" sx={{ color: alpha(gold, 0.4) }}>·</Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>Turn {scene.turn}</Typography>
           </Box>
         </Box>
-        <ButtonGroup size="small" variant="outlined">
-          <Button onClick={handleBookify} disabled={exporting} startIcon={<ExportIcon sx={{ fontSize: '16px !important' }} />}>
-            {exporting ? 'Working...' : 'Bookify'}
-          </Button>
-          <Button onClick={async () => {
-            if (!storyId) return;
-            setExporting(true);
-            try {
-              const res = await api.post(`/export/stories/${storyId}/epub`, null, { responseType: 'blob' });
-              const url = URL.createObjectURL(res.data);
-              const a = document.createElement('a');
-              a.href = url; a.download = `${(story.title || 'story').replace(/[^a-z0-9\-_]+/gi, '_')}.epub`;
-              document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-            } catch (e) { setError(e.message || 'EPUB export failed'); }
-            finally { setExporting(false); }
-          }}>
-            EPUB
-          </Button>
-        </ButtonGroup>
+        <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', flexShrink: 0 }}>
+          {isMobile && (
+            <>
+              <IconButton size="small" onClick={() => setMobilePanel('left')} sx={{ color: 'text.secondary' }}>
+                <PersonIcon fontSize="small" />
+              </IconButton>
+              <IconButton size="small" onClick={() => setMobilePanel('right')} sx={{ color: 'text.secondary' }}>
+                <PartyIcon fontSize="small" />
+              </IconButton>
+            </>
+          )}
+          <Tooltip title="Journal — what your character knows">
+            <IconButton size="small" onClick={() => setJournalOpen(true)} sx={{ color: gold }}>
+              <JournalIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <ButtonGroup size="small" variant="outlined">
+            <Button onClick={handleBookify} disabled={exporting} startIcon={<ExportIcon sx={{ fontSize: '16px !important' }} />}>
+              {exporting ? '...' : 'Bookify'}
+            </Button>
+            <Button onClick={async () => {
+              if (!storyId) return;
+              setExporting(true);
+              try {
+                const res = await api.post(`/export/stories/${storyId}/epub`, null, { responseType: 'blob' });
+                const url = URL.createObjectURL(res.data);
+                const a = document.createElement('a');
+                a.href = url; a.download = `${(story.title || 'story').replace(/[^a-z0-9\-_]+/gi, '_')}.epub`;
+                document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+              } catch (e) { setError(e.message || 'EPUB export failed'); }
+              finally { setExporting(false); }
+            }}>EPUB</Button>
+          </ButtonGroup>
+        </Box>
       </Box>
 
       {/* Messages */}
-      <Box
-        ref={containerRef}
-        sx={{
-          flex: 1, overflow: 'auto',
-          px: { xs: 0.5, md: 2 }, py: 2,
-        }}
-      >
+      <Box ref={containerRef} sx={{ flex: 1, overflow: 'auto', px: { xs: 0.5, md: 1.5 }, py: 1 }}>
         {messages.map(renderMessage)}
-
         {loading && (
           <Box sx={{ display: 'flex', justifyContent: 'flex-start', mb: 2 }}>
             <Paper sx={{
               p: 2, display: 'flex', alignItems: 'center', gap: 1.5,
-              border: `1px solid ${theme.palette.divider}`,
-              borderRadius: '16px 16px 16px 4px',
+              border: `1px solid ${theme.palette.divider}`, borderRadius: '16px 16px 16px 4px',
             }}>
-              <Box sx={{
-                width: 8, height: 8, borderRadius: '50%',
-                backgroundColor: gold, animation: 'glowPulse 1.5s ease-in-out infinite',
-              }} />
-              <Typography variant="body2" sx={{
-                color: 'text.secondary', fontFamily: '"Cinzel", serif',
-                fontSize: '0.8rem', letterSpacing: '0.05em',
-              }}>
+              <Box sx={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: gold, animation: 'glowPulse 1.5s ease-in-out infinite' }} />
+              <Typography variant="body2" sx={{ color: 'text.secondary', fontFamily: '"Cinzel", serif', fontSize: '0.8rem', letterSpacing: '0.05em' }}>
                 The narrator contemplates...
               </Typography>
             </Paper>
@@ -372,15 +396,11 @@ function StoryPlay() {
         <div ref={endRef} />
       </Box>
 
-      {/* Error */}
       {error && <Alert severity="error" sx={{ mb: 1, mx: 1 }} onClose={() => setError('')}>{error}</Alert>}
 
       {/* Input */}
       <Paper sx={{
-        p: { xs: 1.5, md: 2 },
-        borderTop: `1px solid ${alpha(gold, 0.1)}`,
-        borderRadius: 0,
-        position: 'sticky', bottom: 0,
+        p: { xs: 1.5, md: 2 }, borderTop: `1px solid ${alpha(gold, 0.1)}`, borderRadius: 0,
         background: theme.palette.mode === 'dark'
           ? alpha(theme.palette.background.default, 0.95)
           : alpha(theme.palette.background.paper, 0.95),
@@ -399,29 +419,51 @@ function StoryPlay() {
             placeholder="What do you do?"
             disabled={loading} inputRef={inputRef}
             multiline maxRows={4}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                fontFamily: '"Crimson Pro", serif',
-                fontSize: '1rem',
-              },
-            }}
+            sx={{ '& .MuiOutlinedInput-root': { fontFamily: '"Crimson Pro", serif', fontSize: '1rem' } }}
           />
-          <Button
-            type="submit" variant="contained"
-            disabled={loading || !userInput.trim()}
-            sx={{
-              minWidth: 48, height: 48, borderRadius: 2, px: 0,
-            }}
-          >
+          <Button type="submit" variant="contained" disabled={loading || !userInput.trim()}
+            sx={{ minWidth: 48, height: 48, borderRadius: 2, px: 0 }}>
             {loading ? <CircularProgress size={20} sx={{ color: 'inherit' }} /> : <SendIcon />}
           </Button>
         </Box>
-        <Typography variant="body2" sx={{
-          mt: 0.75, fontSize: '0.7rem', color: 'text.disabled', textAlign: 'center',
-        }}>
+        <Typography variant="body2" sx={{ mt: 0.75, fontSize: '0.7rem', color: 'text.disabled', textAlign: 'center' }}>
           /checkpoint /back /char /info /end
         </Typography>
       </Paper>
+    </Box>
+  );
+
+  return (
+    <Box sx={{ height: 'calc(100vh - 120px)', display: 'flex', gap: 1.5, minHeight: 0 }}>
+      {/* Left rail (desktop) */}
+      {!isMobile && (
+        <Box sx={{ width: 272, flexShrink: 0, overflowY: 'auto', pr: 0.5 }}>
+          {leftRail}
+        </Box>
+      )}
+
+      {/* Center */}
+      <Box sx={{ flex: 1, minWidth: 0 }}>{centerColumn}</Box>
+
+      {/* Right rail (desktop) */}
+      {!isMobile && (
+        <Box sx={{ width: 300, flexShrink: 0, overflowY: 'auto', pl: 0.5 }}>
+          {rightRail}
+        </Box>
+      )}
+
+      {/* Mobile panel drawers */}
+      <Drawer anchor="left" open={mobilePanel === 'left'} onClose={() => setMobilePanel(null)}
+        PaperProps={{ sx: { width: '85%', maxWidth: 320, p: 1.5 } }}>
+        {leftRail}
+      </Drawer>
+      <Drawer anchor="right" open={mobilePanel === 'right'} onClose={() => setMobilePanel(null)}
+        PaperProps={{ sx: { width: '85%', maxWidth: 340, p: 1.5 } }}>
+        {rightRail}
+      </Drawer>
+
+      {/* Journal */}
+      <JournalDrawer open={journalOpen} onClose={() => setJournalOpen(false)} story={story} />
 
       {/* Bookify Dialog */}
       <Dialog open={exportOpen} onClose={() => setExportOpen(false)} fullWidth maxWidth="md">
