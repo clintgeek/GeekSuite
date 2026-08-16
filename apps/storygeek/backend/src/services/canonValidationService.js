@@ -307,7 +307,9 @@ class CanonValidationService {
       ['destroyed', 'intact'], ['destroyed', 'rebuilt'],
       ['dead', 'alive'], ['open', 'closed'], ['closed', 'open'],
       ['lost', 'found'], ['stolen', 'returned'],
-      ['burned', 'standing'], ['ruined', 'restored']
+      ['burned', 'standing'], ['ruined', 'restored'],
+      ['analog', 'digital'], ['locked', 'unlocked'],
+      ['empty', 'full'], ['working', 'broken']
     ];
     const newText = norm(newFact.fact);
     const newSubjects = (newFact.subjects || []).map(norm);

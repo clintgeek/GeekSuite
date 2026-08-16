@@ -227,3 +227,19 @@ describe('story clock', () => {
     assert.ok(prompt.includes('NEVER invent supernatural explanations'), 'challenge-correction rule present');
   });
 });
+
+describe('object-detail contradiction guard', () => {
+  test('analog vs digital on the same subject becomes a conflict, not canon', async () => {
+    const { default: validator } = await import('../services/canonValidationService.js');
+    const story = makeStory();
+    story.storyState.establishedFacts.push({
+      id: 'f_pump', category: 'detail', fact: 'The gas station pumps are aged analog units',
+      subjects: ['gas station pumps'], visibility: 'public', source: 'narrator', turn: 13, isRetired: false
+    });
+    const { accepted, conflicts } = validator.validateProposal(story, {
+      newFacts: [{ fact: 'The gas station pumps have digital readouts', category: 'detail', subjects: ['gas station pumps'], origin: 'narrator' }]
+    });
+    assert.equal(accepted.newFacts.length, 0);
+    assert.equal(conflicts.length, 1, 'analog/digital flip surfaced as a canon conflict');
+  });
+});
