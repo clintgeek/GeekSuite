@@ -34,8 +34,12 @@ The application owns truth. The model narrates.
 
 - **Established facts** — `storyState.establishedFacts[]`: stable `id`,
   `subjects` (entity names for relevance selection), `visibility`
-  (public/secret), `turn`. Facts are never deleted; superseded facts are
-  *retired* with a reason, preserving the audit trail.
+  (public/secret), `turn`, and **`source` (provenance)**: `player` (the
+  player asserted it), `narrator` (the GM's narration introduced it), or
+  `setup` (opening-scene seed). Canon is a **timeline, not a set** — "what
+  did we know, from whom, as of turn N" is answerable historically. Facts
+  are never deleted; superseded facts are *retired* with a reason,
+  preserving the audit trail.
 - **Characters** — `status` (dead stays dead), `motivation`, `locationName`,
   and **`knowledge[]`**: the facts each character knows and *how they learned
   them* (witnessed / told / inference / initial). `isPlayer` marks the PC.
@@ -77,6 +81,38 @@ budget — the answer to long stories is better *selection*, not bigger dumps):
   keywords) do **not** enter canon — they surface as next-turn CANON ALERTS.
 - `auditStoryConsistency()` sweeps for dangling references (used after
   checkpoint restore and by tests).
+
+### Canon queries (canonQueryService)
+
+"What do we know about Jim's truck?" is a question to the **engine**, not an
+action in the fiction. Routed to the creative GM it produces canon plus fresh
+invention, and one turn later the invention has laundered itself into
+"something we've always known" (observed in play — the GM even invented a
+justification for how the player had "gleaned" details the GM itself made up
+a turn earlier).
+
+Canon queries — `/recall …`, `/canon …`, and conservatively auto-detected
+questions ("what do we know about…", "remind me", "recap"; never in-fiction
+actions like "I ask the guard what he knows") — bypass the GM entirely:
+
+- **Deterministic retrieval** from canonical state: live facts by
+  subject/keyword in timeline order with provenance, entity state cards,
+  related threads. The payload IS the answer.
+- **Zero-turn**: no event, no turn increment, no dice. Asking what you know
+  doesn't advance the world.
+- The optional aux-model summary runs under a report-only contract
+  (attribute provenance, add nothing, admit gaps) with a deterministic
+  fallback; the UI renders the whole thing as a provenance-badged CANON card
+  (YOU / NARRATOR / OPENING · turn) with an explicit "anything not listed
+  has not been established" footer.
+
+Anti-laundering on the write side: the extractor distinguishes durable facts
+from vivid embellishment (sensory color is prose, not canon, unless the
+player engages with it or it's plot-relevant), never restates an existing
+fact reworded, and classifies each new fact's `origin` (player vs narrator).
+The GM context tags facts with provenance (`[you, T3]` / `[narrator, T5]`)
+and the GM contract forbids presenting just-invented details as things the
+player already knew.
 
 ### Dice
 

@@ -348,6 +348,8 @@ class StoryController {
           canonAlertsShown: canonAlerts.length,
           activeThreads: (story.storyThreads || []).filter(t => t.status === 'active').length,
           liveFacts: (story.storyState?.establishedFacts || []).filter(f => !f.isRetired).length,
+          factSources: (story.storyState?.establishedFacts || []).filter(f => !f.isRetired)
+            .reduce((acc, f) => { const k = f.source || 'other'; acc[k] = (acc[k] || 0) + 1; return acc; }, {}),
           presentNPCs: turnContext.presentCharacterNames,
           contextChars: prompt.length
         };

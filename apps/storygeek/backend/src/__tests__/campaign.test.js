@@ -19,6 +19,7 @@ import contextService from '../services/contextService.js';
 import stateCommitService from '../services/stateCommitService.js';
 import canonValidationService from '../services/canonValidationService.js';
 import checkpointService from '../services/checkpointService.js';
+import canonQueryService from '../services/canonQueryService.js';
 import diceService from '../services/diceService.js';
 
 /** Minimal engine mirroring storyController's turn pipeline, minus HTTP/AI. */
@@ -100,7 +101,7 @@ test('100-turn campaign: canon survives, knowledge stays bounded, checkpoints re
     'A crash echoes — an ogre has smashed through the North Gate, leaving it in rubble before being driven off. Marta and Doran rush to the windows.',
     {
       newLocations: [{ name: 'North Gate', description: 'the fortified north entrance of Millhaven', type: 'other' }],
-      newFacts: [{ fact: 'The North Gate of Millhaven was destroyed by an ogre', category: 'location', subjects: ['North Gate', 'Millhaven'], visibility: 'public' }],
+      newFacts: [{ fact: 'The North Gate of Millhaven was destroyed by an ogre', category: 'location', subjects: ['North Gate', 'Millhaven'], visibility: 'public', origin: 'narrator' }],
       locationUpdates: [{ name: 'North Gate', state: 'destroyed', stateNotes: 'reduced to rubble by an ogre' }],
       knowledgeGrants: [
         { characterName: 'Marta', factText: 'The North Gate of Millhaven was destroyed by an ogre', learnedVia: 'witnessed' },
@@ -116,7 +117,7 @@ test('100-turn campaign: canon survives, knowledge stays bounded, checkpoints re
   await playTurn(story, 'I quietly confess to Marta that I stole the mayor\'s seal in Highspire',
     'Marta\'s eyes widen. She leans in. "That seal means a noose if the wrong ears hear it. Your secret stays behind my bar."',
     {
-      newFacts: [{ fact: 'Kestrel stole the mayor\'s seal in Highspire', category: 'event', subjects: ['Kestrel'], visibility: 'secret' }],
+      newFacts: [{ fact: 'Kestrel stole the mayor\'s seal in Highspire', category: 'event', subjects: ['Kestrel'], visibility: 'secret', origin: 'player' }],
       knowledgeGrants: [{ characterName: 'Marta', factText: 'Kestrel stole the mayor\'s seal in Highspire', learnedVia: 'told', learnedFrom: 'Kestrel' }]
     });
 
@@ -278,6 +279,26 @@ test('100-turn campaign: canon survives, knowledge stays bounded, checkpoints re
     const promiseLine = prompt.split('\n').find(l => l.includes('Festival watch for Doran'));
     assert.ok(promiseLine, 'promise thread never disappeared from context');
     assert.ok(promiseLine.includes('DORMANT'), 'promise flagged dormant after ~50 turns');
+  }
+
+  // ── Canon query mid-campaign: answered from the record, with provenance,
+  //    zero-turn — asking what you know must not advance the world. ────
+  {
+    const turnBefore = story.worldState.turnNumber;
+    assert.equal(canonQueryService.isCanonQuery('What all do we know about the North Gate?'), true);
+    assert.equal(canonQueryService.isCanonQuery('I ask Marta what she knows about the gate'), false, 'in-fiction action passes to GM');
+    const payload = await canonQueryService.answerCanonQuery(story, 'What all do we know about the North Gate?');
+    assert.equal(story.worldState.turnNumber, turnBefore, 'canon query is zero-turn');
+    const gate = payload.facts.find(f => f.text.includes('destroyed by an ogre'));
+    assert.ok(gate, 'gate fact retrieved from the record');
+    assert.equal(gate.source, 'narrator', 'provenance preserved: narrator introduced it');
+    assert.ok(!payload.facts.some(f => f.text.includes('stands intact')), 'the rejected contradiction never entered the record');
+    const gateCard = payload.entities.find(e => e.name === 'North Gate');
+    assert.equal(gateCard.state, 'destroyed', 'entity card carries canonical state');
+    // The player's own secret carries player provenance in the record.
+    const secretPayload = await canonQueryService.answerCanonQuery(story, "/recall the mayor's seal");
+    const seal = secretPayload.facts.find(f => f.text.includes('seal'));
+    assert.equal(seal?.source, 'player', 'player-asserted fact attributed to the player');
   }
 
   // ── Turn 60: back to Millhaven — old canon must hold ────────────────
