@@ -56,6 +56,9 @@ export default function ScenePanel({ scene }) {
               variant={scene.state === 'intact' ? 'outlined' : 'filled'}
               sx={{ height: 20, fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase' }} />
           )}
+          <Typography variant="caption" sx={{ color: 'text.secondary', fontFamily: '"JetBrains Mono", monospace' }}>
+            Day {scene.storyDay}
+          </Typography>
           <Typography variant="caption" sx={{ color: 'text.secondary' }}>
             {timeIcon(scene.timeOfDay)} {scene.timeOfDay}
           </Typography>

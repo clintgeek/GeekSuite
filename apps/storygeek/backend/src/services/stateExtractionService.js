@@ -23,7 +23,7 @@ Respond with ONLY a JSON object (no markdown fences, no commentary) with this ex
   "threadUpdates": [{ "name": "existing thread name", "status": "active|resolved|abandoned", "resolution": "", "progressNote": "" }],
   "knowledgeGrants": [{ "characterName": "", "factId": "existing id OR omit", "factText": "text if fact is new this turn", "learnedVia": "witnessed|told|inference", "learnedFrom": "who told them (if told)" }],
   "relationshipUpdates": [{ "name": "", "otherName": "", "relationshipType": "friend|enemy|lover|family|mentor|student|rival|neutral", "description": "" }],
-  "sceneUpdate": { "locationName": "where the player now is", "situation": "one-sentence current situation", "mood": "dark|hopeful|tense|peaceful|mysterious|chaotic|neutral", "timeOfDay": "dawn|morning|afternoon|evening|night|midnight", "weather": "stormy|clear|foggy|windy|calm|rainy" },
+  "sceneUpdate": { "locationName": "where the player now is", "situation": "one-sentence current situation", "mood": "dark|hopeful|tense|peaceful|mysterious|chaotic|neutral", "timeOfDay": "dawn|morning|afternoon|evening|night|midnight", "weather": "stormy|clear|foggy|windy|calm|rainy", "timeAdvance": "none|hours|halfday|day|days" },
   "playerCharacter": { "name": "", "description": "" }
 }
 
@@ -38,6 +38,8 @@ RULES:
 - If narration contradicts an established fact from the context, do NOT retire the old fact unless an in-story event genuinely changed it. Prefer recording nothing over papering over a contradiction.
 - threadUpdates only for threads listed in the context. New obligations/promises/quests are newThreads.
 - sceneUpdate is required whenever the player's location or situation changed; otherwise include just the "situation" field.
+- timeAdvance: how much IN-STORY time this turn's events took. Most turns are "none" (minutes). "hours" = travel or a long task; "halfday"/"day"/"days" only when the narration explicitly covers that span (camping overnight, days of travel). Never invent large time jumps.
+- sceneUpdate may include "setting": a one-sentence description of the story's world and premise — ONLY when the context shows the setting is missing or "To be determined".
 - playerCharacter: ONLY when this turn establishes the identity of the player's own character (name/identity revealed) and the context shows no PLAYER CHARACTER yet. Never use it for NPCs.
 - Keep every string under 200 characters.`;
 

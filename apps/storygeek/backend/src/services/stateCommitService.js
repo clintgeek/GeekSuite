@@ -214,6 +214,16 @@ class StateCommitService {
       if (s.weather && ['stormy', 'clear', 'foggy', 'windy', 'calm', 'rainy'].includes(s.weather)) {
         story.worldState.weather = s.weather;
       }
+      // Advance the story clock. Buckets, not model-invented numbers.
+      const TIME_ADVANCE_HOURS = { none: 0, hours: 3, halfday: 12, day: 24, days: 72 };
+      if (s.timeAdvance && TIME_ADVANCE_HOURS[s.timeAdvance] != null) {
+        story.worldState.hoursElapsed = (story.worldState.hoursElapsed || 0) + TIME_ADVANCE_HOURS[s.timeAdvance];
+      }
+      // Backfill the world setting once — the setup flow historically left it
+      // "To be determined", starving the GM of its premise anchor.
+      if (s.setting && (!story.worldState.setting || story.worldState.setting === 'To be determined')) {
+        story.worldState.setting = String(s.setting).slice(0, 500);
+      }
       applied++;
     }
 

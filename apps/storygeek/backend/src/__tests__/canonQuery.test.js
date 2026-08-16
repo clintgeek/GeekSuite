@@ -199,3 +199,31 @@ describe('dice fallback intent detection (aiService)', () => {
     assert.equal(aiService.detectIntentSituation('I tell the kid everything will be okay'), null);
   });
 });
+
+describe('story clock', () => {
+  test('timeAdvance buckets accumulate hoursElapsed; setting backfills once', async () => {
+    const { default: commit } = await import('../services/stateCommitService.js');
+    const story = makeStory();
+    story.worldState.hoursElapsed = 0;
+    story.worldState.setting = 'To be determined';
+
+    commit.applyProposal(story, { sceneUpdate: { situation: 'driving', timeAdvance: 'hours' } }, { turn: 7 });
+    commit.applyProposal(story, { sceneUpdate: { situation: 'camping', timeAdvance: 'halfday', setting: 'Ash country after the blast' } }, { turn: 8 });
+    commit.applyProposal(story, { sceneUpdate: { situation: 'still camping', timeAdvance: 'none', setting: 'A DIFFERENT setting that must not overwrite' } }, { turn: 9 });
+
+    assert.equal(story.worldState.hoursElapsed, 15); // 3 + 12 + 0
+    assert.equal(story.worldState.setting, 'Ash country after the blast', 'setting backfilled once, never overwritten');
+  });
+
+  test('STORY CLOCK renders in the GM context with the right day', async () => {
+    const { default: contextService } = await import('../services/contextService.js');
+    const story = makeStory();
+    story.worldState.hoursElapsed = 38; // Day 2
+    story.events = []; story.storySummaries = [];
+    const { prompt } = await contextService.buildTurnContext(story, 'I look around');
+    assert.ok(prompt.includes('STORY CLOCK: Day 2'), 'clock line present');
+    assert.ok(prompt.includes('38 hours since the story began'));
+    assert.ok(prompt.includes('TIMELINE (STORY CLOCK)'), 'GM timeline rule present');
+    assert.ok(prompt.includes('NEVER invent supernatural explanations'), 'challenge-correction rule present');
+  });
+});

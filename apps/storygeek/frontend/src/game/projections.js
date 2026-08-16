@@ -131,5 +131,6 @@ export function getScene(story) {
     weather: ws.weather || 'clear',
     timeOfDay: ws.timeOfDay || 'day',
     turn: ws.turnNumber || 0,
+    storyDay: Math.floor((ws.hoursElapsed || 0) / 24) + 1,
   };
 }

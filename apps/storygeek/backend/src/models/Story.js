@@ -140,6 +140,10 @@ const storySchema = new mongoose.Schema({
     currentLocationName: { type: String, default: '' },
     // Monotonic turn counter — the timeline spine for facts/knowledge/threads.
     turnNumber: { type: Number, default: 0 },
+    // In-story elapsed time since the story began, in hours. The STORY CLOCK:
+    // anchors world decay, distances, and NPC schedules so the GM cannot
+    // imply years have passed in a story that is one day old.
+    hoursElapsed: { type: Number, default: 0 },
     mood: { type: String, enum: ['dark', 'hopeful', 'tense', 'peaceful', 'mysterious', 'chaotic', 'neutral'], default: 'neutral' },
     weather: { type: String, enum: ['stormy', 'clear', 'foggy', 'windy', 'calm', 'rainy'], default: 'clear' },
     timeOfDay: { type: String, enum: ['dawn', 'morning', 'afternoon', 'evening', 'night', 'midnight'], default: 'morning' }

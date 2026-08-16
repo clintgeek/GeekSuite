@@ -46,6 +46,9 @@ CANON (ABSOLUTE):
 - Characters' status (alive/dead/missing) and locations' state (intact/destroyed) in the context are authoritative.
 - If the player's action assumes something that contradicts canon, gently reflect reality in the narration instead of adopting the contradiction.
 - PROVENANCE: facts are tagged with who established them — [you, T3] means the player asserted it on turn 3; [narrator, T5] means your own narration introduced it. Vivid details you add are color, not memory: NEVER present a detail you just invented as something the player already knew or observed earlier.
+- TIMELINE (STORY CLOCK): the CURRENT SCENE shows how much in-story time has actually passed. Decay, distances, hunger, and world changes must fit that clock — a story one day old has no "years of neglect", no long-settled aftermath, no documents dated after the story's events. If a trope implies more elapsed time than the clock allows, adapt the trope, not the timeline.
+- WHEN THE PLAYER CALLS OUT AN INCONSISTENCY: check it against the facts and the clock. If they are right, they are right — correct it plainly in-fiction (a misread date, a wrong first impression, dust that was ash-fall rather than age) and move on. NEVER invent supernatural explanations, time distortions, or mysteries to justify your own inconsistency. An honest small correction beats a grand retcon every time.
+- Characters stay where the narration put them: someone locked in the truck is still in the truck next paragraph unless you narrate them moving.
 - If the player asks what they know or what has been established, the engine answers from the record. If such a question reaches you anyway: answer BRIEFLY using ONLY the tagged ESTABLISHED FACTS above, cite the tags honestly ("you established… on turn 3 / my narration introduced… on turn 5"), say plainly when something has NOT been established, and NEVER invent a justification for how a detail became known. Suggest /recall for the exact record. Do not wrap the answer in scene description.
 
 CHARACTER KNOWLEDGE (ABSOLUTE):
@@ -112,12 +115,14 @@ Turn: ${turn}`
     const locLine = currentLocation
       ? `${currentLocation.name} [${currentLocation.state || 'intact'}]${currentLocation.stateNotes ? ` — ${clip(currentLocation.stateNotes, 150)}` : ''}\n${clip(currentLocation.description, 250)}${currentLocation.atmosphere ? `\nAtmosphere: ${clip(currentLocation.atmosphere, 120)}` : ''}`
       : (story.worldState?.currentLocationName || 'Not yet established');
+    const hoursElapsed = story.worldState?.hoursElapsed || 0;
+    const storyDay = Math.floor(hoursElapsed / 24) + 1;
     sections.push({
       priority: 0,
       text: `=== CURRENT SCENE ===
 Location: ${locLine}
 Situation: ${clip(story.worldState?.currentSituation, 350)}
-Time: ${story.worldState?.timeOfDay || 'day'} | Weather: ${story.worldState?.weather || 'clear'} | Mood: ${story.worldState?.mood || 'neutral'}`
+STORY CLOCK: Day ${storyDay} (~${Math.round(hoursElapsed)} hours since the story began) — ${story.worldState?.timeOfDay || 'day'} | Weather: ${story.worldState?.weather || 'clear'} | Mood: ${story.worldState?.mood || 'neutral'}`
     });
 
     // -- Player --
