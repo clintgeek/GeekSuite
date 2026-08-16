@@ -54,18 +54,35 @@ export default function JournalDrawer({ open, onClose, story }) {
                 <Typography sx={{ fontFamily: '"Cinzel", serif', fontSize: '0.85rem', fontWeight: 600, color: gold, mb: 0.5 }}>
                   {s.icon} {s.title}
                 </Typography>
-                {entries.map((e, i) => (
-                  <Box key={i} sx={{ display: 'flex', gap: 0.75, py: 0.35, alignItems: 'flex-start' }}>
-                    <Typography sx={{ color: alpha(gold, 0.4), fontSize: '0.8rem', lineHeight: 1.6 }}>—</Typography>
-                    <Typography variant="body2" sx={{ fontSize: '0.85rem', lineHeight: 1.6, flex: 1 }}>
-                      {e.text}
-                      {e.secret && (
-                        <Chip size="small" label="secret" color="warning" variant="outlined"
-                          sx={{ ml: 0.75, height: 15, fontSize: '0.52rem', textTransform: 'uppercase', fontWeight: 700 }} />
-                      )}
-                    </Typography>
-                  </Box>
-                ))}
+                {entries.map((e, i) => {
+                  // Provenance: who put this in the record, and when.
+                  const prov = e.source === 'player' ? { label: `You · T${e.turn ?? '?'}`, color: theme.palette.success.main }
+                    : e.source === 'narrator' ? { label: `Narrator · T${e.turn ?? '?'}`, color: gold }
+                    : e.source === 'setup' ? { label: 'Opening', color: theme.palette.info.main }
+                    : null;
+                  return (
+                    <Box key={i} sx={{ display: 'flex', gap: 0.75, py: 0.35, alignItems: 'flex-start' }}>
+                      <Typography sx={{ color: alpha(gold, 0.4), fontSize: '0.8rem', lineHeight: 1.6 }}>—</Typography>
+                      <Box sx={{ flex: 1 }}>
+                        <Typography variant="body2" sx={{ fontSize: '0.85rem', lineHeight: 1.6 }}>
+                          {e.text}
+                          {e.secret && (
+                            <Chip size="small" label="secret" color="warning" variant="outlined"
+                              sx={{ ml: 0.75, height: 15, fontSize: '0.52rem', textTransform: 'uppercase', fontWeight: 700 }} />
+                          )}
+                        </Typography>
+                        {prov && (
+                          <Typography variant="caption" sx={{
+                            fontSize: '0.58rem', color: alpha(prov.color, 0.75),
+                            fontFamily: '"JetBrains Mono", monospace', letterSpacing: '0.04em',
+                          }}>
+                            {prov.label}
+                          </Typography>
+                        )}
+                      </Box>
+                    </Box>
+                  );
+                })}
               </Box>
             );
           })}

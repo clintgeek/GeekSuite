@@ -4,6 +4,7 @@ import contextService from '../services/contextService.js';
 import stateExtractionService from '../services/stateExtractionService.js';
 import stateCommitService from '../services/stateCommitService.js';
 import checkpointService from '../services/checkpointService.js';
+import canonQueryService from '../services/canonQueryService.js';
 
 const getAuthenticatedUserId = (req) => {
   if (!req.user || !req.user._id) return null;
@@ -152,6 +153,16 @@ class StoryController {
           return res.json({ type: 'error', message: `No information found for "${searchTerm}".` });
         }
 
+        if (command.startsWith('/recall') || command.startsWith('/canon')) {
+          // Canon query: answered from the RECORD, zero-turn — no event, no
+          // dice, no turn increment. Asking what you know doesn't advance
+          // the world.
+          const authHeader2 = req.headers['authorization'];
+          const userToken2 = authHeader2 && authHeader2.split(' ')[1];
+          const payload = await canonQueryService.answerCanonQuery(story, userInput, userToken2);
+          return res.json(payload);
+        }
+
         if (command.startsWith('/timeout')) return res.json({ type: 'timeout', message: 'Time-out called. This is a meta-discussion that won\'t affect the story. What would you like to discuss?' });
 
         if (command.startsWith('/end')) {
@@ -173,7 +184,7 @@ class StoryController {
           return res.json({ type: 'scene_reset', message: 'Scene has been reset. The situation has changed.', aiResponse: aiResponse.content, story });
         }
 
-        return res.json({ type: 'error', message: 'Unknown command. Available commands: /char, /info, /timeout, /end' });
+        return res.json({ type: 'error', message: 'Unknown command. Available commands: /recall, /char, /info, /checkpoint, /back, /timeout, /end' });
       }
 
       // Handle setup phase
@@ -214,7 +225,8 @@ class StoryController {
                 userToken
               );
               if (proposal) {
-                stateCommitService.applyProposal(story, proposal, { presentCharacterNames: [], turn: 1 });
+                // Opening-scene facts are world seeding, not player/narrator turns.
+                stateCommitService.applyProposal(story, proposal, { presentCharacterNames: [], turn: 1, sourceOverride: 'setup' });
               }
             } catch (seedError) {
               console.error('Opening-scene canon seeding failed (story continues):', seedError.message);
@@ -236,6 +248,15 @@ class StoryController {
       //           → state extraction → validation → commit.
       const authHeader = req.headers['authorization'];
       const userToken = authHeader && authHeader.split(' ')[1];
+
+      // Canon queries ("what do we know about Jim's truck?") are questions to
+      // the ENGINE, not actions in the fiction. Route them to deterministic
+      // retrieval — never the creative GM, which answers from canon PLUS its
+      // own invention and then launders the invention into "known" next turn.
+      if (canonQueryService.isCanonQuery(userInput)) {
+        const payload = await canonQueryService.answerCanonQuery(story, userInput, userToken);
+        return res.json(payload);
+      }
 
       const turn = (story.worldState.turnNumber || 0) + 1;
       story.worldState.turnNumber = turn;

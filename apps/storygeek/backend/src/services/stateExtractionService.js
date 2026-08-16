@@ -13,7 +13,7 @@ const EXTRACTION_INSTRUCTIONS = `You are the STATE SCRIBE for a fantasy RPG engi
 Respond with ONLY a JSON object (no markdown fences, no commentary) with this exact shape. Omit empty arrays. Use empty object {} if nothing changed:
 
 {
-  "newFacts": [{ "fact": "concise objective statement", "category": "character|location|event|detail", "subjects": ["EntityName"], "visibility": "public|secret" }],
+  "newFacts": [{ "fact": "concise objective statement", "category": "character|location|event|detail", "subjects": ["EntityName"], "visibility": "public|secret", "origin": "player|narrator" }],
   "retiredFacts": [{ "factId": "fact_id_from_context", "reason": "in-story event that superseded it" }],
   "newCharacters": [{ "name": "", "description": "", "personality": "", "motivation": "", "locationName": "" }],
   "characterUpdates": [{ "name": "", "status": "alive|dead|missing|unknown", "isRevival": false, "locationName": "", "currentState": "one-line condition", "motivation": "" }],
@@ -30,6 +30,9 @@ Respond with ONLY a JSON object (no markdown fences, no commentary) with this ex
 RULES:
 - Record only what ACTUALLY HAPPENED in this turn's narration. Never invent.
 - A fact is something durable and checkable ("The north gate of Millhaven was destroyed by the ogre"), not a mood or a vibe.
+- PROVENANCE: every newFact gets an "origin". "player" = the player's action established or asserted it ("I drive Jim's 4x4 up the trail" → the truck is a 4x4). "narrator" = the GM narration introduced it. When both touch it, the one that FIRST asserted the substance wins.
+- EMBELLISHMENT vs FACT: vivid sensory description (colors, smells, textures, lighting, weather flourishes) is NOT a fact — do not record it. Record a descriptive detail ONLY if (a) the player directly asked about or interacted with that specific detail this turn, or (b) it is plot-relevant (a wound, a missing item, a mark that identifies someone). "The headlights cast eerie shadows" is prose, not canon. "The truck is a 4x4" is canon.
+- NO RESTATING: if the substance of a fact already appears in ESTABLISHED FACTS, do not record it again — not even reworded or with extra adjectives. Only record what is genuinely NEW this turn.
 - knowledgeGrants: every character who learned something this turn, and HOW. A character present in the scene "witnessed"; one who was told gets "told" + learnedFrom. If nobody learned anything, omit.
 - If a character died, that is a characterUpdate with status "dead" AND usually a newFact.
 - If narration contradicts an established fact from the context, do NOT retire the old fact unless an in-story event genuinely changed it. Prefer recording nothing over papering over a contradiction.

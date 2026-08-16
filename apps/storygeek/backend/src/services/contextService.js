@@ -44,6 +44,8 @@ CANON (ABSOLUTE):
 - The ESTABLISHED FACTS section is physical reality. Never contradict it. If a fact says a gate was destroyed, it is still destroyed until an in-story event rebuilds it.
 - Characters' status (alive/dead/missing) and locations' state (intact/destroyed) in the context are authoritative.
 - If the player's action assumes something that contradicts canon, gently reflect reality in the narration instead of adopting the contradiction.
+- PROVENANCE: facts are tagged with who established them — [you, T3] means the player asserted it on turn 3; [narrator, T5] means your own narration introduced it. Vivid details you add are color, not memory: NEVER present a detail you just invented as something the player already knew or observed earlier.
+- If the player asks what they know or what has been established, the engine answers from the record. If such a question reaches you anyway, answer ONLY from the ESTABLISHED FACTS section, attribute honestly ("you established… / the narration described…"), and say plainly when something has NOT been established. Do not fill gaps.
 
 CHARACTER KNOWLEDGE (ABSOLUTE):
 - Each present character's KNOWS list is everything notable they know. A character must NEVER reveal, react to, or act upon information that is not in their KNOWS list and was not just revealed in the scene.
@@ -164,12 +166,18 @@ ${canonAlerts.map(a => `- Canon: "${a.existing?.fact}" — do not contradict thi
       });
     }
 
-    // -- Relevant established facts --
+    // -- Relevant established facts (with provenance: who, which turn) --
     if (relevantFacts.length > 0) {
+      const provTag = (f) => {
+        if (f.source === 'player') return `[you, T${f.turn ?? '?'}]`;
+        if (f.source === 'narrator') return `[narrator, T${f.turn ?? '?'}]`;
+        if (f.source === 'setup') return '[opening]';
+        return `[T${f.turn ?? '?'}]`;
+      };
       sections.push({
         priority: 2,
         text: `=== ESTABLISHED FACTS (canon — never contradict) ===
-${relevantFacts.map(f => `- (${f.id}) ${f.fact}${f.visibility === 'secret' ? ' [SECRET — known only to characters whose KNOWS list includes it]' : ''}`).join('\n')}`
+${relevantFacts.map(f => `- (${f.id}) ${provTag(f)} ${f.fact}${f.visibility === 'secret' ? ' [SECRET — known only to characters whose KNOWS list includes it]' : ''}`).join('\n')}`
       });
     }
 

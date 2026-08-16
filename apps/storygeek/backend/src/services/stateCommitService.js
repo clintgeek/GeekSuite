@@ -15,7 +15,7 @@ class StateCommitService {
    * context (conflicts become CANON ALERTS).
    * Does NOT save the story — caller controls persistence/transaction scope.
    */
-  applyProposal(story, proposal, { presentCharacterNames = [], turn = 0 } = {}) {
+  applyProposal(story, proposal, { presentCharacterNames = [], turn = 0, sourceOverride = null } = {}) {
     if (!proposal) return { applied: 0, rejected: [], conflicts: [] };
 
     const { accepted, rejected, conflicts } = canonValidationService.validateProposal(
@@ -29,6 +29,10 @@ class StateCommitService {
     if (!story.storyState.establishedFacts) story.storyState.establishedFacts = [];
 
     // Facts first — knowledge grants may reference facts created this turn.
+    // Provenance: `source` records WHO established each fact ('player' — the
+    // player asserted it; 'narrator' — the GM introduced it; 'setup' — story
+    // creation). Together with `turn` this makes canon a timeline, not a set:
+    // "what did we know, from whom, as of turn N" is answerable historically.
     const newFactIdsByText = new Map();
     for (const fact of accepted.newFacts) {
       const id = `fact_${randomUUID().slice(0, 8)}`;
@@ -38,7 +42,7 @@ class StateCommitService {
         fact: String(fact.fact).slice(0, 400),
         subjects: (fact.subjects || []).map(s => String(s).slice(0, 80)),
         visibility: fact.visibility === 'secret' ? 'secret' : 'public',
-        source: 'extraction',
+        source: sourceOverride || (fact.origin === 'player' ? 'player' : 'narrator'),
         turn,
         isRetired: false,
         timestamp: new Date()

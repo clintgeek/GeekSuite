@@ -61,6 +61,10 @@ const SCRIPT = [
 
 // Turns that deliberately revisit the past. %-based fillers pad to --turns.
 const REVISIT = [
+  // Canon-query probes: these must be answered from the RECORD (zero-turn,
+  // provenance-attributed), never by the creative GM.
+  'What all do we know about the old stone bridge?',
+  '/recall the innkeeper',
   'I travel back to Duskbridge.',
   'I return to the Lantern & Eel and greet the innkeeper by name.',
   'I walk onto the old stone bridge and look at where the statue stood.',
@@ -107,7 +111,7 @@ async function main() {
     const input = inputs[i];
     try {
       const data = await turn(storyId, input);
-      transcript.push({ turn: i + 2, input, response: data.aiResponse || data.message || '', dice: data.diceResult || null, debug: data.debug || null });
+      transcript.push({ turn: i + 2, input, response: data.aiResponse || data.summary || data.message || '', dice: data.diceResult || null, debug: data.debug || null, canon: data.type === 'canon_answer' ? { facts: data.facts?.length, sources: data.facts?.map(f => f.source) } : null });
       printTurnDiagnostics(i + 2, input, data);
     } catch (e) {
       console.log(`\n━━━ TURN ${i + 2} — FAILED: ${e.response?.data?.error || e.message}\n    ACTION: ${input.slice(0, 100)}`);
@@ -187,7 +191,7 @@ function printTurnDiagnostics(turnNo, input, data) {
     lines.push(`ACTIVE THREADS: ${d.activeThreads} | KNOWN FACTS: ${d.liveFacts} | CONTEXT: ${d.contextChars} chars`);
     lines.push(`PRESENT NPCs: ${(d.presentNPCs || []).join(', ') || '(none)'}`);
   }
-  const prose = (data.aiResponse || data.message || '').replace(/\s+/g, ' ').slice(0, 220);
+  const prose = (data.aiResponse || data.summary || data.message || '').replace(/\s+/g, ' ').slice(0, 220);
   lines.push(`GM: ${prose}${prose.length >= 220 ? '…' : ''}`);
   console.log(lines.join('\n'));
 }

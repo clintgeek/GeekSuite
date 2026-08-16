@@ -104,7 +104,7 @@ export function buildJournal(story) {
 
   const bucket = { people: [], places: [], events: [], details: [] };
   for (const f of known) {
-    const entry = { text: f.fact, turn: f.turn, secret: f.visibility === 'secret' };
+    const entry = { text: f.fact, turn: f.turn, secret: f.visibility === 'secret', source: f.source || null };
     if (f.category === 'character') bucket.people.push(entry);
     else if (f.category === 'location') bucket.places.push(entry);
     else if (f.category === 'event') bucket.events.push(entry);

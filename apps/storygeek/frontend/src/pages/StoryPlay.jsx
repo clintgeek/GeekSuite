@@ -35,6 +35,95 @@ const eventToMessage = (event) => {
   };
 };
 
+// Provenance badge styling for canon facts: who established it, and when.
+const PROVENANCE_META = {
+  player:   { label: 'YOU',      color: '#4caf50' },
+  narrator: { label: 'NARRATOR', color: '#c9a84c' },
+  setup:    { label: 'OPENING',  color: '#7986cb' },
+};
+
+/**
+ * CanonCard — the answer to "what do we know?" straight from the engine's
+ * record. The fact list with provenance badges IS the answer; the summary
+ * prose on top is generated under a report-only contract. Distinct visual
+ * identity from narration: this is the archive speaking, not the narrator.
+ */
+function CanonCard({ canon, gold, theme }) {
+  return (
+    <Box className="fade-in-up" sx={{ display: 'flex', justifyContent: 'flex-start', mb: 2.5 }}>
+      <Paper elevation={0} sx={{
+        p: { xs: 2, md: 2.5 }, maxWidth: { xs: '100%', md: '85%' }, width: '100%',
+        borderRadius: 2,
+        border: `1px solid ${alpha(gold, 0.35)}`,
+        borderLeft: `4px solid ${gold}`,
+        background: alpha(gold, 0.04),
+      }}>
+        <Typography variant="caption" sx={{ color: gold, fontWeight: 700, display: 'block', mb: 0.75, letterSpacing: '0.08em' }}>
+          📜 CANON — from the record
+        </Typography>
+
+        {canon.summary && (
+          <Typography variant="body2" sx={{ mb: 1.5, lineHeight: 1.7, fontSize: '0.9rem' }}>
+            {canon.summary}
+          </Typography>
+        )}
+
+        {canon.entities?.length > 0 && (
+          <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', mb: 1.25 }}>
+            {canon.entities.map((e, i) => (
+              <Chip key={i} size="small" variant="outlined"
+                label={e.kind === 'character'
+                  ? `${e.name} · ${e.status}${e.locationName ? ` · at ${e.locationName}` : ''}`
+                  : `${e.name} · ${e.state}`}
+                sx={{ borderColor: alpha(gold, 0.4), color: 'text.primary', fontSize: '0.7rem' }} />
+            ))}
+          </Box>
+        )}
+
+        {canon.facts?.length > 0 && (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, mb: 1 }}>
+            {canon.facts.map((f, i) => {
+              const prov = PROVENANCE_META[f.source] || { label: 'RECORD', color: theme.palette.text.disabled };
+              return (
+                <Box key={i} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                  <Chip size="small"
+                    label={`${prov.label}${f.turn != null ? ` · T${f.turn}` : ''}`}
+                    sx={{
+                      height: 18, fontSize: '0.55rem', fontWeight: 700, flexShrink: 0, mt: 0.2,
+                      backgroundColor: alpha(prov.color, 0.12), color: prov.color,
+                      fontFamily: '"JetBrains Mono", monospace',
+                    }} />
+                  <Typography variant="body2" sx={{ fontSize: '0.85rem', lineHeight: 1.5 }}>
+                    {f.text}
+                    {f.visibility === 'secret' && (
+                      <Chip size="small" label="secret" color="warning" variant="outlined"
+                        sx={{ ml: 0.5, height: 14, fontSize: '0.5rem', textTransform: 'uppercase' }} />
+                    )}
+                  </Typography>
+                </Box>
+              );
+            })}
+          </Box>
+        )}
+
+        {canon.threads?.length > 0 && (
+          <Box sx={{ mb: 1 }}>
+            {canon.threads.map((t, i) => (
+              <Typography key={i} variant="body2" sx={{ fontSize: '0.78rem', color: 'text.secondary' }}>
+                ◈ <b>{t.name}</b> [{t.status}] — {t.description}
+              </Typography>
+            ))}
+          </Box>
+        )}
+
+        <Typography variant="caption" sx={{ color: 'text.disabled', fontStyle: 'italic', fontSize: '0.68rem' }}>
+          {canon.note}
+        </Typography>
+      </Paper>
+    </Box>
+  );
+}
+
 // Dice result color based on d20 roll
 const getDiceColor = (result) => {
   if (result === 20) return '#ffd700';
@@ -165,6 +254,11 @@ function StoryPlay() {
   const handleSpecialResponse = (data) => {
     const systemMsg = (content) => setMessages(prev => [...prev, { type: 'system', content, timestamp: new Date() }]);
     switch (data.type) {
+      case 'canon_answer':
+        // Answered from the record, not the narrator — rendered as a CANON
+        // card with per-fact provenance. Zero-turn: the world didn't advance.
+        setMessages(prev => [...prev, { type: 'canon', canon: data, timestamp: new Date() }]);
+        break;
       case 'character_list':
         systemMsg(`Characters:\n${data.characters.map(c => `  ${c.name} — ${c.description}${c.isActive ? '' : ' (inactive)'}`).join('\n')}`);
         break;
@@ -197,6 +291,10 @@ function StoryPlay() {
   const renderMessage = (message, index) => {
     const isUser = message.type === 'user';
     const isSystem = message.type === 'system';
+
+    if (message.type === 'canon') {
+      return <CanonCard key={index} canon={message.canon} gold={gold} theme={theme} />;
+    }
 
     return (
       <Box
@@ -451,7 +549,7 @@ function StoryPlay() {
           </Button>
         </Box>
         <Typography variant="body2" sx={{ mt: 0.75, fontSize: '0.7rem', color: 'text.disabled', textAlign: 'center' }}>
-          /checkpoint /back /char /info /end
+          /recall /checkpoint /back /char /info /end
         </Typography>
       </Paper>
     </Box>
