@@ -52,12 +52,17 @@ class CanonQueryService {
     // intercept an action; only direct questions to the engine.
     if (/^i\s/.test(text)) return false;
     return (
-      /\bwhat (all )?(do|did|does) (we|i) (actually |really )?know\b/.test(text) ||
-      /\bwhat (have|had) (we|i) (learned|established|discovered)\b/.test(text) ||
-      /\bwhat('s| is| has) been established\b/.test(text) ||
+      // "(what|which of those|…) did/do we actually know/learn/establish" —
+      // any wh-lead, not just "what" (a "Which of those did we actually
+      // know…" follow-up slipped through to the GM in live play).
+      /\b(do|did|does|have|had) (we|i) (actually |really )?(know|known|learn|learned|establish|established|discover|discovered)\b/.test(text) ||
+      /\bwhat('s| is| was| has| had)? (actually |really )?(been )?(established|known|in the record|canon)\b/.test(text) ||
+      // "what does Marta know" — a question about the record of a character's
+      // knowledge (the knowledge model), not an action.
+      /\bwhat (does|do|did) [\w' -]{2,30} (know|knows|known)\b/.test(text) ||
+      /\bbefore (i|we) asked\b/.test(text) ||
       /\bremind me\b/.test(text) ||
-      /^recap\b/.test(text) ||
-      /\bwhat do (we|i) know about\b/.test(text)
+      /^recap\b/.test(text)
     );
   }
 
@@ -139,7 +144,16 @@ class CanonQueryService {
       return false;
     });
 
-    return matches
+    // Subject expansion (one hop): a follow-up like "which of those did we
+    // know before I asked about the interior?" only keyword-matches the
+    // interior facts — but answering it needs the WHOLE timeline for that
+    // subject. Pull every live fact sharing a subject with a matched fact.
+    const matchedSubjects = new Set(matches.flatMap(f => (f.subjects || []).map(norm)).filter(Boolean));
+    const expanded = matchedSubjects.size > 0
+      ? live.filter(f => matches.includes(f) || (f.subjects || []).some(s => matchedSubjects.has(norm(s))))
+      : matches;
+
+    return expanded
       .sort((a, b) => (a.turn || 0) - (b.turn || 0))
       .slice(0, cap);
   }
@@ -147,14 +161,28 @@ class CanonQueryService {
   /** Canonical entity records for matched subjects. */
   buildEntityCards(story, entities) {
     const cards = [];
+    const player = (story.characters || []).find(c => c.isPlayer);
+    // The player may only see facts they could know about: public canon or
+    // secrets they personally hold. An NPC's KNOWS list shown to the player
+    // is filtered through that lens — the canon card must not leak secrets.
+    const playerFactIds = new Set((player?.knowledge || []).map(k => k.factId));
+    const factById = new Map((story.storyState?.establishedFacts || [])
+      .filter(f => !f.isRetired).map(f => [f.id, f]));
+
     for (const e of entities) {
       if (e.kind === 'character') {
         const c = (story.characters || []).find(x => norm(x.name) === norm(e.name));
         if (c) {
+          const knows = (c.knowledge || [])
+            .map(k => ({ fact: factById.get(k.factId), via: k.learnedVia, turn: k.turn }))
+            .filter(x => x.fact)
+            .filter(x => x.fact.visibility !== 'secret' || playerFactIds.has(x.fact.id))
+            .map(x => ({ text: x.fact.text || x.fact.fact, via: x.via, turn: x.turn }));
           cards.push({
             kind: 'character', name: c.name, status: c.status,
             description: c.description, locationName: c.locationName || null,
-            isPlayer: !!c.isPlayer
+            isPlayer: !!c.isPlayer,
+            knows
           });
         }
       } else {
@@ -209,7 +237,7 @@ PLAYER'S QUESTION: ${question}
 CANONICAL RECORD:
 ${factLines || '(no matching facts)'}
 ${payload.entities.map(e => e.kind === 'character'
-    ? `- ENTITY: ${e.name} — ${e.status}${e.locationName ? `, at ${e.locationName}` : ''}: ${e.description}`
+    ? `- ENTITY: ${e.name} — ${e.status}${e.locationName ? `, at ${e.locationName}` : ''}: ${e.description}${e.knows?.length ? `\n  ${e.name.toUpperCase()} KNOWS (as recorded): ${e.knows.map(k => `${k.text} [${k.via}${k.turn != null ? `, T${k.turn}` : ''}]`).join('; ')}` : ''}`
     : `- ENTITY: ${e.name} — ${e.state}: ${e.description}${e.stateNotes ? ` (${e.stateNotes})` : ''}`
   ).join('\n')}
 ${payload.threads.map(t => `- THREAD [${t.status}]: ${t.name} — ${t.description}`).join('\n')}

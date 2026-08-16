@@ -69,13 +69,30 @@ function CanonCard({ canon, gold, theme }) {
         )}
 
         {canon.entities?.length > 0 && (
-          <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', mb: 1.25 }}>
-            {canon.entities.map((e, i) => (
-              <Chip key={i} size="small" variant="outlined"
-                label={e.kind === 'character'
-                  ? `${e.name} · ${e.status}${e.locationName ? ` · at ${e.locationName}` : ''}`
-                  : `${e.name} · ${e.state}`}
-                sx={{ borderColor: alpha(gold, 0.4), color: 'text.primary', fontSize: '0.7rem' }} />
+          <Box sx={{ mb: 1.25 }}>
+            <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
+              {canon.entities.map((e, i) => (
+                <Chip key={i} size="small" variant="outlined"
+                  label={e.kind === 'character'
+                    ? `${e.name} · ${e.status}${e.locationName ? ` · at ${e.locationName}` : ''}`
+                    : `${e.name} · ${e.state}`}
+                  sx={{ borderColor: alpha(gold, 0.4), color: 'text.primary', fontSize: '0.7rem' }} />
+              ))}
+            </Box>
+            {/* What each character is recorded as knowing (player-visible only) */}
+            {canon.entities.filter(e => e.knows?.length > 0).map((e, i) => (
+              <Box key={`k${i}`} sx={{ mt: 0.75, pl: 1, borderLeft: `2px solid ${alpha(gold, 0.25)}` }}>
+                <Typography variant="caption" sx={{ color: alpha(gold, 0.7), fontSize: '0.62rem', fontWeight: 700 }}>
+                  {e.name.toUpperCase()} KNOWS (as recorded)
+                </Typography>
+                {e.knows.map((k, j) => (
+                  <Typography key={j} variant="body2" sx={{ fontSize: '0.78rem', color: 'text.secondary', lineHeight: 1.5 }}>
+                    • {k.text} <Typography component="span" sx={{ fontSize: '0.6rem', color: 'text.disabled', fontFamily: '"JetBrains Mono", monospace' }}>
+                      [{k.via}{k.turn != null ? ` · T${k.turn}` : ''}]
+                    </Typography>
+                  </Typography>
+                ))}
+              </Box>
             ))}
           </Box>
         )}

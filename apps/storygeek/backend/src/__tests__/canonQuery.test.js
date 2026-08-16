@@ -43,7 +43,11 @@ describe('canon query detection', () => {
     'What all do we know about Jim\'s truck?',
     'what do we know about the Facility',
     'What did we actually know before I asked about the interior?',
+    // The exact phrasing that slipped through to the GM in live play:
+    'Which of those did we actually know before I asked about the interior?',
     'What have we learned about the kid?',
+    'What does The Kid know?',                        // knowledge-model query
+    'Do we know anything about the facility?',
     'Remind me what happened at the facility',
     'recap',
     '/recall Jim\'s truck',
@@ -119,6 +123,43 @@ describe('canon retrieval', () => {
     const payload = await canonQueryService.answerCanonQuery(story, "What do we know about Jim's truck?");
     assert.match(payload.summary, /you established/i);
     assert.match(payload.summary, /narrator/i);
+  });
+});
+
+describe('follow-ups and knowledge boundaries', () => {
+  test('subject expansion: interior follow-up pulls the whole truck timeline', async () => {
+    const story = makeStory();
+    const payload = await canonQueryService.answerCanonQuery(
+      story, 'Which of those did we actually know before I asked about the interior?'
+    );
+    const texts = payload.facts.map(f => f.text);
+    // Keyword only matches the interior fact, but expansion by shared subject
+    // must bring in the full Jim's-truck record so "before" is answerable.
+    assert.ok(texts.includes("Jim's truck has a slate gray interior"));
+    assert.ok(texts.includes("Jim's truck is a 4x4"), 'subject expansion pulled the earlier fact');
+    assert.ok(texts.includes("Jim's truck was parked in spot 22C with the keys left in it"));
+  });
+
+  test('NPC knowledge query shows only player-visible knowledge — no secret leaks', async () => {
+    const story = makeStory();
+    // Give The Kid a public fact and a secret the player does NOT hold.
+    story.storyState.establishedFacts.push(
+      { id: 'f6', category: 'event', fact: 'The blast was triggered from inside the Facility', subjects: ['The Facility'], visibility: 'secret', source: 'narrator', turn: 3, isRetired: false }
+    );
+    story.characters[1].knowledge = [
+      { factId: 'f4', learnedVia: 'witnessed', turn: 1 }, // public: facility destroyed
+      { factId: 'f6', learnedVia: 'witnessed', turn: 3 }  // secret the player doesn't hold
+    ];
+    const payload = await canonQueryService.answerCanonQuery(story, 'What does The Kid know?');
+    const card = payload.entities.find(e => e.name === 'The Kid');
+    assert.ok(card.knows.some(k => k.text.includes('destroyed in the blast')), 'public knowledge shown');
+    assert.ok(!card.knows.some(k => k.text.includes('triggered from inside')),
+      'a secret the player does not hold must NOT surface on the canon card');
+    // …but once the player learns it, it may surface.
+    story.characters[0].knowledge = [{ factId: 'f6', learnedVia: 'told', learnedFrom: 'The Kid', turn: 8 }];
+    const payload2 = await canonQueryService.answerCanonQuery(story, 'What does The Kid know?');
+    const card2 = payload2.entities.find(e => e.name === 'The Kid');
+    assert.ok(card2.knows.some(k => k.text.includes('triggered from inside')), 'player-held secret may surface');
   });
 });
 
