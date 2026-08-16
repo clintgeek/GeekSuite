@@ -49,7 +49,12 @@ class AIDirectorService {
       gemini: {
         'gemini-1.5-flash': { input: 0.00035, output: 1.05 },
         'gemini-1.5-pro': { input: 3.5, output: 10.5 },
-        'gemini-pro': { input: 0.5, output: 1.5 }
+        'gemini-pro': { input: 0.5, output: 1.5 },
+        'gemini-2.0-flash': { input: 0.1, output: 0.4 },
+        'gemini-2.0-flash-lite': { input: 0.075, output: 0.3 },
+        'gemini-2.5-flash': { input: 0.3, output: 2.5 },
+        'gemini-2.5-flash-lite': { input: 0.1, output: 0.4 },
+        'gemini-2.5-pro': { input: 1.25, output: 10 }
       },
       together: {
         'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free': { input: 0.0002, output: 0.0002 },
@@ -262,6 +267,11 @@ class AIDirectorService {
         { provider: 'gemini', modelId: 'gemini-1.5-flash', inputPrice: 0.00035, outputPrice: 1.05 },
         { provider: 'gemini', modelId: 'gemini-1.5-pro', inputPrice: 3.5, outputPrice: 10.5 },
         { provider: 'gemini', modelId: 'gemini-pro', inputPrice: 0.5, outputPrice: 1.5 },
+        { provider: 'gemini', modelId: 'gemini-2.0-flash', inputPrice: 0.1, outputPrice: 0.4 },
+        { provider: 'gemini', modelId: 'gemini-2.0-flash-lite', inputPrice: 0.075, outputPrice: 0.3 },
+        { provider: 'gemini', modelId: 'gemini-2.5-flash', inputPrice: 0.3, outputPrice: 2.5 },
+        { provider: 'gemini', modelId: 'gemini-2.5-flash-lite', inputPrice: 0.1, outputPrice: 0.4 },
+        { provider: 'gemini', modelId: 'gemini-2.5-pro', inputPrice: 1.25, outputPrice: 10 },
 
         // Together.ai models
         { provider: 'together', modelId: 'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free', inputPrice: 0.0002, outputPrice: 0.0002 },
@@ -642,19 +652,64 @@ class AIDirectorService {
         },
 
         // Gemini Free Tier
-        // UPDATED: More conservative limits based on actual free tier quotas
-        // Gemini Flash: 5 req/sec = 300 req/min, but daily limits apply
+        // UPDATED Aug 2026: 1.5-family is RETIRED upstream (404s on new
+        // projects) — flipped to isFree:false so free-only routing (e.g.
+        // StoryGeek's pinned GM) never selects a dead model. The upsert
+        // corrects any stale DB record. Current free tier: 2.0/2.5 flash.
         {
           provider: 'gemini',
           modelId: 'gemini-1.5-flash',
+          isFree: false,
+          freeLimits: {},
+          notes: 'RETIRED upstream — do not route here'
+        },
+        {
+          provider: 'gemini',
+          modelId: 'gemini-2.0-flash',
           isFree: true,
           freeLimits: {
-            requestsPerMinute: 300,  // 5 req/sec theoretical max
-            requestsPerDay: 1500,    // Daily quota (conservative)
-            tokensPerMinute: 1000000, // 1M tokens/min (generous for Flash)
-            tokensPerDay: 1500000    // Daily token limit
+            requestsPerMinute: 15,   // AI Studio free tier
+            requestsPerDay: 200,
+            tokensPerMinute: 1000000,
+            tokensPerDay: 1500000
           },
-          notes: 'Free tier - BEST for vision/multimodal in CodeGeek'
+          notes: 'Free tier - stable GA flash; StoryGeek pinned GM model'
+        },
+        {
+          provider: 'gemini',
+          modelId: 'gemini-2.0-flash-lite',
+          isFree: true,
+          freeLimits: {
+            requestsPerMinute: 30,
+            requestsPerDay: 200,
+            tokensPerMinute: 1000000,
+            tokensPerDay: 1500000
+          },
+          notes: 'Free tier - lite variant, higher RPM'
+        },
+        {
+          provider: 'gemini',
+          modelId: 'gemini-2.5-flash',
+          isFree: true,
+          freeLimits: {
+            requestsPerMinute: 10,
+            requestsPerDay: 250,
+            tokensPerMinute: 250000,
+            tokensPerDay: 1000000
+          },
+          notes: 'Free tier - newest flash family (conservative limits)'
+        },
+        {
+          provider: 'gemini',
+          modelId: 'gemini-2.5-flash-lite',
+          isFree: true,
+          freeLimits: {
+            requestsPerMinute: 15,
+            requestsPerDay: 1000,
+            tokensPerMinute: 250000,
+            tokensPerDay: 1000000
+          },
+          notes: 'Free tier - lite variant, higher daily quota'
         },
 
         // Anthropic - No free tier available

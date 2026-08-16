@@ -178,7 +178,8 @@ class AIService {
         name: 'Gemini 2.0 Flash',
         apiKey: '',
         baseURL: 'https://generativelanguage.googleapis.com/v1beta',
-        model: 'gemini-2.0-flash-exp',
+        // Stable GA id — the -exp preview ids get retired without notice
+        model: 'gemini-2.0-flash',
         costPer1kTokens: 0.0,
         maxTokens: 8000,
         maxContextTokens: 1000000, // 1M token context limit
@@ -526,17 +527,22 @@ class AIService {
               logger.info(`Fetched ${models.length} Gemini models from API (filtered for generateContent)`);
             } catch (apiError) {
               logger.info({ err: apiError }, 'Gemini models API failed, using hardcoded fallback');
+              // 1.5 family retired upstream (Aug 2026) — fallback lists only live families
               models = [
+                { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
+                { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite' },
                 { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' },
-                { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash' },
-                { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' }
+                { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite' },
+                { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' }
               ];
             }
           } else {
             models = [
+              { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
+              { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite' },
               { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' },
-              { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash' },
-              { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' }
+              { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite' },
+              { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' }
             ];
           }
           break;
@@ -608,9 +614,12 @@ class AIService {
           { id: 'mixtral-8x7b-32768', name: 'Mixtral 8x7B (Free)' }
         ],
         gemini: [
-          { id: 'gemini-1.5-flash-latest', name: 'Gemini 1.5 Flash (Free)' },
-          { id: 'gemini-1.5-pro-latest', name: 'Gemini 1.5 Pro' },
-          { id: 'gemini-pro', name: 'Gemini Pro' }
+          // 1.5 family retired upstream (Aug 2026) — seed only live families
+          { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Free)' },
+          { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite (Free)' },
+          { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (Free)' },
+          { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite (Free)' },
+          { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' }
         ],
         together: [
           { id: 'meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo', name: 'Llama 3.1 70B Turbo (Free - Best for tool use)' },
