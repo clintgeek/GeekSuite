@@ -7,7 +7,7 @@ import { ApolloProvider } from '@apollo/client';
 import { AuthProvider, useAuth } from '@geeksuite/auth';
 import { FocusModeProvider } from '@geeksuite/ui';
 import apolloClient from './apolloClient';
-import createStoryTheme from './theme/theme';
+import { createStoryTheme } from './theme/theme';
 
 import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
