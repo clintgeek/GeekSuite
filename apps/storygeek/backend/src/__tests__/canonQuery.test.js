@@ -185,3 +185,16 @@ describe('provenance through commit', () => {
     assert.equal(seeded.source, 'setup');
   });
 });
+
+describe('dice fallback intent detection (aiService)', () => {
+  test('uncertain actions map to situations; trivial/meta inputs do not roll', async () => {
+    const { default: aiService } = await import('../services/aiService.js');
+    assert.equal(aiService.detectIntentSituation('I attack the raider with my crowbar'), 'combat');
+    assert.equal(aiService.detectIntentSituation('I sneak past the checkpoint'), 'stealth');
+    assert.equal(aiService.detectIntentSituation('I try to persuade the guard to let us through'), 'persuasion');
+    assert.equal(aiService.detectIntentSituation('I search the glovebox for a map'), 'investigation');
+    assert.equal(aiService.detectIntentSituation('I navigate the truck through the debris field'), 'survival');
+    assert.equal(aiService.detectIntentSituation('I order a drink and listen'), null);
+    assert.equal(aiService.detectIntentSituation('I tell the kid everything will be okay'), null);
+  });
+});
