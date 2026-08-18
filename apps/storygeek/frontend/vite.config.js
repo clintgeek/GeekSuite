@@ -6,6 +6,26 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    // Force a SINGLE instance of MUI, Emotion, and React across the app and
+    // the @geeksuite/ui workspace package. Without this, pnpm can give
+    // @geeksuite/ui its own copies, so shared components (GeekShell,
+    // GeekAppFrame, …) render through a different MUI/Emotion instance that
+    // never sees the app's ThemeProvider — they fall back to MUI's default
+    // LIGHT theme, which is why the content frame stayed white in dark mode
+    // while app-owned components (top bar, cards) were correctly dark.
+    // Only dedupe packages the app directly depends on. Deduping @mui/material
+    // transitively makes its nested @mui/system a singleton too; listing
+    // @mui/system explicitly instead breaks resolution (it isn't hoisted to a
+    // root-resolvable location under pnpm).
+    resolve: {
+      dedupe: [
+        '@mui/material',
+        '@emotion/react',
+        '@emotion/styled',
+        'react',
+        'react-dom',
+      ],
+    },
     server: {
       port: 5173,
       proxy: {

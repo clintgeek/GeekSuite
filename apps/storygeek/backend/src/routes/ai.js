@@ -1,8 +1,14 @@
 import express from 'express';
 import axios from 'axios';
+import aiService from '../services/aiService.js';
 
 const router = express.Router();
 const BASEGEEK_URL = (process.env.BASEGEEK_URL || 'https://basegeek.clintgeek.com').replace(/\/$/, '');
+
+// The pinned Game Master model — the frontend defaults its picker to this.
+router.get('/gm-config', (req, res) => {
+  res.json(aiService.getGMConfig());
+});
 
 router.get('/providers', async (req, res) => {
   try {

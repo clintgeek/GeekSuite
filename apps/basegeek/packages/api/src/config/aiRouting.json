@@ -32,7 +32,7 @@
     "defaultStrategy": "summarize-old",
     "summarizationThreshold": 4000,
     "maxContextTokens": 8000,
-    "summaryModel": "gemini:gemini-2.0-flash-exp",
+    "summaryModel": "gemini:gemini-2.0-flash",
     "cacheEnabled": true
   },
   "healthTracking": {

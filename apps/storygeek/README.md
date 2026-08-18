@@ -2,6 +2,12 @@
 
 A collaborative AI-powered storytelling game that blends DnD mechanics with choose-your-own-adventure narratives.
 
+> **Note (Aug 2026):** parts of this README predate the continuity overhaul.
+> The code is the source of truth; see [DOCS/CONTINUITY.md](DOCS/CONTINUITY.md)
+> for the current architecture (authoritative game state, per-NPC knowledge
+> tracking, deterministic validation, full-state checkpoints, pinned GM model
+> via aiGeek).
+
 ## Overview
 
 StoryGeek is a fantasy storytelling game where players collaborate with AI to create immersive narratives. The game combines:

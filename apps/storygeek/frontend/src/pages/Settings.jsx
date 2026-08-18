@@ -20,9 +20,10 @@ function Settings() {
     const load = async () => {
       try {
         setLoading(true); setError('');
-        const [providersRes, directorRes] = await Promise.all([
+        const [providersRes, directorRes, gmConfigRes] = await Promise.all([
           api.get('/ai/providers'),
           api.get('/ai/director/models'),
+          api.get('/ai/gm-config').catch(() => ({ data: null })),
         ]);
         const enabledProviders = providersRes.data?.data?.providers || [];
         setProviders(enabledProviders);
@@ -33,10 +34,18 @@ function Settings() {
         }
         setModelsByProvider(mapped);
         if (!selectedProvider && enabledProviders.length > 0) {
-          const geminiAvailable = enabledProviders.some(p => p.name === 'gemini');
-          if (geminiAvailable && mapped['gemini']?.length > 0) {
-            const preferred = mapped['gemini'].find(m => m.id === 'gemini-1.5-flash-latest');
-            setSelection('gemini', preferred ? preferred.id : mapped['gemini'][0].id);
+          // Default to the backend's pinned GM model — narrative consistency
+          // beats whatever model happens to top the list.
+          const gm = gmConfigRes?.data;
+          const gmAvailable = gm && enabledProviders.some(p => p.name === gm.provider) &&
+            mapped[gm.provider]?.some(m => m.id === gm.model);
+          if (gmAvailable) {
+            setSelection(gm.provider, gm.model);
+          } else if (enabledProviders.some(p => p.name === 'gemini') && mapped['gemini']?.length > 0) {
+            const flash = mapped['gemini']
+              .filter(m => /flash/i.test(m.id))
+              .sort((a, b) => b.id.localeCompare(a.id))[0];
+            setSelection('gemini', (flash || mapped['gemini'][0]).id);
           } else {
             const provKey = enabledProviders[0].name;
             setSelection(provKey, mapped[provKey]?.[0]?.id || null);
