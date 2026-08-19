@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box, Button, IconButton, CircularProgress, Tooltip, useTheme } from '@mui/material';
+import { glow } from '../../theme/tokens';
 import { Save, DeleteOutline, Edit, Visibility, Check } from '@mui/icons-material';
 
 /**
@@ -79,10 +80,10 @@ function NoteActions({
             borderRadius: '6px',
             transition: 'background 120ms ease',
             '&:hover': {
-              bgcolor: theme.palette.glow.soft,
+              bgcolor: glow(theme).soft,
             },
             '&:focus-visible': {
-              boxShadow: `0 0 0 3px ${theme.palette.glow.ring}`,
+              boxShadow: `0 0 0 3px ${glow(theme).ring}`,
             },
           }}
         >

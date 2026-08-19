@@ -8,6 +8,7 @@ import PanToolOutlinedIcon from '@mui/icons-material/PanToolOutlined';
 import UndoIcon from '@mui/icons-material/Undo';
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
+import { surfaces } from '../../theme/tokens';
 
 const SAVE_DEBOUNCE_MS = 400;
 
@@ -294,7 +295,7 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false }) => {
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            bgcolor: theme.palette.surfaces.elevated,
+                            bgcolor: surfaces(theme).elevated,
                             zIndex: 10,
                         }}
                     >

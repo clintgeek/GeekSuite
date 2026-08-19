@@ -32,6 +32,7 @@ import useAuthStore from '../store/authStore';
 import useNoteStore from '../store/noteStore';
 import TagContextMenu from './TagContextMenu';
 import { gql, useQuery } from '@apollo/client';
+import { glow } from '../theme/tokens';
 
 const GET_TAGS = gql`
   query GetNoteTags {
@@ -390,7 +391,7 @@ function Sidebar({ closeNavbar }) {
                                 },
                                 '&.Mui-focused': {
                                     bgcolor: 'background.paper',
-                                    boxShadow: `0 0 0 3px ${theme.palette.glow.ring}`,
+                                    boxShadow: `0 0 0 3px ${glow(theme).ring}`,
                                 },
                             },
                         }}

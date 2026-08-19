@@ -20,10 +20,8 @@ import {
 import useNoteStore from '../store/noteStore';
 import { formatRelativeTime } from '../utils/dateUtils';
 import { previewText } from '../utils/previewText';
+import { border, glow, noteTypeColor } from '../theme/tokens';
 
-function getTypeColor(type, palette) {
-    return palette.noteTypes?.[type] || palette.noteTypes?.text || palette.primary.main;
-}
 
 function getPreview(content, type = 'text') {
     return previewText(content, type, 180);
@@ -35,7 +33,7 @@ function ResultRow({ note, query }) {
     const theme = useTheme();
     const navigate = useNavigate();
     const type = note.type || 'text';
-    const typeColor = getTypeColor(type, theme.palette);
+    const typeColor = noteTypeColor(theme, type);
     const isVisual = type === 'handwritten' || type === 'mindmap';
     const preview = isVisual ? '' : getPreview(note.content, type);
 
@@ -65,7 +63,7 @@ function ResultRow({ note, query }) {
                 borderRadius: 0,
                 transition: 'background 120ms ease',
                 '&:hover': {
-                    bgcolor: theme.palette.glow.soft,
+                    bgcolor: glow(theme).soft,
                     '& .type-dot': { transform: 'scale(1.5)' },
                 },
             }}
@@ -135,8 +133,8 @@ function ResultRow({ note, query }) {
                                 px: 0.75,
                                 py: 0.125,
                                 borderRadius: '4px',
-                                border: `1px solid ${theme.palette.border}`,
-                                bgcolor: theme.palette.glow.soft,
+                                border: `1px solid ${border(theme)}`,
+                                bgcolor: glow(theme).soft,
                                 color: 'text.secondary',
                                 lineHeight: '18px',
                             }}

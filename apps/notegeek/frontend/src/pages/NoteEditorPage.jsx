@@ -14,6 +14,7 @@ import { GET_NOTE_BY_ID, GET_NOTES } from '../graphql/queries';
 import { CREATE_NOTE, UPDATE_NOTE } from '../graphql/mutations';
 import { NoteShell, NoteMetaBar, NoteActions, NoteTypeRouter, NOTE_TYPES } from '../components/notes';
 import DeleteNoteDialog from '../components/DeleteNoteDialog';
+import { noteTypeColor } from '../theme/tokens';
 
 // Type card configuration. Colors come from theme.palette.noteTypes so light
 // and dark modes stay in sync with NoteRow / NoteMetaBar / NoteViewer / sidebar.
@@ -29,7 +30,7 @@ const NOTE_TYPE_CARDS = [
 function TypeCard({ config, onSelect }) {
   const theme = useTheme();
   const Icon = config.icon;
-  const color = theme.palette.noteTypes?.[config.themeKey] || theme.palette.text.primary;
+  const color = noteTypeColor(theme, config.themeKey);
 
   return (
     <Box

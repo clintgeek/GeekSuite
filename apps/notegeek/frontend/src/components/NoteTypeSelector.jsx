@@ -8,6 +8,7 @@ import {
     Draw as HandwrittenIcon,
 } from '@mui/icons-material';
 import { NOTE_TYPES } from './notes/NoteTypeRouter';
+import { noteTypeColor } from '../theme/tokens';
 
 // Icon + label per type. Colors come from theme.palette.noteTypes so the
 // type swatch matches NoteRow / NoteMetaBar / NoteViewer in both modes.
@@ -35,7 +36,7 @@ function NoteTypeSelector({ value, onChange }) {
             {Object.entries(TYPE_META).map(([type, meta]) => {
                 const Icon = meta.icon;
                 const isActive = value === type;
-                const typeColor = theme.palette.noteTypes?.[meta.themeKey] || theme.palette.text.primary;
+                const typeColor = noteTypeColor(theme, meta.themeKey);
 
                 return (
                     <Tooltip key={type} title={meta.label} arrow>

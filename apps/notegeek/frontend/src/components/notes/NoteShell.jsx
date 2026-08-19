@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box, useTheme } from '@mui/material';
+import { border, surfaces } from '../../theme/tokens';
 
 /**
  * NoteShell — Unified layout wrapper for all note types.
@@ -22,6 +23,8 @@ function NoteShell({
   disableContentScroll = false,
 }) {
   const theme = useTheme();
+  const paper = surfaces(theme).paper;
+  const elevated = surfaces(theme).elevated;
 
   return (
     <Box
@@ -41,7 +44,7 @@ function NoteShell({
           data-note-header
           sx={{
             flexShrink: 0,
-            bgcolor: theme.palette.surfaces.paper,
+            bgcolor: paper,
             borderBottom: `1px solid ${theme.palette.divider}`,
             zIndex: 1,
           }}
@@ -55,7 +58,7 @@ function NoteShell({
         <Box
           sx={{
             flexShrink: 0,
-            bgcolor: theme.palette.surfaces.paper,
+            bgcolor: paper,
             borderBottom: `1px solid ${theme.palette.divider}`,
           }}
         >
@@ -71,7 +74,7 @@ function NoteShell({
           position: 'relative',
           minHeight: 0,
           // The elevated bg is enough to read as "lifted" — no shadow needed
-          bgcolor: theme.palette.surfaces.elevated,
+          bgcolor: elevated,
           // 4px corners on the inner surface (sharper than chrome)
           // Only bottom corners get radius when header is present
           borderRadius: header ? '0 0 4px 4px' : '4px',
@@ -83,7 +86,7 @@ function NoteShell({
           '&::-webkit-scrollbar': { width: 6 },
           '&::-webkit-scrollbar-track': { bgcolor: 'transparent' },
           '&::-webkit-scrollbar-thumb': {
-            bgcolor: theme.palette.border,
+            bgcolor: border(theme),
             borderRadius: 3,
             '&:hover': { bgcolor: theme.palette.text.disabled },
           },
@@ -99,7 +102,7 @@ function NoteShell({
           sx={{
             flexShrink: 0,
             display: { xs: 'block', sm: 'none' },
-            bgcolor: theme.palette.surfaces.paper,
+            bgcolor: paper,
             borderTop: `1px solid ${theme.palette.divider}`,
             pb: 'env(safe-area-inset-bottom)',
           }}

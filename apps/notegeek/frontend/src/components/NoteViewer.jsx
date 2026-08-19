@@ -20,6 +20,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import DeleteNoteDialog from './DeleteNoteDialog';
+import { border, glow, noteTypeColor, surfaces } from '../theme/tokens';
 
 // Note type configuration — type color comes from theme.palette.noteTypes
 const NOTE_TYPE_CONFIG = {
@@ -32,7 +33,6 @@ const NOTE_TYPE_CONFIG = {
 
 function NoteViewer() {
     const theme = useTheme();
-    const isDark = theme.palette.mode === 'dark';
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
     const { id } = useParams();
@@ -86,7 +86,7 @@ function NoteViewer() {
     const noteType = noteToView.type || 'text';
     const typeConfig = NOTE_TYPE_CONFIG[noteType] || NOTE_TYPE_CONFIG.text;
     // Use theme tokens — same source of truth as the rest of the app
-    const typeColor = theme.palette.noteTypes?.[noteType] || theme.palette.primary.main;
+    const typeColor = noteTypeColor(theme, noteType);
 
     const formatDate = (date) => {
         return new Date(date).toLocaleDateString(undefined, {
@@ -134,8 +134,8 @@ function NoteViewer() {
                             px: 0.875,
                             py: 0.25,
                             borderRadius: '4px',
-                            border: `1px solid ${theme.palette.border}`,
-                            bgcolor: theme.palette.glow.soft,
+                            border: `1px solid ${border(theme)}`,
+                            bgcolor: glow(theme).soft,
                         }}
                     >
                         <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: typeColor, flexShrink: 0 }} />
@@ -157,8 +157,8 @@ function NoteViewer() {
                                 color: 'primary.main',
                                 borderRadius: 1.5,
                                 transition: 'all 120ms ease',
-                                '&:hover': { bgcolor: theme.palette.glow.soft },
-                                '&:focus-visible': { boxShadow: `0 0 0 3px ${ theme.palette.glow.ring }` },
+                                '&:hover': { bgcolor: glow(theme).soft },
+                                '&:focus-visible': { boxShadow: `0 0 0 3px ${ glow(theme).ring }` },
                             }}
                         >
                             <EditIcon sx={{ fontSize: 17 }} />
@@ -187,8 +187,8 @@ function NoteViewer() {
                     sx={{
                         borderRadius: '4px',
                         overflow: 'hidden',
-                        border: `1px solid ${theme.palette.border}`,
-                        bgcolor: theme.palette.surfaces.elevated,
+                        border: `1px solid ${border(theme)}`,
+                        bgcolor: surfaces(theme).elevated,
                         display: 'flex',
                     }}
                 >
@@ -242,7 +242,7 @@ function NoteViewer() {
                                                         px: 0.75,
                                                         py: 0.125,
                                                         borderRadius: '4px',
-                                                        border: `1px solid ${theme.palette.border}`,
+                                                        border: `1px solid ${border(theme)}`,
                                                         color: 'text.secondary',
                                                         cursor: 'pointer',
                                                         lineHeight: '18px',

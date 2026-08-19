@@ -3,6 +3,7 @@ import { Handle, Position } from 'reactflow';
 import { Paper, Typography, IconButton, Box, Tooltip, TextField, useTheme } from '@mui/material';
 import { Add as AddIcon, Delete as DeleteIcon, Check as CheckIcon, Close as CloseIcon } from '@mui/icons-material';
 import { alpha } from '@mui/material/styles';
+import { border, surfaces } from '../theme/tokens';
 
 /**
  * MindMapNode - A node in the mind map with inline editing
@@ -71,11 +72,11 @@ function MindMapNode({ data, isConnectable, selected }) {
 
     const nodeBg = data.isRoot
         ? (isDark ? alpha(theme.palette.primary.main, 0.2) : '#e3f2fd')
-        : theme.palette.surfaces.elevated;
+        : surfaces(theme).elevated;
 
     const nodeBorderColor = selected
         ? theme.palette.primary.main
-        : theme.palette.border;
+        : border(theme);
 
     return (
         <Paper

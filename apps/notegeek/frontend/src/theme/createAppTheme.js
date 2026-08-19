@@ -34,6 +34,24 @@ function buildNoteOverrides(mode) {
   const divider = isLight ? '#E5DDC8' : '#2D2A24';
   const border  = isLight ? '#D8D0BD' : '#3A352D';
 
+  // Per-note-type identity colours — earthy and editorial, never playful.
+  // Dark mode lifts each hue so it stays legible on the warm-black ground.
+  const noteTypes = isLight
+    ? {
+        text:        '#1F1C16',  // ink
+        markdown:    '#3D6B7A',  // muted teal
+        code:        '#5B7A4A',  // moss
+        mindmap:     '#A8782F',  // ochre
+        handwritten: '#8B2C2A',  // oxblood
+      }
+    : {
+        text:        '#EDE6D6',
+        markdown:    '#7AA4B0',
+        code:        '#7DA869',
+        mindmap:     '#D4A05A',
+        handwritten: '#C97570',
+      };
+
   const sansStack = '"Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
   const monoStack = '"JetBrains Mono", "Geist Mono", ui-monospace, "SFMono-Regular", monospace';
 
@@ -49,9 +67,11 @@ function buildNoteOverrides(mode) {
         disabled:  text.disabled,
       },
       divider,
-      // Custom NoteGeek tokens
+      // Custom NoteGeek tokens — read these via ../theme/tokens.js helpers,
+      // never directly, so a plain MUI theme can't crash the UI.
       surfaces,
       border,
+      noteTypes,
     },
 
     typography: {

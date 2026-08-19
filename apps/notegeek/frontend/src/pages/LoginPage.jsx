@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
 import useAuthStore from '../store/authStore';
+import { border, glow } from '../theme/tokens';
 
 function LoginPage() {
     const theme = useTheme();
@@ -239,9 +240,9 @@ function LoginPage() {
                     severity="info"
                     onClose={() => setSignedOutToast(false)}
                     sx={{
-                        bgcolor: theme.palette.glow.soft,
+                        bgcolor: glow(theme).soft,
                         color: 'text.primary',
-                        border: `1px solid ${theme.palette.border}`,
+                        border: `1px solid ${border(theme)}`,
                         '& .MuiAlert-icon': { color: 'primary.main' },
                     }}
                 >

@@ -18,6 +18,7 @@ import useNoteStore from '../store/noteStore';
 import useAuthStore from '../store/authStore';
 import { formatRelativeTime } from '../utils/dateUtils';
 import { previewText } from '../utils/previewText';
+import { border, glow, noteTypeColor, surfaces } from '../theme/tokens';
 
 // ─── Type pills ──────────────────────────────────────────────────────────────
 const TYPE_PILLS = [
@@ -37,9 +38,6 @@ function getGreeting() {
   return 'Good evening';
 }
 
-function getTypeColor(type, palette) {
-  return palette.noteTypes?.[type] || palette.noteTypes?.text || palette.primary.main;
-}
 
 function getPreview(content, type = 'text', maxLen = 100) {
   return previewText(content, type, maxLen);
@@ -48,7 +46,7 @@ function getPreview(content, type = 'text', maxLen = 100) {
 // ─── NoteRow: editorial list row ─────────────────────────────────────────────
 
 function NoteRow({ note, theme, onClick }) {
-  const typeColor = getTypeColor(note.type || 'text', theme.palette);
+  const typeColor = noteTypeColor(theme, note.type || 'text');
   const preview = getPreview(note.content, note.type || 'text');
 
   return (
@@ -66,7 +64,7 @@ function NoteRow({ note, theme, onClick }) {
         color: 'inherit',
         transition: 'background 120ms ease',
         '&:hover': {
-          bgcolor: theme.palette.glow.soft,
+          bgcolor: glow(theme).soft,
           '& .type-dot': { transform: 'scale(1.5)' },
         },
       }}
@@ -135,8 +133,8 @@ function NoteRow({ note, theme, onClick }) {
                 px: 0.75,
                 py: 0.125,
                 borderRadius: '4px',
-                border: `1px solid ${theme.palette.border}`,
-                bgcolor: theme.palette.glow.soft,
+                border: `1px solid ${border(theme)}`,
+                bgcolor: glow(theme).soft,
                 color: 'text.secondary',
                 lineHeight: '18px',
               }}
@@ -240,14 +238,14 @@ function QuickCaptureHome() {
           gap: 1,
           mb: 2,
           borderRadius: '6px',
-          border: `1px solid ${theme.palette.border}`,
-          bgcolor: theme.palette.surfaces.elevated,
+          border: `1px solid ${border(theme)}`,
+          bgcolor: surfaces(theme).elevated,
           px: 1.5,
           py: 0.75,
           transition: 'border-color 120ms ease, box-shadow 120ms ease',
           '&:focus-within': {
             borderColor: theme.palette.primary.main,
-            boxShadow: `0 0 0 3px ${theme.palette.glow.ring}`,
+            boxShadow: `0 0 0 3px ${glow(theme).ring}`,
           },
         }}
       >
@@ -296,7 +294,7 @@ function QuickCaptureHome() {
         }}
       >
         {TYPE_PILLS.map((pill) => {
-          const color = getTypeColor(pill.type, theme.palette);
+          const color = noteTypeColor(theme, pill.type);
           return (
             <ButtonBase
               key={pill.type}
@@ -308,7 +306,7 @@ function QuickCaptureHome() {
                 px: 1,
                 py: 0.375,
                 borderRadius: '4px',
-                border: `1px solid ${theme.palette.border}`,
+                border: `1px solid ${border(theme)}`,
                 bgcolor: 'transparent',
                 fontFamily: theme.typography.fontFamilyMono,
                 fontSize: '0.6875rem',
@@ -317,7 +315,7 @@ function QuickCaptureHome() {
                 color: 'text.secondary',
                 transition: 'all 120ms ease',
                 '&:hover': {
-                  bgcolor: theme.palette.glow.soft,
+                  bgcolor: glow(theme).soft,
                   borderColor: color,
                   color,
                 },
@@ -390,7 +388,7 @@ function QuickCaptureHome() {
                 color: 'text.secondary',
                 minWidth: 0,
                 px: 0.75,
-                '&:hover': { color: 'primary.main', bgcolor: theme.palette.glow.soft },
+                '&:hover': { color: 'primary.main', bgcolor: glow(theme).soft },
               }}
             >
               All notes
@@ -426,9 +424,9 @@ function QuickCaptureHome() {
           severity="success"
           onClose={() => setCaptureToast(false)}
           sx={{
-            bgcolor: theme.palette.glow.soft,
+            bgcolor: glow(theme).soft,
             color: 'text.primary',
-            border: `1px solid ${theme.palette.border}`,
+            border: `1px solid ${border(theme)}`,
             '& .MuiAlert-icon': { color: 'primary.main' },
           }}
         >

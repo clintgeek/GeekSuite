@@ -9,10 +9,10 @@ import {
     Divider,
     useTheme,
 } from '@mui/material';
-import useNoteStore from '../store/noteStore';
 import { formatRelativeTime } from '../utils/dateUtils';
 import { previewText } from '../utils/previewText';
 import { gql, useQuery } from '@apollo/client';
+import { border, glow, noteTypeColor } from '../theme/tokens';
 
 const GET_NOTES = gql`
     query GetNotes($tag: String, $prefix: String) {
@@ -28,9 +28,6 @@ const GET_NOTES = gql`
     }
 `;
 
-function getTypeColor(type, palette) {
-    return palette.noteTypes?.[type] || palette.noteTypes?.text || palette.primary.main;
-}
 
 function getPreview(note) {
     if (note.snippet) return note.snippet;
@@ -42,7 +39,7 @@ function getPreview(note) {
 function NoteRow({ note }) {
     const theme = useTheme();
     const type = note.type || 'text';
-    const typeColor = getTypeColor(type, theme.palette);
+    const typeColor = noteTypeColor(theme, type);
     const preview = getPreview(note);
 
     return (
@@ -62,7 +59,7 @@ function NoteRow({ note }) {
                 color: 'inherit',
                 transition: 'background 120ms ease',
                 '&:hover': {
-                    bgcolor: theme.palette.glow.soft,
+                    bgcolor: glow(theme).soft,
                     '& .type-dot': { transform: 'scale(1.5)' },
                 },
             }}
@@ -131,8 +128,8 @@ function NoteRow({ note }) {
                                 px: 0.75,
                                 py: 0.125,
                                 borderRadius: '4px',
-                                border: `1px solid ${theme.palette.border}`,
-                                bgcolor: theme.palette.glow.soft,
+                                border: `1px solid ${border(theme)}`,
+                                bgcolor: glow(theme).soft,
                                 color: 'text.secondary',
                                 lineHeight: '18px',
                             }}

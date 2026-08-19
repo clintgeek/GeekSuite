@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Box, TextField, ToggleButton, ToggleButtonGroup, useMediaQuery, useTheme } from '@mui/material';
 import { Edit, Visibility, VerticalSplit } from '@mui/icons-material';
 import ReactMarkdown from 'react-markdown';
+import { surfaces } from '../../theme/tokens';
 
 /**
  * MarkdownEditor - Lightweight markdown editor with live preview
@@ -146,7 +147,7 @@ function MarkdownEditor({ content = '', setContent, isLoading, readOnly = false,
                         p: 1,
                         borderBottom: 1,
                         borderColor: 'divider',
-                        bgcolor: theme.palette.surfaces.paper,
+                        bgcolor: surfaces(theme).paper,
                     }}
                 >
                     <ToggleButtonGroup
