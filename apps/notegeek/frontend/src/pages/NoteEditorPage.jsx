@@ -251,6 +251,53 @@ function NoteEditorPage() {
     setDirty(true);
   }, []);
 
+  // ── Refs for flush-on-unmount and keyboard shortcut ───────────────────
+  // These always point to the latest values so stale closures don't bite.
+  const handleSaveRef = useRef(handleSave);
+  handleSaveRef.current = handleSave;
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
+
+  // Debounced autosave — fires 2s after the last edit while dirty.
+  // Resets on every content/title/tag change, giving a true debounce.
+  useEffect(() => {
+    if (!dirty) return;
+    const timer = setTimeout(() => {
+      handleSaveRef.current();
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [dirty, content, title, tags]);
+
+  // Cmd/Ctrl+S — manual save shortcut
+  useEffect(() => {
+    const handler = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault();
+        handleSaveRef.current();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  // Flush on unmount — if there are unsaved changes when the user navigates
+  // away (via in-app navigation, not tab close), fire the save.
+  useEffect(() => {
+    return () => {
+      if (dirtyRef.current) {
+        handleSaveRef.current();
+      }
+    };
+  }, []);
+
+  // Back / cancel — flush save if dirty, then navigate away
+  const handleBack = useCallback(() => {
+    if (dirtyRef.current) {
+      handleSaveRef.current();
+    }
+    navigate(-1);
+  }, [navigate]);
+
   // beforeunload guard — prevents accidental data loss on tab-close / hard-reload
   useEffect(() => {
     if (!dirty) return;
@@ -410,6 +457,7 @@ function NoteEditorPage() {
                 onSave={handleSave}
                 onDelete={() => setIsDeleteDialogOpen(true)}
                 onToggleEdit={() => setIsEditMode(!isEditMode)}
+                onBack={handleBack}
                 isSaving={saveStatus === 'Saving...'}
                 saveStatus={saveStatus}
                 canDelete={!isNewNote || !!savedNoteId}
@@ -425,6 +473,7 @@ function NoteEditorPage() {
             onSave={handleSave}
             onDelete={() => setIsDeleteDialogOpen(true)}
             onToggleEdit={() => setIsEditMode(!isEditMode)}
+            onBack={handleBack}
             isSaving={saveStatus === 'Saving...'}
             saveStatus={saveStatus}
             canDelete={!isNewNote || !!savedNoteId}
