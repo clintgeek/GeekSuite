@@ -192,10 +192,10 @@ function NoteEditorPage() {
     };
   }, [id, noteToEdit, isNewNote, resetForm, getTypeFromQuery]);
 
-  // Handle save
+  // Handle save — allow if either title or content has text
   const handleSave = async () => {
-    if (!content.trim()) {
-      setSaveStatus('Error: Content required');
+    if (!content.trim() && !title.trim()) {
+      setSaveStatus('Error: Add a title or some content first');
       setTimeout(() => setSaveStatus(''), 2000);
       return;
     }

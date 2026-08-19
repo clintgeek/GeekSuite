@@ -56,14 +56,15 @@ function QuickCaptureHome() {
     e.preventDefault();
     if (!captureText.trim()) return;
     const created = await createNote({
-      title: captureText.trim(),
+      title: '',
       type: 'text',
-      content: '',
+      content: captureText.trim(),
     });
     if (created) {
       setCaptureText('');
       setCaptureToast(true);
-      navigate(`/notes/${created.id || created._id}/edit`);
+      // Stay on home — refresh the list so the new note appears in Recent
+      fetchNotes({ limit: 50 });
     }
   };
 
