@@ -4,7 +4,7 @@ import Folder from './models/Folder.js';
 
 export const resolvers = {
   Query: {
-    notes: async (_, { tag, prefix }, context) => {
+    notes: async (_, { tag, prefix, type, limit }, context) => {
       const userId = context.user?.id;
       if (!userId) return [];
 
@@ -18,8 +18,13 @@ export const resolvers = {
       if (prefix) {
         filter.tags = { $regex: `^${ escapeRegex(prefix) }` };
       }
+      if (type) {
+        filter.type = type;
+      }
 
-      return await Note.find(filter).sort({ updatedAt: -1 });
+      const query = Note.find(filter).sort({ updatedAt: -1 });
+      if (limit && limit > 0) query.limit(limit);
+      return await query;
     },
 
     note: async (_, { id }, context) => {

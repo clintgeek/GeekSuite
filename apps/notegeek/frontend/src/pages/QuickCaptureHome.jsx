@@ -68,17 +68,12 @@ function QuickCaptureHome() {
     }
   };
 
-  const sortedNotes = [...notes].sort((a, b) => {
-    const dateA = new Date(a.updatedAt || a.createdAt);
-    const dateB = new Date(b.updatedAt || b.createdAt);
-    return dateB - dateA;
-  });
-
+  // Notes come pre-sorted by updatedAt desc from the resolver
   const firstName = user?.name?.split(' ')[0] || user?.email?.split('@')[0] || '';
 
   // Compact note-count caption (e.g. "12 notes · last edited 4h ago")
-  const lastEdited = sortedNotes[0]
-    ? formatRelativeTime(sortedNotes[0].updatedAt || sortedNotes[0].createdAt)
+  const lastEdited = notes[0]
+    ? formatRelativeTime(notes[0].updatedAt || notes[0].createdAt)
     : null;
   const countCaption = notes.length > 0
     ? `${notes.length} ${notes.length === 1 ? 'note' : 'notes'}${lastEdited ? ` · last edited ${lastEdited}` : ''}`
@@ -228,7 +223,7 @@ function QuickCaptureHome() {
             />
           ))}
         </Box>
-      ) : sortedNotes.length === 0 ? (
+      ) : notes.length === 0 ? (
         <Box sx={{ py: { xs: 4, sm: 6 }, textAlign: 'center' }}>
           <Typography variant="body1" sx={{ color: 'text.disabled', mb: 0.75 }}>
             Nothing here yet
@@ -274,7 +269,7 @@ function QuickCaptureHome() {
 
           {/* Editorial rows with hairline dividers */}
           <Box>
-            {sortedNotes.slice(0, 12).map((note, idx) => (
+            {notes.slice(0, 12).map((note, idx) => (
               <React.Fragment key={note.id || note._id}>
                 {idx > 0 && (
                   <Divider sx={{ borderColor: theme.palette.divider }} />
