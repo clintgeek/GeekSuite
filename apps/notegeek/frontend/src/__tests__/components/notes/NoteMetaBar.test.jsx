@@ -54,14 +54,11 @@ describe('NoteMetaBar', () => {
             <NoteMetaBar title="" noteType="markdown" tags={[]} />,
             { wrapper: AllProviders }
         );
-        expect(screen.getByText('Markdown')).toBeInTheDocument();
+        expect(screen.getByText('MARKDOWN')).toBeInTheDocument();
 
-        rerender(
-            <AllProviders>
-                <NoteMetaBar title="" noteType="code" tags={[]} />
-            </AllProviders>
-        );
-        expect(screen.getByText('Code')).toBeInTheDocument();
+        // rerender reuses the original `wrapper`; re-wrapping would nest routers.
+        rerender(<NoteMetaBar title="" noteType="code" tags={[]} />);
+        expect(screen.getByText('CODE')).toBeInTheDocument();
     });
 
     it('passes down props to TagSelector', () => {

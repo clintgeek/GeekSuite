@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { ThemeProvider, createTheme } from '@mui/material';
+import { ThemeProvider } from '@mui/material';
+import { lightTheme } from '../../testUtils';
 import NoteShell from '../../../components/notes/NoteShell';
 
-const theme = createTheme();
+const theme = lightTheme;
 const ThemeWrapper = ({ children }) => <ThemeProvider theme={theme}>{children}</ThemeProvider>;
 
 describe('NoteShell', () => {

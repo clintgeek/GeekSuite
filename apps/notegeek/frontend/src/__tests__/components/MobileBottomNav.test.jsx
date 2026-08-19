@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
-import { ThemeProvider, createTheme } from '@mui/material';
+import { ThemeProvider } from '@mui/material';
+import { lightTheme } from '../testUtils';
 import MobileBottomNav from '../../components/MobileBottomNav';
 
-const theme = createTheme();
+const theme = lightTheme;
 
 // Portal in JSDOM sometimes struggles, but usually works with testing-library if baseElement is defined or just using container
 const MobileBottomNavTestWrapper = ({ children, initialPath = '/' }) => (

@@ -1,25 +1,25 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
-import { ThemeProvider, createTheme } from '@mui/material';
+import { gql } from '@apollo/client';
+import { MockedProvider } from '@apollo/client/testing';
+import { ThemeProvider } from '@mui/material/styles';
+import { lightTheme } from '../testUtils';
 import Sidebar from '../../components/Sidebar';
 import useAuthStore from '../../store/authStore';
-import useTagStore from '../../store/tagStore';
 import useNoteStore from '../../store/noteStore';
 
-const theme = createTheme();
+const GET_TAGS = gql`
+  query GetNoteTags {
+    noteTags
+  }
+`;
 
-// Mock Zustand stores directly
+const theme = lightTheme;
+
+// Mock Zustand stores directly (only the bits Sidebar still reads)
 vi.mock('../../store/authStore', () => {
     const defaultStore = { logout: vi.fn(), user: { id: 1 } };
-    const useStore = vi.fn((selector) => (selector ? selector(defaultStore) : defaultStore));
-    useStore.getState = () => defaultStore;
-    useStore.setState = () => { };
-    return { default: useStore };
-});
-
-vi.mock('../../store/tagStore', () => {
-    const defaultStore = { tags: ['project/foo', 'project/bar', 'personal'], fetchTags: vi.fn(), clearTags: vi.fn(), isLoading: false, error: null };
     const useStore = vi.fn((selector) => (selector ? selector(defaultStore) : defaultStore));
     useStore.getState = () => defaultStore;
     useStore.setState = () => { };
@@ -38,15 +38,26 @@ vi.mock('../../components/TagContextMenu', () => ({
     default: () => <div data-testid="tag-context-menu-mock">ContextMenu</div>
 }));
 
-const SidebarTestWrapper = ({ children, initialPath = '/' }) => (
+const TAGS = ['project/foo', 'project/bar', 'personal'];
+
+function tagsMock(tags = TAGS) {
+    return {
+        request: { query: GET_TAGS },
+        result: { data: { noteTags: tags } },
+    };
+}
+
+const SidebarTestWrapper = ({ children, initialPath = '/', mocks = [tagsMock()] }) => (
     <ThemeProvider theme={theme}>
-        <MemoryRouter initialEntries={[initialPath]}>
-            {children}
-            <Routes>
-                <Route path="*" element={<div data-testid="route-content" />} />
-                <Route path="/login" element={<div data-testid="login-page">Login Page</div>} />
-            </Routes>
-        </MemoryRouter>
+        <MockedProvider mocks={mocks} addTypename={false}>
+            <MemoryRouter initialEntries={[initialPath]}>
+                {children}
+                <Routes>
+                    <Route path="*" element={<div data-testid="route-content" />} />
+                    <Route path="/login" element={<div data-testid="login-page">Login Page</div>} />
+                </Routes>
+            </MemoryRouter>
+        </MockedProvider>
     </ThemeProvider>
 );
 
@@ -63,31 +74,30 @@ describe('Sidebar', () => {
         expect(screen.getByText('All Notes')).toBeInTheDocument();
     });
 
-    it('renders tags hierarchically', () => {
+    it('renders tags hierarchically', async () => {
         render(<Sidebar />, { wrapper: SidebarTestWrapper });
-        expect(screen.getByText('project')).toBeInTheDocument();
+        await waitFor(() => expect(screen.getByText('project')).toBeInTheDocument());
         expect(screen.getByText('foo')).toBeInTheDocument();
         expect(screen.getByText('bar')).toBeInTheDocument();
         expect(screen.getByText('personal')).toBeInTheDocument();
     });
 
-    it('filters tags based on input', () => {
+    it('filters tags based on input', async () => {
         render(<Sidebar />, { wrapper: SidebarTestWrapper });
+        await waitFor(() => expect(screen.getByText('project')).toBeInTheDocument());
 
-        const filterInput = screen.getByPlaceholderText('Filter tags...');
+        const filterInput = screen.getByPlaceholderText('Filter tags…');
         fireEvent.change(filterInput, { target: { value: 'foo' } });
 
         expect(screen.getByText('project')).toBeInTheDocument();
         expect(screen.getByText('foo')).toBeInTheDocument();
 
-        // 'bar' and 'personal' should not be in the document
         expect(screen.queryByText('bar')).not.toBeInTheDocument();
         expect(screen.queryByText('personal')).not.toBeInTheDocument();
     });
 
-    it('handles logout flow properly', () => {
+    it('handles logout flow properly', async () => {
         const authStore = useAuthStore.getState();
-        const tagStore = useTagStore.getState();
         const noteStore = useNoteStore.getState();
 
         render(<Sidebar closeNavbar={vi.fn()} />, { wrapper: SidebarTestWrapper });
@@ -97,7 +107,6 @@ describe('Sidebar', () => {
 
         expect(authStore.logout).toHaveBeenCalled();
         expect(noteStore.clearNotes).toHaveBeenCalled();
-        expect(tagStore.clearTags).toHaveBeenCalled();
 
         // Navigation should be to /login
         expect(screen.getByTestId('login-page')).toBeInTheDocument();

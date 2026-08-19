@@ -98,7 +98,7 @@ describe('Page Tests', () => {
     describe('QuickCaptureHome', () => {
         it('renders quick capture fields', () => {
             render(<QuickCaptureHome />, { wrapper: AllProviders });
-            expect(screen.getByText(/Your desk is empty/i)).toBeInTheDocument();
+            expect(screen.getByText(/Nothing here yet/i)).toBeInTheDocument();
         });
     });
 });
