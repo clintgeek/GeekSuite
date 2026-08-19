@@ -8,7 +8,7 @@ import {
 } from '@mui/material';
 import { formatRelativeTime } from '../../utils/dateUtils';
 import { previewText } from '../../utils/previewText';
-import { border, glow, noteTypeColor } from '../../theme/tokens';
+import { border, glow, noteTypeColor, layout } from '../../theme/tokens';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -165,7 +165,7 @@ function NoteRow({ note, to, onClick, query, maxPreview = 120 }) {
                 variant="caption"
                 sx={{
                     flexShrink: 0,
-                    minWidth: 44,
+                    minWidth: layout.timestampMinWidth,
                     textAlign: 'right',
                     color: 'text.disabled',
                     alignSelf: 'center',

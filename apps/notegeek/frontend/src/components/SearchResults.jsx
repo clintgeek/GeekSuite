@@ -18,6 +18,7 @@ import {
 } from '@mui/icons-material';
 import NoteRow from './notes/NoteRow';
 import useNoteStore from '../store/noteStore';
+import { layout } from '../theme/tokens';
 
 
 // ─── SearchResults ────────────────────────────────────────────────────────────
@@ -52,7 +53,7 @@ function SearchResults() {
     };
 
     return (
-        <Box sx={{ maxWidth: 720, mx: 'auto', py: { xs: 1.5, sm: 2 } }}>
+        <Box sx={{ maxWidth: layout.contentWidth, mx: 'auto', py: { xs: 1.5, sm: 2 } }}>
             {/* Search input — aligned with the Ink Studio aesthetic */}
             <TextField
                 inputRef={inputRef}

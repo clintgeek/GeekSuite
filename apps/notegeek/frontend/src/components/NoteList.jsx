@@ -11,7 +11,7 @@ import {
 import { gql, useQuery } from '@apollo/client';
 import NoteRow from './notes/NoteRow';
 import { NOTE_TYPES } from './notes/NoteTypeRouter';
-import { border, glow, noteTypeColor } from '../theme/tokens';
+import { border, glow, noteTypeColor, layout } from '../theme/tokens';
 
 const GET_NOTES = gql`
     query GetNotes($tag: String, $prefix: String, $type: String, $limit: Int) {
@@ -74,9 +74,9 @@ function NoteList({ tag, prefix }) {
 
     if (isLoadingList && !data) {
         return (
-            <Box sx={{ py: 2, maxWidth: 720, mx: 'auto' }}>
+            <Box sx={{ py: 2, maxWidth: layout.contentWidth, mx: 'auto' }}>
                 {[1, 2, 3, 4, 5, 6].map((i) => (
-                    <Skeleton key={i} height={44} sx={{ borderRadius: 1, mb: 0.5 }} variant="rounded" />
+                    <Skeleton key={i} height={layout.rowHeight} sx={{ borderRadius: 1, mb: 0.5 }} variant="rounded" />
                 ))}
             </Box>
         );
@@ -91,7 +91,7 @@ function NoteList({ tag, prefix }) {
     }
 
     return (
-        <Box sx={{ py: { xs: 1, sm: 1.5 }, maxWidth: 720, mx: 'auto' }}>
+        <Box sx={{ py: { xs: 1, sm: 1.5 }, maxWidth: layout.contentWidth, mx: 'auto' }}>
             {/* ── Filter + sort controls ──────────────────────────────── */}
             <Box sx={{
                 display: 'flex',

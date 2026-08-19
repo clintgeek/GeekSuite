@@ -211,7 +211,7 @@ function Header({ onMenuClick }) {
             <Typography
               sx={{
                 fontFamily: theme.typography.fontFamilyMono,
-                fontSize: '0.5625rem',
+                fontSize: '0.6875rem',
                 fontWeight: 600,
                 color: 'text.disabled',
                 lineHeight: 1,

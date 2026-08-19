@@ -18,7 +18,7 @@ import NoteRow from '../components/notes/NoteRow';
 import useNoteStore from '../store/noteStore';
 import useAuthStore from '../store/authStore';
 import { formatRelativeTime } from '../utils/dateUtils';
-import { border, glow, noteTypeColor, surfaces } from '../theme/tokens';
+import { border, glow, noteTypeColor, surfaces, layout } from '../theme/tokens';
 
 // ─── Type pills ──────────────────────────────────────────────────────────────
 const TYPE_PILLS = [
@@ -80,7 +80,7 @@ function QuickCaptureHome() {
     : null;
 
   return (
-    <Box sx={{ width: '100%', maxWidth: 720, mx: 'auto', py: { xs: 2, sm: 4 }, px: { xs: 2, sm: 0 } }}>
+    <Box sx={{ width: '100%', maxWidth: layout.contentWidth, mx: 'auto', py: { xs: 2, sm: 4 }, px: { xs: 2, sm: 0 } }}>
 
       {/* ──────────────────────────────────────────────────────────────── */}
       {/* GREETING                                                        */}
@@ -217,7 +217,7 @@ function QuickCaptureHome() {
           {[1, 2, 3, 4, 5].map((i) => (
             <Skeleton
               key={i}
-              height={44}
+              height={layout.rowHeight}
               sx={{ borderRadius: 1, mb: 0.5 }}
               variant="rounded"
             />

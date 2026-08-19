@@ -83,7 +83,7 @@ function NavItem({ item, isActive, onClick }) {
       <Typography
         sx={{
           fontFamily: theme.typography.fontFamilyMono,
-          fontSize: '0.5625rem',
+          fontSize: '0.6875rem',
           fontWeight: isActive ? 600 : 500,
           letterSpacing: '0.06em',
           textTransform: 'uppercase',

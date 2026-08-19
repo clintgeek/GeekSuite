@@ -52,3 +52,14 @@ export function noteTypeColor(theme, type) {
   if (!map) return theme.palette.text?.primary || theme.palette.primary?.main;
   return map[type] || map[FALLBACK_NOTE_TYPE] || theme.palette.primary?.main;
 }
+
+/**
+ * Layout constants — replaces magic numbers scattered across components.
+ * All in px; use via `layout.contentWidth` etc. in `sx` props.
+ */
+export const layout = {
+  contentWidth: 720,    // max width for list views (NoteList, QuickCaptureHome, SearchResults)
+  pickerWidth: 480,     // max width for the new-note type picker
+  timestampMinWidth: 44, // min width for the timestamp column in NoteRow
+  rowHeight: 44,        // skeleton row height for list loading states
+};

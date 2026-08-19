@@ -14,7 +14,7 @@ import { GET_NOTE_BY_ID, GET_NOTES } from '../graphql/queries';
 import { CREATE_NOTE, UPDATE_NOTE } from '../graphql/mutations';
 import { NoteShell, NoteMetaBar, NoteActions, NoteTypeRouter, NOTE_TYPES } from '../components/notes';
 import DeleteNoteDialog from '../components/DeleteNoteDialog';
-import { noteTypeColor } from '../theme/tokens';
+import { noteTypeColor, layout } from '../theme/tokens';
 
 // Type card configuration. Colors come from theme.palette.noteTypes so light
 // and dark modes stay in sync with NoteRow / NoteMetaBar / NoteViewer / sidebar.
@@ -334,7 +334,7 @@ function NoteEditorPage() {
       <Box
         sx={{
           width: '100%',
-          maxWidth: 480,
+          maxWidth: layout.pickerWidth,
           mx: 'auto',
           py: { xs: 2, sm: 4 },
           px: { xs: 2, sm: 3 },
