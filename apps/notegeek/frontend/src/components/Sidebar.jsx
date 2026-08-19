@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
     List,
@@ -13,6 +13,7 @@ import {
     Divider,
     TextField,
     InputAdornment,
+    IconButton,
     useTheme,
     alpha,
 } from '@mui/material';
@@ -25,6 +26,7 @@ import {
     AutoStoriesOutlined as AllNotesIcon,
     HomeOutlined as HomeIcon,
     SettingsOutlined as SettingsIcon,
+    MoreHoriz as MoreIcon,
 } from '@mui/icons-material';
 import { geekLayout } from '@geeksuite/ui';
 import useTagStore from '../store/tagStore';
@@ -80,6 +82,132 @@ function SectionLabel({ children, sx }) {
     );
 }
 
+// ——— Tag hierarchy builder (pure function, module-level) ———————————————
+function buildTagHierarchy(tagList) {
+    const hierarchy = {};
+    tagList.forEach((tag) => {
+        const parts = tag.split('/');
+        let current = hierarchy;
+        let currentPath = '';
+        parts.forEach((part) => {
+            currentPath = currentPath ? `${currentPath}/${part}` : part;
+            if (!current[part]) {
+                current[part] = { path: currentPath, children: {} };
+            }
+            current = current[part].children;
+        });
+    });
+    return hierarchy;
+}
+
+// ——— TagTreeRow: single tag node (module-level, no re-creation) —————————
+function TagTreeRow({ tag, data, level, location, theme, onNavigate, onTagMenu }) {
+    const isSelected = location.pathname === `/tags/${encodeURIComponent(data.path)}`;
+    const tagColor = getTagColor(data.path);
+    const hasChildren = Object.keys(data.children).length > 0;
+
+    return (
+        <div key={data.path}>
+            <ListItemButton
+                component={Link}
+                to={`/tags/${encodeURIComponent(data.path)}`}
+                selected={isSelected}
+                onClick={onNavigate}
+                onContextMenu={(e) => { e.preventDefault(); onTagMenu(e, data.path); }}
+                sx={{
+                    pl: level * 1.5 + 2,
+                    pr: 0.5,
+                    py: 0.625,
+                    mx: 0.75,
+                    my: 0.125,
+                    borderRadius: '6px',
+                    transition: 'all 100ms ease',
+                    '&.Mui-selected': {
+                        backgroundColor: alpha(tagColor, 0.08),
+                        borderLeft: `2px solid ${tagColor}`,
+                        paddingLeft: `calc(${level * 1.5 + 2} * 8px - 2px)`,
+                        '&:hover': { backgroundColor: alpha(tagColor, 0.12) },
+                    },
+                    '&:hover': {
+                        backgroundColor: alpha(tagColor, 0.06),
+                        '& .tag-more-btn': { opacity: 1 },
+                    },
+                }}
+            >
+                {/* Tag color dot */}
+                <Box
+                    sx={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: '50%',
+                        bgcolor: tagColor,
+                        mr: 1.25,
+                        flexShrink: 0,
+                        opacity: isSelected ? 1 : 0.55,
+                        transition: 'opacity 100ms ease',
+                    }}
+                />
+                <ListItemText
+                    primary={tag}
+                    primaryTypographyProps={{
+                        fontFamily: theme.typography.fontFamilyMono,
+                        fontSize: '0.75rem',
+                        fontWeight: isSelected ? 600 : 400,
+                        color: isSelected ? 'text.primary' : 'text.secondary',
+                        letterSpacing: '0.01em',
+                    }}
+                />
+                {/* Discoverable "..." button — visible on hover or focus */}
+                <IconButton
+                    className="tag-more-btn"
+                    size="small"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); onTagMenu(e.currentTarget, data.path); }}
+                    sx={{
+                        opacity: 0,
+                        p: 0.25,
+                        color: 'text.disabled',
+                        transition: 'opacity 100ms ease, color 100ms ease',
+                        '&:hover': { color: 'text.secondary', bgcolor: 'transparent' },
+                    }}
+                    aria-label={`Tag options for ${data.path}`}
+                >
+                    <MoreIcon sx={{ fontSize: 14 }} />
+                </IconButton>
+            </ListItemButton>
+            {hasChildren && (
+                <TagTree
+                    hierarchy={data.children}
+                    level={level + 1}
+                    location={location}
+                    theme={theme}
+                    onNavigate={onNavigate}
+                    onTagMenu={onTagMenu}
+                />
+            )}
+        </div>
+    );
+}
+
+// ——— TagTree: recursive renderer (module-level) ———————————————————————
+function TagTree({ hierarchy, level = 0, location, theme, onNavigate, onTagMenu }) {
+    return (
+        <>
+            {Object.entries(hierarchy).map(([tag, data]) => (
+                <TagTreeRow
+                    key={data.path}
+                    tag={tag}
+                    data={data}
+                    level={level}
+                    location={location}
+                    theme={theme}
+                    onNavigate={onNavigate}
+                    onTagMenu={onTagMenu}
+                />
+            ))}
+        </>
+    );
+}
+
 function Sidebar({ closeNavbar }) {
     const location = useLocation();
     const navigate = useNavigate();
@@ -89,6 +217,8 @@ function Sidebar({ closeNavbar }) {
     const { logout } = useAuthStore();
     const { clearNotes } = useNoteStore();
     const [tagFilter, setTagFilter] = useState('');
+    const [contextMenu, setContextMenu] = useState(null);
+    const [selectedTag, setSelectedTag] = useState(null);
 
     const { data, loading: tagsLoading, error } = useQuery(GET_TAGS, {
         fetchPolicy: 'cache-and-network',
@@ -108,122 +238,16 @@ function Sidebar({ closeNavbar }) {
         navigate('/login?signedOut=1');
     };
 
-    // Build hierarchical tag structure
-    const buildTagHierarchy = (tagList) => {
-        const hierarchy = {};
-        tagList.forEach((tag) => {
-            const parts = tag.split('/');
-            let current = hierarchy;
-            let currentPath = '';
-            parts.forEach((part) => {
-                currentPath = currentPath ? `${currentPath}/${part}` : part;
-                if (!current[part]) {
-                    current[part] = { path: currentPath, children: {} };
-                }
-                current = current[part].children;
-            });
-        });
-        return hierarchy;
-    };
+    // Single context menu handler for all tag rows
+    const handleTagMenu = useCallback((anchorEl, tagPath) => {
+        setContextMenu(anchorEl);
+        setSelectedTag(tagPath);
+    }, []);
 
-    // Recursive tag-tree renderer
-    const RenderTagHierarchy = ({ hierarchy, level = 0 }) => {
-        const [contextMenu, setContextMenu] = useState(null);
-        const [selectedTag, setSelectedTag] = useState(null);
-
-        const handleContextMenu = (event, tag) => {
-            event.preventDefault();
-            setContextMenu(event.currentTarget);
-            setSelectedTag(tag);
-        };
-
-        const handleCloseContextMenu = () => {
-            setContextMenu(null);
-            setSelectedTag(null);
-        };
-
-        return (
-            <>
-                {Object.entries(hierarchy).map(([tag, data]) => {
-                    const isSelected =
-                        location.pathname === `/tags/${encodeURIComponent(data.path)}`;
-                    const tagColor = getTagColor(data.path);
-
-                    return (
-                        <div key={data.path}>
-                            <ListItemButton
-                                component={Link}
-                                to={`/tags/${encodeURIComponent(data.path)}`}
-                                selected={isSelected}
-                                onClick={handleLinkClick}
-                                onContextMenu={(e) => handleContextMenu(e, data.path)}
-                                sx={{
-                                    // Level indent: each nesting level adds 12px
-                                    pl: level * 1.5 + 2,
-                                    pr: 1.25,
-                                    py: 0.625,
-                                    mx: 0.75,
-                                    my: 0.125,
-                                    borderRadius: '6px',
-                                    transition: 'all 100ms ease',
-                                    // Override MuiListItemButton selected state: use tag color
-                                    // (rather than global oxblood) for the glow bg, but keep
-                                    // the 2px left-border in tag color for visual anchoring.
-                                    '&.Mui-selected': {
-                                        backgroundColor: alpha(tagColor, 0.08),
-                                        borderLeft: `2px solid ${tagColor}`,
-                                        paddingLeft: `calc(${level * 1.5 + 2} * 8px - 2px)`,
-                                        '&:hover': {
-                                            backgroundColor: alpha(tagColor, 0.12),
-                                        },
-                                    },
-                                    '&:hover': {
-                                        backgroundColor: alpha(tagColor, 0.06),
-                                    },
-                                }}
-                            >
-                                {/* Tag color dot */}
-                                <Box
-                                    sx={{
-                                        width: 6,
-                                        height: 6,
-                                        borderRadius: '50%',
-                                        bgcolor: tagColor,
-                                        mr: 1.25,
-                                        flexShrink: 0,
-                                        opacity: isSelected ? 1 : 0.55,
-                                        transition: 'opacity 100ms ease',
-                                    }}
-                                />
-                                <ListItemText
-                                    primary={tag}
-                                    primaryTypographyProps={{
-                                        fontFamily: theme.typography.fontFamilyMono,
-                                        fontSize: '0.75rem',
-                                        fontWeight: isSelected ? 600 : 400,
-                                        color: isSelected ? 'text.primary' : 'text.secondary',
-                                        letterSpacing: '0.01em',
-                                    }}
-                                />
-                            </ListItemButton>
-                            {Object.keys(data.children).length > 0 && (
-                                <RenderTagHierarchy
-                                    hierarchy={data.children}
-                                    level={level + 1}
-                                />
-                            )}
-                        </div>
-                    );
-                })}
-                <TagContextMenu
-                    anchorEl={contextMenu}
-                    open={Boolean(contextMenu)}
-                    onClose={handleCloseContextMenu}
-                    tag={selectedTag}
-                />
-            </>
-        );
-    };
+    const handleCloseTagMenu = useCallback(() => {
+        setContextMenu(null);
+        setSelectedTag(null);
+    }, []);
 
     const filteredTags = tags.filter((tag) =>
         tag.toLowerCase().includes(tagFilter.toLowerCase())
@@ -475,7 +499,13 @@ function Sidebar({ closeNavbar }) {
                     </Box>
                 )}
                 {!tagsLoading && !tagsError && Object.keys(filteredHierarchy).length > 0 && (
-                    <RenderTagHierarchy hierarchy={filteredHierarchy} />
+                    <TagTree
+                        hierarchy={filteredHierarchy}
+                        location={location}
+                        theme={theme}
+                        onNavigate={handleLinkClick}
+                        onTagMenu={handleTagMenu}
+                    />
                 )}
                 {!tagsLoading && !tagsError && tagFilter && Object.keys(filteredHierarchy).length === 0 && (
                     <Box sx={{ px: 2, py: 2, textAlign: 'center' }}>
@@ -559,6 +589,14 @@ function Sidebar({ closeNavbar }) {
                     </ListItem>
                 </List>
             </Box>
+
+            {/* Single context menu for all tag rows */}
+            <TagContextMenu
+                anchorEl={contextMenu}
+                open={Boolean(contextMenu)}
+                onClose={handleCloseTagMenu}
+                tag={selectedTag}
+            />
         </Box>
     );
 }
