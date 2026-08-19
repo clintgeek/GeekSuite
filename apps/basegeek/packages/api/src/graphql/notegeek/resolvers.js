@@ -22,11 +22,15 @@ export const resolvers = {
       return await Note.find(filter).sort({ updatedAt: -1 });
     },
 
-    note: async (_, { id }) => {
+    note: async (_, { id }, context) => {
       if (!id || id === 'undefined' || !mongoose.isValidObjectId(id)) {
         throw new Error(`Invalid Note ID format: ${ id }`);
       }
-      return await Note.findById(id);
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const note = await Note.findOne({ _id: id, userId });
+      if (!note) throw new Error('Note not found or you do not have permission to view it');
+      return note;
     },
 
     noteTags: async (_, __, context) => {
@@ -98,11 +102,14 @@ export const resolvers = {
       return note;
     },
 
-    deleteNote: async (_, { id }) => {
+    deleteNote: async (_, { id }, context) => {
       if (!id || id === 'undefined' || !mongoose.isValidObjectId(id)) {
         throw new Error(`Invalid Note ID format: ${ id }`);
       }
-      await Note.findByIdAndDelete(id);
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const note = await Note.findOneAndDelete({ _id: id, userId });
+      if (!note) throw new Error('Note not found or you do not have permission to delete it');
       return true;
     },
 
