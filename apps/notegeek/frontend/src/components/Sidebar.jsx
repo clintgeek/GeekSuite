@@ -42,17 +42,18 @@ const GET_TAGS = gql`
   }
 `;
 
-// Earthy, editorial tag accent colors — warm tones that feel at home
-// against cream paper. Mapped deterministically from tag name hash.
+// Earthy, editorial tag accent colors — spread across the hue wheel so
+// adjacent tags get visually distinct dots. Mapped deterministically from
+// tag name hash. First four align with the noteTypes palette.
 const TAG_COLORS = [
-    '#3D6B7A',  // muted teal   (matches noteTypes.markdown)
-    '#5B7A4A',  // moss          (matches noteTypes.code)
-    '#A8782F',  // ochre         (matches noteTypes.mindmap)
-    '#8B2C2A',  // oxblood       (matches primary)
+    '#2D6A9F',  // slate blue    (matches noteTypes.markdown)
+    '#4A7A2E',  // forest green  (matches noteTypes.code)
+    '#B8841F',  // warm amber    (matches noteTypes.mindmap)
+    '#8B2C2A',  // oxblood       (matches primary/handwritten)
     '#6B5A3A',  // warm umber
-    '#4A6B8A',  // slate blue
-    '#7A5A3D',  // leather
-    '#3A5C4A',  // dark sage
+    '#5C4A8A',  // muted indigo
+    '#7A4A5C',  // plum
+    '#3A6B7A',  // deep teal
 ];
 
 function getTagColor(tagName) {

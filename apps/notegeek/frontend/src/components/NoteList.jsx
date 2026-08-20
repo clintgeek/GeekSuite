@@ -56,7 +56,7 @@ function NoteList({ tag, prefix }) {
         fetchPolicy: 'cache-and-network',
     });
 
-    const notes = data?.notes || [];
+    const notes = React.useMemo(() => data?.notes || [], [data]);
     const listError = error?.message;
 
     // Client-side sort — the resolver already returns by updatedAt desc,

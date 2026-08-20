@@ -35,20 +35,22 @@ function buildNoteOverrides(mode) {
   const border  = isLight ? '#D8D0BD' : '#3A352D';
 
   // Per-note-type identity colours — earthy and editorial, never playful.
-  // Dark mode lifts each hue so it stays legible on the warm-black ground.
+  // Hues are spread across the wheel (blue → green → amber → red) so the
+  // 7px identity dots stay distinguishable at a glance. Dark mode lifts
+  // each hue so it stays legible on the warm-black ground.
   const noteTypes = isLight
     ? {
-        text:        '#1F1C16',  // ink
-        markdown:    '#3D6B7A',  // muted teal
-        code:        '#5B7A4A',  // moss
-        mindmap:     '#A8782F',  // ochre
+        text:        '#1F1C16',  // ink black
+        markdown:    '#2D6A9F',  // slate blue
+        code:        '#4A7A2E',  // forest green
+        mindmap:     '#B8841F',  // warm amber
         handwritten: '#8B2C2A',  // oxblood
       }
     : {
         text:        '#EDE6D6',
-        markdown:    '#7AA4B0',
-        code:        '#7DA869',
-        mindmap:     '#D4A05A',
+        markdown:    '#6BA5D6',
+        code:        '#7DAE50',
+        mindmap:     '#D9A542',
         handwritten: '#C97570',
       };
 
