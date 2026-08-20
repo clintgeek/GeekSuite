@@ -1,11 +1,13 @@
 import React from 'react';
 import { Box, Button, IconButton, CircularProgress, Tooltip, useTheme } from '@mui/material';
-import { Save, DeleteOutline, Edit, Visibility, Check } from '@mui/icons-material';
+import { glow } from '../../theme/tokens';
+import { Save, DeleteOutline, Edit, Visibility, Check, ArrowBack } from '@mui/icons-material';
 
 /**
- * NoteActions — Save, delete, edit/view toggle.
+ * NoteActions — Save, delete, edit/view toggle, back.
  *
  * Design:
+ *   - Back: text button with arrow icon (mobile bottom-bar only)
  *   - Save: contained primary (oxblood)
  *   - Cancel / View: text button
  *   - Delete: text button, error color, confirm dialog handled upstream
@@ -17,6 +19,7 @@ function NoteActions({
   onSave,
   onDelete,
   onToggleEdit,
+  onBack,
   isSaving = false,
   saveStatus = '',
   canDelete = true,
@@ -79,10 +82,10 @@ function NoteActions({
             borderRadius: '6px',
             transition: 'background 120ms ease',
             '&:hover': {
-              bgcolor: theme.palette.glow.soft,
+              bgcolor: glow(theme).soft,
             },
             '&:focus-visible': {
-              boxShadow: `0 0 0 3px ${theme.palette.glow.ring}`,
+              boxShadow: `0 0 0 3px ${glow(theme).ring}`,
             },
           }}
         >
@@ -107,6 +110,23 @@ function NoteActions({
     </Button>
   );
 
+  // ── Back button ───────────────────────────────────────────────────────
+  const BackButton = () => (
+    <Button
+      variant="text"
+      color="inherit"
+      startIcon={<ArrowBack />}
+      onClick={onBack}
+      size={isBottomBar ? 'medium' : 'small'}
+      sx={{
+        color: 'text.secondary',
+        ...(isBottomBar ? { flex: 0.55 } : {}),
+      }}
+    >
+      Back
+    </Button>
+  );
+
   // ── Bottom-bar layout (mobile) ────────────────────────────────────────
   if (isBottomBar) {
     return (
@@ -118,6 +138,7 @@ function NoteActions({
           py: 1.25,
         }}
       >
+        {onBack && <BackButton />}
         {canToggleEdit && <ToggleEditButton />}
         {isEditMode && <SaveButton />}
         {canDelete && <DeleteButton />}
@@ -128,6 +149,7 @@ function NoteActions({
   // ── Inline layout (desktop) — rendered as fragments, parent aligns them
   return (
     <>
+      {onBack && <BackButton />}
       {canToggleEdit && <ToggleEditButton />}
       {isEditMode && <SaveButton />}
       {canDelete && <DeleteButton />}

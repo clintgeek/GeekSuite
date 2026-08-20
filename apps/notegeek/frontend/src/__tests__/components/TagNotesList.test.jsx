@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
-import { ThemeProvider, createTheme } from '@mui/material';
+import { ThemeProvider } from '@mui/material';
+import { lightTheme } from '../testUtils';
 import TagNotesList from '../../components/TagNotesList';
 
-const theme = createTheme();
+const theme = lightTheme;
 
 vi.mock('../../components/NoteList', () => ({
     default: ({ tag }) => <div data-testid="notelist-mock">NoteList for tag: {tag}</div>

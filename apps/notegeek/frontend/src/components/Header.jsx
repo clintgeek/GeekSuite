@@ -19,6 +19,7 @@ import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined';
 import { useNavigate } from 'react-router-dom';
 import { geekLayout } from '@geeksuite/ui';
 import { useThemeMode } from '../theme/ThemeModeProvider.jsx';
+import { glow } from '../theme/tokens';
 
 function Header({ onMenuClick }) {
   const theme = useTheme();
@@ -167,7 +168,7 @@ function Header({ onMenuClick }) {
             '&:focus-within': {
               borderColor: theme.palette.primary.main,
               bgcolor: theme.palette.background.paper,
-              boxShadow: `0 0 0 3px ${theme.palette.glow.ring}`,
+              boxShadow: `0 0 0 3px ${glow(theme).ring}`,
             },
           }}
         >
@@ -210,7 +211,7 @@ function Header({ onMenuClick }) {
             <Typography
               sx={{
                 fontFamily: theme.typography.fontFamilyMono,
-                fontSize: '0.5625rem',
+                fontSize: '0.6875rem',
                 fontWeight: 600,
                 color: 'text.disabled',
                 lineHeight: 1,

@@ -8,6 +8,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import AddOutlinedIcon from '@mui/icons-material/AddOutlined';
 import AutoStoriesOutlinedIcon from '@mui/icons-material/AutoStoriesOutlined';
 import AutoStoriesIcon from '@mui/icons-material/AutoStories';
+import { glow } from '../theme/tokens';
 
 function getNavValue(pathname) {
   if (pathname.startsWith('/search'))                                     return 'search';
@@ -45,7 +46,7 @@ function NavItem({ item, isActive, onClick }) {
         transition: 'background 80ms ease',
         '&:hover': {
           bgcolor: isActive
-            ? theme.palette.glow.soft
+            ? glow(theme).soft
             : `rgba(${theme.palette.mode === 'dark' ? '237,230,214' : '31,28,22'},0.04)`,
         },
         '&:focus-visible': {
@@ -82,7 +83,7 @@ function NavItem({ item, isActive, onClick }) {
       <Typography
         sx={{
           fontFamily: theme.typography.fontFamilyMono,
-          fontSize: '0.5625rem',
+          fontSize: '0.6875rem',
           fontWeight: isActive ? 600 : 500,
           letterSpacing: '0.06em',
           textTransform: 'uppercase',

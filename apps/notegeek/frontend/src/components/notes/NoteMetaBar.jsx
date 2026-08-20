@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, InputBase, Stack, Typography, useTheme } from '@mui/material';
 import TagSelector from '../TagSelector';
+import { border, glow, noteTypeColor } from '../../theme/tokens';
 
 // Type config — labels are ALLCAPS (ink-stamp mono style)
 // Color comes from theme.palette.noteTypes[colorKey]
@@ -32,7 +33,7 @@ function NoteMetaBar({
 }) {
   const theme = useTheme();
   const typeConfig = TYPE_CONFIG[noteType] || TYPE_CONFIG.text;
-  const typeColor = theme.palette.noteTypes?.[typeConfig.colorKey] || theme.palette.primary.main;
+  const typeColor = noteTypeColor(theme, typeConfig.colorKey);
 
   return (
     <Box sx={{ px: { xs: 1.5, sm: 2 }, py: { xs: 1.25, sm: 1.5 } }}>
@@ -44,7 +45,7 @@ function NoteMetaBar({
           borderRadius: '4px',
           transition: 'box-shadow 120ms ease',
           '&:focus-within': {
-            boxShadow: `0 0 0 3px ${theme.palette.glow.ring}`,
+            boxShadow: `0 0 0 3px ${glow(theme).ring}`,
           },
         }}
       >
@@ -95,8 +96,8 @@ function NoteMetaBar({
               px: 0.875,
               py: 0.25,
               borderRadius: '4px',
-              border: `1px solid ${theme.palette.border}`,
-              bgcolor: theme.palette.glow.soft,
+              border: `1px solid ${border(theme)}`,
+              bgcolor: glow(theme).soft,
               flexShrink: 0,
             }}
           >

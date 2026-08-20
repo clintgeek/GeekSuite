@@ -1,10 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { ThemeProvider, createTheme } from '@mui/material';
+import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { renderWithProviders } from '../testUtils';
 import TagContextMenu from '../../components/TagContextMenu';
 import useTagStore from '../../store/tagStore';
-
-const theme = createTheme();
 
 vi.mock('../../store/tagStore', () => {
     const defaultStore = { renameTag: vi.fn(), deleteTag: vi.fn() };
@@ -27,7 +25,7 @@ describe('TagContextMenu', () => {
     it('renders menu items when open is true', () => {
         // Create a dummy element to anchor the menu to
         const anchor = document.createElement('div');
-        render(<TagContextMenu anchorEl={anchor} open={true} onClose={mockOnClose} tag="my-tag" />, { wrapper: ThemeProvider });
+        renderWithProviders(<TagContextMenu anchorEl={anchor} open={true} onClose={mockOnClose} tag="my-tag" />);
 
         expect(screen.getByText('Rename Tag')).toBeInTheDocument();
         expect(screen.getByText('Delete Tag')).toBeInTheDocument();
@@ -35,18 +33,18 @@ describe('TagContextMenu', () => {
 
     it('calls deleteTag when Delete is clicked and confirmed', async () => {
         const anchor = document.createElement('div');
-        render(<TagContextMenu anchorEl={anchor} open={true} onClose={mockOnClose} tag="my-tag" />, { wrapper: ThemeProvider });
+        renderWithProviders(<TagContextMenu anchorEl={anchor} open={true} onClose={mockOnClose} tag="my-tag" />);
 
         fireEvent.click(screen.getByText('Delete Tag'));
 
         expect(window.confirm).toHaveBeenCalledWith('Are you sure you want to delete the tag "my-tag"? This cannot be undone.');
         expect(useTagStore.getState().deleteTag).toHaveBeenCalledWith('my-tag');
-        expect(mockOnClose).toHaveBeenCalled();
+        await waitFor(() => expect(mockOnClose).toHaveBeenCalled());
     });
 
     it('opens rename dialog and calls renameTag on submit', async () => {
         const anchor = document.createElement('div');
-        render(<TagContextMenu anchorEl={anchor} open={true} onClose={mockOnClose} tag="old-tag" />, { wrapper: ThemeProvider });
+        renderWithProviders(<TagContextMenu anchorEl={anchor} open={true} onClose={mockOnClose} tag="old-tag" />);
 
         // Click Rename Tag to open dialog
         fireEvent.click(screen.getByText('Rename Tag'));
@@ -62,6 +60,6 @@ describe('TagContextMenu', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
 
         expect(useTagStore.getState().renameTag).toHaveBeenCalledWith('old-tag', 'new-tag');
-        expect(mockOnClose).toHaveBeenCalled();
+        await waitFor(() => expect(mockOnClose).toHaveBeenCalled());
     });
 });

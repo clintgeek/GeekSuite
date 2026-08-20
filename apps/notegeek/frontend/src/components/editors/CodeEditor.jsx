@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Box, Select, MenuItem, FormControl, InputLabel, Typography, useTheme } from '@mui/material';
+import { surfaces } from '../../theme/tokens';
 
 const CODE_LANGUAGES = [
   { value: 'javascript', label: 'JavaScript' },
@@ -106,7 +107,7 @@ function CodeEditor({ content = '', setContent, readOnly = false, fontSize = 14 
           p: 1,
           borderBottom: 1,
           borderColor: 'divider',
-          bgcolor: theme.palette.surfaces.paper,
+          bgcolor: surfaces(theme).paper,
         }}
       >
         <FormControl variant="outlined" size="small" sx={{ minWidth: 140 }}>
@@ -137,7 +138,7 @@ function CodeEditor({ content = '', setContent, readOnly = false, fontSize = 14 
         sx={{
           flexGrow: 1,
           position: 'relative',
-          bgcolor: theme.palette.surfaces.elevated,
+          bgcolor: surfaces(theme).elevated,
           overflow: 'hidden',
         }}
       >
@@ -149,7 +150,7 @@ function CodeEditor({ content = '', setContent, readOnly = false, fontSize = 14 
             left: 0,
             bottom: 0,
             width: 48,
-            bgcolor: theme.palette.surfaces.paper,
+            bgcolor: surfaces(theme).paper,
             borderRight: 1,
             borderColor: 'divider',
             overflow: 'hidden',

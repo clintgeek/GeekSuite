@@ -94,7 +94,7 @@ describe('useNoteStore', () => {
     // =========================================================================
     describe('fetchNoteById', () => {
         it('should return note and set state on success', async () => {
-            const mockNote = { _id: '123', title: 'Test Note' };
+            const mockNote = { id: '123', title: 'Test Note' };
             getNoteByIdApi.mockResolvedValueOnce({ data: mockNote });
 
             const promise = useNoteStore.getState().fetchNoteById('123');
@@ -117,7 +117,7 @@ describe('useNoteStore', () => {
         });
 
         it('should handle locked note message', async () => {
-            const mockNote = { _id: '123', isLocked: true, message: 'Locked' };
+            const mockNote = { id: '123', isLocked: true, message: 'Locked' };
             getNoteByIdApi.mockResolvedValueOnce({ data: mockNote });
 
             await useNoteStore.getState().fetchNoteById('123');

@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { ThemeProvider } from "@mui/material/styles";
 import { CssBaseline } from "@mui/material";
 import { FocusModeProvider } from "@geeksuite/ui";
+import { BrowserRouter } from "react-router-dom";
 import { ThemeProvider as UserThemeProvider, useThemeMode } from "@geeksuite/user";
 import App from "./App.jsx";
 import "./styles.css";
@@ -32,7 +33,9 @@ function ThemeWrapper() {
       <CssBaseline />
       <FocusModeProvider storageKey="bookgeek.focusMode">
         <GeekSuiteApolloProvider appName="bookgeek">
-          <App />
+          <BrowserRouter>
+            <App />
+          </BrowserRouter>
         </GeekSuiteApolloProvider>
       </FocusModeProvider>
     </ThemeProvider>

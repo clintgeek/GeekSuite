@@ -14,22 +14,23 @@ import { GET_NOTE_BY_ID, GET_NOTES } from '../graphql/queries';
 import { CREATE_NOTE, UPDATE_NOTE } from '../graphql/mutations';
 import { NoteShell, NoteMetaBar, NoteActions, NoteTypeRouter, NOTE_TYPES } from '../components/notes';
 import DeleteNoteDialog from '../components/DeleteNoteDialog';
+import { noteTypeColor, layout } from '../theme/tokens';
 
 // Type card configuration. Colors come from theme.palette.noteTypes so light
 // and dark modes stay in sync with NoteRow / NoteMetaBar / NoteViewer / sidebar.
 const NOTE_TYPE_CARDS = [
-  { type: NOTE_TYPES.TEXT,        icon: TextIcon,        title: 'Rich Text',     description: 'Format with bold, italic, lists, and more',  themeKey: 'text' },
-  { type: NOTE_TYPES.MARKDOWN,    icon: MarkdownIcon,    title: 'Markdown',      description: 'Write in Markdown with live preview',         themeKey: 'markdown' },
-  { type: NOTE_TYPES.CODE,        icon: CodeIcon,        title: 'Code Snippet',  description: 'Syntax highlighting for any language',        themeKey: 'code' },
-  { type: NOTE_TYPES.MINDMAP,     icon: MindMapIcon,     title: 'Mind Map',      description: 'Visual brainstorming and idea mapping',       themeKey: 'mindmap' },
-  { type: NOTE_TYPES.HANDWRITTEN, icon: HandwrittenIcon, title: 'Sketch',        description: 'Draw and write with stylus or touch',         themeKey: 'handwritten' },
+  { type: NOTE_TYPES.TEXT,        icon: TextIcon,        title: 'Rich Text',  description: 'Bold, italic, lists',         themeKey: 'text' },
+  { type: NOTE_TYPES.MARKDOWN,    icon: MarkdownIcon,    title: 'Markdown',   description: 'Plain text with live preview', themeKey: 'markdown' },
+  { type: NOTE_TYPES.CODE,        icon: CodeIcon,        title: 'Code',       description: 'Syntax-highlighted snippets',  themeKey: 'code' },
+  { type: NOTE_TYPES.MINDMAP,     icon: MindMapIcon,     title: 'Mind Map',   description: 'Visual idea mapping',         themeKey: 'mindmap' },
+  { type: NOTE_TYPES.HANDWRITTEN, icon: HandwrittenIcon, title: 'Sketch',     description: 'Freehand drawing and notes',  themeKey: 'handwritten' },
 ];
 
 // Type card — workspace style
 function TypeCard({ config, onSelect }) {
   const theme = useTheme();
   const Icon = config.icon;
-  const color = theme.palette.noteTypes?.[config.themeKey] || theme.palette.text.primary;
+  const color = noteTypeColor(theme, config.themeKey);
 
   return (
     <Box
@@ -191,10 +192,10 @@ function NoteEditorPage() {
     };
   }, [id, noteToEdit, isNewNote, resetForm, getTypeFromQuery]);
 
-  // Handle save
+  // Handle save — allow if either title or content has text
   const handleSave = async () => {
-    if (!content.trim()) {
-      setSaveStatus('Error: Content required');
+    if (!content.trim() && !title.trim()) {
+      setSaveStatus('Error: Add a title or some content first');
       setTimeout(() => setSaveStatus(''), 2000);
       return;
     }
@@ -250,6 +251,53 @@ function NoteEditorPage() {
     setDirty(true);
   }, []);
 
+  // ── Refs for flush-on-unmount and keyboard shortcut ───────────────────
+  // These always point to the latest values so stale closures don't bite.
+  const handleSaveRef = useRef(handleSave);
+  handleSaveRef.current = handleSave;
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
+
+  // Debounced autosave — fires 2s after the last edit while dirty.
+  // Resets on every content/title/tag change, giving a true debounce.
+  useEffect(() => {
+    if (!dirty) return;
+    const timer = setTimeout(() => {
+      handleSaveRef.current();
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [dirty, content, title, tags]);
+
+  // Cmd/Ctrl+S — manual save shortcut
+  useEffect(() => {
+    const handler = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault();
+        handleSaveRef.current();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  // Flush on unmount — if there are unsaved changes when the user navigates
+  // away (via in-app navigation, not tab close), fire the save.
+  useEffect(() => {
+    return () => {
+      if (dirtyRef.current) {
+        handleSaveRef.current();
+      }
+    };
+  }, []);
+
+  // Back / cancel — flush save if dirty, then navigate away
+  const handleBack = useCallback(() => {
+    if (dirtyRef.current) {
+      handleSaveRef.current();
+    }
+    navigate(-1);
+  }, [navigate]);
+
   // beforeunload guard — prevents accidental data loss on tab-close / hard-reload
   useEffect(() => {
     if (!dirty) return;
@@ -286,7 +334,7 @@ function NoteEditorPage() {
       <Box
         sx={{
           width: '100%',
-          maxWidth: 480,
+          maxWidth: layout.pickerWidth,
           mx: 'auto',
           py: { xs: 2, sm: 4 },
           px: { xs: 2, sm: 3 },
@@ -323,15 +371,15 @@ function NoteEditorPage() {
               mb: 1,
             }}
           >
-            Create a note ✨
+            New note
           </Typography>
           <Typography
             sx={{
-              fontSize: '0.95rem',
+              fontSize: '0.875rem',
               color: 'text.secondary',
             }}
           >
-            Choose how you want to capture your thoughts
+            Choose a format
           </Typography>
         </Box>
 
@@ -409,6 +457,7 @@ function NoteEditorPage() {
                 onSave={handleSave}
                 onDelete={() => setIsDeleteDialogOpen(true)}
                 onToggleEdit={() => setIsEditMode(!isEditMode)}
+                onBack={handleBack}
                 isSaving={saveStatus === 'Saving...'}
                 saveStatus={saveStatus}
                 canDelete={!isNewNote || !!savedNoteId}
@@ -424,6 +473,7 @@ function NoteEditorPage() {
             onSave={handleSave}
             onDelete={() => setIsDeleteDialogOpen(true)}
             onToggleEdit={() => setIsEditMode(!isEditMode)}
+            onBack={handleBack}
             isSaving={saveStatus === 'Saving...'}
             saveStatus={saveStatus}
             canDelete={!isNewNote || !!savedNoteId}

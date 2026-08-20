@@ -1,8 +1,8 @@
 import { gql } from '@apollo/client';
 
 export const GET_NOTES = gql`
-    query GetNotes($tag: String, $prefix: String) {
-        notes(tag: $tag, prefix: $prefix) {
+    query GetNotes($tag: String, $prefix: String, $type: String, $limit: Int) {
+        notes(tag: $tag, prefix: $prefix, type: $type, limit: $limit) {
             id
             title
             content

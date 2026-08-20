@@ -1,12 +1,10 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useTheme } from '@mui/material';
 import useAuthStore from '../store/authStore';
 import { LoginSplash } from '@geeksuite/ui';
 
 function Login() {
     const navigate = useNavigate();
-    const theme = useTheme();
     const { login, isAuthenticated, isLoading: authLoading } = useAuthStore();
 
     useEffect(() => {

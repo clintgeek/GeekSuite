@@ -2,6 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { render } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { MantineProvider } from '@mantine/core';
+import { MockedProvider } from '@apollo/client/testing';
+import { gql } from '@apollo/client';
 import ThemeModeProvider from '../../theme/ThemeModeProvider';
 
 // Component Imports
@@ -15,10 +17,26 @@ import SearchResults from '../../components/SearchResults';
 import AppErrorBoundary from '../../components/AppErrorBoundary';
 import Layout from '../../components/Layout';
 
+// Minimal mocks for Apollo queries used by NoteList / Sidebar inside Layout
+const GET_NOTES = gql`
+    query GetNotes($tag: String, $prefix: String, $type: String, $limit: Int) {
+        notes(tag: $tag, prefix: $prefix, type: $type, limit: $limit) { id title content type tags createdAt updatedAt }
+    }
+`;
+const GET_TAGS = gql`
+    query GetNoteTags { noteTags }
+`;
+const apolloMocks = [
+    { request: { query: GET_NOTES, variables: { tag: undefined, prefix: undefined, type: null, limit: 200 } }, result: { data: { notes: [] } } },
+    { request: { query: GET_TAGS }, result: { data: { noteTags: [] } } },
+];
+
 const AllProviders = ({ children }) => (
     <ThemeModeProvider>
         <MantineProvider>
-            <MemoryRouter>{children}</MemoryRouter>
+            <MockedProvider mocks={apolloMocks} addTypename={false}>
+                <MemoryRouter>{children}</MemoryRouter>
+            </MockedProvider>
         </MantineProvider>
     </ThemeModeProvider>
 );

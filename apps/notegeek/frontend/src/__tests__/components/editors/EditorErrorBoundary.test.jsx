@@ -36,24 +36,23 @@ describe('EditorErrorBoundary', () => {
 
     it('resets error state when Retry is clicked', () => {
         let shouldThrow = true;
-        const ThrowOnceComponent = () => {
-            if (shouldThrow) {
-                shouldThrow = false;
-                throw new Error('Test error');
-            }
+        const ConditionalThrow = () => {
+            if (shouldThrow) throw new Error('Test error');
             return <div data-testid="child">Recovered</div>;
         };
 
         render(
             <EditorErrorBoundary>
-                <ThrowOnceComponent />
+                <ConditionalThrow />
             </EditorErrorBoundary>
         );
 
         // First it catches error
         expect(screen.getByText(/Editor failed to load/i)).toBeInTheDocument();
 
-        // Click retry
+        // Stop throwing before retrying. Flipping the flag mid-render instead
+        // would be undone by React re-attempting the render.
+        shouldThrow = false;
         const retryButton = screen.getByRole('button', { name: /Retry/i });
         fireEvent.click(retryButton);
 
