@@ -102,20 +102,15 @@ function processRefreshQueue(error, token = null) {
 
 async function doTokenRefresh() {
   const apiBase = getApiBase();
-  const refreshToken = getStoredRefreshToken();
 
-  const headers = { 'Content-Type': 'application/json' };
-  const body = {};
-
-  if (refreshToken) {
-    body.refreshToken = refreshToken;
-  }
-
+  // Cookie-first: let the shared HttpOnly geek_refresh_token cookie carry the token.
+  // The stored localStorage refresh token is a stale fallback across apps/tabs and
+  // would trigger rotation-reuse revocation if sent in the body.
   const res = await fetch(`${ apiBase }/auth/refresh`, {
     method: 'POST',
     credentials: 'include',
-    headers,
-    body: JSON.stringify(body),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
   });
 
   if (res.status === 401 || res.status === 403) {
@@ -312,8 +307,13 @@ export function startRefreshTimer(onFailure) {
       if (onFailure) onFailure();
     }
   }
-  autoRefresh();
-  refreshTimerId = setInterval(autoRefresh, REFRESH_INTERVAL_MS);
+  // Stagger the first mount refresh so multiple open apps/tabs don't all hit
+  // /auth/refresh simultaneously with the same pre-rotation cookie.
+  const initialDelay = Math.floor(Math.random() * 5000);
+  refreshTimerId = setTimeout(() => {
+    autoRefresh();
+    refreshTimerId = setInterval(autoRefresh, REFRESH_INTERVAL_MS);
+  }, initialDelay);
 }
 
 /**

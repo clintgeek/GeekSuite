@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   AppBar,
   Toolbar,
@@ -7,18 +7,46 @@ import {
   IconButton,
   Button,
   Avatar,
-  Tooltip,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
   useTheme,
   alpha
 } from '@mui/material';
 import {
   Add as AddIcon,
-  LibraryBooks as LibraryIcon,
+  DarkMode as DarkModeIcon,
+  LightMode as LightModeIcon,
+  Settings as SettingsIcon,
+  Logout as LogoutIcon,
 } from '@mui/icons-material';
+import { useThemeMode } from '@geeksuite/user';
+import { logout } from '@geeksuite/auth';
 import { geekLayout } from '@geeksuite/ui';
 
 const Header = ({ user, setActiveView, setAddBookOpen }) => {
   const theme = useTheme();
+  const { theme: mode, toggleTheme } = useThemeMode();
+  const [anchorEl, setAnchorEl] = useState(null);
+
+  const handleOpenMenu = (event) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleCloseMenu = () => {
+    setAnchorEl(null);
+  };
+
+  const handleSettings = () => {
+    setActiveView("profile");
+    handleCloseMenu();
+  };
+
+  const handleLogout = async () => {
+    handleCloseMenu();
+    await logout();
+  };
 
   return (
     <AppBar
@@ -28,7 +56,8 @@ const Header = ({ user, setActiveView, setAddBookOpen }) => {
         backgroundColor: theme.palette.background.paper,
         borderBottom: `1px solid ${theme.palette.divider}`,
         color: theme.palette.text.primary,
-        width: '100%'
+        width: '100%',
+        flexShrink: 0,
       }}
     >
       <Toolbar sx={{ minHeight: `${geekLayout.topBarHeight}px !important`, px: { xs: 2, md: 3 } }}>
@@ -49,7 +78,7 @@ const Header = ({ user, setActiveView, setAddBookOpen }) => {
           </Typography>
         </Box>
 
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
           <Button
             variant="contained"
             size="small"
@@ -69,10 +98,28 @@ const Header = ({ user, setActiveView, setAddBookOpen }) => {
             Add book
           </Button>
 
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography variant="caption" sx={{ color: 'text.secondary', display: { xs: 'none', sm: 'block' } }}>
-              {user.email || user.username}
-            </Typography>
+          <IconButton
+            size="small"
+            onClick={toggleTheme}
+            sx={{
+              color: 'text.primary',
+              '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.1) }
+            }}
+            aria-label={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {mode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
+          </IconButton>
+
+          <IconButton
+            onClick={handleOpenMenu}
+            size="small"
+            sx={{
+              p: 0.25,
+              borderRadius: 999,
+              '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.1) }
+            }}
+            aria-label="User menu"
+          >
             <Avatar 
               sx={{ 
                 width: 32, 
@@ -86,7 +133,37 @@ const Header = ({ user, setActiveView, setAddBookOpen }) => {
             >
               { (user.username || user.email)?.[0]?.toUpperCase() || 'U' }
             </Avatar>
-          </Box>
+          </IconButton>
+
+          <Menu
+            anchorEl={anchorEl}
+            open={Boolean(anchorEl)}
+            onClose={handleCloseMenu}
+            onClick={handleCloseMenu}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+            PaperProps={{
+              sx: {
+                minWidth: 160,
+                mt: 1,
+                border: `1px solid ${theme.palette.divider}`,
+                bgcolor: 'background.paper',
+              }
+            }}
+          >
+            <MenuItem onClick={handleSettings}>
+              <ListItemIcon>
+                <SettingsIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Settings</ListItemText>
+            </MenuItem>
+            <MenuItem onClick={handleLogout}>
+              <ListItemIcon>
+                <LogoutIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Logout</ListItemText>
+            </MenuItem>
+          </Menu>
         </Box>
       </Toolbar>
     </AppBar>

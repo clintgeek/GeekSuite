@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import ePub from "epubjs";
-import { Box } from "@mui/material";
+import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, InputLabel, MenuItem, Select, TextField, Typography } from "@mui/material";
 import { getMe, loginRedirect, logout as logoutRequest, onLogout, startRefreshTimer, stopRefreshTimer } from "@geeksuite/auth";
 import { useUser, usePreferences, useAppPreferences } from "@geeksuite/user";
 import { registerReset, reset as resetUserStore } from "./utils/resetUserStore";
@@ -681,9 +681,10 @@ export default function App() {
       await loadBooksPage(1, { append: false });
 
       try {
-        const apolloRes = await apolloClient.query({ query: GET_SHELVES, fetchPolicy: "no-cache" });
-        if (!cancelled && apolloRes.data?.shelves) {
-          setShelfSummary(apolloRes.data.shelves);
+        const shelvesRes = await authFetch("/shelves");
+        const shelvesJson = await shelvesRes.json().catch(() => null);
+        if (!cancelled && shelvesJson?.data) {
+          setShelfSummary(shelvesJson.data);
         }
       } catch {
         // ignore shelf errors for now
@@ -845,7 +846,7 @@ export default function App() {
   }, [selectedBook]);
 
   useEffect(() => {
-    if (!readerOpen || !selectedBook?._id || !readerContainerRef.current) {
+    if (!readerOpen || !(selectedBook?.id || selectedBook?._id) || !readerContainerRef.current) {
       return;
     }
 
@@ -1075,7 +1076,7 @@ export default function App() {
   }
 
   async function handleEnrichSelectedBook() {
-    if (!selectedBook?._id) return;
+    if (!(selectedBook?.id || selectedBook?._id)) return;
     if (!token) {
       setEnrichError("Sign in to enrich metadata.");
       return;
@@ -1123,7 +1124,7 @@ export default function App() {
   }
 
   async function handleSearchCoversForSelectedBook() {
-    if (!selectedBook?._id) return;
+    if (!(selectedBook?.id || selectedBook?._id)) return;
     if (!token) {
       setCoverSearchError("Sign in to search covers.");
       return;
@@ -1179,7 +1180,7 @@ export default function App() {
   }
 
   async function handleApplyCoverCandidate(candidate) {
-    if (!selectedBook?._id || !candidate) return;
+    if (!(selectedBook?.id || selectedBook?._id) || !candidate) return;
     if (!token) {
       setCoverSearchError("Sign in to change covers.");
       return;
@@ -1265,7 +1266,7 @@ export default function App() {
   }
 
   async function handleUploadCoverForSelectedBook() {
-    if (!selectedBook?._id) return;
+    if (!(selectedBook?.id || selectedBook?._id)) return;
     if (!token) {
       setCoverSearchError("Sign in to upload covers.");
       return;
@@ -1311,7 +1312,7 @@ export default function App() {
   }
 
   async function handleDeleteCoverForSelectedBook() {
-    if (!selectedBook?._id) return;
+    if (!(selectedBook?.id || selectedBook?._id)) return;
     if (!token) {
       setCoverSearchError("Sign in to delete covers.");
       return;
@@ -1432,7 +1433,7 @@ export default function App() {
   }
 
   async function handleDeleteSelectedBook() {
-    if (!selectedBook?._id) return;
+    if (!(selectedBook?.id || selectedBook?._id)) return;
     if (!token) {
       setDeleteError("Sign in to delete books.");
       return;
@@ -1501,7 +1502,7 @@ export default function App() {
   }
 
   async function handleSaveEditForSelectedBook() {
-    if (!selectedBook?._id || !editDraft) return;
+    if (!(selectedBook?.id || selectedBook?._id) || !editDraft) return;
     if (!token) {
       setEditError("Sign in to edit books.");
       return;
@@ -1630,9 +1631,10 @@ export default function App() {
       }
 
       try {
-        const shelvesRes = await apolloClient.query({ query: GET_SHELVES, fetchPolicy: "no-cache" });
-        if (shelvesRes.data?.shelves) {
-          setShelfSummary(shelvesRes.data.shelves);
+        const shelvesRes = await authFetch("/shelves");
+        const shelvesJson = await shelvesRes.json().catch(() => null);
+        if (shelvesJson?.data) {
+          setShelfSummary(shelvesJson.data);
         }
       } catch {
         // ignore shelf summary refresh errors
@@ -1761,9 +1763,17 @@ export default function App() {
   }
 
   return (
-    <GeekShell
-      sidebar={
-        <Sidebar
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
+      <Header
+        user={user}
+        setActiveView={setActiveView}
+        setAddBookOpen={setAddBookOpen}
+      />
+      <GeekShell
+        topBar={null}
+        sx={{ height: 'auto', flex: 1, minHeight: 0 }}
+        sidebar={
+          <Sidebar
           shelves={shelves}
           shelfFilter={shelfFilter}
           setShelfFilter={setShelfFilter}
@@ -1783,13 +1793,6 @@ export default function App() {
           applySavedFilter={applySavedFilter}
           handleDeleteSavedFilter={handleDeleteSavedFilter}
           deleteFilterLoadingId={deleteFilterLoadingId}
-        />
-      }
-      topBar={
-        <Header 
-          user={user} 
-          setActiveView={setActiveView} 
-          setAddBookOpen={setAddBookOpen} 
         />
       }
     >
@@ -2067,6 +2070,9 @@ export default function App() {
                             alt={book.title || "Book cover"}
                             className="h-full w-full object-cover"
                             loading="lazy"
+                            onLoad={(e) => {
+                              e.currentTarget.style.visibility = "visible";
+                            }}
                             onError={(e) => {
                               e.currentTarget.style.visibility = "hidden";
                             }}
@@ -2453,6 +2459,9 @@ export default function App() {
                       src={getCoverUrl(selectedBook) || `${ API_BASE }/books/${ (selectedBook.id || selectedBook._id) }/cover`}
                       alt={selectedBook.title || "Book cover"}
                       className="h-full w-full object-cover"
+                      onLoad={(e) => {
+                        e.currentTarget.style.visibility = "visible";
+                      }}
                       onError={(e) => {
                         e.currentTarget.style.visibility = "hidden";
                       }}
@@ -3219,6 +3228,89 @@ export default function App() {
       )}
       </Box>
     </GeekAppFrame>
-  </GeekShell>
-);
+      </GeekShell>
+
+
+      <Dialog
+        open={addBookOpen}
+        onClose={() => !addBookLoading && setAddBookOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Add book</DialogTitle>
+        <form onSubmit={handleCreateBook}>
+          <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <TextField
+              label="Title"
+              value={addBookTitle}
+              onChange={(e) => setAddBookTitle(e.target.value)}
+              required
+              autoFocus
+              fullWidth
+            />
+            <TextField
+              label="Authors"
+              value={addBookAuthors}
+              onChange={(e) => setAddBookAuthors(e.target.value)}
+              placeholder="Jane Doe, John Smith"
+              helperText="Comma-separated"
+              fullWidth
+            />
+            <TextField
+              label="ISBN"
+              value={addBookIsbn}
+              onChange={(e) => setAddBookIsbn(e.target.value)}
+              fullWidth
+            />
+            <FormControl fullWidth>
+              <InputLabel id="add-book-shelf-label">Shelf</InputLabel>
+              <Select
+                labelId="add-book-shelf-label"
+                value={addBookShelf}
+                onChange={(e) => setAddBookShelf(e.target.value)}
+                label="Shelf"
+              >
+                {shelves.filter((s) => s.id !== "all").map((s) => (
+                  <MenuItem key={s.id} value={s.id}>{s.label}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Box>
+              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
+                Book file (optional)
+              </Typography>
+              <input
+                type="file"
+                accept=".epub,.mobi,.azw3,.pdf,.fb2,.rtf,.txt,.html"
+                onChange={(e) => setAddBookFile(e.target.files?.[0] || null)}
+                className="w-full text-sm file:mr-3 file:rounded file:border-0 file:bg-sky-500/10 file:px-3 file:py-1 file:text-xs file:text-sky-500"
+              />
+            </Box>
+            {addBookError && (
+              <Typography color="error" variant="body2">
+                {addBookError}
+              </Typography>
+            )}
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button
+              type="button"
+              onClick={() => setAddBookOpen(false)}
+              disabled={addBookLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={addBookLoading || !addBookTitle.trim()}
+            >
+              {addBookLoading ? "Creating…" : "Create"}
+            </Button>
+          </DialogActions>
+        </form>
+      </Dialog>
+
+    </Box>
+  );
 }
