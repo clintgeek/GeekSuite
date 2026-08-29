@@ -30,12 +30,12 @@ if (typeof window !== "undefined") {
 
 const shelves = [
   { id: "all", label: "All books" },
-  { id: "reading", label: "Reading" },
-  { id: "unread", label: "Unread" },
-  { id: "read", label: "Read" },
-  { id: "want-to-read", label: "Want to read" },
-  { id: "abandoned", label: "Abandoned" },
-  { id: "need-to-find", label: "Need to find" },
+  { id: "reading", label: "Reading", pillClass: "rounded-full border border-amber-500/70 bg-amber-900/40 px-1.5 py-0.5 text-[9px] font-medium text-amber-200" },
+  { id: "unread", label: "Unread", pillClass: "rounded-full border border-slate-500/70 bg-slate-900/40 px-1.5 py-0.5 text-[9px] font-medium text-slate-200" },
+  { id: "read", label: "Read", pillClass: "rounded-full border border-sky-500/70 bg-sky-900/40 px-1.5 py-0.5 text-[9px] font-medium text-sky-200" },
+  { id: "want-to-read", label: "Want to read", pillClass: "rounded-full border border-violet-500/70 bg-violet-900/40 px-1.5 py-0.5 text-[9px] font-medium text-violet-200" },
+  { id: "abandoned", label: "Abandoned", pillClass: "rounded-full border border-rose-500/70 bg-rose-900/40 px-1.5 py-0.5 text-[9px] font-medium text-rose-200" },
+  { id: "need-to-find", label: "Need to find", pillClass: "rounded-full border border-orange-500/70 bg-orange-900/40 px-1.5 py-0.5 text-[9px] font-medium text-orange-200" },
 ];
 
 function decodeBasicHtmlEntities(input) {
@@ -111,7 +111,6 @@ export default function App() {
   const [authorFilter, setAuthorFilter] = useState("");
   const [tagFilter, setTagFilter] = useState("");
   const [shelfFilter, setShelfFilter] = useState("all");
-  const [ownedFilter, setOwnedFilter] = useState("all"); // all | owned | unowned
   const [total, setTotal] = useState(0);
   const [shelfSummary, setShelfSummary] = useState(null);
 
@@ -197,6 +196,7 @@ export default function App() {
 
   const [readerOpen, setReaderOpen] = useState(false);
   const [readerError, setReaderError] = useState(null);
+  const [readerTheme, setReaderTheme] = useState("dark");
 
   const [activeView, setActiveView] = useState("library");
   const [prefSaveLoading, setPrefSaveLoading] = useState(false);
@@ -274,13 +274,6 @@ export default function App() {
     setAuthorFilter(preset.authorFilter || "");
     setTagFilter(preset.tagFilter || "");
     setShelfFilter(preset.shelfFilter || "all");
-    if (typeof preset.ownedFilter === "string" && preset.ownedFilter) {
-      setOwnedFilter(preset.ownedFilter);
-    } else if (preset.ownedOnly) {
-      setOwnedFilter("owned");
-    } else {
-      setOwnedFilter("all");
-    }
   }
 
   async function handleSaveCurrentFilter() {
@@ -293,8 +286,7 @@ export default function App() {
       searchQuery.trim() ||
       authorFilter.trim() ||
       tagFilter.trim() ||
-      shelfFilter !== "all" ||
-      ownedFilter !== "all";
+      shelfFilter !== "all";
 
     if (!hasAnyFilter) {
       setSaveFilterError("Adjust filters before saving a preset.");
@@ -329,7 +321,6 @@ export default function App() {
           authorFilter,
           tagFilter,
           shelfFilter,
-          ownedFilter,
         }),
       });
       const json = await res.json().catch(() => null);
@@ -500,8 +491,6 @@ export default function App() {
       if (authorFilter.trim()) variables.author = authorFilter.trim();
       if (tagFilter.trim()) variables.tag = tagFilter.trim();
       if (shelfFilter !== "all") variables.shelf = shelfFilter;
-      if (ownedFilter === "owned") variables.owned = "true";
-      if (ownedFilter === "unowned") variables.owned = "false";
 
       const [healthRes, apolloRes] = await Promise.all([
         fetch(`${ API_BASE }/health`, { cache: "no-store" }),
@@ -560,7 +549,7 @@ export default function App() {
   }
 
   async function handleUploadBookFile(book) {
-    if (!book?._id) return;
+    if (!(book?.id || book?._id)) return;
     if (!token) {
       setUploadError("Sign in to attach files to books.");
       return;
@@ -681,10 +670,12 @@ export default function App() {
       await loadBooksPage(1, { append: false });
 
       try {
-        const shelvesRes = await authFetch("/shelves");
-        const shelvesJson = await shelvesRes.json().catch(() => null);
-        if (!cancelled && shelvesJson?.data) {
-          setShelfSummary(shelvesJson.data);
+        const shelvesRes = await apolloClient.query({
+          query: GET_SHELVES,
+          fetchPolicy: "no-cache",
+        });
+        if (!cancelled && shelvesRes.data?.shelves) {
+          setShelfSummary(shelvesRes.data.shelves);
         }
       } catch {
         // ignore shelf errors for now
@@ -707,7 +698,6 @@ export default function App() {
     authorFilter,
     tagFilter,
     shelfFilter,
-    ownedFilter,
   ]);
 
   useEffect(() => {
@@ -883,7 +873,42 @@ export default function App() {
         });
         readerRenditionRef.current = rendition;
 
+        const readerTextSelectors =
+          "body, p, div, span, h1, h2, h3, h4, h5, h6, li, blockquote, pre, code, em, strong, a, small, label, input, textarea, select, table, td, th, dd, dt, figcaption, section, article, main, aside, nav, header, footer, hr";
+
+        if (rendition.themes) {
+          rendition.themes.register("light", {
+            [readerTextSelectors]: {
+              color: "#0f172a !important",
+              "background-color": "transparent !important",
+            },
+            "body": {
+              "background-color": "#ffffff !important",
+            },
+            "a, a:link, a:visited, a:hover, a:active": {
+              color: "#2563eb !important",
+            },
+          });
+
+          rendition.themes.register("dark", {
+            [readerTextSelectors]: {
+              color: "#e2e8f0 !important",
+              "background-color": "transparent !important",
+            },
+            "body": {
+              "background-color": "#020617 !important",
+            },
+            "a, a:link, a:visited, a:hover, a:active": {
+              color: "#60a5fa !important",
+            },
+          });
+        }
+
         await rendition.display();
+
+        if (rendition.themes?.select) {
+          rendition.themes.select(readerTheme);
+        }
       } catch (err) {
         if (!cancelled) {
           setReaderError(err?.message || "Failed to load EPUB for this book.");
@@ -919,7 +944,13 @@ export default function App() {
       }
       readerBookRef.current = null;
     };
-  }, [readerOpen, selectedBook?._id]);
+  }, [readerOpen, selectedBook?.id || selectedBook?._id]);
+
+  useEffect(() => {
+    if (readerRenditionRef.current?.themes?.select) {
+      readerRenditionRef.current.themes.select(readerTheme);
+    }
+  }, [readerTheme]);
 
   async function handleSaveProfile(event) {
     event.preventDefault();
@@ -1569,7 +1600,7 @@ export default function App() {
   }
 
   async function handleSendToKindle(book) {
-    if (!book?._id) return;
+    if (!book || !(book.id || book._id)) return;
     if (!token) {
       setSendToKindleError("Sign in and configure Kindle email first.");
       return;
@@ -1605,7 +1636,7 @@ export default function App() {
   }
 
   async function handleUpdateShelf(book, newShelf) {
-    if (!book?._id) return;
+    if (!(book?.id || book?._id)) return;
     if (!newShelf || newShelf === book.shelf) return;
 
     const bookId = (book.id || book._id);
@@ -1624,17 +1655,18 @@ export default function App() {
         setBooks((prev) =>
           prev.map((b) => ((b.id || b._id) === (updated.id || updated._id) ? updated : b))
         );
-
         if (selectedBook && (selectedBook.id || selectedBook._id) === (updated.id || updated._id)) {
           setSelectedBook(updated);
         }
       }
 
       try {
-        const shelvesRes = await authFetch("/shelves");
-        const shelvesJson = await shelvesRes.json().catch(() => null);
-        if (shelvesJson?.data) {
-          setShelfSummary(shelvesJson.data);
+        const shelvesRes = await apolloClient.query({
+          query: GET_SHELVES,
+          fetchPolicy: "no-cache",
+        });
+        if (shelvesRes.data?.shelves) {
+          setShelfSummary(shelvesRes.data.shelves);
         }
       } catch {
         // ignore shelf summary refresh errors
@@ -1676,7 +1708,6 @@ export default function App() {
     authorFilter,
     tagFilter,
     shelfFilter,
-    ownedFilter,
   ]);
 
   const apiOnline = health?.status === "ok" && health?.db?.state === 1;
@@ -1779,8 +1810,6 @@ export default function App() {
           setShelfFilter={setShelfFilter}
           shelfSummary={shelfSummary}
           setActiveView={setActiveView}
-          ownedFilter={ownedFilter}
-          setOwnedFilter={setOwnedFilter}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
           authorFilter={authorFilter}
@@ -1892,16 +1921,16 @@ export default function App() {
                   onChange={(e) => setTagFilter(e.target.value)}
                 />
                 <div className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs" style={{ border: '1px solid var(--color-border-input)', backgroundColor: 'var(--color-bg-surface)', color: 'var(--color-text-primary)' }}>
-                  <span className="text-[10px]" style={{ color: 'var(--color-text-faint)' }}>Ownership</span>
+                  <span className="text-[10px]" style={{ color: 'var(--color-text-faint)' }}>Shelf</span>
                   <select
-                    value={ownedFilter}
-                    onChange={(e) => setOwnedFilter(e.target.value)}
+                    value={shelfFilter}
+                    onChange={(e) => setShelfFilter(e.target.value)}
                     className="bg-transparent text-xs outline-none"
                     style={{ color: 'var(--color-text-primary)' }}
                   >
-                    <option value="all">All</option>
-                    <option value="owned">Owned</option>
-                    <option value="unowned">Unowned</option>
+                    {shelves.map((s) => (
+                      <option key={s.id} value={s.id}>{s.label}</option>
+                    ))}
                   </select>
                 </div>
                 {showMergeUi && (
@@ -1929,8 +1958,7 @@ export default function App() {
             {(searchQuery.trim() ||
               authorFilter.trim() ||
               tagFilter.trim() ||
-              shelfFilter !== "all" ||
-              ownedFilter !== "all") && (
+              shelfFilter !== "all") && (
                 <div className="mb-3 flex flex-wrap gap-1 text-[11px]">
                   {shelfFilter !== "all" && (
                     <button
@@ -1976,26 +2004,6 @@ export default function App() {
                       <span className="text-slate-400">×</span>
                     </button>
                   )}
-                  {ownedFilter === "owned" && (
-                    <button
-                      type="button"
-                      onClick={() => setOwnedFilter("all")}
-                      className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-slate-200 hover:border-slate-500 hover:bg-slate-800"
-                    >
-                      <span>Owned only</span>
-                      <span className="text-slate-400">×</span>
-                    </button>
-                  )}
-                  {ownedFilter === "unowned" && (
-                    <button
-                      type="button"
-                      onClick={() => setOwnedFilter("all")}
-                      className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-slate-200 hover:border-slate-500 hover:bg-slate-800"
-                    >
-                      <span>Unowned only</span>
-                      <span className="text-slate-400">×</span>
-                    </button>
-                  )}
                   <button
                     type="button"
                     onClick={() => {
@@ -2003,7 +2011,6 @@ export default function App() {
                       setAuthorFilter("");
                       setTagFilter("");
                       setShelfFilter("all");
-                      setOwnedFilter("all");
                     }}
                     className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-950 px-2 py-0.5 text-slate-200 hover:border-slate-500 hover:bg-slate-900"
                   >
@@ -2027,11 +2034,12 @@ export default function App() {
                 ))
                 : books.map((book) => {
                   const isSelected = selectedBookIds.includes((book.id || book._id));
+                  const shelf = shelves.find((s) => s.id === book.shelf);
                   return (
                     <div
                       key={(book.id || book._id)}
                       className={
-                        "relative flex cursor-pointer flex-col rounded-xl p-2.5 text-xs transition-all duration-200 " +
+                        "relative flex cursor-pointer flex-col rounded-xl p-2.5 pb-8 text-xs transition-all duration-200 " +
                         (showMergeUi && isSelected
                           ? "ring-2 ring-sky-500"
                           : "hover:translate-y-[-1px]")
@@ -2082,18 +2090,25 @@ export default function App() {
                       <div className="mb-0.5 line-clamp-2 font-serif font-medium text-[13px]" style={{ color: 'var(--color-text-primary)' }}>
                         {book.title || "Untitled"}
                       </div>
-                      <div className="flex items-center justify-between text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
-                        <span className="truncate">
-                          {Array.isArray(book.authors) && book.authors.length > 0
-                            ? book.authors.join(", ")
-                            : "Unknown author"}
-                        </span>
-                        {book.owned && (
-                          <span className="ml-2 flex-shrink-0 rounded-full border border-emerald-500/70 bg-emerald-900/40 px-1.5 py-0.5 text-[9px] font-medium text-emerald-200">
-                            Owned
-                          </span>
-                        )}
+                      <div className="truncate text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
+                        {Array.isArray(book.authors) && book.authors.length > 0
+                          ? book.authors.join(", ")
+                          : "Unknown author"}
                       </div>
+                      {(book.owned || (shelf && shelf.id !== "all")) && (
+                        <div className="absolute bottom-2 right-2.5 flex gap-1">
+                          {book.owned && (
+                            <span className="rounded-full border border-emerald-500/70 bg-emerald-900/40 px-1.5 py-0.5 text-[9px] font-medium text-emerald-200">
+                              Owned
+                            </span>
+                          )}
+                          {shelf && shelf.id !== "all" && (
+                            <span className={shelf.pillClass}>
+                              {shelf.label}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -2666,6 +2681,16 @@ export default function App() {
                           >
                             {uploadLoading ? "Attaching…" : "Attach file"}
                           </button>
+                          {uploadError && (
+                            <div className="w-full text-[10px] text-rose-400">
+                              {uploadError}
+                            </div>
+                          )}
+                          {uploadMessage && (
+                            <div className="w-full text-[10px] text-emerald-300">
+                              {uploadMessage}
+                            </div>
+                          )}
                         </div>
                       )}
                   </div>
@@ -3023,14 +3048,6 @@ export default function App() {
                     Sending to {sendToKindleStatus.kindleEmail}
                   </div>
                 )}
-                {uploadError && (
-                  <div className="text-[11px] text-rose-400">{uploadError}</div>
-                )}
-                {uploadMessage && (
-                  <div className="text-[11px] text-emerald-300">
-                    {uploadMessage}
-                  </div>
-                )}
                 <div className="mt-2 border-t border-slate-800 pt-2 text-[11px] text-slate-400">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex flex-col gap-1">
@@ -3177,16 +3194,27 @@ export default function App() {
                   </div>
                 )}
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setReaderOpen(false);
-                  setReaderError(null);
-                }}
-                className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-700 bg-slate-900 text-sm font-semibold text-slate-300 hover:border-slate-500 hover:text-slate-50"
-              >
-                ×
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReaderTheme((t) => (t === "dark" ? "light" : "dark"));
+                  }}
+                  className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-200 hover:border-slate-500"
+                >
+                  {readerTheme === "dark" ? "Light" : "Dark"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReaderOpen(false);
+                    setReaderError(null);
+                  }}
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-700 bg-slate-900 text-sm font-semibold text-slate-300 hover:border-slate-500 hover:text-slate-50"
+                >
+                  ×
+                </button>
+              </div>
             </div>
             <div className="flex-1 bg-slate-900">
               <div

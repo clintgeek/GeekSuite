@@ -7,10 +7,6 @@ import {
   ListItemText,
   ListItemIcon,
   Divider,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
   Button,
   IconButton,
   alpha,
@@ -29,8 +25,6 @@ const Sidebar = ({
   setShelfFilter,
   shelfSummary,
   setActiveView,
-  ownedFilter,
-  setOwnedFilter,
   searchQuery,
   setSearchQuery,
   authorFilter,
@@ -49,8 +43,7 @@ const Sidebar = ({
   const hasAnyFilter = searchQuery.trim() ||
     authorFilter.trim() ||
     tagFilter.trim() ||
-    shelfFilter !== "all" ||
-    ownedFilter !== "all";
+    shelfFilter !== "all";
 
   return (
     <Box
@@ -115,25 +108,6 @@ const Sidebar = ({
 
       <Divider sx={{ mb: 2 }} />
 
-      <Typography variant="overline" sx={{ mb: 1.5, color: 'text.secondary', fontWeight: 700 }}>
-        Filters
-      </Typography>
-      
-      <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-        <InputLabel id="owned-filter-label" sx={{ fontSize: '0.75rem' }}>Ownership</InputLabel>
-        <Select
-          labelId="owned-filter-label"
-          value={ownedFilter}
-          label="Ownership"
-          onChange={(e) => setOwnedFilter(e.target.value)}
-          sx={{ fontSize: '0.8125rem' }}
-        >
-          <MenuItem value="all">All books</MenuItem>
-          <MenuItem value="owned">Owned only</MenuItem>
-          <MenuItem value="unowned">Unowned only</MenuItem>
-        </Select>
-      </FormControl>
-
       {hasAnyFilter && (
         <Button
           fullWidth
@@ -145,7 +119,6 @@ const Sidebar = ({
             setAuthorFilter("");
             setTagFilter("");
             setShelfFilter("all");
-            setOwnedFilter("all");
           }}
           sx={{ mb: 2, fontSize: '0.6875rem', py: 0.5 }}
         >

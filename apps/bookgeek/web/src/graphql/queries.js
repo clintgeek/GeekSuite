@@ -50,51 +50,6 @@ export const GET_BOOKS = gql`
   }
 `;
 
-export const GET_BOOK = gql`
-  query GetBook($id: ID!) {
-    book(id: $id) {
-      id
-      title
-      authors
-      series {
-        name
-        index
-      }
-      isbn
-      isbn13
-      goodreadsId
-      openLibraryId
-      asin
-      googleBooksId
-      publisher
-      publishedDate
-      pageCount
-      description
-      language
-      tags
-      files {
-        format
-        path
-        size
-        addedAt
-      }
-      coverPath
-      owned
-      shelf
-      rating
-      review
-      dateAdded
-      dateStarted
-      dateFinished
-      readCount
-      readingProgress
-      source
-      createdAt
-      updatedAt
-    }
-  }
-`;
-
 export const GET_SHELVES = gql`
   query GetShelves {
     shelves {

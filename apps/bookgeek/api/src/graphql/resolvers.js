@@ -10,6 +10,32 @@ const shelfNames = [
   "need-to-find",
 ];
 
+function shelfMatch(name) {
+  if (name === "unread") {
+    return {
+      $and: [
+        {
+          $or: [
+            { shelf: "unread" },
+            { shelf: { $exists: false } },
+            { shelf: null },
+            { shelf: "" },
+          ],
+        },
+        {
+          $nor: [
+            { shelf: "read" },
+            { shelf: "abandoned" },
+            { readCount: { $gt: 0 } },
+            { dateFinished: { $exists: true, $ne: null } },
+          ],
+        },
+      ],
+    };
+  }
+  return { shelf: name };
+}
+
 export const resolvers = {
   Book: {
     id: (parent) => parent._id.toString(),
@@ -32,18 +58,7 @@ export const resolvers = {
       if (author) andConds.push({ authors: { $regex: author, $options: "i" } });
       if (tag) andConds.push({ tags: tag });
       if (shelf) {
-        if (shelf === "unread") {
-          andConds.push({
-            $or: [
-              { shelf: "unread" },
-              { shelf: { $exists: false } },
-              { shelf: null },
-              { shelf: "" },
-            ],
-          });
-        } else {
-          andConds.push({ shelf });
-        }
+        andConds.push(shelfMatch(shelf));
       }
       if (owned === "true") andConds.push({ owned: true });
       else if (owned === "false") andConds.push({ owned: false });
@@ -99,28 +114,14 @@ export const resolvers = {
       return await Book.findById(id).lean();
     },
     shelves: async () => {
-      const [total, owned, shelfCounts, unshelvedCount] = await Promise.all([
+      const [total, owned, ...shelfCounts] = await Promise.all([
         Book.countDocuments({}),
         Book.countDocuments({ owned: true }),
-        Book.aggregate([
-          { $match: { shelf: { $in: shelfNames } } },
-          { $group: { _id: "$shelf", count: { $sum: 1 } } },
-        ]),
-        Book.countDocuments({
-          $or: [
-            { shelf: { $exists: false } },
-            { shelf: null },
-            { shelf: "" },
-          ],
-        }),
+        ...shelfNames.map((name) => Book.countDocuments(shelfMatch(name))),
       ]);
 
       const counts = {};
-      shelfNames.forEach((n) => (counts[n] = 0));
-      shelfCounts.forEach((row) => {
-        if (row._id) counts[row._id] = row.count;
-      });
-      if (unshelvedCount > 0) counts["unread"] = (counts["unread"] || 0) + unshelvedCount;
+      shelfNames.forEach((n, i) => (counts[n] = shelfCounts[i]));
 
       return {
         total,
