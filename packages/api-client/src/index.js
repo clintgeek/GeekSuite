@@ -14,12 +14,11 @@ const httpLink = createHttpLink({
 const authLink = setContext((_, { headers }) => {
     // Extract token. In GeekSuite, it might be stored in localStorage by auth pkg
     const token = localStorage.getItem('geek_token');
-    return {
-        headers: {
-            ...headers,
-            authorization: token ? `Bearer ${ token }` : "",
-        }
+    const nextHeaders = { ...headers };
+    if (token) {
+        nextHeaders.authorization = `Bearer ${ token }`;
     }
+    return { headers: nextHeaders };
 });
 
 import { onError } from '@apollo/client/link/error';

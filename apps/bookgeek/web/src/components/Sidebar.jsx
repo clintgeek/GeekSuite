@@ -68,7 +68,8 @@ const Sidebar = ({
           const count = (() => {
             if (!shelfSummary) return "--";
             if (shelf.id === "all") return shelfSummary.total ?? "--";
-            return shelfSummary.shelves?.[shelf.id] ?? 0;
+            const match = shelfSummary.shelves?.find((s) => s.id === shelf.id);
+            return match?.count ?? 0;
           })();
 
           return (

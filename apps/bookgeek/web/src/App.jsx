@@ -532,7 +532,10 @@ export default function App() {
     } catch (err) {
       if (!append) {
         setError(err.message || "Failed to load data");
+      } else {
+        setError(err.message || "Failed to load more books");
       }
+      setHasMore(false);
     } finally {
       if (!append) {
         setLoading(false);
@@ -1532,6 +1535,27 @@ export default function App() {
     setEditDraft(null);
   }
 
+  function closeBookModal() {
+    setSelectedBook(null);
+    setDownloadOpen(false);
+    setDeleteConfirmOpen(false);
+    setDeleteError(null);
+    setDeleteIncludeFiles(false);
+    setEnrichError(null);
+    setEnrichSummary(null);
+    setEnrichLoading(false);
+    setCoverSearchQuery("");
+    setCoverSearchError(null);
+    setCoverSearchResults(null);
+    setCoverSearchLoading(false);
+    setCoverApplyLoadingId(null);
+    setCoverUploadFile(null);
+    setCoverUploadLoading(false);
+    setCoverDeleteLoading(false);
+    setShowCoverTools(false);
+    cancelEditForSelectedBook();
+  }
+
   async function handleSaveEditForSelectedBook() {
     if (!(selectedBook?.id || selectedBook?._id) || !editDraft) return;
     if (!token) {
@@ -1683,7 +1707,7 @@ export default function App() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (!hasMore || loadingMore) return;
+    if (!hasMore || loadingMore || loading) return;
 
     const observer = new IntersectionObserver((entries) => {
       const [entry] = entries;
@@ -2426,8 +2450,14 @@ export default function App() {
           )}
 
       {selectedBook && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 px-2 py-4">
-          <div className="mx-auto flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 shadow-2xl">
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 px-2 py-4"
+          onClick={closeBookModal}
+        >
+          <div
+            className="mx-auto flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
               <div>
                 <h2 className="text-sm font-semibold text-slate-100 md:text-base">
@@ -2439,26 +2469,7 @@ export default function App() {
               </div>
               <button
                 type="button"
-                onClick={() => {
-                  setSelectedBook(null);
-                  setDownloadOpen(false);
-                  setDeleteConfirmOpen(false);
-                  setDeleteError(null);
-                  setDeleteIncludeFiles(false);
-                  setEnrichError(null);
-                  setEnrichSummary(null);
-                  setEnrichLoading(false);
-                  setCoverSearchQuery("");
-                  setCoverSearchError(null);
-                  setCoverSearchResults(null);
-                  setCoverSearchLoading(false);
-                  setCoverApplyLoadingId(null);
-                  setCoverUploadFile(null);
-                  setCoverUploadLoading(false);
-                  setCoverDeleteLoading(false);
-                  setShowCoverTools(false);
-                  cancelEditForSelectedBook();
-                }}
+                onClick={closeBookModal}
                 aria-label="Close"
                 className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-700 bg-slate-900 text-sm font-semibold text-slate-300 hover:border-slate-500 hover:text-slate-50"
               >
