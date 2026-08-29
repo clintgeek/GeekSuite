@@ -10,18 +10,77 @@ const shelfNames = [
   "need-to-find",
 ];
 
+// Ensure a book on the "unread" shelf is not actually finished/abandoned.
+function shelfMatch(name) {
+  if (name === "unread") {
+    return {
+      $and: [
+        {
+          $or: [
+            { shelf: "unread" },
+            { shelf: { $exists: false } },
+            { shelf: null },
+            { shelf: "" },
+          ],
+        },
+        {
+          $nor: [
+            { shelf: "read" },
+            { shelf: "abandoned" },
+            { readCount: { $gt: 0 } },
+            { dateFinished: { $exists: true, $ne: null } },
+          ],
+        },
+      ],
+    };
+  }
+  return { shelf: name };
+}
+
+function toNumber(value, type = "float") {
+  if (value == null || value === "") return null;
+  if (typeof value === "number") {
+    if (Number.isNaN(value)) return null;
+    return type === "int" ? Math.trunc(value) : value;
+  }
+  const n = Number(value);
+  if (Number.isNaN(n)) return null;
+  return type === "int" ? Math.trunc(n) : n;
+}
+
+function toBool(value) {
+  if (value === true || value === 1 || value === "1" || value === "true") {
+    return true;
+  }
+  if (value === false || value === 0 || value === "0" || value === "false") {
+    return false;
+  }
+  return value ?? false;
+}
+
 export const resolvers = {
   Book: {
-    id: (parent) => parent._id.toString(),
-    publishedDate: (parent) => parent.publishedDate?.toISOString(),
-    dateAdded: (parent) => parent.dateAdded?.toISOString(),
-    dateStarted: (parent) => parent.dateStarted?.toISOString(),
-    dateFinished: (parent) => parent.dateFinished?.toISOString(),
-    createdAt: (parent) => parent.createdAt?.toISOString(),
-    updatedAt: (parent) => parent.updatedAt?.toISOString(),
+    id: (parent) => parent._id?.toString(),
+    pageCount: (parent) => toNumber(parent.pageCount, "int"),
+    readCount: (parent) => toNumber(parent.readCount, "int"),
+    rating: (parent) => toNumber(parent.rating, "float"),
+    readingProgress: (parent) => toNumber(parent.readingProgress, "float"),
+    owned: (parent) => toBool(parent.owned),
+    // Date fields are passed through raw; the shared Date scalar serializes
+    // them safely, coercing strings/numbers to ISO-8601.
+    publishedDate: (parent) => parent.publishedDate,
+    dateAdded: (parent) => parent.dateAdded,
+    dateStarted: (parent) => parent.dateStarted,
+    dateFinished: (parent) => parent.dateFinished,
+    createdAt: (parent) => parent.createdAt,
+    updatedAt: (parent) => parent.updatedAt,
+  },
+  BookSeries: {
+    index: (parent) => toNumber(parent.index, "int"),
   },
   BookFile: {
-    addedAt: (parent) => parent.addedAt?.toISOString(),
+    addedAt: (parent) => parent.addedAt,
+    size: (parent) => toNumber(parent.size, "int"),
   },
   Query: {
     books: async (_, { page = 1, limit = 50, sort = "title", sortDir = "asc", author, tag, shelf, owned, q }) => {
@@ -31,20 +90,8 @@ export const resolvers = {
       const andConds = [];
       if (author) andConds.push({ authors: { $regex: author, $options: "i" } });
       if (tag) andConds.push({ tags: tag });
-      if (shelf) {
-        if (shelf === "unread") {
-          andConds.push({
-            $or: [
-              { shelf: "unread" },
-              { shelf: { $exists: false } },
-              { shelf: null },
-              { shelf: "" },
-            ],
-          });
-        } else {
-          andConds.push({ shelf });
-        }
-      }
+      if (shelf) andConds.push(shelfMatch(shelf));
+
       if (owned === "true") andConds.push({ owned: true });
       else if (owned === "false") andConds.push({ owned: false });
 
@@ -99,28 +146,14 @@ export const resolvers = {
       return await Book.findById(id).lean();
     },
     shelves: async () => {
-      const [total, owned, shelfCounts, unshelvedCount] = await Promise.all([
+      const [total, owned, ...shelfCounts] = await Promise.all([
         Book.countDocuments({}),
         Book.countDocuments({ owned: true }),
-        Book.aggregate([
-          { $match: { shelf: { $in: shelfNames } } },
-          { $group: { _id: "$shelf", count: { $sum: 1 } } },
-        ]),
-        Book.countDocuments({
-          $or: [
-            { shelf: { $exists: false } },
-            { shelf: null },
-            { shelf: "" },
-          ],
-        }),
+        ...shelfNames.map((name) => Book.countDocuments(shelfMatch(name))),
       ]);
 
       const counts = {};
-      shelfNames.forEach((n) => (counts[n] = 0));
-      shelfCounts.forEach((row) => {
-        if (row._id) counts[row._id] = row.count;
-      });
-      if (unshelvedCount > 0) counts["unread"] = (counts["unread"] || 0) + unshelvedCount;
+      shelfNames.forEach((n, i) => (counts[n] = shelfCounts[i]));
 
       return {
         total,
@@ -142,7 +175,7 @@ export const resolvers = {
         dateAdded: new Date(),
         source: "manual",
       };
-      
+
       const book = await Book.create(doc);
       return book.toObject ? book.toObject() : book;
     },
