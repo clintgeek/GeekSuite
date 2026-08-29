@@ -104,6 +104,7 @@ export default function App() {
   const [aiStatusError, setAiStatusError] = useState(null);
   const [selectedBook, setSelectedBook] = useState(null);
   const [downloadOpen, setDownloadOpen] = useState(false);
+  const [convertingFormat, setConvertingFormat] = useState(null);
 
   const [sortBy, setSortBy] = useState("title");
   const [sortDir, setSortDir] = useState("asc");
@@ -616,6 +617,50 @@ export default function App() {
     }
 
     return res;
+  }
+
+  async function handleDownload(book, format) {
+    if (!book || !(book.id || book._id)) return;
+
+    const existingFile = (book.files || []).find(
+      (f) => (f.format || "").toLowerCase() === format
+    );
+
+    setConvertingFormat(format);
+    setDownloadOpen(false);
+
+    try {
+      const res = await authFetch(
+        `/books/${ (book.id || book._id) }/download/${ format }`
+      );
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => "Download failed");
+        let message = "Download failed";
+        try {
+          const json = JSON.parse(text);
+          message = json.error || json.message || message;
+        } catch {
+          message = text || message;
+        }
+        throw new Error(message);
+      }
+
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const safeTitle = (book.title || "book").replace(/[^a-zA-Z0-9 _.-]/g, "_");
+      a.href = blobUrl;
+      a.download = `${ safeTitle }.${ format }`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+    } catch (err) {
+      setError(err.message || "Download failed");
+    } finally {
+      setConvertingFormat(null);
+    }
   }
 
   async function loadSavedFilters() {
@@ -2599,55 +2644,61 @@ export default function App() {
                     <div className="relative inline-block">
                       <button
                         type="button"
-                        className="inline-flex items-center rounded-md bg-sky-600 px-3 py-1 text-xs font-medium text-white hover:bg-sky-500"
+                        className="inline-flex items-center rounded-md bg-sky-600 px-3 py-1 text-xs font-medium text-white hover:bg-sky-500 disabled:opacity-60"
+                        disabled={!!convertingFormat}
                         onClick={() => setDownloadOpen((open) => !open)}
                       >
-                        <span>Download</span>
+                        <span>
+                          {convertingFormat
+                            ? `Converting ${ convertingFormat.toUpperCase() }…`
+                            : "Download"}
+                        </span>
                         <span className="ml-1 text-[10px]">▾</span>
                       </button>
 
-                      {downloadOpen &&
-                        selectedBook.files &&
-                        selectedBook.files.length > 0 && (
-                          <div className="absolute left-0 z-10 mt-1 w-44 overflow-hidden rounded-md border border-slate-800 bg-slate-950 text-[11px] text-slate-100 shadow-xl">
-                            {selectedBook.files.map((file) => {
-                              const sizeBytes = file.size || 0;
+                      {downloadOpen && (
+                        <div className="absolute left-0 z-10 mt-1 w-44 overflow-hidden rounded-md border border-slate-800 bg-slate-950 text-[11px] text-slate-100 shadow-xl">
+                          {["epub", "azw3"].map((format) => {
+                            const existing = (selectedBook.files || []).find(
+                              (f) => (f.format || "").toLowerCase() === format
+                            );
+
+                            let sizeLabel = "";
+                            if (convertingFormat === format) {
+                              sizeLabel = "Converting…";
+                            } else if (existing) {
+                              const sizeBytes = existing.size || 0;
                               const sizeMB = sizeBytes / (1024 * 1024);
-                              const sizeLabel =
+                              sizeLabel =
                                 sizeMB >= 0.1
                                   ? `${ sizeMB.toFixed(1) } MB`
                                   : `${ (sizeBytes / 1024).toFixed(0) } KB`;
+                            } else {
+                              sizeLabel = "Not available";
+                            }
 
-                              const fmt = (file.format || "").toLowerCase();
-                              const formatSlug = fmt ||
-                                (file.path
-                                  ? file.path.split(".").pop().toLowerCase()
-                                  : "");
-
-                              return (
-                                <button
-                                  key={file.path}
-                                  type="button"
-                                  className="flex w-full items-center justify-between px-3 py-1.5 text-left hover:bg-slate-800"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (!(selectedBook.id || selectedBook._id) || !formatSlug) return;
-                                    const url = `${ API_BASE }/books/${ (selectedBook.id || selectedBook._id) }/download/${ formatSlug }`;
-                                    window.location.href = url;
-                                    setDownloadOpen(false);
-                                  }}
-                                >
-                                  <span className="mr-2 font-medium">
-                                    {file.format || formatSlug.toUpperCase()}
-                                  </span>
-                                  <span className="text-[10px] text-slate-400">
-                                    {sizeLabel}
-                                  </span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )}
+                            return (
+                              <button
+                                key={format}
+                                type="button"
+                                className="flex w-full items-center justify-between px-3 py-1.5 text-left hover:bg-slate-800"
+                                disabled={!!convertingFormat}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDownload(selectedBook, format);
+                                }}
+                              >
+                                <span className="mr-2 font-medium">
+                                  {format.toUpperCase()}
+                                </span>
+                                <span className="text-[10px] text-slate-400">
+                                  {sizeLabel}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                     <button
                       className="rounded-md bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-60"

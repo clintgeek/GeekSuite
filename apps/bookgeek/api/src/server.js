@@ -88,6 +88,9 @@ const ADDME_PATH = process.env.ADDME_PATH || "/data/addMe";
 const CALIBRE_EBOOK_META_BIN =
   process.env.CALIBRE_EBOOK_META_BIN || "ebook-meta";
 
+const CALIBRE_EBOOK_CONVERT_BIN =
+  process.env.CALIBRE_EBOOK_CONVERT_BIN || "ebook-convert";
+
 const execFileAsync = promisify(execFile);
 
 const uploadToTemp = multer({
@@ -96,6 +99,40 @@ const uploadToTemp = multer({
     fileSize: 200 * 1024 * 1024,
   },
 });
+
+/**
+ * Convert an ebook file from one format to another using Calibre's
+ * ebook-convert. The output format is determined by outputPath's extension.
+ * Returns the output file's stats, or null if conversion failed.
+ */
+async function convertEbookFile(inputPath, outputPath) {
+  if (!inputPath || !outputPath) {
+    throw new Error("inputPath and outputPath are required");
+  }
+
+  await fs.promises.mkdir(path.dirname(outputPath), { recursive: true });
+
+  try {
+    await execFileAsync(CALIBRE_EBOOK_CONVERT_BIN, [inputPath, outputPath], {
+      timeout: 120000,
+      maxBuffer: 1024 * 1024,
+    });
+  } catch (err) {
+    console.warn("ebook-convert failed", {
+      inputPath,
+      outputPath,
+      error: err.message,
+    });
+    throw err;
+  }
+
+  const stats = await fs.promises.stat(outputPath);
+  if (!stats.isFile()) {
+    throw new Error("Conversion did not produce a file");
+  }
+
+  return { path: outputPath, size: stats.size };
+}
 
 const KINDLE_UI_PIN = String(process.env.KINDLE_UI_PIN || "").trim();
 const KINDLE_UI_COOKIE_NAME = "bookgeek_kindle";
@@ -1060,32 +1097,57 @@ app.post(
       const ext = path.extname(file.originalname || "").toLowerCase();
       const baseName = path.basename(file.originalname || file.filename || "upload", ext) || "upload";
       const safeBase = baseName.replace(/[^a-zA-Z0-9 _.-]/g, "_");
-      const finalName = safeBase + (ext || "");
+      const sourceFormat = ext.startsWith(".") ? ext.slice(1).toLowerCase() : "";
 
       const destDir = path.join(libraryRoot, "uploads", String(book._id));
       await fs.promises.mkdir(destDir, { recursive: true });
-      const destPath = path.join(destDir, finalName);
 
-      await moveFileSafe(file.path, destPath);
+      const targetFormats = ["epub", "azw3"];
+      const generatedFiles = [];
+      const addedAt = new Date();
 
-      const stats = await fs.promises.stat(destPath);
-      if (!stats.isFile()) {
-        return res.status(500).json({ error: "Uploaded file is not a regular file" });
+      for (const targetFormat of targetFormats) {
+        const finalName = `${ safeBase }.${ targetFormat }`;
+        const destPath = path.join(destDir, finalName);
+
+        if (sourceFormat === targetFormat) {
+          // Source is already the desired format: copy it to the library.
+          await fs.promises.copyFile(file.path, destPath);
+        } else {
+          // Convert from the uploaded source file.
+          try {
+            await convertEbookFile(file.path, destPath);
+          } catch (convertErr) {
+            console.warn("/api/books/:id/upload conversion failed", {
+              bookId,
+              targetFormat,
+              error: convertErr.message,
+            });
+            continue;
+          }
+        }
+
+        const stats = await fs.promises.stat(destPath);
+        if (!stats.isFile()) {
+          continue;
+        }
+
+        generatedFiles.push({
+          format: targetFormat.toUpperCase(),
+          path: path.relative(libraryRoot, destPath),
+          size: stats.size,
+          addedAt,
+        });
       }
 
-      const relPath = path.relative(libraryRoot, destPath);
-      const extNoDot = ext.startsWith(".") ? ext.slice(1) : ext;
-      const format = extNoDot ? extNoDot.toUpperCase() : "EPUB";
+      // Clean up the original temp file.
+      await fs.promises.unlink(file.path).catch(() => { });
 
-      const files = Array.isArray(book.files) ? [...book.files] : [];
-      files.push({
-        format,
-        path: relPath,
-        size: stats.size,
-        addedAt: new Date(),
-      });
+      if (generatedFiles.length === 0) {
+        return res.status(500).json({ error: "Failed to convert uploaded file to EPUB/AZW3" });
+      }
 
-      book.files = files;
+      book.files = generatedFiles;
       book.owned = true;
 
       await book.save();
@@ -1106,46 +1168,94 @@ app.get("/api/books/:id/download/:format", async (req, res) => {
       return res.status(503).json({ error: "Database not connected" });
     }
 
-    const book = await Book.findById(req.params.id).lean();
-    if (!book || !Array.isArray(book.files) || book.files.length === 0) {
-      return res.status(404).json({ error: "File not found" });
-    }
-
     const requestedFormat = String(req.params.format || "").toLowerCase();
-
-    let fileEntry = book.files.find(
-      (f) => String(f.format || "").toLowerCase() === requestedFormat
-    );
-
-    // Fallback: match by file extension if format mismatch
-    if (!fileEntry) {
-      fileEntry = book.files.find((f) => {
-        const ext = path.extname(f.path || "").slice(1).toLowerCase();
-        return ext === requestedFormat;
-      });
+    if (!requestedFormat || !["epub", "azw3"].includes(requestedFormat)) {
+      return res.status(400).json({ error: "Invalid format" });
     }
 
-    if (!fileEntry) {
-      return res.status(404).json({ error: "Requested format not available" });
+    const book = await Book.findById(req.params.id);
+    if (!book) {
+      return res.status(404).json({ error: "Book not found" });
     }
 
     const libraryRoot = process.env.LIBRARY_PATH || "/data/library";
-    const fullPath = path.join(libraryRoot, fileEntry.path);
+    const normalizeFormat = (f) => String(f.format || "").toLowerCase();
+    const fileExistsOnDisk = async (relPath) => {
+      try {
+        const fullPath = path.join(libraryRoot, relPath);
+        const stats = await fs.promises.stat(fullPath);
+        return stats.isFile() ? fullPath : null;
+      } catch (err) {
+        if (err.code !== "ENOENT") {
+          console.warn("/api/books/:id/download stat error", {
+            bookId: String(book._id),
+            relPath,
+            error: err.message,
+          });
+        }
+        return null;
+      }
+    };
 
-    try {
-      const stats = await fs.promises.stat(fullPath);
-      if (!stats.isFile()) {
-        return res.status(404).json({ error: "File not found" });
+    // Look for an existing file matching the requested format.
+    let fileEntry = (book.files || []).find(
+      (f) => normalizeFormat(f) === requestedFormat
+    );
+    let fullPath = fileEntry ? await fileExistsOnDisk(fileEntry.path) : null;
+
+    // If the requested format is missing (or its on-disk file is gone),
+    // generate it on demand from another available file.
+    if (!fullPath) {
+      const sources = (book.files || []).filter((f) => f.path);
+      if (sources.length === 0) {
+        return res.status(404).json({ error: "No source files available" });
       }
-    } catch (err) {
-      if (err.code !== "ENOENT") {
-        console.warn("/api/books/:id/download stat error", {
-          bookId: book._id?.toString?.(),
-          fullPath,
-          error: err.message,
+
+      // Prefer a source whose format is not the requested one.
+      const source =
+        sources.find((f) => normalizeFormat(f) !== requestedFormat) ||
+        sources[0];
+      const sourcePath = await fileExistsOnDisk(source.path);
+      if (!sourcePath) {
+        return res.status(404).json({ error: "Source file not found" });
+      }
+
+      const sourceDir = path.dirname(sourcePath);
+      const sourceBase = path.basename(sourcePath, path.extname(sourcePath));
+      const outputPath = path.join(sourceDir, `${ sourceBase }.${ requestedFormat }`);
+
+      try {
+        await convertEbookFile(sourcePath, outputPath);
+      } catch (convertErr) {
+        console.error("/api/books/:id/download conversion failed", {
+          bookId: String(book._id),
+          requestedFormat,
+          sourcePath,
+          error: convertErr.message,
         });
+        return res.status(500).json({ error: "Failed to convert file" });
       }
-      return res.status(404).json({ error: "File not found" });
+
+      const stats = await fs.promises.stat(outputPath);
+      if (!stats.isFile()) {
+        return res.status(500).json({ error: "Conversion did not produce a file" });
+      }
+
+      // Save the new file entry if it is not already tracked.
+      const newEntry = {
+        format: requestedFormat.toUpperCase(),
+        path: path.relative(libraryRoot, outputPath),
+        size: stats.size,
+        addedAt: new Date(),
+      };
+
+      book.files = (book.files || []).filter(
+        (f) => normalizeFormat(f) !== requestedFormat
+      );
+      book.files.push(newEntry);
+      await book.save();
+
+      fullPath = outputPath;
     }
 
     const downloadName = path.basename(fullPath);
