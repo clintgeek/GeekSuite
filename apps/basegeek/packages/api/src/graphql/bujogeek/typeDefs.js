@@ -23,6 +23,7 @@ export const typeDefs = gql`
     parentTask: Task
     subtasks: [Task]
     completedAt: Date
+    cancelledAt: Date
     createdAt: Date
     updatedAt: Date
   }

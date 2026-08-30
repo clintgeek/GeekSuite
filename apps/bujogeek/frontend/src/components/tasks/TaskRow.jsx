@@ -2,7 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Typography, Chip, IconButton, Tooltip, useTheme, useMediaQuery } from '@mui/material';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Pencil, Trash2, StickyNote, Repeat } from 'lucide-react';
+import { Pencil, Trash2, StickyNote, Repeat, Ban, RotateCcw } from 'lucide-react';
 import { format, differenceInCalendarDays } from 'date-fns';
 import TaskCheckbox from './TaskCheckbox';
 import { getTaskAge, getAgingColor, getAgingLabel } from '../../utils/taskAging';
@@ -28,6 +28,7 @@ const TaskRow = ({
   onEdit,
   onDelete,
   onSaveAsNote,
+  onCancel,
   focused = false,
 }) => {
   const theme     = useTheme();
@@ -38,10 +39,19 @@ const TaskRow = ({
   const [tapped,  setTapped]  = useState(false);
 
   const isCompleted = task.status === 'completed';
+  const isCancelled = task.status === 'cancelled';
+  const isSunk       = isCompleted || isCancelled;
   const { level, days } = getTaskAge(task);
-  const agingColor  = isCompleted ? (isDark ? colors.dark[500] : colors.ink[200]) : getAgingColor(level);
+  // Cancelled gets its own muted tone (plum, from the aging palette's "stale"
+  // slot) rather than sharing completed's neutral ink — a struck-as-irrelevant
+  // task should read distinctly from a finished one.
+  const agingColor  = isCancelled
+    ? (isDark ? colors.aging.stale : `${colors.aging.stale}cc`)
+    : isCompleted
+    ? (isDark ? colors.dark[500] : colors.ink[200])
+    : getAgingColor(level);
   const agingLabel  = getAgingLabel(days);
-  const agingTint   = isCompleted ? 'transparent' : getAgingTint(agingColor, isDark);
+  const agingTint   = isSunk ? 'transparent' : getAgingTint(agingColor, isDark);
 
   // Mobile: tap the row to reveal action buttons
   const handleRowClick = useCallback((e) => {
@@ -172,7 +182,9 @@ const TaskRow = ({
             </Box>
           )}
 
-          {/* Task content — animated strikethrough on completion */}
+          {/* Task content — animated strikethrough on completion, dashed
+              italic strike on cancellation (a distinct "struck as
+              irrelevant" signifier, not just a duller version of done) */}
           <Box
             sx={{
               position:      'relative',
@@ -184,14 +196,20 @@ const TaskRow = ({
             <Typography
               sx={{
                 fontSize:    { xs: '0.9375rem', sm: '0.9375rem' },
-                fontWeight:  isCompleted ? 400 : 500,
-                color:       isCompleted
+                fontWeight:  isSunk ? 400 : 500,
+                fontStyle:   isCancelled ? 'italic' : 'normal',
+                color:       isCancelled
+                               ? (isDark ? `${colors.aging.stale}99` : `${colors.aging.stale}bb`)
+                               : isCompleted
                                ? (isDark ? 'rgba(255,245,220,0.28)' : colors.ink[400])
                                : theme.palette.text.primary,
                 lineHeight:  1.5,
                 transition:  'color 260ms ease',
                 display:     'inline',
                 letterSpacing: '-0.005em',
+                textDecoration:      isCancelled ? 'line-through' : 'none',
+                textDecorationStyle: 'dashed',
+                textDecorationColor: isDark ? 'rgba(122,68,98,0.65)' : `${colors.aging.stale}90`,
               }}
             >
               {cleanContent(task.content)}
@@ -219,8 +237,26 @@ const TaskRow = ({
             />
           </Box>
 
+          {/* Cancelled signifier — small, quiet "voided" stamp */}
+          {isCancelled && (
+            <Tooltip title="Cancelled" placement="top">
+              <Box
+                component="span"
+                sx={{
+                  display:    'inline-flex',
+                  alignItems: 'center',
+                  flexShrink: 0,
+                  color:      isDark ? `${colors.aging.stale}` : `${colors.aging.stale}`,
+                  opacity:    0.7,
+                }}
+              >
+                <Ban size={12} strokeWidth={1.75} />
+              </Box>
+            </Tooltip>
+          )}
+
           {/* Inline metadata — due date */}
-          {dueBadge && !isCompleted && (
+          {dueBadge && !isSunk && (
             <Typography
               sx={{
                 fontFamily:   '"IBM Plex Mono", monospace',
@@ -237,7 +273,7 @@ const TaskRow = ({
           )}
 
           {/* Priority dot — small, not screaming */}
-          {task.priority && !isCompleted && (
+          {task.priority && !isSunk && (
             <Box
               sx={{
                 width:           6,
@@ -326,7 +362,7 @@ const TaskRow = ({
         )}
 
         {/* Aging label — only for significantly aged tasks */}
-        {agingLabel && !isCompleted && days > 1 && (
+        {agingLabel && !isSunk && days > 1 && (
           <Typography
             sx={{
               fontFamily:   '"IBM Plex Mono", monospace',
@@ -345,7 +381,7 @@ const TaskRow = ({
 
       {/* ─── Action buttons — desktop hover / mobile tap ──────── */}
       <AnimatePresence>
-        {showActions && (onEdit || onDelete || onSaveAsNote) && (
+        {showActions && (onEdit || onDelete || onSaveAsNote || onCancel) && (
           <motion.div
             initial={{ opacity: 0, scale: 0.94 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -414,6 +450,24 @@ const TaskRow = ({
                   }}
                 >
                   <StickyNote size={14} strokeWidth={1.75} />
+                </IconButton>
+              </Tooltip>
+            )}
+            {onCancel && (
+              <Tooltip title={isCancelled ? 'Restore' : 'Cancel — mark irrelevant'} placement="top">
+                <IconButton
+                  size="small"
+                  onClick={(e) => { e.stopPropagation(); onCancel(task); }}
+                  sx={{
+                    color:   isCancelled
+                               ? (isDark ? colors.aging.stale : colors.aging.stale)
+                               : (isDark ? 'rgba(255,245,220,0.35)' : colors.ink[400]),
+                    width:   28,
+                    height:  28,
+                    '&:hover': { color: colors.aging.stale },
+                  }}
+                >
+                  {isCancelled ? <RotateCcw size={14} strokeWidth={1.75} /> : <Ban size={14} strokeWidth={1.75} />}
                 </IconButton>
               </Tooltip>
             )}

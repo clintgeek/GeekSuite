@@ -58,11 +58,20 @@ const dueTime = (task) => {
  * The single authoritative task comparator. Used everywhere tasks are ordered
  * in this context — do not inline a second copy.
  */
+const SUNK_STATUSES = new Set(['completed', 'cancelled']);
+
 export const compareTasks = (a, b) => {
-  // 1. Completed tasks sink below incomplete ones.
-  const aDone = a?.status === 'completed' ? 1 : 0;
-  const bDone = b?.status === 'completed' ? 1 : 0;
+  // 1. Completed / cancelled tasks sink below incomplete ones.
+  const aDone = SUNK_STATUSES.has(a?.status) ? 1 : 0;
+  const bDone = SUNK_STATUSES.has(b?.status) ? 1 : 0;
   if (aDone !== bDone) return aDone - bDone;
+
+  // Within the sunk group, cancelled sorts after completed (spec doesn't
+  // define an order between them — default to cancelled-last).
+  if (aDone && a?.status !== b?.status) {
+    if (a?.status === 'cancelled') return 1;
+    if (b?.status === 'cancelled') return -1;
+  }
 
   const aDue = dueTime(a);
   const bDue = dueTime(b);
@@ -558,10 +567,11 @@ const TaskProvider = ({ children }) => {
   const updateTaskStatus = useCallback(async (taskId, newStatus) => {
     const snapshot = findTaskInState(tasksRef.current, taskId);
     const completedAt = newStatus === 'completed' ? new Date().toISOString() : null;
+    const cancelledAt = newStatus === 'cancelled' ? new Date().toISOString() : null;
 
     setError(null);
     setTasks(prev => mapTasksState(prev, task => (
-      sameTask(task, taskId) ? { ...task, status: newStatus, completedAt } : task
+      sameTask(task, taskId) ? { ...task, status: newStatus, completedAt, cancelledAt } : task
     )));
 
     try {

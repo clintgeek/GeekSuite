@@ -134,7 +134,7 @@ class TaskService {
       case 'daily':
         query.$or = [
           { dueDate: { $gte: startOfDayDate, $lte: endOfDayDate } },
-          { status: 'completed', updatedAt: { $gte: startOfDayDate, $lte: endOfDayDate }, $or: [{ dueDate: { $gte: startOfDayDate, $lte: endOfDayDate } }, { dueDate: null }] },
+          { status: { $in: ['completed', 'cancelled'] }, updatedAt: { $gte: startOfDayDate, $lte: endOfDayDate }, $or: [{ dueDate: { $gte: startOfDayDate, $lte: endOfDayDate } }, { dueDate: null }] },
           { dueDate: null, status: 'pending', createdAt: { $lte: endOfDayDate } },
           { dueDate: { $lt: startOfDayDate }, status: { $in: ['pending', 'migrated_future'] } },
         ];
@@ -148,7 +148,7 @@ class TaskService {
         endOfWeekDate.setUTCHours(23, 59, 59, 999);
         query.$or = [
           { dueDate: { $gte: startOfWeekDate, $lte: endOfWeekDate } },
-          { status: 'completed', updatedAt: { $gte: startOfWeekDate, $lte: endOfWeekDate } },
+          { status: { $in: ['completed', 'cancelled'] }, updatedAt: { $gte: startOfWeekDate, $lte: endOfWeekDate } },
           { dueDate: null, status: 'pending', createdAt: { $lte: endOfWeekDate } },
           { dueDate: { $lt: startOfWeekDate }, status: { $in: ['pending', 'migrated_future'] } },
         ];
@@ -159,7 +159,7 @@ class TaskService {
         const endOfMonthDate = new Date(Date.UTC(startOfDayDate.getUTCFullYear(), startOfDayDate.getUTCMonth() + 1, 0, 23, 59, 59, 999));
         query.$or = [
           { dueDate: { $gte: startOfMonthDate, $lte: endOfMonthDate } },
-          { status: 'completed', updatedAt: { $gte: startOfMonthDate, $lte: endOfMonthDate } },
+          { status: { $in: ['completed', 'cancelled'] }, updatedAt: { $gte: startOfMonthDate, $lte: endOfMonthDate } },
           { dueDate: null, status: 'pending', createdAt: { $lte: endOfMonthDate } },
           { dueDate: { $lt: startOfMonthDate }, status: { $in: ['pending', 'migrated_future'] } },
         ];
@@ -168,7 +168,7 @@ class TaskService {
       case 'all':
         query.$or = [
           { dueDate: { $ne: null } },
-          { status: 'completed' },
+          { status: { $in: ['completed', 'cancelled'] } },
           { dueDate: null, status: 'pending' },
           { status: 'migrated_back' },
           { isBacklog: true },
@@ -206,7 +206,7 @@ class TaskService {
     const masterTasks = await this.taskModel.find({
       createdBy: userId,
       isSeriesMaster: true,
-      status: { $ne: 'completed' }
+      status: { $nin: ['completed', 'cancelled'] }
     });
 
     const overrides = await this.taskModel.find({
@@ -302,7 +302,17 @@ class TaskService {
 
   sortTasks(tasks) {
     return tasks.sort((a, b) => {
-      if (a.status !== b.status) return a.status === 'pending' ? -1 : 1;
+      if (a.status !== b.status) {
+        const aSunk = a.status !== 'pending';
+        const bSunk = b.status !== 'pending';
+        if (aSunk !== bSunk) return aSunk ? 1 : -1;
+        // Within the sunk group, cancelled sits below completed — per
+        // SORTING_RULES.md spirit (completed/cancelled below active); the doc
+        // doesn't specify a relative order for these two, so cancelled last.
+        if (a.status === 'cancelled' && b.status === 'completed') return 1;
+        if (a.status === 'completed' && b.status === 'cancelled') return -1;
+        return a.status === 'pending' ? -1 : 1;
+      }
       if (a.dueDate && b.dueDate) return a.dueDate - b.dueDate;
       if (a.dueDate) return -1;
       if (b.dueDate) return 1;
@@ -567,9 +577,11 @@ class TaskService {
     this.requireUser(userId);
     const now = new Date();
     const updateData = { status, updatedAt: now };
-    // completedAt is set on completion and explicitly cleared when a task is
-    // un-completed (re-opened, migrated, etc.).
+    // completedAt / cancelledAt are set on entering that status and explicitly
+    // cleared when the task leaves it (re-opened, migrated, un-cancelled, etc.)
+    // — mirrors of the same pattern, kept mutually exclusive.
     updateData.completedAt = status === 'completed' ? now : null;
+    updateData.cancelledAt = status === 'cancelled' ? now : null;
 
     const target = await this.resolveOwnedTarget(taskId, userId);
     if (!target) return null;

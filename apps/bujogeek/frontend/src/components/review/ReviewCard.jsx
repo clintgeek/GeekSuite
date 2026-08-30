@@ -1,5 +1,5 @@
 import { Box, Typography, Chip, IconButton, Tooltip, useTheme } from '@mui/material';
-import { X, ArrowRight, Archive, CalendarCheck, Calendar } from 'lucide-react';
+import { X, ArrowRight, Archive, CalendarCheck, Calendar, Ban } from 'lucide-react';
 import { useState } from 'react';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { motion } from 'framer-motion';
@@ -27,6 +27,7 @@ const ReviewCard = ({
   onMoveTomorrow,
   onMoveTo,
   onBacklog,
+  onCancel,
   onDelete,
   focused = false,
 }) => {
@@ -302,6 +303,16 @@ const ReviewCard = ({
           isDark={isDark}
         />
 
+        {/* Cancel — struck as irrelevant, not deleted */}
+        <ActionButton
+          icon={Ban}
+          label="Cancel"
+          shortcut="4"
+          onClick={() => onCancel?.(task)}
+          variant="cancel"
+          isDark={isDark}
+        />
+
         {/* Spacer */}
         <Box sx={{ flex: 1 }} />
 
@@ -356,6 +367,15 @@ const ActionButton = ({ icon: Icon, label, shortcut, onClick, variant, isDark })
       border:  isDark ? 'rgba(255,245,220,0.08)' : colors.ink[200],
       hoverBg: isDark ? 'rgba(255,245,220,0.04)' : colors.ink[50],
       hoverBorder: isDark ? 'rgba(255,245,220,0.18)' : colors.ink[300],
+    },
+    // Cancel — a distinct "voided" feel (plum, from the aging palette's
+    // "stale" slot), quieter than delete's red but not neutral like backlog.
+    cancel: {
+      color:   isDark ? `${colors.aging.stale}` : `${colors.aging.stale}`,
+      bg:      'transparent',
+      border:  isDark ? `${colors.aging.stale}40` : `${colors.aging.stale}30`,
+      hoverBg: isDark ? `${colors.aging.stale}14` : `${colors.aging.stale}0c`,
+      hoverBorder: `${colors.aging.stale}70`,
     },
   };
 

@@ -123,6 +123,7 @@ export const UPDATE_TASK_STATUS = gql`
       signifier
       status
       completedAt
+      cancelledAt
       priority
       note
       tags

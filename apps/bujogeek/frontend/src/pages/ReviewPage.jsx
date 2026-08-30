@@ -30,6 +30,7 @@ const ReviewPage = () => {
     fetchTasks,
     fetchAllTasks,
     updateTask,
+    updateTaskStatus,
     deleteTask,
     LoadingState,
   } = useTaskContext();
@@ -47,7 +48,7 @@ const ReviewPage = () => {
   const agingTasks = useMemo(() => {
     const taskArray = normalizeTasks(tasks);
     return taskArray.filter((task) => {
-      if (task.status === 'completed') return false;
+      if (task.status === 'completed' || task.status === 'cancelled') return false;
       if (reviewedIds.has((task.id || task._id))) return false;
       if (mode === 'endofday') {
         return task.status === 'pending';
@@ -60,7 +61,7 @@ const ReviewPage = () => {
   const totalToReview = useMemo(() => {
     const taskArray = normalizeTasks(tasks);
     return taskArray.filter((task) => {
-      if (task.status === 'completed') return false;
+      if (task.status === 'completed' || task.status === 'cancelled') return false;
       if (mode === 'endofday') return task.status === 'pending';
       const { days } = getTaskAge(task);
       return days > 0;
@@ -129,6 +130,14 @@ const ReviewPage = () => {
     [deleteTask, markReviewed]
   );
 
+  const handleCancel = useCallback(
+    async (task) => {
+      await updateTaskStatus((task.id || task._id), 'cancelled');
+      markReviewed((task.id || task._id));
+    },
+    [updateTaskStatus, markReviewed]
+  );
+
   const isLoading = loading === LoadingState.FETCHING;
   const allReviewed = agingTasks.length === 0 && !isLoading && totalToReview > 0;
   const nothingToReview = totalToReview === 0 && !isLoading;
@@ -170,6 +179,10 @@ const ReviewPage = () => {
           e.preventDefault();
           handleBacklog(focusedTask);
           break;
+        case '4':
+          e.preventDefault();
+          handleCancel(focusedTask);
+          break;
         default:
           break;
       }
@@ -177,7 +190,7 @@ const ReviewPage = () => {
 
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [isLoading, allReviewed, nothingToReview, focusedTaskId, agingTasks, handleKeep, handleMoveTomorrow, handleBacklog]);
+  }, [isLoading, allReviewed, nothingToReview, focusedTaskId, agingTasks, handleKeep, handleMoveTomorrow, handleBacklog, handleCancel]);
 
   useGlobalShortcuts();
 
@@ -359,6 +372,7 @@ const ReviewPage = () => {
                   onMoveTomorrow={handleMoveTomorrow}
                   onMoveTo={handleMoveToDate}
                   onBacklog={handleBacklog}
+                  onCancel={handleCancel}
                   onDelete={handleDelete}
                   focused={focusedTaskId === (task.id || task._id)}
                 />

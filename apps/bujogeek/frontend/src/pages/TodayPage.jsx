@@ -78,6 +78,12 @@ const TodayPage = () => {
     fetchUpcoming();
   }, [updateTaskStatus, fetchUpcoming]);
 
+  const handleCancelToggle = useCallback(async (task) => {
+    const newStatus = task.status === 'cancelled' ? 'pending' : 'cancelled';
+    await updateTaskStatus((task.id || task._id), newStatus);
+    fetchUpcoming();
+  }, [updateTaskStatus, fetchUpcoming]);
+
   const handleEdit = useCallback((task) => {
     setEditingTask(task);
   }, []);
@@ -127,7 +133,9 @@ const TodayPage = () => {
     const completed = [];
 
     tasks.forEach((task) => {
-      if (task.status === 'completed') {
+      if (task.status === 'completed' || task.status === 'cancelled') {
+        // Cancelled sinks alongside completed — struck as irrelevant, out of
+        // the active/overdue flow, tucked into the collapsed section.
         completed.push(task);
       } else {
         const { days } = getTaskAge(task);
@@ -161,7 +169,7 @@ const TodayPage = () => {
 
     return (Array.isArray(upcomingRangeTasks) ? upcomingRangeTasks : [])
       .filter((task) => {
-        if (task.status === 'completed') return false;
+        if (task.status === 'completed' || task.status === 'cancelled') return false;
         if (!task.dueDate) return false;
         if (dailyIds.has(String(task.id || task._id))) return false;
         return isWithinInterval(startOfDay(new Date(task.dueDate)), {
@@ -216,6 +224,7 @@ const TodayPage = () => {
     onToggle: handleStatusToggle,
     onEdit: handleEdit,
     onDelete: handleDelete,
+    onCancel: handleCancelToggle,
     enabled: !isLoading && !editingTask,
   });
 
@@ -254,6 +263,7 @@ const TodayPage = () => {
             onEdit={handleEdit}
             onDelete={handleDelete}
             onSaveAsNote={handleSaveAsNote}
+            onCancel={handleCancelToggle}
             focusedTaskId={focusedTaskId}
           />
 
@@ -263,6 +273,7 @@ const TodayPage = () => {
             onEdit={handleEdit}
             onDelete={handleDelete}
             onSaveAsNote={handleSaveAsNote}
+            onCancel={handleCancelToggle}
             focusedTaskId={focusedTaskId}
             onReorder={handleReorder}
           />
@@ -273,6 +284,7 @@ const TodayPage = () => {
             onEdit={handleEdit}
             onDelete={handleDelete}
             onSaveAsNote={handleSaveAsNote}
+            onCancel={handleCancelToggle}
             focusedTaskId={focusedTaskId}
           />
 
@@ -282,6 +294,7 @@ const TodayPage = () => {
             onEdit={handleEdit}
             onDelete={handleDelete}
             onSaveAsNote={handleSaveAsNote}
+            onCancel={handleCancelToggle}
           />
         </>
       )}

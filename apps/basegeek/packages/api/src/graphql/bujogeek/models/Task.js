@@ -12,7 +12,7 @@ const taskSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'completed', 'migrated_back', 'migrated_future'],
+    enum: ['pending', 'completed', 'migrated_back', 'migrated_future', 'cancelled'],
     default: 'pending',
   },
   dueDate: { type: Date, default: null },
@@ -36,6 +36,7 @@ const taskSchema = new mongoose.Schema({
   parentTask: { type: mongoose.Schema.Types.ObjectId, ref: 'Task', default: null },
   subtasks: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Task' }],
   completedAt: { type: Date, default: null },
+  cancelledAt: { type: Date, default: null },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },

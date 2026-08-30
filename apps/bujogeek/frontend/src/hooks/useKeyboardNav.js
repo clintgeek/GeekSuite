@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
  * j/k    move focus up/down through the list
  * x      toggle complete on the focused task
  * e      open edit on the focused task
+ * c      toggle cancelled on the focused task (strike as irrelevant)
  * d      delete the focused task (caller should confirm)
  * Escape clear focus
  *
@@ -13,16 +14,16 @@ import { useState, useEffect, useCallback, useRef } from 'react';
  * contentEditable, or when the hook is disabled (e.g. a modal is open).
  * Scrolls the focused row into view.
  */
-const useKeyboardNav = ({ tasks = [], onToggle, onEdit, onDelete, enabled = true }) => {
+const useKeyboardNav = ({ tasks = [], onToggle, onEdit, onDelete, onCancel, enabled = true }) => {
   const [focusedIndex, setFocusedIndex] = useState(-1);
 
   // Refs keep the handler's closure always-current without re-registering the listener
   const focusedIndexRef = useRef(-1);
   const tasksRef = useRef(tasks);
-  const callbacksRef = useRef({ onToggle, onEdit, onDelete });
+  const callbacksRef = useRef({ onToggle, onEdit, onDelete, onCancel });
 
   tasksRef.current = tasks;
-  callbacksRef.current = { onToggle, onEdit, onDelete };
+  callbacksRef.current = { onToggle, onEdit, onDelete, onCancel };
 
   // Sync ref when state changes
   const setFocus = useCallback((valueOrFn) => {
@@ -78,7 +79,7 @@ const useKeyboardNav = ({ tasks = [], onToggle, onEdit, onDelete, enabled = true
 
       const list = tasksRef.current;
       const idx = focusedIndexRef.current;
-      const { onToggle: toggle, onEdit: edit, onDelete: del } = callbacksRef.current;
+      const { onToggle: toggle, onEdit: edit, onDelete: del, onCancel: cancel } = callbacksRef.current;
 
       switch (e.key) {
         case 'j': {
@@ -117,6 +118,13 @@ const useKeyboardNav = ({ tasks = [], onToggle, onEdit, onDelete, enabled = true
           if (idx >= 0 && idx < list.length) {
             e.preventDefault();
             del?.(list[idx]);
+          }
+          break;
+        }
+        case 'c': {
+          if (idx >= 0 && idx < list.length) {
+            e.preventDefault();
+            cancel?.(list[idx]);
           }
           break;
         }

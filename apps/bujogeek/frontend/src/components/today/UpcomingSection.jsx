@@ -12,6 +12,7 @@ const UpcomingSection = ({
   onEdit,
   onDelete,
   onSaveAsNote,
+  onCancel,
   focusedTaskId,
 }) => {
   if (!tasks || tasks.length === 0) return null;
@@ -33,6 +34,7 @@ const UpcomingSection = ({
             onEdit={onEdit}
             onDelete={onDelete}
             onSaveAsNote={onSaveAsNote}
+            onCancel={onCancel}
             focused={focusedTaskId === (task.id || task._id)}
           />
         ))}
