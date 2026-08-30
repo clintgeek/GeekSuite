@@ -115,6 +115,13 @@ async function convertEbookFile(inputPath, outputPath, coverPath = null) {
   await fs.promises.mkdir(path.dirname(outputPath), { recursive: true });
 
   const args = [inputPath, outputPath];
+
+  const outputExt = path.extname(outputPath).toLowerCase();
+  if (outputExt === ".mobi") {
+    // KF8-style MOBI for modern Kindles; profile optimizes the output.
+    args.push("--mobi-file-type", "new", "--output-profile", "kindle");
+  }
+
   let cover = null;
   if (coverPath) {
     try {
@@ -1116,84 +1123,31 @@ app.post(
       const ext = path.extname(file.originalname || "").toLowerCase();
       const baseName = path.basename(file.originalname || file.filename || "upload", ext) || "upload";
       const safeBase = baseName.replace(/[^a-zA-Z0-9 _.-]/g, "_");
-      const sourceFormat = ext.startsWith(".") ? ext.slice(1).toLowerCase() : "";
-
+      const finalName = safeBase + (ext || "");
       const destDir = path.join(libraryRoot, "uploads", String(book._id));
       await fs.promises.mkdir(destDir, { recursive: true });
+      const destPath = path.join(destDir, finalName);
 
-      // Extract a cover from the uploaded source if the book doesn't have one.
-      const update = {};
-      const updatedFields = [];
-      await extractCalibreCoverIfMissing(book, file.path, update, updatedFields);
-      if (update.coverPath) {
-        book.coverPath = update.coverPath;
+      await moveFileSafe(file.path, destPath);
+
+      const stats = await fs.promises.stat(destPath);
+      if (!stats.isFile()) {
+        return res.status(500).json({ error: "Uploaded file is not a regular file" });
       }
 
-      const coverFullPath =
-        book.coverPath && typeof book.coverPath === "string"
-          ? path.join(libraryRoot, book.coverPath)
-          : null;
+      const relPath = path.relative(libraryRoot, destPath);
+      const extNoDot = ext.startsWith(".") ? ext.slice(1) : ext;
+      const format = extNoDot ? extNoDot.toUpperCase() : "EPUB";
 
-      const targetFormats = ["epub", "azw3"];
-      const generatedFiles = [];
-      const addedAt = new Date();
+      const files = Array.isArray(book.files) ? [...book.files] : [];
+      files.push({
+        format,
+        path: relPath,
+        size: stats.size,
+        addedAt: new Date(),
+      });
 
-      for (const targetFormat of targetFormats) {
-        const finalName = `${ safeBase }.${ targetFormat }`;
-        const destPath = path.join(destDir, finalName);
-
-        if (sourceFormat === targetFormat) {
-          // Source is already the desired format. If we have a cover image,
-          // re-convert through Calibre to embed it; otherwise just copy.
-          if (coverFullPath) {
-            try {
-              await convertEbookFile(file.path, destPath, coverFullPath);
-            } catch (convertErr) {
-              console.warn("/api/books/:id/upload same-format conversion failed", {
-                bookId,
-                targetFormat,
-                error: convertErr.message,
-              });
-              await fs.promises.copyFile(file.path, destPath).catch(() => { });
-            }
-          } else {
-            await fs.promises.copyFile(file.path, destPath);
-          }
-        } else {
-          // Convert from the uploaded source file.
-          try {
-            await convertEbookFile(file.path, destPath, coverFullPath);
-          } catch (convertErr) {
-            console.warn("/api/books/:id/upload conversion failed", {
-              bookId,
-              targetFormat,
-              error: convertErr.message,
-            });
-            continue;
-          }
-        }
-
-        const stats = await fs.promises.stat(destPath);
-        if (!stats.isFile()) {
-          continue;
-        }
-
-        generatedFiles.push({
-          format: targetFormat.toUpperCase(),
-          path: path.relative(libraryRoot, destPath),
-          size: stats.size,
-          addedAt,
-        });
-      }
-
-      // Clean up the original temp file.
-      await fs.promises.unlink(file.path).catch(() => { });
-
-      if (generatedFiles.length === 0) {
-        return res.status(500).json({ error: "Failed to convert uploaded file to EPUB/AZW3" });
-      }
-
-      book.files = generatedFiles;
+      book.files = files;
       book.owned = true;
 
       await book.save();
@@ -1215,7 +1169,7 @@ app.get("/api/books/:id/download/:format", async (req, res) => {
     }
 
     const requestedFormat = String(req.params.format || "").toLowerCase();
-    if (!requestedFormat || !["epub", "azw3"].includes(requestedFormat)) {
+    if (!requestedFormat || !["epub", "azw3", "mobi"].includes(requestedFormat)) {
       return res.status(400).json({ error: "Invalid format" });
     }
 

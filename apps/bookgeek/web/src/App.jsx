@@ -2658,7 +2658,7 @@ export default function App() {
 
                       {downloadOpen && (
                         <div className="absolute left-0 z-10 mt-1 w-44 overflow-hidden rounded-md border border-slate-800 bg-slate-950 text-[11px] text-slate-100 shadow-xl">
-                          {["epub", "azw3"].map((format) => {
+                          {["epub", "azw3", "mobi"].map((format) => {
                             const existing = (selectedBook.files || []).find(
                               (f) => (f.format || "").toLowerCase() === format
                             );
