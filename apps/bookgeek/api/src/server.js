@@ -118,8 +118,8 @@ async function convertEbookFile(inputPath, outputPath, coverPath = null) {
 
   const outputExt = path.extname(outputPath).toLowerCase();
   if (outputExt === ".mobi") {
-    // KF8-style MOBI for modern Kindles; profile optimizes the output.
-    args.push("--mobi-file-type", "new", "--output-profile", "kindle");
+    // Both old and new MOBI formats for maximum device compatibility.
+    args.push("--mobi-file-type", "both", "--output-profile", "kindle");
   }
 
   let cover = null;
