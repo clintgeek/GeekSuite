@@ -103,17 +103,35 @@ const uploadToTemp = multer({
 /**
  * Convert an ebook file from one format to another using Calibre's
  * ebook-convert. The output format is determined by outputPath's extension.
- * Returns the output file's stats, or null if conversion failed.
+ * If a coverPath is provided and exists on disk, it is embedded into the
+ * converted output. Returns the output file's stats, or null if conversion
+ * failed.
  */
-async function convertEbookFile(inputPath, outputPath) {
+async function convertEbookFile(inputPath, outputPath, coverPath = null) {
   if (!inputPath || !outputPath) {
     throw new Error("inputPath and outputPath are required");
   }
 
   await fs.promises.mkdir(path.dirname(outputPath), { recursive: true });
 
+  const args = [inputPath, outputPath];
+  let cover = null;
+  if (coverPath) {
+    try {
+      const stats = await fs.promises.stat(coverPath);
+      if (stats.isFile()) {
+        cover = coverPath;
+      }
+    } catch {
+      // Cover file missing; proceed without it.
+    }
+  }
+  if (cover) {
+    args.push("--cover", cover);
+  }
+
   try {
-    await execFileAsync(CALIBRE_EBOOK_CONVERT_BIN, [inputPath, outputPath], {
+    await execFileAsync(CALIBRE_EBOOK_CONVERT_BIN, args, {
       timeout: 120000,
       maxBuffer: 1024 * 1024,
     });
@@ -121,6 +139,7 @@ async function convertEbookFile(inputPath, outputPath) {
     console.warn("ebook-convert failed", {
       inputPath,
       outputPath,
+      cover,
       error: err.message,
     });
     throw err;
@@ -1102,6 +1121,19 @@ app.post(
       const destDir = path.join(libraryRoot, "uploads", String(book._id));
       await fs.promises.mkdir(destDir, { recursive: true });
 
+      // Extract a cover from the uploaded source if the book doesn't have one.
+      const update = {};
+      const updatedFields = [];
+      await extractCalibreCoverIfMissing(book, file.path, update, updatedFields);
+      if (update.coverPath) {
+        book.coverPath = update.coverPath;
+      }
+
+      const coverFullPath =
+        book.coverPath && typeof book.coverPath === "string"
+          ? path.join(libraryRoot, book.coverPath)
+          : null;
+
       const targetFormats = ["epub", "azw3"];
       const generatedFiles = [];
       const addedAt = new Date();
@@ -1111,12 +1143,26 @@ app.post(
         const destPath = path.join(destDir, finalName);
 
         if (sourceFormat === targetFormat) {
-          // Source is already the desired format: copy it to the library.
-          await fs.promises.copyFile(file.path, destPath);
+          // Source is already the desired format. If we have a cover image,
+          // re-convert through Calibre to embed it; otherwise just copy.
+          if (coverFullPath) {
+            try {
+              await convertEbookFile(file.path, destPath, coverFullPath);
+            } catch (convertErr) {
+              console.warn("/api/books/:id/upload same-format conversion failed", {
+                bookId,
+                targetFormat,
+                error: convertErr.message,
+              });
+              await fs.promises.copyFile(file.path, destPath).catch(() => { });
+            }
+          } else {
+            await fs.promises.copyFile(file.path, destPath);
+          }
         } else {
           // Convert from the uploaded source file.
           try {
-            await convertEbookFile(file.path, destPath);
+            await convertEbookFile(file.path, destPath, coverFullPath);
           } catch (convertErr) {
             console.warn("/api/books/:id/upload conversion failed", {
               bookId,
@@ -1203,6 +1249,11 @@ app.get("/api/books/:id/download/:format", async (req, res) => {
     );
     let fullPath = fileEntry ? await fileExistsOnDisk(fileEntry.path) : null;
 
+    const coverFullPath =
+      book.coverPath && typeof book.coverPath === "string"
+        ? path.join(libraryRoot, book.coverPath)
+        : null;
+
     // If the requested format is missing (or its on-disk file is gone),
     // generate it on demand from another available file.
     if (!fullPath) {
@@ -1225,7 +1276,7 @@ app.get("/api/books/:id/download/:format", async (req, res) => {
       const outputPath = path.join(sourceDir, `${ sourceBase }.${ requestedFormat }`);
 
       try {
-        await convertEbookFile(sourcePath, outputPath);
+        await convertEbookFile(sourcePath, outputPath, coverFullPath);
       } catch (convertErr) {
         console.error("/api/books/:id/download conversion failed", {
           bookId: String(book._id),
