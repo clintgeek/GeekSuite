@@ -19,6 +19,7 @@ const SHORTCUT_GROUPS = [
       { keys: ['g', 'r'], desc: 'Go to Review' },
       { keys: ['g', 'p'], desc: 'Go to Plan' },
       { keys: ['g', 's'], desc: 'Go to Search' },
+      { keys: ['g', 'l'], desc: 'Go to Collections' },
       { keys: ['⌘', 'K'], desc: 'Command palette' },
       { keys: ['⌘', 'N'], desc: 'Focus quick-add input' },
     ],

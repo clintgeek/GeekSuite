@@ -160,7 +160,21 @@ function segmentColor(seg, theme) {
 
 /* ---------- component ---------- */
 
-const InlineQuickAdd = ({ onAdd, autoFocus = false }) => {
+/**
+ * InlineQuickAdd — the writing surface. Parses `#tag`, `!priority`,
+ * `/date`, `(daily)`, `^note` and `$^noteGeek` out of one line of prose.
+ *
+ * `collectionId` switches it into collection mode: the entry is filed into that
+ * collection and, crucially, is NOT given a default due date — a collection
+ * entry stays out of the daily log until the writer dates it themselves.
+ */
+const InlineQuickAdd = ({
+  onAdd,
+  autoFocus = false,
+  collectionId = null,
+  promptLabel,
+  placeholder,
+}) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const inputRef = useRef(null);
@@ -286,8 +300,10 @@ const InlineQuickAdd = ({ onAdd, autoFocus = false }) => {
     const parsed = parseTaskInput(trimmed);
     if (!parsed.content) return;
 
-    // Default dueDate to today 9am local when the user doesn't specify one
-    if (!parsed.dueDate) {
+    // Default dueDate to today 9am local when the user doesn't specify one —
+    // but never in a collection: an undated collection entry is precisely the
+    // point (it stays out of the daily log until it's dated).
+    if (!parsed.dueDate && !collectionId) {
       const today = new Date();
       today.setHours(9, 0, 0, 0);
       parsed.dueDate = today;
@@ -309,7 +325,7 @@ const InlineQuickAdd = ({ onAdd, autoFocus = false }) => {
 
     // Strip noteGeekNote before passing to task creation
     const { noteGeekNote, ...taskData } = parsed;
-    onAdd?.(taskData);
+    onAdd?.(collectionId ? { ...taskData, collectionId } : taskData);
 
     setValue('');
     // Keep focus after submit — the user is planning, let them keep writing
@@ -357,7 +373,7 @@ const InlineQuickAdd = ({ onAdd, autoFocus = false }) => {
                 userSelect: 'none',
               }}
             >
-              Plan your day
+              {promptLabel || 'Plan your day'}
             </Typography>
           </Box>
         )}
@@ -426,7 +442,11 @@ const InlineQuickAdd = ({ onAdd, autoFocus = false }) => {
               onSelect={updateCaret}
               onFocus={() => setFocused(true)}
               onBlur={() => setFocused(false)}
-              placeholder={focused ? 'Write a task\u2026  #tag  !high  /tomorrow  (daily)  ^note' : 'What needs to happen today?'}
+              placeholder={
+                focused
+                  ? 'Write a task\u2026  #tag  !high  /tomorrow  (daily)  ^note'
+                  : (placeholder || 'What needs to happen today?')
+              }
               fullWidth
               sx={{
                 fontSize: { xs: '1rem', sm: '1.0625rem' },
@@ -449,7 +469,7 @@ const InlineQuickAdd = ({ onAdd, autoFocus = false }) => {
                 },
               }}
               inputProps={{
-                'aria-label': 'Add a task for today',
+                'aria-label': collectionId ? 'Add an entry to this collection' : 'Add a task for today',
                 'data-quickadd': true,
               }}
             />

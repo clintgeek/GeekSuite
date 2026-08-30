@@ -1,5 +1,6 @@
 import Task from '../models/Task.js';
 import TaskOrder from '../models/TaskOrder.js';
+import Collection from '../models/Collection.js';
 import mongoose from 'mongoose';
 import rrulePkg from 'rrule';
 
@@ -120,11 +121,30 @@ class TaskService {
     return `${ y }-${ m }-${ day }`;
   }
 
+  /**
+   * Collection entries live OUTSIDE the log. An entry filed into a collection
+   * only surfaces in a log view once it has been given a dueDate — that date is
+   * the bridge between a collection and the daily log. Undated collection
+   * entries are therefore excluded from every dated branch below, including the
+   * `dueDate: null, status: 'pending'` carry-forward float.
+   *
+   * `{ collectionId: null }` matches both an explicit null and a missing field,
+   * so pre-collections tasks are unaffected.
+   *
+   * The `all` view (the backlog / export corpus) is left whole on purpose — it
+   * is not a log view.
+   */
+  collectionExclusionClause() {
+    return { $or: [{ collectionId: null }, { dueDate: { $ne: null } }] };
+  }
+
   async getTasksForDateRange({ userId, startDate, endDate, viewType }) {
     this.requireUser(userId);
     const query = { createdBy: userId, isSeriesMaster: { $ne: true } };
     if (viewType !== 'all') {
       query.isBacklog = { $ne: true };
+      // `$and` sits alongside the per-view `$or` below; Mongo ANDs top-level keys.
+      query.$and = [this.collectionExclusionClause()];
     }
     const startOfDayDate = this.toUtcMidnight(startDate);
     const endOfDayDate = new Date(startOfDayDate);
@@ -352,9 +372,27 @@ class TaskService {
     return out;
   }
 
+  /**
+   * A task may only be filed into a collection its own owner holds. Anything
+   * else — a malformed id, a missing collection, somebody else's collection —
+   * is indistinguishable to the caller.
+   */
+  async assertOwnedCollection(collectionId, userId) {
+    this.requireUser(userId);
+    if (collectionId === null || collectionId === undefined || collectionId === '') return;
+    if (!mongoose.Types.ObjectId.isValid(collectionId)) throw new Error('Collection not found');
+    const owned = await Collection.findOne({ _id: collectionId, createdBy: userId }).select('_id');
+    if (!owned) throw new Error('Collection not found');
+  }
+
   async createTask(taskData) {
     this.requireUser(taskData?.createdBy);
-    return new this.taskModel(this.normalizeRecurrence(taskData)).save();
+    const data = this.normalizeRecurrence(taskData);
+    if ('collectionId' in data) {
+      await this.assertOwnedCollection(data.collectionId, data.createdBy);
+      if (!data.collectionId) data.collectionId = null;
+    }
+    return new this.taskModel(data).save();
   }
 
   /**
@@ -471,6 +509,13 @@ class TaskService {
     // Only touch recurrence fields when the caller actually sent one, so that
     // ordinary edits never disturb an existing series.
     let updateData = rawUpdateData || {};
+
+    // Filing into / moving between collections — `null` clears the filing.
+    if ('collectionId' in updateData) {
+      await this.assertOwnedCollection(updateData.collectionId, userId);
+      if (!updateData.collectionId) updateData = { ...updateData, collectionId: null };
+    }
+
     if ('recurrenceRule' in updateData || 'recurrencePattern' in updateData) {
       updateData = this.normalizeRecurrence(
         updateData,

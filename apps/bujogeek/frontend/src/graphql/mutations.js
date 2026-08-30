@@ -46,9 +46,44 @@ export const DELETE_TEMPLATE = gql`
     }
 `;
 
+export const CREATE_COLLECTION = gql`
+  mutation CreateCollection($name: String!, $description: String) {
+    createCollection(name: $name, description: $description) {
+      id
+      name
+      description
+      archived
+      taskCount
+      completedCount
+    }
+  }
+`;
+
+export const UPDATE_COLLECTION = gql`
+  mutation UpdateCollection($id: ID!, $name: String, $description: String, $archived: Boolean) {
+    updateCollection(id: $id, name: $name, description: $description, archived: $archived) {
+      id
+      name
+      description
+      archived
+      taskCount
+      completedCount
+    }
+  }
+`;
+
+export const DELETE_COLLECTION = gql`
+  mutation DeleteCollection($id: ID!, $deleteTasks: Boolean) {
+    deleteCollection(id: $id, deleteTasks: $deleteTasks) {
+      success
+      message
+    }
+  }
+`;
+
 export const CREATE_TASK = gql`
-  mutation CreateTask($content: String!, $signifier: String, $status: String, $priority: Int, $tags: [String], $dueDate: Date, $createdAt: Date, $updatedAt: Date, $note: String, $recurrenceRule: String, $isSeriesMaster: Boolean) {
-    createTask(content: $content, signifier: $signifier, status: $status, priority: $priority, tags: $tags, dueDate: $dueDate, createdAt: $createdAt, updatedAt: $updatedAt, note: $note, recurrenceRule: $recurrenceRule, isSeriesMaster: $isSeriesMaster) {
+  mutation CreateTask($content: String!, $signifier: String, $status: String, $priority: Int, $tags: [String], $dueDate: Date, $createdAt: Date, $updatedAt: Date, $note: String, $recurrenceRule: String, $isSeriesMaster: Boolean, $collectionId: ID) {
+    createTask(content: $content, signifier: $signifier, status: $status, priority: $priority, tags: $tags, dueDate: $dueDate, createdAt: $createdAt, updatedAt: $updatedAt, note: $note, recurrenceRule: $recurrenceRule, isSeriesMaster: $isSeriesMaster, collectionId: $collectionId) {
       id
       content
       signifier
@@ -67,6 +102,7 @@ export const CREATE_TASK = gql`
       recurrenceRule
       seriesId
       isSeriesMaster
+      collectionId
       createdAt
       updatedAt
       parentTask {
@@ -100,6 +136,7 @@ export const UPDATE_TASK = gql`
       recurrenceRule
       seriesId
       isSeriesMaster
+      collectionId
       createdAt
       updatedAt
     }

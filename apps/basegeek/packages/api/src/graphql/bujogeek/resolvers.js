@@ -1,6 +1,7 @@
 import { format } from 'date-fns';
 import JournalEntry from './models/JournalEntry.js';
 import taskService from './services/taskService.js';
+import collectionService from './services/collectionService.js';
 
 export const resolvers = {
   Query: {
@@ -51,6 +52,16 @@ export const resolvers = {
       const userId = context.user?.id;
       if (!userId) return [];
       return taskService.getTasksByTags(userId, [tag]);
+    },
+    collections: async (_, __, context) => {
+      const userId = context.user?.id;
+      if (!userId) return [];
+      return collectionService.listCollections(userId);
+    },
+    collection: async (_, { id }, context) => {
+      const userId = context.user?.id;
+      if (!userId) return null;
+      return collectionService.findOwnedCollection(id, userId);
     },
     journalEntries: async (_, { type, tags }, context) => {
       const userId = context.user?.id;
@@ -154,6 +165,30 @@ export const resolvers = {
       const doc = await taskService.saveDailyOrder({ userId, dateKey, orderedTaskIds });
       return { success: true, updatedAt: doc.updatedAt.toISOString() };
     },
+    createCollection: async (_, { name, description }, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      return collectionService.createCollection({ name, description, createdBy: userId });
+    },
+    updateCollection: async (_, { id, ...updates }, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const collection = await collectionService.updateCollection(id, updates, userId);
+      if (!collection) throw new Error('Collection not found');
+      return collection;
+    },
+    deleteCollection: async (_, { id, deleteTasks = false }, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const collection = await collectionService.deleteCollection(id, deleteTasks, userId);
+      if (!collection) throw new Error('Collection not found');
+      return {
+        success: true,
+        message: deleteTasks
+          ? 'Collection and its entries deleted'
+          : 'Collection deleted; its entries were kept',
+      };
+    },
     createJournalEntry: async (_, args, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
@@ -220,7 +255,32 @@ export const resolvers = {
     },
   },
 
-  Task: { id: (task) => task._id ? task._id.toString() : task.id?.toString() },
+  Task: {
+    id: (task) => task._id ? task._id.toString() : task.id?.toString(),
+    collectionId: (task) => (task.collectionId ? task.collectionId.toString() : null),
+  },
+  Collection: {
+    id: (collection) => collection._id ? collection._id.toString() : collection.id?.toString(),
+    // Counts and entries are resolved lazily so the list view never pays for
+    // the tasks it doesn't render.
+    tasks: async (collection, _, context) => {
+      const userId = context.user?.id;
+      if (!userId) return [];
+      return collectionService.getTasksForCollection(collection._id ?? collection.id, userId);
+    },
+    taskCount: async (collection, _, context) => {
+      const userId = context.user?.id;
+      if (!userId) return 0;
+      const { total } = await collectionService.getCounts(collection._id ?? collection.id, userId);
+      return total;
+    },
+    completedCount: async (collection, _, context) => {
+      const userId = context.user?.id;
+      if (!userId) return 0;
+      const { completed } = await collectionService.getCounts(collection._id ?? collection.id, userId);
+      return completed;
+    },
+  },
   JournalEntry: { id: (entry) => entry._id ? entry._id.toString() : entry.id?.toString() },
   Template: { id: (template) => template._id ? template._id.toString() : template.id?.toString() },
 };

@@ -24,6 +24,25 @@ export const typeDefs = gql`
     subtasks: [Task]
     completedAt: Date
     cancelledAt: Date
+    collectionId: ID
+    createdAt: Date
+    updatedAt: Date
+  }
+
+  """
+  A named list of entries that lives outside the daily log — "Books to Read",
+  "Project X", "Gift Ideas". Its entries are ordinary Tasks carrying this
+  collection's id; an undated entry stays out of the daily/weekly/monthly log
+  entirely, and only joins the log once it is given a dueDate.
+  """
+  type Collection {
+    id: ID!
+    name: String!
+    description: String
+    archived: Boolean
+    taskCount: Int!
+    completedCount: Int!
+    tasks: [Task!]!
     createdAt: Date
     updatedAt: Date
   }
@@ -82,6 +101,8 @@ export const typeDefs = gql`
     isBacklog: Boolean
     recurrencePattern: String @deprecated(reason: "Legacy recurrence enum — translated to recurrenceRule server-side. Send recurrenceRule instead.")
     recurrenceRule: String
+    "Set to file this task into a collection, or null to take it out of one."
+    collectionId: ID
   }
 
   type Query {
@@ -93,6 +114,8 @@ export const typeDefs = gql`
     allTasks: [Task!]!
     taskTags: [TagCount!]!
     tasksByTag(tag: String!): [Task!]!
+    collections: [Collection!]!
+    collection(id: ID!): Collection
     journalEntries(type: String, tags: [String]): [JournalEntry!]!
     journalEntry(id: ID!): JournalEntry
     templates(type: String, isDefault: Boolean): [Template!]!
@@ -107,13 +130,20 @@ export const typeDefs = gql`
     \`recurrencePattern\` is accepted for backward compatibility only and is
     translated to an equivalent RRULE at create time.
     """
-    createTask(content: String!, signifier: String, status: String, priority: Int, tags: [String], dueDate: Date, createdAt: Date, updatedAt: Date, note: String, recurrencePattern: String @deprecated(reason: "Legacy recurrence enum — translated to recurrenceRule server-side. Send recurrenceRule instead."), recurrenceRule: String, isSeriesMaster: Boolean): Task!
+    createTask(content: String!, signifier: String, status: String, priority: Int, tags: [String], dueDate: Date, createdAt: Date, updatedAt: Date, note: String, recurrencePattern: String @deprecated(reason: "Legacy recurrence enum — translated to recurrenceRule server-side. Send recurrenceRule instead."), recurrenceRule: String, isSeriesMaster: Boolean, collectionId: ID): Task!
     updateTask(id: ID!, input: UpdateTaskInput!, editScope: EditScope): Task!
     deleteTask(id: ID!, editScope: EditScope): DeleteResponse!
     updateTaskStatus(id: ID!, status: String!): Task!
     addSubtask(parentId: ID!, content: String!, signifier: String, status: String, priority: Int, tags: [String], dueDate: Date): Task!
     migrateTaskToFuture(id: ID!, futureDate: Date!): Task!
     saveDailyTaskOrder(dateKey: String!, orderedTaskIds: [ID!]!): SaveOrderResponse!
+    createCollection(name: String!, description: String): Collection!
+    updateCollection(id: ID!, name: String, description: String, archived: Boolean): Collection!
+    """
+    Deleting a collection detaches its entries by default (they keep existing
+    as ordinary tasks). Pass \`deleteTasks: true\` to remove them with it.
+    """
+    deleteCollection(id: ID!, deleteTasks: Boolean = false): DeleteResponse!
     createJournalEntry(title: String!, content: String!, type: String, date: Date, tags: [String], status: String): JournalEntry!
     updateJournalEntry(id: ID!, title: String, content: String, type: String, date: Date, tags: [String], status: String): JournalEntry!
     deleteJournalEntry(id: ID!): DeleteResponse!

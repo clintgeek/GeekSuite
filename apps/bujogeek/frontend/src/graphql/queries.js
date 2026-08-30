@@ -253,6 +253,55 @@ export const GET_TASK_TAGS = gql`
   }
 `;
 
+export const GET_COLLECTIONS = gql`
+  query GetCollections {
+    collections {
+      id
+      name
+      description
+      archived
+      taskCount
+      completedCount
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+export const GET_COLLECTION = gql`
+  query GetCollection($id: ID!) {
+    collection(id: $id) {
+      id
+      name
+      description
+      archived
+      taskCount
+      completedCount
+      tasks {
+        id
+        content
+        signifier
+        status
+        priority
+        note
+        tags
+        dueDate
+        originalDate
+        isBacklog
+        taskType
+        recurrenceRule
+        seriesId
+        isSeriesMaster
+        collectionId
+        completedAt
+        cancelledAt
+        createdAt
+        updatedAt
+      }
+    }
+  }
+`;
+
 export const GET_TASKS_BY_TAG = gql`
     query GetTasksByTag($tag: String!) {
         tasksByTag(tag: $tag) {

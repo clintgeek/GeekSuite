@@ -489,6 +489,8 @@ const TaskProvider = ({ children }) => {
       const ALLOWED_UPDATE_FIELDS = [
         'content', 'signifier', 'status', 'priority', 'note',
         'tags', 'dueDate', 'isBacklog', 'recurrenceRule',
+        // null files the task out of its collection; a string moves it.
+        'collectionId',
       ];
       const cleanUpdates = {};
       for (const key of ALLOWED_UPDATE_FIELDS) {

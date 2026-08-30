@@ -33,6 +33,10 @@ const taskSchema = new mongoose.Schema({
   exdates: [{ type: Date }],
   seriesId: { type: String, default: null },
   isSeriesMaster: { type: Boolean, default: false },
+  // Filed into a collection (a named list outside the daily log). An entry
+  // with a collectionId and no dueDate is deliberately kept out of the
+  // daily/weekly/monthly log queries — see taskService.getTasksForDateRange.
+  collectionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Collection', default: null },
   parentTask: { type: mongoose.Schema.Types.ObjectId, ref: 'Task', default: null },
   subtasks: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Task' }],
   completedAt: { type: Date, default: null },
@@ -56,6 +60,7 @@ taskSchema.virtual('taskType').get(function () {
 });
 
 taskSchema.index({ createdBy: 1, tags: 1 });
+taskSchema.index({ createdBy: 1, collectionId: 1 });
 
 const Task = bujoConn.models.Task || bujoConn.model('Task', taskSchema);
 export default Task;

@@ -9,6 +9,12 @@ import { useNavigate } from 'react-router-dom';
  *   g → r   navigate to /review
  *   g → p   navigate to /plan
  *   g → s   navigate to /search
+ *   g → l   navigate to /collections (lists)
+ *
+ * `g → c` would read better for Collections, but a bare `c` is already the
+ * task-list "toggle cancelled" key in useKeyboardNav — which listens on window
+ * ahead of this hook and would strike the focused task on the way past. `l`
+ * for "lists" is free everywhere.
  *
  * Single keys:
  *   Cmd/Ctrl+N   focus the quick-add input (data-quickadd attribute)
@@ -23,6 +29,7 @@ const CHORD_MAP = {
   r: '/review',
   p: '/plan',
   s: '/search',
+  l: '/collections',
 };
 
 const useGlobalShortcuts = ({ onShowHelp } = {}) => {

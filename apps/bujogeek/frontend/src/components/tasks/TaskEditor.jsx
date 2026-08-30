@@ -22,6 +22,7 @@ import { useMutation } from '@apollo/client';
 import { useTaskContext } from '../../context/TaskContext.jsx';
 import { useToast } from '../shared/Toast';
 import useTaskTags from '../../hooks/useTaskTags';
+import useCollections from '../../hooks/useCollections';
 import { CREATE_NOTE } from '../../graphql/notegeekMutations';
 import { colors } from '../../theme/colors';
 import RecurringEditDialog from './RecurringEditDialog';
@@ -62,6 +63,7 @@ const TaskEditor = ({ open, onClose, task = null }) => {
   const isDark = theme.palette.mode === 'dark';
   const { createTask, updateTask } = useTaskContext();
   const existingTags = useTaskTags();
+  const { collections } = useCollections();
   const toast = useToast();
   const [createNote, { loading: savingNote }] = useMutation(CREATE_NOTE);
   const [formData, setFormData] = useState({
@@ -73,6 +75,7 @@ const TaskEditor = ({ open, onClose, task = null }) => {
     tags: [],
     note: '',
     recurrenceFreq: 'none',
+    collectionId: '',
   });
   const [loading, setLoading] = useState(false);
   const [recurringDialogOpen, setRecurringDialogOpen] = useState(false);
@@ -90,6 +93,7 @@ const TaskEditor = ({ open, onClose, task = null }) => {
         tags: task.tags || [],
         note: task.note || '',
         recurrenceFreq: frequencyFromRecurrenceRule(task.recurrenceRule),
+        collectionId: task.collectionId || '',
       });
     } else {
       setFormData({
@@ -101,6 +105,7 @@ const TaskEditor = ({ open, onClose, task = null }) => {
         tags: [],
         note: '',
         recurrenceFreq: 'none',
+        collectionId: '',
       });
     }
   }, [task]);
@@ -144,10 +149,13 @@ const TaskEditor = ({ open, onClose, task = null }) => {
    * `recurrenceFreq` itself is never sent.
    */
   const buildPayload = () => {
-    const { recurrenceFreq, ...rest } = formData;
+    const { recurrenceFreq, collectionId, ...rest } = formData;
     return {
       ...rest,
       recurrenceRule: buildRecurrenceRule(recurrenceFreq, formData.dueDate),
+      // '' is the "Not in a collection" option — send it as an explicit null so
+      // the task is filed out of whatever collection it was in.
+      collectionId: collectionId || null,
     };
   };
 
@@ -415,6 +423,40 @@ const TaskEditor = ({ open, onClose, task = null }) => {
                 }
               />
             </Box>
+
+            {/* Collection — file this entry into a list outside the daily log.
+                Archived collections are hidden unless the task is already in
+                one, so a filed task never silently loses its home. */}
+            <FormControl fullWidth size="small">
+              <InputLabel>Collection</InputLabel>
+              <Select
+                value={
+                  collections.some((c) => c.id === formData.collectionId)
+                    ? formData.collectionId
+                    : ''
+                }
+                onChange={handleChange('collectionId')}
+                label="Collection"
+              >
+                <MenuItem value="">
+                  <Box component="span" sx={{ color: mutedInk }}>Not in a collection</Box>
+                </MenuItem>
+                {collections
+                  .filter((c) => !c.archived || c.id === formData.collectionId)
+                  .map((c) => (
+                    <MenuItem key={c.id} value={c.id}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        {c.name}
+                        {c.archived && (
+                          <Box component="span" sx={{ fontSize: '0.6875rem', color: mutedInk }}>
+                            (archived)
+                          </Box>
+                        )}
+                      </Box>
+                    </MenuItem>
+                  ))}
+              </Select>
+            </FormControl>
           </Box>
 
           {/* ─── Recurrence section ──────────────────────────────── */}
