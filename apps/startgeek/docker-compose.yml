@@ -1,8 +1,10 @@
 services:
   startgeek:
-    image: geeksuite/startgeek:latest
+    image: ghcr.io/clintgeek/startgeek:latest
     container_name: startgeek
     restart: unless-stopped
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
     environment:
       TZ: America/Chicago
     ports:
