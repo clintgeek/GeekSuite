@@ -106,7 +106,7 @@ const PageHeader = ({ date, onDateChange, stats }) => {
       >
         {/* Date headline */}
         <motion.div
-          key={date.toISOString().split('T')[0]}
+          key={format(date, 'yyyy-MM-dd')}
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}

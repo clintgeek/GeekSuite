@@ -181,7 +181,7 @@ const TodayPage = () => {
     (reordered) => {
       setOrderedActiveTasks(reordered);
       // Persist the order to the backend
-      const dateKey = currentDate.toISOString().split('T')[0];
+      const dateKey = format(currentDate, 'yyyy-MM-dd');
       const ids = reordered.map((t) => t.id || t._id);
       saveDailyOrder(dateKey, ids).catch((err) =>
         console.error('Failed to save task order:', err)

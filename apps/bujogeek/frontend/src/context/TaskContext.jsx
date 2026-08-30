@@ -599,7 +599,7 @@ const TaskProvider = ({ children }) => {
 
       const response = await apolloClient.mutate({
         mutation: MIGRATE_TASK_TO_FUTURE,
-        variables: { id: taskId, futureDate: targetDate.toISOString() }
+        variables: { id: taskId, futureDate: format(targetDate, 'yyyy-MM-dd') }
       });
 
       const migratedTask = response.data?.migrateTaskToFuture;
