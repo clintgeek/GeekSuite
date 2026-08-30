@@ -41,6 +41,11 @@ const taskSchema = new mongoose.Schema({
   subtasks: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Task' }],
   completedAt: { type: Date, default: null },
   cancelledAt: { type: Date, default: null },
+  // When the web-push reminder for this task's dueDate was delivered. Non-null
+  // means "already reminded" and is what keeps the 60s scheduler from firing
+  // the same task twice; taskService.updateTask clears it whenever dueDate
+  // moves, so a rescheduled task becomes eligible again. See reminderService.
+  remindedAt: { type: Date, default: null },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
@@ -60,6 +65,8 @@ taskSchema.virtual('taskType').get(function () {
 });
 
 taskSchema.index({ createdBy: 1, tags: 1 });
+// The reminder scheduler's sweep: pending, not-yet-reminded, due in the window.
+taskSchema.index({ status: 1, remindedAt: 1, dueDate: 1 });
 taskSchema.index({ createdBy: 1, collectionId: 1 });
 
 const Task = bujoConn.models.Task || bujoConn.model('Task', taskSchema);

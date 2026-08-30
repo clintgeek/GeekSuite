@@ -124,6 +124,29 @@ export const typeDefs = gql`
     FUTURE_INSTANCES
   }
 
+  """
+  A browser registered to receive task reminders. One row per device; the push
+  service's \`endpoint\` URL is the device's identity.
+  """
+  type PushSubscription {
+    id: ID!
+    endpoint: String!
+    userAgent: String
+    createdAt: Date
+  }
+
+  input PushSubscriptionKeysInput {
+    p256dh: String!
+    auth: String!
+  }
+
+  "The shape \`PushSubscription#toJSON()\` produces in the browser, plus a UA."
+  input PushSubscriptionInput {
+    endpoint: String!
+    keys: PushSubscriptionKeysInput!
+    userAgent: String
+  }
+
   input UpdateTaskInput {
     content: String
     signifier: String
@@ -157,6 +180,14 @@ export const typeDefs = gql`
     journalEntry(id: ID!): JournalEntry
     templates(type: String, isDefault: Boolean): [Template!]!
     template(id: ID!): Template
+    """
+    The server's VAPID application server key, base64url-encoded — what the
+    browser needs to call \`pushManager.subscribe\`. Null when reminders are not
+    configured on this deployment, which the client reads as "unsupported".
+    """
+    pushVapidKey: String
+    "Every push subscription (device) the caller has registered."
+    pushSubscriptions: [PushSubscription!]!
   }
 
   type Mutation {
@@ -198,5 +229,12 @@ export const typeDefs = gql`
     createTemplate(name: String!, description: String, type: String, content: String!, isDefault: Boolean, isPublic: Boolean, tags: [String]): Template!
     updateTemplate(id: ID!, name: String, description: String, type: String, content: String, isDefault: Boolean, isPublic: Boolean, tags: [String]): Template!
     deleteTemplate(id: ID!): DeleteResponse!
+    """
+    Register (or refresh) this browser for task reminders. Keyed by endpoint,
+    so calling it repeatedly from the same device is idempotent.
+    """
+    savePushSubscription(input: PushSubscriptionInput!): PushSubscription!
+    "Unregister one device. Returns false when the endpoint was not the caller's."
+    removePushSubscription(endpoint: String!): DeleteResponse!
   }
 `;

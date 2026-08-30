@@ -19,6 +19,16 @@ export default defineConfig(({ command, mode }) => {
         workbox: {
           cleanupOutdatedCaches: true,
           globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+          // Push reminders need `push` / `notificationclick` handlers inside the
+          // service worker. Rather than switching the whole PWA to
+          // injectManifest (which would make us own precaching by hand), we keep
+          // generateSW and pull the handlers in via workbox's own importScripts.
+          // The path is relative to the generated sw.js, so it survives the
+          // production `base: '/client/dist/'` rewrite. Source: public/push-sw.js.
+          importScripts: ['push-sw.js'],
+          // push-sw.js is imported, never fetched as a page asset — precaching a
+          // copy of it would only duplicate bytes and invalidate on every build.
+          globIgnores: ['push-sw.js'],
           runtimeCaching: [
             {
               // Auth endpoints must NEVER be cached

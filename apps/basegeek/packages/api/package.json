@@ -39,7 +39,8 @@
     "pino-http": "^11.0.0",
     "redis": "^4.6.11",
     "rrule": "^2.8.1",
-    "tiktoken": "^1.0.14"
+    "tiktoken": "^1.0.14",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "jest": "^29.7.0",

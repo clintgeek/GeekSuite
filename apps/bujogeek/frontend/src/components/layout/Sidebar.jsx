@@ -1,5 +1,6 @@
-import { Box, Typography, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Avatar } from '@mui/material';
-import { CalendarCheck, ClipboardCheck, Calendar, Library, Flame, Hash, Search, LayoutTemplate, LogOut } from 'lucide-react';
+import { Box, Typography, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Avatar, Tooltip } from '@mui/material';
+import { CalendarCheck, ClipboardCheck, Calendar, Library, Flame, Hash, Search, LayoutTemplate, LogOut, Bell, BellOff } from 'lucide-react';
+import usePushReminders from '../../hooks/usePushReminders';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '@mui/material/styles';
@@ -106,6 +107,68 @@ const NavItem = ({ item, active, onClick }) => {
           }}
         />
       </ListItemButton>
+    </ListItem>
+  );
+};
+
+/**
+ * The reminders toggle — the app's only push preference, so it lives in the
+ * sidebar footer next to Sign out rather than justifying a settings page.
+ *
+ * Four states, all of them the truth about this browser: reminders unavailable
+ * (no Push API, or the server has no VAPID key — the row hides itself), blocked
+ * by the browser, off, or on.
+ */
+const RemindersToggle = () => {
+  const { status, busy, toggle } = usePushReminders();
+
+  if (status === 'loading' || status === 'unsupported') return null;
+
+  const on = status === 'on';
+  const denied = status === 'denied';
+  const Icon = on ? Bell : BellOff;
+
+  const label = on ? 'Reminders on' : denied ? 'Reminders blocked' : 'Reminders off';
+  const hint = denied
+    ? 'Notifications are blocked for this site — allow them in your browser settings.'
+    : on
+      ? 'Tasks with a due time will notify you here. Click to turn off.'
+      : 'Get a notification when a task with a due time comes up.';
+
+  return (
+    <ListItem disablePadding>
+      <Tooltip title={hint} placement="right">
+        <Box sx={{ width: '100%' }}>
+          <ListItemButton
+            onClick={denied || busy ? undefined : toggle}
+            disabled={denied || busy}
+            sx={{
+              py:           0.875,
+              px:           1.75,
+              borderRadius: '6px',
+              color:        on ? chrome.accent : chrome.textDisabled,
+              transition:   'color 0.14s ease, background-color 0.14s ease',
+              '&.Mui-disabled': { opacity: 1, color: chrome.textDisabled },
+              '&:hover': {
+                backgroundColor: on ? chrome.accentBg : chrome.bgHover,
+                color:           on ? chrome.accent : chrome.text,
+              },
+            }}
+          >
+            <ListItemIcon sx={{ color: 'inherit', minWidth: 34 }}>
+              <Icon size={15} strokeWidth={1.75} />
+            </ListItemIcon>
+            <ListItemText
+              primary={label}
+              primaryTypographyProps={{
+                fontFamily: '"Source Sans 3", sans-serif',
+                fontSize:   '0.8125rem',
+                color:      'inherit',
+              }}
+            />
+          </ListItemButton>
+        </Box>
+      </Tooltip>
     </ListItem>
   );
 };
@@ -248,8 +311,9 @@ const Sidebar = () => {
 
       {/* ─── Footer zone ─────────────────────────────────────── */}
       <Box sx={{ flexShrink: 0 }}>
-        {/* Logout */}
+        {/* Preferences + logout */}
         <List sx={{ px: 1, py: 0.75 }}>
+          <RemindersToggle />
           <ListItem disablePadding>
             <ListItemButton
               onClick={handleLogout}

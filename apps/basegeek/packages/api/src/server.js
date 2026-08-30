@@ -29,6 +29,7 @@ import ambientRoutes from './routes/ambient.js';
 import { connectAIGeekDB, getAIGeekConnection } from './config/database.js';
 import { initRefreshTokenStore, closeRefreshTokenStore, isRefreshTokenStoreConnected } from './services/refreshTokenStore.js';
 import { startOAuthRefreshJob, stopOAuthRefreshJob } from './services/oauthRefreshJobService.js';
+import reminderService from './graphql/bujogeek/services/reminderService.js';
 import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@as-integrations/express4';
 import { typeDefs, resolvers } from './graphql/index.js';
@@ -352,6 +353,15 @@ try {
   logger.error({ err }, '[OAuthRefreshJob] failed to start');
 }
 
+// BuJoGeek task reminders. basegeek owns the task data and runs 24/7, so the
+// 60-second sweep lives here rather than in the client. start() is a logged
+// no-op when VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY are unset.
+try {
+  reminderService.start();
+} catch (err) {
+  logger.error({ err }, '[BujoReminders] failed to start');
+}
+
 // Fallback route for SPA (MUST be after all API and static routes)
 app.get('*', (req, res) => {
   res.sendFile(path.join(uiBuildPath, 'index.html'), (err) => {
@@ -424,6 +434,11 @@ const shutdown = (signal) => {
       stopOAuthRefreshJob()
     } catch (err) {
       logger.error({ err }, 'Error stopping OAuth refresh job')
+    }
+    try {
+      reminderService.stop()
+    } catch (err) {
+      logger.error({ err }, 'Error stopping BuJoGeek reminder scheduler')
     }
     try {
       await mongoose.disconnect()

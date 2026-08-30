@@ -301,3 +301,20 @@ export const TOGGLE_HABIT_LOG = gql`
     }
   }
 `;
+
+export const SAVE_PUSH_SUBSCRIPTION = gql`
+  mutation SavePushSubscription($input: PushSubscriptionInput!) {
+    savePushSubscription(input: $input) {
+      id
+      endpoint
+    }
+  }
+`;
+
+export const REMOVE_PUSH_SUBSCRIPTION = gql`
+  mutation RemovePushSubscription($endpoint: String!) {
+    removePushSubscription(endpoint: $endpoint) {
+      success
+    }
+  }
+`;

@@ -347,3 +347,9 @@ export const GET_HABIT_LOGS = gql`
     }
   }
 `;
+
+export const GET_PUSH_VAPID_KEY = gql`
+  query GetPushVapidKey {
+    pushVapidKey
+  }
+`;

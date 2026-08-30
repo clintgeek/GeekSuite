@@ -516,6 +516,17 @@ class TaskService {
       if (!updateData.collectionId) updateData = { ...updateData, collectionId: null };
     }
 
+    // Moving the due date re-arms the reminder: a task already reminded for
+    // 09:00 must be able to remind again once it is pushed to 14:00. Clearing
+    // is unconditional when the date actually changes — including to null,
+    // where it simply leaves a clean field behind. See reminderService.tick.
+    if ('dueDate' in updateData) {
+      const nextDue = updateData.dueDate ? new Date(updateData.dueDate).getTime() : null;
+      const prevDueRaw = target.task?.dueDate ?? target.originalDueDate ?? null;
+      const prevDue = prevDueRaw ? new Date(prevDueRaw).getTime() : null;
+      if (nextDue !== prevDue) updateData = { ...updateData, remindedAt: null };
+    }
+
     if ('recurrenceRule' in updateData || 'recurrencePattern' in updateData) {
       updateData = this.normalizeRecurrence(
         updateData,

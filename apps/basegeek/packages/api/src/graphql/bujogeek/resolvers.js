@@ -3,6 +3,7 @@ import JournalEntry from './models/JournalEntry.js';
 import taskService from './services/taskService.js';
 import collectionService from './services/collectionService.js';
 import habitService from './services/habitService.js';
+import reminderService from './services/reminderService.js';
 
 export const resolvers = {
   Query: {
@@ -101,6 +102,19 @@ export const resolvers = {
       if (!userId) return null;
       const { default: Template } = await import('./models/Template.js');
       return Template.findOne({ _id: id, createdBy: userId });
+    },
+
+    // Auth-gated even though the key is public: an unauthenticated caller has
+    // nothing to subscribe with, and the client reads null as "reminders off".
+    pushVapidKey: (_, __, context) => {
+      const userId = context.user?.id;
+      if (!userId) return null;
+      return reminderService.vapidPublicKey();
+    },
+    pushSubscriptions: async (_, __, context) => {
+      const userId = context.user?.id;
+      if (!userId) return [];
+      return reminderService.listSubscriptions(userId);
     },
   },
 
@@ -290,6 +304,21 @@ export const resolvers = {
       if (!template) throw new Error('Template not found');
       return { success: true, message: 'Template deleted successfully' };
     },
+
+    savePushSubscription: async (_, { input }, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      return reminderService.saveSubscription(input, userId);
+    },
+    removePushSubscription: async (_, { endpoint }, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const removed = await reminderService.removeSubscription(endpoint, userId);
+      return {
+        success: removed,
+        message: removed ? 'Push subscription removed' : 'No such push subscription',
+      };
+    },
   },
 
   Task: {
@@ -335,4 +364,5 @@ export const resolvers = {
   },
   JournalEntry: { id: (entry) => entry._id ? entry._id.toString() : entry.id?.toString() },
   Template: { id: (template) => template._id ? template._id.toString() : template.id?.toString() },
+  PushSubscription: { id: (sub) => (sub._id ? sub._id.toString() : sub.id?.toString()) },
 };
