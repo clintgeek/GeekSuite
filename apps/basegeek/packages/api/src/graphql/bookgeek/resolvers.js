@@ -48,6 +48,31 @@ function toNumber(value, type = "float") {
   return type === "int" ? Math.trunc(n) : n;
 }
 
+/**
+ * BookGeek is a deliberately SHARED household library: the Book model carries
+ * no owner/userId field, and the standalone bookgeek API serves files and
+ * covers without per-book ownership. So the security boundary here is
+ * "authenticated household member", not "row owner" — every query and mutation
+ * requires a signed-in user, but no read is narrowed to the caller. Per-user
+ * data in this app (profiles, device baskets) lives on its own models and is
+ * not exposed through this gateway module.
+ */
+function requireUser(user) {
+  if (!user?.id) {
+    const err = new Error("Unauthorized");
+    err.code = "UNAUTHORIZED";
+    throw err;
+  }
+  return user.id;
+}
+
+/** Guard Book.findById-style lookups so a malformed id is "not found", not a CastError. */
+function validObjectId(id) {
+  return typeof id === "string" || id instanceof mongoose.Types.ObjectId
+    ? mongoose.isValidObjectId(id)
+    : false;
+}
+
 function toBool(value) {
   if (value === true || value === 1 || value === "1" || value === "true") {
     return true;
@@ -83,7 +108,8 @@ export const resolvers = {
     size: (parent) => toNumber(parent.size, "int"),
   },
   Query: {
-    books: async (_, { page = 1, limit = 50, sort = "title", sortDir = "asc", author, tag, shelf, owned, q }) => {
+    books: async (_, { page = 1, limit = 50, sort = "title", sortDir = "asc", author, tag, shelf, owned, q }, { user }) => {
+      requireUser(user);
       const pageNum = Math.max(1, page);
       const limitNum = Math.max(1, Math.min(100, limit));
 
@@ -142,10 +168,13 @@ export const resolvers = {
         pageSize: limitNum,
       };
     },
-    book: async (_, { id }) => {
+    book: async (_, { id }, { user }) => {
+      requireUser(user);
+      if (!validObjectId(id)) return null;
       return await Book.findById(id).lean();
     },
-    shelves: async () => {
+    shelves: async (_, __, { user }) => {
+      requireUser(user);
       const [total, owned, ...shelfCounts] = await Promise.all([
         Book.countDocuments({}),
         Book.countDocuments({ owned: true }),
@@ -165,7 +194,7 @@ export const resolvers = {
   },
   Mutation: {
     createBook: async (_, { input }, { user }) => {
-      if (!user) throw new Error("Unauthorized");
+      requireUser(user);
       const doc = {
         title: input.title,
         authors: input.authors || [],
@@ -179,7 +208,9 @@ export const resolvers = {
       const book = await Book.create(doc);
       return book.toObject ? book.toObject() : book;
     },
-    updateBook: async (_, { id, input }) => {
+    updateBook: async (_, { id, input }, { user }) => {
+      requireUser(user);
+      if (!validObjectId(id)) return null;
       const updated = await Book.findByIdAndUpdate(
         id,
         { $set: input },
@@ -187,11 +218,13 @@ export const resolvers = {
       );
       return updated;
     },
-    deleteBook: async (_, { id }) => {
+    deleteBook: async (_, { id }, { user }) => {
+      requireUser(user);
+      if (!validObjectId(id)) return { success: false, deletedId: id };
       // Simplification: only deleting the book record here for now.
       // Full implementation should handle file deletion if requested.
-      await Book.deleteOne({ _id: id });
-      return { success: true, deletedId: id };
+      const res = await Book.deleteOne({ _id: id });
+      return { success: res.deletedCount > 0, deletedId: id };
     },
   },
 };
