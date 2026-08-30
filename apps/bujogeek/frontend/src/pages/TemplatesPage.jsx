@@ -21,8 +21,8 @@ const TemplatesPage = () => {
   const captionInk = isDark ? 'rgba(255,255,255,0.32)' : colors.ink[300];
   const primaryInk = theme.palette.text.primary;
 
-  const handleTemplateApplied = (result) => {
-    console.log('Template applied:', result);
+  const handleTemplateApplied = () => {
+    // TemplateApplier surfaces its own success/failure feedback.
   };
 
   return (

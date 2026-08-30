@@ -105,7 +105,13 @@ const TodayPage = () => {
   }, [createNote, toast]);
 
   const handleQuickAdd = useCallback(async (taskData) => {
-    await createTask(taskData);
+    try {
+      await createTask(taskData);
+    } catch {
+      // createTask has already surfaced the error via the task context snackbar;
+      // skip the refetch so the failed entry isn't silently dropped from view.
+      return;
+    }
     // Refetch to get sorted list
     fetchTasks('daily', currentDate);
   }, [createTask, fetchTasks, currentDate]);

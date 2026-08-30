@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useApolloClient } from '@apollo/client';
+import { Alert, Snackbar } from '@mui/material';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import {
   GET_TASKS, GET_ALL_TASKS, GET_DAILY_TASKS, GET_WEEKLY_TASKS, GET_MONTHLY_TASKS
@@ -30,6 +31,98 @@ export const LoadingState = {
   DELETING: 'deleting',
   MIGRATING: 'migrating',
   ERROR: 'error'
+};
+
+// ─── Sorting ────────────────────────────────────────────────────────────────
+// Authoritative spec: DOCS/SORTING_RULES.md
+//   1. Incomplete tasks
+//        a. Scheduled (has a dueDate)   — sorted by priority
+//        b. Non-scheduled (no dueDate)  — sorted by priority
+//   2. Completed tasks                  — sorted by priority
+// Priority is an Int on the schema (Task.priority, min 1 max 3, default null):
+//   1 = High, 2 = Medium, 3 = Low, null/undefined = None (sorts last).
+const PRIORITY_NONE = Number.MAX_SAFE_INTEGER;
+
+const priorityRank = (task) => {
+  const p = Number(task?.priority);
+  return Number.isFinite(p) && p > 0 ? p : PRIORITY_NONE;
+};
+
+const dueTime = (task) => {
+  if (!task?.dueDate) return null;
+  const t = new Date(task.dueDate).getTime();
+  return Number.isNaN(t) ? null : t;
+};
+
+/**
+ * The single authoritative task comparator. Used everywhere tasks are ordered
+ * in this context — do not inline a second copy.
+ */
+export const compareTasks = (a, b) => {
+  // 1. Completed tasks sink below incomplete ones.
+  const aDone = a?.status === 'completed' ? 1 : 0;
+  const bDone = b?.status === 'completed' ? 1 : 0;
+  if (aDone !== bDone) return aDone - bDone;
+
+  const aDue = dueTime(a);
+  const bDue = dueTime(b);
+
+  // 2. Within incomplete tasks, scheduled comes before non-scheduled.
+  if (!aDone) {
+    const aScheduled = aDue === null ? 1 : 0;
+    const bScheduled = bDue === null ? 1 : 0;
+    if (aScheduled !== bScheduled) return aScheduled - bScheduled;
+  }
+
+  // 3. Priority: High(1) → Medium(2) → Low(3) → None.
+  const aPriority = priorityRank(a);
+  const bPriority = priorityRank(b);
+  if (aPriority !== bPriority) return aPriority - bPriority;
+
+  // 4. Tiebreak on due date (earliest first, undated last).
+  if (aDue !== bDue) {
+    if (aDue === null) return 1;
+    if (bDue === null) return -1;
+    return aDue - bDue;
+  }
+
+  return 0;
+};
+
+const sortTasks = (tasks) => {
+  if (!Array.isArray(tasks)) return tasks;
+  return [...tasks].sort(compareTasks);
+};
+
+const sameTask = (task, taskId) => String(task?.id ?? task?._id) === String(taskId);
+
+/** Find a task in either state shape (flat array, or object keyed by date). */
+const findTaskInState = (state, taskId) => {
+  if (Array.isArray(state)) return state.find(t => sameTask(t, taskId)) || null;
+  if (!state || typeof state !== 'object') return null;
+
+  for (const list of Object.values(state)) {
+    if (!Array.isArray(list)) continue;
+    const found = list.find(t => sameTask(t, taskId));
+    if (found) return found;
+  }
+  return null;
+};
+
+/**
+ * Apply `mapper` to every task, re-sorting each list. Handles both shapes this
+ * context stores tasks in: a flat array (daily/weekly) and an object keyed by
+ * date (all/monthly).
+ */
+const mapTasksState = (state, mapper) => {
+  if (Array.isArray(state)) return sortTasks(state.map(mapper));
+  if (!state || typeof state !== 'object') return state;
+
+  const next = {};
+  Object.entries(state).forEach(([date, list]) => {
+    next[date] = Array.isArray(list) ? sortTasks(list.map(mapper)) : list;
+  });
+  return next;
 };
 
 const TaskContext = createContext();
@@ -66,50 +159,14 @@ const TaskProvider = ({ children }) => {
     tags: []
   });
 
-  // Add this utility function near the top of the file, after imports
-  const sortTasks = (tasks) => {
-    if (!Array.isArray(tasks)) return tasks;
-
-    return [...tasks].sort((a, b) => {
-      // First sort by completion status (pending before completed)
-      if (a.status !== b.status) {
-        return a.status === 'completed' ? 1 : -1;
-      }
-
-      // Then sort by priority (high to none)
-      const priorityA = a.priority || 999;
-      const priorityB = b.priority || 999;
-      if (priorityA !== priorityB) {
-        return priorityA - priorityB;
-      }
-
-      // Then sort by due date (past to future then none)
-      const dateA = a.dueDate ? new Date(a.dueDate) : null;
-      const dateB = b.dueDate ? new Date(b.dueDate) : null;
-
-      // Handle cases where one or both dates are null
-      if (!dateA && !dateB) return 0;
-      if (!dateA) return 1;
-      if (!dateB) return -1;
-
-      return dateA - dateB;
-    });
-  };
-
-  const getTaskFromState = useCallback((id) => {
-    // Search in tasks array
-    if (Array.isArray(tasks)) {
-      return tasks.find(t => String(t.id || t._id) === String(id));
-    }
-    // Search in tasks object (grouped by dates)
-    for (const date in tasks) {
-      if (Array.isArray(tasks[date])) {
-        const found = tasks[date].find(t => String(t.id || t._id) === String(id));
-        if (found) return found;
-      }
-    }
-    return null;
+  // Mirror of `tasks` for callbacks that must read the latest state without
+  // taking a dependency on it (keeps their identity stable across re-renders).
+  const tasksRef = useRef(tasks);
+  useEffect(() => {
+    tasksRef.current = tasks;
   }, [tasks]);
+
+  const getTaskFromState = useCallback((id) => findTaskInState(tasksRef.current, id), []);
 
   const promptRecurringScope = async (actionType) => {
     return new Promise((resolve) => {
@@ -127,36 +184,52 @@ const TaskProvider = ({ children }) => {
     setRecurringDialog(prev => ({ ...prev, open: false }));
   };
 
-  // Helper function to handle API errors
-  const handleApiError = useCallback((error) => {
-    let errorType = TaskError.UNKNOWN;
-    let errorMessage = 'An unexpected error occurred';
+  const clearError = useCallback(() => setError(null), []);
 
-    if (error.response) {
-      switch (error.response.status) {
-        case 401:
-          errorType = TaskError.AUTH;
-          errorMessage = 'Authentication failed';
-          break;
-        case 400:
-          errorType = TaskError.VALIDATION;
-          errorMessage = error.response.data.message || 'Invalid request';
-          break;
-        case 500:
-          errorType = TaskError.SERVER;
-          errorMessage = 'Server error occurred';
-          break;
-        default:
-          errorType = TaskError.SERVER;
-          errorMessage = error.response.data.message || 'Server error occurred';
+  /**
+   * Every request in this app goes through Apollo, so errors arrive as
+   * ApolloError: { graphQLErrors: [...], networkError, message } — never as the
+   * axios `error.response.status` shape this used to parse.
+   *
+   * Records a `{ type, message }` on context state (which renders a snackbar)
+   * and returns the message. It intentionally does NOT rethrow; callers that
+   * need the rejection to propagate (createTask/updateTask, whose dialogs stay
+   * open on failure) rethrow explicitly.
+   */
+  const handleApiError = useCallback((err, fallback = 'An unexpected error occurred') => {
+    const gqlErrors = err?.graphQLErrors ?? [];
+    const networkError = err?.networkError;
+    const networkGqlErrors = networkError?.result?.errors ?? [];
+
+    let type = TaskError.UNKNOWN;
+    let message = '';
+
+    if (gqlErrors.length > 0) {
+      message = gqlErrors.map((e) => e.message).filter(Boolean).join('; ');
+      const code = gqlErrors[0]?.extensions?.code;
+      if (code === 'UNAUTHENTICATED' || code === 'FORBIDDEN') {
+        type = TaskError.AUTH;
+      } else if (code === 'BAD_USER_INPUT' || code === 'GRAPHQL_VALIDATION_FAILED') {
+        type = TaskError.VALIDATION;
+      } else {
+        type = TaskError.SERVER;
       }
-    } else if (error.request) {
-      errorType = TaskError.NETWORK;
-      errorMessage = 'Network error occurred';
+    } else if (networkError) {
+      message = networkGqlErrors.map((e) => e.message).filter(Boolean).join('; ');
+      if (networkError.statusCode === 401 || networkError.statusCode === 403) {
+        type = TaskError.AUTH;
+        message = message || 'Your session has expired. Please sign in again.';
+      } else {
+        type = TaskError.NETWORK;
+        message = message || networkError.message || 'Network error — could not reach the server';
+      }
+    } else if (err?.message) {
+      message = err.message;
     }
 
-    setError({ type: errorType, message: errorMessage });
-    throw error;
+    const finalMessage = message || fallback;
+    setError({ type, message: finalMessage });
+    return finalMessage;
   }, []);
 
   // Filter management
@@ -212,7 +285,8 @@ const TaskProvider = ({ children }) => {
       setError(null);
     } catch (error) {
       console.error('Error fetching tasks:', error);
-      handleApiError(error);
+      handleApiError(error, 'Failed to load tasks');
+      setLoading(LoadingState.IDLE);
     }
   }, [handleApiError, loading]);
 
@@ -280,10 +354,10 @@ const TaskProvider = ({ children }) => {
       setLoading(LoadingState.IDLE);
     } catch (err) {
       console.error('Error fetching tasks:', err);
-      setError(err.response?.data?.message || 'Failed to fetch tasks');
+      handleApiError(err, 'Failed to fetch tasks');
       setLoading(LoadingState.IDLE);
     }
-  }, []);
+  }, [handleApiError]);
 
   const fetchAllTasks = useCallback(async () => {
     // Skip if already fetching
@@ -327,7 +401,8 @@ const TaskProvider = ({ children }) => {
       // Only set error if this is still the most recent request
       if (lastFetchRef.current === requestId) {
         console.error('Error fetching all tasks:', error);
-        handleApiError(error);
+        handleApiError(error, 'Failed to load tasks');
+        setLoading(LoadingState.IDLE);
       }
     }
   }, [handleApiError]);
@@ -375,8 +450,7 @@ const TaskProvider = ({ children }) => {
 
   // Task operations
   const createTask = useCallback(async (taskData) => {
-    console.log('Creating task with data:', taskData);
-    setLoading('CREATING');
+    setLoading(LoadingState.CREATING);
     setError(null);
     try {
       const response = await apolloClient.mutate({
@@ -385,26 +459,23 @@ const TaskProvider = ({ children }) => {
       });
 
       const createdTask = response.data?.createTask;
-      console.log('Task created successfully:', createdTask);
 
-      setTasks(prevTasks => {
-        const newTasks = Array.isArray(prevTasks) ? [...prevTasks, createdTask] : [createdTask];
-        console.log('Updated tasks array:', newTasks);
-        return newTasks;
-      });
+      setTasks(prevTasks => (
+        Array.isArray(prevTasks) ? [...prevTasks, createdTask] : [createdTask]
+      ));
       return createdTask;
     } catch (err) {
-      console.error('Error creating task:', err);
-      setError(err.response?.data?.message || 'Failed to create task');
+      handleApiError(err, 'Failed to create task');
       throw err;
     } finally {
       setLoading(LoadingState.IDLE);
     }
-  }, []);
+  }, [handleApiError]);
 
   const updateTask = useCallback(async (taskId, updates, editScope = 'THIS_INSTANCE') => {
     try {
       setLoading(LoadingState.UPDATING);
+      setError(null);
 
       const ALLOWED_UPDATE_FIELDS = [
         'content', 'signifier', 'status', 'priority', 'note',
@@ -427,17 +498,9 @@ const TaskProvider = ({ children }) => {
       setTasks(prevTasks => {
         // Handle array format (daily view)
         if (Array.isArray(prevTasks)) {
-          return prevTasks
-            .map(task => (task.id || task._id) === taskId ? updatedTask : task)
-            .sort((a, b) => {
-              const priorityOrder = { high: 0, medium: 1, low: 2, none: 3 };
-              const priorityDiff = priorityOrder[a.priority] - priorityOrder[b.priority];
-              if (priorityDiff !== 0) return priorityDiff;
-
-              const aDate = a.dueDate ? new Date(a.dueDate) : new Date(9999, 11, 31);
-              const bDate = b.dueDate ? new Date(b.dueDate) : new Date(9999, 11, 31);
-              return aDate - bDate;
-            });
+          return sortTasks(
+            prevTasks.map(task => (task.id || task._id) === taskId ? updatedTask : task)
+          );
         }
 
         // Handle object format (all/other views)
@@ -459,17 +522,9 @@ const TaskProvider = ({ children }) => {
 
         // Remove from old date if it exists
         if (oldDateKey) {
-          newTasks[oldDateKey] = newTasks[oldDateKey]
-            .filter(task => (task.id || task._id) !== taskId)
-            .sort((a, b) => {
-              const priorityOrder = { high: 0, medium: 1, low: 2, none: 3 };
-              const priorityDiff = priorityOrder[a.priority] - priorityOrder[b.priority];
-              if (priorityDiff !== 0) return priorityDiff;
-
-              const aDate = a.dueDate ? new Date(a.dueDate) : new Date(9999, 11, 31);
-              const bDate = b.dueDate ? new Date(b.dueDate) : new Date(9999, 11, 31);
-              return aDate - bDate;
-            });
+          newTasks[oldDateKey] = sortTasks(
+            newTasks[oldDateKey].filter(task => (task.id || task._id) !== taskId)
+          );
 
           // Clean up empty dates
           if (newTasks[oldDateKey].length === 0) {
@@ -478,18 +533,10 @@ const TaskProvider = ({ children }) => {
         }
 
         // Add to new date
-        newTasks[newDateKey] = [
+        newTasks[newDateKey] = sortTasks([
           ...(newTasks[newDateKey] || []),
           updatedTask
-        ].sort((a, b) => {
-          const priorityOrder = { high: 0, medium: 1, low: 2, none: 3 };
-          const priorityDiff = priorityOrder[a.priority] - priorityOrder[b.priority];
-          if (priorityDiff !== 0) return priorityDiff;
-
-          const aDate = a.dueDate ? new Date(a.dueDate) : new Date(9999, 11, 31);
-          const bDate = b.dueDate ? new Date(b.dueDate) : new Date(9999, 11, 31);
-          return aDate - bDate;
-        });
+        ]);
 
         return newTasks;
       });
@@ -497,55 +544,53 @@ const TaskProvider = ({ children }) => {
       setLoading(LoadingState.IDLE);
       return updatedTask;
     } catch (err) {
-      // Surface the real error — Apollo errors live on graphQLErrors/networkError,
-      // not on err.response (which is the axios/REST pattern).
-      const gqlMsg = err.graphQLErrors?.map((e) => e.message).join('; ');
-      const netMsg = err.networkError?.result?.errors?.map((e) => e.message).join('; ');
-      const detail = gqlMsg || netMsg || err.message || 'Failed to update task';
-      console.error('Error updating task:', detail, err);
-      setError(detail);
-      setLoading(LoadingState.ERROR);
+      handleApiError(err, 'Failed to update task');
+      setLoading(LoadingState.IDLE);
       throw err;
     }
-  }, []);
+  }, [handleApiError]);
 
-  // Add updateTaskStatus function
+  /**
+   * Optimistic status toggle: flip the task in local state immediately so the
+   * checkbox responds instantly, then reconcile with the server response.
+   * On failure the previous task object is restored and the error surfaced.
+   */
   const updateTaskStatus = useCallback(async (taskId, newStatus) => {
+    const snapshot = findTaskInState(tasksRef.current, taskId);
+    const completedAt = newStatus === 'completed' ? new Date().toISOString() : null;
+
+    setError(null);
+    setTasks(prev => mapTasksState(prev, task => (
+      sameTask(task, taskId) ? { ...task, status: newStatus, completedAt } : task
+    )));
+
     try {
-      setLoading(LoadingState.UPDATING);
-      setError(null);
       const response = await apolloClient.mutate({
         mutation: UPDATE_TASK_STATUS,
         variables: { id: taskId, status: newStatus }
       });
 
-      setTasks(prev => {
-        // If prev is an array (daily, weekly views)
-        if (Array.isArray(prev)) {
-          return sortTasks(prev.map(task =>
-            (task.id || task._id) === taskId || task.id === taskId ? response.data.updateTaskStatus : task
-          ));
-        }
+      const serverTask = response.data?.updateTaskStatus;
+      if (serverTask) {
+        // Reconcile with the authoritative server object.
+        setTasks(prev => mapTasksState(prev, task => (
+          sameTask(task, taskId) ? { ...task, ...serverTask } : task
+        )));
+      }
 
-        // If prev is an object (all, monthly views)
-        const newTasks = { ...prev };
-        Object.entries(newTasks).forEach(([date, tasks]) => {
-          if (Array.isArray(tasks)) {
-            newTasks[date] = sortTasks(tasks.map(task =>
-              (task.id || task._id) === taskId || task.id === taskId ? response.data.updateTaskStatus : task
-            ));
-          }
-        });
-        return newTasks;
-      });
-
-      return response.data?.updateTaskStatus;
+      setError(null);
+      return serverTask;
     } catch (error) {
-      handleApiError(error);
-    } finally {
-      setLoading(LoadingState.IDLE);
+      // Roll back to the pre-toggle task object.
+      if (snapshot) {
+        setTasks(prev => mapTasksState(prev, task => (
+          sameTask(task, taskId) ? snapshot : task
+        )));
+      }
+      handleApiError(error, 'Failed to update task status');
+      return undefined;
     }
-  }, [handleApiError, sortTasks]);
+  }, [apolloClient, handleApiError]);
 
   const deleteTask = useCallback(async (taskId, editScopeParam = null) => {
     try {
@@ -585,11 +630,11 @@ const TaskProvider = ({ children }) => {
         return newTasks;
       });
     } catch (error) {
-      handleApiError(error);
+      handleApiError(error, 'Failed to delete task');
     } finally {
       setLoading(LoadingState.IDLE);
     }
-  }, [handleApiError]);
+  }, [handleApiError, getTaskFromState]);
 
   // Migration operations
   const migrateTask = useCallback(async (taskId, targetDate) => {
@@ -624,11 +669,22 @@ const TaskProvider = ({ children }) => {
 
       return migratedTask;
     } catch (error) {
-      handleApiError(error);
+      handleApiError(error, 'Failed to migrate task');
     } finally {
       setLoading(LoadingState.IDLE);
     }
   }, [handleApiError]);
+
+  const saveDailyOrder = useCallback(async (dateKey, orderedTaskIds) => {
+    try {
+      await apolloClient.mutate({
+        mutation: SAVE_DAILY_TASK_ORDER,
+        variables: { dateKey, orderedTaskIds }
+      });
+    } catch (error) {
+      handleApiError(error, 'Failed to save task order');
+    }
+  }, [apolloClient, handleApiError]);
 
   const value = useMemo(() => ({
     // State
@@ -638,6 +694,9 @@ const TaskProvider = ({ children }) => {
     filters,
     currentView,
     currentDate,
+
+    // Error handling
+    clearError,
 
     // Filter management
     updateFilters,
@@ -651,16 +710,7 @@ const TaskProvider = ({ children }) => {
     updateTaskStatus,
     deleteTask,
     migrateTask,
-    saveDailyOrder: async (dateKey, orderedTaskIds) => {
-      try {
-        await apolloClient.mutate({
-          mutation: SAVE_DAILY_TASK_ORDER,
-          variables: { dateKey, orderedTaskIds }
-        });
-      } catch (error) {
-        handleApiError(error);
-      }
-    },
+    saveDailyOrder,
 
     // Constants
     TaskError,
@@ -680,7 +730,9 @@ const TaskProvider = ({ children }) => {
     updateTask,
     updateTaskStatus,
     deleteTask,
-    migrateTask
+    migrateTask,
+    saveDailyOrder,
+    clearError
   ]);
 
   return (
@@ -692,6 +744,27 @@ const TaskProvider = ({ children }) => {
         onClose={handleRecurringDialogClose}
         onConfirm={handleRecurringDialogConfirm}
       />
+      {/* App-wide surface for task errors. Cleared on dismiss, and on the next
+          successful operation (each operation resets `error` to null). */}
+      <Snackbar
+        open={Boolean(error)}
+        autoHideDuration={6000}
+        onClose={(_event, reason) => {
+          if (reason === 'clickaway') return;
+          clearError();
+        }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        sx={{ bottom: { xs: 80, md: 24 } }}
+      >
+        <Alert
+          onClose={clearError}
+          severity="error"
+          variant="filled"
+          sx={{ maxWidth: 480 }}
+        >
+          {typeof error === 'string' ? error : error?.message}
+        </Alert>
+      </Snackbar>
     </TaskContext.Provider>
   );
 };
