@@ -4,10 +4,11 @@
  * Comprehensive test suite for Phase 3 stateful conversation management.
  */
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, jest } from '@jest/globals';
 import mongoose from 'mongoose';
 import Conversation from '../models/Conversation.js';
 import conversationService from '../services/conversationService.js';
+import aiService from '../services/aiService.js';
 
 // Test configuration
 const TEST_USER_ID = 'test-user-123';
@@ -276,26 +277,54 @@ describe('Conversation Service', () => {
   });
 
   describe('Automatic Summarization', () => {
-    it('should trigger summarization at threshold', async () => {
-      // Add many messages to exceed threshold (70% of 32K = 22.4K tokens)
+    const thresholdMessages = () => {
+      // Enough long messages to exceed the 70%-of-context threshold
       const longMessage = 'This is a long message. '.repeat(100); // ~600 tokens
-      
-      // Add enough messages to hit threshold (need ~37 messages of 600 tokens each)
       const messages = [];
       for (let i = 0; i < 40; i++) {
         messages.push({ role: i % 2 === 0 ? 'user' : 'assistant', content: longMessage });
       }
-      
-      const result = await conversationService.addMessages(
-        TEST_CONV_ID,
-        TEST_USER_ID,
-        messages,
-        { appName: TEST_APP_NAME, autoSummarize: true }
-      );
-      
-      // Summarization might have occurred
-      if (result.summarized) {
+      return messages;
+    };
+
+    it('should trigger summarization at threshold', async () => {
+      // No live AI providers in tests — stub the call so the summarize
+      // path (not the truncation fallback) is what gets exercised.
+      const spy = jest.spyOn(aiService, 'callAI').mockResolvedValue('Mock summary of earlier conversation.');
+      try {
+        const result = await conversationService.addMessages(
+          TEST_CONV_ID,
+          TEST_USER_ID,
+          thresholdMessages(),
+          { appName: TEST_APP_NAME, autoSummarize: true }
+        );
+
+        expect(spy).toHaveBeenCalled();
+        expect(result.summarized).toBe(true);
+        expect(result.truncated).toBe(false);
         expect(result.conversation.summaries).not.toHaveLength(0);
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    it('should fall back to truncation and report it when AI fails', async () => {
+      const spy = jest.spyOn(aiService, 'callAI').mockRejectedValue(new Error('All AI providers failed'));
+      try {
+        const result = await conversationService.addMessages(
+          `${TEST_CONV_ID}-truncate`,
+          TEST_USER_ID,
+          thresholdMessages(),
+          { appName: TEST_APP_NAME, autoSummarize: true }
+        );
+
+        expect(result.summarized).toBe(false);
+        expect(result.truncated).toBe(true);
+        expect(result.conversation.summaries).toHaveLength(0);
+        // Truncation actually shed messages
+        expect(result.messageCount).toBeLessThan(40);
+      } finally {
+        spy.mockRestore();
       }
     });
 

@@ -96,19 +96,23 @@ class ConversationService {
 
     // Check if we need to summarize
     const needsSummary = this.shouldSummarize(conversation);
+    let summaryOutcome = 'skipped';
     if (needsSummary && options.autoSummarize !== false) {
       logger.info(`[ConversationService] Context at ${conversation.currentContextTokens}/${conversation.contextWindow} tokens, triggering summarization`);
-      await this.summarizeConversation(conversation);
+      summaryOutcome = await this.summarizeConversation(conversation);
     }
 
     await conversation.save();
-    
+
     return {
       conversation,
       currentTokens: conversation.currentContextTokens,
       contextWindow: conversation.contextWindow,
       messageCount: conversation.messages.length,
-      summarized: needsSummary
+      // Honest reporting: 'summarized' only when a summary was actually
+      // produced; AI failure falls back to truncation and says so.
+      summarized: summaryOutcome === 'summarized',
+      truncated: summaryOutcome === 'truncated'
     };
   }
 
@@ -164,7 +168,7 @@ class ConversationService {
     
     if (currentTokens <= targetTokens) {
       logger.info(`[ConversationService] No summarization needed (${currentTokens} <= ${targetTokens})`);
-      return;
+      return 'skipped';
     }
 
     // Calculate how many messages to summarize
@@ -174,7 +178,7 @@ class ConversationService {
     
     if (messagesToSummarize <= 0) {
       logger.info('[ConversationService] Too few messages to summarize, keeping all');
-      return;
+      return 'skipped';
     }
 
     // Get the messages to summarize
@@ -207,11 +211,13 @@ class ConversationService {
       );
 
       logger.info(`[ConversationService] ✅ Summarized ${messagesToSummarize} messages: ${originalTokens} → ${Math.ceil(summary.length / 4)} tokens`);
+      return 'summarized';
 
     } catch (error) {
       logger.error({ err: error }, '[ConversationService] ❌ Summarization failed');
       // Fall back to simple truncation
       this.truncateConversation(conversation, messagesToKeep);
+      return 'truncated';
     }
   }
 
