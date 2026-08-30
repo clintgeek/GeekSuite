@@ -1,0 +1,24 @@
+services:
+  watchtower:
+    # Maintained fork — containrrr/watchtower is stale and negotiates an
+    # API version (1.25) the current daemon rejects (needs >=1.40).
+    image: nickfedor/watchtower:latest
+    container_name: watchtower
+    restart: unless-stopped
+    # Watchtower only needs the docker socket, not container networking.
+    # The box has exhausted its address pools, so reuse the host network
+    # instead of creating a new bridge.
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # No GHCR credentials needed: GeekSuite packages are public, so
+      # Watchtower pulls anonymously. If any package is later made private,
+      # mount a docker config with a read:packages login here:
+      #   - ${HOME}/.docker/config.json:/config.json:ro
+    environment:
+      TZ: America/Chicago
+      WATCHTOWER_POLL_INTERVAL: "300"        # 5 minutes
+      WATCHTOWER_CLEANUP: "true"             # prune old images after update
+      WATCHTOWER_LABEL_ENABLE: "true"        # ONLY update opted-in containers
+      WATCHTOWER_INCLUDE_RESTARTING: "true"
+      WATCHTOWER_ROLLING_RESTART: "true"     # recreate one container at a time
