@@ -28,11 +28,11 @@ export const resolvers = {
     },
 
     note: async (_, { id }, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
       if (!id || id === 'undefined' || !mongoose.isValidObjectId(id)) {
         throw new Error(`Invalid Note ID format: ${ id }`);
       }
-      const userId = context.user?.id;
-      if (!userId) throw new Error('Unauthorized');
       const note = await Note.findOne({ _id: id, userId });
       if (!note) throw new Error('Note not found or you do not have permission to view it');
       return note;
@@ -93,11 +93,13 @@ export const resolvers = {
     },
 
     updateNote: async (_, { id, ...args }, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
       if (!id || id === 'undefined' || !mongoose.isValidObjectId(id)) {
         throw new Error(`Invalid Note ID format: ${ id }`);
       }
-      const userId = context.user?.id;
-      if (!userId) throw new Error('Unauthorized');
+      // `args` is schema-validated by GraphQL and carries no userId field, so
+      // ownership cannot be reassigned through the update payload.
       const note = await Note.findOneAndUpdate(
         { _id: id, userId },
         args,
@@ -108,11 +110,11 @@ export const resolvers = {
     },
 
     deleteNote: async (_, { id }, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
       if (!id || id === 'undefined' || !mongoose.isValidObjectId(id)) {
         throw new Error(`Invalid Note ID format: ${ id }`);
       }
-      const userId = context.user?.id;
-      if (!userId) throw new Error('Unauthorized');
       const note = await Note.findOneAndDelete({ _id: id, userId });
       if (!note) throw new Error('Note not found or you do not have permission to delete it');
       return true;
@@ -146,9 +148,9 @@ export const resolvers = {
     },
 
     updateFolder: async (_, { id, ...args }, context) => {
-      if (!id || !mongoose.isValidObjectId(id)) throw new Error('Invalid Folder ID');
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
+      if (!id || !mongoose.isValidObjectId(id)) throw new Error('Invalid Folder ID');
       const folder = await Folder.findOneAndUpdate(
         { _id: id, userId },
         args,
@@ -159,9 +161,9 @@ export const resolvers = {
     },
 
     deleteFolder: async (_, { id, deleteNotes }, context) => {
-      if (!id || !mongoose.isValidObjectId(id)) throw new Error('Invalid Folder ID');
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
+      if (!id || !mongoose.isValidObjectId(id)) throw new Error('Invalid Folder ID');
 
       const folder = await Folder.findOneAndDelete({ _id: id, userId });
       if (!folder) throw new Error('Folder not found or unauthorized');

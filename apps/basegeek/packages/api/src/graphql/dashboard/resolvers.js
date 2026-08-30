@@ -81,8 +81,25 @@ function endOfDay(dateStr) {
 }
 
 function getUserId(context) {
-  if (!context.user) throw new Error('Unauthorized');
-  return context.user.id || context.user._id;
+  const userId = context?.user?.id || context?.user?._id;
+  if (!userId) throw new Error('Unauthorized');
+  return String(userId);
+}
+
+/**
+ * BuJoGeek stores `createdBy` as an ObjectId, so the string user id has to be
+ * cast. A malformed id must not blow up with a BSON error (and must never be
+ * dropped from the filter — Mongoose strips undefined keys, which would make
+ * the query cross-tenant).
+ */
+function toObjectId(userId) {
+  if (!mongoose.isValidObjectId(userId)) return null;
+  return new mongoose.Types.ObjectId(userId);
+}
+
+/** Escape user input before it becomes a RegExp (injection / ReDoS guard). */
+function escapeRegex(str) {
+  return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 // ── Resolvers ──
@@ -99,7 +116,10 @@ export const resolvers = {
       const dayEnd = endOfDay(targetDate);
 
       // BujoGeek uses createdBy (ObjectId) for user filtering
-      const userOid = new mongoose.Types.ObjectId(userId);
+      const userOid = toObjectId(userId);
+      if (!userOid) {
+        return { date: targetDate, openTasks: 0, completedToday: 0, totalTasks: 0, upcomingEvents: [] };
+      }
 
       const [tasks, entries] = await Promise.all([
         Task.find({
@@ -142,8 +162,10 @@ export const resolvers = {
       const userId = getUserId(context);
       const { Note } = getNoteModels();
 
-      // NoteGeek uses userId (string)
-      const notes = await Note.find({ userId })
+      // NoteGeek stores userId as an ObjectId; these dashboard models are
+      // strict:false so nothing casts the incoming string for us. Match both
+      // representations, but never widen beyond this one user.
+      const notes = await Note.find({ userId: { $in: [userId, toObjectId(userId)].filter(Boolean) } })
         .sort({ updatedAt: -1 })
         .limit(limit)
         .lean();
@@ -159,7 +181,11 @@ export const resolvers = {
 
     // ── Books Widget ──
     dashBookProgress: async (_, __, context) => {
-      getUserId(context); // auth check only — BookGeek has no user filtering
+      // Auth check only. BookGeek's `books` collection is a deliberately shared
+      // library — the model carries no per-user field (only bookgeek profiles
+      // are per-user), so every signed-in user sees the same shelf. Do not
+      // "fix" this by inventing a filter field; it would silently return empty.
+      getUserId(context);
       const { Book } = getBookModels();
 
       // BookGeek uses shelf field: "reading" means currently reading
@@ -286,13 +312,14 @@ export const resolvers = {
       const userId = getUserId(context);
       const results = [];
       const searchApps = apps || ['notegeek', 'bujogeek', 'bookgeek', 'fitnessgeek', 'flockgeek'];
-      const regex = new RegExp(query, 'i');
+      const regex = new RegExp(escapeRegex(query), 'i');
+      const userOid = toObjectId(userId);
 
       if (searchApps.includes('notegeek')) {
         try {
           const { Note } = getNoteModels();
           const notes = await Note.find({
-            userId,
+            userId: { $in: [userId, userOid].filter(Boolean) },
             $or: [{ title: regex }, { content: regex }],
           }).limit(limit).lean();
           for (const n of notes) {
@@ -311,10 +338,9 @@ export const resolvers = {
         } catch { /* app unavailable */ }
       }
 
-      if (searchApps.includes('bujogeek')) {
+      if (searchApps.includes('bujogeek') && userOid) {
         try {
           const { Task } = getBujoModels();
-          const userOid = new mongoose.Types.ObjectId(userId);
           const tasks = await Task.find({
             createdBy: userOid,
             $or: [{ title: regex }, { description: regex }],
@@ -336,6 +362,8 @@ export const resolvers = {
 
       if (searchApps.includes('bookgeek')) {
         try {
+          // Shared library by design — see dashBookProgress. Books carry no
+          // owner field, so results are the same for every signed-in user.
           const { Book } = getBookModels();
           const books = await Book.find({
             $or: [{ title: regex }, { authors: regex }],
