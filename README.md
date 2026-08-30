@@ -1,7 +1,15 @@
 # GeekSuite
 
+[![CI](https://github.com/clintgeek/GeekSuite/actions/workflows/ci.yml/badge.svg)](https://github.com/clintgeek/GeekSuite/actions/workflows/ci.yml)
+[![Release images](https://github.com/clintgeek/GeekSuite/actions/workflows/release.yml/badge.svg)](https://github.com/clintgeek/GeekSuite/actions/workflows/release.yml)
+
 Self-hosted monorepo of interconnected productivity apps built around a unified SSO auth system
-and shared infrastructure. All apps authenticate through **basegeek** and share a GraphQL gateway.
+and shared infrastructure. All apps authenticate through **basegeek** and share a GraphQL gateway
+with service-layer ownership enforcement (337 gateway tests).
+
+**How it deploys:** every push to `main` runs CI (gateway/api tests + frontend build smoke)
+and publishes per-app images to GHCR tagged `latest` and `sha-<commit>`; the production box
+pulls new images — no inbound access from CI. Details in [DOCS/CICD.md](DOCS/CICD.md).
 
 ---
 
@@ -14,7 +22,7 @@ and shared infrastructure. All apps authenticate through **basegeek** and share 
 | **fitnessgeek** | Running | Health and fitness tracking — weight, blood pressure, nutrition, Garmin |
 | **flockgeek** | Running | Poultry flock management and egg production tracking |
 | **storygeek** | Running | Creative writing tool |
-| **bookgeek** | Partial | Book library and reading tracker (format conversion pending) |
+| **bookgeek** | Running | Book library + reading tracker — on-demand format conversion, e-reader device baskets |
 | **notegeek** | Running | Note-taking app — text, markdown, code, mind map, sketch |
 | **startgeek** | Running | Personal-desktop launcher — clock, weather, world clocks, app dock |
 
