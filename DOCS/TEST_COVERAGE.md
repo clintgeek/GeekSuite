@@ -3,7 +3,7 @@
 _Generated 2026-04-21; updated 2026-08-30. Qualitative survey — not measured via coverage tooling._
 
 > **2026-08-30 update:** basegeek's GraphQL gateway is now the best-tested
-> surface in the suite — 19 jest suites / 337 tests, including ownership
+> surface in the suite — 21 jest suites / 344 passing tests, including ownership
 > (IDOR) suites for every app module (bujogeek, fitnessgeek, storygeek,
 > bookgeek, flockgeek, notegeek, dashboard) plus bujogeek feature suites
 > (recurrence, cancelled state, collections, habits, reminders).
@@ -17,7 +17,7 @@ _Generated 2026-04-21; updated 2026-08-30. Qualitative survey — not measured v
 
 | App | Frontend | Backend | Test Framework | Test Files | Coverage |
 |---|---|---|---|---|---|
-| basegeek | React/Vite | Express + GraphQL | Jest | 19 suites / 337 tests | **Good on gateway; UI untested** |
+| basegeek | React/Vite | Express + GraphQL | Jest | 21 suites / 344 passing | **Good on gateway; UI untested** |
 | bookgeek | React/Vite | Express | node:test | 2 files / 64 tests | **Partial (api)** |
 | bujogeek | React/Vite | Express | Jest (configured, unused) | 0 | **Minimal (<5%)** |
 | fitnessgeek | React/Vite | Express | Jest (configured, unused) | 0 | **Minimal (<5%)** |

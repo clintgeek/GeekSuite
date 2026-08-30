@@ -5,7 +5,7 @@
 
 Self-hosted monorepo of interconnected productivity apps built around a unified SSO auth system
 and shared infrastructure. All apps authenticate through **basegeek** and share a GraphQL gateway
-with service-layer ownership enforcement (337 gateway tests).
+with service-layer ownership enforcement (344 gateway tests).
 
 **How it deploys:** every push to `main` runs CI (gateway/api tests + frontend build smoke)
 and publishes per-app images to GHCR tagged `latest` and `sha-<commit>`; the production box

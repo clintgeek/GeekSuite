@@ -17,7 +17,7 @@ StoryGeek SSO alignment + Settings page fix + AuthProvider refactor. Pending mer
 
 - Gateway ownership/IDOR enforcement across **every** basegeek module
   (bujogeek, fitnessgeek, storygeek, bookgeek, flockgeek — the last was
-  anonymously writable — dashboard, notegeek), with 337 jest tests now green.
+  anonymously writable — dashboard, notegeek), with 344 jest tests now green.
 - storygeek REST `getStorySummary` ownership check.
 - bujogeek: UTC date-key fixes, dead REST layer removed (−7.5k lines), sort
   comparator fixed, errors surfaced, optimistic toggles, RRULE-only
