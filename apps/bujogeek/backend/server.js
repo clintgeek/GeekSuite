@@ -81,10 +81,16 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// SPA fallback - serve index.html for all non-API routes (must be LAST)
+// SPA fallback - serve index.html for non-API navigations (must be LAST).
+// Paths with a file extension (e.g. a stale hashed /assets/*.css requested by
+// an old service worker after a deploy) must 404 — answering them with
+// index.html poisons browser/SW caches and renders the app unstyled.
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/graphql')) {
     return next();
+  }
+  if (path.extname(req.path)) {
+    return res.status(404).type('text/plain').send('Not found');
   }
   res.sendFile(path.join(publicPath, 'index.html'));
 });
