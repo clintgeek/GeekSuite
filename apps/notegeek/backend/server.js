@@ -134,7 +134,14 @@ async function start() {
 
   // Serve built frontend assets from backend container
   const publicPath = path.join(__dirname, 'public');
-  app.use(express.static(publicPath));
+  app.use(express.static(publicPath, {
+    setHeaders(res, filePath) {
+      // Vite content-hashes everything under assets/ — cache forever.
+      if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+    },
+  }));
 
   // SPA fallback for non-API routes
   app.use((req, res, next) => {

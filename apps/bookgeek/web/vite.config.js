@@ -35,7 +35,11 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@geeksuite/ui': path.resolve(__dirname, '../../../packages/ui/src/index.js')
-      }
+      },
+      // packages/ui is compiled from source (alias above) and pnpm materializes
+      // a private @mui/material for its peer range; two MUI copies split the
+      // theme context (shell renders unthemed). Force the app's single copy.
+      dedupe: ['@mui/material', '@emotion/react', '@emotion/styled', 'react', 'react-dom']
     }
   };
 });

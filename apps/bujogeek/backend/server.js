@@ -66,7 +66,14 @@ app.use((req, res, next) => {
 
 // Serve static files from frontend build
 const publicPath = path.join(__dirname, 'public');
-app.use(express.static(publicPath));
+app.use(express.static(publicPath, {
+  setHeaders(res, filePath) {
+    // Vite content-hashes everything under assets/ — cache forever.
+    if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    }
+  },
+}));
 
 // Routes
 app.use('/api/auth', authRoutes);

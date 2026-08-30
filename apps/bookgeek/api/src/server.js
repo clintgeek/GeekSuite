@@ -2961,9 +2961,22 @@ app.get("/kindle-test/epub", (req, res) => kindleTestServeFormat(req, res, "epub
 // static + index.html fallback so /download-basket/* is not swallowed by it.
 app.use(deviceBasketRouter);
 
-app.use(express.static(publicPath));
+app.use(express.static(publicPath, {
+  setHeaders(res, filePath) {
+    // Vite content-hashes everything under assets/ — cache forever.
+    if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    }
+  },
+}));
 
 app.get(/^\/(?!api(?:\/|$)|kindle(?:\/|$)|download-basket(?:\/|$)).*/, (req, res) => {
+  // Paths with a file extension (e.g. a stale hashed /assets/*.css requested
+  // by an old service worker after a deploy) must 404 — answering them with
+  // index.html poisons browser/SW caches and renders the app unstyled.
+  if (path.extname(req.path)) {
+    return res.status(404).type("text/plain").send("Not found");
+  }
   return res.sendFile(path.join(publicPath, "index.html"));
 });
 
