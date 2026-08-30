@@ -396,8 +396,11 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
 
   // Phase 2A: Start provider health background job
   try {
-    const { startHealthJob } = await import('./services/aiHealthJobService.js');
-    await startHealthJob();
+    // The service exports autoStart/getInstance — `startHealthJob` never
+    // existed, so this job has silently failed to start since the monorepo
+    // import (the catch below only logged it).
+    const { autoStart } = await import('./services/aiHealthJobService.js');
+    autoStart();
     logger.info('✅ Phase 2A health monitoring started');
   } catch (error) {
     logger.error({ err: error }, '⚠️ Phase 2A health job failed to start');
