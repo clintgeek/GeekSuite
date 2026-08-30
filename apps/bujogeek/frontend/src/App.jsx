@@ -19,6 +19,7 @@ import ReviewPage from './pages/ReviewPage';
 import PlanPage from './pages/PlanPage';
 import TemplatesPage from './pages/TemplatesPage';
 import TagsPage from './pages/TagsPage';
+import SearchPage from './pages/SearchPage';
 import { useMemo, useState, useEffect } from 'react';
 
 function AppWithAuth() {
@@ -63,6 +64,7 @@ function AppWithAuth() {
         <Route path="/templates" element={<ProtectedRoute><TemplatesPage /></ProtectedRoute>} />
         <Route path="/templates/*" element={<ProtectedRoute><TemplatesPage /></ProtectedRoute>} />
         <Route path="/tags" element={<ProtectedRoute><TagsPage /></ProtectedRoute>} />
+        <Route path="/search" element={<ProtectedRoute><SearchPage /></ProtectedRoute>} />
 
         {/* Legacy redirects */}
         <Route path="/tasks/daily" element={<Navigate to="/today" replace />} />

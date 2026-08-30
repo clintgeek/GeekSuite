@@ -22,9 +22,11 @@ import {
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { useTaskContext } from '../../context/TaskContext';
+import { useTaskContext, compareTasks } from '../../context/TaskContext';
 import { format } from 'date-fns';
 import TaskEditor from '../tasks/TaskEditor';
+import EmptyState from '../shared/EmptyState';
+import { filterTasks } from '../../utils/filterTasks';
 
 const TaskList = ({ tasks = [], viewType = 'daily' }) => {
   const { updateTaskStatus, deleteTask, migrateTask, updateTask, filters, saveDailyOrder, currentDate } = useTaskContext();
@@ -37,44 +39,10 @@ const TaskList = ({ tasks = [], viewType = 'daily' }) => {
   // Ensure tasks is an array
   const taskArray = Array.isArray(tasks) ? tasks : [];
 
-  // Filter tasks based on the filters from TaskStore
-  const filteredTasks = taskArray.filter(task => {
-    // Only apply filters if they are explicitly set
-    if (filters.search || filters.status || filters.priority || filters.type || (filters.tags && filters.tags.length > 0)) {
-      const matchesSearch = !filters.search ||
-        task.content.toLowerCase().includes(filters.search.toLowerCase()) ||
-        (task.tags && task.tags.some(tag => tag.toLowerCase().includes(filters.search.toLowerCase())));
-
-      const matchesStatus = !filters.status || task.status === filters.status;
-      const matchesPriority = !filters.priority || task.priority === Number(filters.priority);
-      const matchesType = !filters.type || task.signifier === filters.type;
-      const matchesTags = !filters.tags?.length ||
-        (task.tags && filters.tags.every(tag => task.tags.includes(tag)));
-
-      return matchesSearch && matchesStatus && matchesPriority && matchesType && matchesTags;
-    }
-
-    // If no filters are set, return all tasks
-    return true;
-  });
-
-  // Get unique tags and types from tasks
-  const { uniqueTags, uniqueTypes } = useMemo(() => {
-    const tags = new Set();
-    const types = new Set();
-    taskArray.forEach(task => {
-      if (task.tags) {
-        task.tags.forEach(tag => tags.add(tag));
-      }
-      if (task.signifier) {
-        types.add(task.signifier);
-      }
-    });
-    return {
-      uniqueTags: Array.from(tags).sort(),
-      uniqueTypes: Array.from(types).sort()
-    };
-  }, [taskArray]);
+  // Filter tasks based on the filters from TaskStore (shared with TaskFilters
+  // and the search-page export — logic lives in utils/filterTasks.js so it's
+  // never duplicated).
+  const filteredTasks = filterTasks(taskArray, filters);
 
   // Helper to get local date string
   const getLocalDate = (dateString) => {
@@ -96,37 +64,10 @@ const TaskList = ({ tasks = [], viewType = 'daily' }) => {
     }
   };
 
-  // Group tasks by date for weekly view
-  const groupWeeklyTasks = (tasks) => {
-    return tasks.reduce((acc, task) => {
-      try {
-        // Use due date if it exists, otherwise creation date
-        let dateToUse = task.dueDate ? getLocalDate(task.dueDate) : getLocalDate(task.createdAt);
-
-        // Fallback to today if needed
-        if (!dateToUse) {
-          console.warn('No valid date found for task:', task);
-          dateToUse = getLocalDate(new Date());
-        }
-
-        if (!acc[dateToUse]) {
-          acc[dateToUse] = [];
-        }
-        acc[dateToUse].push(task);
-        return acc;
-      } catch (error) {
-        console.error('Error processing task:', task, error);
-        return acc;
-      }
-    }, {});
-  };
-
-  // Group tasks by date (for non-daily views)
+  // Group tasks by date (for non-daily views: weekly, search, etc.) — due
+  // date if present, otherwise creation date. Undated/invalid dates fall
+  // back to today so nothing silently disappears.
   const groupTasksByDate = (tasks) => {
-    if (viewType === 'weekly') {
-      return groupWeeklyTasks(tasks);
-    }
-
     return tasks.reduce((acc, task) => {
       try {
         // Use due date if it exists, otherwise creation date
@@ -150,26 +91,13 @@ const TaskList = ({ tasks = [], viewType = 'daily' }) => {
     }, {});
   };
 
-  // Sort tasks: pending first (scheduled, then unscheduled), completed at the bottom; within each, sort by priority (high to low), then by creation date (newest first)
-  const sortTasks = (tasks) => {
-    return tasks.sort((a, b) => {
-      // Completed tasks always at the bottom
-      if (a.status === 'completed' && b.status !== 'completed') return 1;
-      if (a.status !== 'completed' && b.status === 'completed') return -1;
-
-      // Scheduled tasks (with dueDate) at top
-      if (a.dueDate && !b.dueDate) return -1;
-      if (!a.dueDate && b.dueDate) return 1;
-
-      // Within each group, sort by priority (high to low)
-      if ((b.priority || 0) !== (a.priority || 0)) {
-        return (b.priority || 0) - (a.priority || 0);
-      }
-
-      // Then by creation date (newest first)
-      return new Date(b.createdAt) - new Date(a.createdAt);
-    });
-  };
+  // Sort tasks using the single authoritative comparator from TaskContext
+  // (completed sink to the bottom, scheduled before unscheduled, priority
+  // 1=High..3=Low with null/none sorting last, then earliest due date).
+  // NOTE: this used to be a locally-duplicated comparator with a bug that
+  // sorted priority backwards (Low ranked above High); using the shared
+  // comparator fixes that and keeps ordering consistent app-wide.
+  const sortTasks = (tasks) => [...tasks].sort(compareTasks);
 
   const baselineTasks = viewType === 'daily' ? [...filteredTasks] : sortTasks([...filteredTasks]);
 
@@ -460,14 +388,7 @@ const TaskList = ({ tasks = [], viewType = 'daily' }) => {
           ))}
         </List>
         {taskArray.length === 0 && (
-          <Typography
-            variant="body1"
-            color="text.secondary"
-            align="center"
-            py={{ xs: 1, sm: 3 }}
-          >
-            No tasks found
-          </Typography>
+          <EmptyState title="No tasks found" />
         )}
         {/* Future Date Dialog */}
         <Dialog open={migrationDialogOpen} onClose={() => setMigrationDialogOpen(false)}>
@@ -569,14 +490,10 @@ const TaskList = ({ tasks = [], viewType = 'daily' }) => {
           </Box>
         ))}
         {filteredTasks.length === 0 && (
-          <Typography
-            variant="body1"
-            color="text.secondary"
-            align="center"
-            py={{ xs: 1, sm: 3 }}
-          >
-            No tasks found
-          </Typography>
+          <EmptyState
+            title="No tasks found"
+            description="Try adjusting your search or filters."
+          />
         )}
         {/* Future Date Dialog */}
         <Dialog open={migrationDialogOpen} onClose={() => setMigrationDialogOpen(false)}>

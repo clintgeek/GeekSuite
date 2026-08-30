@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
  *   g → t   navigate to /today
  *   g → r   navigate to /review
  *   g → p   navigate to /plan
+ *   g → s   navigate to /search
  *
  * Single keys:
  *   Cmd/Ctrl+N   focus the quick-add input (data-quickadd attribute)
@@ -21,6 +22,7 @@ const CHORD_MAP = {
   t: '/today',
   r: '/review',
   p: '/plan',
+  s: '/search',
 };
 
 const useGlobalShortcuts = ({ onShowHelp } = {}) => {

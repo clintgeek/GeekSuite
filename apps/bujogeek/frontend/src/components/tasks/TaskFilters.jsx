@@ -25,8 +25,29 @@ const TaskFilters = ({ openDrawer, setDrawerOpen }) => {
   const handleSetDrawerOpen = setDrawerOpen || setInternalDrawerOpen;
 
   const handleFilterChange = (field, value) => {
-    updateFilters({ ...filters, [field]: value });
+    updateFilters({ [field]: value });
   };
+
+  // Debounced text search: the input updates instantly for a responsive
+  // feel, but only pushes to the (context-wide) filters after a pause in
+  // typing, since that's what drives client-side filtering over all tasks.
+  const [searchInput, setSearchInput] = useState(filters.search || '');
+
+  React.useEffect(() => {
+    // Stay in sync if filters.search changes from elsewhere (e.g. Clear filters)
+    setSearchInput(filters.search || '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.search]);
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchInput !== (filters.search || '')) {
+        handleFilterChange('search', searchInput);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchInput]);
 
   // Get all unique tags from tasks
   const availableTags = React.useMemo(() => {
@@ -54,9 +75,9 @@ const TaskFilters = ({ openDrawer, setDrawerOpen }) => {
       <TextField
         size="small"
         label="Search"
-        value={filters.search || ''}
-        onChange={(e) => handleFilterChange('search', e.target.value)}
-        placeholder="Search tasks..."
+        value={searchInput}
+        onChange={(e) => setSearchInput(e.target.value)}
+        placeholder="Search content, notes, tags..."
         sx={{ minWidth: 240 }}
       />
 
