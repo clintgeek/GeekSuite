@@ -8,3 +8,6 @@ build
 .claude/
 .sixth/
 dev-dist
+
+# macOS AppleDouble metadata (SMB access)
+._*
