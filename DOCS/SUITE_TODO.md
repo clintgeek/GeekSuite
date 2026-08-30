@@ -33,29 +33,28 @@ StoryGeek SSO alignment + Settings page fix + AuthProvider refactor. Pending mer
 
 ## Next up — highest leverage
 
-- **Timezone bug fixes (fitnessgeek, flockgeek)** — documented in detail in
-  `DOCS/ARCHIVE/THE_TIME_ISSUE.md` + `THE_TIME_STEPS.md`. Step 0 (set `TZ=America/Chicago` in
-  docker-compose) is a 5-minute safety net. The real fixes are per-app but well-specified.
-  ~~BujoGeek is most severely affected~~ — bujogeek's date-key bugs fixed 2026-08-30.
-
-- **Mongo connection deduplication (basegeek)** — `models/user.js` creates its own
-  `createConnection` on top of the app-wide `mongoose.connect`. Two pools, two failure modes.
-  `apps/basegeek/packages/api/src/models/user.js`
-
-- **`appPreferences` Map vs Object drift (basegeek)** — user routes read both `.get?.()` and
-  bracket access; old documents are plain objects, new are Maps. Silent write failures without
-  `markModified`. Pick one shape, write a migration.
-  `apps/basegeek/packages/api/src/routes/users.js`
-
-- **AI response cache TTL + LRU (basegeek)** — in-memory cache in `aiService.js` accumulates
-  forever under load. Wire TTL + LRU eviction.
-  `apps/basegeek/packages/api/src/services/aiService.js`
+- ~~Timezone bug fixes (bujogeek, fitnessgeek, flockgeek)~~ — **Done 2026-08-30**
+  across all three (streaks, daily summary, egg/group/mortality dates, quick-add
+  date keys). Remaining timezone work is the shared-utility extraction below.
 
 - **Admin gate on `GET /api/users`** — paginated now but still auth-only, not admin-scoped.
   Dependency: add an admin role. `apps/basegeek/packages/api/src/routes/users.js`
 
-- **`/api/health` with dependency status** — currently always returns "up" even if Mongo or Redis
-  is disconnected. Add ping-each-dependency and return structured health info.
+- **Mongo connection topology (basegeek)** — INVESTIGATED 2026-08-30: not a
+  duplicate pool; four connections deliberately serve four different databases.
+  Deferred. Latent hazard noted: `getAppConnection('usergeek')` would spawn a
+  second pool to the auth DB — don't call it. Consolidation shape (route
+  `models/user.js` through the factory with a per-app URI override) is in the
+  session report if ever pursued.
+
+- ~~`appPreferences` Map vs Object drift~~ — **Fixed 2026-08-30:** all access
+  through `src/lib/appPreferences.js` (Map + markModified), migration script,
+  route + helper tests.
+
+- ~~AI response cache TTL + LRU~~ / ~~`/api/health` dependency status~~ —
+  **Done 2026-08-30:** cache is env-configurable with an eviction fix;
+  `/api/health` now reports per-dependency readiness (incl. the auth DB) via
+  non-blocking cached probes.
 
 ---
 
@@ -136,11 +135,10 @@ Hardening = pino logging, request IDs, graceful shutdown, env-driven CORS, data-
   parsing now runs before signifier detection in `utils/parseTaskInput.js`, so
   `/2026-03-15` / `/03-15-2026` dates parse correctly; regression tests added.
 
-- ~~Extract bujogeek `compareTasks`~~ — **Done 2026-08-30:** moved to `utils/taskSort.js` with 7 unit tests. Previously:
-  `context/TaskContext.jsx`, which imports Apollo + MUI at module scope, so it
-  can't be unit-tested without dragging those in (and vitest hangs on the MUI
-  icon barrel). Move the pure comparator to `utils/` so the previously-broken
-  (NaN-compare) sort logic can be covered. (Noted 2026-08-30.)
+- ~~Extract bujogeek `compareTasks`~~ — **Done 2026-08-30:** moved from
+  `context/TaskContext.jsx` (which pulls Apollo + MUI at module scope) to a pure
+  `utils/taskSort.js` with 7 unit tests locking in the previously-NaN-broken
+  sort logic. TaskContext re-exports it, so importers are unchanged.
 
 - ~~bujogeek recurring tasks UI~~ — **Done (2026-08-30):** RRULE series with editScope
   (this/all/future instances), editor + quick-add syntax, virtual expansion.
