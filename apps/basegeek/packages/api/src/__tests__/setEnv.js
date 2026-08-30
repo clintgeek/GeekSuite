@@ -44,6 +44,12 @@ process.env.USERGEEK_MONGODB_URI = mongoUri;
 process.env.AIGEEK_MONGODB_URI   = mongoUri;
 process.env.MONGODB_TEST_URI     = mongoUri;
 
+// Per-app connections (graphql/shared/appConnections.js) are built as
+// `${MONGO_BASE_URI}/<dbName>?authSource=admin`, so hand it the host portion
+// of the in-memory URI (no trailing path/slash).
+process.env.MONGO_BASE_URI =
+  (mongoUri.match(/^(mongodb(?:\+srv)?:\/\/[^/?]+)/)?.[1]) || mongoUri;
+
 // ── Redis URL ─────────────────────────────────────────────────────────────────
 // The real redis client is mocked per-test-file via jest.unstable_mockModule.
 // This env var satisfies any code that reads it before the mock fires.

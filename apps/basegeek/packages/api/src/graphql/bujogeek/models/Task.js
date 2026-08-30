@@ -35,6 +35,7 @@ const taskSchema = new mongoose.Schema({
   isSeriesMaster: { type: Boolean, default: false },
   parentTask: { type: mongoose.Schema.Types.ObjectId, ref: 'Task', default: null },
   subtasks: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Task' }],
+  completedAt: { type: Date, default: null },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },

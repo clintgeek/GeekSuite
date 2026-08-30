@@ -13,7 +13,11 @@ export const resolvers = {
       const { default: Task } = await import('./models/Task.js');
       return Task.find(filter).sort({ originalDate: -1 });
     },
-    task: async (_, { id }) => taskService.getTaskById(id),
+    task: async (_, { id }, context) => {
+      const userId = context.user?.id;
+      if (!userId) return null;
+      return taskService.getTaskById(id, userId);
+    },
     dailyTasks: async (_, { date }, context) => {
       const userId = context.user?.id;
       if (!userId) return [];
@@ -88,11 +92,15 @@ export const resolvers = {
       if (args.updatedAt) taskData.updatedAt = new Date(args.updatedAt);
       return taskService.createTask(taskData);
     },
-    updateTask: async (_, { id, input }) => {
+    updateTask: async (_, { id, input, editScope }, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
       // Sanitize: only pass fields that exist on the Task schema.
-      // taskType is a virtual, createdAt/updatedAt are managed server-side.
-      const { taskType, createdAt, updatedAt, __typename, ...safeInput } = input || {};
-      return taskService.updateTask(id, safeInput);
+      // taskType is a virtual, createdAt/updatedAt/createdBy are managed server-side.
+      const { taskType, createdAt, updatedAt, createdBy, __typename, ...safeInput } = input || {};
+      const task = await taskService.updateTask(id, safeInput, editScope, userId);
+      if (!task) throw new Error('Task not found');
+      return task;
     },
 
     // Add preference sync mutation if needed, or stick to the central /api/users/preferences
@@ -104,27 +112,39 @@ export const resolvers = {
       const user = await User.findByIdAndUpdate(userId, { $set: { 'preferences.theme': theme } }, { new: true });
       return user.preferences;
     },
-    deleteTask: async (_, { id }) => {
-      const result = await taskService.deleteTask(id);
+    deleteTask: async (_, { id, editScope }, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const result = await taskService.deleteTask(id, editScope, userId);
       if (!result) throw new Error('Task not found');
       return { success: true, message: 'Task deleted successfully' };
     },
-    updateTaskStatus: async (_, { id, status }) => {
-      const task = await taskService.updateTaskStatus(id, status);
+    updateTaskStatus: async (_, { id, status }, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const task = await taskService.updateTaskStatus(id, status, userId);
       if (!task) throw new Error('Task not found');
       return task;
     },
     addSubtask: async (_, args, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
-      const parentTask = await taskService.getTaskById(args.parentId);
+      const parentTask = await taskService.getTaskById(args.parentId, userId);
       if (!parentTask) throw new Error('Parent task not found');
       const subtaskData = { ...args, parentTask: parentTask._id, createdBy: userId };
       if (args.dueDate) subtaskData.dueDate = new Date(args.dueDate);
       return taskService.createTask(subtaskData);
     },
-    migrateTaskToFuture: async (_, { id, futureDate }) => {
-      const task = await taskService.updateTask(id, { dueDate: new Date(futureDate), updatedAt: new Date() });
+    migrateTaskToFuture: async (_, { id, futureDate }, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      // Migrating always moves a single occurrence, never a whole series.
+      const task = await taskService.updateTask(
+        id,
+        { dueDate: new Date(futureDate), updatedAt: new Date() },
+        'THIS_INSTANCE',
+        userId
+      );
       if (!task) throw new Error('Task not found');
       return task;
     },
@@ -159,7 +179,7 @@ export const resolvers = {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
       const { default: Template } = await import('./models/Template.js');
-      const template = await Template.findById(templateId);
+      const template = await Template.findOne({ _id: templateId, createdBy: userId });
       if (!template) throw new Error('Template not found');
       const entry = new JournalEntry({
         title: template.name,

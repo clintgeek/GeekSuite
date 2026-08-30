@@ -3,11 +3,73 @@ import TaskOrder from '../models/TaskOrder.js';
 import mongoose from 'mongoose';
 import rrulePkg from 'rrule';
 
-const { rrulestr } = rrulePkg;
+const { rrulestr, RRule } = rrulePkg;
+
+const VALID_EDIT_SCOPES = ['THIS_INSTANCE', 'ALL_INSTANCES', 'FUTURE_INSTANCES'];
 
 class TaskService {
   constructor() {
     this.taskModel = Task;
+  }
+
+  /**
+   * Every ownership-sensitive service method funnels through this so that a
+   * resolver can never accidentally issue an unscoped query.
+   */
+  requireUser(userId) {
+    if (!userId) {
+      const err = new Error('Unauthorized');
+      err.code = 'UNAUTHORIZED';
+      throw err;
+    }
+    return userId;
+  }
+
+  normalizeEditScope(editScope) {
+    return VALID_EDIT_SCOPES.includes(editScope) ? editScope : 'THIS_INSTANCE';
+  }
+
+  /**
+   * Recurring occurrences are surfaced to the client as synthetic ids of the
+   * form `virtual_<masterId>_<epochMs>`. Returns null for a real (materialized)
+   * task id.
+   */
+  parseVirtualId(taskId) {
+    const id = String(taskId ?? '');
+    if (!id.startsWith('virtual_')) return null;
+    const parts = id.split('_');
+    const masterId = parts[1];
+    const epochMs = parseInt(parts[2], 10);
+    if (!mongoose.Types.ObjectId.isValid(masterId) || Number.isNaN(epochMs)) return null;
+    return { masterId, originalDueDate: new Date(epochMs) };
+  }
+
+  /**
+   * Load a task by id, scoped to its owner. Returns null when the id is
+   * malformed, does not exist, or belongs to somebody else — callers must not
+   * be able to distinguish these cases.
+   */
+  async findOwnedTask(taskId, userId) {
+    this.requireUser(userId);
+    if (!mongoose.Types.ObjectId.isValid(taskId)) return null;
+    return this.taskModel.findOne({ _id: taskId, createdBy: userId });
+  }
+
+  /**
+   * Resolve either a real id or a `virtual_` occurrence id to the owned series
+   * master / task document it refers to.
+   */
+  async resolveOwnedTarget(taskId, userId) {
+    this.requireUser(userId);
+    const virtual = this.parseVirtualId(taskId);
+    if (virtual) {
+      const master = await this.findOwnedTask(virtual.masterId, userId);
+      if (!master) return null;
+      return { virtual: true, master, task: master, originalDueDate: virtual.originalDueDate };
+    }
+    const task = await this.findOwnedTask(taskId, userId);
+    if (!task) return null;
+    return { virtual: false, master: null, task, originalDueDate: null };
   }
 
   toUtcMidnight(dateStr) {
@@ -32,6 +94,7 @@ class TaskService {
   }
 
   async getTasksForDateRange({ userId, startDate, endDate, viewType }) {
+    this.requireUser(userId);
     const query = { createdBy: userId, isSeriesMaster: { $ne: true } };
     if (viewType !== 'all') {
       query.isBacklog = { $ne: true };
@@ -221,6 +284,7 @@ class TaskService {
   }
 
   async saveDailyOrder({ userId, dateKey, orderedTaskIds }) {
+    this.requireUser(userId);
     return TaskOrder.findOneAndUpdate(
       { userId, dateKey },
       { orderedTaskIds, updatedAt: new Date() },
@@ -229,74 +293,211 @@ class TaskService {
   }
 
   async createTask(taskData) {
+    this.requireUser(taskData?.createdBy);
     if (taskData.recurrenceRule) {
       taskData.isSeriesMaster = true;
     }
     return new this.taskModel(taskData).save();
   }
 
-  async updateTask(taskId, updateData, editScope = 'THIS_INSTANCE') {
-    if (taskId.startsWith('virtual_')) {
-      const parts = taskId.split('_');
-      const masterId = parts[1];
-      const originalDueDate = new Date(parseInt(parts[2], 10));
-
-      if (editScope === 'ALL_INSTANCES') {
-        return this.taskModel.findByIdAndUpdate(masterId, { ...updateData, updatedAt: new Date() }, { new: true, runValidators: true });
-      } else {
-        const master = await this.taskModel.findById(masterId);
-        const overrideData = {
-          ...master.toObject(),
-          _id: undefined,
-          ...updateData,
-          seriesId: masterId,
-          isSeriesMaster: false,
-          recurrenceRule: null,
-          originalDueDate,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        };
-        return new this.taskModel(overrideData).save();
-      }
-    } else {
-      const task = await this.taskModel.findById(taskId);
-      if (task && (task.isSeriesMaster || editScope === 'ALL_INSTANCES')) {
-        const targetId = task.seriesId || taskId;
-        return this.taskModel.findByIdAndUpdate(targetId, { ...updateData, updatedAt: new Date() }, { new: true });
-      } else {
-        return this.taskModel.findByIdAndUpdate(taskId, { ...updateData, updatedAt: new Date() }, { new: true, runValidators: true });
-      }
-    }
+  /**
+   * Materialize a single occurrence of a series as its own task document,
+   * carrying the caller's edits.
+   */
+  buildOverride(master, originalDueDate, updateData) {
+    const base = master.toObject();
+    delete base._id;
+    return {
+      ...base,
+      ...updateData,
+      createdBy: master.createdBy,
+      seriesId: String(master._id),
+      isSeriesMaster: false,
+      recurrenceRule: null,
+      exdates: [],
+      originalDueDate,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
   }
 
-  async deleteTask(taskId, editScope = 'THIS_INSTANCE') {
-    if (taskId.startsWith('virtual_')) {
-      const parts = taskId.split('_');
-      const masterId = parts[1];
-      const originalDueDate = new Date(parseInt(parts[2], 10));
+  /**
+   * FUTURE_INSTANCES: terminate the existing series just before `splitDate`
+   * and start a fresh series master at `splitDate` carrying `updateData`.
+   * Overrides at or after the split point are re-parented onto the new series.
+   * When `updateData` is null the series is simply truncated (delete-future).
+   */
+  async splitSeriesAt(master, splitDate, updateData, userId) {
+    this.requireUser(userId);
+    if (!master.recurrenceRule || !(splitDate instanceof Date) || Number.isNaN(splitDate.getTime())) {
+      // Nothing to split — fall back to editing the master itself.
+      if (!updateData) return this.deleteSeries(master, userId);
+      return this.taskModel.findOneAndUpdate(
+        { _id: master._id, createdBy: userId },
+        { ...updateData, updatedAt: new Date() },
+        { new: true }
+      );
+    }
 
-      if (editScope === 'ALL_INSTANCES') {
-        await this.taskModel.deleteMany({ seriesId: masterId });
-        return this.taskModel.findByIdAndDelete(masterId);
-      } else {
-        return this.taskModel.findByIdAndUpdate(masterId, { $push: { exdates: originalDueDate } }, { new: true });
+    let rule;
+    try {
+      rule = rrulestr(master.recurrenceRule);
+    } catch {
+      rule = null;
+    }
+    if (!rule || !rule.origOptions) {
+      // Unparseable / RRuleSet — cannot split cleanly; treat as whole-series.
+      if (!updateData) return this.deleteSeries(master, userId);
+      return this.taskModel.findOneAndUpdate(
+        { _id: master._id, createdBy: userId },
+        { ...updateData, updatedAt: new Date() },
+        { new: true }
+      );
+    }
+
+    const until = new Date(splitDate.getTime() - 1000);
+
+    const truncated = new RRule({ ...rule.origOptions, until, count: null });
+    const truncatedMaster = await this.taskModel.findOneAndUpdate(
+      { _id: master._id, createdBy: userId },
+      { recurrenceRule: truncated.toString(), updatedAt: new Date() },
+      { new: true }
+    );
+
+    // Drop overrides that belong to the detached tail of the old series.
+    if (!updateData) {
+      await this.taskModel.deleteMany({
+        createdBy: userId,
+        seriesId: String(master._id),
+        originalDueDate: { $gte: splitDate },
+      });
+      return truncatedMaster;
+    }
+
+    const newRule = new RRule({ ...rule.origOptions, dtstart: splitDate, until: rule.origOptions.until ?? null });
+    const base = master.toObject();
+    delete base._id;
+    const newMaster = await new this.taskModel({
+      ...base,
+      ...updateData,
+      createdBy: master.createdBy,
+      recurrenceRule: newRule.toString(),
+      isSeriesMaster: true,
+      seriesId: null,
+      exdates: (master.exdates || []).filter((d) => d.getTime() >= splitDate.getTime()),
+      dueDate: updateData.dueDate ?? splitDate,
+      originalDueDate: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }).save();
+
+    await this.taskModel.updateMany(
+      { createdBy: userId, seriesId: String(master._id), originalDueDate: { $gte: splitDate } },
+      { $set: { seriesId: String(newMaster._id) } }
+    );
+
+    return newMaster;
+  }
+
+  async deleteSeries(master, userId) {
+    this.requireUser(userId);
+    await this.taskModel.deleteMany({ createdBy: userId, seriesId: String(master._id) });
+    return this.taskModel.findOneAndDelete({ _id: master._id, createdBy: userId });
+  }
+
+  async updateTask(taskId, updateData, editScope = 'THIS_INSTANCE', userId) {
+    this.requireUser(userId);
+    const scope = this.normalizeEditScope(editScope);
+    const target = await this.resolveOwnedTarget(taskId, userId);
+    if (!target) return null;
+
+    if (target.virtual) {
+      const { master, originalDueDate } = target;
+      if (scope === 'ALL_INSTANCES') {
+        return this.taskModel.findOneAndUpdate(
+          { _id: master._id, createdBy: userId },
+          { ...updateData, updatedAt: new Date() },
+          { new: true, runValidators: true }
+        );
+      }
+      if (scope === 'FUTURE_INSTANCES') {
+        return this.splitSeriesAt(master, originalDueDate, updateData, userId);
+      }
+      return new this.taskModel(this.buildOverride(master, originalDueDate, updateData)).save();
+    }
+
+    const task = target.task;
+
+    if (scope === 'FUTURE_INSTANCES' && (task.isSeriesMaster || task.seriesId)) {
+      const masterId = task.seriesId || task._id;
+      const master = await this.findOwnedTask(masterId, userId);
+      if (master) {
+        const splitDate = task.originalDueDate || task.dueDate;
+        return this.splitSeriesAt(master, splitDate, updateData, userId);
       }
     }
 
-    const task = await this.taskModel.findById(taskId);
-    if (!task) return null;
-
-    if (task.isSeriesMaster || editScope === 'ALL_INSTANCES') {
-      const targetId = task.seriesId || taskId;
-      await this.taskModel.deleteMany({ seriesId: targetId });
-      return this.taskModel.findByIdAndDelete(targetId);
-    } else {
-      if (task.parentTask) {
-        await this.taskModel.findByIdAndUpdate(task.parentTask, { $pull: { subtasks: taskId } });
-      }
-      await this.taskModel.deleteMany({ parentTask: taskId });
-      return this.taskModel.findByIdAndDelete(taskId);
+    if (task.isSeriesMaster || scope === 'ALL_INSTANCES') {
+      const targetId = task.seriesId || task._id;
+      const updated = await this.taskModel.findOneAndUpdate(
+        { _id: targetId, createdBy: userId },
+        { ...updateData, updatedAt: new Date() },
+        { new: true }
+      );
+      if (updated) return updated;
     }
+
+    return this.taskModel.findOneAndUpdate(
+      { _id: task._id, createdBy: userId },
+      { ...updateData, updatedAt: new Date() },
+      { new: true, runValidators: true }
+    );
+  }
+
+  async deleteTask(taskId, editScope = 'THIS_INSTANCE', userId) {
+    this.requireUser(userId);
+    const scope = this.normalizeEditScope(editScope);
+    const target = await this.resolveOwnedTarget(taskId, userId);
+    if (!target) return null;
+
+    if (target.virtual) {
+      const { master, originalDueDate } = target;
+      if (scope === 'ALL_INSTANCES') return this.deleteSeries(master, userId);
+      if (scope === 'FUTURE_INSTANCES') return this.splitSeriesAt(master, originalDueDate, null, userId);
+      return this.taskModel.findOneAndUpdate(
+        { _id: master._id, createdBy: userId },
+        { $push: { exdates: originalDueDate } },
+        { new: true }
+      );
+    }
+
+    const task = target.task;
+
+    if (scope === 'FUTURE_INSTANCES' && (task.isSeriesMaster || task.seriesId)) {
+      const masterId = task.seriesId || task._id;
+      const master = await this.findOwnedTask(masterId, userId);
+      if (master) {
+        const splitDate = task.originalDueDate || task.dueDate;
+        const result = await this.splitSeriesAt(master, splitDate, null, userId);
+        if (task.seriesId) await this.taskModel.findOneAndDelete({ _id: task._id, createdBy: userId });
+        return result;
+      }
+    }
+
+    if (task.isSeriesMaster || scope === 'ALL_INSTANCES') {
+      const targetId = task.seriesId || task._id;
+      const master = await this.findOwnedTask(targetId, userId);
+      if (master) return this.deleteSeries(master, userId);
+    }
+
+    if (task.parentTask) {
+      await this.taskModel.findOneAndUpdate(
+        { _id: task.parentTask, createdBy: userId },
+        { $pull: { subtasks: task._id } }
+      );
+    }
+    await this.taskModel.deleteMany({ parentTask: task._id, createdBy: userId });
+    return this.taskModel.findOneAndDelete({ _id: task._id, createdBy: userId });
   }
 
   nextRecurrenceDate(baseDate, pattern) {
@@ -311,35 +512,27 @@ class TaskService {
     return d;
   }
 
-  async updateTaskStatus(taskId, status) {
+  async updateTaskStatus(taskId, status, userId) {
+    this.requireUser(userId);
     const now = new Date();
     const updateData = { status, updatedAt: now };
-    if (status === 'completed') {
-      updateData.completedAt = now;
-    } else {
-      updateData.completedAt = null;
+    // completedAt is set on completion and explicitly cleared when a task is
+    // un-completed (re-opened, migrated, etc.).
+    updateData.completedAt = status === 'completed' ? now : null;
+
+    const target = await this.resolveOwnedTarget(taskId, userId);
+    if (!target) return null;
+
+    if (target.virtual) {
+      const { master, originalDueDate } = target;
+      return new this.taskModel(this.buildOverride(master, originalDueDate, updateData)).save();
     }
 
-    if (taskId.startsWith('virtual_')) {
-      const parts = taskId.split('_');
-      const masterId = parts[1];
-      const originalDueDate = new Date(parseInt(parts[2], 10));
-      const master = await this.taskModel.findById(masterId);
-      const overrideData = {
-        ...master.toObject(),
-        _id: undefined,
-        ...updateData,
-        seriesId: masterId,
-        isSeriesMaster: false,
-        recurrenceRule: null,
-        originalDueDate,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
-      return new this.taskModel(overrideData).save();
-    }
-
-    const task = await this.taskModel.findByIdAndUpdate(taskId, updateData, { new: true, runValidators: true });
+    const task = await this.taskModel.findOneAndUpdate(
+      { _id: target.task._id, createdBy: userId },
+      updateData,
+      { new: true, runValidators: true }
+    );
 
     // Legacy auto-spawn for basic non-rrule recurrences
     if (task && !task.isSeriesMaster && !task.seriesId && status === 'completed' && task.recurrencePattern && task.recurrencePattern !== 'none') {
@@ -367,14 +560,19 @@ class TaskService {
     return task;
   }
 
-  async getTaskById(taskId) {
-    if (taskId.startsWith('virtual_')) {
+  async getTaskById(taskId, userId) {
+    this.requireUser(userId);
+    if (String(taskId ?? '').startsWith('virtual_')) {
       return null;
     }
-    return this.taskModel.findById(taskId).populate('parentTask', 'content status').populate('subtasks');
+    if (!mongoose.Types.ObjectId.isValid(taskId)) return null;
+    return this.taskModel.findOne({ _id: taskId, createdBy: userId })
+      .populate('parentTask', 'content status')
+      .populate('subtasks');
   }
 
   async getTagsForUser(userId) {
+    this.requireUser(userId);
     return this.taskModel.aggregate([
       { $match: { createdBy: new mongoose.Types.ObjectId(userId) } },
       { $unwind: '$tags' },
@@ -385,6 +583,7 @@ class TaskService {
   }
 
   async getTasksByTags(userId, tags) {
+    this.requireUser(userId);
     const tasks = await this.taskModel.find({ createdBy: userId, tags: { $all: tags } }).sort({ dueDate: -1, createdAt: -1 });
     return tasks.map(t => t.toObject());
   }
