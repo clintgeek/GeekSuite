@@ -460,8 +460,11 @@ class StoryController {
 
   async getStorySummary(req, res) {
     try {
+      const authenticatedUserId = requireAuth(req, res);
+      if (!authenticatedUserId) return;
       const story = await Story.findById(req.params.storyId);
       if (!story) return res.status(404).json({ error: 'Story not found' });
+      if (!isStoryOwner(story, authenticatedUserId)) return res.status(403).json({ error: 'Not authorized to view this story' });
       const allSummaries = story.storySummaries.map(s => s.summary).join('\n\n');
       const allKeywords = { characters: [], locations: [], items: [], concepts: [], events: [] };
       const allImportantDetails = [];

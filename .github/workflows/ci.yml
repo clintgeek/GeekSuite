@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-basegeek:
+    name: basegeek api tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Run jest (mongodb-memory-server)
+        working-directory: apps/basegeek/packages/api
+        run: node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand
+
+  test-bookgeek:
+    name: bookgeek api tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Run node --test
+        working-directory: apps/bookgeek/api
+        run: npm test
+
+  # TODO(notegeek): vitest passes but never exits (open handles keep the
+  # event loop alive), which would hang a CI runner. Re-add a
+  # test-notegeek job once the teardown leak is fixed; the build smoke
+  # below still covers notegeek's frontend.
+
+  build-frontends:
+    name: frontend build smoke
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: bujogeek
+            dir: apps/bujogeek/frontend
+          - app: notegeek
+            dir: apps/notegeek/frontend
+          - app: bookgeek
+            dir: apps/bookgeek/web
+          - app: fitnessgeek
+            dir: apps/fitnessgeek/frontend
+          - app: storygeek
+            dir: apps/storygeek/frontend
+          - app: flockgeek
+            dir: apps/flockgeek/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build ${{ matrix.app }}
+        working-directory: ${{ matrix.dir }}
+        run: npm run build

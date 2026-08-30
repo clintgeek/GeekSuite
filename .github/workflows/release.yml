@@ -1,0 +1,71 @@
+name: Release images
+
+# Tier 3.3 (DOCS/CICD.md): publish suite images to GHCR on every main
+# commit. The production box pulls via Watchtower — no inbound CI access.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      app:
+        description: "Single app to publish (blank = all)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  matrix:
+    name: resolve app matrix
+    runs-on: ubuntu-latest
+    outputs:
+      apps: ${{ steps.set.outputs.apps }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: set
+        run: |
+          if [ -n "${{ github.event.inputs.app }}" ]; then
+            echo "apps=[\"${{ github.event.inputs.app }}\"]" >> "$GITHUB_OUTPUT"
+          else
+            # Apps with root-level Dockerfiles (mirror build.sh APPS)
+            apps=$(for d in apps/*/Dockerfile; do basename "$(dirname "$d")"; done | jq -R . | jq -sc .)
+            echo "apps=$apps" >> "$GITHUB_OUTPUT"
+          fi
+
+  build-and-publish:
+    name: publish ${{ matrix.app }}
+    needs: matrix
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: ${{ fromJson(needs.matrix.outputs.apps) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Short SHA
+        id: sha
+        run: echo "short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/${{ matrix.app }}/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.app }}:latest
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.app }}:sha-${{ steps.sha.outputs.short }}
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.app }}:main
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,scope=${{ matrix.app }},mode=max
