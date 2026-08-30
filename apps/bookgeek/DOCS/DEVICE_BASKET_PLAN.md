@@ -1,5 +1,9 @@
 # BookGeek — Device Download Basket: Implementation Plan
 
+> **Status: SHIPPED 2026-08-30** (including the D9 secret-word landing page
+> and D10 sliding inactivity expiry). Kindle-verified end to end. This doc
+> is retained as the design record.
+
 Goal: vendor-independent book delivery to e-readers. BookGeek creates a temporary,
 word-slug URL (`bookgeek.clintgeek.com/download-basket/soft-apple-chair-lamp`) that
 serves a primitive server-rendered HTML page with direct download links. No JS, no

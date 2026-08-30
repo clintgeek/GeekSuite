@@ -1,13 +1,24 @@
 # GeekSuite Test Coverage Report
 
-_Generated 2026-04-21. Qualitative survey — not measured via coverage tooling._
+_Generated 2026-04-21; updated 2026-08-30. Qualitative survey — not measured via coverage tooling._
+
+> **2026-08-30 update:** basegeek's GraphQL gateway is now the best-tested
+> surface in the suite — 19 jest suites / 337 tests, including ownership
+> (IDOR) suites for every app module (bujogeek, fitnessgeek, storygeek,
+> bookgeek, flockgeek, notegeek, dashboard) plus bujogeek feature suites
+> (recurrence, cancelled state, collections, habits, reminders).
+> bookgeek's api gained a node:test suite (64 tests: slugs, device
+> baskets, formats). CI now runs basegeek + bookgeek tests and six
+> frontend build smokes on every PR/push (`.github/workflows/ci.yml`).
+> Known debt: notegeek's vitest passes but leaks open handles (excluded
+> from CI until fixed).
 
 ## Summary
 
 | App | Frontend | Backend | Test Framework | Test Files | Coverage |
 |---|---|---|---|---|---|
-| basegeek | React/Vite | Express + GraphQL | Jest | 5 | **Partial (~10–15%)** |
-| bookgeek | React/Vite | Express | — | 0 | **None** |
+| basegeek | React/Vite | Express + GraphQL | Jest | 19 suites / 337 tests | **Good on gateway; UI untested** |
+| bookgeek | React/Vite | Express | node:test | 2 files / 64 tests | **Partial (api)** |
 | bujogeek | React/Vite | Express | Jest (configured, unused) | 0 | **Minimal (<5%)** |
 | fitnessgeek | React/Vite | Express | Jest (configured, unused) | 0 | **Minimal (<5%)** |
 | flockgeek | React/Vite | Express | — | 0 | **None** |
@@ -146,8 +157,8 @@ _Generated 2026-04-21. Qualitative survey — not measured via coverage tooling.
 
 ## Cross-cutting gaps
 
-1. **No frontend tests outside notegeek.** Every other React app is untested on the UI side.
-2. **No GraphQL resolver tests** in basegeek — the GraphQL layer is the primary API surface and is unverified.
+1. **No frontend tests outside notegeek.** Every other React app is untested on the UI side (CI build smoke exists for six frontends, which catches compile breakage only).
+2. ~~No GraphQL resolver tests in basegeek~~ **Closed 2026-08-30** — ownership/behavior suites cover every gateway module's resolvers and services.
 3. **No E2E tests anywhere** in the suite (no Playwright, Cypress, or similar).
 4. **No route integration tests** except notegeek's auth route and basegeek's auth flow.
 5. **Three apps have Jest installed but no jest.config.js and no tests** (bujogeek, fitnessgeek, storygeek) — quickest wins: write first tests against existing scaffolding.

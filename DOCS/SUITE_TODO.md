@@ -13,12 +13,30 @@ StoryGeek SSO alignment + Settings page fix + AuthProvider refactor. Pending mer
 
 ---
 
+## Landed 2026-08-30 (overnight hardening pass)
+
+- Gateway ownership/IDOR enforcement across **every** basegeek module
+  (bujogeek, fitnessgeek, storygeek, bookgeek, flockgeek — the last was
+  anonymously writable — dashboard, notegeek), with 337 jest tests now green.
+- storygeek REST `getStorySummary` ownership check.
+- bujogeek: UTC date-key fixes, dead REST layer removed (−7.5k lines), sort
+  comparator fixed, errors surfaced, optimistic toggles, RRULE-only
+  recurrence (+migration), cancelled state, search + export, collections,
+  habits, web-push reminders.
+- bookgeek: device download basket + secret-word landing page, favicon.
+- Suite-wide: MUI dedupe (two-copy theme split), SPA fallbacks 404 asset
+  paths (SW cache poisoning), immutable caching for hashed assets, pnpm
+  pinned in Dockerfiles, CI + GHCR release workflows (`DOCS/CICD.md` Tier 1
+  + 3.3 publish; Watchtower box setup still manual).
+
+---
+
 ## Next up — highest leverage
 
-- **Timezone bug fixes (bujogeek, fitnessgeek, flockgeek)** — documented in detail in
+- **Timezone bug fixes (fitnessgeek, flockgeek)** — documented in detail in
   `DOCS/ARCHIVE/THE_TIME_ISSUE.md` + `THE_TIME_STEPS.md`. Step 0 (set `TZ=America/Chicago` in
   docker-compose) is a 5-minute safety net. The real fixes are per-app but well-specified.
-  BujoGeek is most severely affected (daily/weekly/monthly views).
+  ~~BujoGeek is most severely affected~~ — bujogeek's date-key bugs fixed 2026-08-30.
 
 - **Mongo connection deduplication (basegeek)** — `models/user.js` creates its own
   `createConnection` on top of the app-wide `mongoose.connect`. Two pools, two failure modes.
@@ -108,14 +126,14 @@ Hardening = pino logging, request IDs, graceful shutdown, env-driven CORS, data-
 
 ## Features not yet implemented
 
-- **bookgeek format conversion** — calibre is already in the bookgeek image. Feature: drop a file
-  in, bookgeek locates cover + metadata and ensures an EPUB exists (convert from PDF/MOBI/AZW via
-  `ebook-convert`). Abstract as a `FormatConverter` service so the underlying tool can swap later.
-  Out of scope until bookgeek enters the consolidation+hardening cycle. (`DEFERRED_WORK.md`)
+- ~~bookgeek format conversion~~ — **Done (Aug 2026):** on-demand `ebook-convert` to
+  EPUB/AZW3/MOBI with cover embedding, shared `ensureFormat()`, used by both normal
+  downloads and the device basket.
 
 - **bujogeek subtasks UI** — backend model has `parentTask`/`subtasks` fields; no frontend UI.
 
-- **bujogeek recurring tasks UI** — backend model supports `recurrence`; no frontend UI.
+- ~~bujogeek recurring tasks UI~~ — **Done (2026-08-30):** RRULE series with editScope
+  (this/all/future instances), editor + quick-add syntax, virtual expansion.
 
 ---
 
