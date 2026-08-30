@@ -137,3 +137,6 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# Vite PWA dev service worker output
+frontend/dev-dist

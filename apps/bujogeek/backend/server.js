@@ -9,9 +9,6 @@ import pinoHttp from 'pino-http';
 import logger from './src/lib/logger.js';
 
 // Import routes
-import templateRoutes from './src/routes/templateRoutes.js';
-import journalRoutes from './src/routes/journalRoutes.js';
-import taskRoutes from './src/routes/taskRoutes.js';
 import authRoutes from './src/routes/authRoutes.js';
 import { authenticate } from './src/middleware/authMiddleware.js';
 import { meHandler } from '@geeksuite/user/server';
@@ -75,10 +72,6 @@ app.use(express.static(publicPath));
 app.use('/api/auth', authRoutes);
 
 app.get('/api/me', authenticate, meHandler());
-
-app.use('/api/templates', templateRoutes);
-app.use('/api/journal', journalRoutes);
-app.use('/api/tasks', taskRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

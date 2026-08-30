@@ -9,8 +9,7 @@
     "dev": "nodemon server.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
-    "init-db": "node initDb.js",
-    "seed": "node src/scripts/seedTemplates.js"
+    "init-db": "node initDb.js"
   },
   "keywords": [],
   "author": "",
