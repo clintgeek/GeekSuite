@@ -158,7 +158,7 @@ export const recordMortality = async (req, res, next) => {
   try {
     const { ownerId } = req;
     const { id } = req.params;
-    const { count, notes } = req.body;
+    const { count, notes, date } = req.body;
 
     if (!count || count < 1) {
       return res.status(400).json({
@@ -180,9 +180,15 @@ export const recordMortality = async (req, res, next) => {
 
     meatRun.mortalityCount = (meatRun.mortalityCount || 0) + count;
     if (notes) {
+      // Prefer the caller's local calendar date (YYYY-MM-DD, same convention
+      // as egg production/hatch dates elsewhere in FlockGeek) over deriving
+      // "today" from the server clock — the server has no user timezone, so
+      // new Date().toISOString() can already be tomorrow in UTC for anyone
+      // logging in the evening west of UTC.
+      const noteDate = date || new Date().toISOString().split("T")[0];
       meatRun.mortalityNotes = meatRun.mortalityNotes
-        ? `${meatRun.mortalityNotes}\n${new Date().toISOString().split("T")[0]}: ${notes}`
-        : `${new Date().toISOString().split("T")[0]}: ${notes}`;
+        ? `${meatRun.mortalityNotes}\n${noteDate}: ${notes}`
+        : `${noteDate}: ${notes}`;
     }
 
     await meatRun.save();

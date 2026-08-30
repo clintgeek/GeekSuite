@@ -3,6 +3,18 @@ import GroupMembership from "../models/GroupMembership.js";
 import { logger } from "../utils/logger.js";
 
 /**
+ * `startDate` is a calendar date (stored/displayed as UTC midnight), not an
+ * instant. Falling back to a bare `new Date()` here would stamp it with the
+ * current time-of-day, which shifts to the next UTC day for anyone west of
+ * UTC in the evening — the same class of bug as logging an egg after 6pm
+ * Central. Fall back to today's date at UTC midnight instead.
+ */
+const utcMidnightToday = () => {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+};
+
+/**
  * POST /api/groups
  * Create a new group
  */
@@ -22,7 +34,7 @@ export const createGroup = async (req, res, next) => {
       name,
       purpose,
       type,
-      startDate: startDate || new Date(),
+      startDate: startDate || utcMidnightToday(),
       description,
       notes
     });
