@@ -15,7 +15,7 @@ export const typeDefs = gql`
     migratedTo: String
     isBacklog: Boolean
     taskType: String
-    recurrencePattern: String
+    recurrencePattern: String @deprecated(reason: "Legacy recurrence enum. Use recurrenceRule (RRULE) — tasks created with recurrencePattern are translated server-side and this field is left as 'none'.")
     recurrenceRule: String
     seriesId: String
     isSeriesMaster: Boolean
@@ -79,7 +79,8 @@ export const typeDefs = gql`
     tags: [String]
     dueDate: Date
     isBacklog: Boolean
-    recurrencePattern: String
+    recurrencePattern: String @deprecated(reason: "Legacy recurrence enum — translated to recurrenceRule server-side. Send recurrenceRule instead.")
+    recurrenceRule: String
   }
 
   type Query {
@@ -98,7 +99,14 @@ export const typeDefs = gql`
   }
 
   type Mutation {
-    createTask(content: String!, signifier: String, status: String, priority: Int, tags: [String], dueDate: Date, createdAt: Date, updatedAt: Date, note: String, recurrencePattern: String, recurrenceRule: String, isSeriesMaster: Boolean): Task!
+    """
+    Recurrence is expressed as \`recurrenceRule\` — an RRULE string of the form
+    \`DTSTART:20260315T090000Z\\nRRULE:FREQ=WEEKLY\`. A task created with one
+    becomes a series master and its occurrences are expanded per view window.
+    \`recurrencePattern\` is accepted for backward compatibility only and is
+    translated to an equivalent RRULE at create time.
+    """
+    createTask(content: String!, signifier: String, status: String, priority: Int, tags: [String], dueDate: Date, createdAt: Date, updatedAt: Date, note: String, recurrencePattern: String @deprecated(reason: "Legacy recurrence enum — translated to recurrenceRule server-side. Send recurrenceRule instead."), recurrenceRule: String, isSeriesMaster: Boolean): Task!
     updateTask(id: ID!, input: UpdateTaskInput!, editScope: EditScope): Task!
     deleteTask(id: ID!, editScope: EditScope): DeleteResponse!
     updateTaskStatus(id: ID!, status: String!): Task!

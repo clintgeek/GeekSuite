@@ -7,6 +7,33 @@ const { rrulestr, RRule } = rrulePkg;
 
 const VALID_EDIT_SCOPES = ['THIS_INSTANCE', 'ALL_INSTANCES', 'FUTURE_INSTANCES'];
 
+const LEGACY_PATTERN_FREQ = { daily: 'DAILY', weekly: 'WEEKLY', monthly: 'MONTHLY' };
+
+/**
+ * Format a Date as an iCalendar UTC timestamp (`20260315T090000Z`) — the exact
+ * shape `RRule#toString()` emits and `rrulestr()` round-trips.
+ */
+export function formatDtstart(date) {
+  return new Date(date).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+}
+
+/**
+ * Legacy shim: translate the deprecated `recurrencePattern` enum
+ * ('daily' | 'weekly' | 'monthly') into the canonical RRULE string the
+ * expansion code in `getTasksForDateRange` parses:
+ *
+ *   DTSTART:20260315T090000Z\nRRULE:FREQ=WEEKLY
+ *
+ * Returns null for 'none' / unknown patterns or an unusable start date.
+ */
+export function recurrencePatternToRRule(pattern, startDate) {
+  const freq = LEGACY_PATTERN_FREQ[String(pattern ?? '').toLowerCase()];
+  if (!freq) return null;
+  const start = startDate ? new Date(startDate) : new Date();
+  if (Number.isNaN(start.getTime())) return null;
+  return `DTSTART:${ formatDtstart(start) }\nRRULE:FREQ=${ freq }`;
+}
+
 class TaskService {
   constructor() {
     this.taskModel = Task;
@@ -292,12 +319,32 @@ class TaskService {
     );
   }
 
+  /**
+   * RRULE is the single source of truth for recurrence. Anything arriving with
+   * only the deprecated `recurrencePattern` is translated to an equivalent
+   * RRULE, and any task carrying an RRULE becomes a series master (its
+   * occurrences are then expanded virtually per view window).
+   */
+  normalizeRecurrence(data, fallbackStart = null) {
+    const out = { ...data };
+    if (!out.recurrenceRule && out.recurrencePattern && out.recurrencePattern !== 'none') {
+      const shimmed = recurrencePatternToRRule(
+        out.recurrencePattern,
+        out.dueDate || out.originalDate || fallbackStart
+      );
+      if (shimmed) out.recurrenceRule = shimmed;
+    }
+    if (out.recurrenceRule) {
+      out.isSeriesMaster = true;
+      // The legacy field is never persisted alongside an RRULE — one system only.
+      out.recurrencePattern = 'none';
+    }
+    return out;
+  }
+
   async createTask(taskData) {
     this.requireUser(taskData?.createdBy);
-    if (taskData.recurrenceRule) {
-      taskData.isSeriesMaster = true;
-    }
-    return new this.taskModel(taskData).save();
+    return new this.taskModel(this.normalizeRecurrence(taskData)).save();
   }
 
   /**
@@ -405,11 +452,27 @@ class TaskService {
     return this.taskModel.findOneAndDelete({ _id: master._id, createdBy: userId });
   }
 
-  async updateTask(taskId, updateData, editScope = 'THIS_INSTANCE', userId) {
+  async updateTask(taskId, rawUpdateData, editScope = 'THIS_INSTANCE', userId) {
     this.requireUser(userId);
     const scope = this.normalizeEditScope(editScope);
     const target = await this.resolveOwnedTarget(taskId, userId);
     if (!target) return null;
+
+    // Only touch recurrence fields when the caller actually sent one, so that
+    // ordinary edits never disturb an existing series.
+    let updateData = rawUpdateData || {};
+    if ('recurrenceRule' in updateData || 'recurrencePattern' in updateData) {
+      updateData = this.normalizeRecurrence(
+        updateData,
+        target.task?.dueDate || target.originalDueDate
+      );
+      if (!updateData.recurrenceRule) {
+        // Recurrence explicitly cleared — demote back to a plain task.
+        updateData.recurrenceRule = null;
+        updateData.recurrencePattern = 'none';
+        updateData.isSeriesMaster = false;
+      }
+    }
 
     if (target.virtual) {
       const { master, originalDueDate } = target;
@@ -500,18 +563,6 @@ class TaskService {
     return this.taskModel.findOneAndDelete({ _id: task._id, createdBy: userId });
   }
 
-  nextRecurrenceDate(baseDate, pattern) {
-    const d = new Date(baseDate || Date.now());
-    switch (pattern) {
-      case 'daily': d.setUTCDate(d.getUTCDate() + 1); break;
-      case 'weekly': d.setUTCDate(d.getUTCDate() + 7); break;
-      case 'monthly': d.setUTCMonth(d.getUTCMonth() + 1); break;
-      default: return null;
-    }
-    d.setUTCHours(9, 0, 0, 0);
-    return d;
-  }
-
   async updateTaskStatus(taskId, status, userId) {
     this.requireUser(userId);
     const now = new Date();
@@ -528,36 +579,15 @@ class TaskService {
       return new this.taskModel(this.buildOverride(master, originalDueDate, updateData)).save();
     }
 
-    const task = await this.taskModel.findOneAndUpdate(
+    // NOTE: the legacy "auto-spawn the next occurrence on completion" branch
+    // was removed — recurrence is now expressed exclusively as an RRULE series
+    // and future occurrences are expanded virtually, never materialized on
+    // completion.
+    return this.taskModel.findOneAndUpdate(
       { _id: target.task._id, createdBy: userId },
       updateData,
       { new: true, runValidators: true }
     );
-
-    // Legacy auto-spawn for basic non-rrule recurrences
-    if (task && !task.isSeriesMaster && !task.seriesId && status === 'completed' && task.recurrencePattern && task.recurrencePattern !== 'none') {
-      const nextDue = this.nextRecurrenceDate(task.dueDate, task.recurrencePattern);
-      if (nextDue) {
-        const startOfDay = new Date(nextDue); startOfDay.setUTCHours(0, 0, 0, 0);
-        const endOfDay = new Date(nextDue); endOfDay.setUTCHours(23, 59, 59, 999);
-        const existing = await this.taskModel.findOne({
-          createdBy: task.createdBy,
-          content: task.content,
-          recurrencePattern: task.recurrencePattern,
-          status: 'pending',
-          dueDate: { $gte: startOfDay, $lte: endOfDay },
-        });
-        if (!existing) {
-          await this.taskModel.create({
-            content: task.content, signifier: task.signifier, status: 'pending', priority: task.priority,
-            note: task.note, tags: task.tags, dueDate: nextDue, originalDate: nextDue,
-            recurrencePattern: task.recurrencePattern, createdBy: task.createdBy,
-          });
-        }
-      }
-    }
-
-    return task;
   }
 
   async getTaskById(taskId, userId) {

@@ -25,6 +25,7 @@ import useTaskTags from '../../hooks/useTaskTags';
 import { CREATE_NOTE } from '../../graphql/notegeekMutations';
 import { colors } from '../../theme/colors';
 import RecurringEditDialog from './RecurringEditDialog';
+import { buildRecurrenceRule, frequencyFromRecurrenceRule } from '../../utils/parseTaskInput';
 
 const SIGNIFIER_OPTIONS = [
   { value: '*', label: 'Task', mono: '*' },
@@ -40,6 +41,9 @@ const PRIORITY_OPTIONS = [
   { value: 3, label: 'Low', color: colors.priority.low },
 ];
 
+// UI-only frequency picker. The value never leaves the component as-is — it is
+// translated into an RRULE (`recurrenceRule`) on submit. The legacy
+// `recurrencePattern` field is no longer written by this editor.
 const RECURRENCE_OPTIONS = [
   { value: 'none', label: 'None' },
   { value: 'daily', label: 'Daily' },
@@ -68,7 +72,7 @@ const TaskEditor = ({ open, onClose, task = null }) => {
     dueDate: null,
     tags: [],
     note: '',
-    recurrencePattern: 'none',
+    recurrenceFreq: 'none',
   });
   const [loading, setLoading] = useState(false);
   const [recurringDialogOpen, setRecurringDialogOpen] = useState(false);
@@ -85,7 +89,7 @@ const TaskEditor = ({ open, onClose, task = null }) => {
         dueDate: task.dueDate ? new Date(task.dueDate) : null,
         tags: task.tags || [],
         note: task.note || '',
-        recurrencePattern: task.recurrencePattern || 'none',
+        recurrenceFreq: frequencyFromRecurrenceRule(task.recurrenceRule),
       });
     } else {
       setFormData({
@@ -96,7 +100,7 @@ const TaskEditor = ({ open, onClose, task = null }) => {
         dueDate: null,
         tags: [],
         note: '',
-        recurrencePattern: 'none',
+        recurrenceFreq: 'none',
       });
     }
   }, [task]);
@@ -135,13 +139,26 @@ const TaskEditor = ({ open, onClose, task = null }) => {
     await performSubmit(editScope);
   };
 
+  /**
+   * Translate the UI-only frequency picker into the RRULE the API stores.
+   * `recurrenceFreq` itself is never sent.
+   */
+  const buildPayload = () => {
+    const { recurrenceFreq, ...rest } = formData;
+    return {
+      ...rest,
+      recurrenceRule: buildRecurrenceRule(recurrenceFreq, formData.dueDate),
+    };
+  };
+
   const performSubmit = async (editScope) => {
     setLoading(true);
     try {
+      const payload = buildPayload();
       if (isEditing) {
-        await updateTask(task.id || task._id, formData, editScope);
+        await updateTask(task.id || task._id, payload, editScope);
       } else {
-        await createTask(formData);
+        await createTask(payload);
       }
       onClose();
     } catch (error) {
@@ -418,8 +435,8 @@ const TaskEditor = ({ open, onClose, task = null }) => {
             <FormControl fullWidth size="small">
               <InputLabel>Repeat interval</InputLabel>
               <Select
-                value={formData.recurrencePattern}
-                onChange={handleChange('recurrencePattern')}
+                value={formData.recurrenceFreq}
+                onChange={handleChange('recurrenceFreq')}
                 label="Repeat interval"
               >
                 {RECURRENCE_OPTIONS.map((opt) => (

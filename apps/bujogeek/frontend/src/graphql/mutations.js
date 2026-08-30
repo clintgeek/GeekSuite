@@ -47,8 +47,8 @@ export const DELETE_TEMPLATE = gql`
 `;
 
 export const CREATE_TASK = gql`
-  mutation CreateTask($content: String!, $signifier: String, $status: String, $priority: Int, $tags: [String], $dueDate: Date, $createdAt: Date, $updatedAt: Date, $note: String, $recurrencePattern: String, $recurrenceRule: String, $isSeriesMaster: Boolean) {
-    createTask(content: $content, signifier: $signifier, status: $status, priority: $priority, tags: $tags, dueDate: $dueDate, createdAt: $createdAt, updatedAt: $updatedAt, note: $note, recurrencePattern: $recurrencePattern, recurrenceRule: $recurrenceRule, isSeriesMaster: $isSeriesMaster) {
+  mutation CreateTask($content: String!, $signifier: String, $status: String, $priority: Int, $tags: [String], $dueDate: Date, $createdAt: Date, $updatedAt: Date, $note: String, $recurrenceRule: String, $isSeriesMaster: Boolean) {
+    createTask(content: $content, signifier: $signifier, status: $status, priority: $priority, tags: $tags, dueDate: $dueDate, createdAt: $createdAt, updatedAt: $updatedAt, note: $note, recurrenceRule: $recurrenceRule, isSeriesMaster: $isSeriesMaster) {
       id
       content
       signifier
@@ -122,6 +122,7 @@ export const UPDATE_TASK_STATUS = gql`
       content
       signifier
       status
+      completedAt
       priority
       note
       tags

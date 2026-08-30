@@ -479,7 +479,7 @@ const TaskProvider = ({ children }) => {
 
       const ALLOWED_UPDATE_FIELDS = [
         'content', 'signifier', 'status', 'priority', 'note',
-        'tags', 'dueDate', 'isBacklog', 'recurrencePattern',
+        'tags', 'dueDate', 'isBacklog', 'recurrenceRule',
       ];
       const cleanUpdates = {};
       for (const key of ALLOWED_UPDATE_FIELDS) {

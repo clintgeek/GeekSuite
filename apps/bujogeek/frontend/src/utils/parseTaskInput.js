@@ -16,7 +16,10 @@
  *                             /mar 5th  /january 15
  *   Time (after a date):      9am  14:30  2:30pm  2 p.m.
  *
- * Returns: { content, signifier, priority, dueDate, tags, note, noteGeekNote, recurrencePattern, recurrenceRule }
+ * Recurrence is emitted as an RRULE string only — the legacy
+ * `recurrencePattern` enum is no longer produced by any surface.
+ *
+ * Returns: { content, signifier, priority, dueDate, tags, note, noteGeekNote, recurrenceRule }
  */
 
 const DAY_NAMES = {
@@ -61,6 +64,43 @@ function defaultTime(date) {
   return date;
 }
 
+/* ---------- recurrence (RRULE) ---------- */
+
+const FREQ_BY_WORD = { daily: 'DAILY', weekly: 'WEEKLY', monthly: 'MONTHLY' };
+
+/**
+ * Format a Date as an iCalendar UTC timestamp: `20260315T090000Z`.
+ */
+function formatDtstart(date) {
+  return new Date(date).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+}
+
+/**
+ * Build the canonical RRULE string the API's expansion code parses:
+ *
+ *   DTSTART:20260315T090000Z\nRRULE:FREQ=WEEKLY
+ *
+ * @param {string} freq      'daily' | 'weekly' | 'monthly' (anything else → null)
+ * @param {Date}   startDate DTSTART anchor; defaults to today at 09:00 local
+ * @returns {string|null}
+ */
+export function buildRecurrenceRule(freq, startDate) {
+  const FREQ = FREQ_BY_WORD[String(freq ?? '').toLowerCase()];
+  if (!FREQ) return null;
+  const start = startDate ? new Date(startDate) : defaultTime(new Date());
+  if (isNaN(start.getTime())) return null;
+  return `DTSTART:${formatDtstart(start)}\nRRULE:FREQ=${FREQ}`;
+}
+
+/**
+ * Inverse of buildRecurrenceRule — read the frequency word back out of an
+ * RRULE so an editor can pre-select it. Returns 'none' when there is no rule.
+ */
+export function frequencyFromRecurrenceRule(rule) {
+  const match = String(rule ?? '').match(/FREQ=(DAILY|WEEKLY|MONTHLY)/i);
+  return match ? match[1].toLowerCase() : 'none';
+}
+
 /* ---------- core patterns ---------- */
 
 const PATTERNS = {
@@ -84,18 +124,15 @@ export default function parseTaskInput(text) {
   let signifier = null;
   let note = null;
   let noteGeekNote = null;
-  let recurrencePattern = null;
-  let recurrenceRule = null;
+  let recurrenceFreq = null;
   const tags = [];
 
-  // 0. Recurrence — (daily) / (weekly) / (monthly)
+  // 0. Recurrence — (daily) / (weekly) / (monthly). The RRULE itself is built
+  //    at the end, once the due date (its DTSTART anchor) has been parsed.
   const recurrenceMatch = content.match(PATTERNS.recurrence);
   if (recurrenceMatch) {
-    recurrencePattern = recurrenceMatch[1].toLowerCase();
+    recurrenceFreq = recurrenceMatch[1].toLowerCase();
     content = content.replace(recurrenceMatch[0], '').trim();
-    if (recurrencePattern === 'daily') recurrenceRule = 'FREQ=DAILY';
-    if (recurrencePattern === 'weekly') recurrenceRule = 'FREQ=WEEKLY';
-    if (recurrencePattern === 'monthly') recurrenceRule = 'FREQ=MONTHLY';
   }
 
   // 1. Tags — extract first so # tokens don't interfere with other parsing
@@ -218,6 +255,9 @@ export default function parseTaskInput(text) {
   // Clean up any remaining extra whitespace
   content = content.replace(/\s{2,}/g, ' ').trim();
 
+  // 6. Recurrence → RRULE, anchored on the due date when one was given.
+  const recurrenceRule = buildRecurrenceRule(recurrenceFreq, dueDate);
+
   return {
     content: content || undefined,
     signifier,
@@ -226,7 +266,6 @@ export default function parseTaskInput(text) {
     tags: tags.length > 0 ? tags : undefined,
     note: note || undefined,
     noteGeekNote: noteGeekNote || undefined,
-    recurrencePattern: recurrencePattern || undefined,
     recurrenceRule: recurrenceRule || undefined,
   };
 }

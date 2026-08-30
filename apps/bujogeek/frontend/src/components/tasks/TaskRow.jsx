@@ -259,7 +259,7 @@ const TaskRow = ({
 
           {/* Recurrence icon */}
           {((task.recurrencePattern && task.recurrencePattern !== 'none') || task.recurrenceRule || task.isSeriesMaster || task.seriesId) && (
-            <Tooltip title={task.recurrencePattern ? `Repeats ${task.recurrencePattern}` : 'Recurring task'} placement="top">
+            <Tooltip title={task.recurrencePattern && task.recurrencePattern !== 'none' ? `Repeats ${task.recurrencePattern}` : 'Recurring task'} placement="top">
               <Box
                 component="span"
                 sx={{
