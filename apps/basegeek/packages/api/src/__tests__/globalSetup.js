@@ -10,7 +10,12 @@
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { writeFileSync } from 'fs';
 
-const STATE_FILE = '/tmp/__jest_mongod_state__.json';
+// Run-unique sidecar path: two concurrent jest runs used to share
+// /tmp/__jest_mongod_state__.json, overwrite each other's URI, and each
+// teardown killed the other's mongod. The main-process pid disambiguates;
+// workers find it via env (inherited at spawn) with a ppid fallback in
+// setEnv.js.
+const STATE_FILE = `/tmp/__jest_mongod_state__.${process.pid}.json`;
 
 export default async function globalSetup() {
   // MongoDB 6.0+ supports OpenSSL 3 (Ubuntu 22.04+).
@@ -30,7 +35,10 @@ export default async function globalSetup() {
 
   // Persist instance reference so globalTeardown can stop it (same process).
   global.__MONGOD__ = mongod;
+  global.__MONGOD_STATE_FILE__ = STATE_FILE;
 
   // Write the URI to a sidecar file so setupFiles workers can read it.
+  // Workers inherit env at spawn, so publish the run-unique path there too.
+  process.env.JEST_MONGOD_STATE_FILE = STATE_FILE;
   writeFileSync(STATE_FILE, JSON.stringify({ uri }), 'utf8');
 }

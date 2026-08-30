@@ -25,18 +25,27 @@ process.env.KEY_VAULT_SECRET    = 'a'.repeat(64);
 process.env.NODE_ENV = 'test';
 
 // ── MongoDB URIs ──────────────────────────────────────────────────────────────
-// Read from the sidecar written by globalSetup so every model file that
-// creates a Mongoose connection at import-time points at the in-memory DB.
-const STATE_FILE = '/tmp/__jest_mongod_state__.json';
+// Read from the run-unique sidecar written by globalSetup so every model file
+// that creates a Mongoose connection at import-time points at THIS run's
+// in-memory DB (concurrent jest runs each get their own mongod). The path
+// arrives via env (workers inherit the main process env at spawn); the ppid
+// fallback covers pools where env propagation differs.
+const stateFileCandidates = [
+  process.env.JEST_MONGOD_STATE_FILE,
+  `/tmp/__jest_mongod_state__.${process.ppid}.json`,
+].filter(Boolean);
 
 let mongoUri = 'mongodb://localhost:27017/testdb'; // fallback (shouldn't be needed)
-try {
-  const raw = readFileSync(STATE_FILE, 'utf8');
-  mongoUri = JSON.parse(raw).uri;
-} catch {
-  // globalSetup may not have run (e.g. running a single test file manually).
-  // The fallback URI will cause connection errors — that's acceptable for
-  // isolated unit tests that don't need Mongo.
+for (const candidate of stateFileCandidates) {
+  try {
+    const raw = readFileSync(candidate, 'utf8');
+    mongoUri = JSON.parse(raw).uri;
+    break;
+  } catch {
+    // Try the next candidate; globalSetup may not have run at all when a
+    // single test file is executed manually — the fallback URI is acceptable
+    // for isolated unit tests that don't need Mongo.
+  }
 }
 
 process.env.MONGODB_URI          = mongoUri;

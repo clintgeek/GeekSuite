@@ -27,6 +27,9 @@ import appsRoutes from './routes/apps.js';
 import oauthConnectionsRoutes from './routes/oauthConnections.js';
 import ambientRoutes from './routes/ambient.js';
 import { connectAIGeekDB, getAIGeekConnection } from './config/database.js';
+import { userGeekConn } from './models/user.js';
+import { listAppConnections } from './graphql/shared/appConnections.js';
+import { summarizeDependencies, createCachedProbe } from './lib/healthCheck.js';
 import { initRefreshTokenStore, closeRefreshTokenStore, isRefreshTokenStoreConnected } from './services/refreshTokenStore.js';
 import { startOAuthRefreshJob, stopOAuthRefreshJob } from './services/oauthRefreshJobService.js';
 import reminderService from './graphql/bujogeek/services/reminderService.js';
@@ -170,31 +173,84 @@ app.use(express.static(uiBuildPath));
 // Track server start time for uptime
 const serverStartTime = Date.now();
 
+// Postgres / Influx have no long-lived client in this process — routes open a
+// fresh connection per request. So they can't be checked with a readyState
+// lookup the way the Mongo connections can. Both go through a cached probe
+// that keeps the health handler synchronous: it reads the last known result
+// and refreshes in the background, so a hung Postgres can never hang
+// /api/health. Unconfigured deps stay `enabled: false` → readiness `null`
+// → not counted as down (a deployment without Postgres isn't degraded).
+const postgresProbe = createCachedProbe({
+  enabled: !!process.env.POSTGRES_URL,
+  ttlMs: 30_000,
+  timeoutMs: 2_000,
+  probe: async (timeoutMs) => {
+    const { default: pg } = await import('pg');
+    const client = new pg.Client({
+      connectionString: process.env.POSTGRES_URL,
+      connectionTimeoutMillis: timeoutMs,
+      query_timeout: timeoutMs,
+    });
+    try {
+      await client.connect();
+      await client.query('SELECT 1');
+      return true;
+    } finally {
+      await client.end().catch(() => {});
+    }
+  },
+});
+
+const influxProbe = createCachedProbe({
+  enabled: !!process.env.INFLUXDB_TOKEN,
+  ttlMs: 30_000,
+  timeoutMs: 2_000,
+  probe: async (timeoutMs) => {
+    const { pingInflux } = await import('./config/influx.js');
+    return pingInflux(timeoutMs);
+  },
+});
+
 // Health check — real status, version, uptime, dependency readiness.
 //
-// Uses cheap already-open pool/client checks (no new connections) so it's
-// safe for orchestrators to hit frequently. For deeper probing (latency,
+// Fully synchronous: every dependency is either an already-open pool
+// (readyState) or a cached probe. No awaits, so a sick dependency degrades
+// the body without delaying the response. For deeper probing (latency,
 // versions, fresh connect), hit /api/health/infra instead.
 //
 // Status semantics:
-//   - "ok"        all critical deps ready → 200
-//   - "degraded"  non-critical dep down (redis / aiGeek) → 200
-//   - "unhealthy" critical dep down (mongo) → 503
+//   - "ok"        all deps ready → 200
+//   - "degraded"  non-critical dep down (redis / aiGeek / app DBs / pg / influx) → 200
+//   - "unhealthy" critical dep down (mongo / userGeek — auth can't work) → 503
+//
+// Only `ready === false` counts as down; `null` means "unknown / not
+// configured" and is ignored.
 app.get('/api/health', (req, res) => {
   const uptimeSeconds = Math.floor((Date.now() - serverStartTime) / 1000);
 
-  const mongoReady = mongoose.connection.readyState === 1;
-  const aiGeekReady = getAIGeekConnection().readyState === 1;
-  const redisReady = isRefreshTokenStoreConnected();
+  const appConnections = listAppConnections();
+  const appNames = Object.keys(appConnections);
+  const appsDown = appNames.filter((name) => !appConnections[name].ready);
 
-  let status = 'ok';
-  let httpStatus = 200;
-  if (!mongoReady) {
-    status = 'unhealthy';
-    httpStatus = 503;
-  } else if (!redisReady || !aiGeekReady) {
-    status = 'degraded';
-  }
+  const dependencies = {
+    // Critical: the core datageek DB and the userGeek DB that every login
+    // reads. userGeek was previously unchecked, so basegeek reported "ok"
+    // while authentication was hard down.
+    mongo: { ready: mongoose.connection.readyState === 1, critical: true },
+    userGeek: { ready: userGeekConn.readyState === 1, critical: true },
+    // Non-critical: degrade, don't fail.
+    aiGeek: { ready: getAIGeekConnection().readyState === 1 },
+    redis: { ready: isRefreshTokenStoreConnected() },
+    appDatabases: {
+      ready: appNames.length === 0 ? null : appsDown.length === 0,
+      ...(appsDown.length > 0 ? { down: appsDown } : {}),
+      connections: appConnections,
+    },
+    postgres: postgresProbe.read(),
+    influx: influxProbe.read(),
+  };
+
+  const { status, httpStatus, down } = summarizeDependencies(dependencies);
 
   res.status(httpStatus).json({
     status,
@@ -202,11 +258,8 @@ app.get('/api/health', (req, res) => {
     uptime: uptimeSeconds,
     timestamp: new Date().toISOString(),
     app: 'basegeek',
-    dependencies: {
-      mongo: { ready: mongoReady },
-      aiGeek: { ready: aiGeekReady },
-      redis: { ready: redisReady },
-    },
+    ...(down.length > 0 ? { downDependencies: down } : {}),
+    dependencies,
   });
 });
 

@@ -39,3 +39,19 @@ export function getAppConnection(appName) {
   connections[appName] = conn;
   return conn;
 }
+
+/**
+ * Snapshot of the per-app connections created so far, for /api/health.
+ * Only reports connections that have actually been opened — a model file that
+ * was never imported has no connection, and reporting it as "down" would be a
+ * lie. Reads `readyState` only (no I/O), so it's safe on the health path.
+ *
+ * @returns {Object<string, {ready: boolean, readyState: number}>}
+ */
+export function listAppConnections() {
+  const out = {};
+  for (const [appName, conn] of Object.entries(connections)) {
+    out[appName] = { ready: conn.readyState === 1, readyState: conn.readyState };
+  }
+  return out;
+}

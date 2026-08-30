@@ -24,6 +24,23 @@ import { countTextTokens, countMessageTokens } from './tokenCounter.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+/**
+ * Read a positive integer from an env var, falling back to `fallback` when
+ * unset, unparseable, or <= 0. Keeps a typo'd env var from silently
+ * disabling the cache bound (NaN comparisons are always false, which would
+ * make the eviction loop a no-op).
+ */
+function envPositiveInt(name, fallback) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === null || raw === '') return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    logger.warn(`Ignoring invalid ${name}="${raw}" — using default ${fallback}`);
+    return fallback;
+  }
+  return parsed;
+}
+
 function normalizeMessageContent(content) {
   if (typeof content === 'string') {
     return content;
@@ -117,15 +134,22 @@ class AIService {
     this.summarizationEnabled = true; // Re-enabled with cloud approach
     this.summarizationThreshold = 8000;
 
-    // Response caching (LRU cache with 100 entries, 1h TTL).
-    // TTL keeps long-running processes from serving stale responses
-    // indefinitely when the same prompts recur; LRU caps memory.
+    // Response caching — bounded on BOTH axes:
+    //   TTL  keeps a long-lived process from serving stale completions forever
+    //   LRU  caps memory when prompt churn would otherwise grow the Map without limit
+    // A Map is insertion-ordered, so "oldest key" == least-recently-used as long
+    // as every read re-inserts (see getCachedResponse).
+    //
+    // Tunables (env, both optional):
+    //   AI_CACHE_MAX_ENTRIES  max cached responses      (default 500)
+    //   AI_CACHE_TTL_MS       entry lifetime in ms      (default 30 minutes)
     this.responseCache = new Map();
-    this.maxCacheSize = 100;
-    this.cacheTtlMs = 60 * 60 * 1000;
+    this.maxCacheSize = envPositiveInt('AI_CACHE_MAX_ENTRIES', 500);
+    this.cacheTtlMs = envPositiveInt('AI_CACHE_TTL_MS', 30 * 60 * 1000);
     this.cacheHits = 0;
     this.cacheMisses = 0;
     this.cacheExpirations = 0;
+    this.cacheEvictions = 0;
 
     // Request batching
     this.batchQueue = [];
@@ -885,14 +909,56 @@ class AIService {
    * would see content='' and zero tool_calls and fail to parse.
    */
   setCachedResponse(cacheKey, response) {
-    if (this.responseCache.size >= this.maxCacheSize) {
-      const firstKey = this.responseCache.keys().next().value;
-      this.responseCache.delete(firstKey);
-    }
+    // Delete-then-set so an overwrite moves the key to the MRU end rather than
+    // updating in place. It also means a refresh of an existing key never
+    // triggers an eviction (the old code evicted on `size >= max` before the
+    // insert, discarding a live entry to make room for one already present).
+    this.responseCache.delete(cacheKey);
     const entry = typeof response === 'object' && response !== null && !Array.isArray(response)
       ? { ...response, timestamp: Date.now() }
       : { content: response, toolCalls: null, finishReason: 'stop', timestamp: Date.now() };
     this.responseCache.set(cacheKey, entry);
+    this.enforceCacheBounds();
+  }
+
+  /**
+   * Drop expired entries, then evict least-recently-used ones until the cache
+   * fits maxCacheSize. Expired-first means a burst of writes reclaims dead
+   * entries before it starts discarding live ones.
+   */
+  enforceCacheBounds(now = Date.now()) {
+    if (this.responseCache.size > this.maxCacheSize) {
+      for (const [key, entry] of this.responseCache) {
+        if (this.responseCache.size <= this.maxCacheSize) break;
+        if (entry?.timestamp && now - entry.timestamp > this.cacheTtlMs) {
+          this.responseCache.delete(key);
+          this.cacheExpirations++;
+        }
+      }
+    }
+    while (this.responseCache.size > this.maxCacheSize) {
+      const lruKey = this.responseCache.keys().next().value;
+      if (lruKey === undefined) break;
+      this.responseCache.delete(lruKey);
+      this.cacheEvictions++;
+    }
+  }
+
+  /**
+   * Retune the cache at runtime (and in tests). Shrinking maxSize evicts
+   * immediately rather than waiting for the next write.
+   */
+  configureCache({ maxSize, ttlMs } = {}) {
+    if (maxSize !== undefined) {
+      const n = Number.parseInt(maxSize, 10);
+      if (Number.isFinite(n) && n > 0) this.maxCacheSize = n;
+    }
+    if (ttlMs !== undefined) {
+      const n = Number.parseInt(ttlMs, 10);
+      if (Number.isFinite(n) && n > 0) this.cacheTtlMs = n;
+    }
+    this.enforceCacheBounds();
+    return { maxSize: this.maxCacheSize, ttlMs: this.cacheTtlMs };
   }
 
   /**
@@ -915,6 +981,7 @@ class AIService {
       hits: this.cacheHits,
       misses: this.cacheMisses,
       expirations: this.cacheExpirations,
+      evictions: this.cacheEvictions,
       hitRate: this.cacheHits + this.cacheMisses > 0
         ? Math.round(this.cacheHits / (this.cacheHits + this.cacheMisses) * 100)
         : 0
