@@ -63,8 +63,10 @@ services:
     restart: unless-stopped
 
   basegeek:
-    image: geeksuite/basegeek:latest
+    image: ghcr.io/clintgeek/basegeek:latest
     container_name: basegeek
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
     env_file:
       - .env.production
     environment:
