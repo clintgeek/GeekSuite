@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Box } from '@mui/material';
-import { useMutation } from '@apollo/client';
+import { useApolloClient, useMutation } from '@apollo/client';
+import { addDays, format, isWithinInterval, startOfDay } from 'date-fns';
 import { useTaskContext } from '../context/TaskContext';
 import { useToast } from '../components/shared/Toast';
 import PageHeader from '../components/layout/PageHeader';
 import OverdueSection from '../components/today/OverdueSection';
 import TodaySection from '../components/today/TodaySection';
+import UpcomingSection from '../components/today/UpcomingSection';
 import CompletedSection from '../components/today/CompletedSection';
 import InlineQuickAdd from '../components/today/InlineQuickAdd';
 import SkeletonLoader from '../components/shared/SkeletonLoader';
@@ -13,11 +15,14 @@ import TaskEditor from '../components/tasks/TaskEditor';
 import useKeyboardNav from '../hooks/useKeyboardNav';
 import useGlobalShortcuts from '../hooks/useGlobalShortcuts';
 import { CREATE_NOTE } from '../graphql/notegeekMutations';
+import { GET_MONTHLY_TASKS } from '../graphql/queries';
 import { getTaskAge } from '../utils/taskAging';
 
 const TodayPage = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [editingTask, setEditingTask] = useState(null);
+  // Tasks due within the next 7 days (fetched separately from the daily view)
+  const [upcomingRangeTasks, setUpcomingRangeTasks] = useState([]);
   // Track whether fetchTasks has resolved for the current date.
   // Separate from context loading state because: (a) context starts as 'IDLE' string
   // not matching LoadingState enum, and (b) other views (Review, Plan) mutate the
@@ -25,6 +30,7 @@ const TodayPage = () => {
   const [todayLoaded, setTodayLoaded] = useState(false);
   const toast = useToast();
   const [createNote] = useMutation(CREATE_NOTE);
+  const apolloClient = useApolloClient();
   const {
     tasks,
     loading,
@@ -41,6 +47,27 @@ const TodayPage = () => {
     fetchTasks('daily', currentDate).finally(() => setTodayLoaded(true));
   }, [currentDate, fetchTasks]);
 
+  // ─── Upcoming: tasks due within the next 7 days after the viewed date ───
+  const fetchUpcoming = useCallback(async () => {
+    try {
+      const res = await apolloClient.query({
+        query: GET_MONTHLY_TASKS,
+        variables: {
+          startDate: format(addDays(currentDate, 1), 'yyyy-MM-dd'),
+          endDate: format(addDays(currentDate, 7), 'yyyy-MM-dd'),
+        },
+        fetchPolicy: 'no-cache',
+      });
+      setUpcomingRangeTasks(res.data?.monthlyTasks || []);
+    } catch (err) {
+      console.error('Failed to fetch upcoming tasks:', err);
+    }
+  }, [apolloClient, currentDate]);
+
+  useEffect(() => {
+    fetchUpcoming();
+  }, [fetchUpcoming]);
+
   const handleDateChange = useCallback((newDate) => {
     setCurrentDate(newDate);
   }, []);
@@ -48,7 +75,8 @@ const TodayPage = () => {
   const handleStatusToggle = useCallback(async (task) => {
     const newStatus = task.status === 'completed' ? 'pending' : 'completed';
     await updateTaskStatus((task.id || task._id), newStatus);
-  }, [updateTaskStatus]);
+    fetchUpcoming();
+  }, [updateTaskStatus, fetchUpcoming]);
 
   const handleEdit = useCallback((task) => {
     setEditingTask(task);
@@ -114,6 +142,29 @@ const TodayPage = () => {
 
     return { overdueTasks: overdue, activeTasks: active, completedTasks: completed };
   }, [tasks]);
+
+  // Upcoming = pending tasks with a due date within (viewed date, viewed date + 7],
+  // excluding anything already shown on this page (dedupe against daily tasks).
+  const upcomingTasks = useMemo(() => {
+    const dayStart = startOfDay(currentDate);
+    const windowStart = addDays(dayStart, 1);
+    const windowEnd = addDays(dayStart, 7);
+    const dailyIds = new Set(
+      (Array.isArray(tasks) ? tasks : []).map((t) => String(t.id || t._id))
+    );
+
+    return (Array.isArray(upcomingRangeTasks) ? upcomingRangeTasks : [])
+      .filter((task) => {
+        if (task.status === 'completed') return false;
+        if (!task.dueDate) return false;
+        if (dailyIds.has(String(task.id || task._id))) return false;
+        return isWithinInterval(startOfDay(new Date(task.dueDate)), {
+          start: windowStart,
+          end: windowEnd,
+        });
+      })
+      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+  }, [upcomingRangeTasks, tasks, currentDate]);
 
   // ─── Drag-and-drop reorder for Today's active tasks ───
   const [orderedActiveTasks, setOrderedActiveTasks] = useState(null);
@@ -208,6 +259,15 @@ const TodayPage = () => {
             onSaveAsNote={handleSaveAsNote}
             focusedTaskId={focusedTaskId}
             onReorder={handleReorder}
+          />
+
+          <UpcomingSection
+            tasks={upcomingTasks}
+            onStatusToggle={handleStatusToggle}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            onSaveAsNote={handleSaveAsNote}
+            focusedTaskId={focusedTaskId}
           />
 
           <CompletedSection

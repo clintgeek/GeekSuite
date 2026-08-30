@@ -12,6 +12,7 @@ import {
   Box,
   IconButton,
   Chip,
+  Autocomplete,
   Typography,
   useTheme,
 } from '@mui/material';
@@ -20,6 +21,7 @@ import { X, StickyNote } from 'lucide-react';
 import { useMutation } from '@apollo/client';
 import { useTaskContext } from '../../context/TaskContext.jsx';
 import { useToast } from '../shared/Toast';
+import useTaskTags from '../../hooks/useTaskTags';
 import { CREATE_NOTE } from '../../graphql/notegeekMutations';
 import { colors } from '../../theme/colors';
 import RecurringEditDialog from './RecurringEditDialog';
@@ -55,6 +57,7 @@ const TaskEditor = ({ open, onClose, task = null }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const { createTask, updateTask } = useTaskContext();
+  const existingTags = useTaskTags();
   const toast = useToast();
   const [createNote, { loading: savingNote }] = useMutation(CREATE_NOTE);
   const [formData, setFormData] = useState({
@@ -67,7 +70,6 @@ const TaskEditor = ({ open, onClose, task = null }) => {
     note: '',
     recurrencePattern: 'none',
   });
-  const [tagInput, setTagInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [recurringDialogOpen, setRecurringDialogOpen] = useState(false);
 
@@ -101,21 +103,6 @@ const TaskEditor = ({ open, onClose, task = null }) => {
 
   const handleChange = (field) => (event) => {
     setFormData({ ...formData, [field]: event.target.value });
-  };
-
-  const handleTagInputKeyDown = (event) => {
-    if (event.key === 'Enter' && tagInput.trim()) {
-      event.preventDefault();
-      const newTag = tagInput.trim();
-      if (!formData.tags.includes(newTag)) {
-        setFormData({ ...formData, tags: [...formData.tags, newTag] });
-      }
-      setTagInput('');
-    }
-  };
-
-  const handleRemoveTag = (tagToRemove) => {
-    setFormData({ ...formData, tags: formData.tags.filter((t) => t !== tagToRemove) });
   };
 
   const handleSaveAsNote = async () => {
@@ -372,33 +359,44 @@ const TaskEditor = ({ open, onClose, task = null }) => {
               />
             </Box>
 
-            {/* Tags */}
+            {/* Tags — pick from existing or type new (Enter/comma) */}
             <Box sx={{ mb: 2 }}>
-              <TextField
-                label="Add tags"
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={handleTagInputKeyDown}
-                placeholder="Press Enter to add"
-                fullWidth
-                size="small"
+              <Autocomplete
+                multiple
+                freeSolo
+                options={existingTags}
+                value={formData.tags}
+                onChange={(event, newValue) =>
+                  setFormData({ ...formData, tags: newValue })
+                }
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Tags"
+                    placeholder={formData.tags.length ? 'Add another…' : 'Pick or type a tag'}
+                    size="small"
+                  />
+                )}
+                renderTags={(value, getTagProps) =>
+                  value.map((tag, index) => {
+                    const { key, ...chipProps } = getTagProps({ index });
+                    return (
+                      <Chip
+                        key={key}
+                        label={tag}
+                        size="small"
+                        sx={{
+                          fontWeight: 500,
+                          fontSize: '0.75rem',
+                          backgroundColor: isDark ? 'rgba(96,152,204,0.15)' : colors.primary[50],
+                          color: colors.primary[600],
+                        }}
+                        {...chipProps}
+                      />
+                    );
+                  })
+                }
               />
-              {formData.tags.length > 0 && (
-                <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                  {formData.tags.map((tag) => (
-                    <Chip
-                      key={tag}
-                      label={tag}
-                      onDelete={() => handleRemoveTag(tag)}
-                      size="small"
-                      sx={{
-                        fontWeight: 500,
-                        fontSize: '0.75rem',
-                      }}
-                    />
-                  ))}
-                </Box>
-              )}
             </Box>
           </Box>
 

@@ -1,10 +1,12 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } from 'react';
 import { Box, InputBase, Typography, useTheme } from '@mui/material';
+import { Hash } from 'lucide-react';
 import { useMutation } from '@apollo/client';
 import { colors } from '../../theme/colors';
 import { useToast } from '../shared/Toast';
 import TaskInputHelpButton from '../tasks/TaskInputHelpButton';
 import parseTaskInput from '../../utils/parseTaskInput';
+import useTaskTags from '../../hooks/useTaskTags';
 import { CREATE_NOTE } from '../../graphql/notegeekMutations';
 
 /* ---------- tokenizer ---------- */
@@ -167,6 +169,15 @@ const InlineQuickAdd = ({ onAdd, autoFocus = false }) => {
   const [focused, setFocused] = useState(false);
   const toast = useToast();
   const [createNote] = useMutation(CREATE_NOTE);
+  const allTags = useTaskTags();
+
+  // ─── Tag autocomplete (#-triggered) ───
+  const [caretPos, setCaretPos] = useState(0);
+  const [dismissedKey, setDismissedKey] = useState(null);
+  const [highlightIndex, setHighlightIndex] = useState(0);
+  const [anchorX, setAnchorX] = useState(0);
+  const measureRef = useRef(null);
+  const pendingCaretRef = useRef(null);
 
   useEffect(() => {
     if (autoFocus) {
@@ -190,6 +201,82 @@ const InlineQuickAdd = ({ onAdd, autoFocus = false }) => {
 
   // Reset scroll sync whenever value changes (cursor may have moved)
   useEffect(() => { syncScroll(); }, [value, syncScroll]);
+
+  const updateCaret = useCallback(() => {
+    setCaretPos(inputRef.current?.selectionStart ?? 0);
+  }, []);
+
+  // Is the caret inside a (possibly empty) #tag token?
+  const activeTag = useMemo(() => {
+    if (!value) return null;
+    const beforeCaret = value.slice(0, caretPos);
+    const m = beforeCaret.match(/#([a-zA-Z0-9_-]*)$/);
+    if (!m) return null;
+    return { start: caretPos - m[0].length, query: m[1], raw: m[0] };
+  }, [value, caretPos]);
+
+  const tagSuggestions = useMemo(() => {
+    if (!activeTag) return [];
+    const q = activeTag.query.toLowerCase();
+    const matches = allTags.filter((t) => {
+      const lt = t.toLowerCase();
+      return lt.startsWith(q) && lt !== q;
+    });
+    return (q ? matches : allTags).slice(0, 6);
+  }, [activeTag, allTags]);
+
+  const dismissKey = activeTag ? `${activeTag.start}:${activeTag.query}` : null;
+  const tagMenuOpen = Boolean(activeTag) && dismissedKey !== dismissKey && tagSuggestions.length > 0;
+
+  // Keep the highlighted suggestion valid
+  useEffect(() => {
+    setHighlightIndex(0);
+  }, [dismissKey]);
+
+  const applyTagSuggestion = useCallback((tag) => {
+    if (!activeTag || !tag) return;
+    const nextCaret = activeTag.start + tag.length + 2; // '#tag '
+    setValue(
+      value.slice(0, activeTag.start) + '#' + tag + ' ' + value.slice(caretPos)
+    );
+    pendingCaretRef.current = nextCaret;
+    inputRef.current?.focus();
+  }, [activeTag, value, caretPos]);
+
+  // Apply pending caret position after the value update renders
+  useEffect(() => {
+    if (pendingCaretRef.current != null && inputRef.current) {
+      const pos = pendingCaretRef.current;
+      pendingCaretRef.current = null;
+      inputRef.current.setSelectionRange(pos, pos);
+      syncScroll();
+    }
+  }, [value, syncScroll]);
+
+  // Measure the pixel offset of the '#' so the menu opens at the caret.
+  // The hidden mirror span lives inside the syntax overlay (identical typography).
+  useLayoutEffect(() => {
+    if (measureRef.current) {
+      setAnchorX(Math.max(0, Math.min(measureRef.current.offsetWidth, 360)));
+    }
+  }, [activeTag?.start, value]);
+
+  const handleTagMenuKeyDown = (e) => {
+    if (!tagMenuOpen) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightIndex((i) => (i + 1) % tagSuggestions.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightIndex((i) => (i - 1 + tagSuggestions.length) % tagSuggestions.length);
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      applyTagSuggestion(tagSuggestions[highlightIndex] || tagSuggestions[0]);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setDismissedKey(dismissKey);
+    }
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -315,6 +402,15 @@ const InlineQuickAdd = ({ onAdd, autoFocus = false }) => {
                       {seg.text}
                     </span>
                   ))}
+                  {activeTag && (
+                    <span
+                      ref={measureRef}
+                      aria-hidden
+                      style={{ visibility: 'hidden', position: 'absolute', whiteSpace: 'pre' }}
+                    >
+                      {value.slice(0, activeTag.start)}
+                    </span>
+                  )}
                 </Box>
               </Box>
             )}
@@ -322,7 +418,12 @@ const InlineQuickAdd = ({ onAdd, autoFocus = false }) => {
             <InputBase
               inputRef={inputRef}
               value={value}
-              onChange={(e) => setValue(e.target.value)}
+              onChange={(e) => {
+                setValue(e.target.value);
+                updateCaret();
+              }}
+              onKeyDown={handleTagMenuKeyDown}
+              onSelect={updateCaret}
               onFocus={() => setFocused(true)}
               onBlur={() => setFocused(false)}
               placeholder={focused ? 'Write a task\u2026  #tag  !high  /tomorrow  (daily)  ^note' : 'What needs to happen today?'}
@@ -352,6 +453,52 @@ const InlineQuickAdd = ({ onAdd, autoFocus = false }) => {
                 'data-quickadd': true,
               }}
             />
+
+            {/* Tag autocomplete popup — opens at the '#' position */}
+            {tagMenuOpen && (
+              <Box
+                sx={{
+                  position: 'absolute',
+                  top: 'calc(100% + 4px)',
+                  left: anchorX,
+                  zIndex: 20,
+                  minWidth: 160,
+                  maxWidth: 280,
+                  py: 0.5,
+                  borderRadius: '8px',
+                  backgroundColor: theme.palette.background.paper,
+                  border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : colors.ink[200]}`,
+                  boxShadow: '0 8px 24px rgba(28,20,14,0.14)',
+                }}
+              >
+                {tagSuggestions.map((tag, i) => (
+                  <Box
+                    key={tag}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => applyTagSuggestion(tag)}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                      px: 1.25,
+                      py: 0.75,
+                      cursor: 'pointer',
+                      fontSize: '0.8125rem',
+                      fontWeight: i === highlightIndex ? 550 : 450,
+                      color: i === highlightIndex ? colors.primary[600] : theme.palette.text.primary,
+                      backgroundColor:
+                        i === highlightIndex
+                          ? (isDark ? 'rgba(96,152,204,0.12)' : colors.primary[50])
+                          : 'transparent',
+                      '&:hover': { backgroundColor: isDark ? 'rgba(96,152,204,0.12)' : colors.primary[50] },
+                    }}
+                  >
+                    <Hash size={12} style={{ color: colors.primary[500], flexShrink: 0 }} />
+                    {tag}
+                  </Box>
+                ))}
+              </Box>
+            )}
           </Box>
           <TaskInputHelpButton compact />
         </Box>
