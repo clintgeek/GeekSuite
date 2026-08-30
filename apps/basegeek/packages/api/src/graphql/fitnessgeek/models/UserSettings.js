@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { getAppConnection } from '../../shared/appConnections.js';
+import { requireUser } from '../ownership.js';
 
 const fitnessConn = getAppConnection('fitnessgeek');
 
@@ -271,6 +272,7 @@ userSettingsSchema.index({ user_id: 1 }, { unique: true });
 
 // Static method to get or create user settings
 userSettingsSchema.statics.getOrCreate = async function(userId) {
+  requireUser(userId);
   let settings = await this.findOne({ user_id: userId });
 
   if (!settings) {
@@ -283,9 +285,14 @@ userSettingsSchema.statics.getOrCreate = async function(userId) {
 
 // Static method to update user settings
 userSettingsSchema.statics.updateSettings = async function(userId, updateData) {
+  requireUser(userId);
+  // An empty $set is a MongoDB error, so fall back to a plain upsert.
+  const update = Object.keys(updateData || {}).length
+    ? { $set: updateData }
+    : { $setOnInsert: { user_id: userId } };
   const settings = await this.findOneAndUpdate(
     { user_id: userId },
-    { $set: updateData },
+    update,
     { upsert: true, new: true }
   );
 

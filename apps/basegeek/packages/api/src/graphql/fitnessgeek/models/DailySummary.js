@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { getAppConnection } from '../../shared/appConnections.js';
+import { requireUser } from '../ownership.js';
 
 const fitnessConn = getAppConnection('fitnessgeek');
 
@@ -107,6 +108,7 @@ function toUtcDate(input) {
 
 // Static method to get or create daily summary
 dailySummarySchema.statics.getOrCreate = async function(userId, date) {
+  requireUser(userId);
   const startDate = toUtcDate(date);
   startDate.setUTCHours(0, 0, 0, 0);
 
@@ -128,6 +130,7 @@ dailySummarySchema.statics.getOrCreate = async function(userId, date) {
 
 // Static method to update daily summary from food logs
 dailySummarySchema.statics.updateFromLogs = async function(userId, date) {
+  requireUser(userId);
   const FoodLog = fitnessConn.model('FoodLog');
 
   const startDate = toUtcDate(date);
@@ -219,6 +222,7 @@ dailySummarySchema.statics.updateFromLogs = async function(userId, date) {
 
 // Static method to get summary for date range
 dailySummarySchema.statics.getSummaryRange = async function(userId, startDate, endDate) {
+  requireUser(userId);
   const start = toUtcDate(startDate);
   start.setUTCHours(0, 0, 0, 0);
 

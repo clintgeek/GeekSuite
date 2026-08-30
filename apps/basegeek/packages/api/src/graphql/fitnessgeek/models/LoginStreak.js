@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { getAppConnection } from '../../shared/appConnections.js';
+import { requireUser } from '../ownership.js';
 
 const fitnessConn = getAppConnection('fitnessgeek');
 
@@ -42,6 +43,7 @@ loginStreakSchema.index({ user_id: 1 });
 
 // Static method to get or create login streak for user
 loginStreakSchema.statics.getOrCreateStreak = async function(userId) {
+  requireUser(userId);
   let streak = await this.findOne({ user_id: userId });
 
   if (!streak) {

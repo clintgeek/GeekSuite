@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { getAppConnection } from '../../shared/appConnections.js';
+import { requireUser } from '../ownership.js';
 
 const fitnessConn = getAppConnection('fitnessgeek');
 
@@ -68,6 +69,7 @@ nutritionGoalsSchema.index({ user_id: 1, is_active: 1 });
 
 // Static method to get active goals for user
 nutritionGoalsSchema.statics.getActiveGoals = async function(userId) {
+  requireUser(userId);
   return await this.findOne({
     user_id: userId,
     is_active: true
@@ -76,6 +78,7 @@ nutritionGoalsSchema.statics.getActiveGoals = async function(userId) {
 
 // Static method to create new goals (deactivates old ones)
 nutritionGoalsSchema.statics.createGoals = async function(userId, goalsData) {
+  requireUser(userId);
   // Deactivate existing goals
   await this.updateMany(
     { user_id: userId, is_active: true },
@@ -93,6 +96,7 @@ nutritionGoalsSchema.statics.createGoals = async function(userId, goalsData) {
 
 // Static method to update existing goals
 nutritionGoalsSchema.statics.updateGoals = async function(userId, goalsData) {
+  requireUser(userId);
   const existingGoals = await this.findOne({
     user_id: userId,
     is_active: true

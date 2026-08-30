@@ -16,6 +16,21 @@ import BloodPressure from './models/BloodPressure.js';
 import LoginStreak from './models/LoginStreak.js';
 import DailySummary from './models/DailySummary.js';
 import WeightGoals from './models/WeightGoals.js';
+import { isValidObjectId } from './ownership.js';
+
+/**
+ * Validate every food_item_id a client hands us before it is persisted onto a
+ * meal or a log. Global catalog foods and the caller's own foods are allowed;
+ * another user's private food is rejected, so a crafted id can't be used to
+ * read back somebody else's nutrition data through a populated response.
+ */
+const assertAccessibleFoodItems = async (items, userId) => {
+  const ids = (items || []).map((i) => i?.food_item_id).filter(Boolean);
+  if (!ids.length) return;
+  const unique = [...new Set(ids.map(String))];
+  const found = await FoodItem.findAccessibleMany(unique, userId);
+  if (found.length !== unique.length) throw new Error('Food item not found');
+};
 
 // FitnessJSON scalar — arbitrary JSON passthrough for settings sub-objects
 const FitnessJSONScalar = new GraphQLScalarType({
@@ -324,7 +339,9 @@ export const resolvers = {
     },
     fitnessFood: async (_, { id }, { user }) => {
       if (!user) throw new Error('Unauthorized');
-      return FoodItem.findOne({ _id: id, is_deleted: false });
+      // Shared catalog read: global foods stay visible to everyone, but another
+      // user's private custom food resolves to null.
+      return FoodItem.findAccessible(id, user.id);
     },
     foodLogs: async (_, { date, startDate, endDate, mealType }, { user }) => {
       if (!user) throw new Error('Unauthorized');
@@ -338,6 +355,7 @@ export const resolvers = {
     },
     foodLog: async (_, { id }, { user }) => {
       if (!user) throw new Error('Unauthorized');
+      if (!isValidObjectId(id)) return null;
       return FoodLog.findOne({ _id: id, user_id: user.id }).populate('food_item_id');
     },
     fitnessMeals: async (_, { mealType }, { user }) => {
@@ -347,7 +365,8 @@ export const resolvers = {
     },
     fitnessMeal: async (_, { id }, { user }) => {
       if (!user) throw new Error('Unauthorized');
-      return Meal.findOne({ _id: id, is_deleted: false }).populate('food_items.food_item_id');
+      const meal = await Meal.findOwned(id, user.id);
+      return meal ? meal.populate('food_items.food_item_id') : null;
     },
     fitnessMedications: async (_, __, { user }) => {
       if (!user) throw new Error('Unauthorized');
@@ -722,12 +741,14 @@ export const resolvers = {
 
     logMeal: async (_, { mealId, date, mealType }, { user }) => {
       if (!user) throw new Error('Unauthorized');
-      const meal = await Meal.findById(mealId).populate('food_items.food_item_id');
-      if (!meal) throw new Error('Meal not found');
+      const owned = await Meal.findOwned(mealId, user.id);
+      if (!owned) throw new Error('Meal not found');
+      const meal = await owned.populate('food_items.food_item_id');
 
       const logs = [];
       const logDate = date || format(new Date(), 'yyyy-MM-dd');
       for (const item of meal.food_items) {
+        if (!item.food_item_id) continue; // dangling/deleted catalog reference
         const log = new FoodLog({
           user_id: user.id,
           food_item_id: item.food_item_id._id,
@@ -741,13 +762,17 @@ export const resolvers = {
       }
 
       await DailySummary.updateFromLogs(user.id, logDate);
-      return FoodLog.find({ _id: { $in: logs.map(l => l._id) } }).populate('food_item_id');
+      return FoodLog.find({ _id: { $in: logs.map(l => l._id) }, user_id: user.id }).populate('food_item_id');
     },
     updateFitnessUserSettings: async (_, { input }, { user }) => {
       if (!user) throw new Error('Unauthorized');
       
-      const { theme, ...otherSettings } = input;
-      
+      // `household` is deliberately NOT writable here: membership and the
+      // share flags go through create/join/leave/updateFitnessHouseholdSettings,
+      // which enforce the "one household at a time" invariant. Accepting it as
+      // free-form JSON let a client silently graft itself onto any household id.
+      const { theme, household: _ignoredHousehold, ...otherSettings } = input;
+
       const promises = [UserSettings.updateSettings(user.id, otherSettings)];
       
       if (theme) {
@@ -816,7 +841,7 @@ export const resolvers = {
     },
     addFoodLog: async (_, { input }, { user }) => {
       if (!user) throw new Error('Unauthorized');
-      const food = await FoodItem.findById(input.food_item_id);
+      const food = await FoodItem.findAccessible(input.food_item_id, user.id);
       if (!food) throw new Error('Food item not found');
       const log = new FoodLog({ ...input, user_id: user.id, nutrition: input.nutrition || food.nutrition });
       await log.save();
@@ -824,6 +849,8 @@ export const resolvers = {
     },
     updateFoodLog: async (_, { id, input }, { user }) => {
       if (!user) throw new Error('Unauthorized');
+      if (!isValidObjectId(id)) throw new Error('Food log not found');
+      if (input?.food_item_id) await assertAccessibleFoodItems([input], user.id);
       const log = await FoodLog.findOneAndUpdate({ _id: id, user_id: user.id }, { ...input, updated_at: new Date() }, { new: true }).populate('food_item_id');
       if (!log) throw new Error('Food log not found');
       return log;
@@ -835,18 +862,24 @@ export const resolvers = {
     },
     addFitnessMeal: async (_, { input }, { user }) => {
       if (!user) throw new Error('Unauthorized');
+      await assertAccessibleFoodItems(input?.food_items, user.id);
       const meal = new Meal({ ...input, user_id: user.id });
       await meal.save();
       return meal.populate('food_items.food_item_id');
     },
     updateFitnessMeal: async (_, { id, input }, { user }) => {
       if (!user) throw new Error('Unauthorized');
-      const meal = await Meal.findOneAndUpdate({ _id: id, $or: [{ user_id: user.id }, { user_id: null }] }, { ...input, updated_at: new Date() }, { new: true }).populate('food_items.food_item_id');
+      if (!isValidObjectId(id)) throw new Error('Meal not found or unauthorized');
+      await assertAccessibleFoodItems(input?.food_items, user.id);
+      // Owner-scoped only: the previous `$or: [{ user_id: null }]` branch let
+      // any authenticated user rewrite ownerless (shared) meal rows.
+      const meal = await Meal.findOneAndUpdate({ _id: id, user_id: user.id }, { ...input, updated_at: new Date() }, { new: true }).populate('food_items.food_item_id');
       if (!meal) throw new Error('Meal not found or unauthorized');
       return meal;
     },
     deleteFitnessMeal: async (_, { id }, { user }) => {
       if (!user) throw new Error('Unauthorized');
+      if (!isValidObjectId(id)) return false;
       const result = await Meal.findOneAndUpdate({ _id: id, user_id: user.id }, { is_deleted: true, updated_at: new Date() });
       return !!result;
     },

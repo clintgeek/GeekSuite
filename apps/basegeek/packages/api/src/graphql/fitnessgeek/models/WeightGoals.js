@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { getAppConnection } from '../../shared/appConnections.js';
+import { requireUser } from '../ownership.js';
 
 const fitnessConn = getAppConnection('fitnessgeek');
 
@@ -44,6 +45,7 @@ weightGoalsSchema.index({ user_id: 1, is_active: 1 });
 
 // Static method to get active weight goals for user
 weightGoalsSchema.statics.getActiveWeightGoals = async function(userId) {
+  requireUser(userId);
   return await this.findOne({
     user_id: userId,
     is_active: true
@@ -52,6 +54,7 @@ weightGoalsSchema.statics.getActiveWeightGoals = async function(userId) {
 
 // Static method to create new weight goals (deactivates old ones)
 weightGoalsSchema.statics.createWeightGoals = async function(userId, goalsData) {
+  requireUser(userId);
   // Deactivate existing goals
   await this.updateMany(
     { user_id: userId, is_active: true },
@@ -69,6 +72,7 @@ weightGoalsSchema.statics.createWeightGoals = async function(userId, goalsData) 
 
 // Static method to update existing weight goals
 weightGoalsSchema.statics.updateWeightGoals = async function(userId, goalsData) {
+  requireUser(userId);
   const existingGoals = await this.findOne({
     user_id: userId,
     is_active: true

@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { getAppConnection } from '../../shared/appConnections.js';
+import { requireUser, isValidObjectId } from '../ownership.js';
 
 const fitnessConn = getAppConnection('fitnessgeek');
 
@@ -54,26 +55,41 @@ mealSchema.pre('save', function(next) {
   next();
 });
 
+// Meals are personal data: every lookup below is owner-scoped, and a missing
+// userId is a hard failure rather than a silent "return everybody's meals".
+
+// Load one meal by id, scoped to its owner. Returns null when the id is
+// malformed, missing, deleted, or owned by somebody else — callers must not be
+// able to tell those cases apart.
+mealSchema.statics.findOwned = async function(mealId, userId) {
+  requireUser(userId);
+  if (!isValidObjectId(mealId)) return null;
+  return this.findOne({ _id: mealId, user_id: userId, is_deleted: false });
+};
+
 // Get all active meals for a user
 mealSchema.statics.getActiveMeals = async function(userId) {
-  const query = { is_deleted: false };
-  if (userId) query.user_id = userId;
-  return this.find(query).populate('food_items.food_item_id').sort({ name: 1 });
+  requireUser(userId);
+  return this.find({ is_deleted: false, user_id: userId })
+    .populate('food_items.food_item_id')
+    .sort({ name: 1 });
 };
 
 // Get meals by meal type for a user
 mealSchema.statics.getMealsByType = async function(mealType, userId) {
-  const query = { meal_type: mealType, is_deleted: false };
-  if (userId) query.user_id = userId;
-  return this.find(query).populate('food_items.food_item_id').sort({ name: 1 });
+  requireUser(userId);
+  return this.find({ meal_type: mealType, is_deleted: false, user_id: userId })
+    .populate('food_items.food_item_id')
+    .sort({ name: 1 });
 };
 
 // Search meals by name for a user
 mealSchema.statics.searchMeals = async function(searchTerm, userId) {
+  requireUser(userId);
   const regex = new RegExp(searchTerm, 'i');
-  const query = { name: regex, is_deleted: false };
-  if (userId) query.user_id = userId;
-  return this.find(query).populate('food_items.food_item_id').sort({ name: 1 });
+  return this.find({ name: regex, is_deleted: false, user_id: userId })
+    .populate('food_items.food_item_id')
+    .sort({ name: 1 });
 };
 
 // Calculate total nutrition for the meal

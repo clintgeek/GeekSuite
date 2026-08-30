@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { getAppConnection } from '../../shared/appConnections.js';
+import { requireUser } from '../ownership.js';
 
 const fitnessConn = getAppConnection('fitnessgeek');
 
@@ -116,6 +117,7 @@ function toUtcDate(date) {
 
 // Static method to get logs for a specific date
 foodLogSchema.statics.getLogsForDate = async function(userId, date) {
+  requireUser(userId);
   const startDate = toUtcDate(date);
   startDate.setUTCHours(0, 0, 0, 0);
 
@@ -132,6 +134,7 @@ foodLogSchema.statics.getLogsForDate = async function(userId, date) {
 
 // Static method to get logs for a date range
 foodLogSchema.statics.getLogsForDateRange = async function(userId, startDate, endDate) {
+  requireUser(userId);
   const start = toUtcDate(startDate);
   start.setUTCHours(0, 0, 0, 0);
 
@@ -148,6 +151,7 @@ foodLogSchema.statics.getLogsForDateRange = async function(userId, startDate, en
 
 // Static method to get recent logs
 foodLogSchema.statics.getRecentLogs = async function(userId, limit = 10) {
+  requireUser(userId);
   return await this.find({ user_id: userId })
     .populate('food_item_id')
     .sort({ created_at: -1 })
@@ -156,6 +160,7 @@ foodLogSchema.statics.getRecentLogs = async function(userId, limit = 10) {
 
 // Static method to get logs by meal type
 foodLogSchema.statics.getLogsByMealType = async function(userId, mealType, date) {
+  requireUser(userId);
   const startDate = toUtcDate(date);
   startDate.setUTCHours(0, 0, 0, 0);
 

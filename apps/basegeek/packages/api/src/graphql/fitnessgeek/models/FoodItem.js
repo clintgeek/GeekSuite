@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { getAppConnection } from '../../shared/appConnections.js';
+import { requireUser, isValidObjectId, foodCatalogFilter } from '../ownership.js';
 
 const fitnessConn = getAppConnection('fitnessgeek');
 
@@ -113,6 +114,23 @@ foodItemSchema.virtual('totalCalories').get(function() {
 // Method to check if food is global (not user-specific)
 foodItemSchema.methods.isGlobal = function() {
   return !this.user_id;
+};
+
+// Catalog read scope: global foods (no user_id) plus the caller's own custom
+// foods. Deliberately shared — global entries stay readable by everyone — but
+// another user's PRIVATE custom food is not exposed.
+foodItemSchema.statics.findAccessible = async function(id, userId) {
+  requireUser(userId);
+  if (!isValidObjectId(id)) return null;
+  return this.findOne({ _id: id, is_deleted: false, ...foodCatalogFilter(userId) });
+};
+
+// Bulk variant used to validate food_item_id references supplied by clients.
+foodItemSchema.statics.findAccessibleMany = async function(ids, userId) {
+  requireUser(userId);
+  const valid = (ids || []).filter(isValidObjectId);
+  if (!valid.length) return [];
+  return this.find({ _id: { $in: valid }, is_deleted: false, ...foodCatalogFilter(userId) });
 };
 
 // Static method to find or create food item
