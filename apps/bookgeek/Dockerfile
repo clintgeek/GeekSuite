@@ -10,7 +10,7 @@ COPY packages ./packages
 COPY apps/bookgeek ./apps/bookgeek
 
 # Install ALL workspace deps (resolves workspace:* links)
-RUN npm install -g pnpm
+RUN npm install -g pnpm@10
 RUN pnpm install --frozen-lockfile
 
 # Build frontend using Vite
@@ -30,7 +30,7 @@ RUN apt-get update && apt-get install -y \
 RUN mkdir -p /data/library /data/covers /data/temp
 
 WORKDIR /app
-RUN npm install -g pnpm
+RUN npm install -g pnpm@10
 
 # Copy workspace manifests + shared packages + api
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./

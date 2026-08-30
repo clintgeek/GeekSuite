@@ -12,7 +12,7 @@ COPY packages ./packages
 COPY apps/basegeek ./apps/basegeek
 
 # Install ALL workspace deps (resolves workspace:* links)
-RUN npm install -g pnpm
+RUN npm install -g pnpm@10
 RUN pnpm install
 
 # Build the frontend (UI)

@@ -10,7 +10,7 @@ COPY packages ./packages
 COPY apps/flockgeek ./apps/flockgeek
 
 # Install ALL workspace deps (resolves workspace:* links + frontend/backend deps)
-RUN npm install -g pnpm
+RUN npm install -g pnpm@10
 RUN pnpm install --frozen-lockfile
 
 # ---------- Build frontend ----------
@@ -22,7 +22,7 @@ FROM node:20-alpine AS prod
 
 WORKDIR /app
 RUN apk add --no-cache vips
-RUN npm install -g pnpm
+RUN npm install -g pnpm@10
 
 # Copy workspace manifests + shared packages + backend
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
