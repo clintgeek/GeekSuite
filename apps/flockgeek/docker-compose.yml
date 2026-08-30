@@ -1,8 +1,14 @@
 services:
   flockgeek:
-    image: geeksuite/flockgeek:latest
+    image: ghcr.io/clintgeek/flockgeek:latest
     container_name: flockgeek
     restart: unless-stopped
+
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+
+    networks:
+      - datageek_network
 
     env_file:
       - .env.production
@@ -14,3 +20,7 @@ services:
 
     ports:
       - "5001:5001"
+
+networks:
+  datageek_network:
+    external: true

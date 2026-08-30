@@ -1,8 +1,14 @@
 services:
   fitnessgeek:
-    image: geeksuite/fitnessgeek:latest
+    image: ghcr.io/clintgeek/fitnessgeek:latest
     container_name: fitnessgeek
     restart: unless-stopped
+
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+
+    networks:
+      - datageek_network
 
     env_file:
       - .env.production
@@ -35,3 +41,7 @@ services:
 
     ports:
       - "4080:3001"
+
+networks:
+  datageek_network:
+    external: true

@@ -1,8 +1,10 @@
 services:
   storygeek:
-    image: geeksuite/storygeek:latest
+    image: ghcr.io/clintgeek/storygeek:latest
     container_name: storygeek
     restart: unless-stopped
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
     environment:
       TZ: America/Chicago
       NODE_ENV: production

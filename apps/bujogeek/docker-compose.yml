@@ -1,8 +1,14 @@
 services:
   bujogeek:
-    image: geeksuite/bujogeek:latest
+    image: ghcr.io/clintgeek/bujogeek:latest
     container_name: bujogeek
     restart: unless-stopped
+
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+
+    networks:
+      - datageek_network
 
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -29,3 +35,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
+networks:
+  datageek_network:
+    external: true

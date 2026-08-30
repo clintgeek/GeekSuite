@@ -1,9 +1,15 @@
 
 services:
   bookgeek:
-    image: geeksuite/bookgeek:latest
+    image: ghcr.io/clintgeek/bookgeek:latest
     container_name: bookgeek
     restart: unless-stopped
+
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+
+    networks:
+      - datageek_network
 
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -33,3 +39,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
+networks:
+  datageek_network:
+    external: true
