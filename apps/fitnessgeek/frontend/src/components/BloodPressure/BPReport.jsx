@@ -25,6 +25,7 @@ import {
 } from '@mui/icons-material';
 import BPChartNivo from './BPChartNivo.jsx';
 import { categorizeBP } from '../../utils/bpUtils.js';
+import { getTodayLocal } from '../../utils/dateUtils';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
@@ -139,7 +140,7 @@ const BPReport = ({ bpLogs, onClose }) => {
         heightLeft -= pageHeight;
       }
 
-      pdf.save(`blood-pressure-report-${new Date().toISOString().split('T')[0]}.pdf`);
+      pdf.save(`blood-pressure-report-${getTodayLocal()}.pdf`);
     } catch (error) {
       console.error('Error generating PDF:', error);
     }
@@ -182,7 +183,7 @@ const BPReport = ({ bpLogs, onClose }) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `blood-pressure-report-${new Date().toISOString().split('T')[0]}.md`;
+    a.download = `blood-pressure-report-${getTodayLocal()}.md`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -206,7 +207,7 @@ const BPReport = ({ bpLogs, onClose }) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `blood-pressure-readings-${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `blood-pressure-readings-${getTodayLocal()}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

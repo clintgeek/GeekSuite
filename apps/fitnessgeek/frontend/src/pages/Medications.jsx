@@ -10,6 +10,7 @@ import MedicationIcon from '@mui/icons-material/Medication';
 import LocalPharmacyIcon from '@mui/icons-material/LocalPharmacy';
 import WarningIcon from '@mui/icons-material/Warning';
 import medsService from '../services/medsService.js';
+import { getTodayLocal } from '../utils/dateUtils';
 import { Surface, SectionLabel, DisplayHeading, EmptyState } from '../components/primitives';
 
 const TIME_OPTIONS = ['morning', 'afternoon', 'evening', 'bedtime'];
@@ -123,7 +124,7 @@ export default function Medications() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `medications_${new Date().toISOString().slice(0,10)}.txt`;
+    a.download = `medications_${getTodayLocal()}.txt`;
     document.body.appendChild(a);
     a.click();
     URL.revokeObjectURL(url);
@@ -254,7 +255,7 @@ export default function Medications() {
       doc.text(`Page ${i} of ${pageCount}`, page.w - margin - 80, page.h - margin / 2);
     }
 
-    doc.save(`medications_${new Date().toISOString().slice(0,10)}.pdf`);
+    doc.save(`medications_${getTodayLocal()}.pdf`);
   };
 
   useEffect(() => {
@@ -298,7 +299,7 @@ export default function Medications() {
     times_of_day: timesOfDay,
     suggested_indications: details?.suggested || editingMed?.suggested_indications || [],
     user_indications: userTags,
-    supply_start_date: currentDaysSupply ? new Date().toISOString().slice(0,10) : null,
+    supply_start_date: currentDaysSupply ? getTodayLocal() : null,
     days_supply: currentDaysSupply ? Number(currentDaysSupply) : null,
   });
 

@@ -145,8 +145,8 @@ const createWeightLog = async (req, res) => {
       const settings = await UserSettings.getOrCreate(userId);
       if (settings?.garmin?.enabled) {
         const garmin = require('../services/garminConnectService');
-        // Use local date string for clarity
-        const ymd = new Date(parsedDate.getTime() - parsedDate.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+        // parsedDate is stored UTC-midnight; read the calendar day back in UTC.
+        const ymd = parsedDate.toISOString().split('T')[0];
         await garmin.updateWeightToGarmin(userId, ymd, weightLog.weight_value, Intl.DateTimeFormat().resolvedOptions().timeZone);
         logger.info(`Pushed weight to Garmin for user ${userId} on ${ymd}`);
       }
@@ -212,7 +212,7 @@ const updateWeightLog = async (req, res) => {
       const settings = await UserSettings.getOrCreate(userId);
       if (settings?.garmin?.enabled) {
         const garmin = require('../services/garminConnectService');
-        const ymd = new Date(weightLog.log_date.getTime() - weightLog.log_date.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+        const ymd = weightLog.log_date.toISOString().split('T')[0];
         await garmin.updateWeightToGarmin(userId, ymd, weightLog.weight_value, Intl.DateTimeFormat().resolvedOptions().timeZone);
         logger.info(`Pushed updated weight to Garmin for user ${userId} on ${ymd}`);
       }

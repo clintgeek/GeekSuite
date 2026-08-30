@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
 const DailySummary = require('../models/DailySummary');
+const { format } = require('date-fns');
 const logger = require('../config/logger');
 
 // Apply authentication to all routes
@@ -11,9 +12,8 @@ router.use(authenticateToken);
 router.get('/today', async (req, res) => {
   try {
     const userId = req.user.id;
-    // Local today in YYYY-MM-DD
-    const now = new Date();
-    const today = now.toISOString().split('T')[0];
+    // Local today in YYYY-MM-DD (calendar day, not the UTC instant)
+    const today = format(new Date(), 'yyyy-MM-dd');
 
     const summary = await DailySummary.updateFromLogs(userId, today);
 

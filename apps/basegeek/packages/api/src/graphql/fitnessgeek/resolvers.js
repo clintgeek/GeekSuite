@@ -398,7 +398,7 @@ export const resolvers = {
 
     dailySummary: async (_, { date }, { user }) => {
       if (!user) throw new Error('Unauthorized');
-      const targetDate = date || new Date().toISOString().split('T')[0];
+      const targetDate = date || format(new Date(), 'yyyy-MM-dd');
       const settings = await UserSettings.findOne({ user_id: user.id });
       const calorieGoal = settings?.nutrition_goal?.daily_calorie_target || null;
       const summary = await DailySummary.updateFromLogs(user.id, targetDate);

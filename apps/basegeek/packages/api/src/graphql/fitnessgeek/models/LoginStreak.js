@@ -62,16 +62,19 @@ loginStreakSchema.statics.getOrCreateStreak = async function(userId) {
 
 // Method to record a login and update streak
 loginStreakSchema.methods.recordLogin = async function() {
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0); // Start of day
+  // "Today" is the user's local calendar day, stored as UTC midnight so it
+  // lines up with the UTC-midnight dates read back elsewhere. Truncating the
+  // instant with setUTCHours would roll to tomorrow after ~18:00 US-Central.
+  const now = new Date();
+  const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
 
   const lastLogin = this.last_login_date ? new Date(this.last_login_date) : null;
   if (lastLogin) {
-    lastLogin.setUTCHours(0, 0, 0, 0); // Start of day
+    lastLogin.setUTCHours(0, 0, 0, 0); // Start of day (already UTC midnight)
   }
 
   const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
+  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
 
   // Check if this is a consecutive day
   if (!lastLogin || lastLogin.getTime() === yesterday.getTime()) {
