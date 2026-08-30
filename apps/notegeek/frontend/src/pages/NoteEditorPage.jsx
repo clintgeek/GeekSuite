@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { Box, CircularProgress, Typography, Button, Paper, Stack, alpha, useTheme } from '@mui/material';
-import {
-  TextFields as TextIcon,
-  Description as MarkdownIcon,
-  Code as CodeIcon,
-  AccountTree as MindMapIcon,
-  Draw as HandwrittenIcon,
-  ArrowBack as BackIcon,
-} from '@mui/icons-material';
+// Deep-import (see RichTextEditor.jsx for why) instead of the
+// '@mui/icons-material' barrel.
+import TextIcon from '@mui/icons-material/TextFields';
+import MarkdownIcon from '@mui/icons-material/Description';
+import CodeIcon from '@mui/icons-material/Code';
+import MindMapIcon from '@mui/icons-material/AccountTree';
+import HandwrittenIcon from '@mui/icons-material/Draw';
+import BackIcon from '@mui/icons-material/ArrowBack';
 import { useQuery, useMutation } from '@apollo/client';
 import { GET_NOTE_BY_ID, GET_NOTES } from '../graphql/queries';
 import { CREATE_NOTE, UPDATE_NOTE } from '../graphql/mutations';

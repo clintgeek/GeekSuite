@@ -1,12 +1,12 @@
 import React from 'react';
 import { Box, Tooltip, alpha, useTheme } from '@mui/material';
-import {
-    Description as MarkdownIcon,
-    TextFields as TextIcon,
-    Code as CodeIcon,
-    AccountTree as MindMapIcon,
-    Draw as HandwrittenIcon,
-} from '@mui/icons-material';
+// Deep-import (see RichTextEditor.jsx for why) instead of the
+// '@mui/icons-material' barrel.
+import MarkdownIcon from '@mui/icons-material/Description';
+import TextIcon from '@mui/icons-material/TextFields';
+import CodeIcon from '@mui/icons-material/Code';
+import MindMapIcon from '@mui/icons-material/AccountTree';
+import HandwrittenIcon from '@mui/icons-material/Draw';
 import { NOTE_TYPES } from './notes/NoteTypeRouter';
 import { noteTypeColor } from '../theme/tokens';
 

@@ -1,6 +1,8 @@
 import React from 'react';
 import { Box, Typography, Button } from '@mui/material';
-import { ErrorOutline } from '@mui/icons-material';
+// Deep-import (see RichTextEditor.jsx for why) instead of the
+// '@mui/icons-material' barrel.
+import ErrorOutline from '@mui/icons-material/ErrorOutline';
 
 class EditorErrorBoundary extends React.Component {
     constructor(props) {

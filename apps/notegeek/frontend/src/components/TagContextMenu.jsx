@@ -11,10 +11,10 @@ import {
     Button,
     TextField,
 } from '@mui/material';
-import {
-    Edit as EditIcon,
-    Delete as DeleteIcon,
-} from '@mui/icons-material';
+// Deep-import (see RichTextEditor.jsx for why) instead of the
+// '@mui/icons-material' barrel.
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
 import useTagStore from '../store/tagStore';
 
 function TagContextMenu({ anchorEl, open, onClose, tag }) {

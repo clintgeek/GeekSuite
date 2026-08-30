@@ -1,7 +1,14 @@
 import React from 'react';
 import { Box, Button, IconButton, CircularProgress, Tooltip, useTheme } from '@mui/material';
 import { glow } from '../../theme/tokens';
-import { Save, DeleteOutline, Edit, Visibility, Check, ArrowBack } from '@mui/icons-material';
+// Deep-import (see RichTextEditor.jsx for why) instead of the
+// '@mui/icons-material' barrel.
+import Save from '@mui/icons-material/Save';
+import DeleteOutline from '@mui/icons-material/DeleteOutline';
+import Edit from '@mui/icons-material/Edit';
+import Visibility from '@mui/icons-material/Visibility';
+import Check from '@mui/icons-material/Check';
+import ArrowBack from '@mui/icons-material/ArrowBack';
 
 /**
  * NoteActions — Save, delete, edit/view toggle, back.

@@ -12,10 +12,10 @@ import {
     Divider,
     useTheme,
 } from '@mui/material';
-import {
-    Search as SearchIcon,
-    Clear as ClearIcon,
-} from '@mui/icons-material';
+// Deep-import (see RichTextEditor.jsx for why) instead of the
+// '@mui/icons-material' barrel.
+import SearchIcon from '@mui/icons-material/Search';
+import ClearIcon from '@mui/icons-material/Clear';
 import NoteRow from './notes/NoteRow';
 import useNoteStore from '../store/noteStore';
 import { layout } from '../theme/tokens';

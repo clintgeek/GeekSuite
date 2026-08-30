@@ -5,16 +5,18 @@ import Link from '@tiptap/extension-link';
 import Underline from '@tiptap/extension-underline';
 import Placeholder from '@tiptap/extension-placeholder';
 import { Box, ButtonGroup, Button, Tooltip } from '@mui/material';
-import {
-  FormatBold,
-  FormatItalic,
-  FormatUnderlined,
-  FormatListBulleted,
-  FormatListNumbered,
-  FormatQuote,
-  Code,
-  Link as LinkIcon
-} from '@mui/icons-material';
+// Deep-import each icon (rather than the '@mui/icons-material' barrel) —
+// the barrel re-exports 2000+ icons and is catastrophically slow to load
+// under Vite's SSR module runner (the one vitest uses for jsdom tests),
+// which was causing whole test files to take minutes to tear down.
+import FormatBold from '@mui/icons-material/FormatBold';
+import FormatItalic from '@mui/icons-material/FormatItalic';
+import FormatUnderlined from '@mui/icons-material/FormatUnderlined';
+import FormatListBulleted from '@mui/icons-material/FormatListBulleted';
+import FormatListNumbered from '@mui/icons-material/FormatListNumbered';
+import FormatQuote from '@mui/icons-material/FormatQuote';
+import Code from '@mui/icons-material/Code';
+import LinkIcon from '@mui/icons-material/Link';
 
 const MenuBar = ({ editor }) => {
   if (!editor) {

@@ -1,7 +1,12 @@
 import React, { memo, useState, useRef, useEffect } from 'react';
 import { Handle, Position } from 'reactflow';
 import { Paper, Typography, IconButton, Box, Tooltip, TextField, useTheme } from '@mui/material';
-import { Add as AddIcon, Delete as DeleteIcon, Check as CheckIcon, Close as CloseIcon } from '@mui/icons-material';
+// Deep-import (see RichTextEditor.jsx for why) instead of the
+// '@mui/icons-material' barrel.
+import AddIcon from '@mui/icons-material/Add';
+import DeleteIcon from '@mui/icons-material/Delete';
+import CheckIcon from '@mui/icons-material/Check';
+import CloseIcon from '@mui/icons-material/Close';
 import { alpha } from '@mui/material/styles';
 import { border, surfaces } from '../theme/tokens';
 

@@ -13,7 +13,10 @@ import {
     Snackbar,
     useTheme,
 } from '@mui/material';
-import { Visibility, VisibilityOff } from '@mui/icons-material';
+// Deep-import (see RichTextEditor.jsx for why) instead of the
+// '@mui/icons-material' barrel.
+import Visibility from '@mui/icons-material/Visibility';
+import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import useAuthStore from '../store/authStore';
 import { border, glow } from '../theme/tokens';
 

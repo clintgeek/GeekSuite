@@ -1,6 +1,10 @@
 import React, { useState } from 'react';
 import { Box, TextField, ToggleButton, ToggleButtonGroup, useMediaQuery, useTheme } from '@mui/material';
-import { Edit, Visibility, VerticalSplit } from '@mui/icons-material';
+// Deep-import (see RichTextEditor.jsx for why) instead of the
+// '@mui/icons-material' barrel.
+import Edit from '@mui/icons-material/Edit';
+import Visibility from '@mui/icons-material/Visibility';
+import VerticalSplit from '@mui/icons-material/VerticalSplit';
 import ReactMarkdown from 'react-markdown';
 import { surfaces } from '../../theme/tokens';
 

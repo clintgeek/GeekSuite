@@ -13,15 +13,15 @@ import {
     useTheme,
     alpha,
 } from '@mui/material';
-import {
-    Brightness4Outlined as ThemeIcon,
-    Brightness7Outlined as LightIcon,
-    SecurityOutlined as SecurityIcon,
-    LogoutOutlined as LogoutIcon,
-    InfoOutlined as InfoIcon,
-    PersonOutlined as AccountIcon,
-    TextFields as FontSizeIcon,
-} from '@mui/icons-material';
+// Deep-import (see RichTextEditor.jsx for why) instead of the
+// '@mui/icons-material' barrel.
+import ThemeIcon from '@mui/icons-material/Brightness4Outlined';
+import LightIcon from '@mui/icons-material/Brightness7Outlined';
+import SecurityIcon from '@mui/icons-material/SecurityOutlined';
+import LogoutIcon from '@mui/icons-material/LogoutOutlined';
+import InfoIcon from '@mui/icons-material/InfoOutlined';
+import AccountIcon from '@mui/icons-material/PersonOutlined';
+import FontSizeIcon from '@mui/icons-material/TextFields';
 import { useAppPreferences, useUser } from '@geeksuite/user';
 import useAuthStore from '../store/authStore';
 import { useThemeMode } from '../theme/ThemeModeProvider';

@@ -17,17 +17,17 @@ import {
     useTheme,
     alpha,
 } from '@mui/material';
-import {
-    Add as AddIcon,
-    Search as SearchIcon,
-    Logout as LogoutIcon,
-    Clear as ClearIcon,
-    LocalOffer as TagIcon,
-    AutoStoriesOutlined as AllNotesIcon,
-    HomeOutlined as HomeIcon,
-    SettingsOutlined as SettingsIcon,
-    MoreHoriz as MoreIcon,
-} from '@mui/icons-material';
+// Deep-import (see RichTextEditor.jsx for why) instead of the
+// '@mui/icons-material' barrel.
+import AddIcon from '@mui/icons-material/Add';
+import SearchIcon from '@mui/icons-material/Search';
+import LogoutIcon from '@mui/icons-material/Logout';
+import ClearIcon from '@mui/icons-material/Clear';
+import TagIcon from '@mui/icons-material/LocalOffer';
+import AllNotesIcon from '@mui/icons-material/AutoStoriesOutlined';
+import HomeIcon from '@mui/icons-material/HomeOutlined';
+import SettingsIcon from '@mui/icons-material/SettingsOutlined';
+import MoreIcon from '@mui/icons-material/MoreHoriz';
 import { geekLayout } from '@geeksuite/ui';
 import useTagStore from '../store/tagStore';
 import useAuthStore from '../store/authStore';
