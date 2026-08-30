@@ -21,6 +21,7 @@ import TemplatesPage from './pages/TemplatesPage';
 import TagsPage from './pages/TagsPage';
 import SearchPage from './pages/SearchPage';
 import CollectionsPage from './pages/CollectionsPage';
+import HabitsPage from './pages/HabitsPage';
 import CollectionDetailPage from './pages/CollectionDetailPage';
 import { useMemo, useState, useEffect } from 'react';
 
@@ -68,6 +69,7 @@ function AppWithAuth() {
         <Route path="/tags" element={<ProtectedRoute><TagsPage /></ProtectedRoute>} />
         <Route path="/collections" element={<ProtectedRoute><CollectionsPage /></ProtectedRoute>} />
         <Route path="/collections/:id" element={<ProtectedRoute><CollectionDetailPage /></ProtectedRoute>} />
+        <Route path="/habits" element={<ProtectedRoute><HabitsPage /></ProtectedRoute>} />
         <Route path="/search" element={<ProtectedRoute><SearchPage /></ProtectedRoute>} />
 
         {/* Legacy redirects */}

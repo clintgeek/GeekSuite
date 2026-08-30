@@ -249,3 +249,55 @@ export const DELETE_JOURNAL_ENTRY = gql`
     }
   }
 `;
+
+export const CREATE_HABIT = gql`
+  mutation CreateHabit($name: String!, $daysOfWeek: [Int!], $color: String) {
+    createHabit(name: $name, daysOfWeek: $daysOfWeek, color: $color) {
+      id
+      name
+      daysOfWeek
+      color
+      archived
+      currentStreak
+    }
+  }
+`;
+
+export const UPDATE_HABIT = gql`
+  mutation UpdateHabit($id: ID!, $name: String, $daysOfWeek: [Int!], $color: String, $archived: Boolean) {
+    updateHabit(id: $id, name: $name, daysOfWeek: $daysOfWeek, color: $color, archived: $archived) {
+      id
+      name
+      daysOfWeek
+      color
+      archived
+      currentStreak
+    }
+  }
+`;
+
+export const DELETE_HABIT = gql`
+  mutation DeleteHabit($id: ID!) {
+    deleteHabit(id: $id) {
+      success
+      message
+    }
+  }
+`;
+
+export const TOGGLE_HABIT_LOG = gql`
+  mutation ToggleHabitLog($habitId: ID!, $date: String!) {
+    toggleHabitLog(habitId: $habitId, date: $date) {
+      done
+      log {
+        id
+        habitId
+        date
+      }
+      habit {
+        id
+        currentStreak
+      }
+    }
+  }
+`;

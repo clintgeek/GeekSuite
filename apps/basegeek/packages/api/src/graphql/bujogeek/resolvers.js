@@ -2,6 +2,7 @@ import { format } from 'date-fns';
 import JournalEntry from './models/JournalEntry.js';
 import taskService from './services/taskService.js';
 import collectionService from './services/collectionService.js';
+import habitService from './services/habitService.js';
 
 export const resolvers = {
   Query: {
@@ -62,6 +63,16 @@ export const resolvers = {
       const userId = context.user?.id;
       if (!userId) return null;
       return collectionService.findOwnedCollection(id, userId);
+    },
+    habits: async (_, { includeArchived = false }, context) => {
+      const userId = context.user?.id;
+      if (!userId) return [];
+      return habitService.listHabits(userId, includeArchived);
+    },
+    habitLogs: async (_, { startDate, endDate }, context) => {
+      const userId = context.user?.id;
+      if (!userId) return [];
+      return habitService.getLogs({ userId, startDate, endDate });
     },
     journalEntries: async (_, { type, tags }, context) => {
       const userId = context.user?.id;
@@ -189,6 +200,32 @@ export const resolvers = {
           : 'Collection deleted; its entries were kept',
       };
     },
+    createHabit: async (_, { name, daysOfWeek, color }, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      return habitService.createHabit({ name, daysOfWeek, color, createdBy: userId });
+    },
+    updateHabit: async (_, { id, ...updates }, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const habit = await habitService.updateHabit(id, updates, userId);
+      if (!habit) throw new Error('Habit not found');
+      return habit;
+    },
+    deleteHabit: async (_, { id }, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const habit = await habitService.deleteHabit(id, userId);
+      if (!habit) throw new Error('Habit not found');
+      return { success: true, message: 'Habit deleted with its history' };
+    },
+    toggleHabitLog: async (_, { habitId, date }, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const result = await habitService.toggleHabitLog(habitId, date, userId);
+      if (!result) throw new Error('Habit not found');
+      return result;
+    },
     createJournalEntry: async (_, args, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
@@ -280,6 +317,21 @@ export const resolvers = {
       const { completed } = await collectionService.getCounts(collection._id ?? collection.id, userId);
       return completed;
     },
+  },
+  Habit: {
+    id: (habit) => (habit._id ? habit._id.toString() : habit.id?.toString()),
+    daysOfWeek: (habit) => habit.daysOfWeek ?? [],
+    archived: (habit) => Boolean(habit.archived),
+    // Resolved lazily and per-habit: the grid asks for it, a bare create does not.
+    currentStreak: async (habit, _, context) => {
+      const userId = context.user?.id;
+      if (!userId) return 0;
+      return habitService.getCurrentStreak(habit, userId);
+    },
+  },
+  HabitLog: {
+    id: (log) => (log._id ? log._id.toString() : log.id?.toString()),
+    habitId: (log) => (log.habitId ? log.habitId.toString() : null),
   },
   JournalEntry: { id: (entry) => entry._id ? entry._id.toString() : entry.id?.toString() },
   Template: { id: (template) => template._id ? template._id.toString() : template.id?.toString() },

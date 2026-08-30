@@ -47,6 +47,40 @@ export const typeDefs = gql`
     updatedAt: Date
   }
 
+  """
+  A habit — something done on a repeating schedule, tracked by presence rather
+  than by task state. Habits never enter the daily log and are never "completed"
+  once; their history is a set of HabitLogs, one per day done.
+  """
+  type Habit {
+    id: ID!
+    name: String!
+    "JS day numbers, 0 = Sunday. Empty means every day."
+    daysOfWeek: [Int!]!
+    color: String
+    archived: Boolean!
+    "Consecutive scheduled days done, counting back from today. Unscheduled days are skipped; today unlogged does not break it."
+    currentStreak: Int!
+    createdAt: Date
+    updatedAt: Date
+  }
+
+  "One day a habit was done. There is no negative row — absence is 'not done'."
+  type HabitLog {
+    id: ID!
+    habitId: ID!
+    date: Date!
+  }
+
+  type ToggleHabitLogResult {
+    "The day's state AFTER the toggle."
+    done: Boolean!
+    "The log that now exists, or null when the day was un-marked."
+    log: HabitLog
+    "The habit, with its streak recomputed."
+    habit: Habit!
+  }
+
   type JournalEntry {
     id: ID!
     title: String!
@@ -116,6 +150,9 @@ export const typeDefs = gql`
     tasksByTag(tag: String!): [Task!]!
     collections: [Collection!]!
     collection(id: ID!): Collection
+    habits(includeArchived: Boolean = false): [Habit!]!
+    "Every habit log in a calendar-date window, inclusive. Dates are yyyy-MM-dd."
+    habitLogs(startDate: String!, endDate: String!): [HabitLog!]!
     journalEntries(type: String, tags: [String]): [JournalEntry!]!
     journalEntry(id: ID!): JournalEntry
     templates(type: String, isDefault: Boolean): [Template!]!
@@ -144,6 +181,15 @@ export const typeDefs = gql`
     as ordinary tasks). Pass \`deleteTasks: true\` to remove them with it.
     """
     deleteCollection(id: ID!, deleteTasks: Boolean = false): DeleteResponse!
+    createHabit(name: String!, daysOfWeek: [Int!], color: String): Habit!
+    updateHabit(id: ID!, name: String, daysOfWeek: [Int!], color: String, archived: Boolean): Habit!
+    "Deleting a habit takes its whole log history with it."
+    deleteHabit(id: ID!): DeleteResponse!
+    """
+    Mark a day done, or un-mark it — whichever the day currently is not.
+    \`date\` is a calendar date (yyyy-MM-dd); the toggle is idempotent per day.
+    """
+    toggleHabitLog(habitId: ID!, date: String!): ToggleHabitLogResult!
     createJournalEntry(title: String!, content: String!, type: String, date: Date, tags: [String], status: String): JournalEntry!
     updateJournalEntry(id: ID!, title: String, content: String, type: String, date: Date, tags: [String], status: String): JournalEntry!
     deleteJournalEntry(id: ID!): DeleteResponse!

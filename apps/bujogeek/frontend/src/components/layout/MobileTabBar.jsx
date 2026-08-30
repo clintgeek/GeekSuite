@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Box, Typography, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
-import { CalendarCheck, ClipboardCheck, Calendar, Hash, MoreHorizontal, Search, Library, LayoutTemplate, Keyboard, LogOut } from 'lucide-react';
+import { CalendarCheck, ClipboardCheck, Calendar, Hash, MoreHorizontal, Search, Library, Flame, LayoutTemplate, Keyboard, LogOut } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { MOBILE_TAB_HEIGHT } from '../../utils/constants';
@@ -136,6 +136,17 @@ const MobileTabBar = () => {
                   <Library size={20} />
                 </ListItemIcon>
                 <ListItemText primary="Collections" primaryTypographyProps={{ fontSize: '0.9375rem' }} />
+              </ListItemButton>
+            </ListItem>
+            <ListItem disablePadding>
+              <ListItemButton
+                onClick={() => { navigate('/habits'); setMoreOpen(false); }}
+                sx={{ borderRadius: '8px' }}
+              >
+                <ListItemIcon sx={{ minWidth: 40 }}>
+                  <Flame size={20} />
+                </ListItemIcon>
+                <ListItemText primary="Habits" primaryTypographyProps={{ fontSize: '0.9375rem' }} />
               </ListItemButton>
             </ListItem>
             <ListItem disablePadding>

@@ -324,3 +324,26 @@ export const GET_TASKS_BY_TAG = gql`
         }
     }
 `;
+
+export const GET_HABITS = gql`
+  query GetHabits($includeArchived: Boolean) {
+    habits(includeArchived: $includeArchived) {
+      id
+      name
+      daysOfWeek
+      color
+      archived
+      currentStreak
+    }
+  }
+`;
+
+export const GET_HABIT_LOGS = gql`
+  query GetHabitLogs($startDate: String!, $endDate: String!) {
+    habitLogs(startDate: $startDate, endDate: $endDate) {
+      id
+      habitId
+      date
+    }
+  }
+`;

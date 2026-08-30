@@ -1,5 +1,5 @@
 import { Box, Typography, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Avatar } from '@mui/material';
-import { CalendarCheck, ClipboardCheck, Calendar, Library, Hash, Search, LayoutTemplate, LogOut } from 'lucide-react';
+import { CalendarCheck, ClipboardCheck, Calendar, Library, Flame, Hash, Search, LayoutTemplate, LogOut } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '@mui/material/styles';
@@ -12,6 +12,7 @@ const navItems = [
   { label: 'Review',    icon: ClipboardCheck, path: '/review',    description: 'End of day' },
   { label: 'Plan',      icon: Calendar,       path: '/plan',      description: 'Upcoming' },
   { label: 'Collections', icon: Library,      path: '/collections', description: 'Lists outside the log' },
+  { label: 'Habits',    icon: Flame,          path: '/habits',    description: 'Kept, day by day' },
   { label: 'Tags',      icon: Hash,           path: '/tags',      description: 'Browse tags' },
   { label: 'Search',    icon: Search,         path: '/search',    description: 'Find anything' },
   { label: 'Templates', icon: LayoutTemplate, path: '/templates', description: 'Reusable tasks' },
