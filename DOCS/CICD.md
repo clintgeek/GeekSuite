@@ -4,6 +4,18 @@ Suite-wide continuous integration + deploy plan. GitHub is the single
 remote (see [MEMORY: GitHub authoritative](../README.md)); workflows
 live under `.github/workflows/` and deploys are pull-based.
 
+> **Status 2026-08-30 — ROLLED OUT.** Tier 1 (`ci.yml`) and Tier 3.3
+> (`release.yml`) are live and green. All 8 apps run
+> `ghcr.io/clintgeek/<app>:latest` with the watchtower opt-in label, on
+> the shared `datageek_network`. Watchtower runs on the box
+> (`docker/watchtower/` mirrors it) polling every 5 min, anonymous public
+> pulls, 0 failures. A push to `main` now builds, publishes, and
+> auto-deploys within ~5 min. **Remaining, optional:** enable branch
+> protection requiring the CI checks (all green now), and eventually
+> retire `build.sh`'s deploy codepath (kept for now as break-glass — note
+> the `--no-deploy` flag was never needed since CI builds in-workflow, not
+> via build.sh). The rollout order below is retained as the history.
+
 ---
 
 ## Goals
