@@ -128,7 +128,13 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@geeksuite/ui': path.resolve(__dirname, '../../../packages/ui/src/index.js')
-      }
+      },
+      // packages/ui is compiled from source (alias above), and pnpm materializes
+      // a private @mui/material@5 to satisfy that package's peer range. Without
+      // dedupe the shell bundles MUI 5 (unthemed, default-light) beside the
+      // app's MUI 7, splitting the theme context — dark mode renders light
+      // panes. Force a single copy of the context-bearing packages: the app's.
+      dedupe: ['@mui/material', '@emotion/react', '@emotion/styled', 'react', 'react-dom']
     }
   };
 });
