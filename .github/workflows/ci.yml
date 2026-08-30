@@ -33,7 +33,11 @@ jobs:
         working-directory: apps/basegeek/packages/api
         env:
           MONGOMS_DOWNLOAD_DIR: /home/runner/.cache/mongodb-binaries
-        run: node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand
+        # --forceExit: all suites pass in ~16s, then a singleton service's
+        # open handle keeps the process alive forever ("Jest did not exit one
+        # second after the test run has completed"). Hunting the handle is
+        # backlogged; forceExit is safe post-"Ran all test suites".
+        run: node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --forceExit
 
   test-bookgeek:
     name: bookgeek api tests
