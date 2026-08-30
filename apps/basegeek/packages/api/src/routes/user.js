@@ -3,6 +3,11 @@ import { authenticateToken } from '../middleware/auth.js';
 import { User } from '../models/user.js';
 import logger from '../lib/logger.js';
 import { setThemeCookie } from '../lib/themeCookie.js';
+import {
+    appPreferencesToObject,
+    getAppPreferences,
+    setAppPreferences,
+} from '../lib/appPreferences.js';
 
 const router = express.Router();
 
@@ -39,9 +44,7 @@ router.get('/bootstrap', authenticateToken, async (req, res) => {
             identity: formatIdentity(user),
             profile: user.profile,
             preferences: user.preferences,
-            appPreferences: user.appPreferences instanceof Map
-                ? Object.fromEntries(user.appPreferences)
-                : (user.appPreferences || {}),
+            appPreferences: appPreferencesToObject(user),
         });
     } catch (err) {
         req.log.error({ err }, 'Bootstrap error');
@@ -211,10 +214,7 @@ router.get('/preferences/apps', authenticateToken, async (req, res) => {
     try {
         const user = await User.findById(req.user.id);
         if (!user) return res.status(404).json({ message: 'User not found', code: 'USER_NOT_FOUND' });
-        const prefs = user.appPreferences instanceof Map
-            ? Object.fromEntries(user.appPreferences)
-            : (user.appPreferences || {});
-        res.json({ appPreferences: prefs });
+        res.json({ appPreferences: appPreferencesToObject(user) });
     } catch (err) {
         res.status(500).json({ message: err.message, code: 'GET_APP_PREFS_ERROR' });
     }
@@ -228,7 +228,7 @@ router.get('/preferences/:app', authenticateToken, async (req, res) => {
         const user = await User.findById(req.user.id);
         if (!user) return res.status(404).json({ message: 'User not found', code: 'USER_NOT_FOUND' });
         const appName = req.params.app.toLowerCase();
-        const prefs = user.appPreferences?.get?.(appName) || user.appPreferences?.[appName] || {};
+        const prefs = getAppPreferences(user, appName);
         res.json({ app: appName, preferences: prefs });
     } catch (err) {
         res.status(500).json({ message: err.message, code: 'GET_APP_PREFS_ERROR' });
@@ -244,11 +244,7 @@ router.patch('/preferences/:app', authenticateToken, async (req, res) => {
         if (!user) return res.status(404).json({ message: 'User not found', code: 'USER_NOT_FOUND' });
 
         const appName = req.params.app.toLowerCase();
-        const existing = user.appPreferences?.get?.(appName) || {};
-        const merged = { ...existing, ...req.body };
-        user.appPreferences.set(appName, merged);
-        user.markModified('appPreferences');
-        await user.save();
+        const merged = await setAppPreferences(user, appName, req.body);
         res.json({ app: appName, preferences: merged });
     } catch (err) {
         req.log.error({ err }, 'Update app preferences error');
