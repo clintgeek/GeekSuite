@@ -4,6 +4,9 @@ const profileSchema = new mongoose.Schema(
   {
     userId: { type: String, required: true, unique: true },
     kindleEmail: { type: String },
+    // Personal "secret word" typed on a device keyboard at /download-basket to
+    // resolve the user's newest active basket. Deliberately low-security.
+    deviceWord: { type: String, lowercase: true, trim: true },
     savedFilters: [
       {
         id: { type: String, required: true },
@@ -23,5 +26,8 @@ const profileSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+// Sparse so profiles without a deviceWord don't collide on the missing value.
+profileSchema.index({ deviceWord: 1 }, { unique: true, sparse: true });
 
 export const Profile = mongoose.model("Profile", profileSchema);

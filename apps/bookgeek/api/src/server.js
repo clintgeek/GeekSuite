@@ -14,9 +14,14 @@ import { fileURLToPath } from "url";
 import { Book } from "./models/book.js";
 import { Profile } from "./models/profile.js";
 import { logger } from "./utils/logger.js";
+import { ensureFormat, EnsureFormatError } from "./ebookFormats.js";
 import authRouter from "./routes/authRoutes.js";
 import aiRouter from "./routes/aiRoutes.js";
 import importRouter from "./routes/importRoutes.js";
+import deviceBasketRouter, {
+  isValidDeviceWord,
+  normalizeDeviceWord,
+} from "./deviceBasket.js";
 import { authenticateToken } from "./middleware/auth.js";
 import { meHandler } from "@geeksuite/user/server";
 import { sendMail } from "./services/emailService.js";
@@ -88,9 +93,6 @@ const ADDME_PATH = process.env.ADDME_PATH || "/data/addMe";
 const CALIBRE_EBOOK_META_BIN =
   process.env.CALIBRE_EBOOK_META_BIN || "ebook-meta";
 
-const CALIBRE_EBOOK_CONVERT_BIN =
-  process.env.CALIBRE_EBOOK_CONVERT_BIN || "ebook-convert";
-
 const execFileAsync = promisify(execFile);
 
 const uploadToTemp = multer({
@@ -99,66 +101,6 @@ const uploadToTemp = multer({
     fileSize: 200 * 1024 * 1024,
   },
 });
-
-/**
- * Convert an ebook file from one format to another using Calibre's
- * ebook-convert. The output format is determined by outputPath's extension.
- * If a coverPath is provided and exists on disk, it is embedded into the
- * converted output. Returns the output file's stats, or null if conversion
- * failed.
- */
-async function convertEbookFile(inputPath, outputPath, coverPath = null) {
-  if (!inputPath || !outputPath) {
-    throw new Error("inputPath and outputPath are required");
-  }
-
-  await fs.promises.mkdir(path.dirname(outputPath), { recursive: true });
-
-  const args = [inputPath, outputPath];
-
-  const outputExt = path.extname(outputPath).toLowerCase();
-  if (outputExt === ".mobi") {
-    // Both old and new MOBI formats for maximum device compatibility.
-    args.push("--mobi-file-type", "both", "--output-profile", "kindle");
-  }
-
-  let cover = null;
-  if (coverPath) {
-    try {
-      const stats = await fs.promises.stat(coverPath);
-      if (stats.isFile()) {
-        cover = coverPath;
-      }
-    } catch {
-      // Cover file missing; proceed without it.
-    }
-  }
-  if (cover) {
-    args.push("--cover", cover);
-  }
-
-  try {
-    await execFileAsync(CALIBRE_EBOOK_CONVERT_BIN, args, {
-      timeout: 120000,
-      maxBuffer: 1024 * 1024,
-    });
-  } catch (err) {
-    console.warn("ebook-convert failed", {
-      inputPath,
-      outputPath,
-      cover,
-      error: err.message,
-    });
-    throw err;
-  }
-
-  const stats = await fs.promises.stat(outputPath);
-  if (!stats.isFile()) {
-    throw new Error("Conversion did not produce a file");
-  }
-
-  return { path: outputPath, size: stats.size };
-}
 
 const KINDLE_UI_PIN = String(process.env.KINDLE_UI_PIN || "").trim();
 const KINDLE_UI_COOKIE_NAME = "bookgeek_kindle";
@@ -257,6 +199,21 @@ function requireKindleAuth(req, res, next) {
   }
   const nextUrl = req.originalUrl || "/kindle";
   return res.redirect(`/kindle/login?next=${ encodeURIComponent(nextUrl) }`);
+}
+
+// Accept either a valid geek_token (SPA / API clients) OR a valid Kindle
+// PIN cookie (server-rendered /kindle pages that embed <img src="/api/.../cover">).
+// Used to protect endpoints that must be consumable by both surfaces.
+function authenticateTokenOrKindle(req, res, next) {
+  if (KINDLE_UI_PIN) {
+    const expected = kindleAuthCookieValue();
+    const cookies = parseCookies(req);
+    const actual = cookies[KINDLE_UI_COOKIE_NAME];
+    if (expected && actual === expected) {
+      return next();
+    }
+  }
+  return authenticateToken(req, res, next);
 }
 
 async function resolveKindleTargetEmail() {
@@ -1162,7 +1119,7 @@ app.post(
   }
 );
 
-app.get("/api/books/:id/download/:format", async (req, res) => {
+app.get("/api/books/:id/download/:format", authenticateToken, async (req, res) => {
   try {
     if (!MONGODB_URI || mongoose.connection.readyState !== 1) {
       return res.status(503).json({ error: "Database not connected" });
@@ -1178,93 +1135,19 @@ app.get("/api/books/:id/download/:format", async (req, res) => {
       return res.status(404).json({ error: "Book not found" });
     }
 
-    const libraryRoot = process.env.LIBRARY_PATH || "/data/library";
-    const normalizeFormat = (f) => String(f.format || "").toLowerCase();
-    const fileExistsOnDisk = async (relPath) => {
-      try {
-        const fullPath = path.join(libraryRoot, relPath);
-        const stats = await fs.promises.stat(fullPath);
-        return stats.isFile() ? fullPath : null;
-      } catch (err) {
-        if (err.code !== "ENOENT") {
-          console.warn("/api/books/:id/download stat error", {
-            bookId: String(book._id),
-            relPath,
-            error: err.message,
-          });
-        }
-        return null;
+    let ensured;
+    try {
+      ensured = await ensureFormat(book, requestedFormat, {
+        logTag: "/api/books/:id/download",
+      });
+    } catch (err) {
+      if (err instanceof EnsureFormatError) {
+        return res.status(err.status).json({ error: err.message });
       }
-    };
-
-    // Look for an existing file matching the requested format.
-    let fileEntry = (book.files || []).find(
-      (f) => normalizeFormat(f) === requestedFormat
-    );
-    let fullPath = fileEntry ? await fileExistsOnDisk(fileEntry.path) : null;
-
-    const coverFullPath =
-      book.coverPath && typeof book.coverPath === "string"
-        ? path.join(libraryRoot, book.coverPath)
-        : null;
-
-    // If the requested format is missing (or its on-disk file is gone),
-    // generate it on demand from another available file.
-    if (!fullPath) {
-      const sources = (book.files || []).filter((f) => f.path);
-      if (sources.length === 0) {
-        return res.status(404).json({ error: "No source files available" });
-      }
-
-      // Prefer a source whose format is not the requested one.
-      const source =
-        sources.find((f) => normalizeFormat(f) !== requestedFormat) ||
-        sources[0];
-      const sourcePath = await fileExistsOnDisk(source.path);
-      if (!sourcePath) {
-        return res.status(404).json({ error: "Source file not found" });
-      }
-
-      const sourceDir = path.dirname(sourcePath);
-      const sourceBase = path.basename(sourcePath, path.extname(sourcePath));
-      const outputPath = path.join(sourceDir, `${ sourceBase }.${ requestedFormat }`);
-
-      try {
-        await convertEbookFile(sourcePath, outputPath, coverFullPath);
-      } catch (convertErr) {
-        console.error("/api/books/:id/download conversion failed", {
-          bookId: String(book._id),
-          requestedFormat,
-          sourcePath,
-          error: convertErr.message,
-        });
-        return res.status(500).json({ error: "Failed to convert file" });
-      }
-
-      const stats = await fs.promises.stat(outputPath);
-      if (!stats.isFile()) {
-        return res.status(500).json({ error: "Conversion did not produce a file" });
-      }
-
-      // Save the new file entry if it is not already tracked.
-      const newEntry = {
-        format: requestedFormat.toUpperCase(),
-        path: path.relative(libraryRoot, outputPath),
-        size: stats.size,
-        addedAt: new Date(),
-      };
-
-      book.files = (book.files || []).filter(
-        (f) => normalizeFormat(f) !== requestedFormat
-      );
-      book.files.push(newEntry);
-      await book.save();
-
-      fullPath = outputPath;
+      throw err;
     }
 
-    const downloadName = path.basename(fullPath);
-    return res.download(fullPath, downloadName, (err) => {
+    return res.download(ensured.fullPath, ensured.filename, (err) => {
       if (err) {
         console.error("/api/books/:id/download send error", err);
         if (!res.headersSent) {
@@ -1543,7 +1426,7 @@ app.post("/api/books/merge", authenticateToken, async (req, res) => {
   }
 });
 
-app.get("/api/books/:id/cover", async (req, res) => {
+app.get("/api/books/:id/cover", authenticateTokenOrKindle, async (req, res) => {
   try {
     if (!MONGODB_URI || mongoose.connection.readyState !== 1) {
       return res.status(503).json({ error: "Database not connected" });
@@ -1712,20 +1595,52 @@ app.put("/api/profile/me", authenticateToken, async (req, res) => {
     }
 
     const update = {};
+    const unset = {};
     if (typeof req.body?.kindleEmail === "string") {
       update.kindleEmail = req.body.kindleEmail.trim();
     }
 
-    const updateDoc = {
-      $set: update,
-      $setOnInsert: { userId },
-    };
+    if (typeof req.body?.deviceWord === "string") {
+      const word = normalizeDeviceWord(req.body.deviceWord);
+      if (!word) {
+        // Empty string clears the word.
+        unset.deviceWord = "";
+      } else if (!isValidDeviceWord(word)) {
+        return res.status(400).json({
+          error:
+            "Secret word must be 3-24 characters, start with a letter, and contain only letters, numbers or hyphens",
+        });
+      } else {
+        const taken = await Profile.findOne(
+          { deviceWord: word, userId: { $ne: userId } },
+          { _id: 1 }
+        ).lean();
+        if (taken) {
+          return res.status(409).json({ error: "That word is already taken" });
+        }
+        update.deviceWord = word;
+      }
+    }
 
-    const profile = await Profile.findOneAndUpdate(
-      { userId },
-      updateDoc,
-      { upsert: true, new: true, lean: true }
-    );
+    const updateDoc = { $setOnInsert: { userId } };
+    if (Object.keys(update).length) updateDoc.$set = update;
+    if (Object.keys(unset).length) updateDoc.$unset = unset;
+
+    let profile;
+    try {
+      profile = await Profile.findOneAndUpdate({ userId }, updateDoc, {
+        upsert: true,
+        new: true,
+        lean: true,
+      });
+    } catch (err) {
+      // Racing writers can slip past the pre-check; the unique sparse index
+      // is the real arbiter.
+      if (err && err.code === 11000) {
+        return res.status(409).json({ error: "That word is already taken" });
+      }
+      throw err;
+    }
 
     res.json({ success: true, data: profile });
   } catch (err) {
@@ -2986,9 +2901,69 @@ async function tryCalibreEnrich(book, update, updatedFields, sourceParts) {
   }
 }
 
+// --- Kindle connectivity test routes (Task 0.1 — throwaway, delete after Phase 0) ---
+const kindleTestHeaders = (res) => {
+  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("X-Robots-Tag", "noindex, nofollow");
+};
+
+app.get("/kindle-test", (req, res) => {
+  kindleTestHeaders(res);
+  res.setHeader("Content-Type", "text/html");
+  res.send(
+    "<html><head><title>BookGeek Test</title></head><body>" +
+      "<h1>BookGeek Test</h1>" +
+      "<p>If you can read this, HTTPS works.</p>" +
+      '<p><a href="/kindle-test/download">Download Test Book (MOBI)</a></p>' +
+      '<p><a href="/kindle-test/epub">Download Test Book (EPUB)</a></p>' +
+      "</body></html>"
+  );
+});
+
+async function kindleTestServeFormat(req, res, format) {
+  kindleTestHeaders(res);
+  try {
+    const libraryRoot = process.env.LIBRARY_PATH || "/data/library";
+    const books = await Book.find({ "files.format": new RegExp(`^${format}$`, "i") }).lean();
+    let best = null;
+    let bestSize = Infinity;
+    for (const book of books) {
+      for (const f of book.files || []) {
+        if (String(f.format || "").toLowerCase() === format && f.size != null && f.size < bestSize) {
+          best = { book, file: f };
+          bestSize = f.size;
+        }
+      }
+    }
+    if (!best) {
+      res.setHeader("Content-Type", "text/html");
+      return res.status(404).send(
+        `<html><body><p>No test ${format.toUpperCase()} available.</p></body></html>`
+      );
+    }
+    const fullPath = path.join(libraryRoot, best.file.path);
+    const safeTitle = (best.book.title || "book").replace(/[^a-z0-9 ]/gi, "").trim().replace(/\s+/g, "_") || "book";
+    const filename = `${safeTitle}.${format}`;
+    return res.download(fullPath, filename);
+  } catch (err) {
+    console.error(`/kindle-test/${format} error`, err);
+    res.setHeader("Content-Type", "text/html");
+    return res.status(500).send("<html><body><p>Server error.</p></body></html>");
+  }
+}
+
+app.get("/kindle-test/download", (req, res) => kindleTestServeFormat(req, res, "mobi"));
+app.get("/kindle-test/epub", (req, res) => kindleTestServeFormat(req, res, "epub"));
+// --- End Kindle connectivity test routes ---
+
+// Device basket routes — POST /api/device-baskets (auth) and public
+// /download-basket/:slug pages/downloads. Must be registered before the SPA
+// static + index.html fallback so /download-basket/* is not swallowed by it.
+app.use(deviceBasketRouter);
+
 app.use(express.static(publicPath));
 
-app.get(/^\/(?!api(?:\/|$)|kindle(?:\/|$)).*/, (req, res) => {
+app.get(/^\/(?!api(?:\/|$)|kindle(?:\/|$)|download-basket(?:\/|$)).*/, (req, res) => {
   return res.sendFile(path.join(publicPath, "index.html"));
 });
 
