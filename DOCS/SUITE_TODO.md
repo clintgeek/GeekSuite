@@ -132,6 +132,16 @@ Hardening = pino logging, request IDs, graceful shutdown, env-driven CORS, data-
 
 - **bujogeek subtasks UI** — backend model has `parentTask`/`subtasks` fields; no frontend UI.
 
+- ~~bujogeek quick-add hyphenated-date bug~~ — **Fixed 2026-08-30:** date
+  parsing now runs before signifier detection in `utils/parseTaskInput.js`, so
+  `/2026-03-15` / `/03-15-2026` dates parse correctly; regression tests added.
+
+- **Extract bujogeek `compareTasks`** — the sort comparator lives in
+  `context/TaskContext.jsx`, which imports Apollo + MUI at module scope, so it
+  can't be unit-tested without dragging those in (and vitest hangs on the MUI
+  icon barrel). Move the pure comparator to `utils/` so the previously-broken
+  (NaN-compare) sort logic can be covered. (Noted 2026-08-30.)
+
 - ~~bujogeek recurring tasks UI~~ — **Done (2026-08-30):** RRULE series with editScope
   (this/all/future instances), editor + quick-add syntax, virtual expansion.
 

@@ -79,16 +79,25 @@ describe('parseTaskInput', () => {
   });
 
   it('resolves an explicit month-name + day date', () => {
-    // NOTE: hyphenated forms like /2026-03-15 are NOT exercised here — the
-    // signifier scan (step 4) runs before date parsing (step 5) and its
-    // char class includes '-', so it currently matches the hyphen *inside*
-    // a slash-date before the date pattern gets a chance to consume it,
-    // corrupting the parse. That's a pre-existing bug outside this task's
-    // scope (not one of the weekend RRULE fixes); flagging rather than
-    // silently working around it in a way that would mask it.
     const result = parseTaskInput('Renew passport /mar 15');
     expect(result.dueDate.getFullYear()).toBe(new Date().getFullYear());
     expect(result.dueDate.getMonth()).toBe(2); // 0-indexed: March
+    expect(result.dueDate.getDate()).toBe(15);
+  });
+
+  it('resolves a hyphenated /YYYY-MM-DD date without the signifier eating the hyphen', () => {
+    const result = parseTaskInput('File taxes /2026-03-15');
+    expect(result.dueDate.getFullYear()).toBe(2026);
+    expect(result.dueDate.getMonth()).toBe(2); // March
+    expect(result.dueDate.getDate()).toBe(15);
+    expect(result.content).toBe('File taxes');
+    expect(result.signifier).toBe('*'); // default task, not '-'
+  });
+
+  it('resolves a hyphenated /MM-DD-YYYY date', () => {
+    const result = parseTaskInput('Trip /03-15-2026');
+    expect(result.dueDate.getFullYear()).toBe(2026);
+    expect(result.dueDate.getMonth()).toBe(2);
     expect(result.dueDate.getDate()).toBe(15);
   });
 

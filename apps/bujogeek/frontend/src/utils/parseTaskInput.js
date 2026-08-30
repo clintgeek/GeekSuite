@@ -165,16 +165,9 @@ export default function parseTaskInput(text) {
     content = content.replace(PATTERNS.priority, '').trim();
   }
 
-  // 4. Signifier (first special char)
-  const typeMatch = content.match(PATTERNS.type);
-  if (typeMatch) {
-    signifier = typeMatch[0];
-    content = content.replace(typeMatch[0], '').trim();
-  } else {
-    signifier = '*'; // default = task
-  }
-
-  // 5. Date + optional time
+  // 4. Date + optional time — parsed BEFORE the signifier so the hyphens in a
+  //    /YYYY-MM-DD (or /MM-DD-YYYY, /MM-DD) date aren't grabbed by the
+  //    signifier's first-special-char match (which includes '-').
   const dtMatch = content.match(PATTERNS.dateTime);
   if (dtMatch) {
     const [fullMatch, dateStr, timeStr, minutes, meridian] = dtMatch;
@@ -250,6 +243,16 @@ export default function parseTaskInput(text) {
 
     dueDate = date;
     content = content.replace(fullMatch, '').trim();
+  }
+
+  // 5. Signifier (first special char) — after the date is removed so it can't
+  //    match a hyphen inside a date token.
+  const typeMatch = content.match(PATTERNS.type);
+  if (typeMatch) {
+    signifier = typeMatch[0];
+    content = content.replace(typeMatch[0], '').trim();
+  } else {
+    signifier = '*'; // default = task
   }
 
   // Clean up any remaining extra whitespace
