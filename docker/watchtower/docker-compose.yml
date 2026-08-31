@@ -23,4 +23,7 @@ services:
       WATCHTOWER_CLEANUP: "true"             # prune old images after update
       WATCHTOWER_LABEL_ENABLE: "true"        # ONLY update opted-in containers
       WATCHTOWER_INCLUDE_RESTARTING: "true"
-      WATCHTOWER_ROLLING_RESTART: "true"     # recreate one container at a time
+      # Rolling restart removed: incompatible with compose depends_on
+      # (basegeek -> its DBs, rallycenter web -> api), which watchtower
+      # refuses to roll and logs as an error. Normal stop/pull/start honors
+      # depends_on with a few seconds of downtime per updated container.
