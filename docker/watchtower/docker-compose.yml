@@ -11,10 +11,12 @@ services:
     network_mode: host
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      # No GHCR credentials needed: GeekSuite packages are public, so
-      # Watchtower pulls anonymously. If any package is later made private,
-      # mount a docker config with a read:packages login here:
-      #   - ${HOME}/.docker/config.json:/config.json:ro
+      # GeekSuite packages are public (anonymous pulls), but this host also
+      # watchtowers the private rallycenter :preview images, which need a
+      # read:packages login (docker login ghcr.io). Restart watchtower after
+      # re-running docker login — the login rewrites config.json's inode and
+      # the bind mount goes stale.
+      - ${HOME}/.docker/config.json:/config.json:ro
     environment:
       TZ: America/Chicago
       WATCHTOWER_POLL_INTERVAL: "300"        # 5 minutes
