@@ -61,11 +61,18 @@ function buildStoryOverrides(mode) {
       text: {
         primary:   isDark ? bg.parchment : bg.ink,
         secondary: isDark ? bg.parchDim : bg.inkSecondary,
-        disabled:  bg.inkFaint,
+        disabled:  isDark ? '#8f8070' : bg.inkFaint,
       },
       divider: goldAlpha(isDark ? 0.1 : 0.15),
-      // App-specific slot
-      codex,
+      // App-specific slot. Components paint text with palette.codex.gold, so
+      // in light mode swap the bright gold for a bronze ink (~5.9:1 on
+      // parchment). The module-level `codex` const stays raw for gradients.
+      codex: {
+        ...codex,
+        gold:      isDark ? codex.gold      : '#7a5c1e',
+        goldLight: isDark ? codex.goldLight : '#9a7b2e',
+        goldDark:  isDark ? codex.goldDark  : '#5c4416',
+      },
     },
 
     typography: {

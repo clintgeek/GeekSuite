@@ -8,7 +8,7 @@ import {
   Add as AddIcon, PlayArrow as PlayIcon, Delete as DeleteIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { useTheme } from '@mui/material/styles';
+import { useTheme, lighten, darken } from '@mui/material/styles';
 import { useAuth } from '@geeksuite/auth';
 import api from '../api';
 
@@ -184,7 +184,11 @@ function StoryList() {
                     {/* Genre & Status */}
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
                       <Typography variant="caption" sx={{
-                        color: genre.color,
+                        // Raw genre color is tuned for the edge strip; shift
+                        // it toward the text pole when used as type.
+                        color: theme.palette.mode === 'dark'
+                          ? lighten(genre.color, 0.35)
+                          : darken(genre.color, 0.3),
                         fontWeight: 600,
                       }}>
                         {genre.icon} {story.genre}

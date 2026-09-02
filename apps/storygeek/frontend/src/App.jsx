@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { ThemeProvider } from '@mui/material/styles';
+import { ThemeProvider as MuiThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { Box, CircularProgress } from '@mui/material';
 import { ApolloProvider } from '@apollo/client';
 import { AuthProvider, useAuth } from '@geeksuite/auth';
 import { FocusModeProvider } from '@geeksuite/ui';
+import { ThemeProvider, useThemeMode } from '@geeksuite/user';
 import apolloClient from './apolloClient';
 import { createStoryTheme } from './theme/theme';
 
@@ -19,38 +20,30 @@ import Settings from './pages/Settings';
 
 function AppShell() {
   const { isAuthenticated, loading } = useAuth();
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  // Suite-wide theme preference (shared `geek_theme` cookie + user prefs).
+  const { theme: mode, toggleTheme } = useThemeMode();
+  const isDarkMode = mode === 'dark';
 
-  useEffect(() => {
-    if (localStorage.getItem('storyGeek-theme') === 'dark') setIsDarkMode(true);
-  }, []);
-
-  const handleThemeToggle = () => {
-    const next = !isDarkMode;
-    setIsDarkMode(next);
-    localStorage.setItem('storyGeek-theme', next ? 'dark' : 'light');
-  };
-
-  const theme = React.useMemo(() => createStoryTheme(isDarkMode ? 'dark' : 'light'), [isDarkMode]);
+  const theme = React.useMemo(() => createStoryTheme(mode), [mode]);
 
   if (loading) {
     return (
-      <ThemeProvider theme={theme}>
+      <MuiThemeProvider theme={theme}>
         <CssBaseline />
         <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
           <CircularProgress />
         </Box>
-      </ThemeProvider>
+      </MuiThemeProvider>
     );
   }
 
   const authed = (page) =>
     isAuthenticated
-      ? <Layout onThemeToggle={handleThemeToggle} isDarkMode={isDarkMode}>{page}</Layout>
+      ? <Layout onThemeToggle={toggleTheme} isDarkMode={isDarkMode}>{page}</Layout>
       : <Navigate to="/login" replace />;
 
   return (
-    <ThemeProvider theme={theme}>
+    <MuiThemeProvider theme={theme}>
       <CssBaseline />
       <FocusModeProvider storageKey="storygeek.focusMode">
         <BrowserRouter>
@@ -65,7 +58,7 @@ function AppShell() {
           </Routes>
         </BrowserRouter>
       </FocusModeProvider>
-    </ThemeProvider>
+    </MuiThemeProvider>
   );
 }
 
@@ -73,7 +66,9 @@ export default function App() {
   return (
     <ApolloProvider client={apolloClient}>
       <AuthProvider appName="storygeek">
-        <AppShell />
+        <ThemeProvider>
+          <AppShell />
+        </ThemeProvider>
       </AuthProvider>
     </ApolloProvider>
   );

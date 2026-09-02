@@ -36,9 +36,10 @@ const eventToMessage = (event) => {
 };
 
 // Provenance badge styling for canon facts: who established it, and when.
+// `tone: 'gold'` resolves to the theme's mode-aware gold at render time.
 const PROVENANCE_META = {
   player:   { label: 'YOU',      color: '#4caf50' },
-  narrator: { label: 'NARRATOR', color: '#c9a84c' },
+  narrator: { label: 'NARRATOR', tone: 'gold' },
   setup:    { label: 'OPENING',  color: '#7986cb' },
 };
 
@@ -100,7 +101,10 @@ function CanonCard({ canon, gold, theme }) {
         {canon.facts?.length > 0 && (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, mb: 1 }}>
             {canon.facts.map((f, i) => {
-              const prov = PROVENANCE_META[f.source] || { label: 'RECORD', color: theme.palette.text.disabled };
+              const meta = PROVENANCE_META[f.source];
+              const prov = meta
+                ? { label: meta.label, color: meta.tone === 'gold' ? gold : meta.color }
+                : { label: 'RECORD', color: theme.palette.text.disabled };
               return (
                 <Box key={i} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
                   <Chip size="small"
@@ -141,14 +145,15 @@ function CanonCard({ canon, gold, theme }) {
   );
 }
 
-// Dice result color based on d20 roll
-const getDiceColor = (result) => {
-  if (result === 20) return '#ffd700';
-  if (result === 1) return '#ff4444';
-  if (result >= 15) return '#4caf50';
-  if (result >= 10) return '#c9a84c';
-  if (result >= 5) return '#ff9800';
-  return '#e57373';
+// Dice result color based on d20 roll. Light mode gets deeper tones so the
+// result text stays legible on parchment.
+const getDiceColor = (result, isDark, gold) => {
+  if (result === 20) return isDark ? '#ffd700' : '#8a6d00';
+  if (result === 1) return isDark ? '#ff4444' : '#c62828';
+  if (result >= 15) return isDark ? '#4caf50' : '#2e7d32';
+  if (result >= 10) return gold;
+  if (result >= 5) return isDark ? '#ff9800' : '#b45309';
+  return isDark ? '#e57373' : '#b71c1c';
 };
 
 function StoryPlay() {
@@ -159,6 +164,7 @@ function StoryPlay() {
   const { user } = useAuth();
   const { selectedProvider, selectedModelId } = useAISettingsStore();
   const gold = theme.palette.codex?.gold || '#c9a84c';
+  const isDark = theme.palette.mode === 'dark';
 
   const [story, setStory] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -378,7 +384,7 @@ function StoryPlay() {
             const d = message.diceResults[0];
             const sit = message.diceMeta?.situation;
             const reason = message.diceMeta?.reason;
-            const dColor = getDiceColor(d.result);
+            const dColor = getDiceColor(d.result, isDark, gold);
             const isCrit = d.result === 20 || d.result === 1;
             return (
               <Box sx={{
@@ -426,7 +432,7 @@ function StoryPlay() {
 
           {/* Timestamp */}
           <Typography variant="caption" sx={{
-            display: 'block', mt: 1, opacity: 0.35,
+            display: 'block', mt: 1, opacity: 0.6,
             fontSize: '0.65rem',
           }}>
             {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

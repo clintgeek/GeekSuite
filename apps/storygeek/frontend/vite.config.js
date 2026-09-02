@@ -1,11 +1,12 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { themePreboot } from '@geeksuite/user/vite'
 
 export default defineConfig(({ mode }) => {
   const isProd = mode === 'production';
 
   return {
-    plugins: [react()],
+    plugins: [react(), themePreboot()],
     // Force a SINGLE instance of MUI, Emotion, and React across the app and
     // the @geeksuite/ui workspace package. Without this, pnpm can give
     // @geeksuite/ui its own copies, so shared components (GeekShell,
