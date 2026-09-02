@@ -38,10 +38,8 @@ import {
   DeleteOutline as DeleteIcon,
 } from '@mui/icons-material';
 import { GeekSidebar, useGeekShell } from '@geeksuite/ui';
-import { displayNameFrom, initialsFrom, secondaryFrom } from '../utils/userDisplay';
 import {
   LIBRARY_NAV_ID,
-  SETTINGS_NAV_ID,
   activeNavId,
   shelfCount,
   shelfNavId
@@ -96,7 +94,6 @@ const Brand = ({ onHome }) => {
 };
 
 const Sidebar = ({
-  user,
   shelves,
   shelfFilter,
   setShelfFilter,
@@ -113,8 +110,7 @@ const Sidebar = ({
   savedFiltersError,
   applySavedFilter,
   handleDeleteSavedFilter,
-  deleteFilterLoadingId,
-  onSignOut
+  deleteFilterLoadingId
 }) => {
   const theme = useTheme();
   const { closeNav } = useGeekShell();
@@ -254,18 +250,11 @@ const Sidebar = ({
       brand={<Brand onHome={() => showLibraryAndClose("all")} />}
       sections={sections}
       activeId={activeNavId({ activeView, shelfFilter })}
+      // Filters sit directly under the shelf list (extras grows, sections don't),
+      // and there is no sidebar footer: the header avatar menu is the single
+      // account entry in BookGeek, so a footer chip would duplicate it.
       extras={extras}
-      footer={{
-        user: user
-          ? {
-              name: displayNameFrom(user),
-              secondary: secondaryFrom(user),
-              initials: initialsFrom(user)
-            }
-          : undefined,
-        settings: { id: SETTINGS_NAV_ID, onClick: () => setActiveView("profile") },
-        onSignOut
-      }}
+      extrasGrow
       sx={{ bgcolor: 'background.paper' }}
       itemSx={{
         mb: 0.25,
