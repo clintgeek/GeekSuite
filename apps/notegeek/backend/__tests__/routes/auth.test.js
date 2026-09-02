@@ -1,37 +1,30 @@
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import request from 'supertest';
 import express from 'express';
 
 // --- Mocks ---
+// This file was originally written against vitest (import { vi } from 'vitest')
+// even though the package's configured test runner is jest — vitest's `vi`
+// pollutes jest's global matcher registry when both are loaded in the same
+// process, crashing every suite in the run. Converted to jest's own ESM
+// mocking API (jest.unstable_mockModule + dynamic import) to match the rest
+// of this test suite.
 const mockAxios = {
-    get: vi.fn(),
-    post: vi.fn(),
+    get: jest.fn(),
+    post: jest.fn(),
 };
-vi.mock('axios', () => ({
+jest.unstable_mockModule('axios', () => ({
     default: mockAxios,
 }));
 
-const mockJwt = {
-    verify: vi.fn(),
-};
-vi.mock('jsonwebtoken', () => ({
-    default: mockJwt,
-}));
-
-// Setup mock controller to avoid needing real auth logic for /register, /login
-vi.mock('../../controllers/auth.js', () => ({
-    registerUser: (req, res) => res.status(200).json({ msg: 'mocked register' }),
-    loginUser: (req, res) => res.status(200).json({ msg: 'mocked login' }),
-}));
-
-// Note: we'll mock User.findById and limit what it needs to do for validation
-const mockUserModel = {
-    findById: vi.fn(),
-    create: vi.fn(),
-};
-vi.mock('../../models/User.js', () => ({
-    default: mockUserModel,
-}));
+// NOTE: routes/auth.js only proxies to baseGeek via axios (/me, /logout,
+// /refresh). controllers/auth.js, jsonwebtoken, and models/User.js — mocked
+// in the original vitest version of this file for a /validate-sso route and
+// local register/login controllers — were all deleted in the Phase 2
+// hardening pass and are no longer imported by routes/auth.js at all, so
+// mocking them here is unnecessary (and mocking a module that no longer
+// exists would break module resolution, the way it did for the deleted
+// Folders controller — see __tests__/controllers/folders.test.js).
 
 // Import after mocks
 const { default: authRoutes } = await import('../../routes/auth.js');
@@ -40,23 +33,14 @@ const app = express();
 app.use(express.json());
 app.use('/api/auth', authRoutes);
 
-// NOTE: The mocks for controllers/auth.js, jsonwebtoken, and models/User.js
-// above mock modules that have been removed in the Phase 2 hardening pass:
-//   - controllers/auth.js (registerUser/loginUser) — deleted, parallel auth removed
-//   - /validate-sso route — deleted, synchronous JWT verify removed
-//   - jsonwebtoken — removed from backend dependencies
-// The /me, /logout, and /refresh proxy tests remain valid.
-// The validate-sso describe block is skipped below.
 describe('Auth Routes (Inline Handlers)', () => {
     beforeEach(() => {
-        vi.clearAllMocks();
+        jest.clearAllMocks();
         process.env.USERGEEK_API_URL = 'https://mock.basegeek.com';
-        process.env.JWT_SECRET = 'testsecret';
     });
 
     afterEach(() => {
         delete process.env.USERGEEK_API_URL;
-        delete process.env.JWT_SECRET;
     });
 
     // =========================================================================
@@ -164,6 +148,10 @@ describe('Auth Routes (Inline Handlers)', () => {
     // POST /refresh
     // =========================================================================
     describe('POST /refresh', () => {
+        // The handler requires either a body.refreshToken or a
+        // `geek_refresh_token` cookie before it will proxy to baseGeek — an
+        // arbitrary cookie name (as this test originally sent) short-circuits
+        // to a 400 before axios is ever called.
         it('should proxy to baseGeek and forward cookies', async () => {
             mockAxios.post.mockResolvedValueOnce({
                 status: 200,
@@ -173,109 +161,40 @@ describe('Auth Routes (Inline Handlers)', () => {
 
             const res = await request(app)
                 .post('/api/auth/refresh')
-                .set('Cookie', ['some_cookie=value']);
+                .set('Cookie', ['geek_refresh_token=some_refresh_value']);
 
             expect(mockAxios.post).toHaveBeenCalledWith(
                 'https://mock.basegeek.com/api/auth/refresh',
                 { app: 'notegeek' },
-                { headers: { Cookie: 'some_cookie=value', Authorization: '' } }
+                { headers: { Cookie: 'geek_refresh_token=some_refresh_value', Authorization: '' } }
             );
             expect(res.status).toBe(200);
             expect(res.headers['set-cookie']).toEqual(['geek_token=new_token; HttpOnly']);
             expect(res.body).toEqual({ accessToken: 'new_token' });
         });
 
+        it('should return 400 if neither refreshToken body nor geek_refresh_token cookie is present', async () => {
+            const res = await request(app).post('/api/auth/refresh');
+
+            expect(res.status).toBe(400);
+            expect(mockAxios.post).not.toHaveBeenCalled();
+        });
+
         it('should return 502 if baseGeek is unreachable', async () => {
             mockAxios.post.mockRejectedValueOnce(new Error('Network Error'));
 
-            const res = await request(app).post('/api/auth/refresh');
+            const res = await request(app)
+                .post('/api/auth/refresh')
+                .set('Cookie', ['geek_refresh_token=some_refresh_value']);
 
             expect(res.status).toBe(502);
         });
     });
 
-    // =========================================================================
-    // POST /validate-sso — SKIPPED: route removed in Phase 2 hardening
-    // =========================================================================
-    describe.skip('POST /validate-sso', () => {
-        it('should validate token and return existing user', async () => {
-            mockJwt.verify.mockReturnValueOnce({ id: 'user123', email: 'test@example.com' });
-
-            const mockUser = { _id: 'user123', email: 'test@example.com', createdAt: '2023-01-01' };
-            const selectMock = vi.fn().mockResolvedValueOnce(mockUser);
-            mockUserModel.findById.mockReturnValueOnce({ select: selectMock });
-
-            const res = await request(app)
-                .post('/api/auth/validate-sso')
-                .send({ token: 'valid_sso_token' });
-
-            expect(mockJwt.verify).toHaveBeenCalledWith('valid_sso_token', 'testsecret');
-            expect(mockUserModel.findById).toHaveBeenCalledWith('user123');
-            expect(selectMock).toHaveBeenCalledWith('-password');
-            expect(res.status).toBe(200);
-            expect(res.body).toEqual({
-                _id: 'user123',
-                email: 'test@example.com',
-                createdAt: '2023-01-01',
-                token: 'valid_sso_token',
-            });
-        });
-
-        it('should create user if not found during SSO', async () => {
-            mockJwt.verify.mockReturnValueOnce({ id: 'newuser123', email: 'new@example.com' });
-
-            const selectMock = vi.fn().mockResolvedValueOnce(null);
-            mockUserModel.findById.mockReturnValueOnce({ select: selectMock });
-
-            const newMockUser = { _id: 'newuser123', email: 'new@example.com', createdAt: 'new-date' };
-            mockUserModel.create.mockResolvedValueOnce(newMockUser);
-
-            const res = await request(app)
-                .post('/api/auth/validate-sso')
-                .send({ token: 'new_sso_token' });
-
-            expect(mockUserModel.create).toHaveBeenCalledWith({
-                email: 'new@example.com',
-                passwordHash: 'SSO_USER',
-            });
-            expect(res.status).toBe(200);
-            expect(res.body.email).toBe('new@example.com');
-        });
-
-        it('should return 400 if no token is provided', async () => {
-            const res = await request(app).post('/api/auth/validate-sso').send({});
-
-            expect(res.status).toBe(400);
-            expect(res.body.message).toBe('Token is required');
-        });
-
-        it('should return 401 if invalid JWT (JsonWebTokenError)', async () => {
-            const jwtError = new Error('invalid signature');
-            jwtError.name = 'JsonWebTokenError';
-            mockJwt.verify.mockImplementationOnce(() => { throw jwtError; });
-
-            const res = await request(app)
-                .post('/api/auth/validate-sso')
-                .send({ token: 'bad_token' });
-
-            expect(res.status).toBe(401);
-            expect(res.body.message).toBe('Invalid token');
-        });
-
-        it('should return 401 if expired JWT (TokenExpiredError)', async () => {
-            const jwtError = new Error('jwt expired');
-            jwtError.name = 'TokenExpiredError';
-            mockJwt.verify.mockImplementationOnce(() => { throw jwtError; });
-
-            const res = await request(app)
-                .post('/api/auth/validate-sso')
-                .send({ token: 'expired_token' });
-
-            expect(res.status).toBe(401);
-            expect(res.body.message).toBe('Token expired');
-        });
-    });
-
     // Note: getCookieFromHeader and forwardSetCookieHeaders are private to the module,
     // but they are implicitly fully tested via the GET /me and POST /logout requests.
+    //
+    // The local register/login controller and /validate-sso route this file
+    // used to also cover were deleted in the Phase 2 hardening pass — see
+    // __tests__/controllers/auth.test.js for the corresponding skip note.
 });

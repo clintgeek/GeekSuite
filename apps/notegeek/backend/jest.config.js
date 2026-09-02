@@ -1,9 +1,6 @@
 export default {
     testEnvironment: 'node',
     transform: {},
-    moduleNameMapper: {
-        '^(\\.{1,2}/.*)\\.js$': '$1'
-    },
     setupFilesAfterEnv: ['./jest.setup.js'],
     testTimeout: 30000,
     testMatch: ['**/__tests__/**/*.test.js'],

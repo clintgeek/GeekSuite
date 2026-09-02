@@ -1,11 +1,16 @@
 import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import { fileURLToPath } from 'url';
 
 // --- Mock the Note model ---
 const mockNoteModel = {
     find: jest.fn(),
 };
 
-jest.unstable_mockModule('../../models/Note.js', () => ({
+// NOTE: unstable_mockModule needs an absolute path here — a relative
+// specifier resolves against jest.setup.js (a jest/ESM quirk when a
+// setupFilesAfterEnv file also touches the jest module registry), not
+// against this test file, and silently fails to find the module.
+jest.unstable_mockModule(fileURLToPath(new URL('../../models/Note.js', import.meta.url)), () => ({
     default: mockNoteModel,
 }));
 

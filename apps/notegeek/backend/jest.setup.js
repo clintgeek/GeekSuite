@@ -1,4 +1,4 @@
-import { vi } from 'vitest';
+import { jest } from '@jest/globals';
 import mongoose from 'mongoose';
 import { mockMongoose } from './__tests__/utils/testUtils.js';
 
@@ -13,11 +13,11 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 // Mock mongoose
-vi.spyOn(mongoose, 'connect').mockImplementation(mockMongoose.connect);
-vi.spyOn(mongoose, 'disconnect').mockImplementation(mockMongoose.disconnect);
-vi.spyOn(mongoose, 'model').mockImplementation(mockMongoose.model);
+jest.spyOn(mongoose, 'connect').mockImplementation(mockMongoose.connect);
+jest.spyOn(mongoose, 'disconnect').mockImplementation(mockMongoose.disconnect);
+jest.spyOn(mongoose, 'model').mockImplementation(mockMongoose.model);
 
 // Add cleanup after all tests
 afterAll(async () => {
-  vi.restoreAllMocks();
+  jest.restoreAllMocks();
 });

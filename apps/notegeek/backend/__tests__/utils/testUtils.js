@@ -1,27 +1,27 @@
-import { vi } from 'vitest';
+import { jest } from '@jest/globals';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 
 // Mock models that will be exported and used directly
 export const UserModel = {
-    findOne: vi.fn().mockResolvedValue(null),
-    findById: vi.fn().mockResolvedValue(null),
-    create: vi.fn().mockImplementation(async (data) => ({ ...data, _id: 'mockObjectId' })),
-    deleteMany: vi.fn().mockResolvedValue({ deletedCount: 1 })
+    findOne: jest.fn().mockResolvedValue(null),
+    findById: jest.fn().mockResolvedValue(null),
+    create: jest.fn().mockImplementation(async (data) => ({ ...data, _id: 'mockObjectId' })),
+    deleteMany: jest.fn().mockResolvedValue({ deletedCount: 1 })
 };
 
 export const NoteModel = {
-    findOne: vi.fn().mockResolvedValue(null),
-    findById: vi.fn().mockResolvedValue(null),
-    create: vi.fn().mockImplementation(async (data) => ({ ...data, _id: 'mockObjectId' })),
-    deleteMany: vi.fn().mockResolvedValue({ deletedCount: 1 })
+    findOne: jest.fn().mockResolvedValue(null),
+    findById: jest.fn().mockResolvedValue(null),
+    create: jest.fn().mockImplementation(async (data) => ({ ...data, _id: 'mockObjectId' })),
+    deleteMany: jest.fn().mockResolvedValue({ deletedCount: 1 })
 };
 
 // Simple mock for mongoose
 export const mockMongoose = {
-    connect: vi.fn().mockResolvedValue(true),
-    disconnect: vi.fn().mockResolvedValue(true),
-    model: vi.fn((name) => {
+    connect: jest.fn().mockResolvedValue(true),
+    disconnect: jest.fn().mockResolvedValue(true),
+    model: jest.fn((name) => {
         if (name === 'User') return UserModel;
         if (name === 'Note') return NoteModel;
         throw new Error(`Model ${ name } not mocked`);
@@ -61,61 +61,100 @@ export const createTestNote = async (userId, overrides = {}) => {
 
 // JWT Test Utilities
 export const mockJwtVerify = (returnValue = { id: createObjectId() }) => {
-    return vi.spyOn(jwt, 'verify').mockReturnValue(returnValue);
+    return jest.spyOn(jwt, 'verify').mockReturnValue(returnValue);
 };
 
 export const mockJwtSign = (returnValue = 'mock.jwt.token') => {
-    return vi.spyOn(jwt, 'sign').mockReturnValue(returnValue);
+    return jest.spyOn(jwt, 'sign').mockReturnValue(returnValue);
 };
 
 export const mockJwtExpiredToken = () => {
-    return vi.spyOn(jwt, 'verify').mockImplementation(() => {
+    return jest.spyOn(jwt, 'verify').mockImplementation(() => {
         throw new jwt.TokenExpiredError('jwt expired', new Date());
     });
 };
 
 export const mockJwtInvalidToken = () => {
-    return vi.spyOn(jwt, 'verify').mockImplementation(() => {
+    return jest.spyOn(jwt, 'verify').mockImplementation(() => {
         throw new jwt.JsonWebTokenError('invalid token');
     });
 };
 
 // Bcrypt Test Utilities
 export const mockBcryptHash = (returnValue = 'hashedPassword') => {
-    return vi.spyOn(bcrypt, 'hash').mockResolvedValue(returnValue);
+    return jest.spyOn(bcrypt, 'hash').mockResolvedValue(returnValue);
 };
 
 export const mockBcryptCompare = (returnValue = true) => {
-    return vi.spyOn(bcrypt, 'compare').mockResolvedValue(returnValue);
+    return jest.spyOn(bcrypt, 'compare').mockResolvedValue(returnValue);
 };
 
-// Request/Response Test Utilities
-export const mockRequest = ({
-    body = {},
-    params = {},
-    query = {},
-    headers = {},
-    user = null
-} = {}) => ({
-    body,
-    params,
-    query,
-    headers: {
-        authorization: headers.authorization || '',
-        ...headers
-    },
-    user
+// pino-http (mounted in server.js) attaches req.log to every real request;
+// controllers call req.log.error(...) in their catch blocks. Give every
+// mock request the same shape so controller error paths don't crash on a
+// missing req.log.
+const mockLog = () => ({
+    info: jest.fn(),
+    error: jest.fn(),
+    warn: jest.fn(),
+    debug: jest.fn()
 });
+
+// Request/Response Test Utilities
+//
+// Two call conventions are supported:
+//   1. Positional (used throughout __tests__/controllers/*): mockRequest(body, userId, params, query)
+//      — userId is wrapped as req.user._id, matching how controllers read the
+//      authenticated user's id off req.user (set by the real attachUser SSO
+//      middleware in production).
+//   2. Options object (used by auth-focused tests that need full control
+//      over req.user or req.headers): mockRequest({ body, params, query, headers, user })
+export const mockRequest = (bodyOrOptions = {}, userId = null, params = {}, query = {}) => {
+    const isOptionsObject = userId === null &&
+        bodyOrOptions !== null &&
+        typeof bodyOrOptions === 'object' &&
+        ('user' in bodyOrOptions || 'headers' in bodyOrOptions || 'params' in bodyOrOptions || 'query' in bodyOrOptions);
+
+    if (isOptionsObject) {
+        const {
+            body = {},
+            params: optParams = {},
+            query: optQuery = {},
+            headers = {},
+            user = null
+        } = bodyOrOptions;
+        return {
+            body,
+            params: optParams,
+            query: optQuery,
+            headers: {
+                authorization: headers.authorization || '',
+                ...headers
+            },
+            log: mockLog(),
+            user
+        };
+    }
+
+    return {
+        body: bodyOrOptions,
+        params,
+        query,
+        headers: { authorization: '' },
+        log: mockLog(),
+        user: userId !== null ? { _id: userId } : null
+    };
+};
 
 export const mockResponse = () => {
     const res = {};
-    res.status = vi.fn().mockReturnValue(res);
-    res.json = vi.fn().mockReturnValue(res);
-    res.send = vi.fn().mockReturnValue(res);
+    res.status = jest.fn().mockReturnValue(res);
+    res.json = jest.fn().mockReturnValue(res);
+    res.send = jest.fn().mockReturnValue(res);
     return res;
 };
 
-export const mockNext = vi.fn();
+export const mockNext = jest.fn();
 
 // Mock Database Utilities
 export const setupTestDb = () => {
@@ -175,11 +214,11 @@ export const clearTestDb = () => {
 
 // Reset function for test files to use
 export const resetMocks = () => {
-    vi.clearAllMocks();
+    jest.clearAllMocks();
     setupTestDb();
 };
 
 export const cleanupMocks = () => {
     clearTestDb();
-    vi.restoreAllMocks();
+    jest.restoreAllMocks();
 };
