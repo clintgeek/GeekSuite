@@ -9,6 +9,7 @@
     "./vite": "./src/vitePlugin.js"
   },
   "scripts": {
+    "test": "node --test src/server/__tests__/*.test.js",
     "lint": "eslint ."
   },
   "devDependencies": {
