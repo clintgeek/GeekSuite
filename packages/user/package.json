@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.js",
     "./server": "./src/server/index.js",
+    "./server/csrfGuard": "./src/server/csrfGuard.js",
     "./vite": "./src/vitePlugin.js"
   },
   "scripts": {
