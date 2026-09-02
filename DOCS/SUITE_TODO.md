@@ -71,6 +71,22 @@ StoryGeek SSO alignment + Settings page fix + AuthProvider refactor. Pending mer
 
 ---
 
+## Landed 2026-09-02 (shell grammar, TODO_ORDER #15a)
+
+- `packages/ui` navigation primitives finished and all seven MUI apps migrated to one shell grammar:
+  permanent 220px sidebar on desktop / same sidebar as a temporary drawer on mobile, brand block
+  in the sidebar, footer user chip → Settings → Sign out, 60px top bar with route title and the
+  theme → switcher → account cluster. bookgeek gets its first mobile layout; basegeek loses the
+  collapsible rail; flockgeek and bujogeek gain Settings pages; duplicate logouts removed from
+  bottom bars. 247 packages/ui tests.
+- **Follow-ups:** visual pass of every app in both modes and at phone width; storygeek's
+  three-column play surface lost 220px on desktop — consider a tighter breakpoint for its rails;
+  content bodies in bookgeek/basegeek still render their own page headings under the new titled
+  top bar (remove the duplicates); `GeekSidebar`/`GeekAppFrame` import react-router at module
+  scope, so a router-less consumer would need a Router in the tree.
+
+---
+
 ## Next up — highest leverage
 
 - ~~Timezone bug fixes (bujogeek, fitnessgeek, flockgeek)~~ — **Done 2026-08-30**

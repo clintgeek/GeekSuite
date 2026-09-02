@@ -56,24 +56,14 @@ cycle so the ordering rationale stays visible; detail moved to `SUITE_TODO.md` "
 
 ## Tier 3 — Consolidation sweeps (L each; run like the 2026-09-02 sweep: per-app commits, incremental deploys)
 
-15a. **Shell grammar pass** — L (one sweep, per-app commits). Decided 2026-09-02 after a
-    seven-app audit; supersedes #16. Same skin, one grammar. Rules:
-    - Desktop (`md`+): permanent 220px sidebar, no collapse rail. Brand block at top, grouped nav,
-      footer in fixed order: **user chip → Settings → Sign out**.
-    - 60px top bar: **page title/context left**; right cluster **theme toggle → app switcher →
-      account avatar menu**. Brand does not live in the top bar.
-    - Mobile (below `md`): hamburger in the top bar opens the *same* sidebar as a temporary
-      220px drawer. One breakpoint everywhere.
-    - Bottom tab bars stay **only** in data-entry apps (bujogeek, fitnessgeek, notegeek) and must
-      not carry Logout or duplicate the drawer's account/settings rows.
-    - Always-dark sidebar chrome (bujogeek, fitnessgeek) is identity — allowed.
-    Step 0 — finish the primitives nobody uses yet: `GeekSidebar` (brand slot, grouped items,
-    ordered footer), `GeekTopBar` (hamburger below `md`, title slot, fixed right cluster),
-    `GeekShell` owns drawer state + breakpoint; optional `GeekBottomNav` (items, hides on
-    editor/auth routes, no logout). Then migrate in this order, smallest chrome first:
-    flockgeek (proof) → storygeek → bookgeek (+ its first mobile layout) → fitnessgeek →
-    notegeek → bujogeek → basegeek. Per-app deltas in SUITE_TODO "Shell grammar audit".
-    *UI*
+15a. ~~Shell grammar pass~~ — **Done 2026-09-02** (commits d2b4787..6e9b14e). `GeekShell` nav mode,
+    `GeekSidebar` content panel (brand → grouped nav → extras → footer chip/Settings/Sign out),
+    `GeekTopBar` (hamburger below md, title slot, theme → switcher → account menu), `GeekBottomNav`.
+    All seven MUI apps migrated: flockgeek (proof), storygeek, bookgeek (first mobile layout),
+    fitnessgeek, notegeek, bujogeek, basegeek (rail removed). New Settings pages in flockgeek and
+    bujogeek. Bottom bars kept in bujogeek/fitnessgeek/notegeek without logout. Follow-ups in
+    SUITE_TODO: visual pass in both modes; storygeek play surface now 220px narrower on desktop;
+    top-bar titles are route names (per-app refinement welcome).
 15. **Shared EmptyState / ErrorState / toast primitives** — L. Seed from bujogeek `EmptyState`;
     migrate app by app. *UI*
 16. ~~Shared mobile bottom-nav primitive~~ — folded into #15a.
@@ -125,7 +115,7 @@ cycle so the ordering rationale stays visible; detail moved to `SUITE_TODO.md` "
 - **Pass C:** #12 CSRF on its own branch, verified per app against the five new auth suites,
   reviewed before merge. Then the basegeek follow-ups from SUITE_TODO (app registry auth, DB
   browser gates, `configure()` wiring) since they're the same code area.
-- **Pass D:** #15a shell grammar pass (primitives first, then flockgeek as proof, then the rest).
+- **Pass D (shell grammar) — done 2026-09-02.**
 - **Pass E:** #15 primitives sweep (EmptyState / ErrorState / toast) with #19 batched in.
 
 *Last ordered: 2026-09-02. Tiers 1 and 2 (minus CSRF) landed the same day.*
