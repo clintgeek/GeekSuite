@@ -26,6 +26,7 @@
     "@geeksuite/api-client": "workspace:*",
     "@geeksuite/auth": "workspace:*",
     "@geeksuite/ui": "workspace:*",
+    "@geeksuite/user": "workspace:*",
     "react-router-dom": "^6.23.1"
   },
   "devDependencies": {

@@ -166,7 +166,7 @@ const EggLogPage = () => {
         ) : (
           <>
             <Table size="small">
-              <TableHead sx={{ backgroundColor: "#f5f5f5" }}>
+              <TableHead sx={{ backgroundColor: "action.hover" }}>
                 <TableRow>
                   <TableCell>{sortCol("date", "Date")}</TableCell>
                   <TableCell>Location</TableCell>

@@ -145,7 +145,7 @@ const HatchLogPage = () => {
         ) : (
           <>
             <Table>
-              <TableHead sx={{ backgroundColor: "#f5f5f5" }}>
+              <TableHead sx={{ backgroundColor: "action.hover" }}>
                 <TableRow>
                   <TableCell>{sortCol("setDate", "Set Date")}</TableCell>
                   <TableCell>{sortCol("hatchDate", "Hatch Date")}</TableCell>

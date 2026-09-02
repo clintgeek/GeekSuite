@@ -248,7 +248,7 @@ const BirdsPage = () => {
         ) : (
           <>
             <Table>
-              <TableHead sx={{ backgroundColor: "#f5f5f5" }}>
+              <TableHead sx={{ backgroundColor: "action.hover" }}>
                 <TableRow>
                   <TableCell>{sortCol("tagId", "Tag ID")}</TableCell>
                   <TableCell>{sortCol("name", "Name")}</TableCell>

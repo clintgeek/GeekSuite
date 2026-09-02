@@ -1,5 +1,5 @@
 :root {
-  color-scheme: dark light;
+  color-scheme: light;
   --fg-amber: #d4910a;
   --fg-forest: #3d6b4f;
   --fg-charcoal: #131311;
@@ -17,10 +17,19 @@ html, body, #root {
 }
 
 body {
-  background-color: var(--fg-charcoal);
+  /* Mode-aware body paint; matches theme.js background.default per mode. */
+  background-color: #f5f0e6;
   background-image: var(--fg-grain);
   background-repeat: repeat;
   background-size: 256px 256px;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+:root[data-theme="dark"] body {
+  background-color: var(--fg-charcoal);
 }
 
 ::selection {

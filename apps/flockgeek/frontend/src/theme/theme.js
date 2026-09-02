@@ -45,10 +45,12 @@ function buildFlockOverrides(mode) {
       background: {
         default: isDark ? bg.leather : bg.parchment,
         paper:   isDark ? bg.wood : bg.paper,
+        sidebar: bg.sidebar,
       },
       text: {
         primary:   bg.textPrimary,
         secondary: bg.textSecondary,
+        disabled:  isDark ? "#8f8877" : "#7d7566",
       },
       divider: bg.divider,
     },

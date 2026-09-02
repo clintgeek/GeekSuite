@@ -148,7 +148,7 @@ const PairingsPage = () => {
         ) : (
           <>
             <Table>
-              <TableHead sx={{ backgroundColor: "#f5f5f5" }}>
+              <TableHead sx={{ backgroundColor: "action.hover" }}>
                 <TableRow>
                   <TableCell>{sortCol("name", "Name")}</TableCell>
                   <TableCell>Roosters</TableCell>
