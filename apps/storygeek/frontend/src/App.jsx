@@ -21,8 +21,8 @@ import Settings from './pages/Settings';
 function AppShell() {
   const { isAuthenticated, loading } = useAuth();
   // Suite-wide theme preference (shared `geek_theme` cookie + user prefs).
-  const { theme: mode, toggleTheme } = useThemeMode();
-  const isDarkMode = mode === 'dark';
+  // The toggle itself lives in the top bar, which reads `useThemeMode` too.
+  const { theme: mode } = useThemeMode();
 
   const theme = React.useMemo(() => createStoryTheme(mode), [mode]);
 
@@ -39,7 +39,7 @@ function AppShell() {
 
   const authed = (page) =>
     isAuthenticated
-      ? <Layout onThemeToggle={toggleTheme} isDarkMode={isDarkMode}>{page}</Layout>
+      ? <Layout>{page}</Layout>
       : <Navigate to="/login" replace />;
 
   return (
