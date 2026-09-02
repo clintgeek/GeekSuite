@@ -8,9 +8,9 @@ import { LoginSplash } from "@geeksuite/ui";
 import { useApolloClient } from "@apollo/client";
 import { GET_BOOKS, GET_SHELVES } from "./graphql/queries.js";
 import { UPDATE_BOOK, DELETE_BOOK, CREATE_BOOK } from "./graphql/mutations.js";
-import { GeekShell, GeekAppFrame, geekLayout } from "@geeksuite/ui";
+import { GeekShell, GeekAppFrame } from "@geeksuite/ui";
 import Sidebar from "./components/Sidebar";
-import Header from "./components/Header";
+import TopBar from "./components/TopBar";
 
 let API_BASE = "http://localhost:1800/api";
 
@@ -1951,38 +1951,48 @@ export default function App() {
     );
   }
 
+  // Suite shell grammar (THE_UI_UNIFICATION_PLAN.md §3): the top bar is the
+  // shell's `topBar`, not a sibling AppBar above it, so the sidebar column runs
+  // full height; `nav` hands the shell the sidebar *content*, and it owns the
+  // md breakpoint, the mobile drawer and the 220px width. The dialogs below
+  // stay siblings of the shell (all of them are portals or `fixed` overlays).
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
-      <Header
-        user={user}
-        setActiveView={setActiveView}
-        setAddBookOpen={setAddBookOpen}
-      />
+    <>
       <GeekShell
-        topBar={null}
-        sx={{ height: 'auto', flex: 1, minHeight: 0 }}
-        sidebar={
+        nav={
           <Sidebar
-          shelves={shelves}
-          shelfFilter={shelfFilter}
-          setShelfFilter={setShelfFilter}
-          shelfSummary={shelfSummary}
-          setActiveView={setActiveView}
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
-          authorFilter={authorFilter}
-          setAuthorFilter={setAuthorFilter}
-          tagFilter={tagFilter}
-          setTagFilter={setTagFilter}
-          savedFilters={savedFilters}
-          savedFiltersLoading={savedFiltersLoading}
-          savedFiltersError={savedFiltersError}
-          applySavedFilter={applySavedFilter}
-          handleDeleteSavedFilter={handleDeleteSavedFilter}
-          deleteFilterLoadingId={deleteFilterLoadingId}
-        />
-      }
-    >
+            user={user}
+            shelves={shelves}
+            shelfFilter={shelfFilter}
+            setShelfFilter={setShelfFilter}
+            shelfSummary={shelfSummary}
+            activeView={activeView}
+            setActiveView={setActiveView}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            authorFilter={authorFilter}
+            setAuthorFilter={setAuthorFilter}
+            tagFilter={tagFilter}
+            setTagFilter={setTagFilter}
+            savedFilters={savedFilters}
+            savedFiltersError={savedFiltersError}
+            applySavedFilter={applySavedFilter}
+            handleDeleteSavedFilter={handleDeleteSavedFilter}
+            deleteFilterLoadingId={deleteFilterLoadingId}
+            onSignOut={handleLogout}
+          />
+        }
+        navSx={{ bgcolor: 'background.paper' }}
+        topBar={
+          <TopBar
+            user={user}
+            activeView={activeView}
+            setActiveView={setActiveView}
+            setAddBookOpen={setAddBookOpen}
+            onSignOut={handleLogout}
+          />
+        }
+      >
       <GeekAppFrame>
         <Box 
           sx={{ 
@@ -3720,6 +3730,6 @@ export default function App() {
         </div>
       )}
 
-    </Box>
+    </>
   );
 }
