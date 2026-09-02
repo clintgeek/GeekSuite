@@ -25,6 +25,9 @@ cycle so the ordering rationale stays visible; detail moved to `SUITE_TODO.md` "
 4. ~~MUI major-version pin~~.
 5. ~~ESLint actually running~~ — 526 files, 0 errors / 207 warnings, `pnpm -r lint` in CI.
    Surfaced and fixed a live bug (fitnessgeek weight chart rendered empty).
+   **startgeek is the exception:** it builds standalone with npm (no workspace deps by
+   design), so it keeps its own ESLint 8 `.eslintrc.cjs` — a `workspace:*` devDependency
+   broke its image build on the first push.
 6. ~~PWA manifests + theme-color per mode~~.
 7. ~~Login wordmark colors + bookgeek primary contrastText~~.
 8. ~~Cross-tab logout BroadcastChannel~~ — also fixed a same-tab double-logout. Gateway is
