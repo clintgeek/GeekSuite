@@ -11,7 +11,16 @@
  *   user chip → Settings → Sign out.
  *
  * Identity — fonts, always-dark chrome, density — is the app's business: pass
- * `sx` (whole panel), `chromeSx` (brand + footer bands) and `itemSx` (rows).
+ * `sx` (whole panel), `chromeSx` (brand + footer bands), `brandSx` / `footerSx`
+ * (merged over `chromeSx`, for that band only) and `itemSx` (rows). A node
+ * `brand` gets the same 60px block sizing as the `{ monogram, name, tagline }`
+ * form; on that object form, `brand.monogramSx` merges last onto the monogram
+ * chip (hook: `data-geek-sidebar="monogram"`).
+ *
+ * `footer.settings` renders selected when `settings.selected === true`, or
+ * when `activeId` equals `settings.to` or `settings.id` (default `'settings'`)
+ * — the sidebar has no router, so apps should pass `activeId="settings"` on
+ * the settings route.
  *
  * Legacy: the pre-2026-09 API (`appName`, flat `items`, a `footer` *element*,
  * `variant="permanent" | "temporary"` with `mobileOpen`/`onMobileClose`) still
@@ -129,6 +138,8 @@ export const GeekSidebar = forwardRef(function GeekSidebar(
     footer,
     sx,
     chromeSx,
+    brandSx,
+    footerSx,
     itemSx,
     // Legacy props — see the file header.
     appName,
@@ -161,19 +172,38 @@ export const GeekSidebar = forwardRef(function GeekSidebar(
 
   const brandBlock = (() => {
     if (!resolvedBrand) return null;
+
+    // Same 60px block for both forms — a node brand still gets sized so apps
+    // don't have to reproduce the height/padding/shrink themselves.
+    const blockSx = {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 1.25,
+      px: 2,
+      width: '100%',
+      minHeight: `${geekLayout.topBarHeight}px`,
+      height: `${geekLayout.topBarHeight}px`,
+      flexShrink: 0,
+      color: 'inherit',
+      textDecoration: 'none',
+      ...chromeSx,
+      ...brandSx,
+    };
+
     if (isValidElement(resolvedBrand)) {
       return (
-        <Box data-geek-sidebar="brand" sx={{ ...chromeSx }}>
+        <Box data-geek-sidebar="brand" sx={blockSx}>
           {resolvedBrand}
         </Box>
       );
     }
 
-    const { monogram, name, tagline, to, href } = resolvedBrand;
+    const { monogram, name, tagline, to, href, monogramSx } = resolvedBrand;
     const inner = (
       <>
         {monogram ? (
           <Box
+            data-geek-sidebar="monogram"
             aria-hidden="true"
             sx={{
               flexShrink: 0,
@@ -188,6 +218,7 @@ export const GeekSidebar = forwardRef(function GeekSidebar(
               fontSize: '0.75rem',
               fontWeight: 600,
               letterSpacing: '0.02em',
+              ...monogramSx,
             }}
           >
             {monogram}
@@ -207,20 +238,6 @@ export const GeekSidebar = forwardRef(function GeekSidebar(
         </Box>
       </>
     );
-
-    const blockSx = {
-      display: 'flex',
-      alignItems: 'center',
-      gap: 1.25,
-      px: 2,
-      width: '100%',
-      minHeight: `${geekLayout.topBarHeight}px`,
-      height: `${geekLayout.topBarHeight}px`,
-      flexShrink: 0,
-      color: 'inherit',
-      textDecoration: 'none',
-      ...chromeSx,
-    };
 
     if (to || href) {
       return (
@@ -244,7 +261,7 @@ export const GeekSidebar = forwardRef(function GeekSidebar(
   const footerBlock = (() => {
     if (legacyFooter) {
       return (
-        <Box data-geek-sidebar="footer" sx={{ p: 2, flexShrink: 0, ...chromeSx }}>
+        <Box data-geek-sidebar="footer" sx={{ p: 2, flexShrink: 0, ...chromeSx, ...footerSx }}>
           {legacyFooter}
         </Box>
       );
@@ -253,6 +270,17 @@ export const GeekSidebar = forwardRef(function GeekSidebar(
 
     const { user, settings, onSignOut, signOutLabel = 'Sign out', settingsLabel = 'Settings' } =
       footerSpec;
+
+    // The sidebar has no router awareness, so "selected" for Settings is decided
+    // purely against `activeId`: either an explicit `settings.selected`, or
+    // `activeId` matching `settings.to` or `settings.id` (default `'settings'`).
+    // Apps that route to Settings should pass `activeId="settings"`.
+    const settingsId = settings?.id ?? 'settings';
+    const settingsSelected = settings
+      ? settings.selected === true ||
+        (settings.to != null && activeId === settings.to) ||
+        activeId === settingsId
+      : false;
 
     return (
       <Box
@@ -263,6 +291,7 @@ export const GeekSidebar = forwardRef(function GeekSidebar(
           py: 1,
           borderTop: (theme) => `1px solid ${theme.palette.divider}`,
           ...chromeSx,
+          ...footerSx,
         }}
       >
         {/* Fixed order: user chip → Settings → Sign out. */}
@@ -307,6 +336,8 @@ export const GeekSidebar = forwardRef(function GeekSidebar(
             <ListItemButton
               data-geek-nav-footer="settings"
               {...(settings.to ? { component: RouterLink, to: settings.to } : {})}
+              selected={settingsSelected}
+              aria-current={settingsSelected ? 'page' : undefined}
               onClick={(event) => {
                 settings.onClick?.(event);
                 closeNav();

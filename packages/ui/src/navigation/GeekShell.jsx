@@ -11,6 +11,8 @@
  *   permanent 220px column at `md`+ and a temporary 220px drawer below it. The
  *   state is published through `useGeekShell()`, so `GeekTopBar`'s hamburger
  *   and `GeekSidebar`'s close-on-navigate work with no wiring in the app.
+ *   Both branches wrap `nav` in a `component="nav"` landmark (`aria-label`
+ *   `"Primary"`), so the landmark exists below `md` too.
  *
  * `nav` and `sidebar` can coexist during a migration; `nav` is rendered after
  * `sidebar`, so pass one or the other in practice.
@@ -99,6 +101,7 @@ export function GeekShell({
         {showNav && !isMobile ? (
           <Box
             component="nav"
+            aria-label="Primary"
             data-geek-nav="permanent"
             sx={{
               width: navWidth,
@@ -120,7 +123,6 @@ export function GeekShell({
             open={mobileOpen}
             onClose={closeNav}
             ModalProps={{ keepMounted: true }}
-            data-geek-nav="temporary"
             sx={{
               '& .MuiDrawer-paper': {
                 width: navWidth,
@@ -130,7 +132,14 @@ export function GeekShell({
               },
             }}
           >
-            {nav}
+            <Box
+              component="nav"
+              aria-label="Primary"
+              data-geek-nav="temporary"
+              sx={{ height: '100%', minHeight: 0, overflow: 'hidden' }}
+            >
+              {nav}
+            </Box>
           </Drawer>
         ) : null}
 

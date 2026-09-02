@@ -12,6 +12,18 @@
  *   - the hamburger appears only below the nav breakpoint, and only when the
  *     shell owns a nav panel
  *   - the bottom tab bar refuses a logout item and caps at five
+ *   - a node `brand` gets the same 60px block sizing as the object form, and
+ *     `brandSx` / `footerSx` merge last over `chromeSx` on their own band
+ *   - the brand monogram carries its `data-geek-sidebar="monogram"` hook and
+ *     `monogramSx`
+ *   - the footer Settings row is `selected` from `activeId` alone (default id
+ *     `'settings'`, or `settings.id`/`settings.to`, or an explicit
+ *     `settings.selected`)
+ *
+ * `@mui/material`'s styled-engine has no DOM to insert into under this `node`
+ * environment, so it renders each rule's `<style>` tag inline as part of the
+ * static markup instead — that is what lets these tests assert on literal
+ * CSS text (e.g. `toContain('height:42px')`) without `@emotion/server`.
  *
  * `useMediaQuery` resolves false under SSR, so "mobile" is simulated by
  * providing the shell context directly — the same value `GeekShell` publishes.
@@ -48,6 +60,21 @@ function render(ui, shell = DESKTOP) {
 /** Index of a `data-*` attribute in the markup, or -1. */
 function at(markup, attr) {
   return markup.indexOf(attr);
+}
+
+/**
+ * The class list of the element whose opening tag contains `attr`. MUI's own
+ * stylesheet always emits a `.Mui-selected` rule for any `ListItemButton` —
+ * selected or not — so a plain `markup.includes('Mui-selected')` proves
+ * nothing; the class must be read off the element's own `class` attribute.
+ */
+function classesFor(markup, attr) {
+  const idx = markup.indexOf(attr);
+  if (idx === -1) return [];
+  const tagStart = markup.lastIndexOf('<', idx);
+  const tagEnd = markup.indexOf('>', idx);
+  const match = markup.slice(tagStart, tagEnd + 1).match(/class="([^"]*)"/);
+  return match ? match[1].split(' ') : [];
 }
 
 function expectOrdered(markup, attrs) {
@@ -109,6 +136,92 @@ describe('GeekSidebar', () => {
     expect(markup).toContain('NoteGeek');
     expect(markup).toContain('data-geek-nav-item="notes"');
     expect(markup).toContain('data-test-legacy-footer');
+  });
+
+  it('gives a node brand the same 60px block sizing as the object form, with brandSx merged last over chromeSx', () => {
+    const markup = render(
+      <GeekSidebar
+        brand={<div data-test-node-brand>Custom brand</div>}
+        chromeSx={{ height: '999px' }}
+        brandSx={{ height: '42px' }}
+        items={[]}
+      />
+    );
+    expect(markup).toContain('data-test-node-brand');
+    // blockSx sizes it to topBarHeight before chromeSx/brandSx are spread on —
+    // brandSx wins the override race, chromeSx's conflicting value never ships.
+    expect(markup).toContain('height:42px');
+    expect(markup).not.toContain('height:999px');
+    expect(markup).toContain('flex-shrink:0');
+  });
+
+  it('merges footerSx onto the footer band, over chromeSx', () => {
+    const markup = render(
+      <GeekSidebar
+        items={[]}
+        chromeSx={{ paddingTop: '1px' }}
+        footerSx={{ paddingTop: '13px' }}
+        footer={{ settings: { to: '/settings' }, onSignOut: () => {} }}
+      />
+    );
+    expect(markup).toContain('data-geek-sidebar="footer"');
+    expect(markup).toContain('padding-top:13px');
+    expect(markup).not.toContain('padding-top:1px');
+  });
+
+  it('exposes the monogram as a hook with monogramSx merged in last', () => {
+    const markup = render(
+      <GeekSidebar
+        brand={{ monogram: 'FL', name: 'FlockGeek', monogramSx: { borderRadius: '3px' } }}
+        items={[]}
+      />
+    );
+    expect(markup).toContain('data-geek-sidebar="monogram"');
+    expect(markup).toContain('border-radius:3px');
+  });
+
+  it('selects the footer Settings row from activeId only, since the sidebar has no router', () => {
+    const settingsAttr = 'data-geek-nav-footer="settings"';
+
+    const notSelected = render(
+      <GeekSidebar
+        items={[]}
+        activeId="birds"
+        footer={{ settings: { to: '/settings' }, onSignOut: () => {} }}
+      />
+    );
+    expect(classesFor(notSelected, settingsAttr)).not.toContain('Mui-selected');
+
+    // Default id ('settings') matches activeId.
+    const byDefaultId = render(
+      <GeekSidebar
+        items={[]}
+        activeId="settings"
+        footer={{ settings: { to: '/settings' }, onSignOut: () => {} }}
+      />
+    );
+    expect(classesFor(byDefaultId, settingsAttr)).toContain('Mui-selected');
+    expect(byDefaultId).toContain('aria-current="page"');
+
+    // Explicit settings.id matches activeId.
+    const byExplicitId = render(
+      <GeekSidebar
+        items={[]}
+        activeId="prefs"
+        footer={{ settings: { to: '/other', id: 'prefs' }, onSignOut: () => {} }}
+      />
+    );
+    expect(classesFor(byExplicitId, settingsAttr)).toContain('Mui-selected');
+
+    // Explicit settings.selected overrides regardless of activeId.
+    const byExplicitFlag = render(
+      <GeekSidebar
+        items={[]}
+        activeId="birds"
+        footer={{ settings: { to: '/settings', selected: true }, onSignOut: () => {} }}
+      />
+    );
+    expect(classesFor(byExplicitFlag, settingsAttr)).toContain('Mui-selected');
   });
 });
 

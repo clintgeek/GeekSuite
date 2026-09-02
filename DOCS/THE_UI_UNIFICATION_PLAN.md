@@ -203,16 +203,24 @@ All four are opt-in; the legacy `GeekShell sidebar`/`topBar` slots keep working 
 - **`GeekShell`** — `nav` (sidebar *content*; turns on shell-owned responsiveness), `navWidth`,
   `navSx`, `topBar`, `bottomNav`, `children`, `focusMode`, `sx`, plus legacy `sidebar`.
   With `nav` the shell owns `isMobile` (`down(md)`) and drawer state: permanent column at `md`+,
-  `Drawer variant="temporary"` below. Publishes `useGeekShell()` →
+  `Drawer variant="temporary"` below — both wrap `nav` in a `component="nav"` landmark, so it
+  exists below `md` too. Publishes `useGeekShell()` →
   `{ isMobile, mobileOpen, hasNav, bottomInset, openNav, closeNav, toggleNav }`.
 - **`GeekSidebar`** — the content panel, not the chrome: `brand` (node or
-  `{ monogram, name, tagline, to }`, rendered as a 60px block), `sections`
+  `{ monogram, name, tagline, to, monogramSx }`, rendered as a 60px block either way — a node
+  brand gets the same block sizing as the object form), `sections`
   (`[{ label?, items: [{ id, label, icon, to?, href?, onClick?, badge?, disabled? }] }]`; a flat
   `items` array is accepted), `activeId`, `onNavigate(item, event)`, `extras` (slot above the
-  footer), `footer: { user: { name, secondary?, avatarUrl?, initials? }, settings: { to?, onClick? },
-  onSignOut, signOutLabel?, settingsLabel? }`, and `sx` / `chromeSx` / `itemSx` for identity.
-  Rows are 44px; navigating closes the mobile drawer through the shell context. Legacy
-  `appName` / flat `items` / `footer` element / `variant="permanent"|"temporary"` still render.
+  footer), `footer: { user: { name, secondary?, avatarUrl?, initials? },
+  settings: { to?, onClick?, id?, selected? }, onSignOut, signOutLabel?, settingsLabel? }`, and
+  `sx` / `chromeSx` / `itemSx` for identity, plus `brandSx` / `footerSx` (merged last, over
+  `chromeSx`, for that band only) and `brand.monogramSx` (merged last onto the monogram chip;
+  hook: `data-geek-sidebar="monogram"`). The footer Settings row renders `selected` when
+  `settings.selected === true`, or when `activeId` equals `settings.to` or `settings.id`
+  (default `'settings'`) — the sidebar has no router, so pass `activeId="settings"` on the
+  settings route. Rows are 44px; navigating closes the mobile drawer through the shell context.
+  Legacy `appName` / flat `items` / `footer` element / `variant="permanent"|"temporary"` still
+  render.
 - **`GeekTopBar`** — `title` (string or node), `leading` (defaults to a hamburger, mobile only,
   only when the shell has a nav), `search`, `actions`, `themeMode` / `onThemeToggle`, `currentApp`,
   `account: { name, secondary?, avatarUrl?, initials?, onSettings?, onSignOut, extraItems? }`.
