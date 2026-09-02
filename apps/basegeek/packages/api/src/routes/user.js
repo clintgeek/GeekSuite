@@ -1,5 +1,5 @@
 import express from 'express';
-import { authenticateToken } from '../middleware/auth.js';
+import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import { User } from '../models/user.js';
 import logger from '../lib/logger.js';
 import { setThemeCookie } from '../lib/themeCookie.js';
@@ -68,6 +68,8 @@ router.get('/me', authenticateToken, async (req, res) => {
         res.json({
             user: {
                 ...formatIdentity(user),
+                // Additive: lets frontends gate admin UI without a second call.
+                role: user.role || 'user',
                 profile: user.profile,
                 preferences: user.preferences,
             }
@@ -258,8 +260,8 @@ router.patch('/preferences/:app', authenticateToken, async (req, res) => {
 
 // @desc    Get all users
 // @route   GET /api/users
-// @access  Private
-router.get('/', authenticateToken, async (req, res) => {
+// @access  Admin
+router.get('/', requireAdmin, async (req, res) => {
     try {
         const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 100);
         const skip = Math.max(parseInt(req.query.skip, 10) || 0, 0);
@@ -272,6 +274,7 @@ router.get('/', authenticateToken, async (req, res) => {
         res.json({
             users: users.map(user => ({
                 ...formatIdentity(user),
+                role: user.role || 'user',
                 profile: user.profile,
                 preferences: user.preferences,
             })),
@@ -285,10 +288,10 @@ router.get('/', authenticateToken, async (req, res) => {
     }
 });
 
-// @desc    Create user (admin use)
+// @desc    Create user
 // @route   POST /api/users
-// @access  Private
-router.post('/', authenticateToken, async (req, res) => {
+// @access  Admin
+router.post('/', requireAdmin, async (req, res) => {
     try {
         const { username, email, password, profile, preferences } = req.body;
         if (!username || !email || !password) {
@@ -322,8 +325,8 @@ router.post('/', authenticateToken, async (req, res) => {
 
 // @desc    Delete user
 // @route   DELETE /api/users/:id
-// @access  Private
-router.delete('/:id', authenticateToken, async (req, res) => {
+// @access  Admin
+router.delete('/:id', requireAdmin, async (req, res) => {
     try {
         const user = await User.findById(req.params.id);
         if (!user) {

@@ -89,6 +89,45 @@ The `app` field must be a value in the canonical `VALID_APPS` list (`packages/ap
 - Validates `app` claim against `VALID_APPS` if present.
 - Attaches decoded payload to `req.user`.
 
+`requireAdmin` (same file) — `authenticateToken`, then a role check. `requireRole('admin')` is the role half on its own, for composing onto a route that is already authenticated.
+
+---
+
+## Roles
+
+Two roles, on the user document itself:
+
+```js
+// packages/api/src/models/user.js
+role: { type: String, enum: ['user', 'admin'], default: 'user', index: true }
+```
+
+**Role is deliberately not in the JWT.** Access tokens are long-lived, so a role baked into the payload would keep a demoted admin privileged until their token expired. `requireAdmin` reads `role` from the userGeek document on every gated request (one indexed-field projection), so a promotion or demotion is live on the user's very next request — no logout, no refresh.
+
+A plain user hitting a gated route gets `403 { error: 'admin_required' }`. A missing token still gets `401` and an invalid one `403` from `authenticateToken`.
+
+### Admin-gated routes
+
+| Method | Path | Why |
+|--------|------|-----|
+| GET | `/api/users` | Lists every user in the suite |
+| POST | `/api/users` | Creates a user out-of-band of registration |
+| DELETE | `/api/users/:id` | Deletes any user |
+
+Self routes are untouched and open to any authenticated user: `/api/users/me`, `/api/users/bootstrap`, `/api/users/profile`, `/api/users/preferences`, `/api/users/preferences/*`.
+
+`GET /api/users/me` returns `user.role` (and the admin list returns `role` per row) so a frontend can hide admin UI without a second call. It is a display hint only — the gate is server-side.
+
+### Promoting a user
+
+```bash
+cd apps/basegeek/packages/api
+node scripts/setUserRole.js <username> admin   # promote
+node scripts/setUserRole.js <username> user    # demote
+```
+
+Reads `USERGEEK_MONGODB_URI` from the API's own `.env`. It refuses to run against a username that does not exist (it never creates a user), rejects a role outside the enum, prints only the before/after role, and is idempotent. The change is live immediately — no restart, no re-login.
+
 ---
 
 ## Logging
@@ -113,6 +152,8 @@ pnpm test
 ```
 
 Key coverage: login happy path, wrong password, refresh rotation, replay detection, family revocation after replay, logout revocation, password-reset hash correctness, JWT secret length enforcement, cryptoVault round-trip.
+
+Role and admin-gate coverage lives in `packages/api/src/__tests__/userRoles.test.js`: the `role` default, the 401/403/200 ladder on `GET /api/users`, promotion and demotion taking effect on the same token, the other gated routes, self routes staying open, and `setUserRole()`.
 
 ---
 

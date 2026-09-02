@@ -72,6 +72,17 @@ const userSchema = new mongoose.Schema({
         default: null
     },
 
+    // ── Authorization ──
+    // Deliberately NOT part of the JWT payload: the auth middleware reads it
+    // from the DB on every admin-gated request so a promotion or demotion
+    // takes effect immediately, without waiting for the user to re-login.
+    role: {
+        type: String,
+        enum: ['user', 'admin'],
+        default: 'user',
+        index: true
+    },
+
     // ── Profile (human-facing) ──
     profile: {
         type: profileSchema,
