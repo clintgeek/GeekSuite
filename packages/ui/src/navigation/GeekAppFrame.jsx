@@ -7,23 +7,39 @@
  *   - transitionKey derived from top-level path segment only
  *
  * Does NOT own:
- *   - bottom padding (app-specific: tab bar height varies per app)
+ *   - bottom padding beyond the shell's bottom-nav inset (see `bottomInset`)
  *   - sidebar / topbar / drawer behavior
  *   - auth awareness
  *   - any prop smarter than `sx`
  *
  * Usage:
- *   <GeekAppFrame sx={{ pb: isMobile ? `${MOBILE_TAB_HEIGHT}px` : 0 }}>
- *     {children}
- *   </GeekAppFrame>
+ *   <GeekAppFrame />                       // inset itself when the shell has a
+ *                                          // bottom nav (`bottomInset` auto)
+ *   <GeekAppFrame bottomInset={false} />   // opt out
+ *   <GeekAppFrame bottomInset={88} />      // explicit, app-owned tab bar
  */
 import { AnimatePresence, motion } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
 import Box from '@mui/material/Box';
-import { geekMotion } from '../designTokens.js';
+import { geekLayout, geekMotion } from '../designTokens.js';
+import { useGeekShell } from './shellContext.js';
 
-export function GeekAppFrame({ children, sx }) {
+/**
+ * @param {number|boolean} [bottomInset] bottom padding reserved for a mobile
+ *   tab bar. Omit to follow the shell (`GeekShell bottomNav`), `true` for
+ *   `geekLayout.bottomNavHeight`, a number for an explicit px value, `false`
+ *   for none.
+ */
+export function GeekAppFrame({ children, bottomInset, sx }) {
   const location = useLocation();
+  const shell = useGeekShell();
+
+  const inset =
+    bottomInset === undefined
+      ? shell.bottomInset
+      : bottomInset === true
+        ? geekLayout.bottomNavHeight
+        : bottomInset || 0;
 
   // Stable key on top-level segment only.
   // /plan/weekly → /plan/monthly won't re-trigger the transition.
@@ -37,6 +53,7 @@ export function GeekAppFrame({ children, sx }) {
         overflowY: 'auto',
         overflowX: 'hidden',
         bgcolor:   'background.default',
+        ...(inset ? { pb: `${inset}px` } : null),
         ...sx,
       }}
     >

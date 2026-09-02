@@ -184,37 +184,59 @@ Tags are part of the universal "Thing" model and should look structurally identi
 
 ## 3. Navigation Rules
 
-### Sidebar
+One grammar, decided 2026-09-02 (TODO_ORDER #15a). Identity — fonts, colors, always-dark
+sidebar chrome, density — stays the app's business. Structure does not.
 
-The sidebar must behave consistently everywhere.
+**Desktop (`md`+):** permanent 220px sidebar (`geekLayout.sidebarWidth`), no collapse rail.
+Brand block at top (60px), grouped nav, footer in fixed order **user chip → Settings → Sign out**.
+**Top bar (60px, `geekLayout.topBarHeight`):** page title/context on the left; right cluster in
+fixed order **theme toggle → app switcher → account avatar menu**. Brand does not live here.
+**Mobile (below `md` — the suite's one breakpoint, `geekLayout.navBreakpoint`):** a hamburger in
+the top bar opens the *same* sidebar content as a temporary 220px drawer.
+**Bottom tab bars:** data-entry apps only (bujogeek, fitnessgeek, notegeek), max five items,
+never Logout, never a duplicate of the drawer's account/settings rows.
 
-Shared rules:
+### The primitives (`packages/ui/src/navigation`)
 
-- Desktop width: `220px`
-- Mobile behavior: temporary drawer or equivalent overlay
-- Active state: same visual structure across apps
-- Item spacing: shared spacing scale
-- Icon size: shared icon token
-- Collapsed/hidden behavior: consistent across apps
+All four are opt-in; the legacy `GeekShell sidebar`/`topBar` slots keep working unchanged.
 
-The sidebar contents may differ by app. The sidebar behavior may not.
+- **`GeekShell`** — `nav` (sidebar *content*; turns on shell-owned responsiveness), `navWidth`,
+  `navSx`, `topBar`, `bottomNav`, `children`, `focusMode`, `sx`, plus legacy `sidebar`.
+  With `nav` the shell owns `isMobile` (`down(md)`) and drawer state: permanent column at `md`+,
+  `Drawer variant="temporary"` below. Publishes `useGeekShell()` →
+  `{ isMobile, mobileOpen, hasNav, bottomInset, openNav, closeNav, toggleNav }`.
+- **`GeekSidebar`** — the content panel, not the chrome: `brand` (node or
+  `{ monogram, name, tagline, to }`, rendered as a 60px block), `sections`
+  (`[{ label?, items: [{ id, label, icon, to?, href?, onClick?, badge?, disabled? }] }]`; a flat
+  `items` array is accepted), `activeId`, `onNavigate(item, event)`, `extras` (slot above the
+  footer), `footer: { user: { name, secondary?, avatarUrl?, initials? }, settings: { to?, onClick? },
+  onSignOut, signOutLabel?, settingsLabel? }`, and `sx` / `chromeSx` / `itemSx` for identity.
+  Rows are 44px; navigating closes the mobile drawer through the shell context. Legacy
+  `appName` / flat `items` / `footer` element / `variant="permanent"|"temporary"` still render.
+- **`GeekTopBar`** — `title` (string or node), `leading` (defaults to a hamburger, mobile only,
+  only when the shell has a nav), `search`, `actions`, `themeMode` / `onThemeToggle`, `currentApp`,
+  `account: { name, secondary?, avatarUrl?, initials?, onSettings?, onSignOut, extraItems? }`.
+  Render order: `actions` → theme → switcher → account → legacy `settings` / `profile`.
+- **`GeekBottomNav`** — `items` (max 5: `id`, `label`, `icon`, `to`/`href`/`onClick`), `activeId`,
+  `onNavigate`, `hidden`, `sx`, `itemSx`. 56px (`geekLayout.bottomNavHeight`), 44px targets, and
+  logout items are dropped, not rendered. Pass it as `GeekShell bottomNav` so `GeekAppFrame`
+  insets content (`bottomInset`: auto from the shell, or `true` / a px number / `false`).
 
-### Top Bar
+### Migrating an app
 
-Top bars must use consistent placement for:
-
-- User profile
-- Settings
-- Search, when present
-- App-level actions
-- Global capture entry point
-
-Shared rules:
-
-- Height: `60px`
-- Keep global/account actions in predictable positions.
-- Keep app-specific actions grouped separately from global controls.
-- Do not move profile/settings/search arbitrarily between apps.
+1. Delete the app's `isMobile` media query, `mobileOpen` state, hamburger handler and its
+   hand-rolled `<Drawer>`; pass `nav={<GeekSidebar … />}` to `GeekShell` instead.
+2. Delete hardcoded `220` / `280` / `68` / `60` / `pb: 88px` literals — use `geekLayout` tokens.
+   No collapse rail, one breakpoint (`md`), 220px on mobile and desktop alike.
+3. Move brand out of the top bar into `GeekSidebar brand`; give the top bar a real `title`.
+4. Move user / Settings / Sign out out of nav lists and mid-list rows into `footer` (sidebar) and
+   `account` (top bar). Both surfaces, fixed order, everywhere.
+5. Pass `themeMode` / `onThemeToggle` / `currentApp` to `GeekTopBar` rather than mounting
+   `GeekThemeToggle` / `GeekAppSwitcher` by hand in a sidebar.
+6. Data-entry apps only: replace the bespoke tab bar with `GeekBottomNav` and drop its Logout
+   row and any duplicate account/settings entries. Drop the manual `pb` on `GeekAppFrame`.
+7. Keep identity via `sx` / `chromeSx` / `itemSx` (dark chrome, fonts, density) — never by
+   restructuring the shell.
 
 ### Routing Feel
 

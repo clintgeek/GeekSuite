@@ -72,6 +72,13 @@ export const geekLayout = {
   topBarHeight: 60,
   sidebarWidth: 220,
   minClickTarget: 44,
+  // Mobile bottom tab bar (data-entry apps only). Content must be inset by
+  // this much so the last row is not hidden behind the bar.
+  bottomNavHeight: 56,
+  // The one navigation breakpoint for the whole suite: below this the sidebar
+  // becomes a temporary drawer and the top bar grows a hamburger. Passed to
+  // `theme.breakpoints.down()`, so it must be a real MUI breakpoint key.
+  navBreakpoint: 'md',
 };
 
 export const geekMotion = {

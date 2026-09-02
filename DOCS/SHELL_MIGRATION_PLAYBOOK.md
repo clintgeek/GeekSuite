@@ -1,5 +1,11 @@
 # GeekSuite Shell Migration Playbook
 
+> **Superseded 2026-09-02.** The shell grammar and migration checklist now live in
+> `THE_UI_UNIFICATION_PLAN.md` §3 (TODO_ORDER #15a): every app adopts `GeekShell nav=…`,
+> `GeekSidebar`, `GeekTopBar` and, for data-entry apps, `GeekBottomNav`. Statements below
+> such as "do not replace app sidebars with GeekSidebar" and "do not touch BookGeek" no
+> longer apply. Kept for the history of the BuJoGeek skeleton it documents.
+
 How to apply the proven BuJoGeek skeleton to each remaining app.
 
 > BuJoGeek is the reference implementation. When in doubt, look there.

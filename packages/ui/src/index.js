@@ -4,12 +4,16 @@ export { FocusModeToggle, GlobalSearchButton, QuickCaptureButton } from './featu
 export { FocusModeProvider, useFocusMode } from './focus';
 export {
   GEEKSUITE_APPS,
+  GEEK_BOTTOM_NAV_MAX_ITEMS,
   GeekAppFrame,
   GeekAppSwitcher,
+  GeekBottomNav,
   GeekShell,
   GeekSidebar,
   GeekThemeToggle,
+  GeekShellContext,
   GeekTopBar,
+  useGeekShell,
 } from './navigation';
 export {
   GeekButton,
