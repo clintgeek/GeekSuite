@@ -71,6 +71,54 @@ jobs:
         working-directory: apps/notegeek/frontend
         run: npx vitest run
 
+  test-ui:
+    name: shared ui tests (theme contrast)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Run vitest
+        working-directory: packages/ui
+        run: npx vitest run
+
+  test-bujogeek:
+    name: bujogeek frontend tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Run vitest
+        working-directory: apps/bujogeek/frontend
+        run: npx vitest run
+
+  lint:
+    name: eslint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Errors gate; warnings don't (see DOCS/CICD.md). `-r` skips packages
+      # without a lint script, so new packages opt in by adding one.
+      - run: pnpm -r lint
+
   build-frontends:
     name: frontend build smoke
     runs-on: ubuntu-latest
@@ -91,6 +139,8 @@ jobs:
             dir: apps/storygeek/frontend
           - app: flockgeek
             dir: apps/flockgeek/frontend
+          - app: basegeek
+            dir: apps/basegeek/packages/ui
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
