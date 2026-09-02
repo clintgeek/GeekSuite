@@ -20,8 +20,8 @@ const Login = () => {
       loading={loading}
       error={error}
       // FitnessGeek branding (Blue/Energy)
-      logoColor="#2563eb" // Blue 600
-      logoSuffixColor="#3b82f6" // Blue 500
+      logoColor="text.primary"
+      logoSuffixColor="primary.main"
       // Custom ink wash for FitnessGeek
       inkColors={[
         'rgba(37, 99, 235, 0.08)', // Blue

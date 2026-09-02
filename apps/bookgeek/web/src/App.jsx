@@ -1940,8 +1940,8 @@ export default function App() {
         loading={authLoading}
         error={authError}
         // BookGeek branding (Blue/Slate)
-        logoColor="#3b82f6" // Blue 500
-        logoSuffixColor="#1d4ed8" // Blue 700
+        logoColor="text.primary"
+        logoSuffixColor="primary.main"
         // Custom ink wash for BookGeek
         inkColors={[
           'rgba(59, 130, 246, 0.08)', // Blue

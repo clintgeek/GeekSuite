@@ -27,8 +27,8 @@ export default function LoginPage() {
       features={['AI Game Master', 'Dice Mechanics', 'Character Tracking', 'Story Export']}
       onLogin={handleLogin}
       loading={loading}
-      logoColor="#7c4dff"
-      logoSuffixColor="#ff6d00"
+      logoColor="text.primary"
+      logoSuffixColor="primary.main"
     />
   );
 }

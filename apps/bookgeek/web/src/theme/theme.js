@@ -10,7 +10,7 @@ import { alpha } from '@mui/material/styles';
 import { createGeekSuiteTheme } from '@geeksuite/ui';
 
 /* ─── Midnight Reader palette ─── */
-const sky = { main: "#0ea5e9", light: "#38bdf8", dark: "#0284c7", contrastText: "#ffffff" };
+const sky = { main: "#0ea5e9", light: "#38bdf8", dark: "#0284c7", contrastText: "#0b1220" };
 
 const darkColors = {
   page:    "#010409",
@@ -43,6 +43,7 @@ function buildBookOverrides(mode) {
       text: {
         primary:   colors.text,
         secondary: colors.muted,
+        muted:     isDark ? "#9aa4b2" : "#5b6472",
       },
       divider: colors.border,
     },
