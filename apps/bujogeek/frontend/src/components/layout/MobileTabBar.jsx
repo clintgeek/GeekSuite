@@ -1,108 +1,53 @@
+/**
+ * BuJoGeek mobile tab bar — rebuilt on the suite `GeekBottomNav` primitive.
+ *
+ * Structure: the four "Journal" nav items plus a "More" tab that opens a
+ * bottom sheet for the "Library" items (Collections, Habits, Search,
+ * Templates) and Keyboard Shortcuts. The sheet used to duplicate Sign out —
+ * that row is removed: account actions live in the sidebar footer and the
+ * top-bar account menu now, not here (`GeekBottomNav` would drop a Logout
+ * item anyway, but the "More" sheet is bujogeek's own Drawer, not the
+ * primitive, so the row had to be removed by hand).
+ */
 import { useState } from 'react';
-import { Box, Typography, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText } from '@mui/material';
+import { Box, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
-import { CalendarCheck, ClipboardCheck, Calendar, Hash, MoreHorizontal, Search, Library, Flame, LayoutTemplate, Keyboard, LogOut } from 'lucide-react';
+import { MoreHorizontal, Keyboard } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
-import { MOBILE_TAB_HEIGHT } from '../../utils/constants';
-import { colors } from '../../theme/colors';
+import { GeekBottomNav } from '@geeksuite/ui';
+import { navSections, activeNavId } from './navConfig';
 
-const tabs = [
-  { label: 'Today', icon: CalendarCheck, path: '/today' },
-  { label: 'Review', icon: ClipboardCheck, path: '/review' },
-  { label: 'Plan', icon: Calendar, path: '/plan' },
-  { label: 'Tags', icon: Hash, path: '/tags' },
-  { label: 'More', icon: MoreHorizontal, path: null },
-];
+const primaryItems = navSections[0].items; // Today, Review, Plan, Tags
+const moreSheetItems = navSections[1].items; // Collections, Habits, Search, Templates
 
 const MobileTabBar = () => {
   const theme = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
-  const { logout } = useAuth();
   const [moreOpen, setMoreOpen] = useState(false);
 
-  const isActive = (path) => {
-    if (!path) return false;
-    if (path === '/plan') return location.pathname.startsWith('/plan');
-    return location.pathname === path;
-  };
+  const currentId = activeNavId(location.pathname);
 
-  const handleTabClick = (tab) => {
-    if (tab.path === null) {
-      setMoreOpen(true);
-    } else {
-      navigate(tab.path);
-    }
-  };
-
-  const handleLogout = () => {
-    logout();
-    setMoreOpen(false);
-    navigate('/login');
-  };
+  const items = [
+    ...primaryItems.map(({ Icon, id, label, to }) => ({
+      id,
+      label,
+      to,
+      icon: <Icon size={22} strokeWidth={id === currentId ? 2.2 : 1.8} />,
+    })),
+    {
+      id: 'more',
+      label: 'More',
+      icon: <MoreHorizontal size={22} strokeWidth={1.8} />,
+      onClick: () => setMoreOpen(true),
+    },
+  ];
 
   return (
     <>
-      <Box
-        sx={{
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: MOBILE_TAB_HEIGHT,
-          backgroundColor: theme.palette.background.paper,
-          borderTop: `1px solid ${theme.palette.divider}`,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-around',
-          zIndex: 1200,
-          paddingBottom: 'env(safe-area-inset-bottom)',
-        }}
-      >
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          const active = isActive(tab.path);
-          return (
-            <Box
-              key={tab.label}
-              onClick={() => handleTabClick(tab)}
-              sx={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flex: 1,
-                py: 1,
-                cursor: 'pointer',
-                color: active ? colors.primary[500] : theme.palette.text.secondary,
-                transition: 'color 0.15s ease',
-                WebkitTapHighlightColor: 'transparent',
-                '&:active': {
-                  color: colors.primary[500],
-                },
-              }}
-              role="button"
-              tabIndex={0}
-              aria-label={tab.label}
-            >
-              <Icon size={22} strokeWidth={active ? 2.2 : 1.8} />
-              <Typography
-                sx={{
-                  fontSize: '0.625rem',
-                  fontWeight: active ? 600 : 400,
-                  mt: 0.25,
-                  lineHeight: 1,
-                }}
-              >
-                {tab.label}
-              </Typography>
-            </Box>
-          );
-        })}
-      </Box>
+      <GeekBottomNav items={items} activeId={currentId} />
 
-      {/* More drawer */}
+      {/* More sheet */}
       <Drawer
         anchor="bottom"
         open={moreOpen}
@@ -127,50 +72,19 @@ const MobileTabBar = () => {
             }}
           />
           <List>
-            <ListItem disablePadding>
-              <ListItemButton
-                onClick={() => { navigate('/collections'); setMoreOpen(false); }}
-                sx={{ borderRadius: '8px' }}
-              >
-                <ListItemIcon sx={{ minWidth: 40 }}>
-                  <Library size={20} />
-                </ListItemIcon>
-                <ListItemText primary="Collections" primaryTypographyProps={{ fontSize: '0.9375rem' }} />
-              </ListItemButton>
-            </ListItem>
-            <ListItem disablePadding>
-              <ListItemButton
-                onClick={() => { navigate('/habits'); setMoreOpen(false); }}
-                sx={{ borderRadius: '8px' }}
-              >
-                <ListItemIcon sx={{ minWidth: 40 }}>
-                  <Flame size={20} />
-                </ListItemIcon>
-                <ListItemText primary="Habits" primaryTypographyProps={{ fontSize: '0.9375rem' }} />
-              </ListItemButton>
-            </ListItem>
-            <ListItem disablePadding>
-              <ListItemButton
-                onClick={() => { navigate('/search'); setMoreOpen(false); }}
-                sx={{ borderRadius: '8px' }}
-              >
-                <ListItemIcon sx={{ minWidth: 40 }}>
-                  <Search size={20} />
-                </ListItemIcon>
-                <ListItemText primary="Search" primaryTypographyProps={{ fontSize: '0.9375rem' }} />
-              </ListItemButton>
-            </ListItem>
-            <ListItem disablePadding>
-              <ListItemButton
-                onClick={() => { navigate('/templates'); setMoreOpen(false); }}
-                sx={{ borderRadius: '8px' }}
-              >
-                <ListItemIcon sx={{ minWidth: 40 }}>
-                  <LayoutTemplate size={20} />
-                </ListItemIcon>
-                <ListItemText primary="Templates" primaryTypographyProps={{ fontSize: '0.9375rem' }} />
-              </ListItemButton>
-            </ListItem>
+            {moreSheetItems.map(({ id, label, to, Icon }) => (
+              <ListItem key={id} disablePadding>
+                <ListItemButton
+                  onClick={() => { navigate(to); setMoreOpen(false); }}
+                  sx={{ borderRadius: '8px' }}
+                >
+                  <ListItemIcon sx={{ minWidth: 40 }}>
+                    <Icon size={20} />
+                  </ListItemIcon>
+                  <ListItemText primary={label} primaryTypographyProps={{ fontSize: '0.9375rem' }} />
+                </ListItemButton>
+              </ListItem>
+            ))}
             <ListItem disablePadding>
               <ListItemButton
                 onClick={() => {
@@ -185,21 +99,6 @@ const MobileTabBar = () => {
                   <Keyboard size={20} />
                 </ListItemIcon>
                 <ListItemText primary="Keyboard Shortcuts" primaryTypographyProps={{ fontSize: '0.9375rem' }} />
-              </ListItemButton>
-            </ListItem>
-            <ListItem disablePadding>
-              <ListItemButton
-                onClick={handleLogout}
-                sx={{
-                  borderRadius: '8px',
-                  color: colors.status.error,
-                  '&:hover': { backgroundColor: colors.status.errorBg },
-                }}
-              >
-                <ListItemIcon sx={{ minWidth: 40, color: 'inherit' }}>
-                  <LogOut size={20} />
-                </ListItemIcon>
-                <ListItemText primary="Logout" primaryTypographyProps={{ fontSize: '0.9375rem' }} />
               </ListItemButton>
             </ListItem>
           </List>

@@ -1,85 +1,58 @@
-import { Box, IconButton, Avatar, useMediaQuery } from '@mui/material';
+/**
+ * BuJoGeek top bar — suite grammar via `GeekTopBar`.
+ *
+ * Before this migration the left slot was empty (no page title) and the
+ * avatar was inert, hidden on mobile. Now the left carries a real,
+ * route-derived title and the avatar is a real account menu (Settings, Sign
+ * out) on every width — the shell's own hamburger covers mobile nav access,
+ * so there is no bespoke `onMenuClick` plumbing here any more.
+ */
+import { alpha } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
-import { Menu as MenuIcon } from 'lucide-react';
-import { GeekAppSwitcher, GeekThemeToggle } from '@geeksuite/ui';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { GeekTopBar } from '@geeksuite/ui';
 import { useThemeMode } from '@geeksuite/user';
 import { useAuth } from '../../context/AuthContext';
-import { TOPBAR_HEIGHT } from '../../utils/constants';
+import { displayNameFrom, initialsFrom, secondaryFrom } from '../../utils/userDisplay';
 import { colors } from '../../theme/colors';
+import { pageTitle } from './navConfig';
 
-/**
- * TopBar — minimal chrome bar. The editorial date headline lives on each
- * page's own masthead, not here. TopBar is the planner's binding stitching:
- * quiet, functional, present but never competing for attention.
- */
-const TopBar = ({ onMenuClick }) => {
+const TopBar = () => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const { user } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { user, isAuthenticated, logout } = useAuth();
   const { theme: themeMode, toggleTheme } = useThemeMode();
 
-  // Avatar letterform in Fraunces
-  const initial = user?.email?.[0]?.toUpperCase() || 'U';
-
   return (
-    <Box
+    <GeekTopBar
+      title={pageTitle(location.pathname)}
+      themeMode={themeMode}
+      onThemeToggle={toggleTheme}
+      currentApp="bujogeek"
+      account={
+        isAuthenticated
+          ? {
+              name: displayNameFrom(user),
+              secondary: secondaryFrom(user),
+              initials: initialsFrom(user),
+              onSettings: () => navigate('/settings'),
+              onSignOut: logout,
+            }
+          : undefined
+      }
       sx={{
-        height: TOPBAR_HEIGHT,
-        display: 'flex',
-        alignItems: 'center',
-        px: { xs: 2, md: 3 },
-        backgroundColor: theme.palette.background.paper,
+        backgroundColor: alpha(theme.palette.background.paper, 0.96),
         borderBottom: `1px dotted ${isDark ? 'rgba(255,255,255,0.12)' : colors.ink[200]}`,
-        flexShrink: 0,
+        boxShadow: 'none',
+        color: 'text.primary',
+        '& [data-geek-topbar="title"]': {
+          fontFamily: '"Fraunces", serif',
+          fontWeight: 500,
+        },
       }}
-    >
-      {/* Mobile hamburger */}
-      {isMobile && (
-        <IconButton
-          onClick={onMenuClick}
-          sx={{
-            mr: 1,
-            color: theme.palette.text.primary,
-            borderRadius: 2,
-            '&:hover': {
-              backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.ink[100],
-            },
-          }}
-          aria-label="Open navigation menu"
-        >
-          <MenuIcon size={22} />
-        </IconButton>
-      )}
-
-      <Box sx={{ flex: 1 }} />
-
-      {/* Right actions */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-        <GeekThemeToggle mode={themeMode} onToggle={toggleTheme} />
-        <GeekAppSwitcher currentApp="bujogeek" />
-        {user && (
-          <Avatar
-            sx={{
-              width: 32,
-              height: 32,
-              ml: 0.5,
-              backgroundColor: colors.primary[500],
-              fontFamily: '"Fraunces", serif',
-              fontSize: '0.9375rem',
-              fontWeight: 500,
-              letterSpacing: '-0.01em',
-              color: '#fff',
-              display: { xs: 'none', md: 'flex' },
-              transition: 'transform 200ms ease',
-              '&:hover': { transform: 'scale(1.06)' },
-            }}
-          >
-            {initial}
-          </Avatar>
-        )}
-      </Box>
-    </Box>
+    />
   );
 };
 

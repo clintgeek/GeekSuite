@@ -23,6 +23,7 @@ import SearchPage from './pages/SearchPage';
 import CollectionsPage from './pages/CollectionsPage';
 import HabitsPage from './pages/HabitsPage';
 import CollectionDetailPage from './pages/CollectionDetailPage';
+import SettingsPage from './pages/SettingsPage';
 import { useMemo, useState, useEffect } from 'react';
 
 function AppWithAuth() {
@@ -71,6 +72,7 @@ function AppWithAuth() {
         <Route path="/collections/:id" element={<ProtectedRoute><CollectionDetailPage /></ProtectedRoute>} />
         <Route path="/habits" element={<ProtectedRoute><HabitsPage /></ProtectedRoute>} />
         <Route path="/search" element={<ProtectedRoute><SearchPage /></ProtectedRoute>} />
+        <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
 
         {/* Legacy redirects */}
         <Route path="/tasks/daily" element={<Navigate to="/today" replace />} />
