@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Box, Typography, Tooltip } from '@mui/material';
+import { Box, Typography, Tooltip, useTheme } from '@mui/material';
 import {
   Dashboard as DashboardIcon,
   Note as NoteIcon,
@@ -14,6 +14,7 @@ import {
   Apps as AppsIcon
 } from '@mui/icons-material';
 import { useBaseGeekAuth } from '../components/AuthContext';
+import { brandInk } from '../theme';
 import api from '../api';
 
 // Icon resolver — maps DB-stored icon name strings to MUI components
@@ -51,6 +52,7 @@ const services = [
 ];
 
 export default function BaseGeekHome() {
+  const theme = useTheme();
   const { user } = useBaseGeekAuth();
   const [apps, setApps] = useState(fallbackApps);
   const [serviceStatus, setServiceStatus] = useState({});
@@ -294,7 +296,7 @@ export default function BaseGeekHome() {
                     justifyContent: 'center',
                     transition: 'all 200ms ease',
                   }}>
-                    <AppIcon sx={{ fontSize: 24, color: app.color }} />
+                    <AppIcon sx={{ fontSize: 24, color: brandInk(theme, app.color) }} />
                   </Box>
                   <Box sx={{ textAlign: 'center' }}>
                     <Typography sx={{

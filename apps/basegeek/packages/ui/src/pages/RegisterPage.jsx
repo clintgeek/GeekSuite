@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { Box, TextField, Button, Typography, Alert } from '@mui/material';
+import { Box, TextField, Button, Typography, Alert, useTheme } from '@mui/material';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { alpha } from '@mui/material/styles';
 import api from '../api';
 
 export default function RegisterPage() {
+  const theme = useTheme();
   const [form, setForm] = useState({ username: '', email: '', password: '' });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -38,7 +40,7 @@ export default function RegisterPage() {
       justifyContent: 'center',
       alignItems: 'center',
       minHeight: '100vh',
-      backgroundColor: '#0c0c0f',
+      backgroundColor: theme.palette.surfaces.deep,
       position: 'relative',
       overflow: 'hidden',
     }}>
@@ -49,7 +51,7 @@ export default function RegisterPage() {
         transform: 'translateX(-50%)',
         width: '600px',
         height: '400px',
-        background: 'radial-gradient(ellipse, rgba(232, 168, 73, 0.06) 0%, transparent 70%)',
+        background: `radial-gradient(ellipse, ${theme.palette.glow.soft} 0%, transparent 70%)`,
         pointerEvents: 'none',
       }} />
 
@@ -59,29 +61,29 @@ export default function RegisterPage() {
             width: 56,
             height: 56,
             borderRadius: '14px',
-            background: 'linear-gradient(135deg, #e8a849 0%, #d4956a 100%)',
+            background: theme.palette.accent.gradient,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             fontSize: '20px',
             fontWeight: 700,
-            color: '#0c0c0f',
+            color: theme.palette.accent.onBrightFill,
             fontFamily: '"Geist Mono", monospace',
             mx: 'auto',
             mb: 2,
-            boxShadow: '0 8px 32px rgba(232, 168, 73, 0.15)',
+            boxShadow: `0 8px 32px ${alpha(theme.palette.primary.main, 0.15)}`,
           }}>
             bg
           </Box>
-          <Typography sx={{ fontWeight: 700, fontSize: '1.5rem', color: '#e4dfd6', letterSpacing: '-0.02em', mb: 0.25 }}>
+          <Typography sx={{ fontWeight: 700, fontSize: '1.5rem', color: 'text.primary', letterSpacing: '-0.02em', mb: 0.25 }}>
             baseGeek
           </Typography>
-          <Typography sx={{ fontSize: '0.7rem', color: '#8a8690', fontFamily: '"Geist Mono", monospace', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+          <Typography sx={{ fontSize: '0.7rem', color: 'text.secondary', fontFamily: '"Geist Mono", monospace', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
             create account
           </Typography>
         </Box>
 
-        <Box sx={{ backgroundColor: '#17171b', borderRadius: '16px', border: '1px solid #252529', p: 3.5 }}>
+        <Box sx={{ backgroundColor: 'background.paper', borderRadius: '16px', border: `1px solid ${theme.palette.line.panel}`, p: 3.5 }}>
           <form onSubmit={handleSubmit}>
             <TextField label="Username" name="username" value={form.username} onChange={handleChange} fullWidth margin="dense" required autoFocus size="small" />
             <TextField label="Email" name="email" type="email" value={form.email} onChange={handleChange} fullWidth margin="dense" required size="small" />
@@ -96,7 +98,7 @@ export default function RegisterPage() {
           </form>
         </Box>
 
-        <Typography sx={{ textAlign: 'center', mt: 3, fontSize: '0.7rem', color: '#71717a', fontFamily: '"Geist Mono", monospace' }}>
+        <Typography sx={{ textAlign: 'center', mt: 3, fontSize: '0.7rem', color: 'text.muted', fontFamily: '"Geist Mono", monospace' }}>
           GeekSuite — shared authentication
         </Typography>
       </Box>

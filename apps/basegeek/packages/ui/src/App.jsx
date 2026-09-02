@@ -1,6 +1,8 @@
+import { useMemo } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { ThemeProvider, CssBaseline } from '@mui/material';
-import theme from './theme';
+import { ThemeProvider as MuiThemeProvider, CssBaseline } from '@mui/material';
+import { ThemeProvider, useThemeMode } from '@geeksuite/user';
+import { createBaseGeekTheme } from './theme';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import Layout from './components/Layout';
@@ -15,9 +17,15 @@ import AccountPage from './pages/AccountPage';
 import { AuthProvider } from './components/AuthContext';
 import PortalPage from './pages/PortalPage';
 
-function App() {
+// Reads the resolved mode from the suite-wide theme provider (shared
+// `geek_theme` cookie + the user's stored preference) and rebuilds the MUI
+// theme when it flips.
+function AppContent() {
+  const { theme: mode } = useThemeMode();
+  const theme = useMemo(() => createBaseGeekTheme(mode), [mode]);
+
   return (
-    <ThemeProvider theme={theme}>
+    <MuiThemeProvider theme={theme}>
       <CssBaseline />
       <AuthProvider>
         <Router>
@@ -39,6 +47,16 @@ function App() {
           </Routes>
         </Router>
       </AuthProvider>
+    </MuiThemeProvider>
+  );
+}
+
+function App() {
+  // baseGeek is a dark-first control room: with no stored preference and no
+  // cookie, it stays dark rather than following the OS.
+  return (
+    <ThemeProvider defaultPreference="dark">
+      <AppContent />
     </ThemeProvider>
   );
 }

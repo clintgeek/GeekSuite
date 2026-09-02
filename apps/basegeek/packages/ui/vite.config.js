@@ -1,10 +1,12 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { themePreboot } from '@geeksuite/user/vite';
 
 export default defineConfig({
   plugins: [
     react(),
+    themePreboot(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'robots.txt', 'apple-touch-icon.png'],
@@ -29,7 +31,21 @@ export default defineConfig({
     })
   ],
   resolve: {
-    extensions: ['.js', '.jsx', '.json']
+    extensions: ['.js', '.jsx', '.json'],
+    // Force a SINGLE instance of MUI, Emotion and React across the app and the
+    // @geeksuite/ui workspace package. Without this, pnpm can hand
+    // @geeksuite/ui its own MUI copy, which never sees this app's
+    // ThemeProvider and falls back to MUI's default LIGHT theme.
+    // Only dedupe packages the app depends on directly: deduping
+    // @mui/material makes its nested @mui/system a singleton too, while
+    // listing @mui/system explicitly breaks resolution under pnpm.
+    dedupe: [
+      '@mui/material',
+      '@emotion/react',
+      '@emotion/styled',
+      'react',
+      'react-dom'
+    ]
   },
   server: {
     port: 5173,

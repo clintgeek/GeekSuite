@@ -18,6 +18,7 @@ import {
   useTheme,
   useMediaQuery
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import {
   Menu as MenuIcon,
   Home as HomeIcon,
@@ -88,13 +89,13 @@ export default function Layout() {
               width: 32,
               height: 32,
               borderRadius: '8px',
-              background: 'linear-gradient(135deg, #e8a849 0%, #d4956a 100%)',
+              background: theme.palette.accent.gradient,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               fontSize: '14px',
               fontWeight: 700,
-              color: '#0c0c0f',
+              color: theme.palette.accent.onBrightFill,
               fontFamily: '"Geist Mono", monospace',
             }}>
               bg
@@ -126,13 +127,13 @@ export default function Layout() {
             width: 32,
             height: 32,
             borderRadius: '8px',
-            background: 'linear-gradient(135deg, #e8a849 0%, #d4956a 100%)',
+            background: theme.palette.accent.gradient,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             fontSize: '14px',
             fontWeight: 700,
-            color: '#0c0c0f',
+            color: theme.palette.accent.onBrightFill,
             fontFamily: '"Geist Mono", monospace',
           }}>
             bg
@@ -239,7 +240,7 @@ export default function Layout() {
             borderRadius: '8px',
             mx: collapsed && !isMobile ? 0.5 : 1,
             '&:hover': {
-              backgroundColor: 'rgba(199, 107, 107, 0.08)',
+              backgroundColor: alpha(theme.palette.error.main, 0.08),
             },
           }}
         >
@@ -293,13 +294,13 @@ export default function Layout() {
                 width: 26,
                 height: 26,
                 borderRadius: '6px',
-                background: 'linear-gradient(135deg, #e8a849 0%, #d4956a 100%)',
+                background: theme.palette.accent.gradient,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 fontSize: '11px',
                 fontWeight: 700,
-                color: '#0c0c0f',
+                color: theme.palette.accent.onBrightFill,
                 fontFamily: '"Geist Mono", monospace',
               }}>
                 bg

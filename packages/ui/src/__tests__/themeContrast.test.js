@@ -25,7 +25,7 @@ import { createFitnessTheme } from '../../../../apps/fitnessgeek/frontend/src/th
 import { createFlockTheme } from '../../../../apps/flockgeek/frontend/src/theme/theme.js';
 import { createStoryTheme } from '../../../../apps/storygeek/frontend/src/theme/theme.js';
 import createBookTheme from '../../../../apps/bookgeek/web/src/theme/theme.js';
-import basegeekTheme from '../../../../apps/basegeek/packages/ui/src/theme.js';
+import { createBaseGeekTheme } from '../../../../apps/basegeek/packages/ui/src/theme.js';
 
 /* ── color helpers ─────────────────────────────────────────────────────── */
 
@@ -64,9 +64,7 @@ const THEMES = [
   { app: 'flockgeek', modes: ['light', 'dark'], build: createFlockTheme },
   { app: 'storygeek', modes: ['light', 'dark'], build: createStoryTheme },
   { app: 'bookgeek', modes: ['light', 'dark'], build: createBookTheme },
-  // basegeek ships a static dark-only theme (see TODO_ORDER #11 — light mode
-  // arrives when it moves onto createGeekSuiteTheme).
-  { app: 'basegeek', modes: ['dark'], build: () => basegeekTheme },
+  { app: 'basegeek', modes: ['light', 'dark'], build: createBaseGeekTheme },
 ];
 
 /* ── pair matrix ───────────────────────────────────────────────────────── */

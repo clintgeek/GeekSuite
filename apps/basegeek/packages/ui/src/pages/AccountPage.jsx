@@ -13,6 +13,7 @@ import {
   InputLabel,
   Divider,
   Chip,
+  useTheme,
 } from '@mui/material';
 import {
   Save as SaveIcon,
@@ -22,7 +23,7 @@ import {
   Palette as PaletteIcon,
   Apps as AppsIcon,
 } from '@mui/icons-material';
-import { useUser } from '@geeksuite/user';
+import { useUser, useThemeMode } from '@geeksuite/user';
 
 // ─── Option constants ───
 
@@ -111,6 +112,11 @@ export default function AccountPage() {
     error: storeError,
   } = useUser();
 
+  // The suite-wide theme provider: this page hosts the Theme selector, so it
+  // drives the provider directly instead of waiting for a Save round-trip.
+  const { themePreference, setThemePreference } = useThemeMode();
+  const theme = useTheme();
+
   const [error, setError] = useState('');
 
   // Section-level save states
@@ -146,7 +152,7 @@ export default function AccountPage() {
       country: profile?.country || '',
     });
     setPrefsForm({
-      theme: preferences?.theme || 'dark',
+      theme: preferences?.theme || 'system',
       accentColor: preferences?.accentColor || '#e8a849',
       defaultApp: preferences?.defaultApp || '',
       dateFormat: preferences?.dateFormat || 'US',
@@ -168,6 +174,20 @@ export default function AccountPage() {
     setPrefsForm(prev => ({ ...prev, [field]: e.target.value }));
     setPrefsSaved(false);
   };
+
+  // Theme is special: apply it live rather than on Save. The DB stores
+  // 'system'; the provider's own vocabulary is 'auto', so normalize here.
+  const handleThemeChange = (e) => {
+    const value = e.target.value;
+    setPrefsForm(prev => ({ ...prev, theme: value }));
+    setPrefsSaved(false);
+    setThemePreference(value === 'system' ? 'auto' : value);
+  };
+
+  // Falls back to the live provider preference until the store hydrates, so
+  // the selector always shows the mode actually in effect.
+  const themeValue =
+    prefsForm.theme || (themePreference === 'auto' ? 'system' : themePreference);
 
   const saveProfile = async () => {
     setProfileSaving(true);
@@ -239,7 +259,7 @@ export default function AccountPage() {
               width: 80,
               height: 80,
               bgcolor: accentColor,
-              color: '#0c0c0f',
+              color: theme.palette.accent.onBrightFill,
               fontSize: '2rem',
               fontWeight: 700,
               fontFamily: '"Geist", sans-serif',
@@ -342,7 +362,7 @@ export default function AccountPage() {
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' }, gap: 2 }}>
               <FormControl size="small" fullWidth>
                 <InputLabel>Theme</InputLabel>
-                <Select value={prefsForm.theme} onChange={handlePrefsChange('theme')} label="Theme">
+                <Select value={themeValue} onChange={handleThemeChange} label="Theme">
                   <MenuItem value="dark">Dark</MenuItem>
                   <MenuItem value="light">Light</MenuItem>
                   <MenuItem value="system">System</MenuItem>
@@ -398,7 +418,9 @@ export default function AccountPage() {
                     borderRadius: '10px',
                     backgroundColor: c.value,
                     cursor: 'pointer',
-                    border: prefsForm.accentColor === c.value ? '2.5px solid #e4dfd6' : '2.5px solid transparent',
+                    border: prefsForm.accentColor === c.value
+                      ? `2.5px solid ${theme.palette.text.primary}`
+                      : '2.5px solid transparent',
                     transition: 'all 150ms ease',
                     display: 'flex',
                     flexDirection: 'column',
@@ -408,7 +430,7 @@ export default function AccountPage() {
                   }}
                 >
                   {prefsForm.accentColor === c.value && (
-                    <CheckIcon sx={{ fontSize: 18, color: '#0c0c0f' }} />
+                    <CheckIcon sx={{ fontSize: 18, color: theme.palette.accent.onBrightFill }} />
                   )}
                 </Box>
               ))}

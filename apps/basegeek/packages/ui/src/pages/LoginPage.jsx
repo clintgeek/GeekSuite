@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Box, TextField, Button, Typography, Alert, Tabs, Tab } from '@mui/material';
+import { Box, TextField, Button, Typography, Alert, Tabs, Tab, useTheme } from '@mui/material';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { alpha } from '@mui/material/styles';
 import api from '../api';
 
 export default function LoginPage() {
+  const theme = useTheme();
   const [tab, setTab] = useState(0);
   const [form, setForm] = useState({ identifier: '', email: '', password: '' });
   const [error, setError] = useState('');
@@ -50,7 +52,7 @@ export default function LoginPage() {
       justifyContent: 'center',
       alignItems: 'center',
       minHeight: '100vh',
-      backgroundColor: '#0c0c0f',
+      backgroundColor: theme.palette.surfaces.deep,
       position: 'relative',
       overflow: 'hidden',
     }}>
@@ -62,7 +64,7 @@ export default function LoginPage() {
         transform: 'translateX(-50%)',
         width: '600px',
         height: '400px',
-        background: 'radial-gradient(ellipse, rgba(232, 168, 73, 0.06) 0%, transparent 70%)',
+        background: `radial-gradient(ellipse, ${theme.palette.glow.soft} 0%, transparent 70%)`,
         pointerEvents: 'none',
       }} />
 
@@ -79,24 +81,24 @@ export default function LoginPage() {
             width: 56,
             height: 56,
             borderRadius: '14px',
-            background: 'linear-gradient(135deg, #e8a849 0%, #d4956a 100%)',
+            background: theme.palette.accent.gradient,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             fontSize: '20px',
             fontWeight: 700,
-            color: '#0c0c0f',
+            color: theme.palette.accent.onBrightFill,
             fontFamily: '"Geist Mono", monospace',
             mx: 'auto',
             mb: 2,
-            boxShadow: '0 8px 32px rgba(232, 168, 73, 0.15)',
+            boxShadow: `0 8px 32px ${alpha(theme.palette.primary.main, 0.15)}`,
           }}>
             bg
           </Box>
           <Typography sx={{
             fontWeight: 700,
             fontSize: '1.5rem',
-            color: '#e4dfd6',
+            color: 'text.primary',
             letterSpacing: '-0.02em',
             mb: 0.25,
           }}>
@@ -104,7 +106,7 @@ export default function LoginPage() {
           </Typography>
           <Typography sx={{
             fontSize: '0.7rem',
-            color: '#8a8690',
+            color: 'text.secondary',
             fontFamily: '"Geist Mono", monospace',
             letterSpacing: '0.08em',
             textTransform: 'uppercase',
@@ -115,9 +117,9 @@ export default function LoginPage() {
 
         {/* Card */}
         <Box sx={{
-          backgroundColor: '#17171b',
+          backgroundColor: 'background.paper',
           borderRadius: '16px',
-          border: '1px solid #252529',
+          border: `1px solid ${theme.palette.line.panel}`,
           p: 3.5,
         }}>
           {appInfo && (
@@ -128,7 +130,7 @@ export default function LoginPage() {
 
           {!appInfo && (
             <Typography sx={{
-              color: '#8a8690',
+              color: 'text.secondary',
               fontSize: '0.85rem',
               textAlign: 'center',
               mb: 2.5,
@@ -216,7 +218,7 @@ export default function LoginPage() {
           textAlign: 'center',
           mt: 3,
           fontSize: '0.7rem',
-          color: '#71717a',
+          color: 'text.muted',
           fontFamily: '"Geist Mono", monospace',
         }}>
           GeekSuite — shared authentication
