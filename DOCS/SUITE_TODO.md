@@ -249,6 +249,12 @@ not repeated here.
 
 ## Shared libraries / refactors
 
+- **basegeek never calls `configure()` from `@geeksuite/user`** — found 2026-09-02 during the light-mode
+  rebuild. `bootstrap()` throws into AccountPage's swallowed catch, so the shared user store never
+  loads: the Theme selector works live via the `geek_theme` cookie but the choice is not persisted
+  to the DB from basegeek (other apps persist it). Wire `configure(apiInstance)` in basegeek's
+  bootstrap like bookgeek/notegeek do (`bootstrapUser.js`). `apps/basegeek/packages/ui/src`
+
 - ~~MUI major-version drift~~ — **Done 2026-09-02.** Was: basegeek, bujogeek, and notegeek declare `@mui/material ^7`
   but the lockfile resolves 5.18.0 (and basegeek's icons resolve to 7.3.8). Harmless today
   because everything is v5, but a fresh `pnpm install` without the lockfile would split the

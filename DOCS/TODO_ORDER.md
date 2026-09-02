@@ -40,10 +40,10 @@ cycle so the ordering rationale stays visible; detail moved to `SUITE_TODO.md` "
 
 10a. ~~Suite blue vs. white button labels~~ — **Done 2026-09-02:** primary darkened to
     `#4B7AA3` suite-wide (4.56:1 with white); `KNOWN_GAPS` is now empty.
-10. **Suite switcher in the GeekShell top bar** — S–M. Nine-dot menu, all eight apps. Biggest
+10. ~~Suite switcher in the GeekShell top bar~~ — **Done 2026-09-02** (GeekAppSwitcher + GeekThemeToggle in packages/ui, wired into all seven MUI apps). Was: — S–M. Nine-dot menu, all eight apps. Biggest
     "this is one product" signal for the least code. Fold **theme toggle placement** into the
     same top-bar work. *UI*
-11. **basegeek light mode on `createGeekSuiteTheme`** — M. Last MUI app off the factory; the
+11. ~~basegeek light mode on `createGeekSuiteTheme`~~ — **Done 2026-09-02.** Follow-up in SUITE_TODO: basegeek never calls `configure()`, so preferences don't persist from there. Was: — M. Last MUI app off the factory; the
     suite's Theme control finally applies to the app that hosts it. Do after #2 so the new
     palette is verified as it's built. Includes the Account-page `'dark'` default bug. *UI*
 12. **CSRF protection** — M. Double-submit token or `SameSite=Strict` refresh cookie + middleware
