@@ -4,6 +4,9 @@
 > **Date**: February 2026  
 > **Status**: Reference — auth hardening (Steps 0–3 for basegeek) completed April 2026.
 > Consumer-app migration (Step 4) in progress. CSRF + HttpOnly rollout deferred (see `DOCS/DEFERRED_WORK.md`).
+> Cross-tab logout BroadcastChannel standardized September 2026 — see
+> [BroadcastChannel — Standardized](#broadcastchannel--standardized-september-2026).
+> Per-app sections below remain the February 2026 snapshot except where annotated.
 
 ---
 
@@ -54,7 +57,7 @@
 ### baseGeek Frontend (Legacy)
 
 - **Zustand store** (`sharedAuthStore.js`): persists `token`, `refreshToken`, `user` to localStorage via `zustand/persist` under key `geek-shared-auth`
-- Uses `window.postMessage` for cross-tab auth state sync (not BroadcastChannel)
+- Used `window.postMessage` for cross-tab auth state sync; the legacy store is gone and `packages/ui/src/components/AuthContext.jsx` now uses the standard `geeksuite-auth` BroadcastChannel 📡
 - `SharedAuthProvider` initializes by calling `/api/auth/validate` with stored token
 - `RequireAuth` component redirects to `/login` if not authenticated
 
@@ -105,7 +108,7 @@
 
 - **Token Storage**: Cookies only
 - **Login UX**: Redirect to baseGeek
-- **Logout**: BroadcastChannel `geek-auth` with `{ type: "logout" }` ⚠️ **Different channel name and event type!**
+- **Logout**: BroadcastChannel `geeksuite-auth` with `{ type: "LOGOUT" }` 📡 (was `geek-auth`/`logout`; standardized September 2026)
 - **Refresh**: Backend proxies refresh to baseGeek
 - **Local User DB**: No
 
@@ -122,7 +125,7 @@
 
 - **Token Storage**: Cookies (primary), **but `ssoTokens.js` still exists** reading cookies + localStorage fallback
 - **Login UX**: Redirect to baseGeek
-- **Logout**: BroadcastChannel `geeksuite-auth` with `{ type: "logout" }` ⚠️ **lowercase type!**
+- **Logout**: BroadcastChannel `geeksuite-auth` with `{ type: "LOGOUT" }` 📡 (was lowercase `logout`; standardized September 2026)
 - **Legacy Files**: `client/src/utils/ssoTokens.js` — reads `document.cookie` + `localStorage` fallback for `token` / `bujogeek_refresh_token`
 - **Backend authController** (`server/src/controllers/authController.js`): ⚠️ **Has LOCAL register/login that creates users in a LOCAL MongoDB**, issues its own JWTs with `{ _id }` payload (7d TTL). This is a **completely separate auth path** from the SSO proxy routes.
 - **Local User DB**: Yes (local User model with password)
@@ -181,7 +184,7 @@
 
 - **Token Storage**: Cookies only
 - **Login UX**: Redirect to baseGeek
-- **Logout**: BroadcastChannel `geeksuite-auth` with `{ type: "logout" }` ⚠️ **lowercase type!**
+- **Logout**: BroadcastChannel `geeksuite-auth` with `{ type: "LOGOUT" }` 📡 (was lowercase `logout`; standardized September 2026)
 - **Refresh**: Requires `refreshToken` in body (same issue as FlockGeek)
 - **Local User DB**: Yes — `UserProfile` model for music-specific data (created on login)
 - **`/auth/logout` requires authentication** — must be logged in to log out ⚠️
@@ -241,7 +244,7 @@
 
 - **Token Storage**: Cookies only
 - **Login UX**: Redirect to baseGeek via `/api/auth/login-redirect`
-- **Logout**: Direct `fetch` to `/api/auth/logout`, no BroadcastChannel ⚠️
+- **Logout**: Direct `fetch` to `/api/auth/logout`, no BroadcastChannel ⚠️ — the gateway is **not in this repo**; if revived it must post `geeksuite-auth`/`LOGOUT`
 - **Runs on Bun** (not Express) — different cookie parsing
 - **No local user DB**
 
@@ -264,22 +267,30 @@
 
 ---
 
-## BroadcastChannel Inconsistencies
+## BroadcastChannel — Standardized (September 2026)
 
-| App | Channel Name | Logout Message Type |
-|-----|-------------|-------------------|
-| **BabelGeek** | `geeksuite-auth` | `LOGOUT` |
-| **bookgeek** | `geek-auth` ⚠️ | `logout` ⚠️ |
-| **BuJoGeek** | `geeksuite-auth` | `logout` ⚠️ |
-| **fitnessGeek** | `geeksuite-auth` | `LOGOUT` |
-| **FlockGeek** | `geeksuite-auth` | `LOGOUT` |
-| **MusicGeek** | `geeksuite-auth` | `logout` ⚠️ |
-| **NoteGeek** | `geeksuite-auth` | `LOGOUT` |
-| **photoGeek** | `geeksuite-auth` | `LOGOUT` |
-| **geekSuite** | *(none)* ⚠️ | N/A |
-| **baseGeek** | *(postMessage)* ⚠️ | `GEEK_AUTH_STATE_CHANGE` |
+One channel, one message type, suite-wide. The canonical values live in
+`packages/auth/src/authClient.js` and are exported as `AUTH_CHANNEL` / `AUTH_LOGOUT`.
 
-**Impact**: Cross-tab logout will NOT work between apps using different channel names or message types. bookgeek uses `geek-auth`/`logout`, several apps use lowercase `logout`, baseGeek uses `postMessage` instead of BroadcastChannel entirely.
+| Apps | Channel Name | Logout Message |
+|------|-------------|----------------|
+| **All** (basegeek, bookgeek, bujogeek, fitnessgeek, flockgeek, notegeek, storygeek) | `geeksuite-auth` | `{ type: 'LOGOUT', sender: <tabId> }` |
+
+Every app both **posts** on logout and **listens** to clear local auth state:
+
+- Apps on `@geeksuite/auth` get both halves for free — `logout()` calls
+  `broadcastLogout()`, and `AuthProvider` (or `onLogout()` directly, for bookgeek and
+  notegeek) subscribes on mount.
+- basegeek's UI has its own `AuthContext` (it does not depend on `@geeksuite/auth`) and
+  duplicates the two constants locally with a "keep in sync" note.
+- startgeek has no auth surface. The geekSuite/Bun gateway is **not in this repo**; if it
+  is revived it must post the same message.
+
+`sender` carries a per-tab id. BroadcastChannel delivers a message to every other channel
+object of the same name — *including* other objects in the sending tab — so listeners
+drop messages whose `sender` matches their own tab. Messages without a `sender` are still
+honoured, so an older build broadcasting `{ type: 'LOGOUT' }` still logs other tabs out.
+Both send and subscribe are guarded for environments with no `BroadcastChannel`.
 
 ---
 
@@ -354,8 +365,8 @@ baseGeek's refresh endpoint reads `req.cookies?.geek_refresh_token` as fallback 
 ### 10. Cache Clearing Breaks Sessions
 Clearing browser cache/cookies removes `geek_token` and `geek_refresh_token`. Since no app stores tokens in memory (all rely on cookies), this immediately logs the user out of everything. There's no re-hydration mechanism — the user must visit baseGeek to log in again.
 
-### 11. Cross-Tab Logout Doesn't Work Reliably
-Three different BroadcastChannel names (`geeksuite-auth`, `geek-auth`, none) and two different message types (`LOGOUT`, `logout`) mean cross-tab logout is fragmented. baseGeek itself uses `postMessage` instead of BroadcastChannel.
+### 11. Cross-Tab Logout Doesn't Work Reliably — ✅ resolved September 2026
+Was: three different BroadcastChannel names (`geeksuite-auth`, `geek-auth`, none) and two message types (`LOGOUT`, `logout`), with baseGeek on `postMessage`. Now a single channel and message type across every app — see [BroadcastChannel — Standardized](#broadcastchannel--standardized-september-2026).
 
 ### 12. Service Worker Caching Auth Responses
 Apps with Workbox service workers (fitnessGeek, BuJoGeek, NoteGeek, FlockGeek, BabelGeek) may cache `/api/me` responses. Even though backends set `Cache-Control: no-store`, service workers can intercept before the cache header is evaluated. A stale cached "authenticated" response after logout would keep showing the user as logged in.

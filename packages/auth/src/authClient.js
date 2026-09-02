@@ -1,5 +1,21 @@
-const BROADCAST_CHANNEL = 'geeksuite-auth';
-const LOGOUT_EVENT_TYPE = 'LOGOUT';
+// Canonical cross-tab auth channel for the whole suite. Every app both posts
+// and listens here; do not fork these values.
+export const AUTH_CHANNEL = 'geeksuite-auth';
+export const AUTH_LOGOUT = 'LOGOUT';
+
+// Identifies this browsing context so a tab ignores the logout it sent itself.
+// BroadcastChannel delivers to every other channel object of the same name,
+// including ones in the same tab, so without this the sending tab runs its own
+// logout handler a second time.
+const TAB_ID = (() => {
+  try {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+  } catch {
+    // ignore
+  }
+  return `tab-${ Date.now() }-${ Math.random().toString(36).slice(2) }`;
+})();
+
 const REFRESH_INTERVAL_MS = 50 * 60 * 1000; // 50 minutes
 
 const GEEK_TOKEN_KEY = 'geek_token';
@@ -78,11 +94,14 @@ function sanitizeRedirectTarget(target) {
   }
 }
 
+/**
+ * Announce a logout to every other tab/app in the suite.
+ */
 export function broadcastLogout() {
   if (typeof window === 'undefined' || !window.BroadcastChannel) return;
   try {
-    const bc = new BroadcastChannel(BROADCAST_CHANNEL);
-    bc.postMessage({ type: LOGOUT_EVENT_TYPE });
+    const bc = new BroadcastChannel(AUTH_CHANNEL);
+    bc.postMessage({ type: AUTH_LOGOUT, sender: TAB_ID });
     bc.close();
   } catch {
     // ignore
@@ -271,11 +290,13 @@ export function onLogout(callback) {
   }
 
   try {
-    const bc = new BroadcastChannel(BROADCAST_CHANNEL);
+    const bc = new BroadcastChannel(AUTH_CHANNEL);
     const handler = (event) => {
-      if (event?.data?.type === LOGOUT_EVENT_TYPE) {
-        callback?.();
-      }
+      const data = event?.data;
+      if (data?.type !== AUTH_LOGOUT) return;
+      // Ignore the message this tab just sent — its own logout path already ran.
+      if (data.sender && data.sender === TAB_ID) return;
+      callback?.();
     };
     bc.addEventListener('message', handler);
     return () => {
