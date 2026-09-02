@@ -99,11 +99,11 @@ Define shared suite colors:
 | Background | `background.default` | `#F5F5F5` |
 | Paper | `background.paper` | `#FFFFFF` |
 | Text Primary | `text.primary` | `#212121` |
-| Text Secondary | `text.secondary` | `#757575` |
+| Text Secondary | `text.secondary` | `#6B6B6B` |
 | Border | `divider` | `rgba(0, 0, 0, 0.12)` |
 | Success | `success.main` | `#2E7D32` light / `#66BB6A` dark |
 | Warning | `warning.main` | `#A35F00` light / `#FFB74D` dark |
-| Error | `error.main` | `#B00020` light / `#EF5350` dark |
+| Error | `error.main` | `#B00020` light / `#F27C74` dark |
 | Info | `info.main` | `#0277BD` light / `#4FC3F7` dark |
 
 Rules:

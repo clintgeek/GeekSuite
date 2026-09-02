@@ -10,7 +10,14 @@ import { alpha } from '@mui/material/styles';
 import { createGeekSuiteTheme } from '@geeksuite/ui';
 
 /* ─── Midnight Reader palette ─── */
-const sky = { main: "#0ea5e9", light: "#38bdf8", dark: "#0284c7", contrastText: "#0b1220" };
+// Sky-500 is a fine accent *fill* on the midnight page, but the accent is also
+// link text, active-nav text and icon color — and #0ea5e9 clears only 2.77:1
+// on white, under the 3:1 floor for UI graphics. Light mode steps down one
+// stop to sky-600 (4.10:1); dark mode keeps the brighter sky.
+const skyDark  = { main: "#0ea5e9", light: "#38bdf8", dark: "#0284c7", contrastText: "#0b1220" };
+const skyLight = { main: "#0284c7", light: "#0ea5e9", dark: "#0369a1", contrastText: "#0b1220" };
+
+const accentFor = (mode) => (mode === "dark" ? skyDark : skyLight);
 
 const darkColors = {
   page:    "#010409",
@@ -42,7 +49,7 @@ function buildBookOverrides(mode) {
       },
       text: {
         primary:   colors.text,
-        secondary: colors.muted,
+        secondary: isDark ? "#94a3b8" : "#475569",
         muted:     isDark ? "#9aa4b2" : "#5b6472",
       },
       divider: colors.border,
@@ -90,9 +97,11 @@ function buildBookOverrides(mode) {
  * Composes shared GeekSuite rules with BookGeek "Midnight Reader" identity.
  */
 export function createBookTheme(mode = "dark") {
+  const accent = accentFor(mode);
+
   const theme = createGeekSuiteTheme({
     mode,
-    accent:    sky,
+    accent,
     overrides: buildBookOverrides(mode),
   });
 
@@ -100,10 +109,10 @@ export function createBookTheme(mode = "dark") {
   // Vite is serving an outdated, pre-bundled cache of @geeksuite/ui.
   if (!theme.palette.glow) {
     theme.palette.glow = {
-      ring: alpha(sky.main, 0.20),
-      soft: alpha(sky.main, 0.06),
-      medium: alpha(sky.main, 0.10),
-      border: alpha(sky.main, 0.30),
+      ring: alpha(accent.main, 0.20),
+      soft: alpha(accent.main, 0.06),
+      medium: alpha(accent.main, 0.10),
+      border: alpha(accent.main, 0.30),
     };
   }
 

@@ -38,7 +38,7 @@ export const geekPalette = {
     background: '#F5F5F5',
     paper: '#FFFFFF',
     textPrimary: '#212121',
-    textSecondary: '#757575',
+    textSecondary: '#6B6B6B',
     textDisabled: '#9E9E9E',
     border: 'rgba(0, 0, 0, 0.12)',
   },
@@ -55,7 +55,7 @@ export const geekPalette = {
   semanticDark: {
     success: '#66BB6A',
     warning: '#FFB74D',
-    error: '#EF5350',
+    error: '#F27C74',
     info: '#4FC3F7',
   },
 };

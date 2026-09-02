@@ -11,6 +11,14 @@ import { createGeekSuiteTheme } from '@geeksuite/ui';
 
 /* ─── Field Ledger palette ─── */
 const amber   = { main: "#d4910a", light: "#e8b44a", dark: "#a06e00" };
+// The accent is link text, active-nav text and icon color as well as a fill,
+// and #d4910a clears only 2.48:1 on the light parchment paper. Light mode
+// steps down to a darker ochre (3.36:1) and pins contrastText to the ledger
+// ink so contained buttons keep an AA label (4.8:1) instead of MUI flipping to
+// white at 3.6:1. Dark mode keeps the bright amber.
+const amberLight = { main: "#b57b00", light: "#d4910a", dark: "#8f6200", contrastText: "#1a1a18" };
+
+const accentFor = (mode) => (mode === "dark" ? amber : amberLight);
 const forest  = { main: "#3d6b4f", light: "#5a9470", dark: "#264432" };
 const rust    = { main: "#c4453c", light: "#d97068", dark: "#8e2e28" };
 const slate   = { main: "#64748b", light: "#94a3b8", dark: "#475569" };
@@ -91,9 +99,11 @@ function buildFlockOverrides(mode) {
  * Composes shared GeekSuite rules with FlockGeek "Field Ledger" identity.
  */
 export function createFlockTheme(mode = "dark") {
+  const accent = accentFor(mode);
+
   const theme = createGeekSuiteTheme({
     mode,
-    accent:    amber,
+    accent,
     overrides: buildFlockOverrides(mode),
   });
 
@@ -101,10 +111,10 @@ export function createFlockTheme(mode = "dark") {
   // Vite is serving an outdated, pre-bundled cache of @geeksuite/ui.
   if (!theme.palette.glow) {
     theme.palette.glow = {
-      ring: alpha(amber.main, 0.20),
-      soft: alpha(amber.main, 0.06),
-      medium: alpha(amber.main, 0.10),
-      border: alpha(amber.main, 0.30),
+      ring: alpha(accent.main, 0.20),
+      soft: alpha(accent.main, 0.06),
+      medium: alpha(accent.main, 0.10),
+      border: alpha(accent.main, 0.30),
     };
   }
 

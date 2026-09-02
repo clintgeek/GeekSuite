@@ -35,14 +35,14 @@ fills, so each mode carries its own value that clears 4.5:1 on that mode's paper
 
 | Role | Light | Dark |
 |------|-------|------|
-| Error | #B00020 | #EF5350 |
+| Error | #B00020 | #F27C74 |
 | Success | #2E7D32 | #66BB6A |
 | Warning | #A35F00 | #FFB74D |
 | Info | #0277BD | #4FC3F7 |
 
 ### Text Colors
 - Primary: #212121
-- Secondary: #757575
+- Secondary: #6B6B6B
 - Disabled: #9E9E9E (light) / #8F8F8F (dark)
 - Placeholder: Secondary @ 70% opacity
 

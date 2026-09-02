@@ -27,7 +27,7 @@ export const tokens = {
 
 // ─── Light Palette ───────────────────────────────────────────────
 const lightColors = {
-  primary: { main: '#0D9488', light: '#14B8A6', dark: '#0F766E', contrastText: '#FFFFFF' },
+  primary: { main: '#0F766E', light: '#14B8A6', dark: '#115E59', contrastText: '#FFFFFF' },
   secondary: { main: '#78716C', light: '#A8A29E', dark: '#57534E', contrastText: '#FFFFFF' },
   background: { default: '#FAFAF9', paper: '#FFFFFF' },
   text: { primary: '#1C1917', secondary: '#78716C', muted: '#6B655F' },

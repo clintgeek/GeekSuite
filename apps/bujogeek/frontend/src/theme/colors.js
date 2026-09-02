@@ -143,8 +143,8 @@ export const darkColors = {
   },
   text: {
     primary:   colors.dark[900],
-    secondary: colors.dark[700],
-    disabled:  colors.dark[600],
+    secondary: '#A39C94',  // lifted from dark[700]: 5.0:1 on dark[200] paper
+    disabled:  '#736D66',  // lifted from dark[600]: clears the 2.5:1 perceptibility floor
     muted:     colors.dark[500],
   },
   divider: colors.dark[500],
