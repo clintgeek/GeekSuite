@@ -2,13 +2,15 @@ import React, { useState } from 'react';
 import { Box, Drawer, IconButton, Typography, useTheme, useMediaQuery, alpha } from "@mui/material";
 import { Outlet } from "react-router-dom";
 import MenuIcon from "@mui/icons-material/Menu";
-import { GeekShell, GeekAppFrame, geekLayout } from "@geeksuite/ui";
+import { GeekShell, GeekAppFrame, GeekAppSwitcher, GeekThemeToggle, geekLayout } from "@geeksuite/ui";
 import Sidebar from "./Sidebar";
+import { useColorMode } from "../theme/AppThemeProvider";
 import { APP_NAME } from "../utils/constants";
 
 const LayoutShell = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const { mode, toggleColorMode } = useColorMode();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleDrawerToggle = () => setMobileOpen((prev) => !prev);
@@ -41,7 +43,13 @@ const LayoutShell = () => {
       >
         {APP_NAME}
       </Typography>
-      <Box sx={{ width: 40 }} />
+      {/* Suite controls: theme toggle then app switcher, right-aligned.
+          FlockGeek has no account control in the mobile bar, so these sit at
+          the right edge on their own. */}
+      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, color: "text.secondary" }}>
+        <GeekThemeToggle mode={mode} onToggle={toggleColorMode} />
+        <GeekAppSwitcher currentApp="flockgeek" />
+      </Box>
     </Box>
   ) : null;
 

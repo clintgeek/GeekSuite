@@ -1,8 +1,9 @@
 import { Box, IconButton, Avatar, useMediaQuery } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { Menu as MenuIcon } from 'lucide-react';
+import { GeekAppSwitcher, GeekThemeToggle } from '@geeksuite/ui';
+import { useThemeMode } from '@geeksuite/user';
 import { useAuth } from '../../context/AuthContext';
-import ThemeToggle from '../ThemeToggle';
 import { TOPBAR_HEIGHT } from '../../utils/constants';
 import { colors } from '../../theme/colors';
 
@@ -16,6 +17,7 @@ const TopBar = ({ onMenuClick }) => {
   const isDark = theme.palette.mode === 'dark';
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { user } = useAuth();
+  const { theme: themeMode, toggleTheme } = useThemeMode();
 
   // Avatar letterform in Fraunces
   const initial = user?.email?.[0]?.toUpperCase() || 'U';
@@ -54,7 +56,8 @@ const TopBar = ({ onMenuClick }) => {
 
       {/* Right actions */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-        <ThemeToggle />
+        <GeekThemeToggle mode={themeMode} onToggle={toggleTheme} />
+        <GeekAppSwitcher currentApp="bujogeek" />
         {user && (
           <Avatar
             sx={{

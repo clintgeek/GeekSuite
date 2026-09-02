@@ -9,6 +9,9 @@ import { defineConfig } from 'vitest/config';
  * node_modules symlinks, so no aliases are needed.
  */
 export default defineConfig({
+  // Automatic JSX runtime so shared primitives can hold module-scope JSX
+  // without importing React (matches the apps' Vite React plugin behavior).
+  esbuild: { jsx: 'automatic' },
   test: {
     environment: 'node',
     include: ['src/__tests__/**/*.test.{js,jsx}'],

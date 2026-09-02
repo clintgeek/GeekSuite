@@ -20,8 +20,14 @@ import {
   Settings as SettingsIcon,
 } from '@mui/icons-material';
 import { useAuth } from '@geeksuite/auth';
-import { GeekShell, GeekAppFrame, geekLayout } from '@geeksuite/ui';
-import ThemeToggle from '../ThemeToggle';
+import {
+  GeekShell,
+  GeekAppFrame,
+  GeekAppSwitcher,
+  GeekThemeToggle,
+  geekLayout,
+} from '@geeksuite/ui';
+import { useThemeMode } from '@geeksuite/user';
 import BottomNav from './BottomNavigation.jsx';
 import Sidebar from './Sidebar';
 
@@ -94,6 +100,7 @@ export default function ModernLayout() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { user, logout } = useAuth();
+  const { theme: themeMode, toggleTheme } = useThemeMode();
   const [mobileMenuAnchor, setMobileMenuAnchor] = useState(null);
 
   const handleLogout = () => {
@@ -134,9 +141,7 @@ export default function ModernLayout() {
             </Typography>
           </Box>
         )}
-        
-        <ThemeToggle />
-        
+
         {!isMobile && (
           <Typography
             sx={{
@@ -152,6 +157,8 @@ export default function ModernLayout() {
             {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
           </Typography>
         )}
+        <GeekThemeToggle mode={themeMode} onToggle={toggleTheme} />
+        <GeekAppSwitcher currentApp="fitnessgeek" />
 
         <IconButton
           onClick={isMobile ? (e) => setMobileMenuAnchor(e.currentTarget) : () => navigate('/settings')}

@@ -7,13 +7,14 @@ import {
 import {
   Menu as MenuIcon, Book as BookIcon, Add as AddIcon,
   People as PeopleIcon, Settings as SettingsIcon,
-  DarkMode as DarkModeIcon, LightMode as LightModeIcon,
   AutoStories as AutoStoriesIcon, Logout as LogoutIcon,
   AccountCircle as AccountIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@geeksuite/auth';
-import { GeekShell, GeekAppFrame, geekLayout } from '@geeksuite/ui';
+import {
+  GeekShell, GeekAppFrame, GeekAppSwitcher, GeekThemeToggle, geekLayout,
+} from '@geeksuite/ui';
 
 const DRAWER_WIDTH = geekLayout.sidebarWidth;
 
@@ -179,15 +180,23 @@ function Layout({ children, onThemeToggle, isDarkMode }) {
 
         {/* Right actions */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-          <IconButton
-            onClick={onThemeToggle}
+          {/* Suite controls — shared primitives, same spot in every app:
+              [theme][switcher][account]. Gold hover keeps the codex feel. */}
+          <GeekThemeToggle
+            mode={isDarkMode ? 'dark' : 'light'}
+            onToggle={onThemeToggle}
             sx={{
               color: 'text.secondary',
               '&:hover': { color: gold, backgroundColor: alpha(gold, 0.08) },
             }}
-          >
-            {isDarkMode ? <LightModeIcon /> : <DarkModeIcon />}
-          </IconButton>
+          />
+          <GeekAppSwitcher
+            currentApp="storygeek"
+            sx={{
+              color: 'text.secondary',
+              '&:hover': { color: gold, backgroundColor: alpha(gold, 0.08) },
+            }}
+          />
 
           <IconButton
             onClick={(e) => setAnchorEl(e.currentTarget)}

@@ -13,8 +13,6 @@ import {
   useTheme
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
-import DarkModeIcon from "@mui/icons-material/DarkMode";
-import LightModeIcon from "@mui/icons-material/LightMode";
 import LogoutIcon from "@mui/icons-material/Logout";
 import HomeIcon from "@mui/icons-material/HomeOutlined";
 import EggIcon from "@mui/icons-material/EggOutlined";
@@ -27,7 +25,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useColorMode } from "../theme/AppThemeProvider";
 import { APP_NAME } from "../utils/constants";
-import { geekLayout } from "@geeksuite/ui";
+import { GeekAppSwitcher, GeekThemeToggle, geekLayout } from "@geeksuite/ui";
 
 const navItems = [
   { label: "Home", to: "/", icon: <HomeIcon /> },
@@ -97,6 +95,29 @@ const Sidebar = ({ isMobile = false, onClose }) => {
         )}
       </Box>
 
+      {/* Suite controls — FlockGeek's desktop layout has no top bar, so the
+          theme toggle and app switcher live at the top of the sidebar. On
+          mobile the same pair lives in LayoutShell's header instead. */}
+      {!isMobile && (
+        <Box
+          sx={{
+            px: 2,
+            pb: 1,
+            display: "flex",
+            alignItems: "center",
+            gap: 0.5,
+            color: "text.secondary"
+          }}
+        >
+          <GeekThemeToggle mode={mode} onToggle={toggleColorMode} />
+          <GeekAppSwitcher
+            currentApp="flockgeek"
+            anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+            transformOrigin={{ vertical: "top", horizontal: "left" }}
+          />
+        </Box>
+      )}
+
       {/* Nav links */}
       <Box sx={{ flex: 1, overflowY: "auto", px: 1.5, py: 2 }}>
         <Typography
@@ -148,12 +169,7 @@ const Sidebar = ({ isMobile = false, onClose }) => {
 
       {/* Bottom controls */}
       <Divider />
-      <Box sx={{ p: 1.5, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <Tooltip title={mode === "light" ? "Dark mode" : "Light mode"} placement="top">
-          <IconButton size="small" onClick={toggleColorMode} aria-label="toggle color mode" sx={{ color: "text.secondary" }}>
-            {mode === "light" ? <DarkModeIcon fontSize="small" /> : <LightModeIcon fontSize="small" />}
-          </IconButton>
-        </Tooltip>
+      <Box sx={{ p: 1.5, display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
         {isAuthenticated && (
           <Tooltip title="Sign out" placement="top">
             <IconButton size="small" onClick={logout} aria-label="sign out" sx={{ color: "text.secondary" }}>

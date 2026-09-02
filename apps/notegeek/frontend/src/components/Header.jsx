@@ -4,7 +4,6 @@ import {
   Box,
   IconButton,
   Toolbar,
-  Tooltip,
   Typography,
   InputBase,
   ButtonBase,
@@ -13,11 +12,9 @@ import {
   alpha,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
-import Brightness4OutlinedIcon from '@mui/icons-material/Brightness4Outlined';
-import Brightness7OutlinedIcon from '@mui/icons-material/Brightness7Outlined';
 import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined';
 import { useNavigate } from 'react-router-dom';
-import { geekLayout } from '@geeksuite/ui';
+import { GeekAppSwitcher, GeekThemeToggle, geekLayout } from '@geeksuite/ui';
 import { useThemeMode } from '../theme/ThemeModeProvider.jsx';
 import { glow } from '../theme/tokens';
 
@@ -25,7 +22,6 @@ function Header({ onMenuClick }) {
   const theme = useTheme();
   const navigate = useNavigate();
   const { mode, toggleMode } = useThemeMode();
-  const isDark = mode === 'dark';
   const [searchQuery, setSearchQuery] = useState('');
   const searchRef = useRef(null);
 
@@ -51,6 +47,17 @@ function Header({ onMenuClick }) {
     } else {
       navigate('/search');
     }
+  };
+
+  // Shared look for the two suite controls: muted at rest, readable on hover.
+  // The primitives already carry the 44px target, 8px radius, and focus ring.
+  const suiteControlSx = {
+    color: 'text.disabled',
+    transition: 'color 100ms ease, background 100ms ease',
+    '&:hover': {
+      color: 'text.secondary',
+      bgcolor: alpha(theme.palette.text.primary, 0.05),
+    },
   };
 
   return (
@@ -239,36 +246,13 @@ function Header({ onMenuClick }) {
 
         <Box sx={{ flexGrow: 1 }} />
 
-        {/* ——— Theme toggle — deliberately understated ——————————————
-            Lives at the right edge. Muted at rest, readable on hover.
+        {/* ——— Suite controls — deliberately understated ————————————
+            Theme toggle then app switcher, at the right edge. Muted at
+            rest, readable on hover; shared primitives so every GeekSuite
+            app puts the same two controls in the same place.
         ——————————————————————————————————————————————————————————————— */}
-        <Tooltip title={isDark ? 'Switch to light mode' : 'Switch to dark mode'} arrow>
-          <IconButton
-            onClick={toggleMode}
-            aria-label={isDark ? 'switch to light mode' : 'switch to dark mode'}
-            size="small"
-            sx={{
-              p: 0.75,
-              borderRadius: 1.5,
-              color: 'text.disabled',
-              transition: 'color 100ms ease, background 100ms ease',
-              '&:hover': {
-                color: 'text.secondary',
-                bgcolor: alpha(theme.palette.text.primary, 0.05),
-              },
-              '&:focus-visible': {
-                outline: `2px solid ${theme.palette.primary.main}`,
-                outlineOffset: 2,
-              },
-            }}
-          >
-            {isDark ? (
-              <Brightness7OutlinedIcon sx={{ fontSize: 17 }} />
-            ) : (
-              <Brightness4OutlinedIcon sx={{ fontSize: 17 }} />
-            )}
-          </IconButton>
-        </Tooltip>
+        <GeekThemeToggle mode={mode} onToggle={toggleMode} sx={suiteControlSx} />
+        <GeekAppSwitcher currentApp="notegeek" sx={suiteControlSx} />
       </Toolbar>
     </AppBar>
   );

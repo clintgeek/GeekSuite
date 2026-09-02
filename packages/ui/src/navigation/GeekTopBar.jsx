@@ -4,6 +4,8 @@ import Box from '@mui/material/Box';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import { geekLayout } from '../designTokens.js';
+import { GeekAppSwitcher } from './GeekAppSwitcher.jsx';
+import { GeekThemeToggle } from './GeekThemeToggle.jsx';
 
 export const GeekTopBar = forwardRef(function GeekTopBar(
   {
@@ -14,6 +16,14 @@ export const GeekTopBar = forwardRef(function GeekTopBar(
     actions,
     profile,
     settings,
+    // Opt-in suite chrome: theme toggle + app switcher, rendered ahead of the
+    // app's own actions so the order is always [theme][switcher][account].
+    // Stateless by design — the host passes mode/onToggle from its own theme
+    // context, because this package must not depend on `@geeksuite/user`.
+    showSuiteControls = false,
+    themeMode,
+    onThemeToggle,
+    currentApp,
     sx,
     ...props
   },
@@ -52,6 +62,12 @@ export const GeekTopBar = forwardRef(function GeekTopBar(
             ml: 'auto',
           }}
         >
+          {showSuiteControls ? (
+            <>
+              <GeekThemeToggle mode={themeMode} onToggle={onThemeToggle} />
+              <GeekAppSwitcher currentApp={currentApp} />
+            </>
+          ) : null}
           {actions}
           {settings}
           {profile}

@@ -16,14 +16,12 @@ import {
 } from '@mui/material';
 import {
   Add as AddIcon,
-  DarkMode as DarkModeIcon,
-  LightMode as LightModeIcon,
   Settings as SettingsIcon,
   Logout as LogoutIcon,
 } from '@mui/icons-material';
 import { useThemeMode } from '@geeksuite/user';
 import { logout } from '@geeksuite/auth';
-import { geekLayout } from '@geeksuite/ui';
+import { GeekAppSwitcher, GeekThemeToggle, geekLayout } from '@geeksuite/ui';
 
 const Header = ({ user, setActiveView, setAddBookOpen }) => {
   const theme = useTheme();
@@ -98,17 +96,23 @@ const Header = ({ user, setActiveView, setAddBookOpen }) => {
             Add book
           </Button>
 
-          <IconButton
-            size="small"
-            onClick={toggleTheme}
+          {/* Suite controls, in the suite order: [theme][switcher][account] */}
+          <GeekThemeToggle
+            mode={mode}
+            onToggle={toggleTheme}
             sx={{
               color: 'text.primary',
               '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.1) }
             }}
-            aria-label={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-          >
-            {mode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
-          </IconButton>
+          />
+
+          <GeekAppSwitcher
+            currentApp="bookgeek"
+            sx={{
+              color: 'text.primary',
+              '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.1) }
+            }}
+          />
 
           <IconButton
             onClick={handleOpenMenu}
