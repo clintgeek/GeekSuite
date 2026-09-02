@@ -1,76 +1,49 @@
 import React from 'react';
-import { Drawer, useTheme, useMediaQuery } from '@mui/material';
-import { GeekShell, GeekAppFrame, geekLayout } from '@geeksuite/ui';
+import { useTheme, useMediaQuery } from '@mui/material';
+import { GeekShell, GeekAppFrame } from '@geeksuite/ui';
 import useAuthStore from '../store/authStore';
 import Sidebar from './Sidebar';
 import MobileBottomNav from './MobileBottomNav';
 import Header from './Header';
 
-// Use shared layout tokens for consistency
-const DRAWER_WIDTH = geekLayout.sidebarWidth; // 220
-const MOBILE_TAB_HEIGHT = 56;
-
 /**
- * Layout — Standard GeekSuite Shell implementation for NoteGeek.
- * Composes GeekShell (engine) + GeekAppFrame (content/transitions).
+ * Layout — pure suite grammar.
+ *
+ * `nav` / `topBar` hand the shell sidebar *content* and the top bar; it owns
+ * the breakpoint, the permanent-column-vs-drawer choice and the mobile
+ * hamburger. There is no local `isMobile`/`desktopOpen`/`mobileOpen` state
+ * or hand-rolled `<Drawer>` here any more — the same `Sidebar` panel serves
+ * desktop and mobile.
+ *
+ * The one media query that remains is for the bottom tab bar: NoteGeek is a
+ * data-entry app that opts into `GeekBottomNav` (via `MobileBottomNav`), but
+ * only on mobile — `GeekAppFrame`'s bottom inset is driven by whether
+ * `bottomNav` is non-null, so passing it unconditionally would reserve 56px
+ * of dead padding on desktop, where the bar never renders.
  */
 function Layout({ children }) {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     const { isAuthenticated } = useAuthStore();
-    
-    const [mobileOpen, setMobileOpen] = React.useState(false);
-    const [desktopOpen, setDesktopOpen] = React.useState(true);
-
-    const handleDrawerToggle = () => {
-        if (!isMobile) {
-            setDesktopOpen((prev) => !prev);
-            return;
-        }
-        setMobileOpen((prev) => !prev);
-    };
-
     const showNavigation = isAuthenticated;
 
-    const sidebar = showNavigation && !isMobile && desktopOpen
-        ? <Sidebar />
-        : null;
-
-    const topBar = <Header onMenuClick={handleDrawerToggle} />;
-
     return (
-        <GeekShell sidebar={sidebar} topBar={topBar}>
-            {/* Mobile Drawer */}
-            {isMobile && showNavigation && (
-                <Drawer
-                    variant="temporary"
-                    open={mobileOpen}
-                    onClose={() => setMobileOpen(false)}
-                    ModalProps={{ keepMounted: false }}
-                    PaperProps={{
-                        sx: { 
-                            width: DRAWER_WIDTH,
-                            // Theme handles bg + border
-                        }
-                    }}
-                >
-                    <Sidebar closeNavbar={() => setMobileOpen(false)} />
-                </Drawer>
-            )}
-
+        <GeekShell
+            nav={showNavigation ? <Sidebar /> : undefined}
+            topBar={<Header />}
+            bottomNav={showNavigation && isMobile ? <MobileBottomNav /> : null}
+        >
             {/* Main content with route transitions */}
-            <GeekAppFrame sx={{ 
-                pb: isMobile && showNavigation ? `${MOBILE_TAB_HEIGHT}px` : 0,
-                // NoteGeek specific: Mindmap editor wants overflow: hidden
-                '&.mindmap-container': {
-                    overflow: 'hidden',
-                },
-            }}>
+            <GeekAppFrame
+                sx={{
+                    // NoteGeek specific: Mindmap editor wants overflow: hidden
+                    '&.mindmap-container': {
+                        overflow: 'hidden',
+                    },
+                }}
+            >
                 {children}
             </GeekAppFrame>
-
-            {/* Mobile Bottom Navigation */}
-            {isMobile && showNavigation && <MobileBottomNav />}
         </GeekShell>
     );
 }

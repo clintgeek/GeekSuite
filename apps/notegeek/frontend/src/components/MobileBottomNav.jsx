@@ -1,6 +1,6 @@
 import React from 'react';
+import { useTheme } from '@mui/material';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Box, ButtonBase, Paper, Portal, Typography, useTheme } from '@mui/material';
 import HomeOutlinedIcon from '@mui/icons-material/HomeOutlined';
 import HomeIcon from '@mui/icons-material/Home';
 import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined';
@@ -8,7 +8,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import AddOutlinedIcon from '@mui/icons-material/AddOutlined';
 import AutoStoriesOutlinedIcon from '@mui/icons-material/AutoStoriesOutlined';
 import AutoStoriesIcon from '@mui/icons-material/AutoStories';
-import { glow } from '../theme/tokens';
+import { GeekBottomNav } from '@geeksuite/ui';
 
 function getNavValue(pathname) {
   if (pathname.startsWith('/search'))                                     return 'search';
@@ -18,139 +18,91 @@ function getNavValue(pathname) {
   return 'home';
 }
 
-const NAV_ITEMS = [
-  { value: 'home',   label: 'Home',   icon: HomeOutlinedIcon,          activeIcon: HomeIcon,          path: '/'          },
-  { value: 'search', label: 'Search', icon: SearchOutlinedIcon,        activeIcon: SearchIcon,        path: '/search'    },
-  { value: 'new',    label: 'New',    icon: AddOutlinedIcon,           activeIcon: AddOutlinedIcon,   path: '/notes/new', accent: true },
-  { value: 'notes',  label: 'Notes',  icon: AutoStoriesOutlinedIcon,   activeIcon: AutoStoriesIcon,   path: '/notes'     },
-];
-
-function NavItem({ item, isActive, onClick }) {
-  const theme = useTheme();
-  const Icon = isActive ? item.activeIcon : item.icon;
-
+/** Hide on editor and auth pages — those occupy full screen. */
+function shouldHide(pathname) {
   return (
-    <ButtonBase
-      onClick={onClick}
-      aria-label={item.label}
-      aria-current={isActive ? 'page' : undefined}
-      sx={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        flex: 1,
-        py: 0.75,
-        gap: 0.375,
-        position: 'relative',
-        transition: 'background 80ms ease',
-        '&:hover': {
-          bgcolor: isActive
-            ? glow(theme).soft
-            : `rgba(${theme.palette.mode === 'dark' ? '237,230,214' : '31,28,22'},0.04)`,
-        },
-        '&:focus-visible': {
-          outline: `2px solid ${theme.palette.primary.main}`,
-          outlineOffset: -2,
-        },
-      }}
-    >
-      {/* Active indicator: 4px top border in primary — ink-stamp feel */}
-      {isActive && (
-        <Box
-          aria-hidden="true"
-          sx={{
-            position: 'absolute',
-            top: 0,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            width: 32,
-            height: 3,
-            borderRadius: '0 0 3px 3px',
-            bgcolor: 'primary.main',
-          }}
-        />
-      )}
-
-      <Icon
-        sx={{
-          fontSize: item.accent ? 22 : 20,
-          color: isActive ? 'primary.main' : 'text.secondary',
-          transition: 'color 100ms ease',
-        }}
-      />
-
-      <Typography
-        sx={{
-          fontFamily: theme.typography.fontFamilyMono,
-          fontSize: '0.6875rem',
-          fontWeight: isActive ? 600 : 500,
-          letterSpacing: '0.06em',
-          textTransform: 'uppercase',
-          color: isActive ? 'primary.main' : 'text.secondary',
-          transition: 'color 100ms ease',
-        }}
-      >
-        {item.label}
-      </Typography>
-    </ButtonBase>
+    pathname.startsWith('/notes/new') ||
+    (pathname.startsWith('/notes/') && pathname !== '/notes') ||
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/register')
   );
 }
 
+/**
+ * MobileBottomNav — thin wrapper around the suite `GeekBottomNav`.
+ *
+ * Same four items and hide rules as before, but no more `Portal` / fixed
+ * positioning / safe-area padding of its own: `GeekShell`'s `bottomNav` slot
+ * renders it in normal flow at the foot of the shell, and `GeekAppFrame`
+ * insets the scrollable content by `geekLayout.bottomNavHeight` for it —
+ * `Layout` only mounts this on mobile, so there's nothing to hide by
+ * breakpoint here, only by route.
+ */
 function MobileBottomNav() {
+  const theme = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
-  const theme = useTheme();
+
+  if (shouldHide(location.pathname)) return null;
 
   const value = getNavValue(location.pathname);
 
-  // Hide on editor and auth pages — those occupy full screen
-  const shouldHide =
-    location.pathname.startsWith('/notes/new') ||
-    (location.pathname.startsWith('/notes/') && location.pathname !== '/notes') ||
-    location.pathname.startsWith('/login') ||
-    location.pathname.startsWith('/register');
-
-  if (shouldHide) return null;
+  const items = [
+    {
+      id: 'home',
+      label: 'Home',
+      icon: value === 'home' ? <HomeIcon sx={{ fontSize: 20 }} /> : <HomeOutlinedIcon sx={{ fontSize: 20 }} />,
+      onClick: () => navigate('/'),
+    },
+    {
+      id: 'search',
+      label: 'Search',
+      icon: value === 'search' ? <SearchIcon sx={{ fontSize: 20 }} /> : <SearchOutlinedIcon sx={{ fontSize: 20 }} />,
+      onClick: () => navigate('/search'),
+    },
+    {
+      id: 'new',
+      label: 'New',
+      icon: <AddOutlinedIcon sx={{ fontSize: 22 }} />,
+      onClick: () => navigate('/notes/new'),
+    },
+    {
+      id: 'notes',
+      label: 'Notes',
+      icon: value === 'notes' ? <AutoStoriesIcon sx={{ fontSize: 20 }} /> : <AutoStoriesOutlinedIcon sx={{ fontSize: 20 }} />,
+      onClick: () => navigate('/notes'),
+    },
+  ];
 
   return (
-    <Portal>
-      <Paper
-        elevation={0}
-        sx={{
-          display: { xs: 'block', md: 'none' },
-          position: 'fixed',
-          left: 0,
-          right: 0,
-          bottom: 0,
-          zIndex: theme.zIndex.modal - 1,
-          // hairline top border — no shadow
-          borderTop: `1px solid ${theme.palette.divider}`,
-          borderRadius: 0,
-          // bg from MuiPaper override — background.paper
-          pb: 'env(safe-area-inset-bottom)',
-        }}
-      >
-        <Box
-          component="nav"
-          aria-label="mobile navigation"
-          sx={{
-            display: 'flex',
-            alignItems: 'stretch',
-            height: 56,
-          }}
-        >
-          {NAV_ITEMS.map((item) => (
-            <NavItem
-              key={item.value}
-              item={item}
-              isActive={value === item.value}
-              onClick={() => navigate(item.path)}
-            />
-          ))}
-        </Box>
-      </Paper>
-    </Portal>
+    <GeekBottomNav
+      items={items}
+      activeId={value}
+      itemSx={{
+        // Mono, uppercase, letterspaced labels — the same treatment every
+        // other NoteGeek label gets, recreated since the primitive's label
+        // typography isn't itself overridable per app.
+        '& .MuiTypography-caption': {
+          fontFamily: theme.typography.fontFamilyMono,
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+        },
+        // Ink-stamp active indicator — a 3px top bar, same treatment the
+        // bespoke bar used, recreated off the primitive's own `aria-current`.
+        position: 'relative',
+        '&[aria-current="page"]::before': {
+          content: '""',
+          position: 'absolute',
+          top: 0,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: 32,
+          height: 3,
+          borderRadius: '0 0 3px 3px',
+          bgcolor: 'primary.main',
+        },
+      }}
+    />
   );
 }
 

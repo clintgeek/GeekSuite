@@ -2,7 +2,6 @@ import React, { useState, useCallback } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
     List,
-    ListItem,
     ListItemButton,
     ListItemIcon,
     ListItemText,
@@ -10,7 +9,6 @@ import {
     Alert,
     CircularProgress,
     Box,
-    Divider,
     TextField,
     InputAdornment,
     IconButton,
@@ -19,22 +17,20 @@ import {
 } from '@mui/material';
 // Deep-import (see RichTextEditor.jsx for why) instead of the
 // '@mui/icons-material' barrel.
-import AddIcon from '@mui/icons-material/Add';
 import SearchIcon from '@mui/icons-material/Search';
-import LogoutIcon from '@mui/icons-material/Logout';
 import ClearIcon from '@mui/icons-material/Clear';
 import TagIcon from '@mui/icons-material/LocalOffer';
 import AllNotesIcon from '@mui/icons-material/AutoStoriesOutlined';
-import HomeIcon from '@mui/icons-material/HomeOutlined';
-import SettingsIcon from '@mui/icons-material/SettingsOutlined';
 import MoreIcon from '@mui/icons-material/MoreHoriz';
-import { geekLayout } from '@geeksuite/ui';
+import { GeekSidebar, geekLayout, useGeekShell } from '@geeksuite/ui';
 import useTagStore from '../store/tagStore';
 import useAuthStore from '../store/authStore';
 import useNoteStore from '../store/noteStore';
 import TagContextMenu from './TagContextMenu';
 import { gql, useQuery } from '@apollo/client';
 import { glow } from '../theme/tokens';
+import { NEW_NOTE_ITEM, navSections, activeNavId } from './navConfig';
+import { displayNameFrom, initialsFrom, secondaryFrom } from '../utils/userDisplay';
 
 const GET_TAGS = gql`
   query GetNoteTags {
@@ -209,13 +205,62 @@ function TagTree({ hierarchy, level = 0, location, theme, onNavigate, onTagMenu 
     );
 }
 
-function Sidebar({ closeNavbar }) {
+// ——— Brand: two-tone mono wordmark ——————————————————————————————————————
+// Passed as a node rather than the primitive's `{ monogram, name }` object
+// so the "Note" / "Geek" color split stays exact. `GeekSidebar` still gives
+// it the standard 60px block, but a node brand has no built-in link/close
+// behavior, so this owns its own `RouterLink` + mobile-drawer close.
+function Brand() {
+    const theme = useTheme();
+    const { closeNav } = useGeekShell();
+
+    return (
+        <Box
+            component={Link}
+            to="/"
+            onClick={closeNav}
+            sx={{
+                display: 'flex',
+                alignItems: 'center',
+                px: 2,
+                height: geekLayout.topBarHeight,
+                textDecoration: 'none',
+                color: 'inherit',
+            }}
+        >
+            <Typography
+                component="div"
+                noWrap
+                sx={{
+                    fontFamily: theme.typography.fontFamilyMono,
+                    fontWeight: 600,
+                    fontSize: '0.8125rem',
+                    letterSpacing: '0.12em',
+                    textTransform: 'uppercase',
+                    userSelect: 'none',
+                    display: 'flex',
+                    lineHeight: 1,
+                }}
+            >
+                <Box component="span" sx={{ color: 'text.primary' }}>
+                    Note
+                </Box>
+                <Box component="span" sx={{ color: 'primary.main' }}>
+                    Geek
+                </Box>
+            </Typography>
+        </Box>
+    );
+}
+
+function Sidebar() {
     const location = useLocation();
     const navigate = useNavigate();
     const theme = useTheme();
     const isDark = theme.palette.mode === 'dark';
+    const { closeNav } = useGeekShell();
     const { clearTags } = useTagStore();
-    const { logout } = useAuthStore();
+    const { user, logout } = useAuthStore();
     const { clearNotes } = useNoteStore();
     const [tagFilter, setTagFilter] = useState('');
     const [contextMenu, setContextMenu] = useState(null);
@@ -227,12 +272,7 @@ function Sidebar({ closeNavbar }) {
     const tags = data?.noteTags || [];
     const tagsError = error?.message;
 
-    const handleLinkClick = () => {
-        closeNavbar?.();
-    };
-
     const handleLogout = () => {
-        handleLinkClick();
         logout();
         clearNotes();
         clearTags();
@@ -256,124 +296,30 @@ function Sidebar({ closeNavbar }) {
     const tagHierarchy = buildTagHierarchy(tags);
     const filteredHierarchy = buildTagHierarchy(filteredTags);
 
-    return (
-        <Box
-            sx={{
-                width: geekLayout.sidebarWidth,
-                height: '100vh',
-                display: 'flex',
-                flexDirection: 'column',
-                overflow: 'hidden',
-                bgcolor: 'background.paper',
-                flexShrink: 0,
-            }}
-        >
-            {/* ——— Primary actions ——————————————————————————————————— */}
-            <List sx={{ pt: 1.25, pb: 0.5, px: 0.75 }}>
-                {/* New Note — primary oxblood contained */}
-                <ListItem disablePadding sx={{ mb: 0.25 }}>
-                    <ListItemButton
-                        onClick={() => {
-                            handleLinkClick();
-                            navigate('/notes/new');
-                        }}
-                        sx={{
-                            borderRadius: '6px',
-                            py: 0.625,
-                            bgcolor: 'primary.main',
-                            color: 'primary.contrastText',
-                            transition: 'background 100ms ease',
-                            '&:hover': { bgcolor: 'primary.dark' },
-                            '&:focus-visible': {
-                                outline: `2px solid ${theme.palette.primary.main}`,
-                                outlineOffset: 2,
-                            },
-                        }}
-                    >
-                        <ListItemIcon sx={{ minWidth: 26 }}>
-                            <AddIcon sx={{ color: 'inherit', fontSize: 17 }} />
-                        </ListItemIcon>
-                        <ListItemText
-                            primary="New Note"
-                            primaryTypographyProps={{
-                                fontWeight: 600,
-                                fontSize: '0.8125rem',
-                                color: 'inherit',
-                                letterSpacing: '0.01em',
-                            }}
-                        />
-                    </ListItemButton>
-                </ListItem>
+    // "/tags/…" rows manage their own `selected` state directly off
+    // `location` (see TagTreeRow) since they live outside the primitive's
+    // `sections`/`activeId` matching — only the primary row uses it.
+    const activeId = activeNavId(location.pathname);
 
-                {/* Home */}
-                <ListItem disablePadding>
-                    <ListItemButton
-                        component={Link}
-                        to="/"
-                        selected={location.pathname === '/'}
-                        onClick={handleLinkClick}
-                        sx={{
-                            '&.Mui-selected .sidebar-icon': { color: 'primary.main' },
-                        }}
-                    >
-                        <ListItemIcon sx={{ minWidth: 26 }}>
-                            <HomeIcon
-                                className="sidebar-icon"
-                                sx={{
-                                    fontSize: 17,
-                                    color: location.pathname === '/' ? 'primary.main' : 'text.secondary',
-                                    transition: 'color 100ms ease',
-                                }}
-                            />
-                        </ListItemIcon>
-                        <ListItemText
-                            primary="Home"
-                            primaryTypographyProps={{
-                                fontSize: '0.8125rem',
-                                fontWeight: location.pathname === '/' ? 600 : 400,
-                            }}
-                        />
-                    </ListItemButton>
-                </ListItem>
-
-                {/* Search */}
-                <ListItem disablePadding>
-                    <ListItemButton
-                        component={Link}
-                        to="/search"
-                        selected={location.pathname === '/search'}
-                        onClick={handleLinkClick}
-                    >
-                        <ListItemIcon sx={{ minWidth: 26 }}>
-                            <SearchIcon
-                                sx={{
-                                    fontSize: 17,
-                                    color: location.pathname === '/search' ? 'primary.main' : 'text.secondary',
-                                    transition: 'color 100ms ease',
-                                }}
-                            />
-                        </ListItemIcon>
-                        <ListItemText
-                            primary="Search"
-                            primaryTypographyProps={{
-                                fontSize: '0.8125rem',
-                                fontWeight: location.pathname === '/search' ? 600 : 400,
-                            }}
-                        />
-                    </ListItemButton>
-                </ListItem>
-            </List>
-
-            {/* Hairline rule between nav and collections */}
-            <Divider />
-
-            {/* ——— Collections / Tags ——————————————————————————————— */}
+    /**
+     * The Collections tag tree as `extras` — see the file header note in the
+     * migration report: `GeekSidebar`'s `sections` box is the only slot with
+     * `flex: 1` / its own scroll region, while `extras` sizes to its content
+     * and does not compete for space. For NoteGeek the tag tree (not the
+     * three-item primary row) is the thing that can grow arbitrarily large,
+     * so left unbounded it would push the footer (Settings / Sign out)
+     * outside the panel's `overflow: hidden` bounds. Bounding it here with
+     * its own `maxHeight` + `overflowY: auto` keeps the footer on screen at
+     * the cost of a variable gap between Search and "Collections" on tall
+     * viewports with few tags — a primitive gap, not an app choice.
+     */
+    const collectionsExtras = (
+        <Box sx={{ borderTop: `1px solid ${theme.palette.divider}` }}>
             <SectionLabel>Collections</SectionLabel>
 
-            {/* Scrollable tag area */}
             <Box
                 sx={{
-                    flex: 1,
+                    maxHeight: 'clamp(160px, 40vh, 420px)',
                     overflowY: 'auto',
                     pb: 1.5,
                     scrollbarWidth: 'thin',
@@ -449,7 +395,7 @@ function Sidebar({ closeNavbar }) {
                         component={Link}
                         to="/notes"
                         selected={location.pathname === '/notes'}
-                        onClick={handleLinkClick}
+                        onClick={closeNav}
                     >
                         <ListItemIcon sx={{ minWidth: 26 }}>
                             <AllNotesIcon
@@ -504,7 +450,7 @@ function Sidebar({ closeNavbar }) {
                         hierarchy={filteredHierarchy}
                         location={location}
                         theme={theme}
-                        onNavigate={handleLinkClick}
+                        onNavigate={closeNav}
                         onTagMenu={handleTagMenu}
                     />
                 )}
@@ -516,80 +462,48 @@ function Sidebar({ closeNavbar }) {
                     </Box>
                 )}
             </Box>
+        </Box>
+    );
 
-            {/* ——— Bottom bar: Settings + Sign out ——————————————————— */}
-            <Box
-                sx={{
-                    bgcolor: 'background.paper',
-                    borderTop: `1px solid ${theme.palette.divider}`,
+    return (
+        <>
+            <GeekSidebar
+                brand={<Brand />}
+                chromeSx={{ flexShrink: 0 }}
+                sections={[{ items: [NEW_NOTE_ITEM, ...navSections[0].items] }]}
+                activeId={activeId}
+                extras={collectionsExtras}
+                footer={{
+                    user: {
+                        name: displayNameFrom(user),
+                        secondary: secondaryFrom(user),
+                        initials: initialsFrom(user),
+                    },
+                    settings: { to: '/settings' },
+                    onSignOut: handleLogout,
                 }}
-            >
-                <List sx={{ py: 0.375, px: 0.75 }}>
-                    <ListItem disablePadding>
-                        <ListItemButton
-                            component={Link}
-                            to="/settings"
-                            selected={location.pathname === '/settings'}
-                            onClick={handleLinkClick}
-                        >
-                            <ListItemIcon sx={{ minWidth: 26 }}>
-                                <SettingsIcon
-                                    sx={{
-                                        fontSize: 15,
-                                        color: location.pathname === '/settings'
-                                            ? 'primary.main'
-                                            : 'text.disabled',
-                                    }}
-                                />
-                            </ListItemIcon>
-                            <ListItemText
-                                primary="Settings"
-                                primaryTypographyProps={{
-                                    fontSize: '0.75rem',
-                                    fontWeight: location.pathname === '/settings' ? 600 : 400,
-                                    color: location.pathname === '/settings'
-                                        ? 'text.primary'
-                                        : 'text.secondary',
-                                }}
-                            />
-                        </ListItemButton>
-                    </ListItem>
-                    <ListItem disablePadding>
-                        <ListItemButton
-                            onClick={handleLogout}
-                            aria-label="sign out"
-                            sx={{
-                                transition: 'all 100ms ease',
-                                '&:hover': {
-                                    bgcolor: alpha(theme.palette.error.main, 0.04),
-                                    '& .logout-icon': { color: 'error.main' },
-                                    '& .logout-text': { color: 'error.main' },
-                                },
-                            }}
-                        >
-                            <ListItemIcon sx={{ minWidth: 26 }}>
-                                <LogoutIcon
-                                    className="logout-icon"
-                                    sx={{
-                                        fontSize: 15,
-                                        color: 'text.muted',
-                                        transition: 'color 100ms ease',
-                                    }}
-                                />
-                            </ListItemIcon>
-                            <ListItemText
-                                primary="Sign out"
-                                primaryTypographyProps={{
-                                    className: 'logout-text',
-                                    fontSize: '0.75rem',
-                                    fontWeight: 400,
-                                    color: 'text.secondary',
-                                }}
-                            />
-                        </ListItemButton>
-                    </ListItem>
-                </List>
-            </Box>
+                itemSx={{
+                    color: 'text.secondary',
+                    '& .MuiListItemText-primary': { fontSize: '0.8125rem' },
+                    '&.Mui-selected .MuiListItemText-primary': { fontWeight: 600, color: 'text.primary' },
+                    '&.Mui-selected .MuiListItemIcon-root': { color: 'primary.main' },
+                    // New Note — the one row styled as a filled primary
+                    // button rather than a plain nav row (see NEW_NOTE_ITEM).
+                    '&[data-geek-nav-item="new-note"]': {
+                        mb: 0.25,
+                        borderRadius: '6px',
+                        bgcolor: 'primary.main',
+                        color: 'primary.contrastText',
+                        transition: 'background 100ms ease',
+                        '& .MuiListItemText-primary': { fontWeight: 600 },
+                        '&:hover': { bgcolor: 'primary.dark' },
+                        '&:focus-visible': {
+                            outline: `2px solid ${theme.palette.primary.main}`,
+                            outlineOffset: 2,
+                        },
+                    },
+                }}
+            />
 
             {/* Single context menu for all tag rows */}
             <TagContextMenu
@@ -598,7 +512,7 @@ function Sidebar({ closeNavbar }) {
                 onClose={handleCloseTagMenu}
                 tag={selectedTag}
             />
-        </Box>
+        </>
     );
 }
 
