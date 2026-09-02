@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import ePub from "epubjs";
 import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, InputLabel, MenuItem, Select, TextField, Typography } from "@mui/material";
 import { getMe, loginRedirect, logout as logoutRequest, onLogout, startRefreshTimer, stopRefreshTimer } from "@geeksuite/auth";
-import { useUser, usePreferences, useAppPreferences } from "@geeksuite/user";
+import { useUser, usePreferences, useAppPreferences, useThemeMode } from "@geeksuite/user";
 import { registerReset, reset as resetUserStore } from "./utils/resetUserStore";
 import { LoginSplash } from "@geeksuite/ui";
 import { useApolloClient } from "@apollo/client";
@@ -30,12 +30,12 @@ if (typeof window !== "undefined") {
 
 const shelves = [
   { id: "all", label: "All books" },
-  { id: "reading", label: "Reading", pillClass: "rounded-full border border-amber-500/70 bg-amber-900/40 px-1.5 py-0.5 text-[9px] font-medium text-amber-200" },
-  { id: "unread", label: "Unread", pillClass: "rounded-full border border-slate-500/70 bg-slate-900/40 px-1.5 py-0.5 text-[9px] font-medium text-slate-200" },
-  { id: "read", label: "Read", pillClass: "rounded-full border border-sky-500/70 bg-sky-900/40 px-1.5 py-0.5 text-[9px] font-medium text-sky-200" },
-  { id: "want-to-read", label: "Want to read", pillClass: "rounded-full border border-violet-500/70 bg-violet-900/40 px-1.5 py-0.5 text-[9px] font-medium text-violet-200" },
-  { id: "abandoned", label: "Abandoned", pillClass: "rounded-full border border-rose-500/70 bg-rose-900/40 px-1.5 py-0.5 text-[9px] font-medium text-rose-200" },
-  { id: "need-to-find", label: "Need to find", pillClass: "rounded-full border border-orange-500/70 bg-orange-900/40 px-1.5 py-0.5 text-[9px] font-medium text-orange-200" },
+  { id: "reading", label: "Reading", pillClass: "rounded-full border border-amber-500/70 bg-amber-100 px-1.5 py-0.5 text-[9px] font-medium text-amber-900 dark:bg-amber-900/40 dark:text-amber-200" },
+  { id: "unread", label: "Unread", pillClass: "rounded-full border border-slate-500/70 bg-slate-100 px-1.5 py-0.5 text-[9px] font-medium text-slate-900 dark:bg-slate-900/40 dark:text-slate-200" },
+  { id: "read", label: "Read", pillClass: "rounded-full border border-sky-500/70 bg-sky-100 px-1.5 py-0.5 text-[9px] font-medium text-sky-900 dark:bg-sky-900/40 dark:text-sky-200" },
+  { id: "want-to-read", label: "Want to read", pillClass: "rounded-full border border-violet-500/70 bg-violet-100 px-1.5 py-0.5 text-[9px] font-medium text-violet-900 dark:bg-violet-900/40 dark:text-violet-200" },
+  { id: "abandoned", label: "Abandoned", pillClass: "rounded-full border border-rose-500/70 bg-rose-100 px-1.5 py-0.5 text-[9px] font-medium text-rose-900 dark:bg-rose-900/40 dark:text-rose-200" },
+  { id: "need-to-find", label: "Need to find", pillClass: "rounded-full border border-orange-500/70 bg-orange-100 px-1.5 py-0.5 text-[9px] font-medium text-orange-900 dark:bg-orange-900/40 dark:text-orange-200" },
 ];
 
 function decodeBasicHtmlEntities(input) {
@@ -198,7 +198,8 @@ export default function App() {
 
   const [readerOpen, setReaderOpen] = useState(false);
   const [readerError, setReaderError] = useState(null);
-  const [readerTheme, setReaderTheme] = useState("dark");
+  const { theme: suiteThemeMode } = useThemeMode();
+  const [readerTheme, setReaderTheme] = useState(suiteThemeMode === "light" ? "light" : "dark");
 
   const [activeView, setActiveView] = useState("library");
   const [prefSaveLoading, setPrefSaveLoading] = useState(false);
@@ -2146,44 +2147,44 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => setShelfFilter("all")}
-                      className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-slate-200 hover:border-slate-500 hover:bg-slate-800"
+                      className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-2 py-0.5 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-slate-500 dark:hover:bg-slate-800"
                     >
                       <span>
                         Shelf:{" "}
                         {shelves.find((s) => s.id === shelfFilter)?.label ||
                           shelfFilter}
                       </span>
-                      <span className="text-slate-400">×</span>
+                      <span className="text-slate-500 dark:text-slate-400">×</span>
                     </button>
                   )}
                   {searchQuery.trim() && (
                     <button
                       type="button"
                       onClick={() => setSearchQuery("")}
-                      className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-slate-200 hover:border-slate-500 hover:bg-slate-800"
+                      className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-2 py-0.5 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-slate-500 dark:hover:bg-slate-800"
                     >
                       <span>Search: {searchQuery.trim()}</span>
-                      <span className="text-slate-400">×</span>
+                      <span className="text-slate-500 dark:text-slate-400">×</span>
                     </button>
                   )}
                   {authorFilter.trim() && (
                     <button
                       type="button"
                       onClick={() => setAuthorFilter("")}
-                      className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-slate-200 hover:border-slate-500 hover:bg-slate-800"
+                      className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-2 py-0.5 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-slate-500 dark:hover:bg-slate-800"
                     >
                       <span>Author: {authorFilter.trim()}</span>
-                      <span className="text-slate-400">×</span>
+                      <span className="text-slate-500 dark:text-slate-400">×</span>
                     </button>
                   )}
                   {tagFilter.trim() && (
                     <button
                       type="button"
                       onClick={() => setTagFilter("")}
-                      className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-slate-200 hover:border-slate-500 hover:bg-slate-800"
+                      className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-2 py-0.5 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-slate-500 dark:hover:bg-slate-800"
                     >
                       <span>Tag: {tagFilter.trim()}</span>
-                      <span className="text-slate-400">×</span>
+                      <span className="text-slate-500 dark:text-slate-400">×</span>
                     </button>
                   )}
                   <button
@@ -2194,7 +2195,7 @@ export default function App() {
                       setTagFilter("");
                       setShelfFilter("all");
                     }}
-                    className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-950 px-2 py-0.5 text-slate-200 hover:border-slate-500 hover:bg-slate-900"
+                    className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-2 py-0.5 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-slate-500 dark:hover:bg-slate-900"
                   >
                     <span>Clear all</span>
                   </button>
@@ -2281,7 +2282,7 @@ export default function App() {
                       {(book.owned || (shelf && shelf.id !== "all")) && (
                         <div className="absolute bottom-2 right-2.5 flex gap-1">
                           {book.owned && (
-                            <span className="rounded-full border border-emerald-500/70 bg-emerald-900/40 px-1.5 py-0.5 text-[9px] font-medium text-emerald-200">
+                            <span className="rounded-full border border-emerald-500/70 bg-emerald-100 px-1.5 py-0.5 text-[9px] font-medium text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-200">
                               Owned
                             </span>
                           )}
@@ -2357,7 +2358,7 @@ export default function App() {
                     setActiveView("library");
                     setShelfFilter("all");
                   }}
-                  className="inline-flex items-center rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-slate-100 hover:border-slate-500 hover:bg-slate-800"
+                  className="inline-flex items-center rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-900 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:border-slate-500 dark:hover:bg-slate-800"
                 >
                   ← Back to library
                 </button>
@@ -2365,12 +2366,12 @@ export default function App() {
 
               {!user ? (
                 <div className="max-w-sm space-y-2">
-                  <div className="text-[11px] text-slate-400">
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">
                     Sign in with your baseGeek account to enable BookGeek
                     features tied to your profile.
                   </div>
                   {authError && (
-                    <div className="text-[10px] text-rose-400">{authError}</div>
+                    <div className="text-[10px] text-rose-700 dark:text-rose-400">{authError}</div>
                   )}
                   <div className="flex items-center gap-2">
                     <button
@@ -2381,14 +2382,14 @@ export default function App() {
                         setAuthError(null);
                         loginRedirect("bookgeek", window.location.href, "login");
                       }}
-                      className="inline-flex items-center rounded border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-slate-50 hover:border-slate-500 disabled:opacity-60"
+                      className="inline-flex items-center rounded border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-900 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 dark:hover:border-slate-500 dark:hover:bg-slate-800 disabled:opacity-60"
                     >
                       {authLoading ? "Redirecting…" : "Sign in"}
                     </button>
                     <button
                       type="button"
                       onClick={() => setActiveView("library")}
-                      className="text-[11px] text-slate-400 hover:text-slate-200"
+                      className="text-[11px] text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
                     >
                       Cancel
                     </button>
@@ -2397,7 +2398,7 @@ export default function App() {
               ) : (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between gap-3">
-                    <div className="text-[11px] text-slate-300">
+                    <div className="text-[11px] text-slate-600 dark:text-slate-300">
                       Signed in as{" "}
                       <span className="font-medium">
                         {user.email || user.username || "unknown"}
@@ -2406,7 +2407,7 @@ export default function App() {
                     <button
                       type="button"
                       onClick={handleLogout}
-                      className="rounded border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] text-slate-200 hover:border-slate-500"
+                      className="rounded border border-slate-300 bg-white px-3 py-1.5 text-[11px] text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-slate-500 dark:hover:bg-slate-800"
                     >
                       Log out
                     </button>
@@ -2416,7 +2417,7 @@ export default function App() {
                     className="max-w-sm space-y-2"
                     onSubmit={handleSaveProfile}
                   >
-                    <div className="text-[11px] font-medium text-slate-200">
+                    <div className="text-[11px] font-medium text-slate-700 dark:text-slate-200">
                       Kindle email address
                     </div>
                     <p className="text-[11px] text-slate-500">
@@ -2425,13 +2426,13 @@ export default function App() {
                     </p>
                     <input
                       type="email"
-                      className="w-full rounded border border-slate-800 bg-slate-900 px-2 py-1.5 text-[11px] text-slate-100 outline-none focus:border-slate-500"
+                      className="w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-[11px] text-slate-900 outline-none focus:border-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
                       placeholder="yourname@kindle.com"
                       value={kindleEmailInput}
                       onChange={(e) => setKindleEmailInput(e.target.value)}
                     />
 
-                    <div className="pt-2 text-[11px] font-medium text-slate-200">
+                    <div className="pt-2 text-[11px] font-medium text-slate-700 dark:text-slate-200">
                       Device word
                     </div>
                     <p className="text-[11px] text-slate-500">
@@ -2440,7 +2441,7 @@ export default function App() {
                     </p>
                     <input
                       type="text"
-                      className="w-full rounded border border-slate-800 bg-slate-900 px-2 py-1.5 text-[11px] text-slate-100 outline-none focus:border-slate-500"
+                      className="w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-[11px] text-slate-900 outline-none focus:border-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
                       placeholder="mustang"
                       value={deviceWordInput}
                       onChange={(e) =>
@@ -2448,27 +2449,27 @@ export default function App() {
                       }
                     />
                     {profileError && (
-                      <div className="text-[10px] text-rose-400">
+                      <div className="text-[10px] text-rose-700 dark:text-rose-400">
                         {profileError}
                       </div>
                     )}
                     {profileMessage && (
-                      <div className="text-[10px] text-emerald-300">
+                      <div className="text-[10px] text-emerald-700 dark:text-emerald-300">
                         {profileMessage}
                       </div>
                     )}
                     <button
                       type="submit"
                       disabled={profileLoading}
-                      className="inline-flex items-center rounded border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-slate-50 hover:border-slate-500 disabled:opacity-60"
+                      className="inline-flex items-center rounded border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-900 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 dark:hover:border-slate-500 dark:hover:bg-slate-800 disabled:opacity-60"
                     >
                       {profileLoading ? "Saving…" : "Save profile"}
                     </button>
                   </form>
 
-                  <div className="border-t border-slate-800 pt-3 text-[11px] text-slate-500 space-y-4">
+                  <div className="border-t border-slate-200 pt-3 dark:border-slate-800 text-[11px] text-slate-500 space-y-4">
                     <div>
-                      <div className="mb-1 text-[11px] font-medium text-slate-200">
+                      <div className="mb-1 text-[11px] font-medium text-slate-700 dark:text-slate-200">
                         Library default shelf
                       </div>
                       <p className="mb-2 text-[11px] text-slate-500">
@@ -2476,7 +2477,7 @@ export default function App() {
                       </p>
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
                         <select
-                          className="w-full max-w-xs rounded border border-slate-800 bg-slate-900 px-2 py-1.5 text-[11px] text-slate-100 outline-none focus:border-slate-500"
+                          className="w-full max-w-xs rounded border border-slate-300 bg-white px-2 py-1.5 text-[11px] text-slate-900 outline-none focus:border-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
                           value={defaultShelfPref}
                           onChange={(e) => setDefaultShelfPref(e.target.value)}
                         >
@@ -2490,16 +2491,16 @@ export default function App() {
                           type="button"
                           onClick={handleSaveDefaultShelf}
                           disabled={prefSaveLoading}
-                          className="inline-flex items-center rounded border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-slate-50 hover:border-slate-500 disabled:opacity-60"
+                          className="inline-flex items-center rounded border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-900 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 dark:hover:border-slate-500 dark:hover:bg-slate-800 disabled:opacity-60"
                         >
                           {prefSaveLoading ? "Saving…" : "Save default shelf"}
                         </button>
                       </div>
                       {prefSaveError && (
-                        <div className="mt-1 text-[10px] text-rose-400">{prefSaveError}</div>
+                        <div className="mt-1 text-[10px] text-rose-700 dark:text-rose-400">{prefSaveError}</div>
                       )}
                       {prefSaveMessage && (
-                        <div className="mt-1 text-[10px] text-emerald-300">{prefSaveMessage}</div>
+                        <div className="mt-1 text-[10px] text-emerald-700 dark:text-emerald-300">{prefSaveMessage}</div>
                       )}
                     </div>
 
@@ -2508,12 +2509,12 @@ export default function App() {
                         type="button"
                         onClick={handleCheckAiStatus}
                         disabled={aiStatusLoading}
-                        className="rounded border border-emerald-600/70 bg-emerald-950/40 px-3 py-1.5 text-[11px] text-emerald-200 hover:border-emerald-400 disabled:opacity-60"
+                        className="rounded border border-emerald-600/70 bg-emerald-100 px-3 py-1.5 text-[11px] text-emerald-800 hover:border-emerald-500 dark:bg-emerald-950/40 dark:text-emerald-200 dark:hover:border-emerald-400 disabled:opacity-60"
                       >
                         {aiStatusLoading ? "Checking AI…" : "Check AI status"}
                       </button>
                       {aiStatus && (
-                        <div className="mt-1 text-[10px] text-slate-400">
+                        <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">
                           AI:{" "}
                           <span className="font-medium">
                             {aiStatus.enabled ? "enabled" : "disabled"}
@@ -2524,14 +2525,14 @@ export default function App() {
                         </div>
                       )}
                       {aiStatusError && (
-                        <div className="mt-1 text-[10px] text-rose-400">
+                        <div className="mt-1 text-[10px] text-rose-700 dark:text-rose-400">
                           {aiStatusError}
                         </div>
                       )}
                     </div>
 
                     <div>
-                      <div className="mb-1 text-[11px] font-medium text-slate-200">
+                      <div className="mb-1 text-[11px] font-medium text-slate-700 dark:text-slate-200">
                         Goodreads import
                       </div>
                       <p className="mb-2 text-[11px] text-slate-500">
@@ -2543,13 +2544,13 @@ export default function App() {
                           type="file"
                           accept=".csv,text/csv"
                           onChange={handleGoodreadsFileChange}
-                          className="text-[11px] text-slate-200 file:mr-2 file:rounded file:border-0 file:bg-slate-800 file:px-2 file:py-1.5 file:text-[11px] file:text-slate-100 hover:file:bg-slate-700"
+                          className="text-[11px] text-slate-700 file:mr-2 file:rounded file:border-0 file:bg-slate-200 file:px-2 file:py-1.5 file:text-[11px] file:text-slate-900 hover:file:bg-slate-300 dark:text-slate-200 dark:file:bg-slate-800 dark:file:text-slate-100 dark:hover:file:bg-slate-700"
                         />
                         <button
                           type="button"
                           onClick={handleGoodreadsImport}
                           disabled={goodreadsImportLoading || !goodreadsFile}
-                          className="inline-flex items-center rounded border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-slate-50 hover:border-slate-500 disabled:opacity-60"
+                          className="inline-flex items-center rounded border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-900 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 dark:hover:border-slate-500 dark:hover:bg-slate-800 disabled:opacity-60"
                         >
                           {goodreadsImportLoading
                             ? "Importing from Goodreads…"
@@ -2557,12 +2558,12 @@ export default function App() {
                         </button>
                       </div>
                       {goodreadsImportError && (
-                        <div className="mt-1 text-[10px] text-rose-400">
+                        <div className="mt-1 text-[10px] text-rose-700 dark:text-rose-400">
                           {goodreadsImportError}
                         </div>
                       )}
                       {goodreadsImportSummary && (
-                        <div className="mt-1 text-[10px] text-emerald-300">
+                        <div className="mt-1 text-[10px] text-emerald-700 dark:text-emerald-300">
                           Imported Goodreads CSV: {goodreadsImportSummary.updated ?? 0} updated,
                           {" "}
                           {goodreadsImportSummary.created ?? 0} created,
@@ -2577,19 +2578,19 @@ export default function App() {
                           type="button"
                           onClick={handleGoodreadsDedupe}
                           disabled={goodreadsDedupeLoading}
-                          className="inline-flex items-center rounded border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-slate-50 hover:border-slate-500 disabled:opacity-60"
+                          className="inline-flex items-center rounded border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-900 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 dark:hover:border-slate-500 dark:hover:bg-slate-800 disabled:opacity-60"
                         >
                           {goodreadsDedupeLoading
                             ? "Merging duplicates…"
                             : "Merge Goodreads duplicates"}
                         </button>
                         {goodreadsDedupeError && (
-                          <span className="text-[10px] text-rose-400">
+                          <span className="text-[10px] text-rose-700 dark:text-rose-400">
                             {goodreadsDedupeError}
                           </span>
                         )}
                         {goodreadsDedupeSummary && (
-                          <span className="text-[10px] text-emerald-300">
+                          <span className="text-[10px] text-emerald-700 dark:text-emerald-300">
                             Merged {goodreadsDedupeSummary.merged ?? 0} of {" "}
                             {goodreadsDedupeSummary.candidates ?? 0} Goodreads-only books; {" "}
                             updated {goodreadsDedupeSummary.updatedPrimary ?? 0} primaries; {" "}
@@ -2601,7 +2602,7 @@ export default function App() {
                   </div>
 
                   <div>
-                    <div className="mb-1 text-[11px] font-medium text-slate-200">
+                    <div className="mb-1 text-[11px] font-medium text-slate-700 dark:text-slate-200">
                       Library rescan
                     </div>
                     <p className="mb-2 text-[11px] text-slate-500">
@@ -2613,19 +2614,19 @@ export default function App() {
                         type="button"
                         onClick={handleCalibreRescan}
                         disabled={calibreRescanLoading}
-                        className="inline-flex items-center rounded border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-slate-50 hover:border-slate-500 disabled:opacity-60"
+                        className="inline-flex items-center rounded border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-900 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 dark:hover:border-slate-500 dark:hover:bg-slate-800 disabled:opacity-60"
                       >
                         {calibreRescanLoading
                           ? "Scanning library…"
                           : "Rescan library"}
                       </button>
                       {calibreRescanError && (
-                        <span className="text-[10px] text-rose-400">
+                        <span className="text-[10px] text-rose-700 dark:text-rose-400">
                           {calibreRescanError}
                         </span>
                       )}
                       {calibreRescanSummary && (
-                        <span className="text-[10px] text-emerald-300">
+                        <span className="text-[10px] text-emerald-700 dark:text-emerald-300">
                           Scanned {calibreRescanSummary.rows ?? 0} entries; attached to{" "}
                           {calibreRescanSummary.attachedExisting ?? 0} existing books; created{" "}
                           {calibreRescanSummary.createdNew ?? 0} new; skipped{" "}
@@ -2950,7 +2951,7 @@ export default function App() {
                       </div>
                     ) : (
                       <>
-                        <h3 className="text-base font-bold font-serif md:text-lg" style={{ color: 'var(--color-text-primary)' }}>
+                        <h3 className="text-base font-bold font-serif text-slate-100 md:text-lg">
                           {selectedBook.title || "Untitled"}
                         </h3>
                         {Array.isArray(selectedBook.authors) &&
@@ -3242,7 +3243,7 @@ export default function App() {
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-slate-300">Shelf:</span>
                     <select
-                      className="min-w-[140px] rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100 outline-none focus:border-slate-500"
+                      className="min-w-[140px] rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100 outline-none [color-scheme:dark] focus:border-slate-500"
                       value={selectedBook.shelf || ""}
                       disabled={
                         !!shelfSavingId && shelfSavingId === (selectedBook.id || selectedBook._id)

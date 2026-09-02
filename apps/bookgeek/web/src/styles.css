@@ -1,5 +1,36 @@
-/* ===== Dark theme (default) ===== */
+/* ===== Light theme (default) ===== */
 :root,
+:root[data-theme="light"],
+.light {
+  color-scheme: light;
+
+  --color-bg-page: #e8ecf1;
+  --color-bg-surface: #ffffff;
+  --color-bg-surface-alt: #f8fafc;
+  --color-bg-card: #ffffff;
+
+  --color-border: rgba(15, 23, 42, 0.10);
+  --color-border-subtle: rgba(15, 23, 42, 0.04);
+  --color-border-card: rgba(15, 23, 42, 0.10);
+  --color-border-input: rgba(15, 23, 42, 0.18);
+
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #334155;
+  --color-text-muted: #64748b;
+  --color-text-faint: #94a3b8;
+
+  --color-sidebar-bg: rgba(241, 245, 249, 0.7);
+  --color-sidebar-text: #475569;
+  --color-sidebar-heading: #94a3b8;
+  --color-sidebar-active-bg: rgba(15, 23, 42, 0.06);
+  --color-sidebar-active-text: #0f172a;
+
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.06), 0 0 0 1px var(--color-border-card);
+  --shadow-panel: 0 8px 30px rgba(0,0,0,0.08);
+}
+
+/* ===== Dark theme (opt-in via data-theme) ===== */
+:root[data-theme="dark"],
 .dark {
   color-scheme: dark;
 
@@ -31,35 +62,6 @@
   /* Card depth */
   --shadow-card: 0 2px 8px rgba(0,0,0,0.3), 0 0 0 1px var(--color-border-card);
   --shadow-panel: 0 22px 60px rgba(0,0,0,0.5);
-}
-
-/* ===== Light theme ===== */
-.light {
-  color-scheme: light;
-
-  --color-bg-page: #e8ecf1;
-  --color-bg-surface: #ffffff;
-  --color-bg-surface-alt: #f8fafc;
-  --color-bg-card: #ffffff;
-
-  --color-border: rgba(15, 23, 42, 0.10);
-  --color-border-subtle: rgba(15, 23, 42, 0.04);
-  --color-border-card: rgba(15, 23, 42, 0.10);
-  --color-border-input: rgba(15, 23, 42, 0.18);
-
-  --color-text-primary: #0f172a;
-  --color-text-secondary: #334155;
-  --color-text-muted: #64748b;
-  --color-text-faint: #94a3b8;
-
-  --color-sidebar-bg: rgba(241, 245, 249, 0.7);
-  --color-sidebar-text: #475569;
-  --color-sidebar-heading: #94a3b8;
-  --color-sidebar-active-bg: rgba(15, 23, 42, 0.06);
-  --color-sidebar-active-text: #0f172a;
-
-  --shadow-card: 0 1px 3px rgba(0,0,0,0.06), 0 0 0 1px var(--color-border-card);
-  --shadow-panel: 0 8px 30px rgba(0,0,0,0.08);
 }
 
 /* ===== Base ===== */

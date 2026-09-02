@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { themePreboot } from '@geeksuite/user/vite';
 import path from 'path';
 
 export default defineConfig(({ mode }) => {
@@ -7,7 +8,7 @@ export default defineConfig(({ mode }) => {
   const apiUrl = isProd ? '/api' : 'http://localhost:1800/api';
 
   return {
-    plugins: [react()],
+    plugins: [react(), themePreboot()],
     server: {
       port: 1801,
       host: '0.0.0.0',
