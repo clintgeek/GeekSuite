@@ -21,8 +21,8 @@ export default defineConfig(({ mode }) => {
           name: 'NoteGeek',
           short_name: 'NoteGeek',
           description: 'A powerful note-taking application',
-          theme_color: '#ffffff',
-          background_color: '#ffffff',
+          theme_color: '#8B2C2A',
+          background_color: '#FBF7EE',
           display: 'standalone',
           orientation: 'any',
           icons: [

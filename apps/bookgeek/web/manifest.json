@@ -4,8 +4,8 @@
   "description": "eBook reader and library manager — part of GeekSuite",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#fefce8",
-  "theme_color": "#b45309",
+  "background_color": "#e8ecf1",
+  "theme_color": "#0ea5e9",
   "orientation": "portrait-primary",
   "scope": "/",
   "icons": [
