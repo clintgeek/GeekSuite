@@ -153,7 +153,7 @@ const NutritionSummary = ({
               }}>
                 <Box sx={{
                   bgcolor: item.color,
-                  color: '#fff',
+                  color: theme.palette.getContrastText(item.color),
                   width: 28,
                   height: 28,
                   borderRadius: '50%',

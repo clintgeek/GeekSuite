@@ -16,7 +16,7 @@ const ProtectedRoute = ({ children }) => {
           justifyContent: 'center',
           alignItems: 'center',
           minHeight: '100vh',
-          backgroundColor: '#f5f5f5'
+          bgcolor: 'background.default'
         }}
       >
         <CircularProgress size={40} />

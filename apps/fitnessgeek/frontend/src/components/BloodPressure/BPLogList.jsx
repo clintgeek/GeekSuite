@@ -11,7 +11,7 @@ import {
   ListItemText,
   ListItemSecondaryAction
 } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
+import { useTheme, darken } from '@mui/material/styles';
 import {
   Delete as DeleteIcon,
   MonitorHeart as BPIcon
@@ -20,6 +20,8 @@ import {
 const BPLogList = ({ logs, onDelete, unit = "mmHg" }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
+  // Status hues are tuned for dark tints; darken for legible text on light-mode tints.
+  const statusTextColor = (color) => (isDark ? color : darken(color, 0.35));
   const getBPStatus = (systolic, diastolic) => {
     // BP Categories based on American Heart Association guidelines
     if (systolic < 120 && diastolic < 80) return { status: 'Normal', color: '#10b981' };
@@ -126,7 +128,7 @@ const BPLogList = ({ logs, onDelete, unit = "mmHg" }) => {
                         size="small"
                         sx={{
                           backgroundColor: `${bpStatus.color}20`,
-                          color: bpStatus.color,
+                          color: statusTextColor(bpStatus.color),
                           fontWeight: 600,
                           fontSize: '0.7rem',
                           height: 20
@@ -188,7 +190,7 @@ const BPLogList = ({ logs, onDelete, unit = "mmHg" }) => {
                       size="small"
                       sx={{
                         backgroundColor: `${bpStatus.color}20`,
-                        color: bpStatus.color,
+                        color: statusTextColor(bpStatus.color),
                         fontWeight: 600,
                         fontSize: '0.75rem'
                       }}

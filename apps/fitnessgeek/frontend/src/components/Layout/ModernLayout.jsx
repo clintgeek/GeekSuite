@@ -168,7 +168,7 @@ export default function ModernLayout() {
               fontFamily: "'DM Serif Display', serif",
               fontWeight: 400,
               fontSize: '1rem',
-              color: isMobile ? theme.palette.primary.contrastText : 'inherit'
+              color: theme.palette.primary.contrastText
             }}
           >
             {user?.username?.[0]?.toUpperCase() || 'U'}

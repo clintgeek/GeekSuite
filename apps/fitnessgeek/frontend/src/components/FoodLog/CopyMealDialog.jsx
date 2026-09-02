@@ -284,10 +284,10 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
         <Box sx={{
           mt: 3,
           p: 2,
-          bgcolor: 'grey.50',
+          bgcolor: 'action.hover',
           borderRadius: 2,
           border: '1px solid',
-          borderColor: 'grey.200'
+          borderColor: 'divider'
         }}>
           <Typography variant="body2" color="text.secondary">
             Will copy: <strong>{formatMealType(fromMealType)}</strong> from{' '}

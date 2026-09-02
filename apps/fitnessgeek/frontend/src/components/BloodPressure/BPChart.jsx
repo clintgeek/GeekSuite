@@ -5,6 +5,7 @@ import {
   Typography,
   Box
 } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import {
   LineChart,
   Line,
@@ -17,6 +18,7 @@ import {
 } from 'recharts';
 
 const BPChart = ({ data, title = "Blood Pressure Trend" }) => {
+  const theme = useTheme();
   // Sort data by date (newest first) and take last 30 entries
   const sortedData = [...data]
     .sort((a, b) => new Date(a.log_date) - new Date(b.log_date))
@@ -71,15 +73,17 @@ const BPChart = ({ data, title = "Blood Pressure Trend" }) => {
               data={sortedData}
               margin={{ top: 20, right: 30, left: 5, bottom: 20 }}
             >
-              <CartesianGrid strokeDasharray="3 3" />
+              <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} />
               <XAxis
                 dataKey="date"
-                tick={{ fontSize: 12 }}
+                tick={{ fontSize: 12, fill: theme.palette.text.secondary }}
+                stroke={theme.palette.divider}
                 interval="preserveStartEnd"
               />
               <YAxis
                 domain={['dataMin - 10', 'dataMax + 10']}
-                tick={{ fontSize: 12 }}
+                tick={{ fontSize: 12, fill: theme.palette.text.secondary }}
+                stroke={theme.palette.divider}
                 width={30}
               />
               <Tooltip
@@ -113,8 +117,8 @@ const BPChart = ({ data, title = "Blood Pressure Trend" }) => {
               />
 
               {/* Normal BP reference lines */}
-              <ReferenceLine y={120} stroke="#4caf50" strokeDasharray="3 3" label="Normal Systolic" />
-              <ReferenceLine y={80} stroke="#4caf50" strokeDasharray="3 3" label="Normal Diastolic" />
+              <ReferenceLine y={120} stroke="#4caf50" strokeDasharray="3 3" label={{ value: 'Normal Systolic', fill: theme.palette.text.secondary }} />
+              <ReferenceLine y={80} stroke="#4caf50" strokeDasharray="3 3" label={{ value: 'Normal Diastolic', fill: theme.palette.text.secondary }} />
             </LineChart>
           </ResponsiveContainer>
         </Box>

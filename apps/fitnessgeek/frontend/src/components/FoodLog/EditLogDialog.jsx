@@ -112,7 +112,7 @@ const EditLogDialog = ({
               gap: 2,
               mb: 3,
               p: 2,
-              backgroundColor: '#f5f5f5',
+              backgroundColor: 'action.hover',
               borderRadius: 1
             }}>
               <FoodIcon sx={{ fontSize: 32, color: 'primary.main' }} />

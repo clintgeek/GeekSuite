@@ -1,8 +1,10 @@
 import React, { useMemo } from 'react';
 import { Card, CardContent, Typography, Box } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 
 const BPHRChart = ({ data = [], title = 'Heart Rate (Today)' }) => {
+  const theme = useTheme();
   const points = useMemo(() => {
     if (!data || !Array.isArray(data)) return [];
     // Accept either {time, bpm} or Garmin style arrays; normalize
@@ -53,7 +55,7 @@ const BPHRChart = ({ data = [], title = 'Heart Rate (Today)' }) => {
     <Card sx={{
       borderRadius: '20px',
       boxShadow: '0 4px 12px rgba(15, 23, 42, 0.08)',
-      border: '1px solid #e2e8f0'
+      border: `1px solid ${theme.palette.divider}`
     }}>
       <CardContent sx={{ p: 3 }}>
         <Typography variant="h6" sx={{ mb: 2, fontWeight: 700, color: 'text.primary' }}>
@@ -62,10 +64,10 @@ const BPHRChart = ({ data = [], title = 'Heart Rate (Today)' }) => {
         <Box sx={{ height: 250 }}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={points} margin={{ top: 10, right: 20, left: 0, bottom: 30 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} />
               <XAxis
                 dataKey="time"
-                tick={{ fontSize: 12, fill: '#78716C' }}
+                tick={{ fontSize: 12, fill: theme.palette.text.secondary }}
                 tickFormatter={formatXAxis}
                 angle={-45}
                 textAnchor="end"
@@ -75,14 +77,15 @@ const BPHRChart = ({ data = [], title = 'Heart Rate (Today)' }) => {
               <YAxis
                 width={40}
                 domain={["dataMin-5", "dataMax+5"]}
-                tick={{ fontSize: 12, fill: '#78716C' }}
-                label={{ value: 'BPM', angle: -90, position: 'insideLeft', style: { fill: '#78716C' } }}
+                tick={{ fontSize: 12, fill: theme.palette.text.secondary }}
+                label={{ value: 'BPM', angle: -90, position: 'insideLeft', style: { fill: theme.palette.text.secondary } }}
               />
               <Tooltip
                 formatter={formatTooltip}
                 contentStyle={{
-                  backgroundColor: 'white',
-                  border: '1px solid #e2e8f0',
+                  backgroundColor: theme.palette.background.paper,
+                  color: theme.palette.text.primary,
+                  border: `1px solid ${theme.palette.divider}`,
                   borderRadius: '8px',
                   boxShadow: '0 4px 12px rgba(15, 23, 42, 0.1)'
                 }}

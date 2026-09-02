@@ -128,7 +128,7 @@ const Sidebar = () => {
                 pt: 2,
                 pb: 0.5,
                 display: 'block',
-                color: 'rgba(255, 255, 255, 0.3)',
+                color: 'rgba(255, 255, 255, 0.55)',
                 fontSize: '0.625rem',
                 fontWeight: 600,
                 letterSpacing: '0.1em',

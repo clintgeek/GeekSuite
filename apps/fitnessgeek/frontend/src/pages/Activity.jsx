@@ -26,7 +26,7 @@ import {
   Psychology as RemIcon,
   Visibility as AwakeIcon,
 } from '@mui/icons-material';
-import { alpha } from '@mui/material/styles';
+import { alpha, darken } from '@mui/material/styles';
 import { fitnessGeekService } from '../services/fitnessGeekService';
 import { Surface, SectionLabel, DisplayHeading, StatNumber, EmptyState } from '../components/primitives';
 
@@ -36,6 +36,8 @@ import { Surface, SectionLabel, DisplayHeading, StatNumber, EmptyState } from '.
 const SleepStageTile = ({ icon: Icon, minutes = 0, label, color }) => {
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
+  const theme = useTheme();
+  const textColor = theme.palette.mode === 'dark' ? color : darken(color, 0.35);
   return (
     <Box
       sx={{
@@ -58,7 +60,7 @@ const SleepStageTile = ({ icon: Icon, minutes = 0, label, color }) => {
           fontVariantNumeric: 'tabular-nums',
           fontSize: '1.125rem',
           fontWeight: 600,
-          color,
+          color: textColor,
           lineHeight: 1,
           letterSpacing: '-0.02em',
         }}
@@ -85,75 +87,79 @@ const SleepStageTile = ({ icon: Icon, minutes = 0, label, color }) => {
  * Small tile helper for health-metric grids.
  * Renders value as mono text directly so non-numeric prefixes like "+" are preserved.
  */
-const MetricTile = ({ icon: Icon, label, value, unit, color, subtext }) => (
-  <Box
-    sx={{
-      textAlign: 'center',
-      p: 1.75,
-      borderRadius: 2,
-      backgroundColor: (t) => alpha(color, t.palette.mode === 'dark' ? 0.12 : 0.08),
-      border: (t) => `1px solid ${alpha(color, t.palette.mode === 'dark' ? 0.2 : 0.14)}`,
-      height: '100%',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      gap: 0.5,
-    }}
-  >
-    {Icon && <Icon sx={{ color, fontSize: 22 }} />}
-    <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.375 }}>
+const MetricTile = ({ icon: Icon, label, value, unit, color, subtext }) => {
+  const theme = useTheme();
+  const textColor = theme.palette.mode === 'dark' ? color : darken(color, 0.35);
+  return (
+    <Box
+      sx={{
+        textAlign: 'center',
+        p: 1.75,
+        borderRadius: 2,
+        backgroundColor: (t) => alpha(color, t.palette.mode === 'dark' ? 0.12 : 0.08),
+        border: (t) => `1px solid ${alpha(color, t.palette.mode === 'dark' ? 0.2 : 0.14)}`,
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 0.5,
+      }}
+    >
+      {Icon && <Icon sx={{ color, fontSize: 22 }} />}
+      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.375 }}>
+        <Typography
+          sx={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontVariantNumeric: 'tabular-nums',
+            fontSize: '1.125rem',
+            fontWeight: 600,
+            color: textColor,
+            lineHeight: 1,
+            letterSpacing: '-0.02em',
+          }}
+        >
+          {value ?? '--'}
+        </Typography>
+        {unit && (
+          <Typography
+            sx={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: '0.625rem',
+              fontWeight: 600,
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
+              color: 'text.secondary',
+            }}
+          >
+            {unit}
+          </Typography>
+        )}
+      </Box>
       <Typography
         sx={{
-          fontFamily: "'JetBrains Mono', monospace",
-          fontVariantNumeric: 'tabular-nums',
-          fontSize: '1.125rem',
-          fontWeight: 600,
-          color,
-          lineHeight: 1,
-          letterSpacing: '-0.02em',
+          fontSize: '0.625rem',
+          fontWeight: 700,
+          textTransform: 'uppercase',
+          letterSpacing: '0.1em',
+          color: 'text.secondary',
         }}
       >
-        {value ?? '--'}
+        {label}
       </Typography>
-      {unit && (
+      {subtext && (
         <Typography
           sx={{
             fontFamily: "'JetBrains Mono', monospace",
             fontSize: '0.625rem',
-            fontWeight: 600,
-            textTransform: 'uppercase',
-            letterSpacing: '0.08em',
-            color: 'text.secondary',
+            color: 'text.disabled',
           }}
         >
-          {unit}
+          {subtext}
         </Typography>
       )}
     </Box>
-    <Typography
-      sx={{
-        fontSize: '0.625rem',
-        fontWeight: 700,
-        textTransform: 'uppercase',
-        letterSpacing: '0.1em',
-        color: 'text.secondary',
-      }}
-    >
-      {label}
-    </Typography>
-    {subtext && (
-      <Typography
-        sx={{
-          fontFamily: "'JetBrains Mono', monospace",
-          fontSize: '0.625rem',
-          color: 'text.disabled',
-        }}
-      >
-        {subtext}
-      </Typography>
-    )}
-  </Box>
-);
+  );
+};
 
 // Activity type icons
 const activityIcons = {

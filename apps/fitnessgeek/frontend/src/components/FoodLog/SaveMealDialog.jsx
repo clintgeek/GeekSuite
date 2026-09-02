@@ -143,7 +143,7 @@ const SaveMealDialog = ({
                     gap: 1,
                     mb: 1,
                     p: 1,
-                    backgroundColor: '#f5f5f5',
+                    backgroundColor: 'action.hover',
                     borderRadius: 1
                   }}
                 >

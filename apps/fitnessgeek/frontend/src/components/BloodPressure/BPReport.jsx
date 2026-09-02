@@ -26,8 +26,14 @@ import {
 import BPChartNivo from './BPChartNivo.jsx';
 import { categorizeBP } from '../../utils/bpUtils.js';
 import { getTodayLocal } from '../../utils/dateUtils';
+import { ThemeProvider } from '@mui/material/styles';
+import { createAppTheme } from '../../theme/theme';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+
+// The report node is the html2canvas source and stays white; render its contents
+// with a light theme so text/dividers stay readable when the app is in dark mode.
+const lightReportTheme = createAppTheme('light');
 
 const BPReport = ({ bpLogs, onClose }) => {
   const reportRef = useRef(null);
@@ -284,6 +290,7 @@ const BPReport = ({ bpLogs, onClose }) => {
         </Box>
       </DialogTitle>
       <DialogContent sx={{ p: 0 }}>
+        <ThemeProvider theme={lightReportTheme}>
         <Box ref={reportRef} sx={{
           p: 3,
           backgroundColor: '#ffffff',
@@ -484,6 +491,7 @@ const BPReport = ({ bpLogs, onClose }) => {
             </Typography>
           </Box>
         </Box>
+        </ThemeProvider>
       </DialogContent>
       <DialogActions sx={{ p: 3 }}>
         <Button onClick={onClose}>Cancel</Button>

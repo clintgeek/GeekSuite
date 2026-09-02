@@ -1,5 +1,6 @@
 /* CSS Custom Properties — aligned with MUI theme (theme.jsx) */
 :root {
+  color-scheme: light;
   /* Light Mode — Stone/Teal palette */
   --primary-color: #0D9488;
   --primary-hover: #0F766E;
@@ -33,6 +34,7 @@
 }
 
 :root[data-theme='dark'] {
+  color-scheme: dark;
   /* Dark Mode — Stone/Teal palette */
   --primary-color: #2DD4BF;
   --primary-hover: #14B8A6;
