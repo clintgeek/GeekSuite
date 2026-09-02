@@ -3,6 +3,8 @@
 Suite-wide backlog. Grouped by theme; ordered roughly by impact and ease within each group.
 Pull from here when planning the next pass; update as work lands or priorities shift.
 `DEFERRED_WORK.md` is the append-only scratch-pad; this is the prioritized cut.
+`TODO_ORDER.md` is the single cross-cutting work queue (UI/UX and everything else,
+ordered by result per unit of work) — consult it first, then come here for detail.
 
 ---
 
@@ -28,6 +30,17 @@ StoryGeek SSO alignment + Settings page fix + AuthProvider refactor. Pending mer
   paths (SW cache poisoning), immutable caching for hashed assets, pnpm
   pinned in Dockerfiles, CI + GHCR release workflows (`DOCS/CICD.md` Tier 1
   + 3.3 publish; Watchtower box setup still manual).
+
+---
+
+## Landed 2026-09-02 (theme contrast sweep)
+
+- Shared factory: per-mode semantic colors (success/warning/error/info), readable
+  `text.disabled`, component overrides built from the app's merged palette.
+- flockgeek + storygeek wired to the suite `geek_theme` cookie + preboot; bookgeek
+  Tailwind dark variant keyed to `[data-theme="dark"]`; bujogeek palette now uses its
+  warm tokens; notegeek accent lifted in dark; fitnessgeek pinned-light tiles removed;
+  basegeek dark-mode legibility fixes. Full findings in the 2026-09-02 session.
 
 ---
 
@@ -99,7 +112,126 @@ Hardening = pino logging, request IDs, graceful shutdown, env-driven CORS, data-
 
 ---
 
+## UI / UX
+
+Grounded in the 2026-09-02 contrast sweep. Complements `DOCS/THE_UI_UNIFICATION_PLAN.md`
+(type scale, shell dimensions, global search, quick capture, focus mode) — those items are
+not repeated here.
+
+### Highest leverage, cheap
+
+- **basegeek light mode + design-language alignment** — basegeek is the only MUI app not
+  composed from `createGeekSuiteTheme`. Rebuild "Mission Control" as
+  `createGeekSuiteTheme({ mode, accent: amber, overrides })` with a real light palette,
+  honor the shared `ThemeProvider` + preboot, and replace the hardcoded dark literals on
+  Portal/Login/Register pages, Drawer/AppBar/Dialog/Tooltip overrides, and
+  `typography.caption.color`. Keep amber as accent only. Also fix the Account-page Theme
+  form defaulting to `'dark'` (overwrites a user's `'system'` on save).
+  `apps/basegeek/packages/ui/src/theme.js`, `pages/AccountPage.jsx:149`
+
+- **Suite switcher in the GeekShell top bar** — nine-dot menu listing all eight apps. SSO
+  already makes them one product; this is the missing "it's a suite" affordance.
+  `packages/ui/src/navigation/`
+
+- **`text.muted` token** — add a third text tier (≥3:1 on each mode's paper) to the shared
+  factory so apps stop using `text.disabled` for timestamps, counts, and empty states.
+  Then sweep the misuses (notegeek, bujogeek, flockgeek, basegeek).
+
+- **Contrast regression test** — vitest in `packages/ui` that builds every app's light and
+  dark theme and asserts text-on-surface pairs (primary/secondary/muted on
+  default/paper; primary.main on paper; contrastText on primary) meet 4.5:1 (3:1 for
+  large/UI). Would have caught most of the 2026-09-02 findings pre-ship.
+
+- **Theme toggle placement** — one spot in the shell for every app. Today: storygeek top
+  bar, notegeek Settings, others absent.
+
+- **storygeek Destroy button** — `MuiButton.styleOverrides.contained` swallows
+  `color="error"`, so the destructive confirm renders as the primary gold/burgundy CTA.
+  Scope the override to `containedPrimary`. `apps/storygeek/frontend/src/theme/theme.js`
+
+### Medium effort, clear payoff
+
+- **Shared mobile bottom-nav primitive** — bujogeek (tabs + More sheet), notegeek and
+  fitnessgeek (bottom navs), flockgeek (sidebar only), storygeek/bookgeek (drawers) all
+  differ. One GeekShell primitive, app supplies items.
+
+- **Shared EmptyState / ErrorState / toast primitives** — every app hand-rolls these and
+  most got them wrong in one mode. Promote bujogeek's `EmptyState` as the seed.
+
+- **PWA splash + browser chrome per mode** — manifests carry wrong colors (flockgeek
+  `#F5F5F5`/`#4A90E2`, bujogeek `#ffffff`, notegeek `#ffffff`, fitnessgeek light) and
+  `theme-color` metas are single-valued. Use `media="(prefers-color-scheme: …)"` pairs and
+  manifest colors matching each app's default mode.
+
+- **bookgeek off the runtime Tailwind CDN** — JIT at runtime means utilities land a frame
+  late, it's a third-party ~300 KB script, and it fails offline in the PWA. Build-time
+  Tailwind or continue the incremental MUI migration. `apps/bookgeek/web/index.html`
+
+- **startgeek joins the suite** — wire to `geek_theme` (needs `@geeksuite/user`, which
+  means bringing it into the pnpm workspace build) and give the wallpaper a stronger,
+  luminance-adaptive scrim; dock labels at `text-white/40` and weather at `/50` vanish on
+  bright photos.
+
+### Worth tracking
+
+- **Shared `toneForMode(color, theme)` helper** — bujogeek aging colors, fitnessgeek BP
+  statuses, storygeek genres/dice were tuned for light paper; 2026-09-02 added ad hoc
+  lighten/darken branches in four places. Consolidate.
+
+- **Auth-hydration splash** — several apps show an unthemed/default-grey box while
+  checking the cookie. Shared splash in `packages/ui` using the app theme.
+
+- **Reduced motion** — framer-motion transitions and bujogeek's grain overlay ignore
+  `prefers-reduced-motion`.
+
+- **Native date inputs** — fitnessgeek and flockgeek mix native `<input type="date">` with
+  MUI controls; `color-scheme` now fixes the glyph but pickers should be consistent.
+
+- **flockgeek first-visit flicker** — preboot has no per-app default, so a cookie-less
+  visitor on a light OS paints light then flips to flockgeek's dark default on mount.
+  Either let the preboot accept a default or accept the one-time flicker.
+
+- **Login wordmark brand colors fail in one mode** — fitnessgeek `#2563eb` (2.4:1 on the dark
+  card), bookgeek `logoSuffixColor="#1d4ed8"` (2.0:1 dark), storygeek `#7c4dff`/`#ff6d00`
+  (off-identity purple/orange; orange 2.7:1 light). Pass theme tokens or mode-paired values
+  to `LoginSplash`. storygeek also never loads the "Plus Jakarta Sans" LoginSplash requests.
+
+- **bookgeek primary button contrast** — sky `#0ea5e9` with white `contrastText` is 2.8:1 in
+  both modes ("Add book", "Create"). Darken the accent or use a dark contrastText.
+  `apps/bookgeek/web/src/theme/theme.js`
+
+- **bujogeek TemplatePreview markdown** — `ReactMarkdown` output is unstyled: UA-blue links on
+  dark paper (~2.3:1), no code-block background, and the panel uses `background.paper`
+  inside a Paper. Style via the palette like notegeek's `NoteViewer` markdown block.
+  `apps/bujogeek/frontend/src/components/templates/TemplatePreview.jsx`
+
+- **notegeek mind-map off-palette colors** — edge stroke `#2196f3`, MiniMap `#5B50A8`/`#3D8493`,
+  root-node fill `#e3f2fd`, and `TAG_COLORS` duplicate light-mode `noteTypes` without the dark
+  lift. Route through the palette. `MindMapEditor.jsx`, `MindMapNode.jsx`, `Sidebar.jsx`
+
+- **fitnessgeek `MuiDrawer` landmine** — theme pins Drawer paper to `#0C0A09` in both modes.
+  Inert today (nothing renders a MUI Drawer) but the first one to do so gets palette text on
+  near-black in light mode. Make it mode-aware or remove. `theme/theme.jsx`
+
+- **fitnessgeek BarcodeScanner** — only surface in the suite keyed to
+  `@media (prefers-color-scheme: dark)` instead of `data-theme`. Reticle only; low impact.
+
+- **Themed tooltips** — the shared factory leaves MUI's default grey-700 tooltip; legible but
+  off-identity in every app. Derive from the palette in `createGeekSuiteTheme`.
+
+- **Offline pages per mode** — flockgeek `offline.html` is light with a `#4A90E2` button
+  (not its amber); bookgeek's is dark-only. Give both a `prefers-color-scheme` pair and
+  the app's accent.
+
+---
+
 ## Shared libraries / refactors
+
+- **MUI major-version drift** — basegeek, bujogeek, and notegeek declare `@mui/material ^7`
+  but the lockfile resolves 5.18.0 (and basegeek's icons resolve to 7.3.8). Harmless today
+  because everything is v5, but a fresh `pnpm install` without the lockfile would split the
+  theme context (see the dedupe notes in `vite.config.js` comments). Pin all apps and
+  `packages/ui` to one declared major.
 
 - **`cryptoVault` → `@geeksuite/crypto-vault`** — currently internal to basegeek at
   `apps/basegeek/packages/api/src/lib/cryptoVault.js`. Promote to a shared package so fitnessgeek
@@ -131,6 +263,11 @@ Hardening = pino logging, request IDs, graceful shutdown, env-driven CORS, data-
 
 - **bujogeek subtasks UI** — backend model has `parentTask`/`subtasks` fields; no frontend UI.
 
+- **storygeek markdown rendering** — AI narration and Bookify output render as plain
+  `pre-wrap` text, so `**bold**` shows literal asterisks. `react-markdown`,
+  `react-syntax-highlighter`, and `@mui/x-data-grid` are declared but never imported —
+  either wire up markdown (styled from the palette) or drop the deps.
+
 - ~~bujogeek quick-add hyphenated-date bug~~ — **Fixed 2026-08-30:** date
   parsing now runs before signifier detection in `utils/parseTaskInput.js`, so
   `/2026-03-15` / `/03-15-2026` dates parse correctly; regression tests added.
@@ -147,6 +284,11 @@ Hardening = pino logging, request IDs, graceful shutdown, env-driven CORS, data-
 
 ## Tests + observability
 
+- **ESLint doesn't run in most frontends** — bujogeek, storygeek, fitnessgeek, basegeek
+  either lack a flat config (ESLint 9) or carry a legacy `.eslintrc`, so `pnpm lint` exits
+  before linting. CI's lint job is effectively a no-op for them. Add a shared
+  `eslint.config.js` in `packages/` and extend it per app.
+
 - **Per-app auth test suites** — basegeek has 33 auth tests. bujogeek, fitnessgeek, flockgeek,
   storygeek, and notegeek have zero. Priority for each app after its hardening pass: auth-isolation
   specs (login flow, `/api/users/me`, data scoping). (`DEFERRED_WORK.md`)
@@ -161,6 +303,14 @@ Hardening = pino logging, request IDs, graceful shutdown, env-driven CORS, data-
 ---
 
 ## Nice-to-haves / backlog
+
+- **Dead frontend components (contrast-sweep findings)** — unrouted files that still carry
+  hardcoded light styling and will bite if re-mounted: fitnessgeek `Layout.jsx`, `Drawer.jsx`,
+  `FoodSearch.jsx` (deprecated), `NaturalLanguageInput.jsx` + subtree, `DashboardOrderSettings.jsx`,
+  `AITestComponent.jsx`, `WeightLayout.jsx`, `WeightProgressRing.jsx`, `MacroBar.jsx`;
+  bujogeek `navigation/BottomNav.jsx` + the `MuiBottomNavigation*` theme overrides;
+  notegeek `pages/LoginPage.jsx`, `pages/RegisterPage.jsx`; basegeek `pages/Databases.jsx`;
+  startgeek `ResumeSection.jsx`, `WorldClocks.jsx`. Delete or route.
 
 - **`fitnessgeek docker-compose.dev.yml`** — references service names that no longer exist in the
   new single-service compose. Rewrite for hot-reload or delete if not in use. (`DEFERRED_WORK.md`)
