@@ -1,184 +1,120 @@
-import React from 'react';
-import {
-  Box,
-  Divider,
-  IconButton,
-  List,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
-  Tooltip,
-  Typography,
-  alpha,
-  useTheme
-} from "@mui/material";
-import CloseIcon from "@mui/icons-material/Close";
-import LogoutIcon from "@mui/icons-material/Logout";
-import HomeIcon from "@mui/icons-material/HomeOutlined";
-import EggIcon from "@mui/icons-material/EggOutlined";
-import PetsIcon from "@mui/icons-material/PetsOutlined";
-import GroupsIcon from "@mui/icons-material/GroupsOutlined";
-import PlaceIcon from "@mui/icons-material/PlaceOutlined";
-import FavoriteIcon from "@mui/icons-material/FavoriteBorderOutlined";
-import HatchIcon from "@mui/icons-material/TrackChangesOutlined";
-import { NavLink, useLocation } from "react-router-dom";
+/**
+ * FlockGeek sidebar — thin identity wrapper around the suite `GeekSidebar`.
+ *
+ * Structure (brand → grouped nav → user chip → Settings → Sign out) belongs to
+ * the primitive; this file only supplies FlockGeek's Field Ledger identity:
+ * the `background.sidebar` band, the amber inset active bar and dense labels.
+ *
+ * `GeekShell nav={…}` decides whether this panel sits in the permanent 220px
+ * column or inside the mobile drawer, so there is no `isMobile` / `onClose`
+ * plumbing here any more.
+ */
+import { Box, Typography, alpha, useTheme } from "@mui/material";
+import { Link as RouterLink, useLocation } from "react-router-dom";
+import { GeekSidebar, geekLayout } from "@geeksuite/ui";
 import { useAuth } from "../contexts/AuthContext";
-import { useColorMode } from "../theme/AppThemeProvider";
 import { APP_NAME } from "../utils/constants";
-import { GeekAppSwitcher, GeekThemeToggle, geekLayout } from "@geeksuite/ui";
+import { displayNameFrom, initialsFrom, secondaryFrom } from "../utils/userDisplay";
+import { activeNavId, navSections } from "./navConfig";
 
-const navItems = [
-  { label: "Home", to: "/", icon: <HomeIcon /> },
-  { label: "Birds", to: "/birds", icon: <PetsIcon /> },
-  { label: "Egg Log", to: "/egg-log", icon: <EggIcon /> },
-  { label: "Groups", to: "/groups", icon: <GroupsIcon /> },
-  { label: "Locations", to: "/locations", icon: <PlaceIcon /> },
-  { label: "Pairings", to: "/pairings", icon: <FavoriteIcon /> },
-  { label: "Hatch Log", to: "/hatch-log", icon: <HatchIcon /> }
-];
+/**
+ * Brand block. Passed as a node rather than the primitive's
+ * `{ monogram, name }` object so the monogram keeps its solid-amber ledger
+ * stamp instead of the shared translucent chip.
+ */
+const Brand = () => (
+  <Box
+    component={RouterLink}
+    to="/"
+    sx={{
+      display: "flex",
+      alignItems: "center",
+      gap: 1.25,
+      px: 2.5,
+      height: geekLayout.topBarHeight,
+      textDecoration: "none",
+      color: "inherit"
+    }}
+  >
+    <Box
+      aria-hidden="true"
+      sx={{
+        width: 32,
+        height: 32,
+        flexShrink: 0,
+        borderRadius: 1,
+        bgcolor: "primary.main",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        color: "#1a1a18",
+        fontWeight: 800,
+        fontSize: "0.875rem",
+        fontFamily: '"DM Serif Display", serif'
+      }}
+    >
+      F
+    </Box>
+    <Typography
+      variant="h6"
+      noWrap
+      sx={{
+        fontFamily: '"DM Serif Display", Georgia, serif',
+        fontWeight: 400,
+        fontSize: "1.15rem",
+        letterSpacing: 0.3
+      }}
+    >
+      {APP_NAME}
+    </Typography>
+  </Box>
+);
 
-const Sidebar = ({ isMobile = false, onClose }) => {
+const Sidebar = () => {
   const theme = useTheme();
   const location = useLocation();
-  const { isAuthenticated, logout } = useAuth();
-  const { mode, toggleColorMode } = useColorMode();
+  const { user, isAuthenticated, logout } = useAuth();
+  const accent = theme.palette.primary.main;
 
   return (
-    <Box
-      sx={{
-        width: isMobile ? 280 : geekLayout.sidebarWidth,
-        height: "100vh",
-        display: "flex",
-        flexDirection: "column",
-        bgcolor: "background.sidebar",
-        flexShrink: 0,
-        borderRight: `1px solid ${theme.palette.divider}`
+    <GeekSidebar
+      brand={<Brand />}
+      sections={navSections}
+      activeId={activeNavId(location.pathname)}
+      footer={{
+        user: isAuthenticated
+          ? {
+              name: displayNameFrom(user),
+              secondary: secondaryFrom(user),
+              initials: initialsFrom(user)
+            }
+          : undefined,
+        settings: { to: "/settings" },
+        onSignOut: isAuthenticated ? logout : undefined
       }}
-      role="navigation"
-    >
-      {/* Brand */}
-      <Box sx={{ px: 2.5, pt: 3, pb: 1, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <NavLink to="/" style={{ textDecoration: "none", color: "inherit", display: "flex", alignItems: "center", gap: 10 }}>
-          <Box
-            sx={{
-              width: 32,
-              height: 32,
-              borderRadius: 1,
-              bgcolor: "primary.main",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#1a1a18",
-              fontWeight: 800,
-              fontSize: "0.875rem",
-              fontFamily: '"DM Serif Display", serif'
-            }}
-          >
-            F
-          </Box>
-          <Typography
-            variant="h6"
-            sx={{
-              fontFamily: '"DM Serif Display", Georgia, serif',
-              fontWeight: 400,
-              fontSize: "1.15rem",
-              letterSpacing: 0.3
-            }}
-          >
-            {APP_NAME}
-          </Typography>
-        </NavLink>
-        {isMobile && (
-          <IconButton size="small" onClick={onClose} aria-label="close navigation">
-            <CloseIcon fontSize="small" />
-          </IconButton>
-        )}
-      </Box>
-
-      {/* Suite controls — FlockGeek's desktop layout has no top bar, so the
-          theme toggle and app switcher live at the top of the sidebar. On
-          mobile the same pair lives in LayoutShell's header instead. */}
-      {!isMobile && (
-        <Box
-          sx={{
-            px: 2,
-            pb: 1,
-            display: "flex",
-            alignItems: "center",
-            gap: 0.5,
-            color: "text.secondary"
-          }}
-        >
-          <GeekThemeToggle mode={mode} onToggle={toggleColorMode} />
-          <GeekAppSwitcher
-            currentApp="flockgeek"
-            anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
-            transformOrigin={{ vertical: "top", horizontal: "left" }}
-          />
-        </Box>
-      )}
-
-      {/* Nav links */}
-      <Box sx={{ flex: 1, overflowY: "auto", px: 1.5, py: 2 }}>
-        <Typography
-          variant="overline"
-          sx={{ px: 1.5, mb: 1, display: "block", color: "text.muted", fontSize: "0.625rem" }}
-        >
-          Navigation
-        </Typography>
-        <List dense disablePadding>
-          {navItems.map(({ to, label, icon }) => {
-            const isActive = to === "/" ? location.pathname === "/" : location.pathname.startsWith(to);
-            return (
-              <ListItemButton
-                key={label}
-                component={NavLink}
-                to={to}
-                end={to === "/"}
-                onClick={isMobile ? onClose : undefined}
-                sx={{
-                  mb: 0.25,
-                  px: 1.5,
-                  py: 0.75,
-                  borderRadius: 1,
-                  color: isActive ? "text.primary" : "text.secondary",
-                  bgcolor: isActive ? alpha(theme.palette.primary.main, 0.18) : "transparent",
-                  boxShadow: isActive ? `inset 3px 0 0 ${theme.palette.primary.main}` : "none",
-                  "&:hover": {
-                    bgcolor: alpha(theme.palette.primary.main, 0.10),
-                    color: "text.primary"
-                  },
-                  transition: "all 0.15s ease"
-                }}
-              >
-                <ListItemIcon sx={{ minWidth: 34, color: "inherit" }}>
-                  {icon}
-                </ListItemIcon>
-                <ListItemText
-                  primary={label}
-                  primaryTypographyProps={{
-                    fontSize: "0.8125rem",
-                    fontWeight: isActive ? 600 : 500
-                  }}
-                />
-              </ListItemButton>
-            );
-          })}
-        </List>
-      </Box>
-
-      {/* Bottom controls */}
-      <Divider />
-      <Box sx={{ p: 1.5, display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
-        {isAuthenticated && (
-          <Tooltip title="Sign out" placement="top">
-            <IconButton size="small" onClick={logout} aria-label="sign out" sx={{ color: "text.secondary" }}>
-              <LogoutIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        )}
-      </Box>
-    </Box>
+      sx={{ bgcolor: "background.sidebar" }}
+      // The primitive only applies its 60px block sizing to the *object* form
+      // of `brand`; a node brand lands in a bare Box, so pin it against the
+      // flex column. The footer band already sets this, so sharing is safe.
+      chromeSx={{ flexShrink: 0 }}
+      itemSx={{
+        mb: 0.25,
+        color: "text.secondary",
+        transition: "background-color 0.15s ease, color 0.15s ease",
+        "& .MuiListItemText-primary": { fontSize: "0.8125rem", fontWeight: 500 },
+        "&:hover": {
+          bgcolor: alpha(accent, 0.1),
+          color: "text.primary"
+        },
+        "&.Mui-selected": {
+          bgcolor: alpha(accent, 0.18),
+          color: "text.primary",
+          boxShadow: `inset 3px 0 0 ${accent}`,
+          "& .MuiListItemText-primary": { fontWeight: 600 },
+          "&:hover": { bgcolor: alpha(accent, 0.22) }
+        }
+      }}
+    />
   );
 };
 

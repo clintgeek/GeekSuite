@@ -11,6 +11,7 @@ import LocationsPage from "./pages/LocationsPage";
 import PairingsPage from "./pages/PairingsPage";
 import EggLogPage from "./pages/EggLogPage";
 import HatchLogPage from "./pages/HatchLogPage";
+import SettingsPage from "./pages/SettingsPage";
 
 // Protected route component
 const ProtectedRoute = ({ element }) => {
@@ -78,6 +79,7 @@ const App = () => {
         <Route path="pairings" element={<PairingsPage />} />
         <Route path="egg-log" element={<EggLogPage />} />
         <Route path="hatch-log" element={<HatchLogPage />} />
+        <Route path="settings" element={<SettingsPage />} />
       </Route>
 
       {/* Catch-all */}

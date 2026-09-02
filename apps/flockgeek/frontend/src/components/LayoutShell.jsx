@@ -1,94 +1,34 @@
-import React, { useState } from 'react';
-import { Box, Drawer, IconButton, Typography, useTheme, useMediaQuery, alpha } from "@mui/material";
+/**
+ * FlockGeek layout — pure suite grammar.
+ *
+ * The shell owns the breakpoint and the drawer (`nav`), so the bespoke 60px
+ * mobile header and the 280px mobile Drawer that used to live here are gone,
+ * along with the `isMobile` / `mobileOpen` state that drove them. The same
+ * 220px `Sidebar` panel serves desktop and mobile.
+ */
+import { Box } from "@mui/material";
 import { Outlet } from "react-router-dom";
-import MenuIcon from "@mui/icons-material/Menu";
-import { GeekShell, GeekAppFrame, GeekAppSwitcher, GeekThemeToggle, geekLayout } from "@geeksuite/ui";
+import { GeekShell, GeekAppFrame } from "@geeksuite/ui";
 import Sidebar from "./Sidebar";
-import { useColorMode } from "../theme/AppThemeProvider";
-import { APP_NAME } from "../utils/constants";
+import TopBar from "./TopBar";
 
-const LayoutShell = () => {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const { mode, toggleColorMode } = useColorMode();
-  const [mobileOpen, setMobileOpen] = useState(false);
-
-  const handleDrawerToggle = () => setMobileOpen((prev) => !prev);
-
-  const topBar = isMobile ? (
-    <Box
-      component="header"
-      sx={{
-        display: "flex",
-        height: geekLayout.topBarHeight,
-        px: 2,
-        alignItems: "center",
-        justifyContent: "space-between",
-        bgcolor: alpha(theme.palette.background.paper, 0.92),
-        backdropFilter: "blur(12px)",
-        borderBottom: `1px solid ${theme.palette.divider}`,
-        width: '100%'
-      }}
-    >
-      <IconButton onClick={handleDrawerToggle} aria-label="open navigation" sx={{ color: "text.primary" }}>
-        <MenuIcon />
-      </IconButton>
-      <Typography
-        variant="h6"
+const LayoutShell = () => (
+  <GeekShell
+    nav={<Sidebar />}
+    navSx={{ bgcolor: "background.sidebar" }}
+    topBar={<TopBar />}
+  >
+    <GeekAppFrame>
+      <Box
         sx={{
-          fontFamily: '"DM Serif Display", Georgia, serif',
-          fontWeight: 400,
-          fontSize: "1.05rem"
+          px: { xs: 2, sm: 3, md: 5 },
+          py: { xs: 3, md: 4 }
         }}
       >
-        {APP_NAME}
-      </Typography>
-      {/* Suite controls: theme toggle then app switcher, right-aligned.
-          FlockGeek has no account control in the mobile bar, so these sit at
-          the right edge on their own. */}
-      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, color: "text.secondary" }}>
-        <GeekThemeToggle mode={mode} onToggle={toggleColorMode} />
-        <GeekAppSwitcher currentApp="flockgeek" />
+        <Outlet />
       </Box>
-    </Box>
-  ) : null;
-
-  return (
-    <GeekShell 
-      sidebar={!isMobile ? <Sidebar /> : null} 
-      topBar={topBar}
-    >
-      {/* Mobile Drawer */}
-      <Drawer
-        variant="temporary"
-        open={mobileOpen}
-        onClose={handleDrawerToggle}
-        ModalProps={{ keepMounted: true }}
-        sx={{
-          display: { xs: "block", md: "none" },
-          "& .MuiDrawer-paper": {
-            boxSizing: "border-box",
-            width: 280,
-            backgroundImage: "none",
-            bgcolor: "background.sidebar"
-          }
-        }}
-      >
-        <Sidebar isMobile onClose={handleDrawerToggle} />
-      </Drawer>
-
-      <GeekAppFrame>
-        <Box
-          sx={{
-            px: { xs: 2, sm: 3, md: 5 },
-            py: { xs: 3, md: 4 },
-          }}
-        >
-          <Outlet />
-        </Box>
-      </GeekAppFrame>
-    </GeekShell>
-  );
-};
+    </GeekAppFrame>
+  </GeekShell>
+);
 
 export default LayoutShell;
