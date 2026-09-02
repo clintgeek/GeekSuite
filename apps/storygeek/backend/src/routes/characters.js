@@ -1,10 +1,13 @@
 import express from 'express';
 import Story from '../models/Story.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { requireStoryOwner } from '../middleware/storyOwner.js';
 
 const router = express.Router();
 
 router.use(authenticateToken);
+// Every route here is keyed by :storyId — only the story's owner may touch its characters.
+router.use('/story/:storyId', requireStoryOwner);
 
 router.get('/story/:storyId', async (req, res) => {
   try {

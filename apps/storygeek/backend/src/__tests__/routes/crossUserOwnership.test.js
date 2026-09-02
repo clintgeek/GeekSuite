@@ -9,9 +9,8 @@
 // basegeek or any AI provider.
 //
 // Two of the describe blocks below assert the CODE'S ACTUAL CONTRACT,
-// which is a security finding, not the desired behavior:
-//   - the characters resource has no ownership check at all
-//   - the export/bookify resource has no ownership check at all
+// Characters and export/bookify routes are guarded by requireStoryOwner
+// (src/middleware/storyOwner.js); these tests pin that contract.
 // Both are reachable by any authenticated user who knows/guesses a
 // storyId belonging to someone else. See the final report for detail;
 // per task instructions these are reported, not silently fixed here.
@@ -145,24 +144,29 @@ describe('GET /api/stories/user/:userId — list scoping', () => {
   });
 });
 
-describe('Characters resource — SECURITY FINDING: no ownership check', () => {
+describe('Characters resource — enforces story ownership', () => {
   function app() {
     return buildApp('/api/characters', characterRoutes);
   }
 
-  test('unauthenticated request is still rejected with 401 (authenticateToken applies)', async () => {
+  test('unauthenticated request is rejected with 401', async () => {
     const res = await request(app()).get('/api/characters/story/story-1');
     expect(res.status).toBe(401);
   });
 
-  // FINDING: routes/characters.js never compares story.userId against the
-  // authenticated caller — any logged-in user who knows/guesses a storyId
-  // can read, add, edit, or delete another user's characters. These
-  // assertions document the ACTUAL (insecure) behavior on purpose, per
-  // task instructions ("assert the code's actual contract; 200 is a
-  // finding") — they are not the desired contract, and should start
-  // failing (403 expected) once the route is fixed.
-  test('a non-owner can currently read another user\'s story characters (200, not 403)', async () => {
+  test('the owner can read their story characters (200)', async () => {
+    const story = buildStoryDoc({ userId: OWNER, characters: [{ name: 'Aldric', description: 'A knight' }] });
+    mockStory.findById.mockResolvedValue(story);
+
+    const res = await request(app())
+      .get('/api/characters/story/story-1')
+      .set('x-test-user', OWNER);
+
+    expect(res.status).toBe(200);
+    expect(res.body[0].name).toBe('Aldric');
+  });
+
+  test('a non-owner cannot read another user\'s story characters (403)', async () => {
     const story = buildStoryDoc({ userId: OWNER, characters: [{ name: 'Aldric', description: 'A knight' }] });
     mockStory.findById.mockResolvedValue(story);
 
@@ -170,11 +174,11 @@ describe('Characters resource — SECURITY FINDING: no ownership check', () => {
       .get('/api/characters/story/story-1')
       .set('x-test-user', OTHER);
 
-    expect(res.status).toBe(200);
-    expect(res.body[0].name).toBe('Aldric');
+    expect(res.status).toBe(403);
+    expect(res.body).not.toHaveProperty('0');
   });
 
-  test('a non-owner can currently add a character to another user\'s story (200, not 403)', async () => {
+  test('a non-owner cannot add a character to another user\'s story (403, nothing saved)', async () => {
     const story = buildStoryDoc({ userId: OWNER, characters: [] });
     story.save = jest.fn().mockResolvedValue(story);
     mockStory.findById.mockResolvedValue(story);
@@ -184,11 +188,12 @@ describe('Characters resource — SECURITY FINDING: no ownership check', () => {
       .set('x-test-user', OTHER)
       .send({ name: 'Intruder', description: 'Added by a non-owner' });
 
-    expect(res.status).toBe(200);
-    expect(story.characters).toHaveLength(1);
+    expect(res.status).toBe(403);
+    expect(story.characters).toHaveLength(0);
+    expect(story.save).not.toHaveBeenCalled();
   });
 
-  test('a non-owner can currently delete another user\'s character (200, not 403)', async () => {
+  test('a non-owner cannot delete another user\'s character (403, nothing saved)', async () => {
     const story = buildStoryDoc({ userId: OWNER, characters: [{ name: 'Aldric', description: 'A knight' }] });
     story.save = jest.fn().mockResolvedValue(story);
     mockStory.findById.mockResolvedValue(story);
@@ -197,34 +202,55 @@ describe('Characters resource — SECURITY FINDING: no ownership check', () => {
       .delete('/api/characters/story/story-1/character/Aldric')
       .set('x-test-user', OTHER);
 
-    expect(res.status).toBe(200);
-    expect(story.characters).toHaveLength(0);
+    expect(res.status).toBe(403);
+    expect(story.characters).toHaveLength(1);
+    expect(story.save).not.toHaveBeenCalled();
+  });
+
+  test('a missing story is a 404 regardless of caller', async () => {
+    mockStory.findById.mockResolvedValue(null);
+
+    const res = await request(app())
+      .get('/api/characters/story/nope')
+      .set('x-test-user', OWNER);
+
+    expect(res.status).toBe(404);
   });
 });
 
-describe('Export/bookify resource — SECURITY FINDING: no ownership check', () => {
+describe('Export/bookify resource — enforces story ownership', () => {
   function app() {
     return buildApp('/api/export', exportRoutes);
   }
 
-  test('unauthenticated request is still rejected with 401 (authenticateToken applies)', async () => {
+  test('unauthenticated request is rejected with 401', async () => {
     const res = await request(app()).post('/api/export/stories/story-1/bookify');
     expect(res.status).toBe(401);
   });
 
-  // FINDING: bookService.bookify(storyId, userToken) loads the story purely
-  // by id and never checks it against the caller — export.js's route
-  // handler doesn't check ownership either. Any authenticated user can
-  // export (bookify/epub) any other user's story.
-  test('a non-owner can currently bookify another user\'s story (200, not 403)', async () => {
-    mockBookify.mockResolvedValue({ title: 'Someone Else\'s Story', genre: 'Fantasy', content: '...' });
+  test('the owner can bookify their story (200)', async () => {
+    mockStory.findById.mockResolvedValue(buildStoryDoc({ userId: OWNER }));
+    mockBookify.mockResolvedValue({ title: 'My Story', genre: 'Fantasy', content: '...' });
+
+    const res = await request(app())
+      .post('/api/export/stories/story-1/bookify')
+      .set('x-test-user', OWNER)
+      .send();
+
+    expect(res.status).toBe(200);
+    expect(mockBookify).toHaveBeenCalledWith('story-1', undefined);
+  });
+
+  test('a non-owner cannot bookify another user\'s story (403, bookify never called)', async () => {
+    mockStory.findById.mockResolvedValue(buildStoryDoc({ userId: OWNER }));
+    mockBookify.mockClear();
 
     const res = await request(app())
       .post('/api/export/stories/story-1/bookify')
       .set('x-test-user', OTHER)
       .send();
 
-    expect(res.status).toBe(200);
-    expect(mockBookify).toHaveBeenCalledWith('story-1', undefined);
+    expect(res.status).toBe(403);
+    expect(mockBookify).not.toHaveBeenCalled();
   });
 });

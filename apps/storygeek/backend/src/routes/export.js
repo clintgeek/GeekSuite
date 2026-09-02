@@ -2,10 +2,13 @@ import express from 'express';
 import bookService from '../services/bookService.js';
 import { createEpub } from '../services/epubService.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { requireStoryOwner } from '../middleware/storyOwner.js';
 
 const router = express.Router();
 
 router.use(authenticateToken);
+// Only the story's owner may export/bookify it.
+router.use('/stories/:storyId', requireStoryOwner);
 
 // POST /api/export/stories/:storyId/bookify
 router.post('/stories/:storyId/bookify', async (req, res) => {
