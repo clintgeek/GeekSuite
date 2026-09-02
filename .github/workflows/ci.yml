@@ -3,8 +3,21 @@ name: CI
 on:
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'DOCS/**'
+      - '**/DOCS/**'
+      - 'LICENSE'
   push:
     branches: [main]
+    # Documentation-only pushes skip CI. If branch protection ever requires these
+    # checks, docs-only PRs will need the checks marked as not-required or a
+    # trivial pass-through job — see DOCS/CICD.md.
+    paths-ignore:
+      - '**/*.md'
+      - 'DOCS/**'
+      - '**/DOCS/**'
+      - 'LICENSE'
 
 concurrency:
   group: ci-${{ github.ref }}

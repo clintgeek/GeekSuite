@@ -18,6 +18,14 @@ live under `.github/workflows/` and deploys are pull-based.
 
 ---
 
+## Docs-only commits (added 2026-09-02)
+
+Both `ci.yml` and `release.yml` carry `paths-ignore` for `**/*.md`, `DOCS/**`, `**/DOCS/**` and
+`LICENSE`, so documentation-only pushes neither run CI nor rebuild/redeploy the eight images.
+Caveat: if `main` is ever protected with required status checks, a docs-only PR will show no
+checks at all and GitHub will block the merge — either exempt docs PRs, or add a no-op job that
+always runs. Until protection is enabled this is moot.
+
 ## Goals
 
 1. **Every PR and push to `main` runs automated checks.** Tests for apps

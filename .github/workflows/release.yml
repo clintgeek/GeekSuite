@@ -6,6 +6,12 @@ name: Release images
 on:
   push:
     branches: [main]
+    # Documentation-only commits must not rebuild and redeploy eight images.
+    paths-ignore:
+      - '**/*.md'
+      - 'DOCS/**'
+      - '**/DOCS/**'
+      - 'LICENSE'
   workflow_dispatch:
     inputs:
       app:
