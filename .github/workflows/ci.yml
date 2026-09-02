@@ -33,6 +33,7 @@ jobs:
         working-directory: apps/basegeek/packages/api
         env:
           MONGOMS_DOWNLOAD_DIR: /home/runner/.cache/mongodb-binaries
+          MONGOMS_DISTRO: ubuntu-22.04
         # --forceExit: all suites pass in ~16s, then a singleton service's
         # open handle keeps the process alive forever ("Jest did not exit one
         # second after the test run has completed"). Hunting the handle is
@@ -128,9 +129,19 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
+      # notegeek's suite uses mongodb-memory-server pinned to mongod 7.0.14, which
+      # has no ubuntu-24.04 build; force the 22.04 binary (glibc-compatible) and
+      # share the same cache as the basegeek job.
+      - uses: actions/cache@v4
+        with:
+          path: /home/runner/.cache/mongodb-binaries
+          key: mongodb-binaries-7.0.14-ubuntu2204-${{ runner.os }}
       - run: pnpm install --frozen-lockfile
       - name: Test ${{ matrix.app }} backend
         working-directory: ${{ matrix.dir }}
+        env:
+          MONGOMS_DOWNLOAD_DIR: /home/runner/.cache/mongodb-binaries
+          MONGOMS_DISTRO: ubuntu-22.04
         run: pnpm test
 
   lint:
