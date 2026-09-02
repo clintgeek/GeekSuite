@@ -44,6 +44,18 @@ StoryGeek SSO alignment + Settings page fix + AuthProvider refactor. Pending mer
 
 ---
 
+## Landed 2026-09-02 (Tier 1 of TODO_ORDER)
+
+- storygeek Destroy button red; `text.muted` token + 56-site sweep; MUI ^5 pin; shared
+  ESLint 9 flat config across 14 packages (0 errors) + CI lint job; PWA manifest/theme-color
+  per mode; login wordmarks on theme tokens; CORS dev/LAN origins gated to non-production;
+  logout BroadcastChannel standardized (`geeksuite-auth`/`LOGOUT`, sender-guarded, basegeek
+  listens); contrast regression test (210 assertions) in CI; basegeek added to build matrix;
+  bujogeek tests in CI. Bonus: fitnessgeek weight chart was rendering empty (undeclared
+  variable) — fixed.
+
+---
+
 ## Next up — highest leverage
 
 - ~~Timezone bug fixes (bujogeek, fitnessgeek, flockgeek)~~ — **Done 2026-08-30**
@@ -101,12 +113,12 @@ Hardening = pino logging, request IDs, graceful shutdown, env-driven CORS, data-
   auth store replaced with `AuthProvider`/`useAuth`. Remaining: verify no app reads
   `document.cookie` directly for `geek_token`. (`DEFERRED_WORK.md`, `DOCS/SSO_OVERVIEW.md`)
 
-- **BroadcastChannel inconsistencies** — `bookgeek` uses `geek-auth`/`logout`; several apps use
+- ~~BroadcastChannel inconsistencies~~ — **Done 2026-09-02.** Was: `bookgeek` uses `geek-auth`/`logout`; several apps use
   lowercase `logout`; basegeek uses `postMessage`. Cross-tab logout is fragmented.
   Standardize to channel `geeksuite-auth` / type `LOGOUT` everywhere.
   (See `DOCS/SSO_OVERVIEW.md` BroadcastChannel table.)
 
-- **Hardcoded CORS fallback origins** — basegeek and fitnessgeek support `CORS_ORIGINS` env but
+- ~~Hardcoded CORS fallback origins~~ — **Done 2026-09-02** (dev/LAN gated to non-prod; fitnessgeek's prod env value still lists localhost — trim). Was: basegeek and fitnessgeek support `CORS_ORIGINS` env but
   fallback arrays include dev/LAN IPs. Either enforce env in production (throw if unset) or strip
   the defaults. (`DEFERRED_WORK.md`)
 
@@ -227,7 +239,7 @@ not repeated here.
 
 ## Shared libraries / refactors
 
-- **MUI major-version drift** — basegeek, bujogeek, and notegeek declare `@mui/material ^7`
+- ~~MUI major-version drift~~ — **Done 2026-09-02.** Was: basegeek, bujogeek, and notegeek declare `@mui/material ^7`
   but the lockfile resolves 5.18.0 (and basegeek's icons resolve to 7.3.8). Harmless today
   because everything is v5, but a fresh `pnpm install` without the lockfile would split the
   theme context (see the dedupe notes in `vite.config.js` comments). Pin all apps and
@@ -284,7 +296,7 @@ not repeated here.
 
 ## Tests + observability
 
-- **ESLint doesn't run in most frontends** — bujogeek, storygeek, fitnessgeek, basegeek
+- ~~ESLint doesn't run in most frontends~~ — **Done 2026-09-02** (`@geeksuite/eslint-config`, `pnpm -r lint` in CI). Was: bujogeek, storygeek, fitnessgeek, basegeek
   either lack a flat config (ESLint 9) or carry a legacy `.eslintrc`, so `pnpm lint` exits
   before linting. CI's lint job is effectively a no-op for them. Add a shared
   `eslint.config.js` in `packages/` and extend it per app.

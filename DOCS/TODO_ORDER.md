@@ -11,30 +11,34 @@ When an item lands, strike it here and move its detail to a "Landed" block in `S
 
 ---
 
-## Tier 1 — Foundations and safety (each ≤ half a day, each pays back on everything after)
+## Tier 1 — Foundations and safety — **LANDED 2026-09-02**
 
-1. **storygeek Destroy button renders as primary** — XS. Only item on the list that can cost a
-   user data. Scope the contained override to `containedPrimary`. *UI*
-2. **Contrast regression test in `packages/ui`** — S. Builds every app's light + dark theme
-   and asserts text-on-surface pairs. Turns today's manual sweep into a CI check. *UI / tests*
-3. **`text.muted` token** — S. Third text tier in the shared factory; then sweep the
-   `text.disabled` misuses in notegeek, bujogeek, flockgeek, basegeek. Kills a recurring
-   bug class. *UI*
-4. **MUI major-version pin** — XS. Apps declare `^7`, lockfile resolves 5.18. One bad
-   `pnpm install` away from a split theme context. *Shared libs*
-5. **ESLint actually running** — S. Shared flat config in `packages/`, extended per app.
-   CI's lint job is a no-op for most frontends today. *Tooling*
-6. **PWA manifests + `theme-color` per mode** — XS. Four wrong manifest colors, all metas
-   single-valued. Config only, removes a flash on every install launch. *UI*
-7. **Login wordmark colors + bookgeek primary contrastText** — XS. Pass theme tokens to
-   `LoginSplash`; darken sky or use dark contrastText. *UI*
-8. **Standardize cross-tab logout BroadcastChannel** — S. One channel name, one message type,
-   across all apps and the gateway. Fixes fragmented logout. *Security*
-9. **CORS fallback origins** — XS. Enforce `CORS_ORIGINS` in production or strip the LAN
-   defaults from basegeek and fitnessgeek. *Security*
+All nine shipped in one pass (commits 9f343ea..ca378ea). Kept here struck-through for one
+cycle so the ordering rationale stays visible; detail moved to `SUITE_TODO.md` "Landed".
+
+1. ~~storygeek Destroy button renders as primary~~ — override scoped to `containedPrimary`.
+2. ~~Contrast regression test~~ — `packages/ui/src/__tests__/themeContrast.test.js`, 210
+   assertions, in CI. Found and fixed 10 gaps; **4 remain as a ratchet: white on the suite
+   blue `#6098CC` is 3.06:1** (suite default + bujogeek). Brand decision pending — darken to
+   ~`#4B7AA3` or use dark button labels. → now item 10a below.
+3. ~~`text.muted` token~~ — 56 sites swept.
+4. ~~MUI major-version pin~~.
+5. ~~ESLint actually running~~ — 526 files, 0 errors / 207 warnings, `pnpm -r lint` in CI.
+   Surfaced and fixed a live bug (fitnessgeek weight chart rendered empty).
+6. ~~PWA manifests + theme-color per mode~~.
+7. ~~Login wordmark colors + bookgeek primary contrastText~~.
+8. ~~Cross-tab logout BroadcastChannel~~ — also fixed a same-tab double-logout. Gateway is
+   not in this repo.
+9. ~~CORS fallback origins~~ — note: basegeek production had **no** `CORS_ORIGINS` set and was
+   running on the LAN-inclusive fallback; fitnessgeek's production value still lists two
+   localhost origins (env, not code — trim it).
 
 ## Tier 2 — Headline wins (each M, each visible to every user)
 
+10a. **Suite blue vs. white button labels** — XS decision, S execution. `#6098CC` with white
+    text is 3.06:1 (fails AA for button labels). Either darken `primary.main` to ~`#4B7AA3`
+    suite-wide (bujogeek's `primary[600]`) or switch contained buttons to dark ink. Then
+    delete the four `KNOWN_GAPS` entries in the contrast test. *UI / brand*
 10. **Suite switcher in the GeekShell top bar** — S–M. Nine-dot menu, all eight apps. Biggest
     "this is one product" signal for the least code. Fold **theme toggle placement** into the
     same top-bar work. *UI*
@@ -103,4 +107,4 @@ When an item lands, strike it here and move its detail to a "Landed" block in `S
 - **Pass C (one week):** #12 CSRF on its own branch, verified per app against the new auth
   tests, then #15 primitives sweep.
 
-*Last ordered: 2026-09-02.*
+*Last ordered: 2026-09-02. Tier 1 landed the same day.*
