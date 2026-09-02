@@ -14,6 +14,7 @@ const {
 function buildPalette({ mode, accent }) {
   const isDark = mode === 'dark';
   const appAccent = accent || palette.primary;
+  const semantic = isDark ? palette.semanticDark : palette.semantic;
 
   return {
     mode,
@@ -31,13 +32,15 @@ function buildPalette({ mode, accent }) {
     text: {
       primary: isDark ? '#F5F5F5' : palette.neutral.textPrimary,
       secondary: isDark ? '#BDBDBD' : palette.neutral.textSecondary,
-      disabled: isDark ? '#757575' : palette.neutral.textDisabled,
+      // Apps lean on text.disabled for tertiary copy (timestamps, counts,
+      // empty states), so it must stay perceptible: ~3:1 on each mode's paper.
+      disabled: isDark ? '#8F8F8F' : palette.neutral.textDisabled,
     },
     divider: isDark ? 'rgba(255, 255, 255, 0.12)' : palette.neutral.border,
-    success: { main: palette.semantic.success },
-    warning: { main: palette.semantic.warning },
-    error: { main: palette.semantic.error },
-    info: { main: palette.semantic.info },
+    success: { main: semantic.success },
+    warning: { main: semantic.warning },
+    error: { main: semantic.error },
+    info: { main: semantic.info },
     glow: {
       ring: alpha(appAccent.main, 0.20),
       soft: alpha(appAccent.main, 0.06),
@@ -316,7 +319,10 @@ export function createGeekSuiteTheme({
   accent,
   overrides = {},
 } = {}) {
-  const themePalette = buildPalette({ mode, accent });
+  // Merge the app's palette overrides *before* building component styles, so
+  // CssBaseline body colors, card/app-bar borders and selected-row tints are
+  // derived from the app's real surfaces rather than the suite defaults.
+  const themePalette = deepMerge(buildPalette({ mode, accent }), overrides.palette);
 
   const baseOptions = {
     palette: themePalette,

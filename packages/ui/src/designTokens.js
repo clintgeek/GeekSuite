@@ -39,14 +39,24 @@ export const geekPalette = {
     paper: '#FFFFFF',
     textPrimary: '#212121',
     textSecondary: '#757575',
-    textDisabled: '#BDBDBD',
+    textDisabled: '#9E9E9E',
     border: 'rgba(0, 0, 0, 0.12)',
   },
+  // Semantic colors are used as *foreground* (icons, outlined chips, error
+  // text) far more often than as fills, so each mode gets a value that clears
+  // 4.5:1 against that mode's paper. Light: deep tones on cream/white.
+  // Dark: lifted tones on near-black. MUI augments light/dark/contrastText.
   semantic: {
-    success: '#4CAF50',
-    warning: '#FFC107',
+    success: '#2E7D32',
+    warning: '#A35F00',
     error: '#B00020',
-    info: '#2196F3',
+    info: '#0277BD',
+  },
+  semanticDark: {
+    success: '#66BB6A',
+    warning: '#FFB74D',
+    error: '#EF5350',
+    info: '#4FC3F7',
   },
 };
 

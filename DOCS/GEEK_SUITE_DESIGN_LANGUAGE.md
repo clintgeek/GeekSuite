@@ -29,15 +29,21 @@ This document defines the design language for all GeekSuite applications. It ens
 - Mind Map: #f8f9fa
 
 ### Semantic Colors
-- Error: #B00020
-- Success: #4CAF50
-- Warning: #FFC107
-- Info: #2196F3
+
+Semantic colors are used as foreground (icons, outlined chips, error text) as often as
+fills, so each mode carries its own value that clears 4.5:1 on that mode's paper.
+
+| Role | Light | Dark |
+|------|-------|------|
+| Error | #B00020 | #EF5350 |
+| Success | #2E7D32 | #66BB6A |
+| Warning | #A35F00 | #FFB74D |
+| Info | #0277BD | #4FC3F7 |
 
 ### Text Colors
 - Primary: #212121
 - Secondary: #757575
-- Disabled: #BDBDBD
+- Disabled: #9E9E9E (light) / #8F8F8F (dark)
 - Placeholder: Secondary @ 70% opacity
 
 ## 🔤 Typography
