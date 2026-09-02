@@ -16,7 +16,7 @@ const pinoHttp = require('pino-http');
 const path = require('path');
 const logger = require('./config/logger');
 const { authenticateToken } = require('./middleware/auth');
-const { meHandler } = require('@geeksuite/user/server');
+const { csrfGuard, meHandler } = require('@geeksuite/user/server');
 
 // Load environment variables
 dotenv.config();
@@ -60,6 +60,25 @@ if (!usingEnvCorsOrigins && isProduction) {
 } else {
   logger.info(corsLogPayload, 'CORS allowed origins configured');
 }
+
+// CSRF: origin-check every cookie-authenticated mutation against the same
+// `allowedOrigins` list the cors() config below uses — one list, no second
+// copy.
+//
+// Mounted *before* cors() on purpose. This cors() config answers a
+// disallowed Origin with `callback(new Error(...))`, which express turns into
+// a generic 500 — so a CSRF attempt would otherwise look like an application
+// bug, and would stop being blocked at all the moment someone "tidied" that
+// callback into the equally idiomatic `callback(null, false)` (which lets the
+// request through without the CORS header). Running first makes the rejection
+// a deliberate, tested 403 that does not depend on how cors() reports a
+// mismatch.
+//
+// This also covers `app.all('/graphql')` below, fitnessgeek's reverse proxy
+// into basegeek's unified GraphQL API: a GraphQL mutation is a POST, and it
+// is by far the most valuable thing on this backend for a third-party page to
+// try to reach. See DOCS/SSO_OVERVIEW.md#csrf.
+app.use(csrfGuard({ allowedOrigins, logger, appName: 'fitnessgeek' }));
 
 app.use(cors({
   origin: function (origin, callback) {
