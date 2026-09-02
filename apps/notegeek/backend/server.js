@@ -9,13 +9,14 @@ import { randomUUID } from 'node:crypto';
 import pinoHttp from 'pino-http';
 import mongoose from 'mongoose';
 import connectDB from './config/db.js';
+import { getAllowedOrigins } from './config/corsOrigins.js';
 import { logger } from './lib/logger.js';
 import { notFound, errorHandler } from './middleware/errorMiddleware.js';
 import noteRoutes from './routes/notes.js';
 import tagRoutes from './routes/tags.js';
 import searchRoutes from './routes/search.js';
 import { protect } from './middleware/authMiddleware.js';
-import { meHandler } from '@geeksuite/user/server';
+import { csrfGuard, meHandler } from '@geeksuite/user/server';
 import authRoutes from './routes/auth.js';
 
 // Fail-fast env enforcement
@@ -68,17 +69,21 @@ async function start() {
   });
   app.use('/api/auth/', authLimiter);
 
-  // CORS — origins from env or hardcoded fallback
-  const hardcodedOrigins = [
-    'http://localhost:5173',
-    'http://localhost:5001',
-    'http://localhost:9988',
-    'https://notegeek.clintgeek.com',
-    'http://192.168.1.26:5173',
-  ];
-  const allowedOrigins = process.env.CORS_ORIGINS
-    ? process.env.CORS_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
-    : hardcodedOrigins;
+  // CORS — origins from env or hardcoded fallback (config/corsOrigins.js is
+  // the single source; the CSRF guard below reads the same list).
+  const allowedOrigins = getAllowedOrigins();
+
+  // CSRF: origin-check every cookie-authenticated mutation.
+  //
+  // Mounted *before* cors() on purpose. This cors() config answers a
+  // disallowed Origin with `callback(new Error(...))`, which express turns
+  // into a generic 500 — so a CSRF attempt would otherwise look like an
+  // application bug, and would stop being blocked at all the moment someone
+  // "tidied" that callback into the equally idiomatic `callback(null, false)`
+  // (which lets the request through without the CORS header). Running first
+  // makes the rejection a deliberate, tested 403 that does not depend on how
+  // cors() reports a mismatch. See DOCS/SSO_OVERVIEW.md#csrf.
+  app.use(csrfGuard({ allowedOrigins, logger, appName: 'notegeek' }));
 
   app.use(cors({
     origin: function (origin, callback) {
