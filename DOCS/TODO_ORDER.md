@@ -36,7 +36,7 @@ cycle so the ordering rationale stays visible; detail moved to `SUITE_TODO.md` "
    running on the LAN-inclusive fallback; fitnessgeek's production value still lists two
    localhost origins (env, not code — trim it).
 
-## Tier 2 — Headline wins (each M, each visible to every user)
+## Tier 2 — Headline wins — **LANDED 2026-09-02 except #12**
 
 10a. ~~Suite blue vs. white button labels~~ — **Done 2026-09-02:** primary darkened to
     `#4B7AA3` suite-wide (4.56:1 with white); `KNOWN_GAPS` is now empty.
@@ -101,11 +101,12 @@ cycle so the ordering rationale stays visible; detail moved to `SUITE_TODO.md` "
 
 ---
 
-## Suggested first three passes
+## Suggested next passes
 
-- **Pass A (one day):** Tier 1 in order. Ship as one push.
-- **Pass B (one week):** #10 switcher + toggle, #11 basegeek light mode, #13 auth tests.
-- **Pass C (one week):** #12 CSRF on its own branch, verified per app against the new auth
-  tests, then #15 primitives sweep.
+- **Pass A (Tier 1) and Pass B (Tier 2 minus CSRF) — done 2026-09-02.**
+- **Pass C:** #12 CSRF on its own branch, verified per app against the five new auth suites,
+  reviewed before merge. Then the basegeek follow-ups from SUITE_TODO (app registry auth, DB
+  browser gates, `configure()` wiring) since they're the same code area.
+- **Pass D:** #15 primitives sweep (EmptyState / ErrorState / toast) with #19 batched in.
 
-*Last ordered: 2026-09-02. Tier 1 landed the same day.*
+*Last ordered: 2026-09-02. Tiers 1 and 2 (minus CSRF) landed the same day.*

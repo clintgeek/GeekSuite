@@ -56,6 +56,21 @@ StoryGeek SSO alignment + Settings page fix + AuthProvider refactor. Pending mer
 
 ---
 
+## Landed 2026-09-02 (Tier 2 of TODO_ORDER, all but CSRF)
+
+- Suite app switcher + theme toggle primitives in `packages/ui`, wired into all seven MUI apps.
+- basegeek light mode on `createGeekSuiteTheme`; follows the suite theme cookie; Account-page
+  Theme form defaults to `system`.
+- Suite blue darkened to `#4B7AA3` (white labels now AA); contrast test has no known gaps.
+- Admin role (`role` on the user model, `requireAdmin`), user list/create/delete gated,
+  `scripts/setUserRole.js <username-or-email> admin`. Chef's account promoted.
+- Auth-isolation suites for bujogeek, fitnessgeek, flockgeek, storygeek, notegeek backends, all
+  in CI. Fixed on the way: storygeek characters/export IDOR, notegeek locked-note bcrypt crash,
+  notegeek's backend jest harness (had been red and never collected).
+- CI: backend test matrix, mongod binary pinned to the 22.04 build for the 24.04 runner.
+
+---
+
 ## Next up — highest leverage
 
 - ~~Timezone bug fixes (bujogeek, fitnessgeek, flockgeek)~~ — **Done 2026-08-30**
@@ -337,6 +352,10 @@ not repeated here.
 ---
 
 ## Nice-to-haves / backlog
+
+- **Leftover test account in production** — `claude_theme_test` / `claude-theme-test@clintgeek.com`
+  exists in `userGeek` (from an earlier theme-testing session). Delete once confirmed unused:
+  needs the admin `DELETE /api/users/:id` or a one-off script. Found 2026-09-02.
 
 - **Dead frontend components (contrast-sweep findings)** — unrouted files that still carry
   hardcoded light styling and will bite if re-mounted: fitnessgeek `Layout.jsx`, `Drawer.jsx`,
