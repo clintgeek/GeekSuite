@@ -258,6 +258,16 @@ describe('scripts/setUserRole.js — setUserRole()', () => {
     });
   });
 
+  it('also finds the account by email address', async () => {
+    const { user } = await makeUserWithToken();
+    const email = `${user.username}@example.com`;
+    await User.updateOne({ _id: user._id }, { $set: { email } });
+
+    const result = await setUserRole(email, 'admin');
+    expect(result).toMatchObject({ before: 'user', after: 'admin', changed: true });
+    expect((await User.findById(user._id).lean()).role).toBe('admin');
+  });
+
   it('refuses an unknown username and creates nothing', async () => {
     await expect(setUserRole('no_such_user_ever', 'admin'))
       .rejects.toThrow(/No user found/);

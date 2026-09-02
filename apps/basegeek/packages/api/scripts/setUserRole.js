@@ -9,8 +9,8 @@
  *
  * Usage
  * -----
- *   node scripts/setUserRole.js <username> admin
- *   node scripts/setUserRole.js <username> user
+ *   node scripts/setUserRole.js <username-or-email> admin
+ *   node scripts/setUserRole.js <username-or-email> user
  *   node scripts/setUserRole.js --help
  *
  * Required env (same value the API uses — read from .env via dotenv):
@@ -36,7 +36,7 @@ export const VALID_ROLES = ['user', 'admin'];
  *
  * Factored out of the CLI so it can be unit-tested against in-memory Mongo.
  *
- * @param {string} username  exact username of an existing user
+ * @param {string} username  exact username OR email of an existing user
  * @param {string} role      'user' | 'admin'
  * @param {{ User?: import('mongoose').Model }} [deps]  injectable model (tests)
  * @returns {Promise<{ username: string, before: string, after: string, changed: boolean }>}
@@ -50,9 +50,11 @@ export async function setUserRole(username, role, { User: UserModel = User } = {
     throw new Error(`Invalid role "${ role }" — expected one of: ${ VALID_ROLES.join(', ') }`);
   }
 
-  const user = await UserModel.findOne({ username });
+  // Accounts may have been created with a username or an email address, so
+  // accept either as the identifier.
+  const user = await UserModel.findOne({ $or: [{ username }, { email: username }] });
   if (!user) {
-    throw new Error(`No user found with username "${ username }" — refusing to create one`);
+    throw new Error(`No user found with username or email "${ username }" — refusing to create one`);
   }
 
   const before = user.role || 'user';
