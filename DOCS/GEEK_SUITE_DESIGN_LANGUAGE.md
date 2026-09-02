@@ -8,7 +8,7 @@ This document defines the design language for all GeekSuite applications. It ens
 
 | Role | Color |
 |------|-------|
-| Main | #6098CC |
+| Main | #4B7AA3 |
 | Light | #7BB3F0 |
 | Dark | #2E5C8A |
 | Contrast Text | #FFFFFF |
@@ -86,7 +86,7 @@ fills, so each mode carries its own value that clears 4.5:1 on that mode's paper
 
 ### App Bar
 - Height: 60px
-- Background: Primary Blue (#6098CC)
+- Background: Primary Blue (#4B7AA3)
 - Text: White
 - Shadow: 0px 2px 8px rgba(0,0,0,0.1)
 - Border: 1px solid rgba(0,0,0,0.1)
@@ -118,7 +118,7 @@ fills, so each mode carries its own value that clears 4.5:1 on that mode's paper
 
 ### Drawer
 - Width: 220px
-- Background: Primary Blue (#6098CC)
+- Background: Primary Blue (#4B7AA3)
 - Border: 1px solid rgba(0,0,0,0.1)
 - Shadow: None
 - Mobile: Temporary

@@ -38,10 +38,8 @@ cycle so the ordering rationale stays visible; detail moved to `SUITE_TODO.md` "
 
 ## Tier 2 — Headline wins (each M, each visible to every user)
 
-10a. **Suite blue vs. white button labels** — XS decision, S execution. `#6098CC` with white
-    text is 3.06:1 (fails AA for button labels). Either darken `primary.main` to ~`#4B7AA3`
-    suite-wide (bujogeek's `primary[600]`) or switch contained buttons to dark ink. Then
-    delete the four `KNOWN_GAPS` entries in the contrast test. *UI / brand*
+10a. ~~Suite blue vs. white button labels~~ — **Done 2026-09-02:** primary darkened to
+    `#4B7AA3` suite-wide (4.56:1 with white); `KNOWN_GAPS` is now empty.
 10. **Suite switcher in the GeekShell top bar** — S–M. Nine-dot menu, all eight apps. Biggest
     "this is one product" signal for the least code. Fold **theme toggle placement** into the
     same top-bar work. *UI*

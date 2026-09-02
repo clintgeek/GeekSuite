@@ -11,7 +11,7 @@ import { colors, darkColors, lightColors } from './colors';
 
 // BuJoGeek accent — GeekSuite blue, expressed in this app's full ramp
 const bujoAccent = {
-  main:         colors.primary[500],
+  main:         colors.primary[600],  // #4B7AA3 — the suite blue, darkened for AA button labels
   light:        colors.primary[300],
   dark:         colors.primary[700],
   contrastText: '#FFFFFF',

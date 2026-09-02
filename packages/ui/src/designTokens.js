@@ -29,7 +29,7 @@ export const geekSpacing = {
 
 export const geekPalette = {
   primary: {
-    main: '#6098CC',
+    main: '#4B7AA3',  // was #6098CC; darkened so white labels clear 4.5:1 (2026-09-02)
     light: '#7BB3F0',
     dark: '#2E5C8A',
     contrastText: '#FFFFFF',

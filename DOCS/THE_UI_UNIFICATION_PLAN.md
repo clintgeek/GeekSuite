@@ -93,7 +93,7 @@ Define shared suite colors:
 
 | Role | Token | Value |
 |------|-------|-------|
-| Primary | `primary.main` | `#6098CC` |
+| Primary | `primary.main` | `#4B7AA3` |
 | Primary Light | `primary.light` | `#7BB3F0` |
 | Primary Dark | `primary.dark` | `#2E5C8A` |
 | Background | `background.default` | `#F5F5F5` |

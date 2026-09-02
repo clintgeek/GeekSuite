@@ -132,7 +132,7 @@ function pairsFor(theme) {
  * Every one of these needs a decision, not a tweak, which is why they are
  * recorded rather than silently patched:
  *
- *   `primary.contrastText on primary.main` — the suite blue #6098CC (and
+ *   `primary.contrastText on primary.main` — the suite blue (formerly #6098CC, now #4B7AA3) (and
  *   bujogeek, which uses the same ramp) and fitnessgeek's teal both take a
  *   white label at ~3:1–3.75:1. Fixing it means darkening a brand accent or
  *   flipping to a dark label. TODO_ORDER #7 owns this.
@@ -148,10 +148,6 @@ function pairsFor(theme) {
  *   its secondary). Part of the TODO_ORDER #3 text-tier sweep.
  */
 const KNOWN_GAPS = {
-  'suite-default/light/primary.contrastText on primary.main': 3.06,
-  'suite-default/dark/primary.contrastText on primary.main': 3.06,
-  'bujogeek/light/primary.contrastText on primary.main': 3.06,
-  'bujogeek/dark/primary.contrastText on primary.main': 3.06,
 };
 
 /* ── suite ─────────────────────────────────────────────────────────────── */
