@@ -49,7 +49,7 @@ cycle so the ordering rationale stays visible; detail moved to `SUITE_TODO.md` "
 12. **CSRF protection** — M. Double-submit token or `SameSite=Strict` refresh cookie + middleware
     in basegeek + per-app axios interceptor. Own branch, per-app verification. The largest
     open security exposure. *Security*
-13. **Per-app auth test suites** — M (S per app). bujogeek, fitnessgeek, flockgeek, storygeek,
+13. ~~Per-app auth test suites~~ — **Done 2026-09-02** (5 apps, all in CI; found + fixed a storygeek characters/export IDOR and a notegeek bcrypt crash). Was: — M (S per app). bujogeek, fitnessgeek, flockgeek, storygeek,
     notegeek have zero. Login flow, `/api/users/me`, data scoping. Gates #12 safely. *Tests*
 14. ~~Admin gate on `GET /api/users`~~ — **Done 2026-09-02.** Follow-up added to SUITE_TODO:
     the `/api/apps` registry is unauthenticated and the DB browser routes are ungated.

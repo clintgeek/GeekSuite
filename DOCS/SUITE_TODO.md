@@ -285,6 +285,12 @@ not repeated here.
 
 ## Features not yet implemented
 
+- **notegeek `getTagHierarchy` 500** — found 2026-09-02 by the repaired backend suite. `GET /api/notes/tags`
+  sets `children: null` for a shallow tag (`work`) and then indexes into it when a deeper same-prefix tag
+  (`work/project1`) arrives later; Mongo's return order is not guaranteed, so it intermittently 500s.
+  Build the tree with `children: {}` always, or sort tags by depth first. Test is `it.skip` in
+  `apps/notegeek/backend/__tests__/controllers/notes.test.js` — un-skip when fixed.
+
 - ~~bookgeek format conversion~~ — **Done (Aug 2026):** on-demand `ebook-convert` to
   EPUB/AZW3/MOBI with cover embedding, shared `ensureFormat()`, used by both normal
   downloads and the device basket.
@@ -317,7 +323,7 @@ not repeated here.
   before linting. CI's lint job is effectively a no-op for them. Add a shared
   `eslint.config.js` in `packages/` and extend it per app.
 
-- **Per-app auth test suites** — basegeek has 33 auth tests. bujogeek, fitnessgeek, flockgeek,
+- ~~Per-app auth test suites~~ — **Done 2026-09-02:** bujogeek 29, fitnessgeek 37, flockgeek 49, storygeek 35 jest + 65 node:test, notegeek 89 (its suite had been red and uncollected). All in CI. Found and fixed: storygeek characters/export IDOR, notegeek bcrypt import. Was: basegeek has 33 auth tests. bujogeek, fitnessgeek, flockgeek,
   storygeek, and notegeek have zero. Priority for each app after its hardening pass: auth-isolation
   specs (login flow, `/api/users/me`, data scoping). (`DEFERRED_WORK.md`)
 
