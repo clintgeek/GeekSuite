@@ -51,8 +51,8 @@ cycle so the ordering rationale stays visible; detail moved to `SUITE_TODO.md` "
     open security exposure. *Security*
 13. **Per-app auth test suites** — M (S per app). bujogeek, fitnessgeek, flockgeek, storygeek,
     notegeek have zero. Login flow, `/api/users/me`, data scoping. Gates #12 safely. *Tests*
-14. **Admin gate on `GET /api/users`** — S once an admin role exists; the role is the real
-    work (M). *Security*
+14. ~~Admin gate on `GET /api/users`~~ — **Done 2026-09-02.** Follow-up added to SUITE_TODO:
+    the `/api/apps` registry is unauthenticated and the DB browser routes are ungated.
 
 ## Tier 3 — Consolidation sweeps (L each; run like the 2026-09-02 sweep: per-app commits, incremental deploys)
 

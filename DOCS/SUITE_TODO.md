@@ -62,8 +62,7 @@ StoryGeek SSO alignment + Settings page fix + AuthProvider refactor. Pending mer
   across all three (streaks, daily summary, egg/group/mortality dates, quick-add
   date keys). Remaining timezone work is the shared-utility extraction below.
 
-- **Admin gate on `GET /api/users`** — paginated now but still auth-only, not admin-scoped.
-  Dependency: add an admin role. `apps/basegeek/packages/api/src/routes/users.js`
+- ~~Admin gate on `GET /api/users`~~ — **Done 2026-09-02**, see Cross-cutting security.
 
 - **Mongo connection topology (basegeek)** — INVESTIGATED 2026-08-30: not a
   duplicate pool; four connections deliberately serve four different databases.
@@ -102,6 +101,17 @@ Hardening = pino logging, request IDs, graceful shutdown, env-driven CORS, data-
 ---
 
 ## Cross-cutting security
+
+- **Unauthenticated app registry + privileged DB browsers (basegeek)** — found 2026-09-02 while
+  adding the admin role. `src/routes/apps.js` (GET/POST/PUT/DELETE/seed) has no auth at all and the
+  public portal reads it unauthenticated; `/api/mongo`, `/api/redis`, `/api/postgres`, `/api/influx`
+  (dashgeek-facing browsers) are far more privileged than the user list that is now admin-gated.
+  Decide: keep GET on the registry public but gate mutations with `requireAdmin`; gate the DB
+  browsers with `requireAdmin` outright. Check dashgeek/portal callers first.
+
+- **Admin gate on `GET /api/users`** — ✅ **Done 2026-09-02** (role field, `requireAdmin`, list/create/
+  delete gated, `scripts/setUserRole.js`). Promote with
+  `docker exec basegeek node scripts/setUserRole.js <username> admin` on the box.
 
 - **CSRF protection** — cookie auth + `credentials: true` CORS across `*.clintgeek.com` means any
   XSS'd allowed origin can trigger mutations. Fix: double-submit CSRF tokens or `SameSite=Strict`
