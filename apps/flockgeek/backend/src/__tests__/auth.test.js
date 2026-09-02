@@ -42,6 +42,14 @@ import express from 'express';
 import request from 'supertest';
 import { createFakeModel } from './utils/fakeModel.js';
 
+// Pin the app's origin allow-list before src/config/env.js is loaded (it
+// snapshots process.env at import time, and the dynamic imports in
+// beforeAll() are what first pull it in). Production sets CORS_ORIGIN to
+// exactly this value; the dev default is the Vite dev server, which would
+// make the CSRF assertions at the bottom of this file read as if they were
+// about localhost.
+process.env.CORS_ORIGIN = 'https://flockgeek.clintgeek.com';
+
 const OWNER_A = 'owner-aaaa';
 const OWNER_B = 'owner-bbbb';
 const TOKEN_A = 'token-for-owner-a';
@@ -61,6 +69,8 @@ jest.unstable_mockModule(EGG_MODEL_PATH, () => ({ default: fakeEgg }));
 let requireAuth;
 let birdsRoutes;
 let eggProductionRoutes;
+let csrfGuard;
+let allowedOrigins;
 
 // Map of bearer token -> SSO user "basegeek" returns for GET
 // /api/users/me. Reassigned per-test in beforeEach; the server closes over
@@ -74,6 +84,8 @@ beforeAll(async () => {
   ({ requireAuth } = await import('../middleware/authMiddleware.js'));
   ({ default: birdsRoutes } = await import('../routes/birds.js'));
   ({ default: eggProductionRoutes } = await import('../routes/eggProduction.js'));
+  ({ csrfGuard } = await import('@geeksuite/user/server'));
+  ({ allowedOrigins } = await import('../config/corsOrigins.js'));
 
   basegeekServer = http.createServer((req, res) => {
     basegeekRequestCount += 1;
@@ -125,6 +137,17 @@ function buildWhoamiApp() {
 
 function buildDataApp() {
   const app = express();
+  app.use(express.json());
+  app.use('/api/birds', birdsRoutes);
+  app.use('/api/egg-production', eggProductionRoutes);
+  return app;
+}
+
+// Same wiring as server.js: csrfGuard, with the app's real allow-list, ahead
+// of the routes.
+function buildGuardedDataApp() {
+  const app = express();
+  app.use(csrfGuard({ allowedOrigins, appName: 'flockgeek-test' }));
   app.use(express.json());
   app.use('/api/birds', birdsRoutes);
   app.use('/api/egg-production', eggProductionRoutes);
@@ -310,5 +333,111 @@ describe('cross-user data isolation (birds + egg production) via real requireOwn
 
     expect(res.status).toBe(404);
     expect(fakeEgg._docs().find((e) => e._id === 'egg-b').deletedAt).toBeUndefined();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CSRF origin guard (TODO_ORDER #12)
+//
+// server.js mounts @geeksuite/user's csrfGuard() with the allow-list from
+// src/config/corsOrigins.js — the same list cors() gets, so the two cannot
+// drift. buildGuardedDataApp() above reproduces that wiring; server.js itself
+// calls start() at import time (Mongo connect + listen), so it cannot be
+// imported here, which is exactly why the allow-list was extracted into its
+// own module rather than left inline.
+//
+// This guard matters more on flockgeek than anywhere else in the suite. The
+// other six backends hand cors() an origin *callback* that errors on a
+// mismatch, so a foreign Origin never reaches a route even with no guard at
+// all. flockgeek hands cors() a plain array, and the cors package's array
+// form does not reject — it omits the Access-Control-Allow-Origin header and
+// calls next(). The mutation used to run and commit; only the response was
+// withheld from the attacker's page. So these tests assert the *data*, not
+// just the status code.
+//
+// Unit coverage for every branch of the guard itself (Referer fallback,
+// opaque origins, CSRF_GUARD=off/report, empty allow-list) lives in
+// packages/user/src/server/__tests__/csrfGuard.test.js.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('CSRF origin guard', () => {
+  const OWN_ORIGIN = 'https://flockgeek.clintgeek.com';
+  const EVIL_ORIGIN = 'https://evil.example';
+
+  beforeEach(() => {
+    fakeBird._reset([seedBird({ _id: 'bird-a', ownerId: OWNER_A })]);
+  });
+
+  test('production CORS_ORIGIN is the allow-list the guard is built from', () => {
+    expect(allowedOrigins).toEqual([OWN_ORIGIN]);
+  });
+
+  test("A deleting their own bird from flockgeek's own origin succeeds", async () => {
+    const res = await request(buildGuardedDataApp())
+      .delete('/api/birds/bird-a')
+      .set('Cookie', `geek_token=${TOKEN_A}`)
+      .set('Origin', OWN_ORIGIN);
+
+    expect(res.status).toBe(200);
+    expect(fakeBird._docs().find((b) => b._id === 'bird-a').deletedAt).toBeInstanceOf(Date);
+  });
+
+  test('the same delete from a third-party page is rejected, and the bird survives', async () => {
+    const res = await request(buildGuardedDataApp())
+      .delete('/api/birds/bird-a')
+      .set('Cookie', `geek_token=${TOKEN_A}`)
+      .set('Origin', EVIL_ORIGIN);
+
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({ error: 'csrf_origin_rejected' });
+    expect(fakeBird._docs().find((b) => b._id === 'bird-a').deletedAt).toBeUndefined();
+    expect(basegeekRequestCount).toBe(0); // never even resolved who the caller was
+  });
+
+  test('a POST from a third-party page creates nothing', async () => {
+    const res = await request(buildGuardedDataApp())
+      .post('/api/birds')
+      .set('Cookie', `geek_token=${TOKEN_A}`)
+      .set('Origin', EVIL_ORIGIN)
+      .send({ tagId: 'EVIL-1', name: 'Injected', sex: 'hen' });
+
+    expect(res.status).toBe(403);
+    expect(fakeBird._docs().map((b) => b._id)).toEqual(['bird-a']);
+  });
+
+  test('a foreign Referer with no Origin is rejected too', async () => {
+    const res = await request(buildGuardedDataApp())
+      .delete('/api/birds/bird-a')
+      .set('Cookie', `geek_token=${TOKEN_A}`)
+      .set('Referer', `${EVIL_ORIGIN}/attack.html`);
+
+    expect(res.status).toBe(403);
+    expect(fakeBird._docs().find((b) => b._id === 'bird-a').deletedAt).toBeUndefined();
+  });
+
+  test('a cookie-authenticated mutation with no Origin and no Referer passes', async () => {
+    const res = await request(buildGuardedDataApp())
+      .delete('/api/birds/bird-a')
+      .set('Cookie', `geek_token=${TOKEN_A}`);
+
+    expect(res.status).toBe(200);
+  });
+
+  test('a GET from a foreign origin is not blocked by the guard — mutations only', async () => {
+    const res = await request(buildGuardedDataApp())
+      .get('/api/birds')
+      .set('Cookie', `geek_token=${TOKEN_A}`)
+      .set('Origin', EVIL_ORIGIN);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.birds.map((b) => b._id)).toEqual(['bird-a']);
+  });
+
+  test('an unauthenticated mutation falls through to the normal 401, not a 403', async () => {
+    const res = await request(buildGuardedDataApp())
+      .delete('/api/birds/bird-a')
+      .set('Origin', EVIL_ORIGIN);
+
+    expect(res.status).toBe(401);
   });
 });
