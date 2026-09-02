@@ -208,22 +208,37 @@ All four are opt-in; the legacy `GeekShell sidebar`/`topBar` slots keep working 
   `{ isMobile, mobileOpen, hasNav, bottomInset, openNav, closeNav, toggleNav }`.
 - **`GeekSidebar`** — the content panel, not the chrome: `brand` (node or
   `{ monogram, name, tagline, to, monogramSx }`, rendered as a 60px block either way — a node
-  brand gets the same block sizing as the object form), `sections`
-  (`[{ label?, items: [{ id, label, icon, to?, href?, onClick?, badge?, disabled? }] }]`; a flat
-  `items` array is accepted), `activeId`, `onNavigate(item, event)`, `extras` (slot above the
-  footer), `footer: { user: { name, secondary?, avatarUrl?, initials? },
-  settings: { to?, onClick?, id?, selected? }, onSignOut, signOutLabel?, settingsLabel? }`, and
-  `sx` / `chromeSx` / `itemSx` for identity, plus `brandSx` / `footerSx` (merged last, over
-  `chromeSx`, for that band only) and `brand.monogramSx` (merged last onto the monogram chip;
-  hook: `data-geek-sidebar="monogram"`). The footer Settings row renders `selected` when
-  `settings.selected === true`, or when `activeId` equals `settings.to` or `settings.id`
-  (default `'settings'`) — the sidebar has no router, so pass `activeId="settings"` on the
-  settings route. Rows are 44px; navigating closes the mobile drawer through the shell context.
-  Legacy `appName` / flat `items` / `footer` element / `variant="permanent"|"temporary"` still
-  render.
+  brand gets the same block sizing as the object form and closes the mobile drawer on click, same
+  as a linked object-form brand), `sections`
+  (`[{ label?, items: [{ id, label, icon, to?, href?, onClick?, badge?, badgeProps?, disabled? }] }]`;
+  a flat `items` array is accepted), `activeId`, `onNavigate(item, event)`, `extras` (slot above
+  the footer) / `extrasSx` (defaults: `overflowY: 'auto'`, capped at 40% of the panel height, so a
+  tall extras block scrolls in place instead of squeezing the nav list) / `extrasGrow` (opt-in
+  boolean, default `false`: flips the priority so `extras` is the `flex: 1` scroll body and the
+  nav sections shrink to content instead — for panels where extras, not the nav list, is the
+  point), `footer: { user: { name,
+  secondary?, avatarUrl?, initials?, to?, href?, onClick? }, settings: { to?, onClick?, id?,
+  selected? }, onSignOut, signOutLabel?, settingsLabel? }`, and `sx` / `chromeSx` / `itemSx` for
+  identity, plus `brandSx` / `footerSx` (merged last, over `chromeSx`, for that band only),
+  `sectionLabelSx` (section captions; hook: `data-geek-sidebar="section-label"`) and
+  `brand.monogramSx` (merged last onto the monogram chip; hook: `data-geek-sidebar="monogram"`).
+  The footer Settings row renders `selected` when `settings.selected === true`, or when
+  `activeId` equals `settings.to` or `settings.id` (default `'settings'`) — the sidebar has no
+  router, so pass `activeId="settings"` on the settings route. `footer.user` renders as a plain
+  chip unless it carries `to` / `href` / `onClick`, in which case it becomes a `ButtonBase` (same
+  layout, 44px target) that navigates and closes the mobile drawer. Item `badge` accepts a
+  string, node, or number — a `0` is suppressed unless `badgeProps.showZero` is set; `badgeProps`
+  otherwise passes through to the badge's `Box` (`sx` merges last). Rows are 44px; navigating
+  closes the mobile drawer through the shell context. Legacy `appName` / flat `items` / `footer`
+  element / `variant="permanent"|"temporary"` still render.
 - **`GeekTopBar`** — `title` (string or node), `leading` (defaults to a hamburger, mobile only,
   only when the shell has a nav), `search`, `actions`, `themeMode` / `onThemeToggle`, `currentApp`,
-  `account: { name, secondary?, avatarUrl?, initials?, onSettings?, onSignOut, extraItems? }`.
+  `account: { name, secondary?, avatarUrl?, initials?, onAccount?, accountLabel?, onSettings?,
+  onSignOut, extraItems? }`. The account menu itself renders: user block → `extraItems` →
+  `onAccount` (an "Account" row, label via `accountLabel`, default `'Account'`) → `onSettings` →
+  `onSignOut`. `extraItems` accepts a raw React node (or array of them, rendered untouched, for
+  back-compat) or `{ id, label, icon?, onClick }` objects (or an array mixing both) — the
+  primitive wraps object-form `onClick` to close the menu first.
   Render order: `actions` → theme → switcher → account → legacy `settings` / `profile`.
 - **`GeekBottomNav`** — `items` (max 5: `id`, `label`, `icon`, `to`/`href`/`onClick`), `activeId`,
   `onNavigate`, `hidden`, `sx`, `itemSx`. 56px (`geekLayout.bottomNavHeight`), 44px targets, and

@@ -12,15 +12,30 @@
  *
  * Identity — fonts, always-dark chrome, density — is the app's business: pass
  * `sx` (whole panel), `chromeSx` (brand + footer bands), `brandSx` / `footerSx`
- * (merged over `chromeSx`, for that band only) and `itemSx` (rows). A node
- * `brand` gets the same 60px block sizing as the `{ monogram, name, tagline }`
- * form; on that object form, `brand.monogramSx` merges last onto the monogram
- * chip (hook: `data-geek-sidebar="monogram"`).
+ * (merged over `chromeSx`, for that band only), `itemSx` (rows) and
+ * `sectionLabelSx` (section captions, hook: `data-geek-sidebar="section-label"`).
+ * A node `brand` gets the same 60px block sizing as the
+ * `{ monogram, name, tagline }` form and closes the mobile drawer on click,
+ * same as a linked object-form brand; on that object form,
+ * `brand.monogramSx` merges last onto the monogram chip (hook:
+ * `data-geek-sidebar="monogram"`).
  *
  * `footer.settings` renders selected when `settings.selected === true`, or
  * when `activeId` equals `settings.to` or `settings.id` (default `'settings'`)
  * — the sidebar has no router, so apps should pass `activeId="settings"` on
- * the settings route.
+ * the settings route. `footer.user` renders as a plain chip unless it carries
+ * `to` / `href` / `onClick`, in which case it becomes a `ButtonBase` (same
+ * layout, 44px target) that navigates and closes the mobile drawer.
+ *
+ * `extras` gets a sane default wrapper (`overflowY: 'auto'`, capped at 40% of
+ * the panel) so a tall extras block scrolls in place instead of squeezing the
+ * nav list; override with `extrasSx`. When `extras` is the point of the panel
+ * (a tag tree, say) rather than a footnote to the nav list, pass `extrasGrow`
+ * to flip the priority: extras becomes the `flex: 1` scroll body and the nav
+ * sections shrink to content (`flex: '0 0 auto'`) instead. Item `badge`
+ * accepts a string as-is, a node, or a number — a `0` is suppressed unless
+ * `badgeProps.showZero` is set; `badgeProps` otherwise passes through to the
+ * badge's `Box` (sx merges last).
  *
  * Legacy: the pre-2026-09 API (`appName`, flat `items`, a `footer` *element*,
  * `variant="permanent" | "temporary"` with `mobileOpen`/`onMobileClose`) still
@@ -102,13 +117,18 @@ function linkPropsFor(item) {
   return {};
 }
 
-function Badge({ value }) {
-  // A count of zero is noise, not information.
-  if (value == null || value === false || value === 0) return null;
+function Badge({ value, badgeProps }) {
+  const { showZero = false, sx: badgeSx, ...restBadgeProps } = badgeProps ?? {};
+  // A count of zero is noise, not information — unless the caller opts in via
+  // `badgeProps.showZero`, e.g. to distinguish "checked, zero found" from "not
+  // checked yet". Strings and nodes are always accepted as-is.
+  if (value == null || value === false) return null;
+  if (value === 0 && !showZero) return null;
   if (isValidElement(value)) return value;
   return (
     <Box
       component="span"
+      data-geek-sidebar="badge"
       sx={{
         ml: 1,
         px: 0.75,
@@ -120,7 +140,9 @@ function Badge({ value }) {
         lineHeight: '18px',
         color: 'primary.main',
         backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.14),
+        ...badgeSx,
       }}
+      {...restBadgeProps}
     >
       {value}
     </Box>
@@ -135,12 +157,15 @@ export const GeekSidebar = forwardRef(function GeekSidebar(
     activeId,
     onNavigate,
     extras,
+    extrasSx,
+    extrasGrow = false,
     footer,
     sx,
     chromeSx,
     brandSx,
     footerSx,
     itemSx,
+    sectionLabelSx,
     // Legacy props — see the file header.
     appName,
     variant = 'content',
@@ -191,8 +216,12 @@ export const GeekSidebar = forwardRef(function GeekSidebar(
     };
 
     if (isValidElement(resolvedBrand)) {
+      // A node brand supplies its own link (or none at all); either way, any
+      // click inside it should close the mobile drawer the same as the object
+      // form's brand link does — bubbling makes this safe whether or not the
+      // node is itself a link.
       return (
-        <Box data-geek-sidebar="brand" sx={blockSx}>
+        <Box data-geek-sidebar="brand" onClick={closeNav} sx={blockSx}>
           {resolvedBrand}
         </Box>
       );
@@ -295,41 +324,77 @@ export const GeekSidebar = forwardRef(function GeekSidebar(
         }}
       >
         {/* Fixed order: user chip → Settings → Sign out. */}
-        {user ? (
-          <Box
-            data-geek-nav-footer="user"
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1.25,
-              px: 1.5,
-              py: 1,
-              minHeight: geekLayout.minClickTarget,
-            }}
-          >
-            <Avatar
-              src={user.avatarUrl}
-              alt=""
-              sx={{ width: 28, height: 28, fontSize: '0.75rem', bgcolor: 'primary.main' }}
-            >
-              {user.initials ?? initialsFrom(user.name)}
-            </Avatar>
-            <Box sx={{ minWidth: 0 }}>
-              <Typography variant="body2" noWrap sx={{ fontWeight: 500 }}>
-                {user.name}
-              </Typography>
-              {user.secondary ? (
-                <Typography
-                  variant="caption"
-                  noWrap
-                  sx={{ display: 'block', color: 'text.secondary' }}
-                >
-                  {user.secondary}
+        {user ? (() => {
+          const userChipSx = {
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.25,
+            px: 1.5,
+            py: 1,
+            minHeight: geekLayout.minClickTarget,
+          };
+          const userInner = (
+            <>
+              <Avatar
+                src={user.avatarUrl}
+                alt=""
+                sx={{ width: 28, height: 28, fontSize: '0.75rem', bgcolor: 'primary.main' }}
+              >
+                {user.initials ?? initialsFrom(user.name)}
+              </Avatar>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography variant="body2" noWrap sx={{ fontWeight: 500 }}>
+                  {user.name}
                 </Typography>
-              ) : null}
+                {user.secondary ? (
+                  <Typography
+                    variant="caption"
+                    noWrap
+                    sx={{ display: 'block', color: 'text.secondary' }}
+                  >
+                    {user.secondary}
+                  </Typography>
+                ) : null}
+              </Box>
+            </>
+          );
+
+          // `to` / `href` / `onClick` are all optional — only render the chip
+          // as an interactive control when the app gives it somewhere to go.
+          if (user.to || user.href || user.onClick) {
+            return (
+              <ButtonBase
+                data-geek-nav-footer="user"
+                {...(user.to
+                  ? { component: RouterLink, to: user.to }
+                  : user.href
+                    ? { component: 'a', href: user.href }
+                    : {})}
+                onClick={(event) => {
+                  user.onClick?.(event);
+                  closeNav();
+                }}
+                sx={{
+                  ...userChipSx,
+                  width: '100%',
+                  justifyContent: 'flex-start',
+                  textAlign: 'left',
+                  color: 'inherit',
+                  textDecoration: 'none',
+                  borderRadius: `${geekShape.radius.control}px`,
+                }}
+              >
+                {userInner}
+              </ButtonBase>
+            );
+          }
+
+          return (
+            <Box data-geek-nav-footer="user" sx={userChipSx}>
+              {userInner}
             </Box>
-          </Box>
-        ) : null}
+          );
+        })() : null}
 
         <List disablePadding>
           {settings ? (
@@ -395,7 +460,14 @@ export const GeekSidebar = forwardRef(function GeekSidebar(
     >
       {brandBlock}
 
-      <Box sx={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden' }}>
+      <Box
+        sx={{
+          flex: extrasGrow ? '0 0 auto' : 1,
+          minHeight: 0,
+          overflowY: 'auto',
+          overflowX: 'hidden',
+        }}
+      >
         {resolvedSections.map((section, index) => (
           <Box
             component="section"
@@ -405,6 +477,7 @@ export const GeekSidebar = forwardRef(function GeekSidebar(
             {section.label ? (
               <Typography
                 variant="caption"
+                data-geek-sidebar="section-label"
                 sx={{
                   display: 'block',
                   px: 2.5,
@@ -413,6 +486,7 @@ export const GeekSidebar = forwardRef(function GeekSidebar(
                   textTransform: 'uppercase',
                   letterSpacing: '0.08em',
                   fontWeight: 600,
+                  ...sectionLabelSx,
                 }}
               >
                 {section.label}
@@ -438,7 +512,7 @@ export const GeekSidebar = forwardRef(function GeekSidebar(
                     secondary={item.description}
                     primaryTypographyProps={{ noWrap: true, variant: 'body2' }}
                   />
-                  <Badge value={item.badge} />
+                  <Badge value={item.badge} badgeProps={item.badgeProps} />
                 </ListItemButton>
               ))}
             </List>
@@ -447,7 +521,32 @@ export const GeekSidebar = forwardRef(function GeekSidebar(
       </Box>
 
       {extras ? (
-        <Box data-geek-sidebar="extras" sx={{ flexShrink: 0, px: 1, py: 1 }}>
+        <Box
+          data-geek-sidebar="extras"
+          sx={
+            extrasGrow
+              ? {
+                  // Opt-in: extras becomes the scroll body (e.g. a tag tree
+                  // that's the point of the panel) and the nav sections above
+                  // it shrink to content instead of competing for space.
+                  flex: 1,
+                  minHeight: 0,
+                  overflowY: 'auto',
+                  px: 1,
+                  py: 1,
+                  ...extrasSx,
+                }
+              : {
+                  flexShrink: 0,
+                  minHeight: 0,
+                  maxHeight: '40%',
+                  overflowY: 'auto',
+                  px: 1,
+                  py: 1,
+                  ...extrasSx,
+                }
+          }
+        >
           {extras}
         </Box>
       ) : null}

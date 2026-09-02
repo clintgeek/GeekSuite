@@ -56,10 +56,14 @@ const navItems = navSections.flatMap((section) => section.items);
 
 /**
  * The nav row that owns a pathname. "/" only matches itself; everything else
- * matches its own subtree, so /birds/42 still lights up Birds.
+ * matches its own subtree, so /birds/42 still lights up Birds. `/settings`
+ * has no nav row of its own — the sidebar footer's Settings row highlights
+ * from `activeId` alone (per the primitive's contract), so route it to the
+ * primitive's default settings id explicitly.
  */
 export function activeNavId(pathname) {
   if (pathname === "/") return "/";
+  if (pathname === "/settings" || pathname.startsWith("/settings/")) return "settings";
   const match = navItems
     .filter((item) => item.id !== "/" && pathname.startsWith(item.id))
     .sort((a, b) => b.id.length - a.id.length)[0];

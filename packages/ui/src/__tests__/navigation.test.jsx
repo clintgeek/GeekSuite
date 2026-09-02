@@ -223,6 +223,73 @@ describe('GeekSidebar', () => {
     );
     expect(classesFor(byExplicitFlag, settingsAttr)).toContain('Mui-selected');
   });
+
+  it('renders the footer user chip as a link when `to` is given', () => {
+    const markup = render(
+      <GeekSidebar
+        items={[]}
+        footer={{ user: { name: 'Chef Crocker', to: '/account' }, onSignOut: () => {} }}
+      />
+    );
+    const idx = markup.indexOf('data-geek-nav-footer="user"');
+    expect(idx).toBeGreaterThan(-1);
+    const tagStart = markup.lastIndexOf('<', idx);
+    const tagName = markup.slice(tagStart + 1, markup.indexOf(' ', tagStart));
+    expect(tagName).toBe('a');
+    expect(markup).toContain('href="/account"');
+  });
+
+  it('renders the footer user chip as a plain box with no to/href/onClick', () => {
+    const markup = render(
+      <GeekSidebar items={[]} footer={{ user: { name: 'Chef Crocker' }, onSignOut: () => {} }} />
+    );
+    const idx = markup.indexOf('data-geek-nav-footer="user"');
+    expect(idx).toBeGreaterThan(-1);
+    const tagStart = markup.lastIndexOf('<', idx);
+    const tagName = markup.slice(tagStart + 1, markup.indexOf(' ', tagStart));
+    expect(tagName).toBe('div');
+  });
+
+  it('applies sectionLabelSx and a data hook to section captions', () => {
+    const markup = render(
+      <GeekSidebar
+        sections={[{ label: 'Flock', items: [{ id: 'birds', label: 'Birds', to: '/birds' }] }]}
+        sectionLabelSx={{ paddingBottom: '7px' }}
+      />
+    );
+    expect(markup).toContain('data-geek-sidebar="section-label"');
+    expect(markup).toContain('padding-bottom:7px');
+  });
+
+  it('suppresses a zero badge by default but renders it with badgeProps.showZero', () => {
+    const suppressed = render(
+      <GeekSidebar items={[{ id: 'birds', label: 'Birds', to: '/birds', badge: 0 }]} />
+    );
+    expect(suppressed).not.toContain('data-geek-sidebar="badge"');
+
+    const shown = render(
+      <GeekSidebar
+        items={[
+          { id: 'birds', label: 'Birds', to: '/birds', badge: 0, badgeProps: { showZero: true } },
+        ]}
+      />
+    );
+    expect(shown).toContain('data-geek-sidebar="badge"');
+    expect(shown).toContain('>0<');
+  });
+
+  it('grows extras to fill the scroll body when extrasGrow is set, shrinking the nav sections instead', () => {
+    const sections = [{ label: 'Flock', items: [{ id: 'birds', label: 'Birds', to: '/birds' }] }];
+
+    const grown = render(
+      <GeekSidebar sections={sections} extras={<div data-test-extras />} extrasGrow />
+    );
+    expect(grown).toContain('flex:0 0 auto');
+
+    const fixed = render(<GeekSidebar sections={sections} extras={<div data-test-extras />} />);
+    expect(fixed).not.toContain('flex:0 0 auto');
+    expect(fixed).toContain('max-height:40%');
+  });
 });
 
 describe('GeekTopBar', () => {
@@ -271,6 +338,41 @@ describe('GeekTopBar', () => {
       />
     );
     expectOrdered(markup, ['data-geek-topbar="theme"', 'data-geek-topbar="switcher"', 'data-test-profile']);
+  });
+
+  it('renders an Account row above Settings when onAccount is set, with accountLabel', () => {
+    const markup = render(
+      <GeekTopBar
+        account={{
+          name: 'Chef Crocker',
+          onAccount: () => {},
+          onSettings: () => {},
+          onSignOut: () => {},
+          accountLabel: 'My Account',
+        }}
+      />
+    );
+    expectOrdered(markup, ['data-geek-topbar-menu="account"', 'data-geek-topbar-menu="settings"']);
+    expect(markup).toContain('My Account');
+  });
+
+  it('renders object-form extraItems as menu rows, and still renders raw nodes for back-compat', () => {
+    const markup = render(
+      <GeekTopBar
+        account={{
+          name: 'Chef Crocker',
+          onSettings: () => {},
+          onSignOut: () => {},
+          extraItems: [
+            { id: 'billing', label: 'Billing', onClick: () => {} },
+            <div key="raw" data-test-raw-extra />,
+          ],
+        }}
+      />
+    );
+    expect(markup).toContain('data-geek-topbar-menu="billing"');
+    expect(markup).toContain('Billing');
+    expect(markup).toContain('data-test-raw-extra');
   });
 });
 

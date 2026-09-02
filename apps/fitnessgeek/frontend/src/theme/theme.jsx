@@ -85,14 +85,6 @@ function buildFitnessOverrides(mode) {
           },
         },
       },
-      MuiDrawer: {
-        styleOverrides: {
-          paper: {
-            backgroundColor: '#0C0A09', // Stone 950 — near-black sidebar
-            borderRight: 'none',
-          },
-        },
-      },
     }
   };
 }

@@ -9,10 +9,16 @@
  * that must not move between apps. Brand does not live here — it lives in the
  * sidebar's brand block.
  *
+ * The account menu itself is: user block → `extraItems` → `onAccount` (an
+ * "Account" row, label via `accountLabel`) → `onSettings` → `onSignOut`.
+ * `extraItems` accepts either a raw React node (rendered untouched, for
+ * back-compat) or `{ id, label, icon?, onClick }` objects (or an array mixing
+ * both) — the primitive wraps object-form `onClick` to close the menu first.
+ *
  * Legacy `showSuiteControls`, `settings`, `profile` and `appName` still work;
  * the legacy slots render after the cluster.
  */
-import { forwardRef, useCallback, useState } from 'react';
+import { forwardRef, isValidElement, useCallback, useState } from 'react';
 import AppBar from '@mui/material/AppBar';
 import Avatar from '@mui/material/Avatar';
 import Box from '@mui/material/Box';
@@ -52,6 +58,43 @@ function MenuGlyph() {
   );
 }
 
+/**
+ * Normalizes `account.extraItems` into menu rows. Back-compat: a raw React
+ * element (or array of them) renders untouched, exactly as it always has —
+ * whatever click handling it carries is its own business. A plain
+ * `{ id, label, icon?, onClick }` object gets wrapped into a `MenuItem` whose
+ * `onClick` closes the menu first, then runs the item's own handler.
+ */
+function renderExtraItems(extraItems, closeMenu) {
+  if (extraItems == null || extraItems === false) return null;
+  const list = Array.isArray(extraItems) ? extraItems : [extraItems];
+  return list.map((entry, index) => {
+    if (isValidElement(entry)) return entry;
+    if (entry && typeof entry === 'object') {
+      const { id, label: itemLabel, icon, onClick } = entry;
+      return (
+        <MenuItem
+          key={id ?? index}
+          data-geek-topbar-menu={id ?? `extra-${index}`}
+          onClick={(event) => {
+            closeMenu();
+            onClick?.(event);
+          }}
+          sx={{ minHeight: geekLayout.minClickTarget }}
+        >
+          {icon ? (
+            <Box component="span" sx={{ display: 'inline-flex', mr: 1.5 }}>
+              {icon}
+            </Box>
+          ) : null}
+          {itemLabel}
+        </MenuItem>
+      );
+    }
+    return entry;
+  });
+}
+
 function AccountMenu({ account }) {
   const [anchorEl, setAnchorEl] = useState(null);
   const open = Boolean(anchorEl);
@@ -63,9 +106,11 @@ function AccountMenu({ account }) {
     secondary,
     avatarUrl,
     initials,
+    onAccount,
     onSettings,
     onSignOut,
     extraItems,
+    accountLabel = 'Account',
     settingsLabel = 'Settings',
     signOutLabel = 'Sign out',
     label = 'Account',
@@ -105,6 +150,17 @@ function AccountMenu({ account }) {
         open={open}
         anchorEl={anchorEl}
         onClose={handleClose}
+        // Kept mounted (hidden, not unmounted) so its content — including
+        // `onAccount` / `extraItems` — is present in static markup for SSR
+        // and crawler-style assertions, same as the Drawers elsewhere in this
+        // package (`ModalProps={{ keepMounted: true }}`). MUI's Modal portals
+        // into `document.body` by default, which does not exist under a
+        // `node` SSR render (these apps are all client-only SPAs — never
+        // hydrated — so skipping the portal only in that environment carries
+        // no runtime risk); disable the portal only when there is nowhere to
+        // portal into.
+        keepMounted
+        disablePortal={typeof document === 'undefined'}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
         slotProps={{
@@ -134,7 +190,16 @@ function AccountMenu({ account }) {
           </Box>
         ) : null}
         {name || secondary ? <Divider /> : null}
-        {extraItems}
+        {renderExtraItems(extraItems, handleClose)}
+        {onAccount ? (
+          <MenuItem
+            data-geek-topbar-menu="account"
+            onClick={run(onAccount)}
+            sx={{ minHeight: geekLayout.minClickTarget }}
+          >
+            {accountLabel}
+          </MenuItem>
+        ) : null}
         {onSettings ? (
           <MenuItem
             data-geek-topbar-menu="settings"

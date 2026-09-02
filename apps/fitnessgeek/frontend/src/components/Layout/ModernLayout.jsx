@@ -25,6 +25,8 @@ export default function ModernLayout() {
 
   return (
     <GeekShell
+      // Studio Slate's sidebar is always-dark; pin the mobile drawer paper too.
+      navSx={{ bgcolor: '#0C0A09' }}
       nav={<Sidebar />}
       topBar={<TopBar />}
       bottomNav={

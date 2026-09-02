@@ -93,10 +93,6 @@ const Sidebar = () => {
         onSignOut: isAuthenticated ? logout : undefined
       }}
       sx={{ bgcolor: "background.sidebar" }}
-      // The primitive only applies its 60px block sizing to the *object* form
-      // of `brand`; a node brand lands in a bare Box, so pin it against the
-      // flex column. The footer band already sets this, so sharing is safe.
-      chromeSx={{ flexShrink: 0 }}
       itemSx={{
         mb: 0.25,
         color: "text.secondary",
