@@ -13,6 +13,7 @@ import { promisify } from "util";
 import { fileURLToPath } from "url";
 import { Book } from "./models/book.js";
 import { Profile } from "./models/profile.js";
+import { isAllowedCorsOrigin } from "./corsOrigins.js";
 import { logger } from "./utils/logger.js";
 import { ensureFormat, EnsureFormatError } from "./ebookFormats.js";
 import authRouter from "./routes/authRoutes.js";
@@ -23,7 +24,7 @@ import deviceBasketRouter, {
   normalizeDeviceWord,
 } from "./deviceBasket.js";
 import { authenticateToken } from "./middleware/auth.js";
-import { meHandler } from "@geeksuite/user/server";
+import { csrfGuard, meHandler } from "@geeksuite/user/server";
 import { sendMail } from "./services/emailService.js";
 
 dotenv.config();
@@ -33,29 +34,24 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const publicPath = path.join(__dirname, "../public");
 
-function isAllowedCorsOrigin(origin) {
-  if (!origin) return true;
-
-  const allowList = new Set([
-    "http://localhost:1800",
-    "http://127.0.0.1:1800",
-    "http://localhost:1801",
-    "http://127.0.0.1:1801",
-  ]);
-
-  if (allowList.has(origin)) return true;
-
-  try {
-    const url = new URL(origin);
-    if (url.hostname === "clintgeek.com" || url.hostname.endsWith(".clintgeek.com")) {
-      return true;
-    }
-  } catch {
-    // ignore
-  }
-
-  return false;
-}
+// CSRF: origin-check every cookie-authenticated mutation with the same
+// predicate cors() uses (src/corsOrigins.js — one rule, no second copy).
+//
+// Mounted *before* cors() on purpose. This cors() config answers a
+// disallowed Origin with `cb(new Error(...))`, which express turns into a
+// generic 500 — so a CSRF attempt would otherwise look like an application
+// bug, and would stop being blocked at all the moment someone "tidied" that
+// callback into the equally idiomatic `cb(null, false)` (which lets the
+// request through without the CORS header). Running first makes the
+// rejection a deliberate, tested 403 that does not depend on how cors()
+// reports a mismatch.
+//
+// No path exemptions. The server-rendered /kindle and /download-basket form
+// POSTs authenticate with their own PIN / basket-word cookies, not
+// geek_token, so the guard passes them straight through; when they *are*
+// driven from a logged-in desktop browser at bookgeek.clintgeek.com the form
+// posts same-origin and is allow-listed anyway. See DOCS/SSO_OVERVIEW.md#csrf.
+app.use(csrfGuard({ allowedOrigins: isAllowedCorsOrigin, logger, appName: "bookgeek" }));
 
 app.use(
   cors({
