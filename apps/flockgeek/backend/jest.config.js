@@ -4,7 +4,7 @@ export default {
   setupFilesAfterEnv: ['./jest.setup.js'],
   testTimeout: 30000,
   testMatch: [
-    '<rootDir>/src/__tests__/routes/**/*.test.js',
+    '<rootDir>/src/__tests__/**/*.test.js',
   ],
   moduleFileExtensions: ['js', 'json', 'node'],
 };
