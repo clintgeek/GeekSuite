@@ -1,3 +1,4 @@
+import bcrypt from 'bcryptjs';
 import Note from '../models/Note.js';
 import { logger } from '../lib/logger.js';
 
