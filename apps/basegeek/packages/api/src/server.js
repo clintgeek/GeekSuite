@@ -73,12 +73,9 @@ try {
 }
 
 // Middleware
-const hardcodedOrigins = [
-  'http://localhost:5173',    // Vite dev server
-  'http://localhost:5174',    // Vite dev server (alternative port)
-  'http://localhost:5001',    // Backend dev server
-  'http://localhost:5000',    // Backend dev server (alternative port)
-  'http://localhost:3000',    // StartGeek & StoryGeek frontend
+// Production fallback: only real clintgeek.com origins. Never falls back to
+// dev/LAN addresses when NODE_ENV === 'production' (see devOnlyOrigins below).
+const productionOrigins = [
   'https://basegeek.clintgeek.com',  // Production domain
   'https://geeksuite.clintgeek.com', // GeekSuite public portal
   'https://notegeek.clintgeek.com',  // NoteGeek production
@@ -93,14 +90,37 @@ const hardcodedOrigins = [
   'https://geekpr.clintgeek.com',  // geekPR — autonomous PR reviewer
   'https://start.clintgeek.com',  // StartGeek production
   'https://clintgeek.com',        // Portfolio (for portal link)
+];
+// Dev/LAN origins — only appended to the fallback outside production.
+const devOnlyOrigins = [
+  'http://localhost:5173',    // Vite dev server
+  'http://localhost:5174',    // Vite dev server (alternative port)
+  'http://localhost:5001',    // Backend dev server
+  'http://localhost:5000',    // Backend dev server (alternative port)
+  'http://localhost:3000',    // StartGeek & StoryGeek frontend
   'http://localhost:1801',    // BookGeek dev server
   'http://192.168.1.17:5173',  // Local network access
   'http://192.168.1.17:5174',   // Local network access (alternative port)
   'http://192.168.1.17:9977'   // StoryGeek local network access
 ];
-const allowedOrigins = process.env.CORS_ORIGINS
+const isProduction = process.env.NODE_ENV === 'production';
+const fallbackOrigins = isProduction
+  ? productionOrigins
+  : [...productionOrigins, ...devOnlyOrigins];
+const usingEnvOrigins = Boolean(process.env.CORS_ORIGINS);
+const allowedOrigins = usingEnvOrigins
   ? process.env.CORS_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
-  : hardcodedOrigins;
+  : fallbackOrigins;
+
+const corsLogPayload = {
+  origins: allowedOrigins,
+  source: usingEnvOrigins ? 'env' : 'fallback',
+};
+if (!usingEnvOrigins && isProduction) {
+  logger.warn(corsLogPayload, 'CORS_ORIGINS not set; production is running on the hardcoded fallback origin list');
+} else {
+  logger.info(corsLogPayload, 'CORS allowed origins configured');
+}
 
 app.use(cors({
   origin: function (origin, callback) {

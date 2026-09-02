@@ -25,16 +25,36 @@ function forwardSetCookieHeaders(res, upstreamHeaders) {
 }
 
 // Middleware
-const defaultCorsOrigins = [
+// Production fallback: only real clintgeek.com origins. Never falls back to
+// dev/LAN addresses when NODE_ENV === 'production' (see devOnlyCorsOrigins below).
+const productionCorsOrigins = [
+  'https://fitnessgeek.clintgeek.com',
+];
+// Dev/LAN origins — only appended to the fallback outside production.
+const devOnlyCorsOrigins = [
   'http://localhost:3000',
   'http://localhost:5173',
   'http://localhost:4080',
-  'https://fitnessgeek.clintgeek.com',
   'http://192.168.1.17:4080'
 ];
-const allowedOrigins = process.env.CORS_ORIGINS
+const isProduction = process.env.NODE_ENV === 'production';
+const fallbackCorsOrigins = isProduction
+  ? productionCorsOrigins
+  : [...productionCorsOrigins, ...devOnlyCorsOrigins];
+const usingEnvCorsOrigins = Boolean(process.env.CORS_ORIGINS);
+const allowedOrigins = usingEnvCorsOrigins
   ? process.env.CORS_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
-  : defaultCorsOrigins;
+  : fallbackCorsOrigins;
+
+const corsLogPayload = {
+  origins: allowedOrigins,
+  source: usingEnvCorsOrigins ? 'env' : 'fallback',
+};
+if (!usingEnvCorsOrigins && isProduction) {
+  logger.warn(corsLogPayload, 'CORS_ORIGINS not set; production is running on the hardcoded fallback origin list');
+} else {
+  logger.info(corsLogPayload, 'CORS allowed origins configured');
+}
 
 app.use(cors({
   origin: function (origin, callback) {
