@@ -101,7 +101,7 @@ const Sidebar = ({ isMobile = false, onClose }) => {
       <Box sx={{ flex: 1, overflowY: "auto", px: 1.5, py: 2 }}>
         <Typography
           variant="overline"
-          sx={{ px: 1.5, mb: 1, display: "block", color: "text.disabled", fontSize: "0.625rem" }}
+          sx={{ px: 1.5, mb: 1, display: "block", color: "text.muted", fontSize: "0.625rem" }}
         >
           Navigation
         </Typography>

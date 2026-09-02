@@ -30,7 +30,7 @@ const lightColors = {
   primary: { main: '#0D9488', light: '#14B8A6', dark: '#0F766E', contrastText: '#FFFFFF' },
   secondary: { main: '#78716C', light: '#A8A29E', dark: '#57534E', contrastText: '#FFFFFF' },
   background: { default: '#FAFAF9', paper: '#FFFFFF' },
-  text: { primary: '#1C1917', secondary: '#78716C' },
+  text: { primary: '#1C1917', secondary: '#78716C', muted: '#6B655F' },
   divider: '#E7E5E4',
 };
 
@@ -39,7 +39,7 @@ const darkColors = {
   primary: { main: '#2DD4BF', light: '#5EEAD4', dark: '#14B8A6', contrastText: '#1C1917' },
   secondary: { main: '#A8A29E', light: '#D6D3D1', dark: '#78716C', contrastText: '#1C1917' },
   background: { default: '#1C1917', paper: '#292524' },
-  text: { primary: '#F5F5F4', secondary: '#A8A29E' },
+  text: { primary: '#F5F5F4', secondary: '#A8A29E', muted: '#B5AFA9' },
   divider: '#44403C',
 };
 

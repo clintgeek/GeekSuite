@@ -317,12 +317,12 @@ const CollectionsPage = () => {
                     Archived
                   </Typography>
                   <Typography
-                    sx={{ fontSize: '0.6875rem', fontWeight: 500, color: theme.palette.text.disabled }}
+                    sx={{ fontSize: '0.6875rem', fontWeight: 500, color: theme.palette.text.muted }}
                   >
                     {archived.length}
                   </Typography>
                   <Typography
-                    sx={{ fontSize: '0.6875rem', color: theme.palette.text.disabled, ml: 0.5 }}
+                    sx={{ fontSize: '0.6875rem', color: theme.palette.text.muted, ml: 0.5 }}
                   >
                     {showArchived ? 'hide' : 'show'}
                   </Typography>

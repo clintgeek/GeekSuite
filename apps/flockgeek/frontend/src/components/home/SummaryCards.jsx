@@ -40,7 +40,7 @@ const SummaryCards = ({ stats }) => {
         >
           <Typography
             variant="body2"
-            sx={{ color: "text.disabled", fontSize: "0.6875rem", letterSpacing: 0.5, textTransform: "uppercase", mb: 0.25 }}
+            sx={{ color: "text.muted", fontSize: "0.6875rem", letterSpacing: 0.5, textTransform: "uppercase", mb: 0.25 }}
           >
             {label}
           </Typography>
@@ -58,7 +58,7 @@ const SummaryCards = ({ stats }) => {
               {data[key] ?? "—"}
             </Typography>
             {unit && data[key] != null && (
-              <Typography component="span" variant="body2" sx={{ color: "text.disabled" }}>
+              <Typography component="span" variant="body2" sx={{ color: "text.muted" }}>
                 {unit}
               </Typography>
             )}

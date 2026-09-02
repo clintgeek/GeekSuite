@@ -50,6 +50,7 @@ function buildFlockOverrides(mode) {
       text: {
         primary:   bg.textPrimary,
         secondary: bg.textSecondary,
+        muted:     isDark ? "#a39c8b" : "#6b6456",
         disabled:  isDark ? "#8f8877" : "#7d7566",
       },
       divider: bg.divider,

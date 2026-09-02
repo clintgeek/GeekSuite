@@ -91,7 +91,7 @@ function QuickCaptureHome() {
             {getGreeting()}{firstName ? `, ${firstName}` : ''}
           </Typography>
           {countCaption && (
-            <Typography variant="caption" sx={{ color: 'text.disabled' }}>
+            <Typography variant="caption" sx={{ color: 'text.muted' }}>
               {countCaption}
             </Typography>
           )}
@@ -225,10 +225,10 @@ function QuickCaptureHome() {
         </Box>
       ) : notes.length === 0 ? (
         <Box sx={{ py: { xs: 4, sm: 6 }, textAlign: 'center' }}>
-          <Typography variant="body1" sx={{ color: 'text.disabled', mb: 0.75 }}>
+          <Typography variant="body1" sx={{ color: 'text.muted', mb: 0.75 }}>
             Nothing here yet
           </Typography>
-          <Typography variant="body2" sx={{ color: 'text.disabled', maxWidth: 340, mx: 'auto' }}>
+          <Typography variant="body2" sx={{ color: 'text.muted', maxWidth: 340, mx: 'auto' }}>
             The strip above is for quick text notes — type a thought and press Capture.
             For richer formats like Markdown, code, or mind maps, use the type pills below it.
           </Typography>
@@ -244,7 +244,7 @@ function QuickCaptureHome() {
               mb: 1,
             }}
           >
-            <Typography variant="h6" sx={{ color: 'text.disabled' }}>
+            <Typography variant="h6" sx={{ color: 'text.muted' }}>
               Recent
             </Typography>
             <Button

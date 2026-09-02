@@ -61,6 +61,7 @@ function buildStoryOverrides(mode) {
       text: {
         primary:   isDark ? bg.parchment : bg.ink,
         secondary: isDark ? bg.parchDim : bg.inkSecondary,
+        muted:     isDark ? '#a89880' : '#6f5c47',
         disabled:  isDark ? '#8f8070' : bg.inkFaint,
       },
       divider: goldAlpha(isDark ? 0.1 : 0.15),

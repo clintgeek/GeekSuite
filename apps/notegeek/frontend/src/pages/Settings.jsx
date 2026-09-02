@@ -33,7 +33,7 @@ function SettingsSection({ title, children }) {
                 variant="overline"
                 sx={{
                     display: 'block',
-                    color: 'text.disabled',
+                    color: 'text.muted',
                     mb: 1,
                     px: 0.5,
                 }}

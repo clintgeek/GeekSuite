@@ -46,7 +46,7 @@ const HomePage = () => {
       {/* Greeting header — left-hung, extra vertical air */}
       <motion.div variants={fadeUp}>
         <Box sx={{ mb: 5, maxWidth: 520 }}>
-          <Typography variant="overline" sx={{ color: "text.disabled", mb: 1, display: "block" }}>
+          <Typography variant="overline" sx={{ color: "text.muted", mb: 1, display: "block" }}>
             {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
           </Typography>
           <Typography variant="h1" component="h1" sx={{ mb: 1.5 }}>
@@ -105,7 +105,7 @@ const HomePage = () => {
         <Box sx={{ mt: 2 }}>
           <Box sx={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", mb: 1.5 }}>
             <Typography variant="h4">Recent activity</Typography>
-            <Typography variant="caption" color="text.disabled">
+            <Typography variant="caption" color="text.muted">
               Last 8 events
             </Typography>
           </Box>
@@ -128,7 +128,7 @@ const HomePage = () => {
         >
           <Box sx={{ width: 3, minHeight: 32, bgcolor: "secondary.main", borderRadius: 1, flexShrink: 0, mt: 0.25 }} />
           <Box>
-            <Typography variant="overline" sx={{ color: "text.disabled", display: "block", mb: 0.25 }}>
+            <Typography variant="overline" sx={{ color: "text.muted", display: "block", mb: 0.25 }}>
               Seasonal note
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>

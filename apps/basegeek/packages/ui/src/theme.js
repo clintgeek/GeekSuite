@@ -71,6 +71,7 @@ const theme = createTheme({
     text: {
       primary: '#e4dfd6',
       secondary: '#8a8690',
+      muted: '#8a8690',
       disabled: stone[300],
     },
     divider: 'rgba(255, 255, 255, 0.06)',

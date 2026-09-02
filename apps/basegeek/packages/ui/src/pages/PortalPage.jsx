@@ -88,7 +88,7 @@ function InfraChip({ svc, status }) {
         <Typography sx={{ fontSize: '0.78rem', fontWeight: 600, color: 'text.primary', lineHeight: 1.2 }}>
           {svc.name}
         </Typography>
-        <Typography sx={{ fontSize: '0.6rem', fontFamily: '"Geist Mono", monospace', color: 'text.disabled' }}>
+        <Typography sx={{ fontSize: '0.6rem', fontFamily: '"Geist Mono", monospace', color: 'text.muted' }}>
           {checking ? 'checking...' : online ? `${status.latency}ms` : 'offline'}
         </Typography>
       </Box>
@@ -162,18 +162,18 @@ function AppCard({ app, health }) {
         {app.stack.map((s) => (
           <Typography key={s} sx={{
             fontSize: '0.58rem', fontFamily: '"Geist Mono", monospace',
-            color: 'text.disabled', px: 0.8, py: 0.2,
+            color: 'text.muted', px: 0.8, py: 0.2,
             border: '1px solid rgba(255,255,255,0.08)', borderRadius: '4px',
           }}>{s}</Typography>
         ))}
       </Box>
 
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Typography sx={{ fontSize: '0.62rem', fontFamily: '"Geist Mono", monospace', color: 'text.disabled' }}>
+        <Typography sx={{ fontSize: '0.62rem', fontFamily: '"Geist Mono", monospace', color: 'text.muted' }}>
           {checking ? 'checking...' : online ? `${health.latency}ms RTT` : 'offline'}
           {health?.version ? ` · v${health.version}` : ''}
         </Typography>
-        <OpenInNewIcon sx={{ fontSize: 13, color: 'text.disabled' }} />
+        <OpenInNewIcon sx={{ fontSize: 13, color: 'text.muted' }} />
       </Box>
     </Box>
   );
@@ -197,7 +197,7 @@ function SidecarCard({ svc }) {
         </Box>
         <Tooltip title="View source on GitHub" arrow>
           <Box component="a" href={svc.repo} target="_blank" rel="noopener noreferrer"
-            sx={{ display: 'flex', color: 'text.disabled', '&:hover': { color: 'text.secondary' }, transition: 'color 150ms' }}>
+            sx={{ display: 'flex', color: 'text.muted', '&:hover': { color: 'text.secondary' }, transition: 'color 150ms' }}>
             <GitHubIcon sx={{ fontSize: 16 }} />
           </Box>
         </Tooltip>
@@ -209,7 +209,7 @@ function SidecarCard({ svc }) {
         {svc.stack.map((s) => (
           <Typography key={s} sx={{
             fontSize: '0.58rem', fontFamily: '"Geist Mono", monospace',
-            color: 'text.disabled', px: 0.8, py: 0.2,
+            color: 'text.muted', px: 0.8, py: 0.2,
             border: '1px solid rgba(255,255,255,0.08)', borderRadius: '4px',
           }}>{s}</Typography>
         ))}
@@ -344,7 +344,7 @@ export default function PortalPage() {
               <StatusDot online={true} checking={false} />
               <Box>
                 <Typography sx={{ fontSize: '0.78rem', fontWeight: 600, color: 'text.primary', lineHeight: 1.2 }}>Nginx</Typography>
-                <Typography sx={{ fontSize: '0.6rem', fontFamily: '"Geist Mono", monospace', color: 'text.disabled' }}>TLS 1.3 · A+</Typography>
+                <Typography sx={{ fontSize: '0.6rem', fontFamily: '"Geist Mono", monospace', color: 'text.muted' }}>TLS 1.3 · A+</Typography>
               </Box>
             </Box>
           </Box>

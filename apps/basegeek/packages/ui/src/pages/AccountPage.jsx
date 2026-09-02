@@ -415,7 +415,7 @@ export default function AccountPage() {
             </Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Box sx={{ width: 12, height: 12, borderRadius: '3px', backgroundColor: prefsForm.accentColor }} />
-              <Typography sx={{ fontSize: '0.7rem', color: 'text.disabled', fontFamily: '"Geist Mono", monospace' }}>
+              <Typography sx={{ fontSize: '0.7rem', color: 'text.muted', fontFamily: '"Geist Mono", monospace' }}>
                 {prefsForm.accentColor}
               </Typography>
             </Box>
@@ -427,7 +427,7 @@ export default function AccountPage() {
             icon={<AppsIcon sx={{ fontSize: 16, color: 'text.disabled' }} />}
           >
             {Object.keys(appPreferences || {}).length === 0 ? (
-              <Typography sx={{ fontSize: '0.8rem', color: 'text.disabled' }}>
+              <Typography sx={{ fontSize: '0.8rem', color: 'text.muted' }}>
                 No app-specific preferences yet. As you use GeekSuite apps, their settings will appear here automatically.
               </Typography>
             ) : (
@@ -476,7 +476,7 @@ export default function AccountPage() {
 function DetailRow({ label, value }) {
   return (
     <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.5 }}>
-      <Typography sx={{ fontSize: '0.7rem', color: 'text.disabled' }}>{label}</Typography>
+      <Typography sx={{ fontSize: '0.7rem', color: 'text.muted' }}>{label}</Typography>
       <Typography sx={{ fontSize: '0.7rem', color: 'text.secondary', fontFamily: '"Geist Mono", monospace' }}>
         {value}
       </Typography>

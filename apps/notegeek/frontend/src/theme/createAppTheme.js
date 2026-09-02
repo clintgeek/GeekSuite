@@ -40,8 +40,8 @@ function buildNoteOverrides(mode) {
     : { default: '#16140F', paper: '#1F1C16', elevated: '#26221A' };
 
   const text = isLight
-    ? { primary: '#1F1C16', secondary: '#6B6258', disabled: '#857C72' }
-    : { primary: '#EDE6D6', secondary: '#998F80', disabled: '#7A7062' };
+    ? { primary: '#1F1C16', secondary: '#6B6258', muted: '#7A7064', disabled: '#857C72' }
+    : { primary: '#EDE6D6', secondary: '#998F80', muted: '#A89C8C', disabled: '#7A7062' };
 
   const divider = isLight ? '#E5DDC8' : '#2D2A24';
   const border  = isLight ? '#D8D0BD' : '#3A352D';
@@ -78,6 +78,7 @@ function buildNoteOverrides(mode) {
       text: {
         primary:   text.primary,
         secondary: text.secondary,
+        muted:     text.muted,
         disabled:  text.disabled,
       },
       divider,

@@ -71,7 +71,7 @@ function SectionLabel({ children, sx }) {
         <Typography
             variant="h6"
             sx={{
-                color: 'text.disabled',
+                color: 'text.muted',
                 px: 1.5,
                 pt: 1.5,
                 pb: 0.5,
@@ -486,7 +486,7 @@ function Sidebar({ closeNavbar }) {
                 )}
                 {!tagsLoading && !tagsError && Object.keys(tagHierarchy).length === 0 && (
                     <Box sx={{ px: 2, py: 3, textAlign: 'center' }}>
-                        <TagIcon sx={{ fontSize: 24, color: 'text.disabled', mb: 0.75 }} />
+                        <TagIcon sx={{ fontSize: 24, color: 'text.muted', mb: 0.75 }} />
                         <Typography
                             variant="body2"
                             color="text.secondary"
@@ -494,7 +494,7 @@ function Sidebar({ closeNavbar }) {
                         >
                             No tags yet
                         </Typography>
-                        <Typography variant="caption" color="text.disabled">
+                        <Typography variant="caption" color="text.muted">
                             Add tags to your notes to organize them here
                         </Typography>
                     </Box>
@@ -510,7 +510,7 @@ function Sidebar({ closeNavbar }) {
                 )}
                 {!tagsLoading && !tagsError && tagFilter && Object.keys(filteredHierarchy).length === 0 && (
                     <Box sx={{ px: 2, py: 2, textAlign: 'center' }}>
-                        <Typography variant="caption" color="text.disabled">
+                        <Typography variant="caption" color="text.muted">
                             No tags match "{tagFilter}"
                         </Typography>
                     </Box>
@@ -572,7 +572,7 @@ function Sidebar({ closeNavbar }) {
                                     className="logout-icon"
                                     sx={{
                                         fontSize: 15,
-                                        color: 'text.disabled',
+                                        color: 'text.muted',
                                         transition: 'color 100ms ease',
                                     }}
                                 />

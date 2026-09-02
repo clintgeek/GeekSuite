@@ -92,7 +92,7 @@ function SearchResults() {
                     {/* Subtle inline searching indicator */}
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5, px: 0.5 }}>
                         <CircularProgress size={14} thickness={4} sx={{ color: 'text.disabled' }} />
-                        <Typography variant="caption" sx={{ color: 'text.disabled' }}>
+                        <Typography variant="caption" sx={{ color: 'text.muted' }}>
                             Searching…
                         </Typography>
                     </Box>
@@ -105,7 +105,7 @@ function SearchResults() {
             ) : searchResults.length > 0 ? (
                 <Box>
                     <Box sx={{ mb: 1.5, px: 0.5 }}>
-                        <Typography variant="h6" sx={{ color: 'text.disabled' }}>
+                        <Typography variant="h6" sx={{ color: 'text.muted' }}>
                             {searchResults.length} {searchResults.length === 1 ? 'result' : 'results'}
                         </Typography>
                     </Box>
@@ -125,16 +125,16 @@ function SearchResults() {
                     <Typography variant="body1" sx={{ color: 'text.secondary', mb: 0.5 }}>
                         No matches for &ldquo;{query}&rdquo;
                     </Typography>
-                    <Typography variant="caption" sx={{ color: 'text.disabled' }}>
+                    <Typography variant="caption" sx={{ color: 'text.muted' }}>
                         Try a tag path (e.g. work/ideas) or a partial word
                     </Typography>
                 </Box>
             ) : (
                 <Box sx={{ py: 6, textAlign: 'center' }}>
-                    <Typography variant="body1" sx={{ color: 'text.disabled', mb: 0.5 }}>
+                    <Typography variant="body1" sx={{ color: 'text.muted', mb: 0.5 }}>
                         Search by title, content, or tags
                     </Typography>
-                    <Typography variant="caption" sx={{ color: 'text.disabled' }}>
+                    <Typography variant="caption" sx={{ color: 'text.muted' }}>
                         Press / from anywhere to focus search
                     </Typography>
                 </Box>

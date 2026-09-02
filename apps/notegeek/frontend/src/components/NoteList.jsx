@@ -103,7 +103,7 @@ function NoteList({ tag, prefix }) {
                 px: 0.5,
             }}>
                 {/* Count label */}
-                <Typography variant="h6" sx={{ color: 'text.disabled' }}>
+                <Typography variant="h6" sx={{ color: 'text.muted' }}>
                     {notes.length} {notes.length === 1 ? 'note' : 'notes'}
                 </Typography>
 
@@ -121,7 +121,7 @@ function NoteList({ tag, prefix }) {
                                 fontSize: '0.6875rem',
                                 fontWeight: sortBy === opt.value ? 600 : 400,
                                 letterSpacing: '0.04em',
-                                color: sortBy === opt.value ? 'primary.main' : 'text.disabled',
+                                color: sortBy === opt.value ? 'primary.main' : 'text.muted',
                                 transition: 'all 120ms ease',
                                 '&:hover': {
                                     color: 'text.secondary',
@@ -192,11 +192,11 @@ function NoteList({ tag, prefix }) {
             {/* Editorial list */}
             {sortedNotes.length === 0 ? (
                 <Box sx={{ py: 8, textAlign: 'center' }}>
-                    <Typography variant="body1" sx={{ color: 'text.disabled', mb: 0.5 }}>
+                    <Typography variant="body1" sx={{ color: 'text.muted', mb: 0.5 }}>
                         {tag ? 'No notes tagged here yet.' : 'No notes yet'}
                     </Typography>
                     {!tag && (
-                        <Typography variant="caption" sx={{ color: 'text.disabled' }}>
+                        <Typography variant="caption" sx={{ color: 'text.muted' }}>
                             Create your first note to get started
                         </Typography>
                     )}

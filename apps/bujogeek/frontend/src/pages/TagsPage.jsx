@@ -255,7 +255,7 @@ const TagsPage = () => {
               fontFamily: '"Fraunces", serif',
               fontSize: '1rem',
               fontStyle: 'italic',
-              color: theme.palette.text.disabled,
+              color: theme.palette.text.muted,
               mt: 2,
             }}
           >
@@ -336,7 +336,7 @@ const TagsPage = () => {
             <Typography
               sx={{
                 fontSize: '0.875rem',
-                color: theme.palette.text.disabled,
+                color: theme.palette.text.muted,
                 fontStyle: 'italic',
                 mt: 2,
               }}
@@ -383,7 +383,7 @@ const TagsPage = () => {
             <Typography
               sx={{
                 fontSize: '0.8125rem',
-                color: theme.palette.text.disabled,
+                color: theme.palette.text.muted,
                 fontWeight: 500,
               }}
             >
@@ -397,7 +397,7 @@ const TagsPage = () => {
             <Typography
               sx={{
                 fontSize: '0.875rem',
-                color: theme.palette.text.disabled,
+                color: theme.palette.text.muted,
                 fontStyle: 'italic',
                 px: { xs: 0.5, sm: 0 },
               }}
@@ -449,7 +449,7 @@ const TagsPage = () => {
                         sx={{
                           fontSize: '0.6875rem',
                           fontWeight: 500,
-                          color: theme.palette.text.disabled,
+                          color: theme.palette.text.muted,
                         }}
                       >
                         {sectionTasks.length}

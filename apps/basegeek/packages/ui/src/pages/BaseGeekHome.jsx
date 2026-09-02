@@ -319,7 +319,7 @@ export default function BaseGeekHome() {
                     <Typography sx={{
                       fontSize: '0.6rem',
                       fontFamily: '"Geist Mono", monospace',
-                      color: 'text.disabled',
+                      color: 'text.muted',
                     }}>
                       {isChecking ? 'checking...' : isOnline ? `${health.latency}ms` : 'offline'}
                     </Typography>
@@ -327,7 +327,7 @@ export default function BaseGeekHome() {
                       <Typography sx={{
                         fontSize: '0.55rem',
                         fontFamily: '"Geist Mono", monospace',
-                        color: 'text.disabled',
+                        color: 'text.muted',
                         px: 0.6,
                         py: 0.1,
                         borderRadius: '3px',
@@ -354,7 +354,7 @@ export default function BaseGeekHome() {
       }}>
         <Typography sx={{
           fontSize: '0.75rem',
-          color: 'text.disabled',
+          color: 'text.muted',
           fontFamily: '"Geist Mono", monospace',
         }}>
           GeekSuite — shared authentication across all applications

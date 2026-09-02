@@ -51,7 +51,7 @@ const DashboardPage = () => {
     <Stack spacing={3}>
       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 2 }}>
         <Box>
-          <Typography variant="overline" sx={{ color: "text.disabled", display: "block" }}>System</Typography>
+          <Typography variant="overline" sx={{ color: "text.muted", display: "block" }}>System</Typography>
           <Typography variant="h2">Flock overview</Typography>
         </Box>
         <Button

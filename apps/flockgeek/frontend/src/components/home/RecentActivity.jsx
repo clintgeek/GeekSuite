@@ -39,7 +39,7 @@ const RecentActivity = ({ items = [] }) => {
   if (!items.length) {
     return (
       <Box sx={{ py: 4, textAlign: "center" }}>
-        <Typography variant="body2" color="text.disabled">
+        <Typography variant="body2" color="text.muted">
           No recent activity yet. Log an egg or add a bird to get started.
         </Typography>
       </Box>
@@ -90,7 +90,7 @@ const RecentActivity = ({ items = [] }) => {
               <Typography variant="body2" sx={{ flex: 1, color: "text.primary" }}>
                 {it.text}
               </Typography>
-              <Typography variant="caption" sx={{ color: "text.disabled", flexShrink: 0, textTransform: "none", letterSpacing: 0 }}>
+              <Typography variant="caption" sx={{ color: "text.muted", flexShrink: 0, textTransform: "none", letterSpacing: 0 }}>
                 {formatTime(it.occurredAt)}
               </Typography>
             </Box>

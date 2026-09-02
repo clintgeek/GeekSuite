@@ -18,7 +18,7 @@ const HeroCard = () => (
         borderBottom: (theme) => `1px solid ${theme.palette.divider}`
       }}
     >
-      <Typography variant="overline" sx={{ color: "text.disabled", display: "block", mb: 1 }}>
+      <Typography variant="overline" sx={{ color: "text.muted", display: "block", mb: 1 }}>
         Flock management made simple
       </Typography>
       <Typography variant="h3" gutterBottom>

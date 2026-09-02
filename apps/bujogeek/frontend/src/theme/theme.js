@@ -34,6 +34,9 @@ function buildBujoOverrides(mode) {
       text: {
         primary:   surface.text.primary,
         secondary: surface.text.secondary,
+        // Muted here intentionally overrides colors.js' lightColors/darkColors.text.muted
+        // (those clear only ~2:1) to guarantee ~4.5:1 on this mode's paper.
+        muted:     isDark ? '#9A948D' : colors.ink[500],
         disabled:  surface.text.disabled,
       },
       divider: surface.divider,

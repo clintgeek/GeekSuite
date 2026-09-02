@@ -315,7 +315,7 @@ export function LoginSplash({
             }}
           >
             <Box sx={{ flex: 1, height: '1px', bgcolor: 'divider' }} />
-            <Typography variant="caption" sx={{ color: 'text.disabled', fontWeight: 600, fontSize: '0.65rem', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+            <Typography variant="caption" sx={{ color: 'text.muted', fontWeight: 600, fontSize: '0.65rem', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
               Secured by GeekBase
             </Typography>
             <Box sx={{ flex: 1, height: '1px', bgcolor: 'divider' }} />
@@ -356,7 +356,7 @@ export function LoginSplash({
           variant="caption"
           sx={{
             mt: 3,
-            color: 'text.disabled',
+            color: 'text.muted',
             fontSize: '0.65rem',
             letterSpacing: '0.05em',
             opacity: 0,

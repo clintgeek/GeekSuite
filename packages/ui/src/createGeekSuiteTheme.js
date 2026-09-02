@@ -32,6 +32,8 @@ function buildPalette({ mode, accent }) {
     text: {
       primary: isDark ? '#F5F5F5' : palette.neutral.textPrimary,
       secondary: isDark ? '#BDBDBD' : palette.neutral.textSecondary,
+      // muted = de-emphasized but still readable copy (timestamps, counts, empty states); disabled = inert controls only.
+      muted: isDark ? '#A0A0A0' : '#6B6B6B',
       // Apps lean on text.disabled for tertiary copy (timestamps, counts,
       // empty states), so it must stay perceptible: ~3:1 on each mode's paper.
       disabled: isDark ? '#8F8F8F' : palette.neutral.textDisabled,
