@@ -273,6 +273,9 @@ function MindMapEditorInner({ content, setContent, readOnly }) {
                         bgcolor: alpha(theme.palette.primary.main, 0.1),
                     },
                 },
+                '& .react-flow__controls-button svg': {
+                    fill: theme.palette.text.primary,
+                },
                 '& .react-flow__minimap': {
                     bgcolor: alpha(theme.palette.background.paper, 0.9),
                     backdropFilter: 'blur(8px)',

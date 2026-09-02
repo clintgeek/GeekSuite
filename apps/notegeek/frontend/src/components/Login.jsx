@@ -28,8 +28,8 @@ function Login() {
             onLogin={handleLogin}
             loading={authLoading}
             // NoteGeek specific overrides to match original exactly
-            logoColor="brand.note"
-            logoSuffixColor="brand.geek"
+            logoColor="text.primary"
+            logoSuffixColor="primary.main"
         // Original notegeek ink colors were:
         // Dark: 169, 157, 240, 0.07 / 251, 146, 60, 0.05
         // Light: 91, 80, 168, 0.05 / 232, 89, 12, 0.04

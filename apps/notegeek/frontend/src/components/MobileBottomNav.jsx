@@ -75,7 +75,7 @@ function NavItem({ item, isActive, onClick }) {
       <Icon
         sx={{
           fontSize: item.accent ? 22 : 20,
-          color: isActive ? 'primary.main' : 'text.disabled',
+          color: isActive ? 'primary.main' : 'text.secondary',
           transition: 'color 100ms ease',
         }}
       />
@@ -87,7 +87,7 @@ function NavItem({ item, isActive, onClick }) {
           fontWeight: isActive ? 600 : 500,
           letterSpacing: '0.06em',
           textTransform: 'uppercase',
-          color: isActive ? 'primary.main' : 'text.disabled',
+          color: isActive ? 'primary.main' : 'text.secondary',
           transition: 'color 100ms ease',
         }}
       >

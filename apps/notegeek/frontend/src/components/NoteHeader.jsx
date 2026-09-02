@@ -6,6 +6,7 @@ import {
     IconButton,
     Tooltip,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 // Deep-import (see RichTextEditor.jsx for why) instead of the
 // '@mui/icons-material' barrel.
 import SaveIcon from '@mui/icons-material/Save';
@@ -84,9 +85,9 @@ function NoteHeader({
                             size="small"
                             onClick={onDelete}
                             sx={{
-                                color: '#d32f2f',
+                                color: 'error.main',
                                 '&:hover': {
-                                    bgcolor: 'rgba(211, 47, 47, 0.04)'
+                                    bgcolor: (theme) => alpha(theme.palette.error.main, 0.08)
                                 }
                             }}
                         >

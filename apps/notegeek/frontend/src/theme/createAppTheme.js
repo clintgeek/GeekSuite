@@ -19,8 +19,20 @@ const noteAccent = {
   contrastText: '#FFFCF5',
 };
 
+// Oxblood is 2.0:1 as a foreground on the warm-black ground, so dark mode
+// lifts the accent (matches noteTypes.handwritten below).
+const noteAccentDark = {
+  light: '#E09A95',
+  main:  '#C97570',
+  dark:  '#8B2C2A',
+  contrastText: '#1F1C16',
+};
+
+const accentFor = (mode) => (mode === 'light' ? noteAccent : noteAccentDark);
+
 function buildNoteOverrides(mode) {
   const isLight = mode === 'light';
+  const accent = accentFor(mode);
 
   // Cream-paper / ink-desk-lamp palette.
   const surfaces = isLight
@@ -28,8 +40,8 @@ function buildNoteOverrides(mode) {
     : { default: '#16140F', paper: '#1F1C16', elevated: '#26221A' };
 
   const text = isLight
-    ? { primary: '#1F1C16', secondary: '#6B6258', disabled: '#A8A09A' }
-    : { primary: '#EDE6D6', secondary: '#998F80', disabled: '#5C544A' };
+    ? { primary: '#1F1C16', secondary: '#6B6258', disabled: '#857C72' }
+    : { primary: '#EDE6D6', secondary: '#998F80', disabled: '#7A7062' };
 
   const divider = isLight ? '#E5DDC8' : '#2D2A24';
   const border  = isLight ? '#D8D0BD' : '#3A352D';
@@ -115,7 +127,7 @@ function buildNoteOverrides(mode) {
       MuiCssBaseline: {
         styleOverrides: {
           'input, textarea, [contenteditable]': {
-            caretColor: `${noteAccent.main} !important`,
+            caretColor: `${accent.main} !important`,
           },
         },
       },
@@ -160,9 +172,10 @@ function buildNoteOverrides(mode) {
  * Composes shared GeekSuite rules with NoteGeek "Ink Studio" identity.
  */
 export function createNoteTheme(mode = 'light') {
+  const accent = accentFor(mode);
   const theme = createGeekSuiteTheme({
     mode,
-    accent:    noteAccent,
+    accent,
     overrides: buildNoteOverrides(mode),
   });
 
@@ -170,10 +183,10 @@ export function createNoteTheme(mode = 'light') {
   // Vite is serving an outdated, pre-bundled cache of @geeksuite/ui.
   if (!theme.palette.glow) {
     theme.palette.glow = {
-      ring: alpha(noteAccent.main, 0.20),
-      soft: alpha(noteAccent.main, 0.06),
-      medium: alpha(noteAccent.main, 0.10),
-      border: alpha(noteAccent.main, 0.30),
+      ring: alpha(accent.main, 0.20),
+      soft: alpha(accent.main, 0.06),
+      medium: alpha(accent.main, 0.10),
+      border: alpha(accent.main, 0.30),
     };
   }
 

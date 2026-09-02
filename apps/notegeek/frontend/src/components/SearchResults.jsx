@@ -122,7 +122,7 @@ function SearchResults() {
                 </Box>
             ) : query ? (
                 <Box sx={{ py: 6, textAlign: 'center' }}>
-                    <Typography variant="body1" sx={{ color: 'text.disabled', mb: 0.5 }}>
+                    <Typography variant="body1" sx={{ color: 'text.secondary', mb: 0.5 }}>
                         No matches for &ldquo;{query}&rdquo;
                     </Typography>
                     <Typography variant="caption" sx={{ color: 'text.disabled' }}>

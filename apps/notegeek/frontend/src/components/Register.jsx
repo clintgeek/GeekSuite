@@ -116,8 +116,8 @@ function Register() {
                             mb: 1,
                         }}
                     >
-                        <Box component="span" sx={{ color: 'brand.note' }}>note</Box>
-                        <Box component="span" sx={{ color: 'brand.geek' }}>geek</Box>
+                        <Box component="span" sx={{ color: 'text.primary' }}>note</Box>
+                        <Box component="span" sx={{ color: 'primary.main' }}>geek</Box>
                     </Typography>
                     <Typography
                         variant="body2"

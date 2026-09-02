@@ -223,7 +223,7 @@ function NoteViewer() {
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                                 <Typography
                                     variant="caption"
-                                    sx={{ color: 'text.disabled', display: 'flex', alignItems: 'center', gap: 0.5 }}
+                                    sx={{ color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 0.5 }}
                                 >
                                     <AccessTimeIcon sx={{ fontSize: 12 }} />
                                     {formatDate(noteToView.updatedAt || noteToView.createdAt)}
