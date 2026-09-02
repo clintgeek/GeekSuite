@@ -10,7 +10,7 @@ import logger from './lib/logger.js';
 // Import routes
 import authRoutes from './routes/authRoutes.js';
 import { authenticate } from './middleware/authMiddleware.js';
-import { meHandler } from '@geeksuite/user/server';
+import { csrfGuard, meHandler } from '@geeksuite/user/server';
 
 // Get the directory name (this file lives in backend/src, so the frontend
 // build output ends up one level up, at backend/public).
@@ -41,6 +41,19 @@ export function createApp() {
   const allowedOrigins = process.env.CORS_ORIGINS
     ? process.env.CORS_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
     : hardcodedOrigins;
+
+  // CSRF: origin-check every cookie-authenticated mutation against the same
+  // `allowedOrigins` the cors() config below uses — one list, no second copy.
+  //
+  // Mounted *before* cors() on purpose. This cors() config answers a
+  // disallowed Origin with `callback(new Error(...))`, which express turns
+  // into a generic 500 — so a CSRF attempt would otherwise look like an
+  // application bug, and would stop being blocked at all the moment someone
+  // "tidied" that callback into the equally idiomatic `callback(null, false)`
+  // (which lets the request through without the CORS header). Running first
+  // makes the rejection a deliberate, tested 403 that does not depend on how
+  // cors() reports a mismatch. See DOCS/SSO_OVERVIEW.md#csrf.
+  app.use(csrfGuard({ allowedOrigins, logger, appName: 'bujogeek' }));
 
   app.use(cors({
     origin: function (origin, callback) {
