@@ -103,6 +103,36 @@ jobs:
         working-directory: apps/bujogeek/frontend
         run: npx vitest run
 
+  test-backends:
+    name: backend auth tests (${{ matrix.app }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: bujogeek
+            dir: apps/bujogeek/backend
+          - app: fitnessgeek
+            dir: apps/fitnessgeek/backend
+          - app: flockgeek
+            dir: apps/flockgeek/backend
+          - app: storygeek
+            dir: apps/storygeek/backend
+          - app: notegeek
+            dir: apps/notegeek/backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Test ${{ matrix.app }} backend
+        working-directory: ${{ matrix.dir }}
+        run: pnpm test
+
   lint:
     name: eslint
     runs-on: ubuntu-latest
