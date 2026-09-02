@@ -10,6 +10,7 @@ import { jest, afterAll } from '@jest/globals';
 
 process.env.NODE_ENV = 'test';
 process.env.BASEGEEK_URL = 'https://basegeek.invalid';
+process.env.LOG_LEVEL = 'silent';
 
 // Fail loudly instead of silently swallowing unhandled rejections during
 // tests, but don't crash the process (jest handles reporting).
