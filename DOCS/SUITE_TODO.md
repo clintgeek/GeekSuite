@@ -75,8 +75,10 @@ StoryGeek SSO alignment + Settings page fix + AuthProvider refactor. Pending mer
 
 - `packages/ui` navigation primitives finished and all seven MUI apps migrated to one shell grammar:
   permanent 220px sidebar on desktop / same sidebar as a temporary drawer on mobile, brand block
-  in the sidebar, footer user chip → Settings → Sign out, 60px top bar with route title and the
-  theme → switcher → account cluster. bookgeek gets its first mobile layout; basegeek loses the
+  in the sidebar, 60px top bar with route title and the theme → switcher → account cluster.
+  **Revised the same evening:** sidebar footers removed everywhere — the header avatar menu is the
+  single account entry (Settings, Sign out, Account where it exists); bookgeek's filters float
+  under its shelves. bookgeek gets its first mobile layout; basegeek loses the
   collapsible rail; flockgeek and bujogeek gain Settings pages; duplicate logouts removed from
   bottom bars. 247 packages/ui tests.
 - **Follow-ups:** visual pass of every app in both modes and at phone width; storygeek's

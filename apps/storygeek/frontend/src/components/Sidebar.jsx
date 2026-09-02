@@ -12,10 +12,8 @@
  */
 import { Box, Typography, alpha, useTheme } from '@mui/material';
 import AutoStoriesIcon from '@mui/icons-material/AutoStories';
-import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
+import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { GeekSidebar, useGeekShell } from '@geeksuite/ui';
-import { useAuth } from '@geeksuite/auth';
-import { displayNameFrom, initialsFrom, secondaryFrom } from '../utils/userDisplay';
 import { activeNavId, navSectionsFor } from './navConfig';
 
 /**
@@ -82,33 +80,14 @@ function Brand({ gold }) {
 function Sidebar() {
   const theme = useTheme();
   const location = useLocation();
-  const navigate = useNavigate();
-  const { user, isAuthenticated, logout } = useAuth();
   const gold = theme.palette.codex?.gold || '#c9a84c';
 
-  const handleSignOut = () => {
-    logout();
-    navigate('/login');
-  };
 
   return (
     <GeekSidebar
       brand={<Brand gold={gold} />}
       sections={navSectionsFor(location.pathname)}
       activeId={activeNavId(location.pathname)}
-      footer={{
-        user: isAuthenticated
-          ? {
-              name: displayNameFrom(user),
-              secondary: secondaryFrom(user),
-              initials: initialsFrom(user),
-            }
-          : undefined,
-        settings: { to: '/settings' },
-        onSignOut: isAuthenticated ? handleSignOut : undefined,
-        // The old avatar menu called it "Depart". It still does.
-        signOutLabel: 'Depart',
-      }}
       sx={{
         bgcolor: 'background.paper',
         // The primitive has no per-section label hook, so reach the section
@@ -122,15 +101,6 @@ function Sidebar() {
       // the way the footer band already pins itself.
       chromeSx={{ flexShrink: 0 }}
       brandSx={{ borderBottom: `1px solid ${alpha(gold, 0.15)}` }}
-      footerSx={{
-        borderTop: `1px solid ${alpha(gold, 0.15)}`,
-        '& .MuiAvatar-root': {
-          bgcolor: alpha(gold, 0.15),
-          color: gold,
-          fontFamily: '"Cinzel", serif',
-          fontWeight: 700,
-        },
-      }}
       itemSx={{
         mb: 0.5,
         py: 1.25,

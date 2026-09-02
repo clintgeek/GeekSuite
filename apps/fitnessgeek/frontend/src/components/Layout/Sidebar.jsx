@@ -11,11 +11,9 @@
  * plumbing here.
  */
 import { Box, Typography } from '@mui/material';
-import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '@geeksuite/auth';
+import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { GeekSidebar, geekLayout } from '@geeksuite/ui';
 import { activeNavId, navSections } from './navConfig.jsx';
-import { displayNameFrom, initialsFrom, secondaryFrom } from './userDisplay.js';
 
 const INK = '#F5F5F4';
 const MUTED = '#A8A29E';
@@ -61,31 +59,15 @@ const Brand = () => (
 
 const Sidebar = () => {
   const location = useLocation();
-  const navigate = useNavigate();
-  const { user, logout } = useAuth();
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
 
   return (
     <GeekSidebar
       brand={<Brand />}
       sections={navSections}
       activeId={activeNavId(location.pathname)}
-      footer={{
-        user: {
-          name: displayNameFrom(user),
-          secondary: secondaryFrom(user),
-          initials: initialsFrom(user),
-        },
-        settings: { to: '/settings' },
-        onSignOut: handleLogout,
-      }}
       sx={{ bgcolor: CHROME_BG }}
       chromeSx={{ flexShrink: 0 }}
-      footerSx={{ borderTopColor: 'rgba(255, 255, 255, 0.06)' }}
       itemSx={{
         color: MUTED,
         transition: 'background-color 0.15s ease, color 0.15s ease',

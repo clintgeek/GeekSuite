@@ -188,7 +188,7 @@ One grammar, decided 2026-09-02 (TODO_ORDER #15a). Identity — fonts, colors, a
 sidebar chrome, density — stays the app's business. Structure does not.
 
 **Desktop (`md`+):** permanent 220px sidebar (`geekLayout.sidebarWidth`), no collapse rail.
-Brand block at top (60px), grouped nav, footer in fixed order **user chip → Settings → Sign out**.
+Brand block at top (60px), grouped nav, **no footer**: account actions (Account where it exists, Settings, Sign out) live in the top bar's avatar menu. Decided 2026-09-02 evening after the footers shipped and duplicated the header menu; `GeekSidebar`'s `footer` prop remains supported but no app uses it.
 **Top bar (60px, `geekLayout.topBarHeight`):** page title/context on the left; right cluster in
 fixed order **theme toggle → app switcher → account avatar menu**. Brand does not live here.
 **Mobile (below `md` — the suite's one breakpoint, `geekLayout.navBreakpoint`):** a hamburger in
@@ -252,8 +252,7 @@ All four are opt-in; the legacy `GeekShell sidebar`/`topBar` slots keep working 
 2. Delete hardcoded `220` / `280` / `68` / `60` / `pb: 88px` literals — use `geekLayout` tokens.
    No collapse rail, one breakpoint (`md`), 220px on mobile and desktop alike.
 3. Move brand out of the top bar into `GeekSidebar brand`; give the top bar a real `title`.
-4. Move user / Settings / Sign out out of nav lists and mid-list rows into `footer` (sidebar) and
-   `account` (top bar). Both surfaces, fixed order, everywhere.
+4. Move user / Settings / Sign out out of nav lists and mid-list rows into the top bar `account` menu only (no sidebar footer). One surface, fixed order, everywhere.
 5. Pass `themeMode` / `onThemeToggle` / `currentApp` to `GeekTopBar` rather than mounting
    `GeekThemeToggle` / `GeekAppSwitcher` by hand in a sidebar.
 6. Data-entry apps only: replace the bespoke tab bar with `GeekBottomNav` and drop its Logout

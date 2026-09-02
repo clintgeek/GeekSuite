@@ -12,9 +12,7 @@
 import { Box, Typography, alpha, useTheme } from "@mui/material";
 import { Link as RouterLink, useLocation } from "react-router-dom";
 import { GeekSidebar, geekLayout } from "@geeksuite/ui";
-import { useAuth } from "../contexts/AuthContext";
 import { APP_NAME } from "../utils/constants";
-import { displayNameFrom, initialsFrom, secondaryFrom } from "../utils/userDisplay";
 import { activeNavId, navSections } from "./navConfig";
 
 /**
@@ -73,7 +71,6 @@ const Brand = () => (
 const Sidebar = () => {
   const theme = useTheme();
   const location = useLocation();
-  const { user, isAuthenticated, logout } = useAuth();
   const accent = theme.palette.primary.main;
 
   return (
@@ -81,17 +78,6 @@ const Sidebar = () => {
       brand={<Brand />}
       sections={navSections}
       activeId={activeNavId(location.pathname)}
-      footer={{
-        user: isAuthenticated
-          ? {
-              name: displayNameFrom(user),
-              secondary: secondaryFrom(user),
-              initials: initialsFrom(user)
-            }
-          : undefined,
-        settings: { to: "/settings" },
-        onSignOut: isAuthenticated ? logout : undefined
-      }}
       sx={{ bgcolor: "background.sidebar" }}
       itemSx={{
         mb: 0.25,

@@ -15,8 +15,6 @@ import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { Bell, BellOff } from 'lucide-react';
 import { GeekSidebar } from '@geeksuite/ui';
 import usePushReminders from '../../hooks/usePushReminders';
-import { useAuth } from '../../context/AuthContext';
-import { displayNameFrom, initialsFrom, secondaryFrom } from '../../utils/userDisplay';
 import { colors } from '../../theme/colors';
 import { navSections, activeNavId } from './navConfig';
 
@@ -155,7 +153,6 @@ const Brand = () => (
 
 const Sidebar = () => {
   const location = useLocation();
-  const { user, isAuthenticated, logout } = useAuth();
   // `GeekSidebar` has no router of its own — on the settings route (which has
   // no nav row) pass its default settings id explicitly so the footer
   // Settings row highlights, per the primitive's own contract.
@@ -177,17 +174,6 @@ const Sidebar = () => {
       sections={sections}
       activeId={currentId}
       extras={<RemindersToggle />}
-      footer={{
-        user: isAuthenticated
-          ? {
-              name: displayNameFrom(user),
-              secondary: secondaryFrom(user),
-              initials: initialsFrom(user),
-            }
-          : undefined,
-        settings: { to: '/settings' },
-        onSignOut: isAuthenticated ? logout : undefined,
-      }}
       sx={{
         bgcolor: chrome.bg,
         // `component="section"` wraps only nav groups, not the footer band, so
@@ -201,7 +187,6 @@ const Sidebar = () => {
         },
       }}
       brandSx={{ height: 56, minHeight: 56, px: 2.25, borderBottom: `1px solid ${chrome.border}` }}
-      footerSx={{ borderTop: `1px solid ${chrome.divider}` }}
       itemSx={{
         mb:           0.125,
         px:           1.75,

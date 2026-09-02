@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import {
     List,
     ListItemButton,
@@ -24,13 +24,11 @@ import AllNotesIcon from '@mui/icons-material/AutoStoriesOutlined';
 import MoreIcon from '@mui/icons-material/MoreHoriz';
 import { GeekSidebar, geekLayout, useGeekShell } from '@geeksuite/ui';
 import useTagStore from '../store/tagStore';
-import useAuthStore from '../store/authStore';
 import useNoteStore from '../store/noteStore';
 import TagContextMenu from './TagContextMenu';
 import { gql, useQuery } from '@apollo/client';
 import { glow } from '../theme/tokens';
 import { NEW_NOTE_ITEM, navSections, activeNavId } from './navConfig';
-import { displayNameFrom, initialsFrom, secondaryFrom } from '../utils/userDisplay';
 
 const GET_TAGS = gql`
   query GetNoteTags {
@@ -255,13 +253,9 @@ function Brand() {
 
 function Sidebar() {
     const location = useLocation();
-    const navigate = useNavigate();
     const theme = useTheme();
     const isDark = theme.palette.mode === 'dark';
     const { closeNav } = useGeekShell();
-    const { clearTags } = useTagStore();
-    const { user, logout } = useAuthStore();
-    const { clearNotes } = useNoteStore();
     const [tagFilter, setTagFilter] = useState('');
     const [contextMenu, setContextMenu] = useState(null);
     const [selectedTag, setSelectedTag] = useState(null);
@@ -272,12 +266,6 @@ function Sidebar() {
     const tags = data?.noteTags || [];
     const tagsError = error?.message;
 
-    const handleLogout = () => {
-        logout();
-        clearNotes();
-        clearTags();
-        navigate('/login?signedOut=1');
-    };
 
     // Single context menu handler for all tag rows
     const handleTagMenu = useCallback((anchorEl, tagPath) => {
@@ -473,15 +461,6 @@ function Sidebar() {
                 sections={[{ items: [NEW_NOTE_ITEM, ...navSections[0].items] }]}
                 activeId={activeId}
                 extras={collectionsExtras}
-                footer={{
-                    user: {
-                        name: displayNameFrom(user),
-                        secondary: secondaryFrom(user),
-                        initials: initialsFrom(user),
-                    },
-                    settings: { to: '/settings' },
-                    onSignOut: handleLogout,
-                }}
                 itemSx={{
                     color: 'text.secondary',
                     '& .MuiListItemText-primary': { fontSize: '0.8125rem' },

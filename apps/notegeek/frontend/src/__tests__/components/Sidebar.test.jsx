@@ -96,19 +96,12 @@ describe('Sidebar', () => {
         expect(screen.queryByText('personal')).not.toBeInTheDocument();
     });
 
-    it('handles logout flow properly', async () => {
-        const authStore = useAuthStore.getState();
-        const noteStore = useNoteStore.getState();
-
+    it('does not render account actions (they live in the header avatar menu)', () => {
         render(<Sidebar closeNavbar={vi.fn()} />, { wrapper: SidebarTestWrapper });
 
-        const logoutBtn = screen.getByText('Sign out');
-        fireEvent.click(logoutBtn);
-
-        expect(authStore.logout).toHaveBeenCalled();
-        expect(noteStore.clearNotes).toHaveBeenCalled();
-
-        // Navigation should be to /login
-        expect(screen.getByTestId('login-page')).toBeInTheDocument();
+        // Shell grammar (2026-09-02): the sidebar has no footer; Settings and
+        // Sign out are only in the top bar's account menu.
+        expect(screen.queryByText('Sign out')).toBeNull();
+        expect(screen.queryByText('Settings')).toBeNull();
     });
 });

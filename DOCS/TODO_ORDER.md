@@ -57,7 +57,7 @@ cycle so the ordering rationale stays visible; detail moved to `SUITE_TODO.md` "
 ## Tier 3 — Consolidation sweeps (L each; run like the 2026-09-02 sweep: per-app commits, incremental deploys)
 
 15a. ~~Shell grammar pass~~ — **Done 2026-09-02** (commits d2b4787..6e9b14e). `GeekShell` nav mode,
-    `GeekSidebar` content panel (brand → grouped nav → extras → footer chip/Settings/Sign out),
+    `GeekSidebar` content panel (brand → grouped nav → extras; footer removed same evening),
     `GeekTopBar` (hamburger below md, title slot, theme → switcher → account menu), `GeekBottomNav`.
     All seven MUI apps migrated: flockgeek (proof), storygeek, bookgeek (first mobile layout),
     fitnessgeek, notegeek, bujogeek, basegeek (rail removed). New Settings pages in flockgeek and

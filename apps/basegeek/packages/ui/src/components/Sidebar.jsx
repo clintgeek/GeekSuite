@@ -13,8 +13,6 @@
 import { Box, Typography, alpha, useTheme } from '@mui/material';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { GeekSidebar, useGeekShell } from '@geeksuite/ui';
-import { useBaseGeekAuth } from './AuthContext';
-import { displayNameFrom, initialsFrom, secondaryFrom } from '../utils/userDisplay';
 import { activeNavId, navSections } from './navConfig';
 
 /**
@@ -100,36 +98,16 @@ function Brand() {
 
 export default function Sidebar() {
   const location = useLocation();
-  const { user, isAuthenticated, logout } = useBaseGeekAuth();
 
   return (
     <GeekSidebar
       brand={<Brand />}
       sections={navSections}
       activeId={activeNavId(location.pathname)}
-      footer={{
-        // The chip is the primitive's read-only identity block; Account is
-        // reached from the top bar account menu (see TopBar.jsx and the
-        // primitive gap noted there).
-        user: isAuthenticated
-          ? {
-              name: displayNameFrom(user),
-              secondary: secondaryFrom(user),
-              initials: initialsFrom(user),
-            }
-          : undefined,
-        settings: { to: '/settings' },
-        onSignOut: isAuthenticated ? logout : undefined,
-      }}
       // Hairline under the brand band, where the old bespoke Divider used to be.
       brandSx={{ borderBottom: (theme) => `1px solid ${theme.palette.divider}` }}
       // Sign out keeps its coral-tinted hover from the bespoke layout; every
       // other row shares `itemSx`, so this is scoped by the primitive's hook.
-      footerSx={{
-        '& [data-geek-nav-footer="signout"]:hover': {
-          backgroundColor: (theme) => alpha(theme.palette.error.main, 0.08),
-        },
-      }}
       itemSx={{
         // The app theme's MuiListItemButton override adds `margin: 2px 8px`,
         // which would double up on the primitive's own `List` inset.
