@@ -7,6 +7,13 @@
   "exports": {
     ".": "./src/index.js"
   },
+  "scripts": {
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@geeksuite/eslint-config": "workspace:*",
+    "eslint": "^9.39.2"
+  },
   "peerDependencies": {
     "react": "^18.0.0",
     "@mui/material": "^5.0.0"

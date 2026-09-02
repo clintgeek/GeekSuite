@@ -8,6 +8,13 @@
     "./server": "./src/server/index.js",
     "./vite": "./src/vitePlugin.js"
   },
+  "scripts": {
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@geeksuite/eslint-config": "workspace:*",
+    "eslint": "^9.39.2"
+  },
   "peerDependencies": {
     "react": ">=18",
     "axios": ">=1",

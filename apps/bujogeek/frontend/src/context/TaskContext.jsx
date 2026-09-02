@@ -252,7 +252,7 @@ const TaskProvider = ({ children }) => {
       let responseData = [];
 
       switch (viewType) {
-        case 'daily':
+        case 'daily': {
           const dateStr = format(date || new Date(), 'yyyy-MM-dd');
           const dRes = await apolloClient.query({
             query: GET_DAILY_TASKS,
@@ -261,7 +261,8 @@ const TaskProvider = ({ children }) => {
           });
           responseData = dRes.data?.dailyTasks || [];
           break;
-        case 'weekly':
+        }
+        case 'weekly': {
           const startDate = startOfWeek(date || new Date());
           const wRes = await apolloClient.query({
             query: GET_WEEKLY_TASKS,
@@ -270,7 +271,8 @@ const TaskProvider = ({ children }) => {
           });
           responseData = wRes.data?.weeklyTasks || [];
           break;
-        case 'monthly':
+        }
+        case 'monthly': {
           const monthStart = startOfMonth(date || new Date());
           const monthEnd = endOfMonth(date || new Date());
           const mRes = await apolloClient.query({
@@ -283,14 +285,16 @@ const TaskProvider = ({ children }) => {
           });
           responseData = mRes.data?.monthlyTasks || [];
           break;
+        }
         case 'year':
-        default:
+        default: {
           const aRes = await apolloClient.query({
             query: GET_ALL_TASKS,
             fetchPolicy: 'no-cache'
           });
           responseData = aRes.data?.allTasks || [];
           break;
+        }
       }
 
       setTasks(responseData);
