@@ -3,15 +3,18 @@
 > **Author**: Sage  
 > **Date**: February 2026  
 > **Status**: Reference — auth hardening (Steps 0–3 for basegeek) completed April 2026.
-> Consumer-app migration (Step 4) in progress. CSRF + HttpOnly rollout deferred (see `DOCS/DEFERRED_WORK.md`).
+> Consumer-app migration (Step 4) in progress. HttpOnly rollout completed April 2026.
 > Cross-tab logout BroadcastChannel standardized September 2026 — see
 > [BroadcastChannel — Standardized](#broadcastchannel--standardized-september-2026).
+> CSRF origin guard added September 2026 (branch `csrf-protection`, pending review) — see
+> [CSRF](#csrf).
 > Per-app sections below remain the February 2026 snapshot except where annotated.
 
 ---
 
 ## Table of Contents
 
+0. [CSRF](#csrf) — the origin guard, its escape hatch, and what it does not cover
 1. [Phase 1: Current Auth Implementation Inventory](#phase-1-current-auth-implementation-inventory)
 2. [Phase 2: Risks & Problems](#phase-2-risks--problems)
 3. [Phase 3: GeekSuite Auth Standard](#phase-3-geeksuite-auth-standard)
@@ -291,6 +294,182 @@ object of the same name — *including* other objects in the sending tab — so 
 drop messages whose `sender` matches their own tab. Messages without a `sender` are still
 honoured, so an older build broadcasting `{ type: 'LOGOUT' }` still logs other tabs out.
 Both send and subscribe are guarded for environments with no `BroadcastChannel`.
+
+---
+
+## CSRF
+
+> Added September 2026 on branch `csrf-protection` (TODO_ORDER #12). **Pending review.**
+
+### The exposure
+
+Every app authenticates with the SSO cookies basegeek sets on `.clintgeek.com`
+(`geek_token`, `geek_refresh_token`), and every backend runs
+`cors({ credentials: true })`. So the browser attaches the caller's session to any
+request aimed at any suite backend — including a request some other page caused. Two
+distinct cases:
+
+1. **Third-party CSRF.** A page on `evil.example` causes a mutation against
+   `fitnessgeek.clintgeek.com/api/...` and the browser sends the victim's cookies.
+2. **Sibling-subdomain CSRF.** A compromised or XSS'd `*.clintgeek.com` app issues
+   mutations against another app's API. `SameSite` does **not** help here: subdomains of
+   the same registrable domain are *same-site*.
+
+### Cookie attributes (verified, unchanged in this pass)
+
+`apps/basegeek/packages/api/src/routes/auth.js` sets **both** auth cookies with
+`HttpOnly`, `Secure` (in production), **`SameSite=Lax`**, `Domain=.clintgeek.com`. Nothing
+in the suite sets `SameSite=None` — fitnessgeek's Set-Cookie rewriter only ever
+*downgrades* `None` → `Lax` on non-HTTPS. So no cookie attribute was changed here, and
+`Strict` was deliberately **not** adopted: it would break the SSO navigation flow, where a
+top-level redirect back from basegeek must arrive with the session cookie already
+readable.
+
+`Lax` already stops case 1 for cross-site *subresource* POSTs. That is a coincidence of a
+cookie attribute we could change in one line, not a control — hence the guard below.
+
+### The guard
+
+`csrfGuard()` — `packages/user/src/server/csrfGuard.js`, exported from
+`@geeksuite/user/server` (and `@geeksuite/user/server/csrfGuard` for callers that mock the
+barrel). For an **unsafe method** (POST/PUT/PATCH/DELETE) on a request that **actually
+carries an auth cookie**:
+
+1. Read `Origin`; if absent, fall back to the origin of `Referer`.
+2. On the app's allow-list → pass.
+3. Present and not on the list → **403 `{ error: 'csrf_origin_rejected' }`**, logged at
+   `warn` with the offending origin, method and path.
+4. Neither header present → pass, logged at `debug`.
+
+Both headers are browser-set and cannot be forged by page JavaScript, which is what makes
+step 3 mean anything.
+
+Deliberate passes:
+
+- **Safe methods** (GET/HEAD/OPTIONS/TRACE) — never guarded.
+- **No auth cookie** — nothing for a third-party page to ride on.
+- **`Authorization: Bearer` with no cookie** — not a CSRF vector at all. A cross-site page
+  cannot make the browser attach a custom header (it forces a preflight, which CORS then
+  refuses), so guarding these would only break API and server-to-server clients.
+- **Origin-less clients** — see below.
+- **An empty allow-list** — runs inert with an `error` log rather than 403-ing every
+  mutation. A misconfigured `CORS_ORIGINS` must not be an outage.
+
+Rejected: a literal **`Origin: null`** (an opaque origin — sandboxed iframe, `data:`/
+`blob:` document, some cross-site redirect chains) and an `Origin` that is not a URL. A
+garbage **`Referer`** with no `Origin`, by contrast, is treated as no evidence and passes
+with a `warn` — proxies and privacy tooling rewrite `Referer` routinely.
+
+### Why Origin-less requests pass
+
+`Origin` and `Referer` are browser constructs. Things that legitimately send neither:
+`curl`, server-to-server calls, container healthchecks, supertest, and the in-app
+`/graphql` reverse proxies (fitnessgeek's forwards `cookie` and `authorization`, not
+`Origin`). Rejecting them would break the suite's own plumbing while stopping no attack —
+the attack this guard exists to stop is *by definition* mounted from a browser page, and a
+browser always sends at least one of the two on a cross-origin mutation. A client that can
+omit `Origin` entirely can already set `Authorization` directly and does not need the
+victim's cookie.
+
+### Why it is mounted *before* `cors()`
+
+Six of the seven backends hand `cors()` an origin **callback** that answers a mismatch
+with `callback(new Error(...))`. Express renders that as a generic **500**, so a CSRF
+attempt already looked like an application bug — and would stop being blocked at all the
+moment someone refactored that callback into the equally idiomatic
+`callback(null, false)`, which lets the request through without the CORS header. Running
+the guard first makes the rejection a deliberate, tested 403 that does not depend on how
+`cors()` reports a mismatch.
+
+flockgeek is the exception that proves the need: it hands `cors()` a **plain array**, and
+the cors package's array form does not reject — it omits `Access-Control-Allow-Origin` and
+calls `next()`. The mutation ran and committed; only the *response* was withheld from the
+attacker's page. Until this pass, flockgeek's only CSRF defense was `SameSite=Lax`.
+
+### Mount points and allow-list sources
+
+Every app derives the guard's allow-list from the **same** value its `cors()` config uses.
+A guard whose list can drift from the CORS list is worse than no guard.
+
+| App | Mount | Allow-list source |
+|-----|-------|-------------------|
+| basegeek | `apps/basegeek/packages/api/src/server.js:105` | `src/lib/corsOrigins.js` (extracted from server.js) |
+| bujogeek | `apps/bujogeek/backend/src/app.js:56` | `allowedOrigins` in `createApp()` |
+| fitnessgeek | `apps/fitnessgeek/backend/src/app.js:81` | `allowedOrigins` in `app.js` (`CORS_ORIGINS` in prod) |
+| flockgeek | `apps/flockgeek/backend/src/server.js:43` | `src/config/corsOrigins.js` (extracted; `CORS_ORIGIN`) |
+| notegeek | `apps/notegeek/backend/server.js:86` | `config/corsOrigins.js` (extracted) |
+| storygeek | `apps/storygeek/backend/src/app.js:57` | `allowedOrigins` in `app.js` |
+| bookgeek | `apps/bookgeek/api/src/server.js:54` | `src/corsOrigins.js` — a **predicate** (`*.clintgeek.com`) |
+
+**Exemptions: none, anywhere.** Everything that looked like it needed one does not:
+
+- Health endpoints are GETs.
+- basegeek's `/openai/v1` proxy authenticates with an API key and sends no cookie.
+- bookgeek's server-rendered `/kindle` and `/download-basket` form POSTs authenticate with
+  their own PIN / basket-word cookies, not `geek_token`; driven from a logged-in desktop
+  browser they post same-origin and are allow-listed anyway.
+- There are no webhook routes in the suite.
+
+basegeek's mount is the important one: this process owns the unified GraphQL API, so a
+GraphQL mutation over POST is the highest-value CSRF target in GeekSuite. The guard is
+mounted before every route, which puts it in front of `/graphql`.
+
+### Frontends: nothing changed
+
+Browsers set `Origin` themselves on cross-origin fetch **and** on same-origin non-GET
+fetch/XHR, so no client code needed touching. Verified: no frontend sets an `Origin`
+header; all use `withCredentials: true` / `credentials: 'include'`; every app's
+`VITE_API_URL` points at its own origin (or is relative `/api`), so auth POSTs are
+same-origin; storygeek is the one app whose GraphQL client talks to
+`https://basegeek.clintgeek.com/graphql` cross-origin, and that origin is on basegeek's
+list.
+
+One trap for later: `axios`/`fetch` use request mode `cors`, which is why a same-origin
+POST still carries a real `Origin` even under helmet's default
+`Referrer-Policy: no-referrer` (storygeek, flockgeek, notegeek set it). A plain HTML
+`<form method="post">` or a `fetch(..., { mode: 'same-origin' })` in one of those three
+apps would get `Origin: null` instead, and the guard would reject it. Neither pattern
+exists today.
+
+### Escape hatch
+
+| `CSRF_GUARD` | Behavior |
+|--------------|----------|
+| unset / anything unrecognized | **enforce** (fails safe, not open) |
+| `report` \| `report-only` \| `dry-run` | log at `warn` what it *would* have rejected, allow the request |
+| `off` \| `false` \| `0` \| `no` \| `disabled` | complete no-op, with a `warn` at boot |
+
+Read once when the middleware is built and announced in the boot log, so recovering a bad
+deploy is a **restart with an env var, not a rebuild**. `report` exists so the guard can
+be soaked in production before it blocks anything.
+
+### What this does NOT cover
+
+An origin allow-list cannot tell "your app's real page" from "your app's page running
+attacker JavaScript". So:
+
+- **Case 1 (third-party CSRF): closed** everywhere.
+- **Case 2 (sibling subdomain): closed against the six consumer backends** — each allows
+  only its own origin, so an XSS'd storygeek cannot mutate fitnessgeek's data.
+- **Case 2 against basegeek: still open.** basegeek's allow-list has to contain every app
+  origin, because every app's frontend calls its GraphQL API. An XSS'd sibling can
+  therefore still reach basegeek's mutations with the victim's cookies. bookgeek is
+  similarly wide by construction (its rule is any `*.clintgeek.com` host).
+
+Closing that last case needs a per-app double-submit token (a non-HttpOnly cookie echoed
+in a header, checked server-side), which is a larger change to `@geeksuite/auth` and every
+frontend. It is the right follow-up, not part of this pass.
+
+### Tests
+
+- `packages/user/src/server/__tests__/csrfGuard.test.js` — 68 unit tests, every branch,
+  node's built-in runner, no new dependencies (`pnpm --filter @geeksuite/user test`).
+- Per-backend integration cases live in each app's existing auth suite (basegeek and
+  bookgeek get their own `csrfGuard.test.js`, since neither app's server module can be
+  imported without booting it). Every one covers: allow-listed Origin passes, foreign
+  Origin → 403, foreign `Referer`-only → 403, no `Origin`/`Referer` → passes, GET not
+  blocked. flockgeek's and notegeek's assert the **data** (nothing created, nothing
+  deleted) rather than just the status code.
 
 ---
 

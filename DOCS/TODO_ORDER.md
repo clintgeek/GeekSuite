@@ -46,9 +46,14 @@ cycle so the ordering rationale stays visible; detail moved to `SUITE_TODO.md` "
 11. ~~basegeek light mode on `createGeekSuiteTheme`~~ — **Done 2026-09-02.** Follow-up in SUITE_TODO: basegeek never calls `configure()`, so preferences don't persist from there. Was: — M. Last MUI app off the factory; the
     suite's Theme control finally applies to the app that hosts it. Do after #2 so the new
     palette is verified as it's built. Includes the Account-page `'dark'` default bug. *UI*
-12. **CSRF protection** — M. Double-submit token or `SameSite=Strict` refresh cookie + middleware
-    in basegeek + per-app axios interceptor. Own branch, per-app verification. The largest
-    open security exposure. *Security*
+12. **CSRF protection** — 🟡 **Pending review** on branch `csrf-protection` (2026-09-02; not
+    merged, not deployed). Shared `csrfGuard()` origin check in `packages/user`, mounted ahead
+    of `cors()` in all seven backends including basegeek's `/graphql`; `CSRF_GUARD=off|report`
+    escape hatch; no cookie attributes changed (both were already `SameSite=Lax`; `Strict` was
+    rejected — it breaks SSO navigation). No frontend change was needed, so the per-app axios
+    interceptor in the original plan is not part of it. See
+    [`DOCS/SSO_OVERVIEW.md#csrf`](SSO_OVERVIEW.md#csrf). Residual: sibling-subdomain CSRF
+    against basegeek needs a double-submit token — tracked in SUITE_TODO. *Security*
 13. ~~Per-app auth test suites~~ — **Done 2026-09-02** (5 apps, all in CI; found + fixed a storygeek characters/export IDOR and a notegeek bcrypt crash). Was: — M (S per app). bujogeek, fitnessgeek, flockgeek, storygeek,
     notegeek have zero. Login flow, `/api/users/me`, data scoping. Gates #12 safely. *Tests*
 14. ~~Admin gate on `GET /api/users`~~ — **Done 2026-09-02.** Follow-up added to SUITE_TODO:
@@ -122,9 +127,10 @@ cycle so the ordering rationale stays visible; detail moved to `SUITE_TODO.md` "
 ## Suggested next passes
 
 - **Pass A (Tier 1) and Pass B (Tier 2 minus CSRF) — done 2026-09-02.**
-- **Pass C:** #12 CSRF on its own branch, verified per app against the five new auth suites,
-  reviewed before merge. Then the basegeek follow-ups from SUITE_TODO (app registry auth, DB
-  browser gates, `configure()` wiring) since they're the same code area.
+- **Pass C:** #12 CSRF — built on branch `csrf-protection`, verified per app against the five
+  auth suites, **awaiting Chef's review before merge**. Then the basegeek follow-ups from
+  SUITE_TODO (app registry auth, DB browser gates, `configure()` wiring) since they're the same
+  code area.
 - **Pass D:** #15a shell grammar pass (primitives first, then flockgeek as proof, then the rest).
 - **Pass E:** #15 primitives sweep (EmptyState / ErrorState / toast) with #19 batched in.
 
