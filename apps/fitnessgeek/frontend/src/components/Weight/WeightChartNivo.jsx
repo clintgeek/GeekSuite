@@ -27,6 +27,7 @@ const WeightChartNivo = ({ data, goalLine, startWeight, targetWeight, startDate,
         .map(item => {
           try {
             const isValidWeight = !isNaN(parseFloat(item.weight_value));
+            const isValidLogDate = !isNaN(new Date(item.log_date).getTime());
             if (!isValidLogDate || !isValidWeight) return null;
             return {
               date: goalLine && validStart && validGoal ?
