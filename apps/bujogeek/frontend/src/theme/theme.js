@@ -22,6 +22,23 @@ function buildBujoOverrides(mode) {
   const surface  = isDark ? darkColors : lightColors;
 
   return {
+    // Surface palette — warm bujogeek tokens instead of the suite's cold greys.
+    // Anything reading the palette (GeekShell canvas, TopBar, MobileTabBar,
+    // Drawer text, text.disabled) picks these up; the component overrides
+    // below only add texture/borders on top.
+    palette: {
+      background: {
+        default: surface.background.default,
+        paper:   surface.background.paper,
+      },
+      text: {
+        primary:   surface.text.primary,
+        secondary: surface.text.secondary,
+        disabled:  surface.text.disabled,
+      },
+      divider: surface.divider,
+    },
+
     // App-specific typography identity — Fraunces for editorial headers
     typography: {
       // Override just the font family; the scale comes from the shared system
@@ -114,8 +131,7 @@ function buildBujoOverrides(mode) {
             backgroundSize:   '200px 200px',
           },
           body: {
-            backgroundColor: surface.background.default,
-            color:           surface.text.primary,
+            // background/color come from palette.background.default / text.primary
             // Warm, thin scrollbar — analog feel
             scrollbarWidth: 'thin',
             '&::-webkit-scrollbar':       { width: '6px', height: '6px' },
@@ -192,11 +208,14 @@ function buildBujoOverrides(mode) {
       MuiDrawer: {
         styleOverrides: {
           paper: {
-            backgroundColor: isDark ? '#272420' : '#3B3632',
+            // Follows the mode so drawer content (palette text, Select/InputLabel)
+            // stays readable. The desktop/mobile Sidebar paints its own dark
+            // chrome and pins its Drawer paper explicitly in AppShell.
+            backgroundColor: isDark ? colors.dark[200] : colors.parchment.paper,
             borderRight: 'none',
             boxShadow: isDark
               ? `2px 0 20px ${colors.dark[0]}80`
-              : `2px 0 20px rgba(0,0,0,0.18)`,
+              : `2px 0 20px rgba(0,0,0,0.12)`,
           },
         },
       },
@@ -225,12 +244,6 @@ function buildBujoOverrides(mode) {
               '&.Mui-selected': { fontSize: '0.6875rem' },
             },
           },
-        },
-      },
-
-      MuiDivider: {
-        styleOverrides: {
-          root: { borderColor: surface.divider },
         },
       },
 

@@ -75,7 +75,7 @@ const MobileTabBar = () => {
                 flex: 1,
                 py: 1,
                 cursor: 'pointer',
-                color: active ? colors.primary[500] : theme.palette.text.disabled,
+                color: active ? colors.primary[500] : theme.palette.text.secondary,
                 transition: 'color 0.15s ease',
                 WebkitTapHighlightColor: 'transparent',
                 '&:active': {

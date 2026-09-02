@@ -9,6 +9,7 @@ import EmptyState from '../shared/EmptyState';
 import SkeletonLoader from '../shared/SkeletonLoader';
 import { getTaskAge } from '../../utils/taskAging';
 import { normalizeTasks } from '../../utils/normalizeTasks';
+import { lighten } from '@mui/material/styles';
 import { colors } from '../../theme/colors';
 
 /**
@@ -66,6 +67,8 @@ const BacklogList = () => {
 
   const captionInk = isDark ? 'rgba(255,255,255,0.32)' : colors.ink[300];
   const mutedInk = isDark ? 'rgba(255,255,255,0.5)' : colors.ink[400];
+  // Plum reads ~2.5:1 on dark paper; lift it as text
+  const staleInk = isDark ? lighten(colors.aging.stale, 0.35) : colors.aging.stale;
   const dottedRule = `1px dotted ${isDark ? 'rgba(255,255,255,0.14)' : colors.ink[200]}`;
 
   if (isLoading) {
@@ -115,7 +118,7 @@ const BacklogList = () => {
           >
             {backlogTasks.length} {backlogTasks.length === 1 ? 'task' : 'tasks'}
             {staleTasks.length > 0 && (
-              <Box component="span" sx={{ color: colors.aging.stale }}>
+              <Box component="span" sx={{ color: staleInk }}>
                 {' · '}
                 {staleTasks.length} stale
               </Box>
@@ -180,7 +183,7 @@ const BacklogList = () => {
                         fontFamily: '"Fraunces", serif',
                         fontStyle: 'italic',
                         fontSize: '0.75rem',
-                        color: colors.aging.stale,
+                        color: staleInk,
                         px: 2,
                         pb: 1.25,
                         ml: '44px',

@@ -18,7 +18,7 @@ import { Drawer, useMediaQuery } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { GeekShell, GeekAppFrame } from '@geeksuite/ui';
 import { useAuth } from '../../context/AuthContext';
-import Sidebar from './Sidebar';
+import Sidebar, { chrome } from './Sidebar';
 import TopBar from './TopBar';
 import MobileTabBar from './MobileTabBar';
 import { SIDEBAR_WIDTH, MOBILE_TAB_HEIGHT } from '../../utils/constants';
@@ -49,7 +49,9 @@ const AppShell = ({ children }) => {
           open={mobileDrawerOpen}
           onClose={() => setMobileDrawerOpen(false)}
           PaperProps={{
-            sx: { width: SIDEBAR_WIDTH },
+            // The Sidebar is intentionally dark chrome in both modes; the theme's
+            // Drawer paper now follows the mode, so pin this one explicitly.
+            sx: { width: SIDEBAR_WIDTH, backgroundColor: chrome.bg },
           }}
         >
           <Sidebar />

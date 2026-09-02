@@ -14,6 +14,7 @@ import EmptyState from '../shared/EmptyState';
 import SkeletonLoader from '../shared/SkeletonLoader';
 import TemplateApply from './TemplateApply';
 import TemplateEditor from './TemplateEditor';
+import { lighten } from '@mui/material/styles';
 import { colors } from '../../theme/colors';
 
 const TEMPLATE_TYPES = {
@@ -66,7 +67,7 @@ const TemplateList = () => {
   if (error) {
     return (
       <Box sx={{ py: 4, textAlign: 'center' }}>
-        <Typography sx={{ color: colors.aging.overdue, fontSize: '0.875rem' }}>
+        <Typography sx={{ color: isDark ? lighten(colors.aging.overdue, 0.35) : colors.aging.overdue, fontSize: '0.875rem' }}>
           Failed to load templates: {error}
         </Typography>
       </Box>

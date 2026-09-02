@@ -14,7 +14,7 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #FAFAF9;
+  /* background comes from index.html's per-mode :root preboot colors and the MUI theme */
 }
 
 /* Signifier styling - uses monospace font */

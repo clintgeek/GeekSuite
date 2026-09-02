@@ -302,7 +302,7 @@ const WeeklySpread = () => {
                           fontStyle: 'italic',
                           fontSize: { xs: '1.0625rem', sm: '1.25rem' },
                           fontWeight: today ? 500 : 400,
-                          color: today ? colors.primary[600] : primaryInk,
+                          color: today ? (isDark ? colors.primary[300] : colors.primary[600]) : primaryInk,
                           lineHeight: 1.1,
                           letterSpacing: '-0.005em',
                         }}

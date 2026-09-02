@@ -21,14 +21,14 @@ const navItems = [
 
 // Chrome palette — dark tobacco, warm and grounded
 // Consistent between light/dark app modes so the sidebar is always a dark anchor
-const chrome = {
+export const chrome = {
   bg:           '#252018',  // deeper tobacco — more luxurious than before
   bgHover:      '#2E2820',
   active:       '#1E1B14',  // sunken active state
   border:       'rgba(255, 245, 220, 0.07)',
   text:         'rgba(255, 245, 220, 0.85)',
   textMuted:    'rgba(255, 245, 220, 0.38)',
-  textDisabled: 'rgba(255, 245, 220, 0.2)',
+  textDisabled: 'rgba(255, 245, 220, 0.5)',
   accent:       colors.primary[400],
   accentBg:     'rgba(96, 152, 204, 0.1)',
   danger:       'rgba(184, 60, 52, 0.75)',

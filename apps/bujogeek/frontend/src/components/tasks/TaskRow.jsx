@@ -6,6 +6,7 @@ import { Pencil, Trash2, StickyNote, Repeat, Ban, RotateCcw } from 'lucide-react
 import { format, differenceInCalendarDays } from 'date-fns';
 import TaskCheckbox from './TaskCheckbox';
 import { getTaskAge, getAgingColor, getAgingLabel } from '../../utils/taskAging';
+import { lighten } from '@mui/material/styles';
 import { colors } from '../../theme/colors';
 
 const priorityDotColors = {
@@ -34,6 +35,8 @@ const TaskRow = ({
   const theme     = useTheme();
   const navigate  = useNavigate();
   const isDark    = theme.palette.mode === 'dark';
+  // Plum reads ~2.5:1 on dark paper; lift it when used as text/icon color
+  const staleInk  = isDark ? lighten(colors.aging.stale, 0.35) : colors.aging.stale;
   const isMobile  = useMediaQuery(theme.breakpoints.down('sm'));
   const [hovered, setHovered] = useState(false);
   const [tapped,  setTapped]  = useState(false);
@@ -246,7 +249,7 @@ const TaskRow = ({
                   display:    'inline-flex',
                   alignItems: 'center',
                   flexShrink: 0,
-                  color:      isDark ? `${colors.aging.stale}` : `${colors.aging.stale}`,
+                  color:      staleInk,
                   opacity:    0.7,
                 }}
               >
@@ -460,11 +463,11 @@ const TaskRow = ({
                   onClick={(e) => { e.stopPropagation(); onCancel(task); }}
                   sx={{
                     color:   isCancelled
-                               ? (isDark ? colors.aging.stale : colors.aging.stale)
+                               ? staleInk
                                : (isDark ? 'rgba(255,245,220,0.35)' : colors.ink[400]),
                     width:   28,
                     height:  28,
-                    '&:hover': { color: colors.aging.stale },
+                    '&:hover': { color: staleInk },
                   }}
                 >
                   {isCancelled ? <RotateCcw size={14} strokeWidth={1.75} /> : <Ban size={14} strokeWidth={1.75} />}

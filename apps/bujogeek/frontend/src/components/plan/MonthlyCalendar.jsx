@@ -334,7 +334,7 @@ const MonthlyCalendar = () => {
                         fontWeight: today ? 600 : inMonth ? 500 : 400,
                         lineHeight: 1,
                         color: today
-                          ? colors.primary[600]
+                          ? (isDark ? colors.primary[300] : colors.primary[600])
                           : inMonth
                           ? primaryInk
                           : (isDark ? 'rgba(255,255,255,0.2)' : colors.ink[300]),
