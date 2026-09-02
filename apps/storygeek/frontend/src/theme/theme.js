@@ -162,7 +162,7 @@ function buildStoryOverrides(mode) {
       },
       MuiButton: {
         styleOverrides: {
-          contained: {
+          containedPrimary: {
             background: isDark
               ? `linear-gradient(135deg, ${codex.gold} 0%, ${codex.goldDark} 100%)`
               : `linear-gradient(135deg, ${codex.burgundy} 0%, ${alpha(codex.burgundy, 0.85)} 100%)`,
@@ -173,7 +173,7 @@ function buildStoryOverrides(mode) {
                 : `linear-gradient(135deg, ${codex.burgundyLight} 0%, ${codex.burgundy} 100%)`,
             },
           },
-          outlined: {
+          outlinedPrimary: {
             borderColor: goldAlpha(0.35),
             color: isDark ? codex.gold : codex.burgundy,
             '&:hover': {
