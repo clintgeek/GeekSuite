@@ -104,7 +104,7 @@ export default function LoginPage() {
           </Typography>
           <Typography sx={{
             fontSize: '0.7rem',
-            color: '#52525a',
+            color: '#8a8690',
             fontFamily: '"Geist Mono", monospace',
             letterSpacing: '0.08em',
             textTransform: 'uppercase',
@@ -216,7 +216,7 @@ export default function LoginPage() {
           textAlign: 'center',
           mt: 3,
           fontSize: '0.7rem',
-          color: '#3a3a40',
+          color: '#71717a',
           fontFamily: '"Geist Mono", monospace',
         }}>
           GeekSuite — shared authentication

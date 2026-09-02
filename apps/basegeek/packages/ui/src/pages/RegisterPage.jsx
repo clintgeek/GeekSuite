@@ -76,7 +76,7 @@ export default function RegisterPage() {
           <Typography sx={{ fontWeight: 700, fontSize: '1.5rem', color: '#e4dfd6', letterSpacing: '-0.02em', mb: 0.25 }}>
             baseGeek
           </Typography>
-          <Typography sx={{ fontSize: '0.7rem', color: '#52525a', fontFamily: '"Geist Mono", monospace', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+          <Typography sx={{ fontSize: '0.7rem', color: '#8a8690', fontFamily: '"Geist Mono", monospace', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
             create account
           </Typography>
         </Box>
@@ -96,7 +96,7 @@ export default function RegisterPage() {
           </form>
         </Box>
 
-        <Typography sx={{ textAlign: 'center', mt: 3, fontSize: '0.7rem', color: '#3a3a40', fontFamily: '"Geist Mono", monospace' }}>
+        <Typography sx={{ textAlign: 'center', mt: 3, fontSize: '0.7rem', color: '#71717a', fontFamily: '"Geist Mono", monospace' }}>
           GeekSuite — shared authentication
         </Typography>
       </Box>

@@ -49,6 +49,7 @@ import {
   Add as AddIcon,
   Delete as DeleteIcon
 } from '@mui/icons-material';
+import { alpha } from '@mui/material/styles';
 import { useBaseGeekAuth } from '../components/AuthContext';
 import { apolloClient } from '../apolloClient';
 import { GET_AI_CONFIG, GET_AI_STATS, GET_AI_DIRECTOR_MODELS, GET_AI_USAGE, GET_AI_APP_CONFIGS } from '../graphql/queries';
@@ -889,8 +890,8 @@ const AIGeekPage = () => {
                                                 px: 0.5,
                                                 py: 0.25,
                                                 borderRadius: 1,
-                                                bgcolor: isDirty ? 'warning.50' : 'transparent',
-                                                '&:hover': { bgcolor: isDirty ? 'warning.100' : 'action.hover' }
+                                                bgcolor: (theme) => isDirty ? alpha(theme.palette.warning.main, 0.12) : 'transparent',
+                                                '&:hover': { bgcolor: (theme) => isDirty ? alpha(theme.palette.warning.main, 0.2) : 'action.hover' }
                                               }}
                                             >
                                               {/* Free checkbox */}

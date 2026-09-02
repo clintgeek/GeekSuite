@@ -605,7 +605,7 @@ const APIKeysPage = () => {
           <Alert severity="warning" sx={{ mb: 2 }}>
             This is the only time you will see this API key. Please copy and store it securely.
           </Alert>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 2, bgcolor: 'grey.100', borderRadius: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 2, bgcolor: 'background.default', border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
             <Typography variant="body2" fontFamily="monospace" sx={{ flexGrow: 1, wordBreak: 'break-all' }}>
               {newApiKey}
             </Typography>

@@ -173,7 +173,7 @@ function AppCard({ app, health }) {
           {checking ? 'checking...' : online ? `${health.latency}ms RTT` : 'offline'}
           {health?.version ? ` · v${health.version}` : ''}
         </Typography>
-        <OpenInNewIcon sx={{ fontSize: 13, color: 'text.disabled', opacity: 0.5 }} />
+        <OpenInNewIcon sx={{ fontSize: 13, color: 'text.disabled' }} />
       </Box>
     </Box>
   );
@@ -197,7 +197,7 @@ function SidecarCard({ svc }) {
         </Box>
         <Tooltip title="View source on GitHub" arrow>
           <Box component="a" href={svc.repo} target="_blank" rel="noopener noreferrer"
-            sx={{ display: 'flex', color: 'text.disabled', opacity: 0.6, '&:hover': { opacity: 1 }, transition: 'opacity 150ms' }}>
+            sx={{ display: 'flex', color: 'text.disabled', '&:hover': { color: 'text.secondary' }, transition: 'color 150ms' }}>
             <GitHubIcon sx={{ fontSize: 16 }} />
           </Box>
         </Tooltip>
@@ -287,7 +287,7 @@ export default function PortalPage() {
               </Typography>
             </Box>
           </Box>
-          <Typography sx={{ fontSize: '0.75rem', fontFamily: '"Geist Mono", monospace', color: '#52525a' }}>
+          <Typography sx={{ fontSize: '0.75rem', fontFamily: '"Geist Mono", monospace', color: '#8a8690' }}>
             // geeksuite.clintgeek.com · Containerized · Polyglot · Self-hosted
           </Typography>
         </Box>
@@ -329,7 +329,7 @@ export default function PortalPage() {
 
         {/* ─── Infrastructure Status ─── */}
         <Box sx={{ mb: 10 }}>
-          <Typography sx={{ fontSize: '0.65rem', fontFamily: '"Geist Mono", monospace', color: '#52525a', letterSpacing: '0.12em', textTransform: 'uppercase', mb: 2 }}>
+          <Typography sx={{ fontSize: '0.65rem', fontFamily: '"Geist Mono", monospace', color: '#8a8690', letterSpacing: '0.12em', textTransform: 'uppercase', mb: 2 }}>
             // Infrastructure Layer
           </Typography>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
@@ -353,10 +353,10 @@ export default function PortalPage() {
         {/* ─── Application Directory ─── */}
         <Box sx={{ mb: 10 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-            <Typography sx={{ fontSize: '0.65rem', fontFamily: '"Geist Mono", monospace', color: '#52525a', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+            <Typography sx={{ fontSize: '0.65rem', fontFamily: '"Geist Mono", monospace', color: '#8a8690', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
               // Application Directory ({totalCount} apps)
             </Typography>
-            <Typography sx={{ fontSize: '0.65rem', fontFamily: '"Geist Mono", monospace', color: '#52525a' }}>
+            <Typography sx={{ fontSize: '0.65rem', fontFamily: '"Geist Mono", monospace', color: '#8a8690' }}>
               Live health · 60s refresh
             </Typography>
           </Box>
@@ -373,7 +373,7 @@ export default function PortalPage() {
 
         {/* ─── Sidecar Services ─── */}
         <Box sx={{ mb: 10 }}>
-          <Typography sx={{ fontSize: '0.65rem', fontFamily: '"Geist Mono", monospace', color: '#52525a', letterSpacing: '0.12em', textTransform: 'uppercase', mb: 3 }}>
+          <Typography sx={{ fontSize: '0.65rem', fontFamily: '"Geist Mono", monospace', color: '#8a8690', letterSpacing: '0.12em', textTransform: 'uppercase', mb: 3 }}>
             // Sidecar Services
           </Typography>
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
@@ -397,7 +397,7 @@ export default function PortalPage() {
             {[['Nginx', 'Reverse Proxy'], ['Docker', 'Orchestration'], ['Ollama', 'Local LLM'], ['geekLock', 'Cryptography'], ['geekGrep', 'RAG / Search'],].map(([label, sublabel]) => (
               <Box key={label}>
                 <Typography sx={{ fontSize: '0.75rem', fontWeight: 600, color: '#e4dfd6' }}>{label}</Typography>
-                <Typography sx={{ fontSize: '0.6rem', fontFamily: '"Geist Mono", monospace', color: '#52525a' }}>{sublabel}</Typography>
+                <Typography sx={{ fontSize: '0.6rem', fontFamily: '"Geist Mono", monospace', color: '#8a8690' }}>{sublabel}</Typography>
               </Box>
             ))}
           </Box>
@@ -406,13 +406,13 @@ export default function PortalPage() {
 
       {/* ─── Footer ─── */}
       <Box sx={{ borderTop: '1px solid rgba(255,255,255,0.05)', px: { xs: 3, md: 8 }, py: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
-        <Typography sx={{ fontSize: '0.64rem', fontFamily: '"Geist Mono", monospace', color: '#3a3a40' }}>
+        <Typography sx={{ fontSize: '0.64rem', fontFamily: '"Geist Mono", monospace', color: '#71717a' }}>
           GeekSuite · clintgeek.com · Established 1996
         </Typography>
         <Box sx={{ display: 'flex', gap: 3 }}>
           {[['Portfolio', 'https://clintgeek.com'], ['GitHub', 'https://github.com/clintgeek'], ['LinkedIn', 'https://linkedin.com/in/clintcrocker']].map(([label, href]) => (
             <Box key={label} component="a" href={href} target="_blank" rel="noopener noreferrer"
-              sx={{ fontSize: '0.64rem', fontFamily: '"Geist Mono", monospace', color: '#52525a', textDecoration: 'none', transition: 'color 150ms', '&:hover': { color: '#e8a849' } }}>
+              sx={{ fontSize: '0.64rem', fontFamily: '"Geist Mono", monospace', color: '#8a8690', textDecoration: 'none', transition: 'color 150ms', '&:hover': { color: '#e8a849' } }}>
               {label}
             </Box>
           ))}

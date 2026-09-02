@@ -71,7 +71,7 @@ const theme = createTheme({
     text: {
       primary: '#e4dfd6',
       secondary: '#8a8690',
-      disabled: '#52525a',
+      disabled: stone[300],
     },
     divider: 'rgba(255, 255, 255, 0.06)',
     error:   { main: accent.coral,  light: '#e0a0a0', dark: '#a85050' },
