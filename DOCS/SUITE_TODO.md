@@ -186,6 +186,35 @@ not repeated here.
   `color="error"`, so the destructive confirm renders as the primary gold/burgundy CTA.
   Scope the override to `containedPrimary`. `apps/storygeek/frontend/src/theme/theme.js`
 
+### Shell grammar audit (2026-09-02) — feeds TODO_ORDER #15a
+
+Root cause: `GeekSidebar` and `GeekTopBar` exist in `packages/ui/src/navigation` with the right
+slots but have **zero consumers**; every app hand-rolls both. Per-app structural deviations
+(identity choices — fonts, colors, dark chrome, density — are fine and not listed):
+
+- **basegeek** — no desktop top bar (theme/switcher/account have nowhere to live); sidebar
+  collapses to a 68px rail (decided: remove); Settings + Account are nav-list rows, not footer;
+  bypasses GeekShell/GeekAppFrame and hardcodes 220/68/60. Mobile pattern already conforms.
+- **bujogeek** — top bar left is empty (no page title); avatar is inert and hidden on mobile;
+  no Settings entry (no route); user chip sits *below* Sign out; bottom tab bar's "More" sheet
+  duplicates Logout (decided: remove the duplicate, keep the bar).
+- **notegeek** — desktop sidebar is hideable via the hamburger, not permanent; **no user chip
+  anywhere**; no account avatar/menu; brand in the top bar, not the sidebar; no page title;
+  mixed `sm`/`md` breakpoints; bottom nav duplicates Home/Search/New (keep the bar).
+- **fitnessgeek** — **no mobile drawer**: nav is an avatar-anchored Menu, so Settings/Logout
+  move on mobile; desktop avatar deep-links to /settings instead of a menu; top bar left empty;
+  bottom nav exposes /profile which no other surface has; `navSections` declared three times;
+  hardcoded `pb: 88px`. Keep the bar.
+- **flockgeek** — no desktop top bar; theme/switcher live in the sidebar; **no user chip, no
+  Settings, no account menu anywhere**; sign-out is a bare icon; mobile drawer is 280px vs 220.
+- **storygeek** — sidebar is **never permanent** (hamburger + drawer on desktop too); no brand
+  block in the sidebar; no footer (user/sign-out only in a top-bar avatar menu); Settings is a
+  mid-list nav item; `isMobile` computed and unused.
+- **bookgeek** — **no mobile layout at all**; header rendered outside GeekShell so the sidebar
+  starts below it; sidebar is a filter panel with no brand, no nav, no footer; user/Settings/
+  Logout only in the avatar menu; search lives in the content body; sidebar `height: 100vh`
+  overflows its 60px-offset container.
+
 ### Medium effort, clear payoff
 
 - **Shared mobile bottom-nav primitive** — bujogeek (tabs + More sheet), notegeek and
