@@ -13,6 +13,7 @@ const CATS = {
   recur: { light: { text: '#1a7a68', bg: 'rgba(26,122,104,0.09)' }, dark: { text: '#5bbfad', bg: 'rgba(91,191,173,0.13)' } },
   note:  { light: { text: '#6b559a', bg: 'rgba(107,85,154,0.09)' }, dark: { text: '#a98fce', bg: 'rgba(169,143,206,0.13)' } },
   type:  { light: { text: '#7a5c38', bg: 'rgba(122,92,56,0.09)'  }, dark: { text: '#c4a882', bg: 'rgba(196,168,130,0.13)' } },
+  block: { light: { text: '#7a4462', bg: 'rgba(122,68,98,0.09)'  }, dark: { text: '#c98fae', bg: 'rgba(201,143,174,0.13)' } },
 };
 
 /** Inline colored token — used in the example sentence */
@@ -215,6 +216,8 @@ const TaskInputHelpButton = ({ compact = false }) => {
             <T cat="recur" isDark={isDark}>(weekly)</T>
             {'  '}
             <T cat="note" isDark={isDark}>^confirm appt</T>
+            {'  '}
+            <T cat="block" isDark={isDark}>~blocked waiting on them</T>
           </Box>
         </Box>
 
@@ -258,6 +261,12 @@ const TaskInputHelpButton = ({ compact = false }) => {
             <Box>
               <Label isDark={isDark}>note</Label>
               <Ref token="^text" desc="attaches to task" cat="note" isDark={isDark} />
+
+              <Box sx={{ mt: 1.25 }}>
+                <Label isDark={isDark}>park</Label>
+                <Ref token="~blocked" desc="waiting on something" cat="block" isDark={isDark} />
+                <Ref token="~blocked why" desc="with a reason" cat="block" isDark={isDark} />
+              </Box>
             </Box>
           </Box>
 

@@ -87,6 +87,8 @@ export const GET_TASKS = gql`
       migratedFrom
       migratedTo
       isBacklog
+      blockedReason
+      blockedAt
       taskType
       createdAt
       updatedAt
@@ -118,6 +120,8 @@ export const GET_ALL_TASKS = gql`
       migratedFrom
       migratedTo
       isBacklog
+      blockedReason
+      blockedAt
       taskType
       createdAt
       updatedAt
@@ -149,6 +153,8 @@ export const GET_DAILY_TASKS = gql`
       migratedFrom
       migratedTo
       isBacklog
+      blockedReason
+      blockedAt
       taskType
       createdAt
       updatedAt
@@ -180,6 +186,8 @@ export const GET_WEEKLY_TASKS = gql`
       migratedFrom
       migratedTo
       isBacklog
+      blockedReason
+      blockedAt
       taskType
       createdAt
       updatedAt
@@ -211,6 +219,8 @@ export const GET_MONTHLY_TASKS = gql`
       migratedFrom
       migratedTo
       isBacklog
+      blockedReason
+      blockedAt
       taskType
       createdAt
       updatedAt
@@ -223,6 +233,39 @@ export const GET_MONTHLY_TASKS = gql`
         id
         status
       }
+    }
+  }
+`;
+
+/**
+ * Parked tasks — `status: 'blocked'`, newest-parked first (the gateway sorts by
+ * `blockedAt`). Blocked tasks are filtered out of the daily/weekly/monthly log
+ * views server-side, so this is the only list view that shows them.
+ */
+export const GET_BLOCKED_TASKS = gql`
+  query GetBlockedTasks {
+    blockedTasks {
+      id
+      content
+      signifier
+      status
+      priority
+      note
+      tags
+      dueDate
+      originalDate
+      migratedFrom
+      migratedTo
+      isBacklog
+      blockedReason
+      blockedAt
+      taskType
+      recurrenceRule
+      seriesId
+      isSeriesMaster
+      collectionId
+      createdAt
+      updatedAt
     }
   }
 `;
@@ -288,6 +331,8 @@ export const GET_COLLECTION = gql`
         dueDate
         originalDate
         isBacklog
+        blockedReason
+        blockedAt
         taskType
         recurrenceRule
         seriesId
@@ -317,6 +362,8 @@ export const GET_TASKS_BY_TAG = gql`
             migratedFrom
             migratedTo
             isBacklog
+            blockedReason
+            blockedAt
             taskType
             completedAt
             createdAt

@@ -139,6 +139,82 @@ describe('parseTaskInput', () => {
     });
   });
 
+  describe('~blocked', () => {
+    it('parses a bare ~blocked with no reason', () => {
+      const result = parseTaskInput('Ship the invoice ~blocked');
+      expect(result.blocked).toBe(true);
+      expect(result.blockedReason).toBeUndefined();
+      expect(result.content).toBe('Ship the invoice');
+    });
+
+    it('captures the reason after ~blocked', () => {
+      const result = parseTaskInput('Ship the invoice ~blocked waiting on legal');
+      expect(result.blocked).toBe(true);
+      expect(result.blockedReason).toBe('waiting on legal');
+      expect(result.content).toBe('Ship the invoice');
+    });
+
+    it('is case-insensitive on the token', () => {
+      const result = parseTaskInput('Ship it ~BLOCKED Waiting On Legal');
+      expect(result.blocked).toBe(true);
+      expect(result.blockedReason).toBe('Waiting On Legal');
+      expect(result.content).toBe('Ship it');
+    });
+
+    it('leaves blocked fields undefined when the token is absent', () => {
+      const result = parseTaskInput('Ship the invoice');
+      expect(result.blocked).toBeUndefined();
+      expect(result.blockedReason).toBeUndefined();
+    });
+
+    it('does not fire on a bare ~, a lookalike word, or the word alone', () => {
+      expect(parseTaskInput('Ship it ~').blocked).toBeUndefined();
+      // The reason must be whitespace-separated, so `~blockedish` is not the token.
+      expect(parseTaskInput('Ship it ~blockedish thing').blocked).toBeUndefined();
+      expect(parseTaskInput('Ship it blocked on legal').blocked).toBeUndefined();
+    });
+
+    it('keeps a reason that only appears mid-line out of it (must be last)', () => {
+      const result = parseTaskInput('Ship it ~blocked waiting, then invoice');
+      expect(result.blockedReason).toBe('waiting, then invoice');
+    });
+
+    it('combines with tags, priority, date and recurrence', () => {
+      const result = parseTaskInput('*Send contract !high #legal /monday 2pm ~blocked waiting on their counsel');
+      expect(result.blocked).toBe(true);
+      expect(result.blockedReason).toBe('waiting on their counsel');
+      expect(result.signifier).toBe('*');
+      expect(result.priority).toBe(1);
+      expect(result.tags).toEqual(['legal']);
+      expect(result.dueDate.getDay()).toBe(1);
+      expect(result.dueDate.getHours()).toBe(14);
+      expect(result.content).toBe('Send contract');
+    });
+
+    it('keeps a token-ish reason intact: !high inside the reason is not a priority', () => {
+      const result = parseTaskInput('Ship it ~blocked blocked by the !high ticket');
+      expect(result.blockedReason).toBe('blocked by the !high ticket');
+      expect(result.priority).toBeUndefined();
+      expect(result.content).toBe('Ship it');
+    });
+
+    it('yields to ^note, which shares the end-of-line anchor', () => {
+      // Documented limitation: the note token is read first, so a ~blocked
+      // written after it becomes part of the note.
+      const result = parseTaskInput('Ship it ^see the thread ~blocked waiting');
+      expect(result.note).toBe('see the thread ~blocked waiting');
+      expect(result.blocked).toBeUndefined();
+    });
+
+    it('parses ~blocked when the note token comes after it', () => {
+      const result = parseTaskInput('Ship it ~blocked waiting ^see the thread');
+      expect(result.note).toBe('see the thread');
+      expect(result.blocked).toBe(true);
+      expect(result.blockedReason).toBe('waiting');
+      expect(result.content).toBe('Ship it');
+    });
+  });
+
   it('combines signifier, priority, tags, recurrence, date and note together', () => {
     const result = parseTaskInput(
       '*Team meeting !high #work #urgent (weekly) /monday 2pm ^Bring laptop',

@@ -18,15 +18,19 @@ const DATE_TIME_RE =
 const PRIORITY_RE   = /!(high|medium|low)\b/iy;
 const TAG_RE        = /#[a-zA-Z0-9_-]+/iy;
 const RECURRENCE_RE = /\((daily|weekly|monthly)\)/iy;
-// Note/NoteGeek are anchored at end — tested separately before the walk
+// Note/NoteGeek/blocked are anchored at end — tested separately before the walk.
+// Order mirrors parseTaskInput: the note tokens are read first, so a `~blocked`
+// written after a `^note` is part of the note (in the parser and here).
 const NOTE_GEEK_RE  = /\$\^.+$/i;
 const NOTE_RE       = /\^.+$/i;
+const BLOCKED_RE    = /~blocked(?:\s+.+)?$/i;
 // Signifier only at position 0
 const SIGNIFIER_RE  = /[*@\-!?]/y;
 
 /**
  * tokenize(text) → Array<{ text: string, category: string }>
- * category: 'plain' | 'signifier' | 'priority' | 'tag' | 'recurrence' | 'date' | 'note' | 'noteGeek'
+ * category: 'plain' | 'signifier' | 'priority' | 'tag' | 'recurrence' | 'date'
+ *          | 'note' | 'noteGeek' | 'blocked'
  */
 function tokenize(text) {
   if (!text) return [];
@@ -50,6 +54,13 @@ function tokenize(text) {
       suffix = nMatch[0];
       suffixCategory = 'note';
       prefixText = text.slice(0, nMatch.index);
+    } else {
+      const bMatch = text.match(BLOCKED_RE);
+      if (bMatch) {
+        suffix = bMatch[0];
+        suffixCategory = 'blocked';
+        prefixText = text.slice(0, bMatch.index);
+      }
     }
   }
 
@@ -149,6 +160,8 @@ function segmentColor(seg, theme) {
       return colors.signifier.task;
     case 'noteGeek':
       return colors.primary[600];
+    case 'blocked':
+      return colors.aging.stale;
     case 'signifier': {
       const map = { '*': 'task', '@': 'event', '-': 'note', '!': 'priority', '?': 'question' };
       return colors.signifier[map[seg.text]] ?? colors.signifier.task;
@@ -162,7 +175,10 @@ function segmentColor(seg, theme) {
 
 /**
  * InlineQuickAdd — the writing surface. Parses `#tag`, `!priority`,
- * `/date`, `(daily)`, `^note` and `$^noteGeek` out of one line of prose.
+ * `/date`, `(daily)`, `^note`, `$^noteGeek` and `~blocked [reason]` out of one
+ * line of prose. The `blocked` / `blockedReason` fields it emits are a create
+ * instruction, not task input: the page that owns `onAdd` creates the task and
+ * then parks it (createTask has no blocked input).
  *
  * `collectionId` switches it into collection mode: the entry is filed into that
  * collection and, crucially, is NOT given a default due date — a collection
@@ -444,7 +460,7 @@ const InlineQuickAdd = ({
               onBlur={() => setFocused(false)}
               placeholder={
                 focused
-                  ? 'Write a task\u2026  #tag  !high  /tomorrow  (daily)  ^note'
+                  ? 'Write a task\u2026  #tag  !high  /tomorrow  (daily)  ^note  ~blocked'
                   : (placeholder || 'What needs to happen today?')
               }
               fullWidth

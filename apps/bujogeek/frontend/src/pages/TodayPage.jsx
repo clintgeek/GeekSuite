@@ -8,13 +8,15 @@ import OverdueSection from '../components/today/OverdueSection';
 import TodaySection from '../components/today/TodaySection';
 import UpcomingSection from '../components/today/UpcomingSection';
 import CompletedSection from '../components/today/CompletedSection';
+import BlockedSection from '../components/today/BlockedSection';
 import InlineQuickAdd from '../components/today/InlineQuickAdd';
 import SkeletonLoader from '../components/shared/SkeletonLoader';
 import TaskEditor from '../components/tasks/TaskEditor';
+import BlockTaskDialog from '../components/tasks/BlockTaskDialog';
 import useKeyboardNav from '../hooks/useKeyboardNav';
 import useGlobalShortcuts from '../hooks/useGlobalShortcuts';
 import { CREATE_NOTE } from '../graphql/notegeekMutations';
-import { GET_MONTHLY_TASKS } from '../graphql/queries';
+import { GET_MONTHLY_TASKS, GET_BLOCKED_TASKS } from '../graphql/queries';
 import { getTaskAge } from '../utils/taskAging';
 import { useToast } from '@geeksuite/ui';
 
@@ -23,6 +25,11 @@ const TodayPage = () => {
   const [editingTask, setEditingTask] = useState(null);
   // Tasks due within the next 7 days (fetched separately from the daily view)
   const [upcomingRangeTasks, setUpcomingRangeTasks] = useState([]);
+  // Parked tasks — their own query, because the gateway keeps blocked tasks out
+  // of the daily/weekly/monthly log views entirely.
+  const [blockedTasks, setBlockedTasks] = useState([]);
+  // The task whose "Block…" action is open, if any.
+  const [blockingTask, setBlockingTask] = useState(null);
   // Track whether fetchTasks has resolved for the current date.
   // Separate from context loading state because: (a) context starts as 'IDLE' string
   // not matching LoadingState enum, and (b) other views (Review, Plan) mutate the
@@ -37,6 +44,8 @@ const TodayPage = () => {
     fetchTasks,
     createTask,
     updateTaskStatus,
+    blockTask,
+    unblockTask,
     deleteTask,
     saveDailyOrder,
     LoadingState,
@@ -68,21 +77,43 @@ const TodayPage = () => {
     fetchUpcoming();
   }, [fetchUpcoming]);
 
+  // ─── Blocked: the parked shelf at the bottom of the page ───
+  const fetchBlocked = useCallback(async () => {
+    try {
+      const res = await apolloClient.query({
+        query: GET_BLOCKED_TASKS,
+        fetchPolicy: 'no-cache',
+      });
+      setBlockedTasks(res.data?.blockedTasks || []);
+    } catch (err) {
+      console.error('Failed to fetch blocked tasks:', err);
+    }
+  }, [apolloClient]);
+
+  useEffect(() => {
+    fetchBlocked();
+  }, [fetchBlocked]);
+
   const handleDateChange = useCallback((newDate) => {
     setCurrentDate(newDate);
   }, []);
 
+  // Any status change can move a task across the shelves — completing or
+  // cancelling a parked task un-parks it server-side — so the blocked list is
+  // refetched alongside Upcoming.
   const handleStatusToggle = useCallback(async (task) => {
     const newStatus = task.status === 'completed' ? 'pending' : 'completed';
     await updateTaskStatus((task.id || task._id), newStatus);
     fetchUpcoming();
-  }, [updateTaskStatus, fetchUpcoming]);
+    fetchBlocked();
+  }, [updateTaskStatus, fetchUpcoming, fetchBlocked]);
 
   const handleCancelToggle = useCallback(async (task) => {
     const newStatus = task.status === 'cancelled' ? 'pending' : 'cancelled';
     await updateTaskStatus((task.id || task._id), newStatus);
     fetchUpcoming();
-  }, [updateTaskStatus, fetchUpcoming]);
+    fetchBlocked();
+  }, [updateTaskStatus, fetchUpcoming, fetchBlocked]);
 
   const handleEdit = useCallback((task) => {
     setEditingTask(task);
@@ -91,8 +122,9 @@ const TodayPage = () => {
   const handleDelete = useCallback(async (task) => {
     if (window.confirm('Delete this task?')) {
       await deleteTask((task.id || task._id));
+      fetchBlocked();
     }
-  }, [deleteTask]);
+  }, [deleteTask, fetchBlocked]);
 
   const handleSaveAsNote = useCallback(async (task) => {
     try {
@@ -110,17 +142,55 @@ const TodayPage = () => {
     }
   }, [createNote, notify]);
 
+  const handleBlockRequest = useCallback((task) => {
+    setBlockingTask(task);
+  }, []);
+
+  const handleBlockConfirm = useCallback(async (reason) => {
+    const task = blockingTask;
+    setBlockingTask(null);
+    if (!task) return;
+    const blocked = await blockTask((task.id || task._id), reason);
+    if (!blocked) return; // the context has already surfaced the error
+    notify('Task blocked', { tone: 'success' });
+    // Every list here is fetched no-cache, so refetch the ones that change:
+    // the task leaves the log and joins the parked shelf.
+    fetchTasks('daily', currentDate);
+    fetchUpcoming();
+    fetchBlocked();
+  }, [blockingTask, blockTask, notify, fetchTasks, currentDate, fetchUpcoming, fetchBlocked]);
+
+  const handleUnblock = useCallback(async (task) => {
+    const unblocked = await unblockTask((task.id || task._id));
+    if (!unblocked) return;
+    notify('Task unblocked', { tone: 'success' });
+    fetchTasks('daily', currentDate);
+    fetchUpcoming();
+    fetchBlocked();
+  }, [unblockTask, notify, fetchTasks, currentDate, fetchUpcoming, fetchBlocked]);
+
   const handleQuickAdd = useCallback(async (taskData) => {
+    // `~blocked [reason]` is a two-step create: the mutation has no blocked
+    // input, so the task is created and then parked.
+    const { blocked, blockedReason, ...fields } = taskData;
+    let created;
     try {
-      await createTask(taskData);
+      created = await createTask(fields);
     } catch {
       // createTask has already surfaced the error via the task context snackbar;
       // skip the refetch so the failed entry isn't silently dropped from view.
       return;
     }
+    if (blocked && created) {
+      const parked = await blockTask((created.id || created._id), blockedReason);
+      if (parked) {
+        notify('Task added and blocked', { tone: 'success' });
+        fetchBlocked();
+      }
+    }
     // Refetch to get sorted list
     fetchTasks('daily', currentDate);
-  }, [createTask, fetchTasks, currentDate]);
+  }, [createTask, blockTask, notify, fetchBlocked, fetchTasks, currentDate]);
 
   // Split tasks into overdue, active, completed
   const { overdueTasks, activeTasks, completedTasks } = useMemo(() => {
@@ -133,6 +203,10 @@ const TodayPage = () => {
     const completed = [];
 
     tasks.forEach((task) => {
+      // A parked task has left the log — it belongs to BlockedSection, not to
+      // Today/Carried forward. (The gateway already filters it out of
+      // dailyTasks; this guards the window between a block and the refetch.)
+      if (task.status === 'blocked') return;
       if (task.status === 'completed' || task.status === 'cancelled') {
         // Cancelled sinks alongside completed — struck as irrelevant, out of
         // the active/overdue flow, tucked into the collapsed section.
@@ -170,6 +244,7 @@ const TodayPage = () => {
     return (Array.isArray(upcomingRangeTasks) ? upcomingRangeTasks : [])
       .filter((task) => {
         if (task.status === 'completed' || task.status === 'cancelled') return false;
+        if (task.status === 'blocked') return false;
         if (!task.dueDate) return false;
         if (dailyIds.has(String(task.id || task._id))) return false;
         return isWithinInterval(startOfDay(new Date(task.dueDate)), {
@@ -208,7 +283,8 @@ const TodayPage = () => {
     total: Array.isArray(tasks) ? tasks.length : 0,
     overdue: overdueTasks.length,
     completed: completedTasks.length,
-  }), [tasks, overdueTasks, completedTasks]);
+    blocked: blockedTasks.length,
+  }), [tasks, overdueTasks, completedTasks, blockedTasks]);
 
   const isLoading = !todayLoaded || loading === LoadingState.FETCHING;
 
@@ -225,7 +301,7 @@ const TodayPage = () => {
     onEdit: handleEdit,
     onDelete: handleDelete,
     onCancel: handleCancelToggle,
-    enabled: !isLoading && !editingTask,
+    enabled: !isLoading && !editingTask && !blockingTask,
   });
 
   useGlobalShortcuts();
@@ -264,6 +340,7 @@ const TodayPage = () => {
             onDelete={handleDelete}
             onSaveAsNote={handleSaveAsNote}
             onCancel={handleCancelToggle}
+            onBlock={handleBlockRequest}
             focusedTaskId={focusedTaskId}
           />
 
@@ -274,6 +351,7 @@ const TodayPage = () => {
             onDelete={handleDelete}
             onSaveAsNote={handleSaveAsNote}
             onCancel={handleCancelToggle}
+            onBlock={handleBlockRequest}
             focusedTaskId={focusedTaskId}
             onReorder={handleReorder}
           />
@@ -285,6 +363,7 @@ const TodayPage = () => {
             onDelete={handleDelete}
             onSaveAsNote={handleSaveAsNote}
             onCancel={handleCancelToggle}
+            onBlock={handleBlockRequest}
             focusedTaskId={focusedTaskId}
           />
 
@@ -296,6 +375,18 @@ const TodayPage = () => {
             onSaveAsNote={handleSaveAsNote}
             onCancel={handleCancelToggle}
           />
+
+          {/* Last on the page: the parked shelf. Always rendered, even at zero. */}
+          <BlockedSection
+            tasks={blockedTasks}
+            onStatusToggle={handleStatusToggle}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            onSaveAsNote={handleSaveAsNote}
+            onCancel={handleCancelToggle}
+            onUnblock={handleUnblock}
+            focusedTaskId={focusedTaskId}
+          />
         </>
       )}
 
@@ -303,6 +394,13 @@ const TodayPage = () => {
         open={Boolean(editingTask)}
         onClose={() => setEditingTask(null)}
         task={editingTask}
+      />
+
+      <BlockTaskDialog
+        open={Boolean(blockingTask)}
+        task={blockingTask}
+        onClose={() => setBlockingTask(null)}
+        onConfirm={handleBlockConfirm}
       />
     </Box>
   );

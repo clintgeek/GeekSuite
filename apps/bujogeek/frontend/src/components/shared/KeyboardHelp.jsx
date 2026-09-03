@@ -55,6 +55,7 @@ const SHORTCUT_GROUPS = [
       { keys: ['/tomorrow'], desc: 'Set due date' },
       { keys: ['^note'], desc: 'Add a note' },
       { keys: ['$^text'], desc: 'Save note to NoteGeek' },
+      { keys: ['~blocked'], desc: 'Park it — optional reason after the token' },
     ],
   },
 ];

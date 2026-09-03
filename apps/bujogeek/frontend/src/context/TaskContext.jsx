@@ -6,7 +6,8 @@ import {
   GET_TASKS, GET_ALL_TASKS, GET_DAILY_TASKS, GET_WEEKLY_TASKS, GET_MONTHLY_TASKS
 } from '../graphql/queries';
 import {
-  CREATE_TASK, UPDATE_TASK, DELETE_TASK, UPDATE_TASK_STATUS, MIGRATE_TASK_TO_FUTURE, SAVE_DAILY_TASK_ORDER
+  CREATE_TASK, UPDATE_TASK, DELETE_TASK, UPDATE_TASK_STATUS, MIGRATE_TASK_TO_FUTURE, SAVE_DAILY_TASK_ORDER,
+  BLOCK_TASK, UNBLOCK_TASK
 } from '../graphql/mutations';
 import RecurringEditDialog from '../components/tasks/RecurringEditDialog';
 // Pure sort module — keeps the comparator testable without this file's deps.
@@ -544,6 +545,64 @@ const TaskProvider = ({ children }) => {
     }
   }, [apolloClient, handleApiError]);
 
+  /**
+   * Park a task ("blocked"): it keeps its due date but leaves the log until it
+   * is unblocked. Not optimistic — `blockedAt` is the server's clock and the
+   * gateway refuses to block a completed/cancelled task, so we wait for the
+   * authoritative object and merge it in (the same reconcile step
+   * `updateTaskStatus` does after its optimistic flip).
+   *
+   * Every list that can contain a parked task is fetched `no-cache`, so the
+   * views that need to change refetch after this resolves rather than relying
+   * on Apollo cache invalidation (see the CONTEXT.md debt note).
+   *
+   * @param {string} taskId
+   * @param {string} [reason] optional; 280 chars max, enforced by the gateway
+   * @returns {Promise<object|undefined>} the parked task, or undefined on error
+   */
+  const blockTask = useCallback(async (taskId, reason) => {
+    setError(null);
+    try {
+      const response = await apolloClient.mutate({
+        mutation: BLOCK_TASK,
+        variables: { id: taskId, reason: reason?.trim() ? reason.trim() : null }
+      });
+
+      const serverTask = response.data?.blockTask;
+      if (serverTask) {
+        setTasks(prev => mapTasksState(prev, task => (
+          sameTask(task, taskId) ? { ...task, ...serverTask } : task
+        )));
+      }
+      return serverTask;
+    } catch (error) {
+      handleApiError(error, 'Failed to block task');
+      return undefined;
+    }
+  }, [apolloClient, handleApiError]);
+
+  /** Un-park a task: back to `pending`, blocked fields cleared, dueDate kept. */
+  const unblockTask = useCallback(async (taskId) => {
+    setError(null);
+    try {
+      const response = await apolloClient.mutate({
+        mutation: UNBLOCK_TASK,
+        variables: { id: taskId }
+      });
+
+      const serverTask = response.data?.unblockTask;
+      if (serverTask) {
+        setTasks(prev => mapTasksState(prev, task => (
+          sameTask(task, taskId) ? { ...task, ...serverTask } : task
+        )));
+      }
+      return serverTask;
+    } catch (error) {
+      handleApiError(error, 'Failed to unblock task');
+      return undefined;
+    }
+  }, [apolloClient, handleApiError]);
+
   const deleteTask = useCallback(async (taskId, editScopeParam = null) => {
     try {
       const task = getTaskFromState(taskId);
@@ -660,6 +719,8 @@ const TaskProvider = ({ children }) => {
     createTask,
     updateTask,
     updateTaskStatus,
+    blockTask,
+    unblockTask,
     deleteTask,
     migrateTask,
     saveDailyOrder,
@@ -681,6 +742,8 @@ const TaskProvider = ({ children }) => {
     createTask,
     updateTask,
     updateTaskStatus,
+    blockTask,
+    unblockTask,
     deleteTask,
     migrateTask,
     saveDailyOrder,

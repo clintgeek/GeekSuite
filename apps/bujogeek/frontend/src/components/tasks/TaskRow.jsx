@@ -2,7 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Typography, Chip, IconButton, Tooltip, useTheme, useMediaQuery } from '@mui/material';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Pencil, Trash2, StickyNote, Repeat, Ban, RotateCcw } from 'lucide-react';
+import { Pencil, Trash2, StickyNote, Repeat, Ban, RotateCcw, PauseCircle, Play } from 'lucide-react';
 import { format, differenceInCalendarDays } from 'date-fns';
 import TaskCheckbox from './TaskCheckbox';
 import { getTaskAge, getAgingColor, getAgingLabel } from '../../utils/taskAging';
@@ -30,6 +30,8 @@ const TaskRow = ({
   onDelete,
   onSaveAsNote,
   onCancel,
+  onBlock,
+  onUnblock,
   focused = false,
 }) => {
   const theme     = useTheme();
@@ -44,18 +46,31 @@ const TaskRow = ({
 
   const isCompleted = task.status === 'completed';
   const isCancelled = task.status === 'cancelled';
+  const isBlocked   = task.status === 'blocked';
   const isSunk       = isCompleted || isCancelled;
   const { level, days } = getTaskAge(task);
+  // A parked task keeps its due date but has left the log, so the aging
+  // signals (overdue border, "3 days ago" label, due badge) would be lying:
+  // it is not late, it is waiting. Muted ink, plum "Blocked" chip instead.
+  const parkedSince = isBlocked && task.blockedAt ? new Date(task.blockedAt) : null;
+  const parkedDays = parkedSince && !isNaN(parkedSince.getTime())
+    ? Math.max(0, differenceInCalendarDays(new Date(), parkedSince))
+    : null;
+  const parkedLabel = parkedDays === null
+    ? null
+    : parkedDays === 0
+    ? 'parked today'
+    : `parked ${parkedDays} ${parkedDays === 1 ? 'day' : 'days'}`;
   // Cancelled gets its own muted tone (plum, from the aging palette's "stale"
   // slot) rather than sharing completed's neutral ink — a struck-as-irrelevant
   // task should read distinctly from a finished one.
   const agingColor  = isCancelled
     ? (isDark ? colors.aging.stale : `${colors.aging.stale}cc`)
-    : isCompleted
+    : (isCompleted || isBlocked)
     ? (isDark ? colors.dark[500] : colors.ink[200])
     : getAgingColor(level);
   const agingLabel  = getAgingLabel(days);
-  const agingTint   = isSunk ? 'transparent' : getAgingTint(agingColor, isDark);
+  const agingTint   = (isSunk || isBlocked) ? 'transparent' : getAgingTint(agingColor, isDark);
 
   // Mobile: tap the row to reveal action buttons
   const handleRowClick = useCallback((e) => {
@@ -206,6 +221,8 @@ const TaskRow = ({
                                ? (isDark ? `${colors.aging.stale}99` : `${colors.aging.stale}bb`)
                                : isCompleted
                                ? (isDark ? 'rgba(255,245,220,0.28)' : colors.ink[400])
+                               : isBlocked
+                               ? (isDark ? 'rgba(255,245,220,0.55)' : colors.ink[500])
                                : theme.palette.text.primary,
                 lineHeight:  1.5,
                 transition:  'color 260ms ease',
@@ -259,8 +276,38 @@ const TaskRow = ({
             </Tooltip>
           )}
 
+          {/* Blocked stamp — a parked task is waiting, not late */}
+          {isBlocked && (
+            <Tooltip title={task.blockedReason ? `Blocked — ${task.blockedReason}` : 'Blocked'} placement="top">
+              <Box
+                component="span"
+                sx={{
+                  display:         'inline-flex',
+                  alignItems:      'center',
+                  gap:             0.375,
+                  flexShrink:      0,
+                  fontFamily:      '"IBM Plex Mono", monospace',
+                  fontSize:        '0.5625rem',
+                  fontWeight:      700,
+                  letterSpacing:   '0.08em',
+                  textTransform:   'uppercase',
+                  color:           staleInk,
+                  backgroundColor: isDark ? 'rgba(122,68,98,0.18)' : `${colors.aging.stale}12`,
+                  border:          `1px solid ${isDark ? 'rgba(122,68,98,0.45)' : `${colors.aging.stale}33`}`,
+                  borderRadius:    '3px',
+                  px:              0.5,
+                  py:              '1px',
+                  lineHeight:      1.5,
+                }}
+              >
+                <PauseCircle size={10} strokeWidth={2} />
+                Blocked
+              </Box>
+            </Tooltip>
+          )}
+
           {/* Inline metadata — due date */}
-          {dueBadge && !isSunk && (
+          {dueBadge && !isSunk && !isBlocked && (
             <Typography
               sx={{
                 fontFamily:   '"IBM Plex Mono", monospace',
@@ -277,7 +324,7 @@ const TaskRow = ({
           )}
 
           {/* Priority dot — small, not screaming */}
-          {task.priority && !isSunk && (
+          {task.priority && !isSunk && !isBlocked && (
             <Box
               sx={{
                 width:           6,
@@ -331,6 +378,23 @@ const TaskRow = ({
           </Typography>
         )}
 
+        {/* Why it is parked — muted secondary line, the reason in the writer's
+            own words. Reads below the note when a task has both. */}
+        {isBlocked && task.blockedReason && (
+          <Typography
+            sx={{
+              fontSize:   '0.8125rem',
+              fontStyle:  'italic',
+              fontFamily: '"Fraunces", serif',
+              color:      isDark ? 'rgba(255,245,220,0.42)' : colors.ink[400],
+              mt:         0.375,
+              lineHeight: 1.45,
+            }}
+          >
+            — {task.blockedReason}
+          </Typography>
+        )}
+
         {/* Tags */}
         {task.tags?.length > 0 && (
           <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5, flexWrap: 'wrap' }}>
@@ -365,8 +429,26 @@ const TaskRow = ({
           </Box>
         )}
 
+        {/* Parked-since label — the blocked row's answer to the aging label */}
+        {isBlocked && parkedLabel && (
+          <Typography
+            sx={{
+              fontFamily:   '"IBM Plex Mono", monospace',
+              fontSize:     '0.5625rem',
+              letterSpacing:'0.08em',
+              textTransform:'uppercase',
+              color:        staleInk,
+              mt:           0.375,
+              fontWeight:   600,
+              opacity:      0.85,
+            }}
+          >
+            {parkedLabel}
+          </Typography>
+        )}
+
         {/* Aging label — only for significantly aged tasks */}
-        {agingLabel && !isSunk && days > 1 && (
+        {agingLabel && !isSunk && !isBlocked && days > 1 && (
           <Typography
             sx={{
               fontFamily:   '"IBM Plex Mono", monospace',
@@ -385,7 +467,7 @@ const TaskRow = ({
 
       {/* ─── Action buttons — desktop hover / mobile tap ──────── */}
       <AnimatePresence>
-        {showActions && (onEdit || onDelete || onSaveAsNote || onCancel) && (
+        {showActions && (onEdit || onDelete || onSaveAsNote || onCancel || onBlock || onUnblock) && (
           <motion.div
             initial={{ opacity: 0, scale: 0.94 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -472,6 +554,38 @@ const TaskRow = ({
                   }}
                 >
                   {isCancelled ? <RotateCcw size={14} strokeWidth={1.75} /> : <Ban size={14} strokeWidth={1.75} />}
+                </IconButton>
+              </Tooltip>
+            )}
+            {isBlocked && onUnblock && (
+              <Tooltip title="Unblock — put it back in play" placement="top">
+                <IconButton
+                  size="small"
+                  onClick={(e) => { e.stopPropagation(); onUnblock(task); }}
+                  sx={{
+                    color:   staleInk,
+                    width:   28,
+                    height:  28,
+                    '&:hover': { color: colors.aging.fresh },
+                  }}
+                >
+                  <Play size={14} strokeWidth={1.75} />
+                </IconButton>
+              </Tooltip>
+            )}
+            {!isBlocked && !isSunk && onBlock && (
+              <Tooltip title="Block… — park it, waiting on something" placement="top">
+                <IconButton
+                  size="small"
+                  onClick={(e) => { e.stopPropagation(); onBlock(task); }}
+                  sx={{
+                    color:   isDark ? 'rgba(255,245,220,0.35)' : colors.ink[400],
+                    width:   28,
+                    height:  28,
+                    '&:hover': { color: staleInk },
+                  }}
+                >
+                  <PauseCircle size={14} strokeWidth={1.75} />
                 </IconButton>
               </Tooltip>
             )}

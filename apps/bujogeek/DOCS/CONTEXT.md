@@ -121,6 +121,13 @@ Unchanged: per-day drag order (`dateKey 'yyyy-MM-dd'`, local dates), multi-line 
 
 ---
 
+**Frontend (2026-09-03):** Today renders a `BlockedSection` last (always visible, count in the
+header, empty state when none). `TaskRow` shows a plum BLOCKED chip, the reason as muted
+secondary text and "parked N days"; Block… / Unblock live in the row action strip and open
+`BlockTaskDialog` (optional reason, 280 max). Quick-add accepts `~blocked <reason>` as the
+last token (create → blockTask). ReviewPage excludes blocked tasks; BacklogList and TaskList
+render them with the indicator. PageHeader stats show "N blocked".
+
 ## Invariants (do not regress)
 
 - **Ownership**: every gateway read/write is scoped by `createdBy` in the service layer (`requireUser` pattern). Cross-user ids behave as not-found. Covered by jest suites.

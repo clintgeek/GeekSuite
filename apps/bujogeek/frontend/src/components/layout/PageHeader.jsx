@@ -2,6 +2,7 @@ import { Box, Typography, IconButton, useTheme } from '@mui/material';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { format, isToday, isYesterday, isTomorrow } from 'date-fns';
 import { motion } from 'framer-motion';
+import { toneForMode } from '@geeksuite/ui';
 import { colors } from '../../theme/colors';
 
 /**
@@ -18,6 +19,8 @@ import { colors } from '../../theme/colors';
 const PageHeader = ({ date, onDateChange, stats }) => {
   const theme  = useTheme();
   const isDark = theme.palette.mode === 'dark';
+  // Plum reads ~2.5:1 on dark paper; lift it when used as text.
+  const staleInk = toneForMode(colors.aging.stale, theme, { darkenBy: 0 });
 
   const handlePrev = () => {
     const prev = new Date(date);
@@ -254,6 +257,14 @@ const PageHeader = ({ date, onDateChange, stats }) => {
                   sx={{ color: isDark ? `${colors.aging.warning}cc` : colors.aging.warning }}
                 >
                   {stats.overdue} carried
+                </Box>
+              </>
+            )}
+            {stats.blocked > 0 && (
+              <>
+                <Box component="span" sx={{ opacity: 0.4 }}>·</Box>
+                <Box component="span" sx={{ color: staleInk }}>
+                  {stats.blocked} blocked
                 </Box>
               </>
             )}

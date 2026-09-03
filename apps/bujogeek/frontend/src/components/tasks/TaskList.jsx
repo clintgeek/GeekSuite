@@ -208,6 +208,7 @@ const TaskList = ({ tasks = [], viewType = 'daily' }) => {
 
     // Double border for completed + priority
     const isCompleted = task.status === 'completed';
+    const isBlocked = task.status === 'blocked';
     const hasPriority = !!task.priority;
 
     // Determine if task is carried over (pending, unscheduled, created before today)
@@ -315,6 +316,29 @@ const TaskList = ({ tasks = [], viewType = 'daily' }) => {
                   {task.signifier || '*'}
                 </Typography>
                 {task.content}
+                {/* Blocked entries stay in the search corpus (the gateway only
+                    hides them from the log views), so they get the same
+                    "parked, not late" stamp TaskRow uses. */}
+                {isBlocked && (
+                  <Box
+                    component="span"
+                    sx={{
+                      ml: 1,
+                      fontFamily: 'monospace',
+                      fontSize: '0.625rem',
+                      fontWeight: 700,
+                      letterSpacing: '0.08em',
+                      textTransform: 'uppercase',
+                      color: 'text.secondary',
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      borderRadius: '3px',
+                      px: 0.5,
+                    }}
+                  >
+                    Blocked
+                  </Box>
+                )}
               </Box>
             }
             secondary={
@@ -322,6 +346,11 @@ const TaskList = ({ tasks = [], viewType = 'daily' }) => {
                 {task.dueDate && (
                   <Typography variant="caption" color="text.secondary">
                     {formatDueDate(task.dueDate)}
+                  </Typography>
+                )}
+                {isBlocked && task.blockedReason && (
+                  <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                    Blocked — {task.blockedReason}
                   </Typography>
                 )}
                 {task.tags && task.tags.length > 0 && (

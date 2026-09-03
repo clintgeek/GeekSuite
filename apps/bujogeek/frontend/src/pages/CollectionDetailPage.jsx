@@ -31,6 +31,7 @@ import useKeyboardNav from '../hooks/useKeyboardNav';
 import useGlobalShortcuts from '../hooks/useGlobalShortcuts';
 import InlineQuickAdd from '../components/today/InlineQuickAdd';
 import TaskRow from '../components/tasks/TaskRow';
+import BlockTaskDialog from '../components/tasks/BlockTaskDialog';
 import TaskEditor from '../components/tasks/TaskEditor';
 import SkeletonLoader from '../components/shared/SkeletonLoader';
 import EmptyState from '../components/shared/EmptyState';
@@ -51,7 +52,7 @@ const CollectionDetailPage = () => {
   const isDark = theme.palette.mode === 'dark';
   const navigate = useNavigate();
   const { notify } = useToast();
-  const { createTask, updateTaskStatus, deleteTask } = useTaskContext();
+  const { createTask, updateTaskStatus, blockTask, unblockTask, deleteTask } = useTaskContext();
   const { updateCollection, deleteCollection } = useCollections();
 
   const { data, loading, refetch } = useQuery(GET_COLLECTION, {
@@ -64,6 +65,7 @@ const CollectionDetailPage = () => {
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameForm, setRenameForm] = useState({ name: '', description: '' });
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [blockingTask, setBlockingTask] = useState(null);
 
   const collection = data?.collection ?? null;
   const tasks = useMemo(() => collection?.tasks ?? [], [collection]);
@@ -80,13 +82,20 @@ const CollectionDetailPage = () => {
 
   // ─── Entry handlers — the same context operations the daily log uses ───
   const handleAdd = useCallback(async (taskData) => {
+    // `~blocked [reason]` is a two-step create — createTask has no blocked
+    // input, so the entry is created and then parked.
+    const { blocked, blockedReason, ...fields } = taskData;
+    let created;
     try {
-      await createTask(taskData);
+      created = await createTask(fields);
     } catch {
       return; // the context has already surfaced the error
     }
+    if (blocked && created) {
+      await blockTask((created.id || created._id), blockedReason);
+    }
     refetch();
-  }, [createTask, refetch]);
+  }, [createTask, blockTask, refetch]);
 
   const handleStatusToggle = useCallback(async (task) => {
     const next = task.status === 'completed' ? 'pending' : 'completed';
@@ -107,6 +116,25 @@ const CollectionDetailPage = () => {
   }, [deleteTask, refetch]);
 
   const handleEdit = useCallback((task) => setEditingTask(task), []);
+
+  const handleBlockRequest = useCallback((task) => setBlockingTask(task), []);
+
+  const handleBlockConfirm = useCallback(async (reason) => {
+    const task = blockingTask;
+    setBlockingTask(null);
+    if (!task) return;
+    const parked = await blockTask((task.id || task._id), reason);
+    if (!parked) return; // the context has already surfaced the error
+    notify('Entry blocked', { tone: 'success' });
+    refetch();
+  }, [blockingTask, blockTask, notify, refetch]);
+
+  const handleUnblock = useCallback(async (task) => {
+    const unblocked = await unblockTask(task.id || task._id);
+    if (!unblocked) return;
+    notify('Entry unblocked', { tone: 'success' });
+    refetch();
+  }, [unblockTask, notify, refetch]);
 
   // ─── Collection handlers ───
   const handleToggleArchive = async () => {
@@ -159,7 +187,7 @@ const CollectionDetailPage = () => {
     onEdit: handleEdit,
     onDelete: handleDelete,
     onCancel: handleCancelToggle,
-    enabled: !loading && !editingTask && !renameOpen && !deleteOpen,
+    enabled: !loading && !editingTask && !renameOpen && !deleteOpen && !blockingTask,
   });
 
   useGlobalShortcuts();
@@ -193,6 +221,8 @@ const CollectionDetailPage = () => {
             onEdit={handleEdit}
             onDelete={handleDelete}
             onCancel={handleCancelToggle}
+            onBlock={handleBlockRequest}
+            onUnblock={handleUnblock}
             focused={(task.id || task._id) === focusedTaskId}
           />
         </Box>
@@ -373,6 +403,13 @@ const CollectionDetailPage = () => {
         open={Boolean(editingTask)}
         onClose={() => { setEditingTask(null); refetch(); }}
         task={editingTask}
+      />
+
+      <BlockTaskDialog
+        open={Boolean(blockingTask)}
+        task={blockingTask}
+        onClose={() => setBlockingTask(null)}
+        onConfirm={handleBlockConfirm}
       />
 
       {/* ─── Rename dialog ────────────────────────────────────── */}

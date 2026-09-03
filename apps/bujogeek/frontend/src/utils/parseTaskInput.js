@@ -9,6 +9,8 @@
  *   Recurrence:               (daily)  (weekly)  (monthly)
  *   Note:                     ^some note text  (must be last token)
  *   NoteGeek note:            $^note text  (saves to NoteGeek; must be last token)
+ *   Blocked:                  ~blocked waiting on legal  (parks the task; the
+ *                             reason is optional and must be the last token)
  *   Date:                     /today  /tomorrow  /next-week  /next-month
  *                             /monday … /sunday  (or /mon … /sun)
  *                             /next-monday … /next-sunday
@@ -19,7 +21,13 @@
  * Recurrence is emitted as an RRULE string only — the legacy
  * `recurrencePattern` enum is no longer produced by any surface.
  *
- * Returns: { content, signifier, priority, dueDate, tags, note, noteGeekNote, recurrenceRule }
+ * `~blocked` and `^note` both anchor at the end of the line, so only one of
+ * them can be the trailing token: `^note` is read first and would swallow a
+ * `~blocked` that came after it. Write the block token last when it's the only
+ * trailing token, and prefer the row's "Block…" action when a task needs both.
+ *
+ * Returns: { content, signifier, priority, dueDate, tags, note, noteGeekNote,
+ *            recurrenceRule, blocked, blockedReason }
  */
 
 const DAY_NAMES = {
@@ -113,6 +121,7 @@ const PATTERNS = {
   type: /[*@\-!?]/,
   noteGeek: /\$\^(.+)$/,
   note: /\^(.+)$/,
+  blocked: /~blocked(?:\s+(.+))?$/i,
 };
 
 /* ---------- main export ---------- */
@@ -124,6 +133,8 @@ export default function parseTaskInput(text) {
   let signifier = null;
   let note = null;
   let noteGeekNote = null;
+  let blocked = false;
+  let blockedReason = null;
   let recurrenceFreq = null;
   const tags = [];
 
@@ -154,6 +165,17 @@ export default function parseTaskInput(text) {
   if (noteMatch) {
     note = noteMatch[1].trim();
     content = content.replace(noteMatch[0], '').trim();
+  }
+
+  // 2c. Blocked — `~blocked` with an optional reason, anchored at the end.
+  //     Parsed after the note tokens (which share the end-of-line anchor) and
+  //     before priority, so a reason may contain `!high` and other token-ish
+  //     prose without being torn apart.
+  const blockedMatch = content.match(PATTERNS.blocked);
+  if (blockedMatch) {
+    blocked = true;
+    blockedReason = blockedMatch[1]?.trim() || null;
+    content = content.replace(blockedMatch[0], '').trim();
   }
 
   // 3. Priority — parsed BEFORE signifier so `!high` isn't mistaken for the
@@ -270,5 +292,7 @@ export default function parseTaskInput(text) {
     note: note || undefined,
     noteGeekNote: noteGeekNote || undefined,
     recurrenceRule: recurrenceRule || undefined,
+    blocked: blocked || undefined,
+    blockedReason: blockedReason || undefined,
   };
 }

@@ -19,6 +19,7 @@ const TodaySection = ({
   onDelete,
   onSaveAsNote,
   onCancel,
+  onBlock,
   focusedTaskId,
   onReorder,
 }) => {
@@ -75,6 +76,7 @@ const TodaySection = ({
               onDelete={onDelete}
               onSaveAsNote={onSaveAsNote}
               onCancel={onCancel}
+              onBlock={onBlock}
               focused={focusedTaskId === (task.id || task._id)}
             />
           </Reorder.Item>

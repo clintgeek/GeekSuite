@@ -49,6 +49,10 @@ const ReviewPage = () => {
     const taskArray = normalizeTasks(tasks);
     return taskArray.filter((task) => {
       if (task.status === 'completed' || task.status === 'cancelled') return false;
+      // Parked tasks are out of the ritual: the review asks "keep, move,
+      // backlog or cancel?" and a blocked task has already answered "waiting".
+      // The weekly mode reads the `all` corpus, which still contains them.
+      if (task.status === 'blocked') return false;
       if (reviewedIds.has((task.id || task._id))) return false;
       if (mode === 'endofday') {
         return task.status === 'pending';
@@ -62,6 +66,7 @@ const ReviewPage = () => {
     const taskArray = normalizeTasks(tasks);
     return taskArray.filter((task) => {
       if (task.status === 'completed' || task.status === 'cancelled') return false;
+      if (task.status === 'blocked') return false;
       if (mode === 'endofday') return task.status === 'pending';
       const { days } = getTaskAge(task);
       return days > 0;

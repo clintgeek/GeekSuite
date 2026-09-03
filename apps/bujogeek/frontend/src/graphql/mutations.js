@@ -97,6 +97,8 @@ export const CREATE_TASK = gql`
       migratedFrom
       migratedTo
       isBacklog
+      blockedReason
+      blockedAt
       taskType
       recurrencePattern
       recurrenceRule
@@ -131,6 +133,8 @@ export const UPDATE_TASK = gql`
       migratedFrom
       migratedTo
       isBacklog
+      blockedReason
+      blockedAt
       taskType
       recurrencePattern
       recurrenceRule
@@ -169,6 +173,62 @@ export const UPDATE_TASK_STATUS = gql`
       migratedFrom
       migratedTo
       isBacklog
+      blockedReason
+      blockedAt
+      taskType
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+/**
+ * Park a task. `reason` is optional (280 chars max, enforced by the gateway);
+ * re-blocking an already-blocked task rewrites the reason and keeps the
+ * original `blockedAt`, so "parked since" never drifts.
+ */
+export const BLOCK_TASK = gql`
+  mutation BlockTask($id: ID!, $reason: String) {
+    blockTask(id: $id, reason: $reason) {
+      id
+      content
+      signifier
+      status
+      priority
+      note
+      tags
+      dueDate
+      originalDate
+      migratedFrom
+      migratedTo
+      isBacklog
+      blockedReason
+      blockedAt
+      taskType
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+/** Un-park a task: back to `pending`, blocked fields cleared, dueDate untouched. */
+export const UNBLOCK_TASK = gql`
+  mutation UnblockTask($id: ID!) {
+    unblockTask(id: $id) {
+      id
+      content
+      signifier
+      status
+      priority
+      note
+      tags
+      dueDate
+      originalDate
+      migratedFrom
+      migratedTo
+      isBacklog
+      blockedReason
+      blockedAt
       taskType
       createdAt
       updatedAt
@@ -191,6 +251,8 @@ export const MIGRATE_TASK_TO_FUTURE = gql`
       migratedFrom
       migratedTo
       isBacklog
+      blockedReason
+      blockedAt
       taskType
       createdAt
       updatedAt
