@@ -162,6 +162,9 @@ app.use('/api/api-keys', apiKeyRoutes);
 app.use('/api/apps', appsRoutes);
 app.use('/api/connections', oauthConnectionsRoutes);
 app.use('/api/ambient', ambientRoutes);
+// Infrastructure browsers — admin only. Each router applies `requireAdmin`
+// itself (a `router.use` at the top of the file) so the gate travels with the
+// router and cannot be lost by a re-mount here.
 app.use('/api/mongo', mongoRoutes);
 app.use('/api/redis', redisRoutes);
 app.use('/api/postgres', postgresRoutes);

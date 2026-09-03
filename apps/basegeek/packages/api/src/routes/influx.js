@@ -1,11 +1,15 @@
 import express from 'express';
-import { authenticateToken } from '../middleware/auth.js';
+import { requireAdmin } from '../middleware/auth.js';
 import { getInfluxConfig, getInfluxQueryApi, pingInflux } from '../config/influx.js';
 import logger from '../lib/logger.js';
 
 const router = express.Router();
 
-router.use(authenticateToken);
+// Admin only — the whole router. `/status` returns the Influx url/org/bucket
+// config and queries the bucket's measurement names and point counts — the
+// same infrastructure inventory as routes/mongo.js, which carries the full
+// note. See DOCS/AUTH_SYSTEM.md (Roles).
+router.use(requireAdmin);
 
 const buildBaseStatus = () => ({
   status: 'disconnected',

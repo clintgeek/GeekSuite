@@ -1,10 +1,29 @@
 import express from 'express';
 import App from '../models/App.js';
 import logger from '../lib/logger.js';
+import { requireAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// GET /api/apps — list all enabled apps (sorted)
+// The app registry is deliberately split down the middle:
+//
+//   reads  — public. Nothing here is secret: display name, icon, colour, tag
+//            and a public `https://*.clintgeek.com` URL — the same directory
+//            the public Portal already prints. The public health proxy
+//            (`/api/health/app/:name`) resolves an app's base URL out of this
+//            same collection server-side, so its contents already reach
+//            unauthenticated callers by another door. (The only in-repo HTTP
+//            caller today is basegeek's own authenticated home page; the
+//            Portal renders a hardcoded list. See DOCS/AUTH_SYSTEM.md.)
+//   writes — admin only. Creating, renaming, disabling or deleting an app —
+//            or re-seeding the defaults — rewrites what every consumer of the
+//            registry believes the suite *is*, including the URL the health
+//            proxy will happily fetch server-side. That is an administrative
+//            act, and until 2026-09-03 it took no credentials at all.
+//
+// See DOCS/AUTH_SYSTEM.md (Roles).
+
+// GET /api/apps — list all enabled apps (sorted) [public]
 router.get('/', async (req, res) => {
   try {
     const includeDisabled = req.query.all === 'true';
@@ -17,7 +36,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/apps/:name — get single app by name
+// GET /api/apps/:name — get single app by name [public]
 router.get('/:name', async (req, res) => {
   try {
     const app = await App.findOne({ name: req.params.name.toLowerCase() });
@@ -28,8 +47,8 @@ router.get('/:name', async (req, res) => {
   }
 });
 
-// POST /api/apps — create a new app
-router.post('/', async (req, res) => {
+// POST /api/apps — create a new app [admin]
+router.post('/', requireAdmin, async (req, res) => {
   try {
     const { name, displayName, description, icon, color, url, healthEndpoint, enabled, tag, sortOrder } = req.body;
     const app = new App({ name, displayName, description, icon, color, url, healthEndpoint, enabled, tag, sortOrder });
@@ -43,8 +62,8 @@ router.post('/', async (req, res) => {
   }
 });
 
-// PUT /api/apps/:name — update an app
-router.put('/:name', async (req, res) => {
+// PUT /api/apps/:name — update an app [admin]
+router.put('/:name', requireAdmin, async (req, res) => {
   try {
     const app = await App.findOneAndUpdate(
       { name: req.params.name.toLowerCase() },
@@ -58,8 +77,8 @@ router.put('/:name', async (req, res) => {
   }
 });
 
-// DELETE /api/apps/:name — delete an app
-router.delete('/:name', async (req, res) => {
+// DELETE /api/apps/:name — delete an app [admin]
+router.delete('/:name', requireAdmin, async (req, res) => {
   try {
     const app = await App.findOneAndDelete({ name: req.params.name.toLowerCase() });
     if (!app) return res.status(404).json({ message: 'App not found' });
@@ -69,8 +88,8 @@ router.delete('/:name', async (req, res) => {
   }
 });
 
-// POST /api/apps/seed — seed default apps (idempotent)
-router.post('/seed', async (req, res) => {
+// POST /api/apps/seed — seed default apps (idempotent) [admin]
+router.post('/seed', requireAdmin, async (req, res) => {
   const defaults = [
     { name: 'basegeek', displayName: 'baseGeek', description: 'Auth & shared services', icon: 'Dashboard', color: '#e8a849', url: 'https://basegeek.clintgeek.com', tag: 'platform', sortOrder: 0 },
     { name: 'notegeek', displayName: 'noteGeek', description: 'Notes & documents', icon: 'Note', color: '#a99df0', url: 'https://notegeek.clintgeek.com', tag: 'productivity', sortOrder: 1 },

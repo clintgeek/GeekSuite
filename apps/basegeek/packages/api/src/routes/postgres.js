@@ -1,12 +1,16 @@
 import express from 'express';
 import pkg from 'pg';
-import { authenticateToken } from '../middleware/auth.js';
+import { requireAdmin } from '../middleware/auth.js';
 const { Client } = pkg;
 
 const router = express.Router();
 
-// Protect all routes
-router.use(authenticateToken);
+// Admin only — the whole router. `/status` connects with basegeek's own
+// Postgres credentials and reports server version, uptime, database size and
+// the live connection count — the same infrastructure inventory as
+// routes/mongo.js, which carries the full note.
+// See DOCS/AUTH_SYSTEM.md (Roles).
+router.use(requireAdmin);
 
 const POSTGRES_URL = process.env.POSTGRES_URL || 'postgres://localhost:5432/datageek';
 

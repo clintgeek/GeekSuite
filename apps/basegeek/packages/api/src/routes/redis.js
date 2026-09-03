@@ -1,11 +1,14 @@
 import express from 'express';
 import { createClient } from 'redis';
-import { authenticateToken } from '../middleware/auth.js';
+import { requireAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// Protect all routes
-router.use(authenticateToken);
+// Admin only — the whole router. `/status` returns the full Redis `INFO`
+// dump (`statsRaw`) for the shared instance — the same infrastructure
+// inventory as routes/mongo.js, which carries the full note.
+// See DOCS/AUTH_SYSTEM.md (Roles).
+router.use(requireAdmin);
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://192.168.1.17:6380';
 

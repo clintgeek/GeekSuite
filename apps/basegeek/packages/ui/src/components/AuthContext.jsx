@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { useUser } from '@geeksuite/user';
 import api from '../api';
 
 const AuthContext = createContext(null);
@@ -54,6 +55,36 @@ function onLogout(callback) {
   }
 }
 
+/**
+ * Hydrates the shared `@geeksuite/user` store from the session we just
+ * resolved, the way notegeek's AppBootstrapper does. Renders nothing.
+ *
+ * Not merely a convenience for the Account page: the shared ThemeProvider only
+ * syncs a theme change to the user document once the store reports `loaded`,
+ * so without this the top-bar theme toggle would move the `geek_theme` cookie
+ * and silently fail to persist.
+ *
+ * It is a separate component rather than an effect in AuthProvider because
+ * `useUser()` subscribes to the store — inside the provider, every preference
+ * write would re-render the whole app.
+ */
+function UserStoreSync() {
+  const { user, loading } = useBaseGeekAuth();
+  const { bootstrap, reset } = useUser();
+
+  useEffect(() => {
+    if (loading) return;
+    if (user) {
+      // Non-fatal on failure: preferences simply stay unloaded.
+      bootstrap().catch(() => {});
+    } else {
+      reset();
+    }
+  }, [loading, user, bootstrap, reset]);
+
+  return null;
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -82,6 +113,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider value={{ user, loading, isAuthenticated: !!user, logout }}>
+      <UserStoreSync />
       {children}
     </AuthContext.Provider>
   );

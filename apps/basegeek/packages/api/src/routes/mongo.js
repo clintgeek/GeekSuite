@@ -2,7 +2,7 @@ import express from 'express';
 import { Router } from 'express';
 import { MongoClient } from 'mongodb';
 import dotenv from 'dotenv';
-import { authenticateToken } from '../middleware/auth.js';
+import { requireAdmin } from '../middleware/auth.js';
 import logger from '../lib/logger.js';
 
 // Load environment variables
@@ -10,8 +10,19 @@ dotenv.config();
 
 const router = express.Router();
 
-// Example: protect all routes
-router.use(authenticateToken);
+// Admin only — the whole router.
+//
+// `/status` connects with basegeek's own Mongo credentials and returns the
+// server's `serverStatus` (host, memory, connections) plus *every* database on
+// the instance with each collection's document count and size. That is a
+// cluster-wide inventory of the entire suite's data, strictly more privileged
+// than the user list which has been admin-gated since 2026-09-02 — yet until
+// 2026-09-03 the gate here was plain authentication. Under SSO every suite app
+// carries a valid basegeek token, so any logged-in user of any app could read
+// it. The intended consumers are the parked dashgeek console and basegeek's
+// own DataGeek pages, both admin surfaces.
+// See DOCS/AUTH_SYSTEM.md (Roles).
+router.use(requireAdmin);
 
 // MongoDB connection details from environment variables
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://datageek_user:DataGeek_User_2024@192.168.1.17:27018/datageek?authSource=admin';
