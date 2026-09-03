@@ -45,11 +45,11 @@ build_app() {
     return 1
   fi
 
-  echo -e "${YELLOW}🔨 Building geeksuite/${app}:latest ...${NC}"
-  docker build "${DOCKER_BUILD_EXTRA[@]}" -t "geeksuite/${app}:latest" -f "$dockerfile" .
+  echo -e "${YELLOW}🔨 Building geeksuite/${app}:latest and ghcr.io/clintgeek/${app}:latest ...${NC}"
+  docker build "${DOCKER_BUILD_EXTRA[@]}" -t "geeksuite/${app}:latest" -t "ghcr.io/clintgeek/${app}:latest" -f "$dockerfile" .
 
   if [ $? -eq 0 ]; then
-    echo -e "${GREEN}✓ geeksuite/${app}:latest built successfully${NC}"
+    echo -e "${GREEN}✓ geeksuite/${app}:latest + ghcr.io/clintgeek/${app}:latest built successfully${NC}"
   else
     echo -e "${RED}✗ Failed to build geeksuite/${app}:latest${NC}"
     return 1
