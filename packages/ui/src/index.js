@@ -1,5 +1,15 @@
 export { LoginSplash } from './LoginSplash';
+export { toneForMode } from './color';
 export { createGeekSuiteTheme, geekDesignTokens } from './createGeekSuiteTheme';
+export {
+  GEEK_TOAST_DURATION,
+  GEEK_TOAST_MAX,
+  GeekEmptyState,
+  GeekErrorState,
+  GeekToastContext,
+  GeekToastProvider,
+  useToast,
+} from './feedback';
 export { FocusModeToggle, GlobalSearchButton, QuickCaptureButton } from './features';
 export { FocusModeProvider, useFocusMode } from './focus';
 export {

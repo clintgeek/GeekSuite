@@ -9,7 +9,7 @@ import EmptyState from '../shared/EmptyState';
 import SkeletonLoader from '../shared/SkeletonLoader';
 import { getTaskAge } from '../../utils/taskAging';
 import { normalizeTasks } from '../../utils/normalizeTasks';
-import { lighten } from '@mui/material/styles';
+import { toneForMode } from '@geeksuite/ui';
 import { colors } from '../../theme/colors';
 
 /**
@@ -67,8 +67,9 @@ const BacklogList = () => {
 
   const captionInk = isDark ? 'rgba(255,255,255,0.32)' : colors.ink[300];
   const mutedInk = isDark ? 'rgba(255,255,255,0.5)' : colors.ink[400];
-  // Plum reads ~2.5:1 on dark paper; lift it as text
-  const staleInk = isDark ? lighten(colors.aging.stale, 0.35) : colors.aging.stale;
+  // Plum reads ~2.5:1 on dark paper; lift it as text. Light mode keeps the
+  // authored hue, hence `darkenBy: 0`.
+  const staleInk = toneForMode(colors.aging.stale, theme, { darkenBy: 0 });
   const dottedRule = `1px dotted ${isDark ? 'rgba(255,255,255,0.14)' : colors.ink[200]}`;
 
   if (isLoading) {

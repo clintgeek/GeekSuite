@@ -14,7 +14,7 @@ import EmptyState from '../shared/EmptyState';
 import SkeletonLoader from '../shared/SkeletonLoader';
 import TemplateApply from './TemplateApply';
 import TemplateEditor from './TemplateEditor';
-import { lighten } from '@mui/material/styles';
+import { GeekErrorState, toneForMode } from '@geeksuite/ui';
 import { colors } from '../../theme/colors';
 
 const TEMPLATE_TYPES = {
@@ -35,7 +35,7 @@ const TEMPLATE_TYPES = {
 const TemplateList = () => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
-  const { templates, loading, error, deleteTemplate } = useTemplates();
+  const { templates, loading, error, deleteTemplate, refreshTemplates } = useTemplates();
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState(null);
@@ -66,11 +66,15 @@ const TemplateList = () => {
 
   if (error) {
     return (
-      <Box sx={{ py: 4, textAlign: 'center' }}>
-        <Typography sx={{ color: isDark ? lighten(colors.aging.overdue, 0.35) : colors.aging.overdue, fontSize: '0.875rem' }}>
-          Failed to load templates: {error}
-        </Typography>
-      </Box>
+      <GeekErrorState
+        title="Couldn’t load your templates"
+        error={error}
+        onRetry={refreshTemplates}
+        // The glyph carries BuJoGeek's own overdue red rather than the suite
+        // error tone; `darkenBy: 0` because the hue is authored for light paper
+        // and only needs the dark-mode lift.
+        iconSx={{ color: toneForMode(colors.aging.overdue, theme, { darkenBy: 0 }) }}
+      />
     );
   }
 

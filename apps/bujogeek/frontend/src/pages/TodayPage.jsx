@@ -3,7 +3,6 @@ import { Box } from '@mui/material';
 import { useApolloClient, useMutation } from '@apollo/client';
 import { addDays, format, isWithinInterval, startOfDay } from 'date-fns';
 import { useTaskContext } from '../context/TaskContext';
-import { useToast } from '../components/shared/Toast';
 import PageHeader from '../components/layout/PageHeader';
 import OverdueSection from '../components/today/OverdueSection';
 import TodaySection from '../components/today/TodaySection';
@@ -17,6 +16,7 @@ import useGlobalShortcuts from '../hooks/useGlobalShortcuts';
 import { CREATE_NOTE } from '../graphql/notegeekMutations';
 import { GET_MONTHLY_TASKS } from '../graphql/queries';
 import { getTaskAge } from '../utils/taskAging';
+import { useToast } from '@geeksuite/ui';
 
 const TodayPage = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -28,7 +28,7 @@ const TodayPage = () => {
   // not matching LoadingState enum, and (b) other views (Review, Plan) mutate the
   // shared tasks array, so Today renders stale foreign tasks until its own fetch completes.
   const [todayLoaded, setTodayLoaded] = useState(false);
-  const toast = useToast();
+  const { notify } = useToast();
   const [createNote] = useMutation(CREATE_NOTE);
   const apolloClient = useApolloClient();
   const {
@@ -104,11 +104,11 @@ const TodayPage = () => {
           tags: task.tags || [],
         },
       });
-      toast.success('Note saved to NoteGeek');
+      notify('Note saved to NoteGeek', { tone: 'success' });
     } catch (err) {
-      toast.error('Failed to save note to NoteGeek');
+      notify('Failed to save note to NoteGeek', { tone: 'error' });
     }
-  }, [createNote, toast]);
+  }, [createNote, notify]);
 
   const handleQuickAdd = useCallback(async (taskData) => {
     try {

@@ -3,11 +3,11 @@ import { Box, InputBase, Typography, useTheme } from '@mui/material';
 import { Hash } from 'lucide-react';
 import { useMutation } from '@apollo/client';
 import { colors } from '../../theme/colors';
-import { useToast } from '../shared/Toast';
 import TaskInputHelpButton from '../tasks/TaskInputHelpButton';
 import parseTaskInput from '../../utils/parseTaskInput';
 import useTaskTags from '../../hooks/useTaskTags';
 import { CREATE_NOTE } from '../../graphql/notegeekMutations';
+import { useToast } from '@geeksuite/ui';
 
 /* ---------- tokenizer ---------- */
 
@@ -181,7 +181,7 @@ const InlineQuickAdd = ({
   const overlayRef = useRef(null);
   const [value, setValue] = useState('');
   const [focused, setFocused] = useState(false);
-  const toast = useToast();
+  const { notify } = useToast();
   const [createNote] = useMutation(CREATE_NOTE);
   const allTags = useTaskTags();
 
@@ -319,8 +319,8 @@ const InlineQuickAdd = ({
           tags: parsed.tags || [],
         },
       })
-        .then(() => toast.success('Note saved to NoteGeek'))
-        .catch(() => toast.error('Failed to save note to NoteGeek'));
+        .then(() => notify('Note saved to NoteGeek', { tone: 'success' }))
+        .catch(() => notify('Failed to save note to NoteGeek', { tone: 'error' }));
     }
 
     // Strip noteGeekNote before passing to task creation

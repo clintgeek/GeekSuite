@@ -1,4 +1,4 @@
-import { alpha, createTheme } from '@mui/material/styles';
+import { alpha, createTheme, lighten } from '@mui/material/styles';
 import { geekDesignTokens } from './designTokens.js';
 
 const {
@@ -88,6 +88,20 @@ function buildTypography() {
 function buildComponents(themePalette) {
   const focusColor = themePalette.primary.main;
   const transition = `${motion.duration.base}ms ${motion.easing.standard}`;
+  const isDark = themePalette.mode === 'dark';
+
+  // Tooltips are palette-derived rather than MUI's stock grey-700 wash, which
+  // reads as a foreign object on a warm paper and, in dark mode, as a *lighter*
+  // box than the surface it explains. The rule (TODO_ORDER #19):
+  //   dark  — the app's own paper, lifted a step, with its primary text on it;
+  //   light — inverted: primary text becomes the surface, paper becomes the ink.
+  // The light pair is the app's asserted `text.primary on background.paper`
+  // read backwards, so it inherits that pair's AA guarantee for free; the dark
+  // pair is checked directly in `__tests__/themeContrast.test.js`.
+  const tooltipBg = isDark
+    ? lighten(themePalette.background.paper, 0.16)
+    : themePalette.text.primary;
+  const tooltipFg = isDark ? themePalette.text.primary : themePalette.background.paper;
 
   return {
     MuiCssBaseline: {
@@ -276,6 +290,11 @@ function buildComponents(themePalette) {
           fontSize: typography.scale.caption.fontSize,
           fontWeight: typography.weights.interactive,
           padding: `${spacing.scale[1]}px ${spacing.scale[2]}px`,
+          backgroundColor: tooltipBg,
+          color: tooltipFg,
+        },
+        arrow: {
+          color: tooltipBg,
         },
       },
     },

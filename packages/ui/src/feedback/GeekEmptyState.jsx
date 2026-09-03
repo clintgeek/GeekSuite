@@ -9,6 +9,9 @@
  *
  * `text.muted` (not `text.disabled`) for the description: empty-state copy is
  * copy, and owes AA. See the contrast suite's text-tier notes.
+ *
+ * `children` is an extra slot between the description and the action —
+ * `GeekErrorState` uses it for its detail line.
  */
 import { forwardRef } from 'react';
 import Box from '@mui/material/Box';
@@ -23,6 +26,7 @@ export const GeekEmptyState = forwardRef(function GeekEmptyState(
     title,
     description,
     action,
+    children,
     compact = false,
     align = 'center',
     maxWidth = 420,
@@ -89,6 +93,8 @@ export const GeekEmptyState = forwardRef(function GeekEmptyState(
           {description}
         </Typography>
       ) : null}
+
+      {children}
 
       {action ? (
         <Box

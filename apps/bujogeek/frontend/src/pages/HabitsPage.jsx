@@ -27,8 +27,8 @@ import useHabits, { toDateKey } from '../hooks/useHabits';
 import useGlobalShortcuts from '../hooks/useGlobalShortcuts';
 import SkeletonLoader from '../components/shared/SkeletonLoader';
 import EmptyState from '../components/shared/EmptyState';
-import { useToast } from '../components/shared/Toast';
 import { colors } from '../theme/colors';
+import { useToast } from '@geeksuite/ui';
 
 /**
  * HabitsPage — a week at a glance.
@@ -72,7 +72,7 @@ const emptyForm = { name: '', daysOfWeek: [], color: HABIT_COLORS[0] };
 const HabitsPage = () => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
-  const toast = useToast();
+  const { notify } = useToast();
 
   useGlobalShortcuts();
 
@@ -117,7 +117,7 @@ const HabitsPage = () => {
     try {
       await toggle(habit.id, key);
     } catch {
-      toast.error(`Couldn’t update ${habit.name}`);
+      notify(`Couldn’t update ${habit.name}`, { tone: 'error' });
     }
   };
 
@@ -157,7 +157,7 @@ const HabitsPage = () => {
       }
       closeDialog();
     } catch {
-      toast.error('Failed to save habit');
+      notify('Failed to save habit', { tone: 'error' });
     } finally {
       setSaving(false);
     }
@@ -167,9 +167,9 @@ const HabitsPage = () => {
     event?.stopPropagation();
     try {
       await updateHabit(habit.id, { archived: !habit.archived });
-      toast.success(habit.archived ? 'Habit restored' : 'Habit archived');
+      notify(habit.archived ? 'Habit restored' : 'Habit archived', { tone: 'success' });
     } catch {
-      toast.error('Failed to update habit');
+      notify('Failed to update habit', { tone: 'error' });
     }
   };
 
@@ -179,9 +179,9 @@ const HabitsPage = () => {
     try {
       await deleteHabit(editing.id);
       closeDialog();
-      toast.success('Habit deleted with its history');
+      notify('Habit deleted with its history', { tone: 'success' });
     } catch {
-      toast.error('Failed to delete habit');
+      notify('Failed to delete habit', { tone: 'error' });
     } finally {
       setSaving(false);
     }

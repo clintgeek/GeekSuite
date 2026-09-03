@@ -71,6 +71,7 @@ const THEMES = [
 
 function pairsFor(theme) {
   const p = theme.palette;
+  const tooltip = theme.components?.MuiTooltip?.styleOverrides?.tooltip;
   const surfaces = [
     ['background.default', p.background.default],
     ['background.paper', p.background.paper],
@@ -114,6 +115,20 @@ function pairsFor(theme) {
 
   // Error copy is real text ("Password is required"), so it owes AA too.
   add('error.main (as text)', p.error.main, 'background.paper', p.background.paper, 4.5);
+
+  // Tooltips are palette-derived (TODO_ORDER #19): dark mode lifts the app's
+  // paper and keeps `text.primary` on it, light mode inverts paper and ink. The
+  // values are read off the built component override, so an app that retunes
+  // its own MuiTooltip is held to the same bar as the factory default. Tooltip
+  // copy is copy — AA, not the 3:1 graphics floor.
+  if (tooltip?.backgroundColor && tooltip?.color) {
+    pairs.push({
+      label: 'MuiTooltip color on MuiTooltip backgroundColor',
+      fg: tooltip.color,
+      bg: tooltip.backgroundColor,
+      min: 4.5,
+    });
+  }
 
   return pairs;
 }

@@ -13,9 +13,9 @@ import {
 } from '@mui/material';
 import { X, Play, FileText } from 'lucide-react';
 import { useTaskContext } from '../../context/TaskContext';
-import { useToast } from '../shared/Toast';
 import { colors } from '../../theme/colors';
 import { toLocalDateString } from '../../utils/dateUtils';
+import { useToast } from '@geeksuite/ui';
 
 /**
  * TemplateApply — apply a template to create tasks for today.
@@ -38,7 +38,7 @@ const TemplateApply = ({ template, onClose, onApplied }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const { createTask } = useTaskContext();
-  const toast = useToast();
+  const { notify } = useToast();
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -87,7 +87,7 @@ const TemplateApply = ({ template, onClose, onApplied }) => {
         });
         created += 1;
       }
-      toast.success(`Created ${created} task${created !== 1 ? 's' : ''} from "${template.name}"`);
+      notify(`Created ${created} task${created !== 1 ? 's' : ''} from "${template.name}"`, { tone: 'success' });
       onApplied?.();
       onClose();
     } catch (err) {

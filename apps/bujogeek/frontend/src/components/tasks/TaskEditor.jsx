@@ -20,13 +20,13 @@ import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { X, StickyNote } from 'lucide-react';
 import { useMutation } from '@apollo/client';
 import { useTaskContext } from '../../context/TaskContext.jsx';
-import { useToast } from '../shared/Toast';
 import useTaskTags from '../../hooks/useTaskTags';
 import useCollections from '../../hooks/useCollections';
 import { CREATE_NOTE } from '../../graphql/notegeekMutations';
 import { colors } from '../../theme/colors';
 import RecurringEditDialog from './RecurringEditDialog';
 import { buildRecurrenceRule, frequencyFromRecurrenceRule } from '../../utils/parseTaskInput';
+import { useToast } from '@geeksuite/ui';
 
 const SIGNIFIER_OPTIONS = [
   { value: '*', label: 'Task', mono: '*' },
@@ -64,7 +64,7 @@ const TaskEditor = ({ open, onClose, task = null }) => {
   const { createTask, updateTask } = useTaskContext();
   const existingTags = useTaskTags();
   const { collections } = useCollections();
-  const toast = useToast();
+  const { notify } = useToast();
   const [createNote, { loading: savingNote }] = useMutation(CREATE_NOTE);
   const [formData, setFormData] = useState({
     content: '',
@@ -124,9 +124,9 @@ const TaskEditor = ({ open, onClose, task = null }) => {
           tags: formData.tags || [],
         },
       });
-      toast.success('Note saved to NoteGeek');
+      notify('Note saved to NoteGeek', { tone: 'success' });
     } catch {
-      toast.error('Failed to save note to NoteGeek');
+      notify('Failed to save note to NoteGeek', { tone: 'error' });
     }
   };
 

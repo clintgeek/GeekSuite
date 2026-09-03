@@ -17,8 +17,8 @@ import {
 } from '@mui/material';
 import { X } from 'lucide-react';
 import { useTemplates } from '../../context/TemplateContext';
-import { useToast } from '../shared/Toast';
 import { colors } from '../../theme/colors';
+import { useToast } from '@geeksuite/ui';
 
 const TEMPLATE_TYPES = [
   { value: 'daily', label: 'Daily Log' },
@@ -45,7 +45,7 @@ const TemplateEditor = ({ open, onClose, template = null }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const { createTemplate, updateTemplate } = useTemplates();
-  const toast = useToast();
+  const { notify } = useToast();
 
   const isEditing = Boolean(template);
   const [loading, setLoading] = useState(false);
@@ -108,14 +108,14 @@ const TemplateEditor = ({ open, onClose, template = null }) => {
     try {
       if (isEditing) {
         await updateTemplate(template._id || template.id, formData);
-        toast.success('Template updated');
+        notify('Template updated', { tone: 'success' });
       } else {
         await createTemplate(formData);
-        toast.success('Template created');
+        notify('Template created', { tone: 'success' });
       }
       onClose();
     } catch (err) {
-      toast.error(err.message || 'Failed to save template');
+      notify(err.message || 'Failed to save template', { tone: 'error' });
     } finally {
       setLoading(false);
     }

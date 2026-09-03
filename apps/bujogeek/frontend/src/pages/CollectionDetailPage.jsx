@@ -34,8 +34,8 @@ import TaskRow from '../components/tasks/TaskRow';
 import TaskEditor from '../components/tasks/TaskEditor';
 import SkeletonLoader from '../components/shared/SkeletonLoader';
 import EmptyState from '../components/shared/EmptyState';
-import { useToast } from '../components/shared/Toast';
 import { colors } from '../theme/colors';
+import { useToast } from '@geeksuite/ui';
 
 /**
  * CollectionDetailPage — one collection and its entries.
@@ -50,7 +50,7 @@ const CollectionDetailPage = () => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const navigate = useNavigate();
-  const toast = useToast();
+  const { notify } = useToast();
   const { createTask, updateTaskStatus, deleteTask } = useTaskContext();
   const { updateCollection, deleteCollection } = useCollections();
 
@@ -114,9 +114,9 @@ const CollectionDetailPage = () => {
     try {
       await updateCollection(collection.id, { archived: !collection.archived });
       await refetch();
-      toast.success(collection.archived ? 'Collection restored' : 'Collection archived');
+      notify(collection.archived ? 'Collection restored' : 'Collection archived', { tone: 'success' });
     } catch {
-      toast.error('Failed to update collection');
+      notify('Failed to update collection', { tone: 'error' });
     }
   };
 
@@ -135,7 +135,7 @@ const CollectionDetailPage = () => {
       await refetch();
       setRenameOpen(false);
     } catch {
-      toast.error('Failed to rename collection');
+      notify('Failed to rename collection', { tone: 'error' });
     }
   };
 
@@ -143,12 +143,13 @@ const CollectionDetailPage = () => {
     try {
       await deleteCollection(collection.id, deleteTasks);
       setDeleteOpen(false);
-      toast.success(
-        deleteTasks ? 'Collection and its entries deleted' : 'Collection deleted; entries kept'
+      notify(
+        deleteTasks ? 'Collection and its entries deleted' : 'Collection deleted; entries kept',
+        { tone: 'success' }
       );
       navigate('/collections');
     } catch {
-      toast.error('Failed to delete collection');
+      notify('Failed to delete collection', { tone: 'error' });
     }
   };
 

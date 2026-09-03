@@ -17,8 +17,8 @@ import useCollections from '../hooks/useCollections';
 import useGlobalShortcuts from '../hooks/useGlobalShortcuts';
 import SkeletonLoader from '../components/shared/SkeletonLoader';
 import EmptyState from '../components/shared/EmptyState';
-import { useToast } from '../components/shared/Toast';
 import { colors } from '../theme/colors';
+import { useToast } from '@geeksuite/ui';
 
 /**
  * CollectionsPage — the index of the user's collections.
@@ -31,7 +31,7 @@ const CollectionsPage = () => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const navigate = useNavigate();
-  const toast = useToast();
+  const { notify } = useToast();
   const {
     active,
     archived,
@@ -63,7 +63,7 @@ const CollectionsPage = () => {
       setForm({ name: '', description: '' });
       if (created?.id) navigate(`/collections/${created.id}`);
     } catch {
-      toast.error('Failed to create collection');
+      notify('Failed to create collection', { tone: 'error' });
     } finally {
       setSaving(false);
     }
@@ -73,9 +73,9 @@ const CollectionsPage = () => {
     event.stopPropagation();
     try {
       await updateCollection(collection.id, { archived: !collection.archived });
-      toast.success(collection.archived ? 'Collection restored' : 'Collection archived');
+      notify(collection.archived ? 'Collection restored' : 'Collection archived', { tone: 'success' });
     } catch {
-      toast.error('Failed to update collection');
+      notify('Failed to update collection', { tone: 'error' });
     }
   };
 

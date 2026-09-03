@@ -6,7 +6,7 @@ import { Pencil, Trash2, StickyNote, Repeat, Ban, RotateCcw } from 'lucide-react
 import { format, differenceInCalendarDays } from 'date-fns';
 import TaskCheckbox from './TaskCheckbox';
 import { getTaskAge, getAgingColor, getAgingLabel } from '../../utils/taskAging';
-import { lighten } from '@mui/material/styles';
+import { toneForMode } from '@geeksuite/ui';
 import { colors } from '../../theme/colors';
 
 const priorityDotColors = {
@@ -35,8 +35,9 @@ const TaskRow = ({
   const theme     = useTheme();
   const navigate  = useNavigate();
   const isDark    = theme.palette.mode === 'dark';
-  // Plum reads ~2.5:1 on dark paper; lift it when used as text/icon color
-  const staleInk  = isDark ? lighten(colors.aging.stale, 0.35) : colors.aging.stale;
+  // Plum reads ~2.5:1 on dark paper; lift it when used as text/icon color.
+  // Light mode keeps the authored hue, hence `darkenBy: 0`.
+  const staleInk  = toneForMode(colors.aging.stale, theme, { darkenBy: 0 });
   const isMobile  = useMediaQuery(theme.breakpoints.down('sm'));
   const [hovered, setHovered] = useState(false);
   const [tapped,  setTapped]  = useState(false);

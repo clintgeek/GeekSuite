@@ -8,7 +8,6 @@ import AppBootstrapper from './AppBootstrapper.jsx';
 import { createBuJoTheme } from './theme/theme';
 import { ThemeProvider, useThemeMode } from './context/ThemeContext';
 import { FocusModeProvider } from '@geeksuite/ui';
-import { ToastProvider } from './components/shared/Toast';
 import AppShell from './components/layout/AppShell';
 import ProtectedRoute from './components/ProtectedRoute';
 import KeyboardHelp from './components/shared/KeyboardHelp';
@@ -107,11 +106,9 @@ function AppContent() {
         <AuthProvider>
           <AppBootstrapper>
             <TaskProvider>
-              <ToastProvider>
-                <Router>
-                  <AppWithAuth />
-                </Router>
-              </ToastProvider>
+              <Router>
+                <AppWithAuth />
+              </Router>
             </TaskProvider>
           </AppBootstrapper>
         </AuthProvider>

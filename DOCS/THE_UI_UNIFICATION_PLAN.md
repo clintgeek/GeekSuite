@@ -273,6 +273,140 @@ Rules:
 
 ---
 
+## 3a. Feedback Primitives
+
+Landed 2026-09-03 (TODO_ORDER #15 + #19), seeded from bujogeek and proved there. Three
+surfaces every app was building by hand — "there's nothing here", "that broke", and a
+transient confirmation — plus the mode-aware color helper the same sweep kept re-deriving.
+All live in `packages/ui/src/feedback` and `packages/ui/src/color.js`, and all are exported
+from `@geeksuite/ui`.
+
+### `GeekEmptyState`
+
+```
+icon        node    optional ornament or glyph; rendered above the title, aria-hidden
+title       node    text.primary
+description node    text.muted — empty-state copy is copy, so it owes AA
+action      node    a Button, or a fragment of them; 44px target pinned on the band
+children    node    extra slot between description and action
+compact     bool    tighter vertical rhythm for in-list and in-card empties
+align       'center' | 'start' | 'end'    default 'center'
+maxWidth    number  description measure, default 420
+sx / iconSx / titleSx / descriptionSx / actionSx
+```
+
+Hooks: `data-geek-empty-state`, `…-icon`, `…-title`, `…-description`, `…-action`.
+
+**Use it** whenever a list, table, shelf or panel has nothing to show and the reason is
+*normal* — no records yet, a filter matched nothing, a collection is empty.
+
+### `GeekErrorState`
+
+`GeekEmptyState`'s shape plus:
+
+```
+error       Error | string   rendered as a muted mono detail line
+onRetry     () => void       renders an outlined "Try again" button
+retryLabel  string           default 'Try again'
+detailSx    sx
+```
+
+Two rules that are rules, not looks:
+
+- **`error.main` colors the glyph only.** Title and description stay on
+  `text.primary` / `text.muted`. The palette's semantic tones are mode-aware
+  (`designTokens.semanticDark`) but they are tuned to clear 3:1 as *graphics*, not 4.5:1 as
+  body text — so error copy never rides the error hue.
+- **The detail line is a message, never a stack.** An `Error` contributes `error.message`;
+  anything else is stringified. `error.stack` is never read, so a leaked stack cannot reach
+  a user's screen through this primitive.
+
+Default glyph is inline SVG (`@mui/icons-material` is not a peer of `packages/ui`); pass
+`icon` to override or `icon={null}` for none.
+
+**Use it** when the surface is empty *because something failed* — a fetch rejected, a
+gateway 503'd, a save came back 500. If there is a way to try again, pass `onRetry`; that
+is the difference between an error state and an apology.
+
+### `GeekToastProvider` / `useToast()`
+
+```
+<GeekToastProvider max={3} duration={4000} anchorOrigin? sx?>
+
+const { notify, dismiss } = useToast();
+notify(message, { tone: 'info' | 'success' | 'warning' | 'error', action?, duration? }) → id
+dismiss(id?)   // one toast, or all of them when called bare
+```
+
+- **MUI `Snackbar` + `Alert variant="standard"`.** `filled` paints `palette[tone].main` and
+  drops white on it, which lands under AA for warning and info in at least one mode; the
+  standard variant derives a tinted surface and same-hue ink from the same token and clears
+  4.5:1 in both. Standard it is.
+- **Placement follows the shell, not the viewport.** Bottom-center on mobile; bottom-*left*
+  on desktop, offset by `geekLayout.sidebarWidth` when a permanent nav panel is on screen,
+  so a toast never covers the nav it is talking about. Read from `useGeekShell()`, so an app
+  with no shell simply gets the bottom-left default.
+- **`bottomInset` is respected**, so a toast never hides under a `GeekBottomNav`.
+- **Three at a time.** A fourth evicts the oldest instead of growing a column.
+- A missing provider warns and drops the message rather than throwing: a toast is a
+  courtesy, and it should not take down the tree that was trying to say "saved".
+- **Mount it inside `GeekShell` and outside `GeekAppFrame`.** Inside the shell so it can read
+  the shell context; outside the frame because the frame's route transition is a
+  framer-motion element, and an animating element becomes a containing block for
+  `position: fixed` children — a toast under it would slide with the page fade.
+
+**Use it** for transient confirmations and non-blocking failures. Not for anything the user
+must act on (that is a dialog), and not for a surface-wide failure (that is
+`GeekErrorState`).
+
+### `toneForMode(color, theme, { lightenBy = 0.35, darkenBy = 0.3 })`
+
+`packages/ui/src/color.js`. Returns `lighten(color, lightenBy)` in dark mode and
+`darken(color, darkenBy)` in light mode. `theme` may be a theme or a bare `'light'` /
+`'dark'`. Pass `0` for either side to leave that mode alone — several call sites only need
+the dark lift, because the hue was authored for light paper.
+
+**Use it** for *domain* colors painted as text or icons: bujogeek's aging inks, storygeek's
+genre swatches, fitnessgeek's BP categories. Not for palette tokens — those are already
+mode-aware. This replaces the four hand-rolled `isDark ? lighten(c, 0.35) : c` branches from
+the 2026-09-02 sweep.
+
+### Themed tooltips
+
+`createGeekSuiteTheme`'s `MuiTooltip` override is now palette-derived instead of MUI's stock
+grey-700 wash, which read as a foreign object on a warm paper and, in dark mode, as a
+*lighter* box than the surface it explained:
+
+- **dark** — the app's own `background.paper`, lifted one step (`lighten(paper, 0.16)`), with
+  `text.primary` on it;
+- **light** — inverted: `text.primary` becomes the surface, `background.paper` the ink.
+
+The arrow follows the background. The light pair is the app's asserted
+`text.primary on background.paper` read backwards, so it inherits that pair's AA guarantee;
+the dark pair is asserted directly. `__tests__/themeContrast.test.js` reads the values off
+the *built* override, so an app that retunes its own `MuiTooltip` (bujogeek and basegeek both
+do) is held to the same 4.5:1 bar.
+
+### Migrating an app
+
+Same shape as the shell-grammar migration: structure moves to `packages/ui`, identity stays
+in the app. Import `GeekEmptyState` / `GeekErrorState` / `GeekToastProvider` / `useToast` /
+`toneForMode` from `@geeksuite/ui`. If the app has a local `EmptyState` with real voice
+(bujogeek's three-dot pause mark and Fraunces italic, fitnessgeek's `Surface` ghost card),
+keep the file as a thin wrapper that supplies `icon` / `align` / `titleSx` / `descriptionSx`
+and spreads the rest — every call site stays untouched, and the bespoke layout, the
+hand-rolled dark-mode `rgba()` text colors and the missing 44px target all go away. If the
+app has no local primitive, replace the inline `<Box textAlign="center"><Typography
+color="text.secondary">No X found</Typography></Box>` blocks directly. For toasts, mount
+`GeekToastProvider` inside `GeekShell` (outside `GeekAppFrame`), delete the local provider,
+and rewrite `toast.success(msg)` → `notify(msg, { tone: 'success' })`; per-page
+`useState`-driven `<Snackbar>` pairs collapse into a single `notify` call and lose their
+state. Finally sweep `isDark ? lighten(…) : …` to `toneForMode`. Landing order that keeps
+each commit verifiable: fitnessgeek (has the second-most-developed local `EmptyState` plus
+six page-level `Snackbar`s), then notegeek, flockgeek, storygeek, bookgeek, basegeek.
+
+---
+
 ## 4. Interaction Model
 
 ### Focus States
