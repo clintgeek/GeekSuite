@@ -273,3 +273,24 @@ Watchtower will then keep that manual `latest` pinned until the next
 - [`build.sh`](../build.sh) — current local build/deploy script
 - [`DEFERRED_WORK.md`](DEFERRED_WORK.md) — suite-wide follow-ups
 - [`SUITE_TODO.md`](SUITE_TODO.md) — active roadmap
+
+## Known failure mode — a local `build.sh` deploy blinds Watchtower
+
+Observed 2026-09-03 with startgeek. `./build.sh <app>` builds the image
+locally and tags it `ghcr.io/clintgeek/<app>:latest` (so compose matches),
+but a locally built image has **no RepoDigest**. Watchtower decides whether
+to update by comparing the registry manifest digest against the local
+image's digest; with none to compare, it logs `updated=0` and never pulls,
+even though a newer image is published. Symptoms: release workflow green,
+`docker ps` shows the container hours old, site serves the old build.
+
+Fix (one time, per affected app), from the app directory:
+
+```
+docker compose pull <app> && docker compose up -d <app>
+```
+
+That installs the registry image with its digest and Watchtower resumes
+normal behaviour on the next poll. Rule of thumb: after any `build.sh`
+deploy, expect the *next* push to need this nudge, or skip `build.sh` and
+let the pipeline deploy.
