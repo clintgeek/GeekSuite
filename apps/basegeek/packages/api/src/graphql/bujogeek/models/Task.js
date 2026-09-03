@@ -12,7 +12,7 @@ const taskSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'completed', 'migrated_back', 'migrated_future', 'cancelled'],
+    enum: ['pending', 'completed', 'migrated_back', 'migrated_future', 'cancelled', 'blocked'],
     default: 'pending',
   },
   dueDate: { type: Date, default: null },
@@ -41,6 +41,14 @@ const taskSchema = new mongoose.Schema({
   subtasks: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Task' }],
   completedAt: { type: Date, default: null },
   cancelledAt: { type: Date, default: null },
+  // "Parked": the task is waiting on something outside itself. A blocked task
+  // KEEPS its dueDate — it is simply not part of the log while blocked: every
+  // dated view (daily/weekly/monthly) filters it out, so it is neither "due
+  // today" nor "overdue". blockedAt is the mirror of completedAt/cancelledAt
+  // and is cleared the moment the task leaves the blocked state.
+  // See taskService.blockTask / unblockTask.
+  blockedReason: { type: String, trim: true, maxlength: 280, default: null },
+  blockedAt: { type: Date, default: null },
   // When the web-push reminder for this task's dueDate was delivered. Non-null
   // means "already reminded" and is what keeps the 60s scheduler from firing
   // the same task twice; taskService.updateTask clears it whenever dueDate
@@ -68,6 +76,8 @@ taskSchema.index({ createdBy: 1, tags: 1 });
 // The reminder scheduler's sweep: pending, not-yet-reminded, due in the window.
 taskSchema.index({ status: 1, remindedAt: 1, dueDate: 1 });
 taskSchema.index({ createdBy: 1, collectionId: 1 });
+// The blocked list: owner's parked tasks, newest-blocked first.
+taskSchema.index({ createdBy: 1, status: 1, blockedAt: -1 });
 
 const Task = bujoConn.models.Task || bujoConn.model('Task', taskSchema);
 export default Task;

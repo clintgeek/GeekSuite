@@ -1,9 +1,25 @@
 import { format } from 'date-fns';
+import { GraphQLError } from 'graphql';
 import JournalEntry from './models/JournalEntry.js';
 import taskService from './services/taskService.js';
 import collectionService from './services/collectionService.js';
 import habitService from './services/habitService.js';
 import reminderService from './services/reminderService.js';
+
+/**
+ * The service layer throws transport-agnostic errors tagged with a `code`;
+ * a caller-error (a transition the task's state does not allow) becomes a
+ * 400-style GraphQLError so the client's `handleApiError` can tell it apart
+ * from a server fault. Anything else propagates untouched.
+ */
+function rethrowUserError(err) {
+  if (err?.code === 'BAD_USER_INPUT') {
+    throw new GraphQLError(err.message, {
+      extensions: { code: 'BAD_USER_INPUT', http: { status: err.status ?? 400 } },
+    });
+  }
+  throw err;
+}
 
 export const resolvers = {
   Query: {
@@ -44,6 +60,11 @@ export const resolvers = {
       const userId = context.user?.id;
       if (!userId) return [];
       return taskService.getTasksForDateRange({ userId, startDate: new Date(), endDate: new Date(), viewType: 'all' });
+    },
+    blockedTasks: async (_, __, context) => {
+      const userId = context.user?.id;
+      if (!userId) return [];
+      return taskService.getBlockedTasks(userId);
     },
     taskTags: async (_, __, context) => {
       const userId = context.user?.id;
@@ -159,6 +180,30 @@ export const resolvers = {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
       const task = await taskService.updateTaskStatus(id, status, userId);
+      if (!task) throw new Error('Task not found');
+      return task;
+    },
+    blockTask: async (_, { id, reason }, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      let task;
+      try {
+        task = await taskService.blockTask(id, reason, userId);
+      } catch (err) {
+        rethrowUserError(err);
+      }
+      if (!task) throw new Error('Task not found');
+      return task;
+    },
+    unblockTask: async (_, { id }, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      let task;
+      try {
+        task = await taskService.unblockTask(id, userId);
+      } catch (err) {
+        rethrowUserError(err);
+      }
       if (!task) throw new Error('Task not found');
       return task;
     },

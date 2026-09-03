@@ -11,6 +11,31 @@ const VALID_EDIT_SCOPES = ['THIS_INSTANCE', 'ALL_INSTANCES', 'FUTURE_INSTANCES']
 const LEGACY_PATTERN_FREQ = { daily: 'DAILY', weekly: 'WEEKLY', monthly: 'MONTHLY' };
 
 /**
+ * Statuses a task may be blocked ("parked") FROM. The terminal states —
+ * completed and cancelled — are deliberately absent: a finished task has
+ * nothing left to wait on. There is no `carriedOver` status in this schema;
+ * the migrated_* pair is its equivalent (a task pushed back to the backlog or
+ * forward to a later day is still live work), so both are blockable.
+ * Re-blocking an already-blocked task is allowed and just rewrites the
+ * reason — `blockedAt` stays put so "parked since" never drifts.
+ */
+export const BLOCKABLE_STATUSES = ['pending', 'migrated_back', 'migrated_future', 'blocked'];
+
+export const MAX_BLOCKED_REASON = 280;
+
+/**
+ * A caller-error: the request was well-formed GraphQL but asks for something
+ * the task's current state does not allow. Resolvers translate the `code` into
+ * a 400-style GraphQLError; the service stays transport-agnostic.
+ */
+export function badRequest(message) {
+  const err = new Error(message);
+  err.code = 'BAD_USER_INPUT';
+  err.status = 400;
+  return err;
+}
+
+/**
  * Format a Date as an iCalendar UTC timestamp (`20260315T090000Z`) — the exact
  * shape `RRule#toString()` emits and `rrulestr()` round-trips.
  */
@@ -144,7 +169,11 @@ class TaskService {
     if (viewType !== 'all') {
       query.isBacklog = { $ne: true };
       // `$and` sits alongside the per-view `$or` below; Mongo ANDs top-level keys.
-      query.$and = [this.collectionExclusionClause()];
+      // A blocked task is parked: it keeps its dueDate but leaves the log
+      // entirely, so it is neither "due today" nor overdue. It comes back the
+      // moment it is unblocked. The `all` view (backlog / search / export
+      // corpus) still sees it — that is not a log view.
+      query.$and = [this.collectionExclusionClause(), { status: { $ne: 'blocked' } }];
     }
     const startOfDayDate = this.toUtcMidnight(startDate);
     const endOfDayDate = new Date(startOfDayDate);
@@ -223,10 +252,14 @@ class TaskService {
       viewStart = new Date(0); viewEnd = new Date(8640000000000000);
     }
 
+    // A blocked master parks the whole series — like completed/cancelled, it
+    // stops producing occurrences. Blocking a single occurrence instead
+    // materializes a blocked override, which lands in `overrideMap` below and
+    // suppresses that date's virtual, so neither path can spawn a duplicate.
     const masterTasks = await this.taskModel.find({
       createdBy: userId,
       isSeriesMaster: true,
-      status: { $nin: ['completed', 'cancelled'] }
+      status: { $nin: ['completed', 'cancelled', 'blocked'] }
     });
 
     const overrides = await this.taskModel.find({
@@ -629,16 +662,7 @@ class TaskService {
     return this.taskModel.findOneAndDelete({ _id: task._id, createdBy: userId });
   }
 
-  async updateTaskStatus(taskId, status, userId) {
-    this.requireUser(userId);
-    const now = new Date();
-    const updateData = { status, updatedAt: now };
-    // completedAt / cancelledAt are set on entering that status and explicitly
-    // cleared when the task leaves it (re-opened, migrated, un-cancelled, etc.)
-    // — mirrors of the same pattern, kept mutually exclusive.
-    updateData.completedAt = status === 'completed' ? now : null;
-    updateData.cancelledAt = status === 'cancelled' ? now : null;
-
+  async updateStatusInternal(taskId, updateData, userId) {
     const target = await this.resolveOwnedTarget(taskId, userId);
     if (!target) return null;
 
@@ -647,15 +671,103 @@ class TaskService {
       return new this.taskModel(this.buildOverride(master, originalDueDate, updateData)).save();
     }
 
-    // NOTE: the legacy "auto-spawn the next occurrence on completion" branch
-    // was removed — recurrence is now expressed exclusively as an RRULE series
-    // and future occurrences are expanded virtually, never materialized on
-    // completion.
     return this.taskModel.findOneAndUpdate(
       { _id: target.task._id, createdBy: userId },
       updateData,
       { new: true, runValidators: true }
     );
+  }
+
+  /**
+   * Park a task: it keeps its dueDate but drops out of every log view until it
+   * is unblocked. Blocking a virtual occurrence materializes a blocked
+   * override for that date only, leaving the series master alone.
+   *
+   * Returns null when the id is not the caller's (indistinguishable from
+   * not-found); throws a `BAD_USER_INPUT` error for a transition the task's
+   * current status does not allow, or an over-long reason.
+   */
+  async blockTask(taskId, reason, userId) {
+    this.requireUser(userId);
+    const trimmed = typeof reason === 'string' ? reason.trim() : '';
+    if (trimmed.length > MAX_BLOCKED_REASON) {
+      throw badRequest(`blockTask reason must be ${ MAX_BLOCKED_REASON } characters or fewer`);
+    }
+
+    const target = await this.resolveOwnedTarget(taskId, userId);
+    if (!target) return null;
+
+    // A virtual occurrence has no stored status — it is pending by
+    // construction — so only a materialized task can fail the guard.
+    const current = target.virtual ? 'pending' : target.task.status;
+    if (!BLOCKABLE_STATUSES.includes(current)) {
+      throw badRequest(`A ${ current } task cannot be blocked`);
+    }
+
+    const now = new Date();
+    const updateData = {
+      status: 'blocked',
+      blockedReason: trimmed || null,
+      // Re-blocking rewrites the reason but keeps the original parked-since.
+      blockedAt: (!target.virtual && target.task.blockedAt) || now,
+      completedAt: null,
+      cancelledAt: null,
+      updatedAt: now,
+    };
+
+    return this.updateStatusInternal(taskId, updateData, userId);
+  }
+
+  /**
+   * Un-park a task: back to pending with the blocked fields cleared. The
+   * original dueDate is left exactly as it was — if that date has since passed
+   * the task simply reappears in the log as overdue, which is the point.
+   */
+  async unblockTask(taskId, userId) {
+    this.requireUser(userId);
+    const target = await this.resolveOwnedTarget(taskId, userId);
+    if (!target) return null;
+    if (target.virtual || target.task.status !== 'blocked') {
+      throw badRequest('Task is not blocked');
+    }
+    return this.updateStatusInternal(
+      taskId,
+      { status: 'pending', blockedReason: null, blockedAt: null, updatedAt: new Date() },
+      userId
+    );
+  }
+
+  /** The owner's parked tasks, newest-blocked first. */
+  async getBlockedTasks(userId) {
+    this.requireUser(userId);
+    return this.taskModel.find({ createdBy: userId, status: 'blocked' })
+      .populate('parentTask', 'content status')
+      .sort({ blockedAt: -1, updatedAt: -1 });
+  }
+
+  async updateTaskStatus(taskId, status, userId) {
+    this.requireUser(userId);
+    // 'blocked' has its own entry point so the transition guard and the
+    // blockedAt stamping live in exactly one place.
+    if (status === 'blocked') return this.blockTask(taskId, null, userId);
+
+    const now = new Date();
+    const updateData = { status, updatedAt: now };
+    // completedAt / cancelledAt are set on entering that status and explicitly
+    // cleared when the task leaves it (re-opened, migrated, un-cancelled, etc.)
+    // — mirrors of the same pattern, kept mutually exclusive.
+    updateData.completedAt = status === 'completed' ? now : null;
+    updateData.cancelledAt = status === 'cancelled' ? now : null;
+    // Any other status means the task is no longer parked — completing a
+    // blocked task straight from the blocked list is allowed and clears it.
+    updateData.blockedReason = null;
+    updateData.blockedAt = null;
+
+    // NOTE: the legacy "auto-spawn the next occurrence on completion" branch
+    // was removed — recurrence is now expressed exclusively as an RRULE series
+    // and future occurrences are expanded virtually, never materialized on
+    // completion.
+    return this.updateStatusInternal(taskId, updateData, userId);
   }
 
   async getTaskById(taskId, userId) {

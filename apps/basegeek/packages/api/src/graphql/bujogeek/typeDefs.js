@@ -24,6 +24,10 @@ export const typeDefs = gql`
     subtasks: [Task]
     completedAt: Date
     cancelledAt: Date
+    "Why this task is parked, when it is blocked. Null otherwise; 280 chars max."
+    blockedReason: String
+    "When the task was parked. Non-null exactly while status is 'blocked'."
+    blockedAt: Date
     collectionId: ID
     createdAt: Date
     updatedAt: Date
@@ -169,6 +173,12 @@ export const typeDefs = gql`
     weeklyTasks(date: String): [Task!]!
     monthlyTasks(startDate: String, endDate: String): [Task!]!
     allTasks: [Task!]!
+    """
+    Parked tasks — status 'blocked' — newest-blocked first. Blocked tasks keep
+    their dueDate but are filtered out of dailyTasks/weeklyTasks/monthlyTasks,
+    so this query is the only place they surface as a list.
+    """
+    blockedTasks: [Task!]!
     taskTags: [TagCount!]!
     tasksByTag(tag: String!): [Task!]!
     collections: [Collection!]!
@@ -202,6 +212,23 @@ export const typeDefs = gql`
     updateTask(id: ID!, input: UpdateTaskInput!, editScope: EditScope): Task!
     deleteTask(id: ID!, editScope: EditScope): DeleteResponse!
     updateTaskStatus(id: ID!, status: String!): Task!
+    """
+    Park a task: status becomes 'blocked', \`blockedReason\`/\`blockedAt\` are
+    stamped, and the task drops out of every log view while keeping its
+    dueDate. Allowed from pending / migrated_back / migrated_future, and from
+    'blocked' itself (which rewrites the reason and keeps the original
+    \`blockedAt\`). Blocking a completed or cancelled task is a BAD_USER_INPUT
+    (400) error. Blocking a virtual recurring occurrence parks that occurrence
+    only, by materializing a blocked override.
+    """
+    blockTask(id: ID!, reason: String): Task!
+    """
+    Un-park a task: back to 'pending' with \`blockedReason\`/\`blockedAt\`
+    cleared. The original dueDate is kept — if it has since passed the task
+    simply returns to the log as overdue. BAD_USER_INPUT (400) when the task is
+    not blocked.
+    """
+    unblockTask(id: ID!): Task!
     addSubtask(parentId: ID!, content: String!, signifier: String, status: String, priority: Int, tags: [String], dueDate: Date): Task!
     migrateTaskToFuture(id: ID!, futureDate: Date!): Task!
     saveDailyTaskOrder(dateKey: String!, orderedTaskIds: [ID!]!): SaveOrderResponse!

@@ -3,6 +3,7 @@
 Current state reference for development work. Update this when architecture, data models, or feature status changes significantly.
 
 Last major revision: 2026-08-30 (bug/cleanup/feature pass — see git log for the commit series).
+Amended 2026-09-03: blocked ("parked") task state — gateway half.
 
 ---
 
@@ -58,11 +59,13 @@ Keyboard: `j/k/x/e/d/c` row nav, `g→t/r/p/s/l/h` chords, `Cmd+N`, `?` help.
 
 ### Task
 ```
-content, signifier, status (pending|completed|cancelled|migrated_back|migrated_future),
+content, signifier,
+status (pending|completed|cancelled|blocked|migrated_back|migrated_future),
 dueDate (UTC midnight = date-only; non-midnight = carries a due time),
 priority (1=High 2=Medium 3=Low, null=None), note, tags[],
 originalDate, originalDueDate, migratedFrom/To, isBacklog,
-completedAt, cancelledAt (mutually exclusive; set/cleared by updateTaskStatus),
+completedAt, cancelledAt, blockedAt (mutually exclusive; set/cleared by
+  updateTaskStatus / blockTask / unblockTask), blockedReason (≤280 chars),
 recurrenceRule (RRULE string; ONLY recurrence mechanism — recurrencePattern is a
   deprecated input shim translated server-side), seriesId, isSeriesMaster, exdates[],
 collectionId (undated collection tasks are excluded from log views/carry-forward),
@@ -71,6 +74,36 @@ remindedAt (push reminder dedup), parentTask, subtasks[], createdBy, timestamps
 Recurring tasks are virtual: masters are expanded per view window as
 `virtual_<masterId>_<epochMs>`; edits materialize overrides via editScope
 (THIS_INSTANCE / ALL_INSTANCES / FUTURE_INSTANCES — the last splits the series).
+
+#### Blocked ("parked") tasks — added 2026-09-03
+
+A blocked task is waiting on something outside itself. It **keeps its dueDate**
+— it is parked, not rescheduled — but it leaves the log entirely while blocked:
+`dailyTasks` / `weeklyTasks` / `monthlyTasks` filter `status: 'blocked'` out, so
+a blocked task is neither "due today" nor overdue. The `all` corpus (search,
+export, backlog) still sees it, and `blockedTasks` is the list view.
+
+- `blockTask(id, reason)` → `status: 'blocked'` + `blockedReason` + `blockedAt`.
+  Allowed from `pending` / `migrated_back` / `migrated_future`, and from
+  `blocked` itself (rewrites the reason, keeps the original `blockedAt` so
+  "parked since" never drifts). From `completed` / `cancelled` it is a
+  `BAD_USER_INPUT` (400) GraphQL error. A reason over 280 chars is the same
+  error, thrown before anything is written.
+- `unblockTask(id)` → back to `pending`, `blockedReason`/`blockedAt` cleared,
+  **dueDate untouched** — a date that has since passed simply reappears as
+  overdue. `BAD_USER_INPUT` when the task is not blocked.
+- `updateTaskStatus(id, 'blocked')` delegates to `blockTask` (one guard, one
+  place). Every other status clears the blocked fields, so completing or
+  cancelling straight from the blocked list works and un-parks the task.
+- **Recurrence**: a blocked series *master* stops expanding, exactly like
+  completed/cancelled. Blocking a single `virtual_…` occurrence materializes a
+  blocked override for that date, which suppresses that date's virtual — so
+  neither path can spawn a duplicate. (The daily view's ordinary carry-forward
+  of a series' previous, unblocked occurrence is unaffected.)
+- Reminders are unaffected by design: `reminderService`'s sweep only considers
+  `status: 'pending'`, so a parked task sends no push and resumes on unblock.
+- There is no summary/stats type in this schema, so the requested `blocked: Int`
+  count has no home yet — the frontend reads `blockedTasks.length`.
 
 ### Collection
 `name, description, archived, createdBy, timestamps` — tasks reference it via `collectionId`; delete detaches by default, cascades on request.
@@ -104,7 +137,8 @@ Unchanged: per-day drag order (`dateKey 'yyyy-MM-dd'`, local dates), multi-line 
 - Static SPA serving
 
 Everything else is GraphQL on the gateway: dailyTasks/weeklyTasks/monthlyTasks/allTasks,
-task CRUD + updateTaskStatus + migrateTaskToFuture + saveDailyTaskOrder, taskTags/tasksByTag,
+blockedTasks, task CRUD + updateTaskStatus + blockTask/unblockTask +
+migrateTaskToFuture + saveDailyTaskOrder, taskTags/tasksByTag,
 collections CRUD, habits CRUD + toggleHabitLog + habitLogs, templates, journal,
 pushVapidKey + save/removePushSubscription.
 
