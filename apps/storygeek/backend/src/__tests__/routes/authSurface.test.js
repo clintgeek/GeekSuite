@@ -25,6 +25,11 @@
 // src/routes/stories.js (only the pre-auth 401 boundary).
 
 import { jest } from '@jest/globals';
+// The REAL guard, imported through its own subpath so the module mock below
+// (which replaces '@geeksuite/user/server' wholesale) cannot stub it out. The
+// CSRF tests at the bottom of this file exercise the actual implementation
+// app.js runs in production, not a stand-in.
+import { csrfGuard } from '@geeksuite/user/server/csrfGuard';
 
 jest.unstable_mockModule('@geeksuite/user/server', () => {
   // token -> normalized SSO user, as tokenUtils.normalizeSsoUser would shape it
@@ -87,7 +92,7 @@ jest.unstable_mockModule('@geeksuite/user/server', () => {
     };
   }
 
-  return { attachUser, meHandler, __tokenStore: tokenStore };
+  return { attachUser, meHandler, csrfGuard, __tokenStore: tokenStore };
 });
 
 let app;
@@ -165,5 +170,86 @@ describe('Protected story route without a cookie', () => {
   test('malformed cookie on a protected story route -> 401, not 500', async () => {
     const res = await request(app).get('/api/stories/story-1').set('Cookie', cookieHeader('garbage'));
     expect(res.status).toBe(401);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CSRF origin guard (TODO_ORDER #12)
+//
+// src/app.js mounts @geeksuite/user's csrfGuard() with the same
+// `allowedOrigins` list the cors() config uses, ahead of cors() itself (see
+// the comment there for why). The module mock above hands app.js the *real*
+// csrfGuard, so these cases run the production implementation.
+//
+// POST /api/auth/refresh is the probe: with a geek_token cookie but no
+// refresh token in the body or cookie it answers 400 "refreshToken required"
+// without touching the network, so 400 means "the guard let this through" and
+// 403 means "the guard stopped it".
+//
+// Unit coverage for every branch of the guard itself (Referer fallback,
+// opaque origins, CSRF_GUARD=off/report, empty allow-list) lives in
+// packages/user/src/server/__tests__/csrfGuard.test.js.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('CSRF origin guard', () => {
+  const OWN_ORIGIN = 'https://storygeek.clintgeek.com';
+  const EVIL_ORIGIN = 'https://evil.example';
+
+  test('a cookie-authenticated mutation from an allow-listed origin reaches the route', async () => {
+    const res = await request(app)
+      .post('/api/auth/refresh')
+      .set('Cookie', cookieHeader('some-token'))
+      .set('Origin', OWN_ORIGIN)
+      .send({});
+
+    expect(res.status).toBe(400);
+  });
+
+  test('the same mutation from a foreign origin is rejected with 403', async () => {
+    const res = await request(app)
+      .post('/api/auth/refresh')
+      .set('Cookie', cookieHeader('some-token'))
+      .set('Origin', EVIL_ORIGIN)
+      .send({});
+
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({ error: 'csrf_origin_rejected' });
+  });
+
+  test('a foreign Referer with no Origin is rejected too', async () => {
+    const res = await request(app)
+      .post('/api/auth/refresh')
+      .set('Cookie', cookieHeader('some-token'))
+      .set('Referer', `${EVIL_ORIGIN}/attack.html`)
+      .send({});
+
+    expect(res.status).toBe(403);
+  });
+
+  test('a cookie-authenticated mutation with no Origin and no Referer passes', async () => {
+    const res = await request(app)
+      .post('/api/auth/refresh')
+      .set('Cookie', cookieHeader('some-token'))
+      .send({});
+
+    expect(res.status).toBe(400);
+  });
+
+  test('a GET from a foreign origin is not blocked by the guard — mutations only', async () => {
+    const res = await request(app)
+      .get('/api/stories/story-1')
+      .set('Cookie', cookieHeader('garbage'))
+      .set('Origin', EVIL_ORIGIN);
+
+    expect(res.status).not.toBe(403);
+  });
+
+  test('an unauthenticated mutation is not the guard\'s business', async () => {
+    const res = await request(app)
+      .post('/api/auth/refresh')
+      .set('Origin', EVIL_ORIGIN)
+      .send({});
+
+    expect(res.status).not.toBe(403);
   });
 });

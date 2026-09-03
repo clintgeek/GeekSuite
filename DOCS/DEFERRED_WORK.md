@@ -17,12 +17,15 @@ These were explicitly carved out of the auth hardening branch because
 they touch every consumer app and want a dedicated branch with
 per-app verification.
 
-- **CSRF protection.** Cookie auth + `credentials: true` CORS across
-  every `*.clintgeek.com` subdomain means any allowed origin that gets
-  XSSed can trigger mutations. Adding double-submit CSRF tokens (or
-  moving the refresh cookie to `SameSite=Strict`) requires server
-  middleware in basegeek plus every app's axios client sending the
-  token on mutations. Cross-app — own branch.
+- **CSRF protection.** 🟡 **Pending review** on branch `csrf-protection`
+  (September 2026). An Origin allow-list guard (`csrfGuard()` in
+  `packages/user`) is mounted in all seven backends; it closes
+  third-party CSRF suite-wide and sibling-subdomain CSRF against the six
+  consumer backends. Neither cookie attributes nor any frontend changed.
+  See [`DOCS/SSO_OVERVIEW.md#csrf`](SSO_OVERVIEW.md#csrf). Still
+  deferred: the double-submit token needed to stop an XSS'd sibling
+  subdomain mutating **basegeek**, whose allow-list has to contain every
+  app origin. That one does need every app's client to send a token.
 
 - **HttpOnly cookies + stop persisting tokens in localStorage.**
   [`DOCS/CONTEXT.md`](DOCS/CONTEXT.md) already flags `httpOnly: false`

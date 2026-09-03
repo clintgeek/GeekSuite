@@ -2,6 +2,11 @@ import { jest, describe, it, expect, beforeAll, beforeEach, afterAll } from '@je
 import request from 'supertest';
 import express from 'express';
 import mongoose from 'mongoose';
+// The REAL CSRF guard, imported through its own subpath so the
+// '@geeksuite/user/server' module mock below cannot stub out the very thing
+// the CSRF tests at the bottom of this file are meant to exercise.
+import { csrfGuard } from '@geeksuite/user/server/csrfGuard';
+import { getAllowedOrigins, HARDCODED_ORIGINS } from '../config/corsOrigins.js';
 
 // =============================================================================
 // Auth-isolation integration suite
@@ -145,6 +150,26 @@ function buildApp() {
 }
 
 const app = buildApp();
+
+// Same wiring as server.js: csrfGuard, built from the app's real allow-list,
+// ahead of the routes. server.js builds its app inside start() (which
+// connects Mongo and binds a port at import time), so it cannot be imported
+// here — which is why the allow-list lives in its own module rather than
+// inline in server.js.
+function buildGuardedApp() {
+    const guarded = express();
+    guarded.use(csrfGuard({ allowedOrigins: getAllowedOrigins(), appName: 'notegeek-test' }));
+    guarded.use(express.json());
+    guarded.use((req, res, next) => {
+        req.log = { info: () => {}, error: () => {}, warn: () => {}, debug: () => {} };
+        next();
+    });
+    guarded.get('/api/me', protect, meHandler());
+    guarded.use('/api/notes', noteRoutes);
+    return guarded;
+}
+
+const guardedApp = buildGuardedApp();
 
 const cookieFor = (token) => [`geek_token=${token}`];
 
@@ -359,5 +384,102 @@ describe('cross-user data isolation', () => {
 
         const stillThere = await Note.findById(aliceNoteId);
         expect(stillThere).not.toBeNull();
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CSRF origin guard (TODO_ORDER #12)
+//
+// server.js mounts @geeksuite/user's csrfGuard() with the allow-list from
+// config/corsOrigins.js — the same list cors() gets, so the two cannot drift.
+// buildGuardedApp() above reproduces that wiring around the real notes
+// router and the real Note model on in-memory Mongo, so these assertions are
+// about whether the write actually happened, not just about a status code.
+//
+// Unit coverage for every branch of the guard itself (Referer fallback,
+// opaque origins, CSRF_GUARD=off/report, empty allow-list) lives in
+// packages/user/src/server/__tests__/csrfGuard.test.js.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('CSRF origin guard', () => {
+    const OWN_ORIGIN = 'https://notegeek.clintgeek.com';
+    const EVIL_ORIGIN = 'https://evil.example';
+
+    beforeEach(async () => {
+        await Note.deleteMany({});
+    });
+
+    it("notegeek's own production origin is on the list the guard is built from", () => {
+        expect(HARDCODED_ORIGINS).toContain(OWN_ORIGIN);
+        expect(getAllowedOrigins({})).toEqual(HARDCODED_ORIGINS);
+        expect(getAllowedOrigins({ CORS_ORIGINS: 'https://a.test, https://b.test' }))
+            .toEqual(['https://a.test', 'https://b.test']);
+    });
+
+    it("a note created from notegeek's own origin is written", async () => {
+        const res = await request(guardedApp)
+            .post('/api/notes')
+            .set('Cookie', cookieFor('token-for-alice'))
+            .set('Origin', OWN_ORIGIN)
+            .send({ content: 'from the real app', title: 'Allowed' });
+
+        expect(res.status).toBe(201);
+        expect(await Note.countDocuments({})).toBe(1);
+    });
+
+    it('the same POST from a third-party page is rejected and writes nothing', async () => {
+        const res = await request(guardedApp)
+            .post('/api/notes')
+            .set('Cookie', cookieFor('token-for-alice'))
+            .set('Origin', EVIL_ORIGIN)
+            .send({ content: 'injected by evil.example', title: 'Pwned' });
+
+        expect(res.status).toBe(403);
+        expect(res.body).toEqual({ error: 'csrf_origin_rejected' });
+        expect(await Note.countDocuments({})).toBe(0);
+    });
+
+    it('a foreign Referer with no Origin is rejected too', async () => {
+        const res = await request(guardedApp)
+            .post('/api/notes')
+            .set('Cookie', cookieFor('token-for-alice'))
+            .set('Referer', `${EVIL_ORIGIN}/attack.html`)
+            .send({ content: 'injected', title: 'Pwned' });
+
+        expect(res.status).toBe(403);
+        expect(await Note.countDocuments({})).toBe(0);
+    });
+
+    it('a cookie-authenticated mutation with no Origin and no Referer passes', async () => {
+        const res = await request(guardedApp)
+            .post('/api/notes')
+            .set('Cookie', cookieFor('token-for-alice'))
+            .send({ content: 'from curl', title: 'No headers' });
+
+        expect(res.status).toBe(201);
+    });
+
+    it('a GET from a foreign origin is not blocked by the guard — mutations only', async () => {
+        await request(guardedApp)
+            .post('/api/notes')
+            .set('Cookie', cookieFor('token-for-alice'))
+            .set('Origin', OWN_ORIGIN)
+            .send({ content: 'seed', title: 'Seed' });
+
+        const res = await request(guardedApp)
+            .get('/api/notes')
+            .set('Cookie', cookieFor('token-for-alice'))
+            .set('Origin', EVIL_ORIGIN);
+
+        expect(res.status).toBe(200);
+    });
+
+    it('an unauthenticated mutation falls through to the normal 401, not a 403', async () => {
+        const res = await request(guardedApp)
+            .post('/api/notes')
+            .set('Origin', EVIL_ORIGIN)
+            .send({ content: 'anon', title: 'Anon' });
+
+        expect(res.status).toBe(401);
     });
 });

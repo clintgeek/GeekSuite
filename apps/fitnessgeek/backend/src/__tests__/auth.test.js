@@ -196,3 +196,118 @@ describe('cross-user data isolation on /api/blood-pressure (real auth + real con
     expect(res.body.data.userId).toBe('user-b');
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CSRF origin guard (TODO_ORDER #12)
+//
+// src/app.js mounts @geeksuite/user's csrfGuard() with the same
+// `allowedOrigins` list the cors() config uses, ahead of cors() itself (see
+// the comment there for why). These cases pin down the production contract:
+// a cookie-authenticated mutation from fitnessgeek's own origin still works,
+// the same mutation from a third-party page gets a deliberate 403, and the
+// Origin-less clients the suite depends on (curl, container healthchecks,
+// server-to-server, supertest) are not caught in the blast radius.
+//
+// The DELETE probe reuses the blood-pressure route the isolation tests above
+// already exercise: with the model mocked to find nothing it answers 404, so
+// 404 means "the guard let this through" and 403 means "the guard stopped
+// it". The /graphql probe matters more — it is the reverse proxy into
+// basegeek's unified API, so a GraphQL mutation over POST is the single most
+// valuable thing on this backend for a hostile page to reach.
+//
+// Unit coverage for every branch of the guard itself (Referer fallback,
+// opaque origins, CSRF_GUARD=off/report, empty allow-list) lives in
+// packages/user/src/server/__tests__/csrfGuard.test.js.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('CSRF origin guard', () => {
+  const OWN_ORIGIN = 'https://fitnessgeek.clintgeek.com';
+  const EVIL_ORIGIN = 'https://evil.example';
+  const COOKIE = cookieHeader('valid-token-a');
+
+  test('a cookie-authenticated DELETE from an allow-listed origin reaches the route', async () => {
+    mockBasegeekFor('valid-token-a');
+    BloodPressure.findOneAndDelete.mockResolvedValue(null);
+
+    const res = await request(app)
+      .delete('/api/blood-pressure/bp-a1')
+      .set('Cookie', COOKIE)
+      .set('Origin', OWN_ORIGIN);
+
+    expect(res.status).toBe(404);
+  });
+
+  test('the same DELETE from a foreign origin is rejected with 403 before the route runs', async () => {
+    const res = await request(app)
+      .delete('/api/blood-pressure/bp-a1')
+      .set('Cookie', COOKIE)
+      .set('Origin', EVIL_ORIGIN);
+
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({ error: 'csrf_origin_rejected' });
+    expect(BloodPressure.findOneAndDelete).not.toHaveBeenCalled();
+    expect(axios.get).not.toHaveBeenCalled(); // never even asked basegeek who this is
+  });
+
+  test('a foreign Referer with no Origin is rejected too', async () => {
+    const res = await request(app)
+      .delete('/api/blood-pressure/bp-a1')
+      .set('Cookie', COOKIE)
+      .set('Referer', `${EVIL_ORIGIN}/attack.html`);
+
+    expect(res.status).toBe(403);
+  });
+
+  test('a cookie-authenticated mutation with no Origin and no Referer passes', async () => {
+    mockBasegeekFor('valid-token-a');
+    BloodPressure.findOneAndDelete.mockResolvedValue(null);
+
+    const res = await request(app)
+      .delete('/api/blood-pressure/bp-a1')
+      .set('Cookie', COOKIE);
+
+    expect(res.status).toBe(404);
+  });
+
+  test('a GraphQL mutation from a foreign origin is rejected before it is proxied to basegeek', async () => {
+    const res = await request(app)
+      .post('/graphql')
+      .set('Cookie', COOKIE)
+      .set('Origin', EVIL_ORIGIN)
+      .send({ query: 'mutation { deleteEverything }' });
+
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({ error: 'csrf_origin_rejected' });
+    expect(axios).not.toHaveBeenCalled();
+  });
+
+  test('a GraphQL mutation from the app\'s own origin is proxied through', async () => {
+    axios.mockResolvedValueOnce({ status: 200, headers: {}, data: { data: { ok: true } } });
+
+    const res = await request(app)
+      .post('/graphql')
+      .set('Cookie', COOKIE)
+      .set('Origin', OWN_ORIGIN)
+      .send({ query: 'mutation { addWeightLog(weight: 180) { id } }' });
+
+    expect(res.status).toBe(200);
+    expect(axios).toHaveBeenCalledTimes(1);
+  });
+
+  test('a GET from a foreign origin is not blocked by the guard — mutations only', async () => {
+    const res = await request(app)
+      .get('/api/blood-pressure/bp-a1')
+      .set('Cookie', COOKIE)
+      .set('Origin', EVIL_ORIGIN);
+
+    expect(res.status).not.toBe(403);
+  });
+
+  test('an unauthenticated mutation is not the guard\'s business', async () => {
+    const res = await request(app)
+      .delete('/api/blood-pressure/bp-a1')
+      .set('Origin', EVIL_ORIGIN);
+
+    expect(res.status).not.toBe(403);
+  });
+});

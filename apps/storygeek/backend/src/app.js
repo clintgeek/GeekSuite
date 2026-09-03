@@ -8,7 +8,7 @@ import path from 'path';
 import pinoHttp from 'pino-http';
 import rateLimit from 'express-rate-limit';
 import { fileURLToPath } from 'url';
-import { attachUser, meHandler } from '@geeksuite/user/server';
+import { attachUser, csrfGuard, meHandler } from '@geeksuite/user/server';
 import { logger } from './utils/logger.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -41,6 +41,20 @@ const allowedOrigins = process.env.CORS_ORIGINS
   ? process.env.CORS_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
   : defaultCorsOrigins;
 logger.info({ origins: allowedOrigins }, 'CORS enabled');
+
+// CSRF: origin-check every cookie-authenticated mutation against the same
+// `allowedOrigins` list the cors() config below uses — one list, no second
+// copy.
+//
+// Mounted *before* cors() on purpose. This cors() config answers a
+// disallowed Origin with `callback(new Error(...))`, which express turns into
+// a generic 500 — so a CSRF attempt would otherwise look like an application
+// bug, and would stop being blocked at all the moment someone "tidied" that
+// callback into the equally idiomatic `callback(null, false)` (which lets the
+// request through without the CORS header). Running first makes the rejection
+// a deliberate, tested 403 that does not depend on how cors() reports a
+// mismatch. See DOCS/SSO_OVERVIEW.md#csrf.
+app.use(csrfGuard({ allowedOrigins, logger, appName: 'storygeek' }));
 
 app.use(cors({
   origin: function(origin, callback) {

@@ -29,6 +29,7 @@ import ambientRoutes from './routes/ambient.js';
 import { connectAIGeekDB, getAIGeekConnection } from './config/database.js';
 import { userGeekConn } from './models/user.js';
 import { listAppConnections } from './graphql/shared/appConnections.js';
+import { resolveAllowedOrigins } from './lib/corsOrigins.js';
 import { summarizeDependencies, createCachedProbe } from './lib/healthCheck.js';
 import { initRefreshTokenStore, closeRefreshTokenStore, isRefreshTokenStoreConnected } from './services/refreshTokenStore.js';
 import { startOAuthRefreshJob, stopOAuthRefreshJob } from './services/oauthRefreshJobService.js';
@@ -36,7 +37,7 @@ import reminderService from './graphql/bujogeek/services/reminderService.js';
 import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@as-integrations/express4';
 import { typeDefs, resolvers } from './graphql/index.js';
-import { optionalUser } from '@geeksuite/user/server';
+import { csrfGuard, optionalUser } from '@geeksuite/user/server';
 
 
 const app = express();
@@ -73,54 +74,35 @@ try {
 }
 
 // Middleware
-// Production fallback: only real clintgeek.com origins. Never falls back to
-// dev/LAN addresses when NODE_ENV === 'production' (see devOnlyOrigins below).
-const productionOrigins = [
-  'https://basegeek.clintgeek.com',  // Production domain
-  'https://geeksuite.clintgeek.com', // GeekSuite public portal
-  'https://notegeek.clintgeek.com',  // NoteGeek production
-  'https://fitnessgeek.clintgeek.com',  // FitnessGeek production
-  'https://bujogeek.clintgeek.com',  // BujoGeek production
-  'https://bookgeek.clintgeek.com',  // epub library
-  'https://storygeek.clintgeek.com',  // StoryGeek production
-  'https://flockgeek.clintgeek.com',  // FlockGeek production
-  'https://dash.clintgeek.com',       // DashGeek production
-  'https://dashgeek.clintgeek.com',   // DashGeek production (alt)
-  'https://babelgeek.clintgeek.com',  // BabelGeek production
-  'https://geekpr.clintgeek.com',  // geekPR — autonomous PR reviewer
-  'https://start.clintgeek.com',  // StartGeek production
-  'https://clintgeek.com',        // Portfolio (for portal link)
-];
-// Dev/LAN origins — only appended to the fallback outside production.
-const devOnlyOrigins = [
-  'http://localhost:5173',    // Vite dev server
-  'http://localhost:5174',    // Vite dev server (alternative port)
-  'http://localhost:5001',    // Backend dev server
-  'http://localhost:5000',    // Backend dev server (alternative port)
-  'http://localhost:3000',    // StartGeek & StoryGeek frontend
-  'http://localhost:1801',    // BookGeek dev server
-  'http://192.168.1.17:5173',  // Local network access
-  'http://192.168.1.17:5174',   // Local network access (alternative port)
-  'http://192.168.1.17:9977'   // StoryGeek local network access
-];
-const isProduction = process.env.NODE_ENV === 'production';
-const fallbackOrigins = isProduction
-  ? productionOrigins
-  : [...productionOrigins, ...devOnlyOrigins];
-const usingEnvOrigins = Boolean(process.env.CORS_ORIGINS);
-const allowedOrigins = usingEnvOrigins
-  ? process.env.CORS_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
-  : fallbackOrigins;
+// Origin allow-list lives in lib/corsOrigins.js — cors() and the CSRF guard
+// below read the same list so the two can never drift apart.
+const { origins: allowedOrigins, source: originSource, isProduction } = resolveAllowedOrigins();
 
-const corsLogPayload = {
-  origins: allowedOrigins,
-  source: usingEnvOrigins ? 'env' : 'fallback',
-};
-if (!usingEnvOrigins && isProduction) {
+const corsLogPayload = { origins: allowedOrigins, source: originSource };
+if (originSource === 'fallback' && isProduction) {
   logger.warn(corsLogPayload, 'CORS_ORIGINS not set; production is running on the hardcoded fallback origin list');
 } else {
   logger.info(corsLogPayload, 'CORS allowed origins configured');
 }
+
+// CSRF: origin-check every cookie-authenticated mutation.
+//
+// Mounted *before* cors() on purpose. This cors() config answers a
+// disallowed Origin with `callback(new Error(...))`, which express turns into
+// a generic 500 — so a CSRF attempt would otherwise look like an application
+// bug, and would stop being blocked at all the moment someone "tidied" that
+// callback into the equally idiomatic `callback(null, false)` (which lets the
+// request through without the CORS header). Running first makes the rejection
+// a deliberate, tested 403 that does not depend on how cors() reports a
+// mismatch.
+//
+// Mounted before every route, which is what puts it in front of `/graphql`
+// further down. That is the whole point: this process owns the suite's
+// unified GraphQL API, so a GraphQL mutation over POST is the highest-value
+// target in GeekSuite for a hostile page. `/openai/v1` and the health
+// endpoints need no exemption — the proxy is called with an API key and no
+// cookie, and health checks are GETs. See DOCS/SSO_OVERVIEW.md#csrf.
+app.use(csrfGuard({ allowedOrigins, logger, appName: 'basegeek' }));
 
 app.use(cors({
   origin: function (origin, callback) {

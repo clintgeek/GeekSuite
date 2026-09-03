@@ -1,3 +1,4 @@
+import { csrfGuard } from "@geeksuite/user/server";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import crypto from "crypto";
@@ -7,6 +8,7 @@ import mongoose from "mongoose";
 import path from "path";
 import pinoHttp from "pino-http";
 import { fileURLToPath } from "url";
+import { allowedOrigins } from "./config/corsOrigins.js";
 import { env } from "./config/env.js";
 import apiRouter from "./routes/api.js";
 import { logger } from "./utils/logger.js";
@@ -20,8 +22,25 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
 }));
 
-const allowedOrigins = env.corsOrigin.split(",").map(s => s.trim());
 logger.info(`CORS enabled for origins: ${ JSON.stringify(allowedOrigins) }`);
+
+// CSRF: origin-check every cookie-authenticated mutation against the same
+// allow-list cors() uses (src/config/corsOrigins.js — one list, no second
+// copy).
+//
+// This mount matters more here than anywhere else in the suite. The other six
+// backends pass cors() an origin *callback* that errors on a mismatch, so a
+// foreign Origin never reaches a route even without this guard. flockgeek
+// passes cors() a plain array, and the cors package's array form does not
+// reject: it simply omits the Access-Control-Allow-Origin header and calls
+// next(). The request runs, the mutation commits, and only the *response*
+// is withheld from the attacker's page — which is exactly the shape of a
+// classic CSRF write. Until this line, flockgeek's only defense was the
+// SameSite=lax attribute on the SSO cookies.
+//
+// Mounted before cors() to match the other backends' ordering, so the
+// rejection is a deliberate, tested 403. See DOCS/SSO_OVERVIEW.md#csrf.
+app.use(csrfGuard({ allowedOrigins, logger, appName: "flockgeek" }));
 
 app.use(
   cors({

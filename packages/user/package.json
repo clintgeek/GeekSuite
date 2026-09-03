@@ -6,9 +6,11 @@
   "exports": {
     ".": "./src/index.js",
     "./server": "./src/server/index.js",
+    "./server/csrfGuard": "./src/server/csrfGuard.js",
     "./vite": "./src/vitePlugin.js"
   },
   "scripts": {
+    "test": "node --test src/server/__tests__/*.test.js",
     "lint": "eslint ."
   },
   "devDependencies": {

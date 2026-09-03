@@ -292,3 +292,108 @@ describe('GET /api/health', () => {
     expect(mockAxios.get).not.toHaveBeenCalled();
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CSRF origin guard (TODO_ORDER #12)
+//
+// createApp() mounts @geeksuite/user's csrfGuard() with the same
+// `allowedOrigins` list the cors() config uses (src/app.js). These cases pin
+// down the contract that matters in production: a cookie-authenticated
+// mutation from bujogeek's own origin still works, the same mutation from a
+// third-party page does not, and the Origin-less clients the suite depends on
+// (curl, container healthchecks, server-to-server, supertest itself) are not
+// caught in the blast radius.
+//
+// The guard is mounted ahead of cors() (see src/app.js for why), so a
+// blocked mutation is a deliberate 403 rather than the generic 500 this
+// app's cors() callback produces for a disallowed Origin.
+//
+// POST /api/auth/logout is the probe: it always answers 200 with
+// { success: true } once it reaches the handler — even when the upstream
+// basegeek call fails — so a 200 means "the guard let this through" and a 403
+// means "the guard stopped it", with no upstream mocking needed.
+//
+// Unit coverage for every branch of the guard itself (Referer fallback,
+// opaque origins, CSRF_GUARD=off/report, empty allow-list) lives in
+// packages/user/src/server/__tests__/csrfGuard.test.js.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('CSRF origin guard', () => {
+  const COOKIE = ['geek_token=a-valid-token'];
+  const OWN_ORIGIN = 'https://bujogeek.clintgeek.com';
+  const EVIL_ORIGIN = 'https://evil.example';
+
+  it('allows a cookie-authenticated mutation from an allow-listed origin', async () => {
+    const res = await request(app)
+      .post('/api/auth/logout')
+      .set('Cookie', COOKIE)
+      .set('Origin', OWN_ORIGIN);
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+  });
+
+  it('rejects a cookie-authenticated mutation from a foreign origin with 403', async () => {
+    const res = await request(app)
+      .post('/api/auth/logout')
+      .set('Cookie', COOKIE)
+      .set('Origin', EVIL_ORIGIN);
+
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({ error: 'csrf_origin_rejected' });
+  });
+
+  it('rejects when only the Referer betrays the foreign origin', async () => {
+    const res = await request(app)
+      .post('/api/auth/logout')
+      .set('Cookie', COOKIE)
+      .set('Referer', `${EVIL_ORIGIN}/attack.html`);
+
+    expect(res.status).toBe(403);
+  });
+
+  it('allows a cookie-authenticated mutation with no Origin and no Referer', async () => {
+    // Non-browser clients (curl, server-to-server, healthchecks) send
+    // neither header — see the csrfGuard module header for why that is a
+    // pass and not a 403.
+    const res = await request(app)
+      .post('/api/auth/logout')
+      .set('Cookie', COOKIE);
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+  });
+
+  it('does not reject an unauthenticated mutation — there is no session to ride on', async () => {
+    const res = await request(app)
+      .post('/api/auth/logout')
+      .set('Origin', EVIL_ORIGIN);
+
+    // Not the guard's business: with no auth cookie there is nothing for a
+    // third-party page to abuse. This app's cors() still turns a disallowed
+    // Origin into a 500 of its own (pre-existing behavior, deliberately left
+    // alone in this pass) — what matters here is that the 403 is not ours.
+    expect(res.status).not.toBe(403);
+  });
+
+  it('does not block a GET from a foreign origin — the guard is for mutations only', async () => {
+    const res = await request(app)
+      .get('/api/me')
+      .set('Cookie', COOKIE)
+      .set('Origin', EVIL_ORIGIN);
+
+    expect(res.status).not.toBe(403);
+  });
+
+  it('a GET from the app\'s own origin still works end to end', async () => {
+    mockAxios.get.mockResolvedValueOnce({ status: 200, data: upstreamUser() });
+
+    const res = await request(app)
+      .get('/api/me')
+      .set('Cookie', COOKIE)
+      .set('Origin', OWN_ORIGIN);
+
+    expect(res.status).toBe(200);
+    expect(res.body.user.username).toBe('alice');
+  });
+});
