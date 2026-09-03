@@ -27,7 +27,7 @@
  * `to` / `href` / `onClick`, in which case it becomes a `ButtonBase` (same
  * layout, 44px target) that navigates and closes the mobile drawer.
  *
- * `extras` gets a sane default wrapper (`overflowY: 'auto'`, capped at 40% of
+ * `extras` follows the nav sections directly (nothing is pinned to the bottom;
  * the panel) so a tall extras block scrolls in place instead of squeezing the
  * nav list; override with `extrasSx`. When `extras` is the point of the panel
  * (a tag tree, say) rather than a footnote to the nav list, pass `extrasGrow`
@@ -460,14 +460,21 @@ export const GeekSidebar = forwardRef(function GeekSidebar(
     >
       {brandBlock}
 
+      {/* Everything floats to the top: nav sections first, then extras, in one
+          scroll body. Nothing is pinned to the bottom (Chef, 2026-09-02). With
+          `extrasGrow`, extras takes the remaining height and scrolls on its own. */}
       <Box
+        data-geek-sidebar="body"
         sx={{
-          flex: extrasGrow ? '0 0 auto' : 1,
+          flex: 1,
           minHeight: 0,
-          overflowY: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          overflowY: extrasGrow ? 'hidden' : 'auto',
           overflowX: 'hidden',
         }}
       >
+        <Box sx={{ flex: '0 0 auto' }}>
         {resolvedSections.map((section, index) => (
           <Box
             component="section"
@@ -518,38 +525,21 @@ export const GeekSidebar = forwardRef(function GeekSidebar(
             </List>
           </Box>
         ))}
-      </Box>
-
-      {extras ? (
-        <Box
-          data-geek-sidebar="extras"
-          sx={
-            extrasGrow
-              ? {
-                  // Opt-in: extras becomes the scroll body (e.g. a tag tree
-                  // that's the point of the panel) and the nav sections above
-                  // it shrink to content instead of competing for space.
-                  flex: 1,
-                  minHeight: 0,
-                  overflowY: 'auto',
-                  px: 1,
-                  py: 1,
-                  ...extrasSx,
-                }
-              : {
-                  flexShrink: 0,
-                  minHeight: 0,
-                  maxHeight: '40%',
-                  overflowY: 'auto',
-                  px: 1,
-                  py: 1,
-                  ...extrasSx,
-                }
-          }
-        >
-          {extras}
         </Box>
-      ) : null}
+
+        {extras ? (
+          <Box
+            data-geek-sidebar="extras"
+            sx={
+              extrasGrow
+                ? { flex: 1, minHeight: 0, overflowY: 'auto', px: 1, py: 1, ...extrasSx }
+                : { flex: '0 0 auto', px: 1, py: 1, ...extrasSx }
+            }
+          >
+            {extras}
+          </Box>
+        ) : null}
+      </Box>
 
       {footerBlock}
     </Box>

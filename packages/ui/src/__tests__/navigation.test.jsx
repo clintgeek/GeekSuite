@@ -77,6 +77,15 @@ function classesFor(markup, attr) {
   return match ? match[1].split(' ') : [];
 }
 
+/** The emotion CSS rule text for the element whose opening tag contains `attr`. */
+function ruleFor(markup, attr) {
+  const cls = classesFor(markup, attr).find((c) => c.startsWith('css-'));
+  if (!cls) return '';
+  const idx = markup.indexOf(`.${cls}{`);
+  if (idx === -1) return '';
+  return markup.slice(idx, markup.indexOf('}', idx) + 1);
+}
+
 function expectOrdered(markup, attrs) {
   const positions = attrs.map((attr) => at(markup, attr));
   positions.forEach((position, index) => {
@@ -278,17 +287,20 @@ describe('GeekSidebar', () => {
     expect(shown).toContain('>0<');
   });
 
-  it('grows extras to fill the scroll body when extrasGrow is set, shrinking the nav sections instead', () => {
-    const sections = [{ label: 'Flock', items: [{ id: 'birds', label: 'Birds', to: '/birds' }] }];
-
-    const grown = render(
+  it('floats extras directly under the nav by default and lets extrasGrow take the remaining height', () => {
+    const sections = [{ items: [{ id: 'a', label: 'A', onClick: () => {} }] }];
+    const fixed = renderToStaticMarkup(
+      <GeekSidebar sections={sections} extras={<div data-test-extras />} />
+    );
+    const grown = renderToStaticMarkup(
       <GeekSidebar sections={sections} extras={<div data-test-extras />} extrasGrow />
     );
-    expect(grown).toContain('flex:0 0 auto');
-
-    const fixed = render(<GeekSidebar sections={sections} extras={<div data-test-extras />} />);
-    expect(fixed).not.toContain('flex:0 0 auto');
-    expect(fixed).toContain('max-height:40%');
+    // One scroll body wraps sections + extras; default extras are content-sized.
+    expect(fixed).toContain('data-geek-sidebar="body"');
+    expect(ruleFor(fixed, 'data-geek-sidebar="extras"')).toContain('flex:0 0 auto');
+    expect(fixed).not.toContain('max-height:40%');
+    // With extrasGrow the extras box becomes the flex:1 scroll region.
+    expect(ruleFor(grown, 'data-geek-sidebar="extras"')).toContain('flex:1');
   });
 });
 
