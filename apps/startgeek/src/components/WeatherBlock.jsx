@@ -2,84 +2,72 @@ import { motion } from 'framer-motion'
 import { useWeather } from '../hooks/useWeather'
 import { ANIMATION, REDUCED_MOTION } from '../constants'
 
-const Stat = ({ k, v }) => (
-  <div className="flex flex-col gap-0.5 min-w-0">
-    <span className="font-mono text-[10px] tracking-[0.1em] uppercase text-ink-3">{k}</span>
-    <span className="text-[13px] text-ink tnum truncate">{v}</span>
-  </div>
-)
+const SHADOW = { textShadow: '0 2px 30px rgba(0,0,0,0.35)' }
+const SHADOW_SM = { textShadow: '0 1px 4px rgba(0,0,0,0.25)' }
 
-// Today's weather as one panel beside the clock. The whole block is a
-// button; clicking opens the detail modal with the week.
+// Today's weather set in the clock's type: a big thin temperature on the
+// same baseline, city and conditions in the date's voice, a mono stat line.
+// No panel, so the hero stays balanced. The whole block opens the modal.
 const WeatherBlock = ({ onOpen }) => {
   const { local, loading } = useWeather()
   const { current: w, forecast, error } = local
   const today = forecast?.[0]
 
-  const shell =
-    'mod h-full w-full text-left flex flex-col justify-between gap-4 p-5 cursor-pointer'
-
   if (loading) {
     return (
-      <div className={shell} aria-hidden="true">
-        <div className="h-3 w-24 bg-white/10 rounded animate-pulse" />
-        <div className="h-10 w-32 bg-white/10 rounded animate-pulse" />
-        <div className="h-3 w-40 bg-white/10 rounded animate-pulse" />
+      <div className="flex flex-col items-end justify-end gap-3 select-none" aria-hidden="true">
+        <div className="h-16 w-40 bg-white/10 rounded animate-pulse" />
+        <div className="h-3 w-48 bg-white/10 rounded animate-pulse" />
+        <div className="h-3 w-56 bg-white/10 rounded animate-pulse" />
       </div>
     )
   }
 
   if (error || !w) {
     return (
-      <div className={shell}>
-        <span className="label">Weather</span>
-        <span className="text-sm text-ink-3">Weather unavailable</span>
+      <div className="flex flex-col items-end justify-end text-right">
+        <span className="text-[17px] text-ink-3">Weather unavailable</span>
       </div>
     )
   }
 
   const city = w.location?.split(',')[0] || 'Local'
   const hasRange = today && Number.isFinite(today.highTemp) && Number.isFinite(today.lowTemp)
+  const stats = [
+    hasRange ? `H ${today.highTemp} · L ${today.lowTemp}` : null,
+    Number.isFinite(w.humidity) ? `${w.humidity}% RH` : null,
+    Number.isFinite(w.windSpeed) ? `W ${w.windSpeed} mph` : null,
+  ].filter(Boolean)
 
   return (
     <motion.button
       type="button"
       onClick={onOpen}
-      initial={REDUCED_MOTION ? false : { opacity: 0, y: 8 }}
+      initial={REDUCED_MOTION ? false : { opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: ANIMATION.MEDIUM, ease: ANIMATION.EASE, delay: 0.1 }}
-      className={shell}
+      transition={{ duration: ANIMATION.SLOW, ease: ANIMATION.EASE, delay: 0.1 }}
+      className="group flex flex-col items-end justify-end gap-1.5 text-right select-none rounded-lg -mr-2 pr-2"
       aria-label={`Weather in ${city}: ${w.temperature} degrees, ${w.description}. Open details`}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <span className="label block">{city}</span>
-          <span className="block text-[13px] text-ink-2 mt-1 truncate">{w.description}</span>
-        </div>
-        <span className="font-mono text-[10px] tracking-[0.1em] uppercase text-ink-3 shrink-0 pt-0.5">
-          Details
-        </span>
-      </div>
+      <span
+        className="flex items-baseline gap-3.5 font-extralight leading-[0.92] tracking-[-0.035em] tnum text-ink"
+        style={{ fontSize: 'clamp(72px, 11vw, 148px)', ...SHADOW }}
+      >
+        {w.temperature}°
+      </span>
 
-      <div className="flex items-baseline gap-3">
-        <span
-          className="font-extralight leading-none tracking-[-0.03em] tnum text-ink"
-          style={{ fontSize: 'clamp(48px, 5.5vw, 72px)' }}
-        >
-          {w.temperature}°
-        </span>
-        {Number.isFinite(w.feelsLike) && w.feelsLike !== w.temperature && (
-          <span className="font-mono text-[11px] tracking-wide text-ink-3 tnum">
-            feels {w.feelsLike}°
-          </span>
-        )}
-      </div>
+      <span className="text-[17px] text-ink-2" style={SHADOW_SM}>
+        <span className="font-medium text-ink">{city}</span>
+        <span className="mx-2 text-ink-3">·</span>
+        {w.description}
+      </span>
 
-      <div className="grid grid-cols-3 gap-3">
-        <Stat k="Hi / Lo" v={hasRange ? `${today.highTemp}° / ${today.lowTemp}°` : '--'} />
-        <Stat k="Humidity" v={Number.isFinite(w.humidity) ? `${w.humidity}%` : '--'} />
-        <Stat k="Wind" v={Number.isFinite(w.windSpeed) ? `${w.windSpeed} mph` : '--'} />
-      </div>
+      {stats.length > 0 && (
+        <span className="font-mono text-[11px] tracking-[0.06em] uppercase text-ink-3 tnum" style={SHADOW_SM}>
+          {stats.join('   ')}
+          <span className="ml-3 text-ink-4 group-hover:text-accent transition-colors">Details</span>
+        </span>
+      )}
     </motion.button>
   )
 }
