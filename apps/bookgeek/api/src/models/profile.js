@@ -7,6 +7,14 @@ const profileSchema = new mongoose.Schema(
     // Personal "secret word" typed on a device keyboard at /download-basket to
     // resolve the user's newest active basket. Deliberately low-security.
     deviceWord: { type: String, lowercase: true, trim: true },
+    // User-defined shelves. `id` is "custom-<slug>" and is what gets written
+    // to Book.shelf; `label` is what the UI shows.
+    customShelves: [
+      {
+        id: { type: String, required: true },
+        label: { type: String, required: true },
+      },
+    ],
     savedFilters: [
       {
         id: { type: String, required: true },

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import ePub from "epubjs";
 import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, InputLabel, MenuItem, Select, TextField, Typography } from "@mui/material";
 import { getMe, loginRedirect, logout as logoutRequest, onLogout, startRefreshTimer, stopRefreshTimer } from "@geeksuite/auth";
@@ -28,9 +28,15 @@ if (typeof window !== "undefined") {
   INCLUDE_CREDENTIALS = API_BASE.startsWith(`${ origin }/api`);
 }
 
-const shelves = [
+// Built-in shelves. The user's custom shelves (from their profile) are
+// appended inside the component; see `shelves` below.
+const GENERIC_SHELF_PILL =
+  "rounded-full border border-stone-500/70 bg-stone-100 px-1.5 py-0.5 text-[9px] font-medium text-stone-900 dark:bg-stone-900/40 dark:text-stone-200";
+
+const BUILT_IN_SHELVES = [
   { id: "all", label: "All books" },
   { id: "reading", label: "Reading", pillClass: "rounded-full border border-amber-500/70 bg-amber-100 px-1.5 py-0.5 text-[9px] font-medium text-amber-900 dark:bg-amber-900/40 dark:text-amber-200" },
+  { id: "on-reader", label: "On Reader", pillClass: "rounded-full border border-teal-500/70 bg-teal-100 px-1.5 py-0.5 text-[9px] font-medium text-teal-900 dark:bg-teal-900/40 dark:text-teal-200" },
   { id: "unread", label: "Unread", pillClass: "rounded-full border border-slate-500/70 bg-slate-100 px-1.5 py-0.5 text-[9px] font-medium text-slate-900 dark:bg-slate-900/40 dark:text-slate-200" },
   { id: "read", label: "Read", pillClass: "rounded-full border border-sky-500/70 bg-sky-100 px-1.5 py-0.5 text-[9px] font-medium text-sky-900 dark:bg-sky-900/40 dark:text-sky-200" },
   { id: "want-to-read", label: "Want to read", pillClass: "rounded-full border border-violet-500/70 bg-violet-100 px-1.5 py-0.5 text-[9px] font-medium text-violet-900 dark:bg-violet-900/40 dark:text-violet-200" },
@@ -132,6 +138,29 @@ export default function App() {
   const [kindleEmailInput, setKindleEmailInput] = useState("");
   const [deviceWordInput, setDeviceWordInput] = useState("");
   const [profileMessage, setProfileMessage] = useState(null);
+
+  const [newShelfLabel, setNewShelfLabel] = useState("");
+  const [shelfEditLoading, setShelfEditLoading] = useState(false);
+  const [shelfEditError, setShelfEditError] = useState(null);
+
+  // Built-in shelves plus the signed-in user's custom shelves, in one list
+  // every shelf picker, pill, and filter reads from.
+  const customShelves = useMemo(
+    () => (Array.isArray(profile?.customShelves) ? profile.customShelves : []),
+    [profile]
+  );
+  const shelves = useMemo(
+    () => [
+      ...BUILT_IN_SHELVES,
+      ...customShelves.map((s) => ({
+        id: s.id,
+        label: s.label,
+        pillClass: GENERIC_SHELF_PILL,
+        custom: true,
+      })),
+    ],
+    [customShelves]
+  );
 
   const [goodreadsFile, setGoodreadsFile] = useState(null);
   const [goodreadsImportLoading, setGoodreadsImportLoading] = useState(false);
@@ -1023,6 +1052,85 @@ export default function App() {
       readerRenditionRef.current.themes.select(readerTheme);
     }
   }, [readerTheme]);
+
+  function apiErrorMessage(json, fallback) {
+    if (typeof json?.error === "string") return json.error;
+    return json?.error?.message || json?.message || fallback;
+  }
+
+  async function refreshShelfSummary() {
+    try {
+      const shelvesRes = await apolloClient.query({
+        query: GET_SHELVES,
+        fetchPolicy: "network-only",
+      });
+      if (shelvesRes.data?.shelves) {
+        setShelfSummary(shelvesRes.data.shelves);
+      }
+    } catch {
+      // counts are cosmetic; ignore refresh errors
+    }
+  }
+
+  async function handleAddCustomShelf(event) {
+    if (event?.preventDefault) event.preventDefault();
+    const label = newShelfLabel.trim();
+    if (!label) return;
+    if (!token) {
+      setShelfEditError("Sign in to add shelves.");
+      return;
+    }
+    setShelfEditLoading(true);
+    setShelfEditError(null);
+    try {
+      const res = await authFetch("/profile/shelves", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || json?.success === false) {
+        throw new Error(apiErrorMessage(json, "Failed to add shelf"));
+      }
+      setProfile(json.data || null);
+      setNewShelfLabel("");
+    } catch (err) {
+      setShelfEditError(err.message || "Failed to add shelf");
+    } finally {
+      setShelfEditLoading(false);
+    }
+  }
+
+  async function handleDeleteCustomShelf(shelfId) {
+    if (!token) {
+      setShelfEditError("Sign in to remove shelves.");
+      return;
+    }
+    const shelf = shelves.find((s) => s.id === shelfId);
+    const ok = window.confirm(
+      `Remove the shelf "${shelf?.label || shelfId}"? Books on it go back to Unread.`
+    );
+    if (!ok) return;
+    setShelfEditLoading(true);
+    setShelfEditError(null);
+    try {
+      const res = await authFetch(`/profile/shelves/${encodeURIComponent(shelfId)}`, {
+        method: "DELETE",
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || json?.success === false) {
+        throw new Error(apiErrorMessage(json, "Failed to remove shelf"));
+      }
+      setProfile(json.data || null);
+      if (shelfFilter === shelfId) setShelfFilter("all");
+      if (defaultShelfPref === shelfId) setDefaultShelfPref("all");
+      await refreshShelfSummary();
+    } catch (err) {
+      setShelfEditError(err.message || "Failed to remove shelf");
+    } finally {
+      setShelfEditLoading(false);
+    }
+  }
 
   async function handleSaveProfile(event) {
     event.preventDefault();
@@ -2505,6 +2613,60 @@ export default function App() {
                       )}
                       {prefSaveMessage && (
                         <div className="mt-1 text-[10px] text-emerald-700 dark:text-emerald-300">{prefSaveMessage}</div>
+                      )}
+                    </div>
+
+                    <div>
+                      <div className="mb-1 text-[11px] font-medium text-slate-700 dark:text-slate-200">
+                        Custom shelves
+                      </div>
+                      <p className="mb-2 text-[11px] text-slate-500">
+                        Add your own shelves alongside the built-in ones. They show in the sidebar with a book icon.
+                      </p>
+                      {customShelves.length > 0 && (
+                        <ul className="mb-2 flex flex-wrap gap-1.5">
+                          {customShelves.map((shelf) => (
+                            <li
+                              key={shelf.id}
+                              className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[11px] text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                            >
+                              <span>{shelf.label}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteCustomShelf(shelf.id)}
+                                disabled={shelfEditLoading}
+                                className="ml-0.5 rounded px-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 disabled:opacity-60"
+                                aria-label={`Remove shelf ${shelf.label}`}
+                                title="Remove shelf"
+                              >
+                                ×
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      <form
+                        onSubmit={handleAddCustomShelf}
+                        className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3"
+                      >
+                        <input
+                          type="text"
+                          value={newShelfLabel}
+                          onChange={(e) => setNewShelfLabel(e.target.value)}
+                          maxLength={40}
+                          placeholder="New shelf name"
+                          className="w-full max-w-xs rounded border border-slate-300 bg-white px-2 py-1.5 text-[11px] text-slate-900 outline-none focus:border-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
+                        />
+                        <button
+                          type="submit"
+                          disabled={shelfEditLoading || !newShelfLabel.trim()}
+                          className="inline-flex items-center rounded border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-900 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 dark:hover:border-slate-500 dark:hover:bg-slate-800 disabled:opacity-60"
+                        >
+                          {shelfEditLoading ? "Saving…" : "Add shelf"}
+                        </button>
+                      </form>
+                      {shelfEditError && (
+                        <div className="mt-1 text-[10px] text-rose-700 dark:text-rose-400">{shelfEditError}</div>
                       )}
                     </div>
 

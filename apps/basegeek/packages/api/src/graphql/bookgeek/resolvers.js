@@ -1,9 +1,13 @@
 import { Book } from "./models/book.js";
 import mongoose from "mongoose";
 
+// Built-in shelves. Users can also define custom shelves (ids prefixed
+// "custom-", stored on their bookgeek Profile); those are counted below by
+// aggregating whatever other shelf values exist on books.
 const shelfNames = [
   "unread",
   "reading",
+  "on-reader",
   "read",
   "want-to-read",
   "abandoned",
@@ -175,9 +179,15 @@ export const resolvers = {
     },
     shelves: async (_, __, { user }) => {
       requireUser(user);
-      const [total, owned, ...shelfCounts] = await Promise.all([
+      const [total, owned, otherShelves, ...shelfCounts] = await Promise.all([
         Book.countDocuments({}),
         Book.countDocuments({ owned: true }),
+        // Every shelf value that is not a built-in: custom shelves.
+        Book.aggregate([
+          { $match: { shelf: { $type: "string", $nin: ["", ...shelfNames] } } },
+          { $group: { _id: "$shelf", count: { $sum: 1 } } },
+          { $sort: { _id: 1 } },
+        ]),
         ...shelfNames.map((name) => Book.countDocuments(shelfMatch(name))),
       ]);
 
@@ -188,7 +198,10 @@ export const resolvers = {
         total,
         owned,
         unowned: Math.max(0, total - owned),
-        shelves: Object.entries(counts).map(([id, count]) => ({ id, count })),
+        shelves: [
+          ...Object.entries(counts).map(([id, count]) => ({ id, count })),
+          ...otherShelves.map((s) => ({ id: s._id, count: s.count })),
+        ],
       };
     },
   },

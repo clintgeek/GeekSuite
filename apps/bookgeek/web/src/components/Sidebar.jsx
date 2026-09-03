@@ -29,6 +29,7 @@ import {
 import {
   LibraryBooks as LibraryIcon,
   MenuBook as ReadingIcon,
+  TabletMacOutlined as OnReaderIcon,
   BookmarkBorder as UnreadIcon,
   CheckCircleOutline as ReadIcon,
   FavoriteBorder as WantIcon,
@@ -45,9 +46,10 @@ import {
   shelfNavId
 } from './navConfig';
 
-/** One glyph per shelf in `App.jsx`'s `shelves`, so rows align with the footer. */
+/** One glyph per built-in shelf in `App.jsx`'s `BUILT_IN_SHELVES`; custom shelves fall back to `ShelfIcon`. */
 const SHELF_ICONS = {
   reading: <ReadingIcon />,
+  'on-reader': <OnReaderIcon />,
   unread: <UnreadIcon />,
   read: <ReadIcon />,
   'want-to-read': <WantIcon />,

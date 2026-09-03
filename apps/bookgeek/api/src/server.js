@@ -1797,6 +1797,103 @@ app.delete(
   }
 );
 
+// ---- Custom shelves --------------------------------------------------------
+// Built-in shelf ids live in the web app and basegeek's bookgeek resolver.
+// Custom ones are per-user definitions on the Profile; the id is what gets
+// written to Book.shelf, so it is namespaced to never collide with a built-in.
+const CUSTOM_SHELF_PREFIX = "custom-";
+const MAX_CUSTOM_SHELVES = 20;
+const MAX_CUSTOM_SHELF_LABEL = 40;
+
+function customShelfIdFromLabel(label) {
+  const slug = String(label)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug ? `${CUSTOM_SHELF_PREFIX}${slug}` : null;
+}
+
+app.post("/api/profile/shelves", authenticateToken, async (req, res) => {
+  try {
+    if (!MONGODB_URI || mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ error: "Database not connected" });
+    }
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: "User not available from token" });
+    }
+
+    const label =
+      typeof req.body?.label === "string" ? req.body.label.trim().replace(/\s+/g, " ") : "";
+    if (!label) {
+      return res.status(400).json({ error: "Shelf name is required" });
+    }
+    if (label.length > MAX_CUSTOM_SHELF_LABEL) {
+      return res
+        .status(400)
+        .json({ error: `Shelf name must be ${MAX_CUSTOM_SHELF_LABEL} characters or fewer` });
+    }
+    const id = customShelfIdFromLabel(label);
+    if (!id) {
+      return res.status(400).json({ error: "Shelf name needs at least one letter or number" });
+    }
+
+    const existing = await Profile.findOne({ userId }).lean();
+    const current = Array.isArray(existing?.customShelves) ? existing.customShelves : [];
+    if (current.some((s) => s.id === id)) {
+      return res.status(409).json({ error: "You already have a shelf with that name" });
+    }
+    if (current.length >= MAX_CUSTOM_SHELVES) {
+      return res.status(400).json({ error: `You can have up to ${MAX_CUSTOM_SHELVES} custom shelves` });
+    }
+
+    const profile = await Profile.findOneAndUpdate(
+      { userId },
+      { $setOnInsert: { userId }, $push: { customShelves: { id, label } } },
+      { upsert: true, new: true, lean: true }
+    );
+    return res.json({ success: true, data: profile });
+  } catch (err) {
+    console.error("/api/profile/shelves POST error", err);
+    return res.status(500).json({ error: "Failed to add shelf" });
+  }
+});
+
+// Removing a shelf also clears it from any book sitting on it. Books are
+// shared across users, so those books land back on Unread for everyone.
+app.delete("/api/profile/shelves/:id", authenticateToken, async (req, res) => {
+  try {
+    if (!MONGODB_URI || mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ error: "Database not connected" });
+    }
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: "User not available from token" });
+    }
+    const id = String(req.params.id || "");
+    if (!id.startsWith(CUSTOM_SHELF_PREFIX)) {
+      return res.status(400).json({ error: "Only custom shelves can be removed" });
+    }
+
+    const profile = await Profile.findOneAndUpdate(
+      { userId },
+      { $pull: { customShelves: { id } } },
+      { new: true, lean: true }
+    );
+    const cleared = await Book.updateMany({ shelf: id }, { $unset: { shelf: "" } });
+
+    return res.json({
+      success: true,
+      data: profile,
+      clearedBooks: cleared?.modifiedCount ?? 0,
+    });
+  } catch (err) {
+    console.error("/api/profile/shelves DELETE error", err);
+    return res.status(500).json({ error: "Failed to remove shelf" });
+  }
+});
+
 app.post(
   "/api/books/:id/send-to-kindle",
   authenticateToken,

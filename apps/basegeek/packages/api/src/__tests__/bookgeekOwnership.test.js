@@ -109,6 +109,20 @@ describe('bookgeek — the library stays deliberately shared', () => {
     expect(stats.shelves.find((s) => s.id === 'read').count).toBe(1);
   });
 
+  test('shelves counts the on-reader shelf and any custom shelf values', async () => {
+    await makeBook({ title: 'A', shelf: 'on-reader' });
+    await makeBook({ title: 'B', shelf: 'custom-cookbooks' });
+    await makeBook({ title: 'C', shelf: 'custom-cookbooks' });
+    await makeBook({ title: 'D', shelf: 'unread' });
+
+    const stats = await resolvers.Query.shelves(null, {}, ctx(ALICE));
+    expect(stats.total).toBe(4);
+    expect(stats.shelves.find((s) => s.id === 'on-reader').count).toBe(1);
+    expect(stats.shelves.find((s) => s.id === 'custom-cookbooks').count).toBe(2);
+    // a custom shelf never leaks into the unread bucket
+    expect(stats.shelves.find((s) => s.id === 'unread').count).toBe(1);
+  });
+
   test('a shared book can be updated and deleted by any authenticated member', async () => {
     const b = await makeBook();
 

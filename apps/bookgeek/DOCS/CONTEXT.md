@@ -91,3 +91,29 @@ ebook-convert input.mobi output.epub
 3. **One-time import** — Calibre library and Goodreads are imported once, then retired
 4. **Gemini for recommendations** — on-demand, seed-based, via aiGeek
 5. **ISBN is primary key** — best identifier for matching and deduplication
+
+---
+
+## Shelves (2026-09-03)
+
+A book has one `shelf` string. Built-in ids: `reading`, `on-reader`, `unread`,
+`read`, `want-to-read`, `abandoned`, `need-to-find` (`unread` also matches a
+missing/empty shelf that is not finished). `on-reader` means "loaded on the
+e-reader"; its sidebar icon is a tablet.
+
+**Custom shelves** are per-user definitions stored on the bookgeek `Profile`
+as `customShelves: [{ id, label }]`, `id = "custom-<slug of label>"`. Routes
+(bookgeek API, cookie auth): `POST /api/profile/shelves { label }`,
+`DELETE /api/profile/shelves/:id`. Deleting a shelf `$unset`s `shelf` on every
+book sitting on it. Books are shared across users, so a custom shelf id on a
+book is visible to everyone; only the *definition* is per user. Limits: 20
+shelves, 40-char labels.
+
+**Where the list lives.** The live GraphQL for bookgeek is basegeek's
+`graphql/bookgeek/` module (the copy under `api/src/graphql/` is not mounted).
+Its `shelves` query counts the built-ins and then aggregates every other
+non-empty `shelf` value, so custom shelves get badge counts without basegeek
+knowing about profiles. The web app composes `BUILT_IN_SHELVES` plus
+`profile.customShelves` into one `shelves` list (App.jsx) that every picker,
+pill, and filter reads; custom shelves fall back to the closed-book icon in
+`Sidebar.jsx`.
