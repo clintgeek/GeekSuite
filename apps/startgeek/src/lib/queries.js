@@ -30,6 +30,15 @@ export const GLANCE_TODAY = `
           dueDate
           tags
         }
+        upcoming {
+          id
+          content
+          signifier
+          status
+          priority
+          dueDate
+          tags
+        }
         completedCount
         blockedCount
       }

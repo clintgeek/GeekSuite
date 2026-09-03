@@ -40,7 +40,7 @@ const daysLate = (task, today) => {
   return `${n}d late`
 }
 
-const TaskRow = ({ task, late = false, today }) => {
+const TaskRow = ({ task, late = false, today, aside = null }) => {
   const { refetch } = useGlance()
   const { markOut } = useSession()
 
@@ -90,7 +90,9 @@ const TaskRow = ({ task, late = false, today }) => {
           </span>
         )}
       </a>
-      {time && <span className="font-mono text-[11px] text-ink-3 tnum pt-0.5 shrink-0">{time}</span>}
+      {(time || aside) && (
+        <span className="font-mono text-[11px] text-ink-3 tnum pt-0.5 shrink-0">{time || aside}</span>
+      )}
     </div>
   )
 }

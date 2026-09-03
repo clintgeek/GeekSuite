@@ -16,6 +16,7 @@ export const typeDefs = gql`
     due: [GlanceTask!]!
     overdue: [GlanceTask!]!
     events: [GlanceTask!]!
+    upcoming: [GlanceTask!]!           # pending, dueDate after the day — next 20
     completedCount: Int!
     blockedCount: Int!
   }

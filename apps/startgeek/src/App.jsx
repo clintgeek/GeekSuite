@@ -68,11 +68,7 @@ function Console() {
         </header>
 
         {/* Hero: clock left, today's weather right, same height */}
-        <section
-          className={`grid grid-cols-1 gap-6 lg:gap-8 items-stretch pt-10 pb-7 ${
-            showWeather ? 'lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]' : ''
-          }`}
-        >
+        <section className={`hero pt-10 pb-7 ${showWeather ? 'with-weather' : ''}`}>
           <div className="flex flex-col justify-end">
             <DateTime />
           </div>

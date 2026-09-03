@@ -388,7 +388,7 @@ const CommandBox = () => {
   }
 
   return (
-    <section className="relative w-full">
+    <section className="relative z-20 w-full">
       <div
         className="relative flex items-center gap-3 h-14 pl-5 pr-3.5 rounded-xl border border-hair-strong transition-[border-color,box-shadow] duration-150 focus-within:border-[rgba(230,179,90,0.6)]"
         style={{

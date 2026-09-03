@@ -228,6 +228,20 @@ describe('glanceToday field correctness', () => {
     expect(today.tasks.due.map((t) => t.content)).toContain('Buy eggs');
   });
 
+  test('pending task due after the date -> in tasks.upcoming, sorted, not in due/overdue', async () => {
+    await col('bujogeek', 'tasks').insertMany([
+      { content: 'Later', createdBy: ALICE, dueDate: new Date('2026-01-20'), status: 'pending' },
+      { content: 'Sooner', createdBy: ALICE, dueDate: new Date('2026-01-14'), status: 'pending' },
+      { content: 'Done already', createdBy: ALICE, dueDate: new Date('2026-01-16'), status: 'completed' },
+      { content: 'Not mine', createdBy: BOB, dueDate: new Date('2026-01-16'), status: 'pending' },
+    ]);
+
+    const today = await Query.glanceToday(null, { date: FIELDS_DATE }, ctx(ALICE));
+    expect(today.tasks.upcoming.map((t) => t.content)).toEqual(['Sooner', 'Later']);
+    expect(today.tasks.due).toHaveLength(0);
+    expect(today.tasks.overdue).toHaveLength(0);
+  });
+
   test('signifier @ task -> in tasks.events', async () => {
     await col('bujogeek', 'tasks').insertOne({
       content: 'Call vet',

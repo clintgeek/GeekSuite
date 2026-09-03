@@ -208,6 +208,28 @@
   }
 }
 
+/* ---- Layout ---- */
+/* Hero: clock left, weather right, equal height. Splits at 820px so a
+   laptop-width window still gets two columns. */
+.hero { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; align-items: stretch; }
+@media (min-width: 820px) {
+  .hero.with-weather { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 32px; }
+}
+
+/* Module row: Tasks spans two rows on the left; Fitness and Reading stack
+   on the right and set the height. Tasks scrolls inside that height. */
+.row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; margin-top: 24px; align-items: stretch; }
+.row > .mod { grid-column: auto; }
+.mod-tasks { overflow: hidden; min-height: 260px; }
+.mod-tasks > .mod-body { overflow-y: auto; min-height: 0; scrollbar-gutter: stable; }
+@media (min-width: 820px) {
+  .row.with-side { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); grid-template-rows: auto auto; }
+  .row.with-side > .mod-tasks { grid-row: 1 / span 2; }
+}
+@media (max-width: 819px) {
+  .mod-tasks { max-height: 380px; }
+}
+
 /* Responsive spans. Columns collapse before content does. */
 @media (max-width: 960px) {
   .mod { --span: 6 !important; }

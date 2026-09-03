@@ -82,7 +82,7 @@ export const resolvers = {
 
       const result = {
         date: targetDate,
-        tasks: { due: [], overdue: [], events: [], completedCount: 0, blockedCount: 0 },
+        tasks: { due: [], overdue: [], events: [], upcoming: [], completedCount: 0, blockedCount: 0 },
         habits: [],
         recentNotes: [],
         reading: [],
@@ -93,13 +93,21 @@ export const resolvers = {
       // ── Tasks ──
       try {
         if (userOid) {
-          const [allDaily, completedCount, blockedCount] = await Promise.all([
+          const [allDaily, upcoming, completedCount, blockedCount] = await Promise.all([
             taskService.getTasksForDateRange({
               userId,
               startDate: targetDate,
               endDate: targetDate,
               viewType: 'daily',
             }),
+            Task.find({
+              createdBy: userOid,
+              status: 'pending',
+              dueDate: { $gt: dayEnd },
+            })
+              .sort({ dueDate: 1 })
+              .limit(20)
+              .lean(),
             Task.countDocuments({
               createdBy: userOid,
               completedAt: { $gte: dayStart, $lte: dayEnd },
@@ -140,6 +148,7 @@ export const resolvers = {
                   t.status !== 'blocked'
               )
               .map(mapTask),
+            upcoming: upcoming.map(mapTask),
             completedCount,
             blockedCount,
           };

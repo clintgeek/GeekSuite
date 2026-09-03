@@ -15,7 +15,8 @@
   warm accent. Futuristic by precision, not by neon.
 - Deliberately small. Six things, in this order: time and date, today's
   weather (click for a detail modal with the week), the command bar, then
-  one equal-height row of Tasks, Fitness, and the one book you're on.
+  one block: Tasks on the left (overdue, today, upcoming; scrolls) sized to
+  Fitness and Reading stacked on the right.
 - Logged-out: rail (sign in, settings), clock, weather block, command bar
   (web search only), dock.
 - Logged-in: the above plus quick capture, suite search, and the module row
@@ -40,9 +41,12 @@ Every colour resolves to a CSS variable in `src/index.css` (`--ground`,
 `bg-panel`). **Tailwind opacity modifiers do not work on these** (`text-ink/50`
 silently compiles to nothing); use an arbitrary `rgba(...)` value instead.
 
-Panels (`.mod`) are dark glass: `rgba(12,15,21,0.58)` + 18px backdrop blur,
-`min-height: 200px`, and the row uses `items-stretch` so the three read as
-one object. Photo backdrop is blurred 7px behind a graded scrim.
+Panels (`.mod`) are dark glass: `rgba(12,15,21,0.58)` + 18px backdrop blur.
+Layout classes live in `index.css`: `.hero.with-weather` splits at 820px;
+`.row.with-side` puts Tasks in a two-row span on the left so Fitness +
+Reading set the height and the task list scrolls inside it. The command box
+sits at `z-20` so its results dropdown paints over the row. Photo backdrop is
+blurred 7px behind a graded scrim.
 
 Type is Geist across its range: weight 200 for the clock and the big
 temperature, 400/500 for content, Geist Mono for labels, counts, and streaks.
@@ -88,7 +92,7 @@ src/
     CommandBox.jsx        — Quick capture / search box
     HelpButton.jsx, HelpModal.jsx, SearchResults.jsx, Toast.jsx
     Module.jsx            — Panel wrapper: label, count, link, foot, span
-    ModuleGrid.jsx        — The one row: Tasks (cap 8, "+N more") · Fitness · Reading
+    ModuleGrid.jsx        — Tasks (overdue / today / upcoming, scrolls) beside stacked Fitness + Reading
     TaskRow.jsx           — Task line with dot, tags, event time, overdue pill
     FitnessModule.jsx     — Calories meter, meals, streak
     ReadingModule.jsx     — One book: cover, title, author, progress
@@ -98,7 +102,7 @@ src/
     SettingsContext.jsx   — localStorage-backed settings
     WeatherContext.jsx    — Local conditions + forecast (sunrise/sunset included)
     SessionContext.jsx    — Auth state
-    GlanceContext.jsx     — glanceToday data (query trimmed to tasks, reading, fitness)
+    GlanceContext.jsx     — glanceToday data (tasks incl. upcoming, reading, fitness)
   hooks/
     useSettings.js, useTime.js, useWeather.js, useSession.js, useGlance.js
   services/

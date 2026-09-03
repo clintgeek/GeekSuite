@@ -8,8 +8,6 @@ import TaskRow from './TaskRow'
 import FitnessModule from './FitnessModule'
 import ReadingModule from './ReadingModule'
 
-const MAX_TASK_ROWS = 8
-
 const containerVariants = {
   hidden: { opacity: 0 },
   visible: {
@@ -21,16 +19,32 @@ const containerVariants = {
   },
 }
 
-const Skeleton = ({ span }) => (
-  <div className="mod p-4 flex flex-col gap-3" style={{ '--span': span }} aria-hidden="true">
+const Skeleton = ({ className = '' }) => (
+  <div className={`mod p-4 flex flex-col gap-3 ${className}`} aria-hidden="true">
     <div className="h-3 w-24 bg-white/10 rounded animate-pulse" />
     <div className="h-3 w-48 bg-white/10 rounded animate-pulse" />
     <div className="h-3 w-40 bg-white/10 rounded animate-pulse" />
   </div>
 )
 
-// One row, three panels, equal height: Tasks · Fitness · Reading.
-// Signed out, nothing renders here (weather lives in the hero).
+const GroupLabel = ({ children }) => (
+  <div className="label !text-[10px] !text-ink-3 pt-2 first:pt-0">{children}</div>
+)
+
+// Short due label for an upcoming task: weekday within the week, else "Sep 12".
+const upcomingLabel = (task, todayIso) => {
+  if (!task.dueDate) return null
+  const due = new Date(task.dueDate)
+  if (Number.isNaN(due.getTime())) return null
+  const today = new Date(`${todayIso}T00:00:00`)
+  const days = Math.round((due - today) / 86400000)
+  if (days === 1) return 'Tomorrow'
+  if (days > 1 && days < 7) return due.toLocaleDateString('en-US', { weekday: 'short' })
+  return due.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+// Tasks fill the left two-thirds and stretch to the height of Fitness and
+// Reading stacked on the right; the task list scrolls inside that height.
 const ModuleGrid = () => {
   const { data, loading } = useGlance()
   const { status } = useSession()
@@ -40,14 +54,12 @@ const ModuleGrid = () => {
   if (status !== 'in') return null
 
   const tasks = data?.tasks
-  const rows = tasks
-    ? [
-        ...tasks.events.map((t) => ({ task: t, late: false })),
-        ...tasks.due.map((t) => ({ task: t, late: false })),
-        ...tasks.overdue.map((t) => ({ task: t, late: true })),
-      ]
-    : []
-  const hasTasks = on.today && rows.length > 0
+  const overdue = tasks?.overdue || []
+  const todayRows = [...(tasks?.events || []), ...(tasks?.due || [])]
+  const upcoming = tasks?.upcoming || []
+  const total = overdue.length + todayRows.length + upcoming.length
+
+  const hasTasks = on.today && total > 0
   const hasReading = on.reading && data?.reading?.length > 0
   const hasFitness =
     on.fitness &&
@@ -56,43 +68,31 @@ const ModuleGrid = () => {
       data.fitness.calorieGoal != null ||
       data.fitness.mealsLogged > 0 ||
       data.fitness.loginStreak > 0)
-
-  const shown = rows.slice(0, MAX_TASK_ROWS)
-  const hidden = rows.length - shown.length
+  const hasSide = hasFitness || hasReading
 
   const taskFoot =
-    tasks && (tasks.completedCount > 0 || tasks.blockedCount > 0 || hidden > 0) ? (
+    tasks && (tasks.completedCount > 0 || tasks.blockedCount > 0) ? (
       <>
-        {tasks.completedCount > 0 && <span>{tasks.completedCount} completed</span>}
+        {tasks.completedCount > 0 && <span>{tasks.completedCount} completed today</span>}
         {tasks.blockedCount > 0 && <span>{tasks.blockedCount} blocked</span>}
-        {hidden > 0 && (
-          <a
-            href="https://bujogeek.clintgeek.com/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="ml-auto text-ink-2 hover:text-accent transition-colors no-underline"
-          >
-            +{hidden} more
-          </a>
-        )}
       </>
     ) : null
 
   if (loading && !data) {
     return (
-      <div className="grid grid-cols-12 gap-3.5 mt-6 items-stretch">
-        <Skeleton span={6} />
-        <Skeleton span={3} />
-        <Skeleton span={3} />
+      <div className="row with-side">
+        <Skeleton className="mod-tasks" />
+        <Skeleton />
+        <Skeleton />
       </div>
     )
   }
 
-  if (!hasTasks && !hasFitness && !hasReading) return null
+  if (!hasTasks && !hasSide) return null
 
   return (
     <motion.div
-      className="grid grid-cols-12 gap-3.5 mt-6 items-stretch"
+      className={`row ${hasTasks && hasSide ? 'with-side' : ''}`}
       initial={REDUCED_MOTION ? false : 'hidden'}
       animate="visible"
       variants={containerVariants}
@@ -100,14 +100,35 @@ const ModuleGrid = () => {
       {hasTasks && (
         <Module
           label="Tasks"
-          count={rows.length}
-          span={6}
+          count={total}
+          className="mod-tasks"
           link={{ label: 'BujoGeek', href: 'https://bujogeek.clintgeek.com/' }}
           foot={taskFoot}
         >
-          {shown.map(({ task, late }) => (
-            <TaskRow key={task.id} task={task} late={late} today={data.date} />
-          ))}
+          {overdue.length > 0 && (
+            <>
+              <GroupLabel>Overdue</GroupLabel>
+              {overdue.map((task) => (
+                <TaskRow key={task.id} task={task} late today={data.date} />
+              ))}
+            </>
+          )}
+          {todayRows.length > 0 && (
+            <>
+              <GroupLabel>Today</GroupLabel>
+              {todayRows.map((task) => (
+                <TaskRow key={task.id} task={task} />
+              ))}
+            </>
+          )}
+          {upcoming.length > 0 && (
+            <>
+              <GroupLabel>Upcoming</GroupLabel>
+              {upcoming.map((task) => (
+                <TaskRow key={task.id} task={task} aside={upcomingLabel(task, data.date)} />
+              ))}
+            </>
+          )}
         </Module>
       )}
 
