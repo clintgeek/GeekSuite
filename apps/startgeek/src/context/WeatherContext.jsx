@@ -3,44 +3,33 @@ import { WeatherContext } from './weatherContextValue'
 import { weatherService } from '../services/weatherService'
 import { INTERVALS } from '../constants'
 
+// Local conditions plus the 7-day forecast. The v1 world-clock cities
+// (Buenos Aires, Bengaluru) were fetched here too but nothing rendered
+// them, so they are gone.
 export const WeatherProvider = ({ children }) => {
   const [localWeather, setLocalWeather] = useState({ current: null, forecast: [], error: null })
-  const [buenosAiresWeather, setBuenosAiresWeather] = useState({ current: null, forecast: [], error: null })
-  const [bengaluruWeather, setBengaluruWeather] = useState({ current: null, forecast: [], error: null })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const fetchAllWeather = async () => {
+    const fetchWeather = async () => {
       try {
-        const [local, ba, blr] = await Promise.all([
-          weatherService.getLocalWeatherWithForecast(),
-          weatherService.getLocationWeatherWithForecast('buenosAires'),
-          weatherService.getLocationWeatherWithForecast('bengaluru')
-        ])
-
+        const local = await weatherService.getLocalWeatherWithForecast()
         setLocalWeather({ current: local.current, forecast: local.forecast || [], error: null })
-        setBuenosAiresWeather({ current: ba.current, forecast: ba.forecast || [], error: null })
-        setBengaluruWeather({ current: blr.current, forecast: blr.forecast || [], error: null })
       } catch (error) {
         console.error('Weather fetch failed:', error)
-        setLocalWeather(prev => ({ ...prev, error: 'Failed to load weather' }))
+        setLocalWeather((prev) => ({ ...prev, error: 'Failed to load weather' }))
       } finally {
         setLoading(false)
       }
     }
 
-    fetchAllWeather()
-    const interval = setInterval(fetchAllWeather, INTERVALS.WEATHER_REFRESH)
+    fetchWeather()
+    const interval = setInterval(fetchWeather, INTERVALS.WEATHER_REFRESH)
     return () => clearInterval(interval)
   }, [])
 
   return (
-    <WeatherContext.Provider value={{
-      local: localWeather,
-      buenosAires: buenosAiresWeather,
-      bengaluru: bengaluruWeather,
-      loading
-    }}>
+    <WeatherContext.Provider value={{ local: localWeather, loading }}>
       {children}
     </WeatherContext.Provider>
   )

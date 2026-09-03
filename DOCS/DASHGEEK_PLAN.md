@@ -2,6 +2,16 @@
 
 *Written 2026-09-03, revised 2026-09-03. Status: shipped 2026-09-03.*
 
+> **Revision 2026-09-03 (later the same day) — console redesign.** Chef
+> abandoned the phase plan after shipping and asked for a visual overhaul:
+> the single grey column became a 12-column module grid with per-module
+> switches, a photo/void backdrop choice, a day track in the hero, and a
+> Week (forecast) module. This contradicts ground rule 7 and the §5
+> out-of-scope list (card grids, charts, user-configurable widgets) on
+> purpose. Those rules are retired; the rest of this document stays as the
+> record of how the data layer and command box were built. Current truth is
+> `apps/startgeek/CONTEXT.md`. Flock is deferred, not removed.
+
 "DashGeek" is the working name for the **concept**: StartGeek plus a command
 box and a handful of quiet widgets. The **app stays named `startgeek`** and
 stays at **`https://start.clintgeek.com`**. There is no separate dashgeek app,

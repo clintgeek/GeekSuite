@@ -139,7 +139,7 @@ class WeatherService {
     if (cached) return cached
 
     try {
-      const url = `${this.baseUrl}/forecast?latitude=${lat}&longitude=${lon}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,precipitation_probability_max&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch&timezone=auto`
+      const url = `${this.baseUrl}/forecast?latitude=${lat}&longitude=${lon}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,precipitation_probability_max,sunrise,sunset&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch&timezone=auto`
 
       const response = await this.fetchWithTimeout(url)
       if (!response.ok) throw new Error(`Weather API error: ${response.status}`)
@@ -159,6 +159,8 @@ class WeatherService {
         precipitation: daily.precipitation_sum[index] || 0,
         precipProbability: daily.precipitation_probability_max?.[index] || 0,
         windSpeed: Math.round(daily.wind_speed_10m_max[index]),
+        sunrise: daily.sunrise?.[index] || null,
+        sunset: daily.sunset?.[index] || null,
         location: locationName
       }))
 

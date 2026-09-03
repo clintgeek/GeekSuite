@@ -10,20 +10,23 @@ export default {
         'sans': ['Geist', 'system-ui', 'sans-serif'],
         'mono': ['Geist Mono', 'monospace'],
       },
+      // Console palette. Values live as CSS variables in index.css so the
+      // whole look is tunable from one place; these names just let Tailwind
+      // utilities reach them (text-ink-2, border-hair, bg-panel ...).
       colors: {
-        amber: {
-          50: '#fffbeb',
-          100: '#fef3c7',
-          200: '#fde68a',
-          300: '#fcd34d',
-          400: '#fbbf24',
-          500: '#f59e0b',
-          600: '#d97706',
-          700: '#b45309',
-          800: '#92400e',
-          900: '#78350f',
-          950: '#451a03',
-        },
+        ground: 'var(--ground)',
+        panel: 'var(--panel)',
+        'panel-hover': 'var(--panel-hover)',
+        hair: 'var(--hair)',
+        'hair-strong': 'var(--hair-strong)',
+        ink: 'var(--ink)',
+        'ink-2': 'var(--ink-2)',
+        'ink-3': 'var(--ink-3)',
+        'ink-4': 'var(--ink-4)',
+        accent: 'var(--accent)',
+        'accent-dim': 'var(--accent-dim)',
+        critical: 'var(--critical)',
+        sky: 'var(--sky)',
       },
       animation: {
         'fade-in': 'fadeIn 0.5s ease-in-out',

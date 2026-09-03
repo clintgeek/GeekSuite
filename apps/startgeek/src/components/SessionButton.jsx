@@ -5,29 +5,27 @@ const SessionButton = () => {
   const { user, status, signOut } = useSession()
 
   if (status === 'loading') {
-    return (
-      <span className="text-sm text-white/30">…</span>
-    )
+    return <span className="text-sm text-ink-3">…</span>
   }
 
   if (status === 'in' && user) {
     return (
-      <button
-        onClick={signOut}
-        className="group text-sm text-white/70 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30 rounded"
-      >
-        {user.username}
-        <span className="ml-2 text-white/40 group-hover:text-white/70 text-xs">
-          · Sign out
-        </span>
-      </button>
+      <span className="flex items-center gap-3 text-[13px]">
+        <span className="text-ink">{user.username}</span>
+        <button
+          onClick={signOut}
+          className="text-xs text-ink-3 hover:text-ink transition-colors rounded"
+        >
+          Sign out
+        </button>
+      </span>
     )
   }
 
   return (
     <a
       href={loginUrl()}
-      className="text-sm font-medium text-white/80 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30 rounded"
+      className="text-[13px] font-medium text-ink-2 hover:text-ink transition-colors rounded no-underline"
     >
       Sign in
     </a>

@@ -4,12 +4,9 @@ const HelpButton = ({ onClick }) => {
       onClick={onClick}
       type="button"
       aria-label="Open command box help"
-      className="w-10 h-10 rounded-full flex items-center justify-center text-white/40 hover:text-white/80 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
-      style={{
-        background: 'rgba(255, 255, 255, 0.08)',
-      }}
+      className="w-[26px] h-[26px] shrink-0 rounded-full grid place-items-center border border-hair-strong font-mono text-xs text-ink-3 hover:text-ink transition-colors"
     >
-      <span className="text-sm font-semibold">?</span>
+      ?
     </button>
   )
 }

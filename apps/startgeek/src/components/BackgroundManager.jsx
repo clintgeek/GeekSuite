@@ -1,14 +1,24 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { INTERVALS } from '../constants'
+import { useSettings } from '../hooks/useSettings'
 
 const MAX_RETRIES = 3
 const RETRY_DELAY = 2000
 
+// Photo: a fresh wallpaper, softened and held behind a scrim heavy enough
+// for the panels to read but light enough that the picture is still a
+// picture. Void: no photo, a flat ground with a faint grid and a warm glow.
 const BackgroundManager = () => {
+  const { settings } = useSettings()
+  const photo = settings.backdrop === 'photo'
   const retriesRef = useRef(0)
   const [bgUrl, setBgUrl] = useState(null)
 
   useLayoutEffect(() => {
+    if (!photo || bgUrl) return
+
+    let cancelled = false
+
     const loadBackground = () => {
       const url = `https://picsum.photos/1920/1080.webp?t=${Date.now()}`
       const img = new Image()
@@ -22,7 +32,7 @@ const BackgroundManager = () => {
       }, INTERVALS.BACKGROUND_TIMEOUT)
 
       img.onload = () => {
-        if (settled) return
+        if (settled || cancelled) return
         settled = true
         clearTimeout(timeout)
         setBgUrl(url)
@@ -37,14 +47,10 @@ const BackgroundManager = () => {
       }
 
       img.src = url
-
-      return () => {
-        clearTimeout(timeout)
-        settled = true
-      }
     }
 
     const handleFailure = () => {
+      if (cancelled) return
       if (retriesRef.current < MAX_RETRIES) {
         retriesRef.current++
         setTimeout(loadBackground, RETRY_DELAY)
@@ -52,12 +58,14 @@ const BackgroundManager = () => {
     }
 
     loadBackground()
-  }, [])
+    return () => {
+      cancelled = true
+    }
+  }, [photo, bgUrl])
 
   return (
-    <div className="fixed inset-0 -z-10 pointer-events-none" aria-hidden="true">
-      {/* Layer 1: Wallpaper image with normalization filters */}
-      {/* Scale 110% to hide blur edges bleeding at the frame boundary */}
+    <div className="fixed inset-0 -z-10 pointer-events-none bg-ground" aria-hidden="true">
+      {/* Wallpaper. Scaled slightly so the blur never shows a hard edge. */}
       <div
         className="absolute inset-0 transition-opacity duration-1000"
         style={{
@@ -65,25 +73,33 @@ const BackgroundManager = () => {
           backgroundRepeat: 'no-repeat',
           backgroundSize: 'cover',
           backgroundPosition: 'center',
-          filter: 'saturate(0.8) brightness(0.92) blur(3px)',
+          filter: 'saturate(0.85) brightness(0.9) blur(2px)',
           transform: 'scale(1.04)',
-          opacity: bgUrl ? 1 : 0,
+          opacity: photo && bgUrl ? 1 : 0,
         }}
       />
 
-      {/* Layer 2: Cinematic gradient vignette */}
-      {/* Top → transparent-ish, Mid → darker, Bottom → darkest */}
+      {/* Scrim over the photo: light at the top so the sky survives, heavier toward the grid. */}
+      <div
+        className="absolute inset-0 transition-opacity duration-700"
+        style={{
+          opacity: photo ? 1 : 0,
+          background:
+            'linear-gradient(180deg, rgba(10,13,18,0.30) 0%, rgba(10,13,18,0.45) 40%, rgba(10,13,18,0.78) 100%)',
+        }}
+      />
+
+      {/* Void grid */}
+      <div
+        className="absolute inset-0 void-grid transition-opacity duration-700"
+        style={{ opacity: photo ? 0 : 1 }}
+      />
+
+      {/* Warm glow at the top edge, both modes */}
       <div
         className="absolute inset-0"
         style={{
-          background: `linear-gradient(
-            to bottom,
-            rgba(0, 0, 0, 0.25) 0%,
-            rgba(0, 0, 0, 0.30) 20%,
-            rgba(0, 0, 0, 0.40) 50%,
-            rgba(0, 0, 0, 0.55) 80%,
-            rgba(0, 0, 0, 0.65) 100%
-          )`,
+          background: 'radial-gradient(50% 35% at 50% 0%, rgba(230,179,90,0.07), transparent 70%)',
         }}
       />
     </div>

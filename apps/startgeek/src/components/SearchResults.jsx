@@ -10,9 +10,9 @@ const SearchResults = ({ results, selectedIndex, onSelect, onHover }) => {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
       transition={{ duration: 0.15 }}
-      className="absolute left-0 right-0 top-full mt-2 max-h-72 overflow-y-auto rounded-xl z-40"
+      className="absolute left-0 right-0 top-full mt-2 max-h-72 overflow-y-auto rounded-xl z-40 border border-hair-strong"
       style={{
-        background: 'rgba(0, 0, 0, 0.55)',
+        background: 'rgba(12, 15, 21, 0.9)',
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
       }}

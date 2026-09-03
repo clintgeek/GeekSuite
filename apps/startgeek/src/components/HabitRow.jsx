@@ -3,6 +3,7 @@ import { useSession } from '../hooks/useSession'
 import { gql, UnauthorizedError } from '../lib/graphql'
 import { TOGGLE_HABIT_LOG } from '../lib/queries'
 
+// A habit as a pill: its own colour as the switch, name, streak in mono.
 const HabitRow = ({ habit, date }) => {
   const { refetch } = useGlance()
   const { markOut } = useSession()
@@ -12,31 +13,27 @@ const HabitRow = ({ habit, date }) => {
       await gql(TOGGLE_HABIT_LOG, { habitId: habit.id, date })
       refetch()
     } catch (err) {
-      if (err instanceof UnauthorizedError) {
-        markOut()
-      }
+      if (err instanceof UnauthorizedError) markOut()
     }
   }
 
   return (
-    <div className="group flex items-center gap-2">
-      <button
-        type="button"
-        onClick={handleToggle}
-        className="shrink-0 -ml-1 p-1.5 rounded-full hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30 transition-colors"
-        aria-label={`Toggle ${habit.name}`}
-      >
-        <span
-          style={{ color: habit.color || 'rgba(255, 255, 255, 0.35)' }}
-          className={`block w-2 h-2 rounded-full border transition-colors ${
-            habit.doneToday
-              ? 'bg-current border-current'
-              : 'bg-transparent border-current'
-          }`}
-        />
-      </button>
-      <span className="text-sm text-white/85">{habit.name}</span>
-    </div>
+    <button
+      type="button"
+      onClick={handleToggle}
+      className={`habit ${habit.doneToday ? 'on' : ''}`}
+      style={{ '--c': habit.color || 'var(--ink-2)' }}
+      aria-pressed={habit.doneToday}
+      aria-label={`${habit.doneToday ? 'Undo' : 'Log'} ${habit.name}`}
+    >
+      <i className="habit-sw" aria-hidden="true" />
+      <span className={`flex-1 min-w-0 truncate text-[13px] ${habit.doneToday ? 'text-ink-2' : 'text-ink'}`}>
+        {habit.name}
+      </span>
+      {habit.currentStreak > 0 && (
+        <span className="font-mono text-[11px] text-ink-3 tnum">×{habit.currentStreak}</span>
+      )}
+    </button>
   )
 }
 

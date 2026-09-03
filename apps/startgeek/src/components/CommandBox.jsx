@@ -388,46 +388,57 @@ const CommandBox = () => {
   }
 
   return (
-    <div className="relative w-full">
-      <div className="flex items-center gap-2">
-        <div className="flex-1 relative rounded-2xl" style={{ background: 'rgba(255, 255, 255, 0.08)' }}>
-          <input
-            ref={inputRef}
-            type="text"
-            autoFocus
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Search or type > for a task, < for a note, ? for suite…"
-            className="w-full bg-transparent text-white placeholder-white/35 text-base md:text-lg px-5 py-3.5 pr-32 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-white/25"
-            aria-label="Command box"
-            aria-autocomplete={mode === 'suite' ? 'list' : 'none'}
-            aria-controls={mode === 'suite' ? 'search-results' : undefined}
-          />
+    <section className="relative w-full">
+      <div
+        className="relative flex items-center gap-3 h-14 pl-5 pr-3.5 rounded-xl border border-hair-strong transition-[border-color,box-shadow] duration-150 focus-within:border-[rgba(230,179,90,0.6)]"
+        style={{
+          background: 'rgba(255, 255, 255, 0.05)',
+          backdropFilter: 'blur(18px) saturate(1.3)',
+          WebkitBackdropFilter: 'blur(18px) saturate(1.3)',
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08), 0 10px 40px rgba(0,0,0,0.35)',
+        }}
+      >
+        <span className="font-mono text-[15px] text-accent select-none" aria-hidden="true">›</span>
+        <input
+          ref={inputRef}
+          type="text"
+          autoFocus
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Search, or type  >  for a task,  <  for a note,  ?  to search the suite"
+          className="flex-1 min-w-0 bg-transparent text-ink placeholder:text-ink-3 text-[17px] focus:outline-none"
+          aria-label="Command box"
+          aria-autocomplete={mode === 'suite' ? 'list' : 'none'}
+          aria-controls={mode === 'suite' ? 'search-results' : undefined}
+        />
 
-          <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none">
-            {searchLoading && mode === 'suite' && (
-              <span className="w-1.5 h-1.5 rounded-full bg-white/50 animate-pulse" />
-            )}
-            <span className="text-sm font-medium text-white/40 truncate max-w-[8rem]">
-              {modeLabel}
-            </span>
-          </div>
-
-          <SearchResults
-            results={results}
-            selectedIndex={selectedIndex}
-            onSelect={handleSelectResult}
-            onHover={handleHoverResult}
-          />
-        </div>
-
+        {searchLoading && mode === 'suite' && (
+          <span className="w-1.5 h-1.5 rounded-full bg-ink-2 animate-pulse" aria-hidden="true" />
+        )}
+        <span className="shrink-0 font-mono text-[11px] tracking-[0.06em] uppercase text-ink-2 px-2.5 py-1.5 rounded-md border border-hair truncate max-w-[11rem]">
+          {modeLabel}
+        </span>
         <HelpButton onClick={() => setHelpOpen(true)} />
+
+        <SearchResults
+          results={results}
+          selectedIndex={selectedIndex}
+          onSelect={handleSelectResult}
+          onHover={handleHoverResult}
+        />
+      </div>
+
+      <div className="mt-2.5 mx-1 flex flex-wrap gap-x-4 gap-y-1 font-mono text-[11px] tracking-wide text-ink-3">
+        <span><kbd className="px-1 border border-hair rounded text-ink-2">/</kbd> focus</span>
+        <span><kbd className="px-1 border border-hair rounded text-ink-2">Tab</kbd> engine</span>
+        <span><kbd className="px-1 border border-hair rounded text-ink-2">Esc</kbd> close</span>
+        <span><kbd className="px-1 border border-hair rounded text-ink-2">,</kbd> modules</span>
       </div>
 
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
       <Toast message={toast} onClose={() => setToast(null)} />
-    </div>
+    </section>
   )
 }
 
