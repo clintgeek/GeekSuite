@@ -367,16 +367,7 @@ const TodayPage = () => {
             focusedTaskId={focusedTaskId}
           />
 
-          <CompletedSection
-            tasks={completedTasks}
-            onStatusToggle={handleStatusToggle}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            onSaveAsNote={handleSaveAsNote}
-            onCancel={handleCancelToggle}
-          />
-
-          {/* Last on the page: the parked shelf. Always rendered, even at zero. */}
+          {/* The parked shelf sits above Completed. Always rendered, even at zero. */}
           <BlockedSection
             tasks={blockedTasks}
             onStatusToggle={handleStatusToggle}
@@ -386,6 +377,16 @@ const TodayPage = () => {
             onCancel={handleCancelToggle}
             onUnblock={handleUnblock}
             focusedTaskId={focusedTaskId}
+          />
+
+          {/* Last on the page: what got done. */}
+          <CompletedSection
+            tasks={completedTasks}
+            onStatusToggle={handleStatusToggle}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            onSaveAsNote={handleSaveAsNote}
+            onCancel={handleCancelToggle}
           />
         </>
       )}

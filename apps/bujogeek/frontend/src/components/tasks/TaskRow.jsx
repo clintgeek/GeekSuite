@@ -2,7 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Typography, Chip, IconButton, Tooltip, useTheme, useMediaQuery } from '@mui/material';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Pencil, Trash2, StickyNote, Repeat, Ban, RotateCcw, PauseCircle, Play } from 'lucide-react';
+import { Pencil, Trash2, StickyNote, Repeat, Ban, RotateCcw, PauseCircle, Play, CheckCircle2 } from 'lucide-react';
 import { format, differenceInCalendarDays } from 'date-fns';
 import TaskCheckbox from './TaskCheckbox';
 import { getTaskAge, getAgingColor, getAgingLabel } from '../../utils/taskAging';
@@ -274,6 +274,33 @@ const TaskRow = ({
                 <Ban size={12} strokeWidth={1.75} />
               </Box>
             </Tooltip>
+          )}
+
+          {/* Completed stamp — same light ink and opacity as the finished entry */}
+          {isCompleted && (
+            <Box
+              component="span"
+              sx={{
+                display:         'inline-flex',
+                alignItems:      'center',
+                gap:             0.375,
+                flexShrink:      0,
+                fontFamily:      '"IBM Plex Mono", monospace',
+                fontSize:        '0.5625rem',
+                fontWeight:      700,
+                letterSpacing:   '0.08em',
+                textTransform:   'uppercase',
+                color:           isDark ? 'rgba(255,245,220,0.28)' : colors.ink[400],
+                border:          `1px solid ${isDark ? 'rgba(255,245,220,0.16)' : colors.ink[200]}`,
+                borderRadius:    '3px',
+                px:              0.5,
+                py:              '1px',
+                lineHeight:      1.5,
+              }}
+            >
+              <CheckCircle2 size={10} strokeWidth={2} />
+              Completed
+            </Box>
           )}
 
           {/* Blocked stamp — a parked task is waiting, not late */}
