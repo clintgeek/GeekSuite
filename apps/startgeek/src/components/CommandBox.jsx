@@ -390,7 +390,7 @@ const CommandBox = () => {
   return (
     <section className="relative z-20 w-full">
       <div
-        className="relative flex items-center gap-3 h-14 pl-5 pr-3.5 rounded-xl border border-hair-strong transition-[border-color,box-shadow] duration-150 focus-within:border-[rgba(230,179,90,0.6)]"
+        className="relative flex items-center gap-3 h-14 pl-5 pr-3.5 rounded-xl border border-hair-strong transition-[border-color,box-shadow] duration-150 focus-within:border-[rgba(127,180,230,0.65)] focus-within:shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_0_0_4px_rgba(127,180,230,0.12),0_10px_40px_rgba(0,0,0,0.35)]"
         style={{
           background: 'rgba(255, 255, 255, 0.05)',
           backdropFilter: 'blur(18px) saturate(1.3)',
@@ -398,7 +398,7 @@ const CommandBox = () => {
           boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08), 0 10px 40px rgba(0,0,0,0.35)',
         }}
       >
-        <span className="font-mono text-[15px] text-accent select-none" aria-hidden="true">›</span>
+        <span className="font-mono text-[15px] text-sky select-none" aria-hidden="true">›</span>
         <input
           ref={inputRef}
           type="text"
