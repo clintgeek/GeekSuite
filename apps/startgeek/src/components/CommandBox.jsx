@@ -429,13 +429,6 @@ const CommandBox = () => {
         />
       </div>
 
-      <div className="mt-2.5 mx-1 flex flex-wrap gap-x-4 gap-y-1 font-mono text-[11px] tracking-wide text-ink-3">
-        <span><kbd className="px-1 border border-hair rounded text-ink-2">/</kbd> focus</span>
-        <span><kbd className="px-1 border border-hair rounded text-ink-2">Tab</kbd> engine</span>
-        <span><kbd className="px-1 border border-hair rounded text-ink-2">Esc</kbd> close</span>
-        <span><kbd className="px-1 border border-hair rounded text-ink-2">,</kbd> modules</span>
-      </div>
-
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
       <Toast message={toast} onClose={() => setToast(null)} />
     </section>

@@ -71,6 +71,15 @@ function Console() {
         <section className={`hero pt-10 pb-7 ${showWeather ? 'with-weather' : ''}`}>
           <div className="flex flex-col justify-end">
             <DateTime />
+            <div
+              className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-[11px] tracking-wide text-ink-2 tnum"
+              style={{ textShadow: '0 1px 4px rgba(0,0,0,0.25)' }}
+            >
+              <span><kbd className="px-1 border border-hair rounded">/</kbd> focus</span>
+              <span><kbd className="px-1 border border-hair rounded">Tab</kbd> engine</span>
+              <span><kbd className="px-1 border border-hair rounded">Esc</kbd> close</span>
+              <span><kbd className="px-1 border border-hair rounded">,</kbd> modules</span>
+            </div>
           </div>
           {showWeather && <WeatherBlock onOpen={() => setWeatherOpen(true)} />}
         </section>

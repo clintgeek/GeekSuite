@@ -63,9 +63,9 @@ const WeatherBlock = ({ onOpen }) => {
       </span>
 
       {stats.length > 0 && (
-        <span className="font-mono text-[11px] tracking-[0.06em] uppercase text-ink-3 tnum" style={SHADOW_SM}>
+        <span className="font-mono text-[11px] tracking-[0.06em] uppercase text-ink-2 tnum" style={SHADOW_SM}>
           {stats.join('   ')}
-          <span className="ml-3 text-ink-4 group-hover:text-accent transition-colors">Details</span>
+          <span className="ml-3 text-ink-3 group-hover:text-accent transition-colors">Details</span>
         </span>
       )}
     </motion.button>
