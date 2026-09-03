@@ -1,0 +1,300 @@
+// Copied from apps/bujogeek/frontend/src/utils/parseTaskInput.js; keep the two files in sync.
+
+/**
+ * Shared task-input parser used by InlineQuickAdd, CommandPalette, and any
+ * other surface that accepts a single-line task string.
+ *
+ * Supported syntax (all case-insensitive):
+ *   Signifier (first char):  * (task, default)  @ (event)  - (note)  ? (question)  ! (important)
+ *   Priority:                 !high  !medium  !low
+ *   Tags:                     #work  #my-tag  (letters, digits, hyphens, underscores)
+ *   Recurrence:               (daily)  (weekly)  (monthly)
+ *   Note:                     ^some note text  (must be last token)
+ *   NoteGeek note:            $^note text  (saves to NoteGeek; must be last token)
+ *   Blocked:                  ~blocked waiting on legal  (parks the task; the
+ *                             reason is optional and must be the last token)
+ *   Date:                     /today  /tomorrow  /next-week  /next-month
+ *                             /monday … /sunday  (or /mon … /sun)
+ *                             /next-monday … /next-sunday
+ *                             /2026-03-15  /03-15-2026  /03-15  /15th
+ *                             /mar 5th  /january 15
+ *   Time (after a date):      9am  14:30  2:30pm  2 p.m.
+ *
+ * Recurrence is emitted as an RRULE string only — the legacy
+ * `recurrencePattern` enum is no longer produced by any surface.
+ *
+ * `~blocked` and `^note` both anchor at the end of the line, so only one of
+ * them can be the trailing token: `^note` is read first and would swallow a
+ * `~blocked` that came after it. Write the block token last when it's the only
+ * trailing token, and prefer the row's "Block…" action when a task needs both.
+ *
+ * Returns: { content, signifier, priority, dueDate, tags, note, noteGeekNote,
+ *            recurrenceRule, blocked, blockedReason }
+ */
+
+const DAY_NAMES = {
+  sunday: 0, sun: 0,
+  monday: 1, mon: 1,
+  tuesday: 2, tue: 2,
+  wednesday: 3, wed: 3,
+  thursday: 4, thu: 4,
+  friday: 5, fri: 5,
+  saturday: 6, sat: 6,
+};
+
+const MONTH_NAMES = {
+  january: 0, jan: 0,
+  february: 1, feb: 1,
+  march: 2, mar: 2,
+  april: 3, apr: 3,
+  may: 4,
+  june: 5, jun: 5,
+  july: 6, jul: 6,
+  august: 7, aug: 7,
+  september: 8, sep: 8,
+  october: 9, oct: 9,
+  november: 10, nov: 10,
+  december: 11, dec: 11,
+};
+
+/* ---------- helpers ---------- */
+
+function getNextDayOccurrence(targetDay) {
+  const today = new Date();
+  const current = today.getDay();
+  let diff = targetDay - current;
+  if (diff <= 0) diff += 7;
+  const d = new Date(today);
+  d.setDate(today.getDate() + diff);
+  return d;
+}
+
+function defaultTime(date) {
+  date.setHours(9, 0, 0, 0);
+  return date;
+}
+
+/* ---------- recurrence (RRULE) ---------- */
+
+const FREQ_BY_WORD = { daily: 'DAILY', weekly: 'WEEKLY', monthly: 'MONTHLY' };
+
+/**
+ * Format a Date as an iCalendar UTC timestamp: `20260315T090000Z`.
+ */
+function formatDtstart(date) {
+  return new Date(date).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+}
+
+/**
+ * Build the canonical RRULE string the API's expansion code parses:
+ *
+ *   DTSTART:20260315T090000Z\nRRULE:FREQ=WEEKLY
+ *
+ * @param {string} freq      'daily' | 'weekly' | 'monthly' (anything else → null)
+ * @param {Date}   startDate DTSTART anchor; defaults to today at 09:00 local
+ * @returns {string|null}
+ */
+export function buildRecurrenceRule(freq, startDate) {
+  const FREQ = FREQ_BY_WORD[String(freq ?? '').toLowerCase()];
+  if (!FREQ) return null;
+  const start = startDate ? new Date(startDate) : defaultTime(new Date());
+  if (isNaN(start.getTime())) return null;
+  return `DTSTART:${formatDtstart(start)}\nRRULE:FREQ=${FREQ}`;
+}
+
+/**
+ * Inverse of buildRecurrenceRule — read the frequency word back out of an
+ * RRULE so an editor can pre-select it. Returns 'none' when there is no rule.
+ */
+export function frequencyFromRecurrenceRule(rule) {
+  const match = String(rule ?? '').match(/FREQ=(DAILY|WEEKLY|MONTHLY)/i);
+  return match ? match[1].toLowerCase() : 'none';
+}
+
+/* ---------- core patterns ---------- */
+
+const PATTERNS = {
+  recurrence: /\((daily|weekly|monthly)\)/i,
+  priority: /!(high|medium|low)\b/i,
+  dateTime:
+    /\/(today|tomorrow|next-week|next-month|next-(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|(?:mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)|(?:\d{4}-\d{2}-\d{2})|(?:\d{2}-\d{2}-\d{4})|(?:\d{2}-\d{2})|(?:\d{1,2})(?:st|nd|rd|th)?|(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}(?:st|nd|rd|th)?)(?:\s+(\d{1,2})(?::(\d{2}))?\s*(?:([ap]\.?m\.?))?)?/i,
+  timeMarker: /\b([ap]\.?m\.?)\b/i,
+  tags: /#([a-zA-Z0-9_-]+)/g,
+  type: /[*@\-!?]/,
+  noteGeek: /\$\^(.+)$/,
+  note: /\^(.+)$/,
+  blocked: /~blocked(?:\s+(.+))?$/i,
+};
+
+/* ---------- main export ---------- */
+
+export default function parseTaskInput(text) {
+  let content = text;
+  let dueDate = null;
+  let priority = null;
+  let signifier = null;
+  let note = null;
+  let noteGeekNote = null;
+  let blocked = false;
+  let blockedReason = null;
+  let recurrenceFreq = null;
+  const tags = [];
+
+  // 0. Recurrence — (daily) / (weekly) / (monthly). The RRULE itself is built
+  //    at the end, once the due date (its DTSTART anchor) has been parsed.
+  const recurrenceMatch = content.match(PATTERNS.recurrence);
+  if (recurrenceMatch) {
+    recurrenceFreq = recurrenceMatch[1].toLowerCase();
+    content = content.replace(recurrenceMatch[0], '').trim();
+  }
+
+  // 1. Tags — extract first so # tokens don't interfere with other parsing
+  let tagMatch;
+  while ((tagMatch = PATTERNS.tags.exec(content)) !== null) {
+    tags.push(tagMatch[1]);
+  }
+  content = content.replace(/#[a-zA-Z0-9_-]+/g, '').trim();
+
+  // 2a. NoteGeek note ($^) — check before regular note (^) since ^ would partially match
+  const noteGeekMatch = content.match(PATTERNS.noteGeek);
+  if (noteGeekMatch) {
+    noteGeekNote = noteGeekMatch[1].trim();
+    content = content.replace(noteGeekMatch[0], '').trim();
+  }
+
+  // 2b. Note — anchored at end
+  const noteMatch = !noteGeekMatch && content.match(PATTERNS.note);
+  if (noteMatch) {
+    note = noteMatch[1].trim();
+    content = content.replace(noteMatch[0], '').trim();
+  }
+
+  // 2c. Blocked — `~blocked` with an optional reason, anchored at the end.
+  //     Parsed after the note tokens (which share the end-of-line anchor) and
+  //     before priority, so a reason may contain `!high` and other token-ish
+  //     prose without being torn apart.
+  const blockedMatch = content.match(PATTERNS.blocked);
+  if (blockedMatch) {
+    blocked = true;
+    blockedReason = blockedMatch[1]?.trim() || null;
+    content = content.replace(blockedMatch[0], '').trim();
+  }
+
+  // 3. Priority — parsed BEFORE signifier so `!high` isn't mistaken for the
+  //    `!` signifier followed by the word `high`.
+  const priorityMatch = content.match(PATTERNS.priority);
+  if (priorityMatch) {
+    const level = priorityMatch[1].toLowerCase();
+    priority = level === 'high' ? 1 : level === 'low' ? 3 : 2;
+    content = content.replace(PATTERNS.priority, '').trim();
+  }
+
+  // 4. Date + optional time — parsed BEFORE the signifier so the hyphens in a
+  //    /YYYY-MM-DD (or /MM-DD-YYYY, /MM-DD) date aren't grabbed by the
+  //    signifier's first-special-char match (which includes '-').
+  const dtMatch = content.match(PATTERNS.dateTime);
+  if (dtMatch) {
+    const [fullMatch, dateStr, timeStr, minutes, meridian] = dtMatch;
+    let date = new Date();
+    const dl = dateStr.toLowerCase();
+
+    if (dl === 'today') {
+      /* keep today */
+    } else if (dl === 'tomorrow') {
+      date.setDate(date.getDate() + 1);
+    } else if (dl === 'next-week') {
+      date.setDate(date.getDate() + 7);
+    } else if (dl === 'next-month') {
+      date.setMonth(date.getMonth() + 1);
+    } else if (dl.startsWith('next-')) {
+      const dayName = dl.substring(5);
+      const dayNum = DAY_NAMES[dayName];
+      if (dayNum !== undefined) date = getNextDayOccurrence(dayNum);
+    } else if (DAY_NAMES[dl] !== undefined) {
+      date = getNextDayOccurrence(DAY_NAMES[dl]);
+    } else {
+      const parts = dateStr.split('-');
+      if (parts.length === 2) {
+        date = defaultTime(new Date(date.getFullYear(), parseInt(parts[0]) - 1, parseInt(parts[1])));
+      } else if (parts.length === 3) {
+        if (parts[0].length === 4) {
+          date = defaultTime(new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])));
+        } else {
+          date = defaultTime(new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1])));
+        }
+      } else {
+        // month-name + day  OR  bare day number
+        const monthDayMatch = dl.match(
+          /^(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+(\d{1,2})(?:st|nd|rd|th)?$/i,
+        );
+        if (monthDayMatch) {
+          const month = MONTH_NAMES[monthDayMatch[1].toLowerCase()];
+          const day = parseInt(monthDayMatch[2]);
+          date = defaultTime(new Date(date.getFullYear(), month, day));
+        }
+        // else: bare number like /15th — handled by regex capture but not assigned a month,
+        // so we interpret as the 15th of the current month
+        else {
+          const bareDay = parseInt(dateStr.replace(/(?:st|nd|rd|th)$/i, ''));
+          if (!isNaN(bareDay)) {
+            date = defaultTime(new Date(date.getFullYear(), date.getMonth(), bareDay));
+          }
+        }
+      }
+    }
+
+    // Time
+    if (timeStr) {
+      let hours = parseInt(timeStr);
+      let mins = minutes ? parseInt(minutes) : 0;
+      let mer = meridian?.toLowerCase().replace(/\./g, '');
+
+      if (!mer) {
+        const remaining = content.substring(content.indexOf(fullMatch) + fullMatch.length);
+        const markerMatch = remaining.match(PATTERNS.timeMarker);
+        if (markerMatch) mer = markerMatch[1].toLowerCase().replace(/\./g, '');
+      }
+
+      if (mer) {
+        if (mer.startsWith('p') && hours < 12) hours += 12;
+        else if (mer.startsWith('a') && hours === 12) hours = 0;
+      }
+
+      date.setHours(hours, mins, 0, 0);
+    } else {
+      date.setHours(9, 0, 0, 0);
+    }
+
+    dueDate = date;
+    content = content.replace(fullMatch, '').trim();
+  }
+
+  // 5. Signifier (first special char) — after the date is removed so it can't
+  //    match a hyphen inside a date token.
+  const typeMatch = content.match(PATTERNS.type);
+  if (typeMatch) {
+    signifier = typeMatch[0];
+    content = content.replace(typeMatch[0], '').trim();
+  } else {
+    signifier = '*'; // default = task
+  }
+
+  // Clean up any remaining extra whitespace
+  content = content.replace(/\s{2,}/g, ' ').trim();
+
+  // 6. Recurrence → RRULE, anchored on the due date when one was given.
+  const recurrenceRule = buildRecurrenceRule(recurrenceFreq, dueDate);
+
+  return {
+    content: content || undefined,
+    signifier,
+    priority: priority || undefined,
+    dueDate: dueDate || undefined,
+    tags: tags.length > 0 ? tags : undefined,
+    note: note || undefined,
+    noteGeekNote: noteGeekNote || undefined,
+    recurrenceRule: recurrenceRule || undefined,
+    blocked: blocked || undefined,
+    blockedReason: blockedReason || undefined,
+  };
+}

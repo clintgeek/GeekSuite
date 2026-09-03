@@ -84,6 +84,9 @@ export const typeDefs = gql`
     isbn: String
     isbn13: String
     goodreadsId: String
+    readingProgress: Int
+    dateStarted: Date
+    dateFinished: Date
   }
 
   input CreateBookInput {

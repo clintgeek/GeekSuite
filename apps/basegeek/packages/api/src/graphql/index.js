@@ -26,8 +26,8 @@ import { resolvers as bookResolvers } from './bookgeek/resolvers.js';
 import { typeDefs as storyTypeDefs } from './storygeek/typeDefs.js';
 import { resolvers as storyResolvers } from './storygeek/resolvers.js';
 
-import { typeDefs as dashTypeDefs } from './dashboard/typeDefs.js';
-import { resolvers as dashResolvers } from './dashboard/resolvers.js';
+import { typeDefs as glanceTypeDefs } from './glance/typeDefs.js';
+import { resolvers as glanceResolvers } from './glance/resolvers.js';
 
 // Scalar resolver for the shared `Date` type
 const dateScalarResolver = {
@@ -84,7 +84,7 @@ export const typeDefs = mergeTypeDefs([
   fitnessTypeDefs,
   bookTypeDefs,
   storyTypeDefs,
-  dashTypeDefs,
+  glanceTypeDefs,
 ]);
 
 export const resolvers = mergeResolvers([
@@ -96,5 +96,5 @@ export const resolvers = mergeResolvers([
   fitnessResolvers,
   bookResolvers,
   storyResolvers,
-  dashResolvers,
+  glanceResolvers,
 ]);

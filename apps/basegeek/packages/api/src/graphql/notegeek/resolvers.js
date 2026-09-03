@@ -4,7 +4,7 @@ import Folder from './models/Folder.js';
 
 export const resolvers = {
   Query: {
-    notes: async (_, { tag, prefix, type, limit }, context) => {
+    notes: async (_, { tag, prefix, type, limit, sort }, context) => {
       const userId = context.user?.id;
       if (!userId) return [];
 
@@ -22,7 +22,23 @@ export const resolvers = {
         filter.type = type;
       }
 
-      const query = Note.find(filter).sort({ updatedAt: -1 });
+      let sortObj = { updatedAt: -1 };
+      switch (sort?.toLowerCase()) {
+        case 'updatedat_asc':
+          sortObj = { updatedAt: 1 };
+          break;
+        case 'updatedat_desc':
+          sortObj = { updatedAt: -1 };
+          break;
+        case 'createdat_desc':
+          sortObj = { createdAt: -1 };
+          break;
+        case 'title_asc':
+          sortObj = { title: 1 };
+          break;
+      }
+
+      const query = Note.find(filter).sort(sortObj);
       if (limit && limit > 0) query.limit(limit);
       return await query;
     },

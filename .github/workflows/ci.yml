@@ -195,6 +195,8 @@ jobs:
             dir: apps/flockgeek/frontend
           - app: basegeek
             dir: apps/basegeek/packages/ui
+          - app: startgeek
+            dir: apps/startgeek
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

@@ -147,7 +147,7 @@ Hardening = pino logging, request IDs, graceful shutdown, env-driven CORS, data-
 | storygeek | ✅ | ✅ | |
 | notegeek | ✅ | ✅ | |
 | bookgeek | ✅ | ✅ | Format-conversion feature also pending (see Features section below) |
-| startgeek | ✅ | ✅ | Static Vite app — no backend, no auth. Already in build.sh + docker-compose. |
+| startgeek | ✅ | ✅ | v2: cookie-SSO day-at-a-glance via basegeek GraphQL. v1 archived. See DOCS/DASHGEEK_PLAN.md. |
 
 ---
 
@@ -371,6 +371,35 @@ slots but have **zero consumers**; every app hand-rolls both. Per-app structural
   `apps/fitnessgeek/backend/src/models/UserSettings.js` and
   `apps/basegeek/packages/api/src/graphql/fitnessgeek/models/UserSettings.js` and has drifted.
   Consolidate to one source of truth. (See `DOCS/CONTEXT.md`)
+
+### GraphQL consolidation audit (2026-09-03)
+
+Target architecture: every frontend reads/writes domain data through basegeek's `/graphql`;
+each app's own backend shrinks to auth, health, and file/binary/third-party work. Where
+reality stands, per app:
+
+| App | Frontend data layer | Verdict |
+|-----|---------------------|---------|
+| bujogeek | Apollo → basegeek | ✅ fully on GraphQL. Own backend is auth-only, no duplicate models. The reference. |
+| flockgeek | Apollo → basegeek | ✅ fully on GraphQL (only `/api/health` ping). **All 13 Mongoose models duplicated** in `apps/flockgeek/backend/src/models/` — dead if no route reads them; delete or make basegeek the only copy. |
+| notegeek | Apollo → basegeek | ✅ frontend fully on GraphQL. Own backend still carries legacy REST (`routes/notes.js`, `tags.js`, `search.js`) + duplicate `models/Note.js` nobody calls. Also the `getTagHierarchy` 500 below lives in that dead route. Prune. |
+| bookgeek | Apollo for library CRUD; `authFetch` REST for the rest | ⚠️ mostly. Legit REST: upload/download/cover/enrich/merge/import/device-baskets (binary + long jobs). Not legit: `/api/profile/*` (`library-filters`, `me`) and `/api/ai/status` — pure data, should be GraphQL. `App.jsx:15` hardcodes `http://localhost:1800/api`. `api/src/graphql/{schema,resolvers}.js` is an **unmounted dead GraphQL server** — delete. 4 duplicated models. |
+| fitnessgeek | `apiService.js` shims REST→GraphQL, but `restClient.js` still hits own backend | ⚠️ mostly. Still REST: food search/barcode/favorites/recent (`foodService.js`), `POST/PUT/DELETE /logs` + `POST /meals/:id/add-to-log` (`fitnessGeekService.js` — **these have GraphQL equivalents `addFoodLog`/`updateFoodLog`/`deleteFoodLog`/`logMeal` already**), meds RxNorm + med logs, influx, AI, `PUT /user/profile`. **All 13 models duplicated** — this is the `UserSettings` drift hazard above, times 13. |
+| storygeek | axios REST to own backend | ❌ not on GraphQL. `apolloClient.js` exists but is never imported. basegeek's storygeek schema (`stories`, `story`, 3 mutations) is unused by the app and too thin to replace `/stories/*/continue`, `/export/*`, `/ai/*`. Decide: either build out the schema or drop the basegeek storygeek module as dead code. |
+
+Ordered cheap-to-expensive:
+1. Delete dead code: bookgeek unmounted GraphQL, notegeek legacy REST routes + Note model,
+   flockgeek duplicate models (verify no imports first with `rg`).
+2. fitnessgeek: point `foodLogs` writes at the existing GraphQL mutations; remove those REST
+   routes. Then food search/favorites/recent → new queries.
+3. bookgeek: `profile` + `ai/status` → GraphQL; kill the hardcoded `localhost:1800`.
+4. fitnessgeek model consolidation (13 pairs) — biggest risk, do last, one model at a time.
+5. storygeek decision.
+
+Backend-side notes from the same pass: `graphql/dashboard/` is orphaned and field-name-broken —
+being replaced by `graphql/glance/` under `DOCS/DASHGEEK_PLAN.md`. `notes` has no sort argument;
+`UpdateBookInput` cannot set `readingProgress`/`dateStarted`/`dateFinished`; `Note` has no
+`folderId` though `Folder` exists — the first two are fixed in that plan, `folderId` is not.
 
 ---
 

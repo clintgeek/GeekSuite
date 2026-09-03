@@ -15,6 +15,11 @@ import { geekLayout, geekShape } from '../designTokens.js';
  *
  * `id` is the subdomain label, which is also how the current app is detected
  * from `window.location.hostname` when no `currentApp` prop is supplied.
+ *
+ * `url` is derived from `id` unless an entry sets it explicitly. `startgeek`
+ * does: it is served at `start.clintgeek.com`, not `startgeek.clintgeek.com`.
+ * That divergence means `hostnameApp()` cannot detect it — harmless, because
+ * startgeek is a standalone Tailwind app that never renders this switcher.
  */
 export const GEEKSUITE_APPS = [
   { id: 'basegeek', label: 'Mission Control', monogram: 'MC' },
@@ -24,8 +29,8 @@ export const GEEKSUITE_APPS = [
   { id: 'storygeek', label: 'StoryGeek', monogram: 'SG' },
   { id: 'flockgeek', label: 'FlockGeek', monogram: 'FL' },
   { id: 'bookgeek', label: 'BookGeek', monogram: 'BK' },
-  { id: 'startgeek', label: 'Launcher', monogram: 'LA' },
-].map((app) => ({ ...app, url: `https://${app.id}.clintgeek.com` }));
+  { id: 'startgeek', label: 'Start', monogram: 'ST', url: 'https://start.clintgeek.com' },
+].map((app) => ({ ...app, url: app.url || `https://${app.id}.clintgeek.com` }));
 
 /** Nine-dot "apps" glyph. Inline SVG on purpose: @mui/icons-material is not a
  * peer dependency of this package, so shared chrome must not reach for it. */

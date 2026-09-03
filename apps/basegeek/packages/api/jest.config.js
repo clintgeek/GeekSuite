@@ -9,6 +9,10 @@ export default {
   // Use the Node test environment (no jsdom)
   testEnvironment: 'node',
 
+  // Single shared in-memory MongoDB per run; parallel workers clobber each
+  // other's test data. Run suites sequentially.
+  maxWorkers: 1,
+
   // Discover tests only inside src/__tests__/
   testMatch: ['**/src/__tests__/**/*.test.js'],
 

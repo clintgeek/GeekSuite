@@ -40,7 +40,7 @@ export const typeDefs = gql`
   }
 
   type Query {
-    notes(tag: String, prefix: String, type: String, limit: Int): [Note!]!
+    notes(tag: String, prefix: String, type: String, limit: Int, sort: String): [Note!]!
     note(id: ID!): Note
     noteTags: [String!]!
     searchNotes(q: String!): [SearchSnippet!]!

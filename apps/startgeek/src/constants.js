@@ -1,8 +1,10 @@
 // Timing intervals (in milliseconds)
 export const INTERVALS = {
-  CLOCK_UPDATE: 1000,           // 1 second
-  WEATHER_REFRESH: 15 * 60 * 1000,  // 15 minutes
-  BACKGROUND_TIMEOUT: 8000      // 8 seconds
+  CLOCK_UPDATE: 1000,                 // 1 second
+  WEATHER_REFRESH: 15 * 60 * 1000,    // 15 minutes
+  GLANCE_REFRESH: 5 * 60 * 1000,      // 5 minutes
+  GLANCE_STALE: 60 * 1000,            // 1 minute
+  BACKGROUND_TIMEOUT: 8000            // 8 seconds
 }
 
 // Animation durations (in seconds for framer-motion)
@@ -18,3 +20,8 @@ export const FORECAST = {
   LOCAL_DAYS: 7,
   WORLD_DAYS: 5
 }
+
+// Motion preference
+export const REDUCED_MOTION =
+  typeof window !== 'undefined' &&
+  window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
