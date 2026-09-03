@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSettings } from '../hooks/useSettings'
 import { useSession } from '../hooks/useSession'
-import { MODULES } from '../config/modules'
+import { MODULES, DEFAULT_CALENDAR_COLOR } from '../config/modules'
 import { ANIMATION, REDUCED_MOTION } from '../constants'
 
 const FOCUSABLE =
@@ -36,9 +36,28 @@ const Seg = ({ value, options, onChange, ariaLabel }) => (
 // Opened from the rail control or the `,` key. Focus is trapped while open.
 const SettingsSheet = ({ open, onClose }) => {
   const panelRef = useRef(null)
-  const { settings, setBackdrop, setClock, toggleModule, reset } = useSettings()
+  const { settings, setBackdrop, setClock, toggleModule, setCalendars, reset } = useSettings()
   const { status } = useSession()
   const signedIn = status === 'in'
+
+  const updateCalendar = (index, next) => {
+    setCalendars((prev) => {
+      const copy = [...prev]
+      copy[index] = next
+      return copy
+    })
+  }
+
+  const addCalendar = () => {
+    setCalendars((prev) => [
+      ...prev,
+      { id: '', label: '', color: DEFAULT_CALENDAR_COLOR },
+    ])
+  }
+
+  const removeCalendar = (index) => {
+    setCalendars((prev) => prev.filter((_, i) => i !== index))
+  }
 
   useEffect(() => {
     if (!open) return
@@ -136,6 +155,59 @@ const SettingsSheet = ({ open, onClose }) => {
                   <span className="switch" aria-hidden="true" />
                 </button>
               ))}
+            </Group>
+
+            <Group title="Calendars">
+              {settings.calendars.length === 0 && (
+                <p className="text-[12.5px] leading-relaxed text-ink-3 mb-2">
+                  No calendars added yet.
+                </p>
+              )}
+              {settings.calendars.map((cal, idx) => (
+                <div key={idx} className="flex items-center gap-2 mb-2">
+                  <input
+                    type="text"
+                    value={cal.label || ''}
+                    onChange={(e) => updateCalendar(idx, { ...cal, label: e.target.value })}
+                    placeholder="Label"
+                    className="w-24 min-w-0 bg-transparent border border-hair rounded px-2 py-1.5 text-sm text-ink placeholder:text-ink-4 focus:outline-none focus:border-hair-strong"
+                  />
+                  <input
+                    type="text"
+                    value={cal.id || ''}
+                    onChange={(e) => updateCalendar(idx, { ...cal, id: e.target.value })}
+                    placeholder="Calendar ID"
+                    className="flex-1 min-w-0 bg-transparent border border-hair rounded px-2 py-1.5 text-sm text-ink placeholder:text-ink-4 focus:outline-none focus:border-hair-strong"
+                  />
+                  <input
+                    type="color"
+                    value={cal.color || DEFAULT_CALENDAR_COLOR}
+                    onChange={(e) => updateCalendar(idx, { ...cal, color: e.target.value })}
+                    className="w-8 h-8 shrink-0 p-0 border-0 rounded overflow-hidden bg-transparent cursor-pointer"
+                    aria-label={`Color for ${cal.label || 'calendar'}`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeCalendar(idx)}
+                    className="shrink-0 w-7 h-7 rounded-lg grid place-items-center text-ink-3 hover:text-ink hover:bg-panel transition-colors"
+                    aria-label={`Remove ${cal.label || 'calendar'}`}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={addCalendar}
+                className="font-mono text-[11px] tracking-wide px-3 py-1.5 rounded-full border border-hair-strong text-ink hover:bg-panel-hover transition-colors"
+              >
+                Add calendar
+              </button>
+              <p className="text-[12.5px] leading-relaxed text-ink-3 mt-2.5">
+                Paste a Google Calendar ID (found under Settings → Integrations → Calendar ID)
+                or the <code>src</code> value from the embed code. Events only appear for
+                public or shared calendars.
+              </p>
             </Group>
 
             <Group title="Backdrop">

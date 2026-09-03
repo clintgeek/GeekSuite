@@ -17,6 +17,7 @@ const load = () => {
       backdrop: BACKDROPS.includes(saved.backdrop) ? saved.backdrop : DEFAULT_SETTINGS.backdrop,
       clock: CLOCKS.includes(saved.clock) ? saved.clock : DEFAULT_SETTINGS.clock,
       modules: { ...DEFAULT_SETTINGS.modules, ...(saved.modules || {}) },
+      calendars: Array.isArray(saved.calendars) ? clone(saved.calendars) : clone(DEFAULT_SETTINGS.calendars),
     }
   } catch {
     return clone(DEFAULT_SETTINGS)
@@ -51,11 +52,18 @@ export const SettingsProvider = ({ children }) => {
     }))
   }, [])
 
+  const setCalendars = useCallback((updater) => {
+    setSettings((s) => ({
+      ...s,
+      calendars: typeof updater === 'function' ? updater(s.calendars) : updater,
+    }))
+  }, [])
+
   const reset = useCallback(() => setSettings(clone(DEFAULT_SETTINGS)), [])
 
   const value = useMemo(
-    () => ({ settings, setBackdrop, setClock, toggleModule, reset }),
-    [settings, setBackdrop, setClock, toggleModule, reset]
+    () => ({ settings, setBackdrop, setClock, toggleModule, setCalendars, reset }),
+    [settings, setBackdrop, setClock, toggleModule, setCalendars, reset]
   )
 
   return (

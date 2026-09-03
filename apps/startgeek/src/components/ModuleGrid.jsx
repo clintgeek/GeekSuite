@@ -5,6 +5,7 @@ import { useSettings } from '../hooks/useSettings'
 import { REDUCED_MOTION } from '../constants'
 import Module from './Module'
 import TaskRow from './TaskRow'
+import CalendarModule from './CalendarModule'
 import FitnessModule from './FitnessModule'
 import ReadingModule from './ReadingModule'
 
@@ -43,8 +44,8 @@ const upcomingLabel = (task, todayIso) => {
   return due.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-// Tasks fill the left two-thirds and stretch to the height of Fitness and
-// Reading stacked on the right; the task list scrolls inside that height.
+// Calendar and Tasks each span two rows; Fitness and Reading stack on the
+// right and set the height. The task list scrolls inside that height.
 const ModuleGrid = () => {
   const { data, loading } = useGlance()
   const { status } = useSession()
@@ -59,6 +60,7 @@ const ModuleGrid = () => {
   const upcoming = tasks?.upcoming || []
   const total = overdue.length + todayRows.length + upcoming.length
 
+  const hasCalendar = on.calendar && settings.calendars?.some((cal) => cal.id)
   const hasTasks = on.today && total > 0
   const hasReading = on.reading && data?.reading?.length > 0
   const hasFitness =
@@ -71,6 +73,8 @@ const ModuleGrid = () => {
       data.fitness.lastActivity != null)
   const hasSide = hasFitness || hasReading
 
+  const rowClasses = `row ${hasCalendar ? 'with-calendar' : ''} ${hasTasks ? 'with-tasks' : ''} ${hasSide ? 'with-side' : ''}`
+
   const taskFoot =
     tasks && (tasks.completedCount > 0 || tasks.blockedCount > 0) ? (
       <>
@@ -80,24 +84,28 @@ const ModuleGrid = () => {
     ) : null
 
   if (loading && !data) {
+    const loadingClasses = `row ${on.calendar && hasCalendar ? 'with-calendar' : ''} ${on.today ? 'with-tasks' : ''} ${(on.fitness || on.reading) ? 'with-side' : ''}`
     return (
-      <div className="row with-side">
-        <Skeleton className="mod-tasks" />
-        <Skeleton />
-        <Skeleton />
+      <div className={loadingClasses}>
+        {on.calendar && hasCalendar && <Skeleton className="mod-calendar" />}
+        {on.today && <Skeleton className="mod-tasks" />}
+        {on.fitness && <Skeleton />}
+        {on.reading && <Skeleton />}
       </div>
     )
   }
 
-  if (!hasTasks && !hasSide) return null
+  if (!hasCalendar && !hasTasks && !hasSide) return null
 
   return (
     <motion.div
-      className={`row ${hasTasks && hasSide ? 'with-side' : ''}`}
+      className={rowClasses}
       initial={REDUCED_MOTION ? false : 'hidden'}
       animate="visible"
       variants={containerVariants}
     >
+      {hasCalendar && <CalendarModule />}
+
       {hasTasks && (
         <Module
           label="Tasks"
