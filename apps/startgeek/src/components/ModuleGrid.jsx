@@ -67,7 +67,8 @@ const ModuleGrid = () => {
     (data.fitness.calories != null ||
       data.fitness.calorieGoal != null ||
       data.fitness.mealsLogged > 0 ||
-      data.fitness.loginStreak > 0)
+      data.fitness.loginStreak > 0 ||
+      data.fitness.lastActivity != null)
   const hasSide = hasFitness || hasReading
 
   const taskFoot =

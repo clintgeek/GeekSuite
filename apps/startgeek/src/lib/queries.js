@@ -55,6 +55,13 @@ export const GLANCE_TODAY = `
         calorieGoal
         mealsLogged
         loginStreak
+        lastActivity {
+          activityName
+          activityType
+          startTimeLocal
+          calories
+          duration
+        }
       }
     }
   }

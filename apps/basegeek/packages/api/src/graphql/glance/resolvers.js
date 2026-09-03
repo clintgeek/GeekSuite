@@ -230,19 +230,21 @@ export const resolvers = {
 
       // ── Fitness ──
       try {
-        const [summary, streak, logs] = await Promise.all([
+        const [summary, streak, logs, activities] = await Promise.all([
           fitnessResolvers.Query.dailySummary(null, { date: targetDate }, context),
           fitnessResolvers.Query.loginStreak(null, {}, context),
           fitnessResolvers.Query.foodLogs(null, { date: targetDate }, context),
+          fitnessResolvers.Query.garminActivities(null, { limit: 1 }, context).catch(() => []),
         ]);
 
         const mealsLogged = Array.isArray(logs) ? logs.length : 0;
         const calories = summary?.totals?.calories ?? 0;
         const calorieGoal = summary?.calorieGoal ?? null;
         const loginStreak = streak?.currentStreak ?? null;
+        const lastActivity = Array.isArray(activities) && activities[0] ? activities[0] : null;
 
-        if (mealsLogged > 0 || calorieGoal || calories > 0 || loginStreak) {
-          result.fitness = { calories, calorieGoal, mealsLogged, loginStreak };
+        if (mealsLogged > 0 || calorieGoal || calories > 0 || loginStreak || lastActivity) {
+          result.fitness = { calories, calorieGoal, mealsLogged, loginStreak, lastActivity };
         }
       } catch (err) {
         logger.warn({ err }, 'glanceToday: fitness fetch failed');

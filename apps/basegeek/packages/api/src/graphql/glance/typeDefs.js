@@ -62,6 +62,15 @@ export const typeDefs = gql`
     calorieGoal: Float
     mealsLogged: Int!
     loginStreak: Int
+    lastActivity: GlanceLastActivity
+  }
+
+  type GlanceLastActivity {
+    activityName: String
+    activityType: String
+    startTimeLocal: String
+    calories: Float
+    duration: Float
   }
 
   type GlanceFlock {
