@@ -201,6 +201,8 @@ export default function App() {
   const [uploadMessage, setUploadMessage] = useState(null);
 
   const [shelfSavingId, setShelfSavingId] = useState(null);
+  const [progressSavingId, setProgressSavingId] = useState(null);
+  const [progressDraft, setProgressDraft] = useState("");
 
   const [addBookOpen, setAddBookOpen] = useState(false);
   const [addBookLoading, setAddBookLoading] = useState(false);
@@ -1844,6 +1846,49 @@ export default function App() {
     }
   }
 
+  // Keep the progress field in step with whichever book is open.
+  useEffect(() => {
+    const p = selectedBook?.readingProgress;
+    setProgressDraft(Number.isFinite(p) ? Math.round(p) : "");
+  }, [selectedBook]);
+
+  function clampProgress(value) {
+    if (value === "" || value == null) return null;
+    const n = Math.round(Number(value));
+    if (!Number.isFinite(n)) return null;
+    return Math.min(100, Math.max(0, n));
+  }
+
+  async function handleUpdateProgress(book, value) {
+    if (!(book?.id || book?._id)) return;
+    const next = clampProgress(value);
+    if (next === null) return;
+    const current = Number.isFinite(book.readingProgress) ? Math.round(book.readingProgress) : null;
+    if (next === current) return;
+
+    const bookId = (book.id || book._id);
+    setProgressSavingId(bookId);
+    try {
+      const apolloRes = await apolloClient.mutate({
+        mutation: UPDATE_BOOK,
+        variables: { id: bookId, input: { readingProgress: next } },
+      });
+      const updated = apolloRes.data?.updateBook;
+      if (!updated) throw new Error("Failed to update progress");
+      setBooks((prev) =>
+        prev.map((b) => ((b.id || b._id) === (updated.id || updated._id) ? updated : b))
+      );
+      if (selectedBook && (selectedBook.id || selectedBook._id) === (updated.id || updated._id)) {
+        setSelectedBook(updated);
+      }
+    } catch (err) {
+      console.error("Failed to update progress", err);
+      setProgressDraft(current ?? "");
+    } finally {
+      setProgressSavingId(null);
+    }
+  }
+
   async function handleUpdateShelf(book, newShelf) {
     if (!(book?.id || book?._id)) return;
     if (!newShelf || newShelf === book.shelf) return;
@@ -2386,6 +2431,19 @@ export default function App() {
                           />
                         ) : null}
                       </div>
+                      {Number.isFinite(book.readingProgress) && book.readingProgress > 0 && (
+                        <div
+                          className="-mt-1 mb-1.5 h-[3px] w-full overflow-hidden rounded-full"
+                          style={{ backgroundColor: 'var(--color-bg-surface)' }}
+                          title={`${Math.round(book.readingProgress)}% read`}
+                          aria-label={`${Math.round(book.readingProgress)}% read`}
+                        >
+                          <div
+                            className="h-full rounded-full bg-amber-500"
+                            style={{ width: `${Math.min(100, Math.max(0, book.readingProgress))}%` }}
+                          />
+                        </div>
+                      )}
                       <div className="mb-0.5 line-clamp-2 font-serif font-medium text-[13px]" style={{ color: 'var(--color-text-primary)' }}>
                         {book.title || "Untitled"}
                       </div>
@@ -3427,6 +3485,46 @@ export default function App() {
                           </option>
                         ))}
                     </select>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium text-slate-300">Progress:</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={progressDraft === "" ? 0 : progressDraft}
+                      disabled={!!progressSavingId && progressSavingId === (selectedBook.id || selectedBook._id)}
+                      onChange={(e) => setProgressDraft(Number(e.target.value))}
+                      onPointerUp={(e) => handleUpdateProgress(selectedBook, e.currentTarget.value)}
+                      onKeyUp={(e) => handleUpdateProgress(selectedBook, e.currentTarget.value)}
+                      className="w-36 accent-amber-500"
+                      aria-label="Percent read"
+                    />
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      inputMode="numeric"
+                      value={progressDraft}
+                      disabled={!!progressSavingId && progressSavingId === (selectedBook.id || selectedBook._id)}
+                      onChange={(e) => setProgressDraft(e.target.value === "" ? "" : Number(e.target.value))}
+                      onBlur={(e) => handleUpdateProgress(selectedBook, e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleUpdateProgress(selectedBook, e.currentTarget.value);
+                        }
+                      }}
+                      className="w-14 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-right text-[11px] text-slate-100 outline-none [color-scheme:dark] focus:border-slate-500"
+                      aria-label="Percent read"
+                    />
+                    <span className="text-slate-400">%</span>
+                    {selectedBook.pageCount > 0 && progressDraft !== "" && (
+                      <span className="text-[11px] text-slate-500">
+                        about p. {Math.round((Number(progressDraft) / 100) * selectedBook.pageCount)} of {selectedBook.pageCount}
+                      </span>
+                    )}
                   </div>
                 </div>
 
