@@ -203,6 +203,8 @@ export default function App() {
   const [shelfSavingId, setShelfSavingId] = useState(null);
   const [progressSavingId, setProgressSavingId] = useState(null);
   const [progressDraft, setProgressDraft] = useState("");
+  const [progressError, setProgressError] = useState(null);
+  const progressCommitRef = useRef(null);
 
   const [addBookOpen, setAddBookOpen] = useState(false);
   const [addBookLoading, setAddBookLoading] = useState(false);
@@ -1850,7 +1852,24 @@ export default function App() {
   useEffect(() => {
     const p = selectedBook?.readingProgress;
     setProgressDraft(Number.isFinite(p) ? Math.round(p) : "");
+    setProgressError(null);
+    return () => {
+      if (progressCommitRef.current) {
+        clearTimeout(progressCommitRef.current);
+        progressCommitRef.current = null;
+      }
+    };
   }, [selectedBook]);
+
+  // Save shortly after the last change so dragging the slider or typing a
+  // number both land without depending on a release/blur event.
+  function scheduleProgressCommit(book, value) {
+    if (progressCommitRef.current) clearTimeout(progressCommitRef.current);
+    progressCommitRef.current = setTimeout(() => {
+      progressCommitRef.current = null;
+      handleUpdateProgress(book, value);
+    }, 400);
+  }
 
   function clampProgress(value) {
     if (value === "" || value == null) return null;
@@ -1866,8 +1885,13 @@ export default function App() {
     const current = Number.isFinite(book.readingProgress) ? Math.round(book.readingProgress) : null;
     if (next === current) return;
 
+    if (progressCommitRef.current) {
+      clearTimeout(progressCommitRef.current);
+      progressCommitRef.current = null;
+    }
     const bookId = (book.id || book._id);
     setProgressSavingId(bookId);
+    setProgressError(null);
     try {
       const apolloRes = await apolloClient.mutate({
         mutation: UPDATE_BOOK,
@@ -1883,6 +1907,7 @@ export default function App() {
       }
     } catch (err) {
       console.error("Failed to update progress", err);
+      setProgressError(err?.message || "Failed to save progress");
       setProgressDraft(current ?? "");
     } finally {
       setProgressSavingId(null);
@@ -3495,9 +3520,10 @@ export default function App() {
                       step={1}
                       value={progressDraft === "" ? 0 : progressDraft}
                       disabled={!!progressSavingId && progressSavingId === (selectedBook.id || selectedBook._id)}
-                      onChange={(e) => setProgressDraft(Number(e.target.value))}
-                      onPointerUp={(e) => handleUpdateProgress(selectedBook, e.currentTarget.value)}
-                      onKeyUp={(e) => handleUpdateProgress(selectedBook, e.currentTarget.value)}
+                      onChange={(e) => {
+                        setProgressDraft(Number(e.target.value));
+                        scheduleProgressCommit(selectedBook, e.target.value);
+                      }}
                       className="w-36 accent-amber-500"
                       aria-label="Percent read"
                     />
@@ -3508,7 +3534,11 @@ export default function App() {
                       inputMode="numeric"
                       value={progressDraft}
                       disabled={!!progressSavingId && progressSavingId === (selectedBook.id || selectedBook._id)}
-                      onChange={(e) => setProgressDraft(e.target.value === "" ? "" : Number(e.target.value))}
+                      onChange={(e) => {
+                        const v = e.target.value === "" ? "" : Number(e.target.value);
+                        setProgressDraft(v);
+                        if (v !== "") scheduleProgressCommit(selectedBook, v);
+                      }}
                       onBlur={(e) => handleUpdateProgress(selectedBook, e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
@@ -3524,6 +3554,12 @@ export default function App() {
                       <span className="text-[11px] text-slate-500">
                         about p. {Math.round((Number(progressDraft) / 100) * selectedBook.pageCount)} of {selectedBook.pageCount}
                       </span>
+                    )}
+                    {progressSavingId && progressSavingId === (selectedBook.id || selectedBook._id) && (
+                      <span className="text-[11px] text-slate-500">Saving…</span>
+                    )}
+                    {progressError && (
+                      <span className="text-[11px] text-rose-400">{progressError}</span>
                     )}
                   </div>
                 </div>
