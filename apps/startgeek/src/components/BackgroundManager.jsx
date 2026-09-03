@@ -5,9 +5,9 @@ import { useSettings } from '../hooks/useSettings'
 const MAX_RETRIES = 3
 const RETRY_DELAY = 2000
 
-// Photo: a fresh wallpaper, blurred and held behind a scrim so the type and
-// the dark-glass panels read on any picture while it stays recognisably a
-// picture. Void: no photo, a flat ground with a faint grid and a warm glow.
+// Photo: a fresh wallpaper, lightly softened behind a gentle scrim. The
+// dark-glass panels carry legibility, so the picture stays readable and
+// present without being the focal point. Void: no photo, a flat ground with a faint grid and a warm glow.
 const BackgroundManager = () => {
   const { settings } = useSettings()
   const photo = settings.backdrop === 'photo'
@@ -73,8 +73,8 @@ const BackgroundManager = () => {
           backgroundRepeat: 'no-repeat',
           backgroundSize: 'cover',
           backgroundPosition: 'center',
-          filter: 'saturate(0.8) brightness(0.85) blur(7px)',
-          transform: 'scale(1.06)',
+          filter: 'saturate(0.9) brightness(0.92) blur(2px)',
+          transform: 'scale(1.03)',
           opacity: photo && bgUrl ? 1 : 0,
         }}
       />
@@ -85,7 +85,7 @@ const BackgroundManager = () => {
         style={{
           opacity: photo ? 1 : 0,
           background:
-            'linear-gradient(180deg, rgba(10,13,18,0.42) 0%, rgba(10,13,18,0.55) 40%, rgba(10,13,18,0.82) 100%)',
+            'linear-gradient(180deg, rgba(10,13,18,0.18) 0%, rgba(10,13,18,0.28) 45%, rgba(10,13,18,0.62) 100%)',
         }}
       />
 
