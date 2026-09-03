@@ -292,7 +292,6 @@ export default function DataGeekPage() {
   const [tab, setTab] = useState(0);
   return (
     <Box>
-      <Typography variant="h4" sx={{ mb: 0.5 }}>DataGeek</Typography>
       <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
         Database and infrastructure status
       </Typography>

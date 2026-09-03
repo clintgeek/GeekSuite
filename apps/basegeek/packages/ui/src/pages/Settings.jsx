@@ -29,7 +29,6 @@ function SettingsSection({ title, children }) {
 function Settings() {
   return (
     <Box>
-      <Typography variant="h4" sx={{ mb: 0.5 }}>Settings</Typography>
       <Typography variant="body2" sx={{ color: 'text.secondary', mb: 4 }}>
         Configure baseGeek infrastructure and preferences
       </Typography>

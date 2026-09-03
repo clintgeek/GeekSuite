@@ -233,7 +233,6 @@ export default function AccountPage() {
 
   return (
     <Box>
-      <Typography variant="h4" sx={{ mb: 0.5 }}>Account</Typography>
       <Typography variant="body2" sx={{ color: 'text.secondary', mb: 4 }}>
         Your profile and preferences across all GeekSuite applications
       </Typography>

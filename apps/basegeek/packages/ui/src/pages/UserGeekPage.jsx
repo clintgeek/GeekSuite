@@ -74,7 +74,6 @@ export default function UserGeekPage() {
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 4 }}>
         <Box>
-          <Typography variant="h4" sx={{ mb: 0.5 }}>User Management</Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary' }}>
             Manage users across the GeekSuite applications
           </Typography>

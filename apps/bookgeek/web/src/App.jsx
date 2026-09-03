@@ -2012,9 +2012,6 @@ export default function App() {
           >
             <div className="mb-2 flex flex-col gap-2 md:mb-3 md:flex-row md:items-center md:justify-between">
               <div>
-                <h2 className="font-serif text-base font-bold tracking-tight md:text-lg" style={{ color: 'var(--color-text-primary)' }}>
-                  Library
-                </h2>
                 <p className="text-[11px] md:text-xs" style={{ color: 'var(--color-text-muted)' }}>
                   {loading
                     ? "Loading from backend…"
@@ -2355,9 +2352,6 @@ export default function App() {
             <section className="flex-1 rounded-xl p-3.5 md:p-4" style={{ backgroundColor: 'var(--color-bg-surface-alt)', border: '1px solid var(--color-border)' }}>
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
-                  <h2 className="font-serif text-base font-bold tracking-tight md:text-lg" style={{ color: 'var(--color-text-primary)' }}>
-                    Profile &amp; settings
-                  </h2>
                   <p className="text-[11px] md:text-xs" style={{ color: 'var(--color-text-muted)' }}>
                     Manage your account and Kindle email for send-to-device.
                   </p>

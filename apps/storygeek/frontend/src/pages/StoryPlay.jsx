@@ -158,7 +158,7 @@ const getDiceColor = (result, isDark, gold) => {
 
 function StoryPlay() {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
   const { storyId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
