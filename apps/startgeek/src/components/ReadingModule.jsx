@@ -28,7 +28,7 @@ const ReadingModule = ({ book }) => {
   const page = progress != null && pages ? Math.round((progress / 100) * pages) : null
 
   return (
-    <Module label="Reading" span={3} link={{ label: 'BookGeek', href: `${BOOKGEEK}/books/${book.id}` }}>
+    <Module label="Reading" link={{ label: 'BookGeek', href: `${BOOKGEEK}/books/${book.id}` }}>
       <a
         href={`${BOOKGEEK}/books/${book.id}`}
         target="_blank"

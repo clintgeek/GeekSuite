@@ -13,7 +13,7 @@ const FitnessModule = ({ fitness }) => {
   const streak = fitness.loginStreak > 0 ? `${fitness.loginStreak}-day streak` : null
 
   return (
-    <Module label="Fitness" span={3} link={{ label: 'FitnessGeek', href: 'https://fitnessgeek.clintgeek.com' }}>
+    <Module label="Fitness" link={{ label: 'FitnessGeek', href: 'https://fitnessgeek.clintgeek.com' }}>
       {hasCalories && (
         <>
           <div className="text-[26px] font-light leading-none tracking-[-0.02em] tnum">

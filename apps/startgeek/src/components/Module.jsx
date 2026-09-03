@@ -22,15 +22,10 @@ const OpenGlyph = () => (
  *  count  — small secondary figure beside the label (optional)
  *  link   — { label, href } rendered as "AppName ↗" on the right (optional)
  *  foot   — node rendered in the footer strip (optional)
- *  span   — grid columns out of 12 (default 4); `wide` marks a full-width row
+ *  Placement is the parent grid's job (see .hero / .row in index.css).
  */
-const Module = ({ label, count, link, foot, span = 4, wide = false, className = '', children }) => (
-  <motion.section
-    variants={variants}
-    className={`mod ${wide ? 'wide' : ''} ${className}`}
-    style={{ '--span': span }}
-    aria-label={label}
-  >
+const Module = ({ label, count, link, foot, className = '', children }) => (
+  <motion.section variants={variants} className={`mod ${className}`} aria-label={label}>
     <div className="mod-head">
       <span className="label">{label}</span>
       {count != null && (

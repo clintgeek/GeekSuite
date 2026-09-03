@@ -83,7 +83,6 @@
 
   /* ---- Panel ---- */
   .mod {
-    grid-column: span var(--span, 4);
     display: flex;
     flex-direction: column;
     min-width: 0;
@@ -219,7 +218,6 @@
 /* Module row: Tasks spans two rows on the left; Fitness and Reading stack
    on the right and set the height. Tasks scrolls inside that height. */
 .row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; margin-top: 24px; align-items: stretch; }
-.row > .mod { grid-column: auto; }
 .mod-tasks { overflow: hidden; min-height: 260px; }
 .mod-tasks > .mod-body { overflow-y: auto; min-height: 0; scrollbar-gutter: stable; }
 @media (min-width: 820px) {
@@ -228,14 +226,6 @@
 }
 @media (max-width: 819px) {
   .mod-tasks { max-height: 380px; }
-}
-
-/* Responsive spans. Columns collapse before content does. */
-@media (max-width: 960px) {
-  .mod { --span: 6 !important; }
-}
-@media (max-width: 680px) {
-  .mod { --span: 12 !important; }
 }
 
 @media (prefers-reduced-motion: reduce) {
