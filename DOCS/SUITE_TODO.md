@@ -89,6 +89,24 @@ StoryGeek SSO alignment + Settings page fix + AuthProvider refactor. Pending mer
 
 ---
 
+## Landed 2026-09-03 (Pass C/E batch)
+
+- CSRF origin guard merged and enforcing on all seven backends (`CSRF_GUARD=off|report` levers).
+- Sidebar footers removed suite-wide (header avatar menu is the account entry); sidebar content
+  floats to the top; bookgeek filters under the shelves.
+- Shell polish: storygeek rails collapse below `lg`; duplicate page headings removed in bookgeek
+  and basegeek.
+- basegeek: registry mutations + mongo/redis/postgres/influx routers admin-gated (21 tests);
+  `configure()` wired so the Account page hydrates and theme preference persists.
+- Feedback primitives (GeekEmptyState / GeekErrorState / GeekToastProvider / toneForMode /
+  palette tooltips) with bujogeek as proof.
+- bujogeek blocked-task state in the gateway (blockTask / unblockTask / blockedTasks, 24 tests);
+  frontend Blocked section + `~blocked` quick-add token in progress.
+- Housekeeping: `claude_theme_test` account deleted; fitnessgeek production CORS trimmed to its
+  own origin (compose no longer overrides it from the dev .env); CSRF worktree removed.
+
+---
+
 ## Next up — highest leverage
 
 - ~~Timezone bug fixes (bujogeek, fitnessgeek, flockgeek)~~ — **Done 2026-08-30**
@@ -135,7 +153,7 @@ Hardening = pino logging, request IDs, graceful shutdown, env-driven CORS, data-
 
 ## Cross-cutting security
 
-- **Unauthenticated app registry + privileged DB browsers (basegeek)** — found 2026-09-02 while
+- ~~Unauthenticated app registry + privileged DB browsers (basegeek)~~ — **Done 2026-09-03** (mutations + browsers admin-gated; reads public, no unauthenticated caller exists). Was: found 2026-09-02 while
   adding the admin role. `src/routes/apps.js` (GET/POST/PUT/DELETE/seed) has no auth at all and the
   public portal reads it unauthenticated; `/api/mongo`, `/api/redis`, `/api/postgres`, `/api/influx`
   (dashgeek-facing browsers) are far more privileged than the user list that is now admin-gated.
@@ -322,7 +340,7 @@ slots but have **zero consumers**; every app hand-rolls both. Per-app structural
 
 ## Shared libraries / refactors
 
-- **basegeek never calls `configure()` from `@geeksuite/user`** — found 2026-09-02 during the light-mode
+- ~~basegeek never calls `configure()` from `@geeksuite/user`~~ — **Done 2026-09-03.** Was: found 2026-09-02 during the light-mode
   rebuild. `bootstrap()` throws into AccountPage's swallowed catch, so the shared user store never
   loads: the Theme selector works live via the `geek_theme` cookie but the choice is not persisted
   to the DB from basegeek (other apps persist it). Wire `configure(apiInstance)` in basegeek's
@@ -411,7 +429,7 @@ slots but have **zero consumers**; every app hand-rolls both. Per-app structural
 
 ## Nice-to-haves / backlog
 
-- **Leftover test account in production** — `claude_theme_test` / `claude-theme-test@clintgeek.com`
+- ~~Leftover test account in production~~ — **Deleted 2026-09-02.** Was: `claude_theme_test` / `claude-theme-test@clintgeek.com`
   exists in `userGeek` (from an earlier theme-testing session). Delete once confirmed unused:
   needs the admin `DELETE /api/users/:id` or a one-off script. Found 2026-09-02.
 

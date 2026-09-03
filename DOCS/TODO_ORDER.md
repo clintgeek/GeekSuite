@@ -62,15 +62,17 @@ cycle so the ordering rationale stays visible; detail moved to `SUITE_TODO.md` "
     bujogeek. Bottom bars kept in bujogeek/fitnessgeek/notegeek without logout. Follow-ups in
     SUITE_TODO: visual pass in both modes; storygeek play surface now 220px narrower on desktop;
     top-bar titles are route names (per-app refinement welcome).
-15. **Shared EmptyState / ErrorState / toast primitives** — L. Seed from bujogeek `EmptyState`;
-    migrate app by app. *UI*
+15. ~~Shared EmptyState / ErrorState / toast primitives~~ — **primitives done 2026-09-03** (GeekEmptyState,
+    GeekErrorState, GeekToastProvider/useToast in packages/ui; bujogeek is the proof). Fan-out to the
+    other six apps is the remaining L; list of local patterns is in THE_UI_UNIFICATION_PLAN.md
+    "Feedback primitives". *UI*
 16. ~~Shared mobile bottom-nav primitive~~ — folded into #15a.
 17. **Shared date utilities** — M. `toUtcMidnight` / `localDateString` / `displayCalendarDate`
     into `packages/utils`; bujogeek, fitnessgeek, flockgeek consume. Spec exists in
     `ARCHIVE/THE_TIME_ISSUE.md`. *Shared libs*
 18. **Shared logger** — S–M. Extract the pino pattern already in three apps. *Shared libs*
-19. **`toneForMode` helper + themed tooltips + auth splash** — S each; batch into #15's sweep.
-    Replaces the four ad hoc lighten/darken branches added 2026-09-02. *UI*
+19. ~~`toneForMode` helper + themed tooltips~~ — **Done 2026-09-03** (bujogeek's three sites converted;
+    storygeek/fitnessgeek sites convert during the #15 fan-out). Auth splash still open — S. *UI*
 20. **cryptoVault → `@geeksuite/crypto-vault`** — M. Step 1 promote; step 2 fitnessgeek Garmin
     password encryption + backfill. *Shared libs / security*
 21. **fitnessgeek `UserSettings` schema consolidation** — S. Silent-data-loss hazard documented
@@ -113,7 +115,7 @@ cycle so the ordering rationale stays visible; detail moved to `SUITE_TODO.md` "
 - **Pass C:** ~~#12 CSRF~~ — **merged and enforcing 2026-09-02** (branch `csrf-protection`; Origin/Referer
   allow-list guard before `cors()` in all seven backends; `CSRF_GUARD=off|report` levers; sibling-
   subdomain CSRF against basegeek still needs a double-submit token — tracked in SUITE_TODO).
-  Next: the basegeek follow-ups (app registry auth, DB browser gates, `configure()` wiring).
+  Basegeek follow-ups **done 2026-09-03**: registry mutations + DB browsers admin-gated, `configure()` wired.
 - **Pass D (shell grammar) — done 2026-09-02.**
 - **Pass E:** #15 primitives sweep (EmptyState / ErrorState / toast) with #19 batched in.
 
