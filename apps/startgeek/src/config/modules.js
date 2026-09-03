@@ -1,13 +1,11 @@
-// The switchable modules on the console grid, in render order.
-// `auth` modules only appear when signed in. A module with no data stays
+// The switchable blocks on the console, in render order.
+// `auth` blocks only appear when signed in. A block with no data stays
 // hidden even when switched on.
 export const MODULES = [
-  { id: 'today',   name: 'Today',   desc: 'Due, overdue, events, completed and blocked counts', auth: true },
-  { id: 'habits',  name: 'Habits',  desc: 'Today’s habits with streaks', auth: true },
+  { id: 'weather', name: 'Weather', desc: 'Today at a glance; click for details and the week', auth: false },
+  { id: 'today',   name: 'Tasks',   desc: 'Due today, events, and overdue', auth: true },
   { id: 'fitness', name: 'Fitness', desc: 'Calories against goal, meals, streak', auth: true },
-  { id: 'notes',   name: 'Notes',   desc: 'Most recent notes with a snippet', auth: true },
-  { id: 'reading', name: 'Reading', desc: 'Books on the reading shelf', auth: true },
-  { id: 'week',    name: 'Week',    desc: 'Seven-day forecast', auth: false },
+  { id: 'reading', name: 'Reading', desc: 'The book you are on', auth: true },
 ]
 
 export const BACKDROPS = ['photo', 'void']

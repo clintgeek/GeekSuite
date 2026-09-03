@@ -5,11 +5,10 @@ import { useSettings } from '../hooks/useSettings'
 import { REDUCED_MOTION } from '../constants'
 import Module from './Module'
 import TaskRow from './TaskRow'
-import HabitRow from './HabitRow'
-import NoteRow from './NoteRow'
-import BookRow from './BookRow'
 import FitnessModule from './FitnessModule'
-import WeekModule from './WeekModule'
+import ReadingModule from './ReadingModule'
+
+const MAX_TASK_ROWS = 8
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -22,31 +21,35 @@ const containerVariants = {
   },
 }
 
-const Skeleton = () => (
-  <div className="mod col-span-6 h-32 p-4 flex flex-col gap-3" style={{ '--span': 6 }} aria-hidden="true">
+const Skeleton = ({ span }) => (
+  <div className="mod p-4 flex flex-col gap-3" style={{ '--span': span }} aria-hidden="true">
     <div className="h-3 w-24 bg-white/10 rounded animate-pulse" />
     <div className="h-3 w-48 bg-white/10 rounded animate-pulse" />
     <div className="h-3 w-40 bg-white/10 rounded animate-pulse" />
   </div>
 )
 
-// The 12-column console grid. Dense packing so a switched-off module lets
-// the rest flow up. Week works logged out; everything else needs a session.
+// One row, three panels, equal height: Tasks · Fitness · Reading.
+// Signed out, nothing renders here (weather lives in the hero).
 const ModuleGrid = () => {
   const { data, loading } = useGlance()
   const { status } = useSession()
   const { settings } = useSettings()
   const on = settings.modules
-  const signedIn = status === 'in'
+
+  if (status !== 'in') return null
 
   const tasks = data?.tasks
-  const hasToday =
-    signedIn && on.today && (tasks?.due?.length > 0 || tasks?.overdue?.length > 0 || tasks?.events?.length > 0)
-  const hasHabits = signedIn && on.habits && data?.habits?.length > 0
-  const hasNotes = signedIn && on.notes && data?.recentNotes?.length > 0
-  const hasReading = signedIn && on.reading && data?.reading?.length > 0
+  const rows = tasks
+    ? [
+        ...tasks.events.map((t) => ({ task: t, late: false })),
+        ...tasks.due.map((t) => ({ task: t, late: false })),
+        ...tasks.overdue.map((t) => ({ task: t, late: true })),
+      ]
+    : []
+  const hasTasks = on.today && rows.length > 0
+  const hasReading = on.reading && data?.reading?.length > 0
   const hasFitness =
-    signedIn &&
     on.fitness &&
     data?.fitness != null &&
     (data.fitness.calories != null ||
@@ -54,87 +57,63 @@ const ModuleGrid = () => {
       data.fitness.mealsLogged > 0 ||
       data.fitness.loginStreak > 0)
 
-  const todayCount = (tasks?.due?.length || 0) + (tasks?.overdue?.length || 0) + (tasks?.events?.length || 0)
-  const habitsDone = data?.habits?.filter((h) => h.doneToday).length || 0
+  const shown = rows.slice(0, MAX_TASK_ROWS)
+  const hidden = rows.length - shown.length
 
-  const todayFoot =
-    tasks && (tasks.completedCount > 0 || tasks.blockedCount > 0) ? (
+  const taskFoot =
+    tasks && (tasks.completedCount > 0 || tasks.blockedCount > 0 || hidden > 0) ? (
       <>
         {tasks.completedCount > 0 && <span>{tasks.completedCount} completed</span>}
         {tasks.blockedCount > 0 && <span>{tasks.blockedCount} blocked</span>}
+        {hidden > 0 && (
+          <a
+            href="https://bujogeek.clintgeek.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="ml-auto text-ink-2 hover:text-accent transition-colors no-underline"
+          >
+            +{hidden} more
+          </a>
+        )}
       </>
     ) : null
 
+  if (loading && !data) {
+    return (
+      <div className="grid grid-cols-12 gap-3.5 mt-6 items-stretch">
+        <Skeleton span={6} />
+        <Skeleton span={3} />
+        <Skeleton span={3} />
+      </div>
+    )
+  }
+
+  if (!hasTasks && !hasFitness && !hasReading) return null
+
   return (
     <motion.div
-      className="grid grid-cols-12 gap-3.5 mt-6"
-      style={{ gridAutoFlow: 'dense' }}
+      className="grid grid-cols-12 gap-3.5 mt-6 items-stretch"
       initial={REDUCED_MOTION ? false : 'hidden'}
       animate="visible"
       variants={containerVariants}
     >
-      {signedIn && loading && !data && <Skeleton />}
-
-      {hasToday && (
+      {hasTasks && (
         <Module
-          label="Today"
-          count={todayCount}
+          label="Tasks"
+          count={rows.length}
           span={6}
           link={{ label: 'BujoGeek', href: 'https://bujogeek.clintgeek.com/' }}
-          foot={todayFoot}
+          foot={taskFoot}
         >
-          {tasks.events.map((task) => (
-            <TaskRow key={task.id} task={task} />
+          {shown.map(({ task, late }) => (
+            <TaskRow key={task.id} task={task} late={late} today={data.date} />
           ))}
-          {tasks.due.map((task) => (
-            <TaskRow key={task.id} task={task} />
-          ))}
-          {tasks.overdue.map((task) => (
-            <TaskRow key={task.id} task={task} late today={data.date} />
-          ))}
-        </Module>
-      )}
-
-      {hasHabits && (
-        <Module label="Habits" count={`${habitsDone} / ${data.habits.length}`} span={3}>
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-2">
-            {data.habits.map((habit) => (
-              <HabitRow key={habit.id} habit={habit} date={data.date} />
-            ))}
-          </div>
         </Module>
       )}
 
       {hasFitness && <FitnessModule fitness={data.fitness} />}
 
-      {hasNotes && (
-        <Module
-          label="Notes"
-          count="recent"
-          span={4}
-          link={{ label: 'NoteGeek', href: 'https://notegeek.clintgeek.com' }}
-        >
-          {data.recentNotes.map((note) => (
-            <NoteRow key={note.id} note={note} />
-          ))}
-        </Module>
-      )}
-
-      {hasReading && (
-        <Module
-          label="Reading"
-          count={data.reading.length}
-          span={5}
-          link={{ label: 'BookGeek', href: 'https://bookgeek.clintgeek.com' }}
-          className="[&>.mod-body]:gap-3.5"
-        >
-          {data.reading.map((book) => (
-            <BookRow key={book.id} book={book} />
-          ))}
-        </Module>
-      )}
-
-      {on.week && <WeekModule />}
+      {hasReading && <ReadingModule book={data.reading[0]} />}
     </motion.div>
   )
 }

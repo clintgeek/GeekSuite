@@ -3,11 +3,11 @@ import { SessionProvider } from './context/SessionContext'
 import { GlanceProvider } from './context/GlanceContext'
 import { WeatherProvider } from './context/WeatherContext'
 import { SettingsProvider } from './context/SettingsContext'
+import { useSettings } from './hooks/useSettings'
 import BackgroundManager from './components/BackgroundManager'
 import DateTime from './components/DateTime'
-import DayTrack from './components/DayTrack'
-import GlanceSummary from './components/GlanceSummary'
-import WeatherStrip from './components/WeatherStrip'
+import WeatherBlock from './components/WeatherBlock'
+import WeatherModal from './components/WeatherModal'
 import CommandBox from './components/CommandBox'
 import ModuleGrid from './components/ModuleGrid'
 import AppDock from './components/AppDock'
@@ -27,8 +27,11 @@ const isEditable = (el) =>
   el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)
 
 function Console() {
+  const { settings } = useSettings()
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [weatherOpen, setWeatherOpen] = useState(false)
   const closeSettings = useCallback(() => setSettingsOpen(false), [])
+  const closeWeather = useCallback(() => setWeatherOpen(false), [])
 
   // `,` toggles the settings sheet from anywhere outside a text field.
   useEffect(() => {
@@ -36,41 +39,44 @@ function Console() {
       if (e.key !== ',' || e.ctrlKey || e.altKey || e.metaKey) return
       if (isEditable(e.target)) return
       e.preventDefault()
+      setWeatherOpen(false)
       setSettingsOpen((v) => !v)
     }
     document.addEventListener('keydown', handleKey)
     return () => document.removeEventListener('keydown', handleKey)
   }, [])
 
+  const showWeather = settings.modules.weather
+
   return (
     <div className="min-h-screen relative overflow-hidden font-sans">
       <BackgroundManager />
 
-      <main className="relative z-10 max-w-[1280px] mx-auto px-5 sm:px-7 pt-4 pb-32">
-        {/* Rail: ambient weather left, session and settings right */}
-        <header className="flex items-center justify-between gap-4 pb-3.5 border-b border-hair">
-          <WeatherStrip />
-          <div className="flex items-center gap-3.5 shrink-0">
-            <SessionButton />
-            <button
-              type="button"
-              onClick={() => setSettingsOpen(true)}
-              className="w-[30px] h-[30px] rounded-lg grid place-items-center text-ink-3 border border-transparent hover:text-ink hover:border-hair-strong hover:bg-panel transition-colors"
-              aria-label="Modules and backdrop"
-              title="Modules and backdrop  ( , )"
-            >
-              <SlidersIcon />
-            </button>
-          </div>
+      <main className="relative z-10 max-w-[1180px] mx-auto px-5 sm:px-7 pt-4 pb-32">
+        {/* Rail: session and settings, right-aligned */}
+        <header className="flex items-center justify-end gap-3.5 pb-3 border-b border-hair">
+          <SessionButton />
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            className="w-[30px] h-[30px] rounded-lg grid place-items-center text-ink-3 border border-transparent hover:text-ink hover:border-hair-strong hover:bg-panel transition-colors"
+            aria-label="Blocks and backdrop"
+            title="Blocks and backdrop  ( , )"
+          >
+            <SlidersIcon />
+          </button>
         </header>
 
-        {/* Hero: clock left, day track and summary right */}
-        <section className="grid grid-cols-1 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] gap-6 lg:gap-8 items-end pt-10 pb-7">
-          <DateTime />
-          <div className="flex flex-col gap-3.5 pb-2">
-            <DayTrack />
-            <GlanceSummary />
+        {/* Hero: clock left, today's weather right, same height */}
+        <section
+          className={`grid grid-cols-1 gap-6 lg:gap-8 items-stretch pt-10 pb-7 ${
+            showWeather ? 'lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]' : ''
+          }`}
+        >
+          <div className="flex flex-col justify-end">
+            <DateTime />
           </div>
+          {showWeather && <WeatherBlock onOpen={() => setWeatherOpen(true)} />}
         </section>
 
         <CommandBox />
@@ -80,6 +86,7 @@ function Console() {
 
       <AppDock />
       <SettingsSheet open={settingsOpen} onClose={closeSettings} />
+      <WeatherModal open={weatherOpen} onClose={closeWeather} />
     </div>
   )
 }

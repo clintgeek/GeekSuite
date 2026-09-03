@@ -33,21 +33,6 @@ export const GLANCE_TODAY = `
         completedCount
         blockedCount
       }
-      habits {
-        id
-        name
-        color
-        doneToday
-        currentStreak
-      }
-      recentNotes {
-        id
-        title
-        type
-        tags
-        updatedAt
-        snippet
-      }
       reading {
         id
         title
@@ -61,11 +46,6 @@ export const GLANCE_TODAY = `
         calorieGoal
         mealsLogged
         loginStreak
-      }
-      flock {
-        activeBirds
-        todayEggs
-        weekEggs
       }
     }
   }
