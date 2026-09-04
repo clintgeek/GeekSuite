@@ -1,18 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import Module from './Module'
 import { useSettings } from '../hooks/useSettings'
-import { useSession } from '../hooks/useSession'
-import { gql, UnauthorizedError } from '../lib/graphql'
-import { CALENDAR_EVENTS } from '../lib/queries'
-import { INTERVALS } from '../constants'
+import { useCalendarEvents } from '../hooks/useCalendarEvents'
 
-const DAY_MS = 24 * 60 * 60 * 1000
-
-const startOfToday = () => {
-  const d = new Date()
-  d.setHours(0, 0, 0, 0)
-  return d
-}
+const PAGE = 7
 
 const dateKey = (d, isFullDay) =>
   new Date(d).toLocaleDateString('en-US', {
@@ -69,93 +60,92 @@ const groupEvents = (events) => {
 
 const CalendarModule = () => {
   const { settings } = useSettings()
-  const { markOut } = useSession()
   const sources = useMemo(
     () => (settings.calendars || []).filter((c) => c.url).map((c) => ({ url: c.url, color: c.color })),
     [settings.calendars]
   )
 
-  const [events, setEvents] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
+  const { events, loading, error } = useCalendarEvents(sources)
+  const [displayLimit, setDisplayLimit] = useState(PAGE)
 
   useEffect(() => {
-    if (sources.length === 0) return
+    setDisplayLimit(PAGE)
+  }, [sources])
 
-    let cancelled = false
-    const fetchEvents = async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        const from = startOfToday()
-        const to = new Date(from.getTime() + 14 * DAY_MS)
-        const data = await gql(CALENDAR_EVENTS, { sources, from, to })
-        if (!cancelled) setEvents(data.calendarEvents || [])
-      } catch (err) {
-        if (err instanceof UnauthorizedError) {
-          markOut()
-          return
-        }
-        if (!cancelled) {
-          setError(err.message || 'Could not load calendars')
-          setEvents([])
-        }
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
+  const visibleEvents = useMemo(() => events.slice(0, displayLimit), [events, displayLimit])
+  const grouped = useMemo(() => groupEvents(visibleEvents), [visibleEvents])
+  const hasMore = displayLimit < events.length
+
+  const displayLimitRef = useRef(displayLimit)
+  const eventsRef = useRef(events)
+  const loadingMoreRef = useRef(false)
+
+  displayLimitRef.current = displayLimit
+  eventsRef.current = events
+
+  const handleScroll = useCallback((e) => {
+    const { scrollTop, clientHeight, scrollHeight } = e.currentTarget
+    if (scrollTop + clientHeight < scrollHeight - 40) return
+    if (loadingMoreRef.current || displayLimitRef.current >= eventsRef.current.length) return
+    loadingMoreRef.current = true
+    setDisplayLimit((prev) => Math.min(prev + PAGE, eventsRef.current.length))
+    setTimeout(() => {
+      loadingMoreRef.current = false
+    }, 200)
+  }, [])
+
+  const content = (() => {
+    if (sources.length === 0) {
+      return <p className="text-sm text-ink-3">Add an ICS URL in settings to see events.</p>
     }
-
-    fetchEvents()
-    const interval = setInterval(fetchEvents, INTERVALS.GLANCE_REFRESH)
-    return () => {
-      cancelled = true
-      clearInterval(interval)
-    }
-  }, [sources, markOut])
-
-  const grouped = useMemo(() => groupEvents(events), [events])
-
-  return (
-    <Module label="Calendar" className="mod-calendar" count={events.length || undefined}>
-      {sources.length === 0 ? (
-        <p className="text-sm text-ink-3">Add an ICS URL in settings to see events.</p>
-      ) : loading && events.length === 0 ? (
+    if (loading && events.length === 0) {
+      return (
         <div className="flex-1 min-h-0 space-y-3">
           <div className="h-3 w-20 bg-white/10 rounded animate-pulse" />
           <div className="h-3 w-full bg-white/10 rounded animate-pulse" />
           <div className="h-3 w-4/5 bg-white/10 rounded animate-pulse" />
           <div className="h-3 w-full bg-white/10 rounded animate-pulse" />
         </div>
-      ) : error ? (
-        <p className="text-sm text-critical">{error}</p>
-      ) : events.length === 0 ? (
-        <p className="text-sm text-ink-3">No events in the next two weeks.</p>
-      ) : (
-        <div className="flex-1 min-h-0 overflow-y-auto -mr-1 pr-1">
-          {grouped.map(([date, dayEvents]) => (
-            <div key={date} className="mb-3">
-              <h4 className="text-[10px] font-medium uppercase tracking-wider text-ink-3 mb-1.5">
-                {date}
-              </h4>
-              <div className="flex flex-col gap-2">
-                {dayEvents.map((ev) => (
-                  <div key={ev.id} className="flex items-start gap-2.5">
-                    <span
-                      className="mt-1.5 w-1.5 h-1.5 rounded-full shrink-0"
-                      style={{ backgroundColor: ev.color || '#2952A3' }}
-                      aria-hidden="true"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[13px] text-ink leading-tight truncate">{ev.summary}</p>
-                      <p className="text-[11px] text-ink-3">{formatEventTime(ev)}</p>
-                    </div>
+      )
+    }
+    if (error && events.length === 0) {
+      return <p className="text-sm text-critical">{error}</p>
+    }
+    if (events.length === 0) {
+      return <p className="text-sm text-ink-3">No events in the next two weeks.</p>
+    }
+    return (
+      <div className="flex-1 min-h-0 overflow-y-auto -mr-1 pr-1" onScroll={handleScroll}>
+        {grouped.map(([date, dayEvents]) => (
+          <div key={date} className="mb-3">
+            <h4 className="text-[10px] font-medium uppercase tracking-wider text-ink-3 mb-1.5">
+              {date}
+            </h4>
+            <div className="flex flex-col gap-2">
+              {dayEvents.map((ev) => (
+                <div key={ev.id} className="flex items-start gap-2.5">
+                  <span
+                    className="mt-1.5 w-1.5 h-1.5 rounded-full shrink-0"
+                    style={{ backgroundColor: ev.color || '#2952A3' }}
+                    aria-hidden="true"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] text-ink leading-tight truncate">{ev.summary}</p>
+                    <p className="text-[11px] text-ink-3">{formatEventTime(ev)}</p>
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      )}
+          </div>
+        ))}
+        {hasMore && <div className="h-6" aria-hidden="true" />}
+      </div>
+    )
+  })()
+
+  return (
+    <Module label="Calendar" className="mod-calendar" count={events.length || undefined}>
+      {content}
     </Module>
   )
 }
