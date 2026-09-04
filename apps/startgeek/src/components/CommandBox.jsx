@@ -248,13 +248,21 @@ const CommandBox = () => {
 
       const parsed = parseTaskInput(q)
 
+      // Default to today 9am local when the user doesn't give a date, mirroring
+      // BujoGeek's quick-add so bare `> buy milk` shows up as due today.
+      if (!parsed.dueDate) {
+        const today = new Date()
+        today.setHours(9, 0, 0, 0)
+        parsed.dueDate = today
+      }
+
       try {
         const { createTask: task } = await gql(CREATE_TASK, {
           content: parsed.content || '',
           signifier: parsed.signifier,
           priority: parsed.priority,
           tags: parsed.tags || null,
-          dueDate: parsed.dueDate ? parsed.dueDate.toISOString() : null,
+          dueDate: parsed.dueDate.toISOString(),
           note: parsed.note || null,
           recurrenceRule: parsed.recurrenceRule || null,
         })

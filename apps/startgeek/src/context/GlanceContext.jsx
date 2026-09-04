@@ -7,7 +7,9 @@ import { INTERVALS } from '../constants'
 
 function todayIso() {
   const d = new Date()
-  return d.toISOString().split('T')[0]
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+    .toISOString()
+    .split('T')[0]
 }
 
 export const GlanceProvider = ({ children }) => {
