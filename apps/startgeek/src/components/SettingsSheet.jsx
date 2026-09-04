@@ -170,14 +170,14 @@ const SettingsSheet = ({ open, onClose }) => {
                     value={cal.label || ''}
                     onChange={(e) => updateCalendar(idx, { ...cal, label: e.target.value })}
                     placeholder="Label"
-                    className="w-24 min-w-0 bg-transparent border border-hair rounded px-2 py-1.5 text-sm text-ink placeholder:text-ink-4 focus:outline-none focus:border-hair-strong"
+                    className="w-24 min-w-0 bg-transparent border border-hair rounded px-2 py-1.5 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:border-hair-strong"
                   />
                   <input
                     type="text"
                     value={cal.url || ''}
                     onChange={(e) => updateCalendar(idx, { ...cal, url: e.target.value })}
                     placeholder="ICS URL"
-                    className="flex-1 min-w-0 bg-transparent border border-hair rounded px-2 py-1.5 text-sm text-ink placeholder:text-ink-4 focus:outline-none focus:border-hair-strong"
+                    className="flex-1 min-w-0 bg-transparent border border-hair rounded px-2 py-1.5 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:border-hair-strong"
                   />
                   <input
                     type="color"
