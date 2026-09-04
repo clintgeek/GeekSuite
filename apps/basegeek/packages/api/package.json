@@ -33,6 +33,7 @@
     "mongodb": "^6.0.0",
     "mongoose": "^8.2.1",
     "morgan": "^1.10.0",
+    "node-ical": "0.26.0",
     "onnxruntime-web": "^1.14.0",
     "pg": "^8.15.6",
     "pino": "^10.3.1",

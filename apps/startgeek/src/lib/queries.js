@@ -1,3 +1,17 @@
+export const CALENDAR_EVENTS = `
+  query CalendarEvents($sources: [CalendarSourceInput!]!, $from: Date, $to: Date) {
+    calendarEvents(sources: $sources, from: $from, to: $to) {
+      id
+      summary
+      start
+      end
+      isFullDay
+      color
+      calendarUrl
+    }
+  }
+`
+
 export const GLANCE_TODAY = `
   query GlanceToday($date: String) {
     glanceToday(date: $date) {

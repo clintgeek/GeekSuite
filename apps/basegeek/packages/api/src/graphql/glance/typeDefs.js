@@ -89,8 +89,24 @@ export const typeDefs = gql`
     updatedAt: Date
   }
 
+  input CalendarSourceInput {
+    url: String!
+    color: String
+  }
+
+  type CalendarEvent {
+    id: String!
+    summary: String
+    start: Date
+    end: Date
+    isFullDay: Boolean!
+    color: String
+    calendarUrl: String
+  }
+
   extend type Query {
     glanceToday(date: String): GlanceToday!
     glanceSearch(query: String!, limit: Int = 12): [GlanceSearchResult!]!
+    calendarEvents(sources: [CalendarSourceInput!]!, from: Date, to: Date): [CalendarEvent!]!
   }
 `;

@@ -13,11 +13,14 @@ const load = () => {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return clone(DEFAULT_SETTINGS)
     const saved = JSON.parse(raw)
+    const calendars = Array.isArray(saved.calendars)
+      ? clone(saved.calendars).map((c) => ({ ...c, url: c.url || c.id || '' }))
+      : clone(DEFAULT_SETTINGS.calendars)
     return {
       backdrop: BACKDROPS.includes(saved.backdrop) ? saved.backdrop : DEFAULT_SETTINGS.backdrop,
       clock: CLOCKS.includes(saved.clock) ? saved.clock : DEFAULT_SETTINGS.clock,
       modules: { ...DEFAULT_SETTINGS.modules, ...(saved.modules || {}) },
-      calendars: Array.isArray(saved.calendars) ? clone(saved.calendars) : clone(DEFAULT_SETTINGS.calendars),
+      calendars,
     }
   } catch {
     return clone(DEFAULT_SETTINGS)

@@ -60,7 +60,7 @@ const ModuleGrid = () => {
   const upcoming = tasks?.upcoming || []
   const total = overdue.length + todayRows.length + upcoming.length
 
-  const hasCalendar = on.calendar && settings.calendars?.some((cal) => cal.id)
+  const hasCalendar = on.calendar && settings.calendars?.some((cal) => cal.url)
   const hasTasks = on.today && total > 0
   const hasReading = on.reading && data?.reading?.length > 0
   const hasFitness =

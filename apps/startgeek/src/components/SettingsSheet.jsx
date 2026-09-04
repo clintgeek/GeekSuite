@@ -51,7 +51,7 @@ const SettingsSheet = ({ open, onClose }) => {
   const addCalendar = () => {
     setCalendars((prev) => [
       ...prev,
-      { id: '', label: '', color: DEFAULT_CALENDAR_COLOR },
+      { url: '', label: '', color: DEFAULT_CALENDAR_COLOR },
     ])
   }
 
@@ -174,9 +174,9 @@ const SettingsSheet = ({ open, onClose }) => {
                   />
                   <input
                     type="text"
-                    value={cal.id || ''}
-                    onChange={(e) => updateCalendar(idx, { ...cal, id: e.target.value })}
-                    placeholder="Calendar ID"
+                    value={cal.url || ''}
+                    onChange={(e) => updateCalendar(idx, { ...cal, url: e.target.value })}
+                    placeholder="ICS URL"
                     className="flex-1 min-w-0 bg-transparent border border-hair rounded px-2 py-1.5 text-sm text-ink placeholder:text-ink-4 focus:outline-none focus:border-hair-strong"
                   />
                   <input
@@ -204,9 +204,9 @@ const SettingsSheet = ({ open, onClose }) => {
                 Add calendar
               </button>
               <p className="text-[12.5px] leading-relaxed text-ink-3 mt-2.5">
-                Paste a Google Calendar ID (found under Settings → Integrations → Calendar ID)
-                or the <code>src</code> value from the embed code. Events only appear for
-                public or shared calendars.
+                Paste the public ICS URL for each calendar. Google Calendar calls it
+                “Secret address in iCal format”; Outlook calls it “Subscribe to this calendar”
+                or provides an ICS link. A label and color help tell them apart in the pane.
               </p>
             </Group>
 

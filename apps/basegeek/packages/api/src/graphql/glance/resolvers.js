@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { format } from 'date-fns';
 import logger from '../../lib/logger.js';
+import ical from 'node-ical';
 
 import Task from '../bujogeek/models/Task.js';
 import Habit from '../bujogeek/models/Habit.js';
@@ -66,6 +67,24 @@ function noteSnippet(note) {
   if (note.isLocked || note.isEncrypted) return null;
   if (!note.content) return null;
   return note.content.substring(0, 120);
+}
+
+function icalText(value) {
+  if (value == null) return '';
+  if (typeof value === 'string') return value;
+  return value.val ?? '';
+}
+
+// Fetch and parse a single ICS feed, returning VEVENT components only.
+async function fetchIcsEvents(url, timeoutMs = 15000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const data = await ical.fromURL(url, { signal: controller.signal });
+    return Object.values(data).filter((c) => c && c.type === 'VEVENT');
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // ── Resolvers ───────────────────────────────────────────────────────────────
@@ -422,6 +441,46 @@ export const resolvers = {
       });
 
       return results.slice(0, cap);
+    },
+
+    calendarEvents: async (_, { sources, from, to }, context) => {
+      getUserId(context);
+
+      const now = new Date();
+      const fromDate = from ? new Date(from) : new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const toDate = to ? new Date(to) : new Date(fromDate.getTime() + 14 * 24 * 60 * 60 * 1000);
+
+      const allEvents = [];
+
+      for (const source of sources) {
+        if (!source?.url) continue;
+        try {
+          const events = await fetchIcsEvents(source.url);
+          for (const event of events) {
+            const instances = ical.expandRecurringEvent(event, {
+              from: fromDate,
+              to: toDate,
+              expandOngoing: true,
+            });
+            for (const inst of instances) {
+              allEvents.push({
+                id: `${source.url}-${icalText(event.uid)}-${inst.start.toISOString()}`,
+                summary: icalText(inst.summary) || icalText(event.summary) || 'Untitled',
+                start: inst.start,
+                end: inst.end,
+                isFullDay: !!inst.isFullDay,
+                color: source.color || null,
+                calendarUrl: source.url,
+              });
+            }
+          }
+        } catch (err) {
+          logger.warn({ err, url: source.url }, 'calendarEvents: failed to fetch or parse ICS');
+        }
+      }
+
+      allEvents.sort((a, b) => new Date(a.start) - new Date(b.start));
+      return allEvents.slice(0, 100);
     },
   },
 };
