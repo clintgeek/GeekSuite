@@ -156,7 +156,7 @@ Full design in `DOCS/CICD.md` — this is the as-shipped summary.
 
 | Workflow | Trigger | Does |
 |---|---|---|
-| `.github/workflows/ci.yml` | PR → `main`, push → `main` (both skip `**/*.md`, `DOCS/**`, `LICENSE` via `paths-ignore`) | `test-basegeek` (jest, mongodb-memory-server), `test-bookgeek` (`node --test`), `test-notegeek` (vitest), `test-ui` (vitest, theme contrast), `test-bujogeek` (vitest), `test-backends` matrix (bujogeek/fitnessgeek/flockgeek/storygeek/notegeek jest, `pnpm test`), `lint` (`pnpm -r lint`, errors gate/warnings don't), `build-frontends` matrix (8 apps, `npm run build`) |
+| `.github/workflows/ci.yml` | PR → `main`, push → `main` (both skip `**/*.md`, `DOCS/**`, `LICENSE` via `paths-ignore`) | `test-basegeek` (jest, mongodb-memory-server), `test-bookgeek` (`node --test`), `test-notegeek` (vitest), `test-ui` (vitest, theme contrast), `test-bujogeek` (vitest), `test-backends` matrix (bujogeek/fitnessgeek/flockgeek/storygeek/notegeek jest, `pnpm test`), `lint` (`pnpm -r lint`, errors gate/warnings don't), `syntax` (`node tools/syntax-check.mjs`, see below), `build-frontends` matrix (8 apps, `npm run build`) |
 | `.github/workflows/release.yml` | push → `main` (same `paths-ignore`), or `workflow_dispatch` with an optional single-app input | Matrix-builds and pushes every app with a root `Dockerfile` to `ghcr.io/clintgeek/<app>:{latest,sha-<short>,main}` |
 
 **A push to `main` = a deploy.** Release publishes new images; Watchtower on the box polls
@@ -188,6 +188,32 @@ from CI. `docker/watchtower/` mirrors the live config in-repo.
 
 Docs-only commits (`**/*.md`, `DOCS/**`, `LICENSE`) are excluded from both workflows'
 `paths-ignore`, so they neither run CI nor trigger a rebuild/redeploy.
+
+### Syntax gate (`syntax` job, added 2026-09-05)
+
+`tools/syntax-check.mjs` (`pnpm check:syntax`) parses every `.js`/`.mjs`/`.cjs` file under
+`apps/*/**` and `packages/*/**` (excluding `node_modules`, `dist`, `build`, `coverage`,
+`.vite`, `out`, and macOS AppleDouble `._*` sidecar junk) and fails on the first file that
+can't be parsed. It exists because on 2026-09-05 basegeek crash-looped in production:
+`apps/basegeek/packages/api/src/graphql/bujogeek/typeDefs.js` had an unescaped backtick
+inside a `gql` template literal — a plain `SyntaxError` — and every jest suite stayed green
+because none of them imported that module (fixed in `61d3109`, which also added a
+`gatewaySchemaLoads` test). No test suite can be relied on to import every file in the repo;
+this gate doesn't need to.
+
+**How it works**: one child `node --check <file>` per file (capped at 2 concurrent, this box
+runs other agents), letting Node's own nearest-`package.json` `type` resolution decide
+CJS vs ESM per file — no manual grouping or `acorn` dependency needed. Runtime on the full
+tree: ~20s. JSX (`.jsx`) is out of scope; Vite's build already gates JSX parse errors.
+Point it at a fixture instead of the real tree with `SYNTAX_CHECK_DIR=<path> node
+tools/syntax-check.mjs` (used to prove the gate against a scratch copy of a broken file
+without touching the tree).
+
+Caveat found while building this: `node --check` on a file with top-level `import`/`export`
+syntax silently passes if there is **no** `package.json` anywhere in its ancestor chain (a
+Node module-type-detection quirk) — irrelevant here since every real file's ancestor chain
+always terminates at the repo root `package.json`, but it means a from-scratch fixture used
+to test this gate needs its own `package.json` to behave like the real tree.
 
 ---
 
@@ -283,6 +309,7 @@ some of these may differ once the in-flight work lands).
 | Adding a field to fitnessgeek's `UserSettings` silently disappears | The Mongoose schema is duplicated in `apps/fitnessgeek/backend/src/models/UserSettings.js` and `apps/basegeek/packages/api/src/graphql/fitnessgeek/models/UserSettings.js`; most frontend calls hit the basegeek copy via GraphQL, and Mongoose strict mode strips unknown fields on `$set` | Update both, or finish the consolidation tracked as `TODO_ORDER.md` #21 |
 | notegeek dev server renders nothing | Pre-existing esbuild dependency-optimizer fault (`styled_default is not a function`); production build unaffected | Not yet fixed — `DOCS/MOBILE_UI_PLAN.md` §4b, `DOCS/BURN_QUEUE.md` Q5 |
 | basegeek `packages/api` test suite fails wholesale with `Cannot find module '@geeksuite/logger'` | A new workspace package (`packages/logger`) was added but the workspace hasn't been re-linked | `pnpm install` at the repo root |
+| An app crash-loops in production with a plain `SyntaxError` even though CI was green | A module no jest/vitest suite imports (e.g. a `typeDefs.js`) had a parse error — nothing ever loaded it to notice | Fixed by the `syntax` CI job / `pnpm check:syntax` (§5) added 2026-09-05 after exactly this happened to `apps/basegeek/packages/api/src/graphql/bujogeek/typeDefs.js` (`61d3109`) |
 
 ---
 
