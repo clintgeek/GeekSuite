@@ -13,7 +13,7 @@
  * unchanged: every handler, request and state transition the old overlay
  * performed still happens, and all state still lives in `App.jsx`.
  */
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Box,
   Button,
@@ -29,7 +29,7 @@ import {
   Send as SendIcon,
   Bookmarks as ShelfIcon,
 } from "@mui/icons-material";
-import { GeekDialog, GeekSheet } from "@geeksuite/ui";
+import { GeekDialog, GeekSheet, useToast } from "@geeksuite/ui";
 import { formatDescriptionForDisplay } from "../utils/bookDisplay";
 import { hasEpubFile } from "./detail/bookFacts";
 import CoverTools from "./detail/CoverTools";
@@ -127,6 +127,18 @@ export default function BookDetailModal({
   const [moreOpen, setMoreOpen] = useState(false);
   const [shelfOpen, setShelfOpen] = useState(false);
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
+  const { notify } = useToast();
+
+  // Enrich is the suite's "long-running job" pattern (TODO_ORDER #15):
+  // `enrichLoading` stays inline on the More sheet's row (progress, not a
+  // notice); the terminal outcome is a toast instead of the old sticky-bar
+  // status line.
+  useEffect(() => {
+    if (enrichSummary) notify(enrichSummary, { tone: "success" });
+  }, [enrichSummary, notify]);
+  useEffect(() => {
+    if (enrichError) notify(enrichError, { tone: "error" });
+  }, [enrichError, notify]);
 
   if (!selectedBook) return null;
 
@@ -149,8 +161,6 @@ export default function BookDetailModal({
         text: `Sending to ${sendToKindleStatus.kindleEmail}`,
       }
       : null,
-    enrichError ? { key: "enrich-error", tone: "error.main", text: enrichError } : null,
-    enrichSummary ? { key: "enrich-summary", tone: "success.main", text: enrichSummary } : null,
     !epubAvailable
       ? { key: "no-epub", tone: "text.muted", text: "No EPUB yet — attach or convert one from ⋯" }
       : null,
@@ -344,8 +354,6 @@ export default function BookDetailModal({
         beginEditForSelectedBook={beginEditForSelectedBook}
         handleEnrichSelectedBook={handleEnrichSelectedBook}
         enrichLoading={enrichLoading}
-        enrichError={enrichError}
-        enrichSummary={enrichSummary}
         onChangeCover={() => setShowCoverTools(true)}
         onDownload={() => setDownloadOpen(true)}
         convertingFormat={convertingFormat}

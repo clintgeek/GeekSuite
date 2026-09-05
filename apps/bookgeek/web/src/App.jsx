@@ -8,7 +8,7 @@ import { LoginSplash } from "@geeksuite/ui";
 import { useApolloClient } from "@apollo/client";
 import { GET_BOOKS, GET_SHELVES } from "./graphql/queries.js";
 import { UPDATE_BOOK, DELETE_BOOK, CREATE_BOOK } from "./graphql/mutations.js";
-import { GeekShell, GeekAppFrame, GeekFab } from "@geeksuite/ui";
+import { GeekShell, GeekAppFrame, GeekFab, GeekToastProvider } from "@geeksuite/ui";
 import { isFabHidden } from "./components/navConfig";
 import Sidebar from "./components/Sidebar";
 import TopBar from "./components/TopBar";
@@ -2148,8 +2148,9 @@ export default function App() {
           />
         }
       >
+      <GeekToastProvider>
       <GeekAppFrame>
-        <Box 
+        <Box
           sx={{ 
             p: { xs: 2, md: 3 },
             maxWidth: '1200px',
@@ -2343,6 +2344,7 @@ export default function App() {
       )}
       </Box>
     </GeekAppFrame>
+      </GeekToastProvider>
 
       {/* Primary action in the thumb zone. Sibling of `GeekAppFrame`, never
           inside it: the frame animates, and an animating element becomes the

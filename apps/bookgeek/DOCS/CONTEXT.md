@@ -118,3 +118,63 @@ knowing about profiles. The web app composes `BUILT_IN_SHELVES` plus
 `profile.customShelves` into one `shelves` list (App.jsx) that every picker,
 pill, and filter reads; custom shelves fall back to the closed-book icon in
 `Sidebar.jsx`.
+
+---
+
+## Feedback primitives (2026-09-05, TODO_ORDER #15 fan-out)
+
+`GeekToastProvider` is mounted in `App.jsx`, inside `GeekShell` and outside
+`GeekAppFrame` — the suite's standard placement (see
+`THE_UI_UNIFICATION_PLAN.md` §3a). Because `App.jsx` is one large component
+that renders its own shell, the provider had to wrap `GeekAppFrame` from
+*inside* App's own return rather than from an ancestor; this means `App.jsx`
+itself cannot call `useToast()` (it isn't a descendant of the provider it
+renders). The pattern used instead: `App.jsx`'s ~30 handler functions are
+untouched, still setting the same `useState` pairs they always did, and the
+descendant view components (`SettingsView`, `LibraryView`, `BookDetailModal`,
+`MoreSheet`) call `useToast()` themselves and fire `notify()` from a
+`useEffect` keyed on the prop transitioning to a non-null value. This works
+because every one of these handlers resets its error/message state to `null`
+before starting a new attempt, so a fresh value is always a real transition.
+Keep following this shape for any new async action's terminal notice — do
+not thread `notify` down through `App.jsx`'s props.
+
+`LibraryView` and `SettingsView` already carried `GeekEmptyState`/
+`GeekErrorState` from the Pocket Pass rewrite (this week, before the fan-out)
+for the library grid's empty/error states and the signed-out empty state —
+that part needed no conversion. Converted to toast: `SettingsView`'s
+Send-to-device save, default-shelf save, custom-shelf add/remove, and the
+three Goodreads-import / Goodreads-dedupe / Calibre-rescan jobs' terminal
+summaries and errors (each `SpinnerButton`'s loading state stays inline —
+only the terminal notice is a toast, and the multi-metric summaries get an
+8s duration instead of the 4s default so they stay readable);
+`BookDetailModal`'s metadata-enrich terminal notice and its More sheet's
+book-file-attach outcome; `LibraryView`'s selection-bar basket/merge
+validation captions. `SettingsView`'s AI-status check converts its error to
+a compact `GeekErrorState` with `onRetry={handleCheckAiStatus}` in place of
+the persistent status line, rather than a toast — same shape as flockgeek's
+health-check precedent, because the success case is a standing readout, not
+a transient one.
+
+Left alone, deliberately: every error inside an open dialog the user must
+resolve right there to proceed (`AddBookDialog`, `EditMetadataDialog`, the
+delete-confirm `GeekDialog`, `CoverTools`' cover search, `ProgressRow`'s
+reading-progress slider) — moving those to a toast would answer off-surface
+while the dialog stays open; `BookDetailModal`'s sticky-bar `statusLines`
+ticker for `sendToKindleError`/`sendToKindleStatus` and the "No EPUB yet"
+reminder (a reasonable next toast candidate, left with its ticker sibling
+rather than fragmenting the array for one entry); `ReaderModal`'s
+`readerError` (a persistent inline status in the reader's own bespoke
+non-theme-token page/ink chrome, not a transient notice); `Sidebar` and
+`FilterSheet`'s duplicated `savedFiltersError` (a background saved-filters
+list-load failure already rendered in both places); `SettingsView`'s
+`authError` `Alert` inside its `!user` branch, which is dead code in the
+real app — `App.jsx` gates on `!user` earlier via the shared `LoginSplash`,
+which owns this error through its own `error` prop.
+
+No local `EmptyState`/`ErrorState`/toast component existed to delete. No
+`isDark ? lighten(…) : darken(…)` hand-rolled tone helper exists anywhere in
+`apps/bookgeek/web/src` — `theme/theme.js`'s own `isDark ? darkColors :
+lightColors` is base-palette construction, a different thing from the
+domain-color pattern `toneForMode` replaces — and no local `MuiTooltip`
+override either, so TODO_ORDER #19 has nothing to convert here.

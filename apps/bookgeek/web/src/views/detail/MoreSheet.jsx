@@ -6,14 +6,13 @@
  * handlers are the originals; the delete confirm itself is a `GeekDialog`
  * owned by `BookDetailModal` so it survives this sheet closing.
  */
-import React, { useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import {
   Divider,
   List,
   ListItemButton,
   ListItemIcon,
   ListItemText,
-  Typography,
 } from "@mui/material";
 import {
   AutoAwesome as EnrichIcon,
@@ -25,7 +24,7 @@ import {
   ShoppingBasket as BasketIcon,
   UploadFile as UploadFileIcon,
 } from "@mui/icons-material";
-import { GeekSheet } from "@geeksuite/ui";
+import { GeekSheet, useToast } from "@geeksuite/ui";
 import { bookId } from "./bookFacts";
 
 function ActionRow({ icon, label, secondary, onClick, disabled, danger }) {
@@ -57,8 +56,6 @@ export default function MoreSheet({
   beginEditForSelectedBook,
   handleEnrichSelectedBook,
   enrichLoading,
-  enrichError,
-  enrichSummary,
   onChangeCover,
   onDownload,
   convertingFormat,
@@ -73,6 +70,17 @@ export default function MoreSheet({
   const fileInputRef = useRef(null);
   const id = bookId(book);
   const inBasket = Array.isArray(basketBookIds) && basketBookIds.includes(id);
+  const { notify } = useToast();
+
+  // Book-file attach is a fire-and-forget action from this sheet (TODO_ORDER
+  // #15 "upload errors"): `uploadLoading` stays inline on the row, the
+  // terminal outcome is a toast.
+  useEffect(() => {
+    if (uploadMessage) notify(uploadMessage, { tone: "success" });
+  }, [uploadMessage, notify]);
+  useEffect(() => {
+    if (uploadError) notify(uploadError, { tone: "error" });
+  }, [uploadError, notify]);
 
   return (
     <GeekSheet open={open} onClose={onClose} title="More actions" maxWidth="xs">
@@ -88,7 +96,6 @@ export default function MoreSheet({
         <ActionRow
           icon={<EnrichIcon fontSize="small" />}
           label={enrichLoading ? "Enriching metadata…" : "Enrich metadata"}
-          secondary={enrichError || enrichSummary || null}
           disabled={enrichLoading}
           onClick={handleEnrichSelectedBook}
         />
@@ -129,16 +136,6 @@ export default function MoreSheet({
             disabled={uploadLoading}
             onClick={() => handleUploadBookFile(book)}
           />
-        ) : null}
-        {uploadError ? (
-          <Typography variant="caption" sx={{ display: "block", px: 2, color: "error.main" }}>
-            {uploadError}
-          </Typography>
-        ) : null}
-        {uploadMessage ? (
-          <Typography variant="caption" sx={{ display: "block", px: 2, color: "success.main" }}>
-            {uploadMessage}
-          </Typography>
         ) : null}
 
         <ActionRow

@@ -7,7 +7,7 @@
  * the top bar's account menu owns both. State stays in `App`; this
  * component only renders what it is given.
  */
-import React from "react";
+import React, { useEffect } from "react";
 import Alert from "@mui/material/Alert";
 import Avatar from "@mui/material/Avatar";
 import Box from "@mui/material/Box";
@@ -15,7 +15,6 @@ import Button from "@mui/material/Button";
 import CircularProgress from "@mui/material/CircularProgress";
 import Divider from "@mui/material/Divider";
 import FormControl from "@mui/material/FormControl";
-import FormHelperText from "@mui/material/FormHelperText";
 import Grid from "@mui/material/Grid";
 import IconButton from "@mui/material/IconButton";
 import InputLabel from "@mui/material/InputLabel";
@@ -28,7 +27,7 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import { loginRedirect } from "@geeksuite/auth";
-import { GeekEmptyState } from "@geeksuite/ui";
+import { GeekEmptyState, GeekErrorState, useToast } from "@geeksuite/ui";
 import { displayNameFrom, initialsFrom, secondaryFrom } from "../utils/userDisplay";
 
 /** Uppercase, letter-spaced section label — the "h3" of this page without
@@ -104,6 +103,70 @@ export default function SettingsView({
   shelves,
   user,
 }) {
+  const { notify } = useToast();
+
+  // Terminal notices for the page's async actions (TODO_ORDER #15): each of
+  // these is reset to null at the start of its handler, so a fresh non-null
+  // value is always a real transition and fires exactly once. The copy is
+  // unchanged from the inline Alert/FormHelperText it replaces.
+  useEffect(() => {
+    if (profileMessage) notify(profileMessage, { tone: "success" });
+  }, [profileMessage, notify]);
+  useEffect(() => {
+    if (profileError) notify(profileError, { tone: "error" });
+  }, [profileError, notify]);
+
+  useEffect(() => {
+    if (prefSaveMessage) notify(prefSaveMessage, { tone: "success" });
+  }, [prefSaveMessage, notify]);
+  useEffect(() => {
+    if (prefSaveError) notify(prefSaveError, { tone: "error" });
+  }, [prefSaveError, notify]);
+
+  useEffect(() => {
+    if (shelfEditError) notify(shelfEditError, { tone: "error" });
+  }, [shelfEditError, notify]);
+
+  // Import/dedupe/rescan are the suite's "long-running job" pattern: the
+  // SpinnerButton's loading state stays inline (it is progress, not a
+  // notice), but the terminal summary/error is a toast, same as everywhere
+  // else. Summaries are multi-metric, so they get a longer read time.
+  useEffect(() => {
+    if (!goodreadsImportSummary) return;
+    const s = goodreadsImportSummary;
+    notify(
+      `Imported: ${s.updated ?? 0} updated, ${s.created ?? 0} created, ${s.matched ?? 0} matched to existing, ${s.skippedNoMatch ?? 0} with no usable data.`,
+      { tone: "success", duration: 8000 }
+    );
+  }, [goodreadsImportSummary, notify]);
+  useEffect(() => {
+    if (goodreadsImportError) notify(goodreadsImportError, { tone: "error" });
+  }, [goodreadsImportError, notify]);
+
+  useEffect(() => {
+    if (!goodreadsDedupeSummary) return;
+    const s = goodreadsDedupeSummary;
+    notify(
+      `Merged ${s.merged ?? 0} of ${s.candidates ?? 0} Goodreads-only books; updated ${s.updatedPrimary ?? 0} primaries; ${s.skippedNoPrimary ?? 0} skipped with no primary match.`,
+      { tone: "success", duration: 8000 }
+    );
+  }, [goodreadsDedupeSummary, notify]);
+  useEffect(() => {
+    if (goodreadsDedupeError) notify(goodreadsDedupeError, { tone: "error" });
+  }, [goodreadsDedupeError, notify]);
+
+  useEffect(() => {
+    if (!calibreRescanSummary) return;
+    const s = calibreRescanSummary;
+    notify(
+      `Scanned ${s.rows ?? 0} entries; attached to ${s.attachedExisting ?? 0} existing books; created ${s.createdNew ?? 0} new; skipped ${s.skippedNoFiles ?? 0} with no files.`,
+      { tone: "success", duration: 8000 }
+    );
+  }, [calibreRescanSummary, notify]);
+  useEffect(() => {
+    if (calibreRescanError) notify(calibreRescanError, { tone: "error" });
+  }, [calibreRescanError, notify]);
+
   if (!user) {
     return (
       <Box sx={{ maxWidth: 720, mx: "auto", px: 2 }}>
@@ -182,12 +245,6 @@ export default function SettingsView({
               helperText="Used on your e-reader at /download-basket to fetch your basket."
               fullWidth
             />
-            {profileError ? <FormHelperText error>{profileError}</FormHelperText> : null}
-            {profileMessage ? (
-              <Alert severity="success" variant="standard">
-                {profileMessage}
-              </Alert>
-            ) : null}
             <Box>
               <SpinnerButton type="submit" variant="contained" loading={profileLoading}>
                 Save
@@ -226,12 +283,6 @@ export default function SettingsView({
               Save
             </SpinnerButton>
           </Stack>
-          {prefSaveError ? <FormHelperText error>{prefSaveError}</FormHelperText> : null}
-          {prefSaveMessage ? (
-            <Alert severity="success" variant="standard">
-              {prefSaveMessage}
-            </Alert>
-          ) : null}
         </Stack>
 
         {/* Shelves */}
@@ -296,7 +347,6 @@ export default function SettingsView({
               </SpinnerButton>
             </Stack>
           </Box>
-          {shelfEditError ? <FormHelperText error>{shelfEditError}</FormHelperText> : null}
         </Stack>
 
         {/* Library maintenance */}
@@ -338,17 +388,6 @@ export default function SettingsView({
                     Import
                   </SpinnerButton>
                 </Box>
-                {goodreadsImportError ? (
-                  <FormHelperText error>{goodreadsImportError}</FormHelperText>
-                ) : null}
-                {goodreadsImportSummary ? (
-                  <Typography variant="caption" sx={{ color: "text.secondary" }}>
-                    Imported: {goodreadsImportSummary.updated ?? 0} updated,{" "}
-                    {goodreadsImportSummary.created ?? 0} created,{" "}
-                    {goodreadsImportSummary.matched ?? 0} matched to existing,{" "}
-                    {goodreadsImportSummary.skippedNoMatch ?? 0} with no usable data.
-                  </Typography>
-                ) : null}
               </Stack>
             </Grid>
 
@@ -370,17 +409,6 @@ export default function SettingsView({
                     Merge duplicates
                   </SpinnerButton>
                 </Box>
-                {goodreadsDedupeError ? (
-                  <FormHelperText error>{goodreadsDedupeError}</FormHelperText>
-                ) : null}
-                {goodreadsDedupeSummary ? (
-                  <Typography variant="caption" sx={{ color: "text.secondary" }}>
-                    Merged {goodreadsDedupeSummary.merged ?? 0} of{" "}
-                    {goodreadsDedupeSummary.candidates ?? 0} Goodreads-only books; updated{" "}
-                    {goodreadsDedupeSummary.updatedPrimary ?? 0} primaries;{" "}
-                    {goodreadsDedupeSummary.skippedNoPrimary ?? 0} skipped with no primary match.
-                  </Typography>
-                ) : null}
               </Stack>
             </Grid>
 
@@ -402,17 +430,6 @@ export default function SettingsView({
                     Rescan library
                   </SpinnerButton>
                 </Box>
-                {calibreRescanError ? (
-                  <FormHelperText error>{calibreRescanError}</FormHelperText>
-                ) : null}
-                {calibreRescanSummary ? (
-                  <Typography variant="caption" sx={{ color: "text.secondary" }}>
-                    Scanned {calibreRescanSummary.rows ?? 0} entries; attached to{" "}
-                    {calibreRescanSummary.attachedExisting ?? 0} existing books; created{" "}
-                    {calibreRescanSummary.createdNew ?? 0} new; skipped{" "}
-                    {calibreRescanSummary.skippedNoFiles ?? 0} with no files.
-                  </Typography>
-                ) : null}
               </Stack>
             </Grid>
           </Grid>
@@ -432,7 +449,15 @@ export default function SettingsView({
               </Typography>
             ) : null}
           </Stack>
-          {aiStatusError ? <FormHelperText error>{aiStatusError}</FormHelperText> : null}
+          {aiStatusError ? (
+            <GeekErrorState
+              compact
+              align="start"
+              title="Could not check AI status"
+              error={aiStatusError}
+              onRetry={handleCheckAiStatus}
+            />
+          ) : null}
         </Stack>
       </Stack>
     </Box>

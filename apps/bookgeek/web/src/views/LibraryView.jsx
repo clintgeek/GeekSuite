@@ -10,9 +10,9 @@
  * All state still lives in `App`; the only hook here is the sheet's open flag,
  * which nothing outside this view needs to read.
  */
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Box, Button, Skeleton, Typography } from "@mui/material";
-import { GeekEmptyState, GeekErrorState, geekLayout } from "@geeksuite/ui";
+import { GeekEmptyState, GeekErrorState, geekLayout, useToast } from "@geeksuite/ui";
 import BookCard from "../components/BookCard";
 import FilterSheet from "../components/FilterSheet";
 import LibraryToolbar from "../components/LibraryToolbar";
@@ -66,6 +66,17 @@ export default function LibraryView({
   total,
 }) {
   const [filterOpen, setFilterOpen] = useState(false);
+  const { notify } = useToast();
+
+  // Selection-bar action results (merge, device basket): fire-and-forget
+  // feedback on a bar that stays on screen regardless, so a toast rather than
+  // a persistent inline caption (TODO_ORDER #15).
+  useEffect(() => {
+    if (mergeSelectionError) notify(mergeSelectionError, { tone: "error" });
+  }, [mergeSelectionError, notify]);
+  useEffect(() => {
+    if (basketError) notify(basketError, { tone: "error" });
+  }, [basketError, notify]);
 
   const hasFilters =
     Boolean(searchQuery.trim()) ||
@@ -208,12 +219,6 @@ export default function LibraryView({
           </Box>
         )}
 
-        {showMergeUi && mergeSelectionError ? (
-          <Typography variant="caption" sx={{ color: "error.main", display: "block", mt: 1 }}>
-            {mergeSelectionError}
-          </Typography>
-        ) : null}
-
         {hasMore && !loading && (
           <Box ref={loadMoreRef} sx={{ mt: 2, minHeight: 44 }}>
             {loadingMore ? (
@@ -281,11 +286,6 @@ export default function LibraryView({
           >
             {basketLoading ? "Creating…" : "Download to device"}
           </Button>
-          {basketError ? (
-            <Typography variant="caption" sx={{ color: "error.main", width: "100%" }}>
-              {basketError}
-            </Typography>
-          ) : null}
         </Box>
       ) : null}
     </Box>
