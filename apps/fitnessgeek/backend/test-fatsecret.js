@@ -1,12 +1,14 @@
 #!/usr/bin/env node
+import dotenv from 'dotenv';
+
 /**
  * Test FatSecret API Integration (standalone, no Redis dependency)
  *
  * Run: node test-fatsecret.js
  */
 
-require('dotenv').config();
-const axios = require('axios');
+dotenv.config();
+import axios from 'axios';
 
 const clientId = process.env.FATSECRET_CLIENT_ID;
 const clientSecret = process.env.FATSECRET_CLIENT_SECRET;

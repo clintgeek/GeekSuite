@@ -129,6 +129,7 @@ function suggestIndications({ atcClasses = [], epcClasses = [] }) {
   return Array.from(tags);
 }
 
-module.exports = { suggestIndications };
+export { suggestIndications };
+export default { suggestIndications };
 
 

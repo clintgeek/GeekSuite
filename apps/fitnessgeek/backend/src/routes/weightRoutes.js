@@ -1,16 +1,9 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const {
-  getWeightLogs,
-  getWeightLog,
-  createWeightLog,
-  updateWeightLog,
-  deleteWeightLog,
-  getWeightStats
-} = require('../controllers/weightController');
-const { authenticateToken } = require('../middleware/auth');
-const { validate } = require('../validation/validate');
-const { createWeightSchema, updateWeightSchema } = require('../validation/schemas/weight');
+import { getWeightLogs, getWeightLog, createWeightLog, updateWeightLog, deleteWeightLog, getWeightStats } from '../controllers/weightController.js';
+import { authenticateToken } from '../middleware/auth.js';
+import { validate } from '../validation/validate.js';
+import { createWeightSchema, updateWeightSchema } from '../validation/schemas/weight.js';
 
 /**
  * @route GET /api/weight
@@ -54,4 +47,4 @@ router.put('/:id', authenticateToken, validate({ body: updateWeightSchema }), up
  */
 router.delete('/:id', authenticateToken, deleteWeightLog);
 
-module.exports = router;
+export default router;

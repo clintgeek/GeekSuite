@@ -1,16 +1,9 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const {
-  getBPLogs,
-  getBPLog,
-  createBPLog,
-  updateBPLog,
-  deleteBPLog,
-  getBPStats
-} = require('../controllers/bloodPressureController');
-const { authenticateToken } = require('../middleware/auth');
-const { validate } = require('../validation/validate');
-const { createBPSchema, updateBPSchema } = require('../validation/schemas/bloodPressure');
+import { getBPLogs, getBPLog, createBPLog, updateBPLog, deleteBPLog, getBPStats } from '../controllers/bloodPressureController.js';
+import { authenticateToken } from '../middleware/auth.js';
+import { validate } from '../validation/validate.js';
+import { createBPSchema, updateBPSchema } from '../validation/schemas/bloodPressure.js';
 
 /**
  * @route GET /api/blood-pressure
@@ -54,4 +47,4 @@ router.put('/:id', authenticateToken, validate({ body: updateBPSchema }), update
  */
 router.delete('/:id', authenticateToken, deleteBPLog);
 
-module.exports = router;
+export default router;

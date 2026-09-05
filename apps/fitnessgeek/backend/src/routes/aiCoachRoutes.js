@@ -1,10 +1,10 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const { authenticateToken } = require('../middleware/auth');
-const aiCoachService = require('../services/aiCoachService');
-const FoodLog = require('../models/FoodLog');
-const NutritionGoals = require('../models/NutritionGoals');
-const logger = require('../config/logger');
+import { authenticateToken } from '../middleware/auth.js';
+import aiCoachService from '../services/aiCoachService.js';
+import FoodLog from '../models/FoodLog.js';
+import NutritionGoals from '../models/NutritionGoals.js';
+import logger from '../config/logger.js';
 
 /**
  * GET /api/ai-coach/meal-suggestions
@@ -215,4 +215,4 @@ router.post('/ask', authenticateToken, async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

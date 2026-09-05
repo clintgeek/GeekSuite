@@ -4,6 +4,7 @@ A comprehensive nutrition and fitness tracking API that integrates with the base
 
 ## 🏗️ Architecture
 
+- **Runtime**: Node 20, native ESM (`"type": "module"` — `import`/`export`, no `require`)
 - **Authentication**: Uses baseGeek's JWT tokens
 - **Database**: Shared MongoDB instance (baseGeek's MongoDB)
 - **API**: RESTful API with comprehensive nutrition tracking
@@ -13,7 +14,7 @@ A comprehensive nutrition and fitness tracking API that integrates with the base
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20+ (the backend is native ESM — see `../DOCS/CONTEXT.md`)
 - MongoDB (shared with baseGeek)
 - baseGeek running for authentication
 

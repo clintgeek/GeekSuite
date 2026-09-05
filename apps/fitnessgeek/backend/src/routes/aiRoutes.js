@@ -1,10 +1,10 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const { authenticateToken } = require('../middleware/auth');
-const baseGeekAIService = require('../services/baseGeekAIService');
-const aiFoodPromptCacheService = require('../services/aiFoodPromptCacheService');
-const fitnessGoalService = require('../services/fitnessGoalService');
-const logger = require('../config/logger');
+import { authenticateToken } from '../middleware/auth.js';
+import baseGeekAIService from '../services/baseGeekAIService.js';
+import aiFoodPromptCacheService from '../services/aiFoodPromptCacheService.js';
+import fitnessGoalService from '../services/fitnessGoalService.js';
+import logger from '../config/logger.js';
 
 // Apply authentication to all AI routes
 router.use(authenticateToken);
@@ -233,4 +233,4 @@ router.post('/generate-meal-plan', async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

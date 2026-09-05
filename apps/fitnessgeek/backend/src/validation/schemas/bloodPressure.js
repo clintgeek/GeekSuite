@@ -1,5 +1,5 @@
-const { z } = require('zod');
-const { logDateSchema } = require('./common');
+import { z } from 'zod';
+import { logDateSchema } from './common.js';
 
 // Mirrors models/BloodPressure.js bounds exactly.
 const systolic = z.coerce.number({ invalid_type_error: 'systolic must be a number' }).min(70).max(200);
@@ -32,4 +32,5 @@ const bpFields = {
 const createBPSchema = z.object(bpFields).strict().superRefine(systolicAboveDiastolic);
 const updateBPSchema = z.object(bpFields).strict().superRefine(systolicAboveDiastolic);
 
-module.exports = { createBPSchema, updateBPSchema };
+export { createBPSchema, updateBPSchema };
+export default { createBPSchema, updateBPSchema };

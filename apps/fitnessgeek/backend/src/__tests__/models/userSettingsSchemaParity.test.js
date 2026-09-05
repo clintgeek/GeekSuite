@@ -34,12 +34,18 @@
  * Together they close the loop from both sides.
  */
 
-const fs = require('fs');
-const path = require('path');
-const mongoose = require('mongoose');
+import { describe, test, expect, beforeAll } from '@jest/globals';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import mongoose from 'mongoose';
 
-const { createUserSettingsSchema } = require('@geeksuite/schemas/fitnessgeek/userSettings');
-const UserSettings = require('../../models/UserSettings');
+import { createUserSettingsSchema } from '@geeksuite/schemas/fitnessgeek/userSettings';
+import UserSettings from '../../models/UserSettings.js';
+
+// ESM has no __dirname; the source-level checks below resolve sibling files
+// relative to this test file.
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const BASEGEEK_MODEL = path.resolve(
   __dirname,

@@ -1,6 +1,6 @@
-const crypto = require('crypto');
-const logger = require('../config/logger');
-const AIFoodPromptCache = require('../models/AIFoodPromptCache');
+import crypto from 'crypto';
+import logger from '../config/logger.js';
+import AIFoodPromptCache from '../models/AIFoodPromptCache.js';
 
 class AIFoodPromptCacheService {
   normalizeInput(input = '') {
@@ -102,4 +102,4 @@ class AIFoodPromptCacheService {
   }
 }
 
-module.exports = new AIFoodPromptCacheService();
+export default new AIFoodPromptCacheService();

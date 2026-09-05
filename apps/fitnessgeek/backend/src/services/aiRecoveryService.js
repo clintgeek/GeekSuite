@@ -1,7 +1,7 @@
-const influxService = require('./influxService');
-const sleepAnalysisService = require('./sleepAnalysisService');
-const UserSettings = require('../models/UserSettings');
-const logger = require('../config/logger');
+import influxService from './influxService.js';
+import sleepAnalysisService from './sleepAnalysisService.js';
+import UserSettings from '../models/UserSettings.js';
+import logger from '../config/logger.js';
 
 /**
  * Format comprehensive health context for AI analysis
@@ -306,9 +306,5 @@ function calculateReadinessScore(context) {
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
-module.exports = {
-  generateRecoveryContext,
-  formatPromptForAI,
-  getRecoveryRecommendations,
-  calculateReadinessScore
-};
+export { generateRecoveryContext, formatPromptForAI, getRecoveryRecommendations, calculateReadinessScore };
+export default { generateRecoveryContext, formatPromptForAI, getRecoveryRecommendations, calculateReadinessScore };

@@ -1,4 +1,4 @@
-const { z } = require('zod');
+import { z } from 'zod';
 
 /**
  * Recursively strips Mongo's `_id` / `__v` from a plain-object/array payload.
@@ -66,4 +66,5 @@ const logDateSchema = dateOnlyOrIso.refine(notFarFuture, {
   message: `Date cannot be more than ${MAX_FUTURE_DAYS} day(s) in the future`,
 });
 
-module.exports = { stripMongoMeta, dateOnlyOrIso, logDateSchema, MAX_FUTURE_DAYS };
+export { stripMongoMeta, dateOnlyOrIso, logDateSchema, MAX_FUTURE_DAYS };
+export default { stripMongoMeta, dateOnlyOrIso, logDateSchema, MAX_FUTURE_DAYS };

@@ -1,7 +1,10 @@
-const { GarminConnect } = require('garmin-connect');
-const UserSettings = require('../models/UserSettings');
-const logger = require('../config/logger');
-const { createBreaker } = require('../lib/breakers');
+// garmin-connect is CommonJS and its named export is not statically
+// detectable by Node's cjs-module-lexer, so it must come off the default.
+import garminConnectPkg from 'garmin-connect';
+const { GarminConnect } = garminConnectPkg;
+import UserSettings from '../models/UserSettings.js';
+import logger from '../config/logger.js';
+import { createBreaker } from '../lib/breakers.js';
 
 // One breaker for every Garmin network call in this file — login plus each
 // data pull — so a struggling Garmin endpoint trips the same circuit no
@@ -305,15 +308,7 @@ async function getActivities(userId, start = 0, limit = 20) {
   }
 }
 
-module.exports = {
-  buildClient,
-  persistTokens,
-  getStatus,
-  getHeartRate,
-  getDaily,
-  updateWeightToGarmin,
-  getSleepData,
-  getActivities
-};
+export { buildClient, persistTokens, getStatus, getHeartRate, getDaily, updateWeightToGarmin, getSleepData, getActivities };
+export default { buildClient, persistTokens, getStatus, getHeartRate, getDaily, updateWeightToGarmin, getSleepData, getActivities };
 
 

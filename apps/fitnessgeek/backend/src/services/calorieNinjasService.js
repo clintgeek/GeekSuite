@@ -7,10 +7,10 @@
  * @see https://calorieninjas.com/api
  */
 
-const axios = require('axios');
-const logger = require('../config/logger');
-const cacheService = require('./cacheService');
-const { createBreaker } = require('../lib/breakers');
+import axios from 'axios';
+import logger from '../config/logger.js';
+import cacheService from './cacheService.js';
+import { createBreaker } from '../lib/breakers.js';
 
 const calorieNinjasBreaker = createBreaker('calorieninjas', (task) => task());
 
@@ -125,4 +125,4 @@ class CalorieNinjasService {
   }
 }
 
-module.exports = new CalorieNinjasService();
+export default new CalorieNinjasService();

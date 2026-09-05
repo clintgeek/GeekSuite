@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const bloodPressureSchema = new mongoose.Schema({
   userId: {
@@ -70,4 +70,4 @@ bloodPressureSchema.virtual('status').get(function() {
 bloodPressureSchema.set('toJSON', { virtuals: true });
 bloodPressureSchema.set('toObject', { virtuals: true });
 
-module.exports = mongoose.model('BloodPressure', bloodPressureSchema);
+export default mongoose.model('BloodPressure', bloodPressureSchema);

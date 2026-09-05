@@ -57,10 +57,7 @@ function fromBase(baseValue, targetUnit) {
   return { value: baseValue / meta.factor, unit: targetUnit };
 }
 
-module.exports = {
-  normalizeUnit,
-  toBase,
-  fromBase,
-};
+export { normalizeUnit, toBase, fromBase };
+export default { normalizeUnit, toBase, fromBase };
 
 

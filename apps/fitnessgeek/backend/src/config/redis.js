@@ -4,8 +4,8 @@
  * Provides a singleton Redis client for caching throughout the application.
  */
 
-const { createClient } = require('redis');
-const logger = require('./logger');
+import { createClient } from 'redis';
+import logger from './logger.js';
 
 class RedisClient {
   constructor() {
@@ -85,4 +85,4 @@ class RedisClient {
 
 // Export singleton instance
 const redisClient = new RedisClient();
-module.exports = redisClient;
+export default redisClient;

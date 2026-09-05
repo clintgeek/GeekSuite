@@ -1,8 +1,9 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const { authenticateToken } = require('../middleware/auth.js');
-const logger = require('../config/logger.js');
-const axios = require('axios');
+import { authenticateToken } from '../middleware/auth.js';
+import logger from '../config/logger.js';
+import axios from 'axios';
+import UserSettings from '../models/UserSettings.js';
 
 const BASEGEEK_URL = (process.env.BASEGEEK_URL || process.env.BASE_GEEK_URL || 'https://basegeek.clintgeek.com').replace(/\/$/, '');
 
@@ -183,7 +184,6 @@ router.get('/settings', async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const UserSettings = require('../models/UserSettings.js');
     let settings = await UserSettings.findOne({ user_id: userId });
 
     if (!settings) {
@@ -225,7 +225,6 @@ router.patch('/settings', async (req, res) => {
     const userId = req.user.id;
     const { influxEnabled, healthBaselines } = req.body;
 
-    const UserSettings = require('../models/UserSettings.js');
     let settings = await UserSettings.findOne({ user_id: userId });
 
     if (!settings) {
@@ -267,4 +266,4 @@ router.patch('/settings', async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

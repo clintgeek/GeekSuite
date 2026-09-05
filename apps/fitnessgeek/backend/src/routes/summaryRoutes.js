@@ -1,9 +1,9 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const { authenticateToken } = require('../middleware/auth');
-const DailySummary = require('../models/DailySummary');
-const { format } = require('date-fns');
-const logger = require('../config/logger');
+import { authenticateToken } from '../middleware/auth.js';
+import DailySummary from '../models/DailySummary.js';
+import { format } from 'date-fns';
+import logger from '../config/logger.js';
 
 // Apply authentication to all routes
 router.use(authenticateToken);
@@ -218,4 +218,4 @@ router.get('/week/:startDate', async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

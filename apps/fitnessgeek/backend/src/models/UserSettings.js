@@ -1,5 +1,5 @@
-const mongoose = require('mongoose');
-const { createUserSettingsSchema } = require('@geeksuite/schemas/fitnessgeek/userSettings');
+import mongoose from 'mongoose';
+import { createUserSettingsSchema } from '@geeksuite/schemas/fitnessgeek/userSettings';
 
 // The field set lives in @geeksuite/schemas so that this model and basegeek's
 // GraphQL copy (apps/basegeek/packages/api/src/graphql/fitnessgeek/models/
@@ -34,4 +34,4 @@ userSettingsSchema.statics.updateSettings = async function(userId, updateData) {
   return settings;
 };
 
-module.exports = mongoose.model('UserSettings', userSettingsSchema);
+export default mongoose.model('UserSettings', userSettingsSchema);

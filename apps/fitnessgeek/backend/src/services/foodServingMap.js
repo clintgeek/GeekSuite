@@ -16,6 +16,7 @@ function gramsPerPieceFor(name) {
   return found ? found[1] : null;
 }
 
-module.exports = { gramsPerPieceFor };
+export { gramsPerPieceFor };
+export default { gramsPerPieceFor };
 
 

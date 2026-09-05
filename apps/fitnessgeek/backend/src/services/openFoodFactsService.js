@@ -1,6 +1,6 @@
-const axios = require('axios');
-const logger = require('../config/logger');
-const { createBreaker } = require('../lib/breakers');
+import axios from 'axios';
+import logger from '../config/logger.js';
+import { createBreaker } from '../lib/breakers.js';
 
 // Same 'openfoodfacts' breaker/state as foodApiService.js's OFF calls — one
 // upstream, one circuit, regardless of which service file calls it.
@@ -115,4 +115,4 @@ class OpenFoodFactsService {
   }
 }
 
-module.exports = new OpenFoodFactsService();
+export default new OpenFoodFactsService();

@@ -1,5 +1,5 @@
-const { z } = require('zod');
-const { logDateSchema } = require('./common');
+import { z } from 'zod';
+import { logDateSchema } from './common.js';
 
 const MED_TYPES = ['rx', 'otc', 'supplement'];
 const TIME_OF_DAY = ['morning', 'afternoon', 'evening', 'bedtime'];
@@ -51,4 +51,5 @@ const updateMedicationSchema = z.object({
   display_name: z.string().trim().min(1).max(200).optional(),
 }).strict();
 
-module.exports = { createMedicationSchema, updateMedicationSchema };
+export { createMedicationSchema, updateMedicationSchema };
+export default { createMedicationSchema, updateMedicationSchema };

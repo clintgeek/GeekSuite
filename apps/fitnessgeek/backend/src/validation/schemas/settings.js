@@ -1,5 +1,5 @@
-const { z } = require('zod');
-const { stripMongoMeta } = require('./common');
+import { z } from 'zod';
+import { stripMongoMeta } from './common.js';
 
 // Field set mirrors packages/schemas/fitnessgeek/userSettings.js — the
 // single source of truth both fitnessgeek's REST routes and basegeek's
@@ -162,9 +162,5 @@ const aiUpdateSchema = z.preprocess(stripMongoMeta, aiSchema);
 const dashboardUpdateSchema = z.preprocess(stripMongoMeta, dashboardSchema);
 const householdUpdateSchema = z.preprocess(stripMongoMeta, householdPutSchema);
 
-module.exports = {
-  settingsUpdateSchema,
-  aiUpdateSchema,
-  dashboardUpdateSchema,
-  householdUpdateSchema,
-};
+export { settingsUpdateSchema, aiUpdateSchema, dashboardUpdateSchema, householdUpdateSchema };
+export default { settingsUpdateSchema, aiUpdateSchema, dashboardUpdateSchema, householdUpdateSchema };

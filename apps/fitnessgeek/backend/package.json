@@ -3,10 +3,11 @@
   "version": "2.0.0",
   "description": "FitnessGeek Backend API - Nutrition and Fitness Tracking",
   "main": "src/server.js",
+  "type": "module",
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
-    "test": "jest --config jest.config.js"
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   },
   "keywords": [
     "fitness",
@@ -23,6 +24,7 @@
     "@geeksuite/logger": "workspace:*",
     "@geeksuite/schemas": "workspace:*",
     "@geeksuite/user": "workspace:*",
+    "@geeksuite/utils": "workspace:*",
     "axios": "^1.13.2",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.7",

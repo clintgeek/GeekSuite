@@ -1,10 +1,12 @@
 #!/usr/bin/env node
+import dotenv from 'dotenv';
+
 /**
  * Test the full lookup routing logic
  */
 
-require('dotenv').config();
-const unifiedFoodService = require('./src/services/unifiedFoodService');
+dotenv.config();
+import unifiedFoodService from './src/services/unifiedFoodService.js';
 
 async function testRouting() {
   console.log('\n🔄 Testing Food Lookup Routing\n');

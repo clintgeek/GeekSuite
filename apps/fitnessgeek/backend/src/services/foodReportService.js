@@ -1,7 +1,7 @@
-const { format, subDays } = require('date-fns');
-const FoodLog = require('../models/FoodLog');
-const NutritionGoals = require('../models/NutritionGoals');
-const Weight = require('../models/Weight');
+import { format, subDays } from 'date-fns';
+import FoodLog from '../models/FoodLog.js';
+import NutritionGoals from '../models/NutritionGoals.js';
+import Weight from '../models/Weight.js';
 
 const METRICS = ['calories', 'protein', 'carbs', 'fat', 'fiber', 'sugar'];
 
@@ -250,4 +250,4 @@ class FoodReportService {
   }
 }
 
-module.exports = new FoodReportService();
+export default new FoodReportService();

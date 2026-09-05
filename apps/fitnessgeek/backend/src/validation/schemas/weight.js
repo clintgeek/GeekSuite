@@ -1,5 +1,5 @@
-const { z } = require('zod');
-const { logDateSchema } = require('./common');
+import { z } from 'zod';
+import { logDateSchema } from './common.js';
 
 // Mirrors models/Weight.js (`min: 0, max: 1000`), with a positive floor
 // instead of `min: 0`. Safe: the controller already treats a falsy
@@ -27,4 +27,5 @@ const updateWeightSchema = z.object({
   notes,
 }).strict();
 
-module.exports = { createWeightSchema, updateWeightSchema };
+export { createWeightSchema, updateWeightSchema };
+export default { createWeightSchema, updateWeightSchema };

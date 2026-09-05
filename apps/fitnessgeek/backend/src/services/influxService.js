@@ -1,5 +1,5 @@
-const { InfluxDB } = require('influx');
-const logger = require('../config/logger');
+import { InfluxDB } from 'influx';
+import logger from '../config/logger.js';
 
 /**
  * Thrown when InfluxDB is unreachable, returns an auth error, or any
@@ -304,19 +304,5 @@ async function ping() {
   }
 }
 
-module.exports = {
-  InfluxUnavailableError,
-  query,
-  getSleepIntraday,
-  getSleepSummary,
-  getHeartRateIntraday,
-  getStressIntraday,
-  getBodyBatteryIntraday,
-  getStepsIntraday,
-  getDailyStats,
-  getHRVIntraday,
-  getBreathingRateIntraday,
-  getComprehensiveDaily,
-  getIntradayMetrics,
-  ping
-};
+export { InfluxUnavailableError, query, getSleepIntraday, getSleepSummary, getHeartRateIntraday, getStressIntraday, getBodyBatteryIntraday, getStepsIntraday, getDailyStats, getHRVIntraday, getBreathingRateIntraday, getComprehensiveDaily, getIntradayMetrics, ping };
+export default { InfluxUnavailableError, query, getSleepIntraday, getSleepSummary, getHeartRateIntraday, getStressIntraday, getBodyBatteryIntraday, getStepsIntraday, getDailyStats, getHRVIntraday, getBreathingRateIntraday, getComprehensiveDaily, getIntradayMetrics, ping };

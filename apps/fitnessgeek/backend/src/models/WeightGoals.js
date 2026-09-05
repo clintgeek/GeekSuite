@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const weightGoalsSchema = new mongoose.Schema({
   user_id: {
@@ -79,4 +79,4 @@ weightGoalsSchema.statics.updateWeightGoals = async function(userId, goalsData) 
   return await existingGoals.save();
 };
 
-module.exports = mongoose.model('WeightGoals', weightGoalsSchema);
+export default mongoose.model('WeightGoals', weightGoalsSchema);

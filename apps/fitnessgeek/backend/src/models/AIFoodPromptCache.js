@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const aiFoodPromptCacheSchema = new mongoose.Schema({
   user_id: {
@@ -48,4 +48,4 @@ const aiFoodPromptCacheSchema = new mongoose.Schema({
 aiFoodPromptCacheSchema.index({ user_id: 1, prompt_hash: 1, context_hash: 1 }, { unique: true });
 aiFoodPromptCacheSchema.index({ last_used_at: 1 }, { expireAfterSeconds: 60 * 60 * 24 * 45 });
 
-module.exports = mongoose.model('AIFoodPromptCache', aiFoodPromptCacheSchema);
+export default mongoose.model('AIFoodPromptCache', aiFoodPromptCacheSchema);

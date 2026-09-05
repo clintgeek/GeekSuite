@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const foodItemSchema = new mongoose.Schema({
   name: {
@@ -203,4 +203,4 @@ foodItemSchema.statics.search = async function(query, userId = null, limit = 25)
     .limit(limit);
 };
 
-module.exports = mongoose.model('FoodItem', foodItemSchema);
+export default mongoose.model('FoodItem', foodItemSchema);

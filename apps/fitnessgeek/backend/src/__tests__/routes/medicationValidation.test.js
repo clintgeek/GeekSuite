@@ -6,12 +6,18 @@
 // routes under test, so they're left as their real (require-only, no I/O at
 // import time) modules.
 
-const express = require('express');
-const request = require('supertest');
+import { describe, test, expect, beforeEach, jest } from '@jest/globals';
+import express from 'express';
+import request from 'supertest';
 
 const OWNER = 'user-owner';
 
-jest.mock('../../middleware/auth', () => ({
+// jest resolves an `unstable_mockModule` specifier against the *setup* file
+// rather than this one, so every relative mock target is made absolute first.
+// (Same shape as flockgeek's and storygeek's ESM suites.)
+const mod = (p) => new URL(p, import.meta.url).pathname;
+
+jest.unstable_mockModule(mod('../../middleware/auth.js'), () => ({
   authenticateToken: (req, res, next) => {
     const userId = req.header('x-test-user');
     if (!userId) {
@@ -23,16 +29,17 @@ jest.mock('../../middleware/auth', () => ({
   optionalAuth: (req, res, next) => next(),
 }));
 
-jest.mock('../../models/Medication', () => {
+jest.unstable_mockModule(mod('../../models/Medication.js'), () => {
   const Medication = jest.fn();
   Medication.find = jest.fn();
   Medication.findOne = jest.fn();
   Medication.create = jest.fn();
-  return Medication;
+  return { __esModule: true, default: Medication };
 });
 
-const Medication = require('../../models/Medication');
-const medicationRoutes = require('../../routes/medicationRoutes');
+// Dynamic imports: they must resolve AFTER the mock registrations above.
+const { default: Medication } = await import('../../models/Medication.js');
+const { default: medicationRoutes } = await import('../../routes/medicationRoutes.js');
 
 function buildApp() {
   const app = express();

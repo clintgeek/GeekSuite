@@ -1,9 +1,9 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const { authenticateToken } = require('../middleware/auth');
-const Meal = require('../models/Meal');
-const FoodLog = require('../models/FoodLog');
-const logger = require('../config/logger');
+import { authenticateToken } from '../middleware/auth.js';
+import Meal from '../models/Meal.js';
+import FoodLog from '../models/FoodLog.js';
+import logger from '../config/logger.js';
 
 // Apply authentication to all routes
 router.use(authenticateToken);
@@ -407,4 +407,4 @@ router.post('/:id/add-to-log', async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const weightSchema = new mongoose.Schema({
   userId: {
@@ -45,4 +45,4 @@ weightSchema.virtual('formatted_date').get(function() {
 weightSchema.set('toJSON', { virtuals: true });
 weightSchema.set('toObject', { virtuals: true });
 
-module.exports = mongoose.model('Weight', weightSchema);
+export default mongoose.model('Weight', weightSchema);

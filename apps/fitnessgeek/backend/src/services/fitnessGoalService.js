@@ -1,5 +1,5 @@
-const axios = require('axios');
-const logger = require('../config/logger');
+import axios from 'axios';
+import logger from '../config/logger.js';
 
 /**
  * fitnessGoalService — the nutrition-goal and meal-plan side of FitnessGeek.
@@ -396,4 +396,4 @@ Keep it practical and achievable.`;
   }
 }
 
-module.exports = new FitnessGoalService();
+export default new FitnessGoalService();

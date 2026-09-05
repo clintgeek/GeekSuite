@@ -9,9 +9,9 @@
  * { type: 'branded', brand: 'Starbucks', ... }
  */
 
-var crypto = require('crypto');
-var logger = require('../config/logger');
-var AIFoodPromptCache = require('../models/AIFoodPromptCache');
+import crypto from 'crypto';
+import logger from '../config/logger.js';
+import AIFoodPromptCache from '../models/AIFoodPromptCache.js';
 
 var AIClassificationCacheService = {
   /**
@@ -149,4 +149,4 @@ var AIClassificationCacheService = {
   }
 };
 
-module.exports = AIClassificationCacheService;
+export default AIClassificationCacheService;

@@ -4,7 +4,9 @@
 // module-level/shared, same as production) with a short timeout/resetTimeout
 // so the suite doesn't have to wait out the real 30s production reset.
 
-const { createBreaker, breakerStats } = require('../lib/breakers');
+import { describe, test, expect, jest } from '@jest/globals';
+
+import { createBreaker, breakerStats } from '../lib/breakers.js';
 
 describe('lib/breakers', () => {
   test('createBreaker returns the same instance for a repeated name (shared circuit state)', () => {

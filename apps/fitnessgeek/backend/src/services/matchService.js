@@ -33,6 +33,7 @@ async function matchCandidates(parsed, adapters = []) {
   return scored;
 }
 
-module.exports = { matchCandidates };
+export { matchCandidates };
+export default { matchCandidates };
 
 

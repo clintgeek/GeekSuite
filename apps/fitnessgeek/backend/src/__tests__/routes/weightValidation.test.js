@@ -5,12 +5,18 @@
 // middleware, cache service and UserSettings.getOrCreate (called internally
 // for the optional Garmin push) are all doubled — no live Mongo, no Redis.
 
-const express = require('express');
-const request = require('supertest');
+import { describe, test, expect, beforeEach, jest } from '@jest/globals';
+import express from 'express';
+import request from 'supertest';
 
 const OWNER = 'user-owner';
 
-jest.mock('../../middleware/auth', () => ({
+// jest resolves an `unstable_mockModule` specifier against the *setup* file
+// rather than this one, so every relative mock target is made absolute first.
+// (Same shape as flockgeek's and storygeek's ESM suites.)
+const mod = (p) => new URL(p, import.meta.url).pathname;
+
+jest.unstable_mockModule(mod('../../middleware/auth.js'), () => ({
   authenticateToken: (req, res, next) => {
     const userId = req.header('x-test-user');
     if (!userId) {
@@ -22,13 +28,16 @@ jest.mock('../../middleware/auth', () => ({
   optionalAuth: (req, res, next) => next(),
 }));
 
-jest.mock('../../services/cacheService', () => ({
-  invalidateUser: jest.fn().mockResolvedValue(true),
-  invalidateUserAI: jest.fn().mockResolvedValue(true),
-  invalidateUserReports: jest.fn().mockResolvedValue(true),
+jest.unstable_mockModule(mod('../../services/cacheService.js'), () => ({
+  __esModule: true,
+  default: {
+    invalidateUser: jest.fn().mockResolvedValue(true),
+    invalidateUserAI: jest.fn().mockResolvedValue(true),
+    invalidateUserReports: jest.fn().mockResolvedValue(true),
+  },
 }));
 
-jest.mock('../../models/Weight', () => {
+jest.unstable_mockModule(mod('../../models/Weight.js'), () => {
   const Weight = jest.fn().mockImplementation(function ctor(doc) {
     Object.assign(this, doc);
     this.save = jest.fn().mockResolvedValue(this);
@@ -37,12 +46,15 @@ jest.mock('../../models/Weight', () => {
   Weight.countDocuments = jest.fn();
   Weight.findOne = jest.fn();
   Weight.findOneAndDelete = jest.fn();
-  return Weight;
+  return { __esModule: true, default: Weight };
 });
 
-const Weight = require('../../models/Weight');
-const UserSettings = require('../../models/UserSettings');
-const weightRoutes = require('../../routes/weightRoutes');
+// Dynamic imports: they must resolve AFTER the mock registrations above.
+// UserSettings is the REAL model here — the Garmin push is neutered with a
+// jest.spyOn below rather than a module double.
+const { default: Weight } = await import('../../models/Weight.js');
+const { default: UserSettings } = await import('../../models/UserSettings.js');
+const { default: weightRoutes } = await import('../../routes/weightRoutes.js');
 
 function buildApp() {
   const app = express();

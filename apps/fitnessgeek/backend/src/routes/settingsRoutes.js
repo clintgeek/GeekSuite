@@ -1,16 +1,11 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const crypto = require('crypto');
-const { authenticateToken } = require('../middleware/auth');
-const UserSettings = require('../models/UserSettings');
-const logger = require('../config/logger');
-const { validate } = require('../validation/validate');
-const {
-  settingsUpdateSchema,
-  aiUpdateSchema,
-  dashboardUpdateSchema,
-  householdUpdateSchema
-} = require('../validation/schemas/settings');
+import crypto from 'crypto';
+import { authenticateToken } from '../middleware/auth.js';
+import UserSettings from '../models/UserSettings.js';
+import logger from '../config/logger.js';
+import { validate } from '../validation/validate.js';
+import { settingsUpdateSchema, aiUpdateSchema, dashboardUpdateSchema, householdUpdateSchema } from '../validation/schemas/settings.js';
 
 // Apply authentication to all routes
 router.use(authenticateToken);
@@ -490,4 +485,4 @@ router.delete('/household', async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

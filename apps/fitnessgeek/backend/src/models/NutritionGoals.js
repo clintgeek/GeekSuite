@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const nutritionGoalsSchema = new mongoose.Schema({
   user_id: {
@@ -129,4 +129,4 @@ nutritionGoalsSchema.methods.getProgress = function(actualTotals) {
   };
 };
 
-module.exports = mongoose.model('NutritionGoals', nutritionGoalsSchema);
+export default mongoose.model('NutritionGoals', nutritionGoalsSchema);

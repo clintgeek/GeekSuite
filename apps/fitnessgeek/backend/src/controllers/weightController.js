@@ -1,15 +1,9 @@
-const Weight = require('../models/Weight');
-const cacheService = require('../services/cacheService');
-const logger = require('../config/logger');
-
-function toUtcMidnight(dateStr) {
-  if (typeof dateStr === 'string' && dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
-    const [y, m, d] = dateStr.split('-').map(Number);
-    return new Date(Date.UTC(y, m - 1, d));
-  }
-  const date = new Date(dateStr);
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-}
+import { toUtcMidnight } from '@geeksuite/utils';
+import Weight from '../models/Weight.js';
+import cacheService from '../services/cacheService.js';
+import logger from '../config/logger.js';
+import UserSettings from '../models/UserSettings.js';
+import * as garmin from '../services/garminConnectService.js';
 
 /**
  * Get all weight logs for a user
@@ -141,10 +135,8 @@ const createWeightLog = async (req, res) => {
 
     // Push to Garmin if enabled
     try {
-      const UserSettings = require('../models/UserSettings');
       const settings = await UserSettings.getOrCreate(userId);
       if (settings?.garmin?.enabled) {
-        const garmin = require('../services/garminConnectService');
         // parsedDate is stored UTC-midnight; read the calendar day back in UTC.
         const ymd = parsedDate.toISOString().split('T')[0];
         await garmin.updateWeightToGarmin(userId, ymd, weightLog.weight_value, Intl.DateTimeFormat().resolvedOptions().timeZone);
@@ -208,10 +200,8 @@ const updateWeightLog = async (req, res) => {
 
     // Optionally push updated weight to Garmin if log_date is today
     try {
-      const UserSettings = require('../models/UserSettings');
       const settings = await UserSettings.getOrCreate(userId);
       if (settings?.garmin?.enabled) {
-        const garmin = require('../services/garminConnectService');
         const ymd = weightLog.log_date.toISOString().split('T')[0];
         await garmin.updateWeightToGarmin(userId, ymd, weightLog.weight_value, Intl.DateTimeFormat().resolvedOptions().timeZone);
         logger.info(`Pushed updated weight to Garmin for user ${userId} on ${ymd}`);
@@ -377,11 +367,5 @@ const getWeightStats = async (req, res) => {
   }
 };
 
-module.exports = {
-  getWeightLogs,
-  getWeightLog,
-  createWeightLog,
-  updateWeightLog,
-  deleteWeightLog,
-  getWeightStats
-};
+export { getWeightLogs, getWeightLog, createWeightLog, updateWeightLog, deleteWeightLog, getWeightStats };
+export default { getWeightLogs, getWeightLog, createWeightLog, updateWeightLog, deleteWeightLog, getWeightStats };

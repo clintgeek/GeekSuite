@@ -58,4 +58,5 @@ function validate(schemas = {}) {
   };
 }
 
-module.exports = { validate };
+export { validate };
+export default { validate };

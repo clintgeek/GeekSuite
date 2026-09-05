@@ -1,4 +1,4 @@
-const baseGeekAIService = require('./src/services/baseGeekAIService');
+import baseGeekAIService from './src/services/baseGeekAIService.js';
 
 async function testAIIntegration() {
   console.log('🧪 Testing fitnessGeek AI Food Parsing Integration...\n');

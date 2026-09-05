@@ -16,8 +16,8 @@
 // EOPENBREAKER is just another rejected promise, so services that already
 // catch-and-degrade (return [] / null) keep doing exactly that, just faster,
 // once the circuit is open. See each service file for the call sites.
-const CircuitBreaker = require('opossum');
-const logger = require('../config/logger');
+import CircuitBreaker from 'opossum';
+import logger from '../config/logger.js';
 
 // Plain REST food-search APIs: axios already carries a 10s per-call timeout,
 // so the breaker's own timeout (6s) trips first — a slow upstream fails
@@ -106,4 +106,5 @@ function breakerStats() {
   return stats;
 }
 
-module.exports = { createBreaker, breakerStats };
+export { createBreaker, breakerStats };
+export default { createBreaker, breakerStats };

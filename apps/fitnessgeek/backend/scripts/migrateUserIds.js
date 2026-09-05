@@ -1,5 +1,5 @@
-const mongoose = require('mongoose');
-const { ObjectId } = require('mongodb');
+import mongoose from 'mongoose';
+import { ObjectId } from 'mongodb';
 
 // MongoDB connection
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/fitnessgeek?authSource=admin';
@@ -94,4 +94,4 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { migrateUserIds };
+export default { migrateUserIds };

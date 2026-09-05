@@ -7,12 +7,18 @@
 //   - the Garmin password is masked before it leaves the API
 //   - the household join/create guards (already-in-household, unknown code)
 
-const express = require('express');
-const request = require('supertest');
+import { describe, test, expect, jest } from '@jest/globals';
+import express from 'express';
+import request from 'supertest';
 
 const OWNER = 'user-owner';
 
-jest.mock('../../middleware/auth', () => ({
+// jest resolves an `unstable_mockModule` specifier against the *setup* file
+// rather than this one, so every relative mock target is made absolute first.
+// (Same shape as flockgeek's and storygeek's ESM suites.)
+const mod = (p) => new URL(p, import.meta.url).pathname;
+
+jest.unstable_mockModule(mod('../../middleware/auth.js'), () => ({
   authenticateToken: (req, res, next) => {
     const userId = req.header('x-test-user');
     if (!userId) {
@@ -24,18 +30,19 @@ jest.mock('../../middleware/auth', () => ({
   optionalAuth: (req, res, next) => next(),
 }));
 
-jest.mock('../../models/UserSettings', () => {
+jest.unstable_mockModule(mod('../../models/UserSettings.js'), () => {
   const UserSettings = jest.fn();
   UserSettings.getOrCreate = jest.fn();
   UserSettings.findOneAndUpdate = jest.fn();
   UserSettings.updateSettings = jest.fn();
   UserSettings.find = jest.fn();
   UserSettings.findOne = jest.fn();
-  return UserSettings;
+  return { __esModule: true, default: UserSettings };
 });
 
-const UserSettings = require('../../models/UserSettings');
-const settingsRoutes = require('../../routes/settingsRoutes');
+// Dynamic imports: they must resolve AFTER the mock registrations above.
+const { default: UserSettings } = await import('../../models/UserSettings.js');
+const { default: settingsRoutes } = await import('../../routes/settingsRoutes.js');
 
 function buildApp() {
   const app = express();

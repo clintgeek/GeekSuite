@@ -11,13 +11,19 @@
 //      must 403 unless the two users share a household AND the member has
 //      opted into food-log sharing.
 
-const express = require('express');
-const request = require('supertest');
+import { describe, test, expect, jest } from '@jest/globals';
+import express from 'express';
+import request from 'supertest';
 
 const OWNER = 'user-owner';
 const OTHER = 'user-other';
 
-jest.mock('../../middleware/auth', () => ({
+// jest resolves an `unstable_mockModule` specifier against the *setup* file
+// rather than this one, so every relative mock target is made absolute first.
+// (Same shape as flockgeek's and storygeek's ESM suites.)
+const mod = (p) => new URL(p, import.meta.url).pathname;
+
+jest.unstable_mockModule(mod('../../middleware/auth.js'), () => ({
   authenticateToken: (req, res, next) => {
     const userId = req.header('x-test-user');
     if (!userId) {
@@ -29,13 +35,16 @@ jest.mock('../../middleware/auth', () => ({
   optionalAuth: (req, res, next) => next(),
 }));
 
-jest.mock('../../services/cacheService', () => ({
-  invalidateUser: jest.fn().mockResolvedValue(true),
-  invalidateUserAI: jest.fn().mockResolvedValue(true),
-  invalidateUserReports: jest.fn().mockResolvedValue(true),
+jest.unstable_mockModule(mod('../../services/cacheService.js'), () => ({
+  __esModule: true,
+  default: {
+    invalidateUser: jest.fn().mockResolvedValue(true),
+    invalidateUserAI: jest.fn().mockResolvedValue(true),
+    invalidateUserReports: jest.fn().mockResolvedValue(true),
+  },
 }));
 
-jest.mock('../../models/FoodLog', () => {
+jest.unstable_mockModule(mod('../../models/FoodLog.js'), () => {
   const FoodLog = jest.fn();
   FoodLog.findOne = jest.fn();
   FoodLog.find = jest.fn();
@@ -44,31 +53,33 @@ jest.mock('../../models/FoodLog', () => {
   FoodLog.getLogsForDate = jest.fn();
   FoodLog.getLogsByMealType = jest.fn();
   FoodLog.getRecentLogs = jest.fn();
-  return FoodLog;
+  return { __esModule: true, default: FoodLog };
 });
 
-jest.mock('../../models/FoodItem', () => {
+jest.unstable_mockModule(mod('../../models/FoodItem.js'), () => {
   const FoodItem = jest.fn();
   FoodItem.findById = jest.fn();
   FoodItem.findOrCreate = jest.fn();
-  return FoodItem;
+  return { __esModule: true, default: FoodItem };
 });
 
-jest.mock('../../models/DailySummary', () => ({
-  updateFromLogs: jest.fn().mockResolvedValue(true),
+jest.unstable_mockModule(mod('../../models/DailySummary.js'), () => ({
+  __esModule: true,
+  default: { updateFromLogs: jest.fn().mockResolvedValue(true) },
 }));
 
-jest.mock('../../models/UserSettings', () => {
+jest.unstable_mockModule(mod('../../models/UserSettings.js'), () => {
   const UserSettings = jest.fn();
   UserSettings.getOrCreate = jest.fn();
   UserSettings.findOne = jest.fn();
   UserSettings.find = jest.fn();
-  return UserSettings;
+  return { __esModule: true, default: UserSettings };
 });
 
-const FoodLog = require('../../models/FoodLog');
-const UserSettings = require('../../models/UserSettings');
-const logRoutes = require('../../routes/logRoutes');
+// Dynamic imports: they must resolve AFTER the mock registrations above.
+const { default: FoodLog } = await import('../../models/FoodLog.js');
+const { default: UserSettings } = await import('../../models/UserSettings.js');
+const { default: logRoutes } = await import('../../routes/logRoutes.js');
 
 function buildApp() {
   const app = express();

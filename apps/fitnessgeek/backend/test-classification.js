@@ -1,13 +1,15 @@
 #!/usr/bin/env node
+import dotenv from 'dotenv';
+
 /**
  * Test AI Classification System
  *
  * Run: node test-classification.js
  */
 
-require('dotenv').config();
+dotenv.config();
 
-const baseGeekAIService = require('./src/services/baseGeekAIService');
+import baseGeekAIService from './src/services/baseGeekAIService.js';
 
 async function testClassification() {
   console.log('\n🧠 Testing AI Food Classification\n');

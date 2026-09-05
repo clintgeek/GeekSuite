@@ -1,12 +1,14 @@
 #!/usr/bin/env node
+import dotenv from 'dotenv';
+
 /**
  * Test CalorieNinjas API Integration
  *
  * Run: node test-calorieninjas.js
  */
 
-require('dotenv').config();
-const axios = require('axios');
+dotenv.config();
+import axios from 'axios';
 
 const apiKey = process.env.CALORIENINJAS_API_KEY;
 const baseUrl = 'https://api.calorieninjas.com/v1';

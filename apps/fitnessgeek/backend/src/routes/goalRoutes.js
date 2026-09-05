@@ -1,7 +1,8 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const { authenticateToken } = require('../middleware/auth');
-const UserSettings = require('../models/UserSettings');
+import { authenticateToken } from '../middleware/auth.js';
+import UserSettings from '../models/UserSettings.js';
+import * as garmin from '../services/garminConnectService.js';
 
 // Get user goals
 router.get('/', authenticateToken, async (req, res) => {
@@ -168,8 +169,7 @@ router.get('/nutrition/macros', authenticateToken, async (req, res) => {
     // Compute today with live Garmin activity
     let today = weekly[todayIndex] || null;
     try {
-      // Reuse Garmin wrapper
-      const garmin = require('../services/garminConnectService');
+      // Reuse Garmin wrapper (hoisted import; see the ESM migration note in DOCS)
       const d = new Date();
       const localYMD = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0];
       const hrProfile = await garmin.getDaily(req.user.id, localYMD);
@@ -224,4 +224,4 @@ router.get('/nutrition/macros', authenticateToken, async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

@@ -17,17 +17,17 @@
  * Follows DRY and KISS principles.
  */
 
-var axios = require('axios');
-var logger = require('../config/logger');
-var FoodItem = require('../models/FoodItem');
-var FoodLog = require('../models/FoodLog');
-var UserSettings = require('../models/UserSettings');
-var baseGeekAIService = require('./baseGeekAIService');
-var foodApiService = require('./foodApiService');
-var fatSecretService = require('./fatSecretService');
-var aiClassificationCacheService = require('./aiClassificationCacheService');
-var calorieNinjasService = require('./calorieNinjasService');
-var unitConversion = require('./unitConversion');
+import axios from 'axios';
+import logger from '../config/logger.js';
+import FoodItem from '../models/FoodItem.js';
+import FoodLog from '../models/FoodLog.js';
+import UserSettings from '../models/UserSettings.js';
+import baseGeekAIService from './baseGeekAIService.js';
+import foodApiService from './foodApiService.js';
+import fatSecretService from './fatSecretService.js';
+import aiClassificationCacheService from './aiClassificationCacheService.js';
+import calorieNinjasService from './calorieNinjasService.js';
+import unitConversion from './unitConversion.js';
 
 /**
  * Confidence levels for food lookup results
@@ -1173,4 +1173,4 @@ class UnifiedFoodService {
   }
 }
 
-module.exports = new UnifiedFoodService();
+export default new UnifiedFoodService();

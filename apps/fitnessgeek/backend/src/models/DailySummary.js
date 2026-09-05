@@ -1,4 +1,5 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
+import { toUtcMidnight } from '@geeksuite/utils';
 
 const dailySummarySchema = new mongoose.Schema({
   user_id: {
@@ -95,21 +96,9 @@ const dailySummarySchema = new mongoose.Schema({
 // Compound index for user and date
 dailySummarySchema.index({ user_id: 1, date: 1 }, { unique: true });
 
-// Normalize a provided date (string YYYY-MM-DD or Date) to a UTC date at midnight.
-// This mirrors the behavior used when storing and querying FoodLog entries so that
-// dev (local) and prod (UTC) yield the same calendar day.
-function toUtcDate(input) {
-  if (typeof input === 'string') {
-    const [y, m, d] = input.split('-').map(Number);
-    return new Date(Date.UTC(y, (m || 1) - 1, d || 1));
-  }
-  const date = new Date(input);
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-}
-
 // Static method to get or create daily summary
 dailySummarySchema.statics.getOrCreate = async function(userId, date) {
-  const startDate = toUtcDate(date);
+  const startDate = toUtcMidnight(date);
   startDate.setUTCHours(0, 0, 0, 0);
 
   let summary = await this.findOne({
@@ -132,10 +121,10 @@ dailySummarySchema.statics.getOrCreate = async function(userId, date) {
 dailySummarySchema.statics.updateFromLogs = async function(userId, date) {
   const FoodLog = mongoose.model('FoodLog');
 
-  const startDate = toUtcDate(date);
+  const startDate = toUtcMidnight(date);
   startDate.setUTCHours(0, 0, 0, 0);
 
-  const endDate = toUtcDate(date);
+  const endDate = toUtcMidnight(date);
   endDate.setUTCHours(23, 59, 59, 999);
 
   // Get all logs for the date
@@ -223,10 +212,10 @@ dailySummarySchema.statics.updateFromLogs = async function(userId, date) {
 
 // Static method to get summary for date range
 dailySummarySchema.statics.getSummaryRange = async function(userId, startDate, endDate) {
-  const start = toUtcDate(startDate);
+  const start = toUtcMidnight(startDate);
   start.setUTCHours(0, 0, 0, 0);
 
-  const end = toUtcDate(endDate);
+  const end = toUtcMidnight(endDate);
   end.setUTCHours(23, 59, 59, 999);
 
   return await this.find({
@@ -235,4 +224,4 @@ dailySummarySchema.statics.getSummaryRange = async function(userId, startDate, e
   }).sort({ date: 1 });
 };
 
-module.exports = mongoose.model('DailySummary', dailySummarySchema);
+export default mongoose.model('DailySummary', dailySummarySchema);

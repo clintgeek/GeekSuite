@@ -1,5 +1,5 @@
-const foodReportService = require('../services/foodReportService');
-const logger = require('../config/logger');
+import foodReportService from '../services/foodReportService.js';
+import logger from '../config/logger.js';
 
 const parseOptions = (query = {}) => {
   const options = {};
@@ -8,7 +8,7 @@ const parseOptions = (query = {}) => {
   return options;
 };
 
-exports.getOverview = async (req, res) => {
+export const getOverview = async (req, res) => {
   try {
     const data = await foodReportService.getOverview(req.user.id, parseOptions(req.query));
     res.json({ success: true, data });
@@ -18,7 +18,7 @@ exports.getOverview = async (req, res) => {
   }
 };
 
-exports.getTrends = async (req, res) => {
+export const getTrends = async (req, res) => {
   try {
     const data = await foodReportService.getTrends(req.user.id, parseOptions(req.query));
     res.json({ success: true, data });
@@ -28,7 +28,7 @@ exports.getTrends = async (req, res) => {
   }
 };
 
-exports.exportReport = async (req, res) => {
+export const exportReport = async (req, res) => {
   try {
     const format = (req.query.format || 'csv').toLowerCase();
     const options = parseOptions(req.query);

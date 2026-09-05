@@ -4,12 +4,18 @@
 // Hermetic: the BloodPressure model and auth middleware are jest-mocked, no
 // live Mongo.
 
-const express = require('express');
-const request = require('supertest');
+import { describe, test, expect, beforeEach, jest } from '@jest/globals';
+import express from 'express';
+import request from 'supertest';
 
 const OWNER = 'user-owner';
 
-jest.mock('../../middleware/auth', () => ({
+// jest resolves an `unstable_mockModule` specifier against the *setup* file
+// rather than this one, so every relative mock target is made absolute first.
+// (Same shape as flockgeek's and storygeek's ESM suites.)
+const mod = (p) => new URL(p, import.meta.url).pathname;
+
+jest.unstable_mockModule(mod('../../middleware/auth.js'), () => ({
   authenticateToken: (req, res, next) => {
     const userId = req.header('x-test-user');
     if (!userId) {
@@ -21,7 +27,7 @@ jest.mock('../../middleware/auth', () => ({
   optionalAuth: (req, res, next) => next(),
 }));
 
-jest.mock('../../models/BloodPressure', () => {
+jest.unstable_mockModule(mod('../../models/BloodPressure.js'), () => {
   const BloodPressure = jest.fn().mockImplementation(function ctor(doc) {
     Object.assign(this, doc);
     this.save = jest.fn().mockResolvedValue(this);
@@ -30,11 +36,12 @@ jest.mock('../../models/BloodPressure', () => {
   BloodPressure.countDocuments = jest.fn();
   BloodPressure.findOne = jest.fn();
   BloodPressure.findOneAndDelete = jest.fn();
-  return BloodPressure;
+  return { __esModule: true, default: BloodPressure };
 });
 
-const BloodPressure = require('../../models/BloodPressure');
-const bloodPressureRoutes = require('../../routes/bloodPressureRoutes');
+// Dynamic imports: they must resolve AFTER the mock registrations above.
+const { default: BloodPressure } = await import('../../models/BloodPressure.js');
+const { default: bloodPressureRoutes } = await import('../../routes/bloodPressureRoutes.js');
 
 function buildApp() {
   const app = express();

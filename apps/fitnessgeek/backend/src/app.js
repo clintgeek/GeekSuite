@@ -6,18 +6,44 @@
 // connect, app.listen, graceful shutdown) and requires this module for the
 // actual app. Behavior here is unchanged from the original server.js.
 
-const express = require('express');
-const cors = require('cors');
-const cookieParser = require('cookie-parser');
-const axios = require('axios');
-const dotenv = require('dotenv');
-const crypto = require('crypto');
-const { createHttpLogger } = require('@geeksuite/logger');
-const path = require('path');
-const logger = require('./config/logger');
-const { breakerStats } = require('./lib/breakers');
-const { authenticateToken } = require('./middleware/auth');
-const { csrfGuard, meHandler } = require('@geeksuite/user/server');
+import express from 'express';
+import cors from 'cors';
+import cookieParser from 'cookie-parser';
+import axios from 'axios';
+import dotenv from 'dotenv';
+import crypto from 'crypto';
+import { createHttpLogger } from '@geeksuite/logger';
+import path from 'path';
+import { fileURLToPath } from 'node:url';
+import logger from './config/logger.js';
+import { breakerStats } from './lib/breakers.js';
+import { authenticateToken } from './middleware/auth.js';
+import { csrfGuard, meHandler } from '@geeksuite/user/server';
+
+// Route modules. Under ESM these are static imports; the CommonJS original
+// inlined `require()` calls in the app.use() list below.
+import authRoutes from './routes/authRoutes.js';
+import userRoutes from './routes/userRoutes.js';
+import foodRoutes from './routes/foodRoutes.js';
+import logRoutes from './routes/logRoutes.js';
+import summaryRoutes from './routes/summaryRoutes.js';
+import goalRoutes from './routes/goalRoutes.js';
+import mealRoutes from './routes/mealRoutes.js';
+import weightRoutes from './routes/weightRoutes.js';
+import bloodPressureRoutes from './routes/bloodPressureRoutes.js';
+import settingsRoutes from './routes/settingsRoutes.js';
+import streakRoutes from './routes/streakRoutes.js';
+import aiRoutes from './routes/aiRoutes.js';
+import aiCoachRoutes from './routes/aiCoachRoutes.js';
+import fitnessRoutes from './routes/fitnessRoutes.js';
+import medicationRoutes from './routes/medicationRoutes.js';
+import insightsRoutes from './routes/insightsRoutes.js';
+import foodReportRoutes from './routes/foodReportRoutes.js';
+import influxRoutes from './routes/influxRoutes.js';
+
+// ESM has no __dirname; derive it from import.meta.url (used for the built
+// frontend's public/ path below).
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Load environment variables
 dotenv.config();
@@ -147,24 +173,24 @@ app.get('/api/health/breakers', (req, res) => {
 app.get('/api/me', authenticateToken, meHandler());
 
 // API Routes
-app.use('/api/auth', require('./routes/authRoutes'));
-app.use('/api/user', require('./routes/userRoutes'));
-app.use('/api/foods', require('./routes/foodRoutes'));
-app.use('/api/logs', require('./routes/logRoutes'));
-app.use('/api/summary', require('./routes/summaryRoutes'));
-app.use('/api/goals', require('./routes/goalRoutes'));
-app.use('/api/meals', require('./routes/mealRoutes'));
-app.use('/api/weight', require('./routes/weightRoutes'));
-app.use('/api/blood-pressure', require('./routes/bloodPressureRoutes'));
-app.use('/api/settings', require('./routes/settingsRoutes'));
-app.use('/api/streaks', require('./routes/streakRoutes'));
-app.use('/api/ai', require('./routes/aiRoutes'));
-app.use('/api/ai-coach', require('./routes/aiCoachRoutes'));
-app.use('/api/fitness', require('./routes/fitnessRoutes'));
-app.use('/api/meds', require('./routes/medicationRoutes'));
-app.use('/api/insights', require('./routes/insightsRoutes'));
-app.use('/api/food-reports', require('./routes/foodReportRoutes'));
-app.use('/api/influx', require('./routes/influxRoutes'));
+app.use('/api/auth', authRoutes);
+app.use('/api/user', userRoutes);
+app.use('/api/foods', foodRoutes);
+app.use('/api/logs', logRoutes);
+app.use('/api/summary', summaryRoutes);
+app.use('/api/goals', goalRoutes);
+app.use('/api/meals', mealRoutes);
+app.use('/api/weight', weightRoutes);
+app.use('/api/blood-pressure', bloodPressureRoutes);
+app.use('/api/settings', settingsRoutes);
+app.use('/api/streaks', streakRoutes);
+app.use('/api/ai', aiRoutes);
+app.use('/api/ai-coach', aiCoachRoutes);
+app.use('/api/fitness', fitnessRoutes);
+app.use('/api/meds', medicationRoutes);
+app.use('/api/insights', insightsRoutes);
+app.use('/api/food-reports', foodReportRoutes);
+app.use('/api/influx', influxRoutes);
 
 // GraphQL reverse-proxy → BaseGeek unified API
 const BASEGEEK_URL = (process.env.BASEGEEK_URL || 'https://basegeek.clintgeek.com').replace(/\/$/, '');
@@ -228,4 +254,4 @@ app.use((error, req, res, next) => {
   });
 });
 
-module.exports = app;
+export default app;

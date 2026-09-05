@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const MED_TIME_OF_DAY = ['morning', 'afternoon', 'evening', 'bedtime'];
 
@@ -101,6 +101,6 @@ const medicationSchema = new mongoose.Schema({
 
 medicationSchema.index({ user_id: 1, display_name: 1 });
 
-module.exports = mongoose.model('Medication', medicationSchema);
+export default mongoose.model('Medication', medicationSchema);
 
 

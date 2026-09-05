@@ -1,7 +1,7 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const { authenticateToken } = require('../middleware/auth');
-const LoginStreak = require('../models/LoginStreak');
+import { authenticateToken } from '../middleware/auth.js';
+import LoginStreak from '../models/LoginStreak.js';
 
 // Get user's login streak
 router.get('/login', authenticateToken, async (req, res) => {
@@ -58,4 +58,4 @@ router.post('/login', authenticateToken, async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

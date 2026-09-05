@@ -1,11 +1,11 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const { authenticateToken } = require('../middleware/auth');
-const FoodItem = require('../models/FoodItem');
-const FoodLog = require('../models/FoodLog');
-const UserSettings = require('../models/UserSettings');
-const logger = require('../config/logger');
-const unifiedFoodService = require('../services/unifiedFoodService');
+import { authenticateToken } from '../middleware/auth.js';
+import FoodItem from '../models/FoodItem.js';
+import FoodLog from '../models/FoodLog.js';
+import UserSettings from '../models/UserSettings.js';
+import logger from '../config/logger.js';
+import unifiedFoodService from '../services/unifiedFoodService.js';
 
 // Apply authentication to all routes
 router.use(authenticateToken);
@@ -514,4 +514,4 @@ router.get('/search/:query', async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

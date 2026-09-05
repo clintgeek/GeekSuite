@@ -20,22 +20,41 @@
 // coverage. Only axios (the basegeek round-trip) and the Mongoose models
 // touched here are mocked — no live Mongo, no Redis, no real network.
 
-const request = require('supertest');
+import { describe, test, expect, beforeEach, jest } from '@jest/globals';
+import request from 'supertest';
 
-jest.mock('axios');
-const axios = require('axios');
+// ── Mocks must be registered BEFORE the modules under test are imported ──────
+//
+// axios is reached two different ways here, through two different module
+// registries: this app's own ESM `import axios from 'axios'` (app.js's
+// /graphql proxy calls `axios(...)` as a function), and @geeksuite/user's
+// CommonJS `require('axios')` in tokenUtils.js, which is what actually makes
+// the basegeek round-trip. `unstable_mockModule` only patches the ESM
+// registry, so the classic `jest.mock` registration is needed as well —
+// otherwise the remote token check would hit the real axios.
+const axios = jest.fn();
+axios.get = jest.fn();
+axios.post = jest.fn();
+axios.default = axios; // real axios self-references this way; both import styles land on it
+// jest resolves an `unstable_mockModule` specifier against the *setup* file
+// rather than this one, so every relative mock target is made absolute first.
+// (Same shape as flockgeek's and storygeek's ESM suites.)
+const mod = (p) => new URL(p, import.meta.url).pathname;
 
-jest.mock('../models/BloodPressure', () => {
+jest.unstable_mockModule('axios', () => axios);
+jest.mock('axios', () => axios);
+
+jest.unstable_mockModule(mod('../models/BloodPressure.js'), () => {
   const BloodPressure = jest.fn();
   BloodPressure.find = jest.fn();
   BloodPressure.findOne = jest.fn();
   BloodPressure.findOneAndDelete = jest.fn();
   BloodPressure.countDocuments = jest.fn();
-  return BloodPressure;
+  return { __esModule: true, default: BloodPressure };
 });
 
-const BloodPressure = require('../models/BloodPressure');
-const app = require('../app');
+const { default: BloodPressure } = await import('../models/BloodPressure.js');
+const { default: app } = await import('../app.js');
 
 const USER_A = { _id: 'user-a', id: 'user-a', userId: 'user-a', username: 'alice', email: 'alice@example.com' };
 const USER_B = { _id: 'user-b', id: 'user-b', userId: 'user-b', username: 'bob', email: 'bob@example.com' };

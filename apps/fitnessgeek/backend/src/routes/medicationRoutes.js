@@ -1,13 +1,13 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const { authenticateToken } = require('../middleware/auth');
-const Medication = require('../models/Medication');
-const MedicationLog = require('../models/MedicationLog');
-const rx = require('../services/rxService');
-const { suggestIndications } = require('../services/indicationMap');
-const logger = require('../config/logger');
-const { validate } = require('../validation/validate');
-const { createMedicationSchema, updateMedicationSchema } = require('../validation/schemas/medication');
+import { authenticateToken } from '../middleware/auth.js';
+import Medication from '../models/Medication.js';
+import MedicationLog from '../models/MedicationLog.js';
+import rx from '../services/rxService.js';
+import { suggestIndications } from '../services/indicationMap.js';
+import logger from '../config/logger.js';
+import { validate } from '../validation/validate.js';
+import { createMedicationSchema, updateMedicationSchema } from '../validation/schemas/medication.js';
 
 // Search medications (RxNav approximate search)
 router.get('/search', authenticateToken, async (req, res) => {
@@ -263,7 +263,7 @@ router.get('/logs/by-date', authenticateToken, async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;
 // Delete a medication and any associated logs
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {

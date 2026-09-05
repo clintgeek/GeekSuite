@@ -6,8 +6,10 @@
 // itself requires at load time (which auth.test.js already proves is safe
 // to import standalone in jest).
 
-const request = require('supertest');
-const app = require('../../app');
+import { describe, test, expect } from '@jest/globals';
+import request from 'supertest';
+
+import app from '../../app.js';
 
 describe('GET /api/health/breakers', () => {
   test('answers 200 with no auth, matching /api/health', async () => {

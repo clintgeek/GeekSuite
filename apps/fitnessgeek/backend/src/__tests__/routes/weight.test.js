@@ -1,16 +1,23 @@
+// jest resolves an `unstable_mockModule` specifier against the *setup* file
+// rather than this one, so every relative mock target is made absolute first.
+// (Same shape as flockgeek's and storygeek's ESM suites.)
+const mod = (p) => new URL(p, import.meta.url).pathname;
+
 // Ownership / data-isolation tests for the weight-log routes + controller.
 //
-// fitnessgeek's backend is CommonJS, so we replace the Mongoose Weight model,
-// the auth middleware, and the Redis cache service with jest.mock() doubles.
-// No live Mongo, no Redis, no basegeek network call.
+// fitnessgeek's backend is native ESM, so the Mongoose Weight model, the auth
+// middleware and the Redis cache service are replaced with
+// jest.unstable_mockModule() doubles registered before the dynamic imports
+// below. No live Mongo, no Redis, no basegeek network call.
 //
 // The IDOR boundary here is enforced by *query scoping*: every controller
 // query includes the caller's own userId (e.g. Weight.findOne({ _id, userId })),
 // so another user's document can never match — a cross-user lookup returns
 // null and the controller answers 404. These tests pin that behavior.
 
-const express = require('express');
-const request = require('supertest');
+import { describe, test, expect, beforeEach, jest } from '@jest/globals';
+import express from 'express';
+import request from 'supertest';
 
 const OWNER = 'user-owner';
 const OTHER = 'user-other';
@@ -18,7 +25,7 @@ const OTHER = 'user-other';
 // Auth double: caller is identified by the `x-test-user` header, or is
 // unauthenticated (401) if it is absent. Mirrors the real controller's
 // req.user shape ({ id, _id, userId }).
-jest.mock('../../middleware/auth', () => ({
+jest.unstable_mockModule(mod('../../middleware/auth.js'), () => ({
   authenticateToken: (req, res, next) => {
     const userId = req.header('x-test-user');
     if (!userId) {
@@ -31,24 +38,31 @@ jest.mock('../../middleware/auth', () => ({
 }));
 
 // Cache service is Redis-backed; stub it so nothing opens a socket.
-jest.mock('../../services/cacheService', () => ({
-  invalidateUser: jest.fn().mockResolvedValue(true),
-  invalidateUserAI: jest.fn().mockResolvedValue(true),
-  invalidateUserReports: jest.fn().mockResolvedValue(true),
+jest.unstable_mockModule(mod('../../services/cacheService.js'), () => ({
+  __esModule: true,
+  default: {
+    invalidateUser: jest.fn().mockResolvedValue(true),
+    invalidateUserAI: jest.fn().mockResolvedValue(true),
+    invalidateUserReports: jest.fn().mockResolvedValue(true),
+  },
 }));
 
 // Mongoose Weight model replaced by a plain constructor with static mocks.
-jest.mock('../../models/Weight', () => {
+jest.unstable_mockModule(mod('../../models/Weight.js'), () => {
   const Weight = jest.fn();
   Weight.find = jest.fn();
   Weight.countDocuments = jest.fn();
   Weight.findOne = jest.fn();
   Weight.findOneAndDelete = jest.fn();
-  return Weight;
+  return { __esModule: true, default: Weight };
 });
 
-const Weight = require('../../models/Weight');
-const weightRoutes = require('../../routes/weightRoutes');
+// Dynamic imports: they must resolve AFTER the mock registrations above.
+const { default: Weight } = await import('../../models/Weight.js');
+// The real UserSettings model — the optional Garmin push is neutered per-test
+// with jest.spyOn rather than a module double.
+const { default: UserSettings } = await import('../../models/UserSettings.js');
+const { default: weightRoutes } = await import('../../routes/weightRoutes.js');
 
 function buildApp() {
   const app = express();
@@ -134,7 +148,6 @@ describe('PUT /api/weight/:id (updateWeightLog)', () => {
     const doc = { _id: 'w1', userId: OWNER, weight_value: 180, save: jest.fn().mockResolvedValue(true) };
     Weight.findOne.mockResolvedValue(doc);
     // updateWeightLog reads settings for optional Garmin push; keep it disabled.
-    const UserSettings = require('../../models/UserSettings');
     jest.spyOn(UserSettings, 'getOrCreate').mockResolvedValue({ garmin: { enabled: false } });
 
     const res = await request(buildApp())

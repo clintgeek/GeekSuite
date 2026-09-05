@@ -1,4 +1,4 @@
-const axios = require('axios');
+import axios from 'axios';
 
 const RXNAV_BASE = 'https://rxnav.nlm.nih.gov/REST';
 
@@ -32,12 +32,7 @@ async function getClassesByRxcui(rxcui, relaSource) {
   return data;
 }
 
-module.exports = {
-  searchApproximate,
-  resolveRxcuiByName,
-  relatedByTty,
-  getRxTermsInfo,
-  getClassesByRxcui
-};
+export { searchApproximate, resolveRxcuiByName, relatedByTty, getRxTermsInfo, getClassesByRxcui };
+export default { searchApproximate, resolveRxcuiByName, relatedByTty, getRxTermsInfo, getClassesByRxcui };
 
 

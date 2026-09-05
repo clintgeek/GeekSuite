@@ -10,9 +10,9 @@
  * @see https://platform.fatsecret.com/docs
  */
 
-const axios = require('axios');
-const logger = require('../config/logger');
-const cacheService = require('./cacheService');
+import axios from 'axios';
+import logger from '../config/logger.js';
+import cacheService from './cacheService.js';
 
 class FatSecretService {
   constructor() {
@@ -328,4 +328,4 @@ class FatSecretService {
   }
 }
 
-module.exports = new FatSecretService();
+export default new FatSecretService();

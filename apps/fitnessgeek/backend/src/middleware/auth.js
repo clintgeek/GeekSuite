@@ -1,9 +1,7 @@
-const { attachUser, optionalUser } = require('@geeksuite/user/server');
+import { attachUser, optionalUser } from '@geeksuite/user/server';
 
 const authenticateToken = attachUser();
 const optionalAuth = optionalUser();
 
-module.exports = {
-  authenticateToken,
-  optionalAuth
-};
+export { authenticateToken, optionalAuth };
+export default { authenticateToken, optionalAuth };

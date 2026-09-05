@@ -1,3 +1,5 @@
+import dotenv from 'dotenv';
+
 /**
  * Redis Cache Test Script
  * 
@@ -5,10 +7,10 @@
  * Run this to verify cache hits, misses, and TTL behavior.
  */
 
-require('dotenv').config();
-const redisClient = require('./src/config/redis');
-const cacheService = require('./src/services/cacheService');
-const logger = require('./src/config/logger');
+dotenv.config();
+import redisClient from './src/config/redis.js';
+import cacheService from './src/services/cacheService.js';
+import logger from './src/config/logger.js';
 
 async function testCache() {
   console.log('🧪 Testing Redis Cache Implementation...\n');

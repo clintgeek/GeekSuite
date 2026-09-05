@@ -5,17 +5,17 @@
  * and sending to baseGeek AI for analysis.
  */
 
-const logger = require('../config/logger');
-const cacheService = require('./cacheService');
-const baseGeekAIService = require('./baseGeekAIService');
-const FoodLog = require('../models/FoodLog');
-const Weight = require('../models/Weight');
-const BloodPressure = require('../models/BloodPressure');
-const NutritionGoals = require('../models/NutritionGoals');
-const WeightGoals = require('../models/WeightGoals');
-const garminConnectService = require('./garminConnectService');
-const foodReportService = require('./foodReportService');
-const { subDays, format } = require('date-fns');
+import logger from '../config/logger.js';
+import cacheService from './cacheService.js';
+import baseGeekAIService from './baseGeekAIService.js';
+import FoodLog from '../models/FoodLog.js';
+import Weight from '../models/Weight.js';
+import BloodPressure from '../models/BloodPressure.js';
+import NutritionGoals from '../models/NutritionGoals.js';
+import WeightGoals from '../models/WeightGoals.js';
+import garminConnectService from './garminConnectService.js';
+import foodReportService from './foodReportService.js';
+import { subDays, format } from 'date-fns';
 
 class AIInsightsService {
 
@@ -692,4 +692,4 @@ Guidelines:
   }
 }
 
-module.exports = new AIInsightsService();
+export default new AIInsightsService();

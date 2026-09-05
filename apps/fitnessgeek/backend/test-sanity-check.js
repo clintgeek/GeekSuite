@@ -1,10 +1,12 @@
 #!/usr/bin/env node
+import dotenv from 'dotenv';
+
 /**
  * Test AI Sanity Check functionality
  */
 
-require('dotenv').config();
-const baseGeekAIService = require('./src/services/baseGeekAIService');
+dotenv.config();
+import baseGeekAIService from './src/services/baseGeekAIService.js';
 
 async function testSanityCheck() {
   console.log('\n🧠 Testing AI Sanity Check\n');

@@ -1,4 +1,5 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
+import { toUtcMidnight } from '@geeksuite/utils';
 
 const foodLogSchema = new mongoose.Schema({
   user_id: {
@@ -98,25 +99,12 @@ foodLogSchema.virtual('calculatedNutrition').get(function() {
   };
 });
 
-// Helper: parse YYYY-MM-DD as a UTC date (timezone-agnostic across servers)
-function toUtcDate(date) {
-  if (typeof date === 'string') {
-    const [y, m, d] = date.split('-').map(Number);
-    return new Date(Date.UTC(y, (m || 1) - 1, d || 1));
-  }
-  // If a Date was provided, normalize to same Y-M-D at UTC midnight
-  if (date instanceof Date) {
-    return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-  }
-  return new Date(date);
-}
-
 // Static method to get logs for a specific date
 foodLogSchema.statics.getLogsForDate = async function(userId, date) {
-  const startDate = toUtcDate(date);
+  const startDate = toUtcMidnight(date);
   startDate.setUTCHours(0, 0, 0, 0);
 
-  const endDate = toUtcDate(date);
+  const endDate = toUtcMidnight(date);
   endDate.setUTCHours(23, 59, 59, 999);
 
   return await this.find({
@@ -129,10 +117,10 @@ foodLogSchema.statics.getLogsForDate = async function(userId, date) {
 
 // Static method to get logs for a date range
 foodLogSchema.statics.getLogsForDateRange = async function(userId, startDate, endDate) {
-  const start = toUtcDate(startDate);
+  const start = toUtcMidnight(startDate);
   start.setUTCHours(0, 0, 0, 0);
 
-  const end = toUtcDate(endDate);
+  const end = toUtcMidnight(endDate);
   end.setUTCHours(23, 59, 59, 999);
 
   return await this.find({
@@ -153,10 +141,10 @@ foodLogSchema.statics.getRecentLogs = async function(userId, limit = 10) {
 
 // Static method to get logs by meal type
 foodLogSchema.statics.getLogsByMealType = async function(userId, mealType, date) {
-  const startDate = toUtcDate(date);
+  const startDate = toUtcMidnight(date);
   startDate.setUTCHours(0, 0, 0, 0);
 
-  const endDate = toUtcDate(date);
+  const endDate = toUtcMidnight(date);
   endDate.setUTCHours(23, 59, 59, 999);
 
   return await this.find({
@@ -168,4 +156,4 @@ foodLogSchema.statics.getLogsByMealType = async function(userId, mealType, date)
   .sort({ created_at: -1 });
 };
 
-module.exports = mongoose.model('FoodLog', foodLogSchema);
+export default mongoose.model('FoodLog', foodLogSchema);

@@ -1,5 +1,5 @@
-const logger = require('../config/logger');
-const axios = require('axios');
+import logger from '../config/logger.js';
+import axios from 'axios';
 
 /**
  * aiCoachService — FitnessGeek's nutrition coach, over aiGeek.
@@ -233,4 +233,4 @@ Provide a helpful, personalized answer (under 150 words).`;
   }
 }
 
-module.exports = new AICoachService();
+export default new AICoachService();

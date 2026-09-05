@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const loginStreakSchema = new mongoose.Schema({
   user_id: {
@@ -97,4 +97,4 @@ loginStreakSchema.methods.recordLogin = async function() {
   return await this.save();
 };
 
-module.exports = mongoose.model('LoginStreak', loginStreakSchema);
+export default mongoose.model('LoginStreak', loginStreakSchema);

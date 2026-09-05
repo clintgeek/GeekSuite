@@ -1,5 +1,5 @@
-const influxService = require('./influxService');
-const logger = require('../config/logger');
+import influxService from './influxService.js';
+import logger from '../config/logger.js';
 
 /**
  * Sleep stage constants
@@ -605,15 +605,5 @@ async function analyzeSleep(dateStr, userBaselines = {}) {
   }
 }
 
-module.exports = {
-  analyzeSleep,
-  parseSleepData,
-  analyzeSleepArchitecture,
-  analyzeSleepContinuity,
-  analyzeCardiovascularRecovery,
-  analyzeHRVRecovery,
-  analyzeRespiration,
-  analyzeStressRecovery,
-  calculateSleepQualityScore,
-  generateRecommendations
-};
+export { analyzeSleep, parseSleepData, analyzeSleepArchitecture, analyzeSleepContinuity, analyzeCardiovascularRecovery, analyzeHRVRecovery, analyzeRespiration, analyzeStressRecovery, calculateSleepQualityScore, generateRecommendations };
+export default { analyzeSleep, parseSleepData, analyzeSleepArchitecture, analyzeSleepContinuity, analyzeCardiovascularRecovery, analyzeHRVRecovery, analyzeRespiration, analyzeStressRecovery, calculateSleepQualityScore, generateRecommendations };

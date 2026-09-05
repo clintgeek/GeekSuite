@@ -1,6 +1,6 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const axios = require('axios');
+import axios from 'axios';
 const BASEGEEK_URL = (process.env.BASEGEEK_URL || process.env.BASE_GEEK_URL || 'https://basegeek.clintgeek.com').replace(/\/$/, '');
 const APP_NAME = process.env.APP_NAME || 'fitnessgeek';
 
@@ -216,4 +216,4 @@ router.post('/logout', (req, res) => {
   })();
 });
 
-module.exports = router;
+export default router;

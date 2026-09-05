@@ -1,4 +1,4 @@
-const { createLogger } = require('@geeksuite/logger');
+import { createLogger } from '@geeksuite/logger';
 
 // Same level/pretty-print rules every backend used (LOG_LEVEL env, else
 // debug in dev / info in production), now shared via @geeksuite/logger.
@@ -6,4 +6,4 @@ const { createLogger } = require('@geeksuite/logger');
 // any existing field.
 const logger = createLogger({ name: 'fitnessgeek' });
 
-module.exports = logger;
+export default logger;

@@ -1,4 +1,4 @@
-const jwt = require('jsonwebtoken');
+import jwt from 'jsonwebtoken';
 
 // Use the exact same logic as the server
 const JWT_SECRET = process.env.JWT_SECRET || 'CHANGE_ME_SET_JWT_SECRET';

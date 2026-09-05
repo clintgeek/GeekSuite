@@ -1,4 +1,4 @@
-const jwt = require('jsonwebtoken');
+import jwt from 'jsonwebtoken';
 
 // JWT secret - should match baseGeek's secret
 const JWT_SECRET = 'CHANGE_ME_SET_JWT_SECRET';

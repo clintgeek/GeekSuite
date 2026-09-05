@@ -1,26 +1,17 @@
-const express = require('express');
+import express from 'express';
+import { toUtcMidnight } from '@geeksuite/utils';
 const router = express.Router();
-const mongoose = require('mongoose');
-const { authenticateToken } = require('../middleware/auth');
-const FoodLog = require('../models/FoodLog');
-const FoodItem = require('../models/FoodItem');
-const DailySummary = require('../models/DailySummary');
-const UserSettings = require('../models/UserSettings');
-const cacheService = require('../services/cacheService');
-const logger = require('../config/logger');
+import mongoose from 'mongoose';
+import { authenticateToken } from '../middleware/auth.js';
+import FoodLog from '../models/FoodLog.js';
+import FoodItem from '../models/FoodItem.js';
+import DailySummary from '../models/DailySummary.js';
+import UserSettings from '../models/UserSettings.js';
+import cacheService from '../services/cacheService.js';
+import logger from '../config/logger.js';
 
 // Apply authentication to all routes
 router.use(authenticateToken);
-
-// Parse YYYY-MM-DD as a UTC date so prod/dev timezones do not diverge
-function parseUtcDate(input) {
-  if (typeof input === 'string') {
-    const [y, m, d] = input.split('-').map(Number);
-    return new Date(Date.UTC(y, (m || 1) - 1, d || 1));
-  }
-  const date = new Date(input);
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-}
 
 // GET /api/logs - Get food logs for a date
 router.get('/', async (req, res) => {
@@ -178,7 +169,7 @@ router.post('/', async (req, res) => {
     const log = new FoodLog({
       user_id: userId,
       food_item_id: foodItem._id,
-      log_date: parseUtcDate(log_date),
+      log_date: toUtcMidnight(log_date),
       meal_type,
       servings: parseFloat(servings),
       notes: notes || '',
@@ -266,7 +257,7 @@ router.put('/:id', async (req, res) => {
     }
 
     if (log_date !== undefined) {
-      log.log_date = parseUtcDate(log_date);
+      log.log_date = toUtcMidnight(log_date);
     }
 
     if (notes !== undefined) {
@@ -603,7 +594,7 @@ router.post('/copy', async (req, res) => {
     // Build query for source logs
     const query = {
       user_id: sourceUserId,
-      log_date: parseUtcDate(from_date)
+      log_date: toUtcMidnight(from_date)
     };
 
     // If specific meal type, only copy that meal
@@ -626,7 +617,7 @@ router.post('/copy', async (req, res) => {
 
     // Create new logs for destination
     const newLogs = [];
-    const targetDate = parseUtcDate(to_date);
+    const targetDate = toUtcMidnight(to_date);
 
     for (const sourceLog of sourceLogs) {
       // Determine target meal type
@@ -681,4 +672,4 @@ router.post('/copy', async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

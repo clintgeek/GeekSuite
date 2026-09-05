@@ -1,8 +1,8 @@
-const axios = require('axios');
-const cacheService = require('./cacheService');
-const foodQualityService = require('./foodQualityService');
-const logger = require('../config/logger');
-const { createBreaker } = require('../lib/breakers');
+import axios from 'axios';
+import cacheService from './cacheService.js';
+import foodQualityService from './foodQualityService.js';
+import logger from '../config/logger.js';
+import { createBreaker } from '../lib/breakers.js';
 
 // One breaker per upstream, shared across every call site below (and, for
 // 'openfoodfacts', with openFoodFactsService.js — same upstream, same
@@ -288,4 +288,4 @@ class FoodApiService {
 
 }
 
-module.exports = new FoodApiService();
+export default new FoodApiService();

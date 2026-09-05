@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const mealItemSchema = new mongoose.Schema({
   food_item_id: {
@@ -110,4 +110,4 @@ mealSchema.methods.getNutrition = function() {
   };
 };
 
-module.exports = mongoose.model('Meal', mealSchema);
+export default mongoose.model('Meal', mealSchema);

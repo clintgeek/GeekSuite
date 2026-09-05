@@ -1,8 +1,8 @@
-const mongoose = require('mongoose');
-const connectDB = require('./config/database');
-const redisClient = require('./config/redis');
-const logger = require('./config/logger');
-const app = require('./app');
+import mongoose from 'mongoose';
+import connectDB from './config/database.js';
+import redisClient from './config/redis.js';
+import logger from './config/logger.js';
+import app from './app.js';
 
 const PORT = process.env.PORT || 3001;
 
@@ -67,4 +67,4 @@ async function start() {
 
 start();
 
-module.exports = app;
+export default app;

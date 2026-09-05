@@ -1,11 +1,12 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const influxService = require('../services/influxService');
+import influxService from '../services/influxService.js';
 const { InfluxUnavailableError } = influxService;
-const sleepAnalysisService = require('../services/sleepAnalysisService');
-const UserSettings = require('../models/UserSettings');
-const { authenticateToken } = require('../middleware/auth');
-const logger = require('../config/logger');
+import sleepAnalysisService from '../services/sleepAnalysisService.js';
+import * as aiRecoveryService from '../services/aiRecoveryService.js';
+import UserSettings from '../models/UserSettings.js';
+import { authenticateToken } from '../middleware/auth.js';
+import logger from '../config/logger.js';
 
 /**
  * Build a uniform "influx unavailable" 200 response body.
@@ -247,7 +248,6 @@ router.get('/recovery-context/:date', authenticateToken, checkInfluxEnabled, asy
       return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
     }
 
-    const aiRecoveryService = require('../services/aiRecoveryService');
     const data = await aiRecoveryService.generateRecoveryContext(req.user.id, date);
     res.json(data);
   } catch (err) {
@@ -276,7 +276,6 @@ router.get('/recovery-recommendations/:date', authenticateToken, checkInfluxEnab
       return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
     }
 
-    const aiRecoveryService = require('../services/aiRecoveryService');
     const data = await aiRecoveryService.getRecoveryRecommendations(req.user.id, date);
     res.json(data);
   } catch (err) {
@@ -293,4 +292,4 @@ router.get('/recovery-recommendations/:date', authenticateToken, checkInfluxEnab
   }
 });
 
-module.exports = router;
+export default router;

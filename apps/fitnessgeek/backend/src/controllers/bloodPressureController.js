@@ -1,14 +1,6 @@
-const BloodPressure = require('../models/BloodPressure');
-const logger = require('../config/logger');
-
-function toUtcMidnight(dateStr) {
-  if (typeof dateStr === 'string' && dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
-    const [y, m, d] = dateStr.split('-').map(Number);
-    return new Date(Date.UTC(y, m - 1, d));
-  }
-  const date = new Date(dateStr);
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-}
+import { toUtcMidnight } from '@geeksuite/utils';
+import BloodPressure from '../models/BloodPressure.js';
+import logger from '../config/logger.js';
 
 /**
  * Get all blood pressure logs for a user
@@ -337,11 +329,5 @@ const getBPStats = async (req, res) => {
   }
 };
 
-module.exports = {
-  getBPLogs,
-  getBPLog,
-  createBPLog,
-  updateBPLog,
-  deleteBPLog,
-  getBPStats
-};
+export { getBPLogs, getBPLog, createBPLog, updateBPLog, deleteBPLog, getBPStats };
+export default { getBPLogs, getBPLog, createBPLog, updateBPLog, deleteBPLog, getBPStats };

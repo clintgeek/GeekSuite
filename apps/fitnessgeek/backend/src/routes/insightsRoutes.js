@@ -4,11 +4,11 @@
  * Endpoints for AI-powered health insights, summaries, and chat.
  */
 
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const aiInsightsService = require('../services/aiInsightsService');
-const { authenticateToken } = require('../middleware/auth');
-const logger = require('../config/logger');
+import aiInsightsService from '../services/aiInsightsService.js';
+import { authenticateToken } from '../middleware/auth.js';
+import logger from '../config/logger.js';
 
 // All routes require authentication
 router.use(authenticateToken);
@@ -236,4 +236,4 @@ router.get('/context', async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

@@ -99,8 +99,8 @@ packages/schemas/fitnessgeek/userSettings.js   (@geeksuite/schemas)
 Both models build from it:
 
 ```js
-// fitnessgeek/backend (CommonJS)
-const { createUserSettingsSchema } = require('@geeksuite/schemas/fitnessgeek/userSettings');
+// fitnessgeek/backend (ESM since 2026-09-05)
+import { createUserSettingsSchema } from '@geeksuite/schemas/fitnessgeek/userSettings';
 const userSettingsSchema = createUserSettingsSchema(mongoose);
 
 // basegeek/packages/api (ESM)
@@ -130,9 +130,13 @@ dependency-free.
 
 ### Why the module is CommonJS
 
-fitnessgeek's backend is CJS and `require`s it directly; basegeek's api is ESM
-and picks up the default export through Node's ESM→CJS interop. Same
-arrangement `@geeksuite/user` already uses.
+Both consumers are ESM now (fitnessgeek's backend moved to node 20 + ESM on
+2026-09-05), but the shared module itself is still CJS: Node's ESM→CJS interop
+reads its `module.exports = { … }` statically, so `import { createUserSettingsSchema }
+from '@geeksuite/schemas/fitnessgeek/userSettings'` works unchanged from either
+side. Same arrangement `@geeksuite/user` and `@geeksuite/logger` already use.
+(`@geeksuite/utils` is the exception — it is ESM-only, which is what forced
+fitnessgeek's backend off CommonJS in the first place.)
 
 ### What deliberately stayed per-model
 

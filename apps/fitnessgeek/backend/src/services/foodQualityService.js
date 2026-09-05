@@ -422,4 +422,4 @@ class FoodQualityService {
   }
 }
 
-module.exports = new FoodQualityService();
+export default new FoodQualityService();

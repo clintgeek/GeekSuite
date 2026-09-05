@@ -1,10 +1,15 @@
-const fs = require('fs');
-const path = require('path');
-const mongoose = require('mongoose');
-require('dotenv').config({ path: path.join(__dirname, '../.env.local') });
+import { fileURLToPath as __fileURLToPath } from 'node:url';
+import { dirname as __pathDirname } from 'node:path';
+const __dirname = __pathDirname(__fileURLToPath(import.meta.url));
+
+import fs from 'fs';
+import path from 'path';
+import mongoose from 'mongoose';
+import dotenv from 'dotenv';
+dotenv.config({ path: path.join(__dirname, '../.env.local') });
 
 // Import the Weight model
-const Weight = require('../src/models/Weight');
+import Weight from '../src/models/Weight.js';
 
 // Database connection
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/fitnessgeek?authSource=admin';
@@ -225,4 +230,4 @@ if (require.main === module) {
   importWeightData();
 }
 
-module.exports = { importWeightData };
+export default { importWeightData };

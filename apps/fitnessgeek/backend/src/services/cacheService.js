@@ -5,8 +5,8 @@
  * Handles serialization, TTL management, and cache invalidation.
  */
 
-const redisClient = require('../config/redis');
-const logger = require('../config/logger');
+import redisClient from '../config/redis.js';
+import logger from '../config/logger.js';
 
 class CacheService {
   constructor() {
@@ -184,4 +184,4 @@ class CacheService {
   }
 }
 
-module.exports = new CacheService();
+export default new CacheService();
