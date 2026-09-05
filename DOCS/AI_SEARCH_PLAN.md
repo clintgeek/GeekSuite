@@ -90,22 +90,27 @@ appear above the list. Any failure or timeout (3 s) leaves the plain results in 
 `SearchResults` gains an `answer` slot; a new `AnswerCard` shows the line, the provider in
 mono at 11px, and the citations as the highlighted rows.
 
-## Decisions for Chef
+## Decisions (Chef, 2026-09-04)
 
-1. **Opt-in.** Note content leaving the box to a third-party free-tier provider is new. Default
-   the AI layer off, with a Settings toggle ("Ask the suite with AI") and a per-query override
-   (`??` prefix)? Or on by default for titles only, content only when toggled?
-2. **Trigger.** Auto-detect language-shaped queries, or require the explicit `??` prefix so the
-   cost and latency are always the user's choice? Recommendation: explicit prefix first, auto
-   later once latency is known.
-3. **Provider.** `basegeek-free` rotation (free, 1–3 s, variable quality) or a pinned paid model
-   for this one surface (consistent, costs money)? Recommendation: start on rotation; the
-   schema-validated output makes quality differences survivable.
+1. **Opt-in.** The AI layer is off by default; a StartGeek setting ("Ask the suite with AI")
+   turns it on. Locked and encrypted notes stay out of the model's context regardless.
+2. **Trigger: explicit.** `??` invokes Ask; `?` stays the instant regex search. Automatic
+   detection of sentence-shaped queries is deferred until real latency is known.
+3. **Provider: let aiGeek choose, as data.** Ask routes through `model: "basegeek-app"` with app
+   id `startgeek`, so the model is whatever the App Routing config says. aiGeek grows a
+   **model steward** surface to fill that config well: `recommendProvider(task, { freeOnly,
+   priority })` ranks free models for a task description (the director already does most of
+   this: keyword-parsed requirements, capability filtering, cost/speed/quality ordering, free-tier
+   flags per model), `listFreeModels()` returns the current free models with their known
+   properties (context window, JSON/tool support, speed/quality, free-tier limits), both exposed
+   as authenticated GraphQL (`aiRecommendModel`, `aiFreeModels`) and REST, and the AIGeek App
+   Routing dialog gets a "Recommend a free model" block plus a browsable free-model picker so
+   the default can be set by asking, or by hand. Keeps the choice current as free tiers move.
 
 ## Order of work
 
-1. AIGeek phase B lands first (admin gating on keys, toasts) — this adds a new AI-calling
-   surface and should not land on the current unguarded config.
+1. ~~AIGeek phase B (admin gating on keys, toasts)~~ landed 2026-09-04 (`4fac2ef`).
+1b. aiGeek model steward (recommend free model for a task, list free models, App Routing UI). **S–M**
 2. basegeek `glanceAsk` with the intent + search layer only, behind a feature flag, with a
    Jest test that feeds a canned model response and asserts the merged results. **S–M**
 3. startgeek answer card + `??` prefix. **S**
