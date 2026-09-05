@@ -7,11 +7,13 @@
  * gone. The same 220px `Sidebar` panel serves desktop and mobile.
  *
  * `fill` (the play route) hands the page the frame instead of the document
- * flow: `main` and the container stop scrolling and become a flex column, so a
- * page can size itself with `flex: 1` rather than guessing at the chrome with
- * `calc(100vh - N)`. `GeekAppFrame`'s route-transition `motion.div` sits
- * between the two, hence the `& > div` rule — it has no `sx` of its own to
- * take a flex value.
+ * flow. `GeekAppFrame`'s own `fill` prop (see its header, DOCS/THE_UI_UNIFICATION_PLAN.md
+ * §3b) now owns that contract: it stops scrolling itself and flexes its
+ * route-transition `motion.div` for us — no more reaching into the frame with
+ * a `& > div` selector. `Container` still needs its own `fill` handling below:
+ * it's the frame's child, and it stops scrolling and becomes a flex column so
+ * a page can size itself with `flex: 1` rather than guessing at the chrome
+ * with `calc(100vh - N)`.
  */
 import { Container } from '@mui/material';
 import { GeekShell, GeekAppFrame } from '@geeksuite/ui';
@@ -27,9 +29,7 @@ function Layout({ children, fill = false }) {
       navSx={{ bgcolor: 'background.paper' }}
       topBar={<TopBar />}
     >
-      <GeekAppFrame
-        sx={fill ? { overflowY: 'hidden', ...fillColumn, '& > div': { flex: 1, ...fillColumn } } : undefined}
-      >
+      <GeekAppFrame fill={fill}>
         <Container
           maxWidth="xl"
           sx={{
