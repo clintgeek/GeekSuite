@@ -29,6 +29,7 @@ own connection. **Add a field to the shared module, never to a wrapper.**
 | `WeightGoals` | `packages/schemas/fitnessgeek/weightGoals.js` | `weightgoals` | 2026-09-05 | — |
 | `NutritionGoals` | `packages/schemas/fitnessgeek/nutritionGoals.js` | `nutritiongoals` | 2026-09-05 | `evaluateGoalsMet`, `computeGoalProgress`, `attachNutritionGoalsMethods` |
 | `Meal` | `packages/schemas/fitnessgeek/meal.js` | `meals` | 2026-09-05 | `MEAL_TYPES`, `sumMealNutrition`, `createMealItemSchema`, `attachMealTimestamps`, `attachMealMethods` |
+| `FoodItem` | `packages/schemas/fitnessgeek/foodItem.js` | `fooditems` | 2026-09-05 | `FOOD_SOURCES`, `findOrCreateFoodItem`, `foodItemDedupeFilters`, `newFoodItemAttrs`, `foodItemDefaults`, `foodItemBounds`, `attachFoodItemVirtuals`, `attachFoodItemMethods` |
 
 The wrappers, per model:
 
@@ -51,6 +52,7 @@ Statics and instance methods, per consolidated model:
 | `WeightGoals` | `getActiveWeightGoals`, `createWeightGoals`, `updateWeightGoals` on both; basegeek's all open with `requireUser` | — |
 | `NutritionGoals` | `getActiveGoals`, `createGoals`, `updateGoals` on both; basegeek's all open with `requireUser` | `checkGoalsMet`, `getProgress` |
 | `Meal` | `getActiveMeals`, `getMealsByType`, `searchMeals` on both **and they disagree** — basegeek's throw on an unscoped call, fitnessgeek's return every user's meals; `findOwned` is basegeek-only | `getNutrition` |
+| `FoodItem` | `search` on both (byte-identical, still app-side); `findAccessible`, `findAccessibleMany` basegeek-only. `findOrCreate` on both, but each is a **one-line delegate** to the shared `findOrCreateFoodItem` | `isGlobal` |
 
 `recordLogin` was the first *instance method* to move into a shared module. It
 mutates four declared paths, so a divergence in it would corrupt a user's
@@ -68,6 +70,8 @@ does not throw, it quietly tells each caller a different answer. **The rule is
 question is why *statics* are the exception, not a second gate methods have to
 pass.** Each one's arithmetic is exported by name (`evaluateGoalsMet`,
 `computeGoalProgress`, `sumMealNutrition`) so the hermetic suite can call it.
+`FoodItem.isGlobal` joined them on 2026-09-05 for the same reason: it reads one
+declared path and its answer decides whether a catalog row is shared.
 
 `Meal` also carries the first two things of their kind in these modules: an
 **embedded sub-schema** (`food_items`, exported as `createMealItemSchema` — it
@@ -77,11 +81,25 @@ must be built from the caller's own mongoose, exactly as the parent is) and a
 
 ### Two things that are *not* in the shared modules
 
-- **Statics.** They do not appear in `schema.paths`, so they cannot cause the
-  strict-mode data loss these modules exist to prevent, and the two writers
-  legitimately need different ones. The one planned exception is
-  `FoodItem.findOrCreate`, whose dedupe ladder must stay identical or the two
-  writers will mint duplicate catalog rows.
+- **Statics — with one carve-out, taken on 2026-09-05.** They do not appear in
+  `schema.paths`, so they cannot cause the strict-mode data loss these modules
+  exist to prevent, and the two writers legitimately need different ones. The
+  exception is `FoodItem.findOrCreate`: its dedupe ladder is not an ownership
+  policy, it has one correct meaning for both writers, and a divergence would
+  fork the catalog silently rather than throw. So the ladder and the global-row
+  creation live in the shared module as `findOrCreateFoodItem(Model, foodData)`
+  and each app keeps a one-line delegating static. The shape is the same one
+  used for instance methods — move the logic, export the pure part by name —
+  except that the model is a parameter instead of the document, and the pure
+  part is a *query plan* (`foodItemDedupeFilters` returns the three rungs as
+  data) rather than arithmetic.
+
+  Everything that expresses **who may see what** still stays app-side, including
+  `FoodItem.search`, which is byte-identical on both sides and was still not
+  promoted: it scopes on `{user_id: null}` while `foodCatalogFilter` — used by
+  `findAccessible`, in the same gateway file — also matches
+  `{user_id: {$exists: false}}`. Two live definitions of a visible catalog row;
+  promoting one would freeze the disagreement rather than resolve it.
 - **The connection.** No shared module opens a connection or registers a model.
   That is the whole reason the factory takes `mongoose` as a parameter.
 
@@ -113,6 +131,27 @@ must be built from the caller's own mongoose, exactly as the parent is) and a
   paths and the `pre('save')` hook maintains the latter, which means nothing
   stamps `updated_at` on a `findOneAndUpdate`, on either side. Pre-existing on
   both sides, moved verbatim.
+- `FoodItem` carries the **only `unique` index** in `packages/schemas` —
+  `barcode` is `unique: true, sparse: true`. Consolidation changed no index, so
+  production needed no rebuild; but if a `unique` flag ever moves in a shared
+  module, **both processes must be redeployed together**, because whichever
+  reaches `syncIndexes` first builds an index the other's writes may violate.
+  In this suite that happens by construction (every push to `main` rebuilds all
+  eight images and Watchtower rolls the fleet) — but say so in the commit.
+- `FoodItem`'s text index (`{name: 'text', brand: 'text'}`) declares **no
+  weights** on either side, so both fields rank equally. Both parity suites now
+  include `weights` in the normalized index description, so adding one on a
+  single side is a test failure rather than a silent re-ranking.
+- **A soft-deleted `FoodItem` still owns its barcode.** Every rung of the dedupe
+  ladder filters `is_deleted: false`; the `unique` index on `barcode` does not.
+  So when a soft-deleted row holds a barcode, `findOrCreate` refuses to return
+  it and then collides with it on insert — the caller gets `E11000`, not a row.
+  Pre-existing and identical on both sides; found by writing the tests, and now
+  asserted so it stays a known property. Fixing it means a partial unique index
+  or clearing `barcode` on soft delete — both migrations, both `unique` changes.
+- `FoodItem` declares a virtual (`totalCalories`) and passes **no**
+  `toJSON: {virtuals: true}`, so the virtual is readable on the document but is
+  not on the wire. The only pair with that combination.
 - `NutritionGoals`' two methods disagree about sugar and sodium on purpose:
   `checkGoalsMet` treats them as ceilings (under the limit is good),
   `getProgress` treats them as floors like the other five (under the limit

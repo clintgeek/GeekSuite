@@ -2,119 +2,34 @@ import mongoose from 'mongoose';
 import { getAppConnection } from '../../shared/appConnections.js';
 import { requireUser, isValidObjectId, foodCatalogFilter } from '../ownership.js';
 
+// The field set, all six indexes (including `barcode`'s unique/sparse one and
+// the `{name,brand}` text index), the `source` enum, the `totalCalories`
+// virtual and the `isGlobal` instance method live in @geeksuite/schemas so
+// that this model and fitnessgeek's REST copy
+// (apps/fitnessgeek/backend/src/models/FoodItem.js) cannot drift. Both point
+// at the `fooditems` collection in the same database — this gateway through
+// its `fitnessFood` / `addFitnessFood` / `addFoodLog` resolvers, fitnessgeek
+// through its foodRoutes and unifiedFoodService — and mongoose strict mode
+// silently drops paths one side doesn't know about. See the shared module's
+// header and DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md.
+//
+// Do NOT add fields here. Add them to the shared module (and to typeDefs.js if
+// they should cross GraphQL); the tripwire tests in both suites fail if this
+// model stops matching the shared definition. And do not change a `unique`
+// flag on either side alone — see the shared module's header for why both
+// processes have to be redeployed together if one ever moves.
+//
+// Default import + destructure: the shared module is CommonJS (no build step,
+// `require`-able and `import`-able by both consumers), and this is the interop
+// form that works identically under Node ESM and jest's
+// --experimental-vm-modules.
+import foodItemSchemaModule from '@geeksuite/schemas/fitnessgeek/foodItem';
+
+const { createFoodItemSchema, findOrCreateFoodItem } = foodItemSchemaModule;
+
 const fitnessConn = getAppConnection('fitnessgeek');
 
-const foodItemSchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: true,
-    trim: true,
-    index: true
-  },
-  brand: {
-    type: String,
-    trim: true,
-    index: true
-  },
-  barcode: {
-    type: String,
-    unique: true,
-    sparse: true,
-    index: true
-  },
-  nutrition: {
-    calories_per_serving: {
-      type: Number,
-      required: true,
-      min: 0
-    },
-    protein_grams: {
-      type: Number,
-      default: 0,
-      min: 0
-    },
-    carbs_grams: {
-      type: Number,
-      default: 0,
-      min: 0
-    },
-    fat_grams: {
-      type: Number,
-      default: 0,
-      min: 0
-    },
-    fiber_grams: {
-      type: Number,
-      default: 0,
-      min: 0
-    },
-    sugar_grams: {
-      type: Number,
-      default: 0,
-      min: 0
-    },
-    sodium_mg: {
-      type: Number,
-      default: 0,
-      min: 0
-    }
-  },
-  serving: {
-    size: {
-      type: Number,
-      required: true,
-      min: 0.1
-    },
-    unit: {
-      type: String,
-      required: true,
-      default: 'g'
-    }
-  },
-  source: {
-    type: String,
-    required: true,
-    enum: ['nutritionix', 'usda', 'openfoodfacts', 'custom', 'ai', 'fatsecret'],
-    index: true
-  },
-  source_id: {
-    type: String,
-    index: true
-  },
-  user_id: {
-    type: String,
-    index: true
-  },
-  is_deleted: {
-    type: Boolean,
-    default: false,
-    index: true
-  }
-}, {
-  timestamps: {
-    createdAt: 'created_at',
-    updatedAt: 'updated_at'
-  }
-});
-
-// Compound indexes for better query performance
-foodItemSchema.index({ name: 1, brand: 1 });
-foodItemSchema.index({ source: 1, source_id: 1 });
-foodItemSchema.index({ is_deleted: 1, user_id: 1 });
-foodItemSchema.index({ barcode: 1, is_deleted: 1 });  // For barcode lookups in findOrCreate
-
-// Text search index
-foodItemSchema.index({ name: 'text', brand: 'text' });
-
-// Virtual for total calories calculation
-foodItemSchema.virtual('totalCalories').get(function() {
-  return this.nutrition.calories_per_serving;
-});
-
-// Method to check if food is global (not user-specific)
-foodItemSchema.methods.isGlobal = function() {
-  return !this.user_id;
-};
+const foodItemSchema = createFoodItemSchema(mongoose);
 
 // Catalog read scope: global foods (no user_id) plus the caller's own custom
 // foods. Deliberately shared — global entries stay readable by everyone — but
@@ -133,64 +48,40 @@ foodItemSchema.statics.findAccessibleMany = async function(ids, userId) {
   return this.find({ _id: { $in: valid }, is_deleted: false, ...foodCatalogFilter(userId) });
 };
 
-// Static method to find or create food item
-foodItemSchema.statics.findOrCreate = async function(foodData, userId = null) {
-  // Try to find existing food by barcode first
-  if (foodData.barcode) {
-    const existing = await this.findOne({
-      barcode: foodData.barcode,
-      is_deleted: false
-    });
-    if (existing) return existing;
-  }
-
-  // Try to find by source and source_id
-  if (foodData.source && foodData.source_id) {
-    const existing = await this.findOne({
-      source: foodData.source,
-      source_id: foodData.source_id,
-      is_deleted: false
-    });
-    if (existing) return existing;
-  }
-
-  // Try to find by name and brand (for custom foods)
-  if (foodData.name && foodData.brand) {
-    const existing = await this.findOne({
-      name: foodData.name,
-      brand: foodData.brand,
-      is_deleted: false
-    });
-    if (existing) return existing;
-  }
-
-  // Create new food item
-  const foodItem = new this({
-    name: foodData.name,
-    brand: foodData.brand,
-    barcode: foodData.barcode,
-    nutrition: {
-      calories_per_serving: foodData.nutrition?.calories_per_serving || 0,
-      protein_grams: foodData.nutrition?.protein_grams || 0,
-      carbs_grams: foodData.nutrition?.carbs_grams || 0,
-      fat_grams: foodData.nutrition?.fat_grams || 0,
-      fiber_grams: foodData.nutrition?.fiber_grams || 0,
-      sugar_grams: foodData.nutrition?.sugar_grams || 0,
-      sodium_mg: foodData.nutrition?.sodium_mg || 0
-    },
-    serving: {
-      size: foodData.serving?.size || 100,
-      unit: foodData.serving?.unit || 'g'
-    },
-    source: foodData.source || 'custom',
-    source_id: foodData.source_id,
-    user_id: null
-  });
-
-  return await foodItem.save();
+// Static method to find or create food item.
+//
+// The DEDUPE LADDER IS SHARED — barcode, then (source, source_id), then
+// (name, brand), otherwise a new GLOBAL row — because it is the only thing
+// stopping this gateway and fitnessgeek's REST backend minting duplicate
+// catalog rows for the same USDA/OpenFoodFacts item. That is the one carve-out
+// from the "statics stay app-side" rule (plan §4 pair 8): it is not an
+// ownership policy, it has one correct meaning for both writers, and a
+// divergence in it would fork the catalog quietly rather than throw.
+//
+// NO OWNERSHIP GUARD HERE, ON PURPOSE. The ladder's queries are unscoped —
+// that is how a global row gets shared — so `resolveLogFoodItem` in
+// resolvers.js puts the resolved row through `findAccessible` afterwards,
+// which is what stops a crafted (name, brand) handing back another user's
+// private custom food. That re-check is the gateway's divergence from REST and
+// it lives in the resolver; moving it in here would double the query for every
+// caller and change what this static returns.
+foodItemSchema.statics.findOrCreate = async function findOrCreate(foodData, userId = null) {
+  // `userId` is accepted and ignored — shipped behaviour on both sides. A row
+  // minted here is always global (`user_id: null`); `addFitnessFood` is the
+  // path that mints a private custom food.
+  void userId;
+  return findOrCreateFoodItem(this, foodData);
 };
 
-// Static method to search foods
+// Static method to search foods.
+//
+// Stays app-side: it is an ownership-scoping read, and it does not agree with
+// `foodCatalogFilter` above — that one also matches rows with no `user_id` key
+// at all, this one does not. Byte-identical to fitnessgeek's copy today;
+// promoting it would freeze one of two live definitions of catalog visibility
+// into the shared contract, and a read static has no corruption failure mode
+// to buy for that price. Reconciling the two filters is its own ticket. No
+// live caller in this package today.
 foodItemSchema.statics.search = async function(query, userId = null, limit = 25) {
   const filter = { is_deleted: false };
 

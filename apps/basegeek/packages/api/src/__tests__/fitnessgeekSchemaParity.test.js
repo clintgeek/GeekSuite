@@ -84,10 +84,15 @@ const { default: MealRest } = await import(
 );
 const { default: mealShared } = await import('@geeksuite/schemas/fitnessgeek/meal');
 
-// Not under test here — imported only so `FoodItem` is registered on the
-// gateway's connection, because `Meal`'s list statics `.populate()` its ref.
-// (Pair 8; it still declares its own schema today.)
+// Pair 8. Also the model `Meal`'s list statics `.populate()` through its ref,
+// so importing it here registers `FoodItem` on the gateway's connection —
+// without that, `populate` throws MissingSchemaError and the Meal statics
+// tests below would pass for the wrong reason.
 const { default: FoodItemGraphQL } = await import('../graphql/fitnessgeek/models/FoodItem.js');
+const { default: FoodItemRest } = await import(
+  '../../../../../fitnessgeek/backend/src/models/FoodItem.js'
+);
+const { default: foodItemShared } = await import('@geeksuite/schemas/fitnessgeek/foodItem');
 
 const OWNER = String(new mongoose.Types.ObjectId());
 
@@ -357,6 +362,71 @@ const PAIRS = [
       refs: doc.food_items.map((i) => String(i.food_item_id)),
     }),
   },
+  {
+    name: 'FoodItem',
+    Rest: FoodItemRest,
+    GraphQL: FoodItemGraphQL,
+    createSchema: foodItemShared.createFoodItemSchema,
+    // `nutrition` and `serving` are nested OBJECTS, not sub-schemas, so
+    // mongoose flattens them into dotted paths — unlike `Meal.food_items`,
+    // which is a DocumentArray and needs its own comparison.
+    expectedPaths: [
+      'name',
+      'brand',
+      'barcode',
+      'nutrition.calories_per_serving',
+      'nutrition.protein_grams',
+      'nutrition.carbs_grams',
+      'nutrition.fat_grams',
+      'nutrition.fiber_grams',
+      'nutrition.sugar_grams',
+      'nutrition.sodium_mg',
+      'serving.size',
+      'serving.unit',
+      'source',
+      'source_id',
+      'user_id',
+      'is_deleted',
+      'created_at',
+      'updated_at',
+    ],
+    expectedVirtuals: ['totalCalories'],
+    // No `toJSON`/`toObject` options: `totalCalories` is readable on the
+    // document but is NOT on the wire. Both sides shipped it that way.
+    serializesVirtuals: false,
+    ownerField: 'user_id',
+    doc: () => ({
+      name: 'Post-consolidation probe bar',
+      brand: 'ProbeCo',
+      // Unique per run: `barcode` carries `unique: true, sparse: true`, so a
+      // fixed literal would collide across the write-through cases.
+      barcode: `probe-${new mongoose.Types.ObjectId()}`,
+      nutrition: {
+        calories_per_serving: 210,
+        protein_grams: 21,
+        carbs_grams: 4,
+        fat_grams: 12,
+        fiber_grams: 9,
+        sugar_grams: 1,
+        sodium_mg: 140,
+      },
+      serving: { size: 60, unit: 'g' },
+      source: 'openfoodfacts',
+      source_id: 'off-probe-1',
+      user_id: OWNER,
+      is_deleted: false,
+    }),
+    // `barcode` is the field the plan names for this pair — it is the dedupe
+    // key, so a drifted copy eating it would fork the catalog.
+    probe: (doc) => ({
+      barcode: doc.barcode,
+      source: doc.source,
+      source_id: doc.source_id,
+      calories: doc.nutrition.calories_per_serving,
+      sodium: doc.nutrition.sodium_mg,
+      serving: { size: doc.serving.size, unit: doc.serving.unit },
+    }),
+  },
 ];
 
 /** The filter that scopes a pair's probe rows to this run's owner. */
@@ -390,6 +460,12 @@ function describePath(path) {
  * `describePath` only sees the path-level `index: true` flag, never a
  * `schema.index()` call — and a compound index is exactly the kind of thing
  * that can drift unnoticed while both processes race to create it.
+ *
+ * `weights` is in the description because of `FoodItem`: it declares a text
+ * index (`{ name: 'text', brand: 'text' }`) with no weights on either side, so
+ * both fields rank equally. Adding a weight on one side only would change
+ * search ranking for one writer and nothing else — exactly the kind of silent
+ * one-sided change this suite exists to catch.
  */
 const describeIndexes = (schema) =>
   schema
@@ -401,6 +477,7 @@ const describeIndexes = (schema) =>
           unique: !!opts.unique,
           sparse: !!opts.sparse,
           expireAfterSeconds: opts.expireAfterSeconds,
+          weights: opts.weights,
         },
       ])
     )
@@ -872,6 +949,79 @@ describe('ownership guards stayed app-side (statics policy)', () => {
     expect(typeof MealGraphQL.findOwned).toBe('function');
     expect(MealRest.schema.statics.findOwned).toBeUndefined();
   });
+
+  // -------------------------------------------------------------------------
+  // FoodItem — the split is the point: one shared dedupe, two ownership policies
+  // -------------------------------------------------------------------------
+
+  test('both sides expose exactly the statics the split says they should', () => {
+    // The deliberate asymmetry, asserted as a decision. `findOrCreate` and
+    // `search` on both; `findAccessible`/`findAccessibleMany` on the gateway
+    // only, because only it is multi-tenant at the model layer.
+    const statics = (M) => Object.keys(M.schema.statics).sort();
+    expect(statics(FoodItemRest)).toEqual(['findOrCreate', 'search']);
+    expect(statics(FoodItemGraphQL)).toEqual([
+      'findAccessible',
+      'findAccessibleMany',
+      'findOrCreate',
+      'search',
+    ]);
+    // The shared module attaches no statics at all.
+    expect(Object.keys(foodItemShared.createFoodItemSchema(mongoose).statics)).toEqual([]);
+  });
+
+  test('both findOrCreate statics delegate to the one shared implementation', () => {
+    // This is the carve-out from the statics policy, so what matters is not
+    // that a function by this name exists on both — it is that neither side
+    // wrote its own ladder.
+    for (const M of [FoodItemRest, FoodItemGraphQL]) {
+      const src = String(M.schema.statics.findOrCreate);
+      expect(src).toContain('findOrCreateFoodItem');
+      // No ladder of its own: none of the three dedupe filters is restated.
+      expect(src).not.toContain('is_deleted');
+      expect(src).not.toContain('source_id');
+    }
+    // The two bodies are the same code once each side's prose is stripped —
+    // the wrappers explain the same delegation in their own words.
+    const body = (M) =>
+      String(M.schema.statics.findOrCreate)
+        .split('\n')
+        .filter((l) => !l.trim().startsWith('//'))
+        .join('\n');
+    expect(body(FoodItemGraphQL)).toBe(body(FoodItemRest));
+  });
+
+  test('the gateway refuses an unscoped findAccessible / findAccessibleMany', async () => {
+    await expect(
+      FoodItemGraphQL.findAccessible(String(new mongoose.Types.ObjectId()), undefined)
+    ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+    await expect(FoodItemGraphQL.findAccessibleMany(['x'], undefined)).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    });
+  });
+
+  test('the accessibility re-check is the resolver’s, not the static’s', () => {
+    // The gateway's deliberate divergence from REST (79b1b57): the dedupe
+    // queries are unscoped, so `resolveLogFoodItem` puts the resolved row
+    // through `findAccessible` afterwards. That lives in resolvers.js. If
+    // somebody moves it into the static, every caller pays a second query and
+    // this assertion is what makes them say so.
+    expect(String(FoodItemGraphQL.schema.statics.findOrCreate)).not.toContain('findAccessible');
+    expect(String(FoodItemRest.schema.statics.findOrCreate)).not.toContain('findAccessible');
+  });
+
+  test('search stayed app-side on both, and it disagrees with foodCatalogFilter', () => {
+    // Byte-identical copies, deliberately not promoted: `search` scopes on
+    // `{user_id: null}` while `foodCatalogFilter` also matches a row with no
+    // `user_id` key at all. Two live definitions of "visible"; promoting one
+    // into the shared contract would freeze the disagreement rather than
+    // resolve it. See the shared module's header.
+    expect(String(FoodItemGraphQL.schema.statics.search)).toBe(
+      String(FoodItemRest.schema.statics.search)
+    );
+    expect(String(FoodItemRest.schema.statics.search)).toContain('user_id: null');
+    expect(String(FoodItemGraphQL.schema.statics.findAccessible)).toContain('foodCatalogFilter');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1091,6 +1241,227 @@ describe('Meal sub-schema, hook and getNutrition', () => {
       });
       expect(totals.calories).toBe(200);
       expect(totals).toEqual(sumMealNutrition([{ ...food(), servings: 2 }]));
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FoodItem — the shared dedupe ladder, against a real collection
+// ---------------------------------------------------------------------------
+
+describe('FoodItem findOrCreate (the shared dedupe ladder)', () => {
+  const { findOrCreateFoodItem, foodItemDedupeFilters, newFoodItemAttrs, FOOD_SOURCES } =
+    foodItemShared;
+
+  // Bind fitnessgeek's own schema to the in-memory connection, on the same
+  // collection: the production topology, two models over one catalog.
+  let FoodItemRestSide;
+
+  beforeAll(() => {
+    FoodItemRestSide = FoodItemGraphQL.db.model(
+      'FoodItemDedupeProbe',
+      FoodItemRest.schema,
+      FoodItemGraphQL.collection.name
+    );
+  });
+
+  afterEach(async () => {
+    await FoodItemGraphQL.deleteMany({});
+  });
+
+  const food = (over = {}) => ({
+    name: 'Dedupe probe bar',
+    brand: 'ProbeCo',
+    nutrition: { calories_per_serving: 200, protein_grams: 20, sodium_mg: 90 },
+    serving: { size: 55, unit: 'g' },
+    source: 'usda',
+    source_id: 'usda-777',
+    ...over,
+  });
+
+  test('a miss creates ONE global row, with the provenance intact', async () => {
+    const created = await FoodItemGraphQL.findOrCreate(food(), OWNER);
+
+    expect(created.source).toBe('usda');
+    expect(created.source_id).toBe('usda-777');
+    // Global, even though a userId was passed. That is the shipped rule: the
+    // private-custom-food path is a different call.
+    expect(created.user_id ?? null).toBeNull();
+    expect(created.isGlobal()).toBe(true);
+    expect(await FoodItemGraphQL.countDocuments({})).toBe(1);
+  });
+
+  test('a second identical call returns the same row rather than a duplicate', async () => {
+    const first = await FoodItemGraphQL.findOrCreate(food(), OWNER);
+    const second = await FoodItemGraphQL.findOrCreate(food(), OWNER);
+
+    expect(String(second._id)).toBe(String(first._id));
+    expect(await FoodItemGraphQL.countDocuments({})).toBe(1);
+  });
+
+  test('rung 1 — barcode matches even when name, brand and source all differ', async () => {
+    const seeded = await FoodItemGraphQL.create(
+      food({ barcode: '0123456789012', name: 'Seeded', brand: 'SeedCo' })
+    );
+
+    const resolved = await FoodItemGraphQL.findOrCreate(
+      food({ barcode: '0123456789012', name: 'Totally different', brand: 'OtherCo',
+             source: 'openfoodfacts', source_id: 'off-1' }),
+      OWNER
+    );
+
+    expect(String(resolved._id)).toBe(String(seeded._id));
+    expect(await FoodItemGraphQL.countDocuments({})).toBe(1);
+  });
+
+  test('rung 2 — (source, source_id) matches when there is no barcode', async () => {
+    const seeded = await FoodItemGraphQL.create(food({ name: 'Seeded', brand: 'SeedCo' }));
+
+    const resolved = await FoodItemGraphQL.findOrCreate(
+      food({ name: 'Different name', brand: 'DifferentCo' }),
+      OWNER
+    );
+
+    expect(String(resolved._id)).toBe(String(seeded._id));
+    expect(await FoodItemGraphQL.countDocuments({})).toBe(1);
+  });
+
+  test('rung 3 — (name, brand) matches when there is no barcode and no source_id', async () => {
+    const seeded = await FoodItemGraphQL.create(food({ source: 'custom', source_id: undefined }));
+
+    const resolved = await FoodItemGraphQL.findOrCreate(
+      food({ source: 'custom', source_id: undefined, nutrition: { calories_per_serving: 1 } }),
+      OWNER
+    );
+
+    expect(String(resolved._id)).toBe(String(seeded._id));
+    // The existing row wins whole — nothing is merged from the incoming food.
+    expect(resolved.nutrition.calories_per_serving).toBe(200);
+    expect(await FoodItemGraphQL.countDocuments({})).toBe(1);
+  });
+
+  test('a soft-deleted row is not resurrected — every rung requires is_deleted:false', async () => {
+    // No barcode on this one, so the ladder falls to (source, source_id).
+    await FoodItemGraphQL.create(food({ is_deleted: true }));
+
+    const resolved = await FoodItemGraphQL.findOrCreate(food(), OWNER);
+
+    expect(resolved.is_deleted).toBe(false);
+    expect(await FoodItemGraphQL.countDocuments({})).toBe(2);
+  });
+
+  test('but a soft-deleted row that holds a BARCODE makes findOrCreate throw', async () => {
+    // Pre-existing on both sides, found by consolidating rather than caused by
+    // it: the dedupe ladder skips `is_deleted: true`, but the unique index on
+    // `barcode` does NOT — it is unfiltered. So a soft-deleted row still owns
+    // its barcode, the ladder declines to return it, and the insert that
+    // follows collides. Both shipped copies behave exactly this way; asserted
+    // here so it is a known property rather than a surprise in an error log.
+    // Fixing it means either a partial unique index or clearing `barcode` on
+    // soft delete — a migration, not a line in a consolidation commit.
+    await FoodItemGraphQL.init();
+    await FoodItemGraphQL.create(food({ barcode: '9999999999999', is_deleted: true }));
+
+    await expect(
+      FoodItemGraphQL.findOrCreate(food({ barcode: '9999999999999' }), OWNER)
+    ).rejects.toMatchObject({ code: 11000 });
+
+    // And REST's copy does the same thing, because it is the same ladder.
+    await expect(
+      FoodItemRestSide.findOrCreate(food({ barcode: '9999999999999' }))
+    ).rejects.toMatchObject({ code: 11000 });
+  });
+
+  test('both writers dedupe against each other, which is the whole point', async () => {
+    // REST mints it, the gateway finds it. If the two ladders ever diverged,
+    // this is the test that fails and the catalog is what pays.
+    const viaRest = await FoodItemRestSide.findOrCreate(food({ barcode: '5555555555555' }));
+    const viaGateway = await FoodItemGraphQL.findOrCreate(
+      food({ barcode: '5555555555555', name: 'Gateway spelling' }),
+      OWNER
+    );
+
+    expect(String(viaGateway._id)).toBe(String(viaRest._id));
+    expect(await FoodItemGraphQL.countDocuments({})).toBe(1);
+  });
+
+  test('the exported ladder is the ladder, in order', () => {
+    // `foodItemDedupeFilters` is what the hermetic fitnessgeek suite asserts
+    // against; this proves it is the same code the static runs.
+    expect(foodItemDedupeFilters(food({ barcode: 'b1' })).map((r) => r.by)).toEqual([
+      'barcode',
+      'source',
+      'name_brand',
+    ]);
+    expect(foodItemDedupeFilters({ name: 'n' })).toEqual([]);
+  });
+
+  test('the create defaults are the shared ones', () => {
+    const attrs = newFoodItemAttrs({ name: 'Bare' });
+    expect(attrs.serving).toEqual({ size: 100, unit: 'g' });
+    expect(attrs.source).toBe('custom');
+    expect(attrs.user_id).toBeNull();
+    expect(attrs.nutrition.calories_per_serving).toBe(0);
+  });
+
+  test('both models declare the shared source enum, and reject anything else', () => {
+    for (const M of [FoodItemRest, FoodItemGraphQL]) {
+      expect(M.schema.paths.source.enumValues).toEqual([...FOOD_SOURCES]);
+    }
+    const err = new FoodItemGraphQL({
+      name: 'X',
+      source: 'myfitnesspal',
+      nutrition: { calories_per_serving: 1 },
+      serving: { size: 1 },
+    }).validateSync();
+    expect(err && err.errors.source).toBeTruthy();
+  });
+
+  test('barcode really is unique in the database, not just in the schema', async () => {
+    // The one `unique` index in packages/schemas/fitnessgeek. It is unchanged
+    // by consolidation, so production needs no index rebuild — but the flag
+    // has to actually be doing something for that claim to mean anything.
+    await FoodItemGraphQL.init();
+    await FoodItemGraphQL.create(food({ barcode: 'dup-check-1' }));
+    await expect(
+      FoodItemGraphQL.create(food({ barcode: 'dup-check-1', name: 'Second' }))
+    ).rejects.toMatchObject({ code: 11000 });
+
+    // Sparse: two rows with no barcode at all are fine.
+    await FoodItemGraphQL.create(food({ name: 'No barcode A' }));
+    await FoodItemGraphQL.create(food({ name: 'No barcode B' }));
+  });
+
+  test('the text index is declared with no weights, on both sides', () => {
+    const textIndex = (M) =>
+      M.schema.indexes().find(([keys]) => Object.values(keys).includes('text'));
+    for (const M of [FoodItemRest, FoodItemGraphQL]) {
+      const [keys, opts = {}] = textIndex(M);
+      expect(keys).toEqual({ name: 'text', brand: 'text' });
+      // No weights means name and brand rank equally. Asserted so that adding
+      // a weight to one side alone is a failure, not a silent ranking change.
+      expect(opts.weights).toBeUndefined();
+    }
+  });
+
+  test('isGlobal is the shared implementation on both sides', () => {
+    expect(String(FoodItemGraphQL.schema.methods.isGlobal)).toBe(
+      String(FoodItemRest.schema.methods.isGlobal)
+    );
+    const attrs = { name: 'X', source: 'custom', nutrition: { calories_per_serving: 1 },
+                    serving: { size: 1 } };
+    expect(new FoodItemGraphQL(attrs).isGlobal()).toBe(true);
+    expect(new FoodItemGraphQL({ ...attrs, user_id: OWNER }).isGlobal()).toBe(false);
+  });
+
+  test('totalCalories reads through but is NOT serialized, on both sides', () => {
+    const attrs = { name: 'X', source: 'custom', nutrition: { calories_per_serving: 321 },
+                    serving: { size: 1 } };
+    for (const M of [FoodItemRest, FoodItemGraphQL]) {
+      const doc = new M(attrs);
+      expect(doc.totalCalories).toBe(321);
+      // No toJSON: {virtuals: true} on this pair — shipped behaviour.
+      expect(doc.toJSON().totalCalories).toBeUndefined();
     }
   });
 });

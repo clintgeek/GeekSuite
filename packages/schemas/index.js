@@ -10,6 +10,7 @@
 module.exports = {
   fitnessgeek: {
     bloodPressure: require('./fitnessgeek/bloodPressure.js'),
+    foodItem: require('./fitnessgeek/foodItem.js'),
     loginStreak: require('./fitnessgeek/loginStreak.js'),
     meal: require('./fitnessgeek/meal.js'),
     medication: require('./fitnessgeek/medication.js'),

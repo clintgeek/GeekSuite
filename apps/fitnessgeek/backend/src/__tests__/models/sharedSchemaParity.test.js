@@ -68,6 +68,14 @@ import {
   sumMealNutrition,
   MEAL_TYPES,
 } from '@geeksuite/schemas/fitnessgeek/meal';
+import {
+  createFoodItemSchema,
+  findOrCreateFoodItem,
+  foodItemDedupeFilters,
+  newFoodItemAttrs,
+  foodItemDefaults,
+  FOOD_SOURCES,
+} from '@geeksuite/schemas/fitnessgeek/foodItem';
 
 import Weight from '../../models/Weight.js';
 import BloodPressure from '../../models/BloodPressure.js';
@@ -76,6 +84,7 @@ import LoginStreak from '../../models/LoginStreak.js';
 import WeightGoals from '../../models/WeightGoals.js';
 import NutritionGoals from '../../models/NutritionGoals.js';
 import Meal from '../../models/Meal.js';
+import FoodItem from '../../models/FoodItem.js';
 import { createBPSchema } from '../../validation/schemas/bloodPressure.js';
 import { createMedicationSchema as createMedicationZodSchema } from '../../validation/schemas/medication.js';
 
@@ -272,6 +281,46 @@ const PAIRS = [
     // scope only `if (userId)` — divergence C4. Left alone deliberately.
     expectedStatics: ['getActiveMeals', 'getMealsByType', 'searchMeals'],
   },
+  {
+    name: 'FoodItem',
+    Model: FoodItem,
+    createSchema: createFoodItemSchema,
+    factory: 'createFoodItemSchema',
+    specifier: '@geeksuite/schemas/fitnessgeek/foodItem',
+    modelFile: '../../models/FoodItem.js',
+    // `nutrition` and `serving` are nested OBJECTS, not sub-schemas, so
+    // mongoose flattens them into dotted paths. Contrast `Meal.food_items`,
+    // which is a DocumentArray and needs its own comparison.
+    expectedPaths: [
+      'name',
+      'brand',
+      'barcode',
+      'nutrition.calories_per_serving',
+      'nutrition.protein_grams',
+      'nutrition.carbs_grams',
+      'nutrition.fat_grams',
+      'nutrition.fiber_grams',
+      'nutrition.sugar_grams',
+      'nutrition.sodium_mg',
+      'serving.size',
+      'serving.unit',
+      'source',
+      'source_id',
+      'user_id',
+      'is_deleted',
+      'created_at',
+      'updated_at',
+    ],
+    // Declared but NOT serialized: this pair passes no `toJSON`/`toObject`.
+    expectedVirtuals: ['totalCalories'],
+    serializesVirtuals: false,
+    expectedMethods: ['isGlobal'],
+    // `findOrCreate` is here but it is a one-line delegate to the shared
+    // `findOrCreateFoodItem` — the carve-out from the statics policy.
+    // `search` is genuinely this side's; `findAccessible`/`findAccessibleMany`
+    // are basegeek-only.
+    expectedStatics: ['findOrCreate', 'search'],
+  },
 ];
 
 describe.each(PAIRS.map((p) => [p.name, p]))(
@@ -303,6 +352,11 @@ describe.each(PAIRS.map((p) => [p.name, p]))(
                 unique: !!opts.unique,
                 sparse: !!opts.sparse,
                 expireAfterSeconds: opts.expireAfterSeconds,
+                // `weights` is here for `FoodItem`'s text index, which
+                // declares none on either side. Adding one on a single side
+                // would silently re-rank that writer's search and nothing
+                // else.
+                weights: opts.weights,
               },
             ])
           )
@@ -802,5 +856,229 @@ describe('the Meal sub-schema, enum and nutrition arithmetic', () => {
       sumMealNutrition(items)
     );
     expect(String(Meal.schema.methods.getNutrition)).toContain('sumMealNutrition');
+  });
+});
+
+describe('the FoodItem dedupe ladder and catalog contract', () => {
+  // `findOrCreate` is the one static that moved into the shared module — not
+  // as a static, but as `findOrCreateFoodItem(Model, foodData)`, with the two
+  // pure halves exported so this hermetic suite (no Mongo) can assert them.
+  // The ladder is what stops this backend and the gateway minting duplicate
+  // catalog rows for the same upstream food, so a divergence in it forks the
+  // catalog quietly rather than throwing.
+
+  const food = (over = {}) => ({
+    name: 'Probe bar',
+    brand: 'ProbeCo',
+    source: 'usda',
+    source_id: 'usda-777',
+    ...over,
+  });
+
+  test('the rungs are barcode, then (source, source_id), then (name, brand)', () => {
+    expect(foodItemDedupeFilters(food({ barcode: 'b1' }))).toEqual([
+      { by: 'barcode', filter: { barcode: 'b1', is_deleted: false } },
+      {
+        by: 'source',
+        filter: { source: 'usda', source_id: 'usda-777', is_deleted: false },
+      },
+      {
+        by: 'name_brand',
+        filter: { name: 'Probe bar', brand: 'ProbeCo', is_deleted: false },
+      },
+    ]);
+  });
+
+  test('a rung whose inputs are missing is skipped, not queried with undefined', () => {
+    expect(foodItemDedupeFilters(food()).map((r) => r.by)).toEqual(['source', 'name_brand']);
+    expect(foodItemDedupeFilters({ name: 'Only a name' })).toEqual([]);
+    expect(foodItemDedupeFilters({ source: 'usda' })).toEqual([]); // needs source_id too
+    expect(foodItemDedupeFilters({})).toEqual([]);
+    expect(foodItemDedupeFilters(undefined)).toEqual([]);
+  });
+
+  test('every rung requires is_deleted:false, so a soft-deleted row is never resurrected', () => {
+    for (const rung of foodItemDedupeFilters(food({ barcode: 'b1' }))) {
+      expect(rung.filter.is_deleted).toBe(false);
+    }
+  });
+
+  test('no rung is scoped by user — that is what makes a catalog row shared', () => {
+    for (const rung of foodItemDedupeFilters(food({ barcode: 'b1' }))) {
+      expect(Object.keys(rung.filter)).not.toContain('user_id');
+    }
+  });
+
+  test('a created row is GLOBAL even when the caller passed a userId', () => {
+    // The shipped rule. `POST /api/foods` is the path that mints a private
+    // custom food; this one always mints a shared catalog entry.
+    expect(newFoodItemAttrs(food()).user_id).toBeNull();
+  });
+
+  test('the create defaults are 100 g, source custom, and zeroed nutrition', () => {
+    const attrs = newFoodItemAttrs({ name: 'Bare' });
+    expect(attrs.serving).toEqual(foodItemDefaults.serving);
+    expect(attrs.source).toBe(foodItemDefaults.source);
+    expect(attrs.nutrition).toEqual({
+      calories_per_serving: 0,
+      protein_grams: 0,
+      carbs_grams: 0,
+      fat_grams: 0,
+      fiber_grams: 0,
+      sugar_grams: 0,
+      sodium_mg: 0,
+    });
+  });
+
+  test('the defaults use `||`, so a zero serving size becomes 100 — shipped coercion', () => {
+    // Moved verbatim from both copies. `??` would keep the 0 and change
+    // behaviour on both sides at once, which is not what a refactor does.
+    expect(newFoodItemAttrs({ serving: { size: 0, unit: '' } }).serving).toEqual({
+      size: 100,
+      unit: 'g',
+    });
+    expect(newFoodItemAttrs({ source: '' }).source).toBe('custom');
+    expect(newFoodItemAttrs({ serving: { size: 45, unit: 'ml' } }).serving).toEqual({
+      size: 45,
+      unit: 'ml',
+    });
+  });
+
+  test('the ladder walks in order and stops at the first hit', async () => {
+    // A fake model: no Mongo, but the call order is the thing under test.
+    const seen = [];
+    const Fake = {
+      findOne: async (filter) => {
+        seen.push(filter);
+        return filter.source ? { _id: 'hit-by-source' } : null;
+      },
+    };
+
+    const got = await findOrCreateFoodItem(Fake, food({ barcode: 'b1' }));
+
+    expect(got).toEqual({ _id: 'hit-by-source' });
+    expect(seen).toEqual([
+      { barcode: 'b1', is_deleted: false },
+      { source: 'usda', source_id: 'usda-777', is_deleted: false },
+    ]);
+  });
+
+  test('a total miss constructs and saves exactly one row', async () => {
+    const saved = [];
+    function Fake(attrs) {
+      this.attrs = attrs;
+      this.save = async () => {
+        saved.push(attrs);
+        return { _id: 'created', ...attrs };
+      };
+    }
+    Fake.findOne = async () => null;
+
+    const got = await findOrCreateFoodItem(Fake, food());
+
+    expect(got._id).toBe('created');
+    expect(saved).toHaveLength(1);
+    expect(saved[0].user_id).toBeNull();
+    expect(saved[0].source_id).toBe('usda-777');
+  });
+
+  test('it refuses anything that is not a compiled model rather than throwing later', async () => {
+    await expect(findOrCreateFoodItem(null, food())).rejects.toThrow(TypeError);
+    await expect(findOrCreateFoodItem({}, food())).rejects.toThrow(TypeError);
+  });
+
+  test('the real model delegates rather than restating the ladder', () => {
+    const src = String(FoodItem.schema.statics.findOrCreate);
+    expect(src).toContain('findOrCreateFoodItem');
+    expect(src).not.toContain('is_deleted');
+    expect(src).not.toContain('source_id');
+  });
+
+  test('search stayed here, and it is the thing the shared module refused', () => {
+    // An ownership-scoping read: global rows plus the caller's own. Left
+    // app-side deliberately — the gateway's `foodCatalogFilter` also matches a
+    // row with no `user_id` key at all, so the two sides do not actually agree
+    // about what a visible catalog row is. See the shared module's header.
+    expect(typeof FoodItem.search).toBe('function');
+    expect(String(FoodItem.schema.statics.search)).toContain('user_id: null');
+    // And the shared factory attaches no statics whatsoever.
+    expect(Object.keys(createFoodItemSchema(mongoose).statics)).toEqual([]);
+  });
+
+  test('the source enum is the shared one and an unknown source is rejected', () => {
+    expect(FoodItem.schema.paths.source.enumValues).toEqual([...FOOD_SOURCES]);
+    const err = new FoodItem({
+      name: 'X',
+      source: 'myfitnesspal',
+      nutrition: { calories_per_serving: 1 },
+      serving: { size: 1 },
+    }).validateSync();
+    expect(err && err.errors.source).toBeTruthy();
+  });
+
+  test('barcode is the only unique path, and it is sparse', () => {
+    // The first `unique` flag in packages/schemas/fitnessgeek. Unchanged by
+    // consolidation, so production needs no index rebuild — but if it ever
+    // moves, both processes have to be redeployed together.
+    const unique = Object.entries(FoodItem.schema.paths)
+      .filter(([, p]) => p.options?.unique)
+      .map(([k]) => k);
+    expect(unique).toEqual(['barcode']);
+    expect(FoodItem.schema.paths.barcode.options.sparse).toBe(true);
+    // And it is NOT filtered by is_deleted, which is why a soft-deleted row
+    // still owns its barcode while the ladder above refuses to return it —
+    // `findOrCreate` then collides on insert with E11000. Pre-existing on both
+    // sides; the basegeek suite asserts the runtime behaviour. See the shared
+    // module's header before "fixing" it: a partial index is a migration and a
+    // `unique` change, so both processes redeploy together.
+    expect(FoodItem.schema.paths.barcode.options.partialFilterExpression).toBeUndefined();
+  });
+
+  test('the text index is on name and brand with no weights', () => {
+    const [keys, opts = {}] = FoodItem.schema
+      .indexes()
+      .find(([k]) => Object.values(k).includes('text'));
+    expect(keys).toEqual({ name: 'text', brand: 'text' });
+    expect(opts.weights).toBeUndefined();
+  });
+
+  test('isGlobal is the shared predicate for an unowned catalog row', () => {
+    const attrs = { name: 'X', source: 'custom', nutrition: { calories_per_serving: 1 },
+                    serving: { size: 1 } };
+    expect(new FoodItem(attrs).isGlobal()).toBe(true);
+    expect(new FoodItem({ ...attrs, user_id: 'u1' }).isGlobal()).toBe(false);
+  });
+
+  test('totalCalories reads through but is not serialized', () => {
+    const doc = new FoodItem({
+      name: 'X',
+      source: 'custom',
+      nutrition: { calories_per_serving: 321 },
+      serving: { size: 1 },
+    });
+    expect(doc.totalCalories).toBe(321);
+    expect(doc.toJSON().totalCalories).toBeUndefined();
+  });
+
+  test("basegeek keeps its two findAccessible statics and this side has neither", () => {
+    const src = fs.readFileSync(basegeekModel('FoodItem'), 'utf8');
+    expect(src).toContain("from '../ownership.js'");
+    for (const s of ['findAccessible', 'findAccessibleMany']) {
+      expect(src).toMatch(new RegExp(`statics\\.${s} = async function[^{]*\\{\\s*requireUser\\(`));
+    }
+    // And its findOrCreate carries no guard — the accessibility re-check is in
+    // resolvers.js (`resolveLogFoodItem`), which is the gateway's deliberate
+    // divergence from REST. Moving it in here would change what the static
+    // returns for every caller.
+    expect(src).not.toMatch(/statics\.findOrCreate = async function[^{]*\{\s*requireUser\(/);
+
+    const code = fs
+      .readFileSync(path.resolve(__dirname, '../../models/FoodItem.js'), 'utf8')
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('//'))
+      .join('\n');
+    expect(code).not.toContain('ownership.js');
+    expect(code).not.toContain('requireUser');
+    expect(code).not.toContain('findAccessible');
   });
 });

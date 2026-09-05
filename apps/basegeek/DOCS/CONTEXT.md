@@ -44,15 +44,15 @@ mode drops unknown paths from a `$set` silently, so drift between the two copies
 destroys data without an error anywhere. The full audit, the remaining work and
 the ordering are in `DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md`.
 
-**Eight of those models no longer declare a schema here.** `UserSettings`,
+**Nine of those models no longer declare a schema here.** `UserSettings`,
 `Weight`, `BloodPressure`, `Medication`, `LoginStreak`, `WeightGoals`,
-`NutritionGoals` and `Meal` build from `@geeksuite/schemas` — the file in this
-directory is a thin wrapper: a factory call, its own ownership statics, and the
-`fitnessConn.model(...)` binding. Only the food family (`FoodItem`, `FoodLog`,
-`DailySummary`) still declares a schema literal here. The `requireUser` guards
+`NutritionGoals`, `Meal` and `FoodItem` build from `@geeksuite/schemas` — the
+file in this directory is a thin wrapper: a factory call, its own ownership
+statics, and the `fitnessConn.model(...)` binding. Only `FoodLog` and
+`DailySummary` still declare a schema literal here. The `requireUser` guards
 stayed here on purpose — on `LoginStreak.getOrCreateStreak`, the three
-`WeightGoals` statics, the three `NutritionGoals` statics and all four `Meal`
-statics — because this gateway fails closed on an unscoped query while
+`WeightGoals` statics, the three `NutritionGoals` statics, all four `Meal`
+statics and `FoodItem`'s `findAccessible` / `findAccessibleMany` — because this gateway fails closed on an unscoped query while
 fitnessgeek's callers are already past auth, and statics don't appear in
 `schema.paths` so the two writers are free to disagree. For `Meal` that
 disagreement is load-bearing rather than cosmetic: fitnessgeek's list statics
@@ -60,11 +60,29 @@ return **every user's meals** when called without a userId, and both apps' test
 suites assert that divergence as a decision. Do not unify them here; tightening
 fitnessgeek's copy is its own ticket.
 
+`FoodItem` is the one carve-out from that statics rule, taken on 2026-09-05.
+Its `findOrCreate` **dedupe ladder** (barcode → `(source, source_id)` →
+`(name, brand)`, otherwise a new global row) is not an ownership policy: it has
+one correct meaning for both writers, and a divergence would fork the food
+catalog silently instead of throwing. So the ladder lives in the shared module
+as `findOrCreateFoodItem(Model, foodData)` and the static here is a one-line
+delegate. **The accessibility re-check stays in `resolvers.js`**
+(`resolveLogFoodItem`) — the dedupe queries are deliberately unscoped, so the
+resolver puts the resolved row through `findAccessible` afterwards, and that is
+this gateway's deliberate divergence from REST (`79b1b57`). Do not move it into
+the static. `FoodItem.search` was **not** promoted even though it is
+byte-identical on both sides: it scopes on `{user_id: null}` while
+`foodCatalogFilter` above it also matches `{user_id: {$exists: false}}`, so
+there are two live definitions of a visible catalog row and promoting one would
+freeze the disagreement. `barcode` is the only `unique` index in
+`@geeksuite/schemas`; changing a `unique` flag there means both processes
+redeploy together.
+
 Instance methods went the other way and live in the shared modules, so both
 sides run one implementation: `LoginStreak.recordLogin`,
-`NutritionGoals.checkGoalsMet` / `getProgress`, and `Meal.getNutrition` — along
-with `Meal`'s embedded food-item sub-schema and its `pre('save')`
-`updated_at` stamp. Do not add fields to the wrapper; add them to
+`NutritionGoals.checkGoalsMet` / `getProgress`, `Meal.getNutrition` and
+`FoodItem.isGlobal` — along with `Meal`'s embedded food-item sub-schema, its
+`pre('save')` `updated_at` stamp, and `FoodItem`'s `totalCalories` virtual. Do not add fields to the wrapper; add them to
 `packages/schemas/fitnessgeek/*` and, if they must cross GraphQL, to
 `typeDefs.js`. Tripwires in both apps' suites fail if a wrapper stops consuming
 the shared module. Import form here is default-import-plus-destructure — the

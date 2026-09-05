@@ -19,10 +19,10 @@ items are bug fixes that should ship on their own, ahead of any consolidation.**
 | | |
 |---|---|
 | Model pairs total | **13** |
-| Already consolidated | **8** (`UserSettings`, `Weight`, `BloodPressure`, `Medication`, `LoginStreak`, `WeightGoals`, `NutritionGoals`, `Meal` — all 2026-09-05) |
+| Already consolidated | **9** (`UserSettings`, `Weight`, `BloodPressure`, `Medication`, `LoginStreak`, `WeightGoals`, `NutritionGoals`, `Meal`, `FoodItem` — all 2026-09-05) |
 | basegeek orphans deleted | **2** (`AIFoodPromptCache`, `MedicationLog` — done 2026-09-05) |
-| Remaining | **3** (`FoodItem`, `FoodLog`, `DailySummary` — the food family) |
-| …genuinely needing a shared schema | **3** |
+| Remaining | **2** (`FoodLog`, `DailySummary` — the rest of the food family) |
+| …genuinely needing a shared schema | **2** |
 | Conflicting divergences | **4** — 1 in the schema field set, 3 in statics |
 | Drift divergences | 3 (statics one side has and the other doesn't) |
 | Harmless divergences | the rest — connection binding, import order, trailing newline |
@@ -56,7 +56,7 @@ virtual, `toJSON`/`toObject` setting and instance method.
 | 7 | `WeightGoals` | `weightgoals` | identical | identical | BG adds `requireUser` ×3 | ✅ **DONE 2026-09-05** (guards stayed app-side) |
 | 8 | `NutritionGoals` | `nutritiongoals` | identical | identical | BG adds `requireUser` ×3 | ✅ **DONE 2026-09-05** (guards stayed app-side; two instance methods moved) |
 | 9 | `Meal` | `meals` | identical | identical | BG adds `findOwned`; BG's 3 list statics are owner-scoped, FG's are not | ✅ **DONE 2026-09-05** (fields only; the C4 statics stayed put on both sides) |
-| 10 | `FoodItem` | `fooditems` | identical | identical | BG adds `findAccessible`/`findAccessibleMany`; `findOrCreate` + `search` identical | drift (2 statics) |
+| 10 | `FoodItem` | `fooditems` | identical | identical | BG adds `findAccessible`/`findAccessibleMany`; `findOrCreate` + `search` identical | ✅ **DONE 2026-09-05** (`findOrCreate`'s ladder moved as a shared helper; `search` and the two `findAccessible*` stayed app-side) |
 | 11 | `FoodLog` | `foodlogs` | identical | identical | different date normalizer | **conflicting** |
 | 12 | `DailySummary` | `dailysummaries` | **BG is missing `totals.net_carbs_grams`** | identical | different date normalizer; BG's `updateFromLogs` omits the net-carb accumulation | **conflicting ×2** |
 
@@ -376,7 +376,9 @@ during consolidation** — it would be a data migration wearing a refactor's clo
 
 | # | Pair | Effort | Rollback safe? | Notes |
 |---|------|--------|----------------|-------|
-| 8 | `FoodItem` | M | ⚠️ see below | The `findOrCreate` dedupe ladder (`FG :116-171` / `BG :137-192`) is identical today and **must stay identical** — it is the only thing stopping the two writers from minting duplicate rows for the same USDA/OpenFoodFacts item. Promote it into the shared module *with the fields*, as an exception to the statics policy: unlike `requireUser`, it has one correct meaning for both writers and a divergence would corrupt the catalog. `findAccessible`/`findAccessibleMany` stay app-side (basegeek-only ownership scoping). `search` is identical too — promote it as well |
+| 8 | ✅ **`FoodItem`** *(done 2026-09-05)* | M | ⚠️ see below | The `findOrCreate` dedupe ladder (`FG :116-171` / `BG :137-192`) is identical today and **must stay identical** — it is the only thing stopping the two writers from minting duplicate rows for the same USDA/OpenFoodFacts item. Promote it into the shared module *with the fields*, as an exception to the statics policy: unlike `requireUser`, it has one correct meaning for both writers and a divergence would corrupt the catalog. `findAccessible`/`findAccessibleMany` stay app-side (basegeek-only ownership scoping). `search` is identical too — promote it as well |
+
+> **Correction, written after the fact.** `search` was **not** promoted. It is an ownership-scoping read and the two sides do not actually agree about what a visible catalog row is — `search` matches `{user_id: null}`, `foodCatalogFilter` (used by `findAccessible`, in the same file) also matches `{user_id: {$exists: false}}`. Promoting one would freeze a live disagreement into the shared contract, and a read static has no corruption failure mode to buy for that price. `findOrCreate` was split instead: the ladder and the global-row creation are the shared `findOrCreateFoodItem(Model, foodData)`, each side keeps a one-line delegating static. See §11 |
 | 9 | `FoodLog` | M | ✅ *after* PRE-2 | Field definitions identical; the whole divergence is the date normalizer. Once PRE-2 has landed, this drops to an S |
 | 10 | `DailySummary` | M | ❌ *before* PRE-1 | The riskiest pair, and it must be **last**. The shared definition must be fitnessgeek's superset. Until PRE-1 lands, a half-switched state is not neutral — see below |
 
@@ -1128,12 +1130,13 @@ pre-existing `LoginStreak` duplicate-index one. The image was removed afterwards
    `describePath()` cannot see inside a `DocumentArray`. `DailySummary.totals` and its per-meal blocks
    are nested *objects* rather than sub-schemas, which `schema.paths` flattens with dots — check which
    shape each one actually is before assuming.
-3. **PRE-1 and PRE-2 are still the gate on pair 10.** Nothing in this pass touched `DailySummary` or
-   `FoodLog`. §4's rollback analysis stands: until `net_carbs_grams` is restored on the gateway,
-   a one-sided `DailySummary` switch is a behaviour change in either direction, and the two hand-rolled
-   `toUtcDate` normalizers must be swapped for `@geeksuite/utils` **in place, in basegeek**, before
-   `FoodLog` is consolidated. Do not pass `toUtcMidnight` into a factory; `packages/schemas` is CJS
-   and `@geeksuite/utils` is ESM-only.
+3. ~~**PRE-1 and PRE-2 are still the gate on pair 10.**~~ **Stale — both landed in `0cecb4a`
+   (2026-09-05), before this section was written.** `totals.net_carbs_grams` and its accumulation are
+   back on the gateway's `DailySummary`, and both hand-rolled `toUtcDate` normalizers are now
+   `toUtcMidnight` from `@geeksuite/utils`, in place, in basegeek. So the two `DailySummary` schemas
+   *are* equivalent today and pair 10's half-switched state is neutral like every other pair's. What
+   still stands: do not pass `toUtcMidnight` into a factory — `packages/schemas` is CJS and
+   `@geeksuite/utils` is ESM-only, so the date helpers stay in the app-side statics.
 4. **`FoodItem.findOrCreate` and `search` are the one carve-out from the statics policy** (§4 pair 8).
    Pair 4's split is the shape: move the logic, export the pure part by name so a test can call it —
    which is now the third time that shape has been used (`applyLoginToStreak`, `evaluateGoalsMet` /
@@ -1142,10 +1145,227 @@ pre-existing `LoginStreak` duplicate-index one. The image was removed afterwards
 5. **The statics policy is now 4/4.** Pairs 3, 5, 6 and 7 all had real static divergence and "leave
    them app-side" cost nothing every time — including pair 7, where the two sides genuinely disagree
    about what an unscoped call means. PRE-4 (tightening fitnessgeek's) is still its own ticket.
-6. **Three follow-ups are open and all are cheap.** `routes/mealRoutes.js`'s two `validMealTypes`
-   literals; the caller-less `checkGoalsMet` / `getProgress` / `getNutrition` (keep or delete —
+6. **Three follow-ups are open and all are cheap.** ~~`routes/mealRoutes.js`'s two `validMealTypes`
+   literals~~ (closed in `3b842e7`); the caller-less `checkGoalsMet` / `getProgress` / `getNutrition` (keep or delete —
    decide, don't drift); and §3's stale "fitnessgeek's backend is CJS" comments in
    `userSettings.js:46-48` and `userSettingsSchemaParity.test.js:31`, still uncorrected.
+
+---
+
+## 11. Pair 8, done — `FoodItem`, and the first static that had to move
+
+**`FoodItem` was consolidated on 2026-09-05** (§4 Tier 3 #8). Nine of the thirteen pairs are now
+shared; two remain, both in the food family. This is the first pair with a `unique` index, the first
+with a text index, and the first where a *static* moved into `packages/schemas` — so it is worth
+reading before pairs 9 and 10 rather than skimming.
+
+### What shipped
+
+| | |
+|---|---|
+| New shared module | `packages/schemas/fitnessgeek/foodItem.js` → `createFoodItemSchema(mongoose)` |
+| Wiring | one subpath in `packages/schemas/package.json` `exports`, one entry in `packages/schemas/index.js` |
+| Wrappers (2) | `apps/fitnessgeek/backend/src/models/FoodItem.js` — named import, `mongoose.model(...)`<br>`apps/basegeek/packages/api/src/graphql/fitnessgeek/models/FoodItem.js` — default import + destructure, `fitnessConn.model(...)` |
+| Statics — **split** | `findOrCreate`'s dedupe ladder and global-row creation **moved** as `findOrCreateFoodItem(Model, foodData)`; each side keeps a one-line delegating static. `search` (both sides) and `findAccessible` / `findAccessibleMany` (basegeek only) **stayed app-side** |
+| Instance method — moved | `isGlobal` |
+| Virtual — moved | `totalCalories` (declared, but not serialized — this pair passes no `toJSON`/`toObject`) |
+| Also moved | all twelve indexes, including `barcode`'s `unique: true, sparse: true` and the `{name:'text', brand:'text'}` text index; the `source` enum as `FOOD_SOURCES` |
+| Also exported | `foodItemDedupeFilters`, `newFoodItemAttrs` (the pure halves, so the hermetic suite can assert the ladder without a database), `foodItemDefaults`, `foodItemBounds`, `attachFoodItemVirtuals`, `attachFoodItemMethods` |
+| Third copies folded in | **none** — see below |
+| Parity rows added | 1 per suite, plus a behaviour describe on each side |
+
+Test counts: fitnessgeek's backend **203 → 229**; basegeek's api **1044 → 1111** (50 suites, 1
+pre-existing skip, `gatewaySchemaLoads` and `fitnessgeekFoodLogWrites` green). Of that +67, **+29 is
+this work** (the parity suite went 114 → 143) and the rest arrived with the concurrent
+`graphql/bookgeek/validation.js` pass, which was not touched here. `packages/schemas` lint clean;
+`node tools/syntax-check.mjs` **772 files** clean. No `pnpm install`, no lockfile change.
+
+### Where the plan was wrong
+
+§1a's field-set and index columns were right for the eighth time out of eight. Its statics column was
+not, and neither was §4's instruction for them.
+
+1. **`search` was NOT promoted, and §4 said to promote it.** It is byte-identical on both sides, which
+   is what §4 keyed on — but identical is not the same as *agreed*. `search` scopes a catalog read to
+   `{ user_id: null }` OR `{ user_id: userId }`; `foodCatalogFilter` — which the gateway's
+   `findAccessible` uses, twenty lines above `search` in the same file — also matches
+   `{ user_id: { $exists: false } }`. A legacy row with no `user_id` key at all is therefore reachable
+   through one and not the other, **inside a single process**. There are two live definitions of
+   "a visible catalog row" and promoting either would freeze the disagreement into the shared contract
+   rather than resolve it. A read static also has no corruption failure mode to buy for that price.
+   Both copies stayed exactly where they were, and both suites assert that they are byte-identical *and*
+   that they disagree with `foodCatalogFilter`. **Follow-up: reconcile the two filters, or write down
+   why they differ.**
+2. **`findOrCreate` moved as a helper, not as a static.** §10's carry-forward #4 called the shape and
+   it was the right one: the *logic* goes into the shared module, the pure part is exported by name so a
+   test can call it, and each app keeps the thin static. Concretely,
+   `findOrCreateFoodItem(Model, foodData)` takes the model as a parameter — the fourth use of the
+   `applyLoginToStreak` / `evaluateGoalsMet` / `sumMealNutrition` pattern, and the first where the
+   pure part is a *query plan* (`foodItemDedupeFilters` returns the three rungs as data) rather than
+   arithmetic. That is what let the hermetic fitnessgeek suite assert the ladder order, the
+   skipped-rung cases and the `is_deleted: false` on every rung with no Mongo at all.
+3. **The gateway's accessibility re-check is in the resolver, not the static.** The task framing said
+   the two sides' `findOrCreate` differ by a re-check; they do not. Both statics were byte-identical.
+   The divergence introduced in `79b1b57` lives in `resolvers.js`'s `resolveLogFoodItem`, which puts
+   the row `findOrCreate` resolved through `findAccessible` afterwards — because the dedupe queries are
+   deliberately unscoped and a crafted `(name, brand)` could otherwise hand back another user's private
+   custom food. It was left there. Moving it into the static would double the query for every caller
+   and change what the static returns; both suites now assert that neither static mentions
+   `findAccessible`, so anyone who moves it has to say so.
+4. **Neither side's `findOrCreate` had the caller the plan implied, and the two that exist are not
+   symmetric.** The gateway's is live (`resolvers.js:75`). fitnessgeek's has **no caller at all** —
+   grepped across the whole backend, the only reference is the declaration. `POST /api/logs/copy`
+   does not use it; `foodRoutes.js:301-348` (`POST /api/foods`) open-codes its own two-rung lookup and `new FoodItem(...)`
+   instead. It was kept rather than deleted, for the same reason `NutritionGoals`' caller-less methods
+   were: deleting it changes the schema's statics key set and breaks the byte-equivalence the rollback
+   claim rests on. **Follow-up: either point `foodRoutes.js:301` at the shared helper — it is a third,
+   subtly different copy of the same ladder — or delete the dead static. Do not leave three.**
+5. **`search` is dead on the gateway too.** No resolver calls it. fitnessgeek's `foodRoutes.js:492`
+   is its only live caller anywhere.
+6. **`nutrition` and `serving` are nested objects, not sub-schemas.** §10's carry-forward #2 said to
+   check which shape each nested thing is before assuming, and this is the "flattened with dots" case:
+   `schema.paths` carries `nutrition.calories_per_serving`, `serving.size` and so on directly, so
+   `describePath()` sees their `min` bounds and no separate sub-schema comparison is needed. Twenty
+   paths, eighteen declared. Contrast `Meal.food_items`, which really is a `DocumentArray`.
+
+### The `unique` index, and the redeploy rule
+
+`barcode` carries `unique: true, sparse: true` — the **first and only** `unique` flag anywhere in
+`packages/schemas/fitnessgeek/`. Consolidation changed no index, so:
+
+- **Production needs no index rebuild.** The shared definition is byte-equivalent to what both sides
+  already declared, so `syncIndexes` on either process is a no-op against the index that already
+  exists. The half-switched state is neutral, exactly as for pairs 1–7.
+- **If a `unique` flag is ever *changed* here, both processes must be redeployed together.** Whichever
+  reaches `syncIndexes` first tries to build the new index while the other keeps writing under the old
+  contract, and a build the live data violates fails loudly and repeatedly. **In this suite that
+  happens by construction — every push to `main` rebuilds all eight images and Watchtower rolls the
+  fleet, so the two processes always move together.** That is a property of the pipeline, not of the
+  code, so a commit that changes a `unique` flag should say so out loud. The module header carries the
+  same warning.
+
+The **text index** (`{ name: 'text', brand: 'text' }`) carries no `weights` on either side, so both
+fields rank equally. `describeIndexes` in both suites now includes `weights` in the normalized
+description, and each suite asserts explicitly that the text index has none — adding a weight to one
+side alone would re-rank that writer's search and nothing else, which is exactly the kind of silent
+one-sided change these suites exist to catch.
+
+### Found by consolidating: a soft-deleted row still owns its barcode
+
+Not introduced here, and identical on both sides, but it took writing the tests to see it: **every
+rung of the dedupe ladder filters `is_deleted: false`, and the `unique` index on `barcode` does not.**
+So when a soft-deleted row holds a barcode, `findOrCreate` declines to return it and then collides
+with it on insert — the caller gets an `E11000`, not a row. Both shipped copies behave this way. It is
+now asserted in `fitnessgeekSchemaParity.test.js` (through both models, on one collection) so that it
+is a known property rather than an occasional mystery in an error log.
+
+Fixing it means either a partial unique index (`partialFilterExpression: { is_deleted: false }`) or
+clearing `barcode` on soft delete. Both are migrations with their own ticket, and both change a
+`unique` index — so both fall under the redeploy rule above. **Follow-up: decide which.**
+
+### Third copies: what was found, what was rejected
+
+§9's rule fired again, and this time it found nothing worth rewiring.
+
+| Copy | Location | Disposition |
+|---|---|---|
+| a zod validator for `fooditems` | — | **Does not exist.** `src/validation/schemas/` has `bloodPressure`, `common`, `medication`, `settings`, `weight` and nothing else. `foodItemBounds` is exported anyway, for the day one is written |
+| the `source` enum, ×4 | fitnessgeek frontend — `components/MyFoods/FoodSourceUtils.jsx`, `FoodSearch/FoodSearch.jsx`, `FoodSearch/FoodCard.jsx`, `FoodSearch/CompositeResolver.jsx` | **Left — frontend is out of scope for this pass.** They are `switch` statements mapping a source to a label, colour and icon, not enum declarations, and none of them writes. `FOOD_SOURCES` is exported and ready |
+| a source list with scores | `services/foodQualityService.js:5` | **Left — not an enum.** A partial ranking map (`nutritionix: 4, …`) used for result ordering. Rewiring it would mean inventing a score for every enum member |
+| the enum in prose | `graphql/fitnessgeek/typeDefs.js:263` | **Left.** GraphQL types the field as `String`; the list is a doc comment. `typeDefs.js` was outside this pass's touch list |
+| a fourth dedupe ladder | `routes/foodRoutes.js:301-348` (`POST /api/foods`) | **Left, and flagged.** Two rungs and they are `if`/`else if`, not sequential: barcode **or** `(source, source_id)`, never both, and no `(name, brand)` rung at all. It then open-codes its own `new FoodItem(...)` — which mints a **user-owned** row (`user_id: userId`), where `findOrCreate` always mints a global one. Different enough that folding it in is a behaviour decision, not a refactor. See follow-up 4 above |
+
+### What the tripwires grew
+
+- **`weights` in `describeIndexes`**, both suites — see above. Symmetric on every existing row, so no
+  other pair's expectations changed.
+- **A statics-split assertion.** `FoodItemRest` exposes exactly `findOrCreate, search`;
+  `FoodItemGraphQL` exposes exactly `findAccessible, findAccessibleMany, findOrCreate, search`; the
+  shared factory exposes **none**. Written as an equality on the sorted key sets, so adding a static to
+  either side without deciding where it belongs is a failure.
+- **A delegation assertion.** Both `findOrCreate` bodies contain `findOrCreateFoodItem` and contain
+  neither `is_deleted` nor `source_id` — i.e. neither side restated the ladder — and the two bodies are
+  identical once each wrapper's own prose is stripped. (Comment-stripping again: the wrappers explain
+  the delegation in their own words. Third time that wrinkle has come up; assume it for pairs 9–10.)
+- **The dedupe ladder, twice.** Hermetically in fitnessgeek — rung order, skipped rungs, the
+  `is_deleted: false` on all three, the absence of any `user_id` scoping, the `||`-not-`??` coercion
+  (a `serving.size` of `0` becomes `100`), `user_id: null` on every create, and the ladder walking in
+  order and stopping at the first hit, driven by a fake model that records the filters it was handed.
+  Against real Mongo in basegeek — all three rungs, the global row with its provenance intact, no
+  duplicate on a second call, the existing row winning whole rather than merging, the two writers
+  deduping against **each other** on one collection, and the soft-delete cases above.
+- **`unique` proven in the database, not just in the schema.** `FoodItemGraphQL.init()` then a second
+  insert on the same barcode, expecting `E11000`; then two rows with no barcode at all, proving
+  `sparse` is doing its job. The rollback claim's "no index rebuild" is only worth something if the
+  flag is actually enforced.
+- **`totalCalories` reads through but is not on the wire**, both sides — this pair declares a virtual
+  and passes no `toJSON: {virtuals: true}`, which is a combination none of the first seven had.
+
+### The rollback claim, confirmed for pair 8
+
+Verified mechanically: both model files were rebuilt from `git show HEAD:<path>` under temporary
+names, alongside the shared factory's output, and all three were compared on path set, per-path
+description (type, enum, default, required, index/unique/sparse flags, min/max/maxlength), normalized
+index list **including `weights`**, `schema.options`, virtuals and instance methods. **HEAD-fitnessgeek
+≡ HEAD-basegeek ≡ shared, on every one.** The statics key sets differ exactly as the split says they
+should (`2` / `4` / `0`).
+
+| | `FoodItem` |
+|---|---|
+| Collection, both sides | `fooditems` |
+| Declared paths | 18 (20 with `_id`/`__v`) |
+| Indexes, both sides | 7 path-level (`name`, `brand`, `barcode`, `source`, `source_id`, `user_id`, `is_deleted`), 4 compound (`{name,brand}`, `{source,source_id}`, `{is_deleted,user_id}`, `{barcode,is_deleted}`), 1 text (`{name:'text',brand:'text'}`) |
+| `unique` / `sparse` | `barcode` — `unique: true, sparse: true`. **Unchanged**, so no index rebuild in production |
+| TTL anywhere | none |
+| Schema options | `timestamps: {createdAt: 'created_at', updatedAt: 'updated_at'}`; no `toJSON`/`toObject` |
+| Paths added / removed / retyped / re-defaulted | none |
+| Statics, FG / BG | 2 / 4 — `findOrCreate` (delegating) and `search` on both; `findAccessible`, `findAccessibleMany` basegeek-only |
+| Instance methods, both sides | `isGlobal` |
+| Virtuals, both sides | `totalCalories` (not serialized) |
+
+Because no index changed, the half-switched deploy is indistinguishable at the database level and
+either app can be deployed or rolled back alone, in either order — the same claim as pairs 1–7, and
+the `unique` caveat in §4 is a caveat about *future* changes, not about this one.
+
+**The production image resolves the new subpath.** `docker build -f apps/fitnessgeek/Dockerfile .`
+then a `--network none` run: the app boots, mounts routes, and dies at `MongoDB connection failed` —
+not at an import. Importing the model inside the image returns `fooditems`, 20 paths, all twelve
+indexes with `barcode` still `unique+sparse`, the `source` enum intact, `findOrCreate` and `search`
+as the only statics, `isGlobal` and `totalCalories` present, the ladder reporting
+`barcode, source, name_brand` in order, and the create defaults `100 g / custom / user_id: null`.
+The only mongoose warnings at boot are the pre-existing `LoginStreak` duplicate-index ones. The image
+was removed afterwards.
+
+### Carry-forward for pairs 9 and 10
+
+1. **§1a is 8/8 on field sets and indexes and 0/8 on everything else.** Read both model files whole.
+   `FoodLog` and `DailySummary` are the two largest of the thirteen.
+2. **PRE-1 and PRE-2 are done** (`0cecb4a`, 2026-09-05) — `totals.net_carbs_grams` and its
+   accumulation are back on the gateway, and both hand-rolled `toUtcDate` normalizers are
+   `toUtcMidnight` from `@geeksuite/utils`. §10's carry-forward #3 said otherwise and has been
+   corrected in place. **Pair 10 is no longer gated**, and its half-switched state is now as neutral
+   as everybody else's. What still stands: `packages/schemas` is CJS and `@geeksuite/utils` is
+   ESM-only, so **do not pass `toUtcMidnight` into a factory** — the date handling stays in the
+   app-side statics on both sides.
+3. **The statics policy now has a stated shape, not just a rule.** Four passes have used it:
+   *ownership scoping stays app-side; a rule with one correct meaning for both writers moves, as a
+   helper that takes the model or the document, with its pure part exported by name.* `DailySummary`'s
+   `updateFromLogs` is the next candidate and it is the biggest yet — it reads `UserSettings`, sums
+   `FoodLog`s and writes a nested `totals` block. Expect to split it the same way: the arithmetic
+   moves and is exported; the date normalization and the ownership scoping stay.
+4. **`FoodLog` and `Meal` both declare the four meal-type strings, on different collections.** Whether
+   `foodlogs` imports `MEAL_TYPES` from `meal.js` or gets its own constant is pair 9's decision — the
+   first genuinely cross-collection question in this exercise. `routes/mealRoutes.js` was rewired to
+   the shared enum in `3b842e7`, so `models/FoodLog.js` ×2 is the last copy standing.
+5. **Nested shape: check before assuming.** `FoodItem`'s `nutrition` and `serving` are flattened
+   objects; `Meal`'s `food_items` is a `DocumentArray`. `DailySummary.totals` and its per-meal blocks
+   are objects per §10; verify, because the comparison differs.
+6. **Open follow-ups, all cheap, all named above:** reconcile `search` with `foodCatalogFilter`;
+   decide whether `foodRoutes.js:303`'s two-rung ladder folds into the shared helper or the dead
+   `FoodItem.findOrCreate` on the REST side goes; decide the soft-deleted-barcode collision (partial
+   index or clear-on-delete); and the two still-open from §10 — the caller-less `checkGoalsMet` /
+   `getProgress` / `getNutrition`, and §3's stale "fitnessgeek's backend is CJS" comments in
+   `userSettings.js:46-48` and `userSettingsSchemaParity.test.js:31`.
 
 ---
 
