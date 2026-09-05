@@ -12,11 +12,11 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | R4 | M6 guardrails: mobile harness into `tools/mobile-harness`, CI workflow | opus | tools/, .github/workflows/mobile-harness.yml | 09-05 am |
 | R5 | TODO #17 shared date utilities → `packages/utils`; bujogeek/fitnessgeek/flockgeek consume | opus | packages/utils, 3 apps (date code only) | 09-05 am |
 | R9 | TODO #25/#26 bujogeek subtasks UI + Apollo cache invalidation | opus | bujogeek frontend, its GraphQL surface | 09-05 am |
-| R16 | Q5 (notegeek half): formatRelativeTime dedupe; dev-server `styled_default` fault root cause | sonnet | notegeek frontend | 09-05 12:40 |
-| R17 | Q5 (fitnessgeek half): dead frontend files, stale dev compose | sonnet | fitnessgeek frontend (not date code), dev compose | 09-05 12:45 |
 | R18 | flockgeek frontend vitest + RTL suite + CI job | sonnet | flockgeek frontend, ci.yml (one job) | 09-05 12:45 |
 | R19 | Q8: OpenAI-compat fixes (flip the 22 it.failing) + last llm7 refs (Q12) | opus | openaiProxy, aiRoutes, aiService, capabilities, director/rateLimit refs, docs | 09-05 13:15 |
 | R20 | Q7: CSRF double-submit token (report mode default) + packages/auth header | opus | basegeek middleware/csrf*, server.js order, auth routes, packages/auth, ui api.js | 09-05 13:15 |
+| R21 | Q3 first slice: Zod validation on fitnessgeek settings + weight/BP routes | sonnet | fitnessgeek backend routes + new validation/ | 09-05 13:50 |
+| R22 | storygeek frontend vitest + RTL suite + CI job | sonnet | storygeek frontend, ci.yml (one job) | 09-05 13:50 |
 | R13 | Offline pages per mode + theme-color/manifest audit (TODO #30) + bookgeek CONTEXT runtime fix | sonnet | each app's public/offline/manifest/index.html metas; PWA_STANDARD table | 09-05 12:10 |
 
 **Push gate:** `pnpm install --frozen-lockfile` on HEAD fails — the committed lockfile carries
@@ -28,7 +28,7 @@ Push only after those two land, then re-run the check in a detached worktree of 
 | # | Item | Why waiting | Size |
 |---|------|-------------|------|
 | Q1 | Mint service keys into storygeek + fitnessgeek `.env.production`, restart those two containers | R1 landed (`92e7bc9`); do after the next push deploys basegeek; announce restarts | XS |
-| Q3 | TODO #22 input validation (Zod), bujogeek timestamps first | bujogeek backend busy (R5, R9) | L, slow burn |
+| Q3 | TODO #22 input validation (Zod): bujogeek timestamps slice | bujogeek GraphQL busy (R9); fitnessgeek slice running as R21 | L, slow burn |
 | Q6 | bookgeek web unit tests (vitest + RTL for LibraryView/FilterSheet/BookCard/detail) | none — launch next slot | M |
 | Q10 | Revoke the `LocalApps` key once the env grep and nginx sweep confirm no caller | background greps | XS |
 | Q11 | basegeek `Databases.jsx`: wire into nav or delete | Chef's call | XS |
@@ -70,6 +70,8 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 - `6d7865c` — R7 — one UserSettings schema (@geeksuite/schemas) + parity tripwire
 - `61997ed` — R6 — @geeksuite/logger in all seven backends; first-ever log redaction
 - `a0b08ca` — R10 — GeekAppFrame fill, sheet focus/close/align, dialog hooks, reduced motion (354 ui tests)
+- `37e83b6` — R17 — 22 dead fitnessgeek files + broken dev compose deleted
+- `164f978` — R16 — notegeek relative-time tests; dev-server fix pending in vite.config.js (shared with R13)
 - `6c39d00` — R2 — Apps & keys tab; APIKeysPage retired; AppConfigDialog on GeekDialog
 - `92e7bc9` — R1 — caller identity from the credential; service keys; mint script; fitnessGoalService envelope fix
 - `9dede26` — R14 — circuit breakers on fitnessgeek upstreams (58 tests)
