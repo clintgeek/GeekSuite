@@ -9,6 +9,8 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
+| R90 | bujogeek frontend code-splitting per the fitnessgeek recipe | opus | bujogeek frontend, CONTEXT, PWA_STANDARD row | 09-05 18:45 |
+| R91 | flockgeek frontend code-splitting (cheap parts only if already small) | opus | flockgeek frontend, CONTEXT, PWA_STANDARD row | 09-05 18:45 |
 | R89 | Q51 rest: a11y burn-down for fitnessgeek (29), bookgeek (4), notegeek/basegeek/startgeek (2 each) → 0, then flip --enforce-a11y in the workflow | opus | five frontends, mobile-harness.yml, MOBILE_UI_PLAN | 09-05 18:40 |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
