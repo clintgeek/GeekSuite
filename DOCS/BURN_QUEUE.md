@@ -11,6 +11,11 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 |---|--------|-------|-------|-------|
 | R22 | storygeek frontend vitest + RTL suite + CI job | sonnet | storygeek frontend, ci.yml (one job) | 09-05 13:50 |
 | R30 | probe burn-down: basegeek theme, bookgeek strip/sidebar, storygeek overline | sonnet | basegeek ui theme.js, bookgeek web components, storygeek theme.js | 09-05 |
+| R41 | Q23: notegeek backend prune (dead migrations importing Note, tagValidation) | sonnet | notegeek backend, SUITE_TODO | 09-05 12:50 |
+| R42 | Q21: harness recognises ::before/::after hit-area expansion; selftest fixture | sonnet | tools/mobile-harness | 09-05 12:50 |
+| R43 | TODO #15 fan-out: notegeek on shared feedback primitives | sonnet | notegeek frontend, UI plan | 09-05 12:50 |
+| R44 | TODO #15 fan-out: fitnessgeek on shared feedback primitives (+#19 toneForMode) | sonnet | fitnessgeek frontend except services/food-log | 09-05 12:50 |
+| R45 | consolidation step 2 (frontend): fitnessgeek food-log writes → gateway mutations | opus | fitnessgeek frontend services + food-log callers, SUITE_TODO | 09-05 12:50 |
 | R35 | Q17: fitnessgeek backend node 20 + ESM, consume @geeksuite/utils, drop 5 toUtcMidnight copies | opus | fitnessgeek backend, Dockerfile, lockfile | 09-05 12:35 |
 | R40 | TODO #15 fan-out: flockgeek on GeekEmptyState/GeekErrorState/useToast | sonnet | flockgeek frontend, UI plan | 09-05 12:35 |
 
@@ -27,9 +32,7 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | Q11 | basegeek `Databases.jsx`: wire into nav or delete | Chef's call | XS |
 | Q13 | verify COVERS_PATH now serves the old covers in the bookgeek UI (CONTEXT.md runtime line already fixed) | Chef eyeballs the UI | XS |
 | Q18b | After R27 deploys: a day of clean `CSRF token check (report-only)` logs, then `CSRF_TOKEN=enforce` in basegeek's env and a container restart | Chef's call after the log window | XS |
-| Q21 | harness: recognize ::before/::after hit-area expansion (startgeek .hit44/.dot) so the 52 startgeek false positives clear | after R29 lands | S |
 | Q22 | flockgeek backend still mounts a full REST CRUD API (9 models) with no caller in the repo — decide: delete the layer or keep as API surface | Chef's call | S |
-| Q23 | notegeek backend: migrations/*.js import the deleted Note model; utils/tagValidation.js dead — prune | next slot | XS |
 | Q24 | TODO #20 step 2: fitnessgeek Garmin password encryption via @geeksuite/crypto-vault + backfill script | after R35 (ESM) lands | M |
 | Q20b | aiGeek: simulated streaming (F-21) and user-gated selection (F-14) documented, not fixed | design | S |
 | Q14 | storygeek CanonCard summary text through Narration too (agent left it as a separate render path) | Chef's call | XS |
