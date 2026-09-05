@@ -11,7 +11,6 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 |---|--------|-------|-------|-------|
 | R74 | consolidation pairs 9–10: FoodLog + DailySummary (the last two; updateFromLogs is the helper candidate) | opus | packages/schemas, both apps' two models + parity suites | 09-05 16:12 |
 | R72 | adversarial review of today's ~130 pushed commits across streams → DOCS/BURN_REVIEW.md (read-only) | opus | one new doc | 09-05 15:53 |
-| R73 | reconcile root docs (CONTEXT, RUNBOOK, CICD, DEPLOY, README, plans) with today's changes (docs only) | sonnet | root DOCS/*.md, DEPLOY.md, README.md | 09-05 15:53 |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
 ## Queued (launch when files free / prerequisite lands)
@@ -96,6 +95,7 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 - `d8521eb` — R27 — CSRF header in api-client authLink + startgeek clients
 - `1fda489` — R24 — bujogeek tag cloud + template journal cache; #25/#26 struck
 - `x` — R62 — DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md (found the net_carbs_grams live bug → R65)
+- `4f0ba46` — R73 — root docs reconciled (RUNBOOK env/CI tables, README packages, MOBILE_UI_PLAN §4b struck, TODO files consistent)
 - `be79702` — R71 — FoodItem shared; findOrCreate ladder one implementation (fitnessgeek 229, api 1111); soft-deleted-barcode collision found
 - `d5ecb22` — R70 — zod on the bookgeek gateway mutations (38 tests; api 1082) — gateway side of #22 complete
 - `e24de33` — R69 — NutritionGoals + Meal shared (fitnessgeek 203, api 1044); Medication enum copies folded; eight shared
