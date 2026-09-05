@@ -79,6 +79,10 @@ export const geekLayout = {
   // becomes a temporary drawer and the top bar grows a hamburger. Passed to
   // `theme.breakpoints.down()`, so it must be a real MUI breakpoint key.
   navBreakpoint: 'md',
+  // Upper edge of "a phone" for rules that are about the device rather than
+  // the layout (16px inputs so iOS does not zoom, full-screen form dialogs).
+  // This is MUI's `sm` breakpoint minus the sub-pixel `down()` uses.
+  phoneMaxWidth: 599.95,
 };
 
 export const geekMotion = {

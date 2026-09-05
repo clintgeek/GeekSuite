@@ -119,6 +119,27 @@ function buildComponents(themePalette) {
             outlineOffset: interaction.focus.outlineOffset,
           },
         },
+        // Mobile grammar (DOCS/MOBILE_UI_PLAN.md §2): nothing is hover-only.
+        // An action an app reveals on hover marks itself `data-geek-hover-reveal`
+        // and is simply always visible on a device with no hover.
+        '@media (hover: none)': {
+          '[data-geek-hover-reveal]': {
+            opacity: '1 !important',
+            visibility: 'visible !important',
+            pointerEvents: 'auto',
+          },
+        },
+      },
+    },
+    MuiInputBase: {
+      styleOverrides: {
+        input: {
+          // Below `sm` any input under 16px makes iOS Safari zoom the page on
+          // focus. Body type is 14px, so lift inputs to 16px on phones only.
+          [`@media (max-width:${layout.phoneMaxWidth}px)`]: {
+            fontSize: '1rem',
+          },
+        },
       },
     },
     MuiAppBar: {
