@@ -81,7 +81,7 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 
 - 09-05 16:35 — wave 8 (`7fd206b`, 22 commits): R74, R75–R80 (all four P0s + 14 P1s from the review), consolidation complete. Gates: frozen install, syntax, boot-smoke, repo lint. CI, Release and harness green; Watchtower 16:43 (updated=7); all eight apps 200.
 
-- 09-05 16:55 — wave 9 (`116a797`, 8 commits): R81, R82, CSRF caller context, docs. Gates green.
+- 09-05 16:55 — wave 9 (`116a797`, 8 commits): R81, R82, CSRF caller context, docs. Gates green; CI, Release, harness green; Watchtower 17:00 (updated=2: basegeek, fitnessgeek); all eight apps 200. First report line with context: **startgeek** (start.clintgeek.com, Firefox) POST /graphql, cookie, no header.
 
 ## Landed during the burn
 
