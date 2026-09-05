@@ -1451,8 +1451,8 @@ router.get('/families', async (req, res) => {
     if (permissionError) return;
 
     const ModelFamilyRouter = (await import('../services/aiRouterService.js')).default;
-    const router = new ModelFamilyRouter();
-    const stats = await router.getRoutingStats();
+    const familyRouter = new ModelFamilyRouter();
+    const stats = await familyRouter.getRoutingStats();
 
     res.json({
       success: true,
@@ -1554,26 +1554,6 @@ router.post('/context/reset/:conversationId', async (req, res) => {
       error: {
         message: error.message || 'Failed to reset context',
         code: 'CONTEXT_RESET_ERROR'
-      }
-    });
-  }
-});
-
-// GET /api/ai/stats - Get comprehensive service statistics
-router.get('/stats', async (req, res) => {
-  try {
-    const stats = aiService.getServiceStats();
-    res.json({
-      success: true,
-      stats
-    });
-  } catch (error) {
-    req.log.error({ err: error }, '[API] Stats error');
-    res.status(500).json({
-      success: false,
-      error: {
-        message: error.message || 'Failed to get stats',
-        code: 'STATS_ERROR'
       }
     });
   }
