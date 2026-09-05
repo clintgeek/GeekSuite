@@ -6,6 +6,10 @@ import { FocusModeProvider } from "@geeksuite/ui";
 import { BrowserRouter } from "react-router-dom";
 import { ThemeProvider as UserThemeProvider, useThemeMode } from "@geeksuite/user";
 import App from "./App.jsx";
+// The theme's display face. Self-hosted via @fontsource so the wordmark and
+// headings render offline; index.html used to load Libre Baskerville from
+// Google instead, so every serif in the app fell back to Georgia.
+import "@fontsource/dm-serif-display";
 import "./styles.css";
 import { configureUserPlatform } from "./bootstrapUser";
 import { GeekSuiteApolloProvider } from "@geeksuite/api-client";

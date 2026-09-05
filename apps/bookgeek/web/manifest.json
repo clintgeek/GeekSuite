@@ -1,11 +1,11 @@
 {
-  "name": "bookgeek",
-  "short_name": "bookgeek",
+  "name": "BookGeek",
+  "short_name": "BookGeek",
   "description": "eBook reader and library manager — part of GeekSuite",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#e8ecf1",
-  "theme_color": "#0ea5e9",
+  "background_color": "#010409",
+  "theme_color": "#010409",
   "orientation": "portrait-primary",
   "scope": "/",
   "icons": [
