@@ -439,3 +439,37 @@ describe('GeekShell', () => {
     expect(markup).not.toContain('data-geek-nav="permanent"');
   });
 });
+
+describe('mobile grammar (DOCS/MOBILE_UI_PLAN.md §2)', () => {
+  it('sizes the shell in dvh where supported, with vh as the fallback', () => {
+    const markup = renderToStaticMarkup(
+      <MemoryRouter>
+        <GeekShell nav={<GeekSidebar appName="BookGeek" items={[]} />} topBar={<header data-test-topbar />}>
+          <div data-test-content />
+        </GeekShell>
+      </MemoryRouter>
+    );
+    expect(markup).toContain('height:100vh');
+    expect(markup).toContain('@supports (height: 100dvh)');
+    expect(markup).toContain('height:100dvh');
+    expect(markup).toContain('calc(100dvh - 60px)');
+  });
+
+  it('pads the bottom nav by the safe-area inset and merges labelSx onto the caption', () => {
+    const markup = render(
+      <GeekBottomNav
+        items={[{ id: 'home', label: 'Home', to: '/' }]}
+        activeId="home"
+        labelSx={{ letterSpacing: '0.12em' }}
+      />
+    );
+    expect(ruleFor(markup, 'data-geek-bottom-nav')).toContain('env(safe-area-inset-bottom, 0px)');
+    expect(ruleFor(markup, 'data-geek-bottom-nav')).toContain('height:56px');
+    expect(ruleFor(markup, 'data-geek-bottom-nav-label')).toContain('letter-spacing:0.12em');
+  });
+
+  it('pads the top bar by the top safe-area inset', () => {
+    const markup = render(<GeekTopBar title="Library" />, MOBILE);
+    expect(markup).toContain('env(safe-area-inset-top, 0px)');
+  });
+});

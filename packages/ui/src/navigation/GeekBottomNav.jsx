@@ -5,7 +5,13 @@
  *   - at most five items;
  *   - never a Logout/Sign out tab — account actions live in the sidebar footer
  *     and the top-bar account menu, and a logout item passed here is dropped;
- *   - 44px minimum targets, 56px bar (`geekLayout.bottomNavHeight`).
+ *   - 44px minimum targets, 56px bar (`geekLayout.bottomNavHeight`) plus the
+ *     device's bottom safe-area inset, so the bar clears the iOS home
+ *     indicator instead of sitting on it (mobile grammar,
+ *     DOCS/MOBILE_UI_PLAN.md §2);
+ *   - label typography is the app's business: `labelSx` merges last onto the
+ *     caption so an identity (notegeek's mono ink-stamp) comes from the
+ *     primitive instead of being re-drawn around it.
  *
  * Visibility is the app's call: pass `hidden` or render it conditionally.
  * `GeekShell` reserves space for it (via `bottomNav`) so `GeekAppFrame` can
@@ -29,7 +35,7 @@ function isSignOutItem(item) {
 }
 
 export const GeekBottomNav = forwardRef(function GeekBottomNav(
-  { items = [], activeId, onNavigate, hidden = false, sx, itemSx, ...props },
+  { items = [], activeId, onNavigate, hidden = false, sx, itemSx, labelSx, ...props },
   ref
 ) {
   const { closeNav } = useGeekShell();
@@ -48,6 +54,8 @@ export const GeekBottomNav = forwardRef(function GeekBottomNav(
         display: 'flex',
         alignItems: 'stretch',
         height: `${geekLayout.bottomNavHeight}px`,
+        boxSizing: 'content-box',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         borderTop: (theme) => `1px solid ${theme.palette.divider}`,
         bgcolor: 'background.paper',
         ...sx,
@@ -94,7 +102,8 @@ export const GeekBottomNav = forwardRef(function GeekBottomNav(
               <Typography
                 variant="caption"
                 noWrap
-                sx={{ maxWidth: '100%', fontWeight: active ? 600 : 400, lineHeight: 1.2 }}
+                data-geek-bottom-nav-label=""
+                sx={{ maxWidth: '100%', fontWeight: active ? 600 : 400, lineHeight: 1.2, ...labelSx }}
               >
                 {item.label}
               </Typography>

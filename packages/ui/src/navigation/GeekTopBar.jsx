@@ -274,7 +274,15 @@ export const GeekTopBar = forwardRef(function GeekTopBar(
     ) : null;
 
   return (
-    <AppBar ref={ref} position="sticky" color="default" sx={sx} {...props}>
+    <AppBar
+      ref={ref}
+      position="sticky"
+      color="default"
+      // In a standalone PWA the bar runs under the status bar / notch; pad by
+      // the top safe-area inset so the 60px toolbar starts below it.
+      sx={{ paddingTop: 'env(safe-area-inset-top, 0px)', ...sx }}
+      {...props}
+    >
       <Toolbar
         disableGutters
         sx={{

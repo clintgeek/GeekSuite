@@ -154,8 +154,9 @@ export function GeekToastProvider({
         anchorOrigin={origin}
         data-geek-toasts
         sx={{
-          // `bottomInset` is the GeekBottomNav's height when one is mounted.
-          bottom: `${bottomInset + 24}px`,
+          // `bottomInset` is the GeekBottomNav's height when one is mounted;
+          // the safe-area inset keeps the stack off the iOS home indicator.
+          bottom: `calc(${bottomInset + 24}px + env(safe-area-inset-bottom, 0px))`,
           ...(clearsSidebar
             ? { left: `${geekLayout.sidebarWidth + 24}px` }
             : null),

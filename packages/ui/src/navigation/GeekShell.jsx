@@ -73,13 +73,19 @@ export function GeekShell({
   // over-reserved 60px for shells that render no top bar (bookgeek). Reserve
   // only what is actually on screen; `100%` when that is nothing, so a nested
   // shell inherits its container instead of assuming the viewport.
+  //
+  // Heights are in `dvh` where the browser supports it (mobile grammar,
+  // DOCS/MOBILE_UI_PLAN.md §2): `100vh` on iOS Safari is the *largest* viewport,
+  // so with the URL bar showing the bottom of a `100vh` shell — the tab bar,
+  // the last row, a pinned composer — sits below the visible screen. `dvh`
+  // tracks the visible viewport. The `vh` value stays as the fallback for
+  // engines without `dvh`, via `@supports`.
   const reservedHeight =
     (topBar ? geekLayout.topBarHeight : 0) + (showBottomNav ? geekLayout.bottomNavHeight : 0);
-  const contentHeight = focusMode
-    ? '100vh'
-    : reservedHeight
-      ? `calc(100vh - ${reservedHeight}px)`
-      : '100%';
+  const contentHeightFor = (unit) =>
+    focusMode ? `100${unit}` : reservedHeight ? `calc(100${unit} - ${reservedHeight}px)` : '100%';
+  const contentHeight = contentHeightFor('vh');
+  const contentHeightDvh = contentHeightFor('dvh');
 
   return (
     <GeekShellContext.Provider value={shellValue}>
@@ -90,6 +96,7 @@ export function GeekShell({
           display: 'flex',
           height: '100vh',
           maxHeight: '100vh',
+          '@supports (height: 100dvh)': { height: '100dvh', maxHeight: '100dvh' },
           overflow: 'hidden',
           bgcolor: 'background.default',
           color: 'text.primary',
@@ -158,6 +165,7 @@ export function GeekShell({
           <Box
             sx={{
               height: contentHeight,
+              '@supports (height: 100dvh)': { height: contentHeightDvh },
               minHeight: 0,
               flex: 1,
               display: 'flex',
