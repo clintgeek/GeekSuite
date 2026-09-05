@@ -314,50 +314,52 @@ landed the same night** (`useGeekPrimaryAction`, compact header action + `primar
 `titleSx`, node titles, 12px floor in shell chrome, Escape on sheets — see THE_UI_UNIFICATION_PLAN §3b).
 The fitnessgeek dead files and the voice decision remain open. Added after bujogeek/notegeek:
 
-- **`GeekSheet` ignores a child's `autoFocus`** — the paper takes focus after the child's attempt
-  while the drawer is still sliding in; bujogeek re-derives a 260ms delay. Add an
-  `initialFocus`/`autoFocusSelector` prop to the primitive. **XS**
-- **notegeek dev server** fails to render anything (`styled_default is not a function` from the
-  dependency optimizer's lazy `init_styled`); the production build is fine. Pre-existing;
-  investigate before the next notegeek pass so it can be screenshot-verified. **S**
+- ~~**`GeekSheet` ignores a child's `autoFocus`**~~ — **Done 2026-09-05** (`a0b08ca`): `initialFocus`
+  prop added, applied after the slide finishes rather than on a timer.
+- ~~**notegeek dev server**~~ fails to render anything (`styled_default is not a function` from the
+  dependency optimizer's lazy `init_styled`) — **Fixed 2026-09-05** (`70eb36e`): `vite.config.js`
+  pins `@mui/material/styles` and emotion into `optimizeDeps.include`. Screenshot-verified as part
+  of the same pass.
 - bujogeek: CollectionDetailPage rename/delete dialogs and the TaskList/SearchPage migration
   dialog were not converted (three-action confirm wants a sheet); 11px labels inside
   TaskEditor/TemplateEditor/KeyboardHelp/Habits/Tags/Templates/Sidebar are out of the M2 scope.
 
-- **Primary-action registry.** `GeekFab` must mount as a sibling of `GeekAppFrame`, but the
-  page owns the action. fitnessgeek wrote a 75-line context (`Layout/primaryAction.js`); every
-  other app will need the same. Promote it: `useGeekPrimaryAction({ label, icon, onClick })` in
-  `packages/ui` with `GeekShell` rendering the FAB. **S**
-- **`GeekDialog` header action.** A normal `<Button startIcon>` as `primaryAction` fills half the
-  60px bar; apps hide the icon and tighten padding via the `data-geek-dialog="primary"` hook.
-  Do it in the primitive or expose `primaryActionSx`. **XS**
-- **`GeekDialog` `headerSx` is full-mode only**; window mode has no header slot, so identity
-  styling reaches `DialogTitle` through `PaperProps`. Add a window-mode `titleSx`. **XS**
-- **Node `title` in `GeekDialog` full mode** is wrapped in `noWrap` `h3`; an eyebrow-over-title
-  block needs overrides. Detect a node title and skip the wrap. **XS**
-- **`GeekTopBar` desktop date strip** renders at 11px, under the suite's 12px floor. **XS**
-- **`GeekSheet` and Escape.** Focus never enters the drawer, so Escape does not close a sheet;
-  the harness closes via the backdrop. Check `SwipeableDrawer` focus handling. **S**
-- fitnessgeek left dead: `components/BarcodeScanner.jsx` (duplicate), `BarcodeScanner.jsx.v3.backup`,
-  `Layout/Drawer.jsx`, `Layout/PageContainer.jsx`, `Weight/WeightContent.jsx`, `WeightLayout.jsx`;
-  and 10–11px chart ticks / editorial mono labels outside the Log surfaces are a voice decision
-  for Chef, not a fix.
+All six of the following packages/ui items are ~~struck~~ **done 2026-09-05** (`a0b08ca`,
+which also closed the M3–M5 `packages/ui` follow-ups below):
+
+- ~~**Primary-action registry.**~~ `useGeekPrimaryAction({ label, icon, onClick })` landed in
+  `packages/ui` with `GeekShell` rendering the FAB.
+- ~~**`GeekDialog` header action.**~~ Compact header action + `primaryActionSx` added.
+- ~~**`GeekDialog` `headerSx` is full-mode only**~~ — a window-mode `titleSx` added; both modes
+  now have an unambiguous title hook.
+- ~~**Node `title` in `GeekDialog` full mode**~~ — a node title now skips the `noWrap` wrap.
+- **`GeekTopBar` desktop date strip** renders at 11px, under the suite's 12px floor. Not part of
+  `a0b08ca`'s scope — still open. **XS**
+- ~~**`GeekSheet` and Escape.**~~ `initialFocus` (above) plus the frame's `useReducedMotion` work
+  put focus in the drawer once it finishes sliding; Escape closes it.
+- ~~fitnessgeek left dead: `components/BarcodeScanner.jsx` (duplicate), `BarcodeScanner.jsx.v3.backup`,
+  `Layout/Drawer.jsx`, `Layout/PageContainer.jsx`, `Weight/WeightContent.jsx`, `WeightLayout.jsx`~~ —
+  **deleted 2026-09-05** (`37e83b6`), plus 15 more found in the same sweep. 10–11px chart ticks /
+  editorial mono labels outside the Log surfaces remain a voice decision for Chef, not a fix.
 
 ### Follow-ups surfaced by M3–M5 (2026-09-05)
 
-- **`GeekAppFrame` needs a `fill` contract** for full-height pages (a pinned composer, a board):
-  storygeek reaches through the route `motion.div` with `& > div` to flex it. Add a `fill` prop. **S**
-- **`GeekSheet`**: no visible close control in sheet mode (handle, backdrop, Escape only) — thin for a
-  full-snap panel opened from an icon; `actions` has no alignment prop. **XS**
-- **`GeekDialog`** `data-geek-dialog="title"` is shared by the full-mode `h3` and the window
-  `DialogTitle`, so `titleSx` is not a clean window-only slot. **XS**
+- ~~**`GeekAppFrame` needs a `fill` contract**~~ — **Done 2026-09-05** (`a0b08ca`): `fill` makes
+  the frame a non-scrolling flex column and flexes the route transition element.
+- ~~**`GeekSheet`**: no visible close control in sheet mode~~ — **Done 2026-09-05** (`a0b08ca`):
+  a visible 44px close added in full-snap mode, plus `actionsAlign` (stretch for one action, end
+  for several).
+- ~~**`GeekDialog`** `data-geek-dialog="title"` shared by full-mode and window title~~ — **Done
+  2026-09-05** (`a0b08ca`): full-mode header title gets its own hook, `titleSx`/selectors are
+  unambiguous in both modes.
 - **basegeek `Databases.jsx` is orphaned** (no route, no nav entry) — converted anyway; wiring is
   Chef's call. The theme's 11px `overline`/`subtitle2` tokens are a suite typography call.
 - **storygeek**: rails collapse at md (left) and lg (right) by design — gating both at md left a
   ~180px play column at 1000px.
-- **Harness**: the Playwright install moved from `~/.agents/skills/playwright` to
-  `~/.agents/skills.bak-20260904-233317/playwright`; scripts import from the latter. Fix the
-  skills path (ai-setup) before M6 puts the harness in the repo.
+- ~~**Harness**: the Playwright install moved~~ — moot as of M6 (below): `tools/mobile-harness`
+  pins its own `playwright` devDependency and CI installs the matching Chromium; a local run
+  still falls back to `~/.agents/skills*/playwright` if `PLAYWRIGHT_MODULE` isn't set, but no
+  longer depends on the path being right.
 
 ## 5. Rollout
 
@@ -365,11 +367,11 @@ The fitnessgeek dead files and the voice decision remain open. Added after bujog
 |------|-------|--------|----------------|
 | M0 | ~~§2 primitives + shell fixes + `viewport-fit`~~ **landed 2026-09-04** (`daf2071`..`578e5ba`, plus `fafac74` drawer-width fix) | M | Everything else consumes it |
 | M1 | ~~BookGeek pilot (§3)~~ **landed 2026-09-04** (see §3.7) | L | Heaviest case, clearest mobile job, drained the Tailwind CDN debt |
-| M2 | fitnessgeek → bujogeek → notegeek | M each | Bottom navs exist; mostly sheets, dialogs, targets |
+| M2 | ~~fitnessgeek → bujogeek → notegeek~~ **landed** (fitnessgeek, bujogeek 2026-09-04; notegeek 2026-09-05, build/lint/141 tests green, not screenshot-verified until the dev-server fault fixed same day) | M each | Bottom navs exist; mostly sheets, dialogs, targets |
 | M3 | ~~flockgeek~~ **landed 2026-09-05** (`706ae1a`; bottom nav: yes) | L | Tables → cards is the big one |
 | M4 | ~~storygeek, basegeek~~ **landed 2026-09-05** (`7fe5e44`, `816dc02`) | M + S–M | Breakpoint alignment and dialogs |
 | M5 | ~~startgeek~~ **landed 2026-09-05** (`13a922e`; first manifest/SW/offline page) | S–M | Standalone build |
-| M6 | Guardrails | S | Mobile checklist in the review list; `packages/ui` tests for sheet/dialog/fab; a Playwright screenshot script at iPhone 14 (`~/.agents/skills/playwright` has the browser) using a saved `storageState` that Chef creates once by signing in |
+| M6 | ~~Guardrails~~ **landed 2026-09-05** (enforcing in CI 14:54; see below) | S | Mobile checklist in the review list; `packages/ui` tests for sheet/dialog/fab; a Playwright screenshot script at iPhone 14 (`~/.agents/skills/playwright` has the browser) using a saved `storageState` that Chef creates once by signing in |
 
 **M6 — the harness is in the repo (2026-09-05).** The scratch scripts became
 `tools/mobile-harness` (`@geeksuite/mobile-harness`): shared contexts (iPhone 14
@@ -385,10 +387,12 @@ both schemes and uploads the screenshots; `.github/workflows/mobile-harness.yml`
 runs it on pushes to main and on PRs touching `apps/**`, `packages/ui/**` or the
 tool. No screenshot baselines yet — the probe is the gate, diffing is documented
 in the tool's README as the next step. Known violations can be parked in each
-app's `waivers` list with a reason; the list ships empty on purpose, so the
-findings from the first run (bookgeek's 32px shelf chips and 11px saved filters,
-bujogeek's 22–28px chips/habit grid and 11px editor labels, basegeek's 11px
-`overline`/`subtitle2` theme tokens) are visible rather than absorbed.
+app's `waivers` list with a reason; the list ships empty on purpose. The first run found 698
+findings across seven apps (bookgeek's 32px shelf chips and 11px saved filters, bujogeek's
+22–28px chips/habit grid and 11px editor labels, basegeek's 11px `overline`/`subtitle2` theme
+tokens, and more per app) — all burned down to **0 findings, all eight apps**, the same
+2026-09-05 (`e85fc43`, `b2e9c95`, `69a7e2f`, `08be080`, `6249ef4` → `db44ccb`; detail per app in
+`DOCS/BURN_QUEUE.md`'s Landed list).
 
 Run it like the 2026-09-02 sweep: per-app commits, incremental deploys, worktree builds when the
 tree is dirty. Every main push restarts the fleet (Watchtower), so batch per app, not per file.
@@ -408,4 +412,6 @@ Before merging any UI work, at 390×844 in both modes:
 - Safe areas respected in standalone (notch, home indicator).
 - Identity survives: the app's fonts, chrome color, accent, and voice are present on the phone.
 
-*Drafted 2026-09-04; M0 and M1 landed the same day. M3–M5 landed 2026-09-05. Next: M6 guardrails (harness into the repo, review checklist in CI).*
+*Drafted 2026-09-04; M0 and M1 landed the same day. M3–M6 landed 2026-09-05 — the mobile harness
+is in the repo and CI-enforcing (`.github/workflows/mobile-harness.yml`, green since 14:54). The
+review checklist above (§6) is written; it is not yet wired into a PR template or CI comment.*

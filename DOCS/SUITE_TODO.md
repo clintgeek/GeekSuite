@@ -427,17 +427,25 @@ slots but have **zero consumers**; every app hand-rolls both. Per-app structural
   (`backend/src/config/keyVault.js`); 12 suites / 106 tests green, basegeek's parity tripwire still
   green. **Two things Sage still owes production:**
     1. `KEY_VAULT_SECRET` must be set in fitnessgeek's `.env.production` **to the same value
-       basegeek already uses** — both processes read this field. That contradicts the
-       "`KEY_VAULT_SECRET` | basegeek only | Never share across apps" row in the root `DEPLOY.md`,
-       which needs updating. Deploy both apps from the same commit (`packages/schemas` changed).
+       basegeek already uses** — both processes read this field. The root `DEPLOY.md`'s
+       "Shared secrets across apps" row is updated to match (no longer "basegeek only"). Deploy
+       both apps from the same commit (`packages/schemas` changed).
     2. Run the backfill **once**, after that deploy:
        `docker exec fitnessgeek node scripts/encryptGarminPasswords.js --dry-run` then without the
        flag. Idempotent, counts only. Full run order in `apps/fitnessgeek/DOCS/CONTEXT.md`.
   (`DEFERRED_WORK.md`)
 
-- **Shared date utilities** — the timezone bug analysis identified a `toUtcMidnight()` /
-  `localDateString()` / `displayCalendarDate()` pattern needed across bujogeek, fitnessgeek, and
-  flockgeek. Promote to `packages/utils/src/dates.js` and import from there.
+- ~~**Shared date utilities**~~ — **Done 2026-09-05.** `@geeksuite/utils` (`packages/utils`)
+  holds two families — calendar dates stored as UTC midnight (`toUtcMidnight`,
+  `utcMidnightToday`, `utcDayRange`, `utcDateString`, `displayCalendarDate`) and local instants
+  (`localDateString`, `startOfLocalDay`) — because mixing the two was the root cause of every bug
+  in `ARCHIVE/THE_TIME_ISSUE.md`. 36 tests across five zones including both DST transitions.
+  Seven hand-rolled copies collapsed across bujogeek/flockgeek frontends, flockgeek's backend and
+  fitnessgeek's frontend; fitnessgeek's backend copies were blocked at first (its CJS backend on
+  node 18 couldn't `require()` an ESM package) but that blocker cleared the same day when
+  fitnessgeek moved to node 20 + ESM (`17cc6a7`) — all five backend copies collapsed too. Two live
+  off-by-one bugs the migration surfaced on purpose (flockgeek edit-form prefill, fitnessgeek
+  `getTodayBP`) were fixed the same afternoon (`4856227`, eight sites total).
   (Full spec in `DOCS/ARCHIVE/THE_TIME_ISSUE.md`)
 
 - ~~**Shared logger**~~ — **Done 2026-09-05.** `@geeksuite/logger` (`packages/logger`) extracts the
@@ -454,10 +462,11 @@ slots but have **zero consumers**; every app hand-rolls both. Per-app structural
   routes/services/middleware untouched. `installShutdownHooks` is built and exported but not yet wired
   into any backend (each has a bespoke shutdown sequence today — follow-up if wanted).
 
-- **`UserSettings` schema consolidation (fitnessgeek)** — schema lives in both
-  `apps/fitnessgeek/backend/src/models/UserSettings.js` and
-  `apps/basegeek/packages/api/src/graphql/fitnessgeek/models/UserSettings.js` and has drifted.
-  Consolidate to one source of truth. (See `DOCS/CONTEXT.md`)
+- ~~**`UserSettings` schema consolidation (fitnessgeek)`**~~ — **Done 2026-09-05** (`6d7865c`).
+  Both models now build from `packages/schemas/fitnessgeek/userSettings.js` (`@geeksuite/schemas`);
+  a parity tripwire on both sides fails if either stops consuming it. Full detail, and the same
+  treatment for seven more fitnessgeek models the same day, in `DOCS/CONTEXT.md` and
+  `apps/fitnessgeek/DOCS/USER_SETTINGS_SCHEMA.md` "Shared schemas — the index".
 
 ### GraphQL consolidation audit (2026-09-03)
 
@@ -471,7 +480,12 @@ reality stands, per app:
 | flockgeek | Apollo → basegeek | ✅ frontend fully on GraphQL (only `/api/health` ping). ~~All 13 Mongoose models duplicated~~ — **corrected 2026-09-05**: only 4 (`BirdNote`, `BirdTrait`, `Event`, `LineageCache`) were actually orphaned and are now deleted. The other 9 are imported by a full, live, *mounted* REST CRUD API (`routes/api.js` → birds/groups/group-memberships/health-records/egg-production/pairings/locations/hatch-events/meat-runs) that nothing in the repo calls anymore but which still runs in the server. See `apps/flockgeek/CONTEXT.md` — deciding whether to unmount that whole REST layer is a follow-up, not done here. |
 | notegeek | Apollo → basegeek | ✅ frontend fully on GraphQL. ~~Own backend still carries legacy REST~~ — **deleted 2026-09-05**: `routes/notes.js`, `tags.js`, `search.js`, their controllers, and duplicate `models/Note.js`. This also resolved the `getTagHierarchy` 500 below. Follow-up prune, same day: `migrations/migrateNotesBetweenUsers.js` and `convertFoldersToTags.js` still imported the deleted `Note` model and had no caller (no npm script, no server import) — deleted, along with the now-empty `migrations/` directory. `utils/tagValidation.js` was imported only by its own test — both deleted. Backend suite still green (24 passed, 8 skipped); no dependency in `package.json` became unused as a result. |
 | bookgeek | Apollo for library CRUD **and profile data**; `authFetch` REST only for binary/long jobs | ✅ **done 2026-09-05** (item 3 below). All pure data is on the gateway: `bookProfile` / `libraryFilters` / `bookAiStatus` queries and `saveBookProfile` / `saveLibraryFilter` / `deleteLibraryFilter` / `addBookShelf` / `removeBookShelf` mutations. The whole `/api/profile/*` family and `/api/ai/status` (with `routes/aiRoutes.js` and `services/aiGeekService.js`) are deleted from the bookgeek API. Remaining REST is legit only: upload/download/cover/enrich/merge/import/device-baskets/health. The hardcoded `http://localhost:1800/api` is gone — `utils/bookDisplay.js` now uses `import.meta.env.VITE_API_URL \|\| "/api"`, the notegeek/storygeek convention. ~~`api/src/graphql/{schema,resolvers}.js` is an **unmounted dead GraphQL server**~~ — **deleted 2026-09-05** (plus the unused `@apollo/subgraph` dep). Duplicated models: `Profile` is now read/written from both sides, so the two copies are field-identical and carry a tripwire (`bookgeekProfile.test.js`); `book`/`ingestionJob`/`recommendation` still duplicated, untouched. |
-| fitnessgeek | `apiService.js` shims REST→GraphQL, but `restClient.js` still hits own backend | ⚠️ mostly. ~~Still REST: `POST/PUT/DELETE /logs` + `POST /meals/:id/add-to-log`~~ — **food-log writes switched 2026-09-05** (gateway `79b1b57`, frontend same day): `fitnessGeekService.addFoodToLog`/`updateFoodLog`/`deleteFoodLog`/`addMealToLog` now go through `apiService` to `addFoodLog`/`updateFoodLog`/`deleteFoodLog`/`logMeal`. ~~The four REST routes are caller-less and should be deleted — next ticket~~ — **backend routes deleted 2026-09-05** (see item 2 — done). Still REST: food search/barcode/favorites/recent (`foodService.js`), meds RxNorm + med logs, influx, AI, `PUT /user/profile`, Garmin heart-rate detail. **All 13 models duplicated** — this is the `UserSettings` drift hazard above, times 13. |
+| fitnessgeek | `apiService.js` shims REST→GraphQL, but `restClient.js` still hits own backend | ⚠️ mostly. ~~Still REST: `POST/PUT/DELETE /logs` + `POST /meals/:id/add-to-log`~~ — **food-log writes switched 2026-09-05** (gateway `79b1b57`, frontend same day): `fitnessGeekService.addFoodToLog`/`updateFoodLog`/`deleteFoodLog`/`addMealToLog` now go through `apiService` to `addFoodLog`/`updateFoodLog`/`deleteFoodLog`/`logMeal`. ~~The four REST routes are caller-less and should be deleted — next ticket~~ — **backend routes deleted 2026-09-05** (see item 2 — done). Still REST: food search/barcode/favorites/recent (`foodService.js`), meds RxNorm + med logs, influx, AI, `PUT /user/profile`, Garmin heart-rate detail. **Model duplication: 8 of 13 consolidated, a 9th (`FoodItem`) in flight
+(`DOCS/BURN_QUEUE.md` R71)** — `UserSettings`, `Weight`, `BloodPressure`, `Medication`,
+`LoginStreak`, `WeightGoals`, `NutritionGoals`, `Meal` and `FoodItem` (R71, `be79702`) now share
+one `@geeksuite/schemas` definition the way `UserSettings` does above; `MedicationLog` and
+`AIFoodPromptCache` had no gateway consumer and were deleted from the gateway; `FoodLog` and
+`DailySummary` are in flight (R74). See `DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md` for the pairing plan and progress. |
 | storygeek | axios REST to own backend | ❌ not on GraphQL. `apolloClient.js` exists but is never imported. basegeek's storygeek schema (`stories`, `story`, 3 mutations) is unused by the app and too thin to replace `/stories/*/continue`, `/export/*`, `/ai/*`. Decide: either build out the schema or drop the basegeek storygeek module as dead code. |
 
 Ordered cheap-to-expensive:
@@ -658,10 +672,10 @@ being replaced by `graphql/glance/` under `DOCS/DASHGEEK_PLAN.md`. `notes` has n
 
 - **bujogeek subtasks UI** — backend model has `parentTask`/`subtasks` fields; no frontend UI. — **Done 2026-09-05** (`d53b008`: gateway resolvers fixed + UI).
 
-- **storygeek markdown rendering** — AI narration and Bookify output render as plain
-  `pre-wrap` text, so `**bold**` shows literal asterisks. `react-markdown`,
-  `react-syntax-highlighter`, and `@mui/x-data-grid` are declared but never imported —
-  either wire up markdown (styled from the palette) or drop the deps.
+- ~~**storygeek markdown rendering**~~ — **Done 2026-09-05** (`fe805c9`). Narration renders
+  through `react-markdown` with `remark-gfm`/`remark-breaks`, styled from the Codex palette.
+  CanonCard's summary text still goes through a separate render path, not through Narration —
+  tracked as `DOCS/BURN_QUEUE.md` Q14.
 
 - ~~bujogeek quick-add hyphenated-date bug~~ — **Fixed 2026-08-30:** date
   parsing now runs before signifier detection in `utils/parseTaskInput.js`, so
@@ -688,8 +702,11 @@ being replaced by `graphql/glance/` under `DOCS/DASHGEEK_PLAN.md`. `notes` has n
   storygeek, and notegeek have zero. Priority for each app after its hardening pass: auth-isolation
   specs (login flow, `/api/users/me`, data scoping). (`DEFERRED_WORK.md`)
 
-- **Circuit breakers on fitnessgeek external APIs** — USDA, Nutritionix, OpenFoodFacts, Garmin.
-  30s timeout per call but no circuit breaker. Use `opossum` or Redis-backed state. (`DEFERRED_WORK.md`)
+- ~~**Circuit breakers on fitnessgeek external APIs**~~ — **Done 2026-09-05** (`9dede26`).
+  `opossum` breakers around USDA, OpenFoodFacts, CalorieNinjas and Garmin (6s timeout / 50% error
+  threshold over 10 calls / 30s reset; Garmin 15s). Nutritionix has no live call site (default
+  reserved); FatSecret is unwrapped and noted. `GET /api/health/breakers` exposes the stats.
+  58 tests. (`DEFERRED_WORK.md`)
 
 - **Input validation (Joi/Zod)** — most REST routes do ad-hoc `if (!field)` checks.
   Route-by-route, not urgent — own slow-burn pass. (`DEFERRED_WORK.md`)
@@ -712,12 +729,17 @@ being replaced by `graphql/glance/` under `DOCS/DASHGEEK_PLAN.md`. `notes` has n
   needs the admin `DELETE /api/users/:id` or a one-off script. Found 2026-09-02.
 
 - **Dead frontend components (contrast-sweep findings)** — unrouted files that still carry
-  hardcoded light styling and will bite if re-mounted: fitnessgeek `Layout.jsx`, `Drawer.jsx`,
-  `FoodSearch.jsx` (deprecated), `NaturalLanguageInput.jsx` + subtree, `DashboardOrderSettings.jsx`,
-  `AITestComponent.jsx`, `WeightLayout.jsx`, `WeightProgressRing.jsx`, `MacroBar.jsx`;
-  bujogeek `navigation/BottomNav.jsx` + the `MuiBottomNavigation*` theme overrides;
-  notegeek `pages/LoginPage.jsx`, `pages/RegisterPage.jsx`; basegeek `pages/Databases.jsx`;
-  startgeek `ResumeSection.jsx`, `WorldClocks.jsx`. Delete or route.
+  hardcoded light styling and will bite if re-mounted. **fitnessgeek's list is mostly gone as of
+  2026-09-05** (`37e83b6`, the 22-file dead-frontend sweep): `Layout.jsx`, `Drawer.jsx`,
+  `NaturalLanguageInput.jsx` + subtree, `DashboardOrderSettings.jsx`, `AITestComponent.jsx`,
+  `WeightLayout.jsx`, `MacroBar.jsx` are deleted; `WeightProgressRing.jsx` is still there
+  (`components/Weight/`); `FoodSearch.jsx` now exists at two paths
+  (`pages/FoodSearch.jsx`, `components/FoodSearch/FoodSearch.jsx`) — unclear which, if either, is
+  the one this note meant, left for a follow-up look. Still open: bujogeek `navigation/BottomNav.jsx`
+  + the `MuiBottomNavigation*` theme overrides; notegeek `pages/LoginPage.jsx`, `pages/RegisterPage.jsx`;
+  basegeek `pages/Databases.jsx` (orphaned, converted to the mobile grammar anyway during M4 —
+  wiring vs. deleting is still Chef's call, `DOCS/BURN_QUEUE.md` Q11); startgeek `ResumeSection.jsx`,
+  `WorldClocks.jsx`. Delete or route.
 
 - ~~**`fitnessgeek docker-compose.dev.yml`**~~ — **deleted 2026-09-05**, see `DEFERRED_WORK.md`.
 

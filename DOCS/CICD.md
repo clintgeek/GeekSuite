@@ -15,6 +15,14 @@ live under `.github/workflows/` and deploys are pull-based.
 > retire `build.sh`'s deploy codepath (kept for now as break-glass — note
 > the `--no-deploy` flag was never needed since CI builds in-workflow, not
 > via build.sh). The rollout order below is retained as the history.
+>
+> **2026-09-05 addendum:** the job names under Tier 1 below are the original plan, not the
+> shipped list — `ci.yml` has grown well past them (per-app frontend test jobs, `test-utils`,
+> `test-crypto-vault`, a `syntax` gate; see `DOCS/RUNBOOK.md` §5 for the as-shipped table). A
+> third workflow, `.github/workflows/mobile-harness.yml`, now gates every push/PR touching
+> `apps/**` or `packages/ui/**` — a Playwright probe (`tools/mobile-harness`) that fails on any
+> tap target under 44px, text under 12px, sideways scroll, or page error. It went enforcing
+> (`continue-on-error` removed) at 14:54 on its first green run.
 
 ---
 

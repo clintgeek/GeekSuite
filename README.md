@@ -51,7 +51,13 @@ GeekSuite/
 │   ├── auth/              # @geeksuite/auth — SSO middleware + React auth hooks
 │   ├── user/              # @geeksuite/user — ThemeProvider, themePreboot Vite plugin, /me handler
 │   ├── api-client/        # @geeksuite/api-client — GeekSuiteApolloProvider (GraphQL gateway client)
-│   └── ui/                # @geeksuite/ui — shared UI components
+│   ├── ui/                # @geeksuite/ui — shared UI components
+│   ├── utils/             # @geeksuite/utils — calendar-date and local-time helpers
+│   ├── logger/            # @geeksuite/logger — pino logging + redaction, all seven backends
+│   ├── schemas/           # @geeksuite/schemas — Mongoose schemas shared by more than one writer
+│   ├── crypto-vault/      # @geeksuite/crypto-vault — AES-256-GCM secrets-at-rest
+│   └── eslint-config/     # @geeksuite/eslint-config — shared flat ESLint config
+├── tools/                 # mobile-harness (phone-width screenshot + grammar probe, CI-enforced), syntax-check.mjs
 ├── DOCS/                  # Suite-wide documentation
 ├── DEPLOY.md              # Deployment reference
 ├── build.sh               # Docker build + deploy script
@@ -68,6 +74,14 @@ GeekSuite/
 | `@geeksuite/user` | User store, `ThemeProvider`, `themePreboot` Vite plugin, `/users/bootstrap` |
 | `@geeksuite/api-client` | `GeekSuiteApolloProvider` — Apollo Client pointed at basegeek's `/graphql` |
 | `@geeksuite/ui` | Shared MUI-based UI components |
+| `@geeksuite/utils` | Calendar-date and local-time helpers (`toUtcMidnight`, `localDateString`, `displayCalendarDate`, …) — added 2026-09-05 |
+| `@geeksuite/logger` | `createLogger`/`createHttpLogger`/`installShutdownHooks` — pino logging with redaction, in all seven backends — added 2026-09-05 |
+| `@geeksuite/schemas` | Mongoose schema definitions shared by more than one writer — eight fitnessgeek models consolidated so far (UserSettings, Weight, BloodPressure, Medication, LoginStreak, WeightGoals, NutritionGoals, Meal), a ninth (FoodItem) in flight, with parity suites on both sides — added 2026-09-05 |
+| `@geeksuite/crypto-vault` | AES-256-GCM encrypt/decrypt for secrets at rest (basegeek's provider keys, fitnessgeek's Garmin password) — added 2026-09-05 |
+
+`tools/mobile-harness` (`@geeksuite/mobile-harness`) is the same idea for the phone: a
+Playwright screenshot + mobile-grammar probe, CI-enforced via `.github/workflows/mobile-harness.yml`.
+It lives in `tools/`, not `packages/`, because nothing imports it at runtime.
 
 ---
 

@@ -14,9 +14,13 @@ disagree with what the box actually runs, both are stated and the disagreement i
 
 **A live multi-agent work session was in flight while this was written** (see
 `DOCS/BURN_QUEUE.md`) — the working tree had ~20 modified files and several new, uncommitted
-packages (`packages/logger`, `packages/schemas`, `packages/utils`, `tools/`). Test counts here
-are the last CI/STATUS-verified numbers; a local run against a dirty tree may differ. Run
-`git status --short` before trusting any number in this doc as current.
+packages (`packages/logger`, `packages/schemas`, `packages/utils`, `tools/`). **Update
+2026-09-05, later the same session:** all four landed and are committed (waves 1–7,
+`DOCS/BURN_QUEUE.md`); the specific "uncommitted package" caveats below are stale. The general
+warning stands, though — the burn is still running (`DOCS/BURN_QUEUE.md` "Running") and the tree
+may be dirty again by the time you read this. Test counts here are the last CI/STATUS-verified
+numbers; a local run against a dirty tree may differ. Run `git status --short` before trusting
+any number in this doc as current.
 
 ---
 
@@ -44,7 +48,7 @@ SSO/static-file shell (see `DOCS/CONTEXT.md` and each app's own `CONTEXT.md`).
 | App | Public host | Container | Image | Port | Healthcheck | Frontend | Backend |
 |---|---|---|---|---|---|---|---|
 | basegeek | `basegeek.clintgeek.com` (+ `base.`) | `basegeek` | `ghcr.io/clintgeek/basegeek:latest` | 8987→8987 | none in compose; app serves `GET /api/health` | Vite 5 + React (`packages/ui`) | Node + Express (`packages/api`) |
-| bookgeek | `bookgeek.clintgeek.com` | `bookgeek` | `ghcr.io/clintgeek/bookgeek:latest` | 1800→1800 | `wget --spider http://localhost:1800/api/health` | Vite + React + Tailwind + shadcn/ui (`web/`) | Node + Express (`api/`), `node:20-alpine` in `Dockerfile` — **contradicts `apps/bookgeek/DOCS/CONTEXT.md`, which says "Runtime: Bun"; the shipped image is Node, not Bun** |
+| bookgeek | `bookgeek.clintgeek.com` | `bookgeek` | `ghcr.io/clintgeek/bookgeek:latest` | 1800→1800 | `wget --spider http://localhost:1800/api/health` | Vite + React + Tailwind + shadcn/ui (`web/`) | Node + Express (`api/`), `node:20-alpine` in `Dockerfile` — `apps/bookgeek/DOCS/CONTEXT.md`'s runtime line was corrected to node:20 2026-09-05 (`70eb36e`); no longer contradicts the shipped image |
 | bujogeek | `bujogeek.clintgeek.com` (+ `bujo.`) | `bujogeek` | `ghcr.io/clintgeek/bujogeek:latest` | 5005→5005 | `wget --spider http://127.0.0.1:5005/` (root, not `/api/health`, though that route exists) | Vite + React + MUI 7 | Node + Express, thin — SSO proxy + `/api/me` + `/api/health` + static only; all task/habit/collection data is gateway-owned |
 | fitnessgeek | `fitnessgeek.clintgeek.com` (+ `nutrition-tracker.`, `myfitnessgeek.`, `food.`) | `fitnessgeek` | `ghcr.io/clintgeek/fitnessgeek:latest` | 4080→3001 | none in compose; app serves `GET /health` and `GET /api/health` | Vite + React | Node + Express — hybrid: verifies JWT locally with shared `JWT_SECRET` (see `DOCS/SSO_OVERVIEW.md`) as well as proxying auth to basegeek |
 | flockgeek | `flockgeek.clintgeek.com` | `flockgeek` | `ghcr.io/clintgeek/flockgeek:latest` | 5001→5001 | none in compose; app serves `GET /api/health` | Vite + React | Node + Express — owns its own Mongoose models (birds, egg production, meat runs) directly, not fully gateway-owned |
@@ -66,9 +70,12 @@ of each app's backend source. Names only — no values were read or printed.
   `INFLUXDB_BUCKET`, `INFLUXDB_TOKEN`, `INFLUXDB_SETUP_USERNAME`, `INFLUXDB_SETUP_PASSWORD`,
   `INFLUXDB_ADMIN_TOKEN`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`,
   `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SPOTIFY_REDIRECT_URI`, `INTERNAL_JWT_SECRET`,
-  `KEY_VAULT_SECRET`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`,
-  `AI_CACHE_MAX_ENTRIES`, `AI_CACHE_TTL_MS`, `WEATHER_LAT`, `WEATHER_LON`, `SSO_COOKIE_DOMAIN`,
-  `LOG_LEVEL`, `ONNX_RUNTIME_WEB_ONLY`, `JEST_MONGOD_STATE_FILE` (test-only)
+  `KEY_VAULT_SECRET` (shared with fitnessgeek, see below), `VAPID_PUBLIC_KEY`,
+  `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `AI_CACHE_MAX_ENTRIES`, `AI_CACHE_TTL_MS`, `WEATHER_LAT`,
+  `WEATHER_LON`, `SSO_COOKIE_DOMAIN`, `CSRF_GUARD` (`off|report`, all seven backends,
+  2026-09-02), `CSRF_TOKEN` (`off|report|enforce`, basegeek only, 2026-09-05 — default/current
+  `report`; see `DOCS/CONTEXT.md` "CSRF: the double-submit token"), `LOG_LEVEL`,
+  `ONNX_RUNTIME_WEB_ONLY`, `JEST_MONGOD_STATE_FILE` (test-only)
 - **bookgeek**: `API_PORT`, `LIBRARY_PATH`, `COVERS_PATH`, `TEMP_PATH`, `ADDME_PATH`,
   `MONGODB_URI`, `BASEGEEK_MONGODB_URI`, `JWT_SECRET`, `BASEGEEK_URL`, `BOOKGEEK_PUBLIC_URL`,
   `PUBLIC_BASE_URL`, `PUBLIC_URL`, `GOOGLE_BOOKS_API_KEY`,
@@ -79,7 +86,9 @@ of each app's backend source. Names only — no values were read or printed.
   `APP_NAME`, `CORS_ORIGINS`, `LOG_LEVEL`, `NODE_ENV` — VAPID keys are **not** local; they live
   in basegeek's env (`DOCS/REMINDERS.md`)
 - **fitnessgeek**: `MONGODB_URI`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, `BASEGEEK_URL`/`BASE_GEEK_URL`,
-  `REDIS_URL`, `AI_GEEK_API_KEY`, `USDA_API_KEY`, `NUTRITIONIX_APP_ID`, `NUTRITIONIX_API_KEY`,
+  `REDIS_URL`, `KEY_VAULT_SECRET` (basegeek's value, copied by line — encrypts the Garmin
+  password, added 2026-09-05, see `DEPLOY.md` "Shared secrets across apps"), `AI_GEEK_API_KEY`,
+  `USDA_API_KEY`, `NUTRITIONIX_APP_ID`, `NUTRITIONIX_API_KEY`,
   `OPENFOODFACTS_API_URL`, `CALORIENINJAS_API_KEY`, `FATSECRET_CLIENT_ID`,
   `FATSECRET_CLIENT_SECRET`, `INFLUXDB_HOST`, `INFLUXDB_PORT`, `INFLUXDB_USERNAME`,
   `INFLUXDB_PASSWORD`, `INFLUXDB_DATABASE`, `INFLUXDB_PROTOCOL`, `LOCAL_AUTH_COOKIE_DOMAIN`,
@@ -156,8 +165,9 @@ Full design in `DOCS/CICD.md` — this is the as-shipped summary.
 
 | Workflow | Trigger | Does |
 |---|---|---|
-| `.github/workflows/ci.yml` | PR → `main`, push → `main` (both skip `**/*.md`, `DOCS/**`, `LICENSE` via `paths-ignore`) | `test-basegeek` (jest, mongodb-memory-server), `test-bookgeek` (`node --test`), `test-notegeek` (vitest), `test-ui` (vitest, theme contrast), `test-bujogeek` (vitest), `test-backends` matrix (bujogeek/fitnessgeek/flockgeek/storygeek/notegeek jest, `pnpm test`), `lint` (`pnpm -r lint`, errors gate/warnings don't), `syntax` (`node tools/syntax-check.mjs`, see below), `build-frontends` matrix (8 apps, `npm run build`) |
+| `.github/workflows/ci.yml` | PR → `main`, push → `main` (both skip `**/*.md`, `DOCS/**`, `LICENSE` via `paths-ignore`) | `test-basegeek` (jest, mongodb-memory-server), `test-bookgeek` (`node --test`), `test-notegeek` (vitest), `test-bookgeek-web`, `test-flockgeek`, `test-storygeek`, `test-fitnessgeek-web` (frontend vitest suites, added 2026-09-05), `test-ui` (vitest, theme contrast), `test-utils`, `test-crypto-vault` (added 2026-09-05), `test-bujogeek` (vitest), `test-backends` matrix (bujogeek/fitnessgeek/flockgeek/storygeek/notegeek jest, `pnpm test`), `lint` (`pnpm -r lint`, errors gate/warnings don't), `syntax` (`node tools/syntax-check.mjs`, see below), `build-frontends` matrix (8 apps, `npm run build`) |
 | `.github/workflows/release.yml` | push → `main` (same `paths-ignore`), or `workflow_dispatch` with an optional single-app input | Matrix-builds and pushes every app with a root `Dockerfile` to `ghcr.io/clintgeek/<app>:{latest,sha-<short>,main}` |
+| `.github/workflows/mobile-harness.yml` | push → `main`, PR → `main` (`paths`-scoped to `apps/**`, `packages/ui/**`, `tools/mobile-harness/**`, the workflow file itself) | Builds each app, serves `dist`, walks it with `tools/mobile-harness` at iPhone 14 (dark + light), fails on any tap target < 44px, readable text < 12px, sideways scroll, or page error. **Enforcing since 2026-09-05 14:54** (first green run; §8) — no longer report-only. |
 
 **A push to `main` = a deploy.** Release publishes new images; Watchtower on the box polls
 GHCR and recreates any container whose digest changed, within ~5 minutes, no inbound access
@@ -247,7 +257,7 @@ longer the primary deploy path (`DEPLOY.md`) — and using it re-triggers landmi
 | bujogeek | `nodemon server.js` (`backend/`) — prod `PORT` default 5005 (compose), but its own `DOCS/CONTEXT.md` documents local dev backend on `5001` | `vite` — 3000 (`frontend/vite.config.js`) | `resolve.dedupe: ['@mui/material','@emotion/react','@emotion/styled','react','react-dom']` required (see landmine below) |
 | fitnessgeek | `nodemon src/server.js` (`backend/`) | `vite` — 5173 (`frontend/vite.config.js`) | dedupe: `['react','react-dom','@emotion/react','@emotion/styled']` |
 | flockgeek | `nodemon src/server.js` (`backend/`) | `vite` — 5173 dev / 4173 preview (`frontend/vite.config.js`) | dedupe: `['@mui/material','@emotion/react','@emotion/styled','react','react-dom']` |
-| notegeek | `nodemon server.js` (`backend/`) | `vite` — 5173 (`frontend/vite.config.js`) | dedupe: same MUI set. **Dev server fault**: `styled_default is not a function` from the dependency optimizer's lazy `init_styled` — dev server fails to render anything; production build is unaffected. Pre-existing, tracked in `DOCS/MOBILE_UI_PLAN.md` §4b and `DOCS/BURN_QUEUE.md` Q5; not yet fixed. |
+| notegeek | `nodemon server.js` (`backend/`) | `vite` — 5173 (`frontend/vite.config.js`) | dedupe: same MUI set. **Dev server fault fixed 2026-09-05** (`70eb36e`): `styled_default is not a function` from the dependency optimizer's lazy `init_styled` — `vite.config.js` now pins `@mui/material/styles` and emotion into `optimizeDeps.include`. |
 | startgeek | none (no backend) | `vite` — 3000 | Standalone `npm` app, no pnpm workspace deps, its own ESLint 8 config — a `workspace:*` devDependency broke its image build once (`TODO_ORDER.md` #5) |
 | storygeek | `nodemon src/server.js` (`backend/`) | `vite` — 5173 (`frontend/vite.config.js`) | |
 
@@ -263,18 +273,27 @@ above in each app's `vite.config.js`.
 
 ## 8. The mobile harness
 
-Referenced throughout `DOCS/MOBILE_UI_PLAN.md` and `STATUS.md` as the way every Pocket Pass
-mobile change was screenshot-verified: a Playwright script stubs every API call with fixtures
-and screenshots each app at iPhone 14 (dark + light) plus 1280×900, using a saved
-`storageState` created once by signing in.
+**As of 2026-09-05 this is in the repo and CI-enforcing** (M6, `DOCS/MOBILE_UI_PLAN.md` §5) —
+the scratch Playwright script from the M0–M5 passes is now `tools/mobile-harness`
+(`@geeksuite/mobile-harness`): shared iPhone-14 dark/light + 1280×900 contexts, fixture/route
+plumbing per app, and a probe that fails on any tap target < 44px, readable text < 12px,
+sideways scroll, or page error. `pnpm --filter @geeksuite/mobile-harness run ci` builds each
+app, serves `dist` with `vite preview`, and walks its scenes; `.github/workflows/mobile-harness.yml`
+runs it on pushes/PRs touching `apps/**`, `packages/ui/**` or the tool itself, and has been
+enforcing (no `continue-on-error`) since its first green run at 14:54. All eight apps are at 0
+findings; known violations are meant to be parked per-app in a `waivers` list, which currently
+ships empty. No screenshot-diff baselines yet — the probe is the gate; diffing is the documented
+next step in the tool's own README.
 
-**It is not in this repo** — it's scratch, and it's currently broken. The Playwright install
-it depends on moved from `~/.agents/skills/playwright` to
-`~/.agents/skills.bak-20260904-233317/playwright` when `ai-setup` re-hotwired
-`~/.agents/skills` to point at `~/.ai/skills` (confirmed on this box: `~/.agents/skills` is now
-a symlink to `~/.ai/skills`, which has no `playwright` directory — only the `.bak` copy does).
-Harness scripts still import the old path. Fix the skills path before the next mobile pass, or
-before M6 (`DOCS/MOBILE_UI_PLAN.md` §5) puts the harness into the repo for real.
+It no longer depends on `~/.agents/skills/playwright` (the path that broke when `ai-setup`
+re-hotwired `~/.agents/skills` to `~/.ai/skills` on 2026-09-04): the tool pins its own
+`playwright` devDependency and CI installs the matching Chromium; a local run without
+`pnpm install` can still point `PLAYWRIGHT_MODULE` at an existing install, and
+`lib/playwright.mjs` falls back to `~/.agents/skills*/playwright` on its own.
+
+Run: `pnpm --filter @geeksuite/mobile-harness shoot -- --app <app> --base <url> --label <label>`
+for one app against a running server, or `node tools/mobile-harness/ci.mjs` for the full CI walk.
+Details: `tools/mobile-harness/README.md`.
 
 ---
 
@@ -286,7 +305,7 @@ some of these may differ once the in-flight work lands).
 | Package | Command | Result at time of writing |
 |---|---|---|
 | `packages/ui` | `npx vitest run` | **340 passed**, 8 files — matches `STATUS.md` |
-| `apps/basegeek/packages/api` | `node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --forceExit` | **340 passed / 22 failed / 1 skipped**, 27 of 39 suites failed with `Cannot find module '@geeksuite/logger'` — the workspace has an uncommitted new `packages/logger` (confirmed via `git status`, `@geeksuite/logger` in its `package.json`) that isn't yet linked (`node_modules/@geeksuite/` has no `logger` symlink). This is a live burn-session artifact, not a shipped bug — `STATUS.md` (2026-09-05) reports **552 passing** as the last full-suite-green number, and `DOCS/BURN_QUEUE.md` notes the in-flight count as "589+". Re-run `pnpm install` at the repo root before trusting a local run of this suite. |
+| `apps/basegeek/packages/api` | `node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --forceExit` | The `Cannot find module '@geeksuite/logger'` failure seen earlier this pass was a transient burn-session artifact (an uncommitted `packages/logger` not yet linked); resolved once it landed (`61997ed`) and the workspace was reinstalled. The suite has grown fast the same day as more gateway modules gained zod validation and shared schemas — `DOCS/BURN_QUEUE.md` cites **1082** for the api suite as of the R70 stream (09-05). Re-run `pnpm install` at the repo root if a local run disagrees, and treat any single number here as a snapshot, not a contract. |
 | `apps/bookgeek/api` | `npm test` (`node --test test/*.test.js`) | **78 passed**, 2 suites |
 | `apps/bujogeek/frontend` | `npx vitest run` | **64 passed**, 3 files |
 | `apps/bujogeek/backend`, `apps/fitnessgeek/backend`, `apps/flockgeek/backend`, `apps/storygeek/backend`, `apps/notegeek/backend` | `pnpm test` (jest, mongodb-memory-server) — this is CI's `test-backends` matrix | fitnessgeek: **45 passed** (one run showed 1 flaky failure in `auth.test.js` on a `responseTime` assertion under load, reran clean — treat as flaky, not broken); flockgeek: **57 passed**, 5 suites; storygeek: `npm test` runs both `test:node` (**65 passed**) and `test:jest` (**41 passed**) = 106 total; notegeek backend: **96 passed / 9 skipped**, 3 of 10 suites skipped |
@@ -306,17 +325,17 @@ some of these may differ once the in-flight work lands).
 | A docs-only-looking push "did nothing" to basegeek specifically | basegeek's image publishes ~1 min after the other 7 in the same release run and lands on the *next* Watchtower poll | Wait one more 5-min cycle before assuming it's stuck |
 | A push that only touched one app restarted the whole fleet | Every push rebuilds and republishes all 8 images; Watchtower restarts whichever digests changed, and everything calls basegeek so it restarts too whenever anything ships | Expected behavior, not a bug — `STATUS.md` 2026-09-05 |
 | A new file silently missing from a commit | Root `.gitignore` had `*data*` (too broad — matched `MetadataList.jsx`), narrowed to `data/` on 2026-09-04 | After `git add`, check `git show --stat` on the new commit, not just `git status`, to confirm the file landed |
-| Adding a field to fitnessgeek's `UserSettings` silently disappears | The Mongoose schema is duplicated in `apps/fitnessgeek/backend/src/models/UserSettings.js` and `apps/basegeek/packages/api/src/graphql/fitnessgeek/models/UserSettings.js`; most frontend calls hit the basegeek copy via GraphQL, and Mongoose strict mode strips unknown fields on `$set` | Update both, or finish the consolidation tracked as `TODO_ORDER.md` #21 |
-| notegeek dev server renders nothing | Pre-existing esbuild dependency-optimizer fault (`styled_default is not a function`); production build unaffected | Not yet fixed — `DOCS/MOBILE_UI_PLAN.md` §4b, `DOCS/BURN_QUEUE.md` Q5 |
-| basegeek `packages/api` test suite fails wholesale with `Cannot find module '@geeksuite/logger'` | A new workspace package (`packages/logger`) was added but the workspace hasn't been re-linked | `pnpm install` at the repo root |
+| ~~Adding a field to fitnessgeek's `UserSettings` silently disappears~~ | **Fixed 2026-09-05** (`6d7865c`, `TODO_ORDER.md` #21) — both models now build from `packages/schemas/fitnessgeek/userSettings.js` (`@geeksuite/schemas`); a parity tripwire on both sides fails if either stops consuming it. Same pattern followed for seven more fitnessgeek models the same day (`DOCS/CONTEXT.md`). | Add a field to the shared module only, per `apps/fitnessgeek/DOCS/USER_SETTINGS_SCHEMA.md` |
+| notegeek dev server rendered nothing | esbuild dependency-optimizer fault (`styled_default is not a function`); production build was unaffected | **Fixed 2026-09-05** (`70eb36e`) — `vite.config.js` pins `@mui/material/styles` and emotion into `optimizeDeps.include`, so the optimizer stops re-splitting MUI's lazy init across passes |
+| basegeek `packages/api` test suite fails wholesale with `Cannot find module '@geeksuite/logger'` | A new workspace package (`packages/logger`) was added but the workspace hasn't been re-linked yet | `pnpm install` at the repo root — this specific occurrence was fixed 2026-09-05 (`61997ed`); the general shape (add a workspace package, forget to reinstall) recurs any time one lands |
 | An app crash-loops in production with a plain `SyntaxError` even though CI was green | A module no jest/vitest suite imports (e.g. a `typeDefs.js`) had a parse error — nothing ever loaded it to notice | Fixed by the `syntax` CI job / `pnpm check:syntax` (§5) added 2026-09-05 after exactly this happened to `apps/basegeek/packages/api/src/graphql/bujogeek/typeDefs.js` (`61d3109`) |
 
 ---
 
 ## Where to look next
 
-- `DOCS/MOBILE_UI_PLAN.md` — the Pocket Pass mobile pass, per-app findings, the shared
-  `packages/ui` grammar, and the M6 guardrails backlog (harness into the repo).
+- `DOCS/MOBILE_UI_PLAN.md` — the Pocket Pass mobile pass, per-app findings, and the shared
+  `packages/ui` grammar. M6 guardrails (harness into the repo) landed 2026-09-05 — see §8 above.
 - `DOCS/THE_UI_UNIFICATION_PLAN.md` — suite-wide design/component unification plan.
 - `DOCS/AI_SEARCH_PLAN.md` — StartGeek Ask / `glanceAsk` design.
 - `DOCS/TODO_ORDER.md` — the single cross-cutting prioritized work queue; consult before

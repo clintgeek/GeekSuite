@@ -149,6 +149,14 @@ res.json({ user });
 Apps that have completed the hardening pattern use `@geeksuite/auth` middleware, pino
 logging, graceful shutdown, and environment-driven CORS.
 
+**2026-09-05:** the migration axis above (SSO/auth hardening) is orthogonal to a second axis
+that moved a lot this day — how much of each app's own CRUD lives on basegeek's gateway vs.
+its local REST. fitnessgeek's food-log writes and bookgeek's profile/filters/shelves/AI-status
+are now gateway-owned with the REST routes deleted; notegeek's legacy REST and `Note` model are
+gone; every gateway mutation module (bujogeek, fitnessgeek, notegeek, flockgeek, bookgeek) has
+zod validation. See `DOCS/SUITE_TODO.md` "GraphQL consolidation audit" for the current per-app
+state, which has moved past this table.
+
 ---
 
 ## Known Issues / Architecture Debt

@@ -159,19 +159,19 @@ cycle so the ordering rationale stays visible; detail moved to `SUITE_TODO.md` "
     only), 0 violations — unchanged from baseline. Full detail in
     THE_UI_UNIFICATION_PLAN.md "3a. Feedback Primitives". *UI*
 16. ~~Shared mobile bottom-nav primitive~~ — folded into #15a.
-17. **Shared date utilities** — M. `toUtcMidnight` / `localDateString` / `displayCalendarDate`
-    into `packages/utils`; bujogeek, fitnessgeek, flockgeek consume. Spec exists in
-    `ARCHIVE/THE_TIME_ISSUE.md`. *Shared libs*
+17. ~~**Shared date utilities**~~ — **Done 2026-09-05** (`@geeksuite/utils`, 36 tz tests across
+    five zones; detail in `SUITE_TODO.md`). *Shared libs*
 18. ~~**Shared logger**~~ — **Done 2026-09-05** (`@geeksuite/logger`; detail in `SUITE_TODO.md`). *Shared libs*
 19. ~~`toneForMode` helper + themed tooltips~~ — **Done 2026-09-03** (bujogeek's three sites converted;
     fitnessgeek's three sites — `BPLogList`, `BPInsights`, `Activity`'s two tiles — converted
     2026-09-05 during the #15 fan-out; storygeek's one site — StoryList's genre-swatch-as-text
     branch — converted 2026-09-05 too, closing this out; no `MuiTooltip` override exists in
     storygeek's theme, so nothing there to convert). Auth splash still open — S. *UI*
-20. **cryptoVault → `@geeksuite/crypto-vault`** — M. Step 1 promote; step 2 fitnessgeek Garmin
-    password encryption + backfill. *Shared libs / security*
-21. **fitnessgeek `UserSettings` schema consolidation** — S. Silent-data-loss hazard documented
-    in `CONTEXT.md`. *Shared libs*
+20. ~~**cryptoVault → `@geeksuite/crypto-vault`**~~ — **Done 2026-09-05** (both steps: package
+    promoted, fitnessgeek's Garmin password encrypted at rest + backfilled; detail in
+    `SUITE_TODO.md`). *Shared libs / security*
+21. ~~**fitnessgeek `UserSettings` schema consolidation**~~ — **Done 2026-09-05** (`6d7865c`,
+    `@geeksuite/schemas`, parity tripwire both sides; detail in `DOCS/CONTEXT.md`). *Shared libs*
 22. **Input validation (Joi/Zod)** — L, slow-burn. Route by route: bujogeek's
     ten gateway mutations (`3265b1c`) and fitnessgeek's settings/weight/BP/
     medication routes (`00ef0b7`) **done 2026-09-05**; storygeek's REST
@@ -203,13 +203,14 @@ cycle so the ordering rationale stays visible; detail moved to `SUITE_TODO.md` "
     `dateStarted`/`dateFinished` are instants. This closes the gateway side
     of #22 entirely — the only piece left is flockgeek's *own* REST backend,
     pending its Q22 decision. *Security / tests*
-23. **Circuit breakers on fitnessgeek external APIs** — S. `opossum` around USDA, Nutritionix,
-    OpenFoodFacts, Garmin. *Observability*
+23. ~~**Circuit breakers on fitnessgeek external APIs**~~ — **Done 2026-09-05** (`9dede26`,
+    `opossum` around USDA, OpenFoodFacts, CalorieNinjas and Garmin, 58 tests; Nutritionix has no
+    live call site, FatSecret left unwrapped and noted). *Observability*
 
 ## Tier 4 — Features
 
-24. **storygeek markdown rendering** — S. Narration shows literal asterisks; the deps are
-    already declared. Style from the palette. *Feature*
+24. ~~**storygeek markdown rendering**~~ — **Done 2026-09-05** (`fe805c9`, `remark-gfm`/
+    `remark-breaks` in Narration, styled from the Codex palette). *Feature*
 25. ~~**bujogeek subtasks UI**~~ — **Done 2026-09-05** (`d53b008`). *Feature*
 26. ~~**bujogeek Apollo cache invalidation on mutations**~~ — **Done 2026-09-05** (`d53b008`, plus same-day follow-up; see `apps/bujogeek/DOCS/CONTEXT.md`). *Feature / correctness*
 
@@ -244,9 +245,10 @@ cycle so the ordering rationale stays visible; detail moved to `SUITE_TODO.md` "
 
 - **Pass A (Tier 1) and Pass B (Tier 2 minus CSRF) — done 2026-09-02.**
 - **Pass C:** ~~#12 CSRF~~ — **merged and enforcing 2026-09-02** (branch `csrf-protection`; Origin/Referer
-  allow-list guard before `cors()` in all seven backends; `CSRF_GUARD=off|report` levers; sibling-
-  subdomain CSRF against basegeek still needs a double-submit token — tracked in SUITE_TODO).
+  allow-list guard before `cors()` in all seven backends; `CSRF_GUARD=off|report` levers).
   Basegeek follow-ups **done 2026-09-03**: registry mutations + DB browsers admin-gated, `configure()` wired.
+  Sibling-subdomain CSRF against basegeek's double-submit token **done 2026-09-05** (`a3c4031`,
+  `d8521eb`; `CSRF_TOKEN=off|report|enforce`, currently `report`) — detail in `CONTEXT.md`.
 - **Pass D (shell grammar) — done 2026-09-02.**
 - **Pass E:** #15 primitives sweep (EmptyState / ErrorState / toast) with #19 batched in.
 

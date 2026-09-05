@@ -24,9 +24,10 @@ legacy layout; consolidate it (see **Migration** below) before it drifts.
 | `mongodb-init.js` (app-specific) | yes | Init scripts run once at volume creation. |
 
 `.env.production` and any subdirectory named `data` are covered by the
-repo root `.gitignore` (`.env.*` and `*data*`). Re-check before every
+repo root `.gitignore` (`.env.*` and `data/`). Re-check before every
 commit that runs `git add -A` — an accidental commit of either
-destroys the guardrail.
+destroys the guardrail. (`.gitignore` used to say `*data*`, which also
+silently matched `MetadataList.jsx`; narrowed to `data/` 2026-09-04.)
 
 ## Build + deploy
 
