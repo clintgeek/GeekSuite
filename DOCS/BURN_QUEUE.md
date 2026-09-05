@@ -14,9 +14,8 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | R21 | Q3 first slice: Zod validation on fitnessgeek settings + weight/BP routes | sonnet | fitnessgeek backend routes + new validation/ | 09-05 13:50 |
 | R22 | storygeek frontend vitest + RTL suite + CI job | sonnet | storygeek frontend, ci.yml (one job) | 09-05 13:50 |
 
-**Push gate:** `pnpm install --frozen-lockfile` on HEAD fails — the committed lockfile carries
-bookgeek/web (and likely flockgeek) test devDeps whose package.json is still in flight (Q6/R18).
-Push only after those two land, then re-run the check in a detached worktree of HEAD.
+**Push gate:** `pnpm install --frozen-lockfile` on HEAD fails only on `apps/fitnessgeek/backend/package.json`
+(zod, from R21 in flight). Push after R21 commits; re-run the check in a detached worktree of HEAD first.
 
 ## Queued (launch when files free / prerequisite lands)
 
@@ -27,9 +26,8 @@ Push only after those two land, then re-run the check in a detached worktree of 
 | Q10 | Revoke the `LocalApps` key — env grep: no .env under Projects carries it; nginx: zero hits on /openai/v1 or /api/ai/ in the retained log window; key lastUsed 2025-11-03 | ready — Chef's confirm, then revoke via the Apps & keys tab | XS |
 | Q11 | basegeek `Databases.jsx`: wire into nav or delete | Chef's call | XS |
 | Q13 | bookgeek CONTEXT.md says Runtime: Bun (it is node:20); verify COVERS_PATH now serves the old covers in the UI | after R? — trivial, next slot | XS |
-| Q16b | fitnessgeek/bujogeek VitePWA inline manifest theme_color (vite.config.js now free) | next slot | XS |
 | Q17 | fitnessgeek backend: node 18 CJS cannot consume ESM @geeksuite/utils — bump base image to node 20 + ESM migration, then drop its five toUtcMidnight copies | its own ticket, M | M |
-| Q18 | CSRF header in packages/api-client authLink (covers 7 apps' GraphQL) and startgeek's gql()/logout(); then a day of clean report logs; then CSRF_TOKEN=enforce in basegeek env + SUITE_TODO pointer | next slot (api-client free) | S |
+| Q18b | After R27 deploys: a day of clean `CSRF token check (report-only)` logs, then `CSRF_TOKEN=enforce` in basegeek's env and a container restart | Chef's call after the log window | XS |
 | Q14 | storygeek CanonCard summary text through Narration too (agent left it as a separate render path) | Chef's call | XS |
 
 ## How to resume if this session is lost
