@@ -12,7 +12,6 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | R4 | M6 guardrails: mobile harness into `tools/mobile-harness`, CI workflow | opus | tools/, .github/workflows/mobile-harness.yml | 09-05 am |
 | R18 | flockgeek frontend vitest + RTL suite + CI job | sonnet | flockgeek frontend, ci.yml (one job) | 09-05 12:45 |
 | R19 | Q8: OpenAI-compat fixes (flip the 22 it.failing) + last llm7 refs (Q12) | opus | openaiProxy, aiRoutes, aiService, capabilities, director/rateLimit refs, docs | 09-05 13:15 |
-| R20 | Q7: CSRF double-submit token (report mode default) + packages/auth header | opus | basegeek middleware/csrf*, server.js order, auth routes, packages/auth, ui api.js | 09-05 13:15 |
 | R21 | Q3 first slice: Zod validation on fitnessgeek settings + weight/BP routes | sonnet | fitnessgeek backend routes + new validation/ | 09-05 13:50 |
 | R22 | storygeek frontend vitest + RTL suite + CI job | sonnet | storygeek frontend, ci.yml (one job) | 09-05 13:50 |
 
@@ -31,6 +30,7 @@ Push only after those two land, then re-run the check in a detached worktree of 
 | Q13 | bookgeek CONTEXT.md says Runtime: Bun (it is node:20); verify COVERS_PATH now serves the old covers in the UI | after R? — trivial, next slot | XS |
 | Q16b | fitnessgeek/bujogeek VitePWA inline manifest theme_color (vite.config.js now free) | next slot | XS |
 | Q17 | fitnessgeek backend: node 18 CJS cannot consume ESM @geeksuite/utils — bump base image to node 20 + ESM migration, then drop its five toUtcMidnight copies | its own ticket, M | M |
+| Q18 | CSRF header in packages/api-client authLink (covers 7 apps' GraphQL) and startgeek's gql()/logout(); then a day of clean report logs; then CSRF_TOKEN=enforce in basegeek env + SUITE_TODO pointer | next slot (api-client free) | S |
 | Q14 | storygeek CanonCard summary text through Narration too (agent left it as a separate render path) | Chef's call | XS |
 
 ## How to resume if this session is lost
@@ -73,6 +73,7 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 - `d53b008` — R9 — bujogeek subtasks (2 gateway bugs fixed) + cache rule (156/82 tests)
 - `` — Q6 — bookgeek web tests (96) + ci jobs bookgeek-web, utils
 - `fe29788` — R23 — storygeek service worker
+- `a3c4031` — R20 — CSRF double-submit token (report mode), @geeksuite/auth sends the header
 - `37e83b6` — R17 — 22 dead fitnessgeek files + broken dev compose deleted
 - `164f978` — R16 — notegeek relative-time tests; dev-server fix pending in vite.config.js (shared with R13)
 - `6c39d00` — R2 — Apps & keys tab; APIKeysPage retired; AppConfigDialog on GeekDialog
