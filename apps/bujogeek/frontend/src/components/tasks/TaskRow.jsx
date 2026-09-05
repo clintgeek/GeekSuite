@@ -32,8 +32,9 @@ import TaskCheckbox from './TaskCheckbox';
 import SubtaskRow from './SubtaskRow';
 import { getTaskAge, getAgingColor, getAgingLabel } from '../../utils/taskAging';
 import { subtaskProgress, orderedSubtasks, parentCaption } from '../../utils/subtasks';
-import { GeekSheet, toneForMode } from '@geeksuite/ui';
+import { GeekSheet } from '@geeksuite/ui';
 import { colors } from '../../theme/colors';
+import { chipInk, domainInk } from '../../theme/inks';
 
 const priorityDotColors = {
   1: colors.priority.high,
@@ -70,9 +71,9 @@ const TaskRow = ({
   const theme     = useTheme();
   const navigate  = useNavigate();
   const isDark    = theme.palette.mode === 'dark';
-  // Plum reads ~2.5:1 on dark paper; lift it when used as text/icon color.
-  // Light mode keeps the authored hue, hence `darkenBy: 0`.
-  const staleInk  = toneForMode(colors.aging.stale, theme, { darkenBy: 0 });
+  // Plum reads ~1.8:1 on a tinted dark row; `domainInk` walks it until it
+  // clears AA against the least forgiving ground in this mode (theme/inks.js).
+  const staleInk  = domainInk(colors.aging.stale, theme);
   // Layout branches on `md`, the breakpoint the whole shell switches at.
   // (It used to be `sm`, which left 600–900px with mobile chrome and desktop
   // interaction — MOBILE_UI_PLAN.md §1.)
@@ -142,21 +143,21 @@ const TaskRow = ({
 
     if (diffDays < -1) {
       label      = `${Math.abs(diffDays)}d overdue`;
-      badgeColor = colors.aging.overdue;
+      badgeColor = domainInk(colors.aging.overdue, theme);
     } else if (diffDays === -1) {
       label      = 'yesterday';
-      badgeColor = colors.aging.warning;
+      badgeColor = domainInk(colors.aging.warning, theme);
     } else if (diffDays === 0) {
       const hours = due.getHours();
       const mins  = due.getMinutes();
       label      = (hours === 0 && mins === 0) ? 'today' : format(due, 'h:mm a');
-      badgeColor = colors.aging.fresh;
+      badgeColor = domainInk(colors.aging.fresh, theme);
     } else if (diffDays === 1) {
       label      = 'tomorrow';
-      badgeColor = isDark ? colors.dark[700] : colors.ink[500];
+      badgeColor = theme.palette.text.secondary;
     } else {
       label      = format(due, 'MMM d');
-      badgeColor = isDark ? colors.dark[700] : colors.ink[400];
+      badgeColor = theme.palette.text.secondary;
     }
 
     return { label, color: badgeColor };
@@ -175,7 +176,7 @@ const TaskRow = ({
     ? 'rgba(255, 245, 220, 0.03)'
     : `${colors.ink[100]}50`;
 
-  const idleInk = isDark ? 'rgba(255,245,220,0.35)' : colors.ink[400];
+  const idleInk = theme.palette.text.secondary;
 
   // One list of actions, two surfaces: the hover cluster at `md`+ and the ⋯
   // sheet below it (MOBILE_UI_PLAN.md §4 — six 28px targets revealed on hover
@@ -292,6 +293,7 @@ const TaskRow = ({
           checked={isCompleted}
           onChange={() => onStatusToggle?.(task)}
           color={agingColor}
+          label={`Mark "${cleanContent(task.content) || 'this entry'}" ${isCompleted ? 'not done' : 'done'}`}
         />
       </Box>
 
@@ -309,7 +311,7 @@ const TaskRow = ({
               gap: 0.5,
               mb: 0.25,
               minWidth: 0,
-              color: isDark ? 'rgba(255,245,220,0.34)' : colors.ink[400],
+              color: theme.palette.text.muted,
             }}
           >
             <CornerDownRight size={11} strokeWidth={1.75} style={{ flexShrink: 0 }} />
@@ -348,7 +350,8 @@ const TaskRow = ({
                 fontSize:        '0.75rem',
                 fontWeight:      600,
                 backgroundColor: isDark ? 'rgba(255,245,220,0.08)' : colors.ink[100],
-                color:           isDark ? 'rgba(255,245,220,0.6)' : colors.ink[500],
+                // ink[500] on the ink[100] tint is 4.29:1 — under AA for 12px.
+                color:           theme.palette.text.secondary,
                 px:              0.625,
                 py:              0.125,
                 borderRadius:    '3px',
@@ -378,11 +381,11 @@ const TaskRow = ({
                 fontWeight:  isSunk ? 400 : 500,
                 fontStyle:   isCancelled ? 'italic' : 'normal',
                 color:       isCancelled
-                               ? (isDark ? `${colors.aging.stale}99` : `${colors.aging.stale}bb`)
+                               ? staleInk
                                : isCompleted
-                               ? (isDark ? 'rgba(255,245,220,0.28)' : colors.ink[400])
+                               ? theme.palette.text.muted
                                : isBlocked
-                               ? (isDark ? 'rgba(255,245,220,0.55)' : colors.ink[500])
+                               ? theme.palette.text.secondary
                                : theme.palette.text.primary,
                 lineHeight:  1.5,
                 transition:  'color 260ms ease',
@@ -423,6 +426,7 @@ const TaskRow = ({
             <Tooltip title="Cancelled" placement="top">
               <Box
                 component="span"
+                role="img"
                 sx={{
                   display:    'inline-flex',
                   alignItems: 'center',
@@ -450,7 +454,7 @@ const TaskRow = ({
                 fontWeight:      700,
                 letterSpacing:   '0.06em',
                 textTransform:   'uppercase',
-                color:           isDark ? 'rgba(255,245,220,0.28)' : colors.ink[400],
+                color:           theme.palette.text.muted,
                 border:          `1px solid ${isDark ? 'rgba(255,245,220,0.16)' : colors.ink[200]}`,
                 borderRadius:    '3px',
                 px:              0.5,
@@ -537,11 +541,16 @@ const TaskRow = ({
             <Tooltip title={task.recurrencePattern && task.recurrencePattern !== 'none' ? `Repeats ${task.recurrencePattern}` : 'Recurring task'} placement="top">
               <Box
                 component="span"
+                // MUI's Tooltip hands its title to the child as `aria-label`,
+                // and `aria-label` on a bare <span> is prohibited (axe
+                // `aria-prohibited-attr`). It is not a bare span though — it
+                // is a glyph meaning "this repeats", so say so.
+                role="img"
                 sx={{
                   display:    'inline-flex',
                   alignItems: 'center',
                   flexShrink: 0,
-                  color:      isDark ? 'rgba(255,245,220,0.3)' : colors.ink[300],
+                  color:      theme.palette.text.muted,
                 }}
               >
                 <Repeat size={12} strokeWidth={1.75} />
@@ -577,8 +586,8 @@ const TaskRow = ({
                   // 12px/600, and ink[500] on ink[100] is 4.29:1 — under AA
                   // for text this size. ink[600] is 5.79:1.
                   color: subtasksDone === subtaskTotal
-                    ? colors.aging.fresh
-                    : (isDark ? 'rgba(255,245,220,0.5)' : colors.ink[600]),
+                    ? domainInk(colors.aging.fresh, theme)
+                    : theme.palette.text.secondary,
                   backgroundColor: isDark ? 'rgba(255,245,220,0.06)' : colors.ink[100],
                   border: `1px solid ${isDark ? 'rgba(255,245,220,0.1)' : colors.ink[200]}`,
                   transition: 'color 0.12s ease, background-color 0.12s ease',
@@ -618,7 +627,7 @@ const TaskRow = ({
               fontSize:    '0.8125rem',
               fontStyle:   'italic',
               fontFamily:  '"Fraunces", serif',
-              color:       isDark ? 'rgba(255,245,220,0.38)' : colors.ink[400],
+              color:       theme.palette.text.secondary,
               mt:          0.375,
               lineHeight:  1.45,
             }}
@@ -635,7 +644,7 @@ const TaskRow = ({
               fontSize:   '0.8125rem',
               fontStyle:  'italic',
               fontFamily: '"Fraunces", serif',
-              color:      isDark ? 'rgba(255,245,220,0.42)' : colors.ink[400],
+              color:      theme.palette.text.secondary,
               mt:         0.375,
               lineHeight: 1.45,
             }}
@@ -685,12 +694,16 @@ const TaskRow = ({
                     letterSpacing:   '0.02em',
                     pointerEvents:   'none',
                     backgroundColor: isDark ? 'rgba(255,245,220,0.06)' : colors.ink[100],
-                    color:           isDark ? 'rgba(255,245,220,0.45)' : colors.ink[400],
+                    // The chip tint is its own ground: the muted token reads
+                    // 4.29:1 on ink[100] and secondary only 4.3:1 on the dark
+                    // wash over an aging-tinted row. `chipInk` measures against
+                    // the tint rather than the page.
+                    color:           chipInk(theme.palette.text.secondary, theme),
                     border:          `1px solid ${isDark ? 'rgba(255,245,220,0.1)' : colors.ink[200]}`,
                     borderRadius:    '3px',
                     'button:hover &': {
                       backgroundColor: isDark ? 'rgba(255,245,220,0.1)' : colors.ink[200],
-                      color:           isDark ? 'rgba(255,245,220,0.65)' : colors.ink[600],
+                      color:           theme.palette.text.primary,
                     },
                     '& .MuiChip-label': { px: 0.625 },
                   }}
@@ -733,7 +746,10 @@ const TaskRow = ({
               fontSize:     '0.5625rem',
               letterSpacing:'0.08em',
               textTransform:'uppercase',
-              color:        `${agingColor}99`,
+              // Was `${agingColor}99` — 60% alpha over an already-tinted row
+              // bottomed out at 1.6:1. Full-strength readable ink instead:
+              // 9px is still text, aria-hidden or not, and axe grades it.
+              color:        domainInk(agingColor, theme),
               mt:           0.375,
               fontWeight:   600,
             }}

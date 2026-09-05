@@ -1,5 +1,6 @@
 import { Box, Typography, useTheme } from '@mui/material';
 import { colors } from '../../theme/colors';
+import { domainInk } from '../../theme/inks';
 
 /**
  * SectionHeader — the planner's chapter dividers.
@@ -38,31 +39,37 @@ const SectionHeader = ({
   const toneColors = {
     default: {
       title:    theme.palette.text.primary,
-      caption:  isDark ? 'rgba(255,245,220,0.32)' : colors.ink[300],
+      caption:  theme.palette.text.muted,
       rule:     isDark ? 'rgba(255,255,255,0.1)'  : colors.ink[200],
       bar:      isDark ? colors.ink[600]           : colors.ink[300],
-      label:    isDark ? 'rgba(255,245,220,0.38)' : colors.ink[400],
+      label:    theme.palette.text.secondary,
     },
     warn: {
-      title:   colors.aging.warning,
-      caption: isDark ? `${colors.aging.warning}b0` : `${colors.aging.warning}cc`,
+      // Title/caption/label are read, not just seen: the hue survives, the
+      // value moves until it clears AA (theme/inks.js).
+      title:   domainInk(colors.aging.warning, theme),
+      caption: domainInk(colors.aging.warning, theme),
       rule:    `${colors.aging.warning}30`,
       bar:     colors.aging.warning,
-      label:   isDark ? `${colors.aging.warning}99` : `${colors.aging.warning}bb`,
+      label:   domainInk(colors.aging.warning, theme),
     },
     success: {
-      title:   colors.aging.fresh,
-      caption: isDark ? `${colors.aging.fresh}b0` : `${colors.aging.fresh}cc`,
+      // Title/caption/label are read, not just seen: the hue survives, the
+      // value moves until it clears AA (theme/inks.js).
+      title:   domainInk(colors.aging.fresh, theme),
+      caption: domainInk(colors.aging.fresh, theme),
       rule:    `${colors.aging.fresh}30`,
       bar:     colors.aging.fresh,
-      label:   isDark ? `${colors.aging.fresh}99` : `${colors.aging.fresh}bb`,
+      label:   domainInk(colors.aging.fresh, theme),
     },
     overdue: {
-      title:   colors.aging.overdue,
-      caption: isDark ? `${colors.aging.overdue}b0` : `${colors.aging.overdue}cc`,
+      // Title/caption/label are read, not just seen: the hue survives, the
+      // value moves until it clears AA (theme/inks.js).
+      title:   domainInk(colors.aging.overdue, theme),
+      caption: domainInk(colors.aging.overdue, theme),
       rule:    `${colors.aging.overdue}28`,
       bar:     colors.aging.overdue,
-      label:   isDark ? `${colors.aging.overdue}99` : `${colors.aging.overdue}bb`,
+      label:   domainInk(colors.aging.overdue, theme),
     },
   };
 

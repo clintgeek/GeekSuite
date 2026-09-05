@@ -242,9 +242,9 @@ const TaskEditor = ({ open, onClose, task = null }) => {
     }
   };
 
-  const captionInk = isDark ? 'rgba(255,255,255,0.32)' : colors.ink[300];
+  const captionInk = theme.palette.text.muted;
   const primaryInk = theme.palette.text.primary;
-  const mutedInk = isDark ? 'rgba(255,255,255,0.5)' : colors.ink[400];
+  const mutedInk = theme.palette.text.secondary;
   const dottedRule = `1px dotted ${isDark ? 'rgba(255,255,255,0.14)' : colors.ink[200]}`;
 
   return (
@@ -370,8 +370,9 @@ const TaskEditor = ({ open, onClose, task = null }) => {
             {/* Type + Priority row */}
             <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
               <FormControl fullWidth size="small">
-                <InputLabel>Type</InputLabel>
+                <InputLabel id="task-type-label">Type</InputLabel>
                 <Select
+                  labelId="task-type-label"
                   value={formData.signifier}
                   onChange={handleChange('signifier')}
                   label="Type"
@@ -401,8 +402,9 @@ const TaskEditor = ({ open, onClose, task = null }) => {
               </FormControl>
 
               <FormControl fullWidth size="small">
-                <InputLabel>Priority</InputLabel>
+                <InputLabel id="task-priority-label">Priority</InputLabel>
                 <Select
+                  labelId="task-priority-label"
                   value={formData.priority ?? ''}
                   onChange={handleChange('priority')}
                   label="Priority"
@@ -499,8 +501,9 @@ const TaskEditor = ({ open, onClose, task = null }) => {
                 Archived collections are hidden unless the task is already in
                 one, so a filed task never silently loses its home. */}
             <FormControl fullWidth size="small">
-              <InputLabel>Collection</InputLabel>
+              <InputLabel id="task-collection-label">Collection</InputLabel>
               <Select
+                labelId="task-collection-label"
                 value={
                   collections.some((c) => c.id === formData.collectionId)
                     ? formData.collectionId
@@ -561,8 +564,9 @@ const TaskEditor = ({ open, onClose, task = null }) => {
               Repeats
             </Typography>
             <FormControl fullWidth size="small">
-              <InputLabel>Repeat interval</InputLabel>
+              <InputLabel id="task-repeat-label">Repeat interval</InputLabel>
               <Select
+                labelId="task-repeat-label"
                 value={formData.recurrenceFreq}
                 onChange={handleChange('recurrenceFreq')}
                 label="Repeat interval"

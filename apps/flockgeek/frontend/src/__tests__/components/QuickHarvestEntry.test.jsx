@@ -51,6 +51,29 @@ describe('QuickHarvestEntry', () => {
     ).toBeInTheDocument();
   });
 
+  // a11y: both number inputs are visually a stepper/adornment pair with no
+  // room for a floating MUI label, so they carry an aria-label instead — but
+  // the days field used to pass it as a bare `aria-label` prop on `TextField`,
+  // which MUI drops onto the outer root div rather than the actual `<input>`,
+  // leaving the input itself unnamed to a screen reader (axe: `label`).
+  it('names the egg-count and days-observed inputs for assistive tech', () => {
+    renderWithProviders(<QuickHarvestEntry locations={[]} />);
+    expect(screen.getByRole('spinbutton', { name: 'Eggs collected' })).toBeInTheDocument();
+    expect(screen.getByRole('spinbutton', { name: 'Days observed' })).toBeInTheDocument();
+  });
+
+  // a11y: the Location/Pen `Select` had a visible `InputLabel` but no
+  // `labelId`/`id` pairing, so the rendered `role="combobox"` div had no
+  // accessible name at all (axe: `aria-input-field-name`).
+  it('names the Location / Pen select for assistive tech', () => {
+    const locations = [
+      { id: 'loc-1', name: 'North Coop' },
+      { id: 'loc-2', name: 'South Run' },
+    ];
+    renderWithProviders(<QuickHarvestEntry locations={locations} />);
+    expect(screen.getByRole('combobox', { name: 'Location / Pen' })).toBeInTheDocument();
+  });
+
   it('sets the count from a quick-add chip', async () => {
     const user = userEvent.setup();
     renderWithProviders(<QuickHarvestEntry locations={[]} />);

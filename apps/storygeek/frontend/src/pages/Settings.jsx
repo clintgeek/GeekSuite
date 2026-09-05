@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Box, Typography, Card, CardContent, Grid, FormControl, InputLabel,
-  Select, MenuItem, Chip, CircularProgress, alpha,
+  Select, MenuItem, Chip, CircularProgress,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { GeekErrorState } from '@geeksuite/ui';
@@ -11,6 +11,9 @@ import api from '../api';
 function Settings() {
   const theme = useTheme();
   const gold = theme.palette.codex?.gold || '#c9a84c';
+  // Muted section-label gold. Solid and mode-aware (theme.js) — the
+  // alpha()-diluted gold it replaces failed AA on every codex surface.
+  const goldMuted = theme.palette.codex?.goldMuted || gold;
   const { selectedProvider, selectedModelId, setSelection } = useAISettingsStore();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -62,7 +65,7 @@ function Settings() {
   return (
     <Box>
       <Box sx={{ mb: 4, mt: 1 }}>
-        <Typography variant="overline" sx={{ color: alpha(gold, 0.6) }}>Configuration</Typography>
+        <Typography variant="overline" sx={{ color: goldMuted }}>Configuration</Typography>
         <Typography variant="h2" sx={{ mt: 0.5 }}>Settings</Typography>
       </Box>
 

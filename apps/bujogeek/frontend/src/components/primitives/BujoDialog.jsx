@@ -53,7 +53,7 @@ const BujoDialog = ({
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
 
-  const captionInk = isDark ? 'rgba(255,255,255,0.32)' : colors.ink[300];
+  const captionInk = theme.palette.text.muted;
   const dottedRule = `1px dotted ${isDark ? 'rgba(255,255,255,0.14)' : colors.ink[200]}`;
   const footerTint = isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.015)';
 

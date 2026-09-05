@@ -9,8 +9,8 @@ import EmptyState from '../shared/EmptyState';
 import SkeletonLoader from '../shared/SkeletonLoader';
 import { getTaskAge } from '../../utils/taskAging';
 import { normalizeTasks } from '../../utils/normalizeTasks';
-import { toneForMode } from '@geeksuite/ui';
 import { colors } from '../../theme/colors';
+import { domainInk } from '../../theme/inks';
 
 /**
  * BacklogList — parked tasks, with aging urgency. The stale section (30+
@@ -65,11 +65,11 @@ const BacklogList = () => {
 
   const isLoading = loading === LoadingState.FETCHING;
 
-  const captionInk = isDark ? 'rgba(255,255,255,0.32)' : colors.ink[300];
-  const mutedInk = isDark ? 'rgba(255,255,255,0.5)' : colors.ink[400];
+  const captionInk = theme.palette.text.muted;
+  const mutedInk = theme.palette.text.secondary;
   // Plum reads ~2.5:1 on dark paper; lift it as text. Light mode keeps the
   // authored hue, hence `darkenBy: 0`.
-  const staleInk = toneForMode(colors.aging.stale, theme, { darkenBy: 0 });
+  const staleInk = domainInk(colors.aging.stale, theme);
   const dottedRule = `1px dotted ${isDark ? 'rgba(255,255,255,0.14)' : colors.ink[200]}`;
 
   if (isLoading) {

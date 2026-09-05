@@ -1,4 +1,5 @@
 import { alpha, createTheme, lighten } from '@mui/material/styles';
+import { readableOn } from './color.js';
 import { geekDesignTokens } from './designTokens.js';
 
 const {
@@ -98,6 +99,18 @@ function buildComponents(themePalette) {
   // The light pair is the app's asserted `text.primary on background.paper`
   // read backwards, so it inherits that pair's AA guarantee for free; the dark
   // pair is checked directly in `__tests__/themeContrast.test.js`.
+  // A focused MUI form label is painted with `primary.main`, and an accent
+  // tuned to sit under a white button label is not automatically readable as
+  // 12–15px text on the app's surfaces: the suite blue #4B7AA3 measures 3.12:1
+  // on bujogeek's dark paper and 4.17:1 on the suite's own light canvas (axe
+  // `color-contrast`, 2026-09-05). A label is copy, so it owes AA. Fold
+  // `readableOn` over EVERY surface the palette declares rather than guessing
+  // which one is hardest — in light mode the canvas is darker than the paper,
+  // in dark mode it is the other way round, and an app may add a third.
+  const focusedLabelColor = Object.values(themePalette.background)
+    .filter((value) => typeof value === 'string')
+    .reduce((ink, surface) => readableOn(ink, surface), themePalette.primary.main);
+
   const tooltipBg = isDark
     ? lighten(themePalette.background.paper, 0.16)
     : themePalette.text.primary;
@@ -204,6 +217,15 @@ function buildComponents(themePalette) {
           '&:hover': {
             backgroundColor: alpha(themePalette.primary.main, interaction.hoverOpacity),
           },
+        },
+      },
+    },
+    // See `focusedLabelColor` above: the accent, walked until it clears AA on
+    // every surface this palette declares.
+    MuiFormLabel: {
+      styleOverrides: {
+        root: {
+          '&.Mui-focused': { color: focusedLabelColor },
         },
       },
     },

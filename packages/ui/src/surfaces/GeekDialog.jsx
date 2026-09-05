@@ -40,6 +40,14 @@
  * `aria-labelledby` on the dialog root keeps pointing at whichever one is
  * rendered, in both modes.
  *
+ * Keyboard route into the body (a11y, 2026-09-05): the body scrolls, so both
+ * modes give `DialogContent` `tabIndex={0}`. A dialog whose content is longer
+ * than the paper and holds no focusable element — storygeek's Bookify summary
+ * is the one the harness caught — is otherwise unreachable and unscrollable by
+ * keyboard (axe `scrollable-region-focusable`, WCAG 2.1.1). No `role` goes with
+ * it on purpose: `role="region"` would then owe an accessible name, and the
+ * dialog's own `aria-labelledby` already names the thing.
+ *
  * Reduced motion (DOCS/MOBILE_UI_PLAN.md §2 "Motion" / §4b): `prefers-
  * reduced-motion: reduce` collapses MUI's own enter/exit `Fade` transition
  * to 0ms via `transitionDuration`, using the same `useReducedMotion()`
@@ -221,6 +229,7 @@ export const GeekDialog = forwardRef(function GeekDialog(
           </Box>
           <DialogContent
             data-geek-dialog="body"
+            tabIndex={0}
             sx={{
               paddingBottom: 'calc(16px + env(safe-area-inset-bottom))',
               ...bodySx,
@@ -271,7 +280,7 @@ export const GeekDialog = forwardRef(function GeekDialog(
               </IconButton>
             ) : null}
           </DialogTitle>
-          <DialogContent data-geek-dialog="body" sx={bodySx}>
+          <DialogContent data-geek-dialog="body" tabIndex={0} sx={bodySx}>
             {children}
           </DialogContent>
           {secondaryAction || primaryAction ? (

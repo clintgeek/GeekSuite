@@ -129,12 +129,12 @@ const GroupsPage = () => {
     }});
   };
 
-  const formFields = (formData, setForm) => (
+  const formFields = (formData, setForm, idPrefix) => (
     <>
       <TextField label="Name" required fullWidth value={formData.name} onChange={(e) => setForm(p => ({ ...p, name: e.target.value }))} />
       <FormControl fullWidth>
-        <InputLabel>Purpose</InputLabel>
-        <Select value={formData.purpose} label="Purpose" onChange={(e) => setForm(p => ({ ...p, purpose: e.target.value }))}>
+        <InputLabel id={`${idPrefix}-purpose-label`}>Purpose</InputLabel>
+        <Select labelId={`${idPrefix}-purpose-label`} value={formData.purpose} label="Purpose" onChange={(e) => setForm(p => ({ ...p, purpose: e.target.value }))}>
           {purposeOptions.map((p) => <MenuItem key={p} value={p}>{getPurposeLabel(p)}</MenuItem>)}
         </Select>
       </FormControl>
@@ -183,57 +183,64 @@ const GroupsPage = () => {
             const members = membershipsByGroup[group.id] || [];
             const active = isActive(group);
             return (
-              <Accordion key={group.id} expanded={expandedGroup === group.id}
-                onChange={(_, isExpanded) => setExpandedGroup(isExpanded ? group.id : null)}
-                disableGutters elevation={0} square
-                sx={{ '&:before': { display: 'none' }, '&:not(:last-child)': { borderBottom: 1, borderColor: 'divider' } }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}
-                  sx={{ '& .MuiAccordionSummary-content': { alignItems: 'center', gap: 0, my: 0 } }}>
-                  {/* Five fixed tracks in 390px was four squeezed columns and
-                      a clipped action pair; below `md` the row stacks and the
-                      actions sit on their own 44px line. */}
-                  <Box sx={{
-                    display: 'grid',
-                    gridTemplateColumns: { xs: '1fr auto', md: '1fr 110px 70px 70px auto' },
-                    alignItems: 'center', width: '100%', gap: { xs: 1, md: 2 }, pr: 1
-                  }}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 600, gridColumn: { xs: '1 / -1', md: 'auto' } }}>{group.name}</Typography>
-                    <Chip label={getPurposeLabel(group.purpose)} color={getPurposeColor(group.purpose)} size="small" sx={{ justifySelf: 'start' }} />
-                    <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: { xs: 'left', md: 'right' }, justifySelf: { xs: 'end', md: 'stretch' }, gridColumn: { xs: '2', md: 'auto' } }}>{members.length} birds</Typography>
-                    <Chip label={active ? "Active" : "Inactive"} color={active ? "success" : "default"} size="small" variant="outlined" sx={{ justifySelf: 'start' }} />
-                    <Stack direction="row" spacing={0.5} onClick={(e) => e.stopPropagation()} sx={{ justifySelf: 'end' }}>
-                      <IconButton aria-label={`Edit ${group.name}`} onClick={(e) => handleEdit(group, e)} color="primary" sx={{ width: 44, height: 44 }}><EditIcon fontSize="small" /></IconButton>
-                      <IconButton aria-label={`Delete ${group.name}`} onClick={(e) => handleDelete(group.id, e)} color="error" sx={{ width: 44, height: 44 }}><DeleteIcon fontSize="small" /></IconButton>
-                    </Stack>
-                  </Box>
-                </AccordionSummary>
-                <AccordionDetails>
-                  {group.description && <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{group.description}</Typography>}
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                    {group.startDate ? displayCalendarDate(group.startDate) : "No start"}
-                    {" → "}
-                    {group.endDate ? displayCalendarDate(group.endDate) : "Ongoing"}
-                  </Typography>
-                  {members.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>No birds in this group</Typography>
-                  ) : (
-                    <List dense disablePadding>
-                      {members.map((m) => {
-                        const bird = m.bird;
-                        return (
-                          <ListItem key={m.id} disableGutters>
-                            <ListItemText
-                              primary={bird?.name || bird?.tagId || `Bird ${bird?.id?.slice?.(-6) || '?'}`}
-                              secondary={[bird?.species, bird?.breed, bird?.sex, m.role].filter(Boolean).join(' • ')}
-                            />
-                          </ListItem>
-                        );
-                      })}
-                    </List>
-                  )}
-                  {group.notes && <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>Notes: {group.notes}</Typography>}
-                </AccordionDetails>
-              </Accordion>
+              // Edit/Delete used to live inside `AccordionSummary`, which MUI
+              // renders as its own `role="button"` — a screen reader can't
+              // tab into a button nested inside another button (axe:
+              // nested-interactive). They're a flex sibling of the
+              // `Accordion` now, so the summary's only interactive role is
+              // expand/collapse, and both buttons stay reachable and tappable.
+              <Box key={group.id} sx={{ display: 'flex', alignItems: 'stretch', '&:not(:last-child)': { borderBottom: 1, borderColor: 'divider' } }}>
+                <Accordion expanded={expandedGroup === group.id}
+                  onChange={(_, isExpanded) => setExpandedGroup(isExpanded ? group.id : null)}
+                  disableGutters elevation={0} square
+                  sx={{ flex: 1, minWidth: 0, '&:before': { display: 'none' } }}>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}
+                    sx={{ '& .MuiAccordionSummary-content': { alignItems: 'center', gap: 0, my: 0 } }}>
+                    {/* Five fixed tracks in 390px was four squeezed columns and
+                        a clipped action pair; below `md` the row stacks. */}
+                    <Box sx={{
+                      display: 'grid',
+                      gridTemplateColumns: { xs: '1fr auto', md: '1fr 110px 70px 70px' },
+                      alignItems: 'center', width: '100%', gap: { xs: 1, md: 2 }, pr: 1
+                    }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 600, gridColumn: { xs: '1 / -1', md: 'auto' } }}>{group.name}</Typography>
+                      <Chip label={getPurposeLabel(group.purpose)} color={getPurposeColor(group.purpose)} size="small" sx={{ justifySelf: 'start' }} />
+                      <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: { xs: 'left', md: 'right' }, justifySelf: { xs: 'end', md: 'stretch' }, gridColumn: { xs: '2', md: 'auto' } }}>{members.length} birds</Typography>
+                      <Chip label={active ? "Active" : "Inactive"} color={active ? "success" : "default"} size="small" variant="outlined" sx={{ justifySelf: 'start' }} />
+                    </Box>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    {group.description && <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{group.description}</Typography>}
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                      {group.startDate ? displayCalendarDate(group.startDate) : "No start"}
+                      {" → "}
+                      {group.endDate ? displayCalendarDate(group.endDate) : "Ongoing"}
+                    </Typography>
+                    {members.length === 0 ? (
+                      <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>No birds in this group</Typography>
+                    ) : (
+                      <List dense disablePadding>
+                        {members.map((m) => {
+                          const bird = m.bird;
+                          return (
+                            <ListItem key={m.id} disableGutters>
+                              <ListItemText
+                                primary={bird?.name || bird?.tagId || `Bird ${bird?.id?.slice?.(-6) || '?'}`}
+                                secondary={[bird?.species, bird?.breed, bird?.sex, m.role].filter(Boolean).join(' • ')}
+                              />
+                            </ListItem>
+                          );
+                        })}
+                      </List>
+                    )}
+                    {group.notes && <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>Notes: {group.notes}</Typography>}
+                  </AccordionDetails>
+                </Accordion>
+                <Stack direction="row" spacing={0.5} sx={{ alignItems: 'flex-start', flexShrink: 0, py: 1, pr: 1.5 }}>
+                  <IconButton aria-label={`Edit ${group.name}`} onClick={(e) => handleEdit(group, e)} color="primary" sx={{ width: 44, height: 44 }}><EditIcon fontSize="small" /></IconButton>
+                  <IconButton aria-label={`Delete ${group.name}`} onClick={(e) => handleDelete(group.id, e)} color="error" sx={{ width: 44, height: 44 }}><DeleteIcon fontSize="small" /></IconButton>
+                </Stack>
+              </Box>
             );
           })}
         </Paper>
@@ -254,7 +261,7 @@ const GroupsPage = () => {
           onSubmit={(e) => { e.preventDefault(); handleSaveEdit(); }}
           sx={{ display: "flex", flexDirection: "column", gap: 2 }}
         >
-          {formFields(editFormData, setEditFormData)}
+          {formFields(editFormData, setEditFormData, 'group-edit')}
         </Box>
       </LedgerDialog>
 
@@ -273,7 +280,7 @@ const GroupsPage = () => {
           onSubmit={(e) => { e.preventDefault(); handleSaveAdd(); }}
           sx={{ display: "flex", flexDirection: "column", gap: 2 }}
         >
-          {formFields(addFormData, setAddFormData)}
+          {formFields(addFormData, setAddFormData, 'group-add')}
         </Box>
       </LedgerDialog>
 

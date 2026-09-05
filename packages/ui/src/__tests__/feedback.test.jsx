@@ -14,16 +14,19 @@
  *     shell around it (an SSR pass must not explode), and shows nothing until
  *     something is notified;
  *   - `toneForMode` lifts in dark and deepens in light, and honors a `0`.
+ *   - `readableOn` measures instead: it walks an ink away from its surface
+ *     until the pair clears a WCAG floor, and leaves it alone when it already
+ *     does. This is the helper the 2026-09-05 a11y burn-down leans on.
  */
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { getLuminance } from '@mui/material/styles';
+import { getContrastRatio, getLuminance } from '@mui/material/styles';
 import Button from '@mui/material/Button';
 
 import { GeekEmptyState } from '../feedback/GeekEmptyState.jsx';
 import { GeekErrorState } from '../feedback/GeekErrorState.jsx';
 import { GeekToastProvider } from '../feedback/GeekToastProvider.jsx';
-import { toneForMode } from '../color.js';
+import { readableOn, toneForMode } from '../color.js';
 import { geekLayout } from '../designTokens.js';
 
 describe('GeekEmptyState', () => {
@@ -197,5 +200,64 @@ describe('toneForMode', () => {
     expect(toneForMode('', 'dark')).toBe('');
     // No mode at all behaves as light — the default MUI mode.
     expect(toneForMode(color, {})).toBe(toneForMode(color, 'light'));
+  });
+});
+
+
+describe('readableOn', () => {
+  // The real pairs the axe pass flagged, so a regression here is a regression
+  // in the burn-down (tools/mobile-harness/README.md "The a11y pass").
+  const CASES = [
+    ['bujogeek aging.overdue on the dark canvas', '#B83C34', '#221F1B'],
+    ['bujogeek aging.fresh on the parchment canvas', '#5B9E6F', '#FAF8F5'],
+    ['bujogeek aging.warning on parchment', '#C97D35', '#FAF8F5'],
+    ['bujogeek ink[400] on a chip tint', '#918E88', '#EDEAE4'],
+    ['storygeek gold on the leather canvas', '#C9A84C', '#1A1614'],
+    ['a translucent cream ink on warm dark paper', 'rgba(255,245,220,0.28)', '#221F1B'],
+  ];
+
+  it.each(CASES)('lifts %s to AA', (_name, ink, surface) => {
+    const fixed = readableOn(ink, surface);
+    expect(getContrastRatio(fixed, surface)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('leaves an ink that already clears the floor exactly as it was', () => {
+    // Identity matters: a pass-through that "fixed" a passing color would
+    // quietly repaint half the suite.
+    expect(readableOn('#1C1A18', '#FAF8F5')).toBe('#1C1A18');
+    expect(readableOn('#EDE8E2', '#221F1B')).toBe('#EDE8E2');
+  });
+
+  it('walks toward white on a dark ground and toward black on a light one', () => {
+    // Direction follows the surface, not the mode: the same ink goes lighter
+    // on leather and darker on parchment.
+    // A mid grey is the only ink that fails on both grounds, so it is the one
+    // that proves the direction rather than the floor.
+    const grey = '#767676';
+    const onDark = readableOn(grey, '#221F1B');
+    const onLight = readableOn(grey, '#FAF8F5');
+    expect(getLuminance(onDark)).toBeGreaterThan(getLuminance(grey));
+    expect(getLuminance(onLight)).toBeLessThan(getLuminance(grey));
+  });
+
+  it('honors a lower floor for large text and graphical objects', () => {
+    const aa = readableOn('#C97D35', '#FAF8F5');
+    const graphical = readableOn('#C97D35', '#FAF8F5', { min: 3 });
+    expect(getContrastRatio(graphical, '#FAF8F5')).toBeGreaterThanOrEqual(3);
+    expect(getLuminance(graphical)).toBeGreaterThan(getLuminance(aa));
+  });
+
+  it('flattens a translucent ink over its surface before measuring', () => {
+    // rgba(255,245,220,0.28) on #221F1B paints as #605B51 — 2.43:1. Measuring
+    // the raw rgba() instead (what getContrastRatio does on its own) would
+    // read it as near-white and call it a pass.
+    const raw = 'rgba(255,245,220,0.28)';
+    expect(getContrastRatio(readableOn(raw, '#221F1B'), '#221F1B')).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('passes through what it cannot parse or measure', () => {
+    expect(readableOn(undefined, '#FFFFFF')).toBe(undefined);
+    expect(readableOn('#FFFFFF', undefined)).toBe('#FFFFFF');
+    expect(readableOn('currentColor', '#FFFFFF')).toBe('currentColor');
   });
 });

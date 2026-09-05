@@ -115,12 +115,12 @@ const LocationsPage = () => {
     }});
   };
 
-  const formFields = (formData, setForm) => (
+  const formFields = (formData, setForm, idPrefix) => (
     <>
       <TextField label="Name" required fullWidth value={formData.name} onChange={(e) => setForm(p => ({ ...p, name: e.target.value }))} />
       <FormControl fullWidth>
-        <InputLabel>Type</InputLabel>
-        <Select value={formData.type} label="Type" onChange={(e) => setForm(p => ({ ...p, type: e.target.value }))}>
+        <InputLabel id={`${idPrefix}-type-label`}>Type</InputLabel>
+        <Select labelId={`${idPrefix}-type-label`} value={formData.type} label="Type" onChange={(e) => setForm(p => ({ ...p, type: e.target.value }))}>
           {typeOptions.map((t) => <MenuItem key={t} value={t}>{getTypeLabel(t)}</MenuItem>)}
         </Select>
       </FormControl>
@@ -166,49 +166,58 @@ const LocationsPage = () => {
             const birds = birdsByLocation[location.id] || [];
             const capacity = location.capacity || 0;
             return (
-              <Accordion key={location.id} expanded={expandedLocation === location.id}
-                onChange={(_, isExpanded) => setExpandedLocation(isExpanded ? location.id : null)}
-                disableGutters elevation={0} square
-                sx={{ '&:before': { display: 'none' }, '&:not(:last-child)': { borderBottom: 1, borderColor: 'divider' } }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}
-                  sx={{ '& .MuiAccordionSummary-content': { alignItems: 'center', gap: 0, my: 0 } }}>
-                  {/* Four fixed tracks squeeze at 390px; below `md` the name
-                      takes its own line and the actions get their 44px. */}
-                  <Box sx={{
-                    display: 'grid',
-                    gridTemplateColumns: { xs: '1fr auto', md: '1fr 100px 80px auto' },
-                    alignItems: 'center', width: '100%', gap: { xs: 1, md: 2 }, pr: 1
-                  }}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 600, gridColumn: { xs: '1 / -1', md: 'auto' } }}>{location.name}</Typography>
-                    <Chip label={getTypeLabel(location.type)} color={getTypeColor(location.type)} size="small" sx={{ justifySelf: 'start' }} />
-                    <Typography variant="body2" sx={{ fontWeight: 500, color: capacity && birds.length > capacity ? 'error.main' : 'text.secondary', textAlign: { xs: 'left', md: 'right' }, justifySelf: { xs: 'end', md: 'stretch' }, gridColumn: { xs: '2', md: 'auto' } }}>
-                      {capacity ? `${birds.length} / ${capacity}` : birds.length}
-                    </Typography>
-                    <Stack direction="row" spacing={0.5} onClick={(e) => e.stopPropagation()} sx={{ justifySelf: 'end', gridColumn: { xs: '1 / -1', md: 'auto' } }}>
-                      <IconButton aria-label={`Edit ${location.name}`} onClick={(e) => handleEdit(location, e)} color="primary" sx={{ width: 44, height: 44 }}><EditIcon fontSize="small" /></IconButton>
-                      <IconButton aria-label={`Delete ${location.name}`} onClick={(e) => handleDelete(location.id, e)} color="error" sx={{ width: 44, height: 44 }}><DeleteIcon fontSize="small" /></IconButton>
-                    </Stack>
-                  </Box>
-                </AccordionSummary>
-                <AccordionDetails>
-                  {location.description && <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{location.description}</Typography>}
-                  {birds.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>No birds in this location</Typography>
-                  ) : (
-                    <List dense disablePadding>
-                      {birds.map((bird) => (
-                        <ListItem key={bird.id} disableGutters>
-                          <ListItemText
-                            primary={bird.name || bird.tagId || `Bird ${bird.id.slice(-6)}`}
-                            secondary={[bird.species, bird.breed, bird.sex].filter(Boolean).join(' • ')}
-                          />
-                        </ListItem>
-                      ))}
-                    </List>
-                  )}
-                  {location.notes && <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>Notes: {location.notes}</Typography>}
-                </AccordionDetails>
-              </Accordion>
+              // The Edit/Delete buttons used to live inside `AccordionSummary`,
+              // which MUI renders as its own `role="button"` — a screen reader
+              // has no way to tab into a button nested inside another button
+              // (axe: nested-interactive). They're a flex sibling of the
+              // `Accordion` now, not a descendant of its summary, so the
+              // expand/collapse role stays the only interactive thing in there
+              // and the buttons stay reachable.
+              <Box key={location.id} sx={{ display: 'flex', alignItems: 'stretch', '&:not(:last-child)': { borderBottom: 1, borderColor: 'divider' } }}>
+                <Accordion expanded={expandedLocation === location.id}
+                  onChange={(_, isExpanded) => setExpandedLocation(isExpanded ? location.id : null)}
+                  disableGutters elevation={0} square
+                  sx={{ flex: 1, minWidth: 0, '&:before': { display: 'none' } }}>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}
+                    sx={{ '& .MuiAccordionSummary-content': { alignItems: 'center', gap: 0, my: 0 } }}>
+                    {/* Four fixed tracks squeeze at 390px; below `md` the name
+                        takes its own line and the count gets the second. */}
+                    <Box sx={{
+                      display: 'grid',
+                      gridTemplateColumns: { xs: '1fr auto', md: '1fr 100px 80px' },
+                      alignItems: 'center', width: '100%', gap: { xs: 1, md: 2 }, pr: 1
+                    }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 600, gridColumn: { xs: '1 / -1', md: 'auto' } }}>{location.name}</Typography>
+                      <Chip label={getTypeLabel(location.type)} color={getTypeColor(location.type)} size="small" sx={{ justifySelf: 'start' }} />
+                      <Typography variant="body2" sx={{ fontWeight: 500, color: capacity && birds.length > capacity ? 'error.main' : 'text.secondary', textAlign: { xs: 'left', md: 'right' }, justifySelf: { xs: 'end', md: 'stretch' }, gridColumn: { xs: '2', md: 'auto' } }}>
+                        {capacity ? `${birds.length} / ${capacity}` : birds.length}
+                      </Typography>
+                    </Box>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    {location.description && <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{location.description}</Typography>}
+                    {birds.length === 0 ? (
+                      <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>No birds in this location</Typography>
+                    ) : (
+                      <List dense disablePadding>
+                        {birds.map((bird) => (
+                          <ListItem key={bird.id} disableGutters>
+                            <ListItemText
+                              primary={bird.name || bird.tagId || `Bird ${bird.id.slice(-6)}`}
+                              secondary={[bird.species, bird.breed, bird.sex].filter(Boolean).join(' • ')}
+                            />
+                          </ListItem>
+                        ))}
+                      </List>
+                    )}
+                    {location.notes && <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>Notes: {location.notes}</Typography>}
+                  </AccordionDetails>
+                </Accordion>
+                <Stack direction="row" spacing={0.5} sx={{ alignItems: 'flex-start', flexShrink: 0, py: 1, pr: 1.5 }}>
+                  <IconButton aria-label={`Edit ${location.name}`} onClick={(e) => handleEdit(location, e)} color="primary" sx={{ width: 44, height: 44 }}><EditIcon fontSize="small" /></IconButton>
+                  <IconButton aria-label={`Delete ${location.name}`} onClick={(e) => handleDelete(location.id, e)} color="error" sx={{ width: 44, height: 44 }}><DeleteIcon fontSize="small" /></IconButton>
+                </Stack>
+              </Box>
             );
           })}
         </Paper>
@@ -229,7 +238,7 @@ const LocationsPage = () => {
           onSubmit={(e) => { e.preventDefault(); handleSaveEdit(); }}
           sx={{ display: "flex", flexDirection: "column", gap: 2 }}
         >
-          {formFields(editFormData, setEditFormData)}
+          {formFields(editFormData, setEditFormData, 'location-edit')}
         </Box>
       </LedgerDialog>
 
@@ -248,7 +257,7 @@ const LocationsPage = () => {
           onSubmit={(e) => { e.preventDefault(); handleSaveAdd(); }}
           sx={{ display: "flex", flexDirection: "column", gap: 2 }}
         >
-          {formFields(addFormData, setAddFormData)}
+          {formFields(addFormData, setAddFormData, 'location-add')}
         </Box>
       </LedgerDialog>
 

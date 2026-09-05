@@ -3,7 +3,6 @@ import { Box, IconButton } from '@mui/material';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import SectionHeader from '../shared/SectionHeader';
 import TaskRow from '../tasks/TaskRow';
-import { colors } from '../../theme/colors';
 
 const CompletedSection = ({ tasks, onStatusToggle, onEdit, onDelete, onSaveAsNote, onCancel, subtaskProps }) => {
   const [expanded, setExpanded] = useState(false);
@@ -19,7 +18,7 @@ const CompletedSection = ({ tasks, onStatusToggle, onEdit, onDelete, onSaveAsNot
           <IconButton
             size="small"
             onClick={() => setExpanded(!expanded)}
-            sx={{ color: colors.ink[400] }}
+            sx={{ color: 'text.secondary' }}
             aria-label={expanded ? 'Collapse completed tasks' : 'Expand completed tasks'}
           >
             {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}

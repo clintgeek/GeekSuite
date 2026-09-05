@@ -339,44 +339,69 @@ Three deliberate choices:
 gate and a11y is a burn-down list. The flip criterion, per
 [`MOBILE_UI_PLAN.md`](../../DOCS/MOBILE_UI_PLAN.md) §2, is **0 open across all
 eight apps** — waived findings do not count as open.
+### Burn-down (2026-09-05)
 
-### Burn-down (baseline: full local run, 2026-09-05)
+**Baseline, the run that started this** — 140 scenes, 8 apps, iPhone 14 dark +
+light: 0 grammar violations, 0 page errors, **112 a11y findings**. Per app:
+fitnessgeek 29, bujogeek 28, storygeek 28, flockgeek 16, bookgeek 5,
+basegeek 2, notegeek 2, startgeek 2.
 
-140 scenes, 8 apps, iPhone 14 dark + light. **0 grammar violations, 0 page
-errors, 112 a11y findings.** The gate is green; the list below is the work.
+**After the first burn (Q51)** — same 140 scenes: 0 grammar violations, 0 page
+errors, **39 a11y findings**. Three apps are at zero and the two rules that
+were two thirds of the list are gone from every app that was worked.
+
+| app | before | after | |
+|---|--:|--:|---|
+| bujogeek | 28 | **0** | contrast, checkbox names, `Select` labels, `role="img"` |
+| storygeek | 28 | **0** | gold overlines, icon-button names, transcript keyboard route |
+| flockgeek | 16 | **0** | `Select` labels, form labels, accordion nesting |
+| bookgeek | 5 | **4** | the one contrast finding fell out of the suite theme fix |
+| fitnessgeek | 29 | 29 | not touched — another pass owned this app that night |
+| basegeek | 2 | 2 | not touched — same |
+| notegeek | 2 | 2 | not touched |
+| startgeek | 2 | 2 | not touched |
+| **total** | **112** | **39** | |
+
+What is left, by rule:
 
 | rule | impact | findings | nodes | where it lives |
 |---|---|--:|--:|---|
-| [`color-contrast`](https://dequeuniversity.com/rules/axe/4.13/color-contrast) | serious | 40 | 253 | bujogeek 20, storygeek 14, fitnessgeek 5, bookgeek 1 |
-| [`button-name`](https://dequeuniversity.com/rules/axe/4.13/button-name) | critical | 18 | 98 | storygeek 8, fitnessgeek 6, bujogeek 4 |
-| [`aria-input-field-name`](https://dequeuniversity.com/rules/axe/4.13/aria-input-field-name) | serious | 16 | 56 | flockgeek 8, fitnessgeek 2, bujogeek 2, notegeek 2, basegeek 2 |
-| [`scrollable-region-focusable`](https://dequeuniversity.com/rules/axe/4.13/scrollable-region-focusable) | serious | 8 | 8 | storygeek 6, startgeek 2 |
+| [`button-name`](https://dequeuniversity.com/rules/axe/4.13/button-name) | critical | 6 | 56 | fitnessgeek 6 |
+| [`aria-input-field-name`](https://dequeuniversity.com/rules/axe/4.13/aria-input-field-name) | serious | 6 | 18 | fitnessgeek 2, notegeek 2, basegeek 2 |
 | [`aria-progressbar-name`](https://dequeuniversity.com/rules/axe/4.13/aria-progressbar-name) | serious | 6 | 14 | fitnessgeek 6 |
 | [`list`](https://dequeuniversity.com/rules/axe/4.13/list) | serious | 6 | 8 | fitnessgeek 4, bookgeek 2 |
-| [`nested-interactive`](https://dequeuniversity.com/rules/axe/4.13/nested-interactive) | serious | 6 | 16 | flockgeek 4, fitnessgeek 2 |
-| [`label`](https://dequeuniversity.com/rules/axe/4.13/label) | critical | 4 | 6 | flockgeek 4 |
+| [`color-contrast`](https://dequeuniversity.com/rules/axe/4.13/color-contrast) | serious | 5 | 9 | fitnessgeek 5 |
 | [`svg-img-alt`](https://dequeuniversity.com/rules/axe/4.13/svg-img-alt) | serious | 4 | 6 | fitnessgeek 4 |
 | [`aria-required-children`](https://dequeuniversity.com/rules/axe/4.13/aria-required-children) | critical | 2 | 2 | bookgeek 2 |
-| [`aria-prohibited-attr`](https://dequeuniversity.com/rules/axe/4.13/aria-prohibited-attr) | serious | 2 | 2 | bujogeek 2 |
+| [`nested-interactive`](https://dequeuniversity.com/rules/axe/4.13/nested-interactive) | serious | 2 | 2 | fitnessgeek 2 |
+| [`scrollable-region-focusable`](https://dequeuniversity.com/rules/axe/4.13/scrollable-region-focusable) | serious | 2 | 2 | startgeek 2 |
 
-Per app: fitnessgeek 29, bujogeek 28, storygeek 28, flockgeek 16, bookgeek 5,
-basegeek 2, notegeek 2, startgeek 2.
+**The waiver list is still empty.** Nothing in the 73 findings that went away
+needed one, and nothing in the 39 that remain looks like a false positive.
 
-**What the shape of this list says.** Two thirds of it is three rules, and all
-three are suite-level, not app-level:
+### What the burn taught, for the next app
 
-1. `color-contrast` (40) — muted secondary text on tinted panels, `overline`
-   and `Chip` labels most of all. Measured ratios cluster in the 2.4–4.1 band
-   against a 4.5 floor. `packages/ui` owns the palette, so this is one fix in
-   the theme's secondary/disabled text tokens, not four app fixes.
-2. `button-name` (18) — MUI `IconButton`s with an icon and no `aria-label`.
-   Mechanical, per call site, and the `tap-target` rule already taught this
-   codebase where its icon buttons are.
-3. `aria-input-field-name` (16) — MUI `Select` rendered without a paired
-   `InputLabel`/`labelId`, which is the same bug at every call site.
-
-The rest are small and local: an unnamed `LinearProgress`, an
-`AccordionSummary` with a button inside it, a `<hr>` as a direct child of a
-`<ul>`, an unlabelled recharts `<svg>`, a scrollable strip with no keyboard
-route into it. None of them are false positives worth waiving — which is why
-the waiver list is still empty.
+1. **`color-contrast` was never a token problem.** The suite's contrast ratchet
+   (`packages/ui/src/__tests__/themeContrast.test.js`) was green through all 40
+   findings, because it measured `text.muted` on `background.paper` while the
+   apps were painting `colors.ink[300]` — a *border* tone — as body copy, or
+   diluting a domain hue with `alpha()` until it composited to 2.4:1. The fixes
+   were at the call sites, plus one new shared helper:
+   `readableOn(ink, surface, { min })` in `@geeksuite/ui` composites, measures,
+   and walks the ink away from the surface until it clears the floor, returning
+   it untouched when it already does. Its older sibling `toneForMode` nudges by
+   a fixed amount and cannot know what surface the text lands on; that is what
+   produced half of this list. The ratchet now sweeps **every** surface the
+   palette declares, not just the canvas and the cards.
+2. **Two shared-component fixes cleared findings in apps nobody edited.**
+   `GeekDialog`'s scrolling body got `tabIndex={0}` (storygeek's Bookify summary
+   had no keyboard route in), and the theme now runs the accent through
+   `readableOn` for a focused `MuiFormLabel` — the suite blue measured 3.12:1 as
+   a label on bujogeek's dark paper and 4.17:1 on the suite's own light canvas.
+   `GeekFab` now throws in development when `label` is missing, so the next
+   nameless FAB fails at the call site instead of in a nightly run.
+3. **`button-name` and `aria-input-field-name` are mechanical but not
+   thoughtless.** A name has to say *which* thing the control acts on —
+   bujogeek's task toggle is `Mark "Call the roofer" done`, not `Toggle` — and a
+   MUI `Select` wants a real `InputLabel` + `labelId`, not an `aria-label`
+   bolted on, wherever the form has room for a visible label.

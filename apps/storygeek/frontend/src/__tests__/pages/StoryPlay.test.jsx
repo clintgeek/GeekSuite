@@ -115,6 +115,28 @@ describe('StoryPlay composer', () => {
   });
 });
 
+// The a11y pass (2026-09-05): the composer's send button is icon-only and the
+// transcript is a scroll container with nothing focusable inside it. Both were
+// axe findings on 04-play/08-composer; both are named contracts now, not
+// incidental markup.
+describe('StoryPlay accessibility', () => {
+  it('names the icon-only send button', async () => {
+    renderStoryPlay();
+    await screen.findByPlaceholderText('What do you do?');
+
+    const send = screen.getByRole('button', { name: 'Send' });
+    expect(send).toHaveAttribute('type', 'submit');
+  });
+
+  it('makes the transcript a named, keyboard-reachable log', async () => {
+    renderStoryPlay();
+    await screen.findByPlaceholderText('What do you do?');
+
+    const transcript = screen.getByRole('log', { name: 'Story transcript' });
+    expect(transcript).toHaveAttribute('tabindex', '0');
+  });
+});
+
 describe('StoryPlay rails', () => {
   it('opens the left rail as a GeekSheet in sheet mode', async () => {
     renderStoryPlay();

@@ -92,6 +92,17 @@ ternaries (base-palette authoring); `LoginPage` (public route, outside
 No local `EmptyState`/`ErrorState`/toast component existed here to delete, and no local
 `MuiTooltip` override exists to touch for #19's tooltip half.
 
+
+## Frontend — the mobile-harness a11y pass (2026-09-05)
+
+storygeek's 28 axe (wcag2a+aa) findings went to 0: `aria-label`s on the three
+icon-only controls (per-card `Delete <title>`, composer `Send`, `Close journal`),
+`tabIndex={0}` + `role="log"` + `aria-label="Story transcript"` on the play
+transcript, and — the whole 14-finding contrast bucket — `palette.codex.goldMuted`
+plus a darker light-mode `inkFaint` and light dice ramp replacing the
+`alpha(gold, 0.6–0.7)` section labels that composited to 2.4–4.1:1; never wrap
+`goldMuted` in `alpha()` again, that dilution *is* the bug.
+
 ---
 
 ## Known quirk — the StoryPlay test stall (root-caused 2026-09-05)

@@ -21,6 +21,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTaskContext } from '../../context/TaskContext';
 import { normalizeTasks } from '../../utils/normalizeTasks';
 import { colors } from '../../theme/colors';
+import { domainInk } from '../../theme/inks';
 import { getTaskAge, getAgingColor } from '../../utils/taskAging';
 
 const WEEKDAYS_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -151,8 +152,8 @@ const MonthlyCalendar = () => {
   };
 
   const dottedRule = `1px dotted ${isDark ? 'rgba(255,255,255,0.12)' : colors.ink[200]}`;
-  const mutedInk = isDark ? 'rgba(255,255,255,0.5)' : colors.ink[400];
-  const captionInk = isDark ? 'rgba(255,255,255,0.32)' : colors.ink[300];
+  const mutedInk = theme.palette.text.secondary;
+  const captionInk = theme.palette.text.muted;
   const primaryInk = theme.palette.text.primary;
 
   // Stable key for AnimatePresence — one per month
@@ -273,13 +274,13 @@ const MonthlyCalendar = () => {
           >
             {monthStats.total} {monthStats.total === 1 ? 'task' : 'tasks'} on the page
             {monthStats.overdue > 0 && (
-              <Box component="span" sx={{ color: colors.aging.overdue }}>
+              <Box component="span" sx={{ color: domainInk(colors.aging.overdue, theme) }}>
                 {' · '}
                 {monthStats.overdue} overdue
               </Box>
             )}
             {monthStats.done > 0 && (
-              <Box component="span" sx={{ color: colors.aging.fresh }}>
+              <Box component="span" sx={{ color: domainInk(colors.aging.fresh, theme) }}>
                 {' · '}
                 {monthStats.done} done
               </Box>

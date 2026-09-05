@@ -12,6 +12,12 @@
  * containing block for `position: fixed` children — a FAB inside it would be
  * positioned against the page and fade with it (same rule as the toasts).
  *
+ * `label` is not optional (a11y, 2026-09-05). The FAB is an icon-only button
+ * in the common case, so the label IS its accessible name — without one axe
+ * reports `button-name` (critical) and a screen-reader user gets "button".
+ * A missing or blank label throws in development and warns in production:
+ * loud at the call site beats a finding in a nightly harness run.
+ *
  * Inline SVG glyph, matching the rest of `packages/ui` chrome:
  * `@mui/icons-material` is not a dependency here, and shared chrome must not
  * add one.
@@ -81,6 +87,16 @@ export const GeekFab = forwardRef(function GeekFab(
   const shell = useGeekShell();
   const { focusMode } = useFocusMode();
   const inset = bottomInset === undefined ? shell.bottomInset : bottomInset;
+
+  // The label is the accessible name of an icon-only button. Fail loudly
+  // where a developer will see it rather than shipping a nameless FAB.
+  if (typeof label !== 'string' || !label.trim()) {
+    const message =
+      'GeekFab: `label` is required and must be a non-empty string — it is the ' +
+      "button's accessible name (MOBILE_UI_PLAN.md §2).";
+    if (process.env.NODE_ENV !== 'production') throw new Error(message);
+    console.error(message);
+  }
 
   if (hidden || focusMode) return null;
 

@@ -258,16 +258,16 @@ const BirdsPage = () => {
       </Grid>
       <Grid item xs={12} sm={6}>
         <FormControl fullWidth>
-          <InputLabel>Sex</InputLabel>
-          <Select value={editFormData.sex} label="Sex" onChange={(e) => setEF('sex', e.target.value)}>
+          <InputLabel id="bird-edit-sex-label">Sex</InputLabel>
+          <Select labelId="bird-edit-sex-label" value={editFormData.sex} label="Sex" onChange={(e) => setEF('sex', e.target.value)}>
             {sexOptions.map(sex => <MenuItem key={sex} value={sex}>{titleCase(sex)}</MenuItem>)}
           </Select>
         </FormControl>
       </Grid>
       <Grid item xs={12} sm={6}>
         <FormControl fullWidth>
-          <InputLabel>Breed</InputLabel>
-          <Select value={editFormData.breed} label="Breed" onChange={(e) => setEF('breed', e.target.value)}>
+          <InputLabel id="bird-edit-breed-label">Breed</InputLabel>
+          <Select labelId="bird-edit-breed-label" value={editFormData.breed} label="Breed" onChange={(e) => setEF('breed', e.target.value)}>
             <MenuItem value=""><em>None</em></MenuItem>
             {allBreeds.map(b => <MenuItem key={b} value={b}>{b}</MenuItem>)}
           </Select>
@@ -279,8 +279,8 @@ const BirdsPage = () => {
       </Grid>
       <Grid item xs={12} sm={6}>
         <FormControl fullWidth>
-          <InputLabel>Status</InputLabel>
-          <Select value={editFormData.status} label="Status" onChange={(e) => setEF('status', e.target.value)}>
+          <InputLabel id="bird-edit-status-label">Status</InputLabel>
+          <Select labelId="bird-edit-status-label" value={editFormData.status} label="Status" onChange={(e) => setEF('status', e.target.value)}>
             {statusOptions.map(st => <MenuItem key={st} value={st}>{titleCase(st)}</MenuItem>)}
           </Select>
         </FormControl>
@@ -294,7 +294,7 @@ const BirdsPage = () => {
    * both surfaces — the desktop accordion and the phone's edit dialog — render
    * this one function, so the form can never drift between them.
    */
-  const birdDetailSections = (bird, editing) => (
+  const birdDetailSections = (bird, editing, idPrefix = 'bird-edit') => (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       <Box>
         <Typography variant="h6" sx={{ mb: 1 }}>Bird Details</Typography>
@@ -306,8 +306,8 @@ const BirdsPage = () => {
           <Grid item xs={12} sm={6} md={4}>
             {editing ? (
               <FormControl fullWidth>
-                <InputLabel>Species</InputLabel>
-                <Select value={editFormData.species} label="Species" onChange={(e) => setEF('species', e.target.value)}>
+                <InputLabel id={`${idPrefix}-species-label`}>Species</InputLabel>
+                <Select labelId={`${idPrefix}-species-label`} value={editFormData.species} label="Species" onChange={(e) => setEF('species', e.target.value)}>
                   {speciesOptions.map(sp => <MenuItem key={sp} value={sp}>{titleCase(sp)}</MenuItem>)}
                 </Select>
               </FormControl>
@@ -331,8 +331,8 @@ const BirdsPage = () => {
           <Grid item xs={12} sm={6} md={4}>
             {editing ? (
               <FormControl fullWidth>
-                <InputLabel>Cross</InputLabel>
-                <Select value={editFormData.cross} label="Cross" onChange={(e) => setEF('cross', e.target.value)}>
+                <InputLabel id={`${idPrefix}-cross-label`}>Cross</InputLabel>
+                <Select labelId={`${idPrefix}-cross-label`} value={editFormData.cross} label="Cross" onChange={(e) => setEF('cross', e.target.value)}>
                   <MenuItem value="true">Yes</MenuItem>
                   <MenuItem value="false">No</MenuItem>
                 </Select>
@@ -347,8 +347,8 @@ const BirdsPage = () => {
           <Grid item xs={12} sm={6} md={4}>
             {editing ? (
               <FormControl fullWidth>
-                <InputLabel>Origin</InputLabel>
-                <Select value={editFormData.origin} label="Origin" onChange={(e) => setEF('origin', e.target.value)}>
+                <InputLabel id={`${idPrefix}-origin-label`}>Origin</InputLabel>
+                <Select labelId={`${idPrefix}-origin-label`} value={editFormData.origin} label="Origin" onChange={(e) => setEF('origin', e.target.value)}>
                   {originOptions.map(o => <MenuItem key={o} value={o}>{originLabel(o)}</MenuItem>)}
                 </Select>
               </FormControl>
@@ -362,8 +362,8 @@ const BirdsPage = () => {
           <Grid item xs={12} sm={6} md={4}>
             {editing ? (
               <FormControl fullWidth>
-                <InputLabel>Foundation Stock</InputLabel>
-                <Select value={editFormData.foundationStock} label="Foundation Stock" onChange={(e) => setEF('foundationStock', e.target.value)}>
+                <InputLabel id={`${idPrefix}-foundation-stock-label`}>Foundation Stock</InputLabel>
+                <Select labelId={`${idPrefix}-foundation-stock-label`} value={editFormData.foundationStock} label="Foundation Stock" onChange={(e) => setEF('foundationStock', e.target.value)}>
                   <MenuItem value="true">Yes</MenuItem>
                   <MenuItem value="false">No</MenuItem>
                 </Select>
@@ -378,8 +378,8 @@ const BirdsPage = () => {
           <Grid item xs={12} sm={6} md={4}>
             {editing ? (
               <FormControl fullWidth>
-                <InputLabel>Location</InputLabel>
-                <Select value={editFormData.locationId} label="Location" onChange={(e) => setEF('locationId', e.target.value)}>
+                <InputLabel id={`${idPrefix}-location-label`}>Location</InputLabel>
+                <Select labelId={`${idPrefix}-location-label`} value={editFormData.locationId} label="Location" onChange={(e) => setEF('locationId', e.target.value)}>
                   <MenuItem value=""><em>Unassigned</em></MenuItem>
                   {locations.map(loc => <MenuItem key={loc.id} value={loc.id}>{loc.name}</MenuItem>)}
                 </Select>
@@ -478,7 +478,7 @@ const BirdsPage = () => {
       <Box>
         <Typography variant="h6" sx={{ mb: 1 }}>Notes</Typography>
         {editing ? (
-          <TextField fullWidth multiline minRows={3} value={editFormData.notes} onChange={(e) => setEF('notes', e.target.value)} />
+          <TextField fullWidth multiline minRows={3} label="Notes" value={editFormData.notes} onChange={(e) => setEF('notes', e.target.value)} />
         ) : (
           <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{bird.notes || '-'}</Typography>
         )}
@@ -545,8 +545,8 @@ const BirdsPage = () => {
                 <Box sx={{ minWidth: 140 }}>
                   {isExpanded ? (
                     <FormControl fullWidth size="small" onClick={(e) => e.stopPropagation()}>
-                      <InputLabel>Sex</InputLabel>
-                      <Select value={editFormData.sex} label="Sex" onChange={(e) => setEF('sex', e.target.value)} onClick={(e) => e.stopPropagation()}>
+                      <InputLabel id={`bird-row-${bird.id}-inline-sex-label`}>Sex</InputLabel>
+                      <Select labelId={`bird-row-${bird.id}-inline-sex-label`} value={editFormData.sex} label="Sex" onChange={(e) => setEF('sex', e.target.value)} onClick={(e) => e.stopPropagation()}>
                         {sexOptions.map(sex => <MenuItem key={sex} value={sex}>{titleCase(sex)}</MenuItem>)}
                       </Select>
                     </FormControl>
@@ -557,8 +557,8 @@ const BirdsPage = () => {
                 <Box sx={{ minWidth: 180 }}>
                   {isExpanded ? (
                     <FormControl fullWidth size="small" onClick={(e) => e.stopPropagation()}>
-                      <InputLabel>Breed</InputLabel>
-                      <Select value={editFormData.breed} label="Breed" onChange={(e) => setEF('breed', e.target.value)} onClick={(e) => e.stopPropagation()}>
+                      <InputLabel id={`bird-row-${bird.id}-inline-breed-label`}>Breed</InputLabel>
+                      <Select labelId={`bird-row-${bird.id}-inline-breed-label`} value={editFormData.breed} label="Breed" onChange={(e) => setEF('breed', e.target.value)} onClick={(e) => e.stopPropagation()}>
                         <MenuItem value=""><em>None</em></MenuItem>
                         {allBreeds.map(b => <MenuItem key={b} value={b}>{b}</MenuItem>)}
                       </Select>
@@ -580,8 +580,8 @@ const BirdsPage = () => {
                 <Box sx={{ minWidth: 140, display: 'flex', alignItems: 'center' }}>
                   {isExpanded ? (
                     <FormControl fullWidth size="small" onClick={(e) => e.stopPropagation()}>
-                      <InputLabel>Status</InputLabel>
-                      <Select value={editFormData.status} label="Status" onChange={(e) => setEF('status', e.target.value)} onClick={(e) => e.stopPropagation()}>
+                      <InputLabel id={`bird-row-${bird.id}-inline-status-label`}>Status</InputLabel>
+                      <Select labelId={`bird-row-${bird.id}-inline-status-label`} value={editFormData.status} label="Status" onChange={(e) => setEF('status', e.target.value)} onClick={(e) => e.stopPropagation()}>
                         {statusOptions.map(st => <MenuItem key={st} value={st}>{titleCase(st)}</MenuItem>)}
                       </Select>
                     </FormControl>
@@ -593,7 +593,7 @@ const BirdsPage = () => {
             </AccordionSummary>
             <AccordionDetails>
               <Box sx={{ pt: 2 }}>
-                {birdDetailSections(bird, isExpanded)}
+                {birdDetailSections(bird, isExpanded, `bird-row-${bird.id}`)}
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 3 }}>
                   <Button onClick={() => handleDelete(bird.id)} color="error" startIcon={<DeleteIcon />}>Delete</Button>
                   <Button onClick={handleCancelEdit}>Cancel</Button>
@@ -686,16 +686,16 @@ const BirdsPage = () => {
             </Grid>
             <Grid item xs={12} sm={6}>
               <FormControl fullWidth>
-                <InputLabel>Sex *</InputLabel>
-                <Select value={addFormData.sex} label="Sex" onChange={(e) => setAddFormData(p => ({ ...p, sex: e.target.value }))}>
+                <InputLabel id="bird-add-sex-label">Sex *</InputLabel>
+                <Select labelId="bird-add-sex-label" value={addFormData.sex} label="Sex" onChange={(e) => setAddFormData(p => ({ ...p, sex: e.target.value }))}>
                   {sexOptions.filter(sx => sx !== "unknown").map(sx => <MenuItem key={sx} value={sx}>{titleCase(sx)}</MenuItem>)}
                 </Select>
               </FormControl>
             </Grid>
             <Grid item xs={12} sm={6}>
               <FormControl fullWidth>
-                <InputLabel>Breed</InputLabel>
-                <Select value={addFormData.breed} label="Breed" onChange={(e) => setAddFormData(p => ({ ...p, breed: e.target.value }))}>
+                <InputLabel id="bird-add-breed-label">Breed</InputLabel>
+                <Select labelId="bird-add-breed-label" value={addFormData.breed} label="Breed" onChange={(e) => setAddFormData(p => ({ ...p, breed: e.target.value }))}>
                   <MenuItem value=""><em>None</em></MenuItem>
                   {allBreeds.map(b => <MenuItem key={b} value={b}>{b}</MenuItem>)}
                 </Select>
@@ -707,8 +707,8 @@ const BirdsPage = () => {
             </Grid>
             <Grid item xs={12} sm={6}>
               <FormControl fullWidth>
-                <InputLabel>Status</InputLabel>
-                <Select value={addFormData.status} label="Status" onChange={(e) => setAddFormData(p => ({ ...p, status: e.target.value }))}>
+                <InputLabel id="bird-add-status-label">Status</InputLabel>
+                <Select labelId="bird-add-status-label" value={addFormData.status} label="Status" onChange={(e) => setAddFormData(p => ({ ...p, status: e.target.value }))}>
                   {statusOptions.map(st => <MenuItem key={st} value={st}>{titleCase(st)}</MenuItem>)}
                 </Select>
               </FormControl>
@@ -716,8 +716,8 @@ const BirdsPage = () => {
             <Grid item xs={12}><Typography variant="h6" sx={{ mt: 1, mb: 0 }}>More Details</Typography></Grid>
             <Grid item xs={12} sm={6} md={4}>
               <FormControl fullWidth>
-                <InputLabel>Species</InputLabel>
-                <Select value={addFormData.species} label="Species" onChange={(e) => setAddFormData(p => ({ ...p, species: e.target.value }))}>
+                <InputLabel id="bird-add-species-label">Species</InputLabel>
+                <Select labelId="bird-add-species-label" value={addFormData.species} label="Species" onChange={(e) => setAddFormData(p => ({ ...p, species: e.target.value }))}>
                   {speciesOptions.map(sp => <MenuItem key={sp} value={sp}>{titleCase(sp)}</MenuItem>)}
                 </Select>
               </FormControl>
@@ -728,8 +728,8 @@ const BirdsPage = () => {
             </Grid>
             <Grid item xs={12} sm={6} md={4}>
               <FormControl fullWidth>
-                <InputLabel>Origin</InputLabel>
-                <Select value={addFormData.origin} label="Origin" onChange={(e) => setAddFormData(p => ({ ...p, origin: e.target.value }))}>
+                <InputLabel id="bird-add-origin-label">Origin</InputLabel>
+                <Select labelId="bird-add-origin-label" value={addFormData.origin} label="Origin" onChange={(e) => setAddFormData(p => ({ ...p, origin: e.target.value }))}>
                   {originOptions.map(o => <MenuItem key={o} value={o}>{originLabel(o)}</MenuItem>)}
                 </Select>
               </FormControl>

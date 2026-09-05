@@ -14,8 +14,9 @@ import EmptyState from '../shared/EmptyState';
 import SkeletonLoader from '../shared/SkeletonLoader';
 import TemplateApply from './TemplateApply';
 import TemplateEditor from './TemplateEditor';
-import { GeekErrorState, toneForMode } from '@geeksuite/ui';
+import { GeekErrorState } from '@geeksuite/ui';
 import { colors } from '../../theme/colors';
+import { domainInk } from '../../theme/inks';
 
 const TEMPLATE_TYPES = {
   daily: 'Daily Log',
@@ -40,7 +41,7 @@ const TemplateList = () => {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState(null);
 
-  const mutedInk = isDark ? 'rgba(255,255,255,0.5)' : colors.ink[400];
+  const mutedInk = theme.palette.text.secondary;
   const primaryInk = theme.palette.text.primary;
   const dottedRule = `1px dotted ${isDark ? 'rgba(255,255,255,0.14)' : colors.ink[200]}`;
 
@@ -73,7 +74,7 @@ const TemplateList = () => {
         // The glyph carries BuJoGeek's own overdue red rather than the suite
         // error tone; `darkenBy: 0` because the hue is authored for light paper
         // and only needs the dark-mode lift.
-        iconSx={{ color: toneForMode(colors.aging.overdue, theme, { darkenBy: 0 }) }}
+        iconSx={{ color: domainInk(colors.aging.overdue, theme, { min: 3 }) }}
       />
     );
   }

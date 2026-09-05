@@ -2,7 +2,7 @@ import { Box, Typography, IconButton, useTheme } from '@mui/material';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { format, isToday, isYesterday, isTomorrow } from 'date-fns';
 import { motion } from 'framer-motion';
-import { toneForMode } from '@geeksuite/ui';
+import { domainInk } from '../../theme/inks';
 import { colors } from '../../theme/colors';
 
 /**
@@ -20,7 +20,7 @@ const PageHeader = ({ date, onDateChange, stats }) => {
   const theme  = useTheme();
   const isDark = theme.palette.mode === 'dark';
   // Plum reads ~2.5:1 on dark paper; lift it when used as text.
-  const staleInk = toneForMode(colors.aging.stale, theme, { darkenBy: 0 });
+  const staleInk = domainInk(colors.aging.stale, theme);
 
   const handlePrev = () => {
     const prev = new Date(date);
@@ -60,10 +60,10 @@ const PageHeader = ({ date, onDateChange, stats }) => {
   const relativeLabel = getRelativeLabel();
 
   // Color tokens
-  const eyebrowColor  = isDark ? 'rgba(255,245,220,0.28)' : colors.ink[300];
+  const eyebrowColor  = theme.palette.text.muted;
   const headlineColor = theme.palette.text.primary;
-  const metaColor     = isDark ? 'rgba(255,245,220,0.24)' : colors.ink[300];
-  const navIconColor  = isDark ? 'rgba(255,245,220,0.3)'  : colors.ink[400];
+  const metaColor     = theme.palette.text.muted;
+  const navIconColor  = theme.palette.text.secondary;
   const navIconHover  = isDark ? 'rgba(255,245,220,0.6)'  : colors.ink[600];
 
   return (
@@ -244,7 +244,7 @@ const PageHeader = ({ date, onDateChange, stats }) => {
                 <Box component="span" sx={{ opacity: 0.4 }}>·</Box>
                 <Box
                   component="span"
-                  sx={{ color: isDark ? `${colors.aging.fresh}cc` : colors.aging.fresh }}
+                  sx={{ color: domainInk(colors.aging.fresh, theme) }}
                 >
                   {stats.completed} done
                 </Box>
@@ -255,7 +255,7 @@ const PageHeader = ({ date, onDateChange, stats }) => {
                 <Box component="span" sx={{ opacity: 0.4 }}>·</Box>
                 <Box
                   component="span"
-                  sx={{ color: isDark ? `${colors.aging.warning}cc` : colors.aging.warning }}
+                  sx={{ color: domainInk(colors.aging.warning, theme) }}
                 >
                   {stats.overdue} carried
                 </Box>

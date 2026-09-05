@@ -4,7 +4,6 @@ import TemplateApplier from '../components/templates/TemplateApplier';
 import TemplateFilters from '../components/templates/TemplateFilters';
 import { TemplateProvider } from '../context/TemplateContext';
 import useGlobalShortcuts from '../hooks/useGlobalShortcuts';
-import { colors } from '../theme/colors';
 
 /**
  * TemplatesPage — repeatable routines for daily/weekly/monthly planning.
@@ -15,10 +14,9 @@ import { colors } from '../theme/colors';
  */
 const TemplatesPage = () => {
   const theme = useTheme();
-  const isDark = theme.palette.mode === 'dark';
   useGlobalShortcuts();
 
-  const captionInk = isDark ? 'rgba(255,255,255,0.32)' : colors.ink[300];
+  const captionInk = theme.palette.text.muted;
   const primaryInk = theme.palette.text.primary;
 
   const handleTemplateApplied = () => {

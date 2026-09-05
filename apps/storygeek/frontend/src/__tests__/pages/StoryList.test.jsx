@@ -124,11 +124,11 @@ describe('StoryList', () => {
     const user = userEvent.setup();
     api.delete.mockResolvedValue({});
     renderStoryList();
-    const card = (await screen.findByText('Neon Dead Drop')).closest('.MuiCard-root');
-    // The delete control is an icon-only IconButton (no accessible name) —
-    // select it by its `color="error"` MUI class rather than role name.
-    const deleteButton = card.querySelector('button.MuiIconButton-colorError');
-    expect(deleteButton).not.toBeNull();
+    // The delete control is icon-only, so its accessible name has to carry the
+    // title — one "Delete" per card would be unusable with a screen reader
+    // (a11y pass, 2026-09-05).
+    await screen.findByText('Neon Dead Drop');
+    const deleteButton = screen.getByRole('button', { name: 'Delete Neon Dead Drop' });
 
     await user.click(deleteButton);
 
@@ -143,6 +143,14 @@ describe('StoryList', () => {
   // TODO_ORDER #15: the load-error branch now renders `GeekErrorState` with a
   // real retry, replacing the empty-shelves card a failed load used to show
   // indistinguishably from a genuinely empty library.
+  it('names every delete button after the tale it deletes', async () => {
+    renderStoryList();
+    await screen.findByText('The Fog-Bound Crossroads');
+
+    expect(screen.getByRole('button', { name: 'Delete The Fog-Bound Crossroads' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete Neon Dead Drop' })).toBeInTheDocument();
+  });
+
   it('shows GeekEmptyState when the library is genuinely empty', async () => {
     api.get.mockResolvedValue({ data: [] });
     renderStoryList();

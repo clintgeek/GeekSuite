@@ -210,6 +210,34 @@ fills, so each mode carries its own value that clears 4.5:1 on that mode's paper
 - Full keyboard nav support
 - ARIA labels on icons
 
+### Colour on a surface, not colour in the abstract (2026-09-05)
+
+A ratio is a property of a *pair*, so an ink is only "AA" against the ground it
+actually lands on. The axe pass in `tools/mobile-harness` found 40 contrast
+failures where the token was fine and the surface was not: `text.muted` clears
+4.5:1 on the paper and 4.29:1 on a chip tint; an accent tuned to carry a white
+button label reads at 3.12:1 as a focused form label.
+
+The rules that fell out of that burn-down:
+
+- **Paint text with the text tokens.** `text.primary` / `text.secondary` /
+  `text.muted` are audited by `packages/ui/src/__tests__/themeContrast.test.js`
+  against *every* surface the palette declares. A neutral from the raw ramp
+  (`ink[300]`, `dark[500]`) is a border, a divider or a fill — as text it is
+  unmeasured, and in practice it measures around 2:1.
+- **Never paint text with a low-alpha ink.** `rgba(255,245,220,0.28)` is not a
+  colour, it is a colour *and* whatever shows through it. Composite it or use a
+  solid token.
+- **A domain colour used as text goes through `readableOn`.** `readableOn(ink,
+  surface, { min = 4.5 })` in `@geeksuite/ui` composites, measures, and walks
+  the ink away from the surface until it clears the floor — returning it
+  untouched when it already does. Pass the surface the text really sits on (a
+  tint, not the paper), and `{ min: 3 }` only for large text or a graphic. Its
+  older sibling `toneForMode` nudges by a fixed amount and does not measure;
+  prefer `readableOn` for anything readable.
+- **The ratchet is the record.** Every pair the suite asserts lives in
+  `themeContrast.test.js`, `KNOWN_GAPS` is empty, and it stays empty.
+
 ## 🔖 Branding & Iconography
 
 ### Logo

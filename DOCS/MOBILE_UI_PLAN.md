@@ -98,7 +98,7 @@ Rules, not screens. Every app inherits these; identity stays in `sx`.
 | Tables | Below `md` a table renders as a card or definition list. App-owned layout, shared rule. | per app |
 | Keyboard | Composer/inputs pinned to the bottom use `dvh` + `interactive-widget=resizes-content`; autofocus only on explicit user intent. | per app |
 | Motion | Sheets slide 180ms on the standard curve; route fades unchanged; both honor `prefers-reduced-motion`. | `geekMotion` |
-| Accessibility | No axe-core violation at WCAG 2 A or AA, colour contrast included. **Report-only** — see below. | harness (`a11y` category) |
+| Accessibility | No axe-core violation at WCAG 2 A or AA, colour contrast included. **Report-only** until the count reaches 0 — 112 at baseline, **39 after the first burn (2026-09-05)**; see below. | harness (`a11y` category) |
 
 ### The `a11y` rule is report-only (added 2026-09-05)
 
@@ -121,6 +121,30 @@ muted secondary text and `overline`/`Chip` labels, measured in the 2.4–4.1 ban
 floor), `button-name` (18, MUI `IconButton` with no `aria-label`) and `aria-input-field-name`
 (16, MUI `Select` with no paired `InputLabel`/`labelId`). The per-rule, per-app table lives in
 `tools/mobile-harness/README.md`.
+
+**After the first burn, 2026-09-05 (TODO_ORDER Q51):** the same full run —
+140 scenes, eight apps, both schemes — reports **0 grammar violations, 0 page
+errors and 39 a11y findings**. bujogeek (28), storygeek (28) and flockgeek (16)
+are at zero; bookgeek went 5 → 4 without being touched, because its one
+contrast finding was the suite accent painted as a focused form label and that
+is now fixed in the theme. fitnessgeek (29), basegeek (2), notegeek (2) and
+startgeek (2) were out of scope that night and are unchanged. Still no waivers.
+
+Three things came out of it that outlive the numbers:
+
+- **`readableOn(ink, surface, { min })`** in `@geeksuite/ui` — composite,
+  measure, and walk the ink away from the surface until it clears the floor;
+  return it untouched when it already does. Every one of the 40 contrast
+  findings was a call site painting a *border* tone (`ink[300]`) as body copy or
+  diluting a domain hue with `alpha()`, not a bad token. Prefer it over
+  `toneForMode`, which nudges by a fixed amount and cannot see the surface.
+- **The contrast ratchet now sweeps every surface the palette declares**, not
+  just `background.default` and `background.paper`. That is the gap that let 40
+  findings coexist with a green `themeContrast.test.js`.
+- **Two `packages/ui` fixes cleared findings in apps nobody edited**:
+  `GeekDialog`'s scrolling body takes `tabIndex={0}` (WCAG 2.1.1), and a focused
+  `MuiFormLabel` is painted with the accent run through `readableOn`. `GeekFab`
+  now throws in development without a `label`.
 
 **The flip criterion: 0 open a11y findings across all eight apps.** When a full
 `pnpm --filter @geeksuite/mobile-harness run ci` reports `a11y: 0`, add `--enforce-a11y` to the

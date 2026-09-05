@@ -36,6 +36,9 @@ function StoryCreation() {
   const { user } = useAuth();
   const { selectedProvider, selectedModelId } = useAISettingsStore();
   const gold = theme.palette.codex?.gold || '#c9a84c';
+  // Muted section-label gold. Solid and mode-aware (theme.js) — the
+  // alpha()-diluted gold it replaces failed AA on every codex surface.
+  const goldMuted = theme.palette.codex?.goldMuted || gold;
 
   const [formData, setFormData] = useState({ title: '', genre: 'Fantasy', prompt: '', description: '' });
   const [loading, setLoading] = useState(false);
@@ -72,7 +75,7 @@ function StoryCreation() {
   return (
     <Box>
       <Box sx={{ mb: 4, mt: 1 }}>
-        <Typography variant="overline" sx={{ color: alpha(gold, 0.6) }}>New Adventure</Typography>
+        <Typography variant="overline" sx={{ color: goldMuted }}>New Adventure</Typography>
         <Typography variant="h2" sx={{ mt: 0.5 }}>Forge a Tale</Typography>
       </Box>
 

@@ -118,8 +118,13 @@ const QuickHarvestEntry = ({ onSuccess, locations = [], variant = "panel" }) => 
 
       {locations.length > 1 && (
         <FormControl fullWidth sx={{ mb: 2, maxWidth: { sm: 320 } }}>
-          <InputLabel>Location / Pen</InputLabel>
-          <Select value={locationId} label="Location / Pen" onChange={(e) => { setLocationId(e.target.value); setDaysOverride(null); }}>
+          <InputLabel id="quick-harvest-location-label">Location / Pen</InputLabel>
+          <Select
+            labelId="quick-harvest-location-label"
+            value={locationId}
+            label="Location / Pen"
+            onChange={(e) => { setLocationId(e.target.value); setDaysOverride(null); }}
+          >
             <MenuItem value=""><em>No specific location</em></MenuItem>
             {locations.map((loc) => (
               <MenuItem key={loc.id} value={loc.id}>{loc.name}</MenuItem>
@@ -171,7 +176,7 @@ const QuickHarvestEntry = ({ onSuccess, locations = [], variant = "panel" }) => 
           type="number"
           value={eggCount}
           onChange={(e) => setEggCount(Math.max(0, parseInt(e.target.value) || 0))}
-          inputProps={{ min: 0, style: { textAlign: "center", fontSize: "2rem", fontWeight: 700, width: "80px" } }}
+          inputProps={{ min: 0, 'aria-label': 'Eggs collected', style: { textAlign: "center", fontSize: "2rem", fontWeight: 700, width: "80px" } }}
           sx={{ "& .MuiOutlinedInput-root": { backgroundColor: "background.paper" } }}
         />
 
@@ -191,13 +196,12 @@ const QuickHarvestEntry = ({ onSuccess, locations = [], variant = "panel" }) => 
           <TextField
             type="number"
             value={days}
-            aria-label="Days observed"
             onChange={(e) => setDaysOverride(Math.max(1, parseInt(e.target.value) || 1))}
             InputProps={{
               startAdornment: <Box component="span" sx={{ color: "text.secondary", mr: 0.5, userSelect: "none" }}>÷</Box>,
               endAdornment: <Box component="span" sx={{ color: "text.secondary", ml: 0.5, fontSize: "0.75rem", userSelect: "none" }}>days</Box>,
             }}
-            inputProps={{ min: 1, style: { textAlign: "center", width: "44px" } }}
+            inputProps={{ min: 1, 'aria-label': 'Days observed', style: { textAlign: "center", width: "44px" } }}
             // The border used to appear on hover only, which on a touch screen
             // meant never. It is always drawn now.
             sx={{ width: 116, "& .MuiOutlinedInput-root": { minHeight: 44 } }}

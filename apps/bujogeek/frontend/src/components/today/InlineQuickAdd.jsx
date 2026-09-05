@@ -3,6 +3,7 @@ import { Box, InputBase, Typography, useTheme } from '@mui/material';
 import { Hash } from 'lucide-react';
 import { useMutation } from '@apollo/client';
 import { colors } from '../../theme/colors';
+import { domainInk } from '../../theme/inks';
 import TaskInputHelpButton from '../tasks/TaskInputHelpButton';
 import parseTaskInput from '../../utils/parseTaskInput';
 import useTaskTags from '../../hooks/useTaskTags';
@@ -147,6 +148,13 @@ function tokenize(text) {
 /* ---------- color map ---------- */
 
 function segmentColor(seg, theme) {
+  // Every branch below is painted as 16px text in the quick-add field, so the
+  // authored hue goes through `domainInk` on the way out — the token stays
+  // recognisable (blue tag, amber repeat, violet date) and clears AA.
+  return domainInk(rawSegmentColor(seg, theme), theme);
+}
+
+function rawSegmentColor(seg, theme) {
   switch (seg.category) {
     case 'priority':
       return colors.priority[seg.level] ?? colors.priority.medium;

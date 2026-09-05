@@ -19,6 +19,7 @@ import TaskEditor from '../components/tasks/TaskEditor';
 import SkeletonLoader from '../components/shared/SkeletonLoader';
 import { useTaskContext } from '../context/TaskContext';
 import { colors } from '../theme/colors';
+import { domainInk } from '../theme/inks';
 
 const AUTH_CONFIG = { withCredentials: true };
 
@@ -403,11 +404,13 @@ const TagsPage = () => {
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
               {groupedTasks.map(({ key, label, tasks: sectionTasks }) => {
                 const isCollapsed = collapsedSections[key];
-                const sectionColor =
+                const sectionColor = domainInk(
                   key === 'overdue' ? colors.aging.overdue
                   : key === 'today' ? colors.aging.fresh
                   : key === 'completed' ? colors.task.completed
-                  : colors.ink[400];
+                  : theme.palette.text.secondary,
+                  theme,
+                );
 
                 return (
                   <Box key={key}>

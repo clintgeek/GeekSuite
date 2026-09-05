@@ -17,6 +17,7 @@ import TaskRow from '../tasks/TaskRow';
 import SkeletonLoader from '../shared/SkeletonLoader';
 import { normalizeTasks } from '../../utils/normalizeTasks';
 import { colors } from '../../theme/colors';
+import { domainInk } from '../../theme/inks';
 import { getTaskAge } from '../../utils/taskAging';
 
 /**
@@ -102,8 +103,8 @@ const WeeklySpread = () => {
   const isCurrentWeek = now >= weekStart && now <= weekEnd;
   const isLoading = loading === LoadingState.FETCHING;
 
-  const mutedInk = isDark ? 'rgba(255,255,255,0.5)' : colors.ink[400];
-  const captionInk = isDark ? 'rgba(255,255,255,0.32)' : colors.ink[300];
+  const mutedInk = theme.palette.text.secondary;
+  const captionInk = theme.palette.text.muted;
   const primaryInk = theme.palette.text.primary;
   const dottedRule = `1px dotted ${isDark ? 'rgba(255,255,255,0.14)' : colors.ink[200]}`;
 
@@ -231,13 +232,13 @@ const WeeklySpread = () => {
           >
             {weekStats.total} {weekStats.total === 1 ? 'task' : 'tasks'} on the spread
             {weekStats.overdue > 0 && (
-              <Box component="span" sx={{ color: colors.aging.overdue }}>
+              <Box component="span" sx={{ color: domainInk(colors.aging.overdue, theme) }}>
                 {' · '}
                 {weekStats.overdue} overdue
               </Box>
             )}
             {weekStats.done > 0 && (
-              <Box component="span" sx={{ color: colors.aging.fresh }}>
+              <Box component="span" sx={{ color: domainInk(colors.aging.fresh, theme) }}>
                 {' · '}
                 {weekStats.done} done
               </Box>

@@ -81,6 +81,9 @@ function Sidebar() {
   const theme = useTheme();
   const location = useLocation();
   const gold = theme.palette.codex?.gold || '#c9a84c';
+  // Muted section-label gold. Solid and mode-aware (theme.js) — the
+  // alpha()-diluted gold it replaces failed AA on every codex surface.
+  const goldMuted = theme.palette.codex?.goldMuted || gold;
 
 
   return (
@@ -94,7 +97,7 @@ function Sidebar() {
         // captions here: gold overlines, as the "Chapters" divider header was.
         '& section > .MuiTypography-caption': {
           fontFamily: '"Cinzel", serif',
-          color: alpha(gold, 0.6),
+          color: goldMuted,
         },
       }}
       // A node `brand` lands in a bare Box, so pin it against the flex column

@@ -13,11 +13,9 @@ import {
 } from '@mui/material';
 import { Search, X } from 'lucide-react';
 import { useTemplates } from '../../context/TemplateContext';
-import { colors } from '../../theme/colors';
 
 const TemplateFilters = () => {
   const theme = useTheme();
-  const isDark = theme.palette.mode === 'dark';
   const {
     filters,
     updateFilters,
@@ -25,7 +23,7 @@ const TemplateFilters = () => {
     templateTypes,
   } = useTemplates();
 
-  const mutedInk = isDark ? 'rgba(255,255,255,0.5)' : colors.ink[400];
+  const mutedInk = theme.palette.text.secondary;
 
   const hasActiveFilters =
     filters.search || filters.type || filters.tags.length > 0 || filters.isPublic !== undefined;
@@ -63,8 +61,9 @@ const TemplateFilters = () => {
         />
 
         <FormControl size="small" sx={{ minWidth: 120 }}>
-          <InputLabel>Type</InputLabel>
+          <InputLabel id="template-filter-type-label">Type</InputLabel>
           <Select
+            labelId="template-filter-type-label"
             value={filters.type}
             onChange={(e) => updateFilters({ type: e.target.value })}
             label="Type"

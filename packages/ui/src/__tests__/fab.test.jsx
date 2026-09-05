@@ -83,6 +83,23 @@ describe('GeekFab', () => {
     expect(render(<GeekFab label="Add book" hidden />)).toBe('');
   });
 
+  // The label is the accessible name of an icon-only button, so a missing one
+  // is a `button-name` violation waiting to ship (a11y burn-down, 2026-09-05).
+  // `vitest` runs with NODE_ENV=test, so the dev branch — the throw — is the
+  // one under test here.
+  it.each([
+    ['no label', {}],
+    ['an empty label', { label: '' }],
+    ['a whitespace label', { label: '   ' }],
+    ['a non-string label', { label: 42 }],
+  ])('throws in development when given %s', (_name, props) => {
+    expect(() => render(<GeekFab {...props} />)).toThrow(/`label` is required/);
+  });
+
+  it('throws for a missing label even when the FAB would render nothing', () => {
+    expect(() => render(<GeekFab hidden />)).toThrow(/`label` is required/);
+  });
+
   it('renders nothing when focus mode is forced on via FocusModeProvider', () => {
     // FocusModeProvider takes a `defaultFocusMode` initial value (there is no
     // separate "forced" prop); with no `storageKey` and no `window` under

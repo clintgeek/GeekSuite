@@ -171,6 +171,8 @@ first `@testing-library/react` + `@testing-library/jest-dom` devDependencies and
 `src/__tests__/setup.js` (vitest `setupFiles`) — none of that existed before this pass;
 prior coverage was utils/graphql only.
 
+**a11y pass (2026-09-05):** the mobile harness' axe run had bujogeek at **28 findings — 0 now**. Named the task/subtask toggle after its entry (`TaskCheckbox` `label`), wired the four editor `Select`s to their `InputLabel`s via `labelId`, gave the recurrence glyph `role="img"`, and pulled every hardcoded `ink[300]`/`ink[400]`/low-alpha-cream *text* colour onto `palette.text.muted`/`.secondary` — the domain inks (aging, priority, signifier) now go through `theme/inks.js`, which measures each hue against the least forgiving ground it lands on instead of guessing a fixed nudge like `toneForMode` did.
+
 **Housekeeping note (2026-09-05):** `DOCS/SUITE_TODO.md` still listed a
 "bujogeek duplicate model files (`userModel.js`/`User.js`,
 `templateModel.js`/`Template.js`)" cleanup item. Checked the repo — none of

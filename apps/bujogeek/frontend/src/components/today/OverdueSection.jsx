@@ -3,6 +3,7 @@ import { Box, Typography, IconButton, useTheme } from '@mui/material';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import TaskRow from '../tasks/TaskRow';
 import { colors } from '../../theme/colors';
+import { domainInk } from '../../theme/inks';
 
 /**
  * OverdueSection — carried-forward tasks.
@@ -19,6 +20,10 @@ const OverdueSection = ({ tasks, onStatusToggle, onEdit, onDelete, onSaveAsNote,
   const [expanded, setExpanded] = useState(true);
 
   if (!tasks || tasks.length === 0) return null;
+
+  // The amber is identity; `domainInk` keeps the hue and moves only the value
+  // until the header and its caption clear AA on the tinted panel.
+  const amberInk = domainInk(colors.aging.warning, theme);
 
   const warmTint = isDark
     ? 'rgba(212, 132, 62, 0.08)'
@@ -46,7 +51,7 @@ const OverdueSection = ({ tasks, onStatusToggle, onEdit, onDelete, onSaveAsNote,
         <IconButton
           size="small"
           sx={{
-            color: colors.aging.warning,
+            color: amberInk,
             p: 0.25,
             width: 20,
             height: 20,
@@ -65,7 +70,7 @@ const OverdueSection = ({ tasks, onStatusToggle, onEdit, onDelete, onSaveAsNote,
               fontFamily: '"Fraunces", serif',
               fontSize: { xs: '1.125rem', sm: '1.25rem' },
               fontWeight: 500,
-              color: colors.aging.warning,
+              color: amberInk,
               lineHeight: 1.15,
               letterSpacing: '-0.005em',
             }}
@@ -78,7 +83,7 @@ const OverdueSection = ({ tasks, onStatusToggle, onEdit, onDelete, onSaveAsNote,
               fontStyle: 'italic',
               fontSize: '0.75rem',
               fontWeight: 400,
-              color: isDark ? 'rgba(212, 132, 62, 0.75)' : 'rgba(212, 132, 62, 0.85)',
+              color: amberInk,
               letterSpacing: '0.005em',
               mt: 0.25,
             }}

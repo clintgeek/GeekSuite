@@ -21,10 +21,13 @@ const TYPE_META = {
 export default function QuestPanel({ threads }) {
   const theme = useTheme();
   const gold = theme.palette.codex?.gold || '#c9a84c';
+  // Muted section-label gold. Solid and mode-aware (theme.js) — the
+  // alpha()-diluted gold it replaces failed AA on every codex surface.
+  const goldMuted = theme.palette.codex?.goldMuted || gold;
 
   return (
     <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'background.paper', border: `1px solid ${alpha(gold, 0.15)}` }}>
-      <Typography variant="overline" sx={{ color: alpha(gold, 0.65), fontSize: '0.75rem', letterSpacing: '0.12em', display: 'block', mb: 1 }}>
+      <Typography variant="overline" sx={{ color: goldMuted, fontSize: '0.75rem', letterSpacing: '0.12em', display: 'block', mb: 1 }}>
         Open Threads · {threads.length}
       </Typography>
       {threads.length === 0 ? (
@@ -63,7 +66,7 @@ export default function QuestPanel({ threads }) {
                       {t.description}
                     </Typography>
                     {t.characterNames?.length > 0 && (
-                      <Typography variant="caption" sx={{ color: alpha(gold, 0.6) }}>
+                      <Typography variant="caption" sx={{ color: goldMuted }}>
                         {meta.label} · {t.characterNames.join(', ')}
                       </Typography>
                     )}

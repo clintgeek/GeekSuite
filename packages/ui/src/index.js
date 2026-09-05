@@ -1,5 +1,5 @@
 export { LoginSplash } from './LoginSplash';
-export { toneForMode } from './color';
+export { readableOn, toneForMode } from './color';
 export { useReducedMotion } from './motion.js';
 export { createGeekSuiteTheme, geekDesignTokens } from './createGeekSuiteTheme';
 export {

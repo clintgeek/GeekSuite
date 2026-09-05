@@ -78,8 +78,8 @@ const CollectionsPage = () => {
     }
   };
 
-  const captionInk = isDark ? 'rgba(255,255,255,0.3)' : colors.ink[300];
-  const mutedInk = isDark ? 'rgba(255,255,255,0.5)' : colors.ink[400];
+  const captionInk = theme.palette.text.muted;
+  const mutedInk = theme.palette.text.secondary;
   const dottedRule = `1px dotted ${isDark ? 'rgba(255,255,255,0.14)' : colors.ink[200]}`;
 
   const renderCard = (collection) => {

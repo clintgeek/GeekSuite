@@ -23,6 +23,9 @@ const SECTIONS = [
 export default function JournalDrawer({ open, onClose, story }) {
   const theme = useTheme();
   const gold = theme.palette.codex?.gold || '#c9a84c';
+  // Muted section-label gold. Solid and mode-aware (theme.js) — the
+  // alpha()-diluted gold it replaces failed AA on every codex surface.
+  const goldMuted = theme.palette.codex?.goldMuted || gold;
   const journal = buildJournal(story);
   const settled = getClosedThreads(story);
   const totalKnown = SECTIONS.reduce((n, s) => n + journal[s.key].length, 0);
@@ -38,10 +41,10 @@ export default function JournalDrawer({ open, onClose, story }) {
       }}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
           <Box>
-            <Typography variant="overline" sx={{ color: alpha(gold, 0.6) }}>Your Character Knows</Typography>
+            <Typography variant="overline" sx={{ color: goldMuted }}>Your Character Knows</Typography>
             <Typography variant="h4" sx={{ lineHeight: 1.1 }}>Journal</Typography>
           </Box>
-          <IconButton onClick={onClose} sx={{ color: 'text.secondary' }}><CloseIcon /></IconButton>
+          <IconButton aria-label="Close journal" onClick={onClose} sx={{ color: 'text.secondary' }}><CloseIcon /></IconButton>
         </Box>
         <Divider sx={{ borderColor: alpha(gold, 0.15), mb: 1.5 }} />
 
@@ -99,7 +102,7 @@ export default function JournalDrawer({ open, onClose, story }) {
           {settled.length > 0 && (
             <Box sx={{ mb: 2 }}>
               <Divider sx={{ borderColor: alpha(gold, 0.1), my: 1.5 }} />
-              <Typography sx={{ fontFamily: '"Cinzel", serif', fontSize: '0.85rem', fontWeight: 600, color: alpha(gold, 0.7), mb: 0.5 }}>
+              <Typography sx={{ fontFamily: '"Cinzel", serif', fontSize: '0.85rem', fontWeight: 600, color: goldMuted, mb: 0.5 }}>
                 ✓ Settled Threads
               </Typography>
               {settled.map((t, i) => (

@@ -131,6 +131,15 @@ describe('GeekDialog — full mode', () => {
     expect(markup).toContain('data-test-body');
   });
 
+  // The body scrolls; without a tab stop a keyboard user cannot reach or
+  // scroll a dialog whose content holds nothing focusable (axe
+  // `scrollable-region-focusable`, WCAG 2.1.1 — a11y burn-down 2026-09-05).
+  it('gives the scrollable body a keyboard route in', () => {
+    const bodyIdx = markup.indexOf('data-geek-dialog="body"');
+    const tag = markup.slice(markup.lastIndexOf('<', bodyIdx), markup.indexOf('>', bodyIdx));
+    expect(tag).toContain('tabindex="0"');
+  });
+
   it('drops secondaryAction unless keepSecondaryOnMobile is set', () => {
     expect(markup).not.toContain('data-test-secondary');
     expect(markup).not.toContain('data-geek-dialog="footer"');
@@ -181,6 +190,15 @@ describe('GeekDialog — window mode', () => {
   it('renders the body content and hook', () => {
     expect(markup).toContain('data-geek-dialog="body"');
     expect(markup).toContain('data-test-body');
+  });
+
+  // The body scrolls; without a tab stop a keyboard user cannot reach or
+  // scroll a dialog whose content holds nothing focusable (axe
+  // `scrollable-region-focusable`, WCAG 2.1.1 — a11y burn-down 2026-09-05).
+  it('gives the scrollable body a keyboard route in', () => {
+    const bodyIdx = markup.indexOf('data-geek-dialog="body"');
+    const tag = markup.slice(markup.lastIndexOf('<', bodyIdx), markup.indexOf('>', bodyIdx));
+    expect(tag).toContain('tabindex="0"');
   });
 
   it('removes the close hook when disableClose is set', () => {

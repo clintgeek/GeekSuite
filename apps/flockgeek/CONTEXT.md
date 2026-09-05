@@ -2,6 +2,30 @@
 
 _Last updated: 2026-09-05_
 
+## Mobile-harness a11y pass: 16 findings → 0 (2026-09-05)
+
+All 16 axe findings flockgeek contributed to the suite baseline were the same
+two bugs, repeated at every call site: MUI `Select`s rendered with a visible
+`InputLabel` but no `labelId`/`id` pairing, so the `role="combobox"` div had
+no accessible name (`aria-input-field-name`, 8 findings/28 nodes across
+`02-harvest-sheet`, `05-birds-edit-dialog`, `07-add-bird-dialog`,
+`13-location-dialog`); and two unlabelled inputs plus an unlabelled notes
+`<textarea>` (`label`, 4 findings/6 nodes) — one of them (the ÷-days field)
+had an `aria-label` prop, but passed directly on `TextField` it lands on the
+outer root div, not the actual `<input>`, so the input itself stayed
+unnamed. Fixed every `FormControl`/`InputLabel`/`Select` in `BirdsPage.jsx`,
+`LocationsPage.jsx`, `GroupsPage.jsx`, and `QuickHarvestEntry.jsx` with a
+real `labelId`; gave the egg-count stepper `aria-label="Eggs collected"`
+(a visible label would wreck its 2rem centred layout) and moved the ÷-days
+`aria-label="Days observed"` into `inputProps`; added `label="Notes"` to the
+bird notes textarea. Also fixed `nested-interactive` (4 findings/7 nodes,
+`11-groups` + `12-locations`): both pages had Edit/Delete `IconButton`s
+inside `AccordionSummary` (MUI's own `role="button"`, unreachable by a
+screen reader) — moved them out to a flex row that is a sibling of the
+`Accordion`, not a descendant of its summary. Mobile harness: 28 scenes,
+0 violations, 0 a11y findings (`--enforce-a11y`) — flockgeek's contribution
+to the suite's a11y burn-down is now zero.
+
 ## REST `create`/`update` let the body set/reassign `ownerId` (2026-09-05, BURN_REVIEW #4/#18)
 
 The legacy REST CRUD layer (see "Backend reality check" below) built its Mongoose `create`/

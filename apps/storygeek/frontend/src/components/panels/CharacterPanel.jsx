@@ -12,10 +12,13 @@ const STATUS_COLOR = { alive: 'success', dead: 'error', missing: 'warning', unkn
 export default function CharacterPanel({ player }) {
   const theme = useTheme();
   const gold = theme.palette.codex?.gold || '#c9a84c';
+  // Muted section-label gold. Solid and mode-aware (theme.js) — the
+  // alpha()-diluted gold it replaces failed AA on every codex surface.
+  const goldMuted = theme.palette.codex?.goldMuted || gold;
 
   if (!player) {
     return (
-      <PanelShell gold={gold} title="Character">
+      <PanelShell gold={gold} goldMuted={goldMuted} title="Character">
         <GeekEmptyState
           compact
           align="start"
@@ -31,7 +34,7 @@ export default function CharacterPanel({ player }) {
   const skills = player.skills || [];
 
   return (
-    <PanelShell gold={gold} title="Character">
+    <PanelShell gold={gold} goldMuted={goldMuted} title="Character">
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 1 }}>
         <Avatar sx={{
           width: 40, height: 40, bgcolor: alpha(gold, 0.15), color: gold,
@@ -60,7 +63,7 @@ export default function CharacterPanel({ player }) {
       {inventory.length > 0 && (
         <>
           <Divider sx={{ my: 1, borderColor: alpha(gold, 0.1) }} />
-          <Label gold={gold}>Inventory</Label>
+          <Label goldMuted={goldMuted}>Inventory</Label>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
             {inventory.map((it, i) => (
               <Chip key={i} size="small"
@@ -78,7 +81,7 @@ export default function CharacterPanel({ player }) {
       {skills.length > 0 && (
         <>
           <Divider sx={{ my: 1, borderColor: alpha(gold, 0.1) }} />
-          <Label gold={gold}>Skills</Label>
+          <Label goldMuted={goldMuted}>Skills</Label>
           <Box sx={{ mt: 0.5 }}>
             {skills.map((s, i) => (
               <Box key={i} sx={{ display: 'flex', justifyContent: 'space-between', py: 0.15 }}>
@@ -95,22 +98,22 @@ export default function CharacterPanel({ player }) {
   );
 }
 
-function PanelShell({ gold, title, children }) {
+function PanelShell({ gold, goldMuted, title, children }) {
   return (
     <Box sx={{
       p: 1.5, borderRadius: 2, bgcolor: 'background.paper',
       border: `1px solid ${alpha(gold, 0.15)}`,
     }}>
-      <Label gold={gold} block>{title}</Label>
+      <Label goldMuted={goldMuted} block>{title}</Label>
       <Box sx={{ mt: 1 }}>{children}</Box>
     </Box>
   );
 }
 
-function Label({ gold, children, block }) {
+function Label({ goldMuted, children, block }) {
   return (
     <Typography variant="overline" sx={{
-      color: alpha(gold, 0.65), fontSize: '0.75rem', letterSpacing: '0.12em',
+      color: goldMuted, fontSize: '0.75rem', letterSpacing: '0.12em',
       display: block ? 'block' : 'inline',
     }}>
       {children}

@@ -53,6 +53,7 @@ const PROVENANCE_META = {
  * identity from narration: this is the archive speaking, not the narrator.
  */
 function CanonCard({ canon, gold, theme }) {
+  const goldMuted = theme.palette.codex?.goldMuted || gold;
   return (
     <Box className="fade-in-up" sx={{ display: 'flex', justifyContent: 'flex-start', mb: 2.5 }}>
       <Paper elevation={0} sx={{
@@ -86,7 +87,7 @@ function CanonCard({ canon, gold, theme }) {
             {/* What each character is recorded as knowing (player-visible only) */}
             {canon.entities.filter(e => e.knows?.length > 0).map((e, i) => (
               <Box key={`k${i}`} sx={{ mt: 0.75, pl: 1, borderLeft: `2px solid ${alpha(gold, 0.25)}` }}>
-                <Typography variant="caption" sx={{ color: alpha(gold, 0.7), fontWeight: 700 }}>
+                <Typography variant="caption" sx={{ color: goldMuted, fontWeight: 700 }}>
                   {e.name.toUpperCase()} KNOWS (as recorded)
                 </Typography>
                 {e.knows.map((k, j) => (
@@ -148,15 +149,20 @@ function CanonCard({ canon, gold, theme }) {
   );
 }
 
-// Dice result color based on d20 roll. Light mode gets deeper tones so the
-// result text stays legible on parchment.
+// Dice result color based on d20 roll. The result text is painted ON the tint
+// it also generates (`alpha(dColor, .08)` outside, `.15` inside the die box),
+// so a light-mode tone has to clear 4.5:1 against its own darkest wash — the
+// old ramp landed at 3.5-4.3:1 there and was storygeek's last colour-contrast
+// finding. Every light value below is measured >= 4.6:1 on all three washes;
+// the tier order (gold crit, deep green, bronze, umber, blood red) is
+// unchanged. Dark mode sits on a gradient paper and is untouched.
 const getDiceColor = (result, isDark, gold) => {
-  if (result === 20) return isDark ? '#ffd700' : '#8a6d00';
-  if (result === 1) return isDark ? '#ff4444' : '#c62828';
-  if (result >= 15) return isDark ? '#4caf50' : '#2e7d32';
-  if (result >= 10) return gold;
-  if (result >= 5) return isDark ? '#ff9800' : '#b45309';
-  return isDark ? '#e57373' : '#b71c1c';
+  if (result === 20) return isDark ? '#ffd700' : '#665000';
+  if (result === 1) return isDark ? '#ff4444' : '#a81717';
+  if (result >= 15) return isDark ? '#4caf50' : '#1b5e20';
+  if (result >= 10) return isDark ? gold : '#6d5219';
+  if (result >= 5) return isDark ? '#ff9800' : '#8a3d07';
+  return isDark ? '#e57373' : '#9c1414';
 };
 
 function StoryPlay() {
@@ -483,9 +489,12 @@ function StoryPlay() {
             );
           })()}
 
-          {/* Timestamp */}
+          {/* Timestamp — `text.secondary`, not `opacity: 0.6` on the primary
+              ink: the composite of the latter measured 4.32:1 on the light
+              message paper. The token is already the "quieter copy" tier and
+              clears AA on every bubble variant. */}
           <Typography variant="caption" sx={{
-            display: 'block', mt: 1, opacity: 0.6,
+            display: 'block', mt: 1, color: 'text.secondary',
           }}>
             {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </Typography>
@@ -597,8 +606,19 @@ function StoryPlay() {
         </Box>
       </Box>
 
-      {/* Messages */}
-      <Box ref={containerRef} sx={{ flex: 1, minHeight: 0, overflow: 'auto', px: { xs: 0.5, md: 1.5 }, py: 1 }}>
+      {/* Messages. The rail scrolls, so it owes a keyboard route into it:
+          `tabIndex={0}` makes it focusable (axe `scrollable-region-focusable`)
+          and `role="log"` + a name is what turns that focus stop into
+          something a screen reader can announce — a role without a name just
+          trades one finding for another. `log` and not `region` because the
+          narrator appends to it as play advances. */}
+      <Box
+        ref={containerRef}
+        tabIndex={0}
+        role="log"
+        aria-label="Story transcript"
+        sx={{ flex: 1, minHeight: 0, overflow: 'auto', px: { xs: 0.5, md: 1.5 }, py: 1 }}
+      >
         {messages.map(renderMessage)}
         {loading && (
           <Box sx={{ display: 'flex', justifyContent: 'flex-start', mb: 2 }}>
@@ -644,7 +664,8 @@ function StoryPlay() {
             multiline maxRows={4}
             sx={{ '& .MuiOutlinedInput-root': { fontFamily: '"Crimson Pro", serif', fontSize: '1rem' } }}
           />
-          <Button type="submit" variant="contained" disabled={loading || !userInput.trim()}
+          {/* Icon-only: the aria-label is the button's whole name. */}
+          <Button type="submit" variant="contained" aria-label="Send" disabled={loading || !userInput.trim()}
             sx={{ minWidth: 48, height: 48, borderRadius: 2, px: 0 }}>
             {loading ? <CircularProgress size={20} sx={{ color: 'inherit' }} /> : <SendIcon />}
           </Button>

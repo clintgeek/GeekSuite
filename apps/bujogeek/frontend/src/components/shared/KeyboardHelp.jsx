@@ -100,9 +100,9 @@ const KeyBadge = ({ children }) => {
 const KeyboardHelp = ({ open, onClose }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
-  const captionInk = isDark ? 'rgba(255,255,255,0.32)' : colors.ink[300];
+  const captionInk = theme.palette.text.muted;
   const primaryInk = theme.palette.text.primary;
-  const mutedInk = isDark ? 'rgba(255,255,255,0.5)' : colors.ink[400];
+  const mutedInk = theme.palette.text.secondary;
   const dottedRule = `1px dotted ${isDark ? 'rgba(255,255,255,0.14)' : colors.ink[200]}`;
 
   return (

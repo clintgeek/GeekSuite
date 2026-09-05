@@ -2,6 +2,7 @@ import { Box, Typography, Button, useTheme } from '@mui/material';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { colors } from '../../theme/colors';
+import { domainInk } from '../../theme/inks';
 
 /**
  * ReviewComplete — the emotional payoff. When every aging task has been
@@ -15,9 +16,9 @@ const ReviewComplete = () => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
 
-  const captionInk = isDark ? 'rgba(255,255,255,0.32)' : colors.ink[300];
+  const captionInk = theme.palette.text.muted;
   const primaryInk = theme.palette.text.primary;
-  const fresh = colors.aging.fresh;
+  const fresh = domainInk(colors.aging.fresh, theme);
 
   return (
     <Box

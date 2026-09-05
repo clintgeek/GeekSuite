@@ -128,7 +128,7 @@ const TemplateEditor = ({ open, onClose, template = null }) => {
     .filter((line) => line.trim().length > 0).length;
 
   const primaryInk = theme.palette.text.primary;
-  const mutedInk = isDark ? 'rgba(255,255,255,0.5)' : colors.ink[400];
+  const mutedInk = theme.palette.text.secondary;
   const dottedRule = `1px dotted ${isDark ? 'rgba(255,255,255,0.14)' : colors.ink[200]}`;
 
   return (
@@ -237,8 +237,9 @@ const TemplateEditor = ({ open, onClose, template = null }) => {
             {/* Type + tags row */}
             <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
               <FormControl fullWidth size="small">
-                <InputLabel>Type</InputLabel>
+                <InputLabel id="template-item-type-label">Type</InputLabel>
                 <Select
+                  labelId="template-item-type-label"
                   value={formData.type}
                   onChange={handleChange('type')}
                   label="Type"

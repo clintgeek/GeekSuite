@@ -14,6 +14,7 @@ import { format, differenceInCalendarDays } from 'date-fns';
 import { GeekSheet } from '@geeksuite/ui';
 import TaskCheckbox from './TaskCheckbox';
 import { colors } from '../../theme/colors';
+import { domainInk } from '../../theme/inks';
 
 /**
  * SubtaskRow — one step of an entry, rendered inside its parent's expanded row.
@@ -47,7 +48,7 @@ const SubtaskRow = ({
   const isCancelled = subtask.status === 'cancelled';
   const isSunk = isCompleted || isCancelled;
 
-  const idleInk = isDark ? 'rgba(255,245,220,0.35)' : colors.ink[400];
+  const idleInk = theme.palette.text.secondary;
   const ruleInk = isDark ? 'rgba(255,245,220,0.14)' : colors.ink[200];
   // The tick colour is the one aging cue a step keeps: green when it is on
   // time, amber once its own due date has passed. Anything more would compete
@@ -60,6 +61,9 @@ const SubtaskRow = ({
       ? colors.aging.warning
       : colors.aging.fresh;
   }, [subtask.dueDate]);
+  // The tick is a drawn glyph (3:1 is the floor for a non-text graphic); the
+  // due label beside it is 11px text and needs the full 4.5.
+  const dueInk = domainInk(tickColor, theme);
 
   const dueLabel = useMemo(() => {
     if (!subtask.dueDate || isSunk) return null;
@@ -148,10 +152,10 @@ const SubtaskRow = ({
               fontWeight: isSunk ? 400 : 450,
               fontStyle: isCancelled ? 'italic' : 'normal',
               color: isCancelled
-                ? (isDark ? `${colors.aging.stale}99` : `${colors.aging.stale}bb`)
+                ? domainInk(colors.aging.stale, theme)
                 : isCompleted
-                ? (isDark ? 'rgba(255,245,220,0.28)' : colors.ink[400])
-                : (isDark ? 'rgba(255,245,220,0.78)' : colors.ink[700]),
+                ? theme.palette.text.muted
+                : theme.palette.text.secondary,
               lineHeight: 1.45,
               transition: 'color 260ms ease',
               letterSpacing: '-0.003em',
@@ -189,7 +193,7 @@ const SubtaskRow = ({
               fontFamily: '"IBM Plex Mono", monospace',
               fontSize: '0.6875rem',
               fontWeight: 600,
-              color: tickColor,
+              color: dueInk,
               whiteSpace: 'nowrap',
               flexShrink: 0,
               letterSpacing: '0.01em',

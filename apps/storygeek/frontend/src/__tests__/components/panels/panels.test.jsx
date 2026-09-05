@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { ThemeProvider } from '@mui/material/styles';
 import { lightTheme } from '../../testUtils';
 import CharacterPanel from '../../../components/panels/CharacterPanel';
@@ -138,5 +138,15 @@ describe('JournalDrawer', () => {
     expect(screen.getByText('The bridge is out.')).toBeInTheDocument();
     expect(screen.getByText(/People/)).toBeInTheDocument();
     expect(screen.getByText(/Places/)).toBeInTheDocument();
+  });
+
+  // Icon-only close control: without a name it is an unlabelled button to a
+  // screen reader, which is what the axe pass flagged on 07-journal.
+  it('names its close control and calls onClose', () => {
+    const onClose = vi.fn();
+    withTheme(<JournalDrawer open onClose={onClose} story={{}} />);
+    const close = screen.getByRole('button', { name: 'Close journal' });
+    fireEvent.click(close);
+    expect(onClose).toHaveBeenCalled();
   });
 });

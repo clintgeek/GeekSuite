@@ -72,10 +72,17 @@ const THEMES = [
 function pairsFor(theme) {
   const p = theme.palette;
   const tooltip = theme.components?.MuiTooltip?.styleOverrides?.tooltip;
-  const surfaces = [
-    ['background.default', p.background.default],
-    ['background.paper', p.background.paper],
-  ];
+  const focusedLabel = theme.components?.MuiFormLabel?.styleOverrides?.root?.['&.Mui-focused'];
+  // EVERY surface the palette declares, not just the canvas and the cards.
+  // The 2026-09-05 axe pass found the muted tiers failing on the *tinted*
+  // surfaces an app adds beside those two (flockgeek's sidebar, bujogeek's
+  // warm/cream section grounds) — exactly the pairs a two-surface sweep could
+  // not see. Anything non-string under `palette.background` (MUI's own
+  // augmentations) is skipped.
+  const surfaces = Object.entries(p.background)
+    .filter(([, value]) => typeof value === 'string')
+    .map(([name, value]) => [`background.${name}`, value])
+    .sort(([a], [b]) => a.localeCompare(b));
 
   const pairs = [];
   const add = (label, fg, bgLabel, bg, min) =>
@@ -121,6 +128,16 @@ function pairsFor(theme) {
   // values are read off the built component override, so an app that retunes
   // its own MuiTooltip is held to the same bar as the factory default. Tooltip
   // copy is copy — AA, not the 3:1 graphics floor.
+  // A focused form label is painted with the accent and is real copy, so it
+  // owes AA rather than the 3:1 graphics floor. The suite theme runs the accent
+  // through `readableOn` for exactly this; reading the built override holds an
+  // app that retunes `MuiFormLabel` to the same bar.
+  if (focusedLabel?.color) {
+    for (const [bgLabel, bg] of surfaces) {
+      add('MuiFormLabel Mui-focused color', focusedLabel.color, bgLabel, bg, 4.5);
+    }
+  }
+
   if (tooltip?.backgroundColor && tooltip?.color) {
     pairs.push({
       label: 'MuiTooltip color on MuiTooltip backgroundColor',

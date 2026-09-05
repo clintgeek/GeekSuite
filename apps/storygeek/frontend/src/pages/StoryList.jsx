@@ -44,6 +44,9 @@ function StoryList() {
   const { user } = useAuth();
   const { notify } = useToast();
   const gold = theme.palette.codex?.gold || '#c9a84c';
+  // Muted section-label gold. Solid and mode-aware (theme.js) — the
+  // alpha()-diluted gold it replaces failed AA on every codex surface.
+  const goldMuted = theme.palette.codex?.goldMuted || gold;
 
   const [stories, setStories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -136,7 +139,7 @@ function StoryList() {
       {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', mb: 4, mt: 1 }}>
         <Box>
-          <Typography variant="overline" sx={{ color: alpha(gold, 0.6) }}>
+          <Typography variant="overline" sx={{ color: goldMuted }}>
             Your Library
           </Typography>
           <Typography variant="h2" sx={{ mt: 0.5 }}>
@@ -281,9 +284,14 @@ function StoryList() {
                         >
                           Continue
                         </Button>
+                        {/* Icon-only, and there is one per card — so the name
+                            has to carry the title, or a screen-reader user
+                            hears "Delete" four times with no way to tell which
+                            tale is which. */}
                         <IconButton
                           size="small"
                           color="error"
+                          aria-label={`Delete ${story.title}`}
                           onClick={() => setStoryToDelete(story)}
                           disabled={deletingStory}
                           sx={{ opacity: 0.6, '&:hover': { opacity: 1 } }}

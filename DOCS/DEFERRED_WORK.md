@@ -189,3 +189,18 @@ Out of scope until bookgeek enters the consolidation+hardening cycle.
 be) but haven't had the same logging / boot-await / graceful-shutdown
 pass fitnessgeek just got. Each is probably a ~90-minute agent
 round, same shape as Item A of the fitnessgeek hardening plan.
+
+## storygeek's dark dice tones (found 2026-09-05, a11y burn)
+
+The Q51 a11y pass took storygeek from 28 axe findings to 0 — but the dark-mode
+dice tones (`#4caf50` at 4.02:1, `#ff4444` at 3.54:1 on their inner wash) are
+real AA failures that **axe never reports**. The dark message `Paper` is a
+`linear-gradient`, and `color-contrast` returns *incomplete* rather than a
+violation on a gradient ground, so the whole surface is invisible to the rule.
+The light ramp was deepened in the same pass; the dark one was left alone
+deliberately rather than changing the app's look in a mode nothing measures.
+
+Fix it when someone is already in `StoryPlay.jsx` with the design in front of
+them: either give the dice tones the `readableOn` treatment against the
+gradient's darkest stop, or flatten the message paper so the rule can see it.
+Do not expect the harness to tell you when it is done — measure by hand.

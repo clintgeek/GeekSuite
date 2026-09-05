@@ -37,7 +37,11 @@ const lightPalette = {
   parchDark:   '#e8dcc8',
   ink:         '#2c1810',
   inkSecondary:'#5a4636',
-  inkFaint:    '#8a7662',
+  // Tertiary copy, not just inert control text: `text.disabled` paints the
+  // composer's slash-command hint and a card's "last played" date. At the old
+  // #8a7662 that read 3.7-4.1:1 on parchment; this clears AA on every light
+  // surface (>= 4.75:1) while staying a step lighter than `text.muted`.
+  inkFaint:    '#786553',
   woodAccent:  '#3d2b1f',
 };
 
@@ -73,6 +77,15 @@ function buildStoryOverrides(mode) {
         gold:      isDark ? codex.gold      : '#7a5c1e',
         goldLight: isDark ? codex.goldLight : '#9a7b2e',
         goldDark:  isDark ? codex.goldDark  : '#5c4416',
+        // The quiet gold for section labels ("Character", "Your Library",
+        // "KNOWS · 3"). Every one of those call sites used to write
+        // `alpha(gold, 0.6-0.7)`, which composites to 2.4-4.0:1 on the codex
+        // surfaces — the whole of storygeek's colour-contrast bucket in the
+        // mobile-harness axe pass. This is a solid, mode-aware ink measured at
+        // >= 5:1 on every surface this app paints it on (leather, wood, the
+        // gold-tinted panels; parchment, parchLight, the message papers).
+        // Never re-wrap it in alpha() — that is the bug it exists to close.
+        goldMuted: isDark ? '#b0934a' : '#805f1f',
       },
     },
 

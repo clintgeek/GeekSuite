@@ -6,6 +6,12 @@ import { colors } from '../../theme/colors';
  * `glyph` shrinks the drawn circle without touching the hit target, which
  * stays 44px at every size — a step's checkbox reads as subordinate to its
  * parent's while still being something a thumb can land on.
+ *
+ * `label` is the accessible name and callers should always pass one that says
+ * *which* entry this toggles — the whole control is a drawn circle, so without
+ * it a screen reader hears "checkbox" fourteen times on one screen (axe
+ * `button-name`, 28 nodes, 2026-09-05). The fallback below is a floor, not a
+ * substitute.
  */
 const TaskCheckbox = ({ checked, onChange, color = colors.aging.fresh, glyph = 22, label }) => {
   const r = glyph / 2 - 1;
@@ -17,7 +23,7 @@ const TaskCheckbox = ({ checked, onChange, color = colors.aging.fresh, glyph = 2
       onClick={onChange}
       role="checkbox"
       aria-checked={checked}
-      aria-label={label}
+      aria-label={label || (checked ? 'Mark not done' : 'Mark done')}
       tabIndex={0}
       sx={{
         width: 44,

@@ -25,14 +25,15 @@ export const scenes = [
     },
   },
   {
-    // Delete confirm — window mode even on a phone. The delete icon has no
-    // accessible name, so match it by MUI's data-testid instead.
+    // Delete confirm — window mode even on a phone. The delete icon carries a
+    // per-card name ("Delete <title>") since the 2026-09-05 a11y pass, so match
+    // it by role instead of by MUI's data-testid.
     name: '03-delete-confirm',
     goto: '/',
     wait: 1200,
     viewports: ['phone'],
     async setup(page, h) {
-      const del = page.locator('[data-testid="DeleteIcon"]').first();
+      const del = page.getByRole('button', { name: /^delete /i }).first();
       if (!(await del.count())) return false;
       await del.click();
       await h.settle(600);

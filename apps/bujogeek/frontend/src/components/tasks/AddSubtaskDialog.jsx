@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Box, Button, TextField, Typography, useTheme } from '@mui/material';
 import BujoDialog from '../primitives/BujoDialog';
 import { colors } from '../../theme/colors';
+import { domainInk } from '../../theme/inks';
 
 /**
  * AddSubtaskDialog — one field, for adding a step from a row's action strip
@@ -20,7 +21,6 @@ const FORM_ID = 'bujo-add-subtask-form';
 
 const AddSubtaskDialog = ({ open, task, onClose, onAdd }) => {
   const theme = useTheme();
-  const isDark = theme.palette.mode === 'dark';
   const [content, setContent] = useState('');
   const [busy, setBusy] = useState(false);
   const [added, setAdded] = useState(0);
@@ -50,7 +50,7 @@ const AddSubtaskDialog = ({ open, task, onClose, onAdd }) => {
     }
   };
 
-  const mutedInk = isDark ? 'rgba(255,255,255,0.5)' : colors.ink[400];
+  const mutedInk = theme.palette.text.secondary;
   const parentName = String(task?.content ?? '').trim();
 
   return (
@@ -115,7 +115,7 @@ const AddSubtaskDialog = ({ open, task, onClose, onAdd }) => {
               fontWeight: 600,
               letterSpacing: '0.06em',
               textTransform: 'uppercase',
-              color: colors.aging.fresh,
+              color: domainInk(colors.aging.fresh, theme),
               mt: 1.25,
             }}
           >

@@ -26,6 +26,7 @@ import BujoDialog from '../components/primitives/BujoDialog';
 import SkeletonLoader from '../components/shared/SkeletonLoader';
 import EmptyState from '../components/shared/EmptyState';
 import { colors } from '../theme/colors';
+import { domainInk } from '../theme/inks';
 import { useToast } from '@geeksuite/ui';
 
 const FORM_ID = 'bujo-habit-form';
@@ -98,8 +99,8 @@ const HabitsPage = () => {
     deleteHabit,
   } = useHabits({ startDate, endDate });
 
-  const captionInk = isDark ? 'rgba(255,255,255,0.3)' : colors.ink[300];
-  const mutedInk = isDark ? 'rgba(255,255,255,0.5)' : colors.ink[400];
+  const captionInk = theme.palette.text.muted;
+  const mutedInk = theme.palette.text.secondary;
   const dottedRule = `1px dotted ${isDark ? 'rgba(255,255,255,0.14)' : colors.ink[200]}`;
   const emptyCell = isDark ? 'rgba(255,255,255,0.16)' : colors.ink[200];
 
@@ -349,8 +350,8 @@ const HabitsPage = () => {
         >
           <Flame
             size={13}
-            color={habit.currentStreak > 0 ? colors.aging.warning : captionInk}
-            fill={habit.currentStreak > 0 ? colors.aging.warning : 'none'}
+            color={habit.currentStreak > 0 ? domainInk(colors.aging.warning, theme) : captionInk}
+            fill={habit.currentStreak > 0 ? domainInk(colors.aging.warning, theme) : 'none'}
             strokeWidth={1.75}
           />
           <Typography

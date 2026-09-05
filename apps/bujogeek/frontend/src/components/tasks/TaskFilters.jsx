@@ -82,8 +82,9 @@ const TaskFilters = ({ openDrawer, setDrawerOpen }) => {
       />
 
       <FormControl size="small" sx={{ minWidth: 120 }}>
-        <InputLabel>Status</InputLabel>
+        <InputLabel id="task-filter-status-label">Status</InputLabel>
         <Select
+          labelId="task-filter-status-label"
           value={filters.status || ''}
           label="Status"
           onChange={(e) => handleFilterChange('status', e.target.value)}
@@ -95,8 +96,9 @@ const TaskFilters = ({ openDrawer, setDrawerOpen }) => {
       </FormControl>
 
       <FormControl size="small" sx={{ minWidth: 120 }}>
-        <InputLabel>Priority</InputLabel>
+        <InputLabel id="task-filter-priority-label">Priority</InputLabel>
         <Select
+          labelId="task-filter-priority-label"
           value={filters.priority || ''}
           label="Priority"
           onChange={(e) => handleFilterChange('priority', e.target.value)}
@@ -109,8 +111,9 @@ const TaskFilters = ({ openDrawer, setDrawerOpen }) => {
       </FormControl>
 
       <FormControl size="small" sx={{ minWidth: 120 }}>
-        <InputLabel>Tags</InputLabel>
+        <InputLabel id="task-filter-tags-label">Tags</InputLabel>
         <Select
+          labelId="task-filter-tags-label"
           multiple
           value={filters.tags || []}
           label="Tags"
@@ -134,8 +137,9 @@ const TaskFilters = ({ openDrawer, setDrawerOpen }) => {
       </FormControl>
 
       <FormControl size="small" sx={{ minWidth: 120 }}>
-        <InputLabel>Type</InputLabel>
+        <InputLabel id="task-filter-type-label">Type</InputLabel>
         <Select
+          labelId="task-filter-type-label"
           value={filters.type || ''}
           label="Type"
           onChange={(e) => handleFilterChange('type', e.target.value)}

@@ -11,6 +11,9 @@ import { sceneVisual, stateBadge, weatherIcon, timeIcon, typeSigil } from '../..
 export default function ScenePanel({ scene }) {
   const theme = useTheme();
   const gold = theme.palette.codex?.gold || '#c9a84c';
+  // Muted section-label gold. Solid and mode-aware (theme.js) — the
+  // alpha()-diluted gold it replaces failed AA on every codex surface.
+  const goldMuted = theme.palette.codex?.goldMuted || gold;
   const vis = sceneVisual(scene);
   const badge = stateBadge(scene.state);
   const hasLocation = Boolean(scene.locationName);
@@ -65,7 +68,7 @@ export default function ScenePanel({ scene }) {
           <Typography variant="caption" sx={{ color: 'text.secondary' }}>
             {weatherIcon(scene.weather)} {scene.weather}
           </Typography>
-          <Typography variant="caption" sx={{ color: alpha(gold, 0.7), textTransform: 'capitalize' }}>
+          <Typography variant="caption" sx={{ color: goldMuted, textTransform: 'capitalize' }}>
             · {scene.mood}
           </Typography>
         </Box>

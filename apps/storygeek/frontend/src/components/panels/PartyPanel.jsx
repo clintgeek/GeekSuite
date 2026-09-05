@@ -19,10 +19,13 @@ const REL_COLOR = {
 export default function PartyPanel({ npcs, player, story }) {
   const theme = useTheme();
   const gold = theme.palette.codex?.gold || '#c9a84c';
+  // Muted section-label gold. Solid and mode-aware (theme.js) — the
+  // alpha()-diluted gold it replaces failed AA on every codex surface.
+  const goldMuted = theme.palette.codex?.goldMuted || gold;
 
   return (
     <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'background.paper', border: `1px solid ${alpha(gold, 0.15)}` }}>
-      <Typography variant="overline" sx={{ color: alpha(gold, 0.65), fontSize: '0.75rem', letterSpacing: '0.12em', display: 'block', mb: 1 }}>
+      <Typography variant="overline" sx={{ color: goldMuted, fontSize: '0.75rem', letterSpacing: '0.12em', display: 'block', mb: 1 }}>
         Present · {npcs.length}
       </Typography>
       {npcs.length === 0 ? (
@@ -36,7 +39,7 @@ export default function PartyPanel({ npcs, player, story }) {
       ) : (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
           {npcs.map((npc) => (
-            <NpcCard key={npc.name} npc={npc} player={player} story={story} gold={gold} />
+            <NpcCard key={npc.name} npc={npc} player={player} story={story} gold={gold} goldMuted={goldMuted} />
           ))}
         </Box>
       )}
@@ -44,7 +47,7 @@ export default function PartyPanel({ npcs, player, story }) {
   );
 }
 
-function NpcCard({ npc, player, story, gold }) {
+function NpcCard({ npc, player, story, gold, goldMuted }) {
   const [open, setOpen] = useState(false);
   const rel = npcRelationshipToPlayer(npc, player);
   const known = npcKnownFacts(npc, story);
@@ -83,7 +86,7 @@ function NpcCard({ npc, player, story, gold }) {
 
       {/* Bounded knowledge line */}
       <Box sx={{ mt: 0.5 }}>
-        <Typography variant="caption" sx={{ color: alpha(gold, 0.6) }}>
+        <Typography variant="caption" sx={{ color: goldMuted }}>
           KNOWS {known.length > 0 ? `· ${known.length}` : '· nothing notable'}
         </Typography>
         <Collapse in={open} unmountOnExit>

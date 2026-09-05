@@ -4,7 +4,6 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import SectionHeader from '../shared/SectionHeader';
 import TaskRow from '../tasks/TaskRow';
 import EmptyState from '../shared/EmptyState';
-import { colors } from '../../theme/colors';
 
 /**
  * BlockedSection — the parked shelf, last on the page.
@@ -47,7 +46,7 @@ const BlockedSection = ({
             <IconButton
               size="small"
               onClick={() => setExpanded(!expanded)}
-              sx={{ color: colors.ink[400] }}
+              sx={{ color: 'text.secondary' }}
               aria-label={expanded ? 'Collapse blocked tasks' : 'Expand blocked tasks'}
             >
               {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}

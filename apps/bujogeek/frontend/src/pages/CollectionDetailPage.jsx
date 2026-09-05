@@ -38,6 +38,7 @@ import TaskEditor from '../components/tasks/TaskEditor';
 import SkeletonLoader from '../components/shared/SkeletonLoader';
 import EmptyState from '../components/shared/EmptyState';
 import { colors } from '../theme/colors';
+import { domainInk } from '../theme/inks';
 import { useToast } from '@geeksuite/ui';
 
 /**
@@ -199,8 +200,8 @@ const CollectionDetailPage = () => {
 
   useGlobalShortcuts();
 
-  const captionInk = isDark ? 'rgba(255,255,255,0.3)' : colors.ink[300];
-  const mutedInk = isDark ? 'rgba(255,255,255,0.5)' : colors.ink[400];
+  const captionInk = theme.palette.text.muted;
+  const mutedInk = theme.palette.text.secondary;
   const dottedRule = `1px dotted ${isDark ? 'rgba(255,255,255,0.14)' : colors.ink[200]}`;
 
   const listSurface = {
@@ -351,7 +352,7 @@ const CollectionDetailPage = () => {
                 </MenuItem>
                 <MenuItem
                   onClick={() => { setMenuAnchor(null); setDeleteOpen(true); }}
-                  sx={{ fontSize: '0.875rem', gap: 1.25, color: colors.aging.overdue }}
+                  sx={{ fontSize: '0.875rem', gap: 1.25, color: domainInk(colors.aging.overdue, theme) }}
                 >
                   <Trash2 size={15} /> Delete…
                 </MenuItem>
@@ -546,7 +547,7 @@ const CollectionDetailPage = () => {
               fontSize: '0.8125rem',
               textTransform: 'none',
               fontWeight: 600,
-              color: colors.aging.overdue,
+              color: domainInk(colors.aging.overdue, theme),
             }}
           >
             Delete everything
