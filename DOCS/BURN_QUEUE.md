@@ -9,6 +9,7 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
+| R67 | consolidation pairs 3–5 per the plan's order (Medication first; export enums the validators mirror) | opus | packages/schemas, both apps' three models + parity suites | 09-05 14:45 |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
 ## Queued (launch when files free / prerequisite lands)
@@ -62,7 +63,7 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 
 - 09-05 14:23 — wave 4 (`c6c4136`, 16 commits): CI + Release green, Watchtower deployed 14:34 (updated=7), all eight apps 200. **Harness workflow failed again**, now for real: every `vite preview` "did not start" because Vite bolds the port in colour mode on Actions and the URL regex missed it. Fixed `15aaf38` (ANSI strip + NO_COLOR), verified locally; ships with wave 5 (R66). harness workflow fix (`run ci`), keto-ring fix (R65), R58, R61, R64, docs. Gates green.
 
-- 09-05 14:50 — wave 5: R66 + harness readiness fix (`15aaf38`). Gates green.
+- 09-05 14:43 — wave 5 (`9712fe8`, 8 commits): R66 + harness readiness fix (`15aaf38`). Gates green.
 
 ## Landed during the burn
 
