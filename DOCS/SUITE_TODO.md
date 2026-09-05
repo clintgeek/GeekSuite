@@ -286,9 +286,10 @@ slots but have **zero consumers**; every app hand-rolls both. Per-app structural
   Tailwind or continue the incremental MUI migration. `apps/bookgeek/web/index.html`
 
 - **startgeek joins the suite** — wire to `geek_theme` (needs `@geeksuite/user`, which
-  means bringing it into the pnpm workspace build) and give the wallpaper a stronger,
-  luminance-adaptive scrim; dock labels at `text-white/40` and weather at `/50` vanish on
-  bright photos.
+  means bringing it into the pnpm workspace build). The luminance-adaptive scrim shipped
+  2026-09-05 (see `apps/startgeek/CONTEXT.md`); dock labels at `text-white/40` and weather
+  at `/50` still vanish on bright photos and are unrelated to the scrim — separate follow-up
+  if it recurs after the scrim.
 
 ### Worth tracking
 
@@ -357,11 +358,18 @@ slots but have **zero consumers**; every app hand-rolls both. Per-app structural
   theme context (see the dedupe notes in `vite.config.js` comments). Pin all apps and
   `packages/ui` to one declared major.
 
-- **`cryptoVault` → `@geeksuite/crypto-vault`** — currently internal to basegeek at
-  `apps/basegeek/packages/api/src/lib/cryptoVault.js`. Promote to a shared package so fitnessgeek
-  (and future apps) can encrypt sensitive fields (Garmin password) before writing to MongoDB.
-  Step 1: promote + update basegeek to consume from there. Step 2: wire fitnessgeek encryption +
-  backfill migration script. (`DEFERRED_WORK.md`)
+- **`cryptoVault` → `@geeksuite/crypto-vault`** — **Step 1 done 2026-09-05.** Was internal to
+  basegeek at `apps/basegeek/packages/api/src/lib/cryptoVault.js`; now `packages/crypto-vault`
+  (plain CommonJS, same shape as `@geeksuite/logger`/`@geeksuite/schemas` — `require()`-able from
+  a CJS backend, `import`-able from ESM). Same env var (`KEY_VAULT_SECRET`), same AES-256-GCM
+  cipher, IV/tag layout and `v1:{iv}:{tag}:{ciphertext}` packed format — byte-for-byte compatible,
+  proven by a vitest fixture decrypting a ciphertext captured from the pre-promotion module.
+  basegeek's api now consumes it via `@geeksuite/crypto-vault` (`OAuthConnection.js`,
+  `AIConfig.js`, `aiRoutes.js`, `graphql/basegeek/resolvers.js`); the old `lib/cryptoVault.js` and
+  its standalone test were deleted, coverage moved to `packages/crypto-vault/src/__tests__`.
+  basegeek's own suite stayed green (42 suites / 800 passed / 1 skipped). New CI job
+  `test-crypto-vault` mirrors `test-utils`. **Step 2 remaining**: wire fitnessgeek's Garmin
+  password encryption + backfill migration script. (`DEFERRED_WORK.md`)
 
 - **Shared date utilities** — the timezone bug analysis identified a `toUtcMidnight()` /
   `localDateString()` / `displayCalendarDate()` pattern needed across bujogeek, fitnessgeek, and
@@ -396,15 +404,20 @@ reality stands, per app:
 | App | Frontend data layer | Verdict |
 |-----|---------------------|---------|
 | bujogeek | Apollo → basegeek | ✅ fully on GraphQL. Own backend is auth-only, no duplicate models. The reference. |
-| flockgeek | Apollo → basegeek | ✅ fully on GraphQL (only `/api/health` ping). **All 13 Mongoose models duplicated** in `apps/flockgeek/backend/src/models/` — dead if no route reads them; delete or make basegeek the only copy. |
-| notegeek | Apollo → basegeek | ✅ frontend fully on GraphQL. Own backend still carries legacy REST (`routes/notes.js`, `tags.js`, `search.js`) + duplicate `models/Note.js` nobody calls. Also the `getTagHierarchy` 500 below lives in that dead route. Prune. |
-| bookgeek | Apollo for library CRUD; `authFetch` REST for the rest | ⚠️ mostly. Legit REST: upload/download/cover/enrich/merge/import/device-baskets (binary + long jobs). Not legit: `/api/profile/*` (`library-filters`, `me`) and `/api/ai/status` — pure data, should be GraphQL. `App.jsx:15` hardcodes `http://localhost:1800/api`. `api/src/graphql/{schema,resolvers}.js` is an **unmounted dead GraphQL server** — delete. 4 duplicated models. |
+| flockgeek | Apollo → basegeek | ✅ frontend fully on GraphQL (only `/api/health` ping). ~~All 13 Mongoose models duplicated~~ — **corrected 2026-09-05**: only 4 (`BirdNote`, `BirdTrait`, `Event`, `LineageCache`) were actually orphaned and are now deleted. The other 9 are imported by a full, live, *mounted* REST CRUD API (`routes/api.js` → birds/groups/group-memberships/health-records/egg-production/pairings/locations/hatch-events/meat-runs) that nothing in the repo calls anymore but which still runs in the server. See `apps/flockgeek/CONTEXT.md` — deciding whether to unmount that whole REST layer is a follow-up, not done here. |
+| notegeek | Apollo → basegeek | ✅ frontend fully on GraphQL. ~~Own backend still carries legacy REST~~ — **deleted 2026-09-05**: `routes/notes.js`, `tags.js`, `search.js`, their controllers, and duplicate `models/Note.js`. This also resolved the `getTagHierarchy` 500 below. |
+| bookgeek | Apollo for library CRUD; `authFetch` REST for the rest | ⚠️ mostly. Legit REST: upload/download/cover/enrich/merge/import/device-baskets (binary + long jobs). Not legit: `/api/profile/*` (`library-filters`, `me`) and `/api/ai/status` — pure data, should be GraphQL. `App.jsx:15` hardcodes `http://localhost:1800/api`. ~~`api/src/graphql/{schema,resolvers}.js` is an **unmounted dead GraphQL server**~~ — **deleted 2026-09-05** (plus the unused `@apollo/subgraph` dep). 4 duplicated models remain (not yet touched). |
 | fitnessgeek | `apiService.js` shims REST→GraphQL, but `restClient.js` still hits own backend | ⚠️ mostly. Still REST: food search/barcode/favorites/recent (`foodService.js`), `POST/PUT/DELETE /logs` + `POST /meals/:id/add-to-log` (`fitnessGeekService.js` — **these have GraphQL equivalents `addFoodLog`/`updateFoodLog`/`deleteFoodLog`/`logMeal` already**), meds RxNorm + med logs, influx, AI, `PUT /user/profile`. **All 13 models duplicated** — this is the `UserSettings` drift hazard above, times 13. |
 | storygeek | axios REST to own backend | ❌ not on GraphQL. `apolloClient.js` exists but is never imported. basegeek's storygeek schema (`stories`, `story`, 3 mutations) is unused by the app and too thin to replace `/stories/*/continue`, `/export/*`, `/ai/*`. Decide: either build out the schema or drop the basegeek storygeek module as dead code. |
 
 Ordered cheap-to-expensive:
-1. Delete dead code: bookgeek unmounted GraphQL, notegeek legacy REST routes + Note model,
-   flockgeek duplicate models (verify no imports first with `rg`).
+1. ~~Delete dead code: bookgeek unmounted GraphQL, notegeek legacy REST routes + Note model,
+   flockgeek duplicate models (verify no imports first with `rg`).~~ **Done 2026-09-05** —
+   bookgeek's dead GraphQL server and notegeek's legacy REST routes + Note model are deleted;
+   flockgeek turned out to still have a live, mounted REST API using 9 of its 13 models, so
+   only the 4 genuinely orphaned ones came out (see the table row above and
+   `apps/flockgeek/CONTEXT.md`). bujogeek's duplicate model housekeeping item (below) was
+   already done in an earlier pass (`3af40cc`, 2026-08-30) — nothing left to delete there.
 2. fitnessgeek: point `foodLogs` writes at the existing GraphQL mutations; remove those REST
    routes. Then food search/favorites/recent → new queries.
 3. bookgeek: `profile` + `ai/status` → GraphQL; kill the hardcoded `localhost:1800`.
@@ -491,8 +504,10 @@ being replaced by `graphql/glance/` under `DOCS/DASHGEEK_PLAN.md`. `notes` has n
   data; mutations don't invalidate the cache. Proper `refetchQueries` or cache update on write.
   `apps/bujogeek/DOCS/CONTEXT.md`
 
-- **bujogeek duplicate model files** — `userModel.js`/`User.js`, `templateModel.js`/`Template.js`.
-  Only PascalCase versions are canonical; delete the legacy copies.
+- ~~**bujogeek duplicate model files**~~ — **already done, struck 2026-09-05**. Checked the
+  repo: neither `userModel.js`/`User.js` nor `templateModel.js`/`Template.js` exists anywhere
+  under `apps/bujogeek` — this went out with the rest of the dead REST layer in `3af40cc`
+  ("remove dead REST layer and orphaned frontend code", 2026-08-30). This TODO entry was stale.
 
 - **basegeek stale AI model defaults** — hardcoded `gemini-1.5-flash-latest` and similar in
   `aiService.js` may be deprecated. Polish pass to remove or update defaults.
