@@ -417,37 +417,62 @@ unless noted.
 - **`GeekShell`** sizes itself in `100dvh` (with `vh` as the `@supports` fallback).
   `GeekTopBar` pads the top safe-area inset; `GeekBottomNav` and the toast stack pad the
   bottom one. Every `index.html` declares `viewport-fit=cover`.
+- **Text floor** — nothing in the shell chrome renders below 12px: `GeekSidebar`'s item
+  badge moved from `0.6875rem` to `0.75rem`, which was the last holdout.
 - **`GeekTopBar`** is *compact* below `md`: hamburger → title → at most one app action →
   switcher → avatar. The theme toggle folds into the account menu as a Dark mode / Light mode
   row (`data-geek-topbar-menu="theme"`) when there is an account menu; `actions` reduces to
   its first child, or to `mobileActions` when the app names what survives (`null` for none).
 - **`GeekBottomNav`** gains `labelSx` so label identity comes from the primitive.
+- **`useGeekPrimaryAction({ label, icon, onClick, showOn, hidden })`** (in
+  `packages/ui/src/navigation`) — the page names its one thumb-zone action and
+  `GeekShell` renders it as a `GeekFab`, as a sibling of the content column
+  (the frame's route transition would capture a fixed child). `onClick` and
+  `icon` live in refs, so a fresh arrow function every render costs nothing;
+  only `label`, `showOn` and `hidden` are effect deps. Registration lasts for
+  the mount, registrations stack (last wins; when it unmounts the previous one,
+  if still mounted, comes back), and outside a shell the hook is a no-op. Also
+  exported: `GeekPrimaryActionContext`, `useGeekPrimaryActionState()` for an
+  app-built shell, and `createPrimaryActionRegistry()`, the plain-JS stack the
+  rule is tested against.
 - **`GeekSheet`** — `open`, `onClose`, `title`, `description`, `children`, `actions`,
   `snap: 'content' | 'full'`, `mode: 'auto' | 'sheet' | 'dialog'`, `maxWidth`, `sx`,
   `bodySx`, `headerSx`, `drawerProps`, `dialogProps`, `keepMounted`. Bottom sheet
   (`SwipeableDrawer`, grab handle, 16px top radius, 92dvh cap, safe-area padding) below `md`;
   centered Dialog with a close button at `md`+. Detects the breakpoint itself, so it works
-  outside a shell. Hooks: `data-geek-sheet="root|handle|header|title|description|body|
+  outside a shell. In sheet mode the paper is focusable (`tabIndex={-1}`), takes focus after
+  open when MUI's trap left it outside, and carries its own Escape handler — MUI listens for
+  Escape on the modal root, which never hears the key while focus sits on whatever opened the
+  sheet. Hooks: `data-geek-sheet="root|handle|paper|header|title|description|body|
   actions|close"`, `data-geek-sheet-mode`.
 - **`GeekDialog`** — `open`, `onClose`, `title`, `children`, `primaryAction`,
   `secondaryAction`, `keepSecondaryOnMobile`, `mode: 'auto' | 'full' | 'window'`,
   `fullScreenBelow` (`'sm'`), `maxWidth`, `fullWidth`, `closeLabel`, `disableClose`,
-  `keepMounted`, `dialogProps`, `sx`, `headerSx`, `bodySx`. Full-screen below `sm` with a
+  `keepMounted`, `dialogProps`, `sx`, `headerSx`, `titleSx`, `primaryActionSx`, `bodySx`.
+  Full-screen below `sm` with a
   60px header (close left, title, primary action right) over the top safe-area inset; the
   familiar title / content / actions window at `sm`+. `useGeekDialogFullScreen(bp)` lets an
-  existing `<Dialog>` adopt the rule. Hooks: `data-geek-dialog="root|header|close|title|
+  existing `<Dialog>` adopt the rule. Three slot rules the apps kept re-deriving: the
+  full-mode primary slot is compact by default (no `startIcon`, tightened padding, the 44px
+  target kept) and `primaryActionSx` reopens it; `headerSx` styles the full-mode header and
+  `titleSx` its window-mode counterpart, `DialogTitle`, so identity styling no longer has to
+  go through `PaperProps`; and a node `title` in full mode keeps the `h3` wrapper (and the
+  `aria-labelledby` target) but drops `noWrap` and lets overflow show, so an eyebrow-over-title
+  block is not clipped. Hooks: `data-geek-dialog="root|header|close|title|
   primary|body|actions|footer"`, `data-geek-dialog-mode`.
 - **`GeekFab`** — `label` (required), `icon`, `onClick`, `extended`, `showOn: 'mobile' |
   'always'`, `hidden`, `bottomInset`, `color`, `disabled`, `sx`. 56px squircle pinned
   bottom-right above the shell's `bottomInset` and the safe-area inset; hidden at `md`+ by
   default and in focus mode. Mount it as a sibling of `GeekAppFrame`, whose route animation
-  would trap a fixed element. Hook: `data-geek-fab="icon|extended"`.
+  would trap a fixed element — or, for the page's one primary action, register with
+  `useGeekPrimaryAction()` and let `GeekShell` mount it there for you. Hook:
+  `data-geek-fab="icon|extended"`.
 - **Theme** — inputs lift to 16px below `sm` (`geekLayout.phoneMaxWidth`) so iOS does not
   zoom on focus; anything marked `data-geek-hover-reveal` is forced visible under
   `@media (hover: none)`.
 
 Tests: `__tests__/navigation.test.jsx` (mobile grammar + compact top bar), `sheet.test.jsx`,
-`dialog.test.jsx`, `fab.test.jsx`, `themeMobile.test.js`.
+`dialog.test.jsx`, `fab.test.jsx`, `primaryAction.test.jsx`, `themeMobile.test.js`.
 
 ---
 

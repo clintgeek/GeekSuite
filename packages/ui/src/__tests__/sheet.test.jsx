@@ -109,3 +109,27 @@ describe('GeekSheet', () => {
     expect(markup).toContain('Refine by shelf and tag.');
   });
 });
+
+describe('GeekSheet — Escape', () => {
+  /**
+   * MUI listens for Escape on the modal root, which only hears the key when
+   * focus is inside the drawer. The primitive therefore marks the paper as
+   * focusable and hangs its own handler there (see the GeekSheet header). A
+   * `node` render cannot dispatch a key event, so what is asserted is that the
+   * paper carries the hook and the `tabIndex` the handler depends on.
+   */
+  it('marks the sheet paper focusable and hooked', () => {
+    const markup = render({ mode: 'sheet' });
+    const paperIdx = markup.indexOf('data-geek-sheet="paper"');
+    expect(paperIdx).toBeGreaterThan(-1);
+
+    const tagStart = markup.lastIndexOf('<', paperIdx);
+    const tag = markup.slice(tagStart, markup.indexOf('>', paperIdx) + 1);
+    expect(tag).toContain('tabindex="-1"');
+    expect(tag).toContain('MuiDrawer-paper');
+  });
+
+  it('leaves dialog mode to MUI (no paper hook there)', () => {
+    expect(render({ mode: 'dialog' })).not.toContain('data-geek-sheet="paper"');
+  });
+});

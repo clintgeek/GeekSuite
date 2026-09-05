@@ -14,6 +14,22 @@
  *
  * @mui/icons-material is not a dependency of this package; the close glyph is
  * inline SVG, same as `GeekTopBar`'s hamburger.
+ *
+ * Three slot rules the apps kept re-deriving (MOBILE_UI_PLAN.md §4b) now live
+ * here:
+ *
+ *   - the full-mode primary slot is *compact by default* — a normal
+ *     `<Button startIcon>` otherwise eats half of the 60px header. The slot
+ *     hides the button's start icon and tightens its padding while keeping the
+ *     44px touch target; `primaryActionSx` reopens it for a caller that wants
+ *     the icon back or a different shape.
+ *   - `headerSx` styles the full-mode header; window mode has no header, so
+ *     identity styling used to reach `DialogTitle` only through `PaperProps`.
+ *     `titleSx` is the window-mode counterpart.
+ *   - a node `title` in full mode is not clipped: `noWrap` and the ellipsis go
+ *     away and overflow stays visible, so an eyebrow-over-title block renders
+ *     whole. The `h3` wrapper (and with it the `aria-labelledby` target and the
+ *     `data-geek-dialog="title"` hook) stays either way.
  */
 import { forwardRef, useId } from 'react';
 import Box from '@mui/material/Box';
@@ -80,6 +96,8 @@ export const GeekDialog = forwardRef(function GeekDialog(
     dialogProps,
     sx,
     headerSx,
+    titleSx,
+    primaryActionSx,
     bodySx,
   },
   ref
@@ -87,6 +105,10 @@ export const GeekDialog = forwardRef(function GeekDialog(
   const titleId = useId();
   const autoFull = useGeekDialogFullScreen(fullScreenBelow);
   const full = mode === 'auto' ? autoFull : mode === 'full';
+  // A string/number title is a headline the header may safely clip; anything
+  // else is a composed block (eyebrow over title, a chip beside it) that must
+  // not be.
+  const plainTitle = typeof title === 'string' || typeof title === 'number';
 
   const handleClose = (event, reason) => {
     if (disableClose) return;
@@ -147,15 +169,35 @@ export const GeekDialog = forwardRef(function GeekDialog(
             <Typography
               component="div"
               variant="h3"
-              noWrap
+              noWrap={plainTitle}
               id={titleId}
               data-geek-dialog="title"
-              sx={{ flex: 1, minWidth: 0 }}
+              sx={{
+                flex: 1,
+                minWidth: 0,
+                ...(plainTitle ? null : { overflow: 'visible' }),
+              }}
             >
               {title}
             </Typography>
             {primaryAction ? (
-              <Box data-geek-dialog="primary" sx={{ flexShrink: 0 }}>
+              <Box
+                data-geek-dialog="primary"
+                sx={{
+                  flexShrink: 0,
+                  // Compact by default: the header is 60px, and a full-size
+                  // contained button with a start icon takes half of it.
+                  '& .MuiButton-startIcon': { display: 'none' },
+                  '& .MuiButton-root': {
+                    minHeight: geekLayout.minClickTarget,
+                    px: 1.5,
+                    py: 0.5,
+                    fontSize: '0.875rem',
+                    lineHeight: 1.4,
+                  },
+                  ...primaryActionSx,
+                }}
+              >
                 {primaryAction}
               </Box>
             ) : null}
@@ -191,7 +233,7 @@ export const GeekDialog = forwardRef(function GeekDialog(
           <DialogTitle
             id={titleId}
             data-geek-dialog="title"
-            sx={{ display: 'flex', alignItems: 'center', gap: 1, pr: 6 }}
+            sx={{ display: 'flex', alignItems: 'center', gap: 1, pr: 6, ...titleSx }}
           >
             {title}
             {!disableClose ? (

@@ -28,8 +28,20 @@
  * environment carries no runtime risk) and forward this primitive's own
  * `keepMounted` prop straight through to MUI's `Modal` so tests can render
  * closed markup when they need to.
+ *
+ * Escape (MOBILE_UI_PLAN.md §4b): MUI closes a modal on Escape from a
+ * `keydown` handler on the *modal root*, so the key event has to bubble out of
+ * something inside the drawer. `FocusTrap` normally moves focus to the paper
+ * when the drawer opens, but not always — a sheet opened from a control that
+ * keeps focus, or a caller-supplied `PaperProps`, and the keypress happens on
+ * an element outside the modal, where nothing hears it. Two belts here, both
+ * on the paper (`data-geek-sheet="paper"`): an explicit `tabIndex={-1}` plus a
+ * post-open focus check that pulls focus in when it is still outside, and an
+ * own `keydown` handler so Escape closes the sheet even when the event never
+ * reaches MUI's root handler. The handler stops propagation so MUI's handler
+ * does not fire `onClose` a second time.
  */
-import { useId } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import Box from '@mui/material/Box';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
@@ -39,6 +51,7 @@ import IconButton from '@mui/material/IconButton';
 import SwipeableDrawer from '@mui/material/SwipeableDrawer';
 import Typography from '@mui/material/Typography';
 import { alpha, useTheme } from '@mui/material/styles';
+import useForkRef from '@mui/material/utils/useForkRef';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { geekLayout, geekMotion, geekShape } from '../designTokens.js';
 
@@ -117,9 +130,31 @@ export function GeekSheet({
   const isBelowNavBreakpoint = useMediaQuery(theme.breakpoints.down(geekLayout.navBreakpoint));
   const prefersReducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
   const titleId = useId();
+  const paperRef = useRef(null);
+  const handlePaperRef = useForkRef(paperRef, drawerProps?.PaperProps?.ref);
 
   const resolvedMode = mode === 'auto' ? (isBelowNavBreakpoint ? 'sheet' : 'dialog') : mode;
   const isSheet = resolvedMode === 'sheet';
+
+  // Runs after `SwipeableDrawer`'s own effects (child effects commit first),
+  // so by now MUI's focus trap has had its go. If focus is still outside the
+  // paper, Escape and the arrow keys would land on whatever the sheet was
+  // opened from; pull focus in. See the file header.
+  useEffect(() => {
+    if (!isSheet || !open) return;
+    const paper = paperRef.current;
+    if (!paper) return;
+    const doc = paper.ownerDocument;
+    if (!doc || paper.contains(doc.activeElement)) return;
+    paper.focus({ preventScroll: true });
+  }, [isSheet, open]);
+
+  const handlePaperKeyDown = (event) => {
+    drawerProps?.PaperProps?.onKeyDown?.(event);
+    if (event.key !== 'Escape' || event.defaultPrevented) return;
+    event.stopPropagation();
+    onClose?.(event, 'escapeKeyDown');
+  };
 
   // MUI's Modal cannot portal into a document that does not exist (node/SSR
   // tests); rendering inline there is otherwise harmless since these apps are
@@ -147,6 +182,10 @@ export function GeekSheet({
         data-geek-sheet-mode="sheet"
         PaperProps={{
           ...drawerProps?.PaperProps,
+          ref: handlePaperRef,
+          tabIndex: -1,
+          onKeyDown: handlePaperKeyDown,
+          'data-geek-sheet': 'paper',
           sx: {
             display: 'flex',
             flexDirection: 'column',

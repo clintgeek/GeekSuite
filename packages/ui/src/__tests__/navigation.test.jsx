@@ -287,6 +287,13 @@ describe('GeekSidebar', () => {
     expect(shown).toContain('>0<');
   });
 
+  it('renders the badge at the 12px text floor, not below it', () => {
+    const markup = render(
+      <GeekSidebar items={[{ id: 'birds', label: 'Birds', to: '/birds', badge: 3 }]} />
+    );
+    expect(ruleFor(markup, 'data-geek-sidebar="badge"')).toContain('font-size:0.75rem');
+  });
+
   it('floats extras directly under the nav by default and lets extrasGrow take the remaining height', () => {
     const sections = [{ items: [{ id: 'a', label: 'A', onClick: () => {} }] }];
     const fixed = renderToStaticMarkup(

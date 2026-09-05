@@ -18,11 +18,15 @@ export {
   GeekAppFrame,
   GeekAppSwitcher,
   GeekBottomNav,
+  GeekPrimaryActionContext,
   GeekShell,
   GeekSidebar,
   GeekThemeToggle,
   GeekShellContext,
   GeekTopBar,
+  createPrimaryActionRegistry,
+  useGeekPrimaryAction,
+  useGeekPrimaryActionState,
   useGeekShell,
 } from './navigation';
 export { GeekDialog, GeekFab, GeekSheet, useGeekDialogFullScreen } from './surfaces';

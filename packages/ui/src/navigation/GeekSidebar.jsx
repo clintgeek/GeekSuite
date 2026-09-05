@@ -135,7 +135,10 @@ function Badge({ value, badgeProps }) {
         minWidth: 20,
         textAlign: 'center',
         borderRadius: `${geekShape.radius.chip}px`,
-        fontSize: '0.6875rem',
+        // 12px is the suite's text floor (MOBILE_UI_PLAN.md §2 "Text floor");
+        // this badge used to render at 11px, the one place in the shell chrome
+        // that broke it.
+        fontSize: '0.75rem',
         fontWeight: 600,
         lineHeight: '18px',
         color: 'primary.main',

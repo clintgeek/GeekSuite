@@ -16,6 +16,12 @@
  *
  * `nav` and `sidebar` can coexist during a migration; `nav` is rendered after
  * `sidebar`, so pass one or the other in practice.
+ *
+ * The shell also owns the page's one thumb-zone action: a page calls
+ * `useGeekPrimaryAction({ label, icon, onClick })` and the shell renders the
+ * `GeekFab` here, as a *sibling* of the content column — `GeekAppFrame`'s route
+ * transition is a motion element and would capture a fixed child. No page
+ * registered → no FAB, and apps that mount their own `GeekFab` are unaffected.
  */
 import { useCallback, useMemo, useState } from 'react';
 import Box from '@mui/material/Box';
@@ -24,7 +30,27 @@ import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import { geekLayout } from '../designTokens.js';
 import { useFocusMode } from '../focus/index.js';
+import { GeekFab } from '../surfaces/GeekFab.jsx';
+import { GeekPrimaryActionContext, useGeekPrimaryActionState } from './primaryActionContext.js';
 import { GeekShellContext } from './shellContext.js';
+
+/**
+ * The shell's own FAB slot. `action` is the committed registration (client);
+ * `ssrRef` is the render-phase slot the page writes under SSR, read here
+ * rather than in `GeekShell` so the read happens after the page renders.
+ */
+function ShellPrimaryFab({ action, ssrRef }) {
+  const resolved = action ?? ssrRef.current;
+  if (!resolved) return null;
+  return (
+    <GeekFab
+      label={resolved.label}
+      icon={resolved.icon}
+      showOn={resolved.showOn}
+      onClick={resolved.onClick}
+    />
+  );
+}
 
 export function GeekShell({
   // Legacy: fully-formed, app-managed chrome.
@@ -49,6 +75,11 @@ export function GeekShell({
   const closeNav = useCallback(() => setMobileOpen(false), []);
   const toggleNav = useCallback(() => setMobileOpen((open) => !open), []);
 
+  const {
+    action: primaryAction,
+    ssrRef: primaryActionSsrRef,
+    value: primaryActionValue,
+  } = useGeekPrimaryActionState();
   const { focusMode: contextFocusMode } = useFocusMode();
   const focusMode = focusModeOverride ?? contextFocusMode;
 
@@ -88,97 +119,104 @@ export function GeekShell({
   const contentHeightDvh = contentHeightFor('dvh');
 
   return (
-    <GeekShellContext.Provider value={shellValue}>
-      <Box
-        data-geek-shell
-        data-focus-mode={focusMode ? 'true' : 'false'}
-        sx={{
-          display: 'flex',
-          height: '100vh',
-          maxHeight: '100vh',
-          '@supports (height: 100dvh)': { height: '100dvh', maxHeight: '100dvh' },
-          overflow: 'hidden',
-          bgcolor: 'background.default',
-          color: 'text.primary',
-          ...sx,
-        }}
-      >
-        {focusMode ? null : sidebar}
+    <GeekPrimaryActionContext.Provider value={primaryActionValue}>
+      <GeekShellContext.Provider value={shellValue}>
+        <Box
+          data-geek-shell
+          data-focus-mode={focusMode ? 'true' : 'false'}
+          sx={{
+            display: 'flex',
+            height: '100vh',
+            maxHeight: '100vh',
+            '@supports (height: 100dvh)': { height: '100dvh', maxHeight: '100dvh' },
+            overflow: 'hidden',
+            bgcolor: 'background.default',
+            color: 'text.primary',
+            ...sx,
+          }}
+        >
+          {focusMode ? null : sidebar}
 
-        {showNav && !isMobile ? (
-          <Box
-            component="nav"
-            aria-label="Primary"
-            data-geek-nav="permanent"
-            sx={{
-              width: navWidth,
-              flexShrink: 0,
-              height: '100%',
-              minHeight: 0,
-              overflow: 'hidden',
-              borderRight: (t) => `1px solid ${t.palette.divider}`,
-              ...navSx,
-            }}
-          >
-            {nav}
-          </Box>
-        ) : null}
-
-        {showNav && isMobile ? (
-          <Drawer
-            variant="temporary"
-            open={mobileOpen}
-            onClose={closeNav}
-            ModalProps={{ keepMounted: true }}
-            sx={{
-              '& .MuiDrawer-paper': {
-                width: navWidth,
-                boxSizing: 'border-box',
-                backgroundImage: 'none',
-                ...navSx,
-              },
-            }}
-          >
+          {showNav && !isMobile ? (
             <Box
               component="nav"
               aria-label="Primary"
-              data-geek-nav="temporary"
-              sx={{ height: '100%', minHeight: 0, overflow: 'hidden' }}
+              data-geek-nav="permanent"
+              sx={{
+                width: navWidth,
+                flexShrink: 0,
+                height: '100%',
+                minHeight: 0,
+                overflow: 'hidden',
+                borderRight: (t) => `1px solid ${t.palette.divider}`,
+                ...navSx,
+              }}
             >
               {nav}
             </Box>
-          </Drawer>
-        ) : null}
+          ) : null}
 
-        <Box
-          sx={{
-            minWidth: 0,
-            flex: 1,
-            display: 'flex',
-            flexDirection: 'column',
-            height: '100%',
-            overflow: 'hidden',
-            bgcolor: 'background.default',
-          }}
-        >
-          {focusMode ? null : topBar}
+          {showNav && isMobile ? (
+            <Drawer
+              variant="temporary"
+              open={mobileOpen}
+              onClose={closeNav}
+              ModalProps={{ keepMounted: true }}
+              sx={{
+                '& .MuiDrawer-paper': {
+                  width: navWidth,
+                  boxSizing: 'border-box',
+                  backgroundImage: 'none',
+                  ...navSx,
+                },
+              }}
+            >
+              <Box
+                component="nav"
+                aria-label="Primary"
+                data-geek-nav="temporary"
+                sx={{ height: '100%', minHeight: 0, overflow: 'hidden' }}
+              >
+                {nav}
+              </Box>
+            </Drawer>
+          ) : null}
+
           <Box
             sx={{
-              height: contentHeight,
-              '@supports (height: 100dvh)': { height: contentHeightDvh },
-              minHeight: 0,
+              minWidth: 0,
               flex: 1,
               display: 'flex',
               flexDirection: 'column',
+              height: '100%',
               overflow: 'hidden',
               bgcolor: 'background.default',
             }}
           >
-            {children}
+            {focusMode ? null : topBar}
+            <Box
+              sx={{
+                height: contentHeight,
+                '@supports (height: 100dvh)': { height: contentHeightDvh },
+                minHeight: 0,
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+                bgcolor: 'background.default',
+              }}
+            >
+              {children}
+            </Box>
+            {showBottomNav ? bottomNav : null}
           </Box>
-          {showBottomNav ? bottomNav : null}
+
+          {/* A component, and rendered after the content column, on purpose:
+              under SSR the page registers during its own render, so the FAB
+              has to be walked last to see it. */}
+          <ShellPrimaryFab action={primaryAction} ssrRef={primaryActionSsrRef} />
         </Box>
-      </Box>
-    </GeekShellContext.Provider>
+      </GeekShellContext.Provider>
+    </GeekPrimaryActionContext.Provider>
   );
 }
