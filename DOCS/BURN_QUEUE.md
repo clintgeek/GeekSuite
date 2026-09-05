@@ -9,9 +9,9 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
+| R74 | consolidation pairs 9–10: FoodLog + DailySummary (the last two; updateFromLogs is the helper candidate) | opus | packages/schemas, both apps' two models + parity suites | 09-05 16:12 |
 | R72 | adversarial review of today's ~130 pushed commits across streams → DOCS/BURN_REVIEW.md (read-only) | opus | one new doc | 09-05 15:53 |
 | R73 | reconcile root docs (CONTEXT, RUNBOOK, CICD, DEPLOY, README, plans) with today's changes (docs only) | sonnet | root DOCS/*.md, DEPLOY.md, README.md | 09-05 15:53 |
-| R71 | consolidation pair 8: FoodItem (findOrCreate/search carve-out; barcode unique means both apps deploy together — they do) | opus | packages/schemas, both FoodItem models + parity suites | 09-05 15:38 |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
 ## Queued (launch when files free / prerequisite lands)
@@ -27,6 +27,8 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | Q22 | flockgeek backend still mounts a full REST CRUD API (9 models) with no caller in the repo — decide: delete the layer or keep as API surface | Chef's call | S |
 | Q38 | storygeek gateway module: delete (typeDefs/resolvers/model/test + merge lines + the frontend's dead Apollo plumbing) per DOCS/STORYGEEK_GATEWAY_DECISION.md — or build out | Chef's call | XS |
 | Q39 | fitnessgeek: keep or delete the three caller-less instance methods (checkGoalsMet/getProgress/getNutrition); fix the sugar/sodium ceiling-vs-floor disagreement (mealRoutes' MEAL_TYPES part done `3b842e7`) | Chef on delete; the fix XS | XS |
+| Q40 | fitnessgeek FoodItem: soft-deleted rows keep their barcode under the unique index while findOrCreate filters is_deleted:false → E11000 on re-add; fix = partial index or clear barcode on soft delete (migration) | Chef: which | S |
+| Q41 | fitnessgeek FoodItem: reconcile search (user_id:null) with foodCatalogFilter (also $exists:false); foodRoutes.js:301 open-codes a third dedupe ladder minting user-owned rows — fold into findOrCreateFoodItem or keep | design | S |
 | Q20b | aiGeek: simulated streaming (F-21) and user-gated selection (F-14) documented, not fixed | design | S |
 | Q14 | storygeek CanonCard summary text through Narration too (agent left it as a separate render path) | Chef's call | XS |
 
@@ -94,6 +96,7 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 - `d8521eb` — R27 — CSRF header in api-client authLink + startgeek clients
 - `1fda489` — R24 — bujogeek tag cloud + template journal cache; #25/#26 struck
 - `x` — R62 — DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md (found the net_carbs_grams live bug → R65)
+- `be79702` — R71 — FoodItem shared; findOrCreate ladder one implementation (fitnessgeek 229, api 1111); soft-deleted-barcode collision found
 - `d5ecb22` — R70 — zod on the bookgeek gateway mutations (38 tests; api 1082) — gateway side of #22 complete
 - `e24de33` — R69 — NutritionGoals + Meal shared (fitnessgeek 203, api 1044); Medication enum copies folded; eight shared
 - `e23559c` — R68 — zod on notegeek (8) + flockgeek (16) gateway mutations; shared validateInput; off-enum writes closed (api 1003)
