@@ -115,24 +115,56 @@ The offline page should:
 
 ## Current Status (per app)
 
+*Updated 2026-09-05 — offline-pages-per-mode + theme-color/manifest audit (TODO_ORDER #30).*
+
 | App | SW Type | Auth Safe | Manifest | Offline Page | Installable |
 |-----|---------|-----------|----------|--------------|-------------|
-| fitnessGeek | VitePWA/Workbox | ✅ | ✅ | via navigateFallback | ✅ |
-| NoteGeek | VitePWA/Workbox | ✅ | ✅ | — | ✅ |
-| BuJoGeek | VitePWA/Workbox | ✅ | ✅ | — | ✅ |
-| BabelGeek | Hand-rolled | ✅ | ✅ | ✅ | ✅ |
-| FlockGeek | Hand-rolled | ✅ | ✅ | ✅ | ✅ |
-| TemplateGeek | Hand-rolled | ✅ | ✅ | ✅ | ✅ |
-| MusicGeek | Hand-rolled | ✅ | ✅ (new) | ✅ | ✅ |
-| photoGeek | Hand-rolled | ✅ | ✅ (new) | ✅ | ✅ |
-| bookgeek | Hand-rolled | ✅ | ✅ | ✅ | ✅ — **was 404 in production until 2026-09-05**: the files sat in `web/` instead of `web/public/`, so Vite never copied them into `dist` |
-| geekSuite | None (Bun) | N/A | — | — | ❌ |
-| baseGeek | None | N/A | — | — | ❌ |
+| bookgeek | Hand-rolled | ✅ | ✅ | ✅ — now matches both light/dark palettes via `prefers-color-scheme` | ✅ |
+| bujogeek | VitePWA/Workbox | ✅ | ✅ — `scope` added, `theme_color` now matches default (light) page | ✅ (new) — precached, but **not** wired as `navigateFallback` (see note) | ✅ |
+| fitnessgeek | VitePWA/Workbox | ✅ | ⚠️ static `manifest.json` fixed; inline `manifest` in `vite.config.js` still stale — that file was already dirty (busy), skipped | ✅ (new) — precached; `navigateFallback` stays `/index.html` (SPA routing), not repointed (see note) | ✅ |
+| notegeek | VitePWA/Workbox | ✅ | ✅ — `theme_color` now matches default (light) page; `apple-touch-icon` link added | ✅ (new) — precached, not wired as `navigateFallback` (see note) | ✅ |
+| flockgeek | Hand-rolled | ✅ | ✅ — `scope` added, `theme_color` now matches default (dark) page; `apple-touch-icon` link added | ✅ — now matches both palettes via `prefers-color-scheme` | ✅ |
+| storygeek | None | N/A | ✅ (new) — `manifest.json` + manifest/apple-touch-icon links created | ✅ (new) — file exists, per-mode; **no SW yet**, so nothing auto-serves it | ❌ (no SW) |
+| startgeek | Hand-rolled | ✅ | ✅ | ✅ — dark-only by design (app has one mode, no light palette exists) | ✅ |
+| basegeek | None | N/A | — (none exists; left untouched per scope) | — | ❌ |
+
+### Note on VitePWA `navigateFallback`
+
+`navigateFallback` in Workbox's `generateSW` mode is **not** an offline-only catch — it
+unconditionally serves the precached document for every matching navigation, online or
+off (confirmed against `workbox-precaching`'s `PrecacheStrategy._handle`, which returns
+the cache hit before ever considering the network). fitnessgeek already relies on this
+for SPA routing (`navigateFallback: '/index.html'`); repointing it at `/offline.html`
+would show the offline page for every route, always. bujogeek and notegeek both use
+`react-router-dom` `BrowserRouter` with real paths, so adding a fresh
+`navigateFallback: '/offline.html'` would break deep links and refreshes the same way.
+None of the three were changed. Their new `offline.html` files are precached (existing
+`globPatterns` already match `*.html`) and reachable by direct navigation, but are not
+auto-served on a failed fetch. A true "network failed, not just unmatched" fallback
+needs `workbox-recipes`' `offlineFallback()` / a custom `setCatchHandler`, which requires
+`injectManifest` (custom SW code) — out of scope for a config-only pass.
 
 ### Remaining work
 
-- **NoteGeek, BuJoGeek**: Could benefit from offline.html fallback pages
-- **geekSuite, baseGeek**: Low priority — gateway and auth portal don't benefit much from PWA
+- **fitnessgeek**: `apps/fitnessgeek/frontend/vite.config.js` was already modified in the
+  working tree when this pass ran — skipped per the busy-file rule. Its inline VitePWA
+  `manifest.theme_color` (`#0D9488`) still disagrees with the corrected
+  `public/manifest.json` (`#FAFAF9`), and the built `dist/index.html` ships **two**
+  conflicting `<link rel="manifest">` tags (`/manifest.json` and the VitePWA-generated
+  `/manifest.webmanifest`) — pre-existing, not caused by this pass. Needs a follow-up
+  once that file is free.
+- **bujogeek**: `apps/bujogeek/frontend/vite.config.js` was already modified — skipped,
+  same rule. No corrections were needed there this pass regardless (`manifest: false`,
+  external `manifest.json` only).
+- **storygeek**: has no service worker at all. `manifest.json` and `offline.html` now
+  exist and are theme-correct, but nothing serves the offline page without a SW. Adding
+  one (hand-rolled, matching the standard's Flavor B) is app-code-shaped work, deferred.
+- **bujogeek, notegeek, fitnessgeek**: `manifest.json` icons still combine
+  `purpose: "any maskable"` on a single non-safe-zone SVG/PNG (no dedicated maskable
+  icon exists). Left as-is — do not invent icons — but a real maskable icon (safe zone
+  padding) is still missing suite-wide.
+- **basegeek**: no manifest exists; PWA remains out of scope by design (gateway/auth
+  portal, per the standard's original call).
 
 ---
 

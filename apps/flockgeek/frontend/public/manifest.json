@@ -4,8 +4,9 @@
   "description": "FlockGeek — small-flock management starter app",
   "start_url": "/",
   "display": "standalone",
+  "scope": "/",
   "background_color": "#0f0f0d",
-  "theme_color": "#d4910a",
+  "theme_color": "#0f0f0d",
   "icons": [
     {
       "src": "/icons/icon-192.svg",

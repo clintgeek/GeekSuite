@@ -3,32 +3,32 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f5f0e6">
-  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0f0f0d">
-  <title>FlockGeek — Offline</title>
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f4ece1">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1a1614">
+  <title>StoryGeek — Offline</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      color-scheme: dark light;
-      --page: #0f0f0d;
-      --text: #e8e2d4;
-      --muted: #9c9685;
-      --accent: #d4910a;
-      --accent-hover: #e8b44a;
-      --accent-text: #1a1a18;
+      color-scheme: light dark;
+      --page: #f4ece1;
+      --text: #2c1810;
+      --muted: #5a4636;
+      --accent: #8b2635;
+      --accent-hover: #6d1f2b;
+      --accent-text: #ffffff;
     }
-    @media (prefers-color-scheme: light) {
+    @media (prefers-color-scheme: dark) {
       :root {
-        --page: #f5f0e6;
-        --text: #1a1a18;
-        --muted: #6b6456;
-        --accent: #b57b00;
-        --accent-hover: #8f6200;
-        --accent-text: #ffffff;
+        --page: #1a1614;
+        --text: #e8dcc8;
+        --muted: #b8a890;
+        --accent: #c9a84c;
+        --accent-hover: #e0c872;
+        --accent-text: #1a1614;
       }
     }
     body {
-      font-family: "IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-family: Georgia, 'Times New Roman', serif;
       display: flex; align-items: center; justify-content: center;
       min-height: 100vh; min-height: 100dvh;
       background: var(--page); color: var(--text);
@@ -42,8 +42,8 @@
     .card { max-width: 400px; }
     .icon { font-size: 4rem; margin-bottom: 1rem; }
     h1 {
-      font-family: Georgia, 'Times New Roman', serif;
-      font-weight: 400;
+      font-weight: 700;
+      letter-spacing: 0.04em;
       font-size: 1.5rem; margin-bottom: 0.5rem; color: var(--accent);
     }
     p { font-size: 1rem; line-height: 1.6; color: var(--muted); margin-bottom: 1.5rem; }
@@ -58,9 +58,9 @@
 </head>
 <body>
   <div class="card">
-    <div class="icon">🐔</div>
+    <div class="icon">📖</div>
     <h1>You're offline</h1>
-    <p>FlockGeek needs an internet connection to work. Check your connection and try again.</p>
+    <p>StoryGeek needs an internet connection to work. Check your connection and try again.</p>
     <button onclick="window.location.reload()">Retry</button>
   </div>
 </body>

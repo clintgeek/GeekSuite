@@ -21,7 +21,7 @@ export default defineConfig(({ mode }) => {
           name: 'NoteGeek',
           short_name: 'NoteGeek',
           description: 'A powerful note-taking application',
-          theme_color: '#8B2C2A',
+          theme_color: '#FBF7EE',
           background_color: '#FBF7EE',
           display: 'standalone',
           orientation: 'any',
@@ -120,7 +120,19 @@ export default defineConfig(({ mode }) => {
       sourcemap: true,
     },
     optimizeDeps: {
-      include: ['jwt-decode']
+      // jwt-decode: small CJS dep the scanner otherwise finds late.
+      // @mui/material/styles + the emotion pair: notegeek's entry graph is
+      // the heaviest in the suite (tiptap, tldraw, reactflow, all with deep
+      // dynamic import graphs of their own), which makes esbuild's scanner
+      // discover MUI's styled() chain across more than one optimize pass
+      // ("Re-optimizing dependencies..."). Each pass can re-split chunks
+      // differently, and MUI's styles module is lazy-initialized (CJS
+      // interop wraps it in an __esm() block) — if the chunk that calls
+      // init_styled() isn't guaranteed to run before the chunk that calls
+      // styled_default(), the latter throws "styled_default is not a
+      // function". Forcing these into the *first* scan pins one stable
+      // chunk graph instead of letting late discovery reshuffle it.
+      include: ['jwt-decode', '@mui/material/styles', '@emotion/react', '@emotion/styled']
     },
     define: {
       'import.meta.env.VITE_API_URL': JSON.stringify(apiUrl)

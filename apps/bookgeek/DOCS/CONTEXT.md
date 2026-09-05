@@ -42,7 +42,7 @@ Exclusive Shelf, My Review, Spoiler, Private Notes, Read Count, Owned Copies
 
 ## Tech Stack
 
-- **Runtime:** Bun (not Node)
+- **Runtime:** node:20-alpine (build stage) / node:20-slim (production stage) — see Dockerfile
 - **Language:** JavaScript (not TypeScript)
 - **Backend:** Bun + Express
 - **Frontend:** React + Tailwind + shadcn/ui (Bun bundler)
