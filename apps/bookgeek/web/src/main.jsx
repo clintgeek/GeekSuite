@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React from "react";
 import { createRoot } from "react-dom/client";
 import { ThemeProvider } from "@mui/material/styles";
 import { CssBaseline } from "@mui/material";
@@ -31,12 +31,6 @@ function Root() {
 function ThemeWrapper() {
   const { theme: mode } = useThemeMode();
   const muiTheme = React.useMemo(() => createBookTheme(mode), [mode]);
-
-  useEffect(() => {
-    const root = document.documentElement;
-    root.classList.remove("dark", "light");
-    root.classList.add(mode);
-  }, [mode]);
 
   return (
     <ThemeProvider theme={muiTheme}>

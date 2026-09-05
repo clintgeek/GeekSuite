@@ -2058,11 +2058,20 @@ export default function App() {
 
   if (sessionLoading) {
     return (
-      <div className="min-h-screen font-sans" style={{ backgroundColor: 'var(--color-bg-page)', color: 'var(--color-text-primary)' }}>
-        <div className="mx-auto flex min-h-screen max-w-6xl flex-col items-center justify-center px-4 py-8 md:px-6">
-          <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Checking session…</div>
-        </div>
-      </div>
+      <Box
+        sx={{
+          minHeight: "100vh",
+          "@supports (height: 100dvh)": { minHeight: "100dvh" },
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          bgcolor: "background.default",
+          color: "text.secondary",
+          typography: "body1",
+        }}
+      >
+        Checking session…
+      </Box>
     );
   }
 

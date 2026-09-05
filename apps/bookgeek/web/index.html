@@ -16,34 +16,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/src/styles.css" />
 
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        darkMode: ['selector', '[data-theme="dark"]'],
-        theme: {
-          extend: {
-            fontFamily: {
-              sans: ["Inter", "system-ui", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
-              serif: ["DM Serif Display", "Georgia", "Cambria", "Times New Roman", "serif"],
-            },
-            colors: {
-              bg: {
-                DEFAULT: "var(--color-bg-page)",
-              },
-              surface: {
-                DEFAULT: "var(--color-bg-surface)",
-                alt: "var(--color-bg-surface-alt)",
-              },
-              card: {
-                DEFAULT: "var(--color-bg-card)",
-              },
-            },
-          },
-        },
-      };
-    </script>
   </head>
   <body>
     <div id="root"></div>
