@@ -1,12 +1,58 @@
 /**
  * BookGeek settings view — the "profile" pane behind the sidebar's Settings.
  *
- * Lifted verbatim out of `App.jsx`: profile + Kindle/device word, default
- * shelf, custom shelves, AI status, Goodreads import/dedupe and the library
- * rescan. State stays in `App`; this component only renders what it is given.
+ * Real MUI page (DOCS/MOBILE_UI_PLAN.md §3.4): Account, Send to device,
+ * Default shelf, Shelves, Library maintenance, AI — each a caption-labeled
+ * section separated by dividers. Sign-out and "back to library" are gone;
+ * the top bar's account menu owns both. State stays in `App`; this
+ * component only renders what it is given.
  */
 import React from "react";
+import Alert from "@mui/material/Alert";
+import Avatar from "@mui/material/Avatar";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import CircularProgress from "@mui/material/CircularProgress";
+import Divider from "@mui/material/Divider";
+import FormControl from "@mui/material/FormControl";
+import FormHelperText from "@mui/material/FormHelperText";
+import Grid from "@mui/material/Grid";
+import IconButton from "@mui/material/IconButton";
+import InputLabel from "@mui/material/InputLabel";
+import List from "@mui/material/List";
+import ListItem from "@mui/material/ListItem";
+import MenuItem from "@mui/material/MenuItem";
+import Select from "@mui/material/Select";
+import Stack from "@mui/material/Stack";
+import TextField from "@mui/material/TextField";
+import Typography from "@mui/material/Typography";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import { loginRedirect } from "@geeksuite/auth";
+import { GeekEmptyState } from "@geeksuite/ui";
+import { displayNameFrom, initialsFrom, secondaryFrom } from "../utils/userDisplay";
+
+/** Uppercase, letter-spaced section label — the "h3" of this page without
+ * borrowing the display serif (identity type is reserved for >=18px). */
+function SectionLabel({ children }) {
+  return (
+    <Typography
+      component="h3"
+      variant="overline"
+      sx={{ display: "block", color: "text.muted", letterSpacing: "0.08em", fontWeight: 600 }}
+    >
+      {children}
+    </Typography>
+  );
+}
+
+function SpinnerButton({ loading, children, ...props }) {
+  return (
+    <Button {...props} disabled={props.disabled || loading}>
+      {loading ? <CircularProgress size={20} color="inherit" sx={{ mr: children ? 1 : 0 }} /> : null}
+      {children}
+    </Button>
+  );
+}
 
 export default function SettingsView({
   aiStatus,
@@ -34,7 +80,7 @@ export default function SettingsView({
   handleGoodreadsDedupe,
   handleGoodreadsFileChange,
   handleGoodreadsImport,
-  handleLogout,
+  handleLogout, // eslint-disable-line no-unused-vars -- top bar's account menu owns sign-out now
   handleSaveDefaultShelf,
   handleSaveProfile,
   kindleEmailInput,
@@ -52,359 +98,343 @@ export default function SettingsView({
   setDeviceWordInput,
   setKindleEmailInput,
   setNewShelfLabel,
-  setShelfFilter,
+  setShelfFilter, // eslint-disable-line no-unused-vars -- was only used by the removed "back to library" button
   shelfEditError,
   shelfEditLoading,
   shelves,
   user,
 }) {
-  return (
-    <section className="flex-1 rounded-xl p-3.5 md:p-4" style={{ backgroundColor: 'var(--color-bg-surface-alt)', border: '1px solid var(--color-border)' }}>
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div>
-          <p className="text-[11px] md:text-xs" style={{ color: 'var(--color-text-muted)' }}>
-            Manage your account and Kindle email for send-to-device.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            setActiveView("library");
-            setShelfFilter("all");
-          }}
-          className="inline-flex items-center rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-900 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:border-slate-500 dark:hover:bg-slate-800"
+  if (!user) {
+    return (
+      <Box sx={{ maxWidth: 720, mx: "auto", px: 2 }}>
+        <GeekEmptyState
+          title="Sign in to manage your account"
+          description="Sign in with your baseGeek account to enable BookGeek features tied to your profile: Kindle send-to-device, shelves, and library preferences."
+          action={
+            <>
+              <Button
+                variant="contained"
+                disabled={authLoading}
+                onClick={() => {
+                  setAuthLoading(true);
+                  setAuthError(null);
+                  loginRedirect("bookgeek", window.location.href, "login");
+                }}
+              >
+                {authLoading ? "Redirecting…" : "Sign in"}
+              </Button>
+              <Button variant="text" onClick={() => setActiveView("library")}>
+                Cancel
+              </Button>
+            </>
+          }
         >
-          ← Back to library
-        </button>
-      </div>
+          {authError ? (
+            <Alert severity="error" variant="standard" sx={{ mt: 2, textAlign: "left" }}>
+              {authError}
+            </Alert>
+          ) : null}
+        </GeekEmptyState>
+      </Box>
+    );
+  }
 
-      {!user ? (
-        <div className="max-w-sm space-y-2">
-          <div className="text-[11px] text-slate-500 dark:text-slate-400">
-            Sign in with your baseGeek account to enable BookGeek
-            features tied to your profile.
-          </div>
-          {authError && (
-            <div className="text-[10px] text-rose-700 dark:text-rose-400">{authError}</div>
-          )}
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              disabled={authLoading}
-              onClick={() => {
-                setAuthLoading(true);
-                setAuthError(null);
-                loginRedirect("bookgeek", window.location.href, "login");
-              }}
-              className="inline-flex items-center rounded border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-900 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 dark:hover:border-slate-500 dark:hover:bg-slate-800 disabled:opacity-60"
-            >
-              {authLoading ? "Redirecting…" : "Sign in"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveView("library")}
-              className="text-[11px] text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-[11px] text-slate-600 dark:text-slate-300">
-              Signed in as{" "}
-              <span className="font-medium">
-                {user.email || user.username || "unknown"}
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="rounded border border-slate-300 bg-white px-3 py-1.5 text-[11px] text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-slate-500 dark:hover:bg-slate-800"
-            >
-              Log out
-            </button>
-          </div>
+  const nonAllShelves = shelves.filter((s) => s.id !== "all");
 
-          <form
-            className="max-w-sm space-y-2"
-            onSubmit={handleSaveProfile}
-          >
-            <div className="text-[11px] font-medium text-slate-700 dark:text-slate-200">
-              Kindle email address
-            </div>
-            <p className="text-[11px] text-slate-500">
-              This is where BookGeek will send EPUBs when you choose
-              &quot;Send to eReader&quot;.
-            </p>
-            <input
+  return (
+    <Box sx={{ maxWidth: 720, mx: "auto", px: 2, pb: 4 }}>
+      <Stack divider={<Divider sx={{ my: 3 }} />} spacing={3}>
+        {/* Account */}
+        <Stack spacing={1.5}>
+          <SectionLabel>Account</SectionLabel>
+          <Stack direction="row" alignItems="center" spacing={2}>
+            <Avatar sx={{ width: 44, height: 44, bgcolor: "primary.main", color: "primary.contrastText" }}>
+              {initialsFrom(user)}
+            </Avatar>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="body1" sx={{ fontWeight: 500 }} noWrap>
+                {displayNameFrom(user)}
+              </Typography>
+              <Typography variant="body2" sx={{ color: "text.secondary" }} noWrap>
+                {secondaryFrom(user)}
+              </Typography>
+            </Box>
+          </Stack>
+        </Stack>
+
+        {/* Send to device */}
+        <Box component="form" id="settings-send-to-device-form" onSubmit={handleSaveProfile}>
+          <Stack spacing={1.5}>
+            <SectionLabel>Send to device</SectionLabel>
+            <TextField
+              label="Kindle email address"
               type="email"
-              className="w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-[11px] text-slate-900 outline-none focus:border-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
               placeholder="yourname@kindle.com"
               value={kindleEmailInput}
               onChange={(e) => setKindleEmailInput(e.target.value)}
+              fullWidth
             />
-
-            <div className="pt-2 text-[11px] font-medium text-slate-700 dark:text-slate-200">
-              Device word
-            </div>
-            <p className="text-[11px] text-slate-500">
-              Used on your e-reader at /download-basket to fetch your
-              basket.
-            </p>
-            <input
-              type="text"
-              className="w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-[11px] text-slate-900 outline-none focus:border-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
+            <TextField
+              label="Device word"
               placeholder="mustang"
               value={deviceWordInput}
-              onChange={(e) =>
-                setDeviceWordInput(e.target.value.toLowerCase())
-              }
+              onChange={(e) => setDeviceWordInput(e.target.value.toLowerCase())}
+              helperText="Used on your e-reader at /download-basket to fetch your basket."
+              fullWidth
             />
-            {profileError && (
-              <div className="text-[10px] text-rose-700 dark:text-rose-400">
-                {profileError}
-              </div>
-            )}
-            {profileMessage && (
-              <div className="text-[10px] text-emerald-700 dark:text-emerald-300">
+            {profileError ? <FormHelperText error>{profileError}</FormHelperText> : null}
+            {profileMessage ? (
+              <Alert severity="success" variant="standard">
                 {profileMessage}
-              </div>
-            )}
-            <button
-              type="submit"
-              disabled={profileLoading}
-              className="inline-flex items-center rounded border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-900 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 dark:hover:border-slate-500 dark:hover:bg-slate-800 disabled:opacity-60"
+              </Alert>
+            ) : null}
+            <Box>
+              <SpinnerButton type="submit" variant="contained" loading={profileLoading}>
+                Save
+              </SpinnerButton>
+            </Box>
+          </Stack>
+        </Box>
+
+        {/* Default shelf */}
+        <Stack spacing={1.5}>
+          <SectionLabel>Default shelf</SectionLabel>
+          <Typography variant="body2" sx={{ color: "text.secondary" }}>
+            Choose which shelf loads by default when you open BookGeek.
+          </Typography>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} alignItems={{ sm: "center" }}>
+            <FormControl sx={{ minWidth: 220 }}>
+              <InputLabel id="default-shelf-label">Default shelf</InputLabel>
+              <Select
+                labelId="default-shelf-label"
+                label="Default shelf"
+                value={defaultShelfPref}
+                onChange={(e) => setDefaultShelfPref(e.target.value)}
+              >
+                {shelves.map((shelf) => (
+                  <MenuItem key={shelf.id} value={shelf.id}>
+                    {shelf.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <SpinnerButton
+              variant="contained"
+              loading={prefSaveLoading}
+              onClick={handleSaveDefaultShelf}
             >
-              {profileLoading ? "Saving…" : "Save profile"}
-            </button>
-          </form>
+              Save
+            </SpinnerButton>
+          </Stack>
+          {prefSaveError ? <FormHelperText error>{prefSaveError}</FormHelperText> : null}
+          {prefSaveMessage ? (
+            <Alert severity="success" variant="standard">
+              {prefSaveMessage}
+            </Alert>
+          ) : null}
+        </Stack>
 
-          <div className="border-t border-slate-200 pt-3 dark:border-slate-800 text-[11px] text-slate-500 space-y-4">
-            <div>
-              <div className="mb-1 text-[11px] font-medium text-slate-700 dark:text-slate-200">
-                Library default shelf
-              </div>
-              <p className="mb-2 text-[11px] text-slate-500">
-                Choose which shelf loads by default when you open BookGeek.
-              </p>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-                <select
-                  className="w-full max-w-xs rounded border border-slate-300 bg-white px-2 py-1.5 text-[11px] text-slate-900 outline-none focus:border-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
-                  value={defaultShelfPref}
-                  onChange={(e) => setDefaultShelfPref(e.target.value)}
-                >
-                  {shelves.map((shelf) => (
-                    <option key={shelf.id} value={shelf.id}>
-                      {shelf.label}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={handleSaveDefaultShelf}
-                  disabled={prefSaveLoading}
-                  className="inline-flex items-center rounded border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-900 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 dark:hover:border-slate-500 dark:hover:bg-slate-800 disabled:opacity-60"
-                >
-                  {prefSaveLoading ? "Saving…" : "Save default shelf"}
-                </button>
-              </div>
-              {prefSaveError && (
-                <div className="mt-1 text-[10px] text-rose-700 dark:text-rose-400">{prefSaveError}</div>
-              )}
-              {prefSaveMessage && (
-                <div className="mt-1 text-[10px] text-emerald-700 dark:text-emerald-300">{prefSaveMessage}</div>
-              )}
-            </div>
-
-            <div>
-              <div className="mb-1 text-[11px] font-medium text-slate-700 dark:text-slate-200">
-                Custom shelves
-              </div>
-              <p className="mb-2 text-[11px] text-slate-500">
-                Add your own shelves alongside the built-in ones. They show in the sidebar with a book icon.
-              </p>
-              {customShelves.length > 0 && (
-                <ul className="mb-2 flex flex-wrap gap-1.5">
-                  {customShelves.map((shelf) => (
-                    <li
-                      key={shelf.id}
-                      className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[11px] text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+        {/* Shelves */}
+        <Stack spacing={1.5}>
+          <SectionLabel>Shelves</SectionLabel>
+          <Typography variant="body2" sx={{ color: "text.secondary" }}>
+            Add your own shelves alongside the built-in ones. They show in the sidebar with a
+            book icon.
+          </Typography>
+          {customShelves.length > 0 ? (
+            <List disablePadding>
+              {customShelves.map((shelf) => (
+                <ListItem
+                  key={shelf.id}
+                  disableGutters
+                  sx={{ minHeight: 44, py: 0.5 }}
+                  secondaryAction={
+                    <IconButton
+                      edge="end"
+                      aria-label={`Remove shelf ${shelf.label}`}
+                      title="Remove shelf"
+                      onClick={() => handleDeleteCustomShelf(shelf.id)}
+                      disabled={shelfEditLoading}
+                      sx={{ width: 44, height: 44 }}
                     >
-                      <span>{shelf.label}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteCustomShelf(shelf.id)}
-                        disabled={shelfEditLoading}
-                        className="ml-0.5 rounded px-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 disabled:opacity-60"
-                        aria-label={`Remove shelf ${shelf.label}`}
-                        title="Remove shelf"
-                      >
-                        ×
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <form
-                onSubmit={handleAddCustomShelf}
-                className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3"
+                      <DeleteOutlineIcon fontSize="small" />
+                    </IconButton>
+                  }
+                >
+                  <Box
+                    aria-hidden="true"
+                    sx={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: "50%",
+                      bgcolor: "shelf.custom",
+                      mr: 1.5,
+                      flexShrink: 0,
+                    }}
+                  />
+                  <Typography variant="body2">{shelf.label}</Typography>
+                </ListItem>
+              ))}
+            </List>
+          ) : null}
+          <Box component="form" id="settings-add-shelf-form" onSubmit={handleAddCustomShelf}>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} alignItems={{ sm: "center" }}>
+              <TextField
+                label="New shelf"
+                value={newShelfLabel}
+                onChange={(e) => setNewShelfLabel(e.target.value)}
+                inputProps={{ maxLength: 40 }}
+                sx={{ minWidth: 220 }}
+              />
+              <SpinnerButton
+                type="submit"
+                variant="contained"
+                loading={shelfEditLoading}
+                disabled={!newShelfLabel.trim()}
               >
-                <input
-                  type="text"
-                  value={newShelfLabel}
-                  onChange={(e) => setNewShelfLabel(e.target.value)}
-                  maxLength={40}
-                  placeholder="New shelf name"
-                  className="w-full max-w-xs rounded border border-slate-300 bg-white px-2 py-1.5 text-[11px] text-slate-900 outline-none focus:border-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
-                />
-                <button
-                  type="submit"
-                  disabled={shelfEditLoading || !newShelfLabel.trim()}
-                  className="inline-flex items-center rounded border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-900 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 dark:hover:border-slate-500 dark:hover:bg-slate-800 disabled:opacity-60"
-                >
-                  {shelfEditLoading ? "Saving…" : "Add shelf"}
-                </button>
-              </form>
-              {shelfEditError && (
-                <div className="mt-1 text-[10px] text-rose-700 dark:text-rose-400">{shelfEditError}</div>
-              )}
-            </div>
+                Add
+              </SpinnerButton>
+            </Stack>
+          </Box>
+          {shelfEditError ? <FormHelperText error>{shelfEditError}</FormHelperText> : null}
+        </Stack>
 
-            <div>
-              <button
-                type="button"
-                onClick={handleCheckAiStatus}
-                disabled={aiStatusLoading}
-                className="rounded border border-emerald-600/70 bg-emerald-100 px-3 py-1.5 text-[11px] text-emerald-800 hover:border-emerald-500 dark:bg-emerald-950/40 dark:text-emerald-200 dark:hover:border-emerald-400 disabled:opacity-60"
-              >
-                {aiStatusLoading ? "Checking AI…" : "Check AI status"}
-              </button>
-              {aiStatus && (
-                <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">
-                  AI:{" "}
-                  <span className="font-medium">
-                    {aiStatus.enabled ? "enabled" : "disabled"}
-                  </span>
-                  {" · "}
-                  key:{" "}
-                  {aiStatus.apiKeyConfigured ? "configured" : "missing"}
-                </div>
-              )}
-              {aiStatusError && (
-                <div className="mt-1 text-[10px] text-rose-700 dark:text-rose-400">
-                  {aiStatusError}
-                </div>
-              )}
-            </div>
+        {/* Library maintenance */}
+        <Stack spacing={1.5}>
+          <SectionLabel>Library maintenance</SectionLabel>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={4}>
+              <Stack spacing={1} sx={{ height: "100%" }}>
+                <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                  Goodreads import
+                </Typography>
+                <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                  Upload your Goodreads library CSV export to import ratings, shelves, and read
+                  dates onto your existing books.
+                </Typography>
+                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                  <Button variant="outlined" component="label">
+                    Choose file…
+                    <input
+                      type="file"
+                      accept=".csv,text/csv"
+                      hidden
+                      onChange={handleGoodreadsFileChange}
+                    />
+                  </Button>
+                  {goodreadsFile ? (
+                    <Typography variant="body2" sx={{ color: "text.secondary" }} noWrap>
+                      {goodreadsFile.name}
+                    </Typography>
+                  ) : null}
+                </Stack>
+                <Box>
+                  <SpinnerButton
+                    variant="contained"
+                    loading={goodreadsImportLoading}
+                    disabled={!goodreadsFile}
+                    onClick={handleGoodreadsImport}
+                  >
+                    Import
+                  </SpinnerButton>
+                </Box>
+                {goodreadsImportError ? (
+                  <FormHelperText error>{goodreadsImportError}</FormHelperText>
+                ) : null}
+                {goodreadsImportSummary ? (
+                  <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                    Imported: {goodreadsImportSummary.updated ?? 0} updated,{" "}
+                    {goodreadsImportSummary.created ?? 0} created,{" "}
+                    {goodreadsImportSummary.matched ?? 0} matched to existing,{" "}
+                    {goodreadsImportSummary.skippedNoMatch ?? 0} with no usable data.
+                  </Typography>
+                ) : null}
+              </Stack>
+            </Grid>
 
-            <div>
-              <div className="mb-1 text-[11px] font-medium text-slate-700 dark:text-slate-200">
-                Goodreads import
-              </div>
-              <p className="mb-2 text-[11px] text-slate-500">
-                Upload your Goodreads library CSV export to import ratings,
-                shelves, and read dates onto your existing books.
-              </p>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <input
-                  type="file"
-                  accept=".csv,text/csv"
-                  onChange={handleGoodreadsFileChange}
-                  className="text-[11px] text-slate-700 file:mr-2 file:rounded file:border-0 file:bg-slate-200 file:px-2 file:py-1.5 file:text-[11px] file:text-slate-900 hover:file:bg-slate-300 dark:text-slate-200 dark:file:bg-slate-800 dark:file:text-slate-100 dark:hover:file:bg-slate-700"
-                />
-                <button
-                  type="button"
-                  onClick={handleGoodreadsImport}
-                  disabled={goodreadsImportLoading || !goodreadsFile}
-                  className="inline-flex items-center rounded border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-900 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 dark:hover:border-slate-500 dark:hover:bg-slate-800 disabled:opacity-60"
-                >
-                  {goodreadsImportLoading
-                    ? "Importing from Goodreads…"
-                    : "Upload & import"}
-                </button>
-              </div>
-              {goodreadsImportError && (
-                <div className="mt-1 text-[10px] text-rose-700 dark:text-rose-400">
-                  {goodreadsImportError}
-                </div>
-              )}
-              {goodreadsImportSummary && (
-                <div className="mt-1 text-[10px] text-emerald-700 dark:text-emerald-300">
-                  Imported Goodreads CSV: {goodreadsImportSummary.updated ?? 0} updated,
-                  {" "}
-                  {goodreadsImportSummary.created ?? 0} created,
-                  {" "}
-                  {goodreadsImportSummary.matched ?? 0} matched to existing,
-                  {" "}
-                  {goodreadsImportSummary.skippedNoMatch ?? 0} with no usable data.
-                </div>
-              )}
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleGoodreadsDedupe}
-                  disabled={goodreadsDedupeLoading}
-                  className="inline-flex items-center rounded border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-900 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 dark:hover:border-slate-500 dark:hover:bg-slate-800 disabled:opacity-60"
-                >
-                  {goodreadsDedupeLoading
-                    ? "Merging duplicates…"
-                    : "Merge Goodreads duplicates"}
-                </button>
-                {goodreadsDedupeError && (
-                  <span className="text-[10px] text-rose-700 dark:text-rose-400">
-                    {goodreadsDedupeError}
-                  </span>
-                )}
-                {goodreadsDedupeSummary && (
-                  <span className="text-[10px] text-emerald-700 dark:text-emerald-300">
-                    Merged {goodreadsDedupeSummary.merged ?? 0} of {" "}
-                    {goodreadsDedupeSummary.candidates ?? 0} Goodreads-only books; {" "}
-                    updated {goodreadsDedupeSummary.updatedPrimary ?? 0} primaries; {" "}
+            <Grid item xs={12} md={4}>
+              <Stack spacing={1} sx={{ height: "100%" }}>
+                <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                  Goodreads dedupe
+                </Typography>
+                <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                  Merge Goodreads-only records into the matching primary book already in your
+                  library.
+                </Typography>
+                <Box>
+                  <SpinnerButton
+                    variant="contained"
+                    loading={goodreadsDedupeLoading}
+                    onClick={handleGoodreadsDedupe}
+                  >
+                    Merge duplicates
+                  </SpinnerButton>
+                </Box>
+                {goodreadsDedupeError ? (
+                  <FormHelperText error>{goodreadsDedupeError}</FormHelperText>
+                ) : null}
+                {goodreadsDedupeSummary ? (
+                  <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                    Merged {goodreadsDedupeSummary.merged ?? 0} of{" "}
+                    {goodreadsDedupeSummary.candidates ?? 0} Goodreads-only books; updated{" "}
+                    {goodreadsDedupeSummary.updatedPrimary ?? 0} primaries;{" "}
                     {goodreadsDedupeSummary.skippedNoPrimary ?? 0} skipped with no primary match.
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
+                  </Typography>
+                ) : null}
+              </Stack>
+            </Grid>
 
-          <div>
-            <div className="mb-1 text-[11px] font-medium text-slate-700 dark:text-slate-200">
-              Library rescan
-            </div>
-            <p className="mb-2 text-[11px] text-slate-500">
-              Walks your on-disk BookGeek library and attaches files to existing books,
-              marking them as owned, or creates new records if nothing matches.
-            </p>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={handleCalibreRescan}
-                disabled={calibreRescanLoading}
-                className="inline-flex items-center rounded border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-900 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 dark:hover:border-slate-500 dark:hover:bg-slate-800 disabled:opacity-60"
-              >
-                {calibreRescanLoading
-                  ? "Scanning library…"
-                  : "Rescan library"}
-              </button>
-              {calibreRescanError && (
-                <span className="text-[10px] text-rose-700 dark:text-rose-400">
-                  {calibreRescanError}
-                </span>
-              )}
-              {calibreRescanSummary && (
-                <span className="text-[10px] text-emerald-700 dark:text-emerald-300">
-                  Scanned {calibreRescanSummary.rows ?? 0} entries; attached to{" "}
-                  {calibreRescanSummary.attachedExisting ?? 0} existing books; created{" "}
-                  {calibreRescanSummary.createdNew ?? 0} new; skipped{" "}
-                  {calibreRescanSummary.skippedNoFiles ?? 0} with no files.
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-    </section>
+            <Grid item xs={12} md={4}>
+              <Stack spacing={1} sx={{ height: "100%" }}>
+                <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                  Calibre rescan
+                </Typography>
+                <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                  Walks your on-disk BookGeek library and attaches files to existing books,
+                  marking them as owned, or creates new records if nothing matches.
+                </Typography>
+                <Box>
+                  <SpinnerButton
+                    variant="contained"
+                    loading={calibreRescanLoading}
+                    onClick={handleCalibreRescan}
+                  >
+                    Rescan library
+                  </SpinnerButton>
+                </Box>
+                {calibreRescanError ? (
+                  <FormHelperText error>{calibreRescanError}</FormHelperText>
+                ) : null}
+                {calibreRescanSummary ? (
+                  <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                    Scanned {calibreRescanSummary.rows ?? 0} entries; attached to{" "}
+                    {calibreRescanSummary.attachedExisting ?? 0} existing books; created{" "}
+                    {calibreRescanSummary.createdNew ?? 0} new; skipped{" "}
+                    {calibreRescanSummary.skippedNoFiles ?? 0} with no files.
+                  </Typography>
+                ) : null}
+              </Stack>
+            </Grid>
+          </Grid>
+        </Stack>
+
+        {/* AI */}
+        <Stack spacing={1.5}>
+          <SectionLabel>AI</SectionLabel>
+          <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
+            <SpinnerButton variant="outlined" loading={aiStatusLoading} onClick={handleCheckAiStatus}>
+              Check
+            </SpinnerButton>
+            {aiStatus ? (
+              <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                AI: <strong>{aiStatus.enabled ? "enabled" : "disabled"}</strong> · key:{" "}
+                {aiStatus.apiKeyConfigured ? "configured" : "missing"}
+              </Typography>
+            ) : null}
+          </Stack>
+          {aiStatusError ? <FormHelperText error>{aiStatusError}</FormHelperText> : null}
+        </Stack>
+      </Stack>
+    </Box>
   );
 }

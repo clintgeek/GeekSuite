@@ -1,10 +1,25 @@
 /**
  * BookGeek "Add book" dialog — the MUI form behind the top bar's add action.
  *
- * Lifted verbatim out of `App.jsx`; `open` and every field still live in `App`.
+ * `GeekDialog` (DOCS/MOBILE_UI_PLAN.md §3.5): full-screen below `sm` with
+ * "Create" in the header, submitting the form by `form` id so the header
+ * button works from outside the scrolling body. `open` and every field still
+ * live in `App`.
  */
-import React from "react";
-import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, InputLabel, MenuItem, Select, TextField, Typography } from "@mui/material";
+import React, { useEffect, useState } from "react";
+import Alert from "@mui/material/Alert";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import FormControl from "@mui/material/FormControl";
+import InputLabel from "@mui/material/InputLabel";
+import MenuItem from "@mui/material/MenuItem";
+import Select from "@mui/material/Select";
+import Stack from "@mui/material/Stack";
+import TextField from "@mui/material/TextField";
+import Typography from "@mui/material/Typography";
+import { GeekDialog } from "@geeksuite/ui";
+
+const FORM_ID = "add-book-form";
 
 export default function AddBookDialog({
   addBookAuthors,
@@ -23,16 +38,39 @@ export default function AddBookDialog({
   setAddBookTitle,
   shelves,
 }) {
+  // `addBookFile` (the File object) isn't passed down — only its setter is —
+  // so the chosen filename is tracked locally purely for display. Resets on
+  // every fresh open, matching the old native `<input type=file>`'s reset on
+  // remount (this component itself never unmounts; the dialog body does).
+  const [fileName, setFileName] = useState("");
+  useEffect(() => {
+    if (addBookOpen) setFileName("");
+  }, [addBookOpen]);
+
   return (
-    <Dialog
+    <GeekDialog
       open={addBookOpen}
-      onClose={() => !addBookLoading && setAddBookOpen(false)}
-      fullWidth
-      maxWidth="sm"
+      onClose={() => setAddBookOpen(false)}
+      disableClose={addBookLoading}
+      title="Add book"
+      primaryAction={
+        <Button
+          type="submit"
+          form={FORM_ID}
+          variant="contained"
+          disabled={addBookLoading || !addBookTitle.trim()}
+        >
+          {addBookLoading ? "Creating…" : "Create"}
+        </Button>
+      }
+      secondaryAction={
+        <Button type="button" onClick={() => setAddBookOpen(false)} disabled={addBookLoading}>
+          Cancel
+        </Button>
+      }
     >
-      <DialogTitle>Add book</DialogTitle>
-      <form onSubmit={handleCreateBook}>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <Box component="form" id={FORM_ID} onSubmit={handleCreateBook}>
+        <Stack spacing={2}>
           <TextField
             label="Title"
             value={addBookTitle}
@@ -63,45 +101,47 @@ export default function AddBookDialog({
               onChange={(e) => setAddBookShelf(e.target.value)}
               label="Shelf"
             >
-              {shelves.filter((s) => s.id !== "all").map((s) => (
-                <MenuItem key={s.id} value={s.id}>{s.label}</MenuItem>
-              ))}
+              {shelves
+                .filter((s) => s.id !== "all")
+                .map((s) => (
+                  <MenuItem key={s.id} value={s.id}>
+                    {s.label}
+                  </MenuItem>
+                ))}
             </Select>
           </FormControl>
           <Box>
-            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
+            <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mb: 0.5 }}>
               Book file (optional)
             </Typography>
-            <input
-              type="file"
-              accept=".epub,.mobi,.azw3,.pdf,.fb2,.rtf,.txt,.html"
-              onChange={(e) => setAddBookFile(e.target.files?.[0] || null)}
-              className="w-full text-sm file:mr-3 file:rounded file:border-0 file:bg-sky-500/10 file:px-3 file:py-1 file:text-xs file:text-sky-500"
-            />
+            <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
+              <Button variant="outlined" component="label">
+                Choose file…
+                <input
+                  type="file"
+                  accept=".epub,.mobi,.azw3,.pdf,.fb2,.rtf,.txt,.html"
+                  hidden
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null;
+                    setAddBookFile(file);
+                    setFileName(file?.name || "");
+                  }}
+                />
+              </Button>
+              {fileName ? (
+                <Typography variant="body2" sx={{ color: "text.secondary" }} noWrap>
+                  {fileName}
+                </Typography>
+              ) : null}
+            </Stack>
           </Box>
-          {addBookError && (
-            <Typography color="error" variant="body2">
+          {addBookError ? (
+            <Alert severity="error" variant="standard">
               {addBookError}
-            </Typography>
-          )}
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button
-            type="button"
-            onClick={() => setAddBookOpen(false)}
-            disabled={addBookLoading}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            variant="contained"
-            disabled={addBookLoading || !addBookTitle.trim()}
-          >
-            {addBookLoading ? "Creating…" : "Create"}
-          </Button>
-        </DialogActions>
-      </form>
-    </Dialog>
+            </Alert>
+          ) : null}
+        </Stack>
+      </Box>
+    </GeekDialog>
   );
 }
