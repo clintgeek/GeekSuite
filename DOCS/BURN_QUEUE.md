@@ -9,6 +9,8 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
+| R58 | consolidation step 3: bookgeek profile + ai/status → gateway GraphQL; hardcoded localhost:1800 removed; routes deleted | opus | bookgeek web + api, gateway bookgeek module, SUITE_TODO | 09-05 13:52 |
+| R59 | TODO #22: zod validation on storygeek's REST backend | sonnet | storygeek backend, lockfile, TODO docs | 09-05 13:52 |
 | R57 | TODO #30 ×3: bujogeek TemplatePreview markdown, notegeek mind-map palette, flockgeek first-visit flicker | sonnet | three frontends, TODO docs | 09-05 13:42 |
 | R53 | Q33: fitnessgeek frontend food-log writes → gateway mutations; vitest setup + ci job | opus | fitnessgeek frontend, ci.yml, lockfile, SUITE_TODO | 09-05 13:40 |
 
@@ -80,6 +82,7 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 - `363a820` — R4 — mobile harness in tools/ + CI (report-only); 698 probe findings
 - `d8521eb` — R27 — CSRF header in api-client authLink + startgeek clients
 - `1fda489` — R24 — bujogeek tag cloud + template journal cache; #25/#26 struck
+- mobile-harness.yml is enforcing (continue-on-error removed)
 - `df69537` — R54 — syntax gate tools/syntax-check.mjs (736 files, ~15 s); ci job pending the workflow commit with R53
 - `717c137` — Q35 — StoryList effect keyed on user.id
 - `24e3cac` — R56 — StoryPlay render loop (effect on user object) fixed; 39 storygeek tests run (Q27)
