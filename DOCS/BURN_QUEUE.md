@@ -18,6 +18,8 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | R35 | Q17: fitnessgeek backend node 20 + ESM, consume @geeksuite/utils, drop 5 toUtcMidnight copies | opus | fitnessgeek backend, Dockerfile, lockfile | 09-05 12:35 |
 | R36 | Q20: callCohere case in callProvider + stale hardcoded model defaults (#31) | sonnet | basegeek api aiService/aiProviders/capabilities, AI_CATALOG | 09-05 12:35 |
 | R37 | TODO #20 step 1: @geeksuite/crypto-vault promoted, basegeek consumes; ci job | sonnet | packages/crypto-vault, basegeek api lib + package.json, lockfile, ci.yml | 09-05 12:35 |
+| R39 | TODO #28: startgeek adaptive wallpaper scrim (luminance-sampled) | sonnet | startgeek src (not CommandBox/graphql/basegeek) | 09-05 12:35 |
+| R40 | TODO #15 fan-out: flockgeek on GeekEmptyState/GeekErrorState/useToast | sonnet | flockgeek frontend, UI plan | 09-05 12:35 |
 | R38 | SUITE_TODO consolidation step 1: dead backend code (bookgeek unmounted graphql, notegeek legacy REST+Note, flockgeek dup models, bujogeek dup model files) | sonnet | four backends, SUITE_TODO | 09-05 12:35 |
 
 **Push gate:** `pnpm install --frozen-lockfile` on HEAD now fails only on `apps/storygeek/frontend/package.json`
