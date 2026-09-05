@@ -105,6 +105,7 @@ export default function BookCard({
           {progress > 0 && (
             <Box
               aria-hidden="true"
+              data-testid="book-card-progress"
               sx={{
                 position: "absolute",
                 left: 0,

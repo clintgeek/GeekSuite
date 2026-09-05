@@ -9,6 +9,7 @@ import { useApolloClient } from "@apollo/client";
 import { GET_BOOKS, GET_SHELVES } from "./graphql/queries.js";
 import { UPDATE_BOOK, DELETE_BOOK, CREATE_BOOK } from "./graphql/mutations.js";
 import { GeekShell, GeekAppFrame, GeekFab } from "@geeksuite/ui";
+import { isFabHidden } from "./components/navConfig";
 import Sidebar from "./components/Sidebar";
 import TopBar from "./components/TopBar";
 import { API_BASE } from "./utils/bookDisplay";
@@ -2349,7 +2350,7 @@ export default function App() {
       <GeekFab
         label="Add book"
         onClick={() => setAddBookOpen(true)}
-        hidden={activeView !== "library" || selectMode || basketBookIds.length > 0}
+        hidden={isFabHidden({ activeView, selectMode, basketBookIds })}
       />
       </GeekShell>
 

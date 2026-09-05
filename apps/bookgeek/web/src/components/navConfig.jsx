@@ -55,3 +55,13 @@ export function shelfCount(shelfSummary, shelfId) {
   if (shelfId === "all") return shelfSummary.total ?? null;
   return shelfSummary.shelves?.find((entry) => entry.id === shelfId)?.count ?? null;
 }
+
+/**
+ * Whether the library's "Add book" FAB should hide: off the library view, in
+ * select mode, or with anything already in the device basket (its own band
+ * carries "Download to device" instead). Extracted from the inline `App.jsx`
+ * expression so it has one testable name.
+ */
+export function isFabHidden({ activeView, selectMode, basketBookIds }) {
+  return activeView !== "library" || Boolean(selectMode) || (basketBookIds?.length ?? 0) > 0;
+}
