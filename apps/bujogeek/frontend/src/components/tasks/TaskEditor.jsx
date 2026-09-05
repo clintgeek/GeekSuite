@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   TextField,
   Button,
@@ -22,6 +22,8 @@ import { CREATE_NOTE } from '../../graphql/notegeekMutations';
 import { colors } from '../../theme/colors';
 import BujoDialog from '../primitives/BujoDialog';
 import RecurringEditDialog from './RecurringEditDialog';
+import SubtaskSection from './SubtaskSection';
+import { orderedSubtasks, subtaskId } from '../../utils/subtasks';
 import { buildRecurrenceRule, frequencyFromRecurrenceRule } from '../../utils/parseTaskInput';
 import { useToast } from '@geeksuite/ui';
 
@@ -66,7 +68,9 @@ const FORM_ID = 'bujo-task-editor-form';
 const TaskEditor = ({ open, onClose, task = null }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
-  const { createTask, updateTask } = useTaskContext();
+  const {
+    createTask, updateTask, addSubtask, reorderSubtasks, deleteTask,
+  } = useTaskContext();
   const existingTags = useTaskTags();
   const { collections } = useCollections();
   const { notify } = useToast();
@@ -84,8 +88,19 @@ const TaskEditor = ({ open, onClose, task = null }) => {
   });
   const [loading, setLoading] = useState(false);
   const [recurringDialogOpen, setRecurringDialogOpen] = useState(false);
+  // Steps are held locally rather than read back through the `task` prop: the
+  // pages that open this dialog hold the task they opened it with in their own
+  // state, so a step added in here would never reach the prop.
+  const [subtasks, setSubtasks] = useState([]);
+  // Create mode only — steps typed before the parent exists.
+  const [pendingSubtasks, setPendingSubtasks] = useState([]);
 
   const isEditing = Boolean(task);
+  const taskId = task ? (task.id || task._id) : null;
+  // A recurring occurrence has no document of its own to hang steps off; the
+  // gateway would have to materialize one, which is a bigger decision than a
+  // dialog should make on the writer's behalf.
+  const isVirtual = String(taskId ?? '').startsWith('virtual_');
 
   useEffect(() => {
     if (task) {
@@ -100,6 +115,8 @@ const TaskEditor = ({ open, onClose, task = null }) => {
         recurrenceFreq: frequencyFromRecurrenceRule(task.recurrenceRule),
         collectionId: task.collectionId || '',
       });
+      setSubtasks(orderedSubtasks(task));
+      setPendingSubtasks([]);
     } else {
       setFormData({
         content: '',
@@ -112,8 +129,42 @@ const TaskEditor = ({ open, onClose, task = null }) => {
         recurrenceFreq: 'none',
         collectionId: '',
       });
+      setSubtasks([]);
+      setPendingSubtasks([]);
     }
   }, [task]);
+
+  // ─── Steps ──────────────────────────────────────────────────────────────
+  // Each of these lands immediately when editing; in create mode the section
+  // buffers instead and `performSubmit` plays them back once the parent has an
+  // id. Local state mirrors what the mutation returned so the list is right
+  // without waiting for a refetch.
+
+  const handleAddSubtask = useCallback(async (content) => {
+    if (!taskId) return null;
+    const created = await addSubtask(taskId, { content });
+    if (created) setSubtasks((prev) => [...prev, created]);
+    return created;
+  }, [taskId, addSubtask]);
+
+  const handleRemoveSubtask = useCallback(async (subtask) => {
+    const id = subtaskId(subtask);
+    // A step is an ordinary task, so removing one is deleting it — there is no
+    // "detach" that would leave a parentless fragment in the log.
+    await deleteTask(id, 'THIS_INSTANCE');
+    setSubtasks((prev) => prev.filter((child) => subtaskId(child) !== id));
+  }, [deleteTask]);
+
+  const handleReorderSubtasks = useCallback(async (orderedIds) => {
+    if (!taskId) return;
+    const previous = subtasks;
+    const byId = new Map(previous.map((child) => [subtaskId(child), child]));
+    const next = orderedIds.map((id) => byId.get(String(id))).filter(Boolean);
+    if (next.length !== previous.length) return;
+    setSubtasks(next);
+    const result = await reorderSubtasks(taskId, orderedIds);
+    if (!result) setSubtasks(previous);
+  }, [taskId, subtasks, reorderSubtasks]);
 
   const handleChange = (field) => (event) => {
     setFormData({ ...formData, [field]: event.target.value });
@@ -169,9 +220,19 @@ const TaskEditor = ({ open, onClose, task = null }) => {
     try {
       const payload = buildPayload();
       if (isEditing) {
-        await updateTask(task.id || task._id, payload, editScope);
+        await updateTask(taskId, payload, editScope);
       } else {
-        await createTask(payload);
+        const created = await createTask(payload);
+        // Steps typed before the entry existed. Created in order, one at a
+        // time — the gateway appends, so a parallel burst would land in an
+        // order nobody asked for. A failure here has already been surfaced by
+        // the context; the entry itself is saved either way.
+        const newId = created?.id || created?._id;
+        if (newId) {
+          for (const step of pendingSubtasks) {
+            await addSubtask(newId, { content: step.content });
+          }
+        }
       }
       onClose();
     } catch (error) {
@@ -453,6 +514,20 @@ const TaskEditor = ({ open, onClose, task = null }) => {
               </Select>
             </FormControl>
           </Box>
+
+          {/* ─── Subtasks section ────────────────────────────────── */}
+          {!isVirtual && (
+            <SubtaskSection
+              taskId={taskId}
+              subtasks={subtasks}
+              onAdd={handleAddSubtask}
+              onRemove={handleRemoveSubtask}
+              onReorder={handleReorderSubtasks}
+              pending={pendingSubtasks}
+              onPendingChange={setPendingSubtasks}
+              disabled={loading}
+            />
+          )}
 
           {/* ─── Recurrence section ──────────────────────────────── */}
           <Box sx={{ borderTop: dottedRule, pt: 2.5, mb: 1 }}>

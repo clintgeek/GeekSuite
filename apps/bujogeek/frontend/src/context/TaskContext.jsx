@@ -7,8 +7,16 @@ import {
 } from '../graphql/queries';
 import {
   CREATE_TASK, UPDATE_TASK, DELETE_TASK, UPDATE_TASK_STATUS, MIGRATE_TASK_TO_FUTURE, SAVE_DAILY_TASK_ORDER,
-  BLOCK_TASK, UNBLOCK_TASK
+  BLOCK_TASK, UNBLOCK_TASK, ADD_SUBTASK, REORDER_SUBTASKS
 } from '../graphql/mutations';
+// The cache rule these `update` functions implement is written down at the
+// client setup — see `apolloClient.js`. In short: this context owns the log
+// views' React state, and the update functions own everything the Apollo
+// cache holds (collections, their counts, the tag index, subtask membership).
+import {
+  onTaskCreated, onTaskUpdated, onTaskStatusChanged, onTaskDeleted,
+  onSubtaskAdded, onSubtaskRemoved,
+} from '../graphql/cacheUpdates';
 import RecurringEditDialog from '../components/tasks/RecurringEditDialog';
 // Pure sort module — keeps the comparator testable without this file's deps.
 import { compareTasks, sortTasks } from '../utils/taskSort.js';
@@ -42,17 +50,76 @@ export { compareTasks };
 
 const sameTask = (task, taskId) => String(task?.id ?? task?._id) === String(taskId);
 
-/** Find a task in either state shape (flat array, or object keyed by date). */
+/** The task itself, or whichever of its steps carries `taskId`. */
+const findInTask = (task, taskId) => {
+  if (sameTask(task, taskId)) return task;
+  const children = Array.isArray(task?.subtasks) ? task.subtasks : [];
+  return children.find(child => sameTask(child, taskId)) || null;
+};
+
+/**
+ * Find a task in either state shape (flat array, or object keyed by date),
+ * searching one level of subtasks as well — a step is togglable, editable and
+ * deletable from its parent's expanded row, so every lookup here has to be
+ * able to reach it.
+ */
 const findTaskInState = (state, taskId) => {
-  if (Array.isArray(state)) return state.find(t => sameTask(t, taskId)) || null;
+  const search = (list) => {
+    for (const task of list) {
+      const found = findInTask(task, taskId);
+      if (found) return found;
+    }
+    return null;
+  };
+
+  if (Array.isArray(state)) return search(state);
   if (!state || typeof state !== 'object') return null;
 
   for (const list of Object.values(state)) {
     if (!Array.isArray(list)) continue;
-    const found = list.find(t => sameTask(t, taskId));
+    const found = search(list);
     if (found) return found;
   }
   return null;
+};
+
+/** The task that owns `taskId` as one of its steps, if any. */
+const findParentInState = (state, taskId) => {
+  const search = (list) => list.find(task => (
+    !sameTask(task, taskId) &&
+    (Array.isArray(task?.subtasks) ? task.subtasks : []).some(child => sameTask(child, taskId))
+  )) || null;
+
+  if (Array.isArray(state)) return search(state);
+  if (!state || typeof state !== 'object') return null;
+  for (const list of Object.values(state)) {
+    if (!Array.isArray(list)) continue;
+    const found = search(list);
+    if (found) return found;
+  }
+  return null;
+};
+
+/**
+ * Apply `mapper` to a task AND to each of its steps.
+ *
+ * A step is an ordinary task that happens to live inside its parent's
+ * `subtasks` array, so every operation that can hit a top-level row can hit a
+ * step too — and the parent's `2/5` chip is read straight off that array, so
+ * patching the child in place is what moves the chip. The parent object is
+ * only cloned when a child actually changed, which keeps React's identity
+ * checks meaningful for the overwhelming majority of rows.
+ *
+ * Steps are NOT re-sorted: their order is the writer's, stored on the parent.
+ */
+const mapTaskDeep = (mapper) => (task) => {
+  const mapped = mapper(task);
+  const children = Array.isArray(mapped?.subtasks) ? mapped.subtasks : null;
+  if (!children || children.length === 0) return mapped;
+
+  const nextChildren = children.map(mapper);
+  const changed = nextChildren.some((child, i) => child !== children[i]);
+  return changed ? { ...mapped, subtasks: nextChildren } : mapped;
 };
 
 /**
@@ -61,14 +128,108 @@ const findTaskInState = (state, taskId) => {
  * date (all/monthly).
  */
 const mapTasksState = (state, mapper) => {
-  if (Array.isArray(state)) return sortTasks(state.map(mapper));
+  const deep = mapTaskDeep(mapper);
+  if (Array.isArray(state)) return sortTasks(state.map(deep));
   if (!state || typeof state !== 'object') return state;
 
   const next = {};
   Object.entries(state).forEach(([date, list]) => {
-    next[date] = Array.isArray(list) ? sortTasks(list.map(mapper)) : list;
+    next[date] = Array.isArray(list) ? sortTasks(list.map(deep)) : list;
   });
   return next;
+};
+
+/**
+ * Drop `taskId` from every list AND from every parent's `subtasks` array —
+ * deleting a step has to move the chip it was being counted in.
+ */
+const removeTaskFromState = (state, taskId) => {
+  const prune = (list) => list
+    .filter(task => !sameTask(task, taskId))
+    .map((task) => {
+      const children = Array.isArray(task?.subtasks) ? task.subtasks : null;
+      if (!children || !children.some(child => sameTask(child, taskId))) return task;
+      return { ...task, subtasks: children.filter(child => !sameTask(child, taskId)) };
+    });
+
+  if (Array.isArray(state)) return prune(state);
+  if (!state || typeof state !== 'object') return state;
+
+  const next = {};
+  Object.entries(state).forEach(([date, list]) => {
+    if (!Array.isArray(list)) return;
+    const pruned = prune(list);
+    if (pruned.length > 0) next[date] = pruned;
+  });
+  return next;
+};
+
+/**
+ * A complete `updateTaskStatus` payload built from what the client already
+ * knows, so the optimistic layer satisfies the mutation's whole selection set
+ * (`mutations.js` → UPDATE_TASK_STATUS + TaskFamily). Every field is spelled
+ * out: a missing one is a console warning on every single checkbox tick.
+ *
+ * Returns undefined — Apollo's "no optimistic layer" — for a task we have no
+ * snapshot of, and for a `virtual_` recurring occurrence, whose id is
+ * synthetic. Optimistically writing `Task:virtual_…` would put an entity in
+ * the cache that the server will answer under a different id.
+ */
+const buildOptimisticStatus = (snapshot, taskId, status, completedAt, cancelledAt) => {
+  if (!snapshot || String(taskId).startsWith('virtual_')) return undefined;
+
+  const child = (c) => ({
+    __typename: 'Task',
+    id: String(c?.id ?? c?._id ?? ''),
+    content: c?.content ?? '',
+    signifier: c?.signifier ?? null,
+    status: c?.status ?? 'pending',
+    priority: c?.priority ?? null,
+    note: c?.note ?? null,
+    tags: c?.tags ?? [],
+    dueDate: c?.dueDate ?? null,
+    originalDate: c?.originalDate ?? null,
+    taskType: c?.taskType ?? null,
+    completedAt: c?.completedAt ?? null,
+    cancelledAt: c?.cancelledAt ?? null,
+    createdAt: c?.createdAt ?? null,
+    updatedAt: c?.updatedAt ?? null,
+  });
+
+  return {
+    updateTaskStatus: {
+      __typename: 'Task',
+      id: String(taskId),
+      content: snapshot.content ?? '',
+      signifier: snapshot.signifier ?? null,
+      status,
+      completedAt,
+      cancelledAt,
+      priority: snapshot.priority ?? null,
+      note: snapshot.note ?? null,
+      tags: snapshot.tags ?? [],
+      dueDate: snapshot.dueDate ?? null,
+      originalDate: snapshot.originalDate ?? null,
+      migratedFrom: snapshot.migratedFrom ?? null,
+      migratedTo: snapshot.migratedTo ?? null,
+      isBacklog: snapshot.isBacklog ?? false,
+      // Every non-blocked status clears the parked fields server-side.
+      blockedReason: null,
+      blockedAt: null,
+      taskType: snapshot.taskType ?? null,
+      createdAt: snapshot.createdAt ?? null,
+      updatedAt: new Date().toISOString(),
+      parentTask: snapshot.parentTask
+        ? {
+            __typename: 'Task',
+            id: String(snapshot.parentTask.id ?? snapshot.parentTask._id ?? ''),
+            content: snapshot.parentTask.content ?? '',
+            status: snapshot.parentTask.status ?? 'pending',
+          }
+        : null,
+      subtasks: (Array.isArray(snapshot.subtasks) ? snapshot.subtasks : []).map(child),
+    },
+  };
 };
 
 const TaskContext = createContext();
@@ -405,7 +566,10 @@ const TaskProvider = ({ children }) => {
     try {
       const response = await apolloClient.mutate({
         mutation: CREATE_TASK,
-        variables: { ...taskData }
+        variables: { ...taskData },
+        // Clause 3: a new task changes the tag index and, if it is filed, its
+        // collection's tallies. Both are the gateway's to compute.
+        update: onTaskCreated,
       });
 
       const createdTask = response.data?.createTask;
@@ -440,9 +604,14 @@ const TaskProvider = ({ children }) => {
         }
       }
 
+      // The result knows where the task landed; only the client knows where it
+      // came from, so the previous collection is closed over for the update.
+      const previousCollectionId = findTaskInState(tasksRef.current, taskId)?.collectionId ?? null;
+
       const response = await apolloClient.mutate({
         mutation: UPDATE_TASK,
-        variables: { id: taskId, input: cleanUpdates, editScope }
+        variables: { id: taskId, input: cleanUpdates, editScope },
+        update: onTaskUpdated(previousCollectionId),
       });
 
       const updatedTask = response.data?.updateTask;
@@ -520,7 +689,12 @@ const TaskProvider = ({ children }) => {
     try {
       const response = await apolloClient.mutate({
         mutation: UPDATE_TASK_STATUS,
-        variables: { id: taskId, status: newStatus }
+        variables: { id: taskId, status: newStatus },
+        // Ticking a checkbox is this app's most-repeated gesture; it must not
+        // wait on a round trip. Apollo writes this layer immediately and rolls
+        // the whole thing back if the mutation rejects.
+        optimisticResponse: buildOptimisticStatus(snapshot, taskId, newStatus, completedAt, cancelledAt),
+        update: onTaskStatusChanged(snapshot?.collectionId ?? null),
       });
 
       const serverTask = response.data?.updateTaskStatus;
@@ -565,7 +739,8 @@ const TaskProvider = ({ children }) => {
     try {
       const response = await apolloClient.mutate({
         mutation: BLOCK_TASK,
-        variables: { id: taskId, reason: reason?.trim() ? reason.trim() : null }
+        variables: { id: taskId, reason: reason?.trim() ? reason.trim() : null },
+        update: onTaskStatusChanged(findTaskInState(tasksRef.current, taskId)?.collectionId ?? null),
       });
 
       const serverTask = response.data?.blockTask;
@@ -587,7 +762,8 @@ const TaskProvider = ({ children }) => {
     try {
       const response = await apolloClient.mutate({
         mutation: UNBLOCK_TASK,
-        variables: { id: taskId }
+        variables: { id: taskId },
+        update: onTaskStatusChanged(findTaskInState(tasksRef.current, taskId)?.collectionId ?? null),
       });
 
       const serverTask = response.data?.unblockTask;
@@ -618,28 +794,23 @@ const TaskProvider = ({ children }) => {
 
       setLoading(LoadingState.DELETING);
       setError(null);
+
+      // A step is deleted like any other task; the difference is that its
+      // parent's list has to lose it too, on both sides — the Apollo cache
+      // (the `2/5` chip in a collection view) and this context's array.
+      const parent = findParentInState(tasksRef.current, taskId);
+
       await apolloClient.mutate({
         mutation: DELETE_TASK,
-        variables: { id: taskId, editScope }
+        variables: { id: taskId, editScope },
+        // `deleteTask` returns only `{ success }`, so the id and the
+        // collection are closed over here — clause 2 of the cache rule.
+        update: parent
+          ? onSubtaskRemoved(parent.id || parent._id, taskId)
+          : onTaskDeleted(taskId, task?.collectionId ?? null),
       });
 
-      setTasks(prev => {
-        // If prev is an array (daily view)
-        if (Array.isArray(prev)) {
-          return prev.filter(task => (task.id || task._id) !== taskId);
-        }
-
-        // If prev is an object (grouped by dates)
-        const newTasks = {};
-        Object.entries(prev).forEach(([date, dateTasks]) => {
-          if (!Array.isArray(dateTasks)) return;
-          const filteredTasks = dateTasks.filter(task => (task.id || task._id) !== taskId);
-          if (filteredTasks.length > 0) {
-            newTasks[date] = filteredTasks;
-          }
-        });
-        return newTasks;
-      });
+      setTasks(prev => removeTaskFromState(prev, taskId));
     } catch (error) {
       handleApiError(error, 'Failed to delete task');
     } finally {
@@ -655,7 +826,8 @@ const TaskProvider = ({ children }) => {
 
       const response = await apolloClient.mutate({
         mutation: MIGRATE_TASK_TO_FUTURE,
-        variables: { id: taskId, futureDate: format(targetDate, 'yyyy-MM-dd') }
+        variables: { id: taskId, futureDate: format(targetDate, 'yyyy-MM-dd') },
+        update: onTaskUpdated(null),
       });
 
       const migratedTask = response.data?.migrateTaskToFuture;
@@ -685,6 +857,88 @@ const TaskProvider = ({ children }) => {
       setLoading(LoadingState.IDLE);
     }
   }, [handleApiError]);
+
+  /**
+   * Add a step to an entry.
+   *
+   * The gateway creates an ordinary task carrying `parentTask` and appends it
+   * to the parent's ordered list; here that means appending it to the parent's
+   * `subtasks` array in state, which is what the `2/5` chip counts. The step
+   * is deliberately NOT added as a top-level row: it belongs under its parent
+   * for as long as the parent is on screen (`utils/subtasks.splitNested`).
+   *
+   * @returns {Promise<object|undefined>} the new step, or undefined on error
+   */
+  const addSubtask = useCallback(async (parentId, input) => {
+    setError(null);
+    try {
+      const response = await apolloClient.mutate({
+        mutation: ADD_SUBTASK,
+        variables: {
+          parentId,
+          content: input?.content ?? '',
+          signifier: input?.signifier ?? '*',
+          priority: input?.priority ?? null,
+          tags: input?.tags ?? [],
+          dueDate: input?.dueDate ?? null,
+        },
+        update: onSubtaskAdded(parentId),
+      });
+
+      const subtask = response.data?.addSubtask;
+      if (!subtask) return undefined;
+
+      setTasks(prev => mapTasksState(prev, task => {
+        if (!sameTask(task, parentId)) return task;
+        const children = Array.isArray(task.subtasks) ? task.subtasks : [];
+        if (children.some(child => sameTask(child, subtask.id))) return task;
+        return { ...task, subtasks: [...children, subtask] };
+      }));
+
+      return subtask;
+    } catch (error) {
+      handleApiError(error, 'Failed to add subtask');
+      return undefined;
+    }
+  }, [apolloClient, handleApiError]);
+
+  /**
+   * Reorder an entry's steps. `orderedSubtaskIds` must name every one of them
+   * exactly once — the gateway rejects a partial list rather than dropping the
+   * remainder, which is the behaviour we want: a reorder that quietly loses a
+   * row is worse than one that fails.
+   *
+   * Optimistic, because dragging a row and watching it snap back for a beat is
+   * the whole reason reorder UIs feel cheap. The pre-move order is restored on
+   * failure.
+   */
+  const reorderSubtasks = useCallback(async (parentId, orderedSubtaskIds) => {
+    setError(null);
+    const snapshot = findTaskInState(tasksRef.current, parentId);
+    const previous = Array.isArray(snapshot?.subtasks) ? snapshot.subtasks : [];
+
+    const byId = new Map(previous.map(child => [String(child.id ?? child._id), child]));
+    const reordered = orderedSubtaskIds.map(id => byId.get(String(id))).filter(Boolean);
+    if (reordered.length === previous.length) {
+      setTasks(prev => mapTasksState(prev, task => (
+        sameTask(task, parentId) ? { ...task, subtasks: reordered } : task
+      )));
+    }
+
+    try {
+      const response = await apolloClient.mutate({
+        mutation: REORDER_SUBTASKS,
+        variables: { parentId, orderedSubtaskIds },
+      });
+      return response.data?.reorderSubtasks;
+    } catch (error) {
+      setTasks(prev => mapTasksState(prev, task => (
+        sameTask(task, parentId) ? { ...task, subtasks: previous } : task
+      )));
+      handleApiError(error, 'Failed to reorder subtasks');
+      return undefined;
+    }
+  }, [apolloClient, handleApiError]);
 
   const saveDailyOrder = useCallback(async (dateKey, orderedTaskIds) => {
     try {
@@ -725,6 +979,11 @@ const TaskProvider = ({ children }) => {
     migrateTask,
     saveDailyOrder,
 
+    // Subtasks (removal is deleteTask — a step is an ordinary task)
+    addSubtask,
+    reorderSubtasks,
+    getTaskFromState,
+
     // Constants
     TaskError,
     LoadingState
@@ -747,6 +1006,9 @@ const TaskProvider = ({ children }) => {
     deleteTask,
     migrateTask,
     saveDailyOrder,
+    addSubtask,
+    reorderSubtasks,
+    getTaskFromState,
     clearError
   ]);
 

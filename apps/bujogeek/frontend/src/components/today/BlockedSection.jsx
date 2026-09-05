@@ -26,6 +26,7 @@ const BlockedSection = ({
   onCancel,
   onUnblock,
   focusedTaskId,
+  subtaskProps,
 }) => {
   const rows = Array.isArray(tasks) ? tasks : [];
   const [expanded, setExpanded] = useState(true);
@@ -74,6 +75,7 @@ const BlockedSection = ({
                 onSaveAsNote={onSaveAsNote}
                 onCancel={onCancel}
                 onUnblock={onUnblock}
+                {...(subtaskProps || {})}
                 focused={focusedTaskId === (task.id || task._id)}
               />
             ))}

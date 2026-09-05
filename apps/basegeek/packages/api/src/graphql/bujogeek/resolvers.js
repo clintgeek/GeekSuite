@@ -207,14 +207,27 @@ export const resolvers = {
       if (!task) throw new Error('Task not found');
       return task;
     },
-    addSubtask: async (_, args, context) => {
+    addSubtask: async (_, { parentId, ...data }, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
-      const parentTask = await taskService.getTaskById(args.parentId, userId);
-      if (!parentTask) throw new Error('Parent task not found');
-      const subtaskData = { ...args, parentTask: parentTask._id, createdBy: userId };
-      if (args.dueDate) subtaskData.dueDate = new Date(args.dueDate);
-      return taskService.createTask(subtaskData);
+      try {
+        const { subtask } = await taskService.addSubtask({ parentId, userId, ...data });
+        return subtask;
+      } catch (err) {
+        return rethrowUserError(err);
+      }
+    },
+    reorderSubtasks: async (_, { parentId, orderedSubtaskIds }, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      let parent;
+      try {
+        parent = await taskService.reorderSubtasks(parentId, orderedSubtaskIds, userId);
+      } catch (err) {
+        return rethrowUserError(err);
+      }
+      if (!parent) throw new Error('Task not found');
+      return parent;
     },
     migrateTaskToFuture: async (_, { id, futureDate }, context) => {
       const userId = context.user?.id;
@@ -369,6 +382,28 @@ export const resolvers = {
   Task: {
     id: (task) => task._id ? task._id.toString() : task.id?.toString(),
     collectionId: (task) => (task.collectionId ? task.collectionId.toString() : null),
+    // Both sides of the parent/child link are resolved lazily and from the
+    // stored `subtasks` array, which is the order of record. A list view that
+    // does not select them pays nothing; one that does pays a single extra
+    // query per task that actually HAS children (the array is empty for
+    // almost every entry, and an empty array short-circuits before any I/O).
+    subtasks: async (task, _, context) => {
+      const userId = context.user?.id;
+      if (!userId) return [];
+      return taskService.getSubtasks(task, userId);
+    },
+    subtaskCount: (task) => (Array.isArray(task.subtasks) ? task.subtasks.length : 0),
+    completedSubtaskCount: async (task, _, context) => {
+      const userId = context.user?.id;
+      if (!userId) return 0;
+      const children = await taskService.getSubtasks(task, userId);
+      return children.filter((c) => c.status === 'completed').length;
+    },
+    parentTask: async (task, _, context) => {
+      const userId = context.user?.id;
+      if (!userId) return null;
+      return taskService.getParentTask(task, userId);
+    },
   },
   Collection: {
     id: (collection) => collection._id ? collection._id.toString() : collection.id?.toString(),

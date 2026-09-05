@@ -2,13 +2,22 @@ import { motion } from 'framer-motion';
 import { Box } from '@mui/material';
 import { colors } from '../../theme/colors';
 
-const TaskCheckbox = ({ checked, onChange, color = colors.aging.fresh }) => {
+/**
+ * `glyph` shrinks the drawn circle without touching the hit target, which
+ * stays 44px at every size — a step's checkbox reads as subordinate to its
+ * parent's while still being something a thumb can land on.
+ */
+const TaskCheckbox = ({ checked, onChange, color = colors.aging.fresh, glyph = 22, label }) => {
+  const r = glyph / 2 - 1;
+  const c = glyph / 2;
   return (
     <Box
       component="button"
+      type="button"
       onClick={onChange}
       role="checkbox"
       aria-checked={checked}
+      aria-label={label}
       tabIndex={0}
       sx={{
         width: 44,
@@ -32,12 +41,12 @@ const TaskCheckbox = ({ checked, onChange, color = colors.aging.fresh }) => {
         },
       }}
     >
-      <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+      <svg width={glyph} height={glyph} viewBox={`0 0 ${glyph} ${glyph}`} fill="none">
         {/* Outer circle */}
         <motion.circle
-          cx="11"
-          cy="11"
-          r="10"
+          cx={c}
+          cy={c}
+          r={r}
           stroke={checked ? color : colors.ink[300]}
           strokeWidth="1.5"
           fill={checked ? color : 'none'}
@@ -50,7 +59,7 @@ const TaskCheckbox = ({ checked, onChange, color = colors.aging.fresh }) => {
         />
         {/* Checkmark */}
         <motion.path
-          d="M7 11.5L9.5 14L15 8"
+          d={`M${c * 0.64} ${c * 1.05}L${c * 0.86} ${c * 1.27}L${c * 1.36} ${c * 0.73}`}
           stroke="#FFFFFF"
           strokeWidth="2"
           strokeLinecap="round"

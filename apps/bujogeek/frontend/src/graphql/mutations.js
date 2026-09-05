@@ -1,4 +1,5 @@
 import { gql } from '@apollo/client';
+import { TASK_FAMILY } from './queries';
 
 
 
@@ -107,14 +108,10 @@ export const CREATE_TASK = gql`
       collectionId
       createdAt
       updatedAt
-      parentTask {
-        id
-      }
-      subtasks {
-        id
-      }
+      ...TaskFamily
     }
   }
+  ${TASK_FAMILY}
 `;
 
 export const UPDATE_TASK = gql`
@@ -143,8 +140,10 @@ export const UPDATE_TASK = gql`
       collectionId
       createdAt
       updatedAt
+      ...TaskFamily
     }
   }
+  ${TASK_FAMILY}
 `;
 
 export const DELETE_TASK = gql`
@@ -178,8 +177,10 @@ export const UPDATE_TASK_STATUS = gql`
       taskType
       createdAt
       updatedAt
+      ...TaskFamily
     }
   }
+  ${TASK_FAMILY}
 `;
 
 /**
@@ -207,8 +208,10 @@ export const BLOCK_TASK = gql`
       taskType
       createdAt
       updatedAt
+      ...TaskFamily
     }
   }
+  ${TASK_FAMILY}
 `;
 
 /** Un-park a task: back to `pending`, blocked fields cleared, dueDate untouched. */
@@ -232,8 +235,10 @@ export const UNBLOCK_TASK = gql`
       taskType
       createdAt
       updatedAt
+      ...TaskFamily
     }
   }
+  ${TASK_FAMILY}
 `;
 
 export const MIGRATE_TASK_TO_FUTURE = gql`
@@ -256,8 +261,57 @@ export const MIGRATE_TASK_TO_FUTURE = gql`
       taskType
       createdAt
       updatedAt
+      ...TaskFamily
     }
   }
+  ${TASK_FAMILY}
+`;
+
+/**
+ * Add a step to an entry. The gateway creates an ordinary task carrying
+ * `parentTask` and appends it to the parent's ordered list, so the returned
+ * child plus a `cache.modify` on the parent is all a list needs.
+ */
+export const ADD_SUBTASK = gql`
+  mutation AddSubtask($parentId: ID!, $content: String!, $signifier: String, $priority: Int, $tags: [String], $dueDate: Date) {
+    addSubtask(parentId: $parentId, content: $content, signifier: $signifier, priority: $priority, tags: $tags, dueDate: $dueDate) {
+      id
+      content
+      signifier
+      status
+      priority
+      note
+      tags
+      dueDate
+      originalDate
+      taskType
+      completedAt
+      cancelledAt
+      createdAt
+      updatedAt
+      parentTask {
+        id
+        content
+        status
+      }
+    }
+  }
+`;
+
+/**
+ * Rewrite the order of an entry's steps. Must name every child exactly once —
+ * the gateway rejects a partial list rather than dropping the remainder — and
+ * returns the parent with its steps in the new order.
+ */
+export const REORDER_SUBTASKS = gql`
+  mutation ReorderSubtasks($parentId: ID!, $orderedSubtaskIds: [ID!]!) {
+    reorderSubtasks(parentId: $parentId, orderedSubtaskIds: $orderedSubtaskIds) {
+      id
+      status
+      ...TaskFamily
+    }
+  }
+  ${TASK_FAMILY}
 `;
 
 export const SAVE_DAILY_TASK_ORDER = gql`

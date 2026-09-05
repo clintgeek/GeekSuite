@@ -1,5 +1,46 @@
 import { gql } from '@apollo/client';
 
+/**
+ * TASK_FAMILY — the parent/child link, selected as one piece so the five log
+ * queries and every task mutation payload agree on its shape.
+ *
+ * Two rules are baked in:
+ *   - A child is selected in full, because an expanded row renders it as a
+ *     real entry (content, signifier, priority, tags, its own due date) and
+ *     the `2/5` chip counts statuses out of this same array.
+ *   - A child selects no `subtasks` of its own. Nesting stops at one level in
+ *     the gateway, and a self-referential fragment would not terminate.
+ *
+ * Selecting it on a mutation payload is what keeps the normalised cache
+ * honest: a completed child comes back inside its parent's array, so every
+ * cached copy of that parent updates itself.
+ */
+export const TASK_FAMILY = gql`
+  fragment TaskFamily on Task {
+    parentTask {
+      id
+      content
+      status
+    }
+    subtasks {
+      id
+      content
+      signifier
+      status
+      priority
+      note
+      tags
+      dueDate
+      originalDate
+      taskType
+      completedAt
+      cancelledAt
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
 
 
 export const GET_JOURNAL_ENTRY = gql`
@@ -92,17 +133,10 @@ export const GET_TASKS = gql`
       taskType
       createdAt
       updatedAt
-      parentTask {
-        id
-        content
-        status
-      }
-      subtasks {
-        id
-        status
-      }
+      ...TaskFamily
     }
   }
+  ${TASK_FAMILY}
 `;
 
 export const GET_ALL_TASKS = gql`
@@ -125,17 +159,10 @@ export const GET_ALL_TASKS = gql`
       taskType
       createdAt
       updatedAt
-      parentTask {
-        id
-        content
-        status
-      }
-      subtasks {
-        id
-        status
-      }
+      ...TaskFamily
     }
   }
+  ${TASK_FAMILY}
 `;
 
 export const GET_DAILY_TASKS = gql`
@@ -158,17 +185,10 @@ export const GET_DAILY_TASKS = gql`
       taskType
       createdAt
       updatedAt
-      parentTask {
-        id
-        content
-        status
-      }
-      subtasks {
-        id
-        status
-      }
+      ...TaskFamily
     }
   }
+  ${TASK_FAMILY}
 `;
 
 export const GET_WEEKLY_TASKS = gql`
@@ -191,17 +211,10 @@ export const GET_WEEKLY_TASKS = gql`
       taskType
       createdAt
       updatedAt
-      parentTask {
-        id
-        content
-        status
-      }
-      subtasks {
-        id
-        status
-      }
+      ...TaskFamily
     }
   }
+  ${TASK_FAMILY}
 `;
 
 export const GET_MONTHLY_TASKS = gql`
@@ -224,17 +237,10 @@ export const GET_MONTHLY_TASKS = gql`
       taskType
       createdAt
       updatedAt
-      parentTask {
-        id
-        content
-        status
-      }
-      subtasks {
-        id
-        status
-      }
+      ...TaskFamily
     }
   }
+  ${TASK_FAMILY}
 `;
 
 /**
@@ -266,8 +272,10 @@ export const GET_BLOCKED_TASKS = gql`
       collectionId
       createdAt
       updatedAt
+      ...TaskFamily
     }
   }
+  ${TASK_FAMILY}
 `;
 
 export const GET_JOURNAL_ENTRIES = gql`
@@ -342,9 +350,11 @@ export const GET_COLLECTION = gql`
         cancelledAt
         createdAt
         updatedAt
+        ...TaskFamily
       }
     }
   }
+  ${TASK_FAMILY}
 `;
 
 export const GET_TASKS_BY_TAG = gql`
@@ -368,8 +378,10 @@ export const GET_TASKS_BY_TAG = gql`
             completedAt
             createdAt
             updatedAt
+            ...TaskFamily
         }
     }
+    ${TASK_FAMILY}
 `;
 
 export const GET_HABITS = gql`

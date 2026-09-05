@@ -20,8 +20,21 @@ export const typeDefs = gql`
     seriesId: String
     isSeriesMaster: Boolean
     originalDueDate: Date
+    """
+    The entry this one is a step of, when it is a step of something. Carries
+    enough to caption a row that is showing up on its own in the log.
+    """
     parentTask: Task
-    subtasks: [Task]
+    """
+    This entry's steps, in the order the writer put them in. Empty for the
+    overwhelming majority of entries, and resolved lazily, so asking for it in
+    a log view costs nothing for the tasks that have none.
+    """
+    subtasks: [Task!]!
+    "How many steps this entry has. Cheap — it is the stored list's length."
+    subtaskCount: Int!
+    "How many of those steps are done."
+    completedSubtaskCount: Int!
     completedAt: Date
     cancelledAt: Date
     "Why this task is parked, when it is blocked. Null otherwise; 280 chars max."
@@ -229,7 +242,19 @@ export const typeDefs = gql`
     not blocked.
     """
     unblockTask(id: ID!): Task!
+    """
+    Add a step to `parentId`. The new task is an ordinary Task carrying
+    `parentTask`, appended to the parent's ordered `subtasks` list. One level
+    only: adding a step to something that is itself a step is a
+    BAD_USER_INPUT (400) error.
+    """
     addSubtask(parentId: ID!, content: String!, signifier: String, status: String, priority: Int, tags: [String], dueDate: Date): Task!
+    """
+    Rewrite the order of `parentId`'s steps. `orderedSubtaskIds` must name
+    every one of its children exactly once — a partial or unknown list is a
+    BAD_USER_INPUT (400) error rather than a silent drop. Returns the parent.
+    """
+    reorderSubtasks(parentId: ID!, orderedSubtaskIds: [ID!]!): Task!
     migrateTaskToFuture(id: ID!, futureDate: Date!): Task!
     saveDailyTaskOrder(dateKey: String!, orderedTaskIds: [ID!]!): SaveOrderResponse!
     createCollection(name: String!, description: String): Collection!

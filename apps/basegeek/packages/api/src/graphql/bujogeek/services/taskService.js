@@ -781,6 +781,139 @@ class TaskService {
       .populate('subtasks');
   }
 
+  // ─── Subtasks ───────────────────────────────────────────────────────────
+  //
+  // A subtask is an ordinary Task carrying `parentTask`; the parent keeps an
+  // ordered `subtasks` array of their ids, and THAT array is the order of
+  // record — Mongo does not otherwise promise one. Two rules follow:
+  //
+  //   - every write that creates or removes a child must keep the array in
+  //     step (`addSubtask` pushes, `deleteTask` pulls), and
+  //   - reads order the children BY the array, appending any child the array
+  //     has never heard of (belt and braces for rows written before the push
+  //     existed) so a stray child is late, never invisible.
+  //
+  // Subtasks are deliberately NOT filtered out of the log views: a subtask
+  // with its own due date is real work on a real day. The client nests it
+  // under its parent when both are on screen and shows the parent as a
+  // caption when it is not.
+
+  /**
+   * Create a child of `parentId` and append it to the parent's ordered list.
+   * Returns `{ subtask, parent }` — the parent comes back so a caller can
+   * hand the client a fresh count without a second round trip.
+   */
+  async addSubtask({ parentId, userId, ...data }) {
+    this.requireUser(userId);
+    const parent = await this.findOwnedTask(parentId, userId);
+    if (!parent) throw badRequest('Parent task not found');
+    // One level only. A subtask of a subtask is a project, and this app is a
+    // bullet journal — nesting deeper turns the daily log into an outliner.
+    if (parent.parentTask) throw badRequest('Subtasks cannot themselves have subtasks');
+
+    const subtask = await this.createTask({
+      ...data,
+      parentTask: parent._id,
+      createdBy: userId,
+      dueDate: data.dueDate ? new Date(data.dueDate) : null,
+    });
+
+    const updatedParent = await this.taskModel.findOneAndUpdate(
+      { _id: parent._id, createdBy: userId },
+      { $addToSet: { subtasks: subtask._id }, $set: { updatedAt: new Date() } },
+      { new: true }
+    );
+
+    return { subtask, parent: updatedParent ?? parent };
+  }
+
+  /**
+   * The children of `task`, in the parent's stored order. One query, owner
+   * scoped, and O(0) for the overwhelmingly common childless task — which is
+   * what keeps this safe to hang off a field resolver in a list view.
+   */
+  async getSubtasks(task, userId) {
+    this.requireUser(userId);
+    const raw = Array.isArray(task?.subtasks) ? task.subtasks : [];
+    const parentId = task?._id ?? task?.id;
+    // A virtual recurring occurrence has no document of its own to be a
+    // parent, so it can have no children to look up.
+    if (raw.length === 0 || !mongoose.Types.ObjectId.isValid(parentId)) return [];
+
+    const ids = raw
+      .map((entry) => (entry && entry._id ? entry._id : entry))
+      .filter((id) => mongoose.Types.ObjectId.isValid(id))
+      .map(String);
+    if (ids.length === 0) return [];
+
+    const children = await this.taskModel.find({
+      _id: { $in: ids },
+      parentTask: parentId,
+      createdBy: userId,
+    });
+
+    const byId = new Map(children.map((c) => [String(c._id), c]));
+    const ordered = ids.map((id) => byId.get(id)).filter(Boolean);
+    // Anything the parent's array did not name goes on the end, oldest first.
+    const named = new Set(ordered.map((c) => String(c._id)));
+    for (const child of children) {
+      if (!named.has(String(child._id))) ordered.push(child);
+    }
+    return ordered;
+  }
+
+  /**
+   * Rewrite the parent's ordered child list. Ids that are not this parent's
+   * children are rejected outright rather than silently dropped — a reorder
+   * that quietly loses a row is worse than one that fails.
+   */
+  async reorderSubtasks(parentId, orderedSubtaskIds, userId) {
+    this.requireUser(userId);
+    const parent = await this.findOwnedTask(parentId, userId);
+    if (!parent) return null;
+
+    const requested = (orderedSubtaskIds ?? []).map(String);
+    if (new Set(requested).size !== requested.length) {
+      throw badRequest('reorderSubtasks received a duplicate subtask id');
+    }
+
+    const children = await this.taskModel
+      .find({ parentTask: parent._id, createdBy: userId })
+      .select('_id');
+    const owned = new Set(children.map((c) => String(c._id)));
+
+    for (const id of requested) {
+      if (!owned.has(id)) throw badRequest('reorderSubtasks received an id that is not a subtask of this task');
+    }
+    if (requested.length !== owned.size) {
+      throw badRequest('reorderSubtasks must list every subtask exactly once');
+    }
+
+    return this.taskModel.findOneAndUpdate(
+      { _id: parent._id, createdBy: userId },
+      { $set: { subtasks: requested, updatedAt: new Date() } },
+      { new: true }
+    );
+  }
+
+  /**
+   * The parent of `task`, whatever shape the caller's document is in: already
+   * populated (list views ask for `content status`), a bare ObjectId (a
+   * mutation payload), or absent.
+   */
+  async getParentTask(task, userId) {
+    this.requireUser(userId);
+    const parent = task?.parentTask;
+    if (!parent) return null;
+    // Populated documents carry the fields we ever select; a raw id does not.
+    if (typeof parent === 'object' && (parent.content !== undefined || parent.status !== undefined)) {
+      return parent;
+    }
+    const id = parent._id ?? parent;
+    if (!mongoose.Types.ObjectId.isValid(id)) return null;
+    return this.taskModel.findOne({ _id: id, createdBy: userId }).select('content status');
+  }
+
   async getTagsForUser(userId) {
     this.requireUser(userId);
     return this.taskModel.aggregate([

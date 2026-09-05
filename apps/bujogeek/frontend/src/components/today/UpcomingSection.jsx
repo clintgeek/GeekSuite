@@ -15,6 +15,7 @@ const UpcomingSection = ({
   onCancel,
   onBlock,
   focusedTaskId,
+  subtaskProps,
 }) => {
   if (!tasks || tasks.length === 0) return null;
 
@@ -37,6 +38,7 @@ const UpcomingSection = ({
             onSaveAsNote={onSaveAsNote}
             onCancel={onCancel}
             onBlock={onBlock}
+            {...(subtaskProps || {})}
             focused={focusedTaskId === (task.id || task._id)}
           />
         ))}

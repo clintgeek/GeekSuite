@@ -5,7 +5,7 @@ import SectionHeader from '../shared/SectionHeader';
 import TaskRow from '../tasks/TaskRow';
 import { colors } from '../../theme/colors';
 
-const CompletedSection = ({ tasks, onStatusToggle, onEdit, onDelete, onSaveAsNote, onCancel }) => {
+const CompletedSection = ({ tasks, onStatusToggle, onEdit, onDelete, onSaveAsNote, onCancel, subtaskProps }) => {
   const [expanded, setExpanded] = useState(false);
 
   if (!tasks || tasks.length === 0) return null;
@@ -44,6 +44,7 @@ const CompletedSection = ({ tasks, onStatusToggle, onEdit, onDelete, onSaveAsNot
               onDelete={onDelete}
               onSaveAsNote={onSaveAsNote}
               onCancel={onCancel}
+              {...(subtaskProps || {})}
             />
           ))}
         </Box>

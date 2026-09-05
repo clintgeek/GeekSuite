@@ -22,10 +22,16 @@ import {
   Play,
   CheckCircle2,
   MoreHorizontal,
+  ChevronRight,
+  ChevronDown,
+  ListPlus,
+  CornerDownRight,
 } from 'lucide-react';
 import { format, differenceInCalendarDays } from 'date-fns';
 import TaskCheckbox from './TaskCheckbox';
+import SubtaskRow from './SubtaskRow';
 import { getTaskAge, getAgingColor, getAgingLabel } from '../../utils/taskAging';
+import { subtaskProgress, orderedSubtasks, parentCaption } from '../../utils/subtasks';
 import { GeekSheet, toneForMode } from '@geeksuite/ui';
 import { colors } from '../../theme/colors';
 
@@ -52,6 +58,13 @@ const TaskRow = ({
   onCancel,
   onBlock,
   onUnblock,
+  // Steps. All optional: a list that does not pass them (the review queue, a
+  // migration picker) simply renders rows without an expander, which is the
+  // right answer for a screen that is about one decision per entry.
+  onAddSubtask,
+  onSubtaskToggle,
+  onSubtaskEdit,
+  onSubtaskDelete,
   focused = false,
 }) => {
   const theme     = useTheme();
@@ -66,6 +79,19 @@ const TaskRow = ({
   const isMobile  = useMediaQuery(theme.breakpoints.down('md'));
   const [hovered, setHovered] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  // Steps start folded. An entry with steps is still one line in the log until
+  // you ask it not to be — that is the whole point of a bullet journal.
+  const [expanded, setExpanded] = useState(false);
+
+  const { done: subtasksDone, total: subtaskTotal } = subtaskProgress(task);
+  const children = orderedSubtasks(task);
+  const hasSteps = subtaskTotal > 0;
+  const showSteps = hasSteps && expanded;
+  // Only shown when this row IS a step that turned up on its own — its parent
+  // is filed elsewhere, or due another day. When the parent is on the same
+  // screen the row is nested under it instead and never reaches here
+  // (`utils/subtasks.splitNested`).
+  const parentName = parentCaption(task);
 
   const isCompleted = task.status === 'completed';
   const isCancelled = task.status === 'cancelled';
@@ -166,6 +192,18 @@ const TaskRow = ({
         hoverColor: colors.primary[500],
       });
     }
+    // Steps sit next to Edit, above the state-changing actions: adding one is
+    // an editorial act, not a decision about the entry's fate.
+    if (onAddSubtask && !isSunk) {
+      items.push({
+        key: 'add-subtask',
+        label: 'Add subtask',
+        icon: ListPlus,
+        onClick: () => onAddSubtask(task),
+        color: idleInk,
+        hoverColor: colors.primary[500],
+      });
+    }
     if (onSaveAsNote) {
       items.push({
         key: 'note',
@@ -221,9 +259,10 @@ const TaskRow = ({
       });
     }
     return items;
-  }, [onEdit, onSaveAsNote, onCancel, onBlock, onUnblock, onDelete, task, isCancelled, isBlocked, isSunk, staleInk, idleInk]);
+  }, [onEdit, onAddSubtask, onSaveAsNote, onCancel, onBlock, onUnblock, onDelete, task, isCancelled, isBlocked, isSunk, staleInk, idleInk]);
 
   return (
+    <Box sx={{ position: 'relative' }}>
     <Box
       data-task-id={taskId}
       onMouseEnter={() => setHovered(true)}
@@ -258,6 +297,38 @@ const TaskRow = ({
 
       {/* ─── Content area ─────────────────────────────────────── */}
       <Box sx={{ flex: 1, minWidth: 0, py: 0.5 }}>
+
+        {/* Where this came from. Only a step that turned up without its
+            parent gets this — it is the answer to "why is this here?", and
+            an entry nested under its own parent already knows. */}
+        {parentName && (
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.5,
+              mb: 0.25,
+              minWidth: 0,
+              color: isDark ? 'rgba(255,245,220,0.34)' : colors.ink[400],
+            }}
+          >
+            <CornerDownRight size={11} strokeWidth={1.75} style={{ flexShrink: 0 }} />
+            <Typography
+              sx={{
+                fontFamily: '"Fraunces", serif',
+                fontStyle: 'italic',
+                fontSize: '0.75rem',
+                lineHeight: 1.3,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                color: 'inherit',
+              }}
+            >
+              a step of “{parentName}”
+            </Typography>
+          </Box>
+        )}
 
         {/* Primary line: signifier + text + inline badges */}
         <Box
@@ -476,6 +547,67 @@ const TaskRow = ({
               </Box>
             </Tooltip>
           )}
+
+          {/* Steps: the count and the way in, as one target. Two adjacent
+              controls saying the same thing is one more thing to aim at; the
+              chevron tells you it opens and the `2/5` tells you what is
+              inside. 44px tall below `md`, where a thumb has to find it. */}
+          {hasSteps && (
+            <Tooltip
+              title={expanded ? 'Hide steps' : `${subtasksDone} of ${subtaskTotal} steps done`}
+              placement="top"
+            >
+              <ButtonBase
+                onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
+                aria-expanded={expanded}
+                aria-label={`${expanded ? 'Hide' : 'Show'} ${subtaskTotal} steps, ${subtasksDone} done`}
+                sx={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 0.25,
+                  flexShrink: 0,
+                  height: { xs: 44, md: 24 },
+                  minWidth: { xs: 44, md: 'auto' },
+                  justifyContent: 'center',
+                  px: { xs: 0.75, md: 0.625 },
+                  borderRadius: '3px',
+                  // ink[600] rather than the ink[500] the signifier badge
+                  // uses: this chip carries a number you have to read, at
+                  // 12px/600, and ink[500] on ink[100] is 4.29:1 — under AA
+                  // for text this size. ink[600] is 5.79:1.
+                  color: subtasksDone === subtaskTotal
+                    ? colors.aging.fresh
+                    : (isDark ? 'rgba(255,245,220,0.5)' : colors.ink[600]),
+                  backgroundColor: isDark ? 'rgba(255,245,220,0.06)' : colors.ink[100],
+                  border: `1px solid ${isDark ? 'rgba(255,245,220,0.1)' : colors.ink[200]}`,
+                  transition: 'color 0.12s ease, background-color 0.12s ease',
+                  '&:hover': {
+                    backgroundColor: isDark ? 'rgba(255,245,220,0.1)' : colors.ink[200],
+                  },
+                  '&:focus-visible': {
+                    outline: `2px solid ${colors.primary[500]}`,
+                    outlineOffset: 1,
+                  },
+                }}
+              >
+                {expanded
+                  ? <ChevronDown size={12} strokeWidth={2} />
+                  : <ChevronRight size={12} strokeWidth={2} />}
+                <Box
+                  component="span"
+                  sx={{
+                    fontFamily: '"IBM Plex Mono", monospace',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    letterSpacing: '0.01em',
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {subtasksDone}/{subtaskTotal}
+                </Box>
+              </ButtonBase>
+            </Tooltip>
+          )}
         </Box>
 
         {/* Note — italic, below the content line */}
@@ -691,6 +823,31 @@ const TaskRow = ({
         </GeekSheet>
       )}
 
+    </Box>
+
+    {/* The steps. Indented under the parent, each with its own toggle, in the
+        order the writer put them in — no aging borders of their own, because
+        the row above is already carrying that signal for the whole group. */}
+    {showSteps && (
+      <Box
+        sx={{
+          pb: 0.5,
+          backgroundColor: isDark ? 'rgba(255,245,220,0.02)' : `${colors.ink[100]}40`,
+          borderLeft: `2.5px solid ${agingColor}`,
+        }}
+      >
+        {children.map((child, index) => (
+          <SubtaskRow
+            key={child.id || child._id}
+            subtask={child}
+            isLast={index === children.length - 1}
+            onStatusToggle={onSubtaskToggle}
+            onEdit={onSubtaskEdit}
+            onDelete={onSubtaskDelete}
+          />
+        ))}
+      </Box>
+    )}
     </Box>
   );
 };

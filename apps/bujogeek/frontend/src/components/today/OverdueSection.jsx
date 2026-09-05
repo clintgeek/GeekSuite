@@ -13,7 +13,7 @@ import { colors } from '../../theme/colors';
  * Fraunces caption.
  */
 const OverdueSection = ({ tasks, onStatusToggle, onEdit, onDelete, onSaveAsNote, onCancel,
-  onBlock, focusedTaskId }) => {
+  onBlock, focusedTaskId, subtaskProps }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const [expanded, setExpanded] = useState(true);
@@ -117,6 +117,7 @@ const OverdueSection = ({ tasks, onStatusToggle, onEdit, onDelete, onSaveAsNote,
                 onSaveAsNote={onSaveAsNote}
                 onCancel={onCancel}
                 onBlock={onBlock}
+                {...(subtaskProps || {})}
                 focused={focusedTaskId === (task.id || task._id)}
               />
             </Box>

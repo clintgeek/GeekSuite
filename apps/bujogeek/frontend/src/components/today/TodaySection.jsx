@@ -22,6 +22,10 @@ const TodaySection = ({
   onBlock,
   focusedTaskId,
   onReorder,
+  // One object rather than four props: every section forwards the same set
+  // to TaskRow, and a section that is handed none simply renders rows with
+  // no expander (see TaskRow).
+  subtaskProps,
 }) => {
   const handleReorder = useCallback(
     (newOrder) => {
@@ -77,6 +81,7 @@ const TodaySection = ({
               onSaveAsNote={onSaveAsNote}
               onCancel={onCancel}
               onBlock={onBlock}
+              {...(subtaskProps || {})}
               focused={focusedTaskId === (task.id || task._id)}
             />
           </Reorder.Item>

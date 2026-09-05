@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Box, useMediaQuery } from '@mui/material';
+import { Box, Button, useMediaQuery } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { useApolloClient, useMutation } from '@apollo/client';
 import { addDays, format, isWithinInterval, startOfDay } from 'date-fns';
@@ -15,11 +15,13 @@ import QuickAddSheet from '../components/today/QuickAddSheet';
 import SkeletonLoader from '../components/shared/SkeletonLoader';
 import TaskEditor from '../components/tasks/TaskEditor';
 import BlockTaskDialog from '../components/tasks/BlockTaskDialog';
+import AddSubtaskDialog from '../components/tasks/AddSubtaskDialog';
 import useKeyboardNav from '../hooks/useKeyboardNav';
 import useGlobalShortcuts from '../hooks/useGlobalShortcuts';
 import { CREATE_NOTE } from '../graphql/notegeekMutations';
 import { GET_MONTHLY_TASKS, GET_BLOCKED_TASKS } from '../graphql/queries';
 import { getTaskAge } from '../utils/taskAging';
+import { splitNested, allSubtasksComplete } from '../utils/subtasks';
 import { useToast } from '@geeksuite/ui';
 
 const TodayPage = () => {
@@ -36,6 +38,8 @@ const TodayPage = () => {
   const [blockedTasks, setBlockedTasks] = useState([]);
   // The task whose "Block…" action is open, if any.
   const [blockingTask, setBlockingTask] = useState(null);
+  // The task whose "Add subtask" action is open, if any.
+  const [addingSubtaskTo, setAddingSubtaskTo] = useState(null);
   // Track whether fetchTasks has resolved for the current date.
   // Separate from context loading state because: (a) context starts as 'IDLE' string
   // not matching LoadingState enum, and (b) other views (Review, Plan) mutate the
@@ -54,6 +58,8 @@ const TodayPage = () => {
     unblockTask,
     deleteTask,
     saveDailyOrder,
+    addSubtask,
+    getTaskFromState,
     LoadingState,
   } = useTaskContext();
 
@@ -152,6 +158,71 @@ const TodayPage = () => {
     setBlockingTask(task);
   }, []);
 
+  // ─── Steps ──────────────────────────────────────────────────────────────
+
+  const handleAddSubtaskRequest = useCallback((task) => {
+    setAddingSubtaskTo(task);
+  }, []);
+
+  const handleAddSubtask = useCallback(async (task, content) => (
+    addSubtask((task.id || task._id), { content })
+  ), [addSubtask]);
+
+  /**
+   * Completing a step is completing a task — the same mutation, the same
+   * optimistic path. What is different is what happens when it was the LAST
+   * step: the page offers to finish the parent, and does not do it.
+   *
+   * That distinction is the whole design. An entry with every step ticked is
+   * usually done, but not always — there is often a last look, a send, a
+   * signature that was never worth its own step. Auto-completing would be
+   * right most of the time and infuriating the rest, and the writer would
+   * have to undo it. So: a toast with a button, which expires on its own if
+   * the answer is no.
+   */
+  const handleSubtaskToggle = useCallback(async (subtask) => {
+    const subtaskId = subtask.id || subtask._id;
+    const newStatus = subtask.status === 'completed' ? 'pending' : 'completed';
+    await updateTaskStatus(subtaskId, newStatus);
+    fetchUpcoming();
+
+    if (newStatus !== 'completed') return;
+
+    // Read the parent back from context state, which the toggle has already
+    // patched — the `subtask` argument is the pre-toggle object.
+    const parentId = subtask.parentTask?.id || subtask.parentTask?._id;
+    if (!parentId) return;
+    const parent = getTaskFromState(parentId);
+    if (!parent || parent.status === 'completed' || !allSubtasksComplete(parent)) return;
+
+    notify('Every step is done.', {
+      tone: 'success',
+      duration: 8000,
+      action: (
+        <Button
+          size="small"
+          onClick={() => updateTaskStatus(parentId, 'completed')}
+          sx={{ fontSize: '0.8125rem', textTransform: 'none', fontWeight: 600 }}
+        >
+          Complete the entry
+        </Button>
+      ),
+    });
+  }, [updateTaskStatus, fetchUpcoming, getTaskFromState, notify]);
+
+  const handleSubtaskDelete = useCallback(async (subtask) => {
+    if (window.confirm('Remove this step?')) {
+      await deleteTask((subtask.id || subtask._id));
+    }
+  }, [deleteTask]);
+
+  const subtaskProps = useMemo(() => ({
+    onAddSubtask: handleAddSubtaskRequest,
+    onSubtaskToggle: handleSubtaskToggle,
+    onSubtaskEdit: handleEdit,
+    onSubtaskDelete: handleSubtaskDelete,
+  }), [handleAddSubtaskRequest, handleSubtaskToggle, handleEdit, handleSubtaskDelete]);
+
   const handleBlockConfirm = useCallback(async (reason) => {
     const task = blockingTask;
     setBlockingTask(null);
@@ -210,7 +281,13 @@ const TodayPage = () => {
     const active = [];
     const completed = [];
 
-    tasks.forEach((task) => {
+    // A step whose parent is also in today's log belongs under that parent's
+    // expander, not on a shelf of its own — otherwise the same work is on
+    // screen twice. A step whose parent is NOT here (filed in a collection,
+    // due another day) keeps its own row and shows the parent as a caption.
+    const { rows } = splitNested(tasks);
+
+    rows.forEach((task) => {
       // A parked task has left the log — it belongs to BlockedSection, not to
       // Today/Carried forward. (The gateway already filters it out of
       // dailyTasks; this guards the window between a block and the refetch.)
@@ -249,7 +326,11 @@ const TodayPage = () => {
       (Array.isArray(tasks) ? tasks : []).map((t) => String(t.id || t._id))
     );
 
-    return (Array.isArray(upcomingRangeTasks) ? upcomingRangeTasks : [])
+    const { rows: upcomingRows } = splitNested(
+      Array.isArray(upcomingRangeTasks) ? upcomingRangeTasks : []
+    );
+
+    return upcomingRows
       .filter((task) => {
         if (task.status === 'completed' || task.status === 'cancelled') return false;
         if (task.status === 'blocked') return false;
@@ -309,7 +390,7 @@ const TodayPage = () => {
     onEdit: handleEdit,
     onDelete: handleDelete,
     onCancel: handleCancelToggle,
-    enabled: !isLoading && !editingTask && !blockingTask,
+    enabled: !isLoading && !editingTask && !blockingTask && !addingSubtaskTo,
   });
 
   useGlobalShortcuts();
@@ -362,6 +443,7 @@ const TodayPage = () => {
             onCancel={handleCancelToggle}
             onBlock={handleBlockRequest}
             focusedTaskId={focusedTaskId}
+            subtaskProps={subtaskProps}
           />
 
           <TodaySection
@@ -374,6 +456,7 @@ const TodayPage = () => {
             onBlock={handleBlockRequest}
             focusedTaskId={focusedTaskId}
             onReorder={handleReorder}
+            subtaskProps={subtaskProps}
           />
 
           <UpcomingSection
@@ -385,6 +468,7 @@ const TodayPage = () => {
             onCancel={handleCancelToggle}
             onBlock={handleBlockRequest}
             focusedTaskId={focusedTaskId}
+            subtaskProps={subtaskProps}
           />
 
           {/* The parked shelf sits above Completed. Always rendered, even at zero. */}
@@ -397,6 +481,7 @@ const TodayPage = () => {
             onCancel={handleCancelToggle}
             onUnblock={handleUnblock}
             focusedTaskId={focusedTaskId}
+            subtaskProps={subtaskProps}
           />
 
           {/* Last on the page: what got done. */}
@@ -407,6 +492,7 @@ const TodayPage = () => {
             onDelete={handleDelete}
             onSaveAsNote={handleSaveAsNote}
             onCancel={handleCancelToggle}
+            subtaskProps={subtaskProps}
           />
         </>
       )}
@@ -422,6 +508,13 @@ const TodayPage = () => {
         task={blockingTask}
         onClose={() => setBlockingTask(null)}
         onConfirm={handleBlockConfirm}
+      />
+
+      <AddSubtaskDialog
+        open={Boolean(addingSubtaskTo)}
+        task={addingSubtaskTo}
+        onClose={() => setAddingSubtaskTo(null)}
+        onAdd={handleAddSubtask}
       />
     </Box>
   );
