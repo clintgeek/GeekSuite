@@ -17,6 +17,8 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | R7 | TODO #21 fitnessgeek UserSettings single schema + tripwire | opus | 2 model files, graphql/fitnessgeek, fitnessgeek settings routes | 09-05 am |
 | R9 | TODO #25/#26 bujogeek subtasks UI + Apollo cache invalidation | opus | bujogeek frontend, its GraphQL surface | 09-05 am |
 | R10 | packages/ui leftovers: `GeekAppFrame fill`, sheet initialFocus/close/actionsAlign, dialog title hooks, reduced motion | sonnet | packages/ui | 09-05 am |
+| R13 | Offline pages per mode + theme-color/manifest audit (TODO #30) + bookgeek CONTEXT runtime fix | sonnet | each app's public/offline/manifest/index.html metas; PWA_STANDARD table | 09-05 12:10 |
+| R14 | TODO #23 circuit breakers on fitnessgeek external APIs | sonnet | fitnessgeek backend external-API services, lib/breakers.js | 09-05 12:10 |
 | R12 | `/login` and `/register` redirect home when already signed in (all apps) | sonnet | each frontend's router/auth files; skips files another agent has open | 09-05 11:25 |
 
 ## Queued (launch when files free / prerequisite lands)
@@ -24,9 +26,7 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | # | Item | Why waiting | Size |
 |---|------|-------------|------|
 | Q1 | Mint service keys into storygeek + fitnessgeek `.env.production`, restart those two containers | R1 must land and deploy first; restarts announced to Chef | XS |
-| Q2 | TODO #23 circuit breakers (opossum) on fitnessgeek external APIs | fitnessgeek backend busy (R1, R5, R7) | S |
 | Q3 | TODO #22 input validation (Zod), bujogeek timestamps first | bujogeek backend busy (R5, R9) | L, slow burn |
-| Q4 | Offline pages per mode + `theme-color` audit across apps (TODO #30) | index.html/public touched by many | S |
 | Q5 | Housekeeping (TODO #31): fitnessgeek dead files, stale dev compose, notegeek `formatRelativeTime` dedupe, notegeek dev-server optimizer fault | fitnessgeek + notegeek busy | S |
 | Q6 | bookgeek web unit tests (vitest + RTL for LibraryView/FilterSheet/BookCard/detail) | none — launch next slot | M |
 | Q7 | Sibling-subdomain CSRF double-submit token for basegeek (SUITE_TODO) | basegeek middleware/server busy (R1) | M |
