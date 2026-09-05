@@ -1955,6 +1955,8 @@ class AIService {
         return await this.callGemini(prompt, callConfig);
       case 'together':
         return await this.callTogether(prompt, callConfig);
+      case 'cohere':
+        return await this.callCohere(prompt, callConfig);
       case 'openrouter':
         return await this.callOpenRouter(prompt, callConfig);
       case 'cerebras':
@@ -1977,7 +1979,7 @@ class AIService {
    * Call Cloudflare Workers AI API
    */
   async callCloudflare(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = '@cf/openai/gpt-oss-120b', messages = null } = config;
+    const { maxTokens = 1000, temperature = 0.7, model = DEFAULT_MODELS.cloudflare, messages = null } = config;
 
     const accountId = this.providers.cloudflare.accountId;
     if (!accountId) {
@@ -2044,7 +2046,7 @@ class AIService {
    * Call Ollama Cloud API
    */
   async callOllama(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = 'qwen3-coder:480b', messages = null } = config;
+    const { maxTokens = 1000, temperature = 0.7, model = DEFAULT_MODELS.ollama, messages = null } = config;
 
     const requestMessages = messages || [{ role: 'user', content: prompt }];
 
@@ -2092,7 +2094,7 @@ class AIService {
    * Call LLM Gateway API
    */
   async callLLMGateway(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = 'llama-4-maverick-free', messages = null } = config;
+    const { maxTokens = 1000, temperature = 0.7, model = DEFAULT_MODELS.llmgateway, messages = null } = config;
 
     const requestMessages = messages || [{ role: 'user', content: prompt }];
 
@@ -2284,7 +2286,7 @@ class AIService {
    * Call Claude API
    */
   async callClaude(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = 'claude-3-5-sonnet-20241022', messages = null, responseFormat = null, tools = null, toolChoice = null } = config;
+    const { maxTokens = 1000, temperature = 0.7, model = DEFAULT_MODELS.anthropic, messages = null, responseFormat = null, tools = null, toolChoice = null } = config;
 
     // Anthropic takes `system` as a top-level field, not a message role.
     // Extract system turns from the messages array and collapse them into a
@@ -2445,7 +2447,7 @@ class AIService {
    * Call Groq API
    */
   async callGroq(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = 'llama-3.3-70b-versatile', messages = null, tools = null, toolChoice = null } = config;
+    const { maxTokens = 1000, temperature = 0.7, model = DEFAULT_MODELS.groq, messages = null, tools = null, toolChoice = null } = config;
 
     const requestMessages = (messages && Array.isArray(messages) && messages.length > 0)
       ? messages
@@ -2534,7 +2536,7 @@ class AIService {
    * Call Gemini API
    */
   async callGemini(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = 'gemini-1.5-flash-latest', messages = null, responseFormat = null, tools = null, toolChoice = null } = config;
+    const { maxTokens = 1000, temperature = 0.7, model = DEFAULT_MODELS.gemini, messages = null, responseFormat = null, tools = null, toolChoice = null } = config;
 
     // Gemini's contents[] takes role 'user' or 'model' (not 'assistant'),
     // and system messages go into a separate systemInstruction field.
@@ -2658,7 +2660,7 @@ class AIService {
    * Call Together AI API
    */
   async callTogether(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = 'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free', messages = null } = config;
+    const { maxTokens = 1000, temperature = 0.7, model = DEFAULT_MODELS.together, messages = null } = config;
 
     const requestMessages = (messages && Array.isArray(messages) && messages.length > 0)
       ? messages
@@ -2701,7 +2703,7 @@ class AIService {
    * Call Cohere API
    */
   async callCohere(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = 'command-r-plus-08-2024', messages = null } = config;
+    const { maxTokens = 1000, temperature = 0.7, model = DEFAULT_MODELS.cohere, messages = null } = config;
 
     // Cohere /chat takes a preamble + chat_history + message (current turn).
     // Fold system messages into preamble, use the last user turn as message,
@@ -2732,6 +2734,27 @@ class AIService {
       if (preamble) body.preamble = preamble;
       if (chatHistory.length > 0) body.chat_history = chatHistory;
 
+      // Cohere's /chat sampling knobs, in Cohere's own spelling (F-09 for
+      // cohere): `p` is its top_p, `stop_sequences` takes up to 5 strings,
+      // and seed/frequency_penalty/presence_penalty are named the same as
+      // OpenAI's. Absent values are omitted rather than sent as null/0, same
+      // convention as openAISamplingFields.
+      if (config.topP != null) body.p = config.topP;
+      const cohereStop = stopSequencesFrom(config.stop);
+      if (cohereStop) body.stop_sequences = cohereStop;
+      if (config.seed != null) body.seed = config.seed;
+      if (config.presencePenalty != null) body.presence_penalty = config.presencePenalty;
+      if (config.frequencyPenalty != null) body.frequency_penalty = config.frequencyPenalty;
+
+      // No `tools` forwarding here, deliberately. Cohere's native tool-use
+      // contract (tool_results, force_single_step) is not the OpenAI
+      // {type:"function",...} shape the other adapters translate — doing it
+      // right needs its own translation layer, which is out of scope for
+      // this pass. TOOL_FORWARDING_PROVIDERS in aiModelCapabilitiesService.js
+      // does not include 'cohere', so supportsToolCalling stays false for
+      // every Cohere model regardless of what supportsFunctionCalling says,
+      // and the rotation will not route a `tools` request here (F-04).
+
       const response = await axios.post(`${this.providers.cohere.baseURL}/chat`, body, {
         headers: {
           'Content-Type': 'application/json',
@@ -2761,7 +2784,7 @@ class AIService {
    * Call OpenRouter API
    */
   async callOpenRouter(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = 'google/gemini-2.0-flash-exp:free', messages = null } = config;
+    const { maxTokens = 1000, temperature = 0.7, model = DEFAULT_MODELS.openrouter, messages = null } = config;
 
     const requestMessages = (messages && Array.isArray(messages) && messages.length > 0)
       ? messages
@@ -2805,7 +2828,7 @@ class AIService {
    * Call Cerebras API (OpenAI-compatible)
    */
   async callCerebras(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = 'qwen-3-235b-a22b-instruct-2507', messages = null } = config;
+    const { maxTokens = 1000, temperature = 0.7, model = DEFAULT_MODELS.cerebras, messages = null } = config;
 
     // Use provided messages array or convert prompt to messages
     let requestMessages = messages || [

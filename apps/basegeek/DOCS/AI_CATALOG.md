@@ -1,7 +1,7 @@
 # AI Provider & Model Catalog
 **Last Updated:** 2026-09-05
 **Total Providers:** 10
-**Total Models:** 41
+**Total Models:** 43
 
 <!-- API keys are stored in the database via BaseGeek UI - never commit real keys here -->
 <!-- Configure provider keys at: BaseGeek UI → AI Geek → Configuration -->
@@ -116,16 +116,24 @@ one line:
 
 ---
 
-## Gemini (3 models)
+## Gemini (5 models)
 *API:* `https://generativelanguage.googleapis.com/v1beta`
 *Type:* Free tier
 *Default Model:* `gemini-2.5-flash`
 
+The 1.5 family (`gemini-1.5-flash-latest`, `gemini-1.5-pro-latest`) and bare
+`gemini-pro` retired upstream (Aug 2026, per `aiService.js`'s
+`refreshModels()`/`seedInitialModels()` comments) and are gone from both the
+seed data and this table — a stale pin to any of the three now fails the same
+way any other unrecognized id does (`model_not_found`).
+
 | Model ID | Model Name | Status |
 |----------|------------|--------|
-| `gemini-1.5-flash-latest` | Gemini 1.5 Flash (Free) | ✅ Free |
-| `gemini-1.5-pro-latest` | Gemini 1.5 Pro | Paid |
-| `gemini-pro` | Gemini Pro | Paid |
+| `gemini-2.5-flash` | Gemini 2.5 Flash (Free) | ✅ Free |
+| `gemini-2.5-flash-lite` | Gemini 2.5 Flash Lite (Free) | ✅ Free |
+| `gemini-2.0-flash` | Gemini 2.0 Flash (Free) | ✅ Free |
+| `gemini-2.0-flash-lite` | Gemini 2.0 Flash Lite (Free) | ✅ Free |
+| `gemini-2.5-pro` | Gemini 2.5 Pro | Paid |
 
 ---
 
@@ -275,7 +283,7 @@ one line:
 ### Models by Provider
 - **Anthropic:** 7 models (paid)
 - **Groq:** 4 models (free)
-- **Gemini:** 3 models (mixed)
+- **Gemini:** 5 models (mixed)
 - **Together:** 3 models (free)
 - **Cohere:** 4 models (paid)
 - **OpenRouter:** 7 models (mixed)
