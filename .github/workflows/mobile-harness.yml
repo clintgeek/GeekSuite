@@ -59,7 +59,6 @@ jobs:
       - name: Build, serve and probe every app
         # Report-only until the probe findings from 2026-09-05 (698 across seven
         # apps, DOCS/BURN_QUEUE.md) are burned down or waived; then remove this.
-        continue-on-error: true
         run: pnpm --filter @geeksuite/mobile-harness ci
 
       - name: Upload screenshots
