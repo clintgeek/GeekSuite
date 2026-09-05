@@ -17,6 +17,7 @@ import LoginStreak from './models/LoginStreak.js';
 import DailySummary from './models/DailySummary.js';
 import WeightGoals from './models/WeightGoals.js';
 import { isValidObjectId } from './ownership.js';
+import { toUtcMidnight } from '@geeksuite/utils/dates';
 
 /**
  * Validate every food_item_id a client hands us before it is persisted onto a
@@ -30,6 +31,57 @@ const assertAccessibleFoodItems = async (items, userId) => {
   const unique = [...new Set(ids.map(String))];
   const found = await FoodItem.findAccessibleMany(unique, userId);
   if (found.length !== unique.length) throw new Error('Food item not found');
+};
+
+/**
+ * Translate the GraphQL `FitnessFoodInput` shape (flat serving_size /
+ * serving_unit) into the Mongoose FoodItem shape (nested serving.{size,unit})
+ * that `FoodItem.findOrCreate` reads. Extra keys (`id`) are ignored by
+ * findOrCreate, which only reads the fields it names.
+ */
+const toFoodItemDoc = (input = {}) => {
+  const { serving_size, serving_unit, ...rest } = input;
+  return {
+    ...rest,
+    serving: { size: serving_size ?? 100, unit: serving_unit || 'g' },
+  };
+};
+
+/**
+ * Resolve the catalog row a food log should point at, matching REST
+ * `POST /api/logs` (apps/fitnessgeek/backend/src/routes/logRoutes.js).
+ *
+ * A client may send either an existing `food_item_id` or a whole `food_item`
+ * object. The object route is what every food *search* result needs:
+ * `foodApiService` mints synthetic ids (`usda_<fdcId>`,
+ * `openfoodfacts_<code>`), so there is no catalog row to point at yet.
+ *
+ *   - `food_item.id` (or `food_item_id`) that casts to an ObjectId → an
+ *     existing row; look it up.
+ *   - anything else with a `food_item` → `FoodItem.findOrCreate`, which
+ *     dedupes on `barcode`, then `(source, source_id)`, then `(name, brand)`
+ *     and otherwise creates a GLOBAL row (`user_id: null`).
+ *
+ * Unlike REST, the resolved row is then put through `findAccessible`: the
+ * dedupe queries above are deliberately unscoped (that is how a global row is
+ * shared), so without this a crafted `(name, brand)` could hand back another
+ * user's PRIVATE custom food and populate it into the response.
+ */
+const resolveLogFoodItem = async (input, userId) => {
+  const inline = input?.food_item;
+  const inlineId = inline?.id ?? inline?._id;
+
+  if (inline && !(inlineId && isValidObjectId(inlineId))) {
+    const created = await FoodItem.findOrCreate(toFoodItemDoc(inline), userId);
+    const accessible = created && await FoodItem.findAccessible(created._id, userId);
+    if (!accessible) throw new Error('Food item not found');
+    return accessible;
+  }
+
+  const id = inlineId ?? input?.food_item_id;
+  const food = id ? await FoodItem.findAccessible(id, userId) : null;
+  if (!food) throw new Error('Food item not found');
+  return food;
 };
 
 // FitnessJSON scalar — arbitrary JSON passthrough for settings sub-objects
@@ -746,7 +798,10 @@ export const resolvers = {
       const meal = await owned.populate('food_items.food_item_id');
 
       const logs = [];
-      const logDate = date || format(new Date(), 'yyyy-MM-dd');
+      // Calendar date at UTC midnight, matching the read path. REST's
+      // add-to-log used parseLocalDate() here and wrote LOCAL midnight, which
+      // lands on the previous UTC day west of UTC; this is the fixed version.
+      const logDate = toUtcMidnight(date || format(new Date(), 'yyyy-MM-dd'));
       for (const item of meal.food_items) {
         if (!item.food_item_id) continue; // dangling/deleted catalog reference
         const log = new FoodLog({
@@ -755,6 +810,9 @@ export const resolvers = {
           log_date: logDate,
           meal_type: mealType || meal.meal_type || 'snack',
           servings: item.servings,
+          // Provenance caption, byte-identical to REST's add-to-log —
+          // FoodLogItem.jsx renders `notes` under the food name.
+          notes: `Added from meal: ${meal.name}`,
           nutrition: item.food_item_id.nutrition
         });
         await log.save();
@@ -807,7 +865,10 @@ export const resolvers = {
       // GraphQL FitnessFoodInput uses flat serving_size/serving_unit and has no
       // `source` field. The Mongoose FoodItem model uses nested serving.{size,unit}
       // and requires `source`. Translate here so the GraphQL schema stays clean.
-      const { serving_size, serving_unit, ...rest } = input;
+      // `id`/`source`/`source_id` exist on FitnessFoodInput only for
+      // FoodLogInput.food_item's findOrCreate path — dropped here so this
+      // mutation keeps minting a PRIVATE custom food and nothing else.
+      const { serving_size, serving_unit, id: _id, source: _source, source_id: _sourceId, ...rest } = input;
       const doc = {
         ...rest,
         serving: { size: serving_size, unit: serving_unit || 'g' },
@@ -818,7 +879,7 @@ export const resolvers = {
     },
     updateFitnessFood: async (_, { id, input }, { user }) => {
       if (!user) throw new Error('Unauthorized');
-      const { serving_size, serving_unit, ...rest } = input;
+      const { serving_size, serving_unit, id: _id, source: _source, source_id: _sourceId, ...rest } = input;
       const update = {
         ...rest,
         ...(serving_size != null || serving_unit != null
@@ -841,24 +902,51 @@ export const resolvers = {
     },
     addFoodLog: async (_, { input }, { user }) => {
       if (!user) throw new Error('Unauthorized');
-      const food = await FoodItem.findAccessible(input.food_item_id, user.id);
-      if (!food) throw new Error('Food item not found');
-      const log = new FoodLog({ ...input, user_id: user.id, nutrition: input.nutrition || food.nutrition });
+      // eslint-disable-next-line no-unused-vars
+      const { food_item, food_item_id, log_date, ...rest } = input;
+      const food = await resolveLogFoodItem(input, user.id);
+      const logDate = toUtcMidnight(log_date);
+      const log = new FoodLog({
+        ...rest,
+        user_id: user.id,
+        food_item_id: food._id,
+        log_date: logDate,
+        nutrition: input.nutrition || food.nutrition,
+      });
       await log.save();
+      await DailySummary.updateFromLogs(user.id, logDate);
       return log.populate('food_item_id');
     },
     updateFoodLog: async (_, { id, input }, { user }) => {
       if (!user) throw new Error('Unauthorized');
       if (!isValidObjectId(id)) throw new Error('Food log not found');
+      // Partial patch (FoodLogUpdateInput): only the fields actually supplied
+      // are written, so a servings-only edit no longer has to resend
+      // food_item_id — and therefore no longer re-runs the accessibility
+      // check against a food that may since have been soft-deleted.
       if (input?.food_item_id) await assertAccessibleFoodItems([input], user.id);
-      const log = await FoodLog.findOneAndUpdate({ _id: id, user_id: user.id }, { ...input, updated_at: new Date() }, { new: true }).populate('food_item_id');
+      const patch = { updated_at: new Date() };
+      for (const key of ['meal_type', 'servings', 'notes', 'nutrition', 'food_item_id']) {
+        if (input?.[key] != null) patch[key] = input[key];
+      }
+      if (input?.log_date != null) patch.log_date = toUtcMidnight(input.log_date);
+      const log = await FoodLog.findOneAndUpdate({ _id: id, user_id: user.id }, patch, { new: true }).populate('food_item_id');
       if (!log) throw new Error('Food log not found');
+      await DailySummary.updateFromLogs(user.id, log.log_date);
       return log;
     },
     deleteFoodLog: async (_, { id }, { user }) => {
       if (!user) throw new Error('Unauthorized');
+      if (!isValidObjectId(id)) return false;
+      // Read the date before the row goes away — the summary for that day has
+      // to be recomputed without it, exactly as REST DELETE /api/logs/:id does.
+      const log = await FoodLog.findOne({ _id: id, user_id: user.id });
+      if (!log) return false;
+      const logDate = log.log_date;
       const result = await FoodLog.deleteOne({ _id: id, user_id: user.id });
-      return result.deletedCount === 1;
+      if (result.deletedCount !== 1) return false;
+      await DailySummary.updateFromLogs(user.id, logDate);
+      return true;
     },
     addFitnessMeal: async (_, { input }, { user }) => {
       if (!user) throw new Error('Unauthorized');

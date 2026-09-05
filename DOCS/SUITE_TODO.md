@@ -429,7 +429,7 @@ reality stands, per app:
 | flockgeek | Apollo → basegeek | ✅ frontend fully on GraphQL (only `/api/health` ping). ~~All 13 Mongoose models duplicated~~ — **corrected 2026-09-05**: only 4 (`BirdNote`, `BirdTrait`, `Event`, `LineageCache`) were actually orphaned and are now deleted. The other 9 are imported by a full, live, *mounted* REST CRUD API (`routes/api.js` → birds/groups/group-memberships/health-records/egg-production/pairings/locations/hatch-events/meat-runs) that nothing in the repo calls anymore but which still runs in the server. See `apps/flockgeek/CONTEXT.md` — deciding whether to unmount that whole REST layer is a follow-up, not done here. |
 | notegeek | Apollo → basegeek | ✅ frontend fully on GraphQL. ~~Own backend still carries legacy REST~~ — **deleted 2026-09-05**: `routes/notes.js`, `tags.js`, `search.js`, their controllers, and duplicate `models/Note.js`. This also resolved the `getTagHierarchy` 500 below. Follow-up prune, same day: `migrations/migrateNotesBetweenUsers.js` and `convertFoldersToTags.js` still imported the deleted `Note` model and had no caller (no npm script, no server import) — deleted, along with the now-empty `migrations/` directory. `utils/tagValidation.js` was imported only by its own test — both deleted. Backend suite still green (24 passed, 8 skipped); no dependency in `package.json` became unused as a result. |
 | bookgeek | Apollo for library CRUD; `authFetch` REST for the rest | ⚠️ mostly. Legit REST: upload/download/cover/enrich/merge/import/device-baskets (binary + long jobs). Not legit: `/api/profile/*` (`library-filters`, `me`) and `/api/ai/status` — pure data, should be GraphQL. `App.jsx:15` hardcodes `http://localhost:1800/api`. ~~`api/src/graphql/{schema,resolvers}.js` is an **unmounted dead GraphQL server**~~ — **deleted 2026-09-05** (plus the unused `@apollo/subgraph` dep). 4 duplicated models remain (not yet touched). |
-| fitnessgeek | `apiService.js` shims REST→GraphQL, but `restClient.js` still hits own backend | ⚠️ mostly. Still REST: food search/barcode/favorites/recent (`foodService.js`), `POST/PUT/DELETE /logs` + `POST /meals/:id/add-to-log` (`fitnessGeekService.js` — **the GraphQL equivalents `addFoodLog`/`updateFoodLog`/`deleteFoodLog`/`logMeal` exist but are NOT drop-in — audited 2026-09-05, see item 2 below; no writes moved**), meds RxNorm + med logs, influx, AI, `PUT /user/profile`. **All 13 models duplicated** — this is the `UserSettings` drift hazard above, times 13. |
+| fitnessgeek | `apiService.js` shims REST→GraphQL, but `restClient.js` still hits own backend | ⚠️ mostly. Still REST: food search/barcode/favorites/recent (`foodService.js`), `POST/PUT/DELETE /logs` + `POST /meals/:id/add-to-log` (`fitnessGeekService.js` — ~~the GraphQL equivalents are NOT drop-in~~ **gateway side fixed 2026-09-05, see item 2: `addFoodLog`/`updateFoodLog`/`deleteFoodLog`/`logMeal` are now behaviour-equivalent. The frontend still calls `restClient` — switching it and deleting the routes is the next ticket**), meds RxNorm + med logs, influx, AI, `PUT /user/profile`. **All 13 models duplicated** — this is the `UserSettings` drift hazard above, times 13. |
 | storygeek | axios REST to own backend | ❌ not on GraphQL. `apolloClient.js` exists but is never imported. basegeek's storygeek schema (`stories`, `story`, 3 mutations) is unused by the app and too thin to replace `/stories/*/continue`, `/export/*`, `/ai/*`. Decide: either build out the schema or drop the basegeek storygeek module as dead code. |
 
 Ordered cheap-to-expensive:
@@ -442,48 +442,67 @@ Ordered cheap-to-expensive:
    already done in an earlier pass (`3af40cc`, 2026-08-30) — nothing left to delete there.
 2. fitnessgeek: point `foodLogs` writes at the existing GraphQL mutations; remove those REST
    routes. Then food search/favorites/recent → new queries.
-   **Blocked on a gateway change — audited 2026-09-05, nothing shipped.** The four mutations
-   exist but three of them are not behaviour-equivalent to the REST routes they would replace,
-   so switching the frontend today would lose data or add a new failure mode. `deleteFoodLog`
-   is the only clean one, and moving it alone buys nothing toward removing the routes. Gateway
-   ticket, all in `apps/basegeek/packages/api/src/graphql/fitnessgeek/`:
+   **Gateway side done 2026-09-05. Frontend switch and REST route removal remain.**
 
-   - **`addFoodLog` cannot create a `FoodItem` on the fly.** `FoodLogInput.food_item_id: ID!`
-     must already exist and pass `FoodItem.findAccessible`. REST `POST /api/logs` takes a whole
-     `food_item` object and, when its id is not an ObjectId, calls
-     `FoodItem.findOrCreate(food_item, userId)` — which dedupes by `barcode`, then
-     `(source, source_id)`, then `(name, brand)`, and creates a **global** (`user_id: null`) row
-     carrying `source`/`source_id`. Every food-search result is exactly that case: `foodApiService`
-     mints synthetic ids (`usda_<fdcId>`, `openfoodfacts_<code>`), as do AI results. Pre-creating
-     via `addFitnessFood` is lossy three ways — `FitnessFoodInput` has no `source`/`source_id`,
-     the resolver hardcodes `source: 'custom'` + `user_id: user.id` (private, not global), and it
-     does not dedupe, so every log of the same searched food mints another row.
-     *Fix*: accept an optional `food_item: FitnessFoodInput` (plus `source`/`source_id`) on
-     `FoodLogInput` and run the `findOrCreate` branch server-side.
-   - **`updateFoodLog` takes `FoodLogInput!`, whose `log_date`/`meal_type`/`food_item_id`/`servings`
-     are all non-null**, so a partial edit is impossible over the wire (the gateway's own tests call
-     the resolver directly and never hit schema validation). Forcing the client to resend
-     `food_item_id` re-runs `assertAccessibleFoodItems`, which filters `is_deleted: false` — so
-     editing the servings on a log whose custom food was since soft-deleted would start failing
-     with "Food item not found" where REST `PUT /api/logs/:id` succeeds.
-     *Fix*: a `FoodLogUpdateInput` with every field nullable, and skip the food check when
-     `food_item_id` is absent.
-   - **`logMeal` does not write the `notes` provenance string.** REST `POST /api/meals/:id/add-to-log`
-     stamps each created log with `notes: "Added from meal: <name>"`, and `FoodLogItem.jsx` renders
-     `notes` as a visible caption. *Fix*: one line in the `logMeal` resolver.
-   - Not blocking, but worth doing in the same pass: `addFoodLog`/`updateFoodLog`/`deleteFoodLog`
-     skip `DailySummary.updateFromLogs`, which all three REST routes call (`logMeal` and
-     `copyFitnessMeal` do call it). Harmless today only because `dailySummary` recomputes on read
-     and the food reports read `FoodLog` directly; `weeklySummary` reads stored summaries and would
-     go stale, but it has no frontend caller.
-   - `logMeal` is a genuine **improvement** on one axis: REST's `parseLocalDate()` writes *local*
-     midnight while `POST /logs` writes *UTC* midnight via `toUtcMidnight`, so meals added to the
-     log already land on the wrong UTC day in negative-offset zones. The gateway passes the plain
-     `YYYY-MM-DD` through Mongoose casting, i.e. UTC midnight, matching the read path.
-   - Landmine for whoever picks this up: `apiService.js`'s `routeRequest` already maps
-     `POST /logs` → `ADD_FOOD_LOG` and `PUT /logs/:id` → `UPDATE_FOOD_LOG` by passing the REST body
-     straight through as `input`. Both mappings are wrong for the reasons above and are unreachable
-     today only because `fitnessGeekService` deliberately uses `restClient` for these four calls.
+   The four mutations in `apps/basegeek/packages/api/src/graphql/fitnessgeek/` are now
+   behaviour-equivalent to the REST routes they replace. What landed:
+
+   - **`addFoodLog` creates the `FoodItem` on the fly.** `FoodLogInput` gained an optional
+     `food_item: FitnessFoodInput` and `food_item_id` went from `ID!` to `ID` — supply one or
+     the other. When `food_item.id` is absent or is not an ObjectId (which is every food-search
+     result: `foodApiService` mints `usda_<fdcId>` / `openfoodfacts_<code>`, and AI results the
+     same), the resolver runs REST's `FoodItem.findOrCreate` dedupe — `barcode`, then
+     `(source, source_id)`, then `(name, brand)` — and otherwise creates a **global**
+     (`user_id: null`) row carrying `source`/`source_id`. `FitnessFoodInput` gained optional
+     `id`/`source`/`source_id` for this; `addFitnessFood`/`updateFitnessFood` explicitly drop
+     all three, so they still mint a *private* `source: 'custom'` food exactly as before.
+   - **The resolved food is re-checked against `findAccessible`.** REST's dedupe queries are
+     unscoped, so a crafted `(name, brand)` can match — and populate back — another user's
+     PRIVATE custom food. The gateway refuses with "Food item not found". Deliberate divergence
+     from REST, in the safe direction; the practical cost is that two users cannot both log a
+     food that collides on `(name, brand)` with a third party's private row.
+   - **`updateFoodLog` is a partial patch.** New `FoodLogUpdateInput`, every field nullable;
+     only the fields actually supplied are written. Omitting `food_item_id` skips
+     `assertAccessibleFoodItems`, so editing the servings on a log whose custom food was since
+     soft-deleted now succeeds, matching REST `PUT /api/logs/:id`. Ownership check unchanged.
+   - **`logMeal` writes the provenance caption** — `notes: "Added from meal: <name>"`, what
+     `FoodLogItem.jsx` renders as the visible sub-caption.
+   - **All four mutations call `DailySummary.updateFromLogs`** (`deleteFoodLog` reads the date
+     before deleting the row). `deleteFoodLog` also grew the `isValidObjectId` guard the other
+     mutations already had, so a malformed id is `false` rather than a CastError.
+   - **Dates stay UTC midnight.** `log_date` goes through `@geeksuite/utils` `toUtcMidnight` on
+     add and update, and `logMeal` no longer passes the raw string through Mongoose casting.
+     This keeps the write path aligned with the read path and fixes REST add-to-log's
+     `parseLocalDate()` bug (local midnight → previous UTC day west of UTC) rather than
+     reproducing it. The schema description strings on `FoodLogInput`/`FoodLogUpdateInput` say so.
+   - Tests: `src/__tests__/fitnessgeekFoodLogWrites.test.js`, 26 tests — the four findOrCreate
+     paths, accessibility both when `food_item_id` is given and on the row findOrCreate resolves
+     to, `addFitnessFood`'s unchanged behaviour, partial update over a soft-deleted food,
+     UTC-midnight normalization, `logMeal` notes, and DailySummary after add/update/delete/logMeal.
+     Four of them assert the *wire* contract off the SDL AST, which the resolver-direct tests
+     never touch. Whole api suite: 43 suites, 826 passed / 1 skipped.
+
+   **What the frontend ticket has to do** (nothing in `apps/fitnessgeek/**` was touched):
+
+   - `services/apiService.js` line ~58: `UPDATE_FOOD_LOG` declares `$input: FoodLogInput!` and
+     **must become `$input: FoodLogUpdateInput!`**. This is the one breaking change — a GraphQL
+     variable definition names its type, so a nullable superset under a new name is not
+     substitutable. The mutation is unreachable today (`fitnessGeekService.updateFoodLog` uses
+     `restClient`), so nothing breaks in the meantime, but the stale type name will fail
+     validation the moment it is reached.
+   - `ADD_FOOD_LOG` keeps `$input: FoodLogInput!` and needs no change; the passthrough at
+     `routeRequest`'s `if (base === '/logs')` is now correct, provided the `food_item` object is
+     run through the existing `normalizeFoodInput()` (flattens `serving` →
+     `serving_size`/`serving_unit`) with `id`/`source`/`source_id` carried through —
+     `normalizeFoodInput` currently drops all three.
+   - Then flip `fitnessGeekService.addFoodToLog` / `updateFoodLog` / `deleteFoodLog` /
+     `addMealToLog` off `restClient`, delete the two "NOT REACHABLE TODAY, AND NOT CORRECT"
+     comments in `apiService.js`, and remove `POST/PUT/DELETE /api/logs` +
+     `POST /api/meals/:id/add-to-log` from the fitnessgeek backend.
+   - Behaviour deltas the UI will see, both intended: meals added to the log land on the correct
+     UTC day now (REST put them a day early west of UTC), and `nutrition` on a log created from
+     a `food_item` snapshots the food's nutrition when the client sends none, same as REST.
+
 3. bookgeek: `profile` + `ai/status` → GraphQL; kill the hardcoded `localhost:1800`.
 4. fitnessgeek model consolidation (13 pairs) — biggest risk, do last, one model at a time.
 5. storygeek decision.

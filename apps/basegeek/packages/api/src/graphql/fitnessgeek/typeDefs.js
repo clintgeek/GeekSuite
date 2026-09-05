@@ -245,12 +245,32 @@ export const typeDefs = gql`
   }
 
   input FitnessFoodInput {
+    """
+    Catalog row id, when the client already has one. A value that is not a
+    Mongo ObjectId — the synthetic ids food search mints, e.g. 'usda_1234'
+    or 'openfoodfacts_5000112548167' — means "not in the catalog yet".
+    Read ONLY by 'FoodLogInput.food_item'; 'addFitnessFood' /
+    'updateFitnessFood' ignore it.
+    """
+    id: ID
     name: String!
     brand: String
     serving_size: Float!
     serving_unit: String!
     barcode: String
     nutrition: NutritionDataInput!
+    """
+    Catalog provenance: one of 'nutritionix', 'usda', 'openfoodfacts',
+    'custom', 'ai', 'fatsecret'. Read ONLY by 'FoodLogInput.food_item', where
+    it feeds the '(source, source_id)' dedupe — 'addFitnessFood' /
+    'updateFitnessFood' always write 'custom' and ignore this field.
+    """
+    source: String
+    """
+    Provenance id within 'source' (USDA fdcId, OpenFoodFacts code, …). Same
+    scope as 'source': only 'FoodLogInput.food_item' reads it.
+    """
+    source_id: String
   }
 
   type FoodLog {
@@ -268,10 +288,47 @@ export const typeDefs = gql`
   }
 
   input FoodLogInput {
+    """
+    Calendar date, not an instant. A plain 'YYYY-MM-DD' is normalized to
+    **UTC** midnight ('@geeksuite/utils' 'toUtcMidnight'), which is what every
+    read path here queries against. Deliberately NOT the local midnight the
+    old REST 'POST /api/meals/:id/add-to-log' wrote — that lands on the wrong
+    UTC day for anyone west of UTC.
+    """
     log_date: Date!
     meal_type: String!
-    food_item_id: ID!
+    """
+    An existing catalog row. Required unless 'food_item' is supplied; when
+    both are given and 'food_item.id' is an ObjectId they must agree, because
+    'food_item.id' wins.
+    """
+    food_item_id: ID
+    """
+    A whole food object, for logging something that is not in the catalog yet
+    — a search result, a barcode scan, an AI-generated food. When its 'id' is
+    absent or is not an ObjectId the server dedupes on 'barcode', then
+    '(source, source_id)', then '(name, brand)', and otherwise creates a
+    **global** catalog row ('user_id: null') carrying 'source'/'source_id'.
+    Whatever it resolves to still has to pass the catalog accessibility check.
+    """
+    food_item: FitnessFoodInput
     servings: Float!
+    notes: String
+    nutrition: NutritionDataInput
+  }
+
+  """
+  Partial patch for an existing food log: every field is optional and only the
+  ones actually supplied are written. Omitting 'food_item_id' also skips the
+  catalog accessibility check, so editing the servings on a log whose food has
+  since been soft-deleted still works.
+  """
+  input FoodLogUpdateInput {
+    "Same UTC-midnight normalization as 'FoodLogInput.log_date'."
+    log_date: Date
+    meal_type: String
+    food_item_id: ID
+    servings: Float
     notes: String
     nutrition: NutritionDataInput
   }
@@ -583,7 +640,7 @@ export const typeDefs = gql`
     updateFitnessFood(id: ID!, input: FitnessFoodInput!): FitnessFood
     deleteFitnessFood(id: ID!): Boolean
     addFoodLog(input: FoodLogInput!): FoodLog
-    updateFoodLog(id: ID!, input: FoodLogInput!): FoodLog
+    updateFoodLog(id: ID!, input: FoodLogUpdateInput!): FoodLog
     deleteFoodLog(id: ID!): Boolean
     addFitnessMeal(input: FitnessMealInput!): FitnessMeal
     updateFitnessMeal(id: ID!, input: FitnessMealInput!): FitnessMeal
