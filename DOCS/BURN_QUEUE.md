@@ -7,6 +7,8 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 ## Running
 
+**Standing order (Chef, 09-05 ~19:00):** quota is likely exhausted for ~2 h — if R89/R90/R92 stall, that is why. When they land: verify, commit, then **pause and wait for Chef**. No new launches, no push until he says so.
+
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
 | R92 | Q54: SW reinstall-on-deploy (stamped BUILD_ID + hashed manifest) for storygeek, bookgeek, notegeek, startgeek | sonnet | four public/sw.js + vite.config.js, PWA_STANDARD, context files | 09-05 19:00 |
