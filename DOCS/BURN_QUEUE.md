@@ -10,7 +10,6 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
 | R87 | Q51 a11y burn-down: packages/ui muted-text contrast + shared control names; bujogeek, storygeek, flockgeek to 0 under --enforce-a11y | opus | packages/ui, three frontends, MOBILE_UI_PLAN | 09-05 17:35 |
-| R83 | basegeek console gets its first vitest + RTL suite (Home, AIGeek tabs, ResponsiveTable, Account, UserGeek, safeRedirect) + ci job | sonnet | basegeek packages/ui, ci.yml, lockfile | 09-05 17:00 |
 | R85 | fitnessgeek frontend code-splitting: lazy routes, vendor chunks, on-demand heavy libs; SW precache check; harness stays 0 | opus | fitnessgeek frontend, CONTEXT | 09-05 17:00 |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
@@ -83,6 +82,8 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 - 09-05 16:35 — wave 8 (`7fd206b`, 22 commits): R74, R75–R80 (all four P0s + 14 P1s from the review), consolidation complete. Gates: frozen install, syntax, boot-smoke, repo lint. CI, Release and harness green; Watchtower 16:43 (updated=7); all eight apps 200.
 
 - 09-05 16:55 — wave 9 (`116a797`, 8 commits): R81, R82, CSRF caller context, docs. Gates green; CI, Release, harness green; Watchtower 17:00 (updated=2: basegeek, fitnessgeek); all eight apps 200. First report line with context: **startgeek** (start.clintgeek.com, Firefox) POST /graphql, cookie, no header.
+
+- 09-05 17:35 — wave 10: R83, R84 (a11y report-only), R86 (CSRF heal), docs. Gates green.
 
 ## Landed during the burn
 
