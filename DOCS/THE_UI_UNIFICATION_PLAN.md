@@ -407,6 +407,50 @@ six page-level `Snackbar`s), then notegeek, flockgeek, storygeek, bookgeek, base
 
 ---
 
+## 3b. Mobile Grammar
+
+Landed 2026-09-04 as the shared half of [`MOBILE_UI_PLAN.md`](MOBILE_UI_PLAN.md) (the
+"Pocket Pass"). Same shape as the shell grammar: the rule lives in `packages/ui`, identity
+stays in the app. All exported from `@geeksuite/ui`; all under `packages/ui/src/surfaces`
+unless noted.
+
+- **`GeekShell`** sizes itself in `100dvh` (with `vh` as the `@supports` fallback).
+  `GeekTopBar` pads the top safe-area inset; `GeekBottomNav` and the toast stack pad the
+  bottom one. Every `index.html` declares `viewport-fit=cover`.
+- **`GeekTopBar`** is *compact* below `md`: hamburger → title → at most one app action →
+  switcher → avatar. The theme toggle folds into the account menu as a Dark mode / Light mode
+  row (`data-geek-topbar-menu="theme"`) when there is an account menu; `actions` reduces to
+  its first child, or to `mobileActions` when the app names what survives (`null` for none).
+- **`GeekBottomNav`** gains `labelSx` so label identity comes from the primitive.
+- **`GeekSheet`** — `open`, `onClose`, `title`, `description`, `children`, `actions`,
+  `snap: 'content' | 'full'`, `mode: 'auto' | 'sheet' | 'dialog'`, `maxWidth`, `sx`,
+  `bodySx`, `headerSx`, `drawerProps`, `dialogProps`, `keepMounted`. Bottom sheet
+  (`SwipeableDrawer`, grab handle, 16px top radius, 92dvh cap, safe-area padding) below `md`;
+  centered Dialog with a close button at `md`+. Detects the breakpoint itself, so it works
+  outside a shell. Hooks: `data-geek-sheet="root|handle|header|title|description|body|
+  actions|close"`, `data-geek-sheet-mode`.
+- **`GeekDialog`** — `open`, `onClose`, `title`, `children`, `primaryAction`,
+  `secondaryAction`, `keepSecondaryOnMobile`, `mode: 'auto' | 'full' | 'window'`,
+  `fullScreenBelow` (`'sm'`), `maxWidth`, `fullWidth`, `closeLabel`, `disableClose`,
+  `keepMounted`, `dialogProps`, `sx`, `headerSx`, `bodySx`. Full-screen below `sm` with a
+  60px header (close left, title, primary action right) over the top safe-area inset; the
+  familiar title / content / actions window at `sm`+. `useGeekDialogFullScreen(bp)` lets an
+  existing `<Dialog>` adopt the rule. Hooks: `data-geek-dialog="root|header|close|title|
+  primary|body|actions|footer"`, `data-geek-dialog-mode`.
+- **`GeekFab`** — `label` (required), `icon`, `onClick`, `extended`, `showOn: 'mobile' |
+  'always'`, `hidden`, `bottomInset`, `color`, `disabled`, `sx`. 56px squircle pinned
+  bottom-right above the shell's `bottomInset` and the safe-area inset; hidden at `md`+ by
+  default and in focus mode. Mount it as a sibling of `GeekAppFrame`, whose route animation
+  would trap a fixed element. Hook: `data-geek-fab="icon|extended"`.
+- **Theme** — inputs lift to 16px below `sm` (`geekLayout.phoneMaxWidth`) so iOS does not
+  zoom on focus; anything marked `data-geek-hover-reveal` is forced visible under
+  `@media (hover: none)`.
+
+Tests: `__tests__/navigation.test.jsx` (mobile grammar + compact top bar), `sheet.test.jsx`,
+`dialog.test.jsx`, `fab.test.jsx`, `themeMobile.test.js`.
+
+---
+
 ## 4. Interaction Model
 
 ### Focus States
