@@ -13,6 +13,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@geeksuite/auth';
 import { GeekSheet } from '@geeksuite/ui';
 import CodexDialog from '../components/primitives/CodexDialog';
+import Narration from '../components/Narration';
 import useAISettingsStore from '../store/aiSettingsStore';
 import api from '../api';
 import ScenePanel from '../components/panels/ScenePanel';
@@ -409,17 +410,17 @@ function StoryPlay() {
             </Typography>
           )}
 
-          <Typography variant="body1" sx={{
-            whiteSpace: 'pre-wrap',
-            lineHeight: 1.8,
-            ...(isUser ? { fontWeight: 500 } : {}),
-            ...(!isUser && !isSystem ? {
-              fontFamily: '"Crimson Pro", serif',
-              fontSize: '1.05rem',
-            } : {}),
-          }}>
-            {message.content}
-          </Typography>
+          <Narration
+            content={message.content}
+            sx={{
+              lineHeight: 1.8,
+              ...(isUser ? { fontWeight: 500 } : {}),
+              ...(!isUser && !isSystem ? {
+                fontFamily: '"Crimson Pro", serif',
+                fontSize: '1.05rem',
+              } : {}),
+            }}
+          />
 
           {/* Dice Result */}
           {message.diceResults?.length > 0 && (() => {
