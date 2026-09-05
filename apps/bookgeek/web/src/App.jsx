@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import ePub from "epubjs";
-import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, InputLabel, MenuItem, Select, TextField, Typography } from "@mui/material";
+import { Box } from "@mui/material";
 import { getMe, loginRedirect, logout as logoutRequest, onLogout, startRefreshTimer, stopRefreshTimer } from "@geeksuite/auth";
 import { useUser, usePreferences, useAppPreferences, useThemeMode } from "@geeksuite/user";
 import { registerReset, reset as resetUserStore } from "./utils/resetUserStore";
@@ -11,16 +11,13 @@ import { UPDATE_BOOK, DELETE_BOOK, CREATE_BOOK } from "./graphql/mutations.js";
 import { GeekShell, GeekAppFrame } from "@geeksuite/ui";
 import Sidebar from "./components/Sidebar";
 import TopBar from "./components/TopBar";
-
-let API_BASE = "http://localhost:1800/api";
-
-if (typeof window !== "undefined") {
-  const hostname = window.location.hostname;
-  const origin = window.location.origin.replace(/\/$/, "");
-  if (hostname !== "localhost" && hostname !== "127.0.0.1") {
-    API_BASE = `${ origin }/api`;
-  }
-}
+import { API_BASE } from "./utils/bookDisplay";
+import LibraryView from "./views/LibraryView";
+import SettingsView from "./views/SettingsView";
+import BookDetailModal from "./views/BookDetailModal";
+import ReaderModal from "./views/ReaderModal";
+import AddBookDialog from "./views/AddBookDialog";
+import DeviceBasketDialog from "./views/DeviceBasketDialog";
 
 let INCLUDE_CREDENTIALS = false;
 if (typeof window !== "undefined") {
@@ -43,53 +40,6 @@ const BUILT_IN_SHELVES = [
   { id: "abandoned", label: "Abandoned", pillClass: "rounded-full border border-rose-500/70 bg-rose-100 px-1.5 py-0.5 text-[9px] font-medium text-rose-900 dark:bg-rose-900/40 dark:text-rose-200" },
   { id: "need-to-find", label: "Need to find", pillClass: "rounded-full border border-orange-500/70 bg-orange-100 px-1.5 py-0.5 text-[9px] font-medium text-orange-900 dark:bg-orange-900/40 dark:text-orange-200" },
 ];
-
-function decodeBasicHtmlEntities(input) {
-  if (typeof input !== "string") return "";
-  return input
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'");
-}
-
-function formatDescriptionForDisplay(raw) {
-  if (typeof raw !== "string") return "";
-  let text = raw;
-  const looksHtml = /<\s*\/?\s*[a-z][^>]*>/i.test(text);
-  if (looksHtml) {
-    text = text
-      .replace(/<\s*br\s*\/?\s*>/gi, "\n")
-      .replace(/<\s*\/\s*p\s*>/gi, "\n\n")
-      .replace(/<\s*p\b[^>]*>/gi, "")
-      .replace(/<\s*\/\s*li\s*>/gi, "\n")
-      .replace(/<\s*li\b[^>]*>/gi, "- ")
-      .replace(/<[^>]+>/g, "");
-  }
-  text = decodeBasicHtmlEntities(text);
-  text = text.replace(/\r\n?/g, "\n");
-  text = text
-    .split("\n")
-    .map((line) => line.replace(/\s+/g, " ").trim())
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-  return text;
-}
-
-function getCoverUrl(book) {
-  if (!book || !(book.id || book._id)) return null;
-  const base = `${ API_BASE }/books/${ (book.id || book._id) }/cover`;
-  const ts =
-    (typeof book.updatedAt === "string" && book.updatedAt) ||
-    (typeof book.updatedAt === "number" && book.updatedAt) ||
-    (typeof book.createdAt === "string" && book.createdAt) ||
-    (typeof book.createdAt === "number" && book.createdAt) ||
-    Date.now();
-  return `${ base }?v=${ encodeURIComponent(ts) }`;
-}
 
 export default function App() {
   const apolloClient = useApolloClient();
@@ -2181,1843 +2131,213 @@ export default function App() {
         >
           {/* Main content */}
 
-          <main
-            className={
-              "flex-1 rounded-xl p-3.5 md:p-4 " +
-              (activeView === "profile" ? "hidden" : "")
-            }
-            style={{ backgroundColor: 'var(--color-bg-surface-alt)', border: '1px solid var(--color-border)' }}
-          >
-            <div className="mb-2 flex flex-col gap-2 md:mb-3 md:flex-row md:items-center md:justify-between">
-              <div>
-                <p className="text-[11px] md:text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                  {loading
-                    ? "Loading from backend…"
-                    : error
-                      ? "Backend error — see status chip above."
-                      : books.length === 0
-                        ? "No books found."
-                        : ""}
-                </p>
-              </div>
-            </div>
-
-            {/* Toolbar — two visual zones */}
-            <div className="mb-6 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-              {/* Left cluster: library controls */}
-              <div className="flex flex-1 flex-wrap items-center gap-2">
-                <div className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs" style={{ border: '1px solid var(--color-border-input)', backgroundColor: 'var(--color-bg-surface)', color: 'var(--color-text-primary)' }}>
-                  <span style={{ color: 'var(--color-text-faint)' }}>Sort</span>
-                  <select
-                    className="bg-transparent text-xs outline-none"
-                    style={{ color: 'var(--color-text-primary)' }}
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value)}
-                  >
-                    <option value="title">Title</option>
-                    <option value="author">Author</option>
-                    <option value="rating">Rating</option>
-                    <option value="dateAdded">Date added</option>
-                    <option value="dateFinished">Date finished</option>
-                    <option value="pageCount">Page count</option>
-                    <option value="publishedDate">Published date</option>
-                    <option value="owned">Owned</option>
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setSortDir((prev) => (prev === "desc" ? "asc" : "desc"))
-                    }
-                    className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] hover:opacity-80"
-                    style={{ border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-surface-alt)', color: 'var(--color-text-secondary)' }}
-                    title={sortDir === "asc" ? "Ascending" : "Descending"}
-                  >
-                    {sortDir === "asc" ? "↑" : "↓"}
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  className="flex-1 min-w-[140px] rounded-lg px-2 py-1.5 text-xs outline-none"
-                  style={{ border: '1px solid var(--color-border-input)', backgroundColor: 'var(--color-bg-surface)', color: 'var(--color-text-primary)' }}
-                  placeholder="Search title / author / tag"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
-
-              {/* Right cluster: filtering */}
-              <div className="flex flex-wrap items-center gap-2">
-                {basketBookIds.length > 0 && (
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={handleCreateDeviceBasket}
-                      disabled={basketLoading}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-amber-600 bg-amber-900/50 px-3 py-1.5 text-xs font-medium text-amber-100 hover:border-amber-400 hover:bg-amber-800/70 disabled:opacity-60"
-                      title="Create a Kindle download basket from selected books"
-                    >
-                      <span>📱</span>
-                      <span>{basketLoading ? "Creating…" : `Download to Device (${basketBookIds.length})`}</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={clearBasket}
-                      className="inline-flex items-center rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px] text-slate-300 hover:border-slate-500 hover:bg-slate-800"
-                      title="Clear basket selection"
-                    >
-                      ×
-                    </button>
-                  </div>
-                )}
-                {basketError && (
-                  <span className="text-[11px] text-rose-400">{basketError}</span>
-                )}
-                <button
-                  type="button"
-                  onClick={handleSaveCurrentFilter}
-                  disabled={saveFilterLoading}
-                  className="inline-flex items-center rounded-lg border border-sky-600 bg-sky-900/40 px-3 py-1.5 text-xs font-medium text-sky-100 hover:border-sky-400 hover:bg-sky-800 disabled:opacity-60"
-                >
-                  {saveFilterLoading ? "Saving…" : "Save filter"}
-                </button>
-                <input
-                  type="text"
-                  className="min-w-[120px] rounded-lg px-2 py-1.5 text-xs outline-none"
-                  style={{ border: '1px solid var(--color-border-input)', backgroundColor: 'var(--color-bg-surface)', color: 'var(--color-text-primary)' }}
-                  placeholder="Filter by tag / genre"
-                  value={tagFilter}
-                  onChange={(e) => setTagFilter(e.target.value)}
-                />
-                <div className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs" style={{ border: '1px solid var(--color-border-input)', backgroundColor: 'var(--color-bg-surface)', color: 'var(--color-text-primary)' }}>
-                  <span className="text-[10px]" style={{ color: 'var(--color-text-faint)' }}>Shelf</span>
-                  <select
-                    value={shelfFilter}
-                    onChange={(e) => setShelfFilter(e.target.value)}
-                    className="bg-transparent text-xs outline-none"
-                    style={{ color: 'var(--color-text-primary)' }}
-                  >
-                    {shelves.map((s) => (
-                      <option key={s.id} value={s.id}>{s.label}</option>
-                    ))}
-                  </select>
-                </div>
-                {showMergeUi && (
-                  <button
-                    type="button"
-                    onClick={handleMergeSelectedBooks}
-                    disabled={
-                      mergeLoading || selectedBookIds.length !== 2
-                    }
-                    className={
-                      "inline-flex items-center rounded-lg border px-3 py-1.5 text-xs " +
-                      (selectedBookIds.length === 2 && !mergeLoading
-                        ? "border-sky-500 bg-sky-900/40 text-sky-100 hover:border-sky-400 hover:bg-sky-800"
-                        : "border-slate-800 bg-slate-900 text-slate-100 opacity-60")
-                    }
-                  >
-                    {mergeLoading
-                      ? "Merging…"
-                      : `Merge selected (${ selectedBookIds.length || 0 }/2)`}
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {(searchQuery.trim() ||
-              authorFilter.trim() ||
-              tagFilter.trim() ||
-              shelfFilter !== "all") && (
-                <div className="mb-3 flex flex-wrap gap-1 text-[11px]">
-                  {shelfFilter !== "all" && (
-                    <button
-                      type="button"
-                      onClick={() => setShelfFilter("all")}
-                      className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-2 py-0.5 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-slate-500 dark:hover:bg-slate-800"
-                    >
-                      <span>
-                        Shelf:{" "}
-                        {shelves.find((s) => s.id === shelfFilter)?.label ||
-                          shelfFilter}
-                      </span>
-                      <span className="text-slate-500 dark:text-slate-400">×</span>
-                    </button>
-                  )}
-                  {searchQuery.trim() && (
-                    <button
-                      type="button"
-                      onClick={() => setSearchQuery("")}
-                      className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-2 py-0.5 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-slate-500 dark:hover:bg-slate-800"
-                    >
-                      <span>Search: {searchQuery.trim()}</span>
-                      <span className="text-slate-500 dark:text-slate-400">×</span>
-                    </button>
-                  )}
-                  {authorFilter.trim() && (
-                    <button
-                      type="button"
-                      onClick={() => setAuthorFilter("")}
-                      className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-2 py-0.5 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-slate-500 dark:hover:bg-slate-800"
-                    >
-                      <span>Author: {authorFilter.trim()}</span>
-                      <span className="text-slate-500 dark:text-slate-400">×</span>
-                    </button>
-                  )}
-                  {tagFilter.trim() && (
-                    <button
-                      type="button"
-                      onClick={() => setTagFilter("")}
-                      className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-2 py-0.5 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-slate-500 dark:hover:bg-slate-800"
-                    >
-                      <span>Tag: {tagFilter.trim()}</span>
-                      <span className="text-slate-500 dark:text-slate-400">×</span>
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSearchQuery("");
-                      setAuthorFilter("");
-                      setTagFilter("");
-                      setShelfFilter("all");
-                    }}
-                    className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-2 py-0.5 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-slate-500 dark:hover:bg-slate-900"
-                  >
-                    <span>Clear all</span>
-                  </button>
-                </div>
-              )}
-
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
-              {loading
-                ? Array.from({ length: 8 }).map((_, i) => (
-                  <div
-                    key={i}
-                    className="flex flex-col rounded-xl p-2.5 text-xs animate-pulse"
-                    style={{ backgroundColor: 'var(--color-bg-card)', boxShadow: 'var(--shadow-card)' }}
-                  >
-                    <div className="mb-2 aspect-[2/3] w-full rounded-md" style={{ backgroundColor: 'var(--color-bg-surface)' }} />
-                    <div className="mb-1 h-3 w-5/6 rounded" style={{ backgroundColor: 'var(--color-bg-surface)' }} />
-                    <div className="h-2.5 w-2/3 rounded" style={{ backgroundColor: 'var(--color-bg-surface)' }} />
-                  </div>
-                ))
-                : books.map((book) => {
-                  const isSelected = selectedBookIds.includes((book.id || book._id));
-                  const isInBasket = basketBookIds.includes((book.id || book._id));
-                  const shelf = shelves.find((s) => s.id === book.shelf);
-                  return (
-                    <div
-                      key={(book.id || book._id)}
-                      className={
-                        "relative flex cursor-pointer flex-col rounded-xl p-2.5 pb-8 text-xs transition-all duration-200 " +
-                        (showMergeUi && isSelected
-                          ? "ring-2 ring-sky-500"
-                          : "hover:translate-y-[-1px]")
-                      }
-                      style={{
-                        backgroundColor: 'var(--color-bg-card)',
-                        boxShadow: 'var(--shadow-card)',
-                        color: 'var(--color-text-secondary)',
-                      }}
-                      onClick={() => {
-                        setSelectedBook(book);
-                        setDownloadOpen(false);
-                      }}
-                    >
-                      {showMergeUi && (
-                        <div className="absolute left-1.5 top-1.5 z-10">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                            }}
-                            onChange={(e) => toggleBookSelection((book.id || book._id), e)}
-                            className="h-3 w-3 rounded border-slate-500 bg-slate-900 text-sky-500 focus:ring-sky-500"
-                            title="Select for manual merge"
-                          />
-                        </div>
-                      )}
-                      <div className="mb-2 aspect-[2/3] w-full overflow-hidden rounded-lg" style={{ backgroundColor: 'var(--color-bg-surface)' }}>
-                        {(book.id || book._id) ? (
-                          <img
-                            src={
-                              getCoverUrl(book) ||
-                              `${ API_BASE }/books/${ (book.id || book._id) }/cover`
-                            }
-                            alt={book.title || "Book cover"}
-                            className="h-full w-full object-cover"
-                            loading="lazy"
-                            onLoad={(e) => {
-                              e.currentTarget.style.visibility = "visible";
-                            }}
-                            onError={(e) => {
-                              e.currentTarget.style.visibility = "hidden";
-                            }}
-                          />
-                        ) : null}
-                      </div>
-                      {Number.isFinite(book.readingProgress) && book.readingProgress > 0 && (
-                        <div
-                          className="-mt-1 mb-1.5 h-[3px] w-full overflow-hidden rounded-full"
-                          style={{ backgroundColor: 'var(--color-bg-surface)' }}
-                          title={`${Math.round(book.readingProgress)}% read`}
-                          aria-label={`${Math.round(book.readingProgress)}% read`}
-                        >
-                          <div
-                            className="h-full rounded-full bg-amber-500"
-                            style={{ width: `${Math.min(100, Math.max(0, book.readingProgress))}%` }}
-                          />
-                        </div>
-                      )}
-                      <div className="mb-0.5 line-clamp-2 font-serif font-medium text-[13px]" style={{ color: 'var(--color-text-primary)' }}>
-                        {book.title || "Untitled"}
-                      </div>
-                      <div className="truncate text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
-                        {Array.isArray(book.authors) && book.authors.length > 0
-                          ? book.authors.join(", ")
-                          : "Unknown author"}
-                      </div>
-                      {(book.owned || (shelf && shelf.id !== "all")) && (
-                        <div className="absolute bottom-2 right-2.5 flex gap-1">
-                          {book.owned && (
-                            <span className="rounded-full border border-emerald-500/70 bg-emerald-100 px-1.5 py-0.5 text-[9px] font-medium text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-200">
-                              Owned
-                            </span>
-                          )}
-                          {shelf && shelf.id !== "all" && (
-                            <span className={shelf.pillClass}>
-                              {shelf.label}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                      <button
-                        type="button"
-                        title={isInBasket ? "Remove from device basket" : "Add to device basket"}
-                        onClick={(e) => toggleBasket((book.id || book._id), e)}
-                        className={
-                          "absolute bottom-2 left-2 inline-flex h-5 w-5 items-center justify-center rounded-full border text-[10px] transition-colors " +
-                          (isInBasket
-                            ? "border-amber-500 bg-amber-600/80 text-white"
-                            : "border-slate-700 bg-slate-900/80 text-slate-400 hover:border-amber-500 hover:text-amber-300")
-                        }
-                        aria-label={isInBasket ? "Remove from device basket" : "Add to device basket"}
-                      >
-                        {isInBasket ? "✓" : "+"}
-                      </button>
-                    </div>
-                  );
-                })}
-            </div>
-
-            {showMergeUi && mergeSelectionError && (
-              <div className="mt-2 text-[11px] text-rose-400">
-                {mergeSelectionError}
-              </div>
-            )}
-
-            {hasMore && !loading && (
-              <div
-                ref={loadMoreRef}
-                className="mt-3 h-6 w-full text-center text-[11px] text-slate-500"
-              >
-                {loadingMore ? "Loading more…" : "Scroll to load more"}
-              </div>
-            )}
-
-            <div className="mt-3 flex items-center justify-between text-[11px] text-slate-500 md:mt-4 md:text-xs">
-              <span>
-                {loading
-                  ? "Fetching data from API…"
-                  : error
-                    ? "Error talking to API. Check containers and .env."
-                    : books.length === 0
-                      ? "Connected to API. No books in the database yet."
-                      : `Connected to API. Loaded ${ books.length } book${ books.length === 1 ? "" : "s"
-                      }.`}
-              </span>
-            </div>
-          </main>
+          <LibraryView
+            activeView={activeView}
+            authorFilter={authorFilter}
+            basketBookIds={basketBookIds}
+            basketError={basketError}
+            basketLoading={basketLoading}
+            books={books}
+            clearBasket={clearBasket}
+            error={error}
+            handleCreateDeviceBasket={handleCreateDeviceBasket}
+            handleMergeSelectedBooks={handleMergeSelectedBooks}
+            handleSaveCurrentFilter={handleSaveCurrentFilter}
+            hasMore={hasMore}
+            loadMoreRef={loadMoreRef}
+            loading={loading}
+            loadingMore={loadingMore}
+            mergeLoading={mergeLoading}
+            mergeSelectionError={mergeSelectionError}
+            saveFilterLoading={saveFilterLoading}
+            searchQuery={searchQuery}
+            selectedBookIds={selectedBookIds}
+            setAuthorFilter={setAuthorFilter}
+            setDownloadOpen={setDownloadOpen}
+            setSearchQuery={setSearchQuery}
+            setSelectedBook={setSelectedBook}
+            setShelfFilter={setShelfFilter}
+            setSortBy={setSortBy}
+            setSortDir={setSortDir}
+            setTagFilter={setTagFilter}
+            shelfFilter={shelfFilter}
+            shelves={shelves}
+            showMergeUi={showMergeUi}
+            sortBy={sortBy}
+            sortDir={sortDir}
+            tagFilter={tagFilter}
+            toggleBasket={toggleBasket}
+            toggleBookSelection={toggleBookSelection}
+          />
 
           {activeView === "profile" && (
-            <section className="flex-1 rounded-xl p-3.5 md:p-4" style={{ backgroundColor: 'var(--color-bg-surface-alt)', border: '1px solid var(--color-border)' }}>
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-[11px] md:text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                    Manage your account and Kindle email for send-to-device.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveView("library");
-                    setShelfFilter("all");
-                  }}
-                  className="inline-flex items-center rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-900 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:border-slate-500 dark:hover:bg-slate-800"
-                >
-                  ← Back to library
-                </button>
-              </div>
-
-              {!user ? (
-                <div className="max-w-sm space-y-2">
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Sign in with your baseGeek account to enable BookGeek
-                    features tied to your profile.
-                  </div>
-                  {authError && (
-                    <div className="text-[10px] text-rose-700 dark:text-rose-400">{authError}</div>
-                  )}
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      disabled={authLoading}
-                      onClick={() => {
-                        setAuthLoading(true);
-                        setAuthError(null);
-                        loginRedirect("bookgeek", window.location.href, "login");
-                      }}
-                      className="inline-flex items-center rounded border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-900 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 dark:hover:border-slate-500 dark:hover:bg-slate-800 disabled:opacity-60"
-                    >
-                      {authLoading ? "Redirecting…" : "Sign in"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveView("library")}
-                      className="text-[11px] text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-[11px] text-slate-600 dark:text-slate-300">
-                      Signed in as{" "}
-                      <span className="font-medium">
-                        {user.email || user.username || "unknown"}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleLogout}
-                      className="rounded border border-slate-300 bg-white px-3 py-1.5 text-[11px] text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-slate-500 dark:hover:bg-slate-800"
-                    >
-                      Log out
-                    </button>
-                  </div>
-
-                  <form
-                    className="max-w-sm space-y-2"
-                    onSubmit={handleSaveProfile}
-                  >
-                    <div className="text-[11px] font-medium text-slate-700 dark:text-slate-200">
-                      Kindle email address
-                    </div>
-                    <p className="text-[11px] text-slate-500">
-                      This is where BookGeek will send EPUBs when you choose
-                      &quot;Send to eReader&quot;.
-                    </p>
-                    <input
-                      type="email"
-                      className="w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-[11px] text-slate-900 outline-none focus:border-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
-                      placeholder="yourname@kindle.com"
-                      value={kindleEmailInput}
-                      onChange={(e) => setKindleEmailInput(e.target.value)}
-                    />
-
-                    <div className="pt-2 text-[11px] font-medium text-slate-700 dark:text-slate-200">
-                      Device word
-                    </div>
-                    <p className="text-[11px] text-slate-500">
-                      Used on your e-reader at /download-basket to fetch your
-                      basket.
-                    </p>
-                    <input
-                      type="text"
-                      className="w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-[11px] text-slate-900 outline-none focus:border-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
-                      placeholder="mustang"
-                      value={deviceWordInput}
-                      onChange={(e) =>
-                        setDeviceWordInput(e.target.value.toLowerCase())
-                      }
-                    />
-                    {profileError && (
-                      <div className="text-[10px] text-rose-700 dark:text-rose-400">
-                        {profileError}
-                      </div>
-                    )}
-                    {profileMessage && (
-                      <div className="text-[10px] text-emerald-700 dark:text-emerald-300">
-                        {profileMessage}
-                      </div>
-                    )}
-                    <button
-                      type="submit"
-                      disabled={profileLoading}
-                      className="inline-flex items-center rounded border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-900 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 dark:hover:border-slate-500 dark:hover:bg-slate-800 disabled:opacity-60"
-                    >
-                      {profileLoading ? "Saving…" : "Save profile"}
-                    </button>
-                  </form>
-
-                  <div className="border-t border-slate-200 pt-3 dark:border-slate-800 text-[11px] text-slate-500 space-y-4">
-                    <div>
-                      <div className="mb-1 text-[11px] font-medium text-slate-700 dark:text-slate-200">
-                        Library default shelf
-                      </div>
-                      <p className="mb-2 text-[11px] text-slate-500">
-                        Choose which shelf loads by default when you open BookGeek.
-                      </p>
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-                        <select
-                          className="w-full max-w-xs rounded border border-slate-300 bg-white px-2 py-1.5 text-[11px] text-slate-900 outline-none focus:border-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
-                          value={defaultShelfPref}
-                          onChange={(e) => setDefaultShelfPref(e.target.value)}
-                        >
-                          {shelves.map((shelf) => (
-                            <option key={shelf.id} value={shelf.id}>
-                              {shelf.label}
-                            </option>
-                          ))}
-                        </select>
-                        <button
-                          type="button"
-                          onClick={handleSaveDefaultShelf}
-                          disabled={prefSaveLoading}
-                          className="inline-flex items-center rounded border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-900 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 dark:hover:border-slate-500 dark:hover:bg-slate-800 disabled:opacity-60"
-                        >
-                          {prefSaveLoading ? "Saving…" : "Save default shelf"}
-                        </button>
-                      </div>
-                      {prefSaveError && (
-                        <div className="mt-1 text-[10px] text-rose-700 dark:text-rose-400">{prefSaveError}</div>
-                      )}
-                      {prefSaveMessage && (
-                        <div className="mt-1 text-[10px] text-emerald-700 dark:text-emerald-300">{prefSaveMessage}</div>
-                      )}
-                    </div>
-
-                    <div>
-                      <div className="mb-1 text-[11px] font-medium text-slate-700 dark:text-slate-200">
-                        Custom shelves
-                      </div>
-                      <p className="mb-2 text-[11px] text-slate-500">
-                        Add your own shelves alongside the built-in ones. They show in the sidebar with a book icon.
-                      </p>
-                      {customShelves.length > 0 && (
-                        <ul className="mb-2 flex flex-wrap gap-1.5">
-                          {customShelves.map((shelf) => (
-                            <li
-                              key={shelf.id}
-                              className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[11px] text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                            >
-                              <span>{shelf.label}</span>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteCustomShelf(shelf.id)}
-                                disabled={shelfEditLoading}
-                                className="ml-0.5 rounded px-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 disabled:opacity-60"
-                                aria-label={`Remove shelf ${shelf.label}`}
-                                title="Remove shelf"
-                              >
-                                ×
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                      <form
-                        onSubmit={handleAddCustomShelf}
-                        className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3"
-                      >
-                        <input
-                          type="text"
-                          value={newShelfLabel}
-                          onChange={(e) => setNewShelfLabel(e.target.value)}
-                          maxLength={40}
-                          placeholder="New shelf name"
-                          className="w-full max-w-xs rounded border border-slate-300 bg-white px-2 py-1.5 text-[11px] text-slate-900 outline-none focus:border-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
-                        />
-                        <button
-                          type="submit"
-                          disabled={shelfEditLoading || !newShelfLabel.trim()}
-                          className="inline-flex items-center rounded border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-900 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 dark:hover:border-slate-500 dark:hover:bg-slate-800 disabled:opacity-60"
-                        >
-                          {shelfEditLoading ? "Saving…" : "Add shelf"}
-                        </button>
-                      </form>
-                      {shelfEditError && (
-                        <div className="mt-1 text-[10px] text-rose-700 dark:text-rose-400">{shelfEditError}</div>
-                      )}
-                    </div>
-
-                    <div>
-                      <button
-                        type="button"
-                        onClick={handleCheckAiStatus}
-                        disabled={aiStatusLoading}
-                        className="rounded border border-emerald-600/70 bg-emerald-100 px-3 py-1.5 text-[11px] text-emerald-800 hover:border-emerald-500 dark:bg-emerald-950/40 dark:text-emerald-200 dark:hover:border-emerald-400 disabled:opacity-60"
-                      >
-                        {aiStatusLoading ? "Checking AI…" : "Check AI status"}
-                      </button>
-                      {aiStatus && (
-                        <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">
-                          AI:{" "}
-                          <span className="font-medium">
-                            {aiStatus.enabled ? "enabled" : "disabled"}
-                          </span>
-                          {" · "}
-                          key:{" "}
-                          {aiStatus.apiKeyConfigured ? "configured" : "missing"}
-                        </div>
-                      )}
-                      {aiStatusError && (
-                        <div className="mt-1 text-[10px] text-rose-700 dark:text-rose-400">
-                          {aiStatusError}
-                        </div>
-                      )}
-                    </div>
-
-                    <div>
-                      <div className="mb-1 text-[11px] font-medium text-slate-700 dark:text-slate-200">
-                        Goodreads import
-                      </div>
-                      <p className="mb-2 text-[11px] text-slate-500">
-                        Upload your Goodreads library CSV export to import ratings,
-                        shelves, and read dates onto your existing books.
-                      </p>
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                        <input
-                          type="file"
-                          accept=".csv,text/csv"
-                          onChange={handleGoodreadsFileChange}
-                          className="text-[11px] text-slate-700 file:mr-2 file:rounded file:border-0 file:bg-slate-200 file:px-2 file:py-1.5 file:text-[11px] file:text-slate-900 hover:file:bg-slate-300 dark:text-slate-200 dark:file:bg-slate-800 dark:file:text-slate-100 dark:hover:file:bg-slate-700"
-                        />
-                        <button
-                          type="button"
-                          onClick={handleGoodreadsImport}
-                          disabled={goodreadsImportLoading || !goodreadsFile}
-                          className="inline-flex items-center rounded border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-900 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 dark:hover:border-slate-500 dark:hover:bg-slate-800 disabled:opacity-60"
-                        >
-                          {goodreadsImportLoading
-                            ? "Importing from Goodreads…"
-                            : "Upload & import"}
-                        </button>
-                      </div>
-                      {goodreadsImportError && (
-                        <div className="mt-1 text-[10px] text-rose-700 dark:text-rose-400">
-                          {goodreadsImportError}
-                        </div>
-                      )}
-                      {goodreadsImportSummary && (
-                        <div className="mt-1 text-[10px] text-emerald-700 dark:text-emerald-300">
-                          Imported Goodreads CSV: {goodreadsImportSummary.updated ?? 0} updated,
-                          {" "}
-                          {goodreadsImportSummary.created ?? 0} created,
-                          {" "}
-                          {goodreadsImportSummary.matched ?? 0} matched to existing,
-                          {" "}
-                          {goodreadsImportSummary.skippedNoMatch ?? 0} with no usable data.
-                        </div>
-                      )}
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={handleGoodreadsDedupe}
-                          disabled={goodreadsDedupeLoading}
-                          className="inline-flex items-center rounded border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-900 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 dark:hover:border-slate-500 dark:hover:bg-slate-800 disabled:opacity-60"
-                        >
-                          {goodreadsDedupeLoading
-                            ? "Merging duplicates…"
-                            : "Merge Goodreads duplicates"}
-                        </button>
-                        {goodreadsDedupeError && (
-                          <span className="text-[10px] text-rose-700 dark:text-rose-400">
-                            {goodreadsDedupeError}
-                          </span>
-                        )}
-                        {goodreadsDedupeSummary && (
-                          <span className="text-[10px] text-emerald-700 dark:text-emerald-300">
-                            Merged {goodreadsDedupeSummary.merged ?? 0} of {" "}
-                            {goodreadsDedupeSummary.candidates ?? 0} Goodreads-only books; {" "}
-                            updated {goodreadsDedupeSummary.updatedPrimary ?? 0} primaries; {" "}
-                            {goodreadsDedupeSummary.skippedNoPrimary ?? 0} skipped with no primary match.
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="mb-1 text-[11px] font-medium text-slate-700 dark:text-slate-200">
-                      Library rescan
-                    </div>
-                    <p className="mb-2 text-[11px] text-slate-500">
-                      Walks your on-disk BookGeek library and attaches files to existing books,
-                      marking them as owned, or creates new records if nothing matches.
-                    </p>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={handleCalibreRescan}
-                        disabled={calibreRescanLoading}
-                        className="inline-flex items-center rounded border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-900 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 dark:hover:border-slate-500 dark:hover:bg-slate-800 disabled:opacity-60"
-                      >
-                        {calibreRescanLoading
-                          ? "Scanning library…"
-                          : "Rescan library"}
-                      </button>
-                      {calibreRescanError && (
-                        <span className="text-[10px] text-rose-700 dark:text-rose-400">
-                          {calibreRescanError}
-                        </span>
-                      )}
-                      {calibreRescanSummary && (
-                        <span className="text-[10px] text-emerald-700 dark:text-emerald-300">
-                          Scanned {calibreRescanSummary.rows ?? 0} entries; attached to{" "}
-                          {calibreRescanSummary.attachedExisting ?? 0} existing books; created{" "}
-                          {calibreRescanSummary.createdNew ?? 0} new; skipped{" "}
-                          {calibreRescanSummary.skippedNoFiles ?? 0} with no files.
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </section>
+            <SettingsView
+              aiStatus={aiStatus}
+              aiStatusError={aiStatusError}
+              aiStatusLoading={aiStatusLoading}
+              authError={authError}
+              authLoading={authLoading}
+              calibreRescanError={calibreRescanError}
+              calibreRescanLoading={calibreRescanLoading}
+              calibreRescanSummary={calibreRescanSummary}
+              customShelves={customShelves}
+              defaultShelfPref={defaultShelfPref}
+              deviceWordInput={deviceWordInput}
+              goodreadsDedupeError={goodreadsDedupeError}
+              goodreadsDedupeLoading={goodreadsDedupeLoading}
+              goodreadsDedupeSummary={goodreadsDedupeSummary}
+              goodreadsFile={goodreadsFile}
+              goodreadsImportError={goodreadsImportError}
+              goodreadsImportLoading={goodreadsImportLoading}
+              goodreadsImportSummary={goodreadsImportSummary}
+              handleAddCustomShelf={handleAddCustomShelf}
+              handleCalibreRescan={handleCalibreRescan}
+              handleCheckAiStatus={handleCheckAiStatus}
+              handleDeleteCustomShelf={handleDeleteCustomShelf}
+              handleGoodreadsDedupe={handleGoodreadsDedupe}
+              handleGoodreadsFileChange={handleGoodreadsFileChange}
+              handleGoodreadsImport={handleGoodreadsImport}
+              handleLogout={handleLogout}
+              handleSaveDefaultShelf={handleSaveDefaultShelf}
+              handleSaveProfile={handleSaveProfile}
+              kindleEmailInput={kindleEmailInput}
+              newShelfLabel={newShelfLabel}
+              prefSaveError={prefSaveError}
+              prefSaveLoading={prefSaveLoading}
+              prefSaveMessage={prefSaveMessage}
+              profileError={profileError}
+              profileLoading={profileLoading}
+              profileMessage={profileMessage}
+              setActiveView={setActiveView}
+              setAuthError={setAuthError}
+              setAuthLoading={setAuthLoading}
+              setDefaultShelfPref={setDefaultShelfPref}
+              setDeviceWordInput={setDeviceWordInput}
+              setKindleEmailInput={setKindleEmailInput}
+              setNewShelfLabel={setNewShelfLabel}
+              setShelfFilter={setShelfFilter}
+              shelfEditError={shelfEditError}
+              shelfEditLoading={shelfEditLoading}
+              shelves={shelves}
+              user={user}
+            />
           )}
 
       {selectedBook && (
-        <div
-          className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 px-2 py-4"
-          onClick={closeBookModal}
-        >
-          <div
-            className="mx-auto flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
-              <div>
-                <h2 className="text-sm font-semibold text-slate-100 md:text-base">
-                  Book Details
-                </h2>
-                <p className="text-[11px] text-slate-500">
-                  From your BookGeek library
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={closeBookModal}
-                aria-label="Close"
-                className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-700 bg-slate-900 text-sm font-semibold text-slate-300 hover:border-slate-500 hover:text-slate-50"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 py-4 md:flex-row">
-              <div className="mx-auto w-32 flex-shrink-0 md:mx-0 md:w-40">
-                <div className="relative aspect-[2/3] w-full overflow-hidden rounded-md border border-slate-800 bg-slate-900">
-                  {(selectedBook.id || selectedBook._id) ? (
-                    <img
-                      src={getCoverUrl(selectedBook) || `${ API_BASE }/books/${ (selectedBook.id || selectedBook._id) }/cover`}
-                      alt={selectedBook.title || "Book cover"}
-                      className="h-full w-full object-cover"
-                      onLoad={(e) => {
-                        e.currentTarget.style.visibility = "visible";
-                      }}
-                      onError={(e) => {
-                        e.currentTarget.style.visibility = "hidden";
-                      }}
-                    />
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => setShowCoverTools((v) => !v)}
-                    className="absolute right-1.5 top-1.5 inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-700 bg-slate-950/80 text-[11px] text-slate-200 hover:border-sky-500 hover:text-sky-100"
-                    title="Edit cover"
-                  >
-                    ✎
-                  </button>
-                </div>
-                {showCoverTools && (
-                  <div className="mt-2 space-y-1 text-[11px]">
-                    <div className="flex flex-wrap items-center gap-1">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleCoverFileChange}
-                        className="flex-1 min-w-[120px] text-[10px] text-slate-200 file:mr-1 file:rounded file:border-0 file:bg-slate-800 file:px-2 file:py-1 file:text-[10px] file:text-slate-100 hover:file:bg-slate-700"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleUploadCoverForSelectedBook}
-                        disabled={coverUploadLoading || !coverUploadFile}
-                        className="rounded border border-slate-700 bg-slate-900 px-2 py-0.5 text-[10px] text-slate-100 hover:border-slate-500 disabled:opacity-60"
-                      >
-                        {coverUploadLoading ? "Uploading…" : "Upload cover"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleDeleteCoverForSelectedBook}
-                        disabled={coverDeleteLoading}
-                        className="rounded border border-slate-800 bg-slate-950 px-2 py-0.5 text-[10px] text-slate-300 hover:border-rose-500 hover:text-rose-100 disabled:opacity-60"
-                      >
-                        {coverDeleteLoading ? "Removing…" : "Remove"}
-                      </button>
-                    </div>
-                    <input
-                      type="text"
-                      className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100 outline-none focus:border-sky-500"
-                      placeholder="Search covers…"
-                      value={coverSearchQuery}
-                      onChange={(e) => setCoverSearchQuery(e.target.value)}
-                    />
-                    <button
-                      type="button"
-                      onClick={handleSearchCoversForSelectedBook}
-                      disabled={coverSearchLoading}
-                      className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100 hover:border-slate-500 disabled:opacity-60"
-                    >
-                      {coverSearchLoading ? "Searching covers…" : "Search covers"}
-                    </button>
-                    {coverSearchError && (
-                      <div className="text-[10px] text-rose-400">
-                        {coverSearchError}
-                      </div>
-                    )}
-                    {Array.isArray(coverSearchResults) &&
-                      coverSearchResults.length > 0 && (
-                        <div className="space-y-1">
-                          <div className="text-[10px] text-slate-400">
-                            Choose a cover:
-                          </div>
-                          <div className="grid grid-cols-2 gap-2 md:grid-cols-3 md:gap-2">
-                            {coverSearchResults.slice(0, 9).map((candidate) => {
-                              const key =
-                                typeof candidate.id === "string"
-                                  ? candidate.id
-                                  : `cover-${ String(
-                                    candidate.coverId ?? ""
-                                  ) }`;
-                              const isApplying = coverApplyLoadingId === key;
-                              return (
-                                <button
-                                  key={key}
-                                  type="button"
-                                  onClick={() =>
-                                    handleApplyCoverCandidate(candidate)
-                                  }
-                                  disabled={!!coverApplyLoadingId}
-                                  className="relative overflow-hidden rounded border border-slate-700 bg-slate-900"
-                                >
-                                  <img
-                                    src={candidate.thumbUrl}
-                                    alt={candidate.title || "Cover option"}
-                                    className="h-28 w-full object-cover"
-                                  />
-                                  {isApplying && (
-                                    <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-[11px] text-slate-100">
-                                      Applying…
-                                    </div>
-                                  )}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-                  </div>
-                )}
-              </div>
-
-              <div className="flex-1 space-y-3 text-sm text-slate-100">
-                <div className="flex flex-col gap-2">
-                  <div className="flex flex-wrap gap-2">
-                    <div className="relative inline-block">
-                      <button
-                        type="button"
-                        className="inline-flex items-center rounded-md bg-sky-600 px-3 py-1 text-xs font-medium text-white hover:bg-sky-500 disabled:opacity-60"
-                        disabled={!!convertingFormat}
-                        onClick={() => setDownloadOpen((open) => !open)}
-                      >
-                        <span>
-                          {convertingFormat
-                            ? `Converting ${ convertingFormat.toUpperCase() }…`
-                            : "Download"}
-                        </span>
-                        <span className="ml-1 text-[10px]">▾</span>
-                      </button>
-
-                      {downloadOpen && (
-                        <div className="absolute left-0 z-10 mt-1 w-44 overflow-hidden rounded-md border border-slate-800 bg-slate-950 text-[11px] text-slate-100 shadow-xl">
-                          {["epub", "azw3", "mobi"].map((format) => {
-                            const existing = (selectedBook.files || []).find(
-                              (f) => (f.format || "").toLowerCase() === format
-                            );
-
-                            let sizeLabel = "";
-                            if (convertingFormat === format) {
-                              sizeLabel = "Converting…";
-                            } else if (existing) {
-                              const sizeBytes = existing.size || 0;
-                              const sizeMB = sizeBytes / (1024 * 1024);
-                              sizeLabel =
-                                sizeMB >= 0.1
-                                  ? `${ sizeMB.toFixed(1) } MB`
-                                  : `${ (sizeBytes / 1024).toFixed(0) } KB`;
-                            } else {
-                              sizeLabel = "Not available";
-                            }
-
-                            return (
-                              <button
-                                key={format}
-                                type="button"
-                                className="flex w-full items-center justify-between px-3 py-1.5 text-left hover:bg-slate-800"
-                                disabled={!!convertingFormat}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDownload(selectedBook, format);
-                                }}
-                              >
-                                <span className="mr-2 font-medium">
-                                  {format.toUpperCase()}
-                                </span>
-                                <span className="text-[10px] text-slate-400">
-                                  {sizeLabel}
-                                </span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                    <button
-                      className="rounded-md bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-60"
-                      type="button"
-                      disabled={sendToKindleLoading}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleSendToKindle(selectedBook);
-                      }}
-                    >
-                      {sendToKindleLoading ? "Sending…" : "Send EPUB to eReader"}
-                    </button>
-                    <button
-                      className="rounded-md bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-500"
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setReaderError(null);
-                        setReaderOpen(true);
-                      }}
-                    >
-                      Read in Browser · EPUB
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleBasket((selectedBook.id || selectedBook._id), e);
-                      }}
-                      className={
-                        "rounded-md px-3 py-1 text-xs font-medium transition-colors " +
-                        (basketBookIds.includes((selectedBook.id || selectedBook._id))
-                          ? "bg-amber-600 text-white hover:bg-amber-500"
-                          : "border border-amber-600/60 bg-amber-900/30 text-amber-200 hover:bg-amber-900/60")
-                      }
-                      title="Add this book to a device download basket (Kindle)"
-                    >
-                      {basketBookIds.includes((selectedBook.id || selectedBook._id))
-                        ? "In basket ✓"
-                        : "Add to basket"}
-                    </button>
-                    {(!selectedBook.owned ||
-                      !selectedBook.files ||
-                      selectedBook.files.length === 0) && (
-                        <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-400">
-                          <input
-                            type="file"
-                            accept=".epub,.mobi,.azw3,.pdf,.fb2,.rtf,.txt,.html"
-                            onChange={handleUploadFileChange}
-                            className="text-[10px] text-slate-200 file:mr-2 file:rounded file:border-0 file:bg-slate-800 file:px-2 file:py-1 file:text-[10px] file:text-slate-100 hover:file:bg-slate-700"
-                          />
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleUploadBookFile(selectedBook);
-                            }}
-                            disabled={uploadLoading || !uploadFile}
-                            className="inline-flex items-center rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[10px] font-medium text-slate-50 hover:border-slate-500 disabled:opacity-60"
-                          >
-                            {uploadLoading ? "Attaching…" : "Attach file"}
-                          </button>
-                          {uploadError && (
-                            <div className="w-full text-[10px] text-rose-400">
-                              {uploadError}
-                            </div>
-                          )}
-                          {uploadMessage && (
-                            <div className="w-full text-[10px] text-emerald-300">
-                              {uploadMessage}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                  </div>
-
-                  <div>
-                    {editMode ? (
-                      <div className="space-y-1">
-                        <input
-                          type="text"
-                          className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100 outline-none focus:border-sky-500"
-                          value={editDraft?.title || ""}
-                          onChange={(e) =>
-                            setEditDraft((prev) => ({
-                              ...(prev || {}),
-                              title: e.target.value,
-                            }))
-                          }
-                          placeholder="Title"
-                        />
-                        <input
-                          type="text"
-                          className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100 outline-none focus:border-sky-500"
-                          value={editDraft?.authors || ""}
-                          onChange={(e) =>
-                            setEditDraft((prev) => ({
-                              ...(prev || {}),
-                              authors: e.target.value,
-                            }))
-                          }
-                          placeholder="Authors (comma-separated)"
-                        />
-                      </div>
-                    ) : (
-                      <>
-                        <h3 className="text-base font-bold font-serif text-slate-100 md:text-lg">
-                          {selectedBook.title || "Untitled"}
-                        </h3>
-                        {Array.isArray(selectedBook.authors) &&
-                          selectedBook.authors.length > 0 && (
-                            <div className="text-xs text-sky-400">
-                              {selectedBook.authors.join(", ")}
-                            </div>
-                          )}
-                      </>
-                    )}
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
-                    {editMode ? (
-                      <div className="flex flex-wrap gap-2 w-full">
-                        <input
-                          type="text"
-                          className="min-w-[90px] flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100 outline-none focus:border-sky-500"
-                          placeholder="Language"
-                          value={editDraft?.language || ""}
-                          onChange={(e) =>
-                            setEditDraft((prev) => ({
-                              ...(prev || {}),
-                              language: e.target.value,
-                            }))
-                          }
-                        />
-                        <input
-                          type="text"
-                          className="min-w-[120px] flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100 outline-none focus:border-sky-500"
-                          placeholder="ISBN"
-                          value={editDraft?.isbn || ""}
-                          onChange={(e) =>
-                            setEditDraft((prev) => ({
-                              ...(prev || {}),
-                              isbn: e.target.value,
-                            }))
-                          }
-                        />
-                        <input
-                          type="text"
-                          className="min-w-[120px] flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100 outline-none focus:border-sky-500"
-                          placeholder="ISBN13"
-                          value={editDraft?.isbn13 || ""}
-                          onChange={(e) =>
-                            setEditDraft((prev) => ({
-                              ...(prev || {}),
-                              isbn13: e.target.value,
-                            }))
-                          }
-                        />
-                        <input
-                          type="text"
-                          className="min-w-[120px] flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100 outline-none focus:border-sky-500"
-                          placeholder="Goodreads ID"
-                          value={editDraft?.goodreadsId || ""}
-                          onChange={(e) =>
-                            setEditDraft((prev) => ({
-                              ...(prev || {}),
-                              goodreadsId: e.target.value,
-                            }))
-                          }
-                        />
-                      </div>
-                    ) : (
-                      <>
-                        {selectedBook.language && (
-                          <span className="inline-flex items-center rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5">
-                            <span className="mr-1 text-[10px] uppercase text-slate-500">
-                              Language
-                            </span>
-                            <span>{selectedBook.language}</span>
-                          </span>
-                        )}
-                        {selectedBook.isbn && (
-                          <span className="inline-flex items-center rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5">
-                            <span className="mr-1 text-[10px] uppercase text-slate-500">
-                              ISBN
-                            </span>
-                            <span>{selectedBook.isbn}</span>
-                          </span>
-                        )}
-                        {selectedBook.goodreadsId && (
-                          <span className="inline-flex items-center rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5">
-                            <span className="mr-1 text-[10px] uppercase text-slate-500">
-                              Goodreads
-                            </span>
-                            <span>{selectedBook.goodreadsId}</span>
-                          </span>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {editMode ? (
-                  <div className="flex flex-wrap gap-1.5 text-[11px]">
-                    <input
-                      type="text"
-                      className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100 outline-none focus:border-sky-500"
-                      placeholder="Tags (comma-separated)"
-                      value={editDraft?.tags || ""}
-                      onChange={(e) =>
-                        setEditDraft((prev) => ({
-                          ...(prev || {}),
-                          tags: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                ) : (
-                  Array.isArray(selectedBook.tags) &&
-                  selectedBook.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 text-[11px]">
-                      {selectedBook.tags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="rounded-full bg-slate-800 px-2 py-0.5 text-slate-200"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  )
-                )}
-
-                <div className="space-y-1 text-[11px] text-slate-400">
-                  {editMode ? (
-                    <div className="flex flex-wrap gap-2">
-                      <input
-                        type="text"
-                        className="min-w-[140px] flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100 outline-none focus:border-sky-500"
-                        placeholder="Publisher"
-                        value={editDraft?.publisher || ""}
-                        onChange={(e) =>
-                          setEditDraft((prev) => ({
-                            ...(prev || {}),
-                            publisher: e.target.value,
-                          }))
-                        }
-                      />
-                      <input
-                        type="date"
-                        className="min-w-[140px] flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100 outline-none focus:border-sky-500"
-                        value={editDraft?.publishedDate || ""}
-                        onChange={(e) =>
-                          setEditDraft((prev) => ({
-                            ...(prev || {}),
-                            publishedDate: e.target.value,
-                          }))
-                        }
-                      />
-                    </div>
-                  ) : (
-                    <>
-                      {selectedBook.publisher && (
-                        <div>
-                          <span className="font-medium text-slate-300">
-                            Publisher:
-                          </span>{" "}
-                          <span>{selectedBook.publisher}</span>
-                        </div>
-                      )}
-                      {selectedBook.publishedDate && (
-                        <div>
-                          <span className="font-medium text-slate-300">
-                            Published:
-                          </span>{" "}
-                          <span>
-                            {new Date(
-                              selectedBook.publishedDate
-                            ).toLocaleDateString()}
-                          </span>
-                        </div>
-                      )}
-                    </>
-                  )}
-                  {editMode ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <label className="flex items-center gap-1">
-                        <span className="font-medium text-slate-300">
-                          Rating:
-                        </span>
-                        <input
-                          type="number"
-                          min="0"
-                          max="5"
-                          step="0.5"
-                          className="w-16 rounded border border-slate-700 bg-slate-900 px-1 py-0.5 text-[11px] text-slate-100 outline-none focus:border-sky-500"
-                          value={editDraft?.rating || ""}
-                          onChange={(e) =>
-                            setEditDraft((prev) => ({
-                              ...(prev || {}),
-                              rating: e.target.value,
-                            }))
-                          }
-                        />
-                      </label>
-                    </div>
-                  ) : null}
-                  {selectedBook.owned && (
-                    <div>
-                      <span className="font-medium text-slate-300">
-                        Owned:
-                      </span>{" "}
-                      <span>Yes</span>
-                    </div>
-                  )}
-                  {typeof selectedBook.rating === "number" &&
-                    selectedBook.rating > 0 && (
-                      <div>
-                        <span className="font-medium text-slate-300">
-                          Rating:
-                        </span>{" "}
-                        {(() => {
-                          const r = Math.round(selectedBook.rating);
-                          const stars = "★".repeat(Math.max(0, Math.min(5, r)));
-                          const empty = "☆".repeat(Math.max(0, 5 - r));
-                          return (
-                            <span>
-                              <span className="text-amber-300">
-                                {stars}
-                              </span>
-                              <span className="text-slate-500">{empty}</span>{" "}
-                              <span className="text-slate-300">
-                                ({selectedBook.rating}/5)
-                              </span>
-                            </span>
-                          );
-                        })()}
-                      </div>
-                    )}
-                  {selectedBook.dateFinished && (
-                    <div>
-                      <span className="font-medium text-slate-300">
-                        Finished:
-                      </span>{" "}
-                      <span>
-                        {new Date(selectedBook.dateFinished).toLocaleDateString()}
-                      </span>
-                    </div>
-                  )}
-                  {selectedBook.dateAdded && (
-                    <div>
-                      <span className="font-medium text-slate-300">
-                        Added:
-                      </span>{" "}
-                      <span>
-                        {new Date(selectedBook.dateAdded).toLocaleDateString()}
-                      </span>
-                    </div>
-                  )}
-                  {typeof selectedBook.readCount === "number" &&
-                    selectedBook.readCount > 0 && (
-                      <div>
-                        <span className="font-medium text-slate-300">
-                          Read count:
-                        </span>{" "}
-                        <span>{selectedBook.readCount}</span>
-                      </div>
-                    )}
-                  {editMode ? (
-                    <div className="mt-1 space-y-1">
-                      <div className="font-medium text-slate-300">Review:</div>
-                      <textarea
-                        className="h-20 w-full resize-y rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100 outline-none focus:border-sky-500"
-                        placeholder="Your review or notes for this book"
-                        value={editDraft?.review || ""}
-                        onChange={(e) =>
-                          setEditDraft((prev) => ({
-                            ...(prev || {}),
-                            review: e.target.value,
-                          }))
-                        }
-                      />
-                    </div>
-                  ) : (
-                    selectedBook.review && (
-                      <div>
-                        <span className="font-medium text-slate-300">
-                          Review:
-                        </span>{" "}
-                        <span className="whitespace-pre-wrap text-slate-200">
-                          {selectedBook.review}
-                        </span>
-                      </div>
-                    )
-                  )}
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-slate-300">Shelf:</span>
-                    <select
-                      className="min-w-[140px] rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100 outline-none [color-scheme:dark] focus:border-slate-500"
-                      value={selectedBook.shelf || ""}
-                      disabled={
-                        !!shelfSavingId && shelfSavingId === (selectedBook.id || selectedBook._id)
-                      }
-                      onChange={(e) =>
-                        handleUpdateShelf(selectedBook, e.target.value)
-                      }
-                    >
-                      <option value="">Assign shelf…</option>
-                      {shelves
-                        .filter((s) => s.id !== "all")
-                        .map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.label}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium text-slate-300">Progress:</span>
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      step={1}
-                      value={progressDraft === "" ? 0 : progressDraft}
-                      disabled={!!progressSavingId && progressSavingId === (selectedBook.id || selectedBook._id)}
-                      onChange={(e) => {
-                        setProgressDraft(Number(e.target.value));
-                        scheduleProgressCommit(selectedBook, e.target.value);
-                      }}
-                      className="w-36 accent-amber-500"
-                      aria-label="Percent read"
-                    />
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      inputMode="numeric"
-                      value={progressDraft}
-                      disabled={!!progressSavingId && progressSavingId === (selectedBook.id || selectedBook._id)}
-                      onChange={(e) => {
-                        const v = e.target.value === "" ? "" : Number(e.target.value);
-                        setProgressDraft(v);
-                        if (v !== "") scheduleProgressCommit(selectedBook, v);
-                      }}
-                      onBlur={(e) => handleUpdateProgress(selectedBook, e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          handleUpdateProgress(selectedBook, e.currentTarget.value);
-                        }
-                      }}
-                      className="w-14 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-right text-[11px] text-slate-100 outline-none [color-scheme:dark] focus:border-slate-500"
-                      aria-label="Percent read"
-                    />
-                    <span className="text-slate-400">%</span>
-                    {selectedBook.pageCount > 0 && progressDraft !== "" && (
-                      <span className="text-[11px] text-slate-500">
-                        about p. {Math.round((Number(progressDraft) / 100) * selectedBook.pageCount)} of {selectedBook.pageCount}
-                      </span>
-                    )}
-                    {progressSavingId && progressSavingId === (selectedBook.id || selectedBook._id) && (
-                      <span className="text-[11px] text-slate-500">Saving…</span>
-                    )}
-                    {progressError && (
-                      <span className="text-[11px] text-rose-400">{progressError}</span>
-                    )}
-                  </div>
-                </div>
-
-                {sendToKindleError && (
-                  <div className="text-[11px] text-rose-400">
-                    {sendToKindleError}
-                  </div>
-                )}
-                {sendToKindleStatus && (
-                  <div className="text-[11px] text-emerald-300">
-                    Sending to {sendToKindleStatus.kindleEmail}
-                  </div>
-                )}
-                <div className="mt-2 border-t border-slate-800 pt-2 text-[11px] text-slate-400">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex flex-col gap-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        {editMode ? (
-                          <>
-                            <button
-                              type="button"
-                              onClick={handleSaveEditForSelectedBook}
-                              disabled={editSaving}
-                              className="rounded border border-sky-600 bg-sky-800 px-3 py-1 text-[11px] font-semibold text-sky-50 hover:border-sky-400 hover:bg-sky-700 disabled:opacity-60"
-                            >
-                              {editSaving ? "Saving…" : "Save changes"}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={cancelEditForSelectedBook}
-                              disabled={editSaving}
-                              className="rounded border border-slate-700 bg-slate-900 px-3 py-1 text-[11px] text-slate-200 hover:border-slate-500"
-                            >
-                              Cancel
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <button
-                              type="button"
-                              onClick={beginEditForSelectedBook}
-                              className="rounded border border-slate-700 bg-slate-900 px-3 py-1 text-[11px] font-medium text-slate-200 hover:border-sky-500 hover:text-sky-200"
-                            >
-                              Edit metadata…
-                            </button>
-                            <button
-                              type="button"
-                              onClick={handleEnrichSelectedBook}
-                              disabled={enrichLoading}
-                              className="rounded border border-emerald-700 bg-emerald-950/60 px-3 py-1 text-[11px] font-medium text-emerald-200 hover:border-emerald-500 hover:bg-emerald-900/80 disabled:opacity-60"
-                            >
-                              {enrichLoading ? "Enriching metadata…" : "Enrich metadata"}
-                            </button>
-                          </>
-                        )}
-                      </div>
-                      {(editError || enrichError || enrichSummary) && (
-                        <div className="space-y-0.5">
-                          {editError && (
-                            <div className="text-rose-400">{editError}</div>
-                          )}
-                          {enrichError && (
-                            <div className="text-rose-400">{enrichError}</div>
-                          )}
-                          {enrichSummary && (
-                            <div className="text-emerald-300">{enrichSummary}</div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex-1"></div>
-                    <div className="flex flex-wrap items-center gap-2 justify-end">
-                      {deleteError && (
-                        <div className="mb-1 text-rose-400">{deleteError}</div>
-                      )}
-                      {deleteConfirmOpen ? (
-                        <>
-                          <label className="inline-flex items-center gap-1">
-                            <input
-                              type="checkbox"
-                              className="h-3 w-3 rounded border-slate-500 bg-slate-900 text-rose-500 focus:ring-rose-500"
-                              checked={deleteIncludeFiles}
-                              onChange={(e) =>
-                                setDeleteIncludeFiles(e.target.checked)
-                              }
-                            />
-                            <span>Also delete files</span>
-                          </label>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (!deleteLoading) {
-                                setDeleteConfirmOpen(false);
-                                setDeleteError(null);
-                                setDeleteIncludeFiles(false);
-                              }
-                            }}
-                            className="rounded border border-slate-700 bg-slate-900 px-3 py-1 text-[11px] text-slate-200 hover:border-slate-500"
-                            disabled={deleteLoading}
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            type="button"
-                            onClick={handleDeleteSelectedBook}
-                            disabled={deleteLoading}
-                            className="rounded border border-rose-600 bg-rose-800 px-3 py-1 text-[11px] font-semibold text-rose-50 hover:border-rose-400 hover:bg-rose-700 disabled:opacity-60"
-                          >
-                            {deleteLoading ? "Deleting…" : "Delete book"}
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setDeleteConfirmOpen(true);
-                            setDeleteError(null);
-                          }}
-                          className="rounded border border-rose-700 bg-rose-950/60 px-3 py-1 text-[11px] font-medium text-rose-200 hover:border-rose-500 hover:bg-rose-900/80"
-                        >
-                          Delete this book…
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                {selectedBook.description && (
-                  <div className="mt-2 space-y-1 text-[13px] leading-relaxed text-slate-200">
-                    <div className="text-sm font-semibold text-slate-100">
-                      Description
-                    </div>
-                    <div className="whitespace-pre-wrap text-[13px] leading-relaxed text-slate-200">
-                      {formatDescriptionForDisplay(selectedBook.description)}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
+        <BookDetailModal
+          basketBookIds={basketBookIds}
+          beginEditForSelectedBook={beginEditForSelectedBook}
+          cancelEditForSelectedBook={cancelEditForSelectedBook}
+          closeBookModal={closeBookModal}
+          convertingFormat={convertingFormat}
+          coverApplyLoadingId={coverApplyLoadingId}
+          coverDeleteLoading={coverDeleteLoading}
+          coverSearchError={coverSearchError}
+          coverSearchLoading={coverSearchLoading}
+          coverSearchQuery={coverSearchQuery}
+          coverSearchResults={coverSearchResults}
+          coverUploadFile={coverUploadFile}
+          coverUploadLoading={coverUploadLoading}
+          deleteConfirmOpen={deleteConfirmOpen}
+          deleteError={deleteError}
+          deleteIncludeFiles={deleteIncludeFiles}
+          deleteLoading={deleteLoading}
+          downloadOpen={downloadOpen}
+          editDraft={editDraft}
+          editError={editError}
+          editMode={editMode}
+          editSaving={editSaving}
+          enrichError={enrichError}
+          enrichLoading={enrichLoading}
+          enrichSummary={enrichSummary}
+          handleApplyCoverCandidate={handleApplyCoverCandidate}
+          handleCoverFileChange={handleCoverFileChange}
+          handleDeleteCoverForSelectedBook={handleDeleteCoverForSelectedBook}
+          handleDeleteSelectedBook={handleDeleteSelectedBook}
+          handleDownload={handleDownload}
+          handleEnrichSelectedBook={handleEnrichSelectedBook}
+          handleSaveEditForSelectedBook={handleSaveEditForSelectedBook}
+          handleSearchCoversForSelectedBook={handleSearchCoversForSelectedBook}
+          handleSendToKindle={handleSendToKindle}
+          handleUpdateProgress={handleUpdateProgress}
+          handleUpdateShelf={handleUpdateShelf}
+          handleUploadBookFile={handleUploadBookFile}
+          handleUploadCoverForSelectedBook={handleUploadCoverForSelectedBook}
+          handleUploadFileChange={handleUploadFileChange}
+          progressDraft={progressDraft}
+          progressError={progressError}
+          progressSavingId={progressSavingId}
+          scheduleProgressCommit={scheduleProgressCommit}
+          selectedBook={selectedBook}
+          sendToKindleError={sendToKindleError}
+          sendToKindleLoading={sendToKindleLoading}
+          sendToKindleStatus={sendToKindleStatus}
+          setCoverSearchQuery={setCoverSearchQuery}
+          setDeleteConfirmOpen={setDeleteConfirmOpen}
+          setDeleteError={setDeleteError}
+          setDeleteIncludeFiles={setDeleteIncludeFiles}
+          setDownloadOpen={setDownloadOpen}
+          setEditDraft={setEditDraft}
+          setProgressDraft={setProgressDraft}
+          setReaderError={setReaderError}
+          setReaderOpen={setReaderOpen}
+          setShowCoverTools={setShowCoverTools}
+          shelfSavingId={shelfSavingId}
+          shelves={shelves}
+          showCoverTools={showCoverTools}
+          toggleBasket={toggleBasket}
+          uploadError={uploadError}
+          uploadFile={uploadFile}
+          uploadLoading={uploadLoading}
+          uploadMessage={uploadMessage}
+        />
       )}
 
       {readerOpen && selectedBook && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-2 py-4">
-          <div className="mx-auto flex h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-800 px-4 py-2">
-              <div className="space-y-0.5">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  In-browser reader
-                </div>
-                <div className="text-sm font-semibold text-slate-100 line-clamp-1">
-                  {selectedBook.title || "Untitled"}
-                </div>
-                {Array.isArray(selectedBook.authors) && selectedBook.authors.length > 0 && (
-                  <div className="text-[11px] text-slate-400 line-clamp-1">
-                    {selectedBook.authors.join(", ")}
-                  </div>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setReaderTheme((t) => (t === "dark" ? "light" : "dark"));
-                  }}
-                  className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-200 hover:border-slate-500"
-                >
-                  {readerTheme === "dark" ? "Light" : "Dark"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setReaderOpen(false);
-                    setReaderError(null);
-                  }}
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-700 bg-slate-900 text-sm font-semibold text-slate-300 hover:border-slate-500 hover:text-slate-50"
-                >
-                  ×
-                </button>
-              </div>
-            </div>
-            <div className="flex-1 bg-slate-900">
-              <div
-                ref={readerContainerRef}
-                className="h-full w-full overflow-hidden bg-slate-900"
-              />
-            </div>
-            <div className="flex items-center justify-between border-t border-slate-800 px-4 py-2 text-[11px] text-slate-400">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (readerRenditionRef.current?.prev) {
-                      readerRenditionRef.current.prev();
-                    }
-                  }}
-                  className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-200 hover:border-slate-500"
-                >
-                  ← Previous
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (readerRenditionRef.current?.next) {
-                      readerRenditionRef.current.next();
-                    }
-                  }}
-                  className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-200 hover:border-slate-500"
-                >
-                  Next →
-                </button>
-              </div>
-              <div className="text-[11px] text-rose-400">
-                {readerError || null}
-              </div>
-            </div>
-          </div>
-        </div>
+        <ReaderModal
+          readerContainerRef={readerContainerRef}
+          readerError={readerError}
+          readerRenditionRef={readerRenditionRef}
+          readerTheme={readerTheme}
+          selectedBook={selectedBook}
+          setReaderError={setReaderError}
+          setReaderOpen={setReaderOpen}
+          setReaderTheme={setReaderTheme}
+        />
       )}
       </Box>
     </GeekAppFrame>
       </GeekShell>
 
 
-      <Dialog
-        open={addBookOpen}
-        onClose={() => !addBookLoading && setAddBookOpen(false)}
-        fullWidth
-        maxWidth="sm"
-      >
-        <DialogTitle>Add book</DialogTitle>
-        <form onSubmit={handleCreateBook}>
-          <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <TextField
-              label="Title"
-              value={addBookTitle}
-              onChange={(e) => setAddBookTitle(e.target.value)}
-              required
-              autoFocus
-              fullWidth
-            />
-            <TextField
-              label="Authors"
-              value={addBookAuthors}
-              onChange={(e) => setAddBookAuthors(e.target.value)}
-              placeholder="Jane Doe, John Smith"
-              helperText="Comma-separated"
-              fullWidth
-            />
-            <TextField
-              label="ISBN"
-              value={addBookIsbn}
-              onChange={(e) => setAddBookIsbn(e.target.value)}
-              fullWidth
-            />
-            <FormControl fullWidth>
-              <InputLabel id="add-book-shelf-label">Shelf</InputLabel>
-              <Select
-                labelId="add-book-shelf-label"
-                value={addBookShelf}
-                onChange={(e) => setAddBookShelf(e.target.value)}
-                label="Shelf"
-              >
-                {shelves.filter((s) => s.id !== "all").map((s) => (
-                  <MenuItem key={s.id} value={s.id}>{s.label}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <Box>
-              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
-                Book file (optional)
-              </Typography>
-              <input
-                type="file"
-                accept=".epub,.mobi,.azw3,.pdf,.fb2,.rtf,.txt,.html"
-                onChange={(e) => setAddBookFile(e.target.files?.[0] || null)}
-                className="w-full text-sm file:mr-3 file:rounded file:border-0 file:bg-sky-500/10 file:px-3 file:py-1 file:text-xs file:text-sky-500"
-              />
-            </Box>
-            {addBookError && (
-              <Typography color="error" variant="body2">
-                {addBookError}
-              </Typography>
-            )}
-          </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 2 }}>
-            <Button
-              type="button"
-              onClick={() => setAddBookOpen(false)}
-              disabled={addBookLoading}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              variant="contained"
-              disabled={addBookLoading || !addBookTitle.trim()}
-            >
-              {addBookLoading ? "Creating…" : "Create"}
-            </Button>
-          </DialogActions>
-        </form>
-      </Dialog>
+      <AddBookDialog
+        addBookAuthors={addBookAuthors}
+        addBookError={addBookError}
+        addBookIsbn={addBookIsbn}
+        addBookLoading={addBookLoading}
+        addBookOpen={addBookOpen}
+        addBookShelf={addBookShelf}
+        addBookTitle={addBookTitle}
+        handleCreateBook={handleCreateBook}
+        setAddBookAuthors={setAddBookAuthors}
+        setAddBookFile={setAddBookFile}
+        setAddBookIsbn={setAddBookIsbn}
+        setAddBookOpen={setAddBookOpen}
+        setAddBookShelf={setAddBookShelf}
+        setAddBookTitle={setAddBookTitle}
+        shelves={shelves}
+      />
 
       {/* Device Basket Result Dialog */}
       {basketResultOpen && basketResult && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 py-6"
-          onClick={() => setBasketResultOpen(false)}
-        >
-          <div
-            className="mx-auto w-full max-w-md overflow-hidden rounded-2xl border border-amber-800/60 bg-slate-950 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
-              <div>
-                <h2 className="text-sm font-semibold text-slate-100">
-                  Device Download Basket
-                </h2>
-                <p className="text-[11px] text-slate-500">
-                  {profile?.deviceWord
-                    ? "Visit the page and enter your word on your e-reader"
-                    : "Type this URL into your Kindle browser"}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setBasketResultOpen(false)}
-                aria-label="Close"
-                className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-700 bg-slate-900 text-sm font-semibold text-slate-300 hover:border-slate-500 hover:text-slate-50"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="space-y-5 px-5 py-6">
-              {profile?.deviceWord ? (
-                <>
-                  {/* Easy path — device word is set, this is primary */}
-                  <div className="space-y-4 rounded-xl border border-amber-700/50 bg-amber-950/40 px-4 py-5 text-center">
-                    <div>
-                      <div className="mb-1 text-[11px] uppercase tracking-widest text-amber-400/80">
-                        On your e-reader, go to
-                      </div>
-                      <div
-                        style={{ fontFamily: '"Roboto Mono", monospace', fontSize: '1.35rem', letterSpacing: '0.02em', lineHeight: '1.3' }}
-                        className="font-bold text-amber-100 break-all"
-                      >
-                        {basketResult.landingUrl || "/download-basket"}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="mb-1 text-[11px] uppercase tracking-widest text-amber-400/80">
-                        and enter your word
-                      </div>
-                      <div
-                        style={{ fontFamily: '"Roboto Mono", monospace', fontSize: '1.75rem', letterSpacing: '0.04em' }}
-                        className="font-bold text-amber-100 break-all"
-                      >
-                        {profile.deviceWord}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Full URL — secondary fallback */}
-                  <div className="rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-3 text-center">
-                    <div className="mb-1 text-[10px] uppercase tracking-wide text-slate-500">
-                      Or type the full URL directly
-                    </div>
-                    <div className="text-[11px] text-slate-400 break-all">
-                      {basketResult.url || ""}
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <>
-                  {/* Large slug display — hand-typed on Kindle keyboard */}
-                  <div className="rounded-xl border border-amber-700/50 bg-amber-950/40 px-4 py-5 text-center">
-                    <div
-                      className="mb-1 text-[11px] uppercase tracking-widest text-amber-400/80"
-                    >
-                      4-word URL
-                    </div>
-                    <div
-                      style={{ fontFamily: '"Roboto Mono", monospace', fontSize: '1.5rem', letterSpacing: '0.04em', lineHeight: '1.3' }}
-                      className="font-bold text-amber-100 break-all"
-                    >
-                      {basketResult.slug
-                        ? basketResult.slug.split("-").join(" · ")
-                        : ""}
-                    </div>
-                    <div className="mt-3 text-[11px] text-slate-400 break-all">
-                      {basketResult.url || ""}
-                    </div>
-                  </div>
-
-                  <div className="rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2 text-center text-[11px] text-slate-500">
-                    Tip: set a device word in Settings to make this easier to
-                    type on your e-reader.
-                  </div>
-                </>
-              )}
-
-              {/* Expiry */}
-              {basketResult.expiresAt && (
-                <div className="text-center text-[12px] text-slate-400">
-                  Expires at{" "}
-                  <span className="font-medium text-slate-200">
-                    {new Date(basketResult.expiresAt).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
-                  {" "}(30 minutes)
-                </div>
-              )}
-
-              {/* Copy button */}
-              <button
-                type="button"
-                onClick={() => {
-                  const toCopy = basketResult.url || "";
-                  if (navigator.clipboard) {
-                    navigator.clipboard.writeText(toCopy).catch(() => {});
-                  }
-                }}
-                className="w-full rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-medium text-slate-200 hover:border-slate-500 hover:bg-slate-800"
-              >
-                Copy URL to clipboard
-              </button>
-
-              {/* Actions */}
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setBasketResult(null);
-                    setBasketResultOpen(false);
-                    setBasketError(null);
-                  }}
-                  className="flex-1 rounded-lg border border-amber-700/60 bg-amber-900/30 px-4 py-2 text-xs font-medium text-amber-200 hover:bg-amber-900/60"
-                >
-                  Create new basket
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    clearBasket();
-                  }}
-                  className="flex-1 rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-medium text-slate-300 hover:border-slate-500"
-                >
-                  Done / clear selection
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <DeviceBasketDialog
+          basketResult={basketResult}
+          clearBasket={clearBasket}
+          profile={profile}
+          setBasketError={setBasketError}
+          setBasketResult={setBasketResult}
+          setBasketResultOpen={setBasketResultOpen}
+        />
       )}
 
     </>
