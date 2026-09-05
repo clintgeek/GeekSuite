@@ -38,7 +38,8 @@
     "opossum": "10.0.0",
     "pino": "^9.0.0",
     "pino-http": "^10.0.0",
-    "redis": "^4.6.10"
+    "redis": "^4.6.10",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@jest/globals": "29.7.0",

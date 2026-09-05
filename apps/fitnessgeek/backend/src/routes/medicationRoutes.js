@@ -6,6 +6,8 @@ const MedicationLog = require('../models/MedicationLog');
 const rx = require('../services/rxService');
 const { suggestIndications } = require('../services/indicationMap');
 const logger = require('../config/logger');
+const { validate } = require('../validation/validate');
+const { createMedicationSchema, updateMedicationSchema } = require('../validation/schemas/medication');
 
 // Search medications (RxNav approximate search)
 router.get('/search', authenticateToken, async (req, res) => {
@@ -101,7 +103,7 @@ router.get('/rxcui/:rxcui', authenticateToken, async (req, res) => {
 });
 
 // Create or update a medication record for the user
-router.post('/', authenticateToken, async (req, res) => {
+router.post('/', authenticateToken, validate({ body: createMedicationSchema }), async (req, res) => {
   try {
     const userId = req.user?.id;
     const body = req.body || {};
@@ -173,7 +175,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 });
 
 // Update a medication by id
-router.put('/:id', authenticateToken, async (req, res) => {
+router.put('/:id', authenticateToken, validate({ body: updateMedicationSchema }), async (req, res) => {
   try {
     const userId = req.user?.id;
     const medId = req.params.id;

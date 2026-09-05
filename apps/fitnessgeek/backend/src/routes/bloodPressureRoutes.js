@@ -9,6 +9,8 @@ const {
   getBPStats
 } = require('../controllers/bloodPressureController');
 const { authenticateToken } = require('../middleware/auth');
+const { validate } = require('../validation/validate');
+const { createBPSchema, updateBPSchema } = require('../validation/schemas/bloodPressure');
 
 /**
  * @route GET /api/blood-pressure
@@ -36,14 +38,14 @@ router.get('/:id', authenticateToken, getBPLog);
  * @desc Create new blood pressure log
  * @access Private
  */
-router.post('/', authenticateToken, createBPLog);
+router.post('/', authenticateToken, validate({ body: createBPSchema }), createBPLog);
 
 /**
  * @route PUT /api/blood-pressure/:id
  * @desc Update blood pressure log
  * @access Private
  */
-router.put('/:id', authenticateToken, updateBPLog);
+router.put('/:id', authenticateToken, validate({ body: updateBPSchema }), updateBPLog);
 
 /**
  * @route DELETE /api/blood-pressure/:id

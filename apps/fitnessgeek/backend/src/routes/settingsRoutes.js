@@ -4,6 +4,13 @@ const crypto = require('crypto');
 const { authenticateToken } = require('../middleware/auth');
 const UserSettings = require('../models/UserSettings');
 const logger = require('../config/logger');
+const { validate } = require('../validation/validate');
+const {
+  settingsUpdateSchema,
+  aiUpdateSchema,
+  dashboardUpdateSchema,
+  householdUpdateSchema
+} = require('../validation/schemas/settings');
 
 // Apply authentication to all routes
 router.use(authenticateToken);
@@ -41,7 +48,7 @@ router.get('/', async (req, res) => {
 });
 
 // PUT /api/settings - Update user settings
-router.put('/', async (req, res) => {
+router.put('/', validate({ body: settingsUpdateSchema }), async (req, res) => {
   try {
     const userId = req.user.id;
     const updateData = req.body;
@@ -116,7 +123,7 @@ router.put('/', async (req, res) => {
 });
 
 // PUT /api/settings/ai - Update AI settings specifically
-router.put('/ai', async (req, res) => {
+router.put('/ai', validate({ body: aiUpdateSchema }), async (req, res) => {
   try {
     const userId = req.user.id;
     const aiSettings = req.body;
@@ -162,7 +169,7 @@ router.put('/ai', async (req, res) => {
 });
 
 // PUT /api/settings/dashboard - Update dashboard settings specifically
-router.put('/dashboard', async (req, res) => {
+router.put('/dashboard', validate({ body: dashboardUpdateSchema }), async (req, res) => {
   try {
     const userId = req.user.id;
     const dashboardSettings = req.body;
@@ -391,7 +398,7 @@ router.post('/household/join', async (req, res) => {
 });
 
 // PUT /api/settings/household - Update household sharing settings
-router.put('/household', async (req, res) => {
+router.put('/household', validate({ body: householdUpdateSchema }), async (req, res) => {
   try {
     const userId = req.user.id;
     const { display_name, share_food_logs, share_weight, share_meals } = req.body;

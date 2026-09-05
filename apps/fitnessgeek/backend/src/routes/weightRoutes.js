@@ -9,6 +9,8 @@ const {
   getWeightStats
 } = require('../controllers/weightController');
 const { authenticateToken } = require('../middleware/auth');
+const { validate } = require('../validation/validate');
+const { createWeightSchema, updateWeightSchema } = require('../validation/schemas/weight');
 
 /**
  * @route GET /api/weight
@@ -36,14 +38,14 @@ router.get('/:id', authenticateToken, getWeightLog);
  * @desc Create new weight log
  * @access Private
  */
-router.post('/', authenticateToken, createWeightLog);
+router.post('/', authenticateToken, validate({ body: createWeightSchema }), createWeightLog);
 
 /**
  * @route PUT /api/weight/:id
  * @desc Update weight log
  * @access Private
  */
-router.put('/:id', authenticateToken, updateWeightLog);
+router.put('/:id', authenticateToken, validate({ body: updateWeightSchema }), updateWeightLog);
 
 /**
  * @route DELETE /api/weight/:id
