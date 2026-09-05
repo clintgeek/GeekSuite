@@ -55,6 +55,7 @@ export async function startPreview(name, { timeoutMs = 60000 } = {}) {
   const child = spawn(bin, args, {
     cwd,
     stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' },
     detached: true, // own process group, so stop() can take the whole tree down
   });
   let log = '';
@@ -62,7 +63,11 @@ export async function startPreview(name, { timeoutMs = 60000 } = {}) {
     const timer = setTimeout(() => reject(new Error(`vite preview for ${name} did not start in ${timeoutMs}ms:\n${log}`)), timeoutMs);
     const onData = (buf) => {
       log += buf.toString();
-      const m = /(https?:\/\/(?:localhost|127\.0\.0\.1):\d+\/?[^\s]*)/.exec(log);
+      // Vite bolds the port in colour mode (`http://127.0.0.1:` + ESC[1m41711ESC[22m/), which
+      // broke `:\d+` on GitHub Actions — strip ANSI before matching. NO_COLOR is also set on
+      // the child below; the strip stays as belt and braces.
+      const plain = log.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
+      const m = /(https?:\/\/(?:localhost|127\.0\.0\.1):\d+\/?[^\s]*)/.exec(plain);
       if (m) {
         clearTimeout(timer);
         resolve(m[1].replace(/\/$/, ''));
