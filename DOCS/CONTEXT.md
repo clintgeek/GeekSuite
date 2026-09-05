@@ -1,3 +1,6 @@
+> **This file is the SSO architecture reference only.** For the box, containers, databases,
+> nginx, CI/CD, deploy/rollback, local dev, and known failure modes, see `DOCS/RUNBOOK.md`.
+
 # GeekSuite Unified SSO — Technical Context
 
 Suite-wide SSO architecture reference. For the detailed SSO design, risks, and migration plan see
@@ -85,16 +88,29 @@ logging, graceful shutdown, and environment-driven CORS.
 
 ## Known Issues / Architecture Debt
 
-### Duplicated `UserSettings` schema (fitnessgeek)
+### ~~Duplicated `UserSettings` schema (fitnessgeek)~~ — resolved 2026-09-05, see the tripwire test
 
-The Mongoose `UserSettings` schema lives in two places and has drifted:
+The Mongoose `UserSettings` schema used to be declared twice — once for fitnessgeek's REST routes,
+once for basegeek's GraphQL resolvers — against one collection. Because Mongoose strict mode strips
+unknown fields on `$set` rather than erroring, a field added to one copy was accepted, logged as a
+success, and silently discarded by the other. That is how keto config vanished in April 2026.
 
-- `apps/fitnessgeek/backend/src/models/UserSettings.js` — fitnessgeek REST routes
-- `apps/basegeek/packages/api/src/graphql/fitnessgeek/models/UserSettings.js` — basegeek GraphQL resolvers
+The field set now lives in **one** file, `packages/schemas/fitnessgeek/userSettings.js`
+(`@geeksuite/schemas`), which both models build from. Consolidation was a pure refactor: no document
+rewritten, no migration, no field added, removed, retyped or re-defaulted — the two copies had
+already been hand-synced to an identical 81 paths.
 
-Most frontend REST calls are rewritten to GraphQL by `apiService.js` and hit the basegeek copy.
-Adding a field to fitnessgeek's copy without updating basegeek's = silent data loss (Mongoose strict
-mode strips unknown fields on `$set`). Fix: consolidate to one source of truth.
+Tripwires fail the moment either model stops consuming the shared definition:
+
+- `apps/basegeek/packages/api/src/__tests__/userSettingsSchemaParity.test.js` — imports both real
+  models, compares `schema.paths` path-by-path, and proves write-through in both directions on the
+  in-memory Mongo
+- `apps/fitnessgeek/backend/src/__tests__/models/userSettingsSchemaParity.test.js` — the hermetic
+  half, plus a check that the REST allow-lists name only real schema paths
+
+**Adding a field**: shared module only, then `typeDefs.js` for GraphQL and `settingsRoutes.js`'s
+allow-list for REST. Full field inventory, drift history, and the design rationale:
+[`apps/fitnessgeek/DOCS/USER_SETTINGS_SCHEMA.md`](../apps/fitnessgeek/DOCS/USER_SETTINGS_SCHEMA.md).
 
 ### Stale hardcoded AI models (basegeek)
 
