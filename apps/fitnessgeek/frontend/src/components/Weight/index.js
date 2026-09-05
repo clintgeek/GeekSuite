@@ -6,8 +6,6 @@ export { default as QuickAddWeight } from './QuickAddWeight.jsx';
 export { default as WeightLogList } from './WeightLogList.jsx';
 
 // Legacy components (to be deprecated)
-export { default as WeightLayout } from './WeightLayout.jsx';
-export { default as WeightContent } from './WeightContent.jsx';
 export { default as WeightChart } from './WeightChart.jsx';
 export { default as WeightChartNivo } from './WeightChartNivo.jsx';
 export { default as WeightProgressRing } from './WeightProgressRing.jsx';

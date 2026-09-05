@@ -480,8 +480,7 @@ being replaced by `graphql/glance/` under `DOCS/DASHGEEK_PLAN.md`. `notes` has n
   notegeek `pages/LoginPage.jsx`, `pages/RegisterPage.jsx`; basegeek `pages/Databases.jsx`;
   startgeek `ResumeSection.jsx`, `WorldClocks.jsx`. Delete or route.
 
-- **`fitnessgeek docker-compose.dev.yml`** — references service names that no longer exist in the
-  new single-service compose. Rewrite for hot-reload or delete if not in use. (`DEFERRED_WORK.md`)
+- ~~**`fitnessgeek docker-compose.dev.yml`**~~ — **deleted 2026-09-05**, see `DEFERRED_WORK.md`.
 
 - **bujogeek Apollo cache invalidation on mutations** — currently refreshing the view gives latest
   data; mutations don't invalidate the cache. Proper `refetchQueries` or cache update on write.

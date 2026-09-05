@@ -131,11 +131,14 @@ Likely rollout order once ready:
   routes, any GraphQL resolvers that touch state) is a slow-burn
   project, not a single pass.
 
-- **fitnessgeek `docker-compose.dev.yml`** references service names
-  (`backend`, `frontend`) that no longer exist in the new
-  single-service base compose. Rewrite to target the `fitnessgeek`
-  service with an image override + bind-mount if the dev hot-reload
-  workflow is actually being used; delete if not.
+- ~~**fitnessgeek `docker-compose.dev.yml`**~~ — **deleted 2026-09-05** (housekeeping
+  pass, TODO_ORDER #31). Referenced pre-pnpm-workspace `backend`/`frontend` services
+  and installed via plain `npm` at container boot, which can't resolve the app's
+  `workspace:*` deps against the monorepo root; DEPLOY.md never referenced it and
+  the documented dev workflow (README "Quick start") already runs both halves
+  natively. Not fixed-in-place because mirroring production now means mounting
+  the whole repo root and running `pnpm install` there — a bigger lift than this
+  pass, and nothing indicated the file was in active use.
 
 ## Apps still to migrate (consolidation, not hardening)
 

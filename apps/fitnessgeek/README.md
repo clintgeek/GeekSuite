@@ -55,8 +55,10 @@ This builds the image and deploys via `apps/fitnessgeek/docker-compose.yml`.
 The container is named `fitnessgeek`. Env lives in
 `apps/fitnessgeek/.env.production` (gitignored).
 
-Dev compose (`docker-compose.dev.yml`) exists but service names are stale;
-see `DEFERRED_WORK.md` at repo root before using it.
+There is no dev compose file — it referenced pre-pnpm-workspace `backend`/`frontend`
+services and its `npm install` at boot couldn't resolve the app's `workspace:*`
+deps anyway. Removed 2026-09-05; run backend/frontend natively per "Quick start"
+above.
 
 ---
 

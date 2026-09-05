@@ -103,9 +103,13 @@ cycle so the ordering rationale stays visible; detail moved to `SUITE_TODO.md` "
     fitnessgeek Drawer landmine, BarcodeScanner media query, offline pages per mode, native
     date pickers, reduced motion, flockgeek first-visit flicker. Pick up when already in
     those files. *UI*
-31. **Housekeeping** — dead components list, duplicate bujogeek models, stale fitnessgeek dev
-    compose, basegeek stale AI model defaults, notegeek `formatRelativeTime` dedupe, gateway
+31. **Housekeeping** — dead components list, duplicate bujogeek models, ~~stale fitnessgeek dev
+    compose~~, basegeek stale AI model defaults, notegeek `formatRelativeTime` dedupe, gateway
     logout broadcast. Zero user impact; batch into any nearby pass. *Cleanup*
+    - fitnessgeek dead-frontend-files sweep **done 2026-09-05** (22 files deleted: the 6 M2-report
+      candidates plus 15 more found in a repo-wide unused-import sweep; `docker-compose.dev.yml`
+      deleted — detail in `DEFERRED_WORK.md`). Remaining sub-items (bujogeek models, basegeek AI
+      defaults, notegeek dedupe, gateway broadcast) still open.
 
 ---
 
