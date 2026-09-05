@@ -326,7 +326,7 @@ const CalorieGoalWizard = () => {
               <CircularProgress size={24} />
             </Box>
           ) : (
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
               <TextField
                 label="Age"
                 type="number"
@@ -407,7 +407,7 @@ const CalorieGoalWizard = () => {
             Set Your Weight Goal
           </Typography>
 
-          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mb: 3 }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 3 }}>
             <TextField
               label="Target Weight (lbs)"
               type="number"
@@ -451,7 +451,7 @@ const CalorieGoalWizard = () => {
                 <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
                   Goal Preview
                 </Typography>
-                <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
                   <Box>
                     <Typography variant="body2" sx={{ color: 'text.secondary' }}>Current Weight</Typography>
                     <Typography variant="h6">{profile.weight} lbs</Typography>
@@ -648,7 +648,7 @@ const CalorieGoalWizard = () => {
               <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
                 Weekly Targets
               </Typography>
-              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1 }}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(4, minmax(0, 1fr))', sm: 'repeat(7, minmax(0, 1fr))' }, gap: 1 }}>
                 {plan.schedule.map((d) => (
                   <Box key={d.day} sx={{ textAlign: 'center', p: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
                     <Typography variant="body2" sx={{ color: 'text.secondary' }}>{d.day}</Typography>
@@ -665,7 +665,7 @@ const CalorieGoalWizard = () => {
           </Card>
 
           {/* Detailed Breakdown */}
-          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 3, mb: 3 }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 3, mb: 3 }}>
             <Card>
               <CardContent>
                 <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>

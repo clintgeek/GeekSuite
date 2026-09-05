@@ -1,9 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Button,
   FormControl,
   InputLabel,
@@ -23,6 +19,7 @@ import {
   People as PeopleIcon
 } from '@mui/icons-material';
 import { fitnessGeekService } from '../../services/fitnessGeekService';
+import PremiumDialog from '../primitives/PremiumDialog.jsx';
 
 const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'];
 
@@ -155,13 +152,29 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <CopyIcon color="primary" />
-        Copy Meal
-      </DialogTitle>
-
-      <DialogContent>
+    <PremiumDialog
+      open={open}
+      onClose={onClose}
+      eyebrow="Food Log"
+      title="Copy Meal"
+      icon={CopyIcon}
+      maxWidth="sm"
+      primaryAction={
+        <Button
+          variant="contained"
+          onClick={handleCopy}
+          disabled={copying || !fromDate || !toDate}
+          startIcon={copying ? <CircularProgress size={20} /> : <CopyIcon />}
+        >
+          {copying ? 'Copying...' : 'Copy Meal'}
+        </Button>
+      }
+      secondaryAction={
+        <Button onClick={onClose} disabled={copying}>
+          Cancel
+        </Button>
+      }
+    >
         {/* Quick Presets */}
         <Box sx={{ mb: 3 }}>
           <Typography variant="subtitle2" color="text.secondary" gutterBottom>
@@ -173,20 +186,20 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
               onClick={() => handleQuickCopy('dinner-to-lunch')}
               variant="outlined"
               color="primary"
-              size="small"
+              sx={{ height: 40, fontSize: '0.8125rem' }}
             />
             <Chip
               label="Yesterday's Dinner → Today's Lunch"
               onClick={() => handleQuickCopy('yesterday-dinner')}
               variant="outlined"
               color="primary"
-              size="small"
+              sx={{ height: 40, fontSize: '0.8125rem' }}
             />
             <Chip
               label="Copy Entire Day"
               onClick={() => handleQuickCopy('all-to-tomorrow')}
               variant="outlined"
-              size="small"
+              sx={{ height: 40, fontSize: '0.8125rem' }}
             />
           </Box>
         </Box>
@@ -312,22 +325,7 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
             {success}
           </Alert>
         )}
-      </DialogContent>
-
-      <DialogActions>
-        <Button onClick={onClose} disabled={copying}>
-          Cancel
-        </Button>
-        <Button
-          variant="contained"
-          onClick={handleCopy}
-          disabled={copying || !fromDate || !toDate}
-          startIcon={copying ? <CircularProgress size={20} /> : <CopyIcon />}
-        >
-          {copying ? 'Copying...' : 'Copy Meal'}
-        </Button>
-      </DialogActions>
-    </Dialog>
+    </PremiumDialog>
   );
 };
 

@@ -254,8 +254,8 @@ const AIInsightsCard = () => {
                 sx={{
                   borderRadius: 1.5,
                   fontWeight: 600,
-                  fontSize: '0.6875rem',
-                  height: 28,
+                  fontSize: '0.75rem',
+                  height: { xs: 44, sm: 32 },
                   backgroundColor: isActive
                     ? isDark ? 'rgba(13, 148, 136, 0.15)' : 'rgba(13, 148, 136, 0.08)'
                     : 'transparent',

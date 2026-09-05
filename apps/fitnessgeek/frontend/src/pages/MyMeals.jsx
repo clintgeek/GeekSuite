@@ -9,11 +9,7 @@ import {
   Typography,
   CircularProgress,
   Alert,
-  Dialog,
-  DialogTitle,
-  DialogContent,
   DialogContentText,
-  DialogActions,
   Button,
 } from '@mui/material';
 import {
@@ -29,6 +25,7 @@ import {
   DisplayHeading,
   EmptyState,
   SurfaceSkeleton,
+  PremiumDialog,
 } from '../components/primitives';
 
 const MyMeals = () => {
@@ -265,25 +262,13 @@ const MyMeals = () => {
       />
 
       {/* Delete confirmation — replaces window.confirm */}
-      <Dialog
+      <PremiumDialog
         open={!!mealToDelete}
         onClose={() => !deleting && setMealToDelete(null)}
+        eyebrow="Confirm"
+        title="Delete this meal?"
         maxWidth="xs"
-        fullWidth
-      >
-        <DialogTitle sx={{ fontFamily: "'DM Serif Display', serif", fontWeight: 400 }}>
-          Delete this meal?
-        </DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            <strong>{mealToDelete?.name}</strong> will be permanently removed from your
-            saved meals library. This can't be undone.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2.5 }}>
-          <Button onClick={() => setMealToDelete(null)} disabled={deleting}>
-            Cancel
-          </Button>
+        primaryAction={
           <Button
             onClick={confirmDelete}
             color="error"
@@ -293,8 +278,18 @@ const MyMeals = () => {
           >
             Delete
           </Button>
-        </DialogActions>
-      </Dialog>
+        }
+        secondaryAction={
+          <Button onClick={() => setMealToDelete(null)} disabled={deleting}>
+            Cancel
+          </Button>
+        }
+      >
+        <DialogContentText>
+          <strong>{mealToDelete?.name}</strong> will be permanently removed from your
+          saved meals library. This can't be undone.
+        </DialogContentText>
+      </PremiumDialog>
     </Box>
   );
 };

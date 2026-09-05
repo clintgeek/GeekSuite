@@ -108,8 +108,8 @@ const QuickAddPanel = ({
             label="Favorites & Recent"
             size="small"
             sx={{
-              height: 20,
-              fontSize: '0.7rem',
+              height: 24,
+              fontSize: '0.75rem',
               backgroundColor: 'rgba(13, 148, 136, 0.1)',
               color: 'primary.main'
             }}
@@ -123,8 +123,9 @@ const QuickAddPanel = ({
               ml: { xs: 0, sm: 1 },
               '& .MuiToggleButton-root': {
                 textTransform: 'capitalize',
-                fontSize: '0.7rem',
-                px: 1,
+                fontSize: '0.75rem',
+                minHeight: { xs: 44, sm: 34 },
+                px: 1.5,
                 py: 0.2
               }
             }}

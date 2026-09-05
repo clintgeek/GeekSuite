@@ -10,10 +10,6 @@ import {
   ListItemText,
   IconButton,
   Alert,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Divider
 } from '@mui/material';
 import {
@@ -23,6 +19,7 @@ import {
 } from '@mui/icons-material';
 import { fitnessGeekService } from '../../services/fitnessGeekService';
 import BarcodeScanner from '../BarcodeScanner/BarcodeScanner.jsx';
+import PremiumDialog from '../primitives/PremiumDialog.jsx';
 
 const getSourceName = (source) => {
   switch (source?.toLowerCase()) {
@@ -307,34 +304,28 @@ const FoodSearch = ({
 
       {/* Simple Add Food Dialog */}
       {!disableDialog && (
-        <Dialog
+        <PremiumDialog
           open={!!selectedFood}
           onClose={() => setSelectedFood(null)}
+          eyebrow="Log"
+          title="Add Food"
           maxWidth="xs"
-          fullWidth
-          PaperProps={{
-            sx: {
-              borderRadius: { xs: 0, sm: 2 },
-              margin: { xs: 0, sm: 2 },
-              maxHeight: { xs: '100vh', sm: '90vh' },
-              width: { xs: '100%', sm: 'auto' }
-            }
-          }}
+          primaryAction={
+            <Button
+              onClick={handleAddFood}
+              variant="contained"
+              startIcon={<AddIcon />}
+              color="success"
+            >
+              Add Food
+            </Button>
+          }
+          secondaryAction={
+            <Button onClick={() => setSelectedFood(null)} variant="text">
+              Cancel
+            </Button>
+          }
         >
-          <DialogTitle sx={{ pb: 2, px: { xs: 3, sm: 4 } }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                Add Food
-              </Typography>
-              <IconButton
-                onClick={() => setSelectedFood(null)}
-                size="small"
-              >
-                <CloseIcon />
-              </IconButton>
-            </Box>
-          </DialogTitle>
-          <DialogContent sx={{ px: { xs: 3, sm: 4 } }}>
             {selectedFood && (
               <Box sx={{ p: 2 }}>
                 {/* Selected Food Display */}
@@ -411,38 +402,7 @@ const FoodSearch = ({
                 </Box>
               </Box>
             )}
-          </DialogContent>
-          <DialogActions sx={{
-            px: { xs: 3, sm: 4 },
-            pb: { xs: 3, sm: 4 },
-            gap: 2,
-            flexDirection: { xs: 'column', sm: 'row' },
-            alignItems: 'stretch'
-          }}>
-            <Button
-              onClick={() => setSelectedFood(null)}
-              variant="text"
-              size="large"
-              sx={{ color: '#666' }}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleAddFood}
-              variant="contained"
-              startIcon={<AddIcon />}
-              size="large"
-              sx={{
-                bgcolor: '#4caf50',
-                '&:hover': {
-                  bgcolor: '#45a049'
-                }
-              }}
-            >
-              Add Food
-            </Button>
-          </DialogActions>
-        </Dialog>
+        </PremiumDialog>
       )}
 
       {/* Barcode Scanner Dialog */}

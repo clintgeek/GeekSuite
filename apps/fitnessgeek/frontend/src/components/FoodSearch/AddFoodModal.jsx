@@ -1,9 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Button,
   Box,
   Typography,
@@ -15,10 +11,10 @@ import {
   useTheme
 } from '@mui/material';
 import {
-  Close as CloseIcon,
   Add as AddIcon,
   Remove as RemoveIcon
 } from '@mui/icons-material';
+import PremiumDialog from '../primitives/PremiumDialog.jsx';
 
 const MEAL_TYPES = [
   { value: 'breakfast', label: 'Breakfast', emoji: '🌅' },
@@ -82,47 +78,52 @@ const AddFoodModal = ({
   };
 
   return (
-    <Dialog
+    <PremiumDialog
       open={open}
       onClose={handleClose}
+      eyebrow="Log"
+      title="Add to Log"
       maxWidth="sm"
-      fullWidth
-      PaperProps={{
-        sx:{
-          borderRadius: '12px',
-          maxWidth: 480
-        }
-      }}
-    >
-      <DialogTitle
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          pb: 2,
-          pt: 3,
-          px: 3,
-          fontWeight: 700,
-          color: theme.palette.text.primary
-        }}
-      >
-        Add to Log
-        <IconButton
-          onClick={handleClose}
-          size="small"
+      primaryAction={
+        <Button
+          onClick={handleAdd}
+          variant="contained"
+          startIcon={<AddIcon />}
           sx={{
+            borderRadius: '999px',
+            px: 3,
+            py: 1.25,
+            fontWeight: 700,
+            textTransform: 'none',
+          }}
+        >
+          Add to Log
+        </Button>
+      }
+      secondaryAction={
+        <Button
+          onClick={handleClose}
+          variant="outlined"
+          sx={{
+            borderRadius: '999px',
+            px: 3,
+            py: 1.25,
+            borderColor: theme.palette.divider,
             color: theme.palette.text.secondary,
+            fontWeight: 600,
+            textTransform: 'none',
+            borderWidth: '1.5px',
             '&:hover': {
+              borderColor: theme.palette.text.secondary,
               backgroundColor: theme.palette.action.hover,
-              color: theme.palette.text.primary
+              borderWidth: '1.5px'
             }
           }}
         >
-          <CloseIcon />
-        </IconButton>
-      </DialogTitle>
-
-      <DialogContent sx={{ px: 3, pb: 2 }}>
+          Cancel
+        </Button>
+      }
+    >
         {/* Food Info Card */}
         <Box
           sx={{
@@ -438,48 +439,7 @@ const AddFoodModal = ({
             }}
           />
         </Box>
-      </DialogContent>
-
-      <DialogActions sx={{ px: 3, pb: 3, gap: 1.5 }}>
-        <Button
-          onClick={handleClose}
-          variant="outlined"
-          size="large"
-          sx={{
-            borderRadius: '999px',
-            px: 3,
-            py: 1.25,
-            borderColor: theme.palette.divider,
-            color: theme.palette.text.secondary,
-            fontWeight: 600,
-            textTransform: 'none',
-            borderWidth: '1.5px',
-            '&:hover': {
-              borderColor: theme.palette.text.secondary,
-              backgroundColor: theme.palette.action.hover,
-              borderWidth: '1.5px'
-            }
-          }}
-        >
-          Cancel
-        </Button>
-        <Button
-          onClick={handleAdd}
-          variant="contained"
-          size="large"
-          startIcon={<AddIcon />}
-          sx={{
-            borderRadius: '999px',
-            px: 3,
-            py: 1.25,
-            fontWeight: 700,
-            textTransform: 'none',
-          }}
-        >
-          Add to Log
-        </Button>
-      </DialogActions>
-    </Dialog>
+    </PremiumDialog>
   );
 };
 

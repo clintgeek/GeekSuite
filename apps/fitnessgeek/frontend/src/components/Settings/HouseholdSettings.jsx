@@ -18,10 +18,6 @@ import {
   Avatar,
   IconButton,
   Chip,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   InputAdornment
 } from '@mui/material';
 import {
@@ -34,6 +30,7 @@ import {
   Restaurant as FoodIcon,
   FitnessCenter as MealsIcon
 } from '@mui/icons-material';
+import PremiumDialog from '../primitives/PremiumDialog.jsx';
 import { settingsService } from '../../services/settingsService';
 
 const HouseholdSettings = () => {
@@ -325,9 +322,24 @@ const HouseholdSettings = () => {
       </CardContent>
 
       {/* Create Household Dialog */}
-      <Dialog open={showCreateDialog} onClose={() => setShowCreateDialog(false)}>
-        <DialogTitle>Create Household</DialogTitle>
-        <DialogContent>
+      <PremiumDialog
+        open={showCreateDialog}
+        onClose={() => setShowCreateDialog(false)}
+        eyebrow="Household"
+        title="Create Household"
+        icon={CreateIcon}
+        maxWidth="xs"
+        primaryAction={
+          <Button
+            variant="contained"
+            onClick={handleCreateHousehold}
+            disabled={saving || !displayName.trim()}
+          >
+            {saving ? <CircularProgress size={20} /> : 'Create'}
+          </Button>
+        }
+        secondaryAction={<Button onClick={() => setShowCreateDialog(false)}>Cancel</Button>}
+      >
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             Create a household to share food logs and meals with family members.
           </Typography>
@@ -339,23 +351,27 @@ const HouseholdSettings = () => {
             placeholder="e.g., Clint"
             helperText="This is how family members will see you"
           />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowCreateDialog(false)}>Cancel</Button>
-          <Button
-            variant="contained"
-            onClick={handleCreateHousehold}
-            disabled={saving || !displayName.trim()}
-          >
-            {saving ? <CircularProgress size={20} /> : 'Create'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      </PremiumDialog>
 
       {/* Join Household Dialog */}
-      <Dialog open={showJoinDialog} onClose={() => setShowJoinDialog(false)}>
-        <DialogTitle>Join Household</DialogTitle>
-        <DialogContent>
+      <PremiumDialog
+        open={showJoinDialog}
+        onClose={() => setShowJoinDialog(false)}
+        eyebrow="Household"
+        title="Join Household"
+        icon={JoinIcon}
+        maxWidth="xs"
+        primaryAction={
+          <Button
+            variant="contained"
+            onClick={handleJoinHousehold}
+            disabled={saving || !joinCode.trim() || !displayName.trim()}
+          >
+            {saving ? <CircularProgress size={20} /> : 'Join'}
+          </Button>
+        }
+        secondaryAction={<Button onClick={() => setShowJoinDialog(false)}>Cancel</Button>}
+      >
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             Enter the household code shared by a family member.
           </Typography>
@@ -376,29 +392,16 @@ const HouseholdSettings = () => {
             placeholder="e.g., Sarah"
             helperText="This is how family members will see you"
           />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowJoinDialog(false)}>Cancel</Button>
-          <Button
-            variant="contained"
-            onClick={handleJoinHousehold}
-            disabled={saving || !joinCode.trim() || !displayName.trim()}
-          >
-            {saving ? <CircularProgress size={20} /> : 'Join'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      </PremiumDialog>
 
       {/* Leave Household Dialog */}
-      <Dialog open={showLeaveDialog} onClose={() => setShowLeaveDialog(false)}>
-        <DialogTitle>Leave Household</DialogTitle>
-        <DialogContent>
-          <Typography>
-            Are you sure you want to leave this household? You will no longer be able to see other members' food logs.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowLeaveDialog(false)}>Cancel</Button>
+      <PremiumDialog
+        open={showLeaveDialog}
+        onClose={() => setShowLeaveDialog(false)}
+        eyebrow="Confirm"
+        title="Leave Household"
+        maxWidth="xs"
+        primaryAction={
           <Button
             color="error"
             variant="contained"
@@ -407,8 +410,13 @@ const HouseholdSettings = () => {
           >
             {saving ? <CircularProgress size={20} /> : 'Leave'}
           </Button>
-        </DialogActions>
-      </Dialog>
+        }
+        secondaryAction={<Button onClick={() => setShowLeaveDialog(false)}>Cancel</Button>}
+      >
+        <Typography>
+          Are you sure you want to leave this household? You will no longer be able to see other members' food logs.
+        </Typography>
+      </PremiumDialog>
     </Card>
   );
 };

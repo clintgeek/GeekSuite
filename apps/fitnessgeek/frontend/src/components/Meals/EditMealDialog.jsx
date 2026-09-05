@@ -1,9 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Button,
   TextField,
   Box,
@@ -15,6 +11,7 @@ import {
   InputLabel
 } from '@mui/material';
 import { Delete as DeleteIcon } from '@mui/icons-material';
+import PremiumDialog from '../primitives/PremiumDialog.jsx';
 
 const EditMealDialog = ({ open, onClose, meal, onSave, loading = false }) => {
   const [form, setForm] = useState({ name: '', meal_type: 'breakfast', food_items: [] });
@@ -59,10 +56,22 @@ const EditMealDialog = ({ open, onClose, meal, onSave, loading = false }) => {
   const canSave = form.name.trim().length > 0 && form.food_items.length > 0 && !loading;
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>Edit Meal</DialogTitle>
-      <DialogContent>
-        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mb: 2 }}>
+    <PremiumDialog
+      open={open}
+      onClose={onClose}
+      eyebrow="My Meals"
+      title="Edit Meal"
+      maxWidth="sm"
+      primaryAction={
+        <Button onClick={handleSubmit} variant="contained" disabled={!canSave}>
+          {loading ? 'Saving...' : 'Save'}
+        </Button>
+      }
+      secondaryAction={
+        <Button onClick={onClose} disabled={loading}>Cancel</Button>
+      }
+    >
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 2 }}>
           <TextField
             label="Meal Name"
             value={form.name}
@@ -100,14 +109,7 @@ const EditMealDialog = ({ open, onClose, meal, onSave, loading = false }) => {
             </IconButton>
           </Box>
         ))}
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} disabled={loading}>Cancel</Button>
-        <Button onClick={handleSubmit} variant="contained" disabled={!canSave}>
-          {loading ? 'Saving...' : 'Save'}
-        </Button>
-      </DialogActions>
-    </Dialog>
+    </PremiumDialog>
   );
 };
 

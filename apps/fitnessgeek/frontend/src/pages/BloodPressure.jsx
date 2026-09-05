@@ -304,6 +304,13 @@ const BloodPressure = () => {
               value={timeRangeState}
               exclusive
               onChange={(_e, v) => { if (v) handleTimeRangeChange(v); }}
+              sx={{
+                '& .MuiToggleButton-root': {
+                  minHeight: { xs: 44, sm: 34 },
+                  minWidth: { xs: 56, sm: 44 },
+                  fontSize: '0.8125rem',
+                },
+              }}
             >
               <ToggleButton value="7">7d</ToggleButton>
               <ToggleButton value="30">30d</ToggleButton>

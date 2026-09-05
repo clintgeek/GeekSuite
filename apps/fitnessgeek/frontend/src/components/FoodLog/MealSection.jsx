@@ -4,7 +4,6 @@ import {
   Typography,
   Button,
   Avatar,
-  Chip,
   IconButton
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
@@ -185,16 +184,16 @@ const MealSection = ({
                 color: theme.palette.text.secondary,
                 backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : theme.palette.background.default,
                 border: `1px solid ${theme.palette.divider}`,
-                width: { xs: 32, sm: 40 },
-                height: { xs: 32, sm: 40 },
+                width: 44,
+                height: 44,
                 '&:hover': {
                   backgroundColor: theme.palette.action.hover,
                   borderColor: theme.palette.divider
                 }
               }}
-              size="small"
+              aria-label={`Save ${config.title} as a meal`}
             >
-              <SaveIcon sx={{ fontSize: { xs: 16, sm: 20 } }} />
+              <SaveIcon sx={{ fontSize: 20 }} />
             </IconButton>
           )}
 
@@ -206,17 +205,17 @@ const MealSection = ({
                 color: 'white',
                 background: config.gradient,
                 boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
-                width: { xs: 32, sm: 40 },
-                height: { xs: 32, sm: 40 },
+                width: 44,
+                height: 44,
                 '&:hover': {
                   boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
                   transform: 'scale(1.05)'
                 },
                 transition: 'all 0.2s ease'
               }}
-              size="small"
+              aria-label={`Add food to ${config.title}`}
             >
-              <AddIcon sx={{ fontSize: { xs: 18, sm: 20 } }} />
+              <AddIcon sx={{ fontSize: 22 }} />
             </IconButton>
           )}
         </Box>
@@ -244,7 +243,7 @@ const MealSection = ({
             py: { xs: 3, sm: 4 },
             color: theme.palette.text.disabled
           }}>
-            <Typography variant="body2" sx={{ mb: 1.5, fontSize: '0.9375rem' }}>
+            <Typography variant="body2" sx={{ mb: 1.5, fontSize: '0.9375rem', color: theme.palette.text.secondary }}>
               No foods logged yet
             </Typography>
             {onAddFood && (
@@ -252,8 +251,8 @@ const MealSection = ({
                 onClick={handleAddFood}
                 startIcon={<AddIcon />}
                 variant="outlined"
-                size="small"
                 sx={{
+                  minHeight: 44,
                   borderRadius: '999px',
                   borderColor: theme.palette.divider,
                   color: theme.palette.text.secondary,

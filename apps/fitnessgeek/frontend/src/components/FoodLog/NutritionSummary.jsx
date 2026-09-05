@@ -212,7 +212,7 @@ const NutritionSummary = ({
                       variant="caption"
                       sx={{
                         color: theme.palette.text.secondary,
-                        fontSize: { xs: '0.625rem', sm: '0.75rem' }
+                        fontSize: '0.75rem'
                       }}
                     >
                       {item.isRDA ? 'RDA' : 'Goal'}: {item.goal}
@@ -221,7 +221,7 @@ const NutritionSummary = ({
                       variant="caption"
                       sx={{
                         color: theme.palette.text.secondary,
-                        fontSize: { xs: '0.625rem', sm: '0.75rem' }
+                        fontSize: '0.75rem'
                       }}
                     >
                       {Math.round(item.progress)}%

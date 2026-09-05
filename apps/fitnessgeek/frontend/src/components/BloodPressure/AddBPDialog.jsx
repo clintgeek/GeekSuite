@@ -1,26 +1,21 @@
 import React, { useState } from 'react';
 import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Button,
   TextField,
   Box,
   Typography,
   Alert,
-  useTheme,
-  useMediaQuery
+  useTheme
 } from '@mui/material';
 import {
   MonitorHeart as BPIcon,
   Add as AddIcon
 } from '@mui/icons-material';
 import { getTodayLocal } from '../../utils/dateUtils.js';
+import PremiumDialog from '../primitives/PremiumDialog.jsx';
 
 const AddBPDialog = ({ open, onClose, onAdd, existingTodayBP = null }) => {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   const [systolic, setSystolic] = useState('');
   const [diastolic, setDiastolic] = useState('');
@@ -120,31 +115,29 @@ const AddBPDialog = ({ open, onClose, onAdd, existingTodayBP = null }) => {
   const bpStatus = getBPStatus();
 
   return (
-    <Dialog
+    <PremiumDialog
       open={open}
       onClose={handleClose}
-      fullScreen={isMobile}
+      eyebrow="Health"
+      title="Add Reading"
+      icon={BPIcon}
       maxWidth="sm"
-      fullWidth
-      PaperProps={{
-        sx: {
-          borderRadius: isMobile ? 0 : 2
-        }
-      }}
+      primaryAction={
+        <Button
+          onClick={handleSubmit}
+          variant="contained"
+          startIcon={<AddIcon />}
+          disabled={loading}
+        >
+          {loading ? 'Adding...' : 'Save'}
+        </Button>
+      }
+      secondaryAction={
+        <Button onClick={handleClose} disabled={loading}>
+          Cancel
+        </Button>
+      }
     >
-      <DialogTitle sx={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 1,
-        pb: 1
-      }}>
-        <BPIcon sx={{ color: theme.palette.primary.main }} />
-        <Typography variant="h6" sx={{ fontWeight: 600 }}>
-          Add Blood Pressure Reading
-        </Typography>
-      </DialogTitle>
-
-      <DialogContent>
         {existingTodayBP && (
           <Alert severity="info" sx={{ mb: 2 }}>
             <Typography variant="body2">
@@ -232,22 +225,7 @@ const AddBPDialog = ({ open, onClose, onAdd, existingTodayBP = null }) => {
             )}
           </Box>
         </Box>
-      </DialogContent>
-
-      <DialogActions sx={{ p: 2, gap: 1 }}>
-        <Button onClick={handleClose} disabled={loading}>
-          Cancel
-        </Button>
-        <Button
-          onClick={handleSubmit}
-          variant="contained"
-          startIcon={<AddIcon />}
-          disabled={loading}
-        >
-          {loading ? 'Adding...' : 'Add Reading'}
-        </Button>
-      </DialogActions>
-    </Dialog>
+    </PremiumDialog>
   );
 };
 

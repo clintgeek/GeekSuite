@@ -49,7 +49,7 @@ const SectionLabel = ({
         component="span"
         sx={{
           fontFamily: "'DM Sans', sans-serif",
-          fontSize: '0.6875rem',
+          fontSize: '0.75rem',
           fontWeight: 700,
           textTransform: 'uppercase',
           letterSpacing: '0.14em',
@@ -63,7 +63,7 @@ const SectionLabel = ({
             component="span"
             sx={{
               fontFamily: "'JetBrains Mono', monospace",
-              fontSize: '0.6875rem',
+              fontSize: '0.75rem',
               fontWeight: 700,
               color: theme.palette.text.secondary,
               ml: 1,

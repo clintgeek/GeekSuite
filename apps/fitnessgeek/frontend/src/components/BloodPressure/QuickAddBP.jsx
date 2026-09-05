@@ -8,14 +8,14 @@ import {
   Box,
   Alert,
   useTheme,
-  Grid,
-  Fab
+  Grid
 } from '@mui/material';
 import {
   Add as AddIcon,
   MonitorHeart as BPIcon
 } from '@mui/icons-material';
 import { getTodayLocal } from '../../utils/dateUtils.js';
+import { useRegisterPrimaryAction } from '../Layout/primaryAction.js';
 import AddBPDialog from './AddBPDialog.jsx';
 
 const QuickAddBP = ({ onAdd, unit = "mmHg", existingTodayBP = null }) => {
@@ -27,6 +27,14 @@ const QuickAddBP = ({ onAdd, unit = "mmHg", existingTodayBP = null }) => {
   const [date, setDate] = useState(getTodayLocal());
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // The page's thumb-zone action. `GeekFab` (mounted by the shell) reads the
+  // bottom-nav inset and the safe area; the old `bottom: 80` guessed at both.
+  useRegisterPrimaryAction({
+    label: 'Log blood pressure',
+    icon: <AddIcon />,
+    onClick: () => setShowDialog(true)
+  });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -107,25 +115,6 @@ const QuickAddBP = ({ onAdd, unit = "mmHg", existingTodayBP = null }) => {
 
   return (
     <>
-      {/* Mobile version - Floating Action Button */}
-      <Box sx={{ display: { xs: 'block', md: 'none' } }}>
-        <Fab
-          color="primary"
-          aria-label="add blood pressure"
-          onClick={() => setShowDialog(true)}
-          sx={{
-            position: 'fixed',
-            bottom: 80,
-            right: 16,
-            zIndex: 1000,
-            width: 56,
-            height: 56
-          }}
-        >
-          <AddIcon />
-        </Fab>
-      </Box>
-
       {/* Desktop version */}
       <Card sx={{
         width: '100%',

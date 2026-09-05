@@ -460,7 +460,11 @@ const DashboardNew = () => {
 
         {/* Quick Actions — first on mobile, original position on desktop */}
         <Surface sx={{ py: 1.5, order: { xs: -1, md: 0 } }}>
-          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1 }}>
+          <Box sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', sm: 'repeat(4, minmax(0, 1fr))' },
+            gap: 1
+          }}>
             <QuickActionButton
               icon={AddIcon}
               label="Food"

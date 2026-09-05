@@ -1,11 +1,7 @@
 import React, { useState } from 'react';
 import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Button,
-  Avatar,
+  Chip,
   Typography,
   Box,
   TextField,
@@ -14,20 +10,22 @@ import {
   Tab,
   InputAdornment,
   Grid,
-  MenuItem,
-  IconButton
+  MenuItem
 } from '@mui/material';
 import {
   Add as AddIcon,
   Restaurant as FoodIcon,
   QrCodeScanner as BarcodeIcon,
-  Edit as EditIcon,
-  Close as CloseIcon
+  Edit as EditIcon
 } from '@mui/icons-material';
 import { useTheme, alpha } from '@mui/material/styles';
 import { UnifiedFoodSearch } from '../FoodSearch';
 import { fitnessGeekService } from '../../services/fitnessGeekService.js';
 import BarcodeScanner from '../BarcodeScanner/BarcodeScanner.jsx';
+import PremiumDialog from '../primitives/PremiumDialog.jsx';
+
+const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'];
+const mealLabel = (meal) => meal.charAt(0).toUpperCase() + meal.slice(1);
 
 const AddFoodDialog = ({
   open,
@@ -35,13 +33,13 @@ const AddFoodDialog = ({
   onFoodSelect,   // Legacy single-item callback (still used by Barcode / Custom tabs)
   onCommitBatch,  // New: batch commit for Search tab's staging tray
   mealType,
+  onMealTypeChange,
   showBarcodeScanner,
   onShowBarcodeScanner,
   mode = 'standard',
   netCarbLimit = 20,
 }) => {
   const theme = useTheme();
-  const primaryGradient = `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`;
   const subtleSurface = alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.16 : 0.08);
   const mutedText = theme.palette.text.secondary;
   const successColor = theme.palette.success.main;
@@ -196,55 +194,70 @@ const AddFoodDialog = ({
 
   return (
     <>
-      <Dialog
+      <PremiumDialog
         open={open}
         onClose={handleClose}
         maxWidth="md"
-        fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: { xs: 0, sm: 3 },
-            margin: { xs: 0, sm: 2 },
-            maxHeight: { xs: '100vh', sm: '90vh' },
-            width: { xs: '100%', sm: 'auto' }
-          }
-        }}
+        eyebrow="Log"
+        title="Add Food"
+        icon={FoodIcon}
+        contentSx={{ px: { xs: 2, sm: 3.5 } }}
+        primaryAction={
+          (activeTab === 1 || activeTab === 2) && selectedFood ? (
+            <Button
+              onClick={handleAddFood}
+              variant="contained"
+              startIcon={<AddIcon />}
+              sx={{
+                bgcolor: successColor,
+                '&:hover': { bgcolor: alpha(successColor, 0.85) }
+              }}
+            >
+              Add Food
+            </Button>
+          ) : null
+        }
+        secondaryAction={
+          (activeTab === 1 || activeTab === 2) && selectedFood ? (
+            <Button
+              onClick={() => setSelectedFood(null)}
+              variant="text"
+              sx={{ color: mutedText }}
+            >
+              Clear Selection
+            </Button>
+          ) : null
+        }
       >
-        <DialogTitle sx={{
-          pb: 2,
-          px: { xs: 3, sm: 4 },
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between'
-        }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Avatar sx={{
-              background: primaryGradient,
-              width: 40,
-              height: 40
-            }}>
-              <FoodIcon />
-            </Avatar>
-            <Typography variant="h6" sx={{ fontWeight: 700, color: theme.palette.text.primary }}>
-              Add Food to {mealType.charAt(0).toUpperCase() + mealType.slice(1)}
-            </Typography>
-          </Box>
-          <IconButton
-            onClick={handleClose}
-            size="small"
+          {/* Which meal — pre-picked from the clock when the FAB opened this,
+              changed here rather than in a question before the search. */}
+          <Box
             sx={{
-              color: mutedText,
-              '&:hover': {
-                backgroundColor: alpha(mutedText, 0.15),
-                color: theme.palette.text.primary
-              }
+              display: 'flex',
+              gap: 1,
+              flexWrap: 'wrap',
+              mb: 2,
+              ...(onMealTypeChange ? null : { display: 'none' })
             }}
           >
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-
-        <DialogContent sx={{ px: { xs: 2, sm: 4 } }}>
+            {MEAL_TYPES.map((meal) => (
+              <Chip
+                key={meal}
+                label={mealLabel(meal)}
+                onClick={() => onMealTypeChange?.(meal)}
+                aria-pressed={meal === mealType}
+                color={meal === mealType ? 'primary' : 'default'}
+                variant={meal === mealType ? 'filled' : 'outlined'}
+                sx={{
+                  height: 40,
+                  borderRadius: '999px',
+                  fontSize: '0.8125rem',
+                  fontWeight: 600,
+                  '& .MuiChip-label': { px: 1.75 }
+                }}
+              />
+            ))}
+          </Box>
           {/* Tabs - Simplified: Search (with AI), Barcode, Custom */}
           <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
             <Tabs
@@ -254,27 +267,27 @@ const AddFoodDialog = ({
               variant="fullWidth"
             >
               <Tab
-                label={<Box sx={{ display: { xs: 'none', sm: 'block' } }}>Search</Box>}
+                label="Search"
                 icon={<FoodIcon />}
                 iconPosition="start"
-                sx={{ minHeight: 48, minWidth: { xs: 'auto', sm: 90 } }}
+                sx={{ minHeight: 48, minWidth: { xs: 'auto', sm: 90 }, fontSize: '0.8125rem' }}
                 aria-label="Search"
               />
               <Tab
-                label={<Box sx={{ display: { xs: 'none', sm: 'block' } }}>Barcode</Box>}
+                label="Barcode"
                 icon={<BarcodeIcon />}
                 iconPosition="start"
-                sx={{ minHeight: 48, minWidth: { xs: 'auto', sm: 90 } }}
+                sx={{ minHeight: 48, minWidth: { xs: 'auto', sm: 90 }, fontSize: '0.8125rem' }}
                 aria-label="Barcode"
                 onClick={() => {
                   handleBarcodeTabClick();
                 }}
               />
               <Tab
-                label={<Box sx={{ display: { xs: 'none', sm: 'block' } }}>Custom</Box>}
+                label="Custom"
                 icon={<EditIcon />}
                 iconPosition="start"
-                sx={{ minHeight: 48, minWidth: { xs: 'auto', sm: 90 } }}
+                sx={{ minHeight: 48, minWidth: { xs: 'auto', sm: 90 }, fontSize: '0.8125rem' }}
                 aria-label="Custom"
               />
             </Tabs>
@@ -566,51 +579,7 @@ const AddFoodDialog = ({
               )}
             </>
           )}
-        </DialogContent>
-
-        <DialogActions sx={{
-          px: { xs: 3, sm: 4 },
-          pb: { xs: 3, sm: 4 },
-          gap: 2,
-          flexDirection: { xs: 'column', sm: 'row' },
-          alignItems: 'stretch'
-        }}>
-          {(activeTab === 1 || activeTab === 2) && selectedFood && (
-            <Button
-              onClick={() => setSelectedFood(null)}
-              variant="text"
-              size="large"
-              sx={{ color: mutedText }}
-            >
-              Clear Selection
-            </Button>
-          )}
-          {(activeTab === 1 || activeTab === 2) && selectedFood && (
-            <Button
-              onClick={handleAddFood}
-              variant="contained"
-              startIcon={<AddIcon />}
-              size="large"
-              sx={{
-                bgcolor: successColor,
-                '&:hover': {
-                  bgcolor: alpha(successColor, 0.85)
-                }
-              }}
-            >
-              Add Food
-            </Button>
-          )}
-          <Button
-            onClick={handleClose}
-            variant="text"
-            size="large"
-            sx={{ color: mutedText }}
-          >
-            Cancel
-          </Button>
-        </DialogActions>
-      </Dialog>
+      </PremiumDialog>
 
       {/* Barcode Scanner Dialog */}
       <BarcodeScanner

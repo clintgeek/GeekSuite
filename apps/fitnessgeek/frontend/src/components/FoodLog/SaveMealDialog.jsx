@@ -1,9 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Button,
   TextField,
   Box,
@@ -14,6 +10,7 @@ import {
 import {
   Restaurant as FoodIcon
 } from '@mui/icons-material';
+import PremiumDialog from '../primitives/PremiumDialog.jsx';
 
 const SaveMealDialog = ({
   open,
@@ -104,16 +101,28 @@ const SaveMealDialog = ({
   }[mealType];
 
   return (
-    <Dialog
+    <PremiumDialog
       open={open}
       onClose={handleClose}
+      eyebrow="My Meals"
+      title={`Save ${mealTypeName}`}
+      icon={FoodIcon}
       maxWidth="sm"
-      fullWidth
+      primaryAction={
+        <Button
+          onClick={handleSave}
+          variant="contained"
+          disabled={!mealName.trim() || loading}
+        >
+          {loading ? 'Saving...' : 'Save Meal'}
+        </Button>
+      }
+      secondaryAction={
+        <Button onClick={handleClose} disabled={loading}>
+          Cancel
+        </Button>
+      }
     >
-      <DialogTitle>
-        Save {mealTypeName} Meal
-      </DialogTitle>
-      <DialogContent>
         <Box sx={{ mb: 3 }}>
           <TextField
             autoFocus
@@ -173,20 +182,7 @@ const SaveMealDialog = ({
             <Chip label={`${Math.round(mealTotals.fat)}g fat`} size="small" />
           </Box>
         </Box>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={handleClose} disabled={loading}>
-          Cancel
-        </Button>
-        <Button
-          onClick={handleSave}
-          variant="contained"
-          disabled={!mealName.trim() || loading}
-        >
-          {loading ? 'Saving...' : 'Save Meal'}
-        </Button>
-      </DialogActions>
-    </Dialog>
+    </PremiumDialog>
   );
 };
 

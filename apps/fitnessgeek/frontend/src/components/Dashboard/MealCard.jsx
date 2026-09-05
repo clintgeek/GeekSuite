@@ -97,6 +97,7 @@ export default function MealCard({
           alignItems: 'center',
           gap: 1.5,
           py: 1.25,
+          minHeight: 44,
           px: 1,
           cursor: hasFoods ? 'pointer' : 'default',
           borderRadius: 1.5,

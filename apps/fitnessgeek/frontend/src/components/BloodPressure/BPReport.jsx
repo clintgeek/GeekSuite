@@ -10,12 +10,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  useTheme
+  Button
 } from '@mui/material';
 import {
   PictureAsPdf as PdfIcon,
@@ -24,6 +19,7 @@ import {
   Favorite as HeartIcon
 } from '@mui/icons-material';
 import BPChartNivo from './BPChartNivo.jsx';
+import PremiumDialog from '../primitives/PremiumDialog.jsx';
 import { categorizeBP } from '../../utils/bpUtils.js';
 import { getTodayLocal } from '../../utils/dateUtils';
 import { ThemeProvider } from '@mui/material/styles';
@@ -37,7 +33,6 @@ const lightReportTheme = createAppTheme('light');
 
 const BPReport = ({ bpLogs, onClose }) => {
   const reportRef = useRef(null);
-  const theme = useTheme();
 
   // Calculate statistics
   const stats = React.useMemo(() => {
@@ -222,74 +217,58 @@ const BPReport = ({ bpLogs, onClose }) => {
 
   if (!stats) {
     return (
-      <Dialog open={true} onClose={onClose} maxWidth="md" fullWidth>
-        <DialogTitle>Blood Pressure Report</DialogTitle>
-        <DialogContent>
-          <Typography>No blood pressure data available for the selected time range.</Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={onClose}>Close</Button>
-        </DialogActions>
-      </Dialog>
+      <PremiumDialog
+        open={true}
+        onClose={onClose}
+        eyebrow="Health"
+        title="Blood Pressure Report"
+        maxWidth="md"
+        secondaryAction={<Button onClick={onClose}>Close</Button>}
+      >
+        <Typography>No blood pressure data available for the selected time range.</Typography>
+      </PremiumDialog>
     );
   }
 
   return (
-    <Dialog open={true} onClose={onClose} maxWidth="lg" fullWidth>
-      <DialogTitle sx={{ pb: 1 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Typography variant="h6">Blood Pressure Report</Typography>
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <Button
-              onClick={exportToCSV}
-              variant="outlined"
-              size="small"
-              startIcon={<CsvIcon />}
-              sx={{
-                borderColor: theme.palette.primary.main,
-                color: theme.palette.primary.main,
-                '&:hover': {
-                  borderColor: theme.palette.primary.dark,
-                  backgroundColor: theme.palette.primary.light + '20'
-                }
-              }}
-            >
-              CSV
-            </Button>
-            <Button
-              onClick={exportToMarkdown}
-              variant="outlined"
-              size="small"
-              startIcon={<MarkdownIcon />}
-              sx={{
-                borderColor: theme.palette.primary.main,
-                color: theme.palette.primary.main,
-                '&:hover': {
-                  borderColor: theme.palette.primary.dark,
-                  backgroundColor: theme.palette.primary.light + '20'
-                }
-              }}
-            >
-              MD
-            </Button>
-            <Button
-              onClick={exportToPDF}
-              variant="contained"
-              size="small"
-              startIcon={<PdfIcon />}
-              sx={{
-                backgroundColor: theme.palette.primary.main,
-                '&:hover': {
-                  backgroundColor: theme.palette.primary.dark
-                }
-              }}
-            >
-              PDF
-            </Button>
-          </Box>
+    <PremiumDialog
+      open={true}
+      onClose={onClose}
+      eyebrow="Health"
+      title="Blood Pressure Report"
+      icon={HeartIcon}
+      maxWidth="lg"
+      contentSx={{ px: { xs: 1.5, sm: 2 }, py: 2 }}
+      primaryAction={
+        <Button
+          onClick={exportToPDF}
+          variant="contained"
+          startIcon={<PdfIcon />}
+        >
+          PDF
+        </Button>
+      }
+      secondaryAction={<Button onClick={onClose}>Close</Button>}
+    >
+        {/* Export row — outside `reportRef`, so it never lands in the capture. */}
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
+          <Button
+            onClick={exportToCSV}
+            variant="outlined"
+            startIcon={<CsvIcon />}
+            sx={{ borderColor: 'primary.main', color: 'primary.main' }}
+          >
+            CSV
+          </Button>
+          <Button
+            onClick={exportToMarkdown}
+            variant="outlined"
+            startIcon={<MarkdownIcon />}
+            sx={{ borderColor: 'primary.main', color: 'primary.main' }}
+          >
+            Markdown
+          </Button>
         </Box>
-      </DialogTitle>
-      <DialogContent sx={{ p: 0 }}>
         <ThemeProvider theme={lightReportTheme}>
         <Box ref={reportRef} sx={{
           p: 3,
@@ -385,7 +364,54 @@ const BPReport = ({ bpLogs, onClose }) => {
             <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
               Blood Pressure Readings ({stats.totalReadings})
             </Typography>
-            <TableContainer component={Paper}>
+            {/* Phones get the same rows as stacked cards — a five-column
+                table at 390px is a horizontal scroll nobody performs. */}
+            <Box sx={{ display: { xs: 'grid', sm: 'none' }, gap: 1 }}>
+              {stats.weeklyData.map((week, index) => (
+                <Box
+                  key={index}
+                  sx={{
+                    p: 1.5,
+                    border: '1px solid #e0e0e0',
+                    borderRadius: 1,
+                    backgroundColor: '#ffffff'
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 0.75 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                      {formatWeekRange(week.weekStart, week.weekEnd)}
+                    </Typography>
+                    <Box sx={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      px: 1.5,
+                      py: 0.5,
+                      borderRadius: 1,
+                      backgroundColor: week.category.color,
+                      color: 'white',
+                      fontWeight: 600,
+                      fontSize: '0.75rem'
+                    }}>
+                      {week.category.stage}
+                    </Box>
+                  </Box>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: 1.5, rowGap: 0.25 }}>
+                    <Typography variant="body2" color="text.secondary">Systolic</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {week.systolicRange.min} - {week.systolicRange.max}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">Diastolic</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {week.diastolicRange.min} - {week.diastolicRange.max}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">Readings</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{week.count}</Typography>
+                  </Box>
+                </Box>
+              ))}
+            </Box>
+
+            <TableContainer component={Paper} sx={{ display: { xs: 'none', sm: 'block' } }}>
               <Table size="small">
                 <TableHead>
                   <TableRow>
@@ -421,7 +447,7 @@ const BPReport = ({ bpLogs, onClose }) => {
                           backgroundColor: week.category.color,
                           color: 'white',
                           fontWeight: 600,
-                          fontSize: '0.7rem',
+                          fontSize: '0.75rem',
                           minWidth: 60,
                           textAlign: 'center'
                         }}>
@@ -492,19 +518,7 @@ const BPReport = ({ bpLogs, onClose }) => {
           </Box>
         </Box>
         </ThemeProvider>
-      </DialogContent>
-      <DialogActions sx={{ p: 3 }}>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button
-          onClick={exportToPDF}
-          variant="contained"
-          startIcon={<PdfIcon />}
-          disabled={false}
-        >
-          Generate PDF
-        </Button>
-      </DialogActions>
-    </Dialog>
+    </PremiumDialog>
   );
 };
 

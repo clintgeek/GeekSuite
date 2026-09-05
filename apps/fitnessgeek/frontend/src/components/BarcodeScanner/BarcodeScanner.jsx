@@ -1,10 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Button,
   Typography,
   TextField,
@@ -25,6 +21,7 @@ import {
   FlashlightOff as TorchOffIcon
 } from '@mui/icons-material';
 import { fitnessGeekService } from '../../services/fitnessGeekService';
+import PremiumDialog from '../primitives/PremiumDialog.jsx';
 import './BarcodeScanner.css';
 
 const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
@@ -505,28 +502,15 @@ const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
   );
 
   return (
-    <Dialog
+    <PremiumDialog
       open={open}
       onClose={handleClose}
+      eyebrow="Log"
+      title="Scan Barcode"
       maxWidth="sm"
-      fullWidth
-      PaperProps={{
-        sx: {
-          borderRadius: { xs: 0, sm: 2 },
-          margin: { xs: 0, sm: 2 },
-          maxHeight: { xs: '100vh', sm: '90vh' },
-          width: { xs: '100%', sm: 'auto' }
-        }
-      }}
+      contentSx={{ px: 0, py: 0 }}
+      secondaryAction={<Button onClick={handleClose}>Cancel</Button>}
     >
-      <DialogTitle>
-        <Box display="flex" justifyContent="space-between" alignItems="center">
-          <Typography variant="h6">Scan Barcode</Typography>
-          <IconButton onClick={handleClose}><CloseIcon /></IconButton>
-        </Box>
-      </DialogTitle>
-
-      <DialogContent sx={{ p: 0 }}>
         {/* Mode selector tabs */}
         <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 2 }}>
           <Tabs value={mode} onChange={handleModeChange} variant="fullWidth">
@@ -551,12 +535,7 @@ const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
         )}
 
         {mode === 'camera' ? renderCameraScanner() : renderManualEntry()}
-      </DialogContent>
-
-      <DialogActions sx={{ p: 2, pt: 1 }}>
-        <Button onClick={handleClose}>Cancel</Button>
-      </DialogActions>
-    </Dialog>
+    </PremiumDialog>
   );
 };
 

@@ -14,7 +14,8 @@ import {
 import { useTheme } from '@mui/material/styles';
 import {
   ContentCopy as CopyIcon,
-  People as PeopleIcon
+  People as PeopleIcon,
+  Add as AddIcon
 } from '@mui/icons-material';
 import NutritionSummary from '../components/FoodLog/NutritionSummary.jsx';
 import CalorieSummary from '../components/FoodLog/CalorieSummary.jsx';
@@ -33,7 +34,21 @@ import { fitnessGeekService } from '../services/fitnessGeekService.js';
 import { settingsService } from '../services/settingsService.js';
 import { goalsService } from '../services/goalsService.js';
 import { Surface, SectionLabel, DisplayHeading, StatNumber } from '../components/primitives';
+import { useRegisterPrimaryAction } from '../components/Layout/primaryAction.js';
 import { netCarbs as calcNetCarbs, ketoStatus } from '../utils/ketoMath.js';
+
+/**
+ * The meal a log at this hour most likely belongs to. The FAB opens the food
+ * search with this pre-selected; the picker inside the dialog is how the user
+ * disagrees (mobile grammar: the primary action never asks a question first).
+ */
+const mealTypeForNow = (now = new Date()) => {
+  const hour = now.getHours();
+  if (hour < 10) return 'breakfast';
+  if (hour < 15) return 'lunch';
+  if (hour < 21) return 'dinner';
+  return 'snack';
+};
 
 const FoodLog = () => {
   const theme = useTheme();
@@ -180,6 +195,13 @@ const FoodLog = () => {
     setSelectedMealType(mealType);
     setShowAddDialog(true);
   };
+
+  // The page's one primary action, rendered by the shell in the thumb zone.
+  useRegisterPrimaryAction({
+    label: 'Log food',
+    icon: <AddIcon />,
+    onClick: () => handleAddFood(mealTypeForNow())
+  });
 
   // Legacy single-item callback — used by Barcode and Custom tabs
   const handleFoodSelect = async (food, meta = {}) => {
@@ -389,12 +411,11 @@ const FoodLog = () => {
               px: { xs: 2, sm: 2.5 },
               borderRadius: { xs: 2, sm: 999 },
               '& .MuiButton-startIcon': {
-                mr: { xs: 0, sm: 1 },
                 '& > svg': { fontSize: { xs: 20, sm: 22 } }
               }
             }}
           >
-            <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Copy Meal</Box>
+            Copy Meal
           </Button>
         </Tooltip>
         <Tooltip title="See what household members ate">
@@ -409,12 +430,11 @@ const FoodLog = () => {
               px: { xs: 2, sm: 2.5 },
               borderRadius: { xs: 2, sm: 999 },
               '& .MuiButton-startIcon': {
-                mr: { xs: 0, sm: 1 },
                 '& > svg': { fontSize: { xs: 20, sm: 22 } }
               }
             }}
           >
-            <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Household</Box>
+            Household
           </Button>
         </Tooltip>
       </Box>
@@ -517,7 +537,7 @@ const FoodLog = () => {
                 letterSpacing: '0.1em',
                 color: theme.palette.text.secondary,
                 fontFamily: '"DM Sans", sans-serif',
-                fontSize: '0.7rem',
+                fontSize: '0.75rem',
                 mb: 0.5
               }}
             >
@@ -604,6 +624,7 @@ const FoodLog = () => {
         onFoodSelect={handleFoodSelect}
         onCommitBatch={handleCommitBatch}
         mealType={selectedMealType}
+        onMealTypeChange={setSelectedMealType}
         showBarcodeScanner={showBarcodeScanner}
         onShowBarcodeScanner={setShowBarcodeScanner}
         onBarcodeScanned={(food) => {

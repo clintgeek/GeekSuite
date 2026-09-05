@@ -1,15 +1,12 @@
 import React from 'react';
-import { Dialog, DialogTitle, DialogContent } from '@mui/material';
+import PremiumDialog from '../primitives/PremiumDialog.jsx';
 import MatchCandidateList from './MatchCandidateList.jsx';
 
 const SwapDialog = ({ open, candidates, onClose, onSelect }) => {
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Select a match</DialogTitle>
-      <DialogContent>
-        <MatchCandidateList candidates={candidates} onSelect={onSelect} />
-      </DialogContent>
-    </Dialog>
+    <PremiumDialog open={open} onClose={onClose} eyebrow="Swap" title="Select a match" maxWidth="sm">
+      <MatchCandidateList candidates={candidates} onSelect={onSelect} />
+    </PremiumDialog>
   );
 };
 

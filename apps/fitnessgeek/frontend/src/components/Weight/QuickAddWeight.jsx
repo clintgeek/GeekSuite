@@ -3,28 +3,31 @@ import {
   Box,
   Card,
   CardContent,
-  Typography,
   TextField,
-  Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Fab,
-  useTheme
+  Button
 } from '@mui/material';
 import {
   Add as AddIcon,
   MonitorWeight as WeightIcon
 } from '@mui/icons-material';
 import { getTodayLocal } from '../../utils/dateUtils.js';
+import { useRegisterPrimaryAction } from '../Layout/primaryAction.js';
+import PremiumDialog from '../primitives/PremiumDialog.jsx';
 
 const QuickAddWeight = ({ onAdd, unit = 'lbs' }) => {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState('');
   const [date, setDate] = useState(getTodayLocal());
   const [loading, setLoading] = useState(false);
-  const theme = useTheme();
+
+  // The page's thumb-zone action. `GeekFab` (mounted by the shell) reads the
+  // bottom-nav inset and the safe area, so the old hardcoded `bottom: 80` —
+  // which also rendered on desktop, beside the Quick Add card — is gone.
+  useRegisterPrimaryAction({
+    label: 'Log weight',
+    icon: <AddIcon />,
+    onClick: () => setOpen(true)
+  });
 
   const handleSubmit = async () => {
     if (!value || !date) return;
@@ -54,25 +57,6 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs' }) => {
 
   return (
     <>
-      {/* Floating Action Button for mobile */}
-      <Fab
-        color="primary"
-        aria-label="add weight"
-        onClick={() => setOpen(true)}
-        sx={{
-          position: 'fixed',
-          bottom: 80, // Above bottom navigation
-          right: 16,
-          zIndex: 1000,
-          backgroundColor: 'primary.main',
-          '&:hover': {
-            backgroundColor: 'primary.dark'
-          }
-        }}
-      >
-        <AddIcon />
-      </Fab>
-
       {/* Quick Add Card for desktop */}
       <Card sx={{
         width: '100%',
@@ -113,14 +97,24 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs' }) => {
       </Card>
 
       {/* Add Dialog */}
-      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <WeightIcon sx={{ mr: 1 }} />
-            Log Weight
-          </Box>
-        </DialogTitle>
-        <DialogContent>
+      <PremiumDialog
+        open={open}
+        onClose={() => setOpen(false)}
+        eyebrow="Tracking"
+        title="Log Weight"
+        icon={WeightIcon}
+        maxWidth="sm"
+        primaryAction={
+          <Button
+            onClick={handleSubmit}
+            variant="contained"
+            disabled={!value || loading}
+          >
+            Save
+          </Button>
+        }
+        secondaryAction={<Button onClick={() => setOpen(false)}>Cancel</Button>}
+      >
           <TextField
             fullWidth
             label={`Weight (${unit})`}
@@ -148,18 +142,7 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs' }) => {
             onChange={(e) => setDate(e.target.value)}
             InputLabelProps={{ shrink: true }}
           />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpen(false)}>Cancel</Button>
-          <Button
-            onClick={handleSubmit}
-            variant="contained"
-            disabled={!value || loading}
-          >
-            Log Weight
-          </Button>
-        </DialogActions>
-      </Dialog>
+      </PremiumDialog>
     </>
   );
 };

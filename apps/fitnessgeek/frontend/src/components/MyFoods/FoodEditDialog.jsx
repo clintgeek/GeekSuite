@@ -1,9 +1,5 @@
 import React from 'react';
 import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Button,
   TextField,
   Box,
@@ -14,15 +10,24 @@ import {
   MenuItem,
   CircularProgress
 } from '@mui/material';
+import PremiumDialog from '../primitives/PremiumDialog.jsx';
 
 const FoodEditDialog = ({ open, food, form, onChange, onClose, onSave, loading }) => {
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>
-        Edit {food?.name}
-      </DialogTitle>
-      <DialogContent>
-        <Box sx={{ pt: 1 }}>
+    <PremiumDialog
+      open={open}
+      onClose={onClose}
+      eyebrow="My Foods"
+      title={`Edit ${food?.name ?? 'food'}`}
+      maxWidth="sm"
+      primaryAction={
+        <Button onClick={onSave} variant="contained" disabled={loading}>
+          {loading ? <CircularProgress size={20} /> : 'Save'}
+        </Button>
+      }
+      secondaryAction={<Button onClick={onClose}>Cancel</Button>}
+    >
+      <Box sx={{ pt: 1 }}>
           <TextField
             fullWidth
             label="Name"
@@ -52,7 +57,7 @@ const FoodEditDialog = ({ open, food, form, onChange, onClose, onSave, loading }
             />
           </Box>
 
-          <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 2, mb: 2 }}>
             <TextField
               fullWidth
               label="Protein"
@@ -85,7 +90,7 @@ const FoodEditDialog = ({ open, food, form, onChange, onClose, onSave, loading }
             />
           </Box>
 
-          <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 2, mb: 2 }}>
             <TextField
               fullWidth
               label="Fiber"
@@ -118,7 +123,7 @@ const FoodEditDialog = ({ open, food, form, onChange, onClose, onSave, loading }
             />
           </Box>
 
-          <Box sx={{ display: 'flex', gap: 2 }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 2 }}>
             <TextField
               fullWidth
               label="Serving Size"
@@ -142,19 +147,8 @@ const FoodEditDialog = ({ open, food, form, onChange, onClose, onSave, loading }
               </Select>
             </FormControl>
           </Box>
-        </Box>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button
-          onClick={onSave}
-          variant="contained"
-          disabled={loading}
-        >
-          {loading ? <CircularProgress size={20} /> : 'Save'}
-        </Button>
-      </DialogActions>
-    </Dialog>
+      </Box>
+    </PremiumDialog>
   );
 };
 

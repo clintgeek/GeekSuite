@@ -7,10 +7,6 @@ import {
   Avatar,
   Alert,
   CircularProgress,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Grid,
   List,
   ListItem,
@@ -28,7 +24,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import { useAuth } from '@geeksuite/auth';
 import { userService } from '../services/userService.js';
 import HouseholdSettings from '../components/Settings/HouseholdSettings';
-import { Surface, SectionLabel, DisplayHeading } from '../components/primitives';
+import { Surface, SectionLabel, DisplayHeading, PremiumDialog } from '../components/primitives';
 
 const Profile = () => {
   const { user, logout } = useAuth();
@@ -327,9 +323,26 @@ const Profile = () => {
       </Grid>
 
       {/* Edit Profile Dialog */}
-      <Dialog open={showEditDialog} onClose={() => setShowEditDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Edit Profile</DialogTitle>
-        <DialogContent>
+      <PremiumDialog
+        open={showEditDialog}
+        onClose={() => setShowEditDialog(false)}
+        eyebrow="Account"
+        title="Edit Profile"
+        icon={PersonIcon}
+        maxWidth="sm"
+        primaryAction={
+          <Button
+            onClick={handleSaveProfile}
+            variant="contained"
+            disabled={loading}
+          >
+            {loading ? <CircularProgress size={20} /> : 'Save Changes'}
+          </Button>
+        }
+        secondaryAction={
+          <Button onClick={() => setShowEditDialog(false)}>Cancel</Button>
+        }
+      >
           <TextField
             fullWidth
             label="Username"
@@ -345,7 +358,7 @@ const Profile = () => {
             onChange={(e) => setEditData({ ...editData, email: e.target.value })}
             sx={{ mb: 2 }}
           />
-          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mb: 2 }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 2 }}>
             <TextField
               label="First Name"
               value={editData.firstName}
@@ -357,7 +370,7 @@ const Profile = () => {
               onChange={(e) => setEditData({ ...editData, lastName: e.target.value })}
             />
           </Box>
-          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mb: 2 }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 2 }}>
             <TextField
               label="Age"
               type="number"
@@ -379,6 +392,7 @@ const Profile = () => {
             onChange={(e) => setEditData({ ...editData, gender: e.target.value })}
             sx={{ mb: 2 }}
             SelectProps={{ native: true }}
+            InputLabelProps={{ shrink: true }}
           >
             <option value="">Select gender</option>
             <option value="male">Male</option>
@@ -386,18 +400,7 @@ const Profile = () => {
             <option value="other">Other</option>
             <option value="prefer-not-to-say">Prefer not to say</option>
           </TextField>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowEditDialog(false)}>Cancel</Button>
-          <Button
-            onClick={handleSaveProfile}
-            variant="contained"
-            disabled={loading}
-          >
-            {loading ? <CircularProgress size={20} /> : 'Save Changes'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      </PremiumDialog>
     </Box>
   );
 };

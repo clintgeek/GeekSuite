@@ -1,9 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Button,
   Box,
   Typography,
@@ -31,6 +27,7 @@ import {
   Restaurant as MealIcon
 } from '@mui/icons-material';
 import { fitnessGeekService } from '../../services/fitnessGeekService';
+import PremiumDialog from '../primitives/PremiumDialog.jsx';
 
 const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'];
 
@@ -145,13 +142,15 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
   const groupedLogs = groupLogsByMealType();
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <PeopleIcon color="primary" />
-        Household Food Logs
-      </DialogTitle>
-
-      <DialogContent>
+    <PremiumDialog
+      open={open}
+      onClose={onClose}
+      eyebrow="Household"
+      title="Household Food Logs"
+      icon={PeopleIcon}
+      maxWidth="md"
+      secondaryAction={<Button onClick={onClose}>Close</Button>}
+    >
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
             <CircularProgress />
@@ -288,12 +287,7 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
             )}
           </>
         )}
-      </DialogContent>
-
-      <DialogActions>
-        <Button onClick={onClose}>Close</Button>
-      </DialogActions>
-    </Dialog>
+    </PremiumDialog>
   );
 };
 

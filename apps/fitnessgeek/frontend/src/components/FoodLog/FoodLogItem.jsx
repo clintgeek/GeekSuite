@@ -183,7 +183,7 @@ const FoodLogItem = ({
         >
           <Box sx={{ textAlign: 'center', color: 'white' }}>
             <EditIcon sx={{ fontSize: 24 }} />
-            <Typography variant="caption" sx={{ display: 'block', fontWeight: 600, fontSize: '0.7rem' }}>
+            <Typography variant="caption" sx={{ display: 'block', fontWeight: 600, fontSize: '0.75rem' }}>
               Edit
             </Typography>
           </Box>
@@ -210,7 +210,7 @@ const FoodLogItem = ({
         >
           <Box sx={{ textAlign: 'center', color: 'white' }}>
             <DeleteIcon sx={{ fontSize: 24 }} />
-            <Typography variant="caption" sx={{ display: 'block', fontWeight: 600, fontSize: '0.7rem' }}>
+            <Typography variant="caption" sx={{ display: 'block', fontWeight: 600, fontSize: '0.75rem' }}>
               Delete
             </Typography>
           </Box>
@@ -393,12 +393,12 @@ const FoodLogItem = ({
             label={`${totalCalories} cal`}
             size="small"
             sx={{
-              height: 22,
+              height: 24,
               borderRadius: '999px',
               backgroundColor: theme.palette.primary.main,
               color: theme.palette.primary.contrastText,
               fontWeight: 700,
-              fontSize: '0.7rem',
+              fontSize: '0.75rem',
               '& .MuiChip-label': { px: 1 }
             }}
           />
@@ -406,7 +406,7 @@ const FoodLogItem = ({
             variant="caption"
             sx={{
               color: theme.palette.text.secondary,
-              fontSize: '0.7rem',
+              fontSize: '0.75rem',
               fontWeight: 500
             }}
           >
@@ -417,7 +417,7 @@ const FoodLogItem = ({
               variant="caption"
               sx={{
                 color: theme.palette.warning.main,
-                fontSize: '0.7rem',
+                fontSize: '0.75rem',
                 fontWeight: 700,
                 fontFamily: '"JetBrains Mono", monospace'
               }}
@@ -433,7 +433,7 @@ const FoodLogItem = ({
             label={`${servingsCount} serving${servingsCount !== 1 ? 's' : ''}`}
             size="small"
             sx={{
-              height: 22,
+              height: 24,
               borderRadius: '999px',
               backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : theme.palette.background.default,
               color: theme.palette.text.secondary,

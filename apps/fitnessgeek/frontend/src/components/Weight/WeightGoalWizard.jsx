@@ -1,9 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Box,
   Button,
   TextField,
@@ -11,19 +7,18 @@ import {
   ToggleButtonGroup,
   ToggleButton,
   Alert,
-  IconButton,
   Chip,
   Divider
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import {
-  Close as CloseIcon,
   TrendingDown as LoseIcon,
   TrendingUp as GainIcon,
   TrendingFlat as MaintainIcon,
   Flag as GoalIcon
 } from '@mui/icons-material';
 import { addWeeks, differenceInDays, format } from 'date-fns';
+import PremiumDialog from '../primitives/PremiumDialog.jsx';
 
 const RATE_OPTIONS = [
   { value: 0.5, label: '0.5', safe: true, description: 'Very gradual' },
@@ -180,51 +175,44 @@ const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, 
   const selectedRate = RATE_OPTIONS.find(opt => opt.value === ratePerWeek);
 
   return (
-    <Dialog
+    <PremiumDialog
       open={open}
       onClose={handleCancel}
+      eyebrow="Tracking"
+      title={existingGoal?.enabled ? 'Edit Weight Goal' : 'Set Weight Goal'}
+      subtitle="Track your progress with a personalized plan"
+      icon={GoalIcon}
       maxWidth="sm"
-      fullWidth
-      PaperProps={{
-        sx: {
-          borderRadius: '24px',
-          boxShadow: '0 24px 48px rgba(15, 23, 42, 0.15)'
-        }
-      }}
+      primaryAction={
+        <Button
+          onClick={handleSave}
+          variant="contained"
+          disabled={!goalDate || Object.keys(errors).length > 0}
+          sx={{
+            borderRadius: '999px',
+            px: 4,
+            textTransform: 'none',
+            fontWeight: 700,
+          }}
+        >
+          {existingGoal?.enabled ? 'Update Goal' : 'Set Goal'}
+        </Button>
+      }
+      secondaryAction={
+        <Button
+          onClick={handleCancel}
+          sx={{
+            borderRadius: '999px',
+            px: 3,
+            textTransform: 'none',
+            fontWeight: 600,
+            color: theme.palette.text.secondary
+          }}
+        >
+          Cancel
+        </Button>
+      }
     >
-      <DialogTitle sx={{
-        pb: 1,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between'
-      }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          <Box sx={{
-            width: 48,
-            height: 48,
-            borderRadius: '12px',
-            backgroundColor: theme.palette.primary.main,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}>
-            <GoalIcon sx={{ color: '#ffffff', fontSize: 24 }} />
-          </Box>
-          <Box>
-            <Typography variant="h6" sx={{ fontWeight: 700, color: theme.palette.text.primary }}>
-              {existingGoal?.enabled ? 'Edit Weight Goal' : 'Set Weight Goal'}
-            </Typography>
-            <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-              Track your progress with a personalized plan
-            </Typography>
-          </Box>
-        </Box>
-        <IconButton onClick={handleCancel} size="small">
-          <CloseIcon />
-        </IconButton>
-      </DialogTitle>
-
-      <DialogContent sx={{ pt: 2 }}>
         {/* Goal Type Selection */}
         <Box sx={{ mb: 3 }}>
           <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600, color: theme.palette.text.primary }}>
@@ -325,7 +313,7 @@ const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, 
               fullWidth
               sx={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(96px, 1fr))',
                 gap: 1,
                 mb: 2,
                 '& .MuiToggleButtonGroup-grouped': {
@@ -432,36 +420,7 @@ const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, 
             </Box>
           </Box>
         )}
-      </DialogContent>
-
-      <DialogActions sx={{ p: 3, pt: 0 }}>
-        <Button
-          onClick={handleCancel}
-          sx={{
-            borderRadius: '999px',
-            px: 3,
-            textTransform: 'none',
-            fontWeight: 600,
-            color: theme.palette.text.secondary
-          }}
-        >
-          Cancel
-        </Button>
-        <Button
-          onClick={handleSave}
-          variant="contained"
-          disabled={!goalDate || Object.keys(errors).length > 0}
-          sx={{
-            borderRadius: '999px',
-            px: 4,
-            textTransform: 'none',
-            fontWeight: 700,
-          }}
-        >
-          {existingGoal?.enabled ? 'Update Goal' : 'Set Goal'}
-        </Button>
-      </DialogActions>
-    </Dialog>
+    </PremiumDialog>
   );
 };
 

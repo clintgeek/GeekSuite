@@ -1,9 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Button,
   TextField,
   Box,
@@ -17,6 +13,7 @@ import {
   Grid
 } from '@mui/material';
 import NutritionInputs from './NutritionInputs.jsx';
+import PremiumDialog from '../primitives/PremiumDialog.jsx';
 import {
   Restaurant as FoodIcon
 } from '@mui/icons-material';
@@ -93,16 +90,27 @@ const EditLogDialog = ({
   ];
 
   return (
-    <Dialog
+    <PremiumDialog
       open={open}
       onClose={handleClose}
+      eyebrow="Food Log"
+      title="Edit Entry"
       maxWidth="sm"
-      fullWidth
+      primaryAction={
+        <Button
+          onClick={handleSave}
+          variant="contained"
+          disabled={loading || !servings || parseFloat(servings) <= 0}
+        >
+          {loading ? 'Saving...' : 'Save Changes'}
+        </Button>
+      }
+      secondaryAction={
+        <Button onClick={handleClose} disabled={loading}>
+          Cancel
+        </Button>
+      }
     >
-      <DialogTitle>
-        Edit Food Log Entry
-      </DialogTitle>
-      <DialogContent>
         <Box sx={{ mb: 3 }}>
           {/* Food Item Info */}
           {food_item && (
@@ -207,20 +215,7 @@ const EditLogDialog = ({
             </Box>
           )}
         </Box>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={handleClose} disabled={loading}>
-          Cancel
-        </Button>
-        <Button
-          onClick={handleSave}
-          variant="contained"
-          disabled={loading || !servings || parseFloat(servings) <= 0}
-        >
-          {loading ? 'Saving...' : 'Save Changes'}
-        </Button>
-      </DialogActions>
-    </Dialog>
+    </PremiumDialog>
   );
 };
 

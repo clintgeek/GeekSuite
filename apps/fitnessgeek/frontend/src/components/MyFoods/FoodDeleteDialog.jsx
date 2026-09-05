@@ -1,27 +1,20 @@
 import React from 'react';
 import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Button,
   Typography,
   CircularProgress
 } from '@mui/material';
+import PremiumDialog from '../primitives/PremiumDialog.jsx';
 
 const FoodDeleteDialog = ({ open, food, onClose, onConfirm, loading }) => {
   return (
-    <Dialog open={open} onClose={onClose}>
-      <DialogTitle>Delete Food?</DialogTitle>
-      <DialogContent>
-        <Typography>
-          Are you sure you want to delete "{food?.name}"?
-          This will remove it from your saved foods but preserve any historical logs.
-          You can always search for it again to re-add it.
-        </Typography>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
+    <PremiumDialog
+      open={open}
+      onClose={onClose}
+      eyebrow="Confirm"
+      title="Delete Food?"
+      maxWidth="xs"
+      primaryAction={
         <Button
           onClick={onConfirm}
           variant="contained"
@@ -30,8 +23,15 @@ const FoodDeleteDialog = ({ open, food, onClose, onConfirm, loading }) => {
         >
           {loading ? <CircularProgress size={20} /> : 'Delete'}
         </Button>
-      </DialogActions>
-    </Dialog>
+      }
+      secondaryAction={<Button onClick={onClose}>Cancel</Button>}
+    >
+      <Typography>
+        Are you sure you want to delete "{food?.name}"?
+        This will remove it from your saved foods but preserve any historical logs.
+        You can always search for it again to re-add it.
+      </Typography>
+    </PremiumDialog>
   );
 };
 
