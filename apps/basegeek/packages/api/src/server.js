@@ -342,6 +342,9 @@ app.get('/api/health/app/:appName', async (req, res) => {
       storygeek: 'https://storygeek.clintgeek.com',
       flockgeek: 'https://flockgeek.clintgeek.com',
       babelgeek: 'https://babelgeek.clintgeek.com',
+      bookgeek: 'https://bookgeek.clintgeek.com',
+      // startgeek is a static bundle behind `serve`; any HTTP answer counts.
+      startgeek: 'https://start.clintgeek.com',
       dashgeek: 'https://dash.clintgeek.com',
     };
     baseUrl = fallback[appName.toLowerCase()];

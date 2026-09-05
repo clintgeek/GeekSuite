@@ -11,7 +11,10 @@ import {
   Storage as StorageIcon,
   Memory as MemoryIcon,
   DataObject as DataObjectIcon,
-  Apps as AppsIcon
+  Apps as AppsIcon,
+  MenuBook as MenuBookIcon,
+  RocketLaunch as RocketLaunchIcon,
+  Dns as DnsIcon
 } from '@mui/icons-material';
 import { useBaseGeekAuth } from '../components/AuthContext';
 import { brandInk } from '../theme';
@@ -30,31 +33,47 @@ const iconMap = {
   Memory: MemoryIcon,
   DataObject: DataObjectIcon,
   Apps: AppsIcon,
+  MenuBook: MenuBookIcon,
+  RocketLaunch: RocketLaunchIcon,
 };
 const resolveIcon = (iconName) => iconMap[iconName] || DashboardIcon;
 
-// Hardcoded fallback — used only if the API registry is unreachable
+// The apps the Home screen launches, in this order. The registry (`/api/apps`)
+// is the source of display data — name, colour, icon, URL — but *which* apps
+// are the suite's day-to-day surfaces is a product decision, so it lives here
+// rather than in whatever happens to be enabled in Mongo (storygeek, babelgeek
+// and geekpr are registered but are not the daily set; basegeek is this page).
+const KEY_APPS = ['fitnessgeek', 'bujogeek', 'notegeek', 'bookgeek', 'flockgeek', 'startgeek'];
+
+// Display data used when the registry is unreachable or has no entry yet.
 const fallbackApps = [
-  { name: 'basegeek', displayName: 'baseGeek', description: 'Auth & shared services', icon: 'Dashboard', color: '#e8a849', url: 'https://basegeek.clintgeek.com', tag: 'platform' },
-  { name: 'notegeek', displayName: 'noteGeek', description: 'Notes & documents', icon: 'Note', color: '#a99df0', url: 'https://notegeek.clintgeek.com', tag: 'productivity' },
-  { name: 'bujogeek', displayName: 'bujoGeek', description: 'Bullet journal & tasks', icon: 'Book', color: '#d4956a', url: 'https://bujogeek.clintgeek.com', tag: 'productivity' },
   { name: 'fitnessgeek', displayName: 'fitnessGeek', description: 'Nutrition & fitness', icon: 'FitnessCenter', color: '#7dac8e', url: 'https://fitnessgeek.clintgeek.com', tag: 'health' },
-  { name: 'storygeek', displayName: 'storyGeek', description: 'Story plotting & writing', icon: 'AutoStories', color: '#c76b8e', url: 'https://storygeek.clintgeek.com', tag: 'creative' },
-  { name: 'flockgeek', displayName: 'flockGeek', description: 'Flock management', icon: 'NatureOutlined', color: '#7dac8e', url: 'https://flockgeek.clintgeek.com', tag: 'management' },
-  { name: 'babelgeek', displayName: 'babelGeek', description: 'Translation & language', icon: 'Translate', color: '#6db5c0', url: 'https://babelgeek.clintgeek.com', tag: 'learning' },
+  { name: 'bujogeek', displayName: 'bujoGeek', description: 'Bullet journal & tasks', icon: 'Book', color: '#d4956a', url: 'https://bujogeek.clintgeek.com', tag: 'productivity' },
+  { name: 'notegeek', displayName: 'noteGeek', description: 'Notes & documents', icon: 'Note', color: '#a99df0', url: 'https://notegeek.clintgeek.com', tag: 'productivity' },
+  { name: 'bookgeek', displayName: 'bookGeek', description: 'Library & reading', icon: 'MenuBook', color: '#5fa8d3', url: 'https://bookgeek.clintgeek.com', tag: 'reading' },
+  { name: 'flockgeek', displayName: 'flockGeek', description: 'Flock management', icon: 'NatureOutlined', color: '#9a8f6a', url: 'https://flockgeek.clintgeek.com', tag: 'management' },
+  { name: 'startgeek', displayName: 'startGeek', description: 'Start page & launcher', icon: 'RocketLaunch', color: '#e6b35a', url: 'https://start.clintgeek.com', tag: 'launcher' },
 ];
 
-// Service status checks
+/** The key apps in order, preferring registry data over the fallback entry. */
+function pickKeyApps(registry) {
+  const byName = new Map((registry || []).map((app) => [String(app.name).toLowerCase(), app]));
+  return KEY_APPS.map((name) => byName.get(name) || fallbackApps.find((app) => app.name === name)).filter(Boolean);
+}
+
+// Infrastructure status checks. Each admin-gated status route reports its
+// version differently; `version` picks the short number out of each.
 const services = [
-  { name: 'MongoDB', icon: StorageIcon, endpoint: '/mongo/status', key: 'mongo' },
-  { name: 'Redis', icon: MemoryIcon, endpoint: '/redis/status', key: 'redis' },
-  { name: 'InfluxDB', icon: DataObjectIcon, endpoint: '/influx/status', key: 'influx' },
+  { name: 'MongoDB', icon: StorageIcon, endpoint: '/mongo/status', key: 'mongo', version: (d) => d?.serverInfo?.version },
+  { name: 'PostgreSQL', icon: DnsIcon, endpoint: '/postgres/status', key: 'postgres', version: (d) => d?.version?.match(/PostgreSQL (\d+(?:\.\d+)?)/)?.[1] },
+  { name: 'Redis', icon: MemoryIcon, endpoint: '/redis/status', key: 'redis', version: (d) => d?.redisVersion },
+  { name: 'InfluxDB', icon: DataObjectIcon, endpoint: '/influx/status', key: 'influx', version: (d) => d?.version },
 ];
 
 export default function BaseGeekHome() {
   const theme = useTheme();
   const { user } = useBaseGeekAuth();
-  const [apps, setApps] = useState(fallbackApps);
+  const [apps, setApps] = useState(() => pickKeyApps([]));
   const [serviceStatus, setServiceStatus] = useState({});
   const [appHealth, setAppHealth] = useState({});
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -65,7 +84,7 @@ export default function BaseGeekHome() {
       try {
         const res = await api.get('/apps');
         if (res.data?.apps?.length > 0) {
-          setApps(res.data.apps);
+          setApps(pickKeyApps(res.data.apps));
         }
       } catch {
         // Keep fallback
@@ -91,7 +110,7 @@ export default function BaseGeekHome() {
           results[svc.key] = {
             online: true,
             latency,
-            version: res.data?.serverInfo?.version || res.data?.redisVersion || null,
+            version: svc.version?.(res.data) || null,
           };
         } catch {
           results[svc.key] = { online: false, latency: null, version: null };
@@ -203,11 +222,12 @@ export default function BaseGeekHome() {
                       animation: isOnline ? 'pulse-dot 2s ease-in-out infinite' : 'none',
                     }} />
                     <Typography sx={{
-                      fontSize: '0.675rem',
+                      fontSize: '0.75rem',
                       color: 'text.secondary',
                       fontFamily: '"Geist Mono", monospace',
                     }}>
                       {status === undefined ? 'checking...' : isOnline ? `${status.latency}ms` : 'offline'}
+                      {isOnline && status.version ? ` · v${status.version}` : ''}
                     </Typography>
                   </Box>
                 </Box>
@@ -309,7 +329,7 @@ export default function BaseGeekHome() {
                       {app.displayName}
                     </Typography>
                     <Typography sx={{
-                      fontSize: '0.7rem',
+                      fontSize: '0.75rem',
                       color: 'text.secondary',
                       lineHeight: 1.3,
                     }}>
@@ -319,7 +339,7 @@ export default function BaseGeekHome() {
                   {/* Health detail line */}
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                     <Typography sx={{
-                      fontSize: '0.6rem',
+                      fontSize: '0.75rem',
                       fontFamily: '"Geist Mono", monospace',
                       color: 'text.muted',
                     }}>
@@ -327,7 +347,7 @@ export default function BaseGeekHome() {
                     </Typography>
                     {health?.version && (
                       <Typography sx={{
-                        fontSize: '0.55rem',
+                        fontSize: '0.6875rem',
                         fontFamily: '"Geist Mono", monospace',
                         color: 'text.muted',
                         px: 0.6,
