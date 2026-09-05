@@ -567,11 +567,25 @@ router.post('/call', async (req, res) => {
 
       req.log.debug({ resultLength: result?.length }, 'Sending non-streaming response');
 
+      // `usage` used to be three hardcoded zeros, which is worse than absent:
+      // a caller cannot tell "no tokens" from "we didn't count". These are
+      // local estimates from the same tokenCounter the /smart route above
+      // uses — the rotation's providers do not all return usage, and an
+      // estimate that is honest about being one beats a zero that lies.
+      const promptTokens = Array.isArray(config.messages) && config.messages.length > 0
+        ? countMessageTokens(config.messages)
+        : countTextTokens(prompt || '');
+      const completionTokens = countTextTokens(result || '');
+
       res.json({
         id: `chatcmpl-${Date.now()}`,
         object: 'chat.completion',
         created: Math.floor(Date.now() / 1000),
         model: model,
+        // Additive, outside the OpenAI shape: rotation callers pass no
+        // provider and had no way to learn which one actually answered. The
+        // AIGeek playground reads it; OpenAI clients ignore unknown fields.
+        provider: aiService.currentProvider,
         choices: [
           {
             index: 0,
@@ -583,9 +597,10 @@ router.post('/call', async (req, res) => {
           }
         ],
         usage: {
-          prompt_tokens: 0,
-          completion_tokens: 0,
-          total_tokens: 0
+          prompt_tokens: promptTokens,
+          completion_tokens: completionTokens,
+          total_tokens: promptTokens + completionTokens,
+          estimated: true
         }
       });
     }
