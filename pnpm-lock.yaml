@@ -265,9 +265,6 @@ importers:
       express:
         specifier: ^4.21.1
         version: 4.22.1
-      jsonwebtoken:
-        specifier: ^9.0.2
-        version: 9.0.3
       mongoose:
         specifier: ^7.8.0
         version: 7.8.9(@aws-sdk/credential-providers@3.990.0)
@@ -277,18 +274,6 @@ importers:
       nodemailer:
         specifier: ^6.9.15
         version: 6.10.1
-      nodemailer-smtp-transport:
-        specifier: ^2.7.4
-        version: 2.7.4
-      pino:
-        specifier: ^9.0.0
-        version: 9.14.0
-      pino-http:
-        specifier: ^10.0.0
-        version: 10.5.0
-      pino-pretty:
-        specifier: ^11.0.0
-        version: 11.3.0
 
   apps/bookgeek/web:
     dependencies:
@@ -380,9 +365,6 @@ importers:
 
   apps/bujogeek/backend:
     dependencies:
-      '@apollo/subgraph':
-        specifier: ^2.9.3
-        version: 2.13.1(graphql@16.13.2)
       '@geeksuite/logger':
         specifier: workspace:*
         version: link:../../../packages/logger
@@ -392,39 +374,18 @@ importers:
       axios:
         specifier: ^1.6.7
         version: 1.13.5
-      bcrypt:
-        specifier: ^5.1.1
-        version: 5.1.1
-      bcryptjs:
-        specifier: ^3.0.2
-        version: 3.0.3
       cors:
         specifier: ^2.8.5
         version: 2.8.6
-      date-fns:
-        specifier: ^4.1.0
-        version: 4.1.0
-      date-fns-tz:
-        specifier: ^3.2.0
-        version: 3.2.0(date-fns@4.1.0)
       dotenv:
         specifier: ^16.4.7
         version: 16.6.1
       express:
         specifier: ^4.18.2
         version: 4.22.1
-      jsonwebtoken:
-        specifier: ^9.0.2
-        version: 9.0.3
       mongoose:
         specifier: ^6.12.0
         version: 6.13.9
-      pino:
-        specifier: ^9.0.0
-        version: 9.14.0
-      pino-http:
-        specifier: ^10.0.0
-        version: 10.5.0
     devDependencies:
       '@jest/globals':
         specifier: ^29.7.0
@@ -435,9 +396,6 @@ importers:
       nodemon:
         specifier: ^3.1.9
         version: 3.1.11
-      pino-pretty:
-        specifier: '*'
-        version: 13.1.3
       supertest:
         specifier: ^7.1.0
         version: 7.2.2
@@ -550,6 +508,9 @@ importers:
       '@apollo/subgraph':
         specifier: ^2.9.3
         version: 2.13.1(graphql@16.13.2)
+      '@geeksuite/crypto-vault':
+        specifier: workspace:*
+        version: link:../../../packages/crypto-vault
       '@geeksuite/logger':
         specifier: workspace:*
         version: link:../../../packages/logger
@@ -768,9 +729,6 @@ importers:
 
   apps/flockgeek/backend:
     dependencies:
-      '@apollo/subgraph':
-        specifier: ^2.9.3
-        version: 2.13.1(graphql@16.13.2)
       '@geeksuite/logger':
         specifier: workspace:*
         version: link:../../../packages/logger
@@ -783,9 +741,6 @@ importers:
       axios:
         specifier: ^1.12.2
         version: 1.13.5
-      bcryptjs:
-        specifier: ^2.4.3
-        version: 2.4.3
       cookie-parser:
         specifier: ^1.4.6
         version: 1.4.7
@@ -807,15 +762,6 @@ importers:
       mongoose:
         specifier: ^8.5.1
         version: 8.23.0(@aws-sdk/credential-providers@3.990.0)(socks@2.8.7)
-      pino:
-        specifier: ^9.0.0
-        version: 9.14.0
-      pino-http:
-        specifier: ^10.0.0
-        version: 10.5.0
-      pino-pretty:
-        specifier: ^11.0.0
-        version: 11.3.0
     devDependencies:
       '@jest/globals':
         specifier: 29.7.0
@@ -926,9 +872,6 @@ importers:
 
   apps/notegeek/backend:
     dependencies:
-      '@apollo/subgraph':
-        specifier: ^2.13.1
-        version: 2.13.1(graphql@16.13.2)
       '@geeksuite/logger':
         specifier: workspace:*
         version: link:../../../packages/logger
@@ -959,16 +902,7 @@ importers:
       mongoose:
         specifier: ^6.12.0
         version: 6.13.9
-      pino:
-        specifier: ^9.0.0
-        version: 9.14.0
-      pino-http:
-        specifier: ^10.0.0
-        version: 10.5.0
     devDependencies:
-      '@babel/preset-env':
-        specifier: ^7.26.9
-        version: 7.29.0(@babel/core@7.29.0)
       jest:
         specifier: ^29.7.0
         version: 29.7.0(@types/node@25.2.3)(babel-plugin-macros@3.1.0)
@@ -981,9 +915,6 @@ importers:
       nodemon:
         specifier: ^3.1.9
         version: 3.1.11
-      pino-pretty:
-        specifier: ^13.0.0
-        version: 13.1.3
       supertest:
         specifier: ^7.1.0
         version: 7.2.2
@@ -1469,6 +1400,9 @@ importers:
 
   packages/schemas:
     dependencies:
+      '@geeksuite/crypto-vault':
+        specifier: workspace:*
+        version: link:../crypto-vault
       mongoose:
         specifier: '>=7'
         version: 8.23.0(@aws-sdk/credential-providers@3.990.0)(socks@2.8.7)
@@ -7197,14 +7131,6 @@ packages:
     resolution: {integrity: sha512-JrF8SSLVmcvc5NducxgyOrKXe3EsyHMgBFgSaIUGmArKe+rwr0uphRkRXvwiom3I+fpIfoItveHrfudL8/rxuA==}
     engines: {node: '>=16'}
 
-  httpntlm@1.6.1:
-    resolution: {integrity: sha512-Tcz3Ct9efvNqw3QdTl3h6IgRRlIQxwKkJELN/aAIGnzi2xvb3pDHdnMs8BrxWLV6OoT4DlVyhzSVhFt/tk0lIw==}
-    engines: {node: '>=0.8.0'}
-
-  httpreq@1.1.1:
-    resolution: {integrity: sha512-uhSZLPPD2VXXOSN8Cni3kIsoFHaU2pT/nySEU/fHr/ePbqHYr0jeiQRmUKLEirC09SFPsdMoA7LU7UXMd/w0Kw==}
-    engines: {node: '>= 6.15.1'}
-
   https-proxy-agent@5.0.1:
     resolution: {integrity: sha512-dFcAjpTQFgoLMzC2VwU+C/CbS7uRL0lWmxDITmqm7C+7F0Odmj6s9l6alZc6AELXhrnggM2CeWSXHGOdX2YtwA==}
     engines: {node: '>= 6'}
@@ -8420,18 +8346,6 @@ packages:
   node-releases@2.0.27:
     resolution: {integrity: sha512-nmh3lCkYZ3grZvqcCH+fjmQ7X+H0OeZgP40OierEaAptX4XofMh5kwNbWh7lBduUzCcV/8kZ+NDLCwm2iorIlA==}
 
-  nodemailer-fetch@1.6.0:
-    resolution: {integrity: sha512-P7S5CEVGAmDrrpn351aXOLYs1R/7fD5NamfMCHyi6WIkbjS2eeZUB/TkuvpOQr0bvRZicVqo59+8wbhR3yrJbQ==}
-
-  nodemailer-shared@1.1.0:
-    resolution: {integrity: sha512-68xW5LSyPWv8R0GLm6veAvm7E+XFXkVgvE3FW0FGxNMMZqMkPFeGDVALfR1DPdSfcoO36PnW7q5AAOgFImEZGg==}
-
-  nodemailer-smtp-transport@2.7.4:
-    resolution: {integrity: sha512-1e86YhJ633OZWk3OHWS5TpuoYXG/LtY2/RzNiB5+EkFifDdqHCNHBnExd5cobx0ZSHJLNGM8EKnDuHRFIjFi6Q==}
-
-  nodemailer-wellknown@0.1.10:
-    resolution: {integrity: sha512-/VV4mjAEjfm2fn0loUvrpjvugw5rgurNjPO4WU24CuVSoeumsyLOTgaEWG8WoGdPxh1biOAp5JxDoy1hlA2zsw==}
-
   nodemailer@6.10.1:
     resolution: {integrity: sha512-Z+iLaBGVaSjbIzQ4pX6XV41HrooLsQ10ZWPUehGmuantvzWoDVBnmsdUcOIDM1t+yPor5pDhVlDESgOMEGxhHA==}
     engines: {node: '>=6.0.0'}
@@ -9598,9 +9512,6 @@ packages:
     resolution: {integrity: sha512-KAkBqZl3c2GvNgNhcoyJae1aKldDW0LO279wF9bk1PnluRTETKBq0WyzRXxEhoQLk56yHaOY4JCBEKDuJIET5g==}
     engines: {node: '>=20.0.0'}
 
-  smtp-connection@2.12.0:
-    resolution: {integrity: sha512-UP5jK4s5SGcUcqPN4U9ingqKt9mXYSKa52YhqxPuMecAnUOsVJpOmtgGaOm1urUBJZlzDt1M9WhZZkgbhxQlvg==}
-
   socks@2.8.7:
     resolution: {integrity: sha512-HLpt+uLy/pxB+bum/9DzAgiKS8CX1EvbWxI4zlmgGCExImLdiad2iCwXT5Z4c9c3Eq8rP2318mPW2c+QbtjK8A==}
     engines: {node: '>= 10.0.0', npm: '>= 3.0.0'}
@@ -10079,9 +9990,6 @@ packages:
 
   undefsafe@2.0.5:
     resolution: {integrity: sha512-WxONCrssBM8TSPRqN5EmsjVrsv4A8X12J4ArBiiayv3DyyG3ZlIg6yysuuSYdZsVz3TKcTg2fd//Ujd4CHV1iA==}
-
-  underscore@1.7.0:
-    resolution: {integrity: sha512-cp0oQQyZhUM1kpJDLdGO1jPZHgS/MpzoWYfe9+CM2h/QGDZlqwT2T3YGukuBdaNJ/CAPoeyAZRRHz8JFo176vA==}
 
   undici-types@7.16.0:
     resolution: {integrity: sha512-Zz+aZWSj8LE6zoxD+xrjh4VfkIG8Ya6LvYkZqtUQGJPZjYl53ypCaUwWqo7eI0x66KBGeRo+mlBEkMSeSZ38Nw==}
@@ -17628,13 +17536,6 @@ snapshots:
 
   http_ece@1.2.0: {}
 
-  httpntlm@1.6.1:
-    dependencies:
-      httpreq: 1.1.1
-      underscore: 1.7.0
-
-  httpreq@1.1.1: {}
-
   https-proxy-agent@5.0.1:
     dependencies:
       agent-base: 6.0.2
@@ -19258,20 +19159,6 @@ snapshots:
 
   node-releases@2.0.27: {}
 
-  nodemailer-fetch@1.6.0: {}
-
-  nodemailer-shared@1.1.0:
-    dependencies:
-      nodemailer-fetch: 1.6.0
-
-  nodemailer-smtp-transport@2.7.4:
-    dependencies:
-      nodemailer-shared: 1.1.0
-      nodemailer-wellknown: 0.1.10
-      smtp-connection: 2.12.0
-
-  nodemailer-wellknown@0.1.10: {}
-
   nodemailer@6.10.1: {}
 
   nodemon@3.1.11:
@@ -20780,11 +20667,6 @@ snapshots:
 
   smob@1.6.1: {}
 
-  smtp-connection@2.12.0:
-    dependencies:
-      httpntlm: 1.6.1
-      nodemailer-shared: 1.1.0
-
   socks@2.8.7:
     dependencies:
       ip-address: 10.1.0
@@ -21368,8 +21250,6 @@ snapshots:
       which-boxed-primitive: 1.1.1
 
   undefsafe@2.0.5: {}
-
-  underscore@1.7.0: {}
 
   undici-types@7.16.0: {}
 
