@@ -62,7 +62,7 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 
 - 09-05 14:05 — wave 3 (`8ce9296`, 34 commits): CI green; **Mobile harness workflow failed** on its first enforcing run — `pnpm --filter … ci` was pnpm's install alias, not the script (broken since R4, masked by continue-on-error). Fixed `4ef412d` (`run ci`), ships with wave 4. Watchtower deployed wave 3 at 14:13 (updated=6); all eight apps 200. R50, R51, R53–R57, R59, R60, hotfix follow-ups, syntax gate, harness enforcing. Gate: frozen install, `pnpm -r lint`, syntax check all green before push.
 
-- 09-05 14:40 — wave 4: harness workflow fix (`run ci`), keto-ring fix (R65), R58, R61, R64, docs. Gates green.
+- 09-05 14:23 — wave 4 (`c6c4136`, 16 commits): harness workflow fix (`run ci`), keto-ring fix (R65), R58, R61, R64, docs. Gates green.
 
 ## Landed during the burn
 
