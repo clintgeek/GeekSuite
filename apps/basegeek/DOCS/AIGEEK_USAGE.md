@@ -52,8 +52,11 @@ await openai.chat.completions.create({
 ```
 
 Known provider prefixes: `anthropic`, `groq`, `gemini`, `together`,
-`cohere`, `openrouter`, `cerebras`, `cloudflare`, `ollama`, `llm7`,
-`llmgateway`, `onemin`.
+`cohere`, `openrouter`, `cerebras`, `cloudflare`, `ollama`, `llmgateway`.
+
+`llm7` and `onemin` were retired on 2026-09-04 and their implementations
+deleted on 2026-09-05; pinning either now fails like any other unknown
+provider. See [AI_CATALOG.md](./AI_CATALOG.md#removed-2026-09-04).
 
 ## Structured output
 
@@ -282,3 +285,53 @@ StartGeek Ask (`DOCS/AI_SEARCH_PLAN.md`) does exactly this, with app id
 `startgeek`. Which model answers a suite search is therefore a row in the
 database that an admin can re-ask the steward about whenever the free tiers
 shift — not a constant anyone has to redeploy.
+
+## The AIGeek admin page
+
+`/aigeek` in baseGeek. **Admin-only** — the config mutations always were, and
+since 2026-09-05 the route and its sidebar row are gated client-side too, so a
+non-admin is sent to Home with a toast rather than shown a page of 403s.
+DataGeek and UserGeek are gated the same way. The gate reads `role` from
+`GET /auth/profile`; the server remains the thing that actually enforces it.
+
+Four tabs:
+
+| Tab | What it settles |
+|---|---|
+| **Configuration** | Provider keys and enable switches, plus **Try it** (below) |
+| **Usage & Cost** | Calls, tokens and spend, per provider and per app |
+| **Catalog** | Every model: price per 1M, FREE/PAID, and its free-tier limits |
+| **App Routing** | Which model answers for which app, plus the model steward |
+
+**Catalog is the merge of what used to be two tabs.** "Free Tier Config" and
+"AI Catalog" listed the same models from the same query through two different
+save paths — the catalog wrote a single model immediately, the free-tier editor
+batched on Save All — so editing a model on one tab left the other stale, and
+Save All could put the old value back over the newer one. One list now, one
+save path (`BULK_UPDATE_FREE_TIERS`). The advanced dialog still exists for the
+audio limits and the notes, which have no column, and it clears that model's
+pending row edit as it saves so the two cannot fight.
+
+### Try it
+
+A prompt box on the Configuration tab that posts to `POST /api/ai/call` — the
+same endpoint the suite's apps use, not a special admin path — and reports the
+provider and model that answered, the wall-clock latency, the token counts and
+the raw envelope. Leave the provider on **Rotation** to exercise the free-tier
+rotation exactly as a caller gets it; pick a provider to pin one. The JSON
+schema toggle sends `responseFormat` and accepts either a bare schema or the
+full `{ name, schema }` envelope.
+
+It deliberately sends no `appName`: the route auto-routes any call that names
+an app and no provider through that app's `AIAppConfig` row, which would stop
+the panel testing the rotation at all.
+
+Two additive fields on the non-streaming `/api/ai/call` response make this
+possible, and are useful to any caller:
+
+- **`provider`** — which provider actually answered. Rotation callers name none
+  on the way in and previously had no way to learn it on the way out.
+- **`usage`** — real counts instead of three hardcoded zeros. They are local
+  estimates from the same `tokenCounter` the `/smart` route uses (not every
+  provider in the rotation returns usage), and say so: `usage.estimated` is
+  `true`. Existing OpenAI clients ignore both fields.
