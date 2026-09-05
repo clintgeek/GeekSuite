@@ -172,8 +172,20 @@ cycle so the ordering rationale stays visible; detail moved to `SUITE_TODO.md` "
     password encryption + backfill. *Shared libs / security*
 21. **fitnessgeek `UserSettings` schema consolidation** — S. Silent-data-loss hazard documented
     in `CONTEXT.md`. *Shared libs*
-22. **Input validation (Joi/Zod)** — L, slow-burn. Route by route; start with bujogeek
-    timestamps and fitnessgeek settings. *Security / tests*
+22. **Input validation (Joi/Zod)** — L, slow-burn. Route by route: bujogeek's
+    ten gateway mutations (`3265b1c`) and fitnessgeek's settings/weight/BP/
+    medication routes (`00ef0b7`) **done 2026-09-05**; storygeek's REST
+    backend **done 2026-09-05** (stories, characters, export, auth's
+    `/refresh`; `ai.js` has no mutating routes so nothing to add there —
+    detail in `apps/storygeek/DOCS/CONTEXT.md`); **bookgeek api done
+    2026-09-05** (the binary/long-job REST that stayed after `01d35d4` moved
+    the pure-data CRUD to basegeek's gateway — book file upload/download,
+    covers, enrich, merge, Goodreads import/dedupe, Calibre rescan, device
+    baskets, send-to-kindle; detail in `apps/bookgeek/DOCS/CONTEXT.md`).
+    Remaining: flockgeek REST pending its own Q22 decision, notegeek (its
+    data routes are GraphQL through basegeek — that's a separate gateway-side
+    item; the per-app auth-isolation suites are unrelated and already done,
+    see `SUITE_TODO.md`). *Security / tests*
 23. **Circuit breakers on fitnessgeek external APIs** — S. `opossum` around USDA, Nutritionix,
     OpenFoodFacts, Garmin. *Observability*
 
@@ -195,10 +207,12 @@ cycle so the ordering rationale stays visible; detail moved to `SUITE_TODO.md` "
     until there's a second reason to touch that build. *UI*
 29. **Mongo connection topology (basegeek)** — investigated, not a duplicate pool; deferred
     with the hazard noted. *Infra*
-30. **Small UI items** — bujogeek TemplatePreview markdown, notegeek mind-map palette,
-    fitnessgeek Drawer landmine, BarcodeScanner media query, offline pages per mode, native
-    date pickers, reduced motion, flockgeek first-visit flicker. Pick up when already in
-    those files. *UI*
+30. **Small UI items** — ~~bujogeek TemplatePreview markdown~~, ~~notegeek mind-map
+    palette~~, ~~fitnessgeek Drawer landmine~~, ~~fitnessgeek BarcodeScanner media query~~,
+    offline pages per mode, ~~native date pickers (fitnessgeek)~~ — flockgeek's half still
+    open, reduced motion, ~~flockgeek first-visit flicker~~ — six
+    done 2026-09-05 (detail in SUITE_TODO.md). Pick up the rest when already in those
+    files. *UI*
 31. **Housekeeping** — dead components list, duplicate bujogeek models, ~~stale fitnessgeek dev
     compose~~, basegeek stale AI model defaults, notegeek `formatRelativeTime` dedupe, gateway
     logout broadcast. Zero user impact; batch into any nearby pass. *Cleanup*

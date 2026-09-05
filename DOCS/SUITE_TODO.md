@@ -303,12 +303,29 @@ slots but have **zero consumers**; every app hand-rolls both. Per-app structural
 - **Reduced motion** — framer-motion transitions and bujogeek's grain overlay ignore
   `prefers-reduced-motion`.
 
-- **Native date inputs** — fitnessgeek and flockgeek mix native `<input type="date">` with
-  MUI controls; `color-scheme` now fixes the glyph but pickers should be consistent.
+- **Native date inputs** — ~~fitnessgeek~~ done 2026-09-05, flockgeek still mixes native
+  `<input type="date">` with MUI controls; `color-scheme` now fixes the glyph but pickers
+  should be consistent. fitnessgeek never had a MUI X date picker to gate — every date-only
+  field (weight log, BP log, "viewing" day, copy-meal from/to) already used a bare
+  `TextField type="date"`, just with a different label/size/min-width combination each time
+  (two fields had no visible label at all). Consolidated into one shared
+  `components/primitives/DateField.jsx`; all six call sites now route through it, and
+  `HealthDashboard`'s hand-rolled "no future dates" `max` is now `localDateString()`
+  (`@geeksuite/utils`) instead of a manual `Date` format. Values stay plain `YYYY-MM-DD`
+  strings throughout — no `Date` object round-trip, so this cannot reintroduce the
+  calendar-vs-instant bug fixed in `4856227`. 5 new vitest cases
+  (`components/primitives/__tests__/DateField.test.jsx`).
 
-- **flockgeek first-visit flicker** — preboot has no per-app default, so a cookie-less
-  visitor on a light OS paints light then flips to flockgeek's dark default on mount.
-  Either let the preboot accept a default or accept the one-time flicker.
+- ~~**flockgeek first-visit flicker**~~ — **done 2026-09-05**. Cause: `AppThemeProvider`
+  hardcoded `<ThemeProvider defaultPreference="dark">`, while the preboot script
+  (`@geeksuite/user/vite`, unparameterized) always assumes `'auto'` for a cookie-less
+  visitor. A light-OS, cookie-less visitor got preboot's light guess, then the provider's
+  own "dark" default flipped it the instant it mounted. bujogeek/notegeek never override
+  the prop, so they never disagreed with preboot. Fix: dropped the override (now `'auto'`,
+  matching the other two apps) and added the missing baseline `:root[data-theme="dark"]`
+  CSS snap block to `index.html` (present in bujogeek/notegeek, absent here) so first paint
+  matches whatever preboot resolves, cookie or not. `apps/flockgeek/frontend/src/theme/
+  AppThemeProvider.jsx`, `apps/flockgeek/frontend/index.html`.
 
 - **Login wordmark brand colors fail in one mode** — fitnessgeek `#2563eb` (2.4:1 on the dark
   card), bookgeek `logoSuffixColor="#1d4ed8"` (2.0:1 dark), storygeek `#7c4dff`/`#ff6d00`
@@ -319,21 +336,46 @@ slots but have **zero consumers**; every app hand-rolls both. Per-app structural
   both modes ("Add book", "Create"). Darken the accent or use a dark contrastText.
   `apps/bookgeek/web/src/theme/theme.js`
 
-- **bujogeek TemplatePreview markdown** — `ReactMarkdown` output is unstyled: UA-blue links on
-  dark paper (~2.3:1), no code-block background, and the panel uses `background.paper`
-  inside a Paper. Style via the palette like notegeek's `NoteViewer` markdown block.
-  `apps/bujogeek/frontend/src/components/templates/TemplatePreview.jsx`
+- ~~**bujogeek TemplatePreview markdown**~~ — **done 2026-09-05**. Added `remark-gfm` +
+  `remark-breaks` (same versions storygeek pins) and a `components` map so links, code
+  (inline vs. fenced via the `language-xxx` className), blockquotes use theme tokens
+  (`primary.main`, `alpha(text.primary)`, `divider`) instead of `ReactMarkdown` defaults;
+  the preview box now uses `background.default` + a border instead of `background.paper`
+  inside a `Paper` (no separation). Still no `rehype-raw`, so raw HTML stays inert — same
+  sanitization contract as storygeek's `Narration.jsx`. 7 new vitest cases (bold/list/
+  variable-substitution/link-color/code-block/no-raw-HTML).
+  `apps/bujogeek/frontend/src/components/templates/TemplatePreview.jsx`,
+  `apps/bujogeek/frontend/src/__tests__/components/TemplatePreview.test.jsx`.
 
-- **notegeek mind-map off-palette colors** — edge stroke `#2196f3`, MiniMap `#5B50A8`/`#3D8493`,
-  root-node fill `#e3f2fd`, and `TAG_COLORS` duplicate light-mode `noteTypes` without the dark
-  lift. Route through the palette. `MindMapEditor.jsx`, `MindMapNode.jsx`, `Sidebar.jsx`
+- ~~**notegeek mind-map off-palette colors**~~ — **done 2026-09-05**. Edge stroke and MiniMap
+  fills now derive from `noteTypeColor(theme, 'mindmap')` via a `defaultEdgeOptions` prop
+  (root fill was `#e3f2fd`/`#5B50A8`/`#3D8493`/`#2196f3`, none mode-aware); the root node's
+  background is `alpha(noteTypeColor(theme, 'mindmap'), isDark ? 0.22 : 0.14)`, checked at
+  ≥9:1 for `text.primary` in both modes (see `__tests__/theme/mindMapPalette.test.js`).
+  `TAG_COLORS` now reads the real `noteTypes` value per mode for its four note-type-aligned
+  entries and runs the other four through `toneForMode` (`@geeksuite/ui`, packages/ui/src/
+  color.js) for the same dark lift, instead of a static light-authored array reused
+  unmodified in dark mode. `MindMapEditor.jsx`, `MindMapNode.jsx`, `Sidebar.jsx`.
 
-- **fitnessgeek `MuiDrawer` landmine** — theme pins Drawer paper to `#0C0A09` in both modes.
-  Inert today (nothing renders a MUI Drawer) but the first one to do so gets palette text on
-  near-black in light mode. Make it mode-aware or remove. `theme/theme.jsx`
+- ~~**fitnessgeek `MuiDrawer` landmine**~~ — **already resolved, stale entry struck
+  2026-09-05**. This described the state before the GeekShell migration (`6e9b14e`, 2026-09-02):
+  `theme/theme.jsx` no longer carries a global `MuiDrawer` paper override at all — the
+  always-dark chrome moved to `ModernLayout.jsx`'s `navSx={{ bgcolor: '#0C0A09' }}`, which
+  `GeekShell` applies only to its own nav Drawer's `PaperProps`/permanent-sidebar `Box`
+  (see `packages/ui/src/navigation/GeekShell.jsx`), in both light and dark app modes —
+  intentional Studio Slate identity (MOBILE_UI_PLAN.md §4 "near-black drawer"), not a leak
+  to every Drawer. No code change needed; verified via `git log -S`/`git show` on
+  `6e9b14e061a448059d532087be57a0bc5c6648da`.
 
-- **fitnessgeek BarcodeScanner** — only surface in the suite keyed to
-  `@media (prefers-color-scheme: dark)` instead of `data-theme`. Reticle only; low impact.
+- ~~**fitnessgeek BarcodeScanner**~~ — **done 2026-09-05**. The reticle's dark styling now
+  keys off `:root[data-theme='dark']` (the suite's actual theme-switch attribute, set from
+  the `geek_theme` cookie) instead of `@media (prefers-color-scheme: dark)`, so it follows
+  the in-app theme toggle rather than only the OS preference. Also folded the reticle/corner
+  size and scan-line-speed `@media (max-width: 600/480/360px)` cutoffs — a second, unrelated
+  raw-breakpoint smell in the same file — into `theme.breakpoints.down('sm'|480|360)` +
+  `useMediaQuery` in the component, and gave the camera viewport a `sm`+ max-width so it no
+  longer stretches full-bleed above phone width.
+  `components/BarcodeScanner/BarcodeScanner.jsx`, `.css`.
 
 - **Themed tooltips** — the shared factory leaves MUI's default grey-700 tooltip; legible but
   off-identity in every app. Derive from the palette in `createGeekSuiteTheme`.
@@ -428,7 +470,7 @@ reality stands, per app:
 | bujogeek | Apollo → basegeek | ✅ fully on GraphQL. Own backend is auth-only, no duplicate models. The reference. |
 | flockgeek | Apollo → basegeek | ✅ frontend fully on GraphQL (only `/api/health` ping). ~~All 13 Mongoose models duplicated~~ — **corrected 2026-09-05**: only 4 (`BirdNote`, `BirdTrait`, `Event`, `LineageCache`) were actually orphaned and are now deleted. The other 9 are imported by a full, live, *mounted* REST CRUD API (`routes/api.js` → birds/groups/group-memberships/health-records/egg-production/pairings/locations/hatch-events/meat-runs) that nothing in the repo calls anymore but which still runs in the server. See `apps/flockgeek/CONTEXT.md` — deciding whether to unmount that whole REST layer is a follow-up, not done here. |
 | notegeek | Apollo → basegeek | ✅ frontend fully on GraphQL. ~~Own backend still carries legacy REST~~ — **deleted 2026-09-05**: `routes/notes.js`, `tags.js`, `search.js`, their controllers, and duplicate `models/Note.js`. This also resolved the `getTagHierarchy` 500 below. Follow-up prune, same day: `migrations/migrateNotesBetweenUsers.js` and `convertFoldersToTags.js` still imported the deleted `Note` model and had no caller (no npm script, no server import) — deleted, along with the now-empty `migrations/` directory. `utils/tagValidation.js` was imported only by its own test — both deleted. Backend suite still green (24 passed, 8 skipped); no dependency in `package.json` became unused as a result. |
-| bookgeek | Apollo for library CRUD; `authFetch` REST for the rest | ⚠️ mostly. Legit REST: upload/download/cover/enrich/merge/import/device-baskets (binary + long jobs). Not legit: `/api/profile/*` (`library-filters`, `me`) and `/api/ai/status` — pure data, should be GraphQL. `App.jsx:15` hardcodes `http://localhost:1800/api`. ~~`api/src/graphql/{schema,resolvers}.js` is an **unmounted dead GraphQL server**~~ — **deleted 2026-09-05** (plus the unused `@apollo/subgraph` dep). 4 duplicated models remain (not yet touched). |
+| bookgeek | Apollo for library CRUD **and profile data**; `authFetch` REST only for binary/long jobs | ✅ **done 2026-09-05** (item 3 below). All pure data is on the gateway: `bookProfile` / `libraryFilters` / `bookAiStatus` queries and `saveBookProfile` / `saveLibraryFilter` / `deleteLibraryFilter` / `addBookShelf` / `removeBookShelf` mutations. The whole `/api/profile/*` family and `/api/ai/status` (with `routes/aiRoutes.js` and `services/aiGeekService.js`) are deleted from the bookgeek API. Remaining REST is legit only: upload/download/cover/enrich/merge/import/device-baskets/health. The hardcoded `http://localhost:1800/api` is gone — `utils/bookDisplay.js` now uses `import.meta.env.VITE_API_URL \|\| "/api"`, the notegeek/storygeek convention. ~~`api/src/graphql/{schema,resolvers}.js` is an **unmounted dead GraphQL server**~~ — **deleted 2026-09-05** (plus the unused `@apollo/subgraph` dep). Duplicated models: `Profile` is now read/written from both sides, so the two copies are field-identical and carry a tripwire (`bookgeekProfile.test.js`); `book`/`ingestionJob`/`recommendation` still duplicated, untouched. |
 | fitnessgeek | `apiService.js` shims REST→GraphQL, but `restClient.js` still hits own backend | ⚠️ mostly. ~~Still REST: `POST/PUT/DELETE /logs` + `POST /meals/:id/add-to-log`~~ — **food-log writes switched 2026-09-05** (gateway `79b1b57`, frontend same day): `fitnessGeekService.addFoodToLog`/`updateFoodLog`/`deleteFoodLog`/`addMealToLog` now go through `apiService` to `addFoodLog`/`updateFoodLog`/`deleteFoodLog`/`logMeal`. ~~The four REST routes are caller-less and should be deleted — next ticket~~ — **backend routes deleted 2026-09-05** (see item 2 — done). Still REST: food search/barcode/favorites/recent (`foodService.js`), meds RxNorm + med logs, influx, AI, `PUT /user/profile`, Garmin heart-rate detail. **All 13 models duplicated** — this is the `UserSettings` drift hazard above, times 13. |
 | storygeek | axios REST to own backend | ❌ not on GraphQL. `apolloClient.js` exists but is never imported. basegeek's storygeek schema (`stories`, `story`, 3 mutations) is unused by the app and too thin to replace `/stories/*/continue`, `/export/*`, `/ai/*`. Decide: either build out the schema or drop the basegeek storygeek module as dead code. |
 
@@ -552,9 +594,48 @@ Ordered cheap-to-expensive:
    nothing — so a stale entry there can only be seen by calling fitnessgeek's own REST insight
    routes directly. `weightController.js` still invalidates on its own writes.
 
-3. bookgeek: `profile` + `ai/status` → GraphQL; kill the hardcoded `localhost:1800`.
+3. ~~bookgeek: `profile` + `ai/status` → GraphQL; kill the hardcoded `localhost:1800`.~~
+   **Done 2026-09-05.** Scope note: the audit's parenthetical named `library-filters` and
+   `me`, but `/api/profile/shelves` (added the same day the audit was written) is the same
+   kind of pure data, so the whole family moved — otherwise the routes would not have been
+   caller-less and nothing could be deleted.
+
+   - **Gateway** (`graphql/bookgeek/`): `bookProfile`, `libraryFilters`, `bookAiStatus`
+     queries; `saveBookProfile`, `saveLibraryFilter`, `deleteLibraryFilter`, `addBookShelf`,
+     `removeBookShelf` mutations. Every one calls the module's existing `requireUser()` —
+     but unlike `books`/`shelves`, which are deliberately shared across the household, the
+     Profile resolvers scope every read and write to `userId`. New suite
+     `__tests__/bookgeekProfile.test.js` (19 tests) covers auth, cross-user isolation, the
+     device-word rules and uniqueness conflict, the filter shape, the 20-shelf cap, and the
+     "removing a shelf clears it off every book" side effect.
+   - **`bookAiStatus` is not a literal port.** bookgeek's old `/api/ai/status` reported on
+     *its own* `AIGEEK_API_KEY` env var — the key it used to call basegeek. Asked at the
+     gateway that question is "does basegeek have a usable AI provider", so the resolver
+     counts `AIConfig` rows (`enabled`, and non-empty `apiKey`) and returns the same
+     `{ enabled, apiKeyConfigured, baseGeekUrl, model }` shape plus a `providers` count. No
+     key is read, decrypted, or returned. Consequence: **`AIGEEK_API_KEY` is now unused by
+     bookgeek** — it can come out of bookgeek's `.env.production` and out of the RUNBOOK's
+     bookgeek env list whenever someone is next in there.
+   - **Origin**: `apps/bookgeek/web/src/utils/bookDisplay.js` (where the hardcode had moved
+     to after this week's rewrite — no longer `App.jsx:15`) is now
+     `import.meta.env.VITE_API_URL || "/api"`. `vite.config.js` already defined
+     `VITE_API_URL` (prod `/api`, dev `http://localhost:1800/api`) and already proxies
+     `/api` in dev; in production the bookgeek container serves the SPA and the API from one
+     origin on 1800, so the remaining REST keeps working behind `bookgeek.clintgeek.com`
+     exactly as before. The dead `INCLUDE_CREDENTIALS` binding in `App.jsx` went with it.
+   - **Verified**: bookgeek api `npm test` 78 (unchanged — no test covered the deleted
+     routes); `apps/bookgeek/web` build clean, `pnpm lint` 18 warnings (baseline, 0 errors),
+     `pnpm test` 104 (was 96 — +7 new `graphql/profileOperations.test.js`, +1 in
+     `bookDisplay.test.js`); gateway `pnpm test` 45 suites / 847 tests (was 44 / 828);
+     mobile harness `--app bookgeek --serve --viewports phone` 12 scenes, 0 violations
+     (its `**/api/profile/*` and `**/api/ai/status` route stubs became `GetBookProfile` /
+     `GetLibraryFilters` / `GetBookAiStatus` entries in `graphqlRoute`).
 4. fitnessgeek model consolidation (13 pairs) — biggest risk, do last, one model at a time.
-5. storygeek decision.
+   **Planned 2026-09-05**: full pair-by-pair diff, ordering, pre-work and estimates in
+   `DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md` (12 pairs left; 2 are basegeek orphans to delete,
+   and one — `DailySummary.totals.net_carbs_grams` — is losing data in production today).
+5. storygeek decision. **Analyzed 2026-09-05**: no live caller of the gateway module anywhere
+   in the suite — see `DOCS/STORYGEEK_GATEWAY_DECISION.md` (recommendation: drop it).
 
 Backend-side notes from the same pass: `graphql/dashboard/` is orphaned and field-name-broken —
 being replaced by `graphql/glance/` under `DOCS/DASHGEEK_PLAN.md`. `notes` has no sort argument;
@@ -610,9 +691,17 @@ being replaced by `graphql/glance/` under `DOCS/DASHGEEK_PLAN.md`. `notes` has n
 - **Circuit breakers on fitnessgeek external APIs** — USDA, Nutritionix, OpenFoodFacts, Garmin.
   30s timeout per call but no circuit breaker. Use `opossum` or Redis-backed state. (`DEFERRED_WORK.md`)
 
-- **Input validation (Joi/Zod)** — most REST routes do ad-hoc `if (!field)` checks. Flag:
-  bujogeek (client-controllable timestamps, unbounded strings), fitnessgeek (`settingsRoutes.js`).
+- **Input validation (Joi/Zod)** — most REST routes do ad-hoc `if (!field)` checks.
   Route-by-route, not urgent — own slow-burn pass. (`DEFERRED_WORK.md`)
+  bujogeek's ten gateway mutations, fitnessgeek's settings/weight/BP/medication routes,
+  storygeek's REST backend (stories, characters, export, auth's `/refresh`), and bookgeek's
+  api (book file upload, covers, enrich, merge, Goodreads import/dedupe, Calibre rescan,
+  device baskets, send-to-kindle — the binary/long-job REST that stayed after `01d35d4`
+  moved the rest to basegeek's gateway) — **done 2026-09-05** (`3265b1c`, `00ef0b7`, and
+  each app's own TODO_ORDER #22 slice; detail in `apps/storygeek/DOCS/CONTEXT.md` and
+  `apps/bookgeek/DOCS/CONTEXT.md`). Still ad-hoc: flockgeek REST (its own Q22 decision
+  pending), notegeek (data routes are GraphQL through basegeek — separate gateway-side
+  item).
 
 ---
 
