@@ -151,6 +151,20 @@ pushVapidKey + save/removePushSubscription.
 
 ---
 
+**TemplatePreview markdown styling (2026-09-05, TODO_ORDER #30):** the template preview
+(`components/templates/TemplatePreview.jsx`) rendered raw `ReactMarkdown` with none of its
+own styling — UA-blue links on dark paper, no code-block background, and the content box
+shared `background.paper` with the surrounding `Paper` (no visual separation). Added
+`remark-gfm` + `remark-breaks` (same versions storygeek pins) and a `components` map so
+links/code/blockquotes read from the theme palette (`primary.main`, `alpha(text.primary,
+0.08)`, `divider`), and switched the content box to `background.default` + a border. Still
+no `rehype-raw`, so literal HTML in a template body renders as inert text, not markup —
+same sanitization contract as storygeek's `Narration.jsx`. Added the app's first component
+test (`__tests__/components/TemplatePreview.test.jsx`, 7 cases) and, with it, the app's
+first `@testing-library/react` + `@testing-library/jest-dom` devDependencies and a
+`src/__tests__/setup.js` (vitest `setupFiles`) — none of that existed before this pass;
+prior coverage was utils/graphql only.
+
 **Housekeeping note (2026-09-05):** `DOCS/SUITE_TODO.md` still listed a
 "bujogeek duplicate model files (`userModel.js`/`User.js`,
 `templateModel.js`/`Template.js`)" cleanup item. Checked the repo — none of

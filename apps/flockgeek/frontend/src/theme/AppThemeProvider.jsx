@@ -12,7 +12,7 @@ import { createFlockTheme } from "./theme";
 export const ColorModeContext = createContext({
   mode: "dark",
   toggleColorMode: () => {},
-  themePreference: "dark",
+  themePreference: "auto",
   setThemePreference: () => {}
 });
 
@@ -34,8 +34,18 @@ const FlockThemeBridge = ({ children }) => {
   );
 };
 
+// `defaultPreference` used to be hardcoded "dark" (DOCS/SUITE_TODO.md
+// "flockgeek first-visit flicker"): the theme-preboot inline script
+// (@geeksuite/user/vite) has no per-app hook and always assumes 'auto' for a
+// cookie-less visitor, resolving via `prefers-color-scheme` before React ever
+// mounts. Overriding the *post-mount* default to "dark" meant a light-OS,
+// cookie-less visitor got a real light→dark repaint the instant this
+// provider read its state — the preboot script and this provider disagreeing
+// about what "no preference yet" means. bujogeek and notegeek never override
+// this prop (both stay on the shared 'auto' default), which is what keeps
+// them flicker-free; flockgeek now matches them.
 export const AppThemeProvider = ({ children }) => (
-  <ThemeProvider defaultPreference="dark">
+  <ThemeProvider>
     <FlockThemeBridge>{children}</FlockThemeBridge>
   </ThemeProvider>
 );

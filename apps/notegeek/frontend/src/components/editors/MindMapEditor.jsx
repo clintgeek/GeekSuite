@@ -11,6 +11,7 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import { Box, useTheme, useMediaQuery, alpha } from '@mui/material';
 import MindMapNode from '../MindMapNode';
+import { noteTypeColor } from '../../theme/tokens';
 
 const nodeTypes = {
     mindmap: MindMapNode,
@@ -33,6 +34,10 @@ function MindMapEditorInner({ content, setContent, readOnly }) {
     const containerRef = useRef(null);
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+    // Identity accent for edges/minimap — same amber as the mindmap type dot,
+    // lifted per mode by noteTypeColor. Was a hardcoded '#2196f3' (edges) and
+    // '#5B50A8'/'#3D8493' (minimap) that ignored theme mode entirely.
+    const mindmapAccent = noteTypeColor(theme, 'mindmap');
     const [nodes, setNodes, onNodesChange] = useNodesState([initialNode]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
     const nextIdRef = useRef(1);
@@ -185,9 +190,10 @@ function MindMapEditorInner({ content, setContent, readOnly }) {
             id: `e${parentId}-${newNodeId}`,
             source: parentId,
             target: newNodeId,
-            type: 'smoothstep',
-            animated: false,
-            style: { stroke: '#2196f3' }
+            // type/animated/style come from `defaultEdgeOptions` below (theme-
+            // driven), so every edge — this one, onConnect's, and one loaded
+            // from saved content with no style of its own — stays in sync
+            // with the current mode instead of baking in a fixed hex.
         };
 
         setNodes(nds => [...nds, newNode]);
@@ -296,6 +302,7 @@ function MindMapEditorInner({ content, setContent, readOnly }) {
                 nodeTypes={nodeTypes}
                 fitView
                 defaultViewport={defaultViewport}
+                defaultEdgeOptions={{ type: 'smoothstep', animated: false, style: { stroke: mindmapAccent } }}
                 proOptions={{ hideAttribution: true }}
                 deleteKeyCode="Delete"
                 selectionKeyCode="Shift"
@@ -327,8 +334,8 @@ function MindMapEditorInner({ content, setContent, readOnly }) {
                 />
                 {/* Hide MiniMap on mobile - it's too small to be useful */}
                 {!isMobile && (
-                    <MiniMap 
-                        nodeColor={(node) => node.data?.isRoot ? '#5B50A8' : '#3D8493'}
+                    <MiniMap
+                        nodeColor={(node) => node.data?.isRoot ? mindmapAccent : alpha(theme.palette.text.secondary, 0.55)}
                         maskColor={alpha(theme.palette.background.paper, 0.7)}
                     />
                 )}

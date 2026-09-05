@@ -2,6 +2,32 @@
 
 _Last updated: 2026-09-05_
 
+## First-visit theme flicker (2026-09-05, TODO_ORDER #30)
+
+Cause: `theme/AppThemeProvider.jsx` mounted `@geeksuite/user`'s `<ThemeProvider
+defaultPreference="dark">`. The theme-preboot inline script (`themePreboot()` from
+`@geeksuite/user/vite`, injected into every app's `<head>`, not parameterizable) always
+falls back to `'auto'` (resolves via `prefers-color-scheme`) when there's no `geek_theme`
+cookie. So a cookie-less visitor on a light OS got preboot's light guess as the first
+paint, then this provider's own hardcoded "dark" default resolved the mode the instant it
+mounted — a real light-to-dark repaint, not just a mismatched initial value. bujogeek and
+notegeek never override `defaultPreference` (both stay on the shared `'auto'`), which is
+why only flockgeek showed this.
+
+Fix: dropped the `defaultPreference="dark"` override (now the shared `'auto'` default,
+matching bujogeek/notegeek and agreeing with preboot's assumption) and added the missing
+baseline `:root` / `:root[data-theme="dark"]` CSS snap block to `index.html` — bujogeek and
+notegeek's `index.html` both have this (colors matching their theme's `background.default`
++ `text.primary` exactly) but flockgeek's never did, so its very first paint (before the
+preboot script's effect could even show through) had no themed background at all. One
+regression test added: `__tests__/theme/AppThemeProvider.test.jsx` asserts a cookie-less
+render resolves to `'light'` under the test suite's default (light) `matchMedia` mock.
+Mobile harness (`flockgeek-small` label, phone viewport): 28 scenes, 0 violations —
+unchanged from baseline.
+
+`apps/flockgeek/frontend/src/theme/AppThemeProvider.jsx`,
+`apps/flockgeek/frontend/index.html`.
+
 ## Feedback primitives fan-out (2026-09-05, TODO_ORDER #15)
 
 Frontend now uses `@geeksuite/ui`'s `GeekEmptyState` / `GeekErrorState` /

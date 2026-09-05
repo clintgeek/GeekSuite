@@ -27,7 +27,8 @@ import useTagStore from '../store/tagStore';
 import useNoteStore from '../store/noteStore';
 import TagContextMenu from './TagContextMenu';
 import { gql, useQuery } from '@apollo/client';
-import { glow } from '../theme/tokens';
+import { toneForMode } from '@geeksuite/ui';
+import { glow, noteTypeColor } from '../theme/tokens';
 import { NEW_NOTE_ITEM, navSections, activeNavId } from './navConfig';
 
 const GET_TAGS = gql`
@@ -38,24 +39,36 @@ const GET_TAGS = gql`
 
 // Earthy, editorial tag accent colors — spread across the hue wheel so
 // adjacent tags get visually distinct dots. Mapped deterministically from
-// tag name hash. First four align with the noteTypes palette.
-const TAG_COLORS = [
-    '#2D6A9F',  // slate blue    (matches noteTypes.markdown)
-    '#4A7A2E',  // forest green  (matches noteTypes.code)
-    '#B8841F',  // warm amber    (matches noteTypes.mindmap)
-    '#8B2C2A',  // oxblood       (matches primary/handwritten)
+// tag name hash. First four are the real per-mode noteTypes palette values
+// (not a copy — dark mode used to reuse the light-mode hex here, which
+// skipped the dark lift `noteTypes` applies everywhere else, DOCS/SUITE_TODO.md
+// "notegeek mind-map off-palette colors"). The remaining four have no
+// noteTypes equivalent, so they're light-authored hues run through
+// `toneForMode` (packages/ui/src/color.js) for the same dark lift.
+const EXTRA_TAG_HUES = [
     '#6B5A3A',  // warm umber
     '#5C4A8A',  // muted indigo
     '#7A4A5C',  // plum
     '#3A6B7A',  // deep teal
 ];
 
-function getTagColor(tagName) {
+function getTagColors(theme) {
+    return [
+        noteTypeColor(theme, 'markdown'),
+        noteTypeColor(theme, 'code'),
+        noteTypeColor(theme, 'mindmap'),
+        noteTypeColor(theme, 'handwritten'),
+        ...EXTRA_TAG_HUES.map((hue) => toneForMode(hue, theme)),
+    ];
+}
+
+function getTagColor(tagName, theme) {
     let hash = 0;
     for (let i = 0; i < tagName.length; i++) {
         hash = tagName.charCodeAt(i) + ((hash << 5) - hash);
     }
-    return TAG_COLORS[Math.abs(hash) % TAG_COLORS.length];
+    const colors = getTagColors(theme);
+    return colors[Math.abs(hash) % colors.length];
 }
 
 // ——— Section label ————————————————————————————————————————————————————
@@ -98,7 +111,7 @@ function buildTagHierarchy(tagList) {
 // ——— TagTreeRow: single tag node (module-level, no re-creation) —————————
 function TagTreeRow({ tag, data, level, location, theme, onNavigate, onTagMenu }) {
     const isSelected = location.pathname === `/tags/${encodeURIComponent(data.path)}`;
-    const tagColor = getTagColor(data.path);
+    const tagColor = getTagColor(data.path, theme);
     const hasChildren = Object.keys(data.children).length > 0;
 
     return (

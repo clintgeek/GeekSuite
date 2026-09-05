@@ -8,7 +8,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
 import { alpha } from '@mui/material/styles';
-import { border, surfaces } from '../theme/tokens';
+import { border, surfaces, noteTypeColor } from '../theme/tokens';
 
 /**
  * MindMapNode - A node in the mind map with inline editing
@@ -75,8 +75,14 @@ function MindMapNode({ data, isConnectable, selected }) {
         }
     };
 
+    // Root node gets a wash of the mindmap identity color (noteTypes.mindmap,
+    // the same amber used for the type dot/pill everywhere else) instead of
+    // Material's default blue (`#e3f2fd`, light-only — DOCS/SUITE_TODO.md
+    // "notegeek mind-map off-palette colors"). Both alphas keep
+    // `theme.palette.text.primary` at ≥9:1 over the blended fill (checked
+    // against noteTypes.mindmap light/dark on background.default).
     const nodeBg = data.isRoot
-        ? (isDark ? alpha(theme.palette.primary.main, 0.2) : '#e3f2fd')
+        ? alpha(noteTypeColor(theme, 'mindmap'), isDark ? 0.22 : 0.14)
         : surfaces(theme).elevated;
 
     const nodeBorderColor = selected

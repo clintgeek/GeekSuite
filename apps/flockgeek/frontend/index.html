@@ -9,6 +9,20 @@
     <link rel="icon" type="image/png" href="/icons/icon-192.png" />
     <link rel="apple-touch-icon" href="/icons/icon-192.svg" />
   <title>FlockGeek</title>
+    <!-- Baseline colors that snap immediately before MUI/React boots.
+         Must EXACTLY match theme.js's background.default / text.primary
+         (light: lightPalette.parchment / textPrimary; dark: darkPalette.leather
+         / textPrimary) or you'll get a repaint flash when React mounts.
+         See apps/bujogeek/frontend/index.html and apps/notegeek/frontend/index.html
+         for the pattern this mirrors. The theme preboot script (injected by the
+         themePreboot() Vite plugin from @geeksuite/user) sets <html data-theme>
+         from the shared `geek_theme` cookie — or `prefers-color-scheme` for a
+         cookie-less visitor — before this CSS is parsed. -->
+    <style>
+      :root                    { color-scheme: light; background-color: #f5f0e6; color: #1a1a18; }
+      :root[data-theme="dark"] { color-scheme: dark;  background-color: #0f0f0d; color: #e8e2d4; }
+      body                     { margin: 0; background-color: inherit; color: inherit; }
+    </style>
   </head>
   <body>
     <div id="root"></div>
