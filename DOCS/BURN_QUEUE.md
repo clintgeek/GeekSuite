@@ -9,6 +9,7 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
+| R61 | TODO #30 fitnessgeek: Drawer landmine, BarcodeScanner media query, phone-native date pickers | sonnet | fitnessgeek frontend (not services), TODO docs | 09-05 14:04 |
 | R58 | consolidation step 3: bookgeek profile + ai/status → gateway GraphQL; hardcoded localhost:1800 removed; routes deleted | opus | bookgeek web + api, gateway bookgeek module, SUITE_TODO | 09-05 13:52 |
 | R59 | TODO #22: zod validation on storygeek's REST backend | sonnet | storygeek backend, lockfile, TODO docs | 09-05 13:52 |
 | R57 | TODO #30 ×3: bujogeek TemplatePreview markdown, notegeek mind-map palette, flockgeek first-visit flicker | sonnet | three frontends, TODO docs | 09-05 13:42 |
