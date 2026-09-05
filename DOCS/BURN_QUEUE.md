@@ -9,6 +9,9 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
+| R50 | Q29: gateway fitnessgeek food-log mutations — food_item findOrCreate, nullable update input, logMeal notes, DailySummary | opus | basegeek api graphql/fitnessgeek | 09-05 13:22 |
+| R51 | TODO #15 fan-out: storygeek on shared feedback primitives (last app) | sonnet | storygeek frontend src, UI plan | 09-05 13:22 |
+| R52 | Q28 + Q30: notegeek dead pages/LoginPage+RegisterPage; packages/schemas eslint config | sonnet | notegeek frontend pages + test, packages/schemas | 09-05 13:22 |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
 ## Queued (launch when files free / prerequisite lands)
@@ -52,6 +55,10 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask step 5; nginx
 `startgeek.clintgeek.com` redirect. See `STATUS.md`.
+
+## Waves pushed
+
+- 09-05 13:19 — `446e5c0` (86 commits: R19–R49). Watch CI + Release, then Watchtower; fitnessgeek boots only with the vault key (set).
 
 ## Landed during the burn
 
