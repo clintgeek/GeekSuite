@@ -39,6 +39,7 @@ import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@as-integrations/express4';
 import { typeDefs, resolvers } from './graphql/index.js';
 import { csrfGuard, optionalUser } from '@geeksuite/user/server';
+import { csrfTokenGuard, ensureCsrfCookie } from './middleware/csrfToken.js';
 
 
 const app = express();
@@ -116,6 +117,26 @@ if (originSource === 'fallback' && isProduction) {
 // cookie, and health checks are GETs. See DOCS/SSO_OVERVIEW.md#csrf.
 app.use(csrfGuard({ allowedOrigins, logger, appName: 'basegeek' }));
 
+// CSRF, second factor: the double-submit token.
+//
+// The origin guard above cannot close sibling-subdomain CSRF against *this*
+// process, because basegeek's allow-list has to contain every app origin —
+// every frontend in the suite calls this GraphQL API — and the SSO cookies are
+// issued on `domain=.clintgeek.com`. So a cookie-authenticated mutation must
+// also echo the `geek_csrf` cookie back in `X-CSRF-Token`, which a cross-site
+// page cannot attach. API-key and bearer clients carry no cookie and are
+// exempt by construction; see middleware/csrfToken.js.
+//
+// Mounted here for the same reason the origin guard is: in front of every
+// route, `/graphql` included. Reads cookies straight off the header, so it
+// does not care that `cookieParser()` is mounted further down.
+//
+// Ships in report-only mode (CSRF_TOKEN defaults to `report`) — it logs what
+// it would have blocked and blocks nothing, so deploying it cannot break an
+// app whose client does not send the header yet. Flip to CSRF_TOKEN=enforce
+// after a day of clean logs.
+app.use(csrfTokenGuard({ logger, appName: 'basegeek' }));
+
 app.use(cors({
   origin: function (origin, callback) {
     // allow requests with no origin (like mobile apps, curl, etc.)
@@ -136,7 +157,11 @@ app.use(cors({
     'Origin',
     'Access-Control-Allow-Headers',
     'Access-Control-Allow-Origin',
-    'Access-Control-Allow-Credentials'
+    'Access-Control-Allow-Credentials',
+    // The double-submit CSRF token. Without this on the allow-list the
+    // preflight for any cross-origin mutation fails and every app but
+    // basegeek's own UI breaks the moment it starts sending the header.
+    'X-CSRF-Token'
   ],
   exposedHeaders: ['Content-Range'],
   maxAge: 86400,
@@ -147,6 +172,12 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(cookieParser());
+
+// Back-fill `geek_csrf` for any session that has SSO cookies but no token yet
+// — a session created before this shipped heals on its very next request
+// rather than on its next login. Never overwrites an existing token; rotation
+// belongs to routes/auth.js, in lockstep with the refresh token.
+app.use(ensureCsrfCookie());
 
 // Attach request ID and structured logger to every request
 const httpLogger = createHttpLogger(logger);

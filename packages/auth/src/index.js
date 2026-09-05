@@ -11,4 +11,8 @@ export {
   startRefreshTimer,
   stopRefreshTimer,
   setupAxiosInterceptors,
+  csrfHeaders,
+  readCsrfToken,
+  CSRF_COOKIE_NAME,
+  CSRF_HEADER_NAME,
 } from './authClient.js';

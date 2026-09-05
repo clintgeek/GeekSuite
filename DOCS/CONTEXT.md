@@ -54,9 +54,74 @@ Cookies are set with `domain=.clintgeek.com` so every `*.clintgeek.com` subdomai
 |--------|---------|---------|----------|
 | `geek_token` | Access token (JWT, 1h TTL) | 1h | true |
 | `geek_refresh_token` | Refresh token | 30d | true |
+| `geek_csrf` | Double-submit CSRF token (basegeek only) | 30d | **false** |
 
-Cookies are `HttpOnly: true` (basegeek auth hardening, April 2026). Frontend never reads
-tokens directly — it calls `/api/users/me` (server reads cookie, returns user or 401).
+Both auth cookies are `HttpOnly: true` (basegeek auth hardening, April 2026). Frontend never
+reads tokens directly — it calls `/api/users/me` (server reads cookie, returns user or 401).
+
+`geek_csrf` is deliberately **not** HttpOnly: the page has to read it to echo it back. It is
+never a credential on its own — it authenticates nothing, and basegeek only ever compares it
+against itself.
+
+### CSRF: the double-submit token (basegeek, 2026-09-05)
+
+The Origin allow-list guard (`CSRF_GUARD`, all seven backends, 2026-09-02) closes third-party
+CSRF everywhere and sibling-subdomain CSRF against the six consumer backends. It cannot close
+sibling-subdomain CSRF against **basegeek**, whose allow-list must contain every app origin
+because every frontend calls its GraphQL API. The double-submit token closes that gap.
+
+**The contract**
+
+| | |
+|---|---|
+| Cookie | `geek_csrf=<43-char base64url>` — 32 random bytes, `domain=.clintgeek.com`, `SameSite=Lax`, `Secure` in production, `path=/`, max-age 30d |
+| Header | `X-CSRF-Token: <the exact same value>` |
+| Required on | `POST` / `PUT` / `PATCH` / `DELETE` to basegeek that authenticate **by cookie** |
+| Not required on | `GET`/`HEAD`/`OPTIONS`/`TRACE`, and any request with no SSO cookie — API-key (`Authorization: Bearer bg_…`, `/openai/v1` and the key-authenticated `/api/ai/*`) and JWT-bearer clients are exempt **by construction**, not by a path list |
+| Rejections | 403 `{ "error": "csrf_token_missing" }` (no header) / 403 `{ "error": "csrf_token_invalid" }` (header ≠ cookie) |
+
+**Issued and rotated** wherever the SSO cookies are — login, register, refresh (`setSSOCookies`
+in `apps/basegeek/packages/api/src/routes/auth.js`), so it rotates in lockstep with the refresh
+token — and cleared on logout and on refresh-reuse revocation. `ensureCsrfCookie()` back-fills it
+on any request that carries a session but no token yet, so a session created before this shipped
+heals on its next call instead of its next login. A request whose session has no `geek_csrf` yet
+is allowed and logged (`reason: no_csrf_cookie`); a third-party page cannot make the browser omit
+a cookie it holds, so that branch is only reachable by a not-yet-issued session.
+
+**The lever**: `CSRF_TOKEN=off|report|enforce` on basegeek, read once at boot, restart-only.
+
+- **Default and current setting: `report`.** Violations are logged (`app`, `method`, `path`,
+  `reason`, `wouldReject`) and let through, so deploying it cannot break a client that does not
+  send the header yet. Unlike `CSRF_GUARD`, an unset or unrecognized value means `report`, not
+  `enforce`.
+- **Flip to `enforce`** — set `CSRF_TOKEN=enforce` in basegeek's env and restart — only after
+  (a) a day with no `CSRF token check (report-only)` warnings in the logs and (b) every direct
+  caller below is sending the header. `off` is the escape hatch if enforcing goes wrong.
+
+**Clients.** `@geeksuite/auth` (`packages/auth/src/authClient.js`) reads the cookie and adds the
+header on every non-GET call it makes (`logout()`, `doTokenRefresh()`, and the
+`setupAxiosInterceptors()` request interceptor every app's axios instance goes through), and
+exports `csrfHeaders(method?)` for callers that reach basegeek without it. basegeek's own
+`packages/ui/src/api.js` adds it via its own request interceptor.
+
+**Still to do** (these call basegeek directly and do not yet send the header — harmless while the
+lever is `report`, must be fixed before `enforce`):
+
+- `packages/api-client/src/index.js` — the shared Apollo `authLink`. Covers basegeek-ui, bujogeek,
+  notegeek, storygeek, bookgeek, fitnessgeek and flockgeek GraphQL mutations in one change.
+- `apps/startgeek/src/lib/graphql.js` — startgeek's hand-rolled `gql()` fetch.
+- `apps/startgeek/src/lib/basegeek.js` — startgeek's hand-rolled `logout()` fetch.
+
+**What it does not do.** A token cannot stop full script execution on an allow-listed origin: the
+cookie is readable by any `*.clintgeek.com` page by design (that is how a sibling app attaches the
+header), so an XSS on a suite origin can read and replay it. It closes everything short of that —
+injected markup that cannot script, a hostile page on a `*.clintgeek.com` host a wildcard rule
+lets through, a stale allow-list entry, a future mount where the Origin guard is bypassed. The
+Origin guard stays in front of it as defense in depth.
+
+**Code**: `apps/basegeek/packages/api/src/middleware/csrfToken.js` (guard + issuance),
+mounted in `server.js` immediately after `csrfGuard()`; `X-CSRF-Token` is on basegeek's CORS
+`allowedHeaders` list, without which the cross-origin preflight would fail.
 
 ### Standard pattern (every app)
 

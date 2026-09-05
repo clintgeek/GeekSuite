@@ -21,6 +21,78 @@ const REFRESH_INTERVAL_MS = 50 * 60 * 1000; // 50 minutes
 const GEEK_TOKEN_KEY = 'geek_token';
 const GEEK_REFRESH_TOKEN_KEY = 'geek_refresh_token';
 
+/**
+ * Double-submit CSRF token (basegeek, 2026-09-05).
+ *
+ * basegeek issues `geek_csrf` on `domain=.clintgeek.com` alongside the SSO
+ * cookies, deliberately NOT HttpOnly, and rotates it with the refresh token.
+ * Every state-changing call that authenticates by cookie has to echo the value
+ * back in `X-CSRF-Token`. A cross-site page cannot attach a custom header
+ * without a CORS preflight basegeek will not clear for it, which is what makes
+ * the echo meaningful — the origin allow-list alone cannot tell one
+ * `*.clintgeek.com` app from another.
+ *
+ * basegeek ships the check in report-only mode (`CSRF_TOKEN=report`), so a
+ * missing header is logged rather than blocked until every direct caller is
+ * sending it. See apps/basegeek/packages/api/src/middleware/csrfToken.js.
+ */
+export const CSRF_COOKIE_NAME = 'geek_csrf';
+export const CSRF_HEADER_NAME = 'X-CSRF-Token';
+
+/** Methods that carry no CSRF risk and are never checked server-side. */
+const CSRF_SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS', 'TRACE']);
+
+/**
+ * Read the CSRF token out of `document.cookie`.
+ *
+ * Read fresh on every call rather than cached: basegeek rotates the cookie on
+ * every refresh, and a cached copy would go stale exactly when the session is
+ * healthiest. Returns null server-side, in a browser with cookies disabled, or
+ * before basegeek has issued one.
+ */
+export function readCsrfToken() {
+  if (typeof document === 'undefined') return null;
+  const raw = document.cookie;
+  if (typeof raw !== 'string' || !raw) return null;
+
+  for (const part of raw.split(';')) {
+    const trimmed = part.trim();
+    const idx = trimmed.indexOf('=');
+    if (idx < 0) continue;
+    if (trimmed.slice(0, idx) !== CSRF_COOKIE_NAME) continue;
+    const value = trimmed.slice(idx + 1);
+    if (!value) return null;
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      return value;
+    }
+  }
+  return null;
+}
+
+/**
+ * Headers to merge into any state-changing request aimed at basegeek.
+ *
+ * Returns `{}` when there is no token, so a caller can always spread it:
+ * `headers: { ...csrfHeaders() }`. An empty object is the honest answer for a
+ * session issued before this shipped — basegeek back-fills the cookie on the
+ * next request, and its report-only mode means the gap costs a log line, not a
+ * failure.
+ *
+ * Exported for the call sites that talk to basegeek without going through this
+ * module: packages/api-client's Apollo link, startgeek's hand-rolled fetches,
+ * and basegeek's own axios instance.
+ *
+ * @param {string} [method] – skips the header for GET/HEAD/OPTIONS/TRACE when
+ *   given. Omit it to always get the header.
+ */
+export function csrfHeaders(method) {
+  if (method && CSRF_SAFE_METHODS.has(String(method).toUpperCase())) return {};
+  const token = readCsrfToken();
+  return token ? { [CSRF_HEADER_NAME]: token } : {};
+}
+
 let refreshTimerId = null;
 let isRefreshing = false;
 let refreshQueue = [];
@@ -128,7 +200,7 @@ async function doTokenRefresh() {
   const res = await fetch(`${ apiBase }/auth/refresh`, {
     method: 'POST',
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
     body: JSON.stringify({}),
   });
 
@@ -263,7 +335,7 @@ export function loginRedirect(appName, returnTo, mode = 'login') {
 export async function logout() {
   const apiBase = getApiBase();
   const token = getStoredToken();
-  const headers = { 'Content-Type': 'application/json' };
+  const headers = { 'Content-Type': 'application/json', ...csrfHeaders() };
   if (token) {
     headers['Authorization'] = `Bearer ${ token }`;
   }
@@ -362,6 +434,13 @@ export function setupAxiosInterceptors(axiosInstance, onSessionExpired) {
       const token = getStoredToken();
       if (token && !config.headers['Authorization']) {
         config.headers['Authorization'] = `Bearer ${ token }`;
+      }
+      // Double-submit CSRF token on anything that can change state. Set here
+      // rather than at each call site so an app cannot forget it, and read per
+      // request because basegeek rotates the cookie on every refresh.
+      const csrf = csrfHeaders(config.method);
+      for (const [name, value] of Object.entries(csrf)) {
+        if (!config.headers[name]) config.headers[name] = value;
       }
       return config;
     },

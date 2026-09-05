@@ -5,6 +5,7 @@ import { authenticateToken } from '../middleware/auth.js';
 import { User } from '../models/user.js';
 import { VALID_APPS } from '../config/validApps.js';
 import { setThemeCookie } from '../lib/themeCookie.js';
+import { setCsrfCookie, clearCsrfCookie } from '../middleware/csrfToken.js';
 
 // SSO Cookie Configuration
 // In local/dev we omit domain so cookies apply to localhost redirects.
@@ -38,6 +39,11 @@ function setSSOCookies(res, token, refreshToken) {
         ...baseCookieOptions,
         maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days — matches REFRESH_TOKEN_EXPIRES_IN
     });
+    // Double-submit CSRF token, rotated in lockstep with the refresh token so a
+    // session can never end up holding a token older than its credentials.
+    // Deliberately NOT HttpOnly — the page has to read it to echo it back in
+    // X-CSRF-Token. See middleware/csrfToken.js.
+    setCsrfCookie(res, { domain: SSO_COOKIE_DOMAIN });
 }
 
 /**
@@ -54,6 +60,7 @@ function clearSSOCookies(res) {
     if (SSO_COOKIE_DOMAIN) cookieOptions.domain = SSO_COOKIE_DOMAIN;
     res.clearCookie('geek_token', cookieOptions);
     res.clearCookie('geek_refresh_token', cookieOptions);
+    clearCsrfCookie(res, { domain: SSO_COOKIE_DOMAIN });
 }
 
 const router = express.Router();
