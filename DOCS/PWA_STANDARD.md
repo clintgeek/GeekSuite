@@ -26,6 +26,53 @@ Every app's SW must follow this priority order:
 
 **The auth bypass rule must always be FIRST.** Workbox evaluates rules in order and uses the first match.
 
+### 1a. Code-split chunks and the SPA fallback (added 2026-09-05)
+
+Splitting an app's bundle re-hashes every chunk name, so a deploy can leave an
+old client asking for `/assets/<old-hash>.js`. Two rules keep that from turning
+into a poisoned cache.
+
+**Every hashed `.js`/`.css` must be precached, or fetched network-first.**
+VitePWA's `generateSW` does this by default — its `globPatterns` already match
+`**/*.{js,css,html,ico,png,svg}` — so a new chunk is covered automatically and
+there is nothing to maintain when the chunk list changes. Verify it after any
+chunking change rather than assuming:
+
+```js
+// count precache entries in the built SW against what is actually on disk
+const urls = [...require('fs').readFileSync('dist/sw.js', 'utf8')
+  .matchAll(/url:"([^"]+)"/g)].map(m => m[1]);
+```
+
+Precaching is what makes a deploy survivable: the old client keeps serving the
+old chunks from its own precache instead of re-fetching URLs the server no
+longer has.
+
+**A StaleWhileRevalidate rule for JS/CSS/fonts must refuse `text/html`.**
+Precaching does not cover everything — hashed font files (`.woff`/`.woff2` are
+not in the default `globPatterns`) and any cross-origin script fall through to
+the runtime rule. If the app's SPA fallback answers a deleted asset path with
+`index.html` and a 200, StaleWhileRevalidate will store that HTML *as* the
+stylesheet or font and serve it until the user clears site data. Add a
+`cacheWillUpdate` plugin to the rule:
+
+```js
+plugins: [{
+  cacheWillUpdate: async ({ response }) => {
+    if (!response || response.status !== 200) return null;
+    if ((response.headers.get('content-type') || '').includes('text/html')) return null;
+    return response;
+  }
+}]
+```
+
+This is a **mitigation, not the cure**. The cure is the extname-404 guard in the
+server's SPA fallback — a path with a file extension must return 404, not the
+index document. bujogeek, notegeek and bookgeek have it; **fitnessgeek's
+`backend/src/app.js` does not** (verified 2026-09-05: `GET /assets/gone-DEAD.js`
+returns 200 `text/html`). The guard makes the bad response uncacheable; only the
+404 makes the failure honest.
+
 ### 2. Two SW Flavors in the Suite
 
 #### A. VitePWA + Workbox (preferred for new apps)
@@ -153,6 +200,13 @@ needs `workbox-recipes`' `offlineFallback()` / a custom `setCatchHandler`, which
   `registerType: 'autoUpdate'` and the workbox config are untouched. Verified via
   `pnpm build`: built `dist/index.html` now ships exactly one `<link rel="manifest">`
   (`/manifest.json`); no `manifest.webmanifest` is generated.
+
+  **Also 2026-09-05 (bundle split):** fitnessgeek's chunks were re-split — 62
+  js/css files on disk, all 62 precached (64 entries with `index.html` +
+  `offline.html`) — and the `fitnessgeek-assets` StaleWhileRevalidate rule
+  gained the §1a `cacheWillUpdate` guard. Still open, and the real fix:
+  `apps/fitnessgeek/backend/src/app.js`'s `GET *` fallback answers a deleted
+  `/assets/<hash>.js` with 200 `text/html` instead of 404.
 - **bujogeek**: no change needed — already `manifest: false` with `public/manifest.json`
   (`theme_color` `#FAF8F5`) as the sole source, matching the default (light) page
   background. Verified via `pnpm build`: one manifest link in `dist/index.html`.
@@ -179,6 +233,8 @@ needs `workbox-recipes`' `offlineFallback()` / a custom `setCatchHandler`, which
 
 1. **Never add a runtimeCaching rule for `/api/*` without the auth bypass rule above it**
 2. **Never cache responses that include `Set-Cookie` headers**
-3. **Always bump the cache version** (`v1` → `v2`) when changing SW logic so old caches get cleaned
-4. **Always use `skipWaiting()` + `clients.claim()`** so new SWs activate immediately
-5. **Test auth flow after every SW change**: login → verify `/api/me` → logout → verify `/api/me` returns 401 (not cached 200)
+3. **Never cache a `text/html` response for a script/style/font request** — see §1a; a SPA fallback that does not 404 asset paths will hand you one
+4. **After any code-splitting change, re-check that every hashed chunk is precached** — §1a
+5. **Always bump the cache version** (`v1` → `v2`) when changing SW logic so old caches get cleaned
+6. **Always use `skipWaiting()` + `clients.claim()`** so new SWs activate immediately
+7. **Test auth flow after every SW change**: login → verify `/api/me` → logout → verify `/api/me` returns 401 (not cached 200)

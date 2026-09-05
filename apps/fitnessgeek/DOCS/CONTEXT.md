@@ -398,6 +398,163 @@ variables for all four. CI job `test-fitnessgeek-web`.
 
 ---
 
+## Frontend — Bundle (2026-09-05)
+
+`pnpm build` used to end with three "chunks are larger than 500 kB" warnings.
+It no longer warns. The numbers below are from `frontend/dist`, KiB
+(bytes / 1024), gzip measured with `zlib.gzipSync`.
+
+**First load** — the entry chunk plus everything `dist/index.html` references
+directly (`<script>`, `<link rel="modulepreload">`, `<link rel="stylesheet">`):
+
+| | before | after |
+|---|---|---|
+| entry chunk `index-*.js` | 632.9 kB (gz 190.0) | **93.2 kB (gz 28.0)** |
+| first load, total | 1170.5 kB (gz 363.2) | **992.0 kB (gz 309.7)** |
+| files on the critical path | 3 | 6 |
+| all built js + css | 3130.9 kB (gz 980.9) | 2956.4 kB (gz 932.2) |
+| chunks emitted | 45 | 62 |
+| chunks over 500 kB | 3 (entry 648, jspdf 589, mui 522) | 0 (largest is `mui` at 401) |
+
+**Route cost** — what a route pulls *beyond* the first load, following its
+static imports transitively:
+
+| route | before | after |
+|---|---|---|
+| `/blood-pressure` | 1246.2 kB (gz 386.5) | **122.4 kB (gz 38.4)** |
+| `/medications` | 631.8 kB (gz 193.2) | **54.8 kB (gz 21.8)** |
+| `/weight` | 312.8 kB (gz 109.1) | **74.7 kB (gz 21.6)** |
+| `/health` | 293.9 kB (gz 96.3) | **53.7 kB (gz 20.9)** |
+| `/food-log`, `/dashboard`, the rest | unchanged | unchanged |
+
+Route-level `React.lazy` was already in place in `App.jsx` before this pass and
+is not where the win came from. Four things were.
+
+### 1. The MUI dedupe was missing
+
+`resolve.dedupe` listed react, react-dom and the two emotion packages but not
+`@mui/material`, so the bundle carried **two** @mui/material 5.18.0 trees — the
+app's own and the one pnpm materializes for `packages/ui`'s `^5` peer (Tooltip,
+Chip, InputBase, SelectInput, Button, Popover and `createStyled` each appeared
+twice in the chunk dump). That is the suite-wide landmine in the root `DOCS/`,
+and fitnessgeek was the app still carrying it; bujogeek, notegeek, flockgeek and
+storygeek all had the full list already. Adding `@mui/material` took 118 kB off
+the eager path and put `GeekShell`/`GeekAppFrame` on the same MUI ThemeContext
+as the rest of the app. Do **not** add `@mui/system` to the list — deduping
+`@mui/material` makes its nested `@mui/system` a singleton transitively, while
+naming it directly breaks resolution under pnpm.
+
+### 2. `manualChunks` was an object, and the object form is a trap
+
+`manualChunks: { vendor: ['react', 'react-dom'], mui: [...] }` matches by
+resolved module id. react and react-dom arrive through `@rollup/plugin-commonjs`
+proxy modules whose ids never equal the bare specifier, so `vendor` came out as
+a **0.03 kB chunk** and react-dom's 130 kB rode along inside `mui`. It is now a
+function matching on the path (see `VENDOR_GROUPS` in `vite.config.js`), which
+is proxy-proof and pnpm-proof.
+
+Groups, and why each exists:
+
+| chunk | contents | eager? |
+|---|---|---|
+| `react-vendor` | react, react-dom, scheduler, react-is, react-router + `@remix-run/router` | yes |
+| `mui` | `@mui/*`, `@emotion/*` | yes |
+| `apollo` | `@apollo/client`, graphql and its runtime tail | yes |
+| `motion` | framer-motion / motion-dom — pulled by `packages/ui`'s `GeekAppFrame`, not by app code | yes |
+| `date-fns` | date-fns | no |
+| `lodash` | lodash | no |
+| `d3` | `d3-*`, internmap, delaunator, robust-predicates | no |
+| `nivo` | `@nivo/*`, `@react-spring/*` | no |
+| `recharts` | recharts + its Redux/immer/es-toolkit tail | no |
+| `chartjs` | chart.js, react-chartjs-2, the date-fns adapter | no |
+
+Three of those groups exist only because of a chunk-graph trap that does not
+show up in the build log. **A module no group claims can be folded by rollup
+into a manual chunk that already needs it — and that makes the whole chunk a
+dependency of everything else that needs the module.** Measured here:
+
+- date-fns landed inside `chartjs`, so `/weight` (which only wants
+  `differenceInWeeks`) statically imported all 217 kB of chart.js.
+- the shared d3 packages landed inside `nivo`, so `recharts` imported `nivo`,
+  and one Recharts heart-rate chart cost 574 kB.
+- `delaunator`/`robust-predicates` are `d3-delaunay`'s deps, not Nivo's; leaving
+  them in the `nivo` group added a `d3 → nivo` edge on top of `nivo → d3`, and
+  the cycle made every d3 consumer pull all of Nivo.
+
+The `mui` group is load-bearing for the **async** side too, which is the least
+obvious thing here. Dropping it and letting rollup place `@mui` itself pushes
+first load from 992 kB to **1439 kB** and drags `nivo` (303 kB) and `recharts`
+(269 kB) onto it, because without a MUI chunk boundary rollup's automatic
+grouping hoists the chart vendors into the entry's graph. Measured, not
+guessed. Do not "simplify" it away.
+
+### 3. Heavy, rarely-used libraries load on demand
+
+- **jspdf + html2canvas** (589 kB minified together) were module-scope imports
+  in `pages/Medications.jsx` and `components/BloodPressure/BPReport.jsx`, so
+  they were on the *route* load for two pages. They are now `await import()`ed
+  inside the two export handlers, i.e. on the click. Medications also imported
+  `html2canvas` and never called it; that import is gone (this is the one
+  eslint warning that disappeared, 55 → 54).
+- **Nivo / Recharts / chart.js.** All three chart libraries are in use — Nivo on
+  `/weight` and `/blood-pressure`, Recharts for the Garmin heart-rate chart,
+  chart.js on `/health`. Each chart is now a `React.lazy` island inside its
+  page: `BPChartNivo`, `BPCategoryDistribution`, `BPHRChart` and `BPReport` on
+  `/blood-pressure`; `WeightTimeline` on `/weight`; the four analytics tab
+  panels on `/health`. The page frame, insights and log list paint first.
+- `/health` is the biggest of these in practice: chart.js used to be downloaded
+  even by users who have never enabled the InfluxDB integration and only ever
+  see the "integration required" screen. Now it is never fetched for them.
+- **Barcode / ZXing was already on demand** and stays that way — `BarcodeScanner`
+  appends a `<script src="https://unpkg.com/@zxing/library@0.19.1/...">` at scan
+  time and nothing ZXing is bundled. (That CDN dependency is its own question,
+  but it is not a bundle-size one.)
+
+### 4. Barrel files defeat lazy boundaries
+
+`pages/Weight.jsx` imported four components from `components/Weight/index.js`.
+That barrel also re-exports the legacy `WeightChart` / `WeightChartNivo` /
+`WeightSparkline*` set, and **nothing in this workspace declares
+`sideEffects: false`** — so rollup shakes the unused *bindings* but keeps those
+modules' top-level side effects, and `@nivo/line` came straight back into the
+page chunk as a bare side-effect import, silently undoing the lazy boundary.
+Importing the three components by file dropped `/weight` from 380 kB to 74.7 kB.
+Nothing else in the app imports through that barrel. **If a lazy boundary does
+not show up in the chunk sizes, look for a barrel first.**
+
+### The FAB registry is unaffected
+
+`useGeekPrimaryAction` (`packages/ui/src/navigation/primaryActionContext.js`)
+registers in a mount effect and unregisters on unmount, as a stack. A lazy
+component simply registers when Suspense resolves it. It did not need handling
+here anyway: the three registrants — `FoodLog`, `QuickAddWeight`, `QuickAddBP` —
+were all deliberately left eager within their routes, so nothing that registers
+a FAB sits behind a new Suspense boundary.
+
+### Service worker
+
+`generateSW` precaches **every** hashed `.js`/`.css` — verified after the split:
+62 js/css files on disk, 64 precache entries (those plus `index.html` and
+`offline.html`), none missing. New chunk names are therefore covered
+automatically; there is nothing to maintain when the chunk list changes.
+
+The `fitnessgeek-assets` StaleWhileRevalidate rule gained a `cacheWillUpdate`
+plugin that refuses to cache a `text/html` response for a script/style/font
+request. See the SPA-fallback note under "Known landmines" for why.
+
+### How to re-measure
+
+There is no bundle visualizer in this workspace and none was added.
+`npx vite-bundle-visualizer` is not resolvable without an install. The numbers
+above came from `dist/assets` file sizes plus a throwaway rollup
+`generateBundle` hook that dumps each chunk's `modules`, `imports` and
+`dynamicImports` to JSON; first load is the transitive static closure of the
+entry chunk, a route's cost is its own closure minus that. Reading
+`dist/index.html`'s `<script>` + `modulepreload` list gives the same first-load
+set and is the quicker check.
+
+---
+
 ## Known landmines
 
 - **Mongoose duplicate-index warnings** on boot (`user_id`) are pre-existing
@@ -406,10 +563,28 @@ variables for all four. CI job `test-fitnessgeek-web`.
   `cjs-module-lexer` cannot see, so it must be imported as a default and
   destructured (`src/services/garminConnectService.js`). A plain
   `import { GarminConnect } from 'garmin-connect'` throws at load.
-- **The backend serves the SPA.** `src/app.js` has a `GET *` catch-all that
-  sends `public/index.html` for anything that is not `/api/*` or `/graphql`.
-  See the suite-wide note in `DOCS/` about fallbacks needing to 404 asset
-  paths so a stale service worker cannot be poisoned on deploy.
+- **The backend serves the SPA, and its fallback does NOT 404 asset paths.**
+  `src/app.js:223` has a `GET *` catch-all that sends `public/index.html` for
+  anything that is not `/api/*` or `/graphql` — including
+  `/assets/<hash>.js` for a hash a deploy has just deleted. Verified
+  2026-09-05 against a real build (`vite preview` behaves identically to the
+  Express fallback): `GET /assets/gone-DEAD.js` answers **200 text/html** with
+  the index document, where it should answer 404. That is the suite-wide
+  landmine in the root `DOCS/`; bujogeek, notegeek and bookgeek carry the
+  extname-404 guard and fitnessgeek does not. **This is still open** — the
+  fix is a `path.extname(req.path)` check in that handler, and it belongs to
+  whoever next touches `backend/src/app.js`.
+
+  Two things currently keep it from biting. First, `generateSW` precaches
+  every hashed `.js`/`.css`, so an old client keeps serving the old chunks out
+  of its own precache rather than re-fetching a URL the server no longer has.
+  Second, the `fitnessgeek-assets` runtime rule now carries a `cacheWillUpdate`
+  plugin (`frontend/vite.config.js`) that declines to cache any `text/html`
+  response for a script/style/font request, which covers what precaching does
+  not: the 38 hashed `@fontsource` `.woff`/`.woff2` files (generateSW's
+  `globPatterns` do not match them) and the cross-origin ZXing script. Neither
+  is a substitute for the server-side 404 — the guard makes the poisoned
+  response uncacheable, it does not make the asset load.
 - **`/health` and `/api/health`** both answer, unauthenticated. No Docker
   `HEALTHCHECK` is defined for this service.
 - **`KEY_VAULT_SECRET` is shared with basegeek**, and `packages/schemas` is now

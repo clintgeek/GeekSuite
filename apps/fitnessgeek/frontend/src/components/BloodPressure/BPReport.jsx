@@ -24,8 +24,6 @@ import { categorizeBP } from '../../utils/bpUtils.js';
 import { localDateString } from '@geeksuite/utils';
 import { ThemeProvider } from '@mui/material/styles';
 import { createAppTheme } from '../../theme/theme';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
 
 // The report node is the html2canvas source and stays white; render its contents
 // with a light theme so text/dividers stay readable when the app is in dark mode.
@@ -116,6 +114,15 @@ const BPReport = ({ bpLogs, onClose }) => {
     if (!reportRef.current) return;
 
     try {
+      // jspdf + html2canvas are ~590 kB minified between them and are only
+      // reachable from this one button. Importing them at module scope put
+      // that chunk on the /blood-pressure route load for everyone; importing
+      // them here puts it on the click.
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+      ]);
+
       const canvas = await html2canvas(reportRef.current, {
         scale: 2,
         useCORS: true,

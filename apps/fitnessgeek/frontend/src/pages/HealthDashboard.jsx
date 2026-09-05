@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { lazy, useState, useEffect } from 'react';
 import {
   Box,
   Container,
@@ -23,12 +23,19 @@ import {
 import { useAuth } from '@geeksuite/auth';
 import { localDateString } from '@geeksuite/utils';
 import { apiService } from '../services/apiService';
-import IntradayDashboard from '../components/IntradayDashboard';
-import SleepAnalysis from '../components/SleepAnalysis';
-import MealImpactVisualization from '../components/MealImpactVisualization';
-import RecoveryCoach from '../components/RecoveryCoach';
 import InfluxDBSettings from '../components/InfluxDBSettings';
-import { SectionLabel, DisplayHeading, DateField } from '../components/primitives';
+import { SectionLabel, DisplayHeading, DateField, SuspenseSurface } from '../components/primitives';
+
+// The four analytics panels are lazy. Two of them (Intraday, Meal Impact) pull
+// chart.js + its date-fns adapter — 380 kB raw — which used to sit in this
+// route's chunk, so it was downloaded even by users who have never enabled the
+// InfluxDB integration and only ever see the "integration required" screen
+// above. InfluxDBSettings stays eager: it renders on that screen, and it costs
+// nothing (no chart library).
+const IntradayDashboard = lazy(() => import('../components/IntradayDashboard'));
+const SleepAnalysis = lazy(() => import('../components/SleepAnalysis'));
+const MealImpactVisualization = lazy(() => import('../components/MealImpactVisualization'));
+const RecoveryCoach = lazy(() => import('../components/RecoveryCoach'));
 
 const TAB_TITLES = [
   'Overview',
@@ -226,15 +233,17 @@ export default function HealthDashboard() {
 
         {/* Tab Panels — no redundant heading, tab label already names the section */}
         <Box>
-          {activeTab === 0 && <IntradayDashboard date={selectedDate} />}
-          {activeTab === 1 && <SleepAnalysis date={selectedDate} />}
-          {activeTab === 2 && <MealImpactVisualization date={selectedDate} />}
-          {activeTab === 3 && (
-            <RecoveryCoach
-              date={selectedDate}
-              onRequestAIAnalysis={handleAIAnalysisRequest}
-            />
-          )}
+          <SuspenseSurface rows={5} height={360}>
+            {activeTab === 0 && <IntradayDashboard date={selectedDate} />}
+            {activeTab === 1 && <SleepAnalysis date={selectedDate} />}
+            {activeTab === 2 && <MealImpactVisualization date={selectedDate} />}
+            {activeTab === 3 && (
+              <RecoveryCoach
+                date={selectedDate}
+                onRequestAIAnalysis={handleAIAnalysisRequest}
+              />
+            )}
+          </SuspenseSurface>
 
           {activeTab === 4 && (
             <Stack spacing={3}>

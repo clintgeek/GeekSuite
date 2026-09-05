@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { lazy, Suspense, useState, useEffect, useMemo } from 'react';
 import {
   Container,
   Typography,
@@ -19,18 +19,25 @@ import {
   PictureAsPdf as PdfIcon
 } from '@mui/icons-material';
 import { useToast } from '@geeksuite/ui';
-import { SectionLabel, DisplayHeading } from '../components/primitives';
-import BPChartNivo from '../components/BloodPressure/BPChartNivo.jsx';
+import { SectionLabel, DisplayHeading, SuspenseSurface } from '../components/primitives';
 import BPInsights from '../components/BloodPressure/BPInsights.jsx';
-import BPCategoryDistribution from '../components/BloodPressure/BPCategoryDistribution.jsx';
 import QuickAddBP from '../components/BloodPressure/QuickAddBP.jsx';
 import BPLogList from '../components/BloodPressure/BPLogList.jsx';
-import BPReport from '../components/BloodPressure/BPReport.jsx';
-import BPHRChart from '../components/BloodPressure/BPHRChart.jsx';
 import { bpService } from '../services/bpService.js';
 import { fitnessGeekService } from '../services/fitnessGeekService.js';
 import { localDateString, utcDateString } from '@geeksuite/utils';
 import logger from '../utils/logger.js';
+
+// Charts and the report are lazy: between them they pulled Nivo (line + pie,
+// ~530 kB raw), Recharts with its Redux/immer tail (~400 kB raw) and — through
+// BPReport — jspdf + html2canvas onto this route's chunk, all before the page
+// could paint its header, insights or log list. None of it is needed for the
+// first frame, and the report is behind a button. Each boundary renders a
+// SurfaceSkeleton the size of the card it replaces, so nothing jumps.
+const BPChartNivo = lazy(() => import('../components/BloodPressure/BPChartNivo.jsx'));
+const BPCategoryDistribution = lazy(() => import('../components/BloodPressure/BPCategoryDistribution.jsx'));
+const BPHRChart = lazy(() => import('../components/BloodPressure/BPHRChart.jsx'));
+const BPReport = lazy(() => import('../components/BloodPressure/BPReport.jsx'));
 
 const BloodPressure = () => {
   const theme = useTheme();
@@ -264,7 +271,9 @@ const BloodPressure = () => {
       </Box>
 
       <Box sx={{ mb: 3 }}>
-        <BPCategoryDistribution bpLogs={bpLogs} />
+        <SuspenseSurface rows={3} height={220}>
+          <BPCategoryDistribution bpLogs={bpLogs} />
+        </SuspenseSurface>
       </Box>
 
       {/* Blood Pressure Chart */}
@@ -324,16 +333,20 @@ const BloodPressure = () => {
           )}
 
           <Box sx={{ mb: 3 }}>
-            <BPChartNivo
-              data={filteredBPLogs}
-              title="Blood Pressure Trend"
-            />
+            <SuspenseSurface rows={4} height={320}>
+              <BPChartNivo
+                data={filteredBPLogs}
+                title="Blood Pressure Trend"
+              />
+            </SuspenseSurface>
           </Box>
 
           {/* Heart Rate series from Garmin */}
           {hrSeries && hrSeries.length > 0 && (
             <Box sx={{ mb: 3 }}>
-              <BPHRChart data={hrSeries} title="Heart Rate (Garmin)" />
+              <SuspenseSurface rows={4} height={300}>
+                <BPHRChart data={hrSeries} title="Heart Rate (Garmin)" />
+              </SuspenseSurface>
             </Box>
           )}
         </>
@@ -355,10 +368,14 @@ const BloodPressure = () => {
 
       {/* BP Report Dialog */}
       {showReport && (
-        <BPReport
-          bpLogs={filteredBPLogs}
-          onClose={() => setShowReport(false)}
-        />
+        // A modal has no layout to reserve, so this boundary falls back to
+        // nothing rather than to a skeleton card behind the backdrop.
+        <Suspense fallback={null}>
+          <BPReport
+            bpLogs={filteredBPLogs}
+            onClose={() => setShowReport(false)}
+          />
+        </Suspense>
       )}
     </Box>
   );

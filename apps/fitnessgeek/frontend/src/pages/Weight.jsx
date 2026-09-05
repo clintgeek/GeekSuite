@@ -1,15 +1,24 @@
-import React, { useEffect } from 'react';
+import React, { lazy, useEffect } from 'react';
 import { Box, Typography, CircularProgress } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@geeksuite/ui';
 import { useWeight } from '../hooks/useWeight.js';
-import {
-  WeightTimeline,
-  WeightProgress,
-  QuickAddWeight,
-  WeightLogList
-} from '../components/Weight';
-import { SectionLabel, DisplayHeading } from '../components/primitives';
+// Imported by file, not through `../components/Weight`. The barrel also
+// re-exports the legacy WeightChart/WeightChartNivo/WeightSparkline* set, and
+// nothing in this workspace declares `sideEffects: false` — so rollup keeps
+// those modules' top-level side effects even after shaking their bindings, and
+// @nivo/line came back into this page's chunk as a bare side-effect import,
+// undoing the lazy boundary below.
+import WeightProgress from '../components/Weight/WeightProgress.jsx';
+import QuickAddWeight from '../components/Weight/QuickAddWeight.jsx';
+import WeightLogList from '../components/Weight/WeightLogList.jsx';
+import { SectionLabel, DisplayHeading, SuspenseSurface } from '../components/primitives';
+
+// The timeline is the only thing on this page that needs Nivo (~530 kB raw
+// with @react-spring and the d3 scales behind it). Deferring it lets the
+// progress ring, quick-add and log list paint first; the boundary reserves the
+// chart's height so nothing below it moves when the chart arrives.
+const WeightTimeline = lazy(() => import('../components/Weight/WeightTimeline.jsx'));
 
 const Weight = () => {
   const navigate = useNavigate();
@@ -82,11 +91,13 @@ const Weight = () => {
 
       {/* Timeline Chart */}
       <Box sx={{ mb: 3 }}>
-        <WeightTimeline
-          weightLogs={weightLogs}
-          goal={weightGoal}
-          unit="lbs"
-        />
+        <SuspenseSurface rows={4} height={320}>
+          <WeightTimeline
+            weightLogs={weightLogs}
+            goal={weightGoal}
+            unit="lbs"
+          />
+        </SuspenseSurface>
       </Box>
 
       {/* Quick Add Weight */}

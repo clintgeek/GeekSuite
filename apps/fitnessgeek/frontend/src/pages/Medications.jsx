@@ -1,7 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Typography, TextField, Button, Chip, Stack, IconButton, ToggleButton, ToggleButtonGroup, FormControl, InputLabel, Select, MenuItem, Alert } from '@mui/material';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 import SearchIcon from '@mui/icons-material/Search';
 import EditIcon from '@mui/icons-material/Edit';
 import SaveIcon from '@mui/icons-material/Save';
@@ -132,6 +130,11 @@ export default function Medications() {
   };
 
   const handleDownloadPdf = async () => {
+    // jspdf is ~590 kB minified with its optional canvg/dompurify tail and is
+    // reachable only from this button; a module-scope import put it on the
+    // /medications route load. (html2canvas used to be imported here too and
+    // was never called — it went with the static import.)
+    const { default: jsPDF } = await import('jspdf');
     const doc = new jsPDF({ unit: 'pt', format: 'letter' });
     const page = { w: 612, h: 792 };
     const margin = 40;
