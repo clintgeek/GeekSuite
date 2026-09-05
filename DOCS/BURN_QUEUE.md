@@ -10,8 +10,6 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
 | R4 | M6 guardrails: mobile harness into `tools/mobile-harness`, CI workflow | opus | tools/, .github/workflows/mobile-harness.yml | 09-05 am |
-| R5 | TODO #17 shared date utilities → `packages/utils`; bujogeek/fitnessgeek/flockgeek consume | opus | packages/utils, 3 apps (date code only) | 09-05 am |
-| R9 | TODO #25/#26 bujogeek subtasks + Apollo cache — **done, commit held**: TaskList/ReviewPage/HabitsPage also carry R5's in-flight date-utils edits; commit both when R5 lands (gateway 156 tests, frontend 82) | opus | bujogeek frontend, graphql/bujogeek | 09-05 am |
 | R18 | flockgeek frontend vitest + RTL suite + CI job | sonnet | flockgeek frontend, ci.yml (one job) | 09-05 12:45 |
 | R19 | Q8: OpenAI-compat fixes (flip the 22 it.failing) + last llm7 refs (Q12) | opus | openaiProxy, aiRoutes, aiService, capabilities, director/rateLimit refs, docs | 09-05 13:15 |
 | R20 | Q7: CSRF double-submit token (report mode default) + packages/auth header | opus | basegeek middleware/csrf*, server.js order, auth routes, packages/auth, ui api.js | 09-05 13:15 |
@@ -27,13 +25,12 @@ Push only after those two land, then re-run the check in a detached worktree of 
 | # | Item | Why waiting | Size |
 |---|------|-------------|------|
 | Q1 | Mint service keys into storygeek + fitnessgeek `.env.production`, restart those two containers | R1 landed (`92e7bc9`); do after the next push deploys basegeek; announce restarts | XS |
-| Q3 | TODO #22 input validation (Zod): bujogeek timestamps slice | bujogeek GraphQL busy (R9); fitnessgeek slice running as R21 | L, slow burn |
 | Q6 | bookgeek web unit tests (vitest + RTL for LibraryView/FilterSheet/BookCard/detail) | none — launch next slot | M |
 | Q10 | Revoke the `LocalApps` key once the env grep and nginx sweep confirm no caller | background greps | XS |
 | Q11 | basegeek `Databases.jsx`: wire into nav or delete | Chef's call | XS |
 | Q13 | bookgeek CONTEXT.md says Runtime: Bun (it is node:20); verify COVERS_PATH now serves the old covers in the UI | after R? — trivial, next slot | XS |
-| Q15 | bujogeek: TagsPage tag cloud onto the cached GET_TASK_TAGS query; TemplateContext.applyTemplate cache handling (R9 leftovers); strike #25/#26 in docs | after R9 commits | S |
-| Q16 | storygeek service worker (hand-rolled per PWA_STANDARD) so its new offline page is served; fitnessgeek/bujogeek VitePWA inline manifest theme_color (files were busy) | after R5 frees vite.config.js | S |
+| Q16b | fitnessgeek/bujogeek VitePWA inline manifest theme_color (vite.config.js now free) | next slot | XS |
+| Q17 | fitnessgeek backend: node 18 CJS cannot consume ESM @geeksuite/utils — bump base image to node 20 + ESM migration, then drop its five toUtcMidnight copies | its own ticket, M | M |
 | Q14 | storygeek CanonCard summary text through Narration too (agent left it as a separate render path) | Chef's call | XS |
 
 ## How to resume if this session is lost
@@ -72,6 +69,8 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 - `61997ed` — R6 — @geeksuite/logger in all seven backends; first-ever log redaction
 - `a0b08ca` — R10 — GeekAppFrame fill, sheet focus/close/align, dialog hooks, reduced motion (354 ui tests)
 - `70eb36e` — R13 — offline pages both modes ×6, manifests, storygeek manifest, notegeek dev-server fix
+- `1fc8623` — R5 — @geeksuite/utils dates (36 tz tests); 3 apps consume; 2 live off-by-one bugs documented → R26
+- `d53b008` — R9 — bujogeek subtasks (2 gateway bugs fixed) + cache rule (156/82 tests)
 - `37e83b6` — R17 — 22 dead fitnessgeek files + broken dev compose deleted
 - `164f978` — R16 — notegeek relative-time tests; dev-server fix pending in vite.config.js (shared with R13)
 - `6c39d00` — R2 — Apps & keys tab; APIKeysPage retired; AppConfigDialog on GeekDialog
