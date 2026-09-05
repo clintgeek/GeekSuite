@@ -278,3 +278,53 @@ entry) and `DOCS/TODO_ORDER.md` item 15; the short version:
 
 `src/theme.js` was intentionally left untouched throughout this pass (it had
 just landed) — themed tooltips and brand-ink derivation live there.
+
+---
+
+## Tests (added 2026-09-05)
+
+The admin console (`apps/basegeek/packages/ui`) had no test suite before this
+— every other frontend in the suite did. It now has vitest + React Testing
+Library, mirroring `apps/fitnessgeek/frontend`'s config exactly (jsdom,
+`@geeksuite/ui` aliased to source with the same MUI/React dedupe block, since
+this console consumes it from source the same way) and `apps/bookgeek/web`'s
+Apollo-mocking pattern (mock `apolloClient` at module level, route by
+GraphQL operation name rather than by JS reference — see
+`src/__tests__/pages/AIGeekPage.test.jsx`).
+
+Run from this package:
+
+```
+cd apps/basegeek/packages/ui
+npx vitest run       # or `pnpm test`
+npx vitest           # watch mode, or `pnpm test:watch`
+```
+
+Coverage, by surface:
+- `pages/BaseGeekHome.jsx` — KEY_APPS order, Postgres in Infrastructure, the
+  health proxy (`/health/app/<name>`), registry fallback.
+- `pages/AIGeekPage.jsx` + `pages/aigeek/*` — the four tabs, `AppsKeysTab`'s
+  key list and the "Recommend a free model" flow, `ModelStewardBlock`,
+  `TestPromptPanel`. GraphQL is mocked on `apolloClient.query`/`.mutate` by
+  operation name (`useAIGeek.js` calls these directly rather than through
+  `useQuery`/`useMutation` hooks, so there is no `MockedProvider` to reach
+  for); REST (`TestPromptPanel`'s `POST /ai/call`) mocks `../../api`.
+- `components/primitives/ResponsiveTable.jsx` — empty/error/data states,
+  desktop table vs. mobile card layout.
+- `pages/AccountPage.jsx` — mocks `@geeksuite/user` (`useUser`, `useThemeMode`)
+  as a module and `@geeksuite/ui`'s `useToast` as a spy (every other
+  `@geeksuite/ui` export stays real via `importOriginal`), so a save's
+  `notify(...)` call is asserted directly.
+- `pages/UserGeekPage.jsx` — load failure/retry, empty state, create/delete
+  flows, and that a delete/create failure is a toast rather than an error
+  state (it must not blow away a list already on screen).
+- `utils/safeRedirect.js` — pure unit tests, no rendering.
+
+One known quirk the tests caught rather than "fixed": `AccountPage`'s avatar
+card renders its **Locale** detail row from `prefsForm.locale`, which is
+never populated (locale lives on `profileForm`, hydrated from `profile`, not
+`preferences`) — the row is always blank. Left as-is; this pass is tests, not
+a product fix.
+
+Verify: `npx vitest run` green, `pnpm build && pnpm lint` clean (7 pre-existing
+warnings, none new), `node tools/syntax-check.mjs` from the repo root.
