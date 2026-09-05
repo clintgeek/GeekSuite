@@ -17,7 +17,6 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | R20 | Q7: CSRF double-submit token (report mode default) + packages/auth header | opus | basegeek middleware/csrf*, server.js order, auth routes, packages/auth, ui api.js | 09-05 13:15 |
 | R21 | Q3 first slice: Zod validation on fitnessgeek settings + weight/BP routes | sonnet | fitnessgeek backend routes + new validation/ | 09-05 13:50 |
 | R22 | storygeek frontend vitest + RTL suite + CI job | sonnet | storygeek frontend, ci.yml (one job) | 09-05 13:50 |
-| R13 | Offline pages per mode + theme-color/manifest audit (TODO #30) + bookgeek CONTEXT runtime fix | sonnet | each app's public/offline/manifest/index.html metas; PWA_STANDARD table | 09-05 12:10 |
 
 **Push gate:** `pnpm install --frozen-lockfile` on HEAD fails — the committed lockfile carries
 bookgeek/web (and likely flockgeek) test devDeps whose package.json is still in flight (Q6/R18).
@@ -34,6 +33,7 @@ Push only after those two land, then re-run the check in a detached worktree of 
 | Q11 | basegeek `Databases.jsx`: wire into nav or delete | Chef's call | XS |
 | Q13 | bookgeek CONTEXT.md says Runtime: Bun (it is node:20); verify COVERS_PATH now serves the old covers in the UI | after R? — trivial, next slot | XS |
 | Q15 | bujogeek: TagsPage tag cloud onto the cached GET_TASK_TAGS query; TemplateContext.applyTemplate cache handling (R9 leftovers); strike #25/#26 in docs | after R9 commits | S |
+| Q16 | storygeek service worker (hand-rolled per PWA_STANDARD) so its new offline page is served; fitnessgeek/bujogeek VitePWA inline manifest theme_color (files were busy) | after R5 frees vite.config.js | S |
 | Q14 | storygeek CanonCard summary text through Narration too (agent left it as a separate render path) | Chef's call | XS |
 
 ## How to resume if this session is lost
@@ -71,6 +71,7 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 - `6d7865c` — R7 — one UserSettings schema (@geeksuite/schemas) + parity tripwire
 - `61997ed` — R6 — @geeksuite/logger in all seven backends; first-ever log redaction
 - `a0b08ca` — R10 — GeekAppFrame fill, sheet focus/close/align, dialog hooks, reduced motion (354 ui tests)
+- `70eb36e` — R13 — offline pages both modes ×6, manifests, storygeek manifest, notegeek dev-server fix
 - `37e83b6` — R17 — 22 dead fitnessgeek files + broken dev compose deleted
 - `164f978` — R16 — notegeek relative-time tests; dev-server fix pending in vite.config.js (shared with R13)
 - `6c39d00` — R2 — Apps & keys tab; APIKeysPage retired; AppConfigDialog on GeekDialog
