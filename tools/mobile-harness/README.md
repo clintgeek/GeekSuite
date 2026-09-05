@@ -137,19 +137,45 @@ two-line clamps and long-title truncation this harness is meant to catch.
 
 Three rules, measured in the live page (computed styles, not source):
 
-| rule | assertion |
-|------|-----------|
-| `tap-target` | every visible interactive element is ≥ 44×44 |
-| `text-floor` | no visible readable string below 12px |
-| `h-scroll` | `document.scrollingElement.scrollWidth === clientWidth` |
+| rule | assertion | viewport |
+|------|-----------|----------|
+| `tap-target` | every visible interactive element is ≥ 44×44 | phone only |
+| `text-floor` | no visible readable string below 12px | all |
+| `h-scroll` | `document.scrollingElement.scrollWidth === clientWidth` | all |
 
 Plus: any uncaught page error fails the run.
+
+`tap-target` only runs when the scene is walked at the phone viewport
+(`runner.mjs` passes `isPhone: h.isPhone` into `probePage`, which gates the
+rule inside `collect(isPhone)` in `lib/probe.mjs`). MOBILE_UI_PLAN §2 makes
+44px a rule below `md`, not a universal one — grading a 1280×900 desktop
+scene against it is noise, not signal. `text-floor` and `h-scroll` still run
+at every viewport, desktop included, because both grammar rules genuinely do
+apply everywhere. `ci.mjs` only walks phone viewports by default anyway
+(`--desktop` adds the 1280×900 contexts), so this mostly matters for that
+flag and for anyone calling `probePage`/`runApp` directly with
+`viewports: ALL_VIEWPORTS`.
 
 It measures the *hit area*, not the paint — a form control is measured at its
 `.MuiInputBase-root`, a slider at its rail, a checkbox at its `<label>`. It
 skips inline links inside prose, off-canvas drawers, `aria-hidden` subtrees,
 and elements that are focusable only because MUI cloned a `tabIndex` onto
 them.
+
+### Violation shape
+
+Each violation is `{ rule, el, hint, detail }`:
+
+- `el` — the full description: tag, id, up to two non-emotion classes, any
+  `data-geek-*` attributes, `aria-label`/`title`, and a text snippet. For
+  humans skimming the log.
+- `hint` — a short, stable selector for grepping the app's source, ranked by
+  durability: `data-testid`/`data-test` → `data-geek-*` → `aria-label` → `id`
+  → (last resort) a tag+class path up to three ancestors deep. This is what
+  an app-fix pass should key off — it survives a text or copy change that
+  would break a match on `el`'s text snippet.
+- `detail` — the measured value: `WxH` for `tap-target`, `Npx "text"` for
+  `text-floor`, `scrollWidth X > clientWidth Y` for `h-scroll`.
 
 ### Waivers
 

@@ -1,16 +1,20 @@
 // The mobile-grammar probe — the CI gate for MOBILE_UI_PLAN.md §6.
 //
-// Three rules, all measured in the live page at 390x844:
-//   tap-target  every visible interactive element is at least 44x44
-//   text-floor  no visible readable string below 12px
-//   h-scroll    the document does not scroll sideways
+// Three rules:
+//   tap-target  every visible interactive element is at least 44x44 —
+//               phone viewport only (MOBILE_UI_PLAN §2: 44px is the rule
+//               below `md`; nothing in the grammar promises it at desktop
+//               widths, and grading a 1280-wide layout against it is just
+//               noise on the gate).
+//   text-floor  no visible readable string below 12px — every viewport.
+//   h-scroll    the document does not scroll sideways — every viewport.
 //
 // It runs in the page, so it sees computed styles rather than source. That
 // catches the whole class of "the sx says 44 but a parent squeezed it".
 
 const RULES = ['tap-target', 'text-floor', 'h-scroll'];
 
-const collect = () => {
+const collect = (isPhone) => {
   const INTERACTIVE = [
     'a[href]', 'button', 'input:not([type=hidden])', 'select', 'textarea', 'summary',
     '[role=button]', '[role=link]', '[role=tab]', '[role=switch]', '[role=checkbox]',
@@ -38,6 +42,35 @@ const collect = () => {
     return out;
   };
 
+  // A short, stable hint for the human (or agent) fixing this — something
+  // greppable in the app's source, ranked most- to least-durable: an
+  // explicit test hook, then the suite's own data-geek-* markers, then
+  // aria-label/id, then (last resort, nothing else survives a refactor) a
+  // short tag+class path up from the element.
+  const selectorHint = (el) => {
+    for (const attr of ['data-testid', 'data-test', 'data-geek-testid']) {
+      if (el.hasAttribute(attr)) return `[${attr}="${el.getAttribute(attr)}"]`;
+    }
+    for (const attr of el.attributes || []) {
+      if (attr.name.startsWith('data-geek')) return `[${attr.name}="${attr.value}"]`;
+    }
+    const label = el.getAttribute('aria-label');
+    if (label) return `[aria-label="${label.slice(0, 60)}"]`;
+    if (el.id) return `#${el.id}`;
+    const seg = (node) => {
+      const tag = node.tagName.toLowerCase();
+      const cls = (node.getAttribute('class') || '')
+        .split(/\s+/).filter(Boolean).filter((c) => !/^css-/.test(c)).slice(0, 2);
+      return cls.length ? `${tag}.${cls.join('.')}` : tag;
+    };
+    const path = [];
+    let node = el;
+    for (let i = 0; i < 3 && node && node !== document.body; i += 1, node = node.parentElement) {
+      path.unshift(seg(node));
+    }
+    return path.join(' > ');
+  };
+
   const hidden = (el) => {
     if (typeof el.checkVisibility === 'function') {
       if (!el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) return true;
@@ -60,57 +93,62 @@ const collect = () => {
   const REAL = INTERACTIVE.split(',').filter((s) => !s.startsWith('[tabindex')).join(',');
 
   // ── tap-target ──────────────────────────────────────────────────────────
-  for (const el of document.querySelectorAll(INTERACTIVE)) {
-    if (seen.has(el)) continue;
-    seen.add(el);
-    if (hidden(el)) continue;
-    if (!el.matches(REAL) && !el.getAttribute('role')) continue;
-    const cs = getComputedStyle(el);
-    if (cs.pointerEvents === 'none') continue;
-    // An inline link inside running prose is not a tap target in the 44px
-    // sense; the paragraph around it is the reading surface.
-    if (el.tagName === 'A' && cs.display.startsWith('inline')) {
-      const parentText = (el.parentElement?.textContent || '').replace(/\s+/g, ' ').trim();
-      const ownText = (el.textContent || '').replace(/\s+/g, ' ').trim();
-      if (parentText.length > ownText.length + 8) continue;
-    }
-    const r = el.getBoundingClientRect();
-    // The hit area may be larger than the paint: a bare icon inside a padded
-    // wrapper counts as the wrapper. Measure the closest ancestor that is
-    // itself only chrome for this control.
-    let w = r.width;
-    let h = r.height;
-    const label = el.closest('label');
-    if (label && (el.tagName === 'INPUT' || el.getAttribute('role') === 'checkbox')) {
-      const lr = label.getBoundingClientRect();
-      w = Math.max(w, lr.width);
-      h = Math.max(h, lr.height);
-    }
-    // A form control's hit area is the bordered box around it, not the bare
-    // <input> (MUI puts the padding on .MuiInputBase-root) and not one
-    // section of a date field (.MuiPickersSectionList spans are one field).
-    const field = el.closest(
-      '[class*="MuiInputBase-root"], [class*="MuiPickersInputBase-root"], [class*="MuiOutlinedInput-root"], [class*="MuiFilledInput-root"]',
-    );
-    if (field && field !== el) {
-      const fr = field.getBoundingClientRect();
-      w = Math.max(w, fr.width);
-      h = Math.max(h, fr.height);
-    }
-    // A slider's input is a 20px thumb; the rail is what the thumb drags on
-    // and what the finger actually lands on, so measure the rail.
-    const slider = el.closest('[class*="MuiSlider-root"], [role="slider"]');
-    if (slider && slider !== el) {
-      const sr = slider.getBoundingClientRect();
-      w = Math.max(w, sr.width);
-      h = Math.max(h, sr.height);
-    }
-    if (w < 43.5 || h < 43.5) {
-      violations.push({
-        rule: 'tap-target',
-        el: describe(el),
-        detail: `${Math.round(w)}x${Math.round(h)}`,
-      });
+  // Phone only: MOBILE_UI_PLAN §2 makes 44px a rule below `md`, not a
+  // universal one, so a desktop-viewport scene has nothing to fail here.
+  if (isPhone) {
+    for (const el of document.querySelectorAll(INTERACTIVE)) {
+      if (seen.has(el)) continue;
+      seen.add(el);
+      if (hidden(el)) continue;
+      if (!el.matches(REAL) && !el.getAttribute('role')) continue;
+      const cs = getComputedStyle(el);
+      if (cs.pointerEvents === 'none') continue;
+      // An inline link inside running prose is not a tap target in the 44px
+      // sense; the paragraph around it is the reading surface.
+      if (el.tagName === 'A' && cs.display.startsWith('inline')) {
+        const parentText = (el.parentElement?.textContent || '').replace(/\s+/g, ' ').trim();
+        const ownText = (el.textContent || '').replace(/\s+/g, ' ').trim();
+        if (parentText.length > ownText.length + 8) continue;
+      }
+      const r = el.getBoundingClientRect();
+      // The hit area may be larger than the paint: a bare icon inside a padded
+      // wrapper counts as the wrapper. Measure the closest ancestor that is
+      // itself only chrome for this control.
+      let w = r.width;
+      let h = r.height;
+      const label = el.closest('label');
+      if (label && (el.tagName === 'INPUT' || el.getAttribute('role') === 'checkbox')) {
+        const lr = label.getBoundingClientRect();
+        w = Math.max(w, lr.width);
+        h = Math.max(h, lr.height);
+      }
+      // A form control's hit area is the bordered box around it, not the bare
+      // <input> (MUI puts the padding on .MuiInputBase-root) and not one
+      // section of a date field (.MuiPickersSectionList spans are one field).
+      const field = el.closest(
+        '[class*="MuiInputBase-root"], [class*="MuiPickersInputBase-root"], [class*="MuiOutlinedInput-root"], [class*="MuiFilledInput-root"]',
+      );
+      if (field && field !== el) {
+        const fr = field.getBoundingClientRect();
+        w = Math.max(w, fr.width);
+        h = Math.max(h, fr.height);
+      }
+      // A slider's input is a 20px thumb; the rail is what the thumb drags on
+      // and what the finger actually lands on, so measure the rail.
+      const slider = el.closest('[class*="MuiSlider-root"], [role="slider"]');
+      if (slider && slider !== el) {
+        const sr = slider.getBoundingClientRect();
+        w = Math.max(w, sr.width);
+        h = Math.max(h, sr.height);
+      }
+      if (w < 43.5 || h < 43.5) {
+        violations.push({
+          rule: 'tap-target',
+          el: describe(el),
+          hint: selectorHint(el),
+          detail: `${Math.round(w)}x${Math.round(h)}`,
+        });
+      }
     }
   }
 
@@ -131,6 +169,7 @@ const collect = () => {
       violations.push({
         rule: 'text-floor',
         el: describe(el),
+        hint: selectorHint(el),
         detail: `${size.toFixed(1)}px "${raw.slice(0, 40)}"`,
       });
     }
@@ -150,6 +189,7 @@ const collect = () => {
     violations.push({
       rule: 'h-scroll',
       el: worst ? describe(worst.el) : 'document',
+      hint: worst ? selectorHint(worst.el) : 'document',
       detail: `scrollWidth ${doc.scrollWidth} > clientWidth ${doc.clientWidth}`,
     });
   }
@@ -157,8 +197,10 @@ const collect = () => {
   return violations;
 };
 
-export async function probePage(page) {
-  return page.evaluate(collect);
+// `isPhone` gates tap-target (see the RULES comment above); text-floor and
+// h-scroll run regardless of viewport.
+export async function probePage(page, { isPhone = true } = {}) {
+  return page.evaluate(collect, isPhone);
 }
 
 // A waiver is { rule, match, why, scenes? }. `match` is a string (substring)

@@ -72,7 +72,7 @@ export async function runApp({
           if (screenshots) {
             await page.screenshot({ path: path.join(outDir, `${app}-${name}-${spec.scheme}${spec.suffix}.png`) });
           }
-          const raw = scene.probe === false ? [] : await probePage(page);
+          const raw = scene.probe === false ? [] : await probePage(page, { isPhone: h.isPhone });
           const { open, waived } = partition(raw, waivers, name);
           results.push({ viewport: key, scene: name, open, waived });
           if (!quiet) {
@@ -121,7 +121,7 @@ export function report(summary) {
   if (summary.violations.length) {
     console.log('\n── mobile grammar violations ───────────────────────────────');
     for (const v of summary.violations) {
-      console.log(`  [${v.rule}] ${v.app} ${v.viewport} ${v.scene}\n      ${v.el}\n      ${v.detail}`);
+      console.log(`  [${v.rule}] ${v.app} ${v.viewport} ${v.scene}\n      ${v.el}\n      hint: ${v.hint}\n      ${v.detail}`);
     }
   }
   if (summary.errors.length) {
