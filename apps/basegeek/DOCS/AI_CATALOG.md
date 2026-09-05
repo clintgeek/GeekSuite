@@ -1,5 +1,5 @@
 # AI Provider & Model Catalog
-**Last Updated:** 2026-09-04
+**Last Updated:** 2026-09-05
 **Total Providers:** 10
 **Total Models:** 41
 
@@ -57,14 +57,31 @@ every call; `onemin` was additionally missing from `AIConfig`'s schema enum, so
 a key saved for it could never persist. Their per-provider sections below are
 retained for reference only — nothing routes to them.
 
-Outstanding follow-up from that removal:
+### Follow-up completed 2026-09-05
 
-- `callLLM7` / `call1minAI` and their entries in `seedInitialModels`,
-  `rateLimits` and `aiModelCapabilitiesService` are still in the tree, now
-  unreachable. Delete or reinstate them deliberately.
-- The `AIConfig` / `AIModel` / `AIPricing` / `AIFreeTier` / `AIAppConfig` /
-  `AIUsage` schema enums still accept `llm7` (and `AIUsage` accepts `onemin`).
-  Existing rows are orphaned, not broken.
+The dead code is gone: `callLLM7` and `callOneMin` are deleted from
+`aiService.js` along with their `rateLimits` and `seedInitialModels` entries,
+`aiModelCapabilitiesService`'s `llm7` block is deleted, and `llm7` / `onemin`
+are out of the `AIConfig` / `AIModel` / `AIPricing` / `AIFreeTier` /
+`AIAppConfig` / `AIUsage` provider enums.
+
+**Existing Mongo rows carrying `provider: 'llm7'` or `'onemin'` are orphaned
+data, not broken data.** They still read back fine — Mongoose enforces an enum
+on validation, and the catalog's writes go through `findOneAndUpdate`, which
+does not run validators by default. Nothing routes to them and no new row can
+be created with either value. Delete them at leisure, or leave them as a record
+of what the rotation used to try.
+
+Two references outside the scope of that pass remain, both harmless and both
+one line:
+
+- `aiDirectorService.js` still restates the roster with `llm7` in it
+  (`collectModelInformation`, ~L136) and keeps an `llm7` row in its
+  `defaultPricing` lookup (~L109). The effect is a ghost provider card with
+  zero models on the AI Catalog tab, nothing more — the seed list that actually
+  writes `AIPricing` rows has no `llm7` entry.
+- `rateLimitService.js` still defines `llm7` and `onemin` limits (~L27, ~L33)
+  that nothing consults.
 
 ---
 
@@ -265,9 +282,9 @@ Outstanding follow-up from that removal:
 - **Cerebras:** 3 models (free)
 - **Cloudflare:** 2 models (free)
 - **Ollama Cloud:** 7 models (free)
-- **LLM7:** 1 model (free)
+- ~~**LLM7:** 1 model~~ — retired 2026-09-04
 - **LLM Gateway:** 1 model (free)
-- **1min.ai:** 9 models (paid, credit-based)
+- ~~**1min.ai:** 9 models~~ — retired 2026-09-04
 
 ### Free vs Paid
 - **Free Models:** 28 models
@@ -280,7 +297,6 @@ Outstanding follow-up from that removal:
 - **Together:** 180,000 TPM, 600 RPM
 - **Groq:** 12,000 TPM, 30 RPM, 1,000 req/day
 - **Cohere:** 20 RPM, 1,000 calls/month
-- **LLM7:** 150 RPM, 4,500 req/hour
 - **Cloudflare:** 10,000 neurons/day
 
 ### Special Features
@@ -305,7 +321,7 @@ Most providers use OpenAI-compatible format:
 }
 ```
 
-**Compatible:** Cerebras, Together, Groq, OpenRouter, LLM7, LLM Gateway
+**Compatible:** Cerebras, Together, Groq, OpenRouter, LLM Gateway
 
 ### Special Formats
 

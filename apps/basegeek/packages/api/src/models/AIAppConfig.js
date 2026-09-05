@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import { getAIGeekConnection } from '../config/database.js';
 
-const PROVIDERS = ['anthropic', 'groq', 'gemini', 'together', 'cohere', 'openrouter', 'cerebras', 'cloudflare', 'ollama', 'llm7', 'llmgateway'];
+const PROVIDERS = ['anthropic', 'groq', 'gemini', 'together', 'cohere', 'openrouter', 'cerebras', 'cloudflare', 'ollama', 'llmgateway'];
 
 const aiAppConfigSchema = new mongoose.Schema({
   appName: {

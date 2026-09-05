@@ -1252,23 +1252,6 @@ class AIModelCapabilitiesService {
           },
           performance: { speed: 'fast', quality: 'excellent', reasoning: 'excellent' }
         }
-      },
-      'llm7': {
-        'qwen2.5-coder-32b': {
-          maxTokens: 32768,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: false,
-          supportsStreaming: true,
-          contextWindow: 32768,
-          tasks: {
-            textGeneration: true, codeGeneration: true, reasoning: true,
-            analysis: true, summarization: true, translation: true,
-            questionAnswering: true, creativeWriting: true, structuredOutput: false
-          },
-          performance: { speed: 'fast', quality: 'excellent', reasoning: 'good' }
-        }
       }
     };
 

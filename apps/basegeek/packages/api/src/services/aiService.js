@@ -176,7 +176,7 @@ class AIService {
     // from the AIPricing collection, which stores dollars per 1,000,000 (see
     // aiDirectorService's costForTokens). Both are correct as written: the
     // values here match their per-1M equivalents divided by 1000 (anthropic
-    // 0.003 = $3/MTok, cohere 0.0025 = $2.50/MTok), and updateStats() divides
+    // 0.005 = $5/MTok, cohere 0.0025 = $2.50/MTok), and updateStats() divides
     // token counts by 1000 to match. Do not "fix" one to look like the other.
     // These are single blended rates per provider, not per-model input/output
     // prices — the AIPricing table is the accurate source for those.
@@ -186,7 +186,12 @@ class AIService {
         apiKey: '',
         baseURL: 'https://api.anthropic.com/v1',
         model: DEFAULT_MODELS.anthropic,
-        costPer1kTokens: 0.003,
+        // 2026-09-05: repriced for claude-sonnet-5, which is $2/MTok in and
+        // $10/MTok out — i.e. 0.002 and 0.010 per 1K; the flat average is
+        // 0.006. This table is a single blended per-provider rate, not a
+        // per-model in/out price (AIPricing holds those, per 1M). Was 0.003 —
+        // the $3/MTok input price of claude-3-5-sonnet, three generations stale.
+        costPer1kTokens: 0.006,
         maxTokens: 4000,
         temperature: 0.7,
         enabled: false
@@ -339,31 +344,12 @@ class AIService {
         lastMonthlyReset: Date.now(), // NEW
         rateLimitedUntil: null
       },
-      llm7: {
-        tokensPerMinute: 100000, // Estimate
-        requestsPerMinute: 150, // 4500 req/h = ~75 req/min avg, but 150/min burst
-        lastReset: Date.now(),
-        tokensUsed: 0,
-        requestsUsed: 0,
-        rateLimitedUntil: null
-      },
       cloudflare: {
         // NO tokensPerMinute limit for Cloudflare Workers AI
         requestsPerMinute: 300, // ACTUAL: 300 RPM for text generation (was incorrectly 50)
         lastReset: Date.now(),
         tokensUsed: 0, // Keep for compatibility but not enforced
         requestsUsed: 0,
-        rateLimitedUntil: null
-      },
-      onemin: {
-        // NO tokensPerMinute limit - uses monthly credits instead
-        requestsPerMinute: 180, // ACTUAL: 180 RPM (was incorrectly 60)
-        creditsPerMonth: 1000000, // NEW: 1M credits/month (credit ≠ token)
-        lastReset: Date.now(),
-        tokensUsed: 0, // Keep for compatibility but not enforced
-        requestsUsed: 0,
-        monthlyCreditsUsed: 0, // NEW: Monthly credit tracking
-        lastMonthlyReset: Date.now(), // NEW
         rateLimitedUntil: null
       },
       gemini: {
@@ -688,22 +674,8 @@ class AIService {
           { id: 'glm-4.6', name: 'GLM 4.6 (Free)' },
           { id: 'qwen3-vl:235b', name: 'Qwen3 VL 235B (Free)' }
         ],
-        llm7: [
-          { id: 'Qwen2.5-Coder-32B-Instruct', name: 'Qwen2.5 Coder 32B Instruct (Free)' }
-        ],
         llmgateway: [
           { id: 'llama-4-maverick-free', name: 'Llama 4 Maverick (Free - 1M context)' }
-        ],
-        onemin: [
-          { id: 'claude-3-7-sonnet', name: 'Claude 3.7 Sonnet (Best for tool use - 1M free credits/month)' },
-          { id: 'claude-4-sonnet', name: 'Claude 4 Sonnet' },
-          { id: 'claude-3-5-haiku', name: 'Claude 3.5 Haiku (Fast)' },
-          { id: 'gpt-5-chat-latest', name: 'GPT-5 Chat Latest' },
-          { id: 'gpt-5', name: 'GPT-5' },
-          { id: 'gpt-4o', name: 'GPT-4o' },
-          { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner (R1)' },
-          { id: 'deepseek-chat', name: 'DeepSeek Chat' },
-          { id: 'grok-code-fast-1', name: 'xAI Grok Code Fast 1' }
         ]
       };
 
@@ -1981,45 +1953,6 @@ class AIService {
   }
 
   /**
-   * Call LLM7 API
-   */
-  async callLLM7(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = 'Qwen2.5-Coder-32B-Instruct', messages = null } = config;
-
-    const requestMessages = messages || [{ role: 'user', content: prompt }];
-
-    try {
-      const response = await axios.post(`${this.providers.llm7.baseURL}/chat/completions`, {
-        model: model,
-        max_tokens: maxTokens,
-        temperature: temperature,
-        messages: requestMessages
-      }, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.providers.llm7.apiKey}`
-        },
-        timeout: 60000
-      });
-
-      const result = response.data.choices[0].message.content;
-
-      return {
-        content: result,
-        inputTokens: response.data.usage?.prompt_tokens || 0,
-        outputTokens: response.data.usage?.completion_tokens || 0
-      };
-    } catch (error) {
-      logger.error({ err: error }, 'LLM7 API error');
-      if (error.response) {
-        logger.error({ status: error.response.status, data: error.response.data }, 'LLM7 response error details');
-        throw new Error(`LLM7 API error (${error.response.status}): ${JSON.stringify(error.response.data)}`);
-      }
-      throw error;
-    }
-  }
-
-  /**
    * Call LLM Gateway API
    */
   async callLLMGateway(prompt, config = {}) {
@@ -2053,63 +1986,6 @@ class AIService {
       if (error.response) {
         logger.error({ status: error.response.status, data: error.response.data }, 'LLM Gateway response error details');
         throw new Error(`LLM Gateway API error (${error.response.status}): ${JSON.stringify(error.response.data)}`);
-      }
-      throw error;
-    }
-  }
-
-  /**
-   * Call 1min.ai Code Generator API
-   * Docs: https://docs.1min.ai/docs/api/ai-for-code/code-generator/code-generator-tag
-   */
-  async callOneMin(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = 'deepseek-reasoner', messages = null } = config;
-
-    // Convert messages to prompt if provided
-    let promptText = prompt;
-    if (messages && Array.isArray(messages)) {
-      promptText = messages.map(m => {
-        if (m.role === 'system') return `System: ${m.content}`;
-        if (m.role === 'assistant') return `Assistant: ${m.content}`;
-        return m.content;
-      }).join('\n\n');
-    }
-
-    try {
-      const response = await axios.post(`${this.providers.onemin.baseURL}/features`, {
-        type: this.providers.onemin.type || 'CODE_GENERATOR',
-        model: model,
-        conversationId: 'CODE_GENERATOR',
-        promptObject: {
-          prompt: promptText,
-          webSearch: false
-        }
-      }, {
-        headers: {
-          'Content-Type': 'application/json',
-          'API-KEY': this.providers.onemin.apiKey
-        },
-        timeout: 60000
-      });
-
-      // 1min.ai returns response in data.response or data.content or data.result
-      const result = response.data?.response || response.data?.content || response.data?.result || response.data?.output || '';
-
-      if (!result) {
-        logger.warn({ data: response.data }, '1min.ai returned empty response');
-        throw new Error('Empty response from 1min.ai API');
-      }
-
-      return {
-        content: result,
-        inputTokens: response.data?.usage?.prompt_tokens || 0,
-        outputTokens: response.data?.usage?.completion_tokens || 0
-      };
-    } catch (error) {
-      logger.error({ err: error }, '1min.ai API error');
-      if (error.response) {
-        logger.error({ status: error.response.status, data: error.response.data }, '1min.ai response error details');
-        throw new Error(`1min.ai API error (${error.response.status}): ${JSON.stringify(error.response.data)}`);
       }
       throw error;
     }

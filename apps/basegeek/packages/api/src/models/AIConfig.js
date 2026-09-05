@@ -11,7 +11,7 @@ const aiConfigSchema = new mongoose.Schema({
   provider: {
     type: String,
     required: true,
-    enum: ['anthropic', 'groq', 'gemini', 'together', 'cohere', 'openrouter', 'cerebras', 'cloudflare', 'ollama', 'llm7', 'llmgateway'],
+    enum: ['anthropic', 'groq', 'gemini', 'together', 'cohere', 'openrouter', 'cerebras', 'cloudflare', 'ollama', 'llmgateway'],
     unique: true
   },
   apiKey: {
