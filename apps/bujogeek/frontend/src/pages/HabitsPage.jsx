@@ -213,6 +213,7 @@ const HabitsPage = () => {
           sx={{
             flex: 1,
             minWidth: 0,
+            minHeight: { xs: 44, sm: 'auto' },
             display: 'flex',
             alignItems: 'center',
             gap: 1,
@@ -251,8 +252,8 @@ const HabitsPage = () => {
               <Typography
                 sx={{
                   fontFamily: '"IBM Plex Mono", monospace',
-                  fontSize: '0.5625rem',
-                  letterSpacing: '0.1em',
+                  fontSize: '0.75rem',
+                  letterSpacing: '0.08em',
                   textTransform: 'uppercase',
                   color: captionInk,
                   mt: 0.25,
@@ -280,6 +281,10 @@ const HabitsPage = () => {
                 placement="top"
                 enterDelay={500}
               >
+                {/* The real tap target is this outer button: 44px on phones,
+                    unchanged desktop density (MOBILE_UI_PLAN.md §4). The
+                    painted cell — background, border, radius — moves to the
+                    inner span so the visual size never changes. */}
                 <Box
                   component="button"
                   type="button"
@@ -288,9 +293,11 @@ const HabitsPage = () => {
                   aria-label={label}
                   onClick={() => !inert && handleToggle(habit, date)}
                   sx={{
-                    width: { xs: 28, sm: 32 },
-                    height: { xs: 28, sm: 32 },
+                    width: { xs: 44, sm: 32 },
+                    height: { xs: 44, sm: 32 },
                     p: 0,
+                    border: 0,
+                    background: 'none',
                     borderRadius: '7px',
                     flexShrink: 0,
                     display: 'flex',
@@ -298,21 +305,31 @@ const HabitsPage = () => {
                     justifyContent: 'center',
                     cursor: inert ? 'default' : 'pointer',
                     WebkitTapHighlightColor: 'transparent',
-                    backgroundColor: done ? accent : 'transparent',
-                    border: done
-                      ? `1px solid ${accent}`
-                      : `1px ${inert ? 'dotted' : 'solid'} ${emptyCell}`,
-                    opacity: inert && !done ? 0.4 : 1,
-                    transition: 'background-color 0.14s ease, border-color 0.14s ease, transform 0.1s ease',
-                    '&:hover': inert
-                      ? {}
-                      : {
-                          borderColor: accent,
-                          backgroundColor: done ? accent : `${accent}22`,
-                        },
                     '&:active': inert ? {} : { transform: 'scale(0.92)' },
                   }}
-                />
+                >
+                  <Box
+                    component="span"
+                    sx={{
+                      width: { xs: 28, sm: 32 },
+                      height: { xs: 28, sm: 32 },
+                      borderRadius: '7px',
+                      display: 'flex',
+                      backgroundColor: done ? accent : 'transparent',
+                      border: done
+                        ? `1px solid ${accent}`
+                        : `1px ${inert ? 'dotted' : 'solid'} ${emptyCell}`,
+                      opacity: inert && !done ? 0.4 : 1,
+                      transition: 'background-color 0.14s ease, border-color 0.14s ease',
+                      'button:hover &': inert
+                        ? {}
+                        : {
+                            borderColor: accent,
+                            backgroundColor: done ? accent : `${accent}22`,
+                          },
+                    }}
+                  />
+                </Box>
               </Tooltip>
             );
           })}
@@ -339,7 +356,7 @@ const HabitsPage = () => {
           <Typography
             sx={{
               fontFamily: '"IBM Plex Mono", monospace',
-              fontSize: '0.6875rem',
+              fontSize: '0.75rem',
               fontWeight: 600,
               color: habit.currentStreak > 0 ? theme.palette.text.secondary : captionInk,
             }}
@@ -489,11 +506,11 @@ const HabitsPage = () => {
                       <Typography
                         sx={{
                           fontFamily: '"IBM Plex Mono", monospace',
-                          fontSize: '0.5625rem',
+                          fontSize: '0.75rem',
                           fontWeight: 700,
-                          letterSpacing: '0.06em',
+                          letterSpacing: '0.04em',
                           color: isToday ? colors.primary[500] : captionInk,
-                          lineHeight: 1.4,
+                          lineHeight: 1.2,
                         }}
                       >
                         {DAY_INITIALS[date.getDay()]}
@@ -501,10 +518,10 @@ const HabitsPage = () => {
                       <Typography
                         sx={{
                           fontFamily: '"IBM Plex Mono", monospace',
-                          fontSize: '0.625rem',
+                          fontSize: '0.75rem',
                           fontWeight: isToday ? 700 : 400,
                           color: isToday ? colors.primary[500] : mutedInk,
-                          lineHeight: 1.3,
+                          lineHeight: 1.2,
                         }}
                       >
                         {date.getDate()}
@@ -634,7 +651,7 @@ const HabitsPage = () => {
 
             <Typography
               sx={{
-                fontSize: '0.6875rem',
+                fontSize: '0.75rem',
                 fontWeight: 700,
                 textTransform: 'uppercase',
                 letterSpacing: '0.06em',
@@ -653,8 +670,11 @@ const HabitsPage = () => {
                 mb: 0.75,
                 '& .MuiToggleButton-root': {
                   py: 0.75,
+                  // 44px real hit area on phones; back to the compact desktop
+                  // height at `md`+ (MOBILE_UI_PLAN.md §4).
+                  minHeight: { xs: 44, md: 'auto' },
                   fontFamily: '"IBM Plex Mono", monospace',
-                  fontSize: '0.6875rem',
+                  fontSize: '0.75rem',
                   fontWeight: 600,
                   borderRadius: '7px !important',
                   border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : colors.ink[200]} !important`,
@@ -684,7 +704,7 @@ const HabitsPage = () => {
 
             <Typography
               sx={{
-                fontSize: '0.6875rem',
+                fontSize: '0.75rem',
                 fontWeight: 700,
                 textTransform: 'uppercase',
                 letterSpacing: '0.06em',
@@ -696,6 +716,8 @@ const HabitsPage = () => {
             </Typography>
             <Box sx={{ display: 'flex', gap: 1 }}>
               {HABIT_COLORS.map((color) => (
+                // 44px real hit area on phones, 26px painted swatch — same
+                // outer/inner split as the habit-grid day cells above.
                 <Box
                   key={color}
                   component="button"
@@ -704,21 +726,36 @@ const HabitsPage = () => {
                   aria-pressed={form.color === color}
                   onClick={() => setForm({ ...form, color })}
                   sx={{
-                    width: 26,
-                    height: 26,
+                    width: { xs: 44, sm: 26 },
+                    height: { xs: 44, sm: 26 },
                     p: 0,
+                    border: 0,
+                    background: 'none',
                     borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                     cursor: 'pointer',
-                    backgroundColor: color,
-                    border: form.color === color
-                      ? `2px solid ${theme.palette.text.primary}`
-                      : '2px solid transparent',
-                    outline: form.color === color ? `1px solid ${color}` : 'none',
-                    outlineOffset: 1,
-                    transition: 'transform 0.1s ease',
-                    '&:hover': { transform: 'scale(1.1)' },
                   }}
-                />
+                >
+                  <Box
+                    component="span"
+                    sx={{
+                      width: 26,
+                      height: 26,
+                      borderRadius: '50%',
+                      display: 'block',
+                      backgroundColor: color,
+                      border: form.color === color
+                        ? `2px solid ${theme.palette.text.primary}`
+                        : '2px solid transparent',
+                      outline: form.color === color ? `1px solid ${color}` : 'none',
+                      outlineOffset: 1,
+                      transition: 'transform 0.1s ease',
+                      'button:hover &': { transform: 'scale(1.1)' },
+                    }}
+                  />
+                </Box>
               ))}
             </Box>
         </Box>

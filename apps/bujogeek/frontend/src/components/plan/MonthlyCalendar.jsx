@@ -300,7 +300,24 @@ const MonthlyCalendar = () => {
               <ChevronLeft size={18} />
             </IconButton>
 
-            <Box sx={{ display: 'flex', flex: 1, gap: 0.25, minWidth: 0 }}>
+            {/* Below `md` seven 44px-wide cells plus the two 44px nav buttons
+                don't fit an iPhone-width strip (MOBILE_UI_PLAN.md §4) — the
+                cells scroll inside their own row instead of shrinking under
+                the touch-target floor. The document itself never scrolls
+                sideways; only this row does, same idea as the shelf strip. */}
+            <Box
+              sx={{
+                display: 'flex',
+                flex: 1,
+                gap: 0.25,
+                minWidth: 0,
+                overflowX: 'auto',
+                WebkitOverflowScrolling: 'touch',
+                scrollSnapType: 'x proximity',
+                '&::-webkit-scrollbar': { display: 'none' },
+                scrollbarWidth: 'none',
+              }}
+            >
               {weekDays.map((day, idx) => {
                 const key = format(day, 'yyyy-MM-dd');
                 const marks = taskMarks[key] || [];
@@ -314,9 +331,11 @@ const MonthlyCalendar = () => {
                     aria-pressed={selected}
                     aria-label={`${format(day, 'EEEE MMMM d')}${marks.length ? `, ${marks.length} task${marks.length !== 1 ? 's' : ''}` : ''}${today ? ', today' : ''}`}
                     sx={{
-                      flex: 1,
-                      minWidth: 0,
+                      flex: '0 0 auto',
+                      width: 44,
+                      minWidth: 44,
                       minHeight: 60,
+                      scrollSnapAlign: 'center',
                       display: 'flex',
                       flexDirection: 'column',
                       alignItems: 'center',

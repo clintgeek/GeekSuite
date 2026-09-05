@@ -269,6 +269,9 @@ const CollectionDetailPage = () => {
             alignItems: 'center',
             gap: 0.25,
             mb: 1,
+            // 44px real hit area on phones; unchanged desktop density
+            // (MOBILE_UI_PLAN.md §2).
+            minHeight: { xs: 44, md: 'auto' },
             cursor: 'pointer',
             color: captionInk,
             '&:hover': { color: mutedInk },

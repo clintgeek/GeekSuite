@@ -467,6 +467,11 @@ const InlineQuickAdd = ({
               sx={{
                 fontSize: { xs: '1rem', sm: '1.0625rem' },
                 fontWeight: 450,
+                // 44px real hit area on phones (MOBILE_UI_PLAN.md §2) — the
+                // composer's own padding otherwise leaves this ~23px tall.
+                minHeight: { xs: 44, md: 'auto' },
+                display: 'flex',
+                alignItems: 'center',
                 // Transparent text when overlay is active, but keep caret visible
                 color: value ? 'transparent' : theme.palette.text.primary,
                 caretColor: theme.palette.text.primary,

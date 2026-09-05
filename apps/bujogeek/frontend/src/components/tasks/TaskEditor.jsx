@@ -375,6 +375,7 @@ const TaskEditor = ({ open, onClose, task = null }) => {
                   value={formData.signifier}
                   onChange={handleChange('signifier')}
                   label="Type"
+                  sx={{ minHeight: { xs: 44, md: 'auto' } }}
                 >
                   {SIGNIFIER_OPTIONS.map((opt) => (
                     <MenuItem key={opt.value} value={opt.value}>
@@ -405,6 +406,7 @@ const TaskEditor = ({ open, onClose, task = null }) => {
                   value={formData.priority ?? ''}
                   onChange={handleChange('priority')}
                   label="Priority"
+                  sx={{ minHeight: { xs: 44, md: 'auto' } }}
                 >
                   {PRIORITY_OPTIONS.map((opt) => (
                     <MenuItem key={opt.value ?? 'normal'} value={opt.value}>
@@ -435,7 +437,20 @@ const TaskEditor = ({ open, onClose, task = null }) => {
                 value={formData.dueDate}
                 onChange={(newDate) => setFormData({ ...formData, dueDate: newDate })}
                 slotProps={{
-                  textField: { fullWidth: true, size: 'small' },
+                  textField: {
+                    fullWidth: true,
+                    size: 'small',
+                    // The pickers field isn't a plain MuiTextField, so the
+                    // suite-wide 44px floor (packages/ui theme, scoped to
+                    // `.MuiTextField-root .MuiOutlinedInput-root`) never
+                    // reaches it — apply the floor locally instead
+                    // (MOBILE_UI_PLAN.md §2).
+                    sx: {
+                      minHeight: { xs: 44, md: 'auto' },
+                      '& .MuiPickersInputBase-root': { minHeight: { xs: 44, md: 'auto' } },
+                      '& .MuiPickersOutlinedInput-root': { minHeight: { xs: 44, md: 'auto' } },
+                    },
+                  },
                 }}
               />
             </Box>
@@ -493,6 +508,7 @@ const TaskEditor = ({ open, onClose, task = null }) => {
                 }
                 onChange={handleChange('collectionId')}
                 label="Collection"
+                sx={{ minHeight: { xs: 44, md: 'auto' } }}
               >
                 <MenuItem value="">
                   <Box component="span" sx={{ color: mutedInk }}>Not in a collection</Box>
@@ -534,7 +550,7 @@ const TaskEditor = ({ open, onClose, task = null }) => {
             <Typography
               sx={{
                 fontFamily: '"IBM Plex Mono", monospace',
-                fontSize: '0.6875rem',
+                fontSize: '0.75rem',
                 fontWeight: 500,
                 letterSpacing: '0.06em',
                 textTransform: 'uppercase',
@@ -550,6 +566,7 @@ const TaskEditor = ({ open, onClose, task = null }) => {
                 value={formData.recurrenceFreq}
                 onChange={handleChange('recurrenceFreq')}
                 label="Repeat interval"
+                sx={{ minHeight: { xs: 44, md: 'auto' } }}
               >
                 {RECURRENCE_OPTIONS.map((opt) => (
                   <MenuItem key={opt.value} value={opt.value}>

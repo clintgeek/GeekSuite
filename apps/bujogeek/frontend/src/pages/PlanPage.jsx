@@ -107,6 +107,11 @@ const PlanPage = () => {
               sx={{
                 position: 'relative',
                 py: 1.25,
+                // 44px real hit area on phones; unchanged desktop density
+                // (MOBILE_UI_PLAN.md §2).
+                minHeight: { xs: 44, md: 'auto' },
+                display: 'flex',
+                alignItems: 'center',
                 cursor: 'pointer',
                 transition: 'color 200ms ease',
                 '&:hover': {

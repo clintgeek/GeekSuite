@@ -474,9 +474,10 @@ const TaskRow = ({
                   gap:             0.375,
                   flexShrink:      0,
                   fontFamily:      '"IBM Plex Mono", monospace',
-                  fontSize:        '0.5625rem',
+                  // 12px floor (MOBILE_UI_PLAN.md §2) — was 0.5625rem/9px.
+                  fontSize:        '0.75rem',
                   fontWeight:      700,
-                  letterSpacing:   '0.08em',
+                  letterSpacing:   '0.06em',
                   textTransform:   'uppercase',
                   color:           staleInk,
                   backgroundColor: isDark ? 'rgba(122,68,98,0.18)' : `${colors.aging.stale}12`,
@@ -643,43 +644,69 @@ const TaskRow = ({
           </Typography>
         )}
 
-        {/* Tags */}
+        {/* Tags — 12px label, 24px visual chip, 44px hit area on phones
+            (MOBILE_UI_PLAN.md §4). The Chip itself stays a plain (non-button)
+            visual at its usual size; the real tap target is the wrapping
+            button, which only grows below `md` — desktop density is
+            untouched. */}
         {task.tags?.length > 0 && (
           <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5, flexWrap: 'wrap' }}>
             {task.tags.map((tag) => (
-              <Chip
+              <Box
                 key={tag}
-                label={`#${tag}`}
-                size="small"
+                component="button"
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   navigate(`/tags?tag=${encodeURIComponent(tag)}`);
                 }}
                 sx={{
-                  height:          22,
-                  fontSize:        '0.75rem',
-                  fontFamily:      '"IBM Plex Mono", monospace',
-                  fontWeight:      500,
-                  letterSpacing:   '0.02em',
-                  cursor:          'pointer',
-                  backgroundColor: isDark ? 'rgba(255,245,220,0.06)' : colors.ink[100],
-                  color:           isDark ? 'rgba(255,245,220,0.45)' : colors.ink[400],
-                  border:          `1px solid ${isDark ? 'rgba(255,245,220,0.1)' : colors.ink[200]}`,
-                  borderRadius:    '3px',
-                  '&:hover': {
-                    backgroundColor: isDark ? 'rgba(255,245,220,0.1)' : colors.ink[200],
-                    color:           isDark ? 'rgba(255,245,220,0.65)' : colors.ink[600],
-                  },
-                  '& .MuiChip-label': { px: 0.625 },
+                  display:        'inline-flex',
+                  alignItems:     'center',
+                  justifyContent: 'center',
+                  minWidth:       { xs: 44, md: 'auto' },
+                  minHeight:      { xs: 44, md: 'auto' },
+                  p:              0,
+                  m:              0,
+                  border:         0,
+                  background:     'none',
+                  cursor:         'pointer',
                 }}
-              />
+              >
+                <Chip
+                  component="span"
+                  label={`#${tag}`}
+                  size="small"
+                  sx={{
+                    height:          24,
+                    fontSize:        '0.75rem',
+                    fontFamily:      '"IBM Plex Mono", monospace',
+                    fontWeight:      500,
+                    letterSpacing:   '0.02em',
+                    pointerEvents:   'none',
+                    backgroundColor: isDark ? 'rgba(255,245,220,0.06)' : colors.ink[100],
+                    color:           isDark ? 'rgba(255,245,220,0.45)' : colors.ink[400],
+                    border:          `1px solid ${isDark ? 'rgba(255,245,220,0.1)' : colors.ink[200]}`,
+                    borderRadius:    '3px',
+                    'button:hover &': {
+                      backgroundColor: isDark ? 'rgba(255,245,220,0.1)' : colors.ink[200],
+                      color:           isDark ? 'rgba(255,245,220,0.65)' : colors.ink[600],
+                    },
+                    '& .MuiChip-label': { px: 0.625 },
+                  }}
+                />
+              </Box>
             ))}
           </Box>
         )}
 
-        {/* Parked-since label — the blocked row's answer to the aging label */}
+        {/* Parked-since label — the blocked row's answer to the aging label.
+            Decorative: the border color + the "Blocked" stamp already carry
+            this state, so the 9px caption is aria-hidden rather than bumped
+            to the 12px floor (MOBILE_UI_PLAN.md §2 — the "aging marks" carve-out). */}
         {isBlocked && parkedLabel && (
           <Typography
+            aria-hidden="true"
             sx={{
               fontFamily:   '"IBM Plex Mono", monospace',
               fontSize:     '0.5625rem',
@@ -695,9 +722,12 @@ const TaskRow = ({
           </Typography>
         )}
 
-        {/* Aging label — only for significantly aged tasks */}
+        {/* Aging label — only for significantly aged tasks. Decorative: the
+            aging border color already carries this signal; aria-hidden per
+            the same carve-out as the parked-since label above. */}
         {agingLabel && !isSunk && !isBlocked && days > 1 && (
           <Typography
+            aria-hidden="true"
             sx={{
               fontFamily:   '"IBM Plex Mono", monospace',
               fontSize:     '0.5625rem',
