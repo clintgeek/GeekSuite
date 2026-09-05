@@ -108,6 +108,39 @@ describe('PUT /api/settings validation', () => {
   });
 });
 
+describe('PUT /api/settings household hazard', () => {
+  // The gateway strips `household` from updateFitnessUserSettings because
+  // accepting it "let a client silently graft itself onto any household id" —
+  // bypassing /household/join's "leave first" check, and with it member
+  // enumeration and shared food-log reads. This route mirrors that now: the
+  // id is refused by the schema, and the whole object is dropped by the
+  // route's allow-list. (BURN_REVIEW #9.)
+  test('rejected: household_id through PUT / is a 400, as it already was on PUT /household', async () => {
+    const res = await request(buildApp())
+      .put('/api/settings')
+      .set('x-test-user', OWNER)
+      .send({ household: { household_id: 'abc123def456' } });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    expect(res.body.error.details).toEqual(
+      expect.arrayContaining([expect.objectContaining({ message: expect.stringContaining('household_id') })])
+    );
+    expect(UserSettings.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  test('accepted but not written: the share flags still validate, and the route drops them', async () => {
+    const res = await request(buildApp())
+      .put('/api/settings')
+      .set('x-test-user', OWNER)
+      .send({ household: { share_food_logs: false }, theme: 'dark' });
+
+    expect(res.status).toBe(200);
+    const update = UserSettings.findOneAndUpdate.mock.calls[0][1];
+    expect(update.$set).toEqual({ theme: 'dark' });
+  });
+});
+
 describe('PUT /api/settings/ai validation', () => {
   test('accepted: toggling a known AI feature', async () => {
     const res = await request(buildApp())

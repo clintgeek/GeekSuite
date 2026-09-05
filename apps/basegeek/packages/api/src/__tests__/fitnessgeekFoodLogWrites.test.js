@@ -489,3 +489,127 @@ describe('logMeal', () => {
     expect(summary.totals.calories).toBe(450); // 1x150 + 2x150
   });
 });
+
+// ---------------------------------------------------------------------------
+// the custom-food edit path (BURN_REVIEW #15, #19)
+// ---------------------------------------------------------------------------
+
+describe('FitnessFood exposes the serving it actually stores', () => {
+  // `FitnessFood` is declared flat (serving_size / serving_unit); the shared
+  // FoodItem schema stores `serving: {size, unit}`. With no field resolvers
+  // both answered null, and MyFoods' edit dialog — which pre-fills from the
+  // row it just read — rewrote every custom food's serving to its 100 g
+  // fallback on save.
+  test('serving_size / serving_unit resolve from serving.{size,unit}', async () => {
+    const food = await makeFood({ name: 'almonds', serving: { size: 28, unit: 'g' } });
+    expect(resolvers.FitnessFood.serving_size(food)).toBe(28);
+    expect(resolvers.FitnessFood.serving_unit(food)).toBe('g');
+  });
+
+  test('a freshly created food round-trips its serving through the type', async () => {
+    const created = await M.addFitnessFood(
+      null,
+      { input: { name: 'skyr', serving_size: 150, serving_unit: 'ml', nutrition: { ...NUTRITION } } },
+      ctx(ALICE)
+    );
+    expect(resolvers.FitnessFood.serving_size(created)).toBe(150);
+    expect(resolvers.FitnessFood.serving_unit(created)).toBe('ml');
+  });
+});
+
+describe('updateFitnessFood is a partial patch', () => {
+  const seedFood = () =>
+    makeFood({ name: 'granola', serving: { size: 45, unit: 'g' }, nutrition: { ...NUTRITION } });
+
+  test('a nutrition patch keeps the macros it did not mention', async () => {
+    const food = await seedFood();
+
+    const updated = await M.updateFitnessFood(
+      null,
+      { id: String(food._id), input: { nutrition: { calories_per_serving: 210 } } },
+      ctx(ALICE)
+    );
+
+    expect(updated.nutrition.calories_per_serving).toBe(210);
+    // Wholesale replacement reset these six to the schema's 0.
+    expect(updated.nutrition.protein_grams).toBe(NUTRITION.protein_grams);
+    expect(updated.nutrition.carbs_grams).toBe(NUTRITION.carbs_grams);
+    expect(updated.nutrition.fat_grams).toBe(NUTRITION.fat_grams);
+    expect(updated.nutrition.fiber_grams).toBe(NUTRITION.fiber_grams);
+    expect(updated.nutrition.sugar_grams).toBe(NUTRITION.sugar_grams);
+    expect(updated.nutrition.sodium_mg).toBe(NUTRITION.sodium_mg);
+  });
+
+  test('a serving_unit-only edit keeps serving.size — a required, min 0.1 path', async () => {
+    const food = await seedFood();
+
+    const updated = await M.updateFitnessFood(
+      null,
+      { id: String(food._id), input: { serving_unit: 'oz' } },
+      ctx(ALICE)
+    );
+
+    expect(updated.serving.unit).toBe('oz');
+    expect(updated.serving.size).toBe(45);
+  });
+
+  test('a serving_size-only edit keeps the unit rather than defaulting it to g', async () => {
+    const food = await makeFood({ name: 'kefir', serving: { size: 240, unit: 'ml' } });
+
+    const updated = await M.updateFitnessFood(
+      null,
+      { id: String(food._id), input: { serving_size: 200 } },
+      ctx(ALICE)
+    );
+
+    expect(updated.serving.size).toBe(200);
+    expect(updated.serving.unit).toBe('ml');
+  });
+
+  test('another user’s food is still untouchable', async () => {
+    const food = await seedFood();
+    await expect(
+      M.updateFitnessFood(null, { id: String(food._id), input: { serving_size: 1 } }, ctx(BOB))
+    ).rejects.toThrow(/not found or unauthorized/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// the calendar day comes from the client, never the server clock
+// (BURN_REVIEW #14)
+// ---------------------------------------------------------------------------
+
+describe('per-day reads require the caller’s date', () => {
+  // The gateway runs in UTC (no image installs tzdata, so TZ is inert). A
+  // server-clock default answered about tomorrow for every Central-time
+  // caller after 19:00 — an empty ring on the dashboard. The browser sends
+  // localDateString() now, and a missing date is a loud caller bug.
+  test('dailySummary without a date throws instead of guessing', async () => {
+    await expect(resolvers.Query.dailySummary(null, {}, ctx(ALICE))).rejects.toThrow(
+      /requires a date/i
+    );
+  });
+
+  test('refreshDailySummary without a date throws too', async () => {
+    await expect(M.refreshDailySummary(null, {}, ctx(ALICE))).rejects.toThrow(/requires a date/i);
+  });
+
+  test('a non-calendar date is rejected rather than coerced', async () => {
+    await expect(
+      resolvers.Query.dailySummary(null, { date: 'today' }, ctx(ALICE))
+    ).rejects.toThrow(/YYYY-MM-DD/);
+  });
+
+  test('with a date it answers about that day', async () => {
+    const food = await makeFood();
+    await M.addFoodLog(
+      null,
+      { input: { food_item_id: String(food._id), log_date: '2026-03-04', meal_type: 'lunch', servings: 2 } },
+      ctx(ALICE)
+    );
+
+    const summary = await resolvers.Query.dailySummary(null, { date: '2026-03-04' }, ctx(ALICE));
+    expect(summary.date).toBe('2026-03-04');
+    expect(summary.totals.calories).toBe(300);
+  });
+});

@@ -142,3 +142,150 @@ describe('POST /api/settings/household/create', () => {
     expect(res.body.error.code).toBe('ALREADY_IN_HOUSEHOLD');
   });
 });
+
+// ---------------------------------------------------------------------------
+// PUT /api/settings — the write shape
+// ---------------------------------------------------------------------------
+//
+// This route used to compose an update object with TWO `$set` keys — the
+// Garmin dot-paths first, then a second `$set` for the ordinary fields — so
+// the second silently won and any body carrying both dropped the Garmin write
+// entirely. That is every save the Settings page makes. (BURN_REVIEW #6.)
+//
+// The throwaway key below is fixed and worthless; crypto-vault reads
+// KEY_VAULT_SECRET once at module load, so it is set before the first import
+// that reaches it.
+process.env.KEY_VAULT_SECRET = 'ab'.repeat(32);
+
+const { default: mongoose } = await import('mongoose');
+const vault = await import('@geeksuite/crypto-vault');
+const schemaModule = await import('@geeksuite/schemas/fitnessgeek/userSettings');
+const { createUserSettingsSchema } = schemaModule.default ?? schemaModule;
+
+/** The update object the route handed the model. */
+const capturedUpdate = () => UserSettings.findOneAndUpdate.mock.calls[0][1];
+
+/**
+ * Run the shared schema's registered pre-middleware over a real (unexecuted)
+ * mongoose query carrying `update`, exactly as the live write would. Same
+ * technique as __tests__/security/garminPasswordEncryption.test.js — this
+ * suite has no Mongo, and a hand-rolled stand-in would not prove the hook is
+ * registered on the operation the route actually uses.
+ */
+let modelSeq = 0;
+const runUpdateHooks = async (update) => {
+  const schema = createUserSettingsSchema(mongoose);
+  const Model = mongoose.model(`UserSettingsRoute_${modelSeq += 1}`, schema);
+  const query = Model.findOneAndUpdate({ user_id: OWNER }, update);
+  await new Promise((resolve, reject) => {
+    schema.s.hooks.execPre('findOneAndUpdate', query, [], (err) => (err ? reject(err) : resolve()));
+  });
+  return query.getUpdate();
+};
+
+describe('PUT /api/settings write shape', () => {
+  const okDoc = () => ({ toObject: () => ({ user_id: OWNER }) });
+
+  test('a Garmin write in the same body as an ordinary field survives — one $set, dot paths', async () => {
+    UserSettings.findOneAndUpdate.mockResolvedValue(okDoc());
+
+    const res = await request(buildApp())
+      .put('/api/settings')
+      .set('x-test-user', OWNER)
+      .send({ garmin: { enabled: true, username: 'me@example.com' }, theme: 'dark' });
+
+    expect(res.status).toBe(200);
+    const update = capturedUpdate();
+    // Exactly one $set — the old shape had two and the second overwrote the first.
+    expect(Object.keys(update)).toEqual(['$set']);
+    expect(update.$set).toEqual({
+      'garmin.enabled': true,
+      'garmin.username': 'me@example.com',
+      theme: 'dark',
+    });
+    // Scoped to the caller.
+    expect(UserSettings.findOneAndUpdate.mock.calls[0][0]).toEqual({ user_id: OWNER });
+  });
+
+  test('every sub-document is dotted, so a partial nutrition_goal save merges', async () => {
+    UserSettings.findOneAndUpdate.mockResolvedValue(okDoc());
+
+    await request(buildApp())
+      .put('/api/settings')
+      .set('x-test-user', OWNER)
+      .send({ nutrition_goal: { enabled: false } });
+
+    // Not `{nutrition_goal: {enabled:false}}`, which would replace the whole
+    // sub-document and erase bmr/tdee/weekly_schedule/keto.
+    expect(capturedUpdate().$set).toEqual({ 'nutrition_goal.enabled': false });
+  });
+
+  test('an array field is written whole, not merged index by index', async () => {
+    UserSettings.findOneAndUpdate.mockResolvedValue(okDoc());
+
+    await request(buildApp())
+      .put('/api/settings')
+      .set('x-test-user', OWNER)
+      .send({ dashboard: { card_order: ['weight_goal', 'nutrition_goal'] } });
+
+    expect(capturedUpdate().$set).toEqual({
+      'dashboard.card_order': ['weight_goal', 'nutrition_goal'],
+    });
+  });
+
+  test('a Garmin password sent through REST reaches Mongo encrypted', async () => {
+    UserSettings.findOneAndUpdate.mockResolvedValue(okDoc());
+    const PLAINTEXT = 'garmin-pass-example';
+
+    const res = await request(buildApp())
+      .put('/api/settings')
+      .set('x-test-user', OWNER)
+      .send({ garmin: { enabled: true, username: 'me@example.com', password: PLAINTEXT }, theme: 'dark' });
+
+    expect(res.status).toBe(200);
+    // The route's own update still carries the credential (it is on its way to
+    // the model)...
+    expect(capturedUpdate().$set['garmin.password']).toBe(PLAINTEXT);
+
+    // ...and the shared schema's pre(findOneAndUpdate) hook packs it before it
+    // reaches the driver. The dot-path shape is the one this route writes.
+    const hooked = await runUpdateHooks(capturedUpdate());
+    const stored = hooked.$set['garmin.password'];
+    expect(vault.isEncrypted(stored)).toBe(true);
+    expect(stored).not.toContain(PLAINTEXT);
+    expect(vault.decrypt(stored)).toBe(PLAINTEXT);
+    // The rest of the same $set is untouched.
+    expect(hooked.$set['garmin.username']).toBe('me@example.com');
+    expect(hooked.$set.theme).toBe('dark');
+    // And the response never carries it back.
+    expect(JSON.stringify(res.body)).not.toContain(PLAINTEXT);
+  });
+
+  test('household is not writable here — the ownership hazard the gateway refuses', async () => {
+    UserSettings.findOneAndUpdate.mockResolvedValue(okDoc());
+
+    const res = await request(buildApp())
+      .put('/api/settings')
+      .set('x-test-user', OWNER)
+      .send({ household: { share_weight: true }, theme: 'dark' });
+
+    expect(res.status).toBe(200);
+    // Shaped by zod, then dropped by the route's allow-list — same answer
+    // basegeek's updateFitnessUserSettings gives. Membership and the share
+    // flags belong to PUT /household and /household/create|join|leave.
+    expect(capturedUpdate().$set).toEqual({ theme: 'dark' });
+  });
+
+  test('a body with nothing writable in it does not send an empty $set', async () => {
+    UserSettings.findOneAndUpdate.mockResolvedValue(okDoc());
+
+    const res = await request(buildApp())
+      .put('/api/settings')
+      .set('x-test-user', OWNER)
+      .send({ household: { share_meals: true } });
+
+    expect(res.status).toBe(200);
+    // An empty $set is a MongoDB error; the upsert falls back to $setOnInsert.
+    expect(capturedUpdate()).toEqual({ $setOnInsert: { user_id: OWNER } });
+  });
+});

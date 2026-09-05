@@ -25,6 +25,53 @@ import { settingsUpdateSchema, aiUpdateSchema, dashboardUpdateSchema, householdU
  * the frontend's Settings page rebuilds `garmin` from `enabled` + `username`
  * only, so nothing on the client reads the removed field.
  */
+/**
+ * Sub-document paths whose value is one opaque blob (`Schema.Types.Mixed`) and
+ * must be written whole rather than merged key by key: Garmin's own OAuth
+ * token objects. A per-key merge would leave a previous token's fields beside
+ * the new one's.
+ */
+const OPAQUE_PATHS = new Set(['garmin.oauth1_token', 'garmin.oauth2_token']);
+
+const isPlainObject = (value) =>
+  value !== null &&
+  typeof value === 'object' &&
+  !Array.isArray(value) &&
+  !(value instanceof Date) &&
+  (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
+
+/**
+ * Flatten a nested settings patch into MongoDB dot paths so `$set` MERGES the
+ * sub-document instead of replacing it.
+ *
+ * Arrays (`dashboard.card_order`, `nutrition_goal.weekly_schedule`), Dates,
+ * scalars and the Mixed paths above are leaves. `undefined` and empty objects
+ * are dropped — `$set: {nutrition_goal: {}}` would reset the sub-document to
+ * its schema defaults, which is precisely what this exists to prevent.
+ *
+ * Twin of `flattenSettingsUpdate` in basegeek's fitnessgeek resolvers; both
+ * writers hit the same collection, so they have to agree. The shared home for
+ * this is `@geeksuite/schemas/fitnessgeek/userSettings` — see
+ * apps/fitnessgeek/DOCS/USER_SETTINGS_SCHEMA.md.
+ *
+ * `garmin.password` is still encrypted on the way out: the shared schema's
+ * `pre(findOneAndUpdate)` hook rewrites it in the dot-path form as well as the
+ * nested one (`encryptGarminPasswordIn`), which
+ * `__tests__/security/garminPasswordEncryption.test.js` pins.
+ */
+function flattenForSet(input, prefix = '', out = {}) {
+  for (const [key, value] of Object.entries(input || {})) {
+    if (value === undefined) continue;
+    const path = prefix ? `${prefix}.${key}` : key;
+    if (isPlainObject(value) && !OPAQUE_PATHS.has(path)) {
+      if (Object.keys(value).length) flattenForSet(value, path, out);
+      continue;
+    }
+    out[path] = value;
+  }
+  return out;
+}
+
 function sanitizeSettings(doc) {
   const sanitized = typeof doc?.toObject === 'function' ? doc.toObject() : { ...doc };
   if (sanitized.garmin) {
@@ -73,7 +120,17 @@ router.put('/', validate({ body: settingsUpdateSchema }), async (req, res) => {
     const userId = req.user.id;
     const updateData = req.body;
 
-    // Validate update data structure
+    // Validate update data structure.
+    //
+    // `household` is NOT here, deliberately, and it is not in this route's
+    // contract even though the zod schema still shapes it: membership and the
+    // share flags belong to PUT /household and the create/join/leave routes,
+    // which enforce the "leave before you join" invariant. Accepting
+    // `household.household_id` here let a client PUT any 12-hex code and graft
+    // itself onto that household — member enumeration and shared food-log
+    // reads — bypassing that check entirely. basegeek's gateway strips
+    // `household` from `updateFitnessUserSettings` for exactly this reason;
+    // this is the same rule, in the same words. (BURN_REVIEW #9.)
     const allowedFields = [
       'dashboard',
       'theme',
@@ -82,8 +139,7 @@ router.put('/', validate({ body: settingsUpdateSchema }), async (req, res) => {
       'ai',
       'nutrition_goal',
       'weight_goal',
-      'garmin',
-      'household'
+      'garmin'
     ];
 
     const validUpdateData = {};
@@ -105,12 +161,25 @@ router.put('/', validate({ body: settingsUpdateSchema }), async (req, res) => {
       validUpdateData.garmin = garminUpdate;
     }
 
-    // Use findOneAndUpdate to avoid replacing nested objects (preserve token fields)
+    // ONE `$set`, dot paths throughout.
+    //
+    // This used to compose an object literal with TWO `$set` keys — the Garmin
+    // one first, then a second for the ordinary fields — and the second
+    // silently won. Any body carrying both (`{garmin:{...}, theme:'dark'}`,
+    // which is what the Settings page sends) dropped the Garmin write on the
+    // floor, encrypted password and all. (BURN_REVIEW #6.)
+    //
+    // Dot paths for every sub-document, not just `garmin`: `$set` with a
+    // nested object REPLACES the whole sub-document, so a partial
+    // `nutrition_goal` save would erase bmr/tdee/weekly_schedule/keto the same
+    // way a partial `garmin` save erased the tokens. Same rule, and the same
+    // helper's twin, as the gateway's `flattenSettingsUpdate`
+    // (apps/basegeek/packages/api/src/graphql/fitnessgeek/resolvers.js).
+    const $set = flattenForSet(validUpdateData);
+
     const settings = await UserSettings.findOneAndUpdate(
       { user_id: userId },
-      validUpdateData.garmin
-        ? { $set: Object.fromEntries(Object.entries(validUpdateData.garmin).map(([k, v]) => [`garmin.${k}`, v])) , ...(Object.keys(validUpdateData).some(k => k !== 'garmin') ? { $setOnInsert: {} } : {}) , ...(Object.keys(validUpdateData).some(k => ['dashboard','theme','notifications','units','ai','nutrition_goal','weight_goal'].includes(k)) ? { $set: Object.fromEntries(Object.entries(validUpdateData).filter(([k]) => ['dashboard','theme','notifications','units','ai','nutrition_goal','weight_goal'].includes(k))) } : {}) }
-        : { $set: validUpdateData },
+      Object.keys($set).length ? { $set } : { $setOnInsert: { user_id: userId } },
       { upsert: true, new: true }
     );
 

@@ -125,18 +125,17 @@ const weightGoalSchema = z.object({
 }).strict();
 
 // ---- household ----------------------------------------------------------
-// PUT / passes `household` through unfiltered today (unlike garmin, there is
-// no local allow-list in that branch), so this nested shape includes
-// household_id. The dedicated `PUT /household` route below never accepts
-// household_id — you can't reassign your household code through it.
-const householdNestedSchema = z.object({
-  household_id: z.string().max(32).optional(),
-  display_name: z.string().trim().max(100).optional(),
-  share_food_logs: bool().optional(),
-  share_weight: bool().optional(),
-  share_meals: bool().optional(),
-}).strict();
-
+// NO `household_id`, on either schema. It used to be accepted here because
+// `PUT /` passed `household` through unfiltered — which meant a client could
+// PUT any 12-hex household code and graft itself onto that household,
+// bypassing the "leave before you join" check on `/household/join` and
+// gaining member enumeration plus shared food-log reads. basegeek's gateway
+// strips `household` from `updateFitnessUserSettings` for exactly this
+// reason; `settingsRoutes.js` now does the same, and this schema refuses the
+// id outright so an attempt is a loud 400 rather than a silent drop.
+// (BURN_REVIEW #9.) Membership changes go through
+// `/household/create|join|leave`; the share flags and display name go through
+// `PUT /household` (householdPutSchema below).
 const householdPutSchema = z.object({
   display_name: z.string().trim().max(100).optional(),
   share_food_logs: bool().optional(),
@@ -144,8 +143,16 @@ const householdPutSchema = z.object({
   share_meals: bool().optional(),
 }).strict();
 
+// The nested shape `PUT /` will *shape* (and then drop, see above) is the same
+// one `PUT /household` writes — minus household_id on both, which is the point.
+const householdNestedSchema = householdPutSchema;
+
 // ---- PUT /api/settings ------------------------------------------------------
-// Matches the `allowedFields` allow-list in settingsRoutes.js exactly.
+// Matches the `allowedFields` allow-list in settingsRoutes.js, plus
+// `household` — which that route deliberately does NOT write (see the
+// household note above). It stays here so a body that carries the share flags
+// is still shaped and answered 200-with-no-household-write, exactly as the
+// gateway answers it, instead of 400ing on an unrecognized key.
 const settingsUpdateSchema = z.preprocess(stripMongoMeta, z.object({
   dashboard: dashboardSchema.optional(),
   theme: z.enum(['light', 'dark', 'auto']).optional(),

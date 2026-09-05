@@ -48,6 +48,94 @@ const toFoodItemDoc = (input = {}) => {
 };
 
 /**
+ * The calendar day a per-day read or recompute applies to.
+ *
+ * There is no defaulting here on purpose. This process runs in UTC (no image
+ * installs tzdata, so `TZ=America/Chicago` is inert — BURN_REVIEW #13), so
+ * `format(new Date(), 'yyyy-MM-dd')` is the *server's* day: between 19:00 and
+ * midnight Central it is already tomorrow, and the client that asked for
+ * "today" got an empty ring. Only the browser knows the user's calendar day,
+ * and it already computes one (`localDateString()` /
+ * `fitnessGeekService.toApiDate`) for every write. So the read demands it too:
+ * a missing date is a caller bug, and it fails loudly rather than quietly
+ * answering about the wrong day. (BURN_REVIEW #14.)
+ *
+ * @param {string} date  a client-supplied `YYYY-MM-DD`
+ * @param {string} field the resolver name, for the error message
+ * @returns {string} the same date
+ */
+const requireCalendarDate = (date, field) => {
+  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
+  if (!date) {
+    throw new Error(
+      `${field} requires a date: the server cannot infer the caller's calendar day ` +
+      '(it runs in UTC). Send localDateString() as `date` (YYYY-MM-DD).'
+    );
+  }
+  throw new Error(`${field}: \`date\` must be a YYYY-MM-DD calendar date`);
+};
+
+/**
+ * Sub-document paths under `UserSettings` whose value is a whole opaque blob
+ * (`Schema.Types.Mixed`) and must be written as ONE value, not merged key by
+ * key. `garmin.oauth1_token` / `oauth2_token` are Garmin's own token objects:
+ * a partial merge would leave fields from a previous token alongside the new
+ * one and hand a Frankenstein credential to the Garmin client.
+ */
+const SETTINGS_OPAQUE_PATHS = new Set(['garmin.oauth1_token', 'garmin.oauth2_token']);
+
+const isPlainObject = (value) =>
+  value !== null &&
+  typeof value === 'object' &&
+  !Array.isArray(value) &&
+  !(value instanceof Date) &&
+  (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
+
+/**
+ * Flatten a nested `FitnessUserSettingsInput` into MongoDB dot paths, so
+ * `$set` MERGES a sub-document instead of REPLACING it.
+ *
+ * `UserSettings.updateSettings` does `{ $set: updateData }` verbatim. Handed
+ * `{garmin: {enabled: true, username: 'x'}}` — exactly what the Settings page
+ * sends when the password box is left blank — MongoDB replaces the whole
+ * `garmin` sub-document, deleting the encrypted `password`, both OAuth tokens
+ * and `last_connected_at`. The same shape erased a whole `nutrition_goal`
+ * (start/target weight, bmr, tdee, weekly_schedule, the keto block) on the
+ * "Remove Goal" click, which sends `{nutrition_goal: {enabled: false}}`.
+ * Dotted, that write touches `garmin.enabled` / `garmin.username` only.
+ * (BURN_REVIEW #5. fitnessgeek's REST twin dots the same paths out —
+ * `apps/fitnessgeek/backend/src/routes/settingsRoutes.js`.)
+ *
+ * Leaves — arrays (`dashboard.card_order`, `nutrition_goal.weekly_schedule`,
+ * `favorite_foods`), Dates, scalars and the Mixed paths above — are set whole.
+ * `undefined` values and empty objects are dropped: neither expresses an
+ * intent MongoDB can act on, and `$set: {nutrition_goal: {}}` would reset the
+ * sub-document to schema defaults, which is the very bug this prevents.
+ *
+ * Encryption still fires: the shared schema's `pre(findOneAndUpdate)` hook
+ * rewrites `garmin.password` in BOTH the dot-path and the nested form — see
+ * `encryptGarminPasswordIn` in @geeksuite/schemas/fitnessgeek/userSettings and
+ * the `garminPasswordEncryption` suite that pins both shapes.
+ *
+ * @param {Object} input   the nested settings patch
+ * @param {string} [prefix] internal — the dot path built so far
+ * @param {Object} [out]    internal — the accumulator
+ * @returns {Object} a flat `{ 'a.b.c': value }` map ready for `$set`
+ */
+export const flattenSettingsUpdate = (input, prefix = '', out = {}) => {
+  for (const [key, value] of Object.entries(input || {})) {
+    if (value === undefined) continue;
+    const path = prefix ? `${prefix}.${key}` : key;
+    if (isPlainObject(value) && !SETTINGS_OPAQUE_PATHS.has(path)) {
+      if (Object.keys(value).length) flattenSettingsUpdate(value, path, out);
+      continue;
+    }
+    out[path] = value;
+  }
+  return out;
+};
+
+/**
  * Resolve the catalog row a food log should point at, matching REST
  * `POST /api/logs` (apps/fitnessgeek/backend/src/routes/logRoutes.js).
  *
@@ -450,7 +538,7 @@ export const resolvers = {
 
     dailySummary: async (_, { date }, { user }) => {
       if (!user) throw new Error('Unauthorized');
-      const targetDate = date || format(new Date(), 'yyyy-MM-dd');
+      const targetDate = requireCalendarDate(date, 'dailySummary');
       const settings = await UserSettings.findOne({ user_id: user.id });
       const calorieGoal = settings?.nutrition_goal?.daily_calorie_target || null;
       const summary = await DailySummary.updateFromLogs(user.id, targetDate);
@@ -787,8 +875,8 @@ export const resolvers = {
 
     refreshDailySummary: async (_, { date }, { user }) => {
       if (!user) throw new Error('Unauthorized');
-      const d = date || format(new Date(), 'yyyy-MM-dd');
-      return DailySummary.updateFromLogs(user.id, d);
+      // Same rule as the `dailySummary` query: the caller owns the calendar.
+      return DailySummary.updateFromLogs(user.id, requireCalendarDate(date, 'refreshDailySummary'));
     },
 
     logMeal: async (_, { mealId, date, mealType }, { user }) => {
@@ -831,7 +919,9 @@ export const resolvers = {
       // free-form JSON let a client silently graft itself onto any household id.
       const { theme, household: _ignoredHousehold, ...otherSettings } = input;
 
-      const promises = [UserSettings.updateSettings(user.id, otherSettings)];
+      // Dot paths, never whole sub-objects: a partial save must MERGE. See
+      // flattenSettingsUpdate() above (BURN_REVIEW #5).
+      const promises = [UserSettings.updateSettings(user.id, flattenSettingsUpdate(otherSettings))];
       
       if (theme) {
         const { User } = await import('../../models/user.js');
@@ -879,14 +969,26 @@ export const resolvers = {
     },
     updateFitnessFood: async (_, { id, input }, { user }) => {
       if (!user) throw new Error('Unauthorized');
-      const { serving_size, serving_unit, id: _id, source: _source, source_id: _sourceId, ...rest } = input;
-      const update = {
-        ...rest,
-        ...(serving_size != null || serving_unit != null
-          ? { serving: { size: serving_size, unit: serving_unit || 'g' } }
-          : {}),
-        updated_at: new Date(),
-      };
+      // A partial edit must MERGE. `{nutrition: {...}}` / `{serving: {...}}`
+      // as nested literals make MongoDB replace the whole sub-document: a
+      // calories-only edit would reset the other six macros to the schema's
+      // `0`, and a unit-only edit would delete `serving.size` — a
+      // `required, min: 0.1` path, with update validators off, so the row
+      // only fails the NEXT time something touches it. Dot paths, and only
+      // for the keys the client actually sent. (BURN_REVIEW #19.)
+      const {
+        serving_size, serving_unit, nutrition,
+        id: _id, source: _source, source_id: _sourceId,
+        ...rest
+      } = input;
+      const update = { ...rest, updated_at: new Date() };
+      if (nutrition && typeof nutrition === 'object') {
+        for (const [key, value] of Object.entries(nutrition)) {
+          if (value !== undefined) update[`nutrition.${ key }`] = value;
+        }
+      }
+      if (serving_size != null) update['serving.size'] = serving_size;
+      if (serving_unit != null) update['serving.unit'] = serving_unit;
       const food = await FoodItem.findOneAndUpdate(
         { _id: id, user_id: user.id },
         update,
@@ -1135,7 +1237,17 @@ export const resolvers = {
   FitnessUserSettings: { id: (s) => s._id.toString() },
   FitnessWeight: { id: (w) => w._id.toString() },
   NutritionGoals: { id: (g) => g._id.toString() },
-  FitnessFood: { id: (f) => f._id.toString() },
+  // `FitnessFood` is declared FLAT (serving_size / serving_unit) while the
+  // shared FoodItem schema stores `serving: {size, unit}`. Without these two
+  // resolvers mongoose hands back a document with no such properties and
+  // GraphQL answers null for both — which is how MyFoods' edit dialog, which
+  // pre-fills from the row it just read, rewrote every custom food's serving
+  // to the 100 g fallback. (BURN_REVIEW #15.)
+  FitnessFood: {
+    id: (f) => f._id.toString(),
+    serving_size: (f) => f.serving?.size ?? f.serving_size ?? null,
+    serving_unit: (f) => f.serving?.unit ?? f.serving_unit ?? null,
+  },
   FoodLog: { id: (l) => l._id.toString() },
   FitnessMeal: { id: (m) => m._id.toString() },
   FitnessMedication: { id: (m) => m._id.toString() },
