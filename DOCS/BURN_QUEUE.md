@@ -9,7 +9,6 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
-| R2 | AIGeek UI: "Apps & keys" tab replaces detected routing; retire APIKeysPage | opus | basegeek ui, graphql/basegeek (additive) | 09-05 am |
 | R4 | M6 guardrails: mobile harness into `tools/mobile-harness`, CI workflow | opus | tools/, .github/workflows/mobile-harness.yml | 09-05 am |
 | R5 | TODO #17 shared date utilities → `packages/utils`; bujogeek/fitnessgeek/flockgeek consume | opus | packages/utils, 3 apps (date code only) | 09-05 am |
 | R9 | TODO #25/#26 bujogeek subtasks UI + Apollo cache invalidation | opus | bujogeek frontend, its GraphQL surface | 09-05 am |
@@ -19,6 +18,10 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | R19 | Q8: OpenAI-compat fixes (flip the 22 it.failing) + last llm7 refs (Q12) | opus | openaiProxy, aiRoutes, aiService, capabilities, director/rateLimit refs, docs | 09-05 13:15 |
 | R20 | Q7: CSRF double-submit token (report mode default) + packages/auth header | opus | basegeek middleware/csrf*, server.js order, auth routes, packages/auth, ui api.js | 09-05 13:15 |
 | R13 | Offline pages per mode + theme-color/manifest audit (TODO #30) + bookgeek CONTEXT runtime fix | sonnet | each app's public/offline/manifest/index.html metas; PWA_STANDARD table | 09-05 12:10 |
+
+**Push gate:** `pnpm install --frozen-lockfile` on HEAD fails — the committed lockfile carries
+bookgeek/web (and likely flockgeek) test devDeps whose package.json is still in flight (Q6/R18).
+Push only after those two land, then re-run the check in a detached worktree of HEAD.
 
 ## Queued (launch when files free / prerequisite lands)
 
@@ -67,6 +70,7 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 - `6d7865c` — R7 — one UserSettings schema (@geeksuite/schemas) + parity tripwire
 - `61997ed` — R6 — @geeksuite/logger in all seven backends; first-ever log redaction
 - `a0b08ca` — R10 — GeekAppFrame fill, sheet focus/close/align, dialog hooks, reduced motion (354 ui tests)
+- `6c39d00` — R2 — Apps & keys tab; APIKeysPage retired; AppConfigDialog on GeekDialog
 - `92e7bc9` — R1 — caller identity from the credential; service keys; mint script; fitnessGoalService envelope fix
 - `9dede26` — R14 — circuit breakers on fitnessgeek upstreams (58 tests)
 - `9e9b4a4` — R15 — storygeek on GeekAppFrame fill
