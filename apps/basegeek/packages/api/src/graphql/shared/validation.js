@@ -33,7 +33,24 @@ import { toUtcMidnight } from '@geeksuite/utils/dates';
  * 24-hex-char ObjectId shape.
  */
 
+/**
+ * The default floor: 2000-01-01. Every date the suite *schedules* — a due
+ * date, a hatch date, a habit log — is a recent or near-future day, and a
+ * date below this floor is a typo or a unix-epoch zero, not a real value.
+ */
 export const MIN_DATE = new Date(Date.UTC(2000, 0, 1));
+
+/**
+ * The floor for a date that is a *historical fact* rather than a scheduling
+ * value — a book's publication date, say. The 2000 floor is correct for
+ * everything the suite plans, and catastrophically wrong for anything it
+ * merely records: with it in place, every metadata edit on a pre-2000 book
+ * was rejected outright, because the edit dialog resends `publishedDate`
+ * unchanged (BURN_REVIEW #1). 1000-01-01 keeps the typo/epoch-zero catch
+ * without arguing with the printing press.
+ */
+export const MIN_HISTORICAL_DATE = new Date(Date.UTC(1000, 0, 1));
+
 export const MAX_YEARS_OUT = 10;
 
 export function maxDate() {
@@ -42,11 +59,12 @@ export function maxDate() {
   return d;
 }
 
-export function inRange(d) {
-  return d >= MIN_DATE && d <= maxDate();
+export function inRange(d, min = MIN_DATE) {
+  return d >= min && d <= maxDate();
 }
 
-const OUT_OF_RANGE = `date must be between ${MIN_DATE.toISOString().slice(0, 10)} and ${MAX_YEARS_OUT} years from now`;
+const outOfRangeMessage = (min) =>
+  `date must be between ${min.toISOString().slice(0, 10)} and ${MAX_YEARS_OUT} years from now`;
 
 /** A reference to another document — see the module doc above for why this is
  *  deliberately not ObjectId-shape-validated. */
@@ -56,7 +74,7 @@ export const idString = z.string().trim().min(1).max(256);
  * An instant: a `Date`, an ISO string, or epoch millis. Parsed and
  * range-checked; the time-of-day (if any) is preserved exactly.
  */
-export function instantField({ required = false } = {}) {
+export function instantField({ required = false, min = MIN_DATE } = {}) {
   const base = z.union([z.date(), z.string().trim().min(1), z.number()]);
   const optional = required ? base : base.nullable().optional();
   return optional.transform((val, ctx) => {
@@ -66,8 +84,8 @@ export function instantField({ required = false } = {}) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'must be a valid date' });
       return z.NEVER;
     }
-    if (!inRange(d)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: OUT_OF_RANGE });
+    if (!inRange(d, min)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: outOfRangeMessage(min) });
       return z.NEVER;
     }
     return d;
@@ -79,7 +97,7 @@ export function instantField({ required = false } = {}) {
  * `@geeksuite/utils`'s `toUtcMidnight`, so a client that sends a full instant
  * for a day-granularity field stores the same day everybody else stores.
  */
-export function calendarDateField({ required = true } = {}) {
+export function calendarDateField({ required = true, min = MIN_DATE } = {}) {
   const base = z.union([z.date(), z.string().trim().min(1), z.number()]);
   const optional = required ? base : base.nullable().optional();
   return optional.transform((val, ctx) => {
@@ -89,12 +107,27 @@ export function calendarDateField({ required = true } = {}) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'must be a valid calendar date (YYYY-MM-DD)' });
       return z.NEVER;
     }
-    if (!inRange(normalized)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: OUT_OF_RANGE });
+    if (!inRange(normalized, min)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: outOfRangeMessage(min) });
       return z.NEVER;
     }
     return normalized;
   });
+}
+
+/**
+ * A calendar date that records something that *already happened*, possibly
+ * long ago — the `MIN_HISTORICAL_DATE` floor instead of the scheduling one,
+ * same "10 years out" ceiling, same UTC-midnight normalization.
+ *
+ * Use it for a date that is a fact about the world (a book's publication
+ * date); keep `calendarDateField()` for a date the suite plans or logs
+ * (a hatch date, a habit day, a due date). If you are unsure which you have,
+ * ask whether a value from 1965 would be a bug. If it would not, it belongs
+ * here.
+ */
+export function historicalDateField({ required = false } = {}) {
+  return calendarDateField({ required, min: MIN_HISTORICAL_DATE });
 }
 
 /**

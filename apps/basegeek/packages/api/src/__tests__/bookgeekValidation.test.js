@@ -21,8 +21,15 @@
  *      `removeBookShelf`'s id deliberately accepts `''` the way
  *      `bookgeekProfile.test.js`'s "a built-in shelf can never be removed"
  *      case expects.
- *   5. `publishedDate` is a calendar day (normalizes to UTC midnight);
- *      `dateStarted`/`dateFinished` are instants (time-of-day preserved).
+ *   5. `publishedDate` is a calendar day (normalizes to UTC midnight) and a
+ *      HISTORICAL one — a 1000-01-01 floor, not the shared 2000-01-01
+ *      scheduling floor, because the edit dialog resends it on every save and
+ *      a 2000 floor made every pre-2000 book permanently uneditable
+ *      (BURN_REVIEW #1). `dateStarted`/`dateFinished` are instants
+ *      (time-of-day preserved) and keep the 2000 floor.
+ *   7. Nullable is decided per field against the GraphQL type: `title` on
+ *      update is optional but never `null`, because `Book.title` is `String!`
+ *      and the resolver `$set`s the raw input (BURN_REVIEW #7).
  *   6. Fields the resolver already validates itself (`deviceWord`,
  *      `kindleEmail`, a filter's `name`, a shelf's `label`) still reach the
  *      resolver on a blank or semantically-invalid value — this layer only
@@ -188,6 +195,72 @@ describe('updateBook', () => {
     expectBadInput(() => validate({ id: ID, input: { publishedDate: 'not-a-date' } }));
     expectBadInput(() => validate({ id: ID, input: { dateStarted: '1970-01-01' } }));
     expectBadInput(() => validate({ id: ID, input: { dateStarted: '2099-01-01' } }));
+  });
+
+  // BURN_REVIEW #1. The shared 2000-01-01 floor is right for a date the suite
+  // *schedules* and wrong for one it merely *records*. The edit dialog seeds
+  // `publishedDate` from the book and resends it on every save, so with the
+  // scheduling floor in place a rating change on Dune came back as
+  // BAD_USER_INPUT — i.e. most of a real library was uneditable.
+  test('publishedDate accepts a HISTORICAL date, well before the 2000 floor', () => {
+    expect(validate({ id: ID, input: { publishedDate: '1965-08-01' } }).input.publishedDate.toISOString()).toBe(
+      '1965-08-01T00:00:00.000Z'
+    );
+    expect(validate({ id: ID, input: { publishedDate: '1999-12-31' } }).input.publishedDate.toISOString()).toBe(
+      '1999-12-31T00:00:00.000Z'
+    );
+    // The historical floor itself is inclusive.
+    expect(validate({ id: ID, input: { publishedDate: '1000-01-01' } }).input.publishedDate.toISOString()).toBe(
+      '1000-01-01T00:00:00.000Z'
+    );
+  });
+
+  test('publishedDate still rejects a typo below the historical floor', () => {
+    expectBadInput(() => validate({ id: ID, input: { publishedDate: '0999-12-31' } }));
+  });
+
+  test('publishedDate still rejects a far-future date — the ceiling is unchanged', () => {
+    // More than MAX_YEARS_OUT (10) from now, so this is a rejection whenever
+    // the suite is running; no clock-dependent edge.
+    expectBadInput(() => validate({ id: ID, input: { publishedDate: '2099-01-01' } }));
+  });
+
+  test('the 2000 floor still applies to the reading-progress instants', () => {
+    // A book from 1965 has a publication date in 1965 and no reading session
+    // in 1965. These stay scheduling-floor fields on purpose.
+    expectBadInput(() => validate({ id: ID, input: { dateStarted: '1965-08-01' } }));
+    expectBadInput(() => validate({ id: ID, input: { dateFinished: '1965-08-01' } }));
+  });
+
+  // BURN_REVIEW #7. `Book.title` is `String!` and `resolvers.js` writes
+  // `{ $set: input }` with no runValidators, so an accepted `null` lands in
+  // the document and that row then errors out of every later `books` query.
+  test('title on update is optional — absent leaves the title alone', () => {
+    const out = validate({ id: ID, input: { rating: 4 } });
+    expect('title' in out.input).toBe(false);
+    expect(validate({ id: ID, input: { title: 'Dune' } }).input.title).toBe('Dune');
+  });
+
+  test('title on update rejects null — Book.title is String!, there is no clearing it', () => {
+    expectBadInput(() => validate({ id: ID, input: { title: null } }));
+  });
+
+  test('title on update still rejects blank and over-long values when present', () => {
+    expectBadInput(() => validate({ id: ID, input: { title: '' } }));
+    expectBadInput(() => validate({ id: ID, input: { title: '   ' } }));
+    expectBadInput(() => validate({ id: ID, input: { title: 'a'.repeat(501) } }));
+  });
+
+  test('the genuinely nullable fields still accept null — clearing them is intended', () => {
+    // Every one of these backs a nullable GraphQL field on `Book`, so `null`
+    // is a real value and this is the behaviour #7 must not break.
+    const out = validate({
+      id: ID,
+      input: { review: null, rating: null, shelf: null, tags: null, publishedDate: null, dateStarted: null },
+    });
+    expect(out.input.review).toBeNull();
+    expect(out.input.rating).toBeNull();
+    expect(out.input.publishedDate).toBeNull();
   });
 });
 

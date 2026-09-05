@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { idString, calendarDateField, instantField, validateInput } from '../shared/validation.js';
+import { idString, historicalDateField, instantField, validateInput } from '../shared/validation.js';
 
 export { validateInput };
 
@@ -67,21 +67,49 @@ export { validateInput };
  * here is a ceiling against abuse (a multi-megabyte "shelf name"), not a
  * replacement for the resolver's semantic validation.
  *
- * ## Dates: `publishedDate` is a calendar day, `dateStarted`/`dateFinished`
- * are instants
+ * ## Dates: `publishedDate` is a HISTORICAL calendar day,
+ * `dateStarted`/`dateFinished` are instants
  *
  * A book's publication date has no time-of-day — every source (ISBN
  * metadata, Open Library, a manual entry) gives a day, never a moment — so it
- * normalizes through `calendarDateField()`. `dateStarted`/`dateFinished` are
- * real reading-progress timestamps (when a session actually opened/closed the
- * book), so they stay instants via `instantField()` and keep whatever
- * time-of-day they carry.
+ * normalizes to UTC midnight. It is also the one date in the gateway that
+ * records a *fact about the world* rather than something the suite schedules,
+ * so it takes `historicalDateField()` and its 1000-01-01 floor, not the
+ * shared 2000-01-01 scheduling floor: the edit dialog seeds `publishedDate`
+ * from the book and resends it on every save, so a 2000 floor made *Dune*
+ * (1965) permanently uneditable — a rating change came back as
+ * `BAD_USER_INPUT` (BURN_REVIEW #1). Every other gateway date — flockgeek's
+ * hatch/set/pairing/harvest days, bujogeek's due dates and habit logs — is a
+ * scheduling value about a live flock or a live list and keeps the 2000
+ * floor. `dateStarted`/`dateFinished` are real reading-progress timestamps
+ * (when a session actually opened/closed the book), so they stay instants via
+ * `instantField()` and keep whatever time-of-day they carry — and they are
+ * genuinely recent, so the 2000 floor is right for them.
+ *
+ * ## Nullable vs. required is decided per field, against the GraphQL type
+ *
+ * `.nullable()` on an update field means "the client may explicitly send
+ * `null` to clear this". That is correct for every field the `Book` type
+ * declares nullable, and *wrong* for one it declares `String!`: the resolver
+ * writes `{ $set: input }` with no `runValidators`, so a `null` lands in the
+ * document and that row then errors out of every subsequent `books` query
+ * against `Book.title: String!` (BURN_REVIEW #7). So `title` on update is
+ * **optional but never nullable** — omit it to leave the title alone; there
+ * is no way to clear it, by design. The other `String!`-backed inputs in
+ * this module (`CreateBookInput.title`, `saveLibraryFilter`'s `name`,
+ * `addBookShelf`'s `label`) are non-null GraphQL arguments that GraphQL
+ * itself refuses a `null` for, and none of their zod schemas is
+ * `.nullable()`; `BookCustomShelf.id`/`BookSavedFilter.id` are
+ * server-generated. Every remaining `.nullable()` field here backs a
+ * nullable GraphQL field, where clearing is the intended behaviour.
  */
 
 // ── Shared field shapes ──────────────────────────────────────────────────────
 
 const titleSchema = z.string().trim().min(1).max(500);
-const optionalTitleSchema = z.string().trim().min(1).max(500).nullable().optional();
+/** Optional on update — but NOT nullable: `Book.title` is `String!` and the
+ *  resolver `$set`s the raw input. See the module doc, BURN_REVIEW #7. */
+const optionalTitleSchema = z.string().trim().min(1).max(500).optional();
 const authorItemSchema = z.string().trim().min(1).max(500);
 const authorsSchema = z.array(authorItemSchema).max(50).nullable().optional();
 const tagItemSchema = z.string().trim().min(1).max(100);
@@ -129,7 +157,7 @@ export const updateBookArgsSchema = z
         tags: tagsSchema,
         language: languageSchema,
         publisher: publisherSchema,
-        publishedDate: calendarDateField({ required: false }),
+        publishedDate: historicalDateField({ required: false }),
         isbn: isbnSchema,
         isbn13: isbnSchema,
         goodreadsId: externalIdSchema,
