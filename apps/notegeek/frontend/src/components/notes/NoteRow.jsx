@@ -66,6 +66,10 @@ function NoteRow({ note, to, onClick, query, maxPreview = 120 }) {
                 alignItems: 'flex-start',
                 gap: 1.5,
                 width: '100%',
+                // 44px hit area (MOBILE_UI_PLAN §2). A row with a preview
+                // line already clears this; a visual/mindmap note with no
+                // preview (getPreview returns '') sat at ~30px without it.
+                minHeight: 44,
                 textAlign: 'left',
                 py: 1.25,
                 px: 0.5,

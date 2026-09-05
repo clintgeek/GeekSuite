@@ -102,7 +102,9 @@ function buildNoteOverrides(mode) {
       h6: {
         fontFamily: monoStack,
         fontWeight: 600,
-        fontSize: '0.6875rem',
+        // 12px text floor (MOBILE_UI_PLAN §2) — the uppercase mono label
+        // identity holds fine at 12px, it just can't go below it.
+        fontSize: '0.75rem',
         letterSpacing: '0.10em',
         textTransform: 'uppercase',
         lineHeight: 1,
@@ -156,7 +158,9 @@ function buildNoteOverrides(mode) {
             borderRadius: 4,
             fontFamily: monoStack,
             fontWeight: 500,
-            fontSize: '0.6875rem',
+            // 12px text floor (MOBILE_UI_PLAN §2). Visual height stays 22 —
+            // only the label text was under the floor.
+            fontSize: '0.75rem',
             height: 22,
             border: `1px solid ${border}`,
             backgroundColor: 'transparent',

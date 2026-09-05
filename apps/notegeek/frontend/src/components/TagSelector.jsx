@@ -47,6 +47,11 @@ function TagSelector({ selectedTags, onChange, disabled }) {
       sx={{
         minWidth: 160,
         maxWidth: 320,
+        // 44px hit area (MOBILE_UI_PLAN §2) — the "small" outlined field
+        // (chips + free-solo input share this box) sat at 40px on phones.
+        '& .MuiOutlinedInput-root': {
+          minHeight: 44,
+        },
       }}
     />
   );

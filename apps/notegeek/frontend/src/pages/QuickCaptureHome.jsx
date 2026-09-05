@@ -18,7 +18,7 @@ import NoteRow from '../components/notes/NoteRow';
 import useNoteStore from '../store/noteStore';
 import useAuthStore from '../store/authStore';
 import { formatRelativeTime } from '../utils/dateUtils';
-import { border, glow, noteTypeColor, surfaces, layout } from '../theme/tokens';
+import { border, glow, noteTypeColor, surfaces, layout, tapTarget44 } from '../theme/tokens';
 
 // ─── Type pills ──────────────────────────────────────────────────────────────
 const TYPE_PILLS = [
@@ -172,6 +172,7 @@ function QuickCaptureHome() {
               key={pill.type}
               onClick={() => navigate(`/notes/new?type=${encodeURIComponent(pill.type)}`)}
               sx={{
+                ...tapTarget44,
                 display: 'flex',
                 alignItems: 'center',
                 gap: 0.625,
@@ -181,7 +182,7 @@ function QuickCaptureHome() {
                 border: `1px solid ${border(theme)}`,
                 bgcolor: 'transparent',
                 fontFamily: theme.typography.fontFamilyMono,
-                fontSize: '0.6875rem',
+                fontSize: '0.75rem',
                 fontWeight: 500,
                 letterSpacing: '0.04em',
                 color: 'text.secondary',
@@ -254,7 +255,7 @@ function QuickCaptureHome() {
               onClick={() => navigate('/notes')}
               sx={{
                 fontFamily: theme.typography.fontFamilyMono,
-                fontSize: '0.6875rem',
+                fontSize: '0.75rem',
                 fontWeight: 500,
                 letterSpacing: '0.03em',
                 color: 'text.secondary',

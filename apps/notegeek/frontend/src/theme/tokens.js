@@ -63,3 +63,21 @@ export const layout = {
   timestampMinWidth: 44, // min width for the timestamp column in NoteRow
   rowHeight: 44,        // skeleton row height for list loading states
 };
+
+/**
+ * MOBILE_UI_PLAN §2: every interactive element needs a 44x44 hit area on
+ * phones. A transparent `::before` inset reads well in a browser (the click
+ * still lands on the button because the pseudo-element is generated content
+ * inside it) but the mobile-harness probe measures `el.getBoundingClientRect()`
+ * on the real element — a pseudo-element's overflow never enlarges that box,
+ * so a `::before`-only fix passes a human tester and fails the gate. `min*`
+ * on the button itself is the one change both agree on, so that's the rule
+ * here: MUI's `ButtonBase` centers its content by default, so a small pill
+ * just gets more transparent padding around the same label — the type-pill
+ * and sort rows get a little taller, not "less dense" in any way that drops
+ * content or spacing between rows.
+ */
+export const tapTarget44 = {
+  minWidth: 44,
+  minHeight: 44,
+};

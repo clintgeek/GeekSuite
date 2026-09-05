@@ -44,7 +44,11 @@ const MenuBar = ({ editor }) => {
         justifyContent: 'center',
         rowGap: 1,
         '& .MuiButton-root': {
-          py: 0.5
+          py: 0.5,
+          // 44px hit area (MOBILE_UI_PLAN §2) — these are icon-only toolbar
+          // buttons, easy to undershoot once py is trimmed for the wrap.
+          minWidth: 44,
+          minHeight: 44,
         }
       }}
     >

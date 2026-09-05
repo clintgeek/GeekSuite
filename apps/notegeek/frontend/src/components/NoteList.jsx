@@ -11,7 +11,7 @@ import {
 import { gql, useQuery } from '@apollo/client';
 import NoteRow from './notes/NoteRow';
 import { NOTE_TYPES } from './notes/NoteTypeRouter';
-import { border, glow, noteTypeColor, layout } from '../theme/tokens';
+import { border, glow, noteTypeColor, layout, tapTarget44 } from '../theme/tokens';
 
 const GET_NOTES = gql`
     query GetNotes($tag: String, $prefix: String, $type: String, $limit: Int) {
@@ -114,11 +114,12 @@ function NoteList({ tag, prefix }) {
                             key={opt.value}
                             onClick={() => setSortBy(opt.value)}
                             sx={{
+                                ...tapTarget44,
                                 px: 0.75,
                                 py: 0.25,
                                 borderRadius: '4px',
                                 fontFamily: theme.typography.fontFamilyMono,
-                                fontSize: '0.6875rem',
+                                fontSize: '0.75rem',
                                 fontWeight: sortBy === opt.value ? 600 : 400,
                                 letterSpacing: '0.04em',
                                 color: sortBy === opt.value ? 'primary.main' : 'text.muted',
@@ -151,6 +152,7 @@ function NoteList({ tag, prefix }) {
                             key={pill.label}
                             onClick={() => setTypeFilter(pill.type)}
                             sx={{
+                                ...tapTarget44,
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: 0.625,
@@ -160,7 +162,7 @@ function NoteList({ tag, prefix }) {
                                 border: `1px solid ${isActive ? color : border(theme)}`,
                                 bgcolor: isActive ? glow(theme).soft : 'transparent',
                                 fontFamily: theme.typography.fontFamilyMono,
-                                fontSize: '0.6875rem',
+                                fontSize: '0.75rem',
                                 fontWeight: 500,
                                 letterSpacing: '0.04em',
                                 color: isActive ? color : 'text.secondary',

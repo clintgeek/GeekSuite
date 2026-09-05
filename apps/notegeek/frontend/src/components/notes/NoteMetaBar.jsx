@@ -57,6 +57,12 @@ function NoteMetaBar({
           fullWidth
           inputProps={{ 'aria-label': 'Note title' }}
           sx={{
+            // 44px hit area (MOBILE_UI_PLAN §2) — a bare title input with
+            // no borders sat as tall as its text (23px); center the text in
+            // a taller box rather than growing the type size.
+            minHeight: 44,
+            display: 'flex',
+            alignItems: 'center',
             fontSize: '1.25rem',
             fontWeight: 600,
             fontFamily: theme.typography.fontFamily,

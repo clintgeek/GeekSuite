@@ -37,10 +37,18 @@ function InnerProvider({ children }) {
       <FocusModeProvider storageKey="notegeek.focusMode">
         <MuiThemeProvider theme={muiTheme}>
           <CssBaseline />
+          {/* Desktop-only: undoes the shared theme's 44px input floor so
+              NoteGeek's forms stay compact above the phone breakpoint.
+              Scoped to `@media (min-width: 600px)` — below that, phones
+              need the 44px hit area (MOBILE_UI_PLAN §2, no exceptions),
+              and this `!important` was overruling it (TagSelector's
+              outlined field, the note-title input). */}
           <GlobalStyles
             styles={{
-              '.MuiInputBase-root, .MuiOutlinedInput-root': {
-                minHeight: 'auto !important',
+              '@media (min-width: 600px)': {
+                '.MuiInputBase-root, .MuiOutlinedInput-root': {
+                  minHeight: 'auto !important',
+                },
               },
             }}
           />
