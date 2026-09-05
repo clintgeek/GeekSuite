@@ -139,7 +139,7 @@ router.post('/create-nutrition-goals', async (req, res) => {
     }
 
     // Use the nutrition goal service with user's token
-    const result = await fitnessGoalService.createNutritionGoals(userInput, userProfile, userToken);
+    const result = await fitnessGoalService.createNutritionGoals(userInput, userProfile, userToken, userId);
 
     logger.info('AI nutrition goal creation completed', {
       userId,
@@ -202,7 +202,7 @@ router.post('/generate-meal-plan', async (req, res) => {
     }
 
     // Use the nutrition goal service with user's token
-    const result = await fitnessGoalService.generateMealPlan(goal, userProfile, userToken);
+    const result = await fitnessGoalService.generateMealPlan(goal, userProfile, userToken, userId);
 
     logger.info('AI meal plan generation completed', {
       userId,
