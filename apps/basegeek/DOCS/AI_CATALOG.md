@@ -1,7 +1,7 @@
 # AI Provider & Model Catalog
-**Last Updated:** January 2025
-**Total Providers:** 12
-**Total Models:** 50
+**Last Updated:** 2026-09-04
+**Total Providers:** 10
+**Total Models:** 41
 
 <!-- API keys are stored in the database via BaseGeek UI - never commit real keys here -->
 <!-- Configure provider keys at: BaseGeek UI → AI Geek → Configuration -->
@@ -15,25 +15,63 @@ GPT-OSS 20B
 ---
 ## Provider Hierarchy & Fallback Order
 
-1. **Cerebras** - 120K tokens/min, 30 req/min, 235B model
-2. **Together** - 180K tokens/min, 600 req/min (DeepSeek R1)
-3. **LLM7** - 4500 req/h, 150 req/min (Qwen2.5 Coder)
-4. **1min.ai** - Code generator with multiple AI models
-5. **Ollama Cloud** - Qwen3 Coder 480B
-6. **LLM Gateway** - Llama 4 Maverick (1M context)
-7. **Cloudflare** - 10K neurons/day
-8. **Groq** - 12K tokens/min, 1K req/day
-9. **OpenRouter** - many free models
-10. **Gemini** - 2.0 Flash
-11. **Cohere** - 1K calls/month, 20/min
-12. **Anthropic** - paid tier only (last resort)
+> **Generated from `packages/api/src/config/aiProviders.js`** — that file is the
+> single source of truth for the roster, the rotation order and every default
+> model id. `aiService.fallbackOrder`, `aiService.rotationProviderOverrides`,
+> the REST `/api/ai/config` route and the GraphQL `aiConfig` resolver all read
+> it. If this section and that file disagree, the file is right; regenerate
+> this section rather than editing it by hand.
+
+### Free-tier rotation
+
+Tried in this order when a caller asks for `basegeek-rotation` or
+`basegeek-free`:
+
+| # | Provider | id | Default model |
+|---|----------|----|---------------|
+| 1 | Groq | `groq` | `llama-3.3-70b-versatile` |
+| 2 | Cerebras | `cerebras` | `qwen-3-235b-a22b-instruct-2507` |
+| 3 | Together AI | `together` | `meta-llama/Llama-3.3-70B-Instruct-Turbo-Free` |
+| 4 | OpenRouter | `openrouter` | `meta-llama/llama-3.1-70b-instruct:free` |
+| 5 | Cloudflare Workers AI | `cloudflare` | `@cf/meta/llama-3.3-70b-instruct-fp8-fast` |
+| 6 | Ollama Cloud | `ollama` | `qwen3-coder:480b-cloud` |
+| 7 | LLM Gateway | `llmgateway` | `llama-4-maverick-free` |
+
+### Off-rotation (explicit pin only)
+
+Never auto-selected. Anthropic is paid; Cohere and Gemini are quota-metered
+and reserved for callers that name them.
+
+| Provider | id | Default model |
+|----------|----|---------------|
+| Anthropic | `anthropic` | `claude-sonnet-5` |
+| Google Gemini | `gemini` | `gemini-2.5-flash` |
+| Cohere | `cohere` | `command-r-plus-08-2024` |
+
+### Removed 2026-09-04
+
+**LLM7** and **1min.ai** (`llm7`, `onemin`) are gone from the provider roster.
+Neither had an entry in `aiService.providers`, so `callLLM7` and `call1minAI`
+dereferenced `this.providers.llm7` / `.onemin` on `undefined` and threw on
+every call; `onemin` was additionally missing from `AIConfig`'s schema enum, so
+a key saved for it could never persist. Their per-provider sections below are
+retained for reference only — nothing routes to them.
+
+Outstanding follow-up from that removal:
+
+- `callLLM7` / `call1minAI` and their entries in `seedInitialModels`,
+  `rateLimits` and `aiModelCapabilitiesService` are still in the tree, now
+  unreachable. Delete or reinstate them deliberately.
+- The `AIConfig` / `AIModel` / `AIPricing` / `AIFreeTier` / `AIAppConfig` /
+  `AIUsage` schema enums still accept `llm7` (and `AIUsage` accepts `onemin`).
+  Existing rows are orphaned, not broken.
 
 ---
 
 ## Anthropic (7 models)
 *API:* `https://api.anthropic.com/v1`
 *Type:* Paid tier
-*Default Model:* `claude-3-5-sonnet-20241022`
+*Default Model:* `claude-sonnet-5`
 
 | Model ID | Model Name | Status |
 |----------|------------|--------|
@@ -64,7 +102,7 @@ GPT-OSS 20B
 ## Gemini (3 models)
 *API:* `https://generativelanguage.googleapis.com/v1beta`
 *Type:* Free tier
-*Default Model:* `gemini-2.0-flash-exp`
+*Default Model:* `gemini-2.5-flash`
 
 | Model ID | Model Name | Status |
 |----------|------------|--------|
@@ -77,7 +115,7 @@ GPT-OSS 20B
 ## Together (3 models)
 *API:* `https://api.together.xyz/v1`
 *Type:* Free tier (180K TPM, 600 RPM)
-*Default Model:* `deepseek-ai/DeepSeek-R1-Distill-Llama-70B-free`
+*Default Model:* `meta-llama/Llama-3.3-70B-Instruct-Turbo-Free`
 
 | Model ID | Model Name | Status |
 |----------|------------|--------|
@@ -104,7 +142,7 @@ GPT-OSS 20B
 ## OpenRouter (7 models)
 *API:* `https://openrouter.ai/api/v1`
 *Type:* Mixed (free & paid)
-*Default Model:* `qwen/qwen3-235b-a22b:free`
+*Default Model:* `meta-llama/llama-3.1-70b-instruct:free`
 
 | Model ID | Model Name | Status |
 |----------|------------|--------|
@@ -134,7 +172,7 @@ GPT-OSS 20B
 ## Cloudflare (2 models)
 *API:* `https://api.cloudflare.com/client/v4/accounts/{accountId}/ai/run`
 *Type:* Free tier (10K neurons/day)
-*Default Model:* `@cf/openai/gpt-oss-120b`
+*Default Model:* `@cf/meta/llama-3.3-70b-instruct-fp8-fast`
 *Format:* Workers AI (prompt string, not messages array)
 
 | Model ID | Model Name | Status |
@@ -147,7 +185,7 @@ GPT-OSS 20B
 ## Ollama Cloud (7 models)
 *API:* `https://ollama.com/api/chat`
 *Type:* Free tier
-*Default Model:* `qwen3-coder:480b`
+*Default Model:* `qwen3-coder:480b-cloud`
 *Format:* Native Ollama API (messages array, stream:false)
 
 | Model ID | Model Name | Status |
@@ -162,7 +200,7 @@ GPT-OSS 20B
 
 ---
 
-## LLM7 (1 model)
+## LLM7 (1 model) — RETIRED 2026-09-04, not routed
 *API:* `https://api.llm7.io/v1`
 *Type:* Free tier (4500 req/h, 150 RPM)
 *Default Model:* `Qwen2.5-Coder-32B-Instruct`
@@ -185,7 +223,7 @@ GPT-OSS 20B
 
 ---
 
-## 1min.ai (9 models)
+## 1min.ai (9 models) — RETIRED 2026-09-04, not routed
 *API:* `https://api.1min.ai/api`
 *Type:* Paid (credit-based)
 *Default Model:* `deepseek-reasoner`
@@ -234,8 +272,8 @@ GPT-OSS 20B
 ### Free vs Paid
 - **Free Models:** 28 models
 - **Paid Models:** 22 models (Anthropic: 7, Cohere: 4, OpenRouter: 2, 1min.ai: 9)
-- **Free Providers:** 8 providers with free tiers
-- **Paid-Only Providers:** 2 providers (Anthropic, 1min.ai)
+- **Free Providers:** 7 providers with free tiers (of the 10 in the roster)
+- **Paid-Only Providers:** 1 provider (Anthropic)
 
 ### Rate Limits (Free Tiers)
 - **Cerebras:** 120,000 TPM, 30 RPM

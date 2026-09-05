@@ -8,6 +8,7 @@ import aiService from '../../services/aiService.js';
 import aiDirectorService from '../../services/aiDirectorService.js';
 import aiUsageService from '../../services/aiUsageService.js';
 import { User } from '../../models/user.js';
+import { PROVIDER_IDS, keyHintFor } from '../../config/aiProviders.js';
 import { GraphQLError } from 'graphql';
 
 const requireAuth = (user) => {
@@ -46,21 +47,8 @@ const requireAdminUser = async (user) => {
   if (!record || (record.role || 'user') !== 'admin') deny();
 };
 
-/**
- * The providers the AI config query and mutation cover. Kept in step with the
- * REST twin in routes/aiRoutes.js by hand for now — worth hoisting to a shared
- * config module the next time either list changes.
- */
-const CONFIG_PROVIDERS = [
-  'anthropic', 'groq', 'gemini', 'together', 'cohere', 'openrouter',
-  'cerebras', 'cloudflare', 'ollama', 'llm7', 'llmgateway', 'onemin'
-];
-
-/** The only part of a provider credential that leaves the server. */
-const keyHintFor = (plaintext) => {
-  if (typeof plaintext !== 'string' || plaintext.length < 4) return '';
-  return `…${plaintext.slice(-4)}`;
-};
+// Same list the REST config route uses — one table, in config/aiProviders.js.
+const CONFIG_PROVIDERS = PROVIDER_IDS;
 
 export const resolvers = {
   Query: {

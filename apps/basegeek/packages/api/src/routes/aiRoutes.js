@@ -1,5 +1,6 @@
 import express from 'express';
 import { requireRole } from '../middleware/auth.js';
+import { PROVIDER_IDS, keyHintFor } from '../config/aiProviders.js';
 import { authenticateJWTOrAPIKey, requirePermission } from '../middleware/apiKeyAuth.js';
 import logger from '../lib/logger.js';
 import aiService from '../services/aiService.js';
@@ -44,20 +45,9 @@ const requireAdminUser = (req, res, next) => {
   return requireRole('admin')(req, res, next);
 };
 
-/** The providers /config reads and writes. */
-const CONFIG_PROVIDERS = [
-  'anthropic', 'groq', 'gemini', 'together', 'cohere', 'openrouter',
-  'cerebras', 'cloudflare', 'ollama', 'llm7', 'llmgateway', 'onemin'
-];
-
-/**
- * A key hint is the *only* part of a provider credential that leaves the
- * server: enough to tell two keys apart in the UI, useless to a thief.
- */
-export const keyHintFor = (plaintext) => {
-  if (typeof plaintext !== 'string' || plaintext.length < 4) return '';
-  return `…${plaintext.slice(-4)}`;
-};
+// The providers /config reads and writes — config/aiProviders.js is the one
+// list; llm7 and onemin used to be named here and had no implementation.
+const CONFIG_PROVIDERS = PROVIDER_IDS;
 
 // GET /api/ai/stats - Get AI service statistics
 router.get('/stats', async (req, res) => {

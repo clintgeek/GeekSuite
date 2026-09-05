@@ -28,7 +28,8 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions
+  DialogActions,
+  useMediaQuery
 } from '@mui/material';
 import {
   Settings as SettingsIcon,
@@ -48,21 +49,24 @@ import {
   Delete as DeleteIcon,
   DeleteSweep as DeleteSweepIcon
 } from '@mui/icons-material';
-import { alpha } from '@mui/material/styles';
+import { alpha, useTheme } from '@mui/material/styles';
 import { GeekEmptyState, GeekErrorState, useToast } from '@geeksuite/ui';
 import { apolloClient } from '../apolloClient';
 import { GET_AI_CONFIG, GET_AI_STATS, GET_AI_DIRECTOR_MODELS, GET_AI_APP_CONFIGS } from '../graphql/queries';
 import { SAVE_AI_CONFIG, TEST_AI_PROVIDER, RESET_AI_STATS, SEED_DIRECTOR_PRICING, SEED_DIRECTOR_FREE_TIER, SYNC_PROVIDER_MODELS, UPDATE_MODEL_PRICING, UPDATE_MODEL_FREE_TIER, RESET_ALL_FREE_TIERS, BULK_UPDATE_FREE_TIERS, SAVE_AI_APP_CONFIG, DELETE_AI_APP_CONFIG } from '../graphql/mutations';
 
 /**
- * The providers this page can configure — the ones AIConfig's schema enum will
- * actually persist. The server's masked config may carry more (onemin), which
- * `withKeyDrafts` drops rather than render a card whose Save would fail
- * validation.
+ * The providers this page can configure. Mirrors the server's one list in
+ * `packages/api/src/config/aiProviders.js` — the UI is a separate package and
+ * cannot import from the API, so this is the one place the roster is repeated;
+ * `withKeyDrafts` drops anything the server sends that is not named here.
+ *
+ * `llm7` and `onemin` were removed 2026-09-04: neither had an implementation
+ * in aiService, so a key saved for either went nowhere.
  */
 const CONFIG_PROVIDERS = [
   'anthropic', 'groq', 'gemini', 'together', 'cohere', 'openrouter',
-  'cerebras', 'cloudflare', 'ollama', 'llm7', 'llmgateway'
+  'cerebras', 'cloudflare', 'ollama', 'llmgateway'
 ];
 
 /** A provider entry before the server has been heard from. */
@@ -93,6 +97,56 @@ const withKeyDrafts = (serverConfig) => Object.fromEntries(
     }])
 );
 
+/**
+ * UsageCardList — the Usage tab's tables, below `md`.
+ *
+ * Six and seven columns do not survive a 390px viewport: the cells collapse to
+ * roughly 40px and every number wraps mid-digit. MOBILE_UI_PLAN §2 makes this
+ * a shared rule ("below md a table renders as a card or definition list") with
+ * the layout left to the app, so each row becomes a card of label/value pairs.
+ * The tables themselves are unchanged at md and up.
+ *
+ * `rows` are `{ key, title, subtitle?, fields: [{ label, value, sx? }] }`.
+ */
+const UsageCardList = ({ rows }) => (
+  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+    {rows.map(row => (
+      <Card key={row.key} variant="outlined">
+        <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+          <Typography variant="subtitle2" sx={{ textTransform: 'capitalize' }}>
+            {row.title}
+          </Typography>
+          {row.subtitle && (
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ textTransform: 'capitalize', display: 'block' }}
+            >
+              {row.subtitle}
+            </Typography>
+          )}
+          <Box sx={{ mt: 1, display: 'grid', gridTemplateColumns: '1fr', rowGap: 0.5 }}>
+            {row.fields.map(field => (
+              <Box
+                key={field.label}
+                sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 2 }}
+              >
+                <Typography variant="body2" color="text.secondary">{field.label}</Typography>
+                <Typography
+                  variant="body2"
+                  sx={{ fontVariantNumeric: 'tabular-nums', ...field.sx }}
+                >
+                  {field.value}
+                </Typography>
+              </Box>
+            ))}
+          </Box>
+        </CardContent>
+      </Card>
+    ))}
+  </Box>
+);
+
 // Free-tier limits applied when a model has no stored limits of its own.
 const FREE_TIER_DEFAULTS = {
   requestsPerMinute: 30,
@@ -103,6 +157,9 @@ const FREE_TIER_DEFAULTS = {
 
 const AIGeekPage = () => {
   const { notify } = useToast();
+  const theme = useTheme();
+  // Same breakpoint the shell switches nav at, per MOBILE_UI_PLAN §2.
+  const isCompact = useMediaQuery(theme.breakpoints.down('md'));
   const [activeTab, setActiveTab] = useState(0);
   const [loading, setLoading] = useState(false);
 
@@ -746,6 +803,20 @@ const AIGeekPage = () => {
                 title="No usage recorded yet"
                 description="Provider rows appear once an app makes its first call through aiGeek."
               />
+            ) : isCompact ? (
+              <UsageCardList
+                rows={Object.entries(stats.providerUsage || {}).map(([provider, usage]) => ({
+                  key: provider,
+                  title: provider,
+                  fields: [
+                    { label: 'Total calls', value: usage.calls || 0 },
+                    { label: 'Free calls', value: usage.freeCalls || 0, sx: { color: 'success.main' } },
+                    { label: 'Paid calls', value: usage.paidCalls || 0, sx: { color: 'warning.main' } },
+                    { label: 'Tokens', value: formatTokens(usage.tokens || 0) },
+                    { label: 'Cost', value: formatCost(usage.cost || 0) }
+                  ]
+                }))}
+              />
             ) : (
               <TableContainer component={Paper}>
                 <Table>
@@ -782,6 +853,24 @@ const AIGeekPage = () => {
                   App Usage Breakdown
                 </Typography>
 
+                {isCompact ? (
+                  <UsageCardList
+                    rows={Object.entries(stats.providerUsage || {}).flatMap(([provider, usage]) =>
+                      Object.entries(usage.appUsage || {}).map(([appName, appUsage]) => ({
+                        key: `${provider}-${appName}`,
+                        title: appName,
+                        subtitle: provider,
+                        fields: [
+                          { label: 'Total calls', value: appUsage.calls || 0 },
+                          { label: 'Free calls', value: appUsage.freeCalls || 0, sx: { color: 'success.main' } },
+                          { label: 'Paid calls', value: appUsage.paidCalls || 0, sx: { color: 'warning.main' } },
+                          { label: 'Tokens', value: formatTokens(appUsage.tokens || 0) },
+                          { label: 'Cost', value: formatCost(appUsage.cost || 0) }
+                        ]
+                      }))
+                    )}
+                  />
+                ) : (
                 <TableContainer component={Paper}>
                   <Table>
                     <TableHead>
@@ -812,6 +901,7 @@ const AIGeekPage = () => {
                     </TableBody>
                   </Table>
                 </TableContainer>
+                )}
               </>
             )}
           </CardContent>
@@ -833,7 +923,8 @@ const AIGeekPage = () => {
                   />
                 )}
               </Box>
-              <Box sx={{ display: 'flex', gap: 1 }}>
+              {/* Four buttons do not fit 390px on one line — wrap, don't clip. */}
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                 <Button
                   variant="outlined"
                   startIcon={<RefreshIcon />}
@@ -903,16 +994,25 @@ const AIGeekPage = () => {
                           <Chip label={`${provider.totalModels} total`} size="small" variant="outlined" />
                         </Box>
 
+                        {/*
+                          The row is a fixed-width track (~640px of checkbox,
+                          prices, four limit fields and an edit button) that
+                          cannot reflow, so below md it scrolls sideways as one
+                          piece rather than crushing every column. Header and
+                          rows share the wrapper so they scroll together.
+                        */}
+                        <Box sx={{ overflowX: 'auto', mx: -0.5, px: 0.5 }}>
+                        <Box sx={{ minWidth: 640 }}>
                         {/* Column header row */}
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 0.5, mb: 0.5 }}>
                           <Box sx={{ width: 36 }} />
-                          <Typography variant="caption" color="text.secondary" sx={{ flex: 1, minWidth: 0 }}>Model</Typography>
-                          <Typography variant="caption" color="text.secondary" sx={{ width: 72, textAlign: 'right' }}>$/M in</Typography>
-                          <Typography variant="caption" color="text.secondary" sx={{ width: 72, textAlign: 'right' }}>$/M out</Typography>
-                          <Typography variant="caption" color="text.secondary" sx={{ width: 80, textAlign: 'center' }}>RPM</Typography>
-                          <Typography variant="caption" color="text.secondary" sx={{ width: 80, textAlign: 'center' }}>RPD</Typography>
-                          <Typography variant="caption" color="text.secondary" sx={{ width: 80, textAlign: 'center' }}>TPM</Typography>
-                          <Typography variant="caption" color="text.secondary" sx={{ width: 80, textAlign: 'center' }}>TPD</Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ flex: 1, minWidth: 0 }}>Model</Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ width: 72, textAlign: 'right' }}>$/M in</Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ width: 72, textAlign: 'right' }}>$/M out</Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ width: 80, textAlign: 'center' }}>RPM</Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ width: 80, textAlign: 'center' }}>RPD</Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ width: 80, textAlign: 'center' }}>TPM</Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ width: 80, textAlign: 'center' }}>TPD</Typography>
                           <Box sx={{ width: 32 }} />
                         </Box>
 
@@ -956,7 +1056,7 @@ const AIGeekPage = () => {
 
                               {/* Pricing: input */}
                               <Typography
-                                variant="caption"
+                                variant="body2"
                                 color={model.pricing?.input && model.pricing.input !== 'Unknown' ? 'text.primary' : 'text.disabled'}
                                 sx={{ width: 72, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}
                               >
@@ -965,7 +1065,7 @@ const AIGeekPage = () => {
 
                               {/* Pricing: output */}
                               <Typography
-                                variant="caption"
+                                variant="body2"
                                 color={model.pricing?.output && model.pricing.output !== 'Unknown' ? 'text.primary' : 'text.disabled'}
                                 sx={{ width: 72, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}
                               >
@@ -1046,6 +1146,8 @@ const AIGeekPage = () => {
                             description="Sync this provider on the AI Catalog tab to fetch its models."
                           />
                         )}
+                        </Box>
+                        </Box>
                       </CardContent>
                     </Card>
                   </Grid>

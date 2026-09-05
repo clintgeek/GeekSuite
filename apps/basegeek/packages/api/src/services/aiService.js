@@ -5,6 +5,7 @@
 import axios from 'axios';
 import logger from '../lib/logger.js';
 import AIConfig from '../models/AIConfig.js';
+import { DEFAULT_MODELS, FALLBACK_ORDER, ROTATION_MODEL_OVERRIDES } from '../config/aiProviders.js';
 import AIModel from '../models/AIModel.js';
 import AIPricing from '../models/AIPricing.js';
 import aiUsageService from './aiUsageService.js';
@@ -166,22 +167,25 @@ class AIService {
     }
     this.rotationManager = new RotationManager(path.join(rotationStateDir, 'rotation-state.json'));
 
-    this.rotationProviderOverrides = {
-      groq: { model: 'llama-3.3-70b-versatile' },
-      cerebras: { model: 'qwen-3-235b-a22b-instruct-2507' },
-      together: { model: 'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free' },
-      openrouter: { model: 'meta-llama/llama-3.1-70b-instruct:free' },
-      cloudflare: { model: '@cf/meta/llama-3.3-70b-instruct-fp8-fast' },
-      ollama: { model: 'qwen3-coder:480b-cloud' },
-      llmgateway: { model: 'llama-4-maverick-free' }
-    };
+    // The rotation pins each provider to its default model, overriding any
+    // model stored on the provider's database row. Derived from the same table
+    // the defaults below come from, so the two cannot drift apart.
+    this.rotationProviderOverrides = ROTATION_MODEL_OVERRIDES;
 
+    // `costPer1kTokens` below is dollars per 1,000 tokens — a different unit
+    // from the AIPricing collection, which stores dollars per 1,000,000 (see
+    // aiDirectorService's costForTokens). Both are correct as written: the
+    // values here match their per-1M equivalents divided by 1000 (anthropic
+    // 0.003 = $3/MTok, cohere 0.0025 = $2.50/MTok), and updateStats() divides
+    // token counts by 1000 to match. Do not "fix" one to look like the other.
+    // These are single blended rates per provider, not per-model input/output
+    // prices — the AIPricing table is the accurate source for those.
     this.providers = {
       anthropic: {
-        name: 'Claude 3.5 Sonnet',
+        name: 'Claude Sonnet 5',
         apiKey: '',
         baseURL: 'https://api.anthropic.com/v1',
-        model: 'claude-3-5-sonnet-20241022',
+        model: DEFAULT_MODELS.anthropic,
         costPer1kTokens: 0.003,
         maxTokens: 4000,
         temperature: 0.7,
@@ -191,7 +195,7 @@ class AIService {
         name: 'Groq Llama 3.3 70B',
         apiKey: '',
         baseURL: 'https://api.groq.com/openai/v1',
-        model: 'llama-3.3-70b-versatile',
+        model: DEFAULT_MODELS.groq,
         costPer1kTokens: 0.0,
         maxTokens: 8000,
         maxContextTokens: 32768, // 32K context limit
@@ -199,11 +203,11 @@ class AIService {
         enabled: false
       },
       gemini: {
-        name: 'Gemini 2.0 Flash',
+        name: 'Gemini 2.5 Flash',
         apiKey: '',
         baseURL: 'https://generativelanguage.googleapis.com/v1beta',
         // Stable GA id — the -exp preview ids get retired without notice
-        model: 'gemini-2.0-flash',
+        model: DEFAULT_MODELS.gemini,
         costPer1kTokens: 0.0,
         maxTokens: 8000,
         maxContextTokens: 1000000, // 1M token context limit
@@ -214,7 +218,7 @@ class AIService {
         name: 'Together Llama 3.3 70B Turbo Free',
         apiKey: '',
         baseURL: 'https://api.together.xyz/v1',
-        model: 'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free',
+        model: DEFAULT_MODELS.together,
         costPer1kTokens: 0.0,
         maxTokens: 8000,
         maxContextTokens: 131072, // 128K context limit
@@ -225,7 +229,7 @@ class AIService {
         name: 'Cohere Command R+',
         apiKey: '',
         baseURL: 'https://api.cohere.ai/v1',
-        model: 'command-r-plus-08-2024',
+        model: DEFAULT_MODELS.cohere,
         costPer1kTokens: 0.0025,
         maxTokens: 4000,
         temperature: 0.7,
@@ -235,7 +239,7 @@ class AIService {
         name: 'OpenRouter Llama 3.1 70B Free',
         apiKey: '',
         baseURL: 'https://openrouter.ai/api/v1',
-        model: 'meta-llama/llama-3.1-70b-instruct:free',
+        model: DEFAULT_MODELS.openrouter,
         costPer1kTokens: 0.0,
         maxTokens: 8000,
         maxContextTokens: 131072, // 128K context limit
@@ -246,7 +250,7 @@ class AIService {
         name: 'Cerebras Qwen 3 235B Instruct',
         apiKey: '',
         baseURL: 'https://api.cerebras.ai/v1',
-        model: 'qwen-3-235b-a22b-instruct-2507',
+        model: DEFAULT_MODELS.cerebras,
         costPer1kTokens: 0.0,
         maxTokens: 8000,
         maxContextTokens: 65536, // 64K context limit
@@ -258,7 +262,7 @@ class AIService {
         apiKey: '',
         baseURL: 'https://api.cloudflare.com/client/v4/accounts',
         accountId: '', // Cloudflare account ID
-        model: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+        model: DEFAULT_MODELS.cloudflare,
         costPer1kTokens: 0.0,
         maxTokens: 8000,
         maxContextTokens: 131072, // 128K context limit
@@ -270,7 +274,7 @@ class AIService {
         name: 'Ollama Cloud Qwen3 Coder 480B',
         apiKey: '',
         baseURL: 'https://ollama.com/api',
-        model: 'qwen3-coder:480b-cloud',
+        model: DEFAULT_MODELS.ollama,
         costPer1kTokens: 0.0,
         maxTokens: 8000,
         temperature: 0.7,
@@ -280,7 +284,7 @@ class AIService {
         name: 'LLM Gateway Llama 4 Maverick',
         apiKey: '',
         baseURL: 'https://api.llmgateway.io/v1',
-        model: 'llama-4-maverick-free',
+        model: DEFAULT_MODELS.llmgateway,
         costPer1kTokens: 0.0,
         maxTokens: 8000,
         maxContextTokens: 1000000, // 1M context limit
@@ -290,7 +294,7 @@ class AIService {
     };
 
     this.currentProvider = 'groq';
-    this.fallbackOrder = ['groq', 'cerebras', 'together', 'openrouter', 'cloudflare', 'ollama', 'llmgateway'];
+    this.fallbackOrder = [...FALLBACK_ORDER];
 
     // Rate limit tracking per provider
     this.rateLimits = {
@@ -2669,6 +2673,8 @@ class AIService {
    * Update usage statistics
    */
     async updateStats(provider, inputTokens, outputTokens, modelId = null, appName = 'unknown') {
+    // Cost below is (tokens / 1000) * costPer1kTokens — per-1K, matching the
+    // provider table's unit, NOT the per-1M unit of AIPricing/costForTokens.
     const totalTokens = inputTokens + outputTokens;
 
     // Check if this model is free and within limits
