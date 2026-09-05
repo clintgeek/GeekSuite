@@ -1,11 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
   TextField,
   Button,
   Avatar,
-  Alert,
   CircularProgress,
   Select,
   MenuItem,
@@ -24,6 +23,7 @@ import {
   Apps as AppsIcon,
 } from '@mui/icons-material';
 import { useUser, useThemeMode } from '@geeksuite/user';
+import { GeekEmptyState, useToast } from '@geeksuite/ui';
 
 // ─── Option constants ───
 
@@ -80,14 +80,13 @@ function SectionCard({ title, icon, children, action }) {
 
 // ─── Save button sub-component ───
 
-function SaveButton({ saving, saved, onClick, label = 'Save' }) {
+// A successful save used to show its own auto-clearing "Saved" checkmark
+// here (`saved` + a 3s `setTimeout`); that state and its UI collapsed into
+// a single `notify(…, { tone: 'success' })` call at the call site (TODO_ORDER
+// #15) — the toast stack is the one place a transient confirmation lives now.
+function SaveButton({ saving, onClick, label = 'Save' }) {
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-      {saved && (
-        <Typography sx={{ fontSize: '0.75rem', color: 'success.main', display: 'flex', alignItems: 'center', gap: 0.25 }}>
-          <CheckIcon sx={{ fontSize: 14 }} /> Saved
-        </Typography>
-      )}
       <Button
         size="small"
         variant="outlined"
@@ -116,14 +115,11 @@ export default function AccountPage() {
   // drives the provider directly instead of waiting for a Save round-trip.
   const { themePreference, setThemePreference } = useThemeMode();
   const theme = useTheme();
-
-  const [error, setError] = useState('');
+  const { notify } = useToast();
 
   // Section-level save states
   const [profileSaving, setProfileSaving] = useState(false);
-  const [profileSaved, setProfileSaved] = useState(false);
   const [prefsSaving, setPrefsSaving] = useState(false);
-  const [prefsSaved, setPrefsSaved] = useState(false);
 
   // Local form state (initialized from store)
   const [profileForm, setProfileForm] = useState({});
@@ -136,6 +132,13 @@ export default function AccountPage() {
       bootstrap().catch(() => {});
     }
   }, [loaded, bootstrapLoading]);
+
+  // The store's own load failure — surfaced the same way a local save
+  // failure is, since by the time it would render this page has nothing
+  // else to show for it (see the `!loaded` spinner branch below).
+  useEffect(() => {
+    if (storeError) notify(storeError, { tone: 'error' });
+  }, [storeError, notify]);
 
   // Hydrate forms when store data arrives
   useEffect(() => {
@@ -164,15 +167,12 @@ export default function AccountPage() {
   // Handlers
   const handleProfileChange = (field) => (e) => {
     setProfileForm(prev => ({ ...prev, [field]: e.target.value }));
-    setProfileSaved(false);
   };
   const handleIdentityChange = (field) => (e) => {
     setIdentityForm(prev => ({ ...prev, [field]: e.target.value }));
-    setProfileSaved(false);
   };
   const handlePrefsChange = (field) => (e) => {
     setPrefsForm(prev => ({ ...prev, [field]: e.target.value }));
-    setPrefsSaved(false);
   };
 
   // Theme is special: apply it live rather than on Save. The DB stores
@@ -180,7 +180,6 @@ export default function AccountPage() {
   const handleThemeChange = (e) => {
     const value = e.target.value;
     setPrefsForm(prev => ({ ...prev, theme: value }));
-    setPrefsSaved(false);
     setThemePreference(value === 'system' ? 'auto' : value);
   };
 
@@ -191,16 +190,14 @@ export default function AccountPage() {
 
   const saveProfile = async () => {
     setProfileSaving(true);
-    setError('');
     try {
       await updateProfile({
         ...identityForm,
         ...profileForm,
       });
-      setProfileSaved(true);
-      setTimeout(() => setProfileSaved(false), 3000);
+      notify('Profile saved', { tone: 'success' });
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to save profile');
+      notify(err.response?.data?.message || 'Failed to save profile', { tone: 'error' });
     } finally {
       setProfileSaving(false);
     }
@@ -208,13 +205,11 @@ export default function AccountPage() {
 
   const savePreferences = async () => {
     setPrefsSaving(true);
-    setError('');
     try {
       await updatePreferences(prefsForm);
-      setPrefsSaved(true);
-      setTimeout(() => setPrefsSaved(false), 3000);
+      notify('Preferences saved', { tone: 'success' });
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to save preferences');
+      notify(err.response?.data?.message || 'Failed to save preferences', { tone: 'error' });
     } finally {
       setPrefsSaving(false);
     }
@@ -236,8 +231,6 @@ export default function AccountPage() {
       <Typography variant="body2" sx={{ color: 'text.secondary', mb: 4 }}>
         Your profile and preferences across all GeekSuite applications
       </Typography>
-
-      {(error || storeError) && <Alert severity="error" sx={{ mb: 3 }}>{error || storeError}</Alert>}
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '260px 1fr' }, gap: 3 }}>
 
@@ -296,7 +289,7 @@ export default function AccountPage() {
           <SectionCard
             title="Identity & Profile"
             icon={<PersonIcon sx={{ fontSize: 16, color: 'text.disabled' }} />}
-            action={<SaveButton saving={profileSaving} saved={profileSaved} onClick={saveProfile} />}
+            action={<SaveButton saving={profileSaving} onClick={saveProfile} />}
           >
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
               <TextField
@@ -356,7 +349,7 @@ export default function AccountPage() {
           <SectionCard
             title="Global Preferences"
             icon={<TuneIcon sx={{ fontSize: 16, color: 'text.disabled' }} />}
-            action={<SaveButton saving={prefsSaving} saved={prefsSaved} onClick={savePreferences} />}
+            action={<SaveButton saving={prefsSaving} onClick={savePreferences} />}
           >
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' }, gap: 2 }}>
               <FormControl size="small" fullWidth>
@@ -404,13 +397,13 @@ export default function AccountPage() {
           <SectionCard
             title="Accent Color"
             icon={<PaletteIcon sx={{ fontSize: 16, color: 'text.disabled' }} />}
-            action={<SaveButton saving={prefsSaving} saved={prefsSaved} onClick={savePreferences} />}
+            action={<SaveButton saving={prefsSaving} onClick={savePreferences} />}
           >
             <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', mb: 1.5 }}>
               {ACCENT_COLORS.map(c => (
                 <Box
                   key={c.value}
-                  onClick={() => { setPrefsForm(prev => ({ ...prev, accentColor: c.value })); setPrefsSaved(false); }}
+                  onClick={() => setPrefsForm(prev => ({ ...prev, accentColor: c.value }))}
                   sx={{
                     width: 40,
                     height: 40,
@@ -448,9 +441,13 @@ export default function AccountPage() {
             icon={<AppsIcon sx={{ fontSize: 16, color: 'text.disabled' }} />}
           >
             {Object.keys(appPreferences || {}).length === 0 ? (
-              <Typography sx={{ fontSize: '0.8rem', color: 'text.muted' }}>
-                No app-specific preferences yet. As you use GeekSuite apps, their settings will appear here automatically.
-              </Typography>
+              <GeekEmptyState
+                compact
+                align="start"
+                title="No app-specific preferences yet"
+                description="As you use GeekSuite apps, their settings will appear here automatically."
+                descriptionSx={{ fontSize: '0.8rem' }}
+              />
             ) : (
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 {Object.entries(appPreferences).map(([appName, prefs]) => (

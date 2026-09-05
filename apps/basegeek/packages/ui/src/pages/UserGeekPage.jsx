@@ -1,15 +1,20 @@
 import { useEffect, useId, useState } from 'react';
-import { Box, Paper, Typography, List, ListItem, ListItemText, IconButton, CircularProgress, Alert, TextField, Button, Stack } from '@mui/material';
+import { Box, Paper, Typography, List, ListItem, ListItemText, IconButton, CircularProgress, TextField, Button, Stack } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
+import { GeekEmptyState, GeekErrorState, useToast } from '@geeksuite/ui';
 import ConsoleDialog from '../components/primitives/ConsoleDialog';
 import api from '../api';
 
 export default function UserGeekPage() {
   const formId = useId();
+  const { notify } = useToast();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  // Only the initial (or retried) load replaces the list with GeekErrorState;
+  // a delete/create failure doesn't blow away a list the user can already
+  // see, so those become toasts instead (TODO_ORDER #15).
+  const [loadError, setLoadError] = useState(null);
   const [deleting, setDeleting] = useState(null);
   const [openCreate, setOpenCreate] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -17,12 +22,12 @@ export default function UserGeekPage() {
 
   const fetchUsers = async () => {
     setLoading(true);
-    setError('');
+    setLoadError(null);
     try {
       const res = await api.get('/users');
       setUsers(res.data.users);
     } catch (err) {
-      setError(err.response?.data?.message || 'Error fetching users');
+      setLoadError(err.response?.data?.message || 'Error fetching users');
     } finally {
       setLoading(false);
     }
@@ -34,12 +39,11 @@ export default function UserGeekPage() {
 
   const handleDelete = async (id) => {
     setDeleting(id);
-    setError('');
     try {
       await api.delete(`/users/${id}`);
       fetchUsers();
     } catch (err) {
-      setError(err.response?.data?.message || 'Error deleting user');
+      notify(err.response?.data?.message || 'Error deleting user', { tone: 'error' });
     } finally {
       setDeleting(null);
     }
@@ -54,12 +58,11 @@ export default function UserGeekPage() {
     e?.preventDefault?.();
     try {
       setCreating(true);
-      setError('');
       await api.post('/users', form);
       setOpenCreate(false);
       await fetchUsers();
     } catch (err) {
-      setError(err.response?.data?.message || 'Error creating user');
+      notify(err.response?.data?.message || 'Error creating user', { tone: 'error' });
     } finally {
       setCreating(false);
     }
@@ -91,66 +94,68 @@ export default function UserGeekPage() {
         </Button>
       </Box>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 3 }}>
-          {error}
-        </Alert>
-      )}
-
-      <Box sx={{
-        borderRadius: '12px',
-        border: '1px solid',
-        borderColor: 'divider',
-        backgroundColor: 'background.paper',
-        overflow: 'hidden',
-      }}>
-        <List disablePadding>
-          {users.map((user, idx) => (
-            <ListItem
-              key={user.id}
-              secondaryAction={
-                <IconButton
-                  edge="end"
-                  aria-label="delete"
-                  onClick={() => handleDelete(user.id)}
-                  disabled={deleting === user.id}
-                  size="small"
-                  sx={{ color: 'text.secondary', '&:hover': { color: 'error.main' } }}
+      {loadError ? (
+        <Box sx={{
+          borderRadius: '12px',
+          border: '1px solid',
+          borderColor: 'divider',
+          backgroundColor: 'background.paper',
+        }}>
+          <GeekErrorState title="Couldn't load users" error={loadError} onRetry={fetchUsers} />
+        </Box>
+      ) : (
+        <Box sx={{
+          borderRadius: '12px',
+          border: '1px solid',
+          borderColor: 'divider',
+          backgroundColor: 'background.paper',
+          overflow: 'hidden',
+        }}>
+          {users.length === 0 ? (
+            <GeekEmptyState
+              title="No users found"
+              description="There are no users in the system"
+            />
+          ) : (
+            <List disablePadding>
+              {users.map((user, idx) => (
+                <ListItem
+                  key={user.id}
+                  secondaryAction={
+                    <IconButton
+                      edge="end"
+                      aria-label="delete"
+                      onClick={() => handleDelete(user.id)}
+                      disabled={deleting === user.id}
+                      size="small"
+                      sx={{ color: 'text.secondary', '&:hover': { color: 'error.main' } }}
+                    >
+                      {deleting === user.id ? (
+                        <CircularProgress size={18} />
+                      ) : (
+                        <DeleteIcon fontSize="small" />
+                      )}
+                    </IconButton>
+                  }
+                  sx={{
+                    borderBottom: idx < users.length - 1 ? '1px solid' : 'none',
+                    borderColor: 'divider',
+                    py: 1.5,
+                    px: 2.5,
+                  }}
                 >
-                  {deleting === user.id ? (
-                    <CircularProgress size={18} />
-                  ) : (
-                    <DeleteIcon fontSize="small" />
-                  )}
-                </IconButton>
-              }
-              sx={{
-                borderBottom: idx < users.length - 1 ? '1px solid' : 'none',
-                borderColor: 'divider',
-                py: 1.5,
-                px: 2.5,
-              }}
-            >
-              <ListItemText
-                primary={user.username}
-                secondary={user.email}
-                primaryTypographyProps={{ fontWeight: 500, fontSize: '0.875rem' }}
-                secondaryTypographyProps={{ fontSize: '0.75rem' }}
-              />
-            </ListItem>
-          ))}
-          {users.length === 0 && !loading && (
-            <ListItem sx={{ py: 4, justifyContent: 'center' }}>
-              <ListItemText
-                primary="No users found"
-                secondary="There are no users in the system"
-                primaryTypographyProps={{ textAlign: 'center', color: 'text.secondary' }}
-                secondaryTypographyProps={{ textAlign: 'center' }}
-              />
-            </ListItem>
+                  <ListItemText
+                    primary={user.username}
+                    secondary={user.email}
+                    primaryTypographyProps={{ fontWeight: 500, fontSize: '0.875rem' }}
+                    secondaryTypographyProps={{ fontSize: '0.75rem' }}
+                  />
+                </ListItem>
+              ))}
+            </List>
           )}
-        </List>
-      </Box>
+        </Box>
+      )}
 
       <ConsoleDialog
         open={openCreate}

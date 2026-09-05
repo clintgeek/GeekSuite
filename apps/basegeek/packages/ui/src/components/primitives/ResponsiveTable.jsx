@@ -9,6 +9,7 @@ import TableRow from '@mui/material/TableRow';
 import Typography from '@mui/material/Typography';
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
+import { GeekEmptyState, GeekErrorState } from '@geeksuite/ui';
 
 /**
  * ResponsiveTable — "wide table with no mobile form" (DOCS/MOBILE_UI_PLAN.md
@@ -28,6 +29,10 @@ import useMediaQuery from '@mui/material/useMediaQuery';
  * `renderActions(row)` — optional actions, rendered as a trailing table
  * column at `md`+ and a footer row on the card below it.
  *
+ * `error` / `errorTitle` / `onRetry` — a load failure replaces the whole
+ * table (card list on mobile, `<Table>` on desktop) with `GeekErrorState`
+ * rather than sitting above an empty grid saying the same thing twice.
+ *
  * Uses `theme.breakpoints.down('md')`, the suite's one layout breakpoint —
  * never `sm`, which is what `GeekDialog`/`GeekSheet` use internally for their
  * own full-screen threshold.
@@ -39,15 +44,22 @@ export default function ResponsiveTable({
   renderCardHeader,
   renderActions,
   emptyMessage = 'Nothing here yet.',
+  error,
+  errorTitle = "Couldn't load this",
+  onRetry,
   sx,
 }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
+  if (error) {
+    return <GeekErrorState compact title={errorTitle} error={error} onRetry={onRetry} />;
+  }
+
   if (!rows || rows.length === 0) {
     return (
       <Box sx={{ py: 5, textAlign: 'center' }}>
-        <Typography sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>{emptyMessage}</Typography>
+        <GeekEmptyState compact title={emptyMessage} />
       </Box>
     );
   }
