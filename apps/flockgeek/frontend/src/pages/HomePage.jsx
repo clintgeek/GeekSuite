@@ -2,12 +2,15 @@ import EggIcon from "@mui/icons-material/EggOutlined";
 import GroupIcon from "@mui/icons-material/GroupsOutlined";
 import BirdIcon from "@mui/icons-material/PetsOutlined";
 import { Box, Button, Stack, Typography } from "@mui/material";
+import { useQuery } from "@apollo/client";
 import { motion } from "framer-motion";
 import { Link as RouterLink } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import SummaryCards from "../components/home/SummaryCards";
 import RecentActivity from "../components/home/RecentActivity";
+import QuickHarvestSheet from "../components/QuickHarvestSheet";
 import useHomeData from "../hooks/useHomeData";
+import { GET_LOCATIONS } from "../graphql/queries";
 
 const quickLinks = [
   { label: "Log eggs", to: "/egg-log", icon: <EggIcon /> },
@@ -35,6 +38,10 @@ const fadeUp = {
 const HomePage = () => {
   const { user } = useAuth();
   const homeData = useHomeData();
+  // Only for the thumb-zone harvest sheet: the same location list the Egg log
+  // hands `QuickHarvestEntry`, so the sheet can default and label the pen.
+  const { data: locData } = useQuery(GET_LOCATIONS);
+  const locations = locData?.flockLocations || [];
 
   const rawName = user?.name || user?.username || user?.email?.split("@")[0] || "";
   const displayName = rawName
@@ -43,13 +50,17 @@ const HomePage = () => {
 
   return (
     <motion.div variants={stagger} initial="hidden" animate="show">
+      {/* Registers "Log eggs" as the shell's primary action and holds the sheet
+          it opens. Renders nothing at `md`+. */}
+      <QuickHarvestSheet locations={locations} />
+
       {/* Greeting header — left-hung, extra vertical air */}
       <motion.div variants={fadeUp}>
         <Box sx={{ mb: 5, maxWidth: 520 }}>
           <Typography variant="overline" sx={{ color: "text.muted", mb: 1, display: "block" }}>
             {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
           </Typography>
-          <Typography variant="h1" component="h1" sx={{ mb: 1.5 }}>
+          <Typography variant="h1" component="h1" sx={{ mb: 1.5, fontSize: { xs: "2rem", sm: "2.75rem" } }}>
             {getGreeting()}, {displayName}
           </Typography>
           <Typography variant="body1" color="text.secondary">
@@ -58,7 +69,9 @@ const HomePage = () => {
         </Box>
       </motion.div>
 
-      {/* Primary CTA — promoted above the fold, full visual weight */}
+      {/* Primary CTA — promoted above the fold, full visual weight. Below `md`
+          the thumb-zone FAB *is* this action (it opens the harvest sheet in
+          place instead of routing away), so the button stands down. */}
       <motion.div variants={fadeUp}>
         <Box sx={{ mb: 4, maxWidth: 320 }}>
           <Button
@@ -68,7 +81,7 @@ const HomePage = () => {
             color="primary"
             size="large"
             startIcon={<EggIcon />}
-            sx={{ px: 4, py: 1.25 }}
+            sx={{ px: 4, py: 1.25, display: { xs: "none", md: "inline-flex" } }}
           >
             Log today's eggs
           </Button>
@@ -85,6 +98,7 @@ const HomePage = () => {
                 sx={{
                   color: "text.secondary",
                   px: 1,
+                  minHeight: 44,
                   "&:hover": { color: "primary.main" }
                 }}
               >

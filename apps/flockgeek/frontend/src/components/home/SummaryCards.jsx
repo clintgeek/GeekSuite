@@ -40,7 +40,9 @@ const SummaryCards = ({ stats }) => {
         >
           <Typography
             variant="body2"
-            sx={{ color: "text.muted", fontSize: "0.6875rem", letterSpacing: 0.5, textTransform: "uppercase", mb: 0.25 }}
+            // 12px is the suite's readable floor (MOBILE_UI_PLAN.md §2); this
+            // eyebrow used to sit at 11px.
+            sx={{ color: "text.muted", fontSize: "0.75rem", letterSpacing: 0.5, textTransform: "uppercase", mb: 0.25 }}
           >
             {label}
           </Typography>

@@ -25,7 +25,11 @@ const ProtectedRoute = ({ element }) => {
           display: "flex",
           justifyContent: "center",
           alignItems: "center",
-          minHeight: "100vh"
+          // `100vh` on iOS Safari is the *largest* viewport, so a centred
+          // spinner sits below the fold while the URL bar shows. Same
+          // `@supports` fallback GeekShell uses (MOBILE_UI_PLAN.md §2).
+          minHeight: "100vh",
+          "@supports (height: 100dvh)": { minHeight: "100dvh" }
         }}
       >
         <CircularProgress />
@@ -48,7 +52,11 @@ const App = () => {
           display: "flex",
           justifyContent: "center",
           alignItems: "center",
-          minHeight: "100vh"
+          // `100vh` on iOS Safari is the *largest* viewport, so a centred
+          // spinner sits below the fold while the URL bar shows. Same
+          // `@supports` fallback GeekShell uses (MOBILE_UI_PLAN.md §2).
+          minHeight: "100vh",
+          "@supports (height: 100dvh)": { minHeight: "100dvh" }
         }}
       >
         <CircularProgress />

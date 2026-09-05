@@ -3,11 +3,11 @@ import { useQuery, useMutation } from '@apollo/client';
 import { toLocalDateString } from "../utils/dateUtils";
 import {
   Container, Paper, Button, Box, Typography, CircularProgress, Alert,
-  TextField, MenuItem, Chip, Dialog, DialogTitle, DialogContent,
-  DialogActions, FormControl, InputLabel, Select, Accordion,
+  TextField, MenuItem, Chip, FormControl, InputLabel, Select, Accordion,
   AccordionSummary, AccordionDetails, List, ListItem, ListItemText,
   IconButton, Stack
 } from "@mui/material";
+import LedgerDialog from "../components/primitives/LedgerDialog";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
@@ -146,7 +146,7 @@ const GroupsPage = () => {
   );
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
+    <Container maxWidth="lg" disableGutters sx={{ py: { xs: 0, md: 4 }, px: { xs: 0, md: 2 } }}>
       <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 3 }}>
         <Button variant="contained" startIcon={<AddIcon />}
           onClick={() => { setAddFormData({ ...emptyForm, startDate: toLocalDateString(new Date()) }); setAddDialogOpen(true); }}>
@@ -184,14 +184,21 @@ const GroupsPage = () => {
                 sx={{ '&:before': { display: 'none' }, '&:not(:last-child)': { borderBottom: 1, borderColor: 'divider' } }}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}
                   sx={{ '& .MuiAccordionSummary-content': { alignItems: 'center', gap: 0, my: 0 } }}>
-                  <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 110px 70px 70px auto', alignItems: 'center', width: '100%', gap: 2, pr: 1 }}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>{group.name}</Typography>
+                  {/* Five fixed tracks in 390px was four squeezed columns and
+                      a clipped action pair; below `md` the row stacks and the
+                      actions sit on their own 44px line. */}
+                  <Box sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr auto', md: '1fr 110px 70px 70px auto' },
+                    alignItems: 'center', width: '100%', gap: { xs: 1, md: 2 }, pr: 1
+                  }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600, gridColumn: { xs: '1 / -1', md: 'auto' } }}>{group.name}</Typography>
                     <Chip label={getPurposeLabel(group.purpose)} color={getPurposeColor(group.purpose)} size="small" sx={{ justifySelf: 'start' }} />
-                    <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'right' }}>{members.length} birds</Typography>
-                    <Chip label={active ? "Active" : "Inactive"} color={active ? "success" : "default"} size="small" variant="outlined" />
-                    <Stack direction="row" spacing={0.5} onClick={(e) => e.stopPropagation()}>
-                      <IconButton size="small" onClick={(e) => handleEdit(group, e)} color="primary"><EditIcon fontSize="small" /></IconButton>
-                      <IconButton size="small" onClick={(e) => handleDelete(group.id, e)} color="error"><DeleteIcon fontSize="small" /></IconButton>
+                    <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: { xs: 'left', md: 'right' }, justifySelf: { xs: 'end', md: 'stretch' }, gridColumn: { xs: '2', md: 'auto' } }}>{members.length} birds</Typography>
+                    <Chip label={active ? "Active" : "Inactive"} color={active ? "success" : "default"} size="small" variant="outlined" sx={{ justifySelf: 'start' }} />
+                    <Stack direction="row" spacing={0.5} onClick={(e) => e.stopPropagation()} sx={{ justifySelf: 'end' }}>
+                      <IconButton aria-label={`Edit ${group.name}`} onClick={(e) => handleEdit(group, e)} color="primary" sx={{ width: 44, height: 44 }}><EditIcon fontSize="small" /></IconButton>
+                      <IconButton aria-label={`Delete ${group.name}`} onClick={(e) => handleDelete(group.id, e)} color="error" sx={{ width: 44, height: 44 }}><DeleteIcon fontSize="small" /></IconButton>
                     </Stack>
                   </Box>
                 </AccordionSummary>
@@ -227,33 +234,44 @@ const GroupsPage = () => {
         </Paper>
       )}
 
-      {/* Edit Dialog */}
-      <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Edit Group</DialogTitle>
-        <DialogContent>
-          <Box sx={{ pt: 2, display: "flex", flexDirection: "column", gap: 2 }}>
-            {formFields(editFormData, setEditFormData)}
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setEditDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleSaveEdit} variant="contained">Save</Button>
-        </DialogActions>
-      </Dialog>
+      {/* Edit / Add — full-screen below `sm`; the header's save button submits
+          the body's form by id. */}
+      <LedgerDialog
+        open={editDialogOpen}
+        onClose={() => setEditDialogOpen(false)}
+        title="Edit group"
+        secondaryAction={<Button onClick={() => setEditDialogOpen(false)}>Cancel</Button>}
+        primaryAction={<Button type="submit" form="group-edit-form" variant="contained">Save</Button>}
+      >
+        <Box
+          component="form"
+          id="group-edit-form"
+          onSubmit={(e) => { e.preventDefault(); handleSaveEdit(); }}
+          sx={{ display: "flex", flexDirection: "column", gap: 2 }}
+        >
+          {formFields(editFormData, setEditFormData)}
+        </Box>
+      </LedgerDialog>
 
-      {/* Add Dialog */}
-      <Dialog open={addDialogOpen} onClose={() => setAddDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Add New Group</DialogTitle>
-        <DialogContent>
-          <Box sx={{ pt: 2, display: "flex", flexDirection: "column", gap: 2 }}>
-            {formFields(addFormData, setAddFormData)}
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setAddDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleSaveAdd} variant="contained" disabled={!addFormData.name || !addFormData.purpose}>Add Group</Button>
-        </DialogActions>
-      </Dialog>
+      <LedgerDialog
+        open={addDialogOpen}
+        onClose={() => setAddDialogOpen(false)}
+        title="Add new group"
+        secondaryAction={<Button onClick={() => setAddDialogOpen(false)}>Cancel</Button>}
+        primaryAction={
+          <Button type="submit" form="group-add-form" variant="contained" disabled={!addFormData.name || !addFormData.purpose}>Add Group</Button>
+        }
+      >
+        <Box
+          component="form"
+          id="group-add-form"
+          onSubmit={(e) => { e.preventDefault(); handleSaveAdd(); }}
+          sx={{ display: "flex", flexDirection: "column", gap: 2 }}
+        >
+          {formFields(addFormData, setAddFormData)}
+        </Box>
+      </LedgerDialog>
+
     </Container>
   );
 };

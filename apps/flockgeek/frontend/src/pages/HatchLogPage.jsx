@@ -1,15 +1,12 @@
 import React, { useState, useMemo } from "react";
 import { useQuery, useMutation } from '@apollo/client';
 import { toLocalDateString } from "../utils/dateUtils";
-import {
-  Container, Paper, Table, TableBody, TableCell, TableContainer,
-  TableHead, TableSortLabel, TableRow, TablePagination, Button, Box,
-  CircularProgress, Alert, TextField, Chip, Dialog, DialogTitle,
-  DialogContent, DialogActions
-} from "@mui/material";
+import { Container, Button, Box, Alert, TextField, Chip } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
+import ResponsiveTable from "../components/primitives/ResponsiveTable";
+import LedgerDialog from "../components/primitives/LedgerDialog";
 import { GET_HATCH_EVENTS } from "../graphql/queries";
 import { RECORD_HATCH_EVENT, UPDATE_HATCH_EVENT, DELETE_ENTITY } from "../graphql/mutations";
 
@@ -110,9 +107,52 @@ const HatchLogPage = () => {
 
   const isHatched = (event) => event.hatchDate && new Date(event.hatchDate) <= new Date();
   const hatchSuccessRate = (event) => !event.eggsSet ? 0 : Math.round((event.chicksHatched / event.eggsSet) * 100);
+  const asDate = (value) => value ? new Date(value).toLocaleDateString(undefined, { timeZone: 'UTC' }) : "-";
 
-  const sortCol = (col, label) => (
-    <TableSortLabel active={sortBy === col} direction={sortBy === col ? sortOrder : "asc"} onClick={() => handleSort(col)}>{label}</TableSortLabel>
+  /**
+   * Ten columns is the widest table in the suite; below `md` `ResponsiveTable`
+   * renders each of these rows as a card titled by its set date, with Edit and
+   * Delete in a ⋯ sheet rather than as a pair of text buttons.
+   */
+  const columns = [
+    { key: "setDate", label: "Set Date", primary: true, render: (e) => asDate(e.setDate) },
+    { key: "hatchDate", label: "Hatch Date", render: (e) => asDate(e.hatchDate) },
+    { key: "eggsSet", label: "Eggs Set", render: (e) => e.eggsSet || 0 },
+    { key: "eggsFertile", label: "Fertile", render: (e) => e.eggsFertile || 0 },
+    { key: "chicksHatched", label: "Hatched", render: (e) => e.chicksHatched || 0 },
+    { key: "pullets", label: "Pullets", render: (e) => e.pullets || 0 },
+    { key: "cockerels", label: "Cockerels", render: (e) => e.cockerels || 0 },
+    { key: "successRate", label: "Success Rate", sortable: false, render: (e) => `${hatchSuccessRate(e)}%` },
+    {
+      key: "status", label: "Status", sortable: false,
+      render: (e) => (
+        <Chip label={isHatched(e) ? "Hatched" : "Incubating"} color={isHatched(e) ? "success" : "warning"} size="small" />
+      )
+    },
+    {
+      key: "actions", label: "Actions", align: "right", sortable: false, cardHidden: true,
+      render: (e) => (
+        <>
+          <Button startIcon={<EditIcon />} onClick={() => handleEditEvent(e)} sx={{ mr: 1 }}>Edit</Button>
+          <Button startIcon={<DeleteIcon />} color="error" onClick={() => handleDeleteEvent(e.id)}>Delete</Button>
+        </>
+      )
+    }
+  ];
+
+  const rowActions = (event) => [
+    { id: "edit", label: "Edit hatch", icon: <EditIcon />, onClick: () => handleEditEvent(event) },
+    { id: "delete", label: "Delete hatch", icon: <DeleteIcon />, color: "error", onClick: () => handleDeleteEvent(event.id) }
+  ];
+
+  /** Framed by `ResponsiveTable`: a Paper at `md`+, a sheet below it. */
+  const filterFields = (
+    <>
+      <TextField type="date" label="Start Date" size="small" InputLabelProps={{ shrink: true }} value={filters.startDate}
+        onChange={(e) => { setFilters(p => ({ ...p, startDate: e.target.value })); setPage(0); }} />
+      <TextField type="date" label="End Date" size="small" InputLabelProps={{ shrink: true }} value={filters.endDate}
+        onChange={(e) => { setFilters(p => ({ ...p, endDate: e.target.value })); setPage(0); }} />
+    </>
   );
 
   const numField = (label, key, formData, setForm, required) => (
@@ -121,7 +161,7 @@ const HatchLogPage = () => {
   );
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
+    <Container maxWidth="lg" disableGutters sx={{ py: { xs: 0, md: 4 }, px: { xs: 0, md: 2 } }}>
       <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 3 }}>
         <Button variant="contained" startIcon={<AddIcon />} onClick={() => { setAddFormData({ setDate: "", hatchDate: "", eggsSet: "", eggsFertile: "", chicksHatched: "", pullets: "", cockerels: "", notes: "" }); setAddDialogOpen(true); }}>
           Add Hatch
@@ -130,107 +170,76 @@ const HatchLogPage = () => {
 
       {(error || mutationError) && <Alert severity="error" sx={{ mb: 2 }}>{error?.message || mutationError}</Alert>}
 
-      <Paper sx={{ p: 2, mb: 3 }}>
-        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 2 }}>
-          <TextField type="date" label="Start Date" size="small" InputLabelProps={{ shrink: true }} value={filters.startDate}
-            onChange={(e) => { setFilters(p => ({ ...p, startDate: e.target.value })); setPage(0); }} />
-          <TextField type="date" label="End Date" size="small" InputLabelProps={{ shrink: true }} value={filters.endDate}
-            onChange={(e) => { setFilters(p => ({ ...p, endDate: e.target.value })); setPage(0); }} />
+      <ResponsiveTable
+        filters={filterFields}
+        filterCount={Object.values(filters).filter(Boolean).length}
+        columns={columns}
+        rows={paginated}
+        rowActions={rowActions}
+        rowLabel={(e) => `hatch set ${asDate(e.setDate)}`}
+        sortBy={sortBy}
+        sortOrder={sortOrder}
+        onSort={handleSort}
+        loading={loading}
+        emptyMessage="No hatch events found"
+        page={page}
+        rowsPerPage={rowsPerPage}
+        count={sorted.length}
+        onPageChange={(_, p) => setPage(p)}
+        onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }}
+      />
+
+      {/* Edit / Add — one form each, full-screen below `sm` via LedgerDialog.
+          The save button lives in the dialog header on a phone, so the form
+          carries an id and the button submits it across the DOM. */}
+      <LedgerDialog
+        open={editDialogOpen}
+        onClose={() => setEditDialogOpen(false)}
+        title="Edit hatch event"
+        secondaryAction={<Button onClick={() => setEditDialogOpen(false)}>Cancel</Button>}
+        primaryAction={<Button type="submit" form="hatch-edit-form" variant="contained">Save</Button>}
+      >
+        <Box
+          component="form"
+          id="hatch-edit-form"
+          onSubmit={(e) => { e.preventDefault(); handleSaveEdit(); }}
+          sx={{ display: "grid", gap: 2 }}
+        >
+          <TextField type="date" label="Set Date" required fullWidth InputLabelProps={{ shrink: true }} value={editFormData.setDate} onChange={(e) => setEditFormData(p => ({ ...p, setDate: e.target.value }))} />
+          <TextField type="date" label="Hatch Date" fullWidth InputLabelProps={{ shrink: true }} value={editFormData.hatchDate} onChange={(e) => setEditFormData(p => ({ ...p, hatchDate: e.target.value }))} />
+          {numField("Eggs Set", "eggsSet", editFormData, setEditFormData, true)}
+          {numField("Fertile Eggs", "eggsFertile", editFormData, setEditFormData, false)}
+          {numField("Chicks Hatched", "chicksHatched", editFormData, setEditFormData, false)}
+          {numField("Pullets", "pullets", editFormData, setEditFormData, false)}
+          {numField("Cockerels", "cockerels", editFormData, setEditFormData, false)}
+          <TextField label="Notes" fullWidth multiline rows={3} value={editFormData.notes} onChange={(e) => setEditFormData(p => ({ ...p, notes: e.target.value }))} />
         </Box>
-      </Paper>
+      </LedgerDialog>
 
-      <TableContainer component={Paper}>
-        {loading ? (
-          <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}><CircularProgress /></Box>
-        ) : (
-          <>
-            <Table>
-              <TableHead sx={{ backgroundColor: "action.hover" }}>
-                <TableRow>
-                  <TableCell>{sortCol("setDate", "Set Date")}</TableCell>
-                  <TableCell>{sortCol("hatchDate", "Hatch Date")}</TableCell>
-                  <TableCell>{sortCol("eggsSet", "Eggs Set")}</TableCell>
-                  <TableCell>{sortCol("eggsFertile", "Fertile")}</TableCell>
-                  <TableCell>{sortCol("chicksHatched", "Hatched")}</TableCell>
-                  <TableCell>{sortCol("pullets", "Pullets")}</TableCell>
-                  <TableCell>{sortCol("cockerels", "Cockerels")}</TableCell>
-                  <TableCell>Success Rate</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell align="right">Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {paginated.length === 0 ? (
-                  <TableRow><TableCell colSpan={10} align="center" sx={{ py: 4 }}>No hatch events found</TableCell></TableRow>
-                ) : paginated.map((event) => (
-                  <TableRow key={event.id} hover>
-                    <TableCell>{new Date(event.setDate).toLocaleDateString(undefined, { timeZone: 'UTC' })}</TableCell>
-                    <TableCell>{event.hatchDate ? new Date(event.hatchDate).toLocaleDateString(undefined, { timeZone: 'UTC' }) : "-"}</TableCell>
-                    <TableCell>{event.eggsSet || 0}</TableCell>
-                    <TableCell>{event.eggsFertile || 0}</TableCell>
-                    <TableCell>{event.chicksHatched || 0}</TableCell>
-                    <TableCell>{event.pullets || 0}</TableCell>
-                    <TableCell>{event.cockerels || 0}</TableCell>
-                    <TableCell>{hatchSuccessRate(event)}%</TableCell>
-                    <TableCell>
-                      <Chip label={isHatched(event) ? "Hatched" : "Incubating"} color={isHatched(event) ? "success" : "warning"} size="small" />
-                    </TableCell>
-                    <TableCell align="right">
-                      <Button size="small" startIcon={<EditIcon />} onClick={() => handleEditEvent(event)} sx={{ mr: 1 }}>Edit</Button>
-                      <Button size="small" startIcon={<DeleteIcon />} color="error" onClick={() => handleDeleteEvent(event.id)}>Delete</Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            <TablePagination rowsPerPageOptions={[5, 10, 25]} component="div" count={sorted.length}
-              rowsPerPage={rowsPerPage} page={page}
-              onPageChange={(_, p) => setPage(p)} onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }} />
-          </>
-        )}
-      </TableContainer>
+      <LedgerDialog
+        open={addDialogOpen}
+        onClose={() => setAddDialogOpen(false)}
+        title="Add hatch event"
+        secondaryAction={<Button onClick={() => setAddDialogOpen(false)}>Cancel</Button>}
+        primaryAction={<Button type="submit" form="hatch-add-form" variant="contained">Add</Button>}
+      >
+        <Box
+          component="form"
+          id="hatch-add-form"
+          onSubmit={(e) => { e.preventDefault(); handleSaveAdd(); }}
+          sx={{ display: "grid", gap: 2 }}
+        >
+          <TextField type="date" label="Set Date" required fullWidth InputLabelProps={{ shrink: true }} value={addFormData.setDate} onChange={(e) => setAddFormData(p => ({ ...p, setDate: e.target.value }))} />
+          <TextField type="date" label="Hatch Date" fullWidth InputLabelProps={{ shrink: true }} value={addFormData.hatchDate} onChange={(e) => setAddFormData(p => ({ ...p, hatchDate: e.target.value }))} />
+          {numField("Eggs Set", "eggsSet", addFormData, setAddFormData, true)}
+          {numField("Fertile Eggs", "eggsFertile", addFormData, setAddFormData, false)}
+          {numField("Chicks Hatched", "chicksHatched", addFormData, setAddFormData, false)}
+          {numField("Pullets", "pullets", addFormData, setAddFormData, false)}
+          {numField("Cockerels", "cockerels", addFormData, setAddFormData, false)}
+          <TextField label="Notes" fullWidth multiline rows={3} value={addFormData.notes} onChange={(e) => setAddFormData(p => ({ ...p, notes: e.target.value }))} />
+        </Box>
+      </LedgerDialog>
 
-      {/* Edit Dialog */}
-      <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Edit Hatch Event</DialogTitle>
-        <DialogContent>
-          <Box sx={{ pt: 2, display: "grid", gap: 2 }}>
-            <TextField type="date" label="Set Date" required fullWidth InputLabelProps={{ shrink: true }} value={editFormData.setDate} onChange={(e) => setEditFormData(p => ({ ...p, setDate: e.target.value }))} />
-            <TextField type="date" label="Hatch Date" fullWidth InputLabelProps={{ shrink: true }} value={editFormData.hatchDate} onChange={(e) => setEditFormData(p => ({ ...p, hatchDate: e.target.value }))} />
-            {numField("Eggs Set", "eggsSet", editFormData, setEditFormData, true)}
-            {numField("Fertile Eggs", "eggsFertile", editFormData, setEditFormData, false)}
-            {numField("Chicks Hatched", "chicksHatched", editFormData, setEditFormData, false)}
-            {numField("Pullets", "pullets", editFormData, setEditFormData, false)}
-            {numField("Cockerels", "cockerels", editFormData, setEditFormData, false)}
-            <TextField label="Notes" fullWidth multiline rows={3} value={editFormData.notes} onChange={(e) => setEditFormData(p => ({ ...p, notes: e.target.value }))} />
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setEditDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleSaveEdit} variant="contained">Save</Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Add Dialog */}
-      <Dialog open={addDialogOpen} onClose={() => setAddDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Add Hatch Event</DialogTitle>
-        <DialogContent>
-          <Box sx={{ pt: 2, display: "grid", gap: 2 }}>
-            <TextField type="date" label="Set Date" required fullWidth InputLabelProps={{ shrink: true }} value={addFormData.setDate} onChange={(e) => setAddFormData(p => ({ ...p, setDate: e.target.value }))} />
-            <TextField type="date" label="Hatch Date" fullWidth InputLabelProps={{ shrink: true }} value={addFormData.hatchDate} onChange={(e) => setAddFormData(p => ({ ...p, hatchDate: e.target.value }))} />
-            {numField("Eggs Set", "eggsSet", addFormData, setAddFormData, true)}
-            {numField("Fertile Eggs", "eggsFertile", addFormData, setAddFormData, false)}
-            {numField("Chicks Hatched", "chicksHatched", addFormData, setAddFormData, false)}
-            {numField("Pullets", "pullets", addFormData, setAddFormData, false)}
-            {numField("Cockerels", "cockerels", addFormData, setAddFormData, false)}
-            <TextField label="Notes" fullWidth multiline rows={3} value={addFormData.notes} onChange={(e) => setAddFormData(p => ({ ...p, notes: e.target.value }))} />
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setAddDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleSaveAdd} variant="contained">Add</Button>
-        </DialogActions>
-      </Dialog>
     </Container>
   );
 };

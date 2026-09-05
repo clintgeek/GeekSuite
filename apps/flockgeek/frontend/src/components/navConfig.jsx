@@ -46,6 +46,21 @@ export const navSections = [
   }
 ];
 
+/**
+ * The phone's tab bar (mobile grammar, MOBILE_UI_PLAN.md §2 and §4): flockgeek
+ * is a data-entry app and was the only one without one. Five items, drawn from
+ * the sidebar's own nav — the five surfaces a caretaker actually opens in a
+ * coop. Never Settings, never Sign out; those live in the top bar's account
+ * menu, and the drawer still carries the full list (Locations included).
+ */
+export const bottomNavItems = [
+  { id: "/", label: "Home", to: "/", icon: <HomeIcon sx={{ fontSize: 22 }} /> },
+  { id: "/egg-log", label: "Eggs", to: "/egg-log", icon: <EggIcon sx={{ fontSize: 22 }} /> },
+  { id: "/birds", label: "Birds", to: "/birds", icon: <PetsIcon sx={{ fontSize: 22 }} /> },
+  { id: "/hatch-log", label: "Hatch", to: "/hatch-log", icon: <HatchIcon sx={{ fontSize: 22 }} /> },
+  { id: "/groups", label: "Groups", to: "/groups", icon: <GroupsIcon sx={{ fontSize: 22 }} /> }
+];
+
 /** Routes that have a page title but deliberately no nav row. */
 const extraTitles = {
   "/dashboard": "Dashboard",
