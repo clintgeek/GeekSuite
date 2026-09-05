@@ -40,3 +40,22 @@ No local `EmptyState`/`ErrorState`/toast component existed here to delete, and n
 `MuiTooltip` override exists to touch for #19's tooltip half.
 
 ---
+
+## Known quirk — the StoryPlay test stall (root-caused 2026-09-05)
+
+`StoryPlay.test.jsx` was `describe.skip`ped for a day because every interaction test pinned
+vitest/jsdom at 60-98% CPU. Not a jsdom/GeekSheet/transition problem at all: it was a genuine
+infinite render loop. `loadStory()` ends with `setMessages(storyData.events.map(...))`, a fresh
+array on every call, so the component always re-renders after a load; the effect that calls it
+was keyed on the whole `user` object (`}, [storyId, user])`), and the test's
+`vi.mock('@geeksuite/auth', () => ({ useAuth: () => ({ user: { id: 'user-1' } }) }))` minted a
+new object on every call — so each load caused a render, each render a new `user` identity, and
+each identity another load. (`StoryList` has the same effect shape and survived only by
+accident: it calls `setStories(response.data)` with the same object reference, so React bails
+out of the re-render.)
+
+Fixed in `StoryPlay.jsx` by keying the effect on `user?.id`, and in the test by returning one
+frozen auth object from the mock factory. Production was never affected — `AuthProvider`
+`useMemo`s its context value — but the loop was one identity change away. Rule of thumb for
+this repo: **effects depend on `user?.id`, never on `user`**, and an auth mock must return the
+same reference every call.

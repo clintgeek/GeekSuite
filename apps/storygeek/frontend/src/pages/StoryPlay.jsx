@@ -216,9 +216,16 @@ function StoryPlay() {
     if (inputRef.current) try { inputRef.current.focus(); } catch (_) {}
   }, [messages]);
 
+  // Keyed on the user's *id*, never on the `user` object: `loadStory` ends with
+  // `setMessages(...map(...))`, which is a fresh array on every call, so the
+  // component always re-renders after a load. If the effect also re-fired on a
+  // new `user` reference, that re-render would trigger another load, forever.
+  // The real AuthProvider memoises its context value so the reference is
+  // stable, which is why production never span — but the loop is one identity
+  // change away, and it pinned vitest/jsdom solid (see DOCS/CONTEXT.md).
   useEffect(() => {
-    if (user && user.id) loadStory();
-  }, [storyId, user]);
+    if (user?.id) loadStory();
+  }, [storyId, user?.id]);
 
   const loadStory = async () => {
     try {

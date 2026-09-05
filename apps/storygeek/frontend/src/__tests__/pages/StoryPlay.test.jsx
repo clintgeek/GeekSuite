@@ -1,7 +1,3 @@
-// SKIPPED 2026-09-05 (burn Q27): every interaction test in this file stalls vitest/jsdom at
-// 60-98% CPU on the StoryPlay tree (rails, sheets, dialogs) even with fireEvent and a 20s
-// timeout; the other 31 storygeek tests are unaffected. Investigate the render loop before
-// re-enabling — see DOCS/BURN_QUEUE.md.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { ThemeProvider } from '@mui/material/styles';
@@ -14,9 +10,15 @@ vi.mock('../../api', () => ({
   default: { get: vi.fn(), post: vi.fn(), delete: vi.fn() },
 }));
 
-vi.mock('@geeksuite/auth', () => ({
-  useAuth: () => ({ user: { id: 'user-1' } }),
-}));
+// One frozen user object, returned by reference. A mock that builds a fresh
+// `{ user: { id } }` per call hands every consumer a new identity on every
+// render, which turns any `useEffect([... user])` into an infinite load loop —
+// exactly what stalled this file for a day. The real AuthProvider memoises its
+// context value; the mock must model that, not fight it.
+vi.mock('@geeksuite/auth', () => {
+  const authValue = { user: { id: 'user-1' } };
+  return { useAuth: () => authValue };
+});
 
 // GeekSheet's mode="auto" and StoryPlay's own rail breakpoints all read
 // useMediaQuery. Simulating a phone (every "up" query false, every "down"
@@ -76,7 +78,7 @@ beforeEach(() => {
   api.get.mockResolvedValue({ data: storyFixture });
 });
 
-describe.skip('StoryPlay composer', () => {
+describe('StoryPlay composer', () => {
   it('sends a message and disables the composer until the reply lands', async () => {
     let resolveContinue;
     api.post.mockImplementation((url) => {
@@ -110,10 +112,10 @@ describe.skip('StoryPlay composer', () => {
     resolveContinue({ data: { aiResponse: 'The mist parts before you.' } });
     await waitFor(() => expect(input).toBeEnabled());
     expect(await screen.findByText('The mist parts before you.')).toBeInTheDocument();
-  }, 20000);
+  });
 });
 
-describe.skip('StoryPlay rails', () => {
+describe('StoryPlay rails', () => {
   it('opens the left rail as a GeekSheet in sheet mode', async () => {
     renderStoryPlay();
     await screen.findByPlaceholderText('What do you do?');
@@ -123,7 +125,7 @@ describe.skip('StoryPlay rails', () => {
     const sheet = await screen.findByText('Scene & Character');
     const root = sheet.closest('[data-geek-sheet-mode]');
     expect(root).toHaveAttribute('data-geek-sheet-mode', 'sheet');
-  }, 20000);
+  });
 
   it('opens the right rail as a GeekSheet in sheet mode', async () => {
     renderStoryPlay();
@@ -134,10 +136,10 @@ describe.skip('StoryPlay rails', () => {
     const sheet = await screen.findByText('Party & Threads');
     const root = sheet.closest('[data-geek-sheet-mode]');
     expect(root).toHaveAttribute('data-geek-sheet-mode', 'sheet');
-  }, 20000);
+  });
 });
 
-describe.skip('StoryPlay Bookify', () => {
+describe('StoryPlay Bookify', () => {
   const originalClipboard = navigator.clipboard;
   const originalShare = navigator.share;
 
@@ -163,7 +165,7 @@ describe.skip('StoryPlay Bookify', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /copy/i }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith('Once, at a foggy crossroads...'));
-  }, 20000);
+  });
 
   it('shows a Share button when navigator.share exists', async () => {
     Object.defineProperty(navigator, 'share', { value: vi.fn().mockResolvedValue(undefined), configurable: true });
@@ -175,7 +177,7 @@ describe.skip('StoryPlay Bookify', () => {
     await screen.findByText('text');
 
     expect(screen.getByRole('button', { name: /^share$/i })).toBeInTheDocument();
-  }, 20000);
+  });
 
   it('hides the Share button when navigator.share does not exist', async () => {
     Object.defineProperty(navigator, 'share', { value: undefined, configurable: true });
@@ -187,5 +189,5 @@ describe.skip('StoryPlay Bookify', () => {
     await screen.findByText('text');
 
     expect(screen.queryByRole('button', { name: /^share$/i })).not.toBeInTheDocument();
-  }, 20000);
+  });
 });
