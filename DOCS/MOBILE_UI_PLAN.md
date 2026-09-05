@@ -312,7 +312,17 @@ Identity notes name what must survive. Effort assumes §2 primitives exist.
 Recorded 2026-09-04 while landing M1 and the fitnessgeek half of M2; **all six primitive items
 landed the same night** (`useGeekPrimaryAction`, compact header action + `primaryActionSx`,
 `titleSx`, node titles, 12px floor in shell chrome, Escape on sheets — see THE_UI_UNIFICATION_PLAN §3b).
-The fitnessgeek dead files and the voice decision remain open.
+The fitnessgeek dead files and the voice decision remain open. Added after bujogeek/notegeek:
+
+- **`GeekSheet` ignores a child's `autoFocus`** — the paper takes focus after the child's attempt
+  while the drawer is still sliding in; bujogeek re-derives a 260ms delay. Add an
+  `initialFocus`/`autoFocusSelector` prop to the primitive. **XS**
+- **notegeek dev server** fails to render anything (`styled_default is not a function` from the
+  dependency optimizer's lazy `init_styled`); the production build is fine. Pre-existing;
+  investigate before the next notegeek pass so it can be screenshot-verified. **S**
+- bujogeek: CollectionDetailPage rename/delete dialogs and the TaskList/SearchPage migration
+  dialog were not converted (three-action confirm wants a sheet); 11px labels inside
+  TaskEditor/TemplateEditor/KeyboardHelp/Habits/Tags/Templates/Sidebar are out of the M2 scope.
 
 - **Primary-action registry.** `GeekFab` must mount as a sibling of `GeekAppFrame`, but the
   page owns the action. fitnessgeek wrote a 75-line context (`Layout/primaryAction.js`); every
@@ -363,4 +373,4 @@ Before merging any UI work, at 390×844 in both modes:
 - Safe areas respected in standalone (notch, home indicator).
 - Identity survives: the app's fonts, chrome color, accent, and voice are present on the phone.
 
-*Drafted 2026-09-04; M0 and M1 landed the same day. Next: M2 continues with bujogeek → notegeek; §4b follow-ups first.*
+*Drafted 2026-09-04; M0 and M1 landed the same day. Next: M3 flockgeek, then M4 storygeek/basegeek, M5 startgeek, M6 guardrails.*
