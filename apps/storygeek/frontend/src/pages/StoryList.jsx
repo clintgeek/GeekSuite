@@ -60,7 +60,9 @@ function StoryList() {
   useEffect(() => {
     if (user && user.id) loadStories();
     else if (user === null) setLoading(false);
-  }, [user]);
+    // Depend on the id, not the object: a fresh user reference per render would
+    // re-fire this load forever (see StoryPlay, 2026-09-05).
+  }, [user?.id]);
 
   const loadStories = async () => {
     try {
