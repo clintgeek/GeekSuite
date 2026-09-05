@@ -126,7 +126,7 @@ function buildStoryOverrides(mode) {
       },
       overline: {
         fontFamily: serifDisplayStack,
-        fontSize: '0.7rem',
+        fontSize: '0.75rem',
         letterSpacing: '0.12em',
         textTransform: 'uppercase',
         fontWeight: 600,

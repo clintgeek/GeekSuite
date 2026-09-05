@@ -179,7 +179,7 @@ const Sidebar = ({
             setShelfFilter("all");
             closeNav();
           }}
-          sx={{ mb: savedFilters.length > 0 ? 2 : 0, fontSize: '0.6875rem', py: 0.5 }}
+          sx={{ mb: savedFilters.length > 0 ? 2 : 0, fontSize: '0.75rem', py: 0.5 }}
         >
           Clear all filters
         </Button>
@@ -201,7 +201,7 @@ const Sidebar = ({
                   variant="contained"
                   sx={{
                     justifyContent: 'flex-start',
-                    fontSize: '0.6875rem',
+                    fontSize: '0.75rem',
                     bgcolor: alpha(theme.palette.divider, 0.05),
                     color: 'text.primary',
                     border: `1px solid ${theme.palette.divider}`,

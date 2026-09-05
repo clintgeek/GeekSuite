@@ -6,7 +6,7 @@
  * sidebar already lists the shelves, so this hides rather than duplicating it.
  */
 import React from "react";
-import { Box, Chip } from "@mui/material";
+import { Box, ButtonBase, Chip } from "@mui/material";
 import { shelfCount } from "./navConfig";
 
 export default function ShelfStrip({
@@ -41,50 +41,64 @@ export default function ShelfStrip({
         const active = shelfFilter === shelf.id;
         const count = shelfCount(shelfSummary, shelf.id);
         return (
-          <Chip
+          // The visible chip stays 32px tall; the ButtonBase around it is the
+          // actual tap target (44px, DOCS/MOBILE_UI_PLAN.md §2) — the chip
+          // itself is decorative and non-interactive so only one element in
+          // the row answers to role="tab".
+          <ButtonBase
             key={shelf.id}
             role="tab"
             aria-selected={active}
-            clickable
             onClick={() => {
               setShelfFilter(shelf.id);
               setActiveView("library");
             }}
-            label={
-              <Box component="span" sx={{ display: "inline-flex", alignItems: "baseline", gap: 0.75 }}>
-                <Box component="span" sx={{ fontSize: "0.75rem", fontWeight: 500 }}>
-                  {shelf.label}
-                </Box>
-                {count ? (
-                  <Box
-                    component="span"
-                    sx={{
-                      fontFamily: '"Roboto Mono", monospace',
-                      fontSize: "0.75rem",
-                      opacity: 0.7,
-                    }}
-                  >
-                    {count}
-                  </Box>
-                ) : null}
-              </Box>
-            }
-            variant={active ? "filled" : "outlined"}
             sx={{
               flex: "0 0 auto",
-              height: 32,
-              scrollSnapAlign: "start",
+              minHeight: 44,
               borderRadius: "16px",
-              ...(active
-                ? {
-                    bgcolor: "primary.main",
-                    color: "primary.contrastText",
-                    borderColor: "primary.main",
-                    "&:hover": { bgcolor: "primary.dark" },
-                  }
-                : { color: "text.secondary" }),
+              scrollSnapAlign: "start",
+              ...(active && {
+                "&:hover .MuiChip-root": { bgcolor: "primary.dark" },
+              }),
             }}
-          />
+          >
+            <Chip
+              component="span"
+              label={
+                <Box component="span" sx={{ display: "inline-flex", alignItems: "baseline", gap: 0.75 }}>
+                  <Box component="span" sx={{ fontSize: "0.75rem", fontWeight: 500 }}>
+                    {shelf.label}
+                  </Box>
+                  {count ? (
+                    <Box
+                      component="span"
+                      sx={{
+                        fontFamily: '"Roboto Mono", monospace',
+                        fontSize: "0.75rem",
+                        opacity: 0.7,
+                      }}
+                    >
+                      {count}
+                    </Box>
+                  ) : null}
+                </Box>
+              }
+              variant={active ? "filled" : "outlined"}
+              sx={{
+                height: 32,
+                borderRadius: "16px",
+                pointerEvents: "none",
+                ...(active
+                  ? {
+                      bgcolor: "primary.main",
+                      color: "primary.contrastText",
+                      borderColor: "primary.main",
+                    }
+                  : { color: "text.secondary" }),
+              }}
+            />
+          </ButtonBase>
         );
       })}
     </Box>

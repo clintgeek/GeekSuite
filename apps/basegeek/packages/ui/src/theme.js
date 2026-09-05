@@ -227,7 +227,7 @@ export function createBaseGeekTheme(mode = 'dark') {
           fontWeight: 600,
           letterSpacing: '0.04em',
           textTransform: 'uppercase',
-          fontSize: '0.6875rem',
+          fontSize: '0.75rem',
         },
         body1: { lineHeight: 1.65, fontSize: '0.9375rem' },
         body2: { lineHeight: 1.6,  fontSize: '0.8125rem' },
@@ -237,7 +237,7 @@ export function createBaseGeekTheme(mode = 'dark') {
           fontWeight: 700,
           letterSpacing: '0.08em',
           textTransform: 'uppercase',
-          fontSize: '0.6875rem',
+          fontSize: '0.75rem',
           fontFamily: monoStack,
         },
       },
@@ -397,6 +397,20 @@ export function createBaseGeekTheme(mode = 'dark') {
                   borderColor: amber,
                   borderWidth: 1.5,
                 },
+              },
+            },
+          },
+        },
+        MuiSelect: {
+          styleOverrides: {
+            select: {
+              // 44px tap targets, no exceptions (DOCS/MOBILE_UI_PLAN.md §2) —
+              // size="small" selects (e.g. Account page) are otherwise 40px.
+              '&.MuiInputBase-inputSizeSmall': {
+                minHeight: 44,
+                display: 'flex',
+                alignItems: 'center',
+                boxSizing: 'border-box',
               },
             },
           },
