@@ -2,6 +2,29 @@ import { Book } from "./models/book.js";
 import { Profile } from "./models/profile.js";
 import AIConfig from "../../models/AIConfig.js";
 import mongoose from "mongoose";
+import {
+  validateInput,
+  createBookArgsSchema,
+  updateBookArgsSchema,
+  deleteBookArgsSchema,
+  saveBookProfileArgsSchema,
+  saveLibraryFilterArgsSchema,
+  deleteLibraryFilterArgsSchema,
+  addBookShelfArgsSchema,
+  removeBookShelfArgsSchema,
+} from "./validation.js";
+
+// Input validation runs AFTER `requireUser` in every mutation below: an
+// anonymous caller must still see `Unauthorized`, never a field-level
+// complaint that describes a valid payload for them.
+const validateCreateBook = validateInput(createBookArgsSchema);
+const validateUpdateBook = validateInput(updateBookArgsSchema);
+const validateDeleteBook = validateInput(deleteBookArgsSchema);
+const validateSaveBookProfile = validateInput(saveBookProfileArgsSchema);
+const validateSaveLibraryFilter = validateInput(saveLibraryFilterArgsSchema);
+const validateDeleteLibraryFilter = validateInput(deleteLibraryFilterArgsSchema);
+const validateAddBookShelf = validateInput(addBookShelfArgsSchema);
+const validateRemoveBookShelf = validateInput(removeBookShelfArgsSchema);
 
 // Built-in shelves. Users can also define custom shelves (ids prefixed
 // "custom-", stored on their bookgeek Profile); those are counted below by
@@ -281,8 +304,9 @@ export const resolvers = {
     },
   },
   Mutation: {
-    createBook: async (_, { input }, { user }) => {
+    createBook: async (_, rawArgs, { user }) => {
       requireUser(user);
+      const { input } = validateCreateBook(rawArgs);
       const doc = {
         title: input.title,
         authors: input.authors || [],
@@ -296,8 +320,9 @@ export const resolvers = {
       const book = await Book.create(doc);
       return book.toObject ? book.toObject() : book;
     },
-    updateBook: async (_, { id, input }, { user }) => {
+    updateBook: async (_, rawArgs, { user }) => {
       requireUser(user);
+      const { id, input } = validateUpdateBook(rawArgs);
       if (!validObjectId(id)) return null;
       const updated = await Book.findByIdAndUpdate(
         id,
@@ -306,16 +331,18 @@ export const resolvers = {
       );
       return updated;
     },
-    deleteBook: async (_, { id }, { user }) => {
+    deleteBook: async (_, rawArgs, { user }) => {
       requireUser(user);
+      const { id } = validateDeleteBook(rawArgs);
       if (!validObjectId(id)) return { success: false, deletedId: id };
       // Simplification: only deleting the book record here for now.
       // Full implementation should handle file deletion if requested.
       const res = await Book.deleteOne({ _id: id });
       return { success: res.deletedCount > 0, deletedId: id };
     },
-    saveBookProfile: async (_, { input }, { user }) => {
+    saveBookProfile: async (_, rawArgs, { user }) => {
       const userId = requireUser(user);
+      const { input } = validateSaveBookProfile(rawArgs);
 
       const set = {};
       const unset = {};
@@ -362,8 +389,9 @@ export const resolvers = {
         throw err;
       }
     },
-    saveLibraryFilter: async (_, { input }, { user }) => {
+    saveLibraryFilter: async (_, rawArgs, { user }) => {
       const userId = requireUser(user);
+      const { input } = validateSaveLibraryFilter(rawArgs);
 
       const name = typeof input?.name === "string" ? input.name.trim() : "";
       if (!name) throw userError("Filter name is required", "BAD_USER_INPUT");
@@ -397,9 +425,9 @@ export const resolvers = {
 
       return savedFiltersOf(profile);
     },
-    deleteLibraryFilter: async (_, { id }, { user }) => {
+    deleteLibraryFilter: async (_, rawArgs, { user }) => {
       const userId = requireUser(user);
-      if (!id) throw userError("Filter id is required", "BAD_USER_INPUT");
+      const { id } = validateDeleteLibraryFilter(rawArgs);
 
       const profile = await Profile.findOneAndUpdate(
         { userId },
@@ -409,8 +437,9 @@ export const resolvers = {
 
       return savedFiltersOf(profile);
     },
-    addBookShelf: async (_, { label: rawLabel }, { user }) => {
+    addBookShelf: async (_, rawArgs, { user }) => {
       const userId = requireUser(user);
+      const { label: rawLabel } = validateAddBookShelf(rawArgs);
 
       const label =
         typeof rawLabel === "string" ? rawLabel.trim().replace(/\s+/g, " ") : "";
@@ -446,8 +475,9 @@ export const resolvers = {
     },
     // Removing a shelf also clears it from any book sitting on it. Books are
     // shared across users, so those books land back on Unread for everyone.
-    removeBookShelf: async (_, { id: rawId }, { user }) => {
+    removeBookShelf: async (_, rawArgs, { user }) => {
       const userId = requireUser(user);
+      const { id: rawId } = validateRemoveBookShelf(rawArgs);
       const id = String(rawId || "");
       if (!id.startsWith(CUSTOM_SHELF_PREFIX)) {
         throw userError("Only custom shelves can be removed", "BAD_USER_INPUT");

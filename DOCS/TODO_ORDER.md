@@ -192,10 +192,17 @@ cycle so the ordering rationale stays visible; detail moved to `SUITE_TODO.md` "
     `findOneAndUpdate` runs with `runValidators` off, so `updateBird(status:)`
     and `updateMeatRun(status:)` previously wrote off-enum values straight to
     the database. Detail in `apps/basegeek/DOCS/CONTEXT.md` "Gateway input
-    validation". Remaining: flockgeek's *own* REST backend pending its Q22
-    decision, and the **bookgeek** gateway module (the per-app auth-isolation
-    suites are unrelated and already done, see `SUITE_TODO.md`).
-    *Security / tests*
+    validation". **bookgeek gateway module done 2026-09-05** — the same layer
+    on all eight bookgeek mutations (`createBook`/`updateBook`/`deleteBook`
+    plus the `01d35d4` profile family: `saveBookProfile`, `saveLibraryFilter`,
+    `deleteLibraryFilter`, `addBookShelf`, `removeBookShelf`). Books and
+    shelves stay a deliberately SHARED household library (no owner key exists
+    in any of these mutations' arguments, so — unlike the other three
+    modules — there was nothing to strip before validation); only the
+    Profile family is per-user. `publishedDate` is a calendar day,
+    `dateStarted`/`dateFinished` are instants. This closes the gateway side
+    of #22 entirely — the only piece left is flockgeek's *own* REST backend,
+    pending its Q22 decision. *Security / tests*
 23. **Circuit breakers on fitnessgeek external APIs** — S. `opossum` around USDA, Nutritionix,
     OpenFoodFacts, Garmin. *Observability*
 

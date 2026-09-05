@@ -84,8 +84,8 @@ a file-level operation.
 ## Gateway input validation (TODO_ORDER #22, 2026-09-05)
 
 The GraphQL gateway validates mutation arguments with zod before a resolver
-touches a service or a model. Three modules are covered so far — bujogeek
-(`3265b1c`), then **notegeek and flockgeek**. Each has its own
+touches a service or a model. All four modules are covered now — bujogeek
+(`3265b1c`), then notegeek and flockgeek, then **bookgeek**. Each has its own
 `src/graphql/<app>/validation.js` with one strict schema per mutation family;
 the machinery they are built from lives in
 `src/graphql/shared/validation.js`.
@@ -126,6 +126,11 @@ the machinery they are built from lives in
 - **bujogeek — mixed.** `dueDate` can carry a real reminder hour, so it stays
   an instant; only `toggleHabitLog`'s `date` is a calendar day. See that
   module's own doc comment.
+- **bookgeek — mixed, the other way round.** `updateBook`'s `publishedDate`
+  is a calendar day (no source — ISBN metadata, Open Library, a manual
+  entry — ever gives a time of day, so it normalizes through
+  `calendarDateField()`); `dateStarted`/`dateFinished` are real
+  reading-progress instants and keep whatever time-of-day they carry.
 
 **One bound worth knowing:** a notegeek note's `content` has two ceilings.
 `text`/`markdown`/`code` stop at 100 000 characters; `mindmap`/`handwritten`
@@ -135,8 +140,25 @@ is picked from the note's own `type`; an `updateNote` that omits `type` gets
 the generous one, since the server cannot know the stored type without a read
 it does not otherwise need.
 
-Still uncovered: the **bookgeek** gateway module. flockgeek's *own* REST
-backend is a separate question (`DOCS/TODO_ORDER.md` #22).
+**bookgeek is a special case: books and shelves are a deliberately SHARED
+household library.** `Book` carries no owner/userId field on purpose — see
+`resolvers.js`'s own doc comment — so `createBook`/`updateBook`/`deleteBook`
+have no owner key to strip before validation (there never was one to strip:
+no bookgeek mutation declares a `userId`/`ownerId` argument at all). Only the
+Profile family — `saveBookProfile`, `saveLibraryFilter`,
+`deleteLibraryFilter`, `addBookShelf`, `removeBookShelf` (added `01d35d4`) —
+is per-user, scoped by the session's `userId` in every resolver. Several
+Profile fields keep their own resolver-level checks with specific, tested
+error messages (`deviceWord`'s 3-24-char pattern, a filter's required `name`,
+a shelf's 40-char `label` cap, "Only custom shelves can be removed" for
+`removeBookShelf`'s built-in ids) — this layer validates shape only for those
+fields (a bounded string, nothing trimmed or required) so the resolver's own
+message still fires; `removeBookShelf`'s `id` also deliberately accepts `''`
+for the same reason (`bookgeekProfile.test.js`'s "a built-in shelf can never
+be removed" case).
+
+This closes the gateway side of #22 entirely. flockgeek's *own* REST backend
+is a separate, still-open question (`DOCS/TODO_ORDER.md` #22).
 
 ---
 
