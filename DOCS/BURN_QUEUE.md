@@ -9,6 +9,7 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
+| R68 | TODO #22: zod on the notegeek + flockgeek gateway mutations (shared validateInput) | opus | basegeek api graphql/notegeek, graphql/flockgeek, graphql/shared, tests | 09-05 15:02 |
 | R67 | consolidation pairs 3–5 per the plan's order (Medication first; export enums the validators mirror) | opus | packages/schemas, both apps' three models + parity suites | 09-05 14:45 |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
