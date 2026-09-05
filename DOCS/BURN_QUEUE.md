@@ -9,7 +9,6 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
-| R88 | Q53: every backend's SPA fallback 404s asset paths; every SW refuses text/html under asset URLs | sonnet | backend entry files + route tests, public/sw.js files, PWA_STANDARD, CONTEXT | 09-05 17:52 |
 | R87 | Q51 a11y burn-down: packages/ui muted-text contrast + shared control names; bujogeek, storygeek, flockgeek to 0 under --enforce-a11y | opus | packages/ui, three frontends, MOBILE_UI_PLAN | 09-05 17:35 |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
