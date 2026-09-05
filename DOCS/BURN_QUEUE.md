@@ -9,7 +9,6 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
-| R75 | review #1 #7 #12: bookgeek publishedDate floor (P0), title:null, gatewaySchemaLoads via ApolloServer | opus | gateway shared/bookgeek validation + 2 tests | 09-05 16:30 |
 | R76 | review #5 #6 #9 #14 #15 #19: fitnessgeek settings/food write paths (gateway merge, REST double $set, household_id, "today", serving fields) | opus | gateway fitnessgeek resolvers/services, fitnessgeek settingsRoutes + settings validator, 2 fe call sites | 09-05 16:30 |
 | R77 | review #4 #18 (flockgeek REST ownerId, P0), #8 (bujogeek UTC-day grouping regression), #16 (fitnessgeek household log dead) | sonnet | flockgeek controllers, bujogeek TaskList, fitnessgeek apiService household | 09-05 16:30 |
 | R78 | review #20 #22: CI jobs for four untested shared packages; boot-smoke import gate | sonnet | ci.yml, tools/boot-smoke.mjs, RUNBOOK | 09-05 16:30 |
