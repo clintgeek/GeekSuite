@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Box } from '@mui/material';
+import { Box, useMediaQuery } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import { useApolloClient, useMutation } from '@apollo/client';
 import { addDays, format, isWithinInterval, startOfDay } from 'date-fns';
 import { useTaskContext } from '../context/TaskContext';
@@ -10,6 +11,7 @@ import UpcomingSection from '../components/today/UpcomingSection';
 import CompletedSection from '../components/today/CompletedSection';
 import BlockedSection from '../components/today/BlockedSection';
 import InlineQuickAdd from '../components/today/InlineQuickAdd';
+import QuickAddSheet from '../components/today/QuickAddSheet';
 import SkeletonLoader from '../components/shared/SkeletonLoader';
 import TaskEditor from '../components/tasks/TaskEditor';
 import BlockTaskDialog from '../components/tasks/BlockTaskDialog';
@@ -21,6 +23,10 @@ import { getTaskAge } from '../utils/taskAging';
 import { useToast } from '@geeksuite/ui';
 
 const TodayPage = () => {
+  const theme = useTheme();
+  // Below `md` the writing surface moves to a FAB-opened sheet, so the inline
+  // field is hidden — two entry points on one page would be one too many.
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [currentDate, setCurrentDate] = useState(new Date());
   const [editingTask, setEditingTask] = useState(null);
   // Tasks due within the next 7 days (fetched separately from the daily view)
@@ -179,7 +185,8 @@ const TodayPage = () => {
     } catch {
       // createTask has already surfaced the error via the task context snackbar;
       // skip the refetch so the failed entry isn't silently dropped from view.
-      return;
+      // `false` also keeps the quick-add sheet open with the entry still typed.
+      return false;
     }
     if (blocked && created) {
       const parked = await blockTask((created.id || created._id), blockedReason);
@@ -190,6 +197,7 @@ const TodayPage = () => {
     }
     // Refetch to get sorted list
     fetchTasks('daily', currentDate);
+    return true;
   }, [createTask, blockTask, notify, fetchBlocked, fetchTasks, currentDate]);
 
   // Split tasks into overdue, active, completed
@@ -312,7 +320,8 @@ const TodayPage = () => {
         maxWidth: 720,
         mx: 'auto',
         px: { xs: 1, sm: 3 },
-        pb: 4,
+        // Room for the FAB below `md` so it never sits on the last entry.
+        pb: { xs: 11, md: 4 },
       }}
     >
       <PageHeader
@@ -321,10 +330,21 @@ const TodayPage = () => {
         stats={stats}
       />
 
-      {/* Writing surface — always visible, never gated on loading */}
-      <InlineQuickAdd
+      {/* Writing surface — always visible, never gated on loading. At `md`+
+          it is the inline field; below it, the FAB's sheet (same component). */}
+      <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+        <InlineQuickAdd
+          onAdd={handleQuickAdd}
+          autoFocus={
+            !isMobile && !isLoading && displayActiveTasks.length === 0 && overdueTasks.length === 0
+          }
+        />
+      </Box>
+
+      <QuickAddSheet
+        label="Add task"
+        sheetTitle="New entry"
         onAdd={handleQuickAdd}
-        autoFocus={!isLoading && displayActiveTasks.length === 0 && overdueTasks.length === 0}
       />
 
       {isLoading ? (

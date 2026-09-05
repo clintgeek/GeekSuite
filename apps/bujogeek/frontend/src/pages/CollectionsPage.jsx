@@ -4,15 +4,13 @@ import {
   Box,
   Typography,
   Button,
-  Dialog,
-  DialogContent,
-  DialogActions,
   TextField,
   IconButton,
   Tooltip,
   useTheme,
 } from '@mui/material';
-import { Plus, Archive, ArchiveRestore, ChevronRight, X } from 'lucide-react';
+import { Plus, Archive, ArchiveRestore, ChevronRight } from 'lucide-react';
+import BujoDialog from '../components/primitives/BujoDialog';
 import useCollections from '../hooks/useCollections';
 import useGlobalShortcuts from '../hooks/useGlobalShortcuts';
 import SkeletonLoader from '../components/shared/SkeletonLoader';
@@ -27,6 +25,7 @@ import { useToast } from '@geeksuite/ui';
  * ("Books to Read", "Project X"). Entries only join the log once dated, so this
  * page is deliberately quiet: names, progress, and a way in.
  */
+const FORM_ID = 'bujo-new-collection-form';
 const CollectionsPage = () => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
@@ -170,7 +169,7 @@ const CollectionsPage = () => {
             <Typography
               sx={{
                 fontFamily: '"IBM Plex Mono", monospace',
-                fontSize: '0.625rem',
+                fontSize: '0.75rem',
                 fontWeight: 600,
                 letterSpacing: '0.04em',
                 color: captionInk,
@@ -307,7 +306,7 @@ const CollectionsPage = () => {
                   <Archive size={13} color={captionInk} />
                   <Typography
                     sx={{
-                      fontSize: '0.6875rem',
+                      fontSize: '0.75rem',
                       fontWeight: 700,
                       textTransform: 'uppercase',
                       letterSpacing: '0.06em',
@@ -317,12 +316,12 @@ const CollectionsPage = () => {
                     Archived
                   </Typography>
                   <Typography
-                    sx={{ fontSize: '0.6875rem', fontWeight: 500, color: theme.palette.text.muted }}
+                    sx={{ fontSize: '0.75rem', fontWeight: 500, color: theme.palette.text.muted }}
                   >
                     {archived.length}
                   </Typography>
                   <Typography
-                    sx={{ fontSize: '0.6875rem', color: theme.palette.text.muted, ml: 0.5 }}
+                    sx={{ fontSize: '0.75rem', color: theme.palette.text.muted, ml: 0.5 }}
                   >
                     {showArchived ? 'hide' : 'show'}
                   </Typography>
@@ -336,102 +335,56 @@ const CollectionsPage = () => {
       </Box>
 
       {/* ─── Create dialog ────────────────────────────────────── */}
-      <Dialog
+      <BujoDialog
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         maxWidth="xs"
-        fullWidth
-        PaperProps={{ sx: { borderRadius: 3, backgroundImage: 'none' } }}
-      >
-        <form onSubmit={handleCreate}>
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'flex-start',
-              justifyContent: 'space-between',
-              px: 3,
-              pt: 3,
-              pb: 2,
-              borderBottom: dottedRule,
-            }}
+        eyebrow="A list outside the log"
+        title="New Collection"
+        primaryAction={
+          <Button
+            type="submit"
+            form={FORM_ID}
+            variant="contained"
+            size="small"
+            disabled={saving || !form.name.trim()}
+            sx={{ fontSize: '0.8125rem', fontWeight: 600, textTransform: 'none', px: 2.5 }}
           >
-            <Box>
-              <Typography
-                sx={{
-                  fontFamily: '"Fraunces", serif',
-                  fontStyle: 'italic',
-                  fontSize: '0.75rem',
-                  color: captionInk,
-                  mb: 0.5,
-                }}
-              >
-                A list outside the log
-              </Typography>
-              <Typography
-                component="h2"
-                sx={{
-                  fontFamily: '"Fraunces", serif',
-                  fontSize: '1.375rem',
-                  fontWeight: 500,
-                  color: theme.palette.text.primary,
-                  lineHeight: 1.15,
-                }}
-              >
-                New Collection
-              </Typography>
-            </Box>
-            <IconButton
-              onClick={() => setCreateOpen(false)}
-              size="small"
-              aria-label="Close"
-              sx={{ color: mutedInk, mt: 0.5 }}
-            >
-              <X size={18} />
-            </IconButton>
-          </Box>
-
-          <DialogContent sx={{ px: 3, py: 3 }}>
-            <TextField
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              label="Name"
-              placeholder="Books to Read"
-              autoFocus
-              required
-              fullWidth
-              size="small"
-              sx={{ mb: 2 }}
-            />
-            <TextField
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              label="Description"
-              placeholder="Optional — what belongs in here?"
-              fullWidth
-              size="small"
-            />
-          </DialogContent>
-
-          <DialogActions sx={{ px: 3, py: 2, borderTop: dottedRule, gap: 1 }}>
-            <Button
-              onClick={() => setCreateOpen(false)}
-              size="small"
-              sx={{ fontSize: '0.8125rem', color: mutedInk, textTransform: 'none' }}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              variant="contained"
-              size="small"
-              disabled={saving || !form.name.trim()}
-              sx={{ fontSize: '0.8125rem', fontWeight: 600, textTransform: 'none', px: 2.5 }}
-            >
-              Create
-            </Button>
-          </DialogActions>
-        </form>
-      </Dialog>
+            Create
+          </Button>
+        }
+        secondaryAction={
+          <Button
+            onClick={() => setCreateOpen(false)}
+            size="small"
+            sx={{ fontSize: '0.8125rem', color: mutedInk, textTransform: 'none' }}
+          >
+            Cancel
+          </Button>
+        }
+      >
+        <Box component="form" id={FORM_ID} onSubmit={handleCreate}>
+          <TextField
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            label="Name"
+            placeholder="Books to Read"
+            autoFocus
+            required
+            fullWidth
+            size="small"
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            value={form.description}
+            onChange={(e) => setForm({ ...form, description: e.target.value })}
+            label="Description"
+            placeholder="Optional — what belongs in here?"
+            fullWidth
+            size="small"
+          />
+        </Box>
+      </BujoDialog>
     </Box>
   );
 };

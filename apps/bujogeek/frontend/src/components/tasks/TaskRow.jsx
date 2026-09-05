@@ -1,12 +1,32 @@
-import { useState, useRef, useCallback } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box, Typography, Chip, IconButton, Tooltip, useTheme, useMediaQuery } from '@mui/material';
+import {
+  Box,
+  ButtonBase,
+  Typography,
+  Chip,
+  IconButton,
+  Tooltip,
+  useTheme,
+  useMediaQuery,
+} from '@mui/material';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Pencil, Trash2, StickyNote, Repeat, Ban, RotateCcw, PauseCircle, Play, CheckCircle2 } from 'lucide-react';
+import {
+  Pencil,
+  Trash2,
+  StickyNote,
+  Repeat,
+  Ban,
+  RotateCcw,
+  PauseCircle,
+  Play,
+  CheckCircle2,
+  MoreHorizontal,
+} from 'lucide-react';
 import { format, differenceInCalendarDays } from 'date-fns';
 import TaskCheckbox from './TaskCheckbox';
 import { getTaskAge, getAgingColor, getAgingLabel } from '../../utils/taskAging';
-import { toneForMode } from '@geeksuite/ui';
+import { GeekSheet, toneForMode } from '@geeksuite/ui';
 import { colors } from '../../theme/colors';
 
 const priorityDotColors = {
@@ -40,9 +60,12 @@ const TaskRow = ({
   // Plum reads ~2.5:1 on dark paper; lift it when used as text/icon color.
   // Light mode keeps the authored hue, hence `darkenBy: 0`.
   const staleInk  = toneForMode(colors.aging.stale, theme, { darkenBy: 0 });
-  const isMobile  = useMediaQuery(theme.breakpoints.down('sm'));
+  // Layout branches on `md`, the breakpoint the whole shell switches at.
+  // (It used to be `sm`, which left 600–900px with mobile chrome and desktop
+  // interaction — MOBILE_UI_PLAN.md §1.)
+  const isMobile  = useMediaQuery(theme.breakpoints.down('md'));
   const [hovered, setHovered] = useState(false);
-  const [tapped,  setTapped]  = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   const isCompleted = task.status === 'completed';
   const isCancelled = task.status === 'cancelled';
@@ -72,14 +95,7 @@ const TaskRow = ({
   const agingLabel  = getAgingLabel(days);
   const agingTint   = (isSunk || isBlocked) ? 'transparent' : getAgingTint(agingColor, isDark);
 
-  // Mobile: tap the row to reveal action buttons
-  const handleRowClick = useCallback((e) => {
-    if (!isMobile) return;
-    if (e.target.closest('button, input, [role="button"], .MuiChip-root')) return;
-    setTapped((prev) => !prev);
-  }, [isMobile]);
-
-  const showActions = isMobile ? tapped : hovered;
+  const showActions = hovered;
 
   const cleanContent = (content) => {
     if (!content) return '';
@@ -133,10 +149,83 @@ const TaskRow = ({
     ? 'rgba(255, 245, 220, 0.03)'
     : `${colors.ink[100]}50`;
 
+  const idleInk = isDark ? 'rgba(255,245,220,0.35)' : colors.ink[400];
+
+  // One list of actions, two surfaces: the hover cluster at `md`+ and the ⋯
+  // sheet below it (MOBILE_UI_PLAN.md §4 — six 28px targets revealed on hover
+  // is nothing you can use with a thumb). Destructive stays last.
+  const actionItems = useMemo(() => {
+    const items = [];
+    if (onEdit) {
+      items.push({
+        key: 'edit',
+        label: 'Edit',
+        icon: Pencil,
+        onClick: () => onEdit(task),
+        color: idleInk,
+        hoverColor: colors.primary[500],
+      });
+    }
+    if (onSaveAsNote) {
+      items.push({
+        key: 'note',
+        label: 'Save as note',
+        icon: StickyNote,
+        onClick: () => onSaveAsNote(task),
+        color: idleInk,
+        hoverColor: colors.primary[500],
+      });
+    }
+    if (onCancel) {
+      items.push({
+        key: 'cancel',
+        label: isCancelled ? 'Restore' : 'Cancel — mark irrelevant',
+        sheetLabel: isCancelled ? 'Restore' : 'Cancel — mark irrelevant',
+        icon: isCancelled ? RotateCcw : Ban,
+        onClick: () => onCancel(task),
+        color: isCancelled ? staleInk : idleInk,
+        hoverColor: staleInk,
+      });
+    }
+    if (isBlocked && onUnblock) {
+      items.push({
+        key: 'unblock',
+        label: 'Unblock — put it back in play',
+        sheetLabel: 'Unblock',
+        icon: Play,
+        onClick: () => onUnblock(task),
+        color: staleInk,
+        hoverColor: colors.aging.fresh,
+      });
+    }
+    if (!isBlocked && !isSunk && onBlock) {
+      items.push({
+        key: 'block',
+        label: 'Block… — park it, waiting on something',
+        sheetLabel: 'Block — park it',
+        icon: PauseCircle,
+        onClick: () => onBlock(task),
+        color: idleInk,
+        hoverColor: staleInk,
+      });
+    }
+    if (onDelete) {
+      items.push({
+        key: 'delete',
+        label: 'Delete',
+        icon: Trash2,
+        onClick: () => onDelete(task),
+        color: idleInk,
+        hoverColor: colors.aging.overdue,
+        destructive: true,
+      });
+    }
+    return items;
+  }, [onEdit, onSaveAsNote, onCancel, onBlock, onUnblock, onDelete, task, isCancelled, isBlocked, isSunk, staleInk, idleInk]);
+
   return (
     <Box
       data-task-id={taskId}
-      onClick={handleRowClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       sx={{
@@ -148,7 +237,7 @@ const TaskRow = ({
         borderLeft:      `2.5px solid ${agingColor}`,
         backgroundColor: focused
           ? focusBg
-          : (hovered || tapped) ? hoverBg : agingTint,
+          : hovered ? hoverBg : agingTint,
         // Focus ring — precise, inset
         outline:         focused ? `1.5px solid ${colors.primary[400]}50` : 'none',
         outlineOffset:   -1,
@@ -185,7 +274,7 @@ const TaskRow = ({
             <Box
               sx={{
                 fontFamily:      '"IBM Plex Mono", monospace',
-                fontSize:        '0.625rem',
+                fontSize:        '0.75rem',
                 fontWeight:      600,
                 backgroundColor: isDark ? 'rgba(255,245,220,0.08)' : colors.ink[100],
                 color:           isDark ? 'rgba(255,245,220,0.6)' : colors.ink[500],
@@ -286,9 +375,9 @@ const TaskRow = ({
                 gap:             0.375,
                 flexShrink:      0,
                 fontFamily:      '"IBM Plex Mono", monospace',
-                fontSize:        '0.5625rem',
+                fontSize:        '0.75rem',
                 fontWeight:      700,
-                letterSpacing:   '0.08em',
+                letterSpacing:   '0.06em',
                 textTransform:   'uppercase',
                 color:           isDark ? 'rgba(255,245,220,0.28)' : colors.ink[400],
                 border:          `1px solid ${isDark ? 'rgba(255,245,220,0.16)' : colors.ink[200]}`,
@@ -298,7 +387,7 @@ const TaskRow = ({
                 lineHeight:      1.5,
               }}
             >
-              <CheckCircle2 size={10} strokeWidth={2} />
+              <CheckCircle2 size={12} strokeWidth={2} />
               Completed
             </Box>
           )}
@@ -327,7 +416,7 @@ const TaskRow = ({
                   lineHeight:      1.5,
                 }}
               >
-                <PauseCircle size={10} strokeWidth={2} />
+                <PauseCircle size={12} strokeWidth={2} />
                 Blocked
               </Box>
             </Tooltip>
@@ -338,7 +427,7 @@ const TaskRow = ({
             <Typography
               sx={{
                 fontFamily:   '"IBM Plex Mono", monospace',
-                fontSize:     '0.625rem',
+                fontSize:     '0.75rem',
                 fontWeight:   600,
                 color:        dueBadge.color,
                 whiteSpace:   'nowrap',
@@ -435,8 +524,8 @@ const TaskRow = ({
                   navigate(`/tags?tag=${encodeURIComponent(tag)}`);
                 }}
                 sx={{
-                  height:          18,
-                  fontSize:        '0.625rem',
+                  height:          22,
+                  fontSize:        '0.75rem',
                   fontFamily:      '"IBM Plex Mono", monospace',
                   fontWeight:      500,
                   letterSpacing:   '0.02em',
@@ -492,34 +581,46 @@ const TaskRow = ({
         )}
       </Box>
 
-      {/* ─── Action buttons — desktop hover / mobile tap ──────── */}
-      <AnimatePresence>
-        {showActions && (onEdit || onDelete || onSaveAsNote || onCancel || onBlock || onUnblock) && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.94 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.94 }}
-            transition={{ duration: 0.1, ease: 'easeOut' }}
-            style={{
-              display:  'flex',
-              alignItems: 'center',
-              gap: 2,
-              // Desktop: absolute right overlay
-              ...(!isMobile && {
-                position:  'absolute',
-                right:     8,
-                top:       '50%',
+      {/* ─── Actions ────────────────────────────────────────────
+          `md`+: the cluster reveals on hover (and is force-shown under
+          `@media (hover: none)` via `data-geek-hover-reveal`).
+          Below `md`: one always-visible 44px ⋯ that opens an action sheet. */}
+      {actionItems.length > 0 && isMobile && (
+        <IconButton
+          onClick={(e) => { e.stopPropagation(); setSheetOpen(true); }}
+          aria-label={`Actions for ${cleanContent(task.content)}`}
+          sx={{
+            flexShrink: 0,
+            alignSelf: 'center',
+            width: 44,
+            height: 44,
+            color: idleInk,
+          }}
+        >
+          <MoreHorizontal size={18} strokeWidth={1.75} />
+        </IconButton>
+      )}
+
+      {!isMobile && (
+        <AnimatePresence>
+          {showActions && actionItems.length > 0 && (
+            <motion.div
+              data-geek-hover-reveal=""
+              initial={{ opacity: 0, scale: 0.94 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.94 }}
+              transition={{ duration: 0.1, ease: 'easeOut' }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 2,
+                position: 'absolute',
+                right: 8,
+                top: '50%',
                 transform: 'translateY(-50%)',
-              }),
-              // Mobile: inline, aligned center
-              ...(isMobile && {
-                flexShrink: 0,
-                alignSelf:  'center',
-              }),
-            }}
-          >
-            {/* Backdrop blur on desktop for legibility */}
-            {!isMobile && (
+              }}
+            >
+              {/* Backdrop blur for legibility over the entry text */}
               <Box
                 sx={{
                   position:        'absolute',
@@ -532,109 +633,64 @@ const TaskRow = ({
                   zIndex:          -1,
                 }}
               />
-            )}
 
-            {onEdit && (
-              <Tooltip title="Edit" placement="top">
-                <IconButton
-                  size="small"
-                  onClick={(e) => { e.stopPropagation(); onEdit(task); }}
-                  sx={{
-                    color:   isDark ? 'rgba(255,245,220,0.35)' : colors.ink[400],
-                    width:   28,
-                    height:  28,
-                    '&:hover': { color: colors.primary[500] },
-                  }}
-                >
-                  <Pencil size={14} strokeWidth={1.75} />
-                </IconButton>
-              </Tooltip>
-            )}
-            {onSaveAsNote && (
-              <Tooltip title="Save as note" placement="top">
-                <IconButton
-                  size="small"
-                  onClick={(e) => { e.stopPropagation(); onSaveAsNote(task); }}
-                  sx={{
-                    color:   isDark ? 'rgba(255,245,220,0.35)' : colors.ink[400],
-                    width:   28,
-                    height:  28,
-                    '&:hover': { color: colors.primary[500] },
-                  }}
-                >
-                  <StickyNote size={14} strokeWidth={1.75} />
-                </IconButton>
-              </Tooltip>
-            )}
-            {onCancel && (
-              <Tooltip title={isCancelled ? 'Restore' : 'Cancel — mark irrelevant'} placement="top">
-                <IconButton
-                  size="small"
-                  onClick={(e) => { e.stopPropagation(); onCancel(task); }}
-                  sx={{
-                    color:   isCancelled
-                               ? staleInk
-                               : (isDark ? 'rgba(255,245,220,0.35)' : colors.ink[400]),
-                    width:   28,
-                    height:  28,
-                    '&:hover': { color: staleInk },
-                  }}
-                >
-                  {isCancelled ? <RotateCcw size={14} strokeWidth={1.75} /> : <Ban size={14} strokeWidth={1.75} />}
-                </IconButton>
-              </Tooltip>
-            )}
-            {isBlocked && onUnblock && (
-              <Tooltip title="Unblock — put it back in play" placement="top">
-                <IconButton
-                  size="small"
-                  onClick={(e) => { e.stopPropagation(); onUnblock(task); }}
-                  sx={{
-                    color:   staleInk,
-                    width:   28,
-                    height:  28,
-                    '&:hover': { color: colors.aging.fresh },
-                  }}
-                >
-                  <Play size={14} strokeWidth={1.75} />
-                </IconButton>
-              </Tooltip>
-            )}
-            {!isBlocked && !isSunk && onBlock && (
-              <Tooltip title="Block… — park it, waiting on something" placement="top">
-                <IconButton
-                  size="small"
-                  onClick={(e) => { e.stopPropagation(); onBlock(task); }}
-                  sx={{
-                    color:   isDark ? 'rgba(255,245,220,0.35)' : colors.ink[400],
-                    width:   28,
-                    height:  28,
-                    '&:hover': { color: staleInk },
-                  }}
-                >
-                  <PauseCircle size={14} strokeWidth={1.75} />
-                </IconButton>
-              </Tooltip>
-            )}
-            {onDelete && (
-              <Tooltip title="Delete" placement="top">
-                <IconButton
-                  size="small"
-                  onClick={(e) => { e.stopPropagation(); onDelete(task); }}
-                  sx={{
-                    color:   isDark ? 'rgba(255,245,220,0.35)' : colors.ink[400],
-                    width:   28,
-                    height:  28,
-                    '&:hover': { color: colors.aging.overdue },
-                  }}
-                >
-                  <Trash2 size={14} strokeWidth={1.75} />
-                </IconButton>
-              </Tooltip>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+              {actionItems.map((action) => (
+                <Tooltip key={action.key} title={action.label} placement="top">
+                  <IconButton
+                    size="small"
+                    onClick={(e) => { e.stopPropagation(); action.onClick(); }}
+                    aria-label={action.label}
+                    sx={{
+                      color:   action.color,
+                      width:   28,
+                      height:  28,
+                      '&:hover': { color: action.hoverColor },
+                    }}
+                  >
+                    <action.icon size={14} strokeWidth={1.75} />
+                  </IconButton>
+                </Tooltip>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      )}
+
+      {/* The ⋯ sheet — the same six actions, at a size a thumb can hit. */}
+      {isMobile && (
+        <GeekSheet
+          open={sheetOpen}
+          onClose={() => setSheetOpen(false)}
+          title={cleanContent(task.content) || 'Entry'}
+          bodySx={{ px: 1, pt: 0.5 }}
+        >
+          <Box sx={{ display: 'flex', flexDirection: 'column', pb: 1 }}>
+            {actionItems.map((action) => (
+              <ButtonBase
+                key={action.key}
+                onClick={(e) => { e.stopPropagation(); setSheetOpen(false); action.onClick(); }}
+                sx={{
+                  display:        'flex',
+                  alignItems:     'center',
+                  justifyContent: 'flex-start',
+                  gap:            1.75,
+                  minHeight:      44,
+                  px:             1.5,
+                  borderRadius:   '8px',
+                  textAlign:      'left',
+                  color:          action.destructive ? 'error.main' : 'text.primary',
+                }}
+              >
+                <action.icon size={18} strokeWidth={1.75} style={{ flexShrink: 0 }} />
+                <Typography sx={{ fontSize: '0.9375rem', fontWeight: 450 }}>
+                  {action.sheetLabel || action.label}
+                </Typography>
+              </ButtonBase>
+            ))}
+          </Box>
+        </GeekSheet>
+      )}
+
     </Box>
   );
 };

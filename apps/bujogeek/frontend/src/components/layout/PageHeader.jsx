@@ -175,15 +175,16 @@ const PageHeader = ({ date, onDateChange, stats }) => {
               onClick={handleToday}
               sx={{
                 fontFamily:      '"IBM Plex Mono", monospace',
-                fontSize:        '0.5625rem',
+                fontSize:        '0.75rem',
                 fontWeight:      700,
                 letterSpacing:   '0.1em',
                 textTransform:   'uppercase',
                 color:           colors.primary[500],
                 border:          `1px solid ${isDark ? `${colors.primary[700]}` : colors.primary[200]}`,
                 borderRadius:    '4px',
-                px:              0.75,
+                px:              1.25,
                 py:              0.375,
+                minHeight:       { xs: 44, md: 'auto' },
                 backgroundColor: 'transparent',
                 cursor:          'pointer',
                 transition:      'all 0.14s ease',
@@ -224,7 +225,7 @@ const PageHeader = ({ date, onDateChange, stats }) => {
           <Typography
             sx={{
               fontFamily:    '"IBM Plex Mono", monospace',
-              fontSize:      '0.6875rem',
+              fontSize:      '0.75rem',
               fontWeight:    400,
               letterSpacing: '0.01em',
               color:         metaColor,

@@ -1,8 +1,5 @@
 import { useState, useEffect } from 'react';
 import {
-  Dialog,
-  DialogContent,
-  DialogActions,
   TextField,
   Button,
   FormControl,
@@ -11,11 +8,10 @@ import {
   MenuItem,
   Box,
   Typography,
-  IconButton,
   Chip,
   useTheme,
 } from '@mui/material';
-import { X } from 'lucide-react';
+import BujoDialog from '../primitives/BujoDialog';
 import { useTemplates } from '../../context/TemplateContext';
 import { colors } from '../../theme/colors';
 import { useToast } from '@geeksuite/ui';
@@ -40,7 +36,12 @@ const TEMPLATE_TYPES = [
  *   Plan today's main goal
  *   Check CI pipeline
  *   Reply to {{person}} about {{topic}}
+ *
+ * The dialog itself is a `BujoDialog` — the app's skin over `GeekDialog` —
+ * so it goes full-screen below `sm` with the shared close / title / save
+ * header instead of being a 326px card on a phone.
  */
+const FORM_ID = 'bujo-template-editor-form';
 const TemplateEditor = ({ open, onClose, template = null }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
@@ -126,77 +127,39 @@ const TemplateEditor = ({ open, onClose, template = null }) => {
     .split('\n')
     .filter((line) => line.trim().length > 0).length;
 
-  const captionInk = isDark ? 'rgba(255,255,255,0.32)' : colors.ink[300];
   const primaryInk = theme.palette.text.primary;
   const mutedInk = isDark ? 'rgba(255,255,255,0.5)' : colors.ink[400];
   const dottedRule = `1px dotted ${isDark ? 'rgba(255,255,255,0.14)' : colors.ink[200]}`;
 
   return (
-    <Dialog
+    <BujoDialog
       open={open}
       onClose={onClose}
-      maxWidth="sm"
-      fullWidth
-      PaperProps={{
-        sx: {
-          borderRadius: 3,
-          backgroundColor: theme.palette.background.paper,
-          backgroundImage: 'none',
-        },
-      }}
-    >
-      <form onSubmit={handleSubmit}>
-        {/* ─── Editorial header ─────────────────────────────────── */}
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'space-between',
-            px: { xs: 3, sm: 3.5 },
-            pt: { xs: 3, sm: 3.5 },
-            pb: 2,
-            borderBottom: dottedRule,
-          }}
+      eyebrow={isEditing ? 'Editing template' : 'New routine'}
+      title={isEditing ? template?.name || 'Edit Template' : 'Create Template'}
+      primaryAction={
+        <Button
+          type="submit"
+          form={FORM_ID}
+          variant="contained"
+          disabled={loading || !formData.name.trim() || !formData.content.trim()}
+          size="small"
+          sx={{ fontSize: '0.8125rem', fontWeight: 600, textTransform: 'none', px: 2.5 }}
         >
-          <Box>
-            <Typography
-              sx={{
-                fontFamily: '"Fraunces", serif',
-                fontStyle: 'italic',
-                fontSize: '0.75rem',
-                fontWeight: 400,
-                color: captionInk,
-                letterSpacing: '0.01em',
-                mb: 0.5,
-              }}
-            >
-              {isEditing ? 'Editing template' : 'New routine'}
-            </Typography>
-            <Typography
-              component="h2"
-              sx={{
-                fontFamily: '"Fraunces", serif',
-                fontSize: { xs: '1.375rem', sm: '1.5rem' },
-                fontWeight: 500,
-                color: primaryInk,
-                letterSpacing: '-0.01em',
-                lineHeight: 1.15,
-              }}
-            >
-              {isEditing ? template?.name || 'Edit Template' : 'Create Template'}
-            </Typography>
-          </Box>
-          <IconButton
-            onClick={onClose}
-            size="small"
-            aria-label="Close"
-            sx={{ color: mutedInk, mt: 0.5, '&:hover': { color: primaryInk } }}
-          >
-            <X size={18} />
-          </IconButton>
-        </Box>
-
-        <DialogContent sx={{ px: { xs: 3, sm: 3.5 }, py: 3 }}>
+          {loading ? 'Saving...' : isEditing ? 'Update' : 'Create'}
+        </Button>
+      }
+      secondaryAction={
+        <Button
+          onClick={onClose}
+          size="small"
+          sx={{ fontSize: '0.8125rem', color: mutedInk, textTransform: 'none' }}
+        >
+          Cancel
+        </Button>
+      }
+    >
+      <Box component="form" id={FORM_ID} onSubmit={handleSubmit}>
           {/* Name */}
           <Box sx={{ mb: 2.5 }}>
             <TextField
@@ -315,37 +278,8 @@ const TemplateEditor = ({ open, onClose, template = null }) => {
               )}
             </Box>
           </Box>
-        </DialogContent>
-
-        {/* ─── Actions ──────────────────────────────────────────── */}
-        <DialogActions
-          sx={{
-            px: { xs: 3, sm: 3.5 },
-            py: 2,
-            borderTop: dottedRule,
-            gap: 1,
-            backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.015)',
-          }}
-        >
-          <Button
-            onClick={onClose}
-            size="small"
-            sx={{ fontSize: '0.8125rem', color: mutedInk, textTransform: 'none' }}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            variant="contained"
-            disabled={loading || !formData.name.trim() || !formData.content.trim()}
-            size="small"
-            sx={{ fontSize: '0.8125rem', fontWeight: 600, textTransform: 'none', px: 2.5 }}
-          >
-            {loading ? 'Saving...' : isEditing ? 'Update' : 'Create'}
-          </Button>
-        </DialogActions>
-      </form>
-    </Dialog>
+      </Box>
+    </BujoDialog>
   );
 };
 

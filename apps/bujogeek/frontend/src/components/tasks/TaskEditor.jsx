@@ -1,8 +1,5 @@
 import { useState, useEffect } from 'react';
 import {
-  Dialog,
-  DialogContent,
-  DialogActions,
   TextField,
   Button,
   FormControl,
@@ -10,20 +7,20 @@ import {
   Select,
   MenuItem,
   Box,
-  IconButton,
   Chip,
   Autocomplete,
   Typography,
   useTheme,
 } from '@mui/material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
-import { X, StickyNote } from 'lucide-react';
+import { StickyNote } from 'lucide-react';
 import { useMutation } from '@apollo/client';
 import { useTaskContext } from '../../context/TaskContext.jsx';
 import useTaskTags from '../../hooks/useTaskTags';
 import useCollections from '../../hooks/useCollections';
 import { CREATE_NOTE } from '../../graphql/notegeekMutations';
 import { colors } from '../../theme/colors';
+import BujoDialog from '../primitives/BujoDialog';
 import RecurringEditDialog from './RecurringEditDialog';
 import { buildRecurrenceRule, frequencyFromRecurrenceRule } from '../../utils/parseTaskInput';
 import { useToast } from '@geeksuite/ui';
@@ -56,8 +53,16 @@ const RECURRENCE_OPTIONS = [
  * TaskEditor — the editorial task edit/create dialog.
  *
  * Fraunces serif title, grouped field sections with dotted dividers,
- * IBM Plex Mono signifier badges, warm parchment background.
+ * IBM Plex Mono signifier badges, warm parchment background — all of which
+ * now come from `BujoDialog`, the app's skin over `GeekDialog`. The mobile
+ * rule (full-screen below `sm`, close ✕ / title / primary action header) is
+ * inherited from the primitive rather than re-implemented here.
+ *
+ * The form lives in the dialog body while Save sits in the header, so the
+ * `<form id>` / `<Button form=…>` pairing is what keeps submit (and
+ * Enter-to-submit) working across the two.
  */
+const FORM_ID = 'bujo-task-editor-form';
 const TaskEditor = ({ open, onClose, task = null }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
@@ -182,71 +187,61 @@ const TaskEditor = ({ open, onClose, task = null }) => {
   const dottedRule = `1px dotted ${isDark ? 'rgba(255,255,255,0.14)' : colors.ink[200]}`;
 
   return (
-    <Dialog
+    <BujoDialog
       open={open}
       onClose={onClose}
-      maxWidth="sm"
-      fullWidth
-      PaperProps={{
-        sx: {
-          borderRadius: 3,
-          backgroundColor: theme.palette.background.paper,
-          backgroundImage: 'none',
-        },
-      }}
-    >
-      <form onSubmit={handleSubmit}>
-        {/* ─── Editorial header ─────────────────────────────────── */}
-        <Box
+      eyebrow={isEditing ? 'Editing' : 'New entry'}
+      title={isEditing ? 'Edit Task' : 'New Task'}
+      primaryAction={
+        <Button
+          type="submit"
+          form={FORM_ID}
+          variant="contained"
+          disabled={loading || !formData.content.trim()}
+          size="small"
           sx={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'space-between',
-            px: { xs: 3, sm: 3.5 },
-            pt: { xs: 3, sm: 3.5 },
-            pb: 2,
-            borderBottom: dottedRule,
+            fontSize: '0.8125rem',
+            fontWeight: 600,
+            textTransform: 'none',
+            px: 2.5,
           }}
         >
-          <Box>
-            <Typography
+          {isEditing ? 'Update' : 'Create'}
+        </Button>
+      }
+      secondaryAction={
+        <>
+          {isEditing && (
+            <Button
+              onClick={handleSaveAsNote}
+              disabled={savingNote}
+              startIcon={<StickyNote size={16} />}
+              size="small"
               sx={{
-                fontFamily: '"Fraunces", serif',
-                fontStyle: 'italic',
-                fontSize: '0.75rem',
-                fontWeight: 400,
-                color: captionInk,
-                letterSpacing: '0.01em',
-                mb: 0.5,
+                mr: 'auto',
+                fontSize: '0.8125rem',
+                color: mutedInk,
+                textTransform: 'none',
+                '&:hover': { color: primaryInk, backgroundColor: 'transparent' },
               }}
             >
-              {isEditing ? 'Editing' : 'New entry'}
-            </Typography>
-            <Typography
-              component="h2"
-              sx={{
-                fontFamily: '"Fraunces", serif',
-                fontSize: { xs: '1.375rem', sm: '1.5rem' },
-                fontWeight: 500,
-                color: primaryInk,
-                letterSpacing: '-0.01em',
-                lineHeight: 1.15,
-              }}
-            >
-              {isEditing ? 'Edit Task' : 'New Task'}
-            </Typography>
-          </Box>
-          <IconButton
+              Save as Note
+            </Button>
+          )}
+          <Button
             onClick={onClose}
             size="small"
-            aria-label="Close"
-            sx={{ color: mutedInk, mt: 0.5, '&:hover': { color: primaryInk } }}
+            sx={{ fontSize: '0.8125rem', color: mutedInk, textTransform: 'none' }}
           >
-            <X size={18} />
-          </IconButton>
-        </Box>
-
-        <DialogContent sx={{ px: { xs: 3, sm: 3.5 }, py: 3 }}>
+            Cancel
+          </Button>
+        </>
+      }
+      // Full-screen mode swallows the footer; keep it while editing so
+      // "Save as Note" survives on a phone.
+      keepSecondaryOnMobile={isEditing}
+    >
+      <Box component="form" id={FORM_ID} onSubmit={handleSubmit}>
           {/* ─── Content section ─────────────────────────────────── */}
           <Box sx={{ mb: 3 }}>
             <Typography
@@ -489,69 +484,15 @@ const TaskEditor = ({ open, onClose, task = null }) => {
               </Select>
             </FormControl>
           </Box>
-        </DialogContent>
+      </Box>
 
-        {/* ─── Actions ──────────────────────────────────────────── */}
-        <DialogActions
-          sx={{
-            px: { xs: 3, sm: 3.5 },
-            py: 2,
-            borderTop: dottedRule,
-            gap: 1,
-            backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.015)',
-          }}
-        >
-          {isEditing && (
-            <Button
-              onClick={handleSaveAsNote}
-              disabled={savingNote}
-              startIcon={<StickyNote size={16} />}
-              size="small"
-              sx={{
-                mr: 'auto',
-                fontSize: '0.8125rem',
-                color: mutedInk,
-                textTransform: 'none',
-                '&:hover': { color: primaryInk, backgroundColor: 'transparent' },
-              }}
-            >
-              Save as Note
-            </Button>
-          )}
-          <Button
-            onClick={onClose}
-            size="small"
-            sx={{
-              fontSize: '0.8125rem',
-              color: mutedInk,
-              textTransform: 'none',
-            }}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            variant="contained"
-            disabled={loading || !formData.content.trim()}
-            size="small"
-            sx={{
-              fontSize: '0.8125rem',
-              fontWeight: 600,
-              textTransform: 'none',
-              px: 2.5,
-            }}
-          >
-            {isEditing ? 'Update' : 'Create'}
-          </Button>
-        </DialogActions>
-      </form>
       <RecurringEditDialog
         open={recurringDialogOpen}
         actionType="edit"
         onClose={() => setRecurringDialogOpen(false)}
         onConfirm={handleRecurringConfirm}
       />
-    </Dialog>
+    </BujoDialog>
   );
 };
 

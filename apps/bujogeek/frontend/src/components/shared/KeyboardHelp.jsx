@@ -1,5 +1,5 @@
-import { Box, Typography, Dialog, DialogContent, IconButton, useTheme } from '@mui/material';
-import { X } from 'lucide-react';
+import { Box, Typography, useTheme } from '@mui/material';
+import { GeekSheet } from '@geeksuite/ui';
 import { colors } from '../../theme/colors';
 
 /**
@@ -9,6 +9,10 @@ import { colors } from '../../theme/colors';
  * Organized by context: Navigation, Today, Review, Quick Entry.
  * Key badges use IBM Plex Mono, descriptions in Source Sans.
  * Fraunces serif title. Dotted dividers between sections.
+ *
+ * Reference content, not a form, so it rides `GeekSheet` rather than
+ * `GeekDialog` (MOBILE_UI_PLAN.md §4): a bottom sheet below `md`, the same
+ * centered window it always was at `md`+.
  */
 
 const SHORTCUT_GROUPS = [
@@ -102,71 +106,43 @@ const KeyboardHelp = ({ open, onClose }) => {
   const dottedRule = `1px dotted ${isDark ? 'rgba(255,255,255,0.14)' : colors.ink[200]}`;
 
   return (
-    <Dialog
+    <GeekSheet
       open={open}
       onClose={onClose}
       maxWidth="sm"
-      fullWidth
-      PaperProps={{
-        sx: {
-          borderRadius: 3,
-          maxHeight: '85vh',
-          backgroundColor: theme.palette.background.paper,
-        },
-      }}
-    >
-      <DialogContent sx={{ px: { xs: 3, sm: 4 }, py: { xs: 3, sm: 3.5 } }}>
-        {/* Header */}
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'space-between',
-            mb: 3,
-          }}
-        >
-          <Box>
-            <Typography
-              sx={{
-                fontFamily: '"Fraunces", serif',
-                fontStyle: 'italic',
-                fontSize: '0.8125rem',
-                fontWeight: 400,
-                color: captionInk,
-                letterSpacing: '0.01em',
-                mb: 0.5,
-              }}
-            >
-              Quick reference
-            </Typography>
-            <Typography
-              component="h2"
-              sx={{
-                fontFamily: '"Fraunces", serif',
-                fontSize: { xs: '1.5rem', sm: '1.75rem' },
-                fontWeight: 500,
-                color: primaryInk,
-                letterSpacing: '-0.02em',
-                lineHeight: 1.15,
-              }}
-            >
-              Keyboard Shortcuts
-            </Typography>
-          </Box>
-          <IconButton
-            onClick={onClose}
-            size="small"
-            aria-label="Close"
+      title={
+        <Box>
+          <Typography
             sx={{
-              color: mutedInk,
-              mt: 0.5,
-              '&:hover': { color: primaryInk },
+              fontFamily: '"Fraunces", serif',
+              fontStyle: 'italic',
+              fontSize: '0.8125rem',
+              fontWeight: 400,
+              color: captionInk,
+              letterSpacing: '0.01em',
+              mb: 0.5,
             }}
           >
-            <X size={18} />
-          </IconButton>
+            Quick reference
+          </Typography>
+          <Typography
+            component="span"
+            sx={{
+              display: 'block',
+              fontFamily: '"Fraunces", serif',
+              fontSize: { xs: '1.5rem', sm: '1.75rem' },
+              fontWeight: 500,
+              color: primaryInk,
+              letterSpacing: '-0.02em',
+              lineHeight: 1.15,
+            }}
+          >
+            Keyboard Shortcuts
+          </Typography>
         </Box>
-
+      }
+      bodySx={{ px: { xs: 2.5, sm: 4 }, pb: { xs: 3, sm: 3.5 } }}
+    >
         {/* Shortcut groups */}
         {SHORTCUT_GROUPS.map((group, groupIdx) => (
           <Box key={group.title} sx={{ mb: groupIdx < SHORTCUT_GROUPS.length - 1 ? 3 : 0 }}>
@@ -267,8 +243,7 @@ const KeyboardHelp = ({ open, onClose }) => {
             Press <KeyBadge>?</KeyBadge> anytime to show this reference
           </Typography>
         </Box>
-      </DialogContent>
-    </Dialog>
+    </GeekSheet>
   );
 };
 

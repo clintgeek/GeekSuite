@@ -3,28 +3,42 @@
  *
  * Structure: the four "Journal" nav items plus a "More" tab that opens a
  * bottom sheet for the "Library" items (Collections, Habits, Search,
- * Templates) and Keyboard Shortcuts. The sheet used to duplicate Sign out —
- * that row is removed: account actions live in the sidebar footer and the
- * top-bar account menu now, not here (`GeekBottomNav` would drop a Logout
- * item anyway, but the "More" sheet is bujogeek's own Drawer, not the
- * primitive, so the row had to be removed by hand).
+ * Templates). The sheet used to duplicate Sign out — that row is gone;
+ * account actions live in the sidebar footer and the top-bar account menu.
+ *
+ * Two mobile-pass changes (MOBILE_UI_PLAN.md §4):
+ *   - the sheet was the suite's only hand-rolled bottom `Drawer`; it now
+ *     rides `GeekSheet`, so it inherits the grab handle, the safe-area
+ *     padding, the 92dvh cap and Escape-to-close.
+ *   - the "Keyboard Shortcuts" row synthesised a `?` keypress, which does
+ *     nothing on a device with no keyboard. It is dropped under
+ *     `@media (hover: none)` — i.e. on touch — and kept everywhere else.
  */
 import { useState } from 'react';
-import { Box, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
+import {
+  Box,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  useMediaQuery,
+} from '@mui/material';
 import { MoreHorizontal, Keyboard } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { GeekBottomNav } from '@geeksuite/ui';
+import { GeekBottomNav, GeekSheet } from '@geeksuite/ui';
 import { navSections, activeNavId } from './navConfig';
 
 const primaryItems = navSections[0].items; // Today, Review, Plan, Tags
 const moreSheetItems = navSections[1].items; // Collections, Habits, Search, Templates
 
 const MobileTabBar = () => {
-  const theme = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const [moreOpen, setMoreOpen] = useState(false);
+  // No hover means no pointer means, in practice, no keyboard: the shortcuts
+  // row is dead weight there.
+  const isTouch = useMediaQuery('(hover: none)');
 
   const currentId = activeNavId(location.pathname);
 
@@ -48,62 +62,48 @@ const MobileTabBar = () => {
       <GeekBottomNav items={items} activeId={currentId} />
 
       {/* More sheet */}
-      <Drawer
-        anchor="bottom"
+      <GeekSheet
         open={moreOpen}
         onClose={() => setMoreOpen(false)}
-        PaperProps={{
-          sx: {
-            borderTopLeftRadius: 16,
-            borderTopRightRadius: 16,
-            maxHeight: '50vh',
-          },
-        }}
+        title="More"
+        bodySx={{ px: 1 }}
       >
-        <Box sx={{ px: 1, py: 1 }}>
-          <Box
-            sx={{
-              width: 36,
-              height: 4,
-              backgroundColor: theme.palette.divider,
-              borderRadius: 2,
-              mx: 'auto',
-              mb: 1,
-            }}
-          />
-          <List>
-            {moreSheetItems.map(({ id, label, to, Icon }) => (
-              <ListItem key={id} disablePadding>
+        <Box sx={{ pb: 1 }}>
+          <List disablePadding>
+            {moreSheetItems.map((item) => (
+              <ListItem key={item.id} disablePadding>
                 <ListItemButton
-                  onClick={() => { navigate(to); setMoreOpen(false); }}
-                  sx={{ borderRadius: '8px' }}
+                  onClick={() => { navigate(item.to); setMoreOpen(false); }}
+                  sx={{ borderRadius: '8px', minHeight: 44 }}
                 >
                   <ListItemIcon sx={{ minWidth: 40 }}>
-                    <Icon size={20} />
+                    <item.Icon size={20} />
                   </ListItemIcon>
-                  <ListItemText primary={label} primaryTypographyProps={{ fontSize: '0.9375rem' }} />
+                  <ListItemText primary={item.label} primaryTypographyProps={{ fontSize: '0.9375rem' }} />
                 </ListItemButton>
               </ListItem>
             ))}
-            <ListItem disablePadding>
-              <ListItemButton
-                onClick={() => {
-                  setMoreOpen(false);
-                  setTimeout(() => {
-                    window.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true }));
-                  }, 200);
-                }}
-                sx={{ borderRadius: '8px' }}
-              >
-                <ListItemIcon sx={{ minWidth: 40 }}>
-                  <Keyboard size={20} />
-                </ListItemIcon>
-                <ListItemText primary="Keyboard Shortcuts" primaryTypographyProps={{ fontSize: '0.9375rem' }} />
-              </ListItemButton>
-            </ListItem>
+            {!isTouch && (
+              <ListItem disablePadding>
+                <ListItemButton
+                  onClick={() => {
+                    setMoreOpen(false);
+                    setTimeout(() => {
+                      window.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true }));
+                    }, 200);
+                  }}
+                  sx={{ borderRadius: '8px', minHeight: 44 }}
+                >
+                  <ListItemIcon sx={{ minWidth: 40 }}>
+                    <Keyboard size={20} />
+                  </ListItemIcon>
+                  <ListItemText primary="Keyboard Shortcuts" primaryTypographyProps={{ fontSize: '0.9375rem' }} />
+                </ListItemButton>
+              </ListItem>
+            )}
           </List>
         </Box>
-      </Drawer>
+      </GeekSheet>
     </>
   );
 };

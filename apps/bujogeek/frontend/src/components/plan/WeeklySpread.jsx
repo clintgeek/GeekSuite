@@ -318,7 +318,7 @@ const WeeklySpread = () => {
                         sx={{
                           fontFamily: '"IBM Plex Mono", monospace',
                           fontVariantNumeric: 'tabular-nums',
-                          fontSize: '0.6875rem',
+                          fontSize: '0.75rem',
                           fontWeight: 500,
                           letterSpacing: '0.06em',
                           textTransform: 'uppercase',
@@ -332,7 +332,7 @@ const WeeklySpread = () => {
                         <Typography
                           sx={{
                             fontFamily: '"IBM Plex Mono", monospace',
-                            fontSize: '0.5625rem',
+                            fontSize: '0.75rem',
                             fontWeight: 700,
                             textTransform: 'uppercase',
                             letterSpacing: '0.14em',
@@ -354,7 +354,7 @@ const WeeklySpread = () => {
                           sx={{
                             fontFamily: '"IBM Plex Mono", monospace',
                             fontVariantNumeric: 'tabular-nums',
-                            fontSize: '0.625rem',
+                            fontSize: '0.75rem',
                             fontWeight: 500,
                             color: mutedInk,
                             mt: today ? 0.5 : 0.625,

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Box, Typography, IconButton, Button, useTheme } from '@mui/material';
+import { Box, ButtonBase, Typography, IconButton, Button, useMediaQuery, useTheme } from '@mui/material';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -11,8 +11,11 @@ import {
   eachDayOfInterval,
   isSameMonth,
   isToday,
+  isSameDay,
   addMonths,
   subMonths,
+  addWeeks,
+  subWeeks,
 } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { useTaskContext } from '../../context/TaskContext';
@@ -31,11 +34,20 @@ const WEEKDAYS_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
  * sets the month name as a page headline, weekdays are rendered in italic
  * serif for warmth, day numbers are tabular-nums for alignment, and task
  * marks sit as small colored glyphs at the bottom of each day cell.
+ *
+ * Below `md` the seven-column grid is not a calendar, it is seven 50px
+ * squares (MOBILE_UI_PLAN.md §4). There the spread becomes a week strip —
+ * seven day pills, the viewed week, today marked — over an agenda of that
+ * day's entries. Same data, same month fetch: no extra queries.
  */
 const MonthlyCalendar = () => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  // The week strip's cursor (mobile only). Follows month navigation so the
+  // strip always sits inside the month whose tasks are loaded.
+  const [selectedDay, setSelectedDay] = useState(new Date());
   const [direction, setDirection] = useState(0);
   const { tasks, loading, fetchTasks, LoadingState } = useTaskContext();
   const navigate = useNavigate();
@@ -44,17 +56,43 @@ const MonthlyCalendar = () => {
     fetchTasks('monthly', currentMonth);
   }, [currentMonth, fetchTasks]);
 
+  // Month navigation drags the week cursor along: today when the month being
+  // shown is this one, otherwise its first day.
+  const syncSelectedDay = (month) => {
+    setSelectedDay(isSameMonth(month, new Date()) ? new Date() : startOfMonth(month));
+  };
+
   const handlePrevMonth = () => {
     setDirection(-1);
-    setCurrentMonth((m) => subMonths(m, 1));
+    setCurrentMonth((m) => {
+      const next = subMonths(m, 1);
+      syncSelectedDay(next);
+      return next;
+    });
   };
   const handleNextMonth = () => {
     setDirection(1);
-    setCurrentMonth((m) => addMonths(m, 1));
+    setCurrentMonth((m) => {
+      const next = addMonths(m, 1);
+      syncSelectedDay(next);
+      return next;
+    });
   };
   const handleThisMonth = () => {
     setDirection(isSameMonth(currentMonth, new Date()) ? 0 : (new Date() > currentMonth ? 1 : -1));
     setCurrentMonth(new Date());
+    setSelectedDay(new Date());
+  };
+
+  // Week navigation (mobile). Crossing a month boundary moves the month too,
+  // which is what refetches the tasks the agenda reads.
+  const shiftWeek = (delta) => {
+    const next = delta > 0 ? addWeeks(selectedDay, 1) : subWeeks(selectedDay, 1);
+    setSelectedDay(next);
+    if (!isSameMonth(next, currentMonth)) {
+      setDirection(delta);
+      setCurrentMonth(next);
+    }
   };
 
   const isCurrentMonth = isSameMonth(currentMonth, new Date());
@@ -69,18 +107,21 @@ const MonthlyCalendar = () => {
   }, [currentMonth]);
 
   // Per-day task marks + running tallies for the stats line
-  const { taskMarks, monthStats } = useMemo(() => {
+  const { taskMarks, tasksByDay, monthStats } = useMemo(() => {
     const marks = {};
+    const byDay = {};
     const stats = { total: 0, overdue: 0, done: 0 };
     const arr = normalizeTasks(tasks);
     arr.forEach((task) => {
       if (!task.dueDate) return;
       const key = format(new Date(task.dueDate), 'yyyy-MM-dd');
       if (!marks[key]) marks[key] = [];
+      if (!byDay[key]) byDay[key] = [];
       const { level } = getTaskAge(task);
       const isDone = task.status === 'completed';
       const color = isDone ? colors.aging.fresh : getAgingColor(level);
       marks[key].push({ color, done: isDone });
+      byDay[key].push({ task, color, done: isDone });
 
       // Only count tasks whose dueDate falls inside the visible month
       if (isSameMonth(new Date(task.dueDate), currentMonth)) {
@@ -89,8 +130,20 @@ const MonthlyCalendar = () => {
         if (!isDone && (level === 'overdue' || level === 'stale')) stats.overdue += 1;
       }
     });
-    return { taskMarks: marks, monthStats: stats };
+    // Each day's agenda reads in due-time order.
+    Object.values(byDay).forEach((entries) =>
+      entries.sort((a, b) => new Date(a.task.dueDate) - new Date(b.task.dueDate))
+    );
+    return { taskMarks: marks, tasksByDay: byDay, monthStats: stats };
   }, [tasks, currentMonth]);
+
+  // The seven days of the week the cursor sits in (mobile strip).
+  const weekDays = useMemo(() => {
+    const start = startOfWeek(selectedDay, { weekStartsOn: 1 });
+    return eachDayOfInterval({ start, end: endOfWeek(selectedDay, { weekStartsOn: 1 }) });
+  }, [selectedDay]);
+
+  const agenda = tasksByDay[format(selectedDay, 'yyyy-MM-dd')] || [];
 
   const handleDayClick = (day) => {
     if (!isSameMonth(day, currentMonth)) return;
@@ -235,6 +288,212 @@ const MonthlyCalendar = () => {
         )}
       </Box>
 
+      {isMobile ? (
+        <Box>
+          {/* ─── Week strip — the phone's calendar row ───────────── */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
+            <IconButton
+              onClick={() => shiftWeek(-1)}
+              aria-label="Previous week"
+              sx={{ color: mutedInk, width: 44, height: 44, flexShrink: 0 }}
+            >
+              <ChevronLeft size={18} />
+            </IconButton>
+
+            <Box sx={{ display: 'flex', flex: 1, gap: 0.25, minWidth: 0 }}>
+              {weekDays.map((day, idx) => {
+                const key = format(day, 'yyyy-MM-dd');
+                const marks = taskMarks[key] || [];
+                const selected = isSameDay(day, selectedDay);
+                const today = isToday(day);
+
+                return (
+                  <ButtonBase
+                    key={key}
+                    onClick={() => setSelectedDay(day)}
+                    aria-pressed={selected}
+                    aria-label={`${format(day, 'EEEE MMMM d')}${marks.length ? `, ${marks.length} task${marks.length !== 1 ? 's' : ''}` : ''}${today ? ', today' : ''}`}
+                    sx={{
+                      flex: 1,
+                      minWidth: 0,
+                      minHeight: 60,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'flex-start',
+                      gap: 0.375,
+                      py: 0.75,
+                      borderRadius: '8px',
+                      // Today keeps the fountain-pen rule the grid gives it.
+                      borderTop: today ? `2px solid ${colors.primary[500]}` : '2px solid transparent',
+                      backgroundColor: selected
+                        ? (isDark ? 'rgba(96,152,204,0.16)' : colors.parchment.warm)
+                        : 'transparent',
+                      transition: 'background-color 180ms ease',
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        fontFamily: '"Fraunces", serif',
+                        fontStyle: 'italic',
+                        fontSize: '0.75rem',
+                        fontWeight: 400,
+                        color: today ? (isDark ? colors.primary[300] : colors.primary[600]) : mutedInk,
+                        lineHeight: 1,
+                      }}
+                    >
+                      {WEEKDAYS_SHORT[idx]}
+                    </Typography>
+                    <Typography
+                      sx={{
+                        fontFamily: '"Fraunces", serif',
+                        fontVariantNumeric: 'tabular-nums',
+                        fontSize: '1.0625rem',
+                        fontWeight: today || selected ? 600 : 500,
+                        lineHeight: 1.1,
+                        color: today
+                          ? (isDark ? colors.primary[300] : colors.primary[600])
+                          : primaryInk,
+                      }}
+                    >
+                      {format(day, 'd')}
+                    </Typography>
+                    <Box sx={{ display: 'flex', gap: 0.25, alignItems: 'center', minHeight: 6 }}>
+                      {marks.slice(0, 3).map((mark, i) => (
+                        <Box
+                          key={i}
+                          sx={{
+                            width: 5,
+                            height: 5,
+                            borderRadius: '50%',
+                            backgroundColor: mark.color,
+                            opacity: mark.done ? 0.45 : 1,
+                          }}
+                        />
+                      ))}
+                    </Box>
+                  </ButtonBase>
+                );
+              })}
+            </Box>
+
+            <IconButton
+              onClick={() => shiftWeek(1)}
+              aria-label="Next week"
+              sx={{ color: mutedInk, width: 44, height: 44, flexShrink: 0 }}
+            >
+              <ChevronRight size={18} />
+            </IconButton>
+          </Box>
+
+          {/* ─── Agenda — the selected day, in full ──────────────── */}
+          <Box sx={{ mt: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+              <Typography
+                sx={{
+                  fontFamily: '"Fraunces", serif',
+                  fontStyle: 'italic',
+                  fontSize: '0.875rem',
+                  color: mutedInk,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {format(selectedDay, 'EEEE, MMMM d')}
+              </Typography>
+              <Box sx={{ flex: 1, borderTop: dottedRule }} />
+              <Typography
+                sx={{
+                  fontFamily: '"IBM Plex Mono", monospace',
+                  fontVariantNumeric: 'tabular-nums',
+                  fontSize: '0.75rem',
+                  color: captionInk,
+                  flexShrink: 0,
+                }}
+              >
+                {agenda.length}
+              </Typography>
+            </Box>
+
+            {agenda.length === 0 ? (
+              <Typography
+                sx={{
+                  fontFamily: '"Fraunces", serif',
+                  fontStyle: 'italic',
+                  fontSize: '0.9375rem',
+                  color: captionInk,
+                  py: 2,
+                }}
+              >
+                Nothing due on this day.
+              </Typography>
+            ) : (
+              <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                {agenda.map(({ task, color, done }) => {
+                  const due = new Date(task.dueDate);
+                  const timed = !isNaN(due.getTime()) && !(due.getHours() === 0 && due.getMinutes() === 0);
+                  // Cancelled sinks with completed: struck, muted, out of the way.
+                  const sunk = done || task.status === 'cancelled';
+                  return (
+                    <ButtonBase
+                      key={task.id || task._id}
+                      onClick={() => navigate('/today')}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'flex-start',
+                        gap: 1.25,
+                        minHeight: 44,
+                        px: 1,
+                        py: 1,
+                        textAlign: 'left',
+                        borderBottom: dottedRule,
+                        borderLeft: `2.5px solid ${color}`,
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: '50%',
+                          backgroundColor: color,
+                          opacity: sunk ? 0.45 : 1,
+                          flexShrink: 0,
+                        }}
+                      />
+                      <Typography
+                        sx={{
+                          flex: 1,
+                          minWidth: 0,
+                          fontSize: '0.9375rem',
+                          fontWeight: sunk ? 400 : 500,
+                          color: sunk ? mutedInk : primaryInk,
+                          textDecoration: sunk ? 'line-through' : 'none',
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        {task.content}
+                      </Typography>
+                      {timed && (
+                        <Typography
+                          sx={{
+                            fontFamily: '"IBM Plex Mono", monospace',
+                            fontSize: '0.75rem',
+                            color: mutedInk,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {format(due, 'h:mm a')}
+                        </Typography>
+                      )}
+                    </ButtonBase>
+                  );
+                })}
+              </Box>
+            )}
+          </Box>
+        </Box>
+      ) : (
+        <>
       {/* ─── Weekday row — Fraunces italic ───────────────────────── */}
       <Box
         sx={{
@@ -349,7 +608,7 @@ const MonthlyCalendar = () => {
                       <Typography
                         sx={{
                           fontFamily: '"IBM Plex Mono", monospace',
-                          fontSize: '0.5rem',
+                          fontSize: '0.75rem',
                           fontWeight: 600,
                           textTransform: 'uppercase',
                           letterSpacing: '0.1em',
@@ -395,7 +654,7 @@ const MonthlyCalendar = () => {
                             sx={{
                               fontFamily: '"IBM Plex Mono", monospace',
                               fontVariantNumeric: 'tabular-nums',
-                              fontSize: '0.5625rem',
+                              fontSize: '0.75rem',
                               fontWeight: 600,
                               color: mutedInk,
                               lineHeight: 1,
@@ -414,6 +673,9 @@ const MonthlyCalendar = () => {
           </motion.div>
         </AnimatePresence>
       </Box>
+
+        </>
+      )}
 
       {/* ─── Legend — tiny, editorial ────────────────────────────── */}
       <Box
@@ -445,7 +707,7 @@ const MonthlyCalendar = () => {
             <Typography
               sx={{
                 fontFamily: '"IBM Plex Mono", monospace',
-                fontSize: '0.625rem',
+                fontSize: '0.75rem',
                 fontWeight: 500,
                 textTransform: 'uppercase',
                 letterSpacing: '0.1em',

@@ -14,6 +14,7 @@ import {
   DialogContentText,
   TextField,
   Button,
+  useMediaQuery,
   useTheme,
 } from '@mui/material';
 import {
@@ -30,6 +31,7 @@ import useCollections from '../hooks/useCollections';
 import useKeyboardNav from '../hooks/useKeyboardNav';
 import useGlobalShortcuts from '../hooks/useGlobalShortcuts';
 import InlineQuickAdd from '../components/today/InlineQuickAdd';
+import QuickAddSheet from '../components/today/QuickAddSheet';
 import TaskRow from '../components/tasks/TaskRow';
 import BlockTaskDialog from '../components/tasks/BlockTaskDialog';
 import TaskEditor from '../components/tasks/TaskEditor';
@@ -50,6 +52,8 @@ const CollectionDetailPage = () => {
   const { id } = useParams();
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
+  // Below `md` the entry field moves into the FAB's sheet (see QuickAddSheet).
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const navigate = useNavigate();
   const { notify } = useToast();
   const { createTask, updateTaskStatus, blockTask, unblockTask, deleteTask } = useTaskContext();
@@ -89,12 +93,15 @@ const CollectionDetailPage = () => {
     try {
       created = await createTask(fields);
     } catch {
-      return; // the context has already surfaced the error
+      // The context has already surfaced the error; `false` keeps the
+      // quick-add sheet open with the entry still typed.
+      return false;
     }
     if (blocked && created) {
       await blockTask((created.id || created._id), blockedReason);
     }
     refetch();
+    return true;
   }, [createTask, blockTask, refetch]);
 
   const handleStatusToggle = useCallback(async (task) => {
@@ -249,7 +256,7 @@ const CollectionDetailPage = () => {
   }
 
   return (
-    <Box sx={{ maxWidth: 720, mx: 'auto', px: { xs: 1, sm: 3 }, pb: 4 }}>
+    <Box sx={{ maxWidth: 720, mx: 'auto', px: { xs: 1, sm: 3 }, pb: { xs: 11, md: 4 } }}>
       {/* ─── Header ───────────────────────────────────────────── */}
       <Box sx={{ px: { xs: 2, sm: 0.5 }, pt: { xs: 2.5, sm: 3.5 }, pb: 1 }}>
         <Box
@@ -351,15 +358,29 @@ const CollectionDetailPage = () => {
         </Box>
       </Box>
 
-      {/* ─── Quick add — collection-scoped, undated by default ─── */}
+      {/* ─── Quick add — collection-scoped, undated by default ───
+          Inline at `md`+; below it, the same field inside the FAB's sheet. */}
       {collection && (
-        <InlineQuickAdd
-          onAdd={handleAdd}
-          collectionId={collection.id}
-          promptLabel={`Add to ${collection.name}`}
-          placeholder="What belongs on this list?"
-          autoFocus={!loading && tasks.length === 0}
-        />
+        <>
+          <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+            <InlineQuickAdd
+              onAdd={handleAdd}
+              collectionId={collection.id}
+              promptLabel={`Add to ${collection.name}`}
+              placeholder="What belongs on this list?"
+              autoFocus={!isMobile && !loading && tasks.length === 0}
+            />
+          </Box>
+
+          <QuickAddSheet
+            label="Add entry"
+            sheetTitle={`Add to ${collection.name}`}
+            onAdd={handleAdd}
+            collectionId={collection.id}
+            promptLabel={`Add to ${collection.name}`}
+            placeholder="What belongs on this list?"
+          />
+        </>
       )}
 
       {loading && !collection ? (
@@ -381,7 +402,7 @@ const CollectionDetailPage = () => {
                 <Box sx={{ mt: openTasks.length > 0 ? 2.5 : 0 }}>
                   <Typography
                     sx={{
-                      fontSize: '0.6875rem',
+                      fontSize: '0.75rem',
                       fontWeight: 700,
                       textTransform: 'uppercase',
                       letterSpacing: '0.06em',

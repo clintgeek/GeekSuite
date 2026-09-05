@@ -3,9 +3,6 @@ import {
   Box,
   Typography,
   Button,
-  Dialog,
-  DialogContent,
-  DialogActions,
   TextField,
   IconButton,
   Tooltip,
@@ -15,7 +12,6 @@ import {
 } from '@mui/material';
 import {
   Plus,
-  X,
   Flame,
   Archive,
   ArchiveRestore,
@@ -25,10 +21,13 @@ import {
 } from 'lucide-react';
 import useHabits, { toDateKey } from '../hooks/useHabits';
 import useGlobalShortcuts from '../hooks/useGlobalShortcuts';
+import BujoDialog from '../components/primitives/BujoDialog';
 import SkeletonLoader from '../components/shared/SkeletonLoader';
 import EmptyState from '../components/shared/EmptyState';
 import { colors } from '../theme/colors';
 import { useToast } from '@geeksuite/ui';
+
+const FORM_ID = 'bujo-habit-form';
 
 /**
  * HabitsPage — a week at a glance.
@@ -576,56 +575,56 @@ const HabitsPage = () => {
       </Box>
 
       {/* ─── Create / edit dialog ─────────────────────────────── */}
-      <Dialog
+      <BujoDialog
         open={Boolean(editing)}
         onClose={closeDialog}
         maxWidth="xs"
-        fullWidth
-        PaperProps={{ sx: { borderRadius: 3, backgroundImage: 'none' } }}
-      >
-        <form onSubmit={handleSave}>
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'flex-start',
-              justifyContent: 'space-between',
-              px: 3,
-              pt: 3,
-              pb: 2,
-              borderBottom: dottedRule,
-            }}
+        eyebrow="Something you mean to keep doing"
+        title={editing === 'new' ? 'New Habit' : 'Edit Habit'}
+        primaryAction={
+          <Button
+            type="submit"
+            form={FORM_ID}
+            variant="contained"
+            size="small"
+            disabled={saving || !form.name.trim()}
+            sx={{ fontSize: '0.8125rem', fontWeight: 600, textTransform: 'none', px: 2.5 }}
           >
-            <Box>
-              <Typography
+            {editing === 'new' ? 'Create' : 'Save'}
+          </Button>
+        }
+        secondaryAction={
+          <>
+            {editing && editing !== 'new' && (
+              <Button
+                onClick={handleDelete}
+                size="small"
+                startIcon={<Trash2 size={14} />}
+                disabled={saving}
                 sx={{
-                  fontFamily: '"Fraunces", serif',
-                  fontStyle: 'italic',
-                  fontSize: '0.75rem',
-                  color: captionInk,
-                  mb: 0.5,
+                  fontSize: '0.8125rem',
+                  color: colors.status.error,
+                  textTransform: 'none',
+                  mr: 'auto',
                 }}
               >
-                Something you mean to keep doing
-              </Typography>
-              <Typography
-                component="h2"
-                sx={{
-                  fontFamily: '"Fraunces", serif',
-                  fontSize: '1.375rem',
-                  fontWeight: 500,
-                  color: theme.palette.text.primary,
-                  lineHeight: 1.15,
-                }}
-              >
-                {editing === 'new' ? 'New Habit' : 'Edit Habit'}
-              </Typography>
-            </Box>
-            <IconButton onClick={closeDialog} size="small" aria-label="Close" sx={{ color: mutedInk, mt: 0.5 }}>
-              <X size={18} />
-            </IconButton>
-          </Box>
-
-          <DialogContent sx={{ px: 3, py: 3 }}>
+                Delete
+              </Button>
+            )}
+            <Button
+              onClick={closeDialog}
+              size="small"
+              sx={{ fontSize: '0.8125rem', color: mutedInk, textTransform: 'none' }}
+            >
+              Cancel
+            </Button>
+          </>
+        }
+        // Keep the footer full-screen while editing: Delete lives there and
+        // has nowhere else to go on a phone.
+        keepSecondaryOnMobile={Boolean(editing) && editing !== 'new'}
+      >
+        <Box component="form" id={FORM_ID} onSubmit={handleSave}>
             <TextField
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -727,44 +726,8 @@ const HabitsPage = () => {
                 />
               ))}
             </Box>
-          </DialogContent>
-
-          <DialogActions sx={{ px: 3, py: 2, borderTop: dottedRule, gap: 1 }}>
-            {editing && editing !== 'new' && (
-              <Button
-                onClick={handleDelete}
-                size="small"
-                startIcon={<Trash2 size={14} />}
-                disabled={saving}
-                sx={{
-                  fontSize: '0.8125rem',
-                  color: colors.status.error,
-                  textTransform: 'none',
-                  mr: 'auto',
-                }}
-              >
-                Delete
-              </Button>
-            )}
-            <Button
-              onClick={closeDialog}
-              size="small"
-              sx={{ fontSize: '0.8125rem', color: mutedInk, textTransform: 'none' }}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              variant="contained"
-              size="small"
-              disabled={saving || !form.name.trim()}
-              sx={{ fontSize: '0.8125rem', fontWeight: 600, textTransform: 'none', px: 2.5 }}
-            >
-              {editing === 'new' ? 'Create' : 'Save'}
-            </Button>
-          </DialogActions>
-        </form>
-      </Dialog>
+        </Box>
+      </BujoDialog>
     </Box>
   );
 };
