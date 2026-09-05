@@ -8,7 +8,7 @@ import { LoginSplash } from "@geeksuite/ui";
 import { useApolloClient } from "@apollo/client";
 import { GET_BOOKS, GET_SHELVES } from "./graphql/queries.js";
 import { UPDATE_BOOK, DELETE_BOOK, CREATE_BOOK } from "./graphql/mutations.js";
-import { GeekShell, GeekAppFrame } from "@geeksuite/ui";
+import { GeekShell, GeekAppFrame, GeekFab } from "@geeksuite/ui";
 import Sidebar from "./components/Sidebar";
 import TopBar from "./components/TopBar";
 import { API_BASE } from "./utils/bookDisplay";
@@ -189,6 +189,10 @@ export default function App() {
   const [prefSaveError, setPrefSaveError] = useState(null);
   const [prefSaveMessage, setPrefSaveMessage] = useState(null);
   const [defaultShelfPref, setDefaultShelfPref] = useState("all");
+
+  // Library bulk-select ("Select books…" in the filter sheet). It drives
+  // `basketBookIds` — the list the device basket posts — and hides the FAB.
+  const [selectMode, setSelectMode] = useState(false);
 
   // Device basket — session-local selection only
   const [basketBookIds, setBasketBookIds] = useState([]);
@@ -2118,6 +2122,8 @@ export default function App() {
             setActiveView={setActiveView}
             setAddBookOpen={setAddBookOpen}
             onSignOut={handleLogout}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
           />
         }
       >
@@ -2133,6 +2139,7 @@ export default function App() {
 
           <LibraryView
             activeView={activeView}
+            applySavedFilter={applySavedFilter}
             authorFilter={authorFilter}
             basketBookIds={basketBookIds}
             basketError={basketError}
@@ -2149,18 +2156,25 @@ export default function App() {
             loadingMore={loadingMore}
             mergeLoading={mergeLoading}
             mergeSelectionError={mergeSelectionError}
+            onRetry={() => loadBooksPage(1, { append: false })}
             saveFilterLoading={saveFilterLoading}
+            savedFilters={savedFilters}
+            savedFiltersError={savedFiltersError}
             searchQuery={searchQuery}
+            selectMode={selectMode}
             selectedBookIds={selectedBookIds}
+            setActiveView={setActiveView}
             setAuthorFilter={setAuthorFilter}
             setDownloadOpen={setDownloadOpen}
             setSearchQuery={setSearchQuery}
+            setSelectMode={setSelectMode}
             setSelectedBook={setSelectedBook}
             setShelfFilter={setShelfFilter}
             setSortBy={setSortBy}
             setSortDir={setSortDir}
             setTagFilter={setTagFilter}
             shelfFilter={shelfFilter}
+            shelfSummary={shelfSummary}
             shelves={shelves}
             showMergeUi={showMergeUi}
             sortBy={sortBy}
@@ -2168,6 +2182,7 @@ export default function App() {
             tagFilter={tagFilter}
             toggleBasket={toggleBasket}
             toggleBookSelection={toggleBookSelection}
+            total={total}
           />
 
           {activeView === "profile" && (
@@ -2307,6 +2322,15 @@ export default function App() {
       )}
       </Box>
     </GeekAppFrame>
+
+      {/* Primary action in the thumb zone. Sibling of `GeekAppFrame`, never
+          inside it: the frame animates, and an animating element becomes the
+          containing block for `position: fixed` children. */}
+      <GeekFab
+        label="Add book"
+        onClick={() => setAddBookOpen(true)}
+        hidden={activeView !== "library" || selectMode || basketBookIds.length > 0}
+      />
       </GeekShell>
 
 
