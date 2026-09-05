@@ -25,7 +25,7 @@ export {
   GeekTopBar,
   useGeekShell,
 } from './navigation';
-export { GeekDialog, useGeekDialogFullScreen } from './surfaces';
+export { GeekDialog, GeekFab, useGeekDialogFullScreen } from './surfaces';
 export {
   GeekButton,
   GeekChip,
