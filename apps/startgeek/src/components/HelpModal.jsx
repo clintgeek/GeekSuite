@@ -149,7 +149,22 @@ const HelpModal = ({ open, onClose }) => {
               <span className="font-mono text-white/90">?</span> Search the suite
             </h3>
             <p className="text-sm text-white/70 leading-relaxed">
-              Notes, tasks, books, birds.
+              Notes, tasks, books, birds. Instant, local, as you type.
+            </p>
+          </section>
+
+          <section>
+            <h3 className="text-sm font-semibold text-white mb-2">
+              <span className="font-mono text-white/90">??</span> Ask the suite
+            </h3>
+            <p className="text-sm text-white/70 leading-relaxed">
+              <code className="font-mono text-white/90">?? what am I reading</code>
+            </p>
+            <p className="mt-2 text-sm text-white/60 leading-relaxed">
+              A question in plain words. aiGeek plans the search and answers from
+              your own Things, citing the ones it used — or says nothing when the
+              answer is not there. Press Enter to run it. Off until you switch on
+              “Ask the suite with AI” in settings.
             </p>
           </section>
         </div>

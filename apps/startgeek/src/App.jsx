@@ -84,7 +84,7 @@ function Console() {
           {showWeather && <WeatherBlock onOpen={() => setWeatherOpen(true)} />}
         </section>
 
-        <CommandBox />
+        <CommandBox onOpenSettings={() => setSettingsOpen(true)} />
 
         <ModuleGrid />
       </main>

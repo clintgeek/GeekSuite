@@ -1,7 +1,19 @@
 import { motion } from 'framer-motion'
 
-const SearchResults = ({ results, selectedIndex, onSelect, onHover }) => {
+// `citations` and `inline` are only ever set in Ask mode; the `?` search
+// passes neither and renders exactly as it always has — its own absolutely
+// positioned dropdown, no citation rules.
+const SearchResults = ({
+  results,
+  selectedIndex,
+  onSelect,
+  onHover,
+  citations = [],
+  inline = false,
+}) => {
   if (!results || results.length === 0) return null
+
+  const cited = new Set(citations)
 
   return (
     <motion.ul
@@ -10,9 +22,20 @@ const SearchResults = ({ results, selectedIndex, onSelect, onHover }) => {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
       transition={{ duration: 0.15 }}
-      className="absolute left-0 right-0 top-full mt-2 max-h-72 overflow-y-auto rounded-xl z-40 border border-hair-strong"
+      className={
+        inline
+          ? 'flex-1 min-h-0 overflow-y-auto rounded-xl border border-hair-strong bg-ground'
+          : 'absolute left-0 right-0 top-full mt-2 max-h-72 overflow-y-auto rounded-xl z-40 border border-hair-strong'
+      }
       style={{
-        background: 'rgba(12, 15, 21, 0.9)',
+        ...(inline
+          ? {
+              // Same panel colour, over the console's ground so the module
+              // grid behind does not ghost through the rows.
+              backgroundImage:
+                'linear-gradient(rgba(12, 15, 21, 0.9), rgba(12, 15, 21, 0.9))',
+            }
+          : { background: 'rgba(12, 15, 21, 0.9)' }),
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
       }}
@@ -25,7 +48,9 @@ const SearchResults = ({ results, selectedIndex, onSelect, onHover }) => {
             type="button"
             onClick={() => onSelect(result)}
             onMouseEnter={() => onHover(index)}
-            className={`w-full text-left px-4 py-3 text-sm transition-colors ${
+            className={`w-full text-left px-4 py-3 text-sm transition-colors border-l-2 ${
+              cited.has(result.id) ? 'border-l-accent' : 'border-l-transparent'
+            } ${
               index === selectedIndex
                 ? 'bg-white/15 text-white'
                 : 'text-white/80 hover:bg-white/10'

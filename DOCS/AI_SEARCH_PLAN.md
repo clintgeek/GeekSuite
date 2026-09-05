@@ -62,33 +62,68 @@ more escape hatch.
 
 ## Where the code goes
 
-**basegeek (S–M).** One new GraphQL query in `graphql/glance`:
+**basegeek (S–M).** *Landed 2026-09-04.* One new GraphQL query in `graphql/glance`
+(`typeDefs.js`, `resolvers.js`, new `askService.js`):
 
 ```graphql
-glanceAsk(query: String!, limit: Int): GlanceAsk!
+glanceAsk(query: String!, limit: Int = 12): GlanceAsk!
+
 type GlanceAsk {
-  intent: GlanceIntent!          # kind, keywords, apps, types, since, shelf, tags
+  intent: GlanceIntent!          # what the model made of the query
   answer: String                 # null unless grounded
   citations: [ID!]!              # result ids the answer used
-  results: [GlanceResult!]!      # the merged glanceSearch hits
-  draft: GlanceDraft             # a proposed task/note when kind = command
+  results: [GlanceSearchResult!]! # the merged, de-duped search hits
   provider: String               # which provider answered, for the footer
+  model: String                  # and which model
+}
+
+type GlanceIntent {
+  kind: String!                  # "search" | "answer"
+  keywords: [String!]!
+  apps: [String!]!
+  types: [String!]!
+  since: String
+  shelf: String
+  tags: [String!]!
 }
 ```
 
-The resolver calls `aiService` server-side (`model: "basegeek-free"`, `response_format:
-json_schema`, `app: "startgeek"` for usage attribution), then runs the existing
-`glanceSearch` logic with the plan. No key or provider detail reaches the browser; the
-user's cookie session is the only credential. Locked and encrypted notes are already excluded
-from search and stay excluded from the model's context.
+The result type is the existing `GlanceSearchResult` that `glanceSearch` already
+returns, not a new `GlanceResult` — one shape, one place. `draft` is not built;
+it belongs to step 5.
 
-**startgeek (S).** `CommandBox` keeps the instant regex results exactly as today. Two triggers
-add the AI layer on top, never instead: pressing Enter with no result selected, or a query
-that looks like language (three or more words, or ends with `?`). While `glanceAsk` runs, a
-quiet "thinking" state on the mode chip; on return, the answer card and the intent chips
-appear above the list. Any failure or timeout (3 s) leaves the plain results in place.
-`SearchResults` gains an `answer` slot; a new `AnswerCard` shows the line, the provider in
-mono at 11px, and the citations as the highlighted rows.
+`askService.planQuery` calls `aiService.callAI` server-side with
+`useAppConfig: true, appName: 'startgeek'` — the same normalization
+`/api/ai/call` performs for `model: "basegeek-app"`, so routing is whatever the
+App Routing config says — plus `responseFormat: { type: 'json_schema' }` for the
+intent shape and a 3 s timeout. Any failure returns a degraded plan
+(`kind: 'search'`, the literal query as the only keyword) so the resolver still
+answers with real regex results. `answerFrom` makes the second call only when
+`kind === 'answer'`, with a trimmed `glanceToday` (tasks due/overdue, reading,
+habits, fitness, flock) and the top hits as JSON context; the schema forces
+`answer: null` when the context does not contain it, and citations are filtered
+down to ids that were actually in the context.
+
+The resolver refactor that made this possible: `glanceSearch`'s body is now
+`searchThings(userId, term, { apps, types, since, shelf, tags, limit })`, which
+both resolvers share — with no filters it behaves exactly as before — and
+`glanceToday`'s body is now `fetchGlanceToday(context, date)` so `glanceAsk` can
+reuse the snapshot. No key or provider detail reaches the browser; the user's
+cookie session is the only credential. Locked and encrypted notes are excluded
+from search and stay excluded from the model's context, asserted in
+`src/__tests__/glanceAsk.test.js`.
+
+**startgeek (S).** *Landed 2026-09-04.* `CommandBox` keeps the instant regex
+results exactly as today under `?`. `??` is a separate mode
+(`lib/commandMode.js`, checked before `?`) that never searches as you type: Enter
+runs `GLANCE_ASK` (`lib/queries.js`) with a "thinking" state on the mode chip.
+`components/AnswerCard.jsx` renders above the results — the answer line, the
+intent as chips, the provider/model in mono at 12px — and `SearchResults` marks
+cited rows with an accent rule. Any error falls back to running the plain
+`glanceSearch` for the query. The layer is opt-in: "Ask the suite with AI" in
+`SettingsSheet.jsx` (off by default, stored with the other console settings in
+`localStorage`); with it off, `??` shows a one-line hint and a button that opens
+settings.
 
 ## Decisions (Chef, 2026-09-04)
 
@@ -111,10 +146,12 @@ mono at 11px, and the citations as the highlighted rows.
 
 1. ~~AIGeek phase B (admin gating on keys, toasts)~~ landed 2026-09-04 (`4fac2ef`).
 1b. aiGeek model steward (recommend free model for a task, list free models, App Routing UI). **S–M**
-2. basegeek `glanceAsk` with the intent + search layer only, behind a feature flag, with a
-   Jest test that feeds a canned model response and asserts the merged results. **S–M**
-3. startgeek answer card + `??` prefix. **S**
-4. Grounded answers from `glanceToday`. **S**
-5. Command routing fallback for `>` and `<`. **S**
+2. ~~basegeek `glanceAsk` with the intent + search layer~~ **landed 2026-09-04.** The flag is
+   the client-side opt-in rather than a server flag: `glanceAsk` is always available, but
+   only `??` calls it. 19 Jest tests in `src/__tests__/glanceAsk.test.js` feed canned model
+   responses and assert the merged results, the degraded path, and the locked-note exclusion.
+3. ~~startgeek answer card + `??` prefix~~ **landed 2026-09-04.**
+4. ~~Grounded answers from `glanceToday`~~ **landed 2026-09-04.**
+5. Command routing fallback for `>` and `<` (the `draft` field on `GlanceAsk`). **S** — not started.
 
 Effort overall: **M**. Depends on nothing in the Pocket Pass.

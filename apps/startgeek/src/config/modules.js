@@ -16,6 +16,8 @@ export const DEFAULT_CALENDAR_COLOR = '#2952A3'
 export const DEFAULT_SETTINGS = {
   backdrop: 'photo',
   clock: '12',
+  // `??` in the command box asks aiGeek. Opt-in, off until Chef says so.
+  ask: false,
   modules: Object.fromEntries(MODULES.map((m) => [m.id, true])),
   calendars: [],
 }

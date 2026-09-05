@@ -95,6 +95,35 @@ export const GLANCE_SEARCH = `
   }
 `
 
+export const GLANCE_ASK = `
+  query GlanceAsk($query: String!, $limit: Int) {
+    glanceAsk(query: $query, limit: $limit) {
+      intent {
+        kind
+        keywords
+        apps
+        types
+        since
+        shelf
+        tags
+      }
+      answer
+      citations
+      results {
+        id
+        app
+        type
+        title
+        snippet
+        url
+        updatedAt
+      }
+      provider
+      model
+    }
+  }
+`
+
 export const CREATE_TASK = `
   mutation CreateTask(
     $content: String!

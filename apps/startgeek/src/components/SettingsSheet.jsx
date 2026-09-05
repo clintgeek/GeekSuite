@@ -36,7 +36,7 @@ const Seg = ({ value, options, onChange, ariaLabel }) => (
 // Opened from the rail control or the `,` key. Focus is trapped while open.
 const SettingsSheet = ({ open, onClose }) => {
   const panelRef = useRef(null)
-  const { settings, setBackdrop, setClock, toggleModule, setCalendars, reset } = useSettings()
+  const { settings, setBackdrop, setClock, toggleModule, toggleAsk, setCalendars, reset } = useSettings()
   const { status } = useSession()
   const signedIn = status === 'in'
 
@@ -156,6 +156,32 @@ const SettingsSheet = ({ open, onClose }) => {
                 </button>
               ))}
             </Group>
+
+            {signedIn && (
+              <Group title="Ask">
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={!!settings.ask}
+                  onClick={toggleAsk}
+                  className="flex items-center gap-3 w-full min-h-[44px] py-2.5 text-left"
+                >
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-ink">Ask the suite with AI</span>
+                    <span className="block text-xs text-ink-3">
+                      Type <span className="font-mono">??</span> in the command box
+                    </span>
+                  </span>
+                  <span className="switch" aria-hidden="true" />
+                </button>
+                <p className="text-[12.5px] leading-relaxed text-ink-3 mt-2.5">
+                  Ask sends your question and the matching notes, tasks, books and birds
+                  to aiGeek, which answers from that and nothing else. Locked and
+                  encrypted notes are never included. Off by default;
+                  <span className="font-mono"> ? </span> stays a plain, local search.
+                </p>
+              </Group>
+            )}
 
             <Group title="Calendars">
               {settings.calendars.length === 0 && (
