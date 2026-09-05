@@ -11,7 +11,6 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 |---|--------|-------|-------|-------|
 | R50 | Q29: gateway fitnessgeek food-log mutations — food_item findOrCreate, nullable update input, logMeal notes, DailySummary | opus | basegeek api graphql/fitnessgeek | 09-05 13:22 |
 | R51 | TODO #15 fan-out: storygeek on shared feedback primitives (last app) | sonnet | storygeek frontend src, UI plan | 09-05 13:22 |
-| R52 | Q28 + Q30: notegeek dead pages/LoginPage+RegisterPage; packages/schemas eslint config | sonnet | notegeek frontend pages + test, packages/schemas | 09-05 13:22 |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
 ## Queued (launch when files free / prerequisite lands)
@@ -58,7 +57,7 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 
 ## Waves pushed
 
-- 09-05 13:19 — `446e5c0` (86 commits: R19–R49). Watch CI + Release, then Watchtower; fitnessgeek boots only with the vault key (set).
+- 09-05 13:19 — `446e5c0` (86 commits: R19–R49). Release: success (images published 13:24, Watchtower rolling). CI: **eslint job failed** — `packages/logger` had a lint script and no flat config (R6 had never been through CI). Fixed in `e183fdd`; goes with the next wave.
 
 ## Landed during the burn
 
@@ -81,6 +80,8 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 - `363a820` — R4 — mobile harness in tools/ + CI (report-only); 698 probe findings
 - `d8521eb` — R27 — CSRF header in api-client authLink + startgeek clients
 - `1fda489` — R24 — bujogeek tag cloud + template journal cache; #25/#26 struck
+- `f5ea782` — R52 — notegeek dead LoginPage/RegisterPage removed (149 tests); schemas eslint config
+- `e183fdd` — logger eslint config (CI fix)
 - `1142e72` — R44 — fitnessgeek on shared feedback primitives + toneForMode; UI plan records four apps
 - `3bafe54` — R47 — 21 unused deps dropped from four thin backends; lockfile regenerated
 - `5b0bc9f` — R45 — food-log writes cannot move yet: three gateway mutation gaps documented (Q29)
