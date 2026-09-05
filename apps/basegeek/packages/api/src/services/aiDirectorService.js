@@ -5,6 +5,23 @@ import AIFreeTier from '../models/AIFreeTier.js';
 import aiModelCapabilitiesService from './aiModelCapabilitiesService.js';
 import logger from '../lib/logger.js';
 
+/**
+ * Pricing in the AIPricing collection is stored per *million* tokens — the
+ * unit every provider quotes and the unit the seed data uses (anthropic opus
+ * at 15/75, gemini-2.5-pro at 1.25/10). Cost math divides by this, never by
+ * 1000; getting it wrong overstated every estimate by 1000x.
+ */
+export const TOKENS_PER_PRICE_UNIT = 1_000_000;
+
+/**
+ * Cost of `tokens` tokens at `pricePerMillion` dollars per million tokens.
+ * A missing or non-numeric price contributes nothing rather than NaN.
+ */
+export function costForTokens(tokens, pricePerMillion) {
+  const price = typeof pricePerMillion === 'number' ? pricePerMillion : 0;
+  return (tokens / TOKENS_PER_PRICE_UNIT) * price;
+}
+
 class AIDirectorService {
   constructor() {
     this.providerPricing = {
@@ -790,8 +807,8 @@ class AIDirectorService {
             const inputTokens = Math.ceil(prompt.length / 4); // Rough estimate
             const outputTokens = expectedResponseLength;
 
-            const inputCost = (inputTokens / 1000) * (model.pricing.input || 0);
-            const outputCost = (outputTokens / 1000) * (model.pricing.output || 0);
+            const inputCost = costForTokens(inputTokens, model.pricing.input);
+            const outputCost = costForTokens(outputTokens, model.pricing.output);
             const totalCost = inputCost + outputCost;
 
             return {

@@ -25,9 +25,12 @@ const aiPricingSchema = new mongoose.Schema({
     type: String,
     default: 'USD'
   },
+  // Documentation of the stored unit, not a switch: nothing reads this field.
+  // Prices are dollars per 1,000,000 tokens (see aiDirectorService's
+  // TOKENS_PER_PRICE_UNIT and the seed data it ships).
   priceUnit: {
     type: String,
-    default: 'per_1k_tokens'
+    default: 'per_1m_tokens'
   },
   lastUpdated: {
     type: Date,
