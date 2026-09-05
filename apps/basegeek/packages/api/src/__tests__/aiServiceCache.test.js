@@ -5,14 +5,21 @@
  * process either serves stale completions forever (no TTL) or grows without
  * limit under prompt churn (no LRU). These tests drive the cache directly
  * through get/setCachedResponse — no provider HTTP is involved.
+ *
+ * The TTL tests below advance a fake clock (`jest.useFakeTimers()` +
+ * `jest.advanceTimersByTime`) rather than sleeping on the real clock.
+ * getCachedResponse/enforceCacheBounds compare against Date.now(), and
+ * modern fake timers mock Date.now() too, so advancing the fake clock moves
+ * the cache's notion of "now" deterministically. Real setTimeout-based
+ * sleeps drifted under CPU contention (a nominal 40ms sleep can take much
+ * longer on a loaded box), which made the tight-margin TTL cases
+ * (e.g. ttlMs: 60 vs. two ~40ms waits) flake under a heavy parallel run.
  */
 
-import { describe, it, expect, beforeEach, afterAll } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach, afterEach, afterAll } from '@jest/globals';
 import aiService from '../services/aiService.js';
 
 const original = { maxSize: aiService.maxCacheSize, ttlMs: aiService.cacheTtlMs };
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 beforeEach(() => {
   aiService.clearCache();
@@ -21,6 +28,12 @@ beforeEach(() => {
   aiService.cacheExpirations = 0;
   aiService.cacheEvictions = 0;
   aiService.configureCache(original);
+});
+
+afterEach(() => {
+  // Defensive: if a test throws after enabling fake timers but before it
+  // restores real ones, don't let that leak into later tests/suites.
+  jest.useRealTimers();
 });
 
 afterAll(() => {
@@ -62,34 +75,40 @@ describe('aiService cache — round trip', () => {
 });
 
 describe('aiService cache — TTL expiration', () => {
-  it('expires an entry once it is older than the TTL', async () => {
+  it('expires an entry once it is older than the TTL', () => {
+    jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] });
     aiService.configureCache({ ttlMs: 20 });
     aiService.setCachedResponse('stale', 'old answer');
     expect(aiService.getCachedResponse('stale')).not.toBeNull();
 
-    await sleep(40);
+    jest.advanceTimersByTime(40);
 
     expect(aiService.getCachedResponse('stale')).toBeNull();
     const stats = aiService.getCacheStats();
     expect(stats.expirations).toBe(1);
     expect(stats.size).toBe(0); // expired entry is evicted, not just skipped
+    jest.useRealTimers();
   });
 
-  it('keeps entries that are still inside the TTL', async () => {
+  it('keeps entries that are still inside the TTL', () => {
+    jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] });
     aiService.configureCache({ ttlMs: 60_000 });
     aiService.setCachedResponse('fresh', 'new answer');
-    await sleep(20);
+    jest.advanceTimersByTime(20);
     expect(aiService.getCachedResponse('fresh').content).toBe('new answer');
     expect(aiService.getCacheStats().expirations).toBe(0);
+    jest.useRealTimers();
   });
 
-  it('refreshes the timestamp when a key is overwritten', async () => {
+  it('refreshes the timestamp when a key is overwritten', () => {
+    jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] });
     aiService.configureCache({ ttlMs: 60 });
     aiService.setCachedResponse('k', 'v1');
-    await sleep(40);
+    jest.advanceTimersByTime(40);
     aiService.setCachedResponse('k', 'v2');
-    await sleep(40); // 80ms since first write, 40ms since the overwrite
+    jest.advanceTimersByTime(40); // 80ms since first write, 40ms since the overwrite
     expect(aiService.getCachedResponse('k')?.content).toBe('v2');
+    jest.useRealTimers();
   });
 });
 
@@ -132,17 +151,19 @@ describe('aiService cache — LRU eviction', () => {
     expect(aiService.getCachedResponse('b')?.content).toBe('B2');
   });
 
-  it('reclaims expired entries before evicting live ones', async () => {
+  it('reclaims expired entries before evicting live ones', () => {
+    jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] });
     aiService.configureCache({ maxSize: 2, ttlMs: 20 });
     aiService.setCachedResponse('old1', 'x');
     aiService.setCachedResponse('old2', 'y');
-    await sleep(40); // both now expired
+    jest.advanceTimersByTime(40); // both now expired
 
     aiService.configureCache({ maxSize: 1 });
     const stats = aiService.getCacheStats();
     expect(aiService.responseCache.size).toBe(1);
     // At least one slot was reclaimed as an expiration rather than an eviction.
     expect(stats.expirations).toBeGreaterThan(0);
+    jest.useRealTimers();
   });
 });
 
