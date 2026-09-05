@@ -18,10 +18,17 @@
  * register "Log eggs" — and `GeekShell` mounts the `GeekFab` as a sibling of
  * `GeekAppFrame`, whose route transition would otherwise capture a fixed
  * child. No page registered → no FAB.
+ *
+ * `GeekToastProvider` (TODO_ORDER #15) is mounted inside `GeekShell` and
+ * outside `GeekAppFrame` for the same reason as the FAB: the frame's route
+ * transition is a framer-motion element and becomes a containing block for
+ * `position: fixed` children, so a toast mounted under it would slide with
+ * the page fade. Inside the shell so it can read `useGeekShell()` and place
+ * itself clear of the sidebar and the mobile tab bar.
  */
 import { Box, useMediaQuery, useTheme } from "@mui/material";
 import { Outlet, useLocation } from "react-router-dom";
-import { GeekShell, GeekAppFrame, GeekBottomNav, geekLayout } from "@geeksuite/ui";
+import { GeekShell, GeekAppFrame, GeekBottomNav, GeekToastProvider, geekLayout } from "@geeksuite/ui";
 import Sidebar from "./Sidebar";
 import TopBar from "./TopBar";
 import { activeNavId, bottomNavItems } from "./navConfig";
@@ -47,16 +54,18 @@ const LayoutShell = () => {
         ) : null
       }
     >
-      <GeekAppFrame>
-        <Box
-          sx={{
-            px: { xs: 2, sm: 3, md: 5 },
-            py: { xs: 3, md: 4 }
-          }}
-        >
-          <Outlet />
-        </Box>
-      </GeekAppFrame>
+      <GeekToastProvider>
+        <GeekAppFrame>
+          <Box
+            sx={{
+              px: { xs: 2, sm: 3, md: 5 },
+              py: { xs: 3, md: 4 }
+            }}
+          >
+            <Outlet />
+          </Box>
+        </GeekAppFrame>
+      </GeekToastProvider>
     </GeekShell>
   );
 };

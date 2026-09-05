@@ -63,8 +63,11 @@ cycle so the ordering rationale stays visible; detail moved to `SUITE_TODO.md` "
     SUITE_TODO: visual pass in both modes; storygeek play surface now 220px narrower on desktop;
     top-bar titles are route names (per-app refinement welcome).
 15. ~~Shared EmptyState / ErrorState / toast primitives~~ — **primitives done 2026-09-03** (GeekEmptyState,
-    GeekErrorState, GeekToastProvider/useToast in packages/ui; bujogeek is the proof). Fan-out to the
-    other six apps is the remaining L; list of local patterns is in THE_UI_UNIFICATION_PLAN.md
+    GeekErrorState, GeekToastProvider/useToast in packages/ui; bujogeek is the proof). **flockgeek
+    fan-out done 2026-09-05** (ResponsiveTable grew error/onRetry props; Groups/LocationsPage
+    converted directly; all mutation errors + QuickHarvestEntry's success/error state became
+    toast; GeekToastProvider mounted in LayoutShell). Remaining fan-out: fitnessgeek, notegeek,
+    storygeek, bookgeek, basegeek; list of local patterns is in THE_UI_UNIFICATION_PLAN.md
     "Feedback primitives". *UI*
 16. ~~Shared mobile bottom-nav primitive~~ — folded into #15a.
 17. **Shared date utilities** — M. `toUtcMidnight` / `localDateString` / `displayCalendarDate`

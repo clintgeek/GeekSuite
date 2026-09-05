@@ -1,12 +1,13 @@
 import React, { useState, useMemo } from "react";
 import { useQuery, useMutation } from '@apollo/client';
 import { displayCalendarDate, utcDateString } from "@geeksuite/utils";
-import { Container, Button, Box, Alert, TextField, Chip } from "@mui/material";
+import { Container, Button, Box, TextField, Chip } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import ResponsiveTable from "../components/primitives/ResponsiveTable";
 import LedgerDialog from "../components/primitives/LedgerDialog";
+import { useToast } from "@geeksuite/ui";
 import { GET_HATCH_EVENTS } from "../graphql/queries";
 import { RECORD_HATCH_EVENT, UPDATE_HATCH_EVENT, DELETE_ENTITY } from "../graphql/mutations";
 
@@ -16,7 +17,7 @@ const HatchLogPage = () => {
   const [sortBy, setSortBy] = useState("setDate");
   const [sortOrder, setSortOrder] = useState("desc");
   const [filters, setFilters] = useState({ startDate: "", endDate: "" });
-  const [mutationError, setMutationError] = useState("");
+  const { notify } = useToast();
 
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
@@ -24,25 +25,25 @@ const HatchLogPage = () => {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [addFormData, setAddFormData] = useState({ setDate: "", hatchDate: "", eggsSet: "", eggsFertile: "", chicksHatched: "", pullets: "", cockerels: "", notes: "" });
 
-  const { data, loading, error } = useQuery(GET_HATCH_EVENTS);
+  const { data, loading, error, refetch } = useQuery(GET_HATCH_EVENTS);
 
   const refetchList = ['GetHatchEvents'];
 
   const [recordHatchEvent] = useMutation(RECORD_HATCH_EVENT, {
     refetchQueries: refetchList, awaitRefetchQueries: true,
     onCompleted: () => { setAddDialogOpen(false); setAddFormData({ setDate: "", hatchDate: "", eggsSet: "", eggsFertile: "", chicksHatched: "", pullets: "", cockerels: "", notes: "" }); },
-    onError: (err) => setMutationError(err.message),
+    onError: (err) => notify(err.message, { tone: 'error' }),
   });
 
   const [updateHatchEvent] = useMutation(UPDATE_HATCH_EVENT, {
     refetchQueries: refetchList, awaitRefetchQueries: true,
     onCompleted: () => { setEditDialogOpen(false); setEditingEvent(null); },
-    onError: (err) => setMutationError(err.message),
+    onError: (err) => notify(err.message, { tone: 'error' }),
   });
 
   const [deleteEntity] = useMutation(DELETE_ENTITY, {
     refetchQueries: refetchList,
-    onError: (err) => setMutationError(err.message),
+    onError: (err) => notify(err.message, { tone: 'error' }),
   });
 
   const allEvents = data?.hatchEvents || [];
@@ -81,7 +82,7 @@ const HatchLogPage = () => {
   };
 
   const handleSaveEdit = () => {
-    if (!editFormData.setDate || !editFormData.eggsSet) { setMutationError("Set date and eggs set are required"); return; }
+    if (!editFormData.setDate || !editFormData.eggsSet) { notify("Set date and eggs set are required", { tone: 'error' }); return; }
     updateHatchEvent({ variables: {
       id: editingEvent.id,
       setDate: editFormData.setDate || undefined,
@@ -96,7 +97,7 @@ const HatchLogPage = () => {
   };
 
   const handleSaveAdd = () => {
-    if (!addFormData.setDate || !addFormData.eggsSet) { setMutationError("Set date and eggs set are required"); return; }
+    if (!addFormData.setDate || !addFormData.eggsSet) { notify("Set date and eggs set are required", { tone: 'error' }); return; }
     recordHatchEvent({ variables: {
       setDate: addFormData.setDate,
       hatchDate: addFormData.hatchDate || undefined,
@@ -168,8 +169,6 @@ const HatchLogPage = () => {
         </Button>
       </Box>
 
-      {(error || mutationError) && <Alert severity="error" sx={{ mb: 2 }}>{error?.message || mutationError}</Alert>}
-
       <ResponsiveTable
         filters={filterFields}
         filterCount={Object.values(filters).filter(Boolean).length}
@@ -181,6 +180,9 @@ const HatchLogPage = () => {
         sortOrder={sortOrder}
         onSort={handleSort}
         loading={loading}
+        error={error}
+        errorTitle="Couldn't load hatch events"
+        onRetry={() => refetch()}
         emptyMessage="No hatch events found"
         page={page}
         rowsPerPage={rowsPerPage}

@@ -1,7 +1,7 @@
 import RefreshIcon from "@mui/icons-material/RefreshOutlined";
 import { Alert, Box, Button, Card, CardContent, CircularProgress, Grid, Stack, Typography } from "@mui/material";
-import { alpha } from "@mui/material/styles";
 import { useCallback, useEffect, useState } from "react";
+import { GeekErrorState } from "@geeksuite/ui";
 
 const cards = [
   {
@@ -67,7 +67,14 @@ const DashboardPage = () => {
         </Button>
       </Box>
 
-      {error && <Alert severity="error">{error.message}</Alert>}
+      {error && (
+        <GeekErrorState
+          compact
+          title="Couldn't reach the backend"
+          error={error}
+          onRetry={fetchHealth}
+        />
+      )}
 
       {health && (
         <Alert severity="success" variant="outlined">

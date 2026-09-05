@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react";
 import { useQuery, useMutation } from '@apollo/client';
 import {
   Container, TableCell, TableRow, Button, Box, Typography,
-  Alert, TextField, MenuItem, Chip, FormControl, InputLabel, Select,
+  TextField, MenuItem, Chip, FormControl, InputLabel, Select,
   Accordion, AccordionSummary, AccordionDetails, Grid
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -11,6 +11,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import ResponsiveTable from "../components/primitives/ResponsiveTable";
 import LedgerDialog from "../components/primitives/LedgerDialog";
+import { useToast } from "@geeksuite/ui";
 import { displayCalendarDate, utcDateString } from "@geeksuite/utils";
 import { GET_BIRDS, GET_LOCATIONS, GET_FLOCK_GROUPS, GET_GROUP_MEMBERSHIPS } from "../graphql/queries";
 import { CREATE_BIRD, UPDATE_BIRD, DELETE_ENTITY } from "../graphql/mutations";
@@ -86,7 +87,7 @@ const BirdsPage = () => {
   const [sortBy, setSortBy] = useState("tagId");
   const [sortOrder, setSortOrder] = useState("asc");
   const [filters, setFilters] = useState({ status: "", sex: "", breed: "", q: "" });
-  const [mutationError, setMutationError] = useState("");
+  const { notify } = useToast();
 
   const [expandedBirdId, setExpandedBirdId] = useState(null);
   const [editingBird, setEditingBird] = useState(null);
@@ -97,7 +98,7 @@ const BirdsPage = () => {
   // full-screen dialog instead of an accordion (MOBILE_UI_PLAN.md §4).
   const [editDialogOpen, setEditDialogOpen] = useState(false);
 
-  const { data: birdsData, loading, error } = useQuery(GET_BIRDS);
+  const { data: birdsData, loading, error, refetch } = useQuery(GET_BIRDS);
   const { data: locData } = useQuery(GET_LOCATIONS);
   const { data: groupsData } = useQuery(GET_FLOCK_GROUPS);
   const { data: membershipsData } = useQuery(GET_GROUP_MEMBERSHIPS, { variables: { activeOnly: true } });
@@ -112,18 +113,18 @@ const BirdsPage = () => {
   const [createBird] = useMutation(CREATE_BIRD, {
     refetchQueries: refetchList, awaitRefetchQueries: true,
     onCompleted: () => { setAddDialogOpen(false); setAddFormData(defaultAddForm); },
-    onError: (err) => setMutationError(err.message),
+    onError: (err) => notify(err.message, { tone: 'error' }),
   });
 
   const [updateBird] = useMutation(UPDATE_BIRD, {
     refetchQueries: refetchList, awaitRefetchQueries: true,
     onCompleted: () => { setExpandedBirdId(null); setEditingBird(null); setEditDialogOpen(false); },
-    onError: (err) => setMutationError(err.message),
+    onError: (err) => notify(err.message, { tone: 'error' }),
   });
 
   const [deleteEntity] = useMutation(DELETE_ENTITY, {
     refetchQueries: refetchList,
-    onError: (err) => setMutationError(err.message),
+    onError: (err) => notify(err.message, { tone: 'error' }),
   });
 
   const allBreeds = useMemo(() => [...new Set(allBirds.map(b => b.breed).filter(Boolean))].sort(), [allBirds]);
@@ -203,7 +204,7 @@ const BirdsPage = () => {
   };
 
   const handleSaveAdd = () => {
-    if (!addFormData.tagId || !addFormData.sex) { setMutationError("Tag ID and sex are required"); return; }
+    if (!addFormData.tagId || !addFormData.sex) { notify("Tag ID and sex are required", { tone: 'error' }); return; }
     createBird({ variables: {
       tagId: addFormData.tagId,
       name: addFormData.name || undefined,
@@ -614,8 +615,6 @@ const BirdsPage = () => {
         </Button>
       </Box>
 
-      {(error || mutationError) && <Alert severity="error" sx={{ mb: 2 }}>{error?.message || mutationError}</Alert>}
-
       <ResponsiveTable
         filters={filterFields}
         filterCount={activeFilterCount}
@@ -627,6 +626,9 @@ const BirdsPage = () => {
         sortOrder={sortOrder}
         onSort={handleSort}
         loading={loading}
+        error={error}
+        errorTitle="Couldn't load birds"
+        onRetry={() => refetch()}
         emptyMessage="No birds found"
         renderDesktopRow={renderBirdRow}
         page={page}

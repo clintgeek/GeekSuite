@@ -13,7 +13,6 @@ import {
   InputLabel,
   IconButton,
   Chip,
-  Alert,
   Collapse,
   Tooltip
 } from "@mui/material";
@@ -23,6 +22,7 @@ import RemoveIcon from "@mui/icons-material/Remove";
 import EggIcon from "@mui/icons-material/EggAlt";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
+import { useToast } from "@geeksuite/ui";
 import { GET_EGG_PRODUCTIONS } from "../graphql/queries";
 import { RECORD_EGG_PRODUCTION } from "../graphql/mutations";
 
@@ -45,8 +45,7 @@ const QuickHarvestEntry = ({ onSuccess, locations = [], variant = "panel" }) => 
   const [locationId, setLocationId] = useState("");
   const [notes, setNotes] = useState("");
   const [showDetails, setShowDetails] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const { notify } = useToast();
 
   // Fetch recent egg productions to find last harvest per location
   const { data: eggsData, refetch: refetchEggs } = useQuery(GET_EGG_PRODUCTIONS, {
@@ -77,21 +76,19 @@ const QuickHarvestEntry = ({ onSuccess, locations = [], variant = "panel" }) => 
     awaitRefetchQueries: true,
     onCompleted: () => {
       const daysText = days > 1 ? ` (${ days } days)` : "";
-      setSuccess(`Logged ${ eggCount } egg${ eggCount !== 1 ? "s" : "" }${ daysText }`);
+      notify(`Logged ${ eggCount } egg${ eggCount !== 1 ? "s" : "" }${ daysText }`, { tone: 'success' });
       setEggCount(0);
       setNotes("");
       setShowDetails(false);
       setDaysOverride(null);
       refetchEggs();
       if (onSuccess) onSuccess();
-      setTimeout(() => setSuccess(""), 2000);
     },
-    onError: (err) => setError(err.message || "Failed to log harvest"),
+    onError: (err) => notify(err.message || "Failed to log harvest", { tone: 'error' }),
   });
 
   const handleSubmit = async () => {
-    if (eggCount === 0) { setError("Enter at least 1 egg"); return; }
-    setError("");
+    if (eggCount === 0) { notify("Enter at least 1 egg", { tone: 'error' }); return; }
     const payload = {
       date: localDateString(new Date()),
       eggsCount: eggCount,
@@ -239,9 +236,6 @@ const QuickHarvestEntry = ({ onSuccess, locations = [], variant = "panel" }) => 
           placeholder="e.g., One cracked, found in unusual spot..." sx={{ mb: 2 }}
         />
       </Collapse>
-
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-      {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
 
       <Button
         variant="contained" size="large" fullWidth onClick={handleSubmit}

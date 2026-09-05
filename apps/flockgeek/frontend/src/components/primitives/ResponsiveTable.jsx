@@ -48,7 +48,7 @@ import {
   useMediaQuery
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
-import { GeekSheet, geekLayout } from "@geeksuite/ui";
+import { GeekEmptyState, GeekErrorState, GeekSheet, geekLayout } from "@geeksuite/ui";
 import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
 import FilterListIcon from "@mui/icons-material/FilterList";
 import SwapVertIcon from "@mui/icons-material/SwapVert";
@@ -72,6 +72,9 @@ const ResponsiveTable = ({
   actionSheetTitle = "Actions",
   loading = false,
   emptyMessage = "Nothing here yet",
+  error,
+  errorTitle = "Couldn't load this",
+  onRetry,
   renderDesktopRow,
   page = 0,
   rowsPerPage = 10,
@@ -107,6 +110,13 @@ const ResponsiveTable = ({
   const spinner = (
     <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}><CircularProgress /></Box>
   );
+
+  // A load failure replaces the whole ledger — filters, sort and pagination
+  // included — rather than sitting above an empty table saying the same
+  // thing twice.
+  if (error) {
+    return <GeekErrorState title={errorTitle} error={error} onRetry={onRetry} />;
+  }
 
   const pillSx = {
     minHeight: 44,
@@ -156,8 +166,8 @@ const ResponsiveTable = ({
         )}
 
         {loading ? spinner : rows.length === 0 ? (
-          <Paper variant="outlined" sx={{ p: 4, textAlign: "center" }}>
-            <Typography color="text.secondary">{emptyMessage}</Typography>
+          <Paper variant="outlined" sx={{ p: 2 }}>
+            <GeekEmptyState compact title={emptyMessage} />
           </Paper>
         ) : (
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
@@ -372,7 +382,9 @@ const ResponsiveTable = ({
             <TableBody>
               {rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={columns.length} align="center" sx={{ py: 4 }}>{emptyMessage}</TableCell>
+                  <TableCell colSpan={columns.length}>
+                    <GeekEmptyState compact title={emptyMessage} />
+                  </TableCell>
                 </TableRow>
               ) : rows.map((row) => (
                 typeof renderDesktopRow === "function" ? renderDesktopRow(row) : (

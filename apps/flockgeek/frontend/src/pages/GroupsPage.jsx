@@ -2,11 +2,12 @@ import React, { useState, useMemo } from "react";
 import { useQuery, useMutation } from '@apollo/client';
 import { displayCalendarDate, localDateString, utcDateString } from "@geeksuite/utils";
 import {
-  Container, Paper, Button, Box, Typography, CircularProgress, Alert,
+  Container, Paper, Button, Box, Typography, CircularProgress,
   TextField, MenuItem, Chip, FormControl, InputLabel, Select, Accordion,
   AccordionSummary, AccordionDetails, List, ListItem, ListItemText,
   IconButton, Stack
 } from "@mui/material";
+import { GeekEmptyState, GeekErrorState, useToast } from "@geeksuite/ui";
 import LedgerDialog from "../components/primitives/LedgerDialog";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -32,7 +33,7 @@ const isActive = (group) => {
 const GroupsPage = () => {
   const [filters, setFilters] = useState({ purpose: "", q: "" });
   const [expandedGroup, setExpandedGroup] = useState(null);
-  const [mutationError, setMutationError] = useState("");
+  const { notify } = useToast();
 
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingGroup, setEditingGroup] = useState(null);
@@ -40,7 +41,7 @@ const GroupsPage = () => {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [addFormData, setAddFormData] = useState(emptyForm);
 
-  const { data: groupsData, loading, error } = useQuery(GET_FLOCK_GROUPS);
+  const { data: groupsData, loading, error, refetch } = useQuery(GET_FLOCK_GROUPS);
   const { data: membershipsData } = useQuery(GET_GROUP_MEMBERSHIPS, { variables: { activeOnly: true } });
 
   const allGroups = groupsData?.flockGroups || [];
@@ -51,18 +52,18 @@ const GroupsPage = () => {
   const [createFlockGroup] = useMutation(CREATE_FLOCK_GROUP, {
     refetchQueries: refetchList, awaitRefetchQueries: true,
     onCompleted: () => { setAddDialogOpen(false); setAddFormData(emptyForm); },
-    onError: (err) => setMutationError(err.message),
+    onError: (err) => notify(err.message, { tone: 'error' }),
   });
 
   const [updateFlockGroup] = useMutation(UPDATE_FLOCK_GROUP, {
     refetchQueries: refetchList, awaitRefetchQueries: true,
     onCompleted: () => { setEditDialogOpen(false); setEditingGroup(null); },
-    onError: (err) => setMutationError(err.message),
+    onError: (err) => notify(err.message, { tone: 'error' }),
   });
 
   const [deleteEntity] = useMutation(DELETE_ENTITY, {
     refetchQueries: refetchList,
-    onError: (err) => setMutationError(err.message),
+    onError: (err) => notify(err.message, { tone: 'error' }),
   });
 
   const groups = useMemo(() => allGroups.filter(g => {
@@ -102,7 +103,7 @@ const GroupsPage = () => {
   };
 
   const handleSaveEdit = () => {
-    if (!editFormData.name) { setMutationError("Name is required"); return; }
+    if (!editFormData.name) { notify("Name is required", { tone: 'error' }); return; }
     updateFlockGroup({ variables: {
       id: editingGroup.id,
       name: editFormData.name,
@@ -116,7 +117,7 @@ const GroupsPage = () => {
   };
 
   const handleSaveAdd = () => {
-    if (!addFormData.name || !addFormData.startDate) { setMutationError("Name and start date are required"); return; }
+    if (!addFormData.name || !addFormData.startDate) { notify("Name and start date are required", { tone: 'error' }); return; }
     createFlockGroup({ variables: {
       name: addFormData.name,
       purpose: addFormData.purpose || undefined,
@@ -154,8 +155,6 @@ const GroupsPage = () => {
         </Button>
       </Box>
 
-      {(error || mutationError) && <Alert severity="error" sx={{ mb: 2 }}>{error?.message || mutationError}</Alert>}
-
       <Paper sx={{ p: 2, mb: 3 }}>
         <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 2 }}>
           <TextField label="Search" size="small" placeholder="Group name" value={filters.q}
@@ -168,10 +167,16 @@ const GroupsPage = () => {
         </Box>
       </Paper>
 
-      {loading ? (
+      {error ? (
+        <GeekErrorState
+          title="Couldn't load groups"
+          error={error}
+          onRetry={() => refetch()}
+        />
+      ) : loading ? (
         <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}><CircularProgress /></Box>
       ) : groups.length === 0 ? (
-        <Paper sx={{ p: 4, textAlign: "center" }}><Typography color="text.secondary">No groups found</Typography></Paper>
+        <Paper sx={{ p: 2 }}><GeekEmptyState compact title="No groups found" /></Paper>
       ) : (
         <Paper sx={{ overflow: 'hidden' }}>
           {groups.map((group) => {

@@ -1,6 +1,39 @@
 # FlockGeek – CONTEXT
 
-_Last updated: 2025-11-28_
+_Last updated: 2026-09-05_
+
+## Feedback primitives fan-out (2026-09-05, TODO_ORDER #15)
+
+Frontend now uses `@geeksuite/ui`'s `GeekEmptyState` / `GeekErrorState` /
+`GeekToastProvider` + `useToast` throughout, replacing every ad-hoc empty
+block, inline error `Alert`, and `useState`-driven success/error message.
+See `THE_UI_UNIFICATION_PLAN.md` "Feedback primitives" (the fan-out
+paragraph under "Migrating an app") for the full account. Short version:
+
+- `components/primitives/ResponsiveTable.jsx` (shared by Birds/Pairings/
+  EggLog/HatchLog) grew `error` / `errorTitle` / `onRetry` props: a query
+  load failure now renders `GeekErrorState` in place of the whole ledger;
+  an empty result renders `GeekEmptyState` (compact) in both its
+  mobile-card and desktop-table branches.
+- Groups/LocationsPage (no `ResponsiveTable`, a custom accordion list)
+  converted their inline empty/error blocks directly.
+- Every page's `mutationError` state + inline error `Alert` became
+  `notify(msg, { tone: 'error' })`. `QuickHarvestEntry`'s local success/
+  error state (with its `setTimeout` auto-clear) collapsed the same way.
+- `GeekToastProvider` is mounted in `components/LayoutShell.jsx`, inside
+  `GeekShell` and outside `GeekAppFrame`.
+- Left alone: `DashboardPage`'s persistent "backend responded at …"
+  success `Alert` — a standing status readout, not a transient
+  confirmation, so it doesn't fit `GeekToastProvider`'s use case. Its
+  sibling error case *was* converted to `GeekErrorState` (compact, with
+  `onRetry={fetchHealth}`).
+- No local `EmptyState`/`ErrorState`/toast component existed here to
+  delete, and no hand-rolled `isDark ? lighten(...) : darken(...)` tone
+  helper (TODO_ORDER #19) — this app inherits the shared themed tooltip
+  from `createGeekSuiteTheme` with no local `MuiTooltip` override, so
+  nothing to convert there either.
+- Mobile harness (`flock-primitives` label, phone viewport): 28 scenes,
+  0 violations — unchanged from baseline.
 
 ## Purpose
 

@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import EggIcon from "@mui/icons-material/EggOutlined";
 import HatchIcon from "@mui/icons-material/TrackChangesOutlined";
 import BirdIcon from "@mui/icons-material/PetsOutlined";
+import { GeekEmptyState } from "@geeksuite/ui";
 
 const meta = {
   egg:   { icon: <EggIcon sx={{ fontSize: 16 }} />,   color: "#e8a735" },
@@ -38,11 +39,11 @@ const formatTime = (dateStr) => {
 const RecentActivity = ({ items = [] }) => {
   if (!items.length) {
     return (
-      <Box sx={{ py: 4, textAlign: "center" }}>
-        <Typography variant="body2" color="text.muted">
-          No recent activity yet. Log an egg or add a bird to get started.
-        </Typography>
-      </Box>
+      <GeekEmptyState
+        compact
+        title="No recent activity yet."
+        description="Log an egg or add a bird to get started."
+      />
     );
   }
 

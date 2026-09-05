@@ -405,6 +405,25 @@ state. Finally sweep `isDark ? lighten(…) : …` to `toneForMode`. Landing ord
 each commit verifiable: fitnessgeek (has the second-most-developed local `EmptyState` plus
 six page-level `Snackbar`s), then notegeek, flockgeek, storygeek, bookgeek, basegeek.
 
+**flockgeek — done 2026-09-05.** No local `EmptyState`/`ErrorState`/toast component and no
+`isDark ? lighten(…) : darken(…)` hand-rolled tone helper existed here, so this app's fan-out
+was pure conversion, nothing to delete. `ResponsiveTable` (the app's own primitive, shared by
+Birds/Pairings/EggLog/HatchLog) grew `error`/`errorTitle`/`onRetry` props and now renders
+`GeekErrorState` in place of the whole ledger on a load failure, and `GeekEmptyState` (compact)
+for the empty-rows case in both its mobile-card and desktop-table branches — so all four pages
+picked up the shared primitives by passing three new props rather than each carrying its own
+block. Groups/LocationsPage (no `ResponsiveTable`, a custom accordion list) converted their
+inline `<Paper><Typography>No X found</Typography></Paper>` and error `Alert` directly. Every
+page's `mutationError` `useState` + inline error `Alert` became a `notify(msg, { tone: 'error'
+})` call from `useToast()`; `QuickHarvestEntry`'s local `success`/`error` state (with its
+`setTimeout`-driven auto-clear `Alert`) collapsed the same way. `GeekToastProvider` is now
+mounted in `LayoutShell.jsx`, inside `GeekShell` and outside `GeekAppFrame`. Left alone:
+DashboardPage's persistent "backend responded at …" success `Alert` — it is a standing status
+readout tied to the last health check, not a transient confirmation or a failure, so it doesn't
+fit any of the three primitives; its sibling error case *was* converted (`GeekErrorState`,
+compact, `onRetry={fetchHealth}`). Mobile harness: 28 scenes, 0 violations — unchanged from
+baseline.
+
 ---
 
 ## 3b. Mobile Grammar

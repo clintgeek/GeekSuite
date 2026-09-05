@@ -1,11 +1,12 @@
 import React, { useState, useMemo } from "react";
 import { useQuery, useMutation } from '@apollo/client';
 import {
-  Container, Paper, Button, Box, Typography, CircularProgress, Alert,
+  Container, Paper, Button, Box, Typography, CircularProgress,
   TextField, MenuItem, Chip, FormControl, InputLabel, Select, Accordion,
   AccordionSummary, AccordionDetails, List, ListItem, ListItemText,
   IconButton, Stack
 } from "@mui/material";
+import { GeekEmptyState, GeekErrorState, useToast } from "@geeksuite/ui";
 import LedgerDialog from "../components/primitives/LedgerDialog";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -22,7 +23,7 @@ const getTypeColor = (type) => ({ tractor: "primary", coop: "info", breeding_pen
 const LocationsPage = () => {
   const [filters, setFilters] = useState({ type: "", q: "" });
   const [expandedLocation, setExpandedLocation] = useState(null);
-  const [mutationError, setMutationError] = useState("");
+  const { notify } = useToast();
 
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingLocation, setEditingLocation] = useState(null);
@@ -30,7 +31,7 @@ const LocationsPage = () => {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [addFormData, setAddFormData] = useState(emptyForm);
 
-  const { data: locData, loading, error } = useQuery(GET_LOCATIONS);
+  const { data: locData, loading, error, refetch } = useQuery(GET_LOCATIONS);
   const { data: birdsData } = useQuery(GET_BIRDS);
 
   const allLocations = locData?.flockLocations || [];
@@ -41,18 +42,18 @@ const LocationsPage = () => {
   const [createFlockLocation] = useMutation(CREATE_FLOCK_LOCATION, {
     refetchQueries: refetchList, awaitRefetchQueries: true,
     onCompleted: () => { setAddDialogOpen(false); setAddFormData(emptyForm); },
-    onError: (err) => setMutationError(err.message),
+    onError: (err) => notify(err.message, { tone: 'error' }),
   });
 
   const [updateFlockLocation] = useMutation(UPDATE_FLOCK_LOCATION, {
     refetchQueries: refetchList, awaitRefetchQueries: true,
     onCompleted: () => { setEditDialogOpen(false); setEditingLocation(null); },
-    onError: (err) => setMutationError(err.message),
+    onError: (err) => notify(err.message, { tone: 'error' }),
   });
 
   const [deleteEntity] = useMutation(DELETE_ENTITY, {
     refetchQueries: refetchList,
-    onError: (err) => setMutationError(err.message),
+    onError: (err) => notify(err.message, { tone: 'error' }),
   });
 
   const locations = useMemo(() => allLocations.filter(loc => {
@@ -92,7 +93,7 @@ const LocationsPage = () => {
   };
 
   const handleSaveEdit = () => {
-    if (!editFormData.name) { setMutationError("Name is required"); return; }
+    if (!editFormData.name) { notify("Name is required", { tone: 'error' }); return; }
     updateFlockLocation({ variables: {
       id: editingLocation.id,
       name: editFormData.name,
@@ -104,7 +105,7 @@ const LocationsPage = () => {
   };
 
   const handleSaveAdd = () => {
-    if (!addFormData.name || !addFormData.type) { setMutationError("Name and type are required"); return; }
+    if (!addFormData.name || !addFormData.type) { notify("Name and type are required", { tone: 'error' }); return; }
     createFlockLocation({ variables: {
       name: addFormData.name,
       type: addFormData.type,
@@ -137,8 +138,6 @@ const LocationsPage = () => {
         </Button>
       </Box>
 
-      {(error || mutationError) && <Alert severity="error" sx={{ mb: 2 }}>{error?.message || mutationError}</Alert>}
-
       <Paper sx={{ p: 2, mb: 3 }}>
         <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 2 }}>
           <TextField label="Search" size="small" placeholder="Location name" value={filters.q}
@@ -151,10 +150,16 @@ const LocationsPage = () => {
         </Box>
       </Paper>
 
-      {loading ? (
+      {error ? (
+        <GeekErrorState
+          title="Couldn't load locations"
+          error={error}
+          onRetry={() => refetch()}
+        />
+      ) : loading ? (
         <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}><CircularProgress /></Box>
       ) : locations.length === 0 ? (
-        <Paper sx={{ p: 4, textAlign: "center" }}><Typography color="text.secondary">No locations found</Typography></Paper>
+        <Paper sx={{ p: 2 }}><GeekEmptyState compact title="No locations found" /></Paper>
       ) : (
         <Paper sx={{ overflow: 'hidden' }}>
           {locations.map((location) => {

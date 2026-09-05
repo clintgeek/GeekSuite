@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react";
 import { useQuery, useMutation } from '@apollo/client';
 import { displayCalendarDate, localDateString } from "@geeksuite/utils";
 import {
-  Container, Button, Box, Typography, Alert, TextField, MenuItem,
+  Container, Button, Box, Typography, TextField, MenuItem,
   FormControl, InputLabel, Select, IconButton
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
@@ -12,6 +12,7 @@ import QuickHarvestEntry from "../components/QuickHarvestEntry";
 import QuickHarvestSheet from "../components/QuickHarvestSheet";
 import ResponsiveTable from "../components/primitives/ResponsiveTable";
 import LedgerDialog from "../components/primitives/LedgerDialog";
+import { useToast } from "@geeksuite/ui";
 import { GET_EGG_PRODUCTIONS, GET_LOCATIONS } from "../graphql/queries";
 import { RECORD_EGG_PRODUCTION, UPDATE_EGG_PRODUCTION, DELETE_ENTITY } from "../graphql/mutations";
 
@@ -23,7 +24,7 @@ const EggLogPage = () => {
   const [sortBy, setSortBy] = useState("date");
   const [sortOrder, setSortOrder] = useState("desc");
   const [filters, setFilters] = useState({ startDate: "", endDate: "", locationId: "" });
-  const [mutationError, setMutationError] = useState("");
+  const { notify } = useToast();
 
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
@@ -31,7 +32,7 @@ const EggLogPage = () => {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [addFormData, setAddFormData] = useState(emptyForm);
 
-  const { data: eggsData, loading: eggsLoading, error: eggsError } = useQuery(GET_EGG_PRODUCTIONS);
+  const { data: eggsData, loading: eggsLoading, error: eggsError, refetch: refetchEggsList } = useQuery(GET_EGG_PRODUCTIONS);
   const { data: locData } = useQuery(GET_LOCATIONS);
 
   const allEggs = eggsData?.eggProductions || [];
@@ -42,18 +43,18 @@ const EggLogPage = () => {
   const [recordEggProduction] = useMutation(RECORD_EGG_PRODUCTION, {
     refetchQueries: refetchList, awaitRefetchQueries: true,
     onCompleted: () => { setAddDialogOpen(false); setAddFormData(emptyForm); },
-    onError: (err) => setMutationError(err.message),
+    onError: (err) => notify(err.message, { tone: 'error' }),
   });
 
   const [updateEggProduction] = useMutation(UPDATE_EGG_PRODUCTION, {
     refetchQueries: refetchList, awaitRefetchQueries: true,
     onCompleted: () => { setEditDialogOpen(false); setEditingRecord(null); },
-    onError: (err) => setMutationError(err.message),
+    onError: (err) => notify(err.message, { tone: 'error' }),
   });
 
   const [deleteEntity] = useMutation(DELETE_ENTITY, {
     refetchQueries: refetchList,
-    onError: (err) => setMutationError(err.message),
+    onError: (err) => notify(err.message, { tone: 'error' }),
   });
 
   const filtered = useMemo(() => allEggs.filter(e => {
@@ -92,7 +93,7 @@ const EggLogPage = () => {
   };
 
   const handleSaveEdit = () => {
-    if (!editFormData.date || !editFormData.eggsCount) { setMutationError("Date and eggs count are required"); return; }
+    if (!editFormData.date || !editFormData.eggsCount) { notify("Date and eggs count are required", { tone: 'error' }); return; }
     updateEggProduction({ variables: {
       id: editingRecord.id,
       date: editFormData.date,
@@ -104,7 +105,7 @@ const EggLogPage = () => {
   };
 
   const handleSaveAdd = () => {
-    if (!addFormData.date || !addFormData.eggsCount) { setMutationError("Date and eggs count are required"); return; }
+    if (!addFormData.date || !addFormData.eggsCount) { notify("Date and eggs count are required", { tone: 'error' }); return; }
     recordEggProduction({ variables: {
       date: addFormData.date,
       eggsCount: parseInt(addFormData.eggsCount),
@@ -197,8 +198,6 @@ const EggLogPage = () => {
         </Button>
       </Box>
 
-      {(eggsError || mutationError) && <Alert severity="error" sx={{ mb: 2 }}>{eggsError?.message || mutationError}</Alert>}
-
       <ResponsiveTable
         filters={filterFields}
         filterCount={Object.values(filters).filter(Boolean).length}
@@ -210,6 +209,9 @@ const EggLogPage = () => {
         sortOrder={sortOrder}
         onSort={handleSort}
         loading={eggsLoading}
+        error={eggsError}
+        errorTitle="Couldn't load the harvest history"
+        onRetry={() => refetchEggsList()}
         emptyMessage="No egg production records found"
         page={page}
         rowsPerPage={rowsPerPage}

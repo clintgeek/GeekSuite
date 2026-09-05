@@ -1,12 +1,13 @@
 import React, { useState, useMemo } from "react";
 import { useQuery, useMutation } from '@apollo/client';
 import { localDateString, utcDateString } from "@geeksuite/utils";
-import { Container, Button, Box, Alert, TextField, MenuItem, Chip } from "@mui/material";
+import { Container, Button, Box, TextField, MenuItem, Chip } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import ResponsiveTable from "../components/primitives/ResponsiveTable";
 import LedgerDialog from "../components/primitives/LedgerDialog";
+import { useToast } from "@geeksuite/ui";
 import { GET_PAIRINGS } from "../graphql/queries";
 import { CREATE_PAIRING, UPDATE_PAIRING, DELETE_ENTITY } from "../graphql/mutations";
 
@@ -18,7 +19,7 @@ const PairingsPage = () => {
   const [sortBy, setSortBy] = useState("startDate");
   const [sortOrder, setSortOrder] = useState("desc");
   const [filters, setFilters] = useState({ active: "", q: "" });
-  const [mutationError, setMutationError] = useState("");
+  const { notify } = useToast();
 
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingPairing, setEditingPairing] = useState(null);
@@ -26,25 +27,25 @@ const PairingsPage = () => {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [addFormData, setAddFormData] = useState(emptyForm);
 
-  const { data, loading, error } = useQuery(GET_PAIRINGS);
+  const { data, loading, error, refetch } = useQuery(GET_PAIRINGS);
 
   const refetchList = ['GetPairings'];
 
   const [createPairing] = useMutation(CREATE_PAIRING, {
     refetchQueries: refetchList, awaitRefetchQueries: true,
     onCompleted: () => { setAddDialogOpen(false); setAddFormData(emptyForm); },
-    onError: (err) => setMutationError(err.message),
+    onError: (err) => notify(err.message, { tone: 'error' }),
   });
 
   const [updatePairing] = useMutation(UPDATE_PAIRING, {
     refetchQueries: refetchList, awaitRefetchQueries: true,
     onCompleted: () => { setEditDialogOpen(false); setEditingPairing(null); },
-    onError: (err) => setMutationError(err.message),
+    onError: (err) => notify(err.message, { tone: 'error' }),
   });
 
   const [deleteEntity] = useMutation(DELETE_ENTITY, {
     refetchQueries: refetchList,
-    onError: (err) => setMutationError(err.message),
+    onError: (err) => notify(err.message, { tone: 'error' }),
   });
 
   const allPairings = data?.pairings || [];
@@ -93,7 +94,7 @@ const PairingsPage = () => {
   };
 
   const handleSaveEdit = () => {
-    if (!editFormData.name) { setMutationError("Name is required"); return; }
+    if (!editFormData.name) { notify("Name is required", { tone: 'error' }); return; }
     updatePairing({ variables: {
       id: editingPairing.id,
       name: editFormData.name,
@@ -104,7 +105,7 @@ const PairingsPage = () => {
   };
 
   const handleSaveAdd = () => {
-    if (!addFormData.name) { setMutationError("Name is required"); return; }
+    if (!addFormData.name) { notify("Name is required", { tone: 'error' }); return; }
     createPairing({ variables: {
       name: addFormData.name,
       pairingDate: addFormData.pairingDate || undefined,
@@ -163,8 +164,6 @@ const PairingsPage = () => {
         </Button>
       </Box>
 
-      {(error || mutationError) && <Alert severity="error" sx={{ mb: 2 }}>{error?.message || mutationError}</Alert>}
-
       <ResponsiveTable
         filters={filterFields}
         filterCount={Object.values(filters).filter(Boolean).length}
@@ -176,6 +175,9 @@ const PairingsPage = () => {
         sortOrder={sortOrder}
         onSort={handleSort}
         loading={loading}
+        error={error}
+        errorTitle="Couldn't load pairings"
+        onRetry={() => refetch()}
         emptyMessage="No pairings found"
         page={page}
         rowsPerPage={rowsPerPage}
