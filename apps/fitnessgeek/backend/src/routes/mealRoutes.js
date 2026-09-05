@@ -2,20 +2,10 @@ import express from 'express';
 const router = express.Router();
 import { authenticateToken } from '../middleware/auth.js';
 import Meal from '../models/Meal.js';
-import FoodLog from '../models/FoodLog.js';
 import logger from '../config/logger.js';
 
 // Apply authentication to all routes
 router.use(authenticateToken);
-
-// Parse YYYY-MM-DD as local date (avoid UTC shift)
-function parseLocalDate(input) {
-  if (typeof input === 'string') {
-    const [y, m, d] = input.split('-').map(Number);
-    return new Date(y, (m || 1) - 1, d || 1);
-  }
-  return new Date(input);
-}
 
 // GET /api/meals - Get all user's meals
 router.get('/', async (req, res) => {
@@ -321,87 +311,6 @@ router.delete('/:id', async (req, res) => {
       error: {
         message: 'Failed to delete meal',
         code: 'MEAL_DELETION_ERROR'
-      }
-    });
-  }
-});
-
-// POST /api/meals/:id/add-to-log - Add meal to food log
-router.post('/:id/add-to-log', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const userId = req.user.id;
-    const { log_date, meal_type } = req.body;
-
-    // Validate required fields
-    if (!log_date || !meal_type) {
-      return res.status(400).json({
-        success: false,
-        error: {
-          message: 'Log date and meal type are required',
-          code: 'VALIDATION_ERROR'
-        }
-      });
-    }
-
-    // Get the meal
-    const meal = await Meal.findOne({
-      _id: id,
-      is_deleted: false
-    }).populate('food_items.food_item_id');
-
-    if (!meal) {
-      return res.status(404).json({
-        success: false,
-        error: {
-          message: 'Meal not found',
-          code: 'MEAL_NOT_FOUND'
-        }
-      });
-    }
-
-    // Create food logs for each item in the meal
-    const createdLogs = [];
-    for (const item of meal.food_items) {
-      const log = new FoodLog({
-        user_id: userId,
-        food_item_id: item.food_item_id._id,
-        log_date: parseLocalDate(log_date),
-        meal_type: meal_type,
-        servings: item.servings,
-        notes: `Added from meal: ${meal.name}`,
-        nutrition: item.food_item_id.nutrition || {}
-      });
-
-      const savedLog = await log.save();
-      createdLogs.push(savedLog);
-    }
-
-    logger.info('Meal added to log', {
-      userId,
-      mealId: id,
-      mealName: meal.name,
-      logDate: log_date,
-      mealType: meal_type,
-      itemCount: createdLogs.length
-    });
-
-    res.status(201).json({
-      success: true,
-      message: `Added ${meal.name} to your ${meal_type}`,
-      data: {
-        meal: meal,
-        logsCreated: createdLogs.length
-      }
-    });
-
-  } catch (error) {
-    logger.error('Error adding meal to log:', error);
-    res.status(500).json({
-      success: false,
-      error: {
-        message: 'Failed to add meal to log',
-        code: 'MEAL_ADD_TO_LOG_ERROR'
       }
     });
   }

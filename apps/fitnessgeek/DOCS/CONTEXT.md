@@ -191,7 +191,7 @@ pnpm install                                   # links workspace:* deps
 # backend (dev)
 cd apps/fitnessgeek/backend && npm run dev     # nodemon, port 3001
 
-# backend tests — 12 suites / 106 tests, hermetic (no Mongo, no Redis, no network)
+# backend tests — 12 suites / 104 tests, hermetic (no Mongo, no Redis, no network)
 cd apps/fitnessgeek/backend && npm test
 
 # frontend tests — vitest + RTL, jsdom. Config is vitest.config.js, NOT vite.config.js
@@ -305,9 +305,32 @@ variables for all four. CI job `test-fitnessgeek-web`.
 - **`KEY_VAULT_SECRET` is shared with basegeek**, and `packages/schemas` is now
   a *behavioural* dependency, not just a field list — a change there changes how
   both apps write to Mongo. Deploy the two from the same commit.
-- **The fitnessgeek backend still serves REST routes nothing in this repo calls.**
-  `POST/PUT/DELETE /api/logs` and `POST /api/meals/:id/add-to-log` lost their last
-  caller on 2026-09-05 (see "Where the writes go" above) but are still mounted.
-  Removing them is the next ticket; until then a stale service worker or an old
-  client can still reach them, and they write through this app's own duplicate
-  Mongoose models rather than the gateway's.
+- **The caller-less REST food-log writes are gone (2026-09-05).**
+  `POST/PUT/DELETE /api/logs` (`logRoutes.js`) and `POST /api/meals/:id/add-to-log`
+  (`mealRoutes.js`, plus its `parseLocalDate()` helper — confirmed the only caller)
+  were deleted along with the `FoodItem`, `cacheService` and `mongoose` imports
+  that only they used in `logRoutes.js`, and the `FoodLog` import in
+  `mealRoutes.js`. `GET /api/logs` (and its siblings: `/:id`, `/date/:date`,
+  `/household`, `/household/:memberId/:date`) and `POST /api/logs/copy` are
+  unaffected — see the route table below. Two tests covering the deleted
+  `DELETE /:id` route came out of `src/__tests__/routes/logs.test.js` (106 → 104
+  tests); no test file targeted the deleted `POST /`, `PUT /:id`, or
+  `add-to-log` routes directly. Docker boot verified (production image,
+  `--network none`): boots past config/routes and fails at the expected
+  Mongo-connect step, no import error.
+
+### `logRoutes.js` / `mealRoutes.js` route table (post 2026-09-05 cleanup)
+
+| Route | Status |
+|---|---|
+| `GET /api/logs` | live — date/meal-type query, recent-logs fallback |
+| `GET /api/logs/:id` | live — single log, owner-scoped |
+| ~~`POST /api/logs`~~ | **deleted** — caller-less, gateway's `addFoodLog` replaced it |
+| ~~`PUT /api/logs/:id`~~ | **deleted** — caller-less, gateway's `updateFoodLog` replaced it |
+| ~~`DELETE /api/logs/:id`~~ | **deleted** — caller-less, gateway's `deleteFoodLog` replaced it |
+| `GET /api/logs/date/:date` | live |
+| `GET /api/logs/household` | live |
+| `GET /api/logs/household/:memberId/:date` | live — sharing gate |
+| `POST /api/logs/copy` | live — still owns `FoodItem`/`DailySummary` via `FoodLog`/`UserSettings`; `toUtcMidnight` still imported for this route |
+| `GET /api/meals`, `GET /api/meals/:id`, `POST /api/meals`, `PUT /api/meals/:id`, `DELETE /api/meals/:id` | live, untouched |
+| ~~`POST /api/meals/:id/add-to-log`~~ | **deleted** — caller-less, gateway's `logMeal` replaced it; its `parseLocalDate()` helper (the buggy local-midnight one) went with it |

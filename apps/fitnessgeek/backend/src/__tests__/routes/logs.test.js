@@ -1,11 +1,13 @@
 // Ownership / data-isolation tests for the food-log routes (src/routes/logRoutes.js).
 //
-// Same hermetic approach as weight.test.js: the FoodLog / FoodItem /
-// DailySummary / UserSettings Mongoose models, the auth middleware, and the
-// Redis cache service are jest-mocked. No live Mongo, no Redis, no basegeek.
+// Same hermetic approach as weight.test.js: the FoodLog / DailySummary /
+// UserSettings Mongoose models and the auth middleware are jest-mocked. No
+// live Mongo, no Redis, no basegeek.
 //
-// Two isolation boundaries are covered:
-//   1. Per-user scoping on single-log reads/deletes — every query carries
+// POST/PUT/DELETE on this router were removed 2026-09-05 (consolidation step
+// 2 — the frontend's food-log writes moved to basegeek's GraphQL gateway;
+// see DOCS/SUITE_TODO.md). What's left to cover:
+//   1. Per-user scoping on single-log reads — every query carries
 //      user_id: <caller>, so a cross-user id returns null -> 404.
 //   2. The household-sharing gate on GET /household/:memberId/:date, which
 //      must 403 unless the two users share a household AND the member has
@@ -35,32 +37,15 @@ jest.unstable_mockModule(mod('../../middleware/auth.js'), () => ({
   optionalAuth: (req, res, next) => next(),
 }));
 
-jest.unstable_mockModule(mod('../../services/cacheService.js'), () => ({
-  __esModule: true,
-  default: {
-    invalidateUser: jest.fn().mockResolvedValue(true),
-    invalidateUserAI: jest.fn().mockResolvedValue(true),
-    invalidateUserReports: jest.fn().mockResolvedValue(true),
-  },
-}));
-
 jest.unstable_mockModule(mod('../../models/FoodLog.js'), () => {
   const FoodLog = jest.fn();
   FoodLog.findOne = jest.fn();
   FoodLog.find = jest.fn();
   FoodLog.findById = jest.fn();
-  FoodLog.deleteOne = jest.fn();
   FoodLog.getLogsForDate = jest.fn();
   FoodLog.getLogsByMealType = jest.fn();
   FoodLog.getRecentLogs = jest.fn();
   return { __esModule: true, default: FoodLog };
-});
-
-jest.unstable_mockModule(mod('../../models/FoodItem.js'), () => {
-  const FoodItem = jest.fn();
-  FoodItem.findById = jest.fn();
-  FoodItem.findOrCreate = jest.fn();
-  return { __esModule: true, default: FoodItem };
 });
 
 jest.unstable_mockModule(mod('../../models/DailySummary.js'), () => ({
@@ -116,28 +101,6 @@ describe('GET /api/logs/:id (single food log)', () => {
 
     expect(res.status).toBe(404);
     expect(FoodLog.findOne).toHaveBeenCalledWith({ _id: 'log1', user_id: OTHER });
-  });
-});
-
-describe('DELETE /api/logs/:id', () => {
-  test('non-owner delete is scoped and 404s without deleting', async () => {
-    FoodLog.findOne.mockResolvedValue(null);
-
-    const res = await request(buildApp()).delete('/api/logs/log1').set('x-test-user', OTHER);
-
-    expect(res.status).toBe(404);
-    expect(FoodLog.findOne).toHaveBeenCalledWith({ _id: 'log1', user_id: OTHER });
-    expect(FoodLog.deleteOne).not.toHaveBeenCalled();
-  });
-
-  test('owner can delete their own log', async () => {
-    FoodLog.findOne.mockResolvedValue({ _id: 'log1', user_id: OWNER, log_date: new Date('2026-01-01') });
-    FoodLog.deleteOne.mockResolvedValue({ deletedCount: 1 });
-
-    const res = await request(buildApp()).delete('/api/logs/log1').set('x-test-user', OWNER);
-
-    expect(res.status).toBe(200);
-    expect(FoodLog.deleteOne).toHaveBeenCalledWith({ _id: 'log1' });
   });
 });
 
