@@ -2,6 +2,7 @@ import express from 'express';
 import App from '../models/App.js';
 import logger from '../lib/logger.js';
 import { requireAdmin } from '../middleware/auth.js';
+import { seedMissingApps } from '../services/appRegistrySeed.js';
 
 const router = express.Router();
 
@@ -89,33 +90,12 @@ router.delete('/:name', requireAdmin, async (req, res) => {
 });
 
 // POST /api/apps/seed — seed default apps (idempotent) [admin]
+// The default list and the create-if-missing logic live in
+// services/appRegistrySeed.js — the same function backs the automatic boot
+// seed in server.js, so this endpoint and the startup path can never drift.
 router.post('/seed', requireAdmin, async (req, res) => {
-  const defaults = [
-    { name: 'basegeek', displayName: 'baseGeek', description: 'Auth & shared services', icon: 'Dashboard', color: '#e8a849', url: 'https://basegeek.clintgeek.com', tag: 'platform', sortOrder: 0 },
-    { name: 'notegeek', displayName: 'noteGeek', description: 'Notes & documents', icon: 'Note', color: '#a99df0', url: 'https://notegeek.clintgeek.com', tag: 'productivity', sortOrder: 1 },
-    { name: 'bujogeek', displayName: 'bujoGeek', description: 'Bullet journal & tasks', icon: 'Book', color: '#d4956a', url: 'https://bujogeek.clintgeek.com', tag: 'productivity', sortOrder: 2 },
-    { name: 'fitnessgeek', displayName: 'fitnessGeek', description: 'Nutrition & fitness', icon: 'FitnessCenter', color: '#7dac8e', url: 'https://fitnessgeek.clintgeek.com', tag: 'health', sortOrder: 3 },
-    { name: 'storygeek', displayName: 'storyGeek', description: 'Story plotting & writing', icon: 'AutoStories', color: '#c76b8e', url: 'https://storygeek.clintgeek.com', tag: 'creative', sortOrder: 4 },
-    { name: 'flockgeek', displayName: 'flockGeek', description: 'Flock management', icon: 'NatureOutlined', color: '#7dac8e', url: 'https://flockgeek.clintgeek.com', tag: 'management', sortOrder: 5 },
-    { name: 'babelgeek', displayName: 'babelGeek', description: 'Translation & language', icon: 'Translate', color: '#6db5c0', url: 'https://babelgeek.clintgeek.com', tag: 'learning', sortOrder: 6 },
-    { name: 'geekpr', displayName: 'geekPR', description: 'Autonomous code reviewer', icon: 'RateReview', color: '#8ba3d4', url: 'https://geekpr.clintgeek.com', tag: 'tools', sortOrder: 7 },
-    { name: 'bookgeek', displayName: 'bookGeek', description: 'Library & reading', icon: 'MenuBook', color: '#5fa8d3', url: 'https://bookgeek.clintgeek.com', tag: 'reading', sortOrder: 8 },
-    // Static bundle behind `serve`: no /api/health, so probe the root.
-    { name: 'startgeek', displayName: 'startGeek', description: 'Start page & launcher', icon: 'RocketLaunch', color: '#e6b35a', url: 'https://start.clintgeek.com', healthEndpoint: '/', tag: 'launcher', sortOrder: 9 },
-  ];
-
   try {
-    let created = 0;
-    let skipped = 0;
-    for (const appData of defaults) {
-      const exists = await App.findOne({ name: appData.name });
-      if (exists) {
-        skipped++;
-      } else {
-        await App.create(appData);
-        created++;
-      }
-    }
+    const { created, skipped } = await seedMissingApps();
     res.json({ message: `Seed complete: ${created} created, ${skipped} already existed` });
   } catch (err) {
     res.status(500).json({ message: 'Error seeding apps', error: err.message });

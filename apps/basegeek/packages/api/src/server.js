@@ -32,6 +32,7 @@ import { listAppConnections } from './graphql/shared/appConnections.js';
 import { resolveAllowedOrigins } from './lib/corsOrigins.js';
 import { summarizeDependencies, createCachedProbe } from './lib/healthCheck.js';
 import { initRefreshTokenStore, closeRefreshTokenStore, isRefreshTokenStoreConnected } from './services/refreshTokenStore.js';
+import { seedMissingApps } from './services/appRegistrySeed.js';
 import { startOAuthRefreshJob, stopOAuthRefreshJob } from './services/oauthRefreshJobService.js';
 import reminderService from './graphql/bujogeek/services/reminderService.js';
 import { ApolloServer } from '@apollo/server';
@@ -54,6 +55,17 @@ try {
 } catch (err) {
   logger.error({ err }, 'MongoDB connection error')
   process.exit(1)
+}
+
+// Auto-seed the app registry with any default app that's missing (never
+// updates or deletes an existing row). Runs on every boot so the Home page
+// reflects the full suite without a manual `POST /api/apps/seed` call.
+// Never fatal — a seeding hiccup shouldn't take the whole API down.
+try {
+  const { created, skipped } = await seedMissingApps()
+  logger.info({ created, skipped }, '[AppRegistrySeed] boot seed complete')
+} catch (err) {
+  logger.error({ err }, '[AppRegistrySeed] boot seed failed')
 }
 
 // Connect to aiGeek database

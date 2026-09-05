@@ -116,14 +116,23 @@ app.use((req, res, next) => {
 });
 
 // Health check endpoint
-app.get('/health', (req, res) => {
+const healthHandler = (req, res) => {
   res.status(200).json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
     version: '1.0.0'
   });
-});
+};
+app.get('/health', healthHandler);
+// basegeek's Home page health proxy defaults every app's healthEndpoint to
+// `/api/health` (every other app answers there); this app historically only
+// answered at `/health`. Same handler, registered before the SPA catch-all
+// and with no auth in front of it. `/health` stays — no docker/compose
+// healthcheck references either path today (checked Dockerfile and
+// docker-compose*.yml — no HEALTHCHECK is defined for this service at all),
+// but removing a previously-public path isn't this change's job.
+app.get('/api/health', healthHandler);
 
 // Session identity endpoint
 app.get('/api/me', authenticateToken, meHandler());

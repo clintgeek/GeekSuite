@@ -137,6 +137,23 @@ async function start() {
   app.use('/api/tags', tagRoutes);
   app.use('/api/search', searchRoutes);
 
+  // Health check — notegeek had no health route at all before this; every
+  // other suite app (and basegeek's Home page health proxy, which defaults
+  // an app's healthEndpoint to `/api/health`) expects one here. No auth in
+  // front of it, registered before the SPA fallback below.
+  //
+  // The docker-compose healthcheck for this service probes the SPA root
+  // (`wget --spider http://localhost:9988/`, see docker-compose.yml), not an
+  // API route, so it is unaffected either way.
+  app.get('/api/health', (req, res) => {
+    res.status(200).json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'development',
+      app: 'notegeek',
+    });
+  });
+
   // Serve built frontend assets from backend container
   const publicPath = path.join(__dirname, 'public');
   app.use(express.static(publicPath, {
