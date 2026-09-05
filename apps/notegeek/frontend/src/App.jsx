@@ -21,6 +21,21 @@ import TagNotesList from './components/TagNotesList';
 import QuickCaptureHome from './pages/QuickCaptureHome';
 import Settings from './pages/Settings';
 
+// `/login` and `/register` accept an optional same-origin `?redirect=` (or
+// `?returnTo=`) target — honored only when it's a relative path, so an
+// already-authenticated visit bounces back to where it came from instead of
+// always landing on `/`.
+function getSafeReturnTo() {
+    try {
+        const params = new URLSearchParams(window.location.search);
+        const raw = params.get('redirect') || params.get('returnTo');
+        if (raw && raw.startsWith('/') && !raw.startsWith('//')) return raw;
+    } catch {
+        // ignore malformed query strings
+    }
+    return '/';
+}
+
 // NewNoteWrapper component to clear state before showing editor
 function NewNoteWrapper() {
     const { clearSelectedNote } = useNoteStore();
@@ -76,9 +91,10 @@ function App() {
                     </Box>
                 ) : (
                     <Routes>
-                        {/* Public routes */}
-                        <Route path="/login" element={<Login />} />
-                        <Route path="/register" element={<Register />} />
+                        {/* Public routes — already-authenticated visits redirect home
+                            (or to `?redirect=`) instead of showing the splash/form. */}
+                        <Route path="/login" element={isAuthenticated ? <Navigate to={getSafeReturnTo()} replace /> : <Login />} />
+                        <Route path="/register" element={isAuthenticated ? <Navigate to={getSafeReturnTo()} replace /> : <Register />} />
 
                         {/* Protected routes */}
                         <Route

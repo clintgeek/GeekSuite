@@ -1,8 +1,10 @@
-import { useState } from 'react';
-import { Box, TextField, Button, Typography, Alert, useTheme } from '@mui/material';
+import { useState, useEffect } from 'react';
+import { Box, TextField, Button, Typography, Alert, useTheme, CircularProgress } from '@mui/material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { alpha } from '@mui/material/styles';
 import api from '../api';
+import { useBaseGeekAuth } from '../components/AuthContext';
+import { safeRedirect } from '../utils/safeRedirect';
 
 export default function RegisterPage() {
   const theme = useTheme();
@@ -11,10 +13,31 @@ export default function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, loading: authLoading } = useBaseGeekAuth();
 
   const params = new URLSearchParams(location.search);
   const redirectUrl = params.get('redirect') || '/';
   const app = params.get('app') || 'basegeek';
+
+  // Already signed in — same rationale as LoginPage: bounce back rather than
+  // showing a registration form to someone with a live session.
+  useEffect(() => {
+    if (!authLoading && user) {
+      window.location.href = safeRedirect(redirectUrl);
+    }
+  }, [authLoading, user, redirectUrl]);
+
+  if (authLoading || user) {
+    return (
+      <Box sx={{
+        display: 'flex', justifyContent: 'center', alignItems: 'center',
+        minHeight: '100vh', '@supports (height: 100dvh)': { minHeight: '100dvh' },
+        backgroundColor: theme.palette.surfaces.deep,
+      }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -26,7 +49,7 @@ export default function RegisterPage() {
     setIsLoading(true);
     try {
       await api.post('/auth/register', { username: form.username, email: form.email, password: form.password, app });
-      window.location.href = decodeURIComponent(redirectUrl);
+      window.location.href = safeRedirect(redirectUrl);
     } catch (err) {
       setError(err.response?.data?.message || 'Registration failed. Please try again.');
     } finally {

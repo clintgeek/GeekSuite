@@ -50,7 +50,8 @@ function AppShell() {
       <FocusModeProvider storageKey="storygeek.focusMode">
         <BrowserRouter>
           <Routes>
-            <Route path="/login" element={<LoginPage />} />
+            {/* Already-authenticated visits bounce home instead of showing the form. */}
+            <Route path="/login" element={isAuthenticated ? <Navigate to="/" replace /> : <LoginPage />} />
             <Route path="/" element={authed(<StoryList />)} />
             <Route path="/create" element={authed(<StoryCreation />)} />
             <Route path="/play/:storyId" element={authed(<StoryPlay />, { fill: true })} />

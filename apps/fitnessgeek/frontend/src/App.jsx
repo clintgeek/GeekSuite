@@ -30,7 +30,7 @@ const AIGoalPlanner = lazy(() => import('./components/FitnessGoals/AIGoalPlanner
 const HealthDashboard = lazy(() => import('./pages/HealthDashboard.jsx'));
 
 // Import contexts
-import { AuthProvider } from '@geeksuite/auth';
+import { AuthProvider, useAuth } from '@geeksuite/auth';
 import AuthListener from './components/AuthListener.jsx';
 import { SettingsProvider } from './contexts/SettingsContext.jsx';
 import { ThemeProvider, useThemeMode as useTheme } from '@geeksuite/user';
@@ -46,6 +46,57 @@ const LoadingFallback = () => (
     <CircularProgress />
   </Box>
 );
+
+// Auth-gated route table. A separate component (rather than inline JSX in
+// AppContent) because it needs `useAuth()`, and hooks only see the context
+// a component's *tree* position provides — AppContent renders <AuthProvider>
+// as a wrapper, so it sits above that context, not inside it.
+function AppRoutes() {
+  const { isAuthenticated, loading } = useAuth();
+
+  // Already-authenticated (or still-resolving) visits to /login or
+  // /register redirect/hold instead of flashing the splash or form.
+  const publicRouteElement = (page) => {
+    if (loading) return <LoadingFallback />;
+    if (isAuthenticated) return <Navigate to="/dashboard" replace />;
+    return page;
+  };
+
+  return (
+    <Routes>
+      {/* Public routes */}
+      <Route path="/login" element={publicRouteElement(<Login />)} />
+      <Route path="/register" element={publicRouteElement(<Register />)} />
+
+      {/* Protected routes */}
+      <Route path="/" element={
+        <ProtectedRoute>
+          <Layout />
+        </ProtectedRoute>
+      }>
+        <Route index element={<Navigate to="/dashboard" replace />} />
+        <Route path="dashboard" element={<Dashboard />} />
+        <Route path="food-search" element={<FoodSearch />} />
+        <Route path="food-log" element={<FoodLog />} />
+        <Route path="my-foods" element={<MyFoods />} />
+        <Route path="my-meals" element={<MyMeals />} />
+        <Route path="weight" element={<Weight />} />
+        <Route path="blood-pressure" element={<BloodPressure />} />
+        <Route path="medications" element={<Medications />} />
+        <Route path="activity" element={<Activity />} />
+        <Route path="reports" element={<Reports />} />
+        <Route path="health" element={<HealthDashboard />} />
+        {/* Legacy goals route removed */}
+        <Route path="calorie-wizard" element={<AIGoalPlanner />} />
+        <Route path="profile" element={<Profile />} />
+        <Route path="settings" element={<Settings />} />
+      </Route>
+
+      {/* Catch all route */}
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+    </Routes>
+  );
+}
 
 // Inner component that uses theme context
 function AppContent() {
@@ -66,38 +117,7 @@ function AppContent() {
                 minHeight: '100vh'
               }}>
                 <Suspense fallback={<LoadingFallback />}>
-                  <Routes>
-                    {/* Public routes */}
-                    <Route path="/login" element={<Login />} />
-                    <Route path="/register" element={<Register />} />
-
-                    {/* Protected routes */}
-                    <Route path="/" element={
-                      <ProtectedRoute>
-                        <Layout />
-                      </ProtectedRoute>
-                    }>
-                      <Route index element={<Navigate to="/dashboard" replace />} />
-                      <Route path="dashboard" element={<Dashboard />} />
-                      <Route path="food-search" element={<FoodSearch />} />
-                      <Route path="food-log" element={<FoodLog />} />
-                      <Route path="my-foods" element={<MyFoods />} />
-                      <Route path="my-meals" element={<MyMeals />} />
-                      <Route path="weight" element={<Weight />} />
-                      <Route path="blood-pressure" element={<BloodPressure />} />
-                      <Route path="medications" element={<Medications />} />
-                      <Route path="activity" element={<Activity />} />
-                      <Route path="reports" element={<Reports />} />
-                      <Route path="health" element={<HealthDashboard />} />
-                      {/* Legacy goals route removed */}
-                      <Route path="calorie-wizard" element={<AIGoalPlanner />} />
-                      <Route path="profile" element={<Profile />} />
-                      <Route path="settings" element={<Settings />} />
-                    </Route>
-
-                    {/* Catch all route */}
-                    <Route path="*" element={<Navigate to="/dashboard" replace />} />
-                  </Routes>
+                  <AppRoutes />
                 </Suspense>
               </Box>
             </Router>
