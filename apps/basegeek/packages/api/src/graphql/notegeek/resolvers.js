@@ -1,6 +1,26 @@
 import mongoose from 'mongoose';
 import Note from './models/Note.js';
 import Folder from './models/Folder.js';
+import {
+  validateInput,
+  createNoteArgsSchema,
+  updateNoteArgsSchema,
+  deleteNoteArgsSchema,
+  renameTagArgsSchema,
+  deleteTagArgsSchema,
+  createFolderArgsSchema,
+  updateFolderArgsSchema,
+  deleteFolderArgsSchema,
+} from './validation.js';
+
+const validateCreateNote = validateInput(createNoteArgsSchema);
+const validateUpdateNote = validateInput(updateNoteArgsSchema);
+const validateDeleteNote = validateInput(deleteNoteArgsSchema);
+const validateRenameTag = validateInput(renameTagArgsSchema);
+const validateDeleteTag = validateInput(deleteTagArgsSchema);
+const validateCreateFolder = validateInput(createFolderArgsSchema);
+const validateUpdateFolder = validateInput(updateFolderArgsSchema);
+const validateDeleteFolder = validateInput(deleteFolderArgsSchema);
 
 export const resolvers = {
   Query: {
@@ -101,16 +121,23 @@ export const resolvers = {
   },
 
   Mutation: {
-    createNote: async (_, args, context) => {
+    createNote: async (_, rawArgs, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
+      // `userId` is not part of the GraphQL argument list, so no real client
+      // can send one; a direct resolver call can, and it is dropped here —
+      // before validation, so the strict schema never sees it — leaving the
+      // session as the only source of ownership.
+      const { userId: _payloadUserId, ...ownArgs } = rawArgs;
+      const args = validateCreateNote(ownArgs);
       const note = new Note({ ...args, userId });
       return await note.save();
     },
 
-    updateNote: async (_, { id, ...args }, context) => {
+    updateNote: async (_, rawArgs, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
+      const { id, ...args } = validateUpdateNote(rawArgs);
       if (!id || id === 'undefined' || !mongoose.isValidObjectId(id)) {
         throw new Error(`Invalid Note ID format: ${ id }`);
       }
@@ -125,9 +152,10 @@ export const resolvers = {
       return note;
     },
 
-    deleteNote: async (_, { id }, context) => {
+    deleteNote: async (_, rawArgs, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
+      const { id } = validateDeleteNote(rawArgs);
       if (!id || id === 'undefined' || !mongoose.isValidObjectId(id)) {
         throw new Error(`Invalid Note ID format: ${ id }`);
       }
@@ -136,9 +164,10 @@ export const resolvers = {
       return true;
     },
 
-    renameTag: async (_, { oldTag, newTag }, context) => {
+    renameTag: async (_, rawArgs, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
+      const { oldTag, newTag } = validateRenameTag(rawArgs);
       await Note.updateMany(
         { userId, tags: oldTag },
         { $set: { 'tags.$': newTag } }
@@ -146,9 +175,10 @@ export const resolvers = {
       return true;
     },
 
-    deleteTag: async (_, { tag }, context) => {
+    deleteTag: async (_, rawArgs, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
+      const { tag } = validateDeleteTag(rawArgs);
       await Note.updateMany(
         { userId, tags: tag },
         { $pull: { tags: tag } }
@@ -156,16 +186,20 @@ export const resolvers = {
       return true;
     },
 
-    createFolder: async (_, args, context) => {
+    createFolder: async (_, rawArgs, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
+      // Same rule as createNote: a payload `userId` is dropped, not trusted.
+      const { userId: _payloadUserId, ...ownArgs } = rawArgs;
+      const args = validateCreateFolder(ownArgs);
       const folder = new Folder({ ...args, userId });
       return await folder.save();
     },
 
-    updateFolder: async (_, { id, ...args }, context) => {
+    updateFolder: async (_, rawArgs, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
+      const { id, ...args } = validateUpdateFolder(rawArgs);
       if (!id || !mongoose.isValidObjectId(id)) throw new Error('Invalid Folder ID');
       const folder = await Folder.findOneAndUpdate(
         { _id: id, userId },
@@ -176,9 +210,10 @@ export const resolvers = {
       return folder;
     },
 
-    deleteFolder: async (_, { id, deleteNotes }, context) => {
+    deleteFolder: async (_, rawArgs, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
+      const { id, deleteNotes } = validateDeleteFolder(rawArgs);
       if (!id || !mongoose.isValidObjectId(id)) throw new Error('Invalid Folder ID');
 
       const folder = await Folder.findOneAndDelete({ _id: id, userId });

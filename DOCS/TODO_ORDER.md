@@ -182,10 +182,20 @@ cycle so the ordering rationale stays visible; detail moved to `SUITE_TODO.md` "
     the pure-data CRUD to basegeek's gateway — book file upload/download,
     covers, enrich, merge, Goodreads import/dedupe, Calibre rescan, device
     baskets, send-to-kindle; detail in `apps/bookgeek/DOCS/CONTEXT.md`).
-    Remaining: flockgeek REST pending its own Q22 decision, notegeek (its
-    data routes are GraphQL through basegeek — that's a separate gateway-side
-    item; the per-app auth-isolation suites are unrelated and already done,
-    see `SUITE_TODO.md`). *Security / tests*
+    **notegeek + flockgeek gateway modules done 2026-09-05** — the same layer
+    as bujogeek's, on all eight notegeek mutations and all sixteen flockgeek
+    ones. `validateInput` and the date/id primitives moved to
+    `graphql/shared/validation.js`; all three modules now raise one error
+    shape. Every flockgeek date argument is a calendar day normalized through
+    `toUtcMidnight` (the write-side half of `4856227`); notegeek takes no date
+    arguments at all. Closes two real gaps mongoose left open — a
+    `findOneAndUpdate` runs with `runValidators` off, so `updateBird(status:)`
+    and `updateMeatRun(status:)` previously wrote off-enum values straight to
+    the database. Detail in `apps/basegeek/DOCS/CONTEXT.md` "Gateway input
+    validation". Remaining: flockgeek's *own* REST backend pending its Q22
+    decision, and the **bookgeek** gateway module (the per-app auth-isolation
+    suites are unrelated and already done, see `SUITE_TODO.md`).
+    *Security / tests*
 23. **Circuit breakers on fitnessgeek external APIs** — S. `opossum` around USDA, Nutritionix,
     OpenFoodFacts, Garmin. *Observability*
 

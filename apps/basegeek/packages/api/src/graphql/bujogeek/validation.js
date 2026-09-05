@@ -1,6 +1,16 @@
 import { z } from 'zod';
-import { GraphQLError } from 'graphql';
-import { toUtcMidnight } from '@geeksuite/utils/dates';
+import {
+  idString,
+  instantField,
+  calendarDateField,
+  validateInput,
+} from '../shared/validation.js';
+
+// `validateInput` lives in `graphql/shared/validation.js` now — bujogeek,
+// notegeek and flockgeek all raise the same BAD_USER_INPUT shape. Re-exported
+// here so this module stays the single import for bujogeek's resolvers and
+// its test suite.
+export { validateInput };
 
 /**
  * Input validation for the bujogeek mutations — SUITE_TODO's "input
@@ -35,76 +45,6 @@ import { toUtcMidnight } from '@geeksuite/utils/dates';
  * ObjectId shape. (`virtual_<id>_<epochMs>` ids are also longer than a bare
  * ObjectId, which the bound accounts for.)
  */
-
-const MIN_DATE = new Date(Date.UTC(2000, 0, 1));
-const MAX_YEARS_OUT = 10;
-
-function maxDate() {
-  const d = new Date();
-  d.setUTCFullYear(d.getUTCFullYear() + MAX_YEARS_OUT);
-  return d;
-}
-
-function inRange(d) {
-  return d >= MIN_DATE && d <= maxDate();
-}
-
-// A reference to somebody else's document — see the module doc above for why
-// this is deliberately not ObjectId-shape-validated.
-const idString = z.string().trim().min(1).max(256);
-
-/**
- * An instant: a Date, an ISO string, or epoch millis. Parsed and
- * range-checked; the time-of-day (if any) is preserved exactly, because a
- * task's dueDate may encode a real reminder time (see module doc).
- */
-function instantField({ required = false } = {}) {
-  const base = z.union([z.date(), z.string().trim().min(1), z.number()]);
-  const optional = required ? base : base.nullable().optional();
-  return optional.transform((val, ctx) => {
-    if (val === null || val === undefined) return val;
-    const d = val instanceof Date ? val : new Date(val);
-    if (Number.isNaN(d.getTime())) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'must be a valid date' });
-      return z.NEVER;
-    }
-    if (!inRange(d)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: `date must be between ${MIN_DATE.toISOString().slice(0, 10)} and ${MAX_YEARS_OUT} years from now`,
-      });
-      return z.NEVER;
-    }
-    return d;
-  });
-}
-
-/**
- * A calendar date — no time-of-day, always UTC midnight. Normalizes through
- * `@geeksuite/utils`'s `toUtcMidnight`, the same rule `habitService` already
- * applies internally, so this is a validation gate in front of an existing
- * normalization, not a new one.
- */
-function calendarDateField({ required = true } = {}) {
-  const base = z.union([z.date(), z.string().trim().min(1)]);
-  const optional = required ? base : base.nullable().optional();
-  return optional.transform((val, ctx) => {
-    if (val === null || val === undefined) return val;
-    const normalized = toUtcMidnight(val);
-    if (!normalized || Number.isNaN(normalized.getTime())) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'must be a valid calendar date (YYYY-MM-DD)' });
-      return z.NEVER;
-    }
-    if (!inRange(normalized)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: `date must be between ${MIN_DATE.toISOString().slice(0, 10)} and ${MAX_YEARS_OUT} years from now`,
-      });
-      return z.NEVER;
-    }
-    return normalized;
-  });
-}
 
 const signifierSchema = z.enum(['*', '@', 'x', '<', '>', '-', '!', '?', '#']).nullable().optional();
 const statusSchema = z
@@ -244,23 +184,3 @@ export const createJournalFromTemplateArgsSchema = z
     date: instantField(),
   })
   .strict();
-
-/**
- * Wrap a zod schema as a resolver-arg validator. Throws a `GraphQLError` with
- * `extensions.code = 'BAD_USER_INPUT'` and a `details` array — the same shape
- * for every bujogeek mutation, mirroring `rethrowUserError`'s existing
- * 400-style translation of a service-layer error.
- */
-export function validateInput(schema) {
-  return function validate(args) {
-    const result = schema.safeParse(args);
-    if (result.success) return result.data;
-    const details = result.error.issues.map((issue) => ({
-      path: issue.path.join('.'),
-      message: issue.message,
-    }));
-    throw new GraphQLError('Invalid input', {
-      extensions: { code: 'BAD_USER_INPUT', http: { status: 400 }, details },
-    });
-  };
-}

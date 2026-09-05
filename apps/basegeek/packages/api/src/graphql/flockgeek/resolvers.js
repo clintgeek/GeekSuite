@@ -1,5 +1,44 @@
 import mongoose from 'mongoose';
 import { GraphQLError } from 'graphql';
+import {
+  validateInput,
+  createBirdArgsSchema,
+  updateBirdArgsSchema,
+  createFlockGroupArgsSchema,
+  updateFlockGroupArgsSchema,
+  createFlockLocationArgsSchema,
+  updateFlockLocationArgsSchema,
+  recordEggProductionArgsSchema,
+  updateEggProductionArgsSchema,
+  createPairingArgsSchema,
+  updatePairingArgsSchema,
+  recordHatchEventArgsSchema,
+  updateHatchEventArgsSchema,
+  createMeatRunArgsSchema,
+  updateMeatRunArgsSchema,
+  addHealthRecordArgsSchema,
+  deleteFlockEntityArgsSchema,
+} from './validation.js';
+
+// Input validation runs AFTER `requireUser` in every mutation below: an
+// anonymous caller must still see `Unauthorized`, never a field-level
+// complaint that tells them what a valid payload would have looked like.
+const validateCreateBird = validateInput(createBirdArgsSchema);
+const validateUpdateBird = validateInput(updateBirdArgsSchema);
+const validateCreateFlockGroup = validateInput(createFlockGroupArgsSchema);
+const validateUpdateFlockGroup = validateInput(updateFlockGroupArgsSchema);
+const validateCreateFlockLocation = validateInput(createFlockLocationArgsSchema);
+const validateUpdateFlockLocation = validateInput(updateFlockLocationArgsSchema);
+const validateRecordEggProduction = validateInput(recordEggProductionArgsSchema);
+const validateUpdateEggProduction = validateInput(updateEggProductionArgsSchema);
+const validateCreatePairing = validateInput(createPairingArgsSchema);
+const validateUpdatePairing = validateInput(updatePairingArgsSchema);
+const validateRecordHatchEvent = validateInput(recordHatchEventArgsSchema);
+const validateUpdateHatchEvent = validateInput(updateHatchEventArgsSchema);
+const validateCreateMeatRun = validateInput(createMeatRunArgsSchema);
+const validateUpdateMeatRun = validateInput(updateMeatRunArgsSchema);
+const validateAddHealthRecord = validateInput(addHealthRecordArgsSchema);
+const validateDeleteFlockEntity = validateInput(deleteFlockEntityArgsSchema);
 
 // Lazy-load all FlockGeek models to avoid circular dependency issues at startup
 const getModels = async () => ({
@@ -207,103 +246,125 @@ export const resolvers = {
   },
 
   Mutation: {
-    createBird: async (_, args, context) => {
+    createBird: async (_, rawArgs, context) => {
       const ownerId = requireUser(context);
+      // `ownerId` is not part of the GraphQL argument list, so no real client
+      // can send one; a direct resolver call can, and it is dropped here —
+      // before validation, so the strict schema never sees it — leaving the
+      // session as the only source of ownership.
+      const { ownerId: _payloadOwnerId, ...ownArgs } = rawArgs;
+      const args = validateCreateBird(ownArgs);
       const { Bird } = await getModels();
       return new Bird({ ...args, ownerId }).save();
     },
-    updateBird: async (_, { id, ...args }, context) => {
+    updateBird: async (_, rawArgs, context) => {
       const ownerId = requireUser(context);
+      const { id, ...args } = validateUpdateBird(rawArgs);
       validateId(id);
       const { Bird, Location } = await getModels();
       await assertOwned(Location, args.locationId, ownerId, 'Location');
       return updateOwned(Bird, id, ownerId, args, 'Bird');
     },
-    recordEggProduction: async (_, args, context) => {
+    recordEggProduction: async (_, rawArgs, context) => {
       const ownerId = requireUser(context);
+      const args = validateRecordEggProduction(rawArgs);
       const { EggProduction, Bird, Group, Location } = await getModels();
       await assertOwned(Bird, args.birdId, ownerId, 'Bird');
       await assertOwned(Group, args.groupId, ownerId, 'FlockGroup');
       await assertOwned(Location, args.locationId, ownerId, 'Location');
-      return new EggProduction({ ...args, ownerId, date: args.date ? new Date(args.date) : new Date() }).save();
+      // `date` is required by the schema and already a UTC-midnight calendar
+      // day, so the old `? new Date(args.date) : new Date()` fallback is gone.
+      return new EggProduction({ ...args, ownerId }).save();
     },
-    updateEggProduction: async (_, { id, ...args }, context) => {
+    updateEggProduction: async (_, rawArgs, context) => {
       const ownerId = requireUser(context);
+      const { id, ...args } = validateUpdateEggProduction(rawArgs);
       validateId(id);
-      if (args.date) args.date = new Date(args.date);
       const { EggProduction, Location } = await getModels();
       await assertOwned(Location, args.locationId, ownerId, 'Location');
       return updateOwned(EggProduction, id, ownerId, args, 'EggProduction');
     },
-    createPairing: async (_, args, context) => {
+    createPairing: async (_, rawArgs, context) => {
       const ownerId = requireUser(context);
+      const args = validateCreatePairing(rawArgs);
       const { Pairing, Bird } = await getModels();
       await assertAllOwned(Bird, args.roosterIds, ownerId, 'Bird');
       await assertAllOwned(Bird, args.henIds, ownerId, 'Bird');
       return new Pairing({ ...args, ownerId }).save();
     },
-    updatePairing: async (_, { id, ...args }, context) => {
+    updatePairing: async (_, rawArgs, context) => {
       const ownerId = requireUser(context);
+      const { id, ...args } = validateUpdatePairing(rawArgs);
       validateId(id);
       const { Pairing, Bird } = await getModels();
       await assertAllOwned(Bird, args.roosterIds, ownerId, 'Bird');
       await assertAllOwned(Bird, args.henIds, ownerId, 'Bird');
       return updateOwned(Pairing, id, ownerId, args, 'Pairing');
     },
-    recordHatchEvent: async (_, args, context) => {
+    recordHatchEvent: async (_, rawArgs, context) => {
       const ownerId = requireUser(context);
+      const args = validateRecordHatchEvent(rawArgs);
       const { HatchEvent } = await getModels();
       return new HatchEvent({ ...args, ownerId }).save();
     },
-    updateHatchEvent: async (_, { id, ...args }, context) => {
+    updateHatchEvent: async (_, rawArgs, context) => {
       const ownerId = requireUser(context);
+      const { id, ...args } = validateUpdateHatchEvent(rawArgs);
       validateId(id);
       const { HatchEvent } = await getModels();
       return updateOwned(HatchEvent, id, ownerId, args, 'HatchEvent');
     },
-    createMeatRun: async (_, args, context) => {
+    createMeatRun: async (_, rawArgs, context) => {
       const ownerId = requireUser(context);
+      const args = validateCreateMeatRun(rawArgs);
       const { MeatRun, Pairing, HatchEvent } = await getModels();
       await assertOwned(Pairing, args.pairingId, ownerId, 'Pairing');
       await assertOwned(HatchEvent, args.hatchEventId, ownerId, 'HatchEvent');
       return new MeatRun({ ...args, ownerId }).save();
     },
-    updateMeatRun: async (_, { id, ...args }, context) => {
+    updateMeatRun: async (_, rawArgs, context) => {
       const ownerId = requireUser(context);
+      const { id, ...args } = validateUpdateMeatRun(rawArgs);
       validateId(id);
       const { MeatRun } = await getModels();
       return updateOwned(MeatRun, id, ownerId, args, 'MeatRun');
     },
-    addHealthRecord: async (_, args, context) => {
+    addHealthRecord: async (_, rawArgs, context) => {
       const ownerId = requireUser(context);
+      const args = validateAddHealthRecord(rawArgs);
       const { HealthRecord, Bird } = await getModels();
       await assertOwned(Bird, args.birdId, ownerId, 'Bird');
       return new HealthRecord({ ...args, ownerId }).save();
     },
-    createFlockGroup: async (_, args, context) => {
+    createFlockGroup: async (_, rawArgs, context) => {
       const ownerId = requireUser(context);
+      const args = validateCreateFlockGroup(rawArgs);
       const { Group } = await getModels();
       return new Group({ ...args, ownerId }).save();
     },
-    updateFlockGroup: async (_, { id, ...args }, context) => {
+    updateFlockGroup: async (_, rawArgs, context) => {
       const ownerId = requireUser(context);
+      const { id, ...args } = validateUpdateFlockGroup(rawArgs);
       validateId(id);
       const { Group } = await getModels();
       return updateOwned(Group, id, ownerId, args, 'FlockGroup');
     },
-    createFlockLocation: async (_, args, context) => {
+    createFlockLocation: async (_, rawArgs, context) => {
       const ownerId = requireUser(context);
+      const args = validateCreateFlockLocation(rawArgs);
       const { Location } = await getModels();
       return new Location({ ...args, ownerId, isActive: true }).save();
     },
-    updateFlockLocation: async (_, { id, ...args }, context) => {
+    updateFlockLocation: async (_, rawArgs, context) => {
       const ownerId = requireUser(context);
+      const { id, ...args } = validateUpdateFlockLocation(rawArgs);
       validateId(id);
       const { Location } = await getModels();
       return updateOwned(Location, id, ownerId, args, 'FlockLocation');
     },
-    deleteFlockEntity: async (_, { type, id }, context) => {
+    deleteFlockEntity: async (_, rawArgs, context) => {
       const ownerId = requireUser(context);
+      const { type, id } = validateDeleteFlockEntity(rawArgs);
       validateId(id);
       const models = await getModels();
       const modelMap = {

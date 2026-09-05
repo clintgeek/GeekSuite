@@ -71,6 +71,65 @@ a file-level operation.
 
 ---
 
+## Gateway input validation (TODO_ORDER #22, 2026-09-05)
+
+The GraphQL gateway validates mutation arguments with zod before a resolver
+touches a service or a model. Three modules are covered so far — bujogeek
+(`3265b1c`), then **notegeek and flockgeek**. Each has its own
+`src/graphql/<app>/validation.js` with one strict schema per mutation family;
+the machinery they are built from lives in
+`src/graphql/shared/validation.js`.
+
+**The rules, which are the same in all three:**
+
+- **One error shape.** `validateInput(schema)` throws a `GraphQLError` with
+  `extensions.code = 'BAD_USER_INPUT'`, `extensions.http.status = 400` and
+  `extensions.details` — an array of `{ path, message }`. Nothing else.
+- **Strict objects.** An argument that is not in the schema is a rejection,
+  not a silently-dropped key. GraphQL already rejects undeclared arguments, so
+  this mainly guards direct resolver calls and future argument churn.
+- **Validation runs after the auth check, never before.** An anonymous caller
+  gets `Unauthorized`, not a field-level complaint that describes a valid
+  payload for them.
+- **Ids are bounded strings, not ObjectId shapes.** Every owned-resource
+  lookup in the gateway reports a malformed id and a foreign id identically
+  ("not found"), on purpose. Validating id *format* here would give the two
+  cases different errors and undo that. The ownership suites assert those
+  exact messages. flockgeek's optional references additionally accept `''`,
+  which `assertOwned` reads as "no reference at all".
+- **Enums and bounds come from the models.** Mongoose only enforces `enum:`
+  on `.save()` — a `findOneAndUpdate` runs with `runValidators` off — so
+  before this layer, `updateBird(status: "anything")` and
+  `updateMeatRun(status: "done")` reached the database unchallenged.
+
+**Dates split by module, and the split is the point:**
+
+- **flockgeek — every date argument is a calendar day.** Hatch, set, status,
+  group start/end, pairing, harvest, egg-collection and health-event dates
+  are all days; every form that writes one is an `<input type="date">`. They
+  normalize through `@geeksuite/utils`' `toUtcMidnight`, the write-side half
+  of the read-side fix in `4856227`. For the frontend this is a no-op; it
+  fixes any other client that sends a full instant for a day field, which
+  would store 06:00Z and read back as the previous day west of UTC.
+- **notegeek — no date arguments at all.** `createdAt`/`updatedAt` are
+  mongoose-managed. If one is ever added it is an *instant*.
+- **bujogeek — mixed.** `dueDate` can carry a real reminder hour, so it stays
+  an instant; only `toggleHabitLog`'s `date` is a calendar day. See that
+  module's own doc comment.
+
+**One bound worth knowing:** a notegeek note's `content` has two ceilings.
+`text`/`markdown`/`code` stop at 100 000 characters; `mindmap`/`handwritten`
+get 5 000 000, because those store a serialized tldraw/mind-map snapshot in
+the same field and a modest sketch clears 100 000 without trying. The ceiling
+is picked from the note's own `type`; an `updateNote` that omits `type` gets
+the generous one, since the server cannot know the stored type without a read
+it does not otherwise need.
+
+Still uncovered: the **bookgeek** gateway module. flockgeek's *own* REST
+backend is a separate question (`DOCS/TODO_ORDER.md` #22).
+
+---
+
 ## UI unification — shared feedback primitives (TODO_ORDER #15, 2026-09-05)
 
 `GeekEmptyState` / `GeekErrorState` / `GeekToastProvider` / `useToast` (from
