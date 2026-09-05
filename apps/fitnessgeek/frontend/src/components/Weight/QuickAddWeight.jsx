@@ -13,6 +13,7 @@ import {
 import { useGeekPrimaryAction } from '@geeksuite/ui';
 import { localDateString } from '@geeksuite/utils';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
+import DateField from '../primitives/DateField.jsx';
 
 const QuickAddWeight = ({ onAdd, unit = 'lbs' }) => {
   const [open, setOpen] = useState(false);
@@ -134,14 +135,7 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs' }) => {
             helperText="Enter weight to one decimal place (e.g., 150.4)"
             autoFocus
           />
-          <TextField
-            fullWidth
-            label="Date"
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            InputLabelProps={{ shrink: true }}
-          />
+          <DateField fullWidth value={date} onChange={setDate} />
       </PremiumDialog>
     </>
   );

@@ -10,7 +10,9 @@ import {
   IconButton,
   Divider,
   Tabs,
-  Tab
+  Tab,
+  useTheme,
+  useMediaQuery
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -36,6 +38,38 @@ const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
   const [cameraError, setCameraError] = useState(null);
   const [torchOn, setTorchOn] = useState(false);
   const [hasTorch, setHasTorch] = useState(false);
+
+  // Reticle/viewport sizing keyed to the theme's own breakpoints (not a raw
+  // CSS media query — see BarcodeScanner.css, which used to carry its own
+  // 600/480/360px cutoffs independent of MUI's `sm` and could drift from it).
+  // `sm` is MUI's default 600px, so `down('sm')` reproduces the old 600px
+  // step exactly; 480/360 have no named breakpoint so `down(480)`/`down(360)`
+  // read them straight off the theme instead of a hardcoded stylesheet value.
+  const theme = useTheme();
+  const isPhone = useMediaQuery(theme.breakpoints.down('sm'));       // <600
+  const isSmallPhone = useMediaQuery(theme.breakpoints.down(480));   // <480
+  const isTinyPhone = useMediaQuery(theme.breakpoints.down(360));    // <360
+
+  let reticleSize = 200;
+  let cornerSize = 20;
+  let cornerBorderWidth = 3;
+  let scanLineDuration = '2s';
+  if (isPhone) {
+    reticleSize = 280;
+    cornerSize = 30;
+    cornerBorderWidth = 4;
+    scanLineDuration = '1.5s';
+  }
+  if (isSmallPhone) {
+    reticleSize = 240;
+    cornerSize = 25;
+    cornerBorderWidth = 3;
+  }
+  if (isTinyPhone) {
+    reticleSize = 200;
+    cornerSize = 20;
+    cornerBorderWidth = 2;
+  }
 
   const videoRef = useRef(null);
   const streamRef = useRef(null);
@@ -393,6 +427,10 @@ const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
       <Box sx={{
         position: 'relative',
         width: '100%',
+        // Full width below `sm` (phone); constrained and centered at `sm`+ so
+        // the video doesn't stretch edge-to-edge in a wide dialog/tablet.
+        maxWidth: { xs: '100%', sm: 480 },
+        mx: { sm: 'auto' },
         height: { xs: 280, sm: 320 },
         backgroundColor: '#000',
         borderRadius: 2,
@@ -411,12 +449,24 @@ const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
         />
 
         {isScanning && (
-          <div className="scanner-overlay">
-            <div className="scanner-corners scanner-corner-tl"></div>
-            <div className="scanner-corners scanner-corner-tr"></div>
-            <div className="scanner-corners scanner-corner-bl"></div>
-            <div className="scanner-corners scanner-corner-br"></div>
-            <div className="scan-line"></div>
+          <div className="scanner-overlay" style={{ width: reticleSize, height: reticleSize }}>
+            <div
+              className="scanner-corners scanner-corner-tl"
+              style={{ width: cornerSize, height: cornerSize, borderWidth: cornerBorderWidth }}
+            ></div>
+            <div
+              className="scanner-corners scanner-corner-tr"
+              style={{ width: cornerSize, height: cornerSize, borderWidth: cornerBorderWidth }}
+            ></div>
+            <div
+              className="scanner-corners scanner-corner-bl"
+              style={{ width: cornerSize, height: cornerSize, borderWidth: cornerBorderWidth }}
+            ></div>
+            <div
+              className="scanner-corners scanner-corner-br"
+              style={{ width: cornerSize, height: cornerSize, borderWidth: cornerBorderWidth }}
+            ></div>
+            <div className="scan-line" style={{ animationDuration: scanLineDuration }}></div>
           </div>
         )}
 

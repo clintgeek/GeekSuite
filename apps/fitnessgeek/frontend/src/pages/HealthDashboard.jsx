@@ -11,8 +11,7 @@ import {
   CircularProgress,
   Card,
   CardContent,
-  Button,
-  TextField
+  Button
 } from '@mui/material';
 import {
   TrendingUp as DashboardIcon,
@@ -22,13 +21,14 @@ import {
   Settings as SettingsIcon
 } from '@mui/icons-material';
 import { useAuth } from '@geeksuite/auth';
+import { localDateString } from '@geeksuite/utils';
 import { apiService } from '../services/apiService';
 import IntradayDashboard from '../components/IntradayDashboard';
 import SleepAnalysis from '../components/SleepAnalysis';
 import MealImpactVisualization from '../components/MealImpactVisualization';
 import RecoveryCoach from '../components/RecoveryCoach';
 import InfluxDBSettings from '../components/InfluxDBSettings';
-import { SectionLabel, DisplayHeading } from '../components/primitives';
+import { SectionLabel, DisplayHeading, DateField } from '../components/primitives';
 
 const TAB_TITLES = [
   'Overview',
@@ -178,17 +178,12 @@ export default function HealthDashboard() {
               <Typography variant="body1" sx={{ fontWeight: 600 }}>
                 Viewing:
               </Typography>
-              <TextField
-                type="date"
+              <DateField
+                label={false}
                 size="small"
                 value={selectedDate}
-                onChange={(e) => handleDateChange(e.target.value)}
-                inputProps={{
-                  max: (() => {
-                    const today = new Date();
-                    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-                  })()
-                }}
+                onChange={handleDateChange}
+                max={localDateString()}
                 sx={{ minWidth: { xs: '100%', sm: 180 } }}
               />
               <Stack direction="row" spacing={1}>

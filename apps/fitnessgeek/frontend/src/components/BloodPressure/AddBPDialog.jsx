@@ -13,6 +13,7 @@ import {
 } from '@mui/icons-material';
 import { localDateString } from '@geeksuite/utils';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
+import DateField from '../primitives/DateField.jsx';
 
 const AddBPDialog = ({ open, onClose, onAdd, existingTodayBP = null }) => {
   const theme = useTheme();
@@ -188,13 +189,7 @@ const AddBPDialog = ({ open, onClose, onAdd, existingTodayBP = null }) => {
               size="medium"
             />
 
-            <TextField
-              fullWidth
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              size="medium"
-            />
+            <DateField fullWidth value={date} onChange={setDate} size="medium" />
 
             {/* BP Status indicator */}
             {bpStatus && (

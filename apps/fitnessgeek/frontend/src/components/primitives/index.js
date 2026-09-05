@@ -17,4 +17,5 @@ export { default as PremiumDialog } from './PremiumDialog.jsx';
 export { default as EmptyState } from './EmptyState.jsx';
 export { default as SurfaceSkeleton } from './SurfaceSkeleton.jsx';
 export { default as PageEnter } from './PageEnter.jsx';
+export { default as DateField } from './DateField.jsx';
 export { buildChartTheme } from './chartTheme.js';

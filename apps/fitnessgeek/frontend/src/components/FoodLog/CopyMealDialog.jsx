@@ -5,7 +5,6 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  TextField,
   Box,
   Typography,
   Alert,
@@ -20,6 +19,7 @@ import {
 } from '@mui/icons-material';
 import { fitnessGeekService } from '../../services/fitnessGeekService';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
+import DateField from '../primitives/DateField.jsx';
 
 const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'];
 
@@ -211,15 +211,7 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
           Copy From
         </Typography>
         <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
-          <TextField
-            label="Date"
-            type="date"
-            value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
-            size="small"
-            InputLabelProps={{ shrink: true }}
-            sx={{ minWidth: 150 }}
-          />
+          <DateField value={fromDate} onChange={setFromDate} sx={{ minWidth: 150 }} />
           <FormControl size="small" sx={{ minWidth: 130 }}>
             <InputLabel>Meal</InputLabel>
             <Select
@@ -267,15 +259,7 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
           Copy To
         </Typography>
         <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
-          <TextField
-            label="Date"
-            type="date"
-            value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
-            size="small"
-            InputLabelProps={{ shrink: true }}
-            sx={{ minWidth: 150 }}
-          />
+          <DateField value={toDate} onChange={setToDate} sx={{ minWidth: 150 }} />
           <FormControl size="small" sx={{ minWidth: 130 }}>
             <InputLabel>Meal</InputLabel>
             <Select

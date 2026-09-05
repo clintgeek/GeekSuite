@@ -17,6 +17,7 @@ import {
 import { useGeekPrimaryAction } from '@geeksuite/ui';
 import { localDateString } from '@geeksuite/utils';
 import AddBPDialog from './AddBPDialog.jsx';
+import DateField from '../primitives/DateField.jsx';
 
 const QuickAddBP = ({ onAdd, unit = "mmHg", existingTodayBP = null }) => {
   const theme = useTheme();
@@ -195,13 +196,7 @@ const QuickAddBP = ({ onAdd, unit = "mmHg", existingTodayBP = null }) => {
               </Grid>
 
               <Grid xs={12} sm={3}>
-                <TextField
-                  fullWidth
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  size="small"
-                />
+                <DateField fullWidth value={date} onChange={setDate} size="small" />
               </Grid>
 
               <Grid xs={12} sm={3}>

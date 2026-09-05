@@ -334,3 +334,55 @@ variables for all four. CI job `test-fitnessgeek-web`.
 | `POST /api/logs/copy` | live — still owns `FoodItem`/`DailySummary` via `FoodLog`/`UserSettings`; `toUtcMidnight` still imported for this route |
 | `GET /api/meals`, `GET /api/meals/:id`, `POST /api/meals`, `PUT /api/meals/:id`, `DELETE /api/meals/:id` | live, untouched |
 | ~~`POST /api/meals/:id/add-to-log`~~ | **deleted** — caller-less, gateway's `logMeal` replaced it; its `parseLocalDate()` helper (the buggy local-midnight one) went with it |
+
+---
+
+## Frontend — TODO_ORDER #30 small UI items, closed 2026-09-05
+
+Three fitnessgeek sub-items from the "Small UI items" pass (see `SUITE_TODO.md`):
+
+- **Drawer landmine — stale entry, no code change.** SUITE_TODO's "`MuiDrawer` landmine
+  pins Drawer paper to `#0C0A09` in both modes" described the state *before* the GeekShell
+  migration (`6e9b14e`, 2026-09-02). `theme/theme.jsx` carries no `MuiDrawer` override today;
+  the always-dark chrome lives in `ModernLayout.jsx`'s `navSx={{ bgcolor: '#0C0A09' }}`,
+  which `GeekShell` (`packages/ui/src/navigation/GeekShell.jsx`) applies only to its own nav
+  Drawer `PaperProps`/permanent-sidebar `Box` — not a global override — in both app modes,
+  deliberately (Studio Slate identity, MOBILE_UI_PLAN.md §4 "near-black drawer"). Verified via
+  `git log -S`/`git show` rather than re-fixing something already fixed.
+
+- **BarcodeScanner** (`components/BarcodeScanner/BarcodeScanner.jsx`, `.css`): the reticle's
+  dark-mode styling keyed off `@media (prefers-color-scheme: dark)`, disagreeing with the
+  app's actual theme switch (`:root[data-theme]`, set from the `geek_theme` cookie —
+  independent of OS preference). Moved those four rules to `:root[data-theme='dark'] .scanner-*`
+  selectors. Also folded the reticle/corner size and scan-line-speed `@media (max-width:
+  600/480/360px)` cutoffs into `theme.breakpoints.down('sm'|480|360)` + `useMediaQuery` inside
+  the component (computed once, applied as inline styles), so the sizing can't drift from the
+  theme's own breakpoints the way a hand-copied stylesheet value can. The camera viewport is
+  full width below `sm` and capped at 480px, centered, at `sm`+.
+
+- **Native date pickers**: fitnessgeek has no MUI X date picker — every date-only field
+  (weight log, BP log, HealthDashboard's "Viewing" day, CopyMealDialog's from/to) already used
+  a bare `TextField type="date"` (the OS-native picker), just with a different
+  label/size/min-width combination each time — two fields (`QuickAddBP`, `AddBPDialog`) had no
+  visible label at all. Consolidated into one shared `components/primitives/DateField.jsx`
+  (exported from the `primitives` barrel) and rewired all six call sites through it.
+  `HealthDashboard`'s hand-rolled "no future dates" `max` (manual `Date` → `YYYY-MM-DD`
+  formatting) is now `localDateString()` from `@geeksuite/utils`. Values in and out stay plain
+  `YYYY-MM-DD` strings throughout — `DateField` never constructs or parses a `Date`, so it
+  cannot reintroduce the calendar-vs-instant bug fixed in `4856227`.
+
+Tests: `components/primitives/__tests__/DateField.test.jsx` (5 cases) and
+`components/BarcodeScanner/__tests__/BarcodeScanner.test.jsx` (5 cases, first component tests
+in this app's frontend suite — 17 → 27). The BarcodeScanner tests never touch a real camera;
+jsdom has no `navigator.mediaDevices`, so `detectCameras()`'s own existing fallback drops the
+component into manual-entry mode, which is what the tests exercise (8-14-digit validation,
+lookup, not-found, and the localStorage-backed scan history). One thing to know if you touch
+this test file again: the mount effect retries the camera ~100ms after `detectCameras()`
+settles regardless of which mode it landed on, and without a native `BarcodeDetector` that
+retry falls into the ZXing branch, which appends a real `<script src="https://unpkg.com/...">`
+— jsdom never fires its `onload`/`onerror`, so the promise (and `isLoading`) hangs forever.
+The tests stub `window.BarcodeDetector` in `beforeEach` to keep that retry on the fast,
+synchronous-failure path instead.
+
+`pnpm build` and `pnpm lint` (55 warnings, unchanged baseline) both clean; `tools/mobile-harness`
+(`--app fitnessgeek --viewports phone`) stays at 0 violations across 20 scenes, both modes.

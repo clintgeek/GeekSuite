@@ -158,65 +158,31 @@
   75% { transform: translateX(5px); }
 }
 
-/* Responsive adjustments */
-@media (max-width: 600px) {
-  .scanner-overlay {
-    width: 280px;
-    height: 280px;
-  }
+/* Responsive sizing (reticle width/height, corner size/border, scan-line
+ * speed) is computed in BarcodeScanner.jsx via `theme.breakpoints` +
+ * `useMediaQuery` and applied as inline styles, not raw `@media` cutoffs
+ * here — the old 600/480/360px blocks duplicated the theme's own
+ * breakpoints and could drift from them (SUITE_TODO "fitnessgeek
+ * BarcodeScanner"). The base sizes above are the >=`sm` desktop default. */
 
-  .scanner-corners {
-    width: 30px;
-    height: 30px;
-    border-width: 4px;
-  }
-
-  .scan-line {
-    animation-duration: 1.5s;
-  }
+/* Dark mode support — keyed to the suite's `data-theme` attribute (set from
+ * the `geek_theme` cookie, see index.html/index.css), not the OS
+ * `prefers-color-scheme` media query. The reticle used to follow the OS
+ * preference only, so a user who picked dark/light *in the app* independent
+ * of their OS setting got a mismatched reticle (SUITE_TODO "fitnessgeek
+ * BarcodeScanner" — reticle-only, low impact but real). */
+:root[data-theme='dark'] .scanner-overlay {
+  border-color: #fff;
 }
 
-@media (max-width: 480px) {
-  .scanner-overlay {
-    width: 240px;
-    height: 240px;
-  }
-
-  .scanner-corners {
-    width: 25px;
-    height: 25px;
-    border-width: 3px;
-  }
+:root[data-theme='dark'] .scanner-overlay::before {
+  border-color: #64B5F6;
 }
 
-@media (max-width: 360px) {
-  .scanner-overlay {
-    width: 200px;
-    height: 200px;
-  }
-
-  .scanner-corners {
-    width: 20px;
-    height: 20px;
-    border-width: 2px;
-  }
+:root[data-theme='dark'] .scanner-corners {
+  border-color: #64B5F6;
 }
 
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  .scanner-overlay {
-    border-color: #fff;
-  }
-
-  .scanner-overlay::before {
-    border-color: #64B5F6;
-  }
-
-  .scanner-corners {
-    border-color: #64B5F6;
-  }
-
-  .scan-line {
-    background: linear-gradient(90deg, transparent, #64B5F6, transparent);
-  }
+:root[data-theme='dark'] .scan-line {
+  background: linear-gradient(90deg, transparent, #64B5F6, transparent);
 }
