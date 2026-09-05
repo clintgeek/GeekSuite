@@ -10,7 +10,6 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
 | R87 | Q51 a11y burn-down: packages/ui muted-text contrast + shared control names; bujogeek, storygeek, flockgeek to 0 under --enforce-a11y | opus | packages/ui, three frontends, MOBILE_UI_PLAN | 09-05 17:35 |
-| R85 | fitnessgeek frontend code-splitting: lazy routes, vendor chunks, on-demand heavy libs; SW precache check; harness stays 0 | opus | fitnessgeek frontend, CONTEXT | 09-05 17:00 |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
 ## Queued (launch when files free / prerequisite lands)
@@ -34,6 +33,8 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | Q48 | consolidation plan §12: 14 open follow-ups (search vs foodCatalogFilter, third dedupe ladder, soft-deleted barcode, caller-less methods, goals_met dead flags, snapshot-vs-catalog recompute, …) — triage | Chef triage | M |
 | Q49 | ai:usage permission is claimed by no route and not in the default mint set — either gate the two /usage routes with it and add it to the defaults, or drop the enum value | XS | XS |
 | Q51 | a11y burn-down: R87 covers packages/ui + bujogeek/storygeek/flockgeek; **fitnessgeek (29) and basegeek console (2) remain** once R85/R83 free those trees; then flip --enforce-a11y at 0 | after R87 + R85/R83 | S |
+| Q52 | fitnessgeek: three chart libraries ship (Nivo, Recharts, chart.js) — consolidate on one (~270 kB async); BarcodeScanner loads ZXing from unpkg at runtime — vendor it or pin a hash | design / M | M |
+| Q53 | sweep every backend's SPA fallback for the extname 404 guard (fitnessgeek lacked it; storygeek, flockgeek, basegeek unverified) and every app's SW for the text/html cache refusal | XS | XS |
 | Q20b | aiGeek: simulated streaming (F-21) and user-gated selection (F-14) documented, not fixed | design | S |
 | Q14 | storygeek CanonCard summary text through Narration too (agent left it as a separate render path) | Chef's call | XS |
 
