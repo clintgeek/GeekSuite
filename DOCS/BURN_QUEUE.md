@@ -10,6 +10,16 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
 | R22 | storygeek frontend vitest + RTL suite + CI job | sonnet | storygeek frontend, ci.yml (one job) | 09-05 13:50 |
+| R29 | harness: phone-only tap-target rule, rerun, per-app lists, SUMMARY.md | sonnet | tools/mobile-harness | 09-05 |
+| R30 | probe burn-down: basegeek theme, bookgeek strip/sidebar, storygeek overline | sonnet | basegeek ui theme.js, bookgeek web components, storygeek theme.js | 09-05 |
+| R31 | probe burn-down: notegeek | sonnet | notegeek frontend | 09-05 |
+| R32 | probe burn-down: bujogeek | sonnet | bujogeek frontend | 09-05 |
+| R33 | probe burn-down: fitnessgeek | sonnet | fitnessgeek frontend | 09-05 |
+| R34 | probe burn-down: startgeek | sonnet | startgeek src | 09-05 |
+| R35 | Q17: fitnessgeek backend node 20 + ESM, consume @geeksuite/utils, drop 5 toUtcMidnight copies | opus | fitnessgeek backend, Dockerfile, lockfile | 09-05 12:35 |
+| R36 | Q20: callCohere case in callProvider + stale hardcoded model defaults (#31) | sonnet | basegeek api aiService/aiProviders/capabilities, AI_CATALOG | 09-05 12:35 |
+| R37 | TODO #20 step 1: @geeksuite/crypto-vault promoted, basegeek consumes; ci job | sonnet | packages/crypto-vault, basegeek api lib + package.json, lockfile, ci.yml | 09-05 12:35 |
+| R38 | SUITE_TODO consolidation step 1: dead backend code (bookgeek unmounted graphql, notegeek legacy REST+Note, flockgeek dup models, bujogeek dup model files) | sonnet | four backends, SUITE_TODO | 09-05 12:35 |
 
 **Push gate:** `pnpm install --frozen-lockfile` on HEAD now fails only on `apps/storygeek/frontend/package.json`
 (test devDeps, R22 in flight). Push after R22 commits; re-run the check first.
@@ -22,10 +32,9 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | Q6 | bookgeek web unit tests (vitest + RTL for LibraryView/FilterSheet/BookCard/detail) | none — launch next slot | M |
 | Q10 | Revoke the `LocalApps` key — env grep: no .env under Projects carries it; nginx: zero hits on /openai/v1 or /api/ai/ in the retained log window; key lastUsed 2025-11-03 | ready — Chef's confirm, then revoke via the Apps & keys tab | XS |
 | Q11 | basegeek `Databases.jsx`: wire into nav or delete | Chef's call | XS |
-| Q13 | bookgeek CONTEXT.md says Runtime: Bun (it is node:20); verify COVERS_PATH now serves the old covers in the UI | after R? — trivial, next slot | XS |
-| Q17 | fitnessgeek backend: node 18 CJS cannot consume ESM @geeksuite/utils — bump base image to node 20 + ESM migration, then drop its five toUtcMidnight copies | its own ticket, M | M |
+| Q13 | verify COVERS_PATH now serves the old covers in the bookgeek UI (CONTEXT.md runtime line already fixed) | Chef eyeballs the UI | XS |
 | Q18b | After R27 deploys: a day of clean `CSRF token check (report-only)` logs, then `CSRF_TOKEN=enforce` in basegeek's env and a container restart | Chef's call after the log window | XS |
-| Q20 | aiGeek: callCohere has no case in callProvider (pinning cohere/* throws); simulated streaming (F-21) and user-gated selection (F-14) documented, not fixed | small / design | S |
+| Q20b | aiGeek: simulated streaming (F-21) and user-gated selection (F-14) documented, not fixed | design | S |
 | Q14 | storygeek CanonCard summary text through Narration too (agent left it as a separate render path) | Chef's call | XS |
 
 ## How to resume if this session is lost
@@ -66,7 +75,7 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 - `70eb36e` — R13 — offline pages both modes ×6, manifests, storygeek manifest, notegeek dev-server fix
 - `1fc8623` — R5 — @geeksuite/utils dates (36 tz tests); 3 apps consume; 2 live off-by-one bugs documented → R26
 - `d53b008` — R9 — bujogeek subtasks (2 gateway bugs fixed) + cache rule (156/82 tests)
-- `` — Q6 — bookgeek web tests (96) + ci jobs bookgeek-web, utils
+- `5346e06` — Q6 — bookgeek web tests (96) + ci jobs bookgeek-web, utils
 - `fe29788` — R23 — storygeek service worker
 - `a3c4031` — R20 — CSRF double-submit token (report mode), @geeksuite/auth sends the header
 - `71066ba` — R18 — flockgeek frontend tests (30) + ci job
