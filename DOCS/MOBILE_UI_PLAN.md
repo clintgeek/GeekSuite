@@ -307,6 +307,29 @@ Identity notes name what must survive. Effort assumes §2 primitives exist.
 
 ---
 
+## 4b. Follow-ups surfaced by the passes (packages/ui)
+
+Recorded 2026-09-04 while landing M1 and the fitnessgeek half of M2; each is small.
+
+- **Primary-action registry.** `GeekFab` must mount as a sibling of `GeekAppFrame`, but the
+  page owns the action. fitnessgeek wrote a 75-line context (`Layout/primaryAction.js`); every
+  other app will need the same. Promote it: `useGeekPrimaryAction({ label, icon, onClick })` in
+  `packages/ui` with `GeekShell` rendering the FAB. **S**
+- **`GeekDialog` header action.** A normal `<Button startIcon>` as `primaryAction` fills half the
+  60px bar; apps hide the icon and tighten padding via the `data-geek-dialog="primary"` hook.
+  Do it in the primitive or expose `primaryActionSx`. **XS**
+- **`GeekDialog` `headerSx` is full-mode only**; window mode has no header slot, so identity
+  styling reaches `DialogTitle` through `PaperProps`. Add a window-mode `titleSx`. **XS**
+- **Node `title` in `GeekDialog` full mode** is wrapped in `noWrap` `h3`; an eyebrow-over-title
+  block needs overrides. Detect a node title and skip the wrap. **XS**
+- **`GeekTopBar` desktop date strip** renders at 11px, under the suite's 12px floor. **XS**
+- **`GeekSheet` and Escape.** Focus never enters the drawer, so Escape does not close a sheet;
+  the harness closes via the backdrop. Check `SwipeableDrawer` focus handling. **S**
+- fitnessgeek left dead: `components/BarcodeScanner.jsx` (duplicate), `BarcodeScanner.jsx.v3.backup`,
+  `Layout/Drawer.jsx`, `Layout/PageContainer.jsx`, `Weight/WeightContent.jsx`, `WeightLayout.jsx`;
+  and 10–11px chart ticks / editorial mono labels outside the Log surfaces are a voice decision
+  for Chef, not a fix.
+
 ## 5. Rollout
 
 | Pass | Scope | Effort | Why this order |
@@ -337,4 +360,4 @@ Before merging any UI work, at 390×844 in both modes:
 - Safe areas respected in standalone (notch, home indicator).
 - Identity survives: the app's fonts, chrome color, accent, and voice are present on the phone.
 
-*Drafted 2026-09-04; M0 and M1 landed the same day. Next: M2 (fitnessgeek → bujogeek → notegeek).*
+*Drafted 2026-09-04; M0 and M1 landed the same day. Next: M2 continues with bujogeek → notegeek; §4b follow-ups first.*
