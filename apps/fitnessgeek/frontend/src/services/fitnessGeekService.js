@@ -3,6 +3,12 @@ import { localDateString } from '@geeksuite/utils';
 import logger from '../utils/logger.js';
 import { restClient as restApi } from './restClient.js';
 
+// Calendar date as a plain 'YYYY-MM-DD' string — the wire format every food-log
+// mutation takes, which the gateway normalizes to UTC midnight. Callers already
+// hold one (FoodLog.jsx's `selectedDate`); a Date is folded to the *local*
+// calendar day, never `toISOString()`, which would jump a day west of UTC.
+const toApiDate = (value) => (typeof value === 'string' ? value : localDateString(value ?? new Date()));
+
 // FitnessGeek service for food logging and nutrition tracking
 export const fitnessGeekService = {
   // ===== FOOD ITEMS =====
@@ -105,35 +111,46 @@ export const fitnessGeekService = {
     }
   },
 
-  // Add food to log — uses REST so backend can create FoodItem from AI/API results
+  // Add food to log — GraphQL `addFoodLog` (basegeek gateway). The mutation takes
+  // a whole `food_item` and findOrCreate()s the catalog row, which is how an
+  // AI/API search result gets logged at all; it also recomputes the daily summary.
+  // Return shape is REST's { success, data, message } so callers are unchanged.
   addFoodToLog: async (logData) => {
     try {
-      const response = await restApi.post('/logs', logData);
-      return response.data; // { success, data, message }
+      const response = await apiService.post('/logs', {
+        ...logData,
+        log_date: toApiDate(logData?.log_date),
+      });
+      return { success: true, data: response?.data, message: 'Food log created successfully' };
     } catch (error) {
-      logger.error('Error adding food to log:', error.response?.data || error.message);
+      logger.error('Error adding food to log:', error.message);
       throw error;
     }
   },
 
-  // Update food log — uses REST for consistency with add
+  // Update food log — GraphQL `updateFoodLog`. Partial patch: only the fields
+  // present in `updateData` are written.
   updateFoodLog: async (logId, updateData) => {
     try {
-      const response = await restApi.put(`/logs/${logId}`, updateData);
-      return response.data;
+      const response = await apiService.put(`/logs/${logId}`, updateData);
+      return { success: true, data: response?.data, message: 'Food log updated successfully' };
     } catch (error) {
-      logger.error('Error updating food log:', error.response?.data || error.message);
+      logger.error('Error updating food log:', error.message);
       throw error;
     }
   },
 
-  // Delete food log — uses REST for consistency
+  // Delete food log — GraphQL `deleteFoodLog`, which returns a Boolean rather
+  // than a body. `false` means "no such log for this user", which REST answered
+  // with a 404 and therefore a thrown axios error; throwing keeps both callers
+  // (useFoodLog, DashboardNew) on the error path they already handle.
   deleteFoodLog: async (logId) => {
     try {
-      const response = await restApi.delete(`/logs/${logId}`);
-      return response.data;
+      const response = await apiService.delete(`/logs/${logId}`);
+      if (response?.data !== true) throw new Error('Food log not found');
+      return { success: true, message: 'Food log deleted successfully' };
     } catch (error) {
-      logger.error('Error deleting food log:', error.response?.data || error.message);
+      logger.error('Error deleting food log:', error.message);
       throw error;
     }
   },
@@ -355,15 +372,22 @@ export const fitnessGeekService = {
     }
   },
 
-  // Add meal to log
+  // Add meal to log — GraphQL `logMeal`, which returns the [FoodLog] it created
+  // and stamps each with `notes: "Added from meal: <name>"`, the caption
+  // FoodLogItem renders. Unlike the old REST route it lands on the correct UTC
+  // day west of UTC. The `meal` object REST echoed back is gone; no caller read it.
   addMealToLog: async (mealId, logDate, mealType) => {
     try {
-      // REST endpoint — expects log_date + meal_type in body (not the GQL apiService path)
-      const response = await restApi.post(`/meals/${mealId}/add-to-log`, {
-        log_date: logDate,
+      const response = await apiService.post(`/meals/${mealId}/add-to-log`, {
+        log_date: toApiDate(logDate),
         meal_type: mealType
       });
-      return response.data;
+      const logs = Array.isArray(response?.data) ? response.data : [];
+      return {
+        success: true,
+        message: `Added ${logs.length} item${logs.length === 1 ? '' : 's'} to your ${mealType || 'log'}`,
+        data: { logs, logsCreated: logs.length }
+      };
     } catch (error) {
       logger.error('Error adding meal to log:', error);
       throw error;

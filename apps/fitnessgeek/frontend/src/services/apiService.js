@@ -50,12 +50,16 @@ const GET_FOOD_LOGS = gql`
   query GetFoodLogs($date: Date, $startDate: Date, $endDate: Date, $mealType: String) { foodLogs(date: $date, startDate: $startDate, endDate: $endDate, mealType: $mealType) { id log_date meal_type servings notes nutrition { calories_per_serving protein_grams carbs_grams fat_grams fiber_grams sugar_grams sodium_mg } calculatedNutrition { calories_per_serving protein_grams carbs_grams fat_grams fiber_grams sugar_grams sodium_mg } food_item_id { id name brand serving_size serving_unit barcode } } }
 `;
 
+// The write half of the food log. Both return the populated log, matching what
+// REST's POST/PUT /api/logs used to hand back, so callers that read the created
+// row keep working. `UpdateFoodLog` takes `FoodLogUpdateInput` — every field
+// nullable — because the edit dialog sends a partial patch.
 const ADD_FOOD_LOG = gql`
-  mutation AddFoodLog($input: FoodLogInput!) { addFoodLog(input: $input) { id } }
+  mutation AddFoodLog($input: FoodLogInput!) { addFoodLog(input: $input) { id log_date meal_type servings notes nutrition { calories_per_serving protein_grams carbs_grams fat_grams fiber_grams sugar_grams sodium_mg } food_item_id { id name brand serving_size serving_unit barcode } } }
 `;
 
 const UPDATE_FOOD_LOG = gql`
-  mutation UpdateFoodLog($id: ID!, $input: FoodLogInput!) { updateFoodLog(id: $id, input: $input) { id } }
+  mutation UpdateFoodLog($id: ID!, $input: FoodLogUpdateInput!) { updateFoodLog(id: $id, input: $input) { id log_date meal_type servings notes nutrition { calories_per_serving protein_grams carbs_grams fat_grams fiber_grams sugar_grams sodium_mg } food_item_id { id name brand serving_size serving_unit barcode } } }
 `;
 
 const DELETE_FOOD_LOG = gql`
@@ -283,6 +287,40 @@ const LOG_MEAL = gql`
   mutation LogMeal($mealId: ID!, $date: String!, $mealType: String) { logMeal(mealId: $mealId, date: $date, mealType: $mealType) { id log_date meal_type servings nutrition { calories_per_serving } food_item_id { id name } } }
 `;
 
+// A Mongo ObjectId, i.e. a row that already exists in the food catalog.
+// Food *search* results carry synthetic ids (`usda_<fdcId>`,
+// `openfoodfacts_<code>`, `ai_...`) which do not match, and that is the signal
+// the gateway uses to run `FoodItem.findOrCreate` instead of a lookup.
+const OBJECT_ID_RE = /^[0-9a-f]{24}$/i;
+const isObjectId = (value) => OBJECT_ID_RE.test(String(value ?? ''));
+
+// The seven fields `NutritionDataInput` declares. A food-log body may carry a
+// nutrition snapshot assembled by the UI (EditLogDialog sends four of them) or
+// a whole object copied off a search result; anything not on this list would be
+// rejected by GraphQL input coercion, which REST simply ignored.
+const NUTRITION_FIELDS = [
+  'calories_per_serving',
+  'protein_grams',
+  'carbs_grams',
+  'fat_grams',
+  'fiber_grams',
+  'sugar_grams',
+  'sodium_mg',
+];
+
+// Returns undefined rather than an empty object when there is nothing to send:
+// omitting `nutrition` is what makes the gateway snapshot the food's own
+// nutrition onto the log, exactly as REST's `nutrition || foodItem.nutrition`.
+const normalizeLogNutrition = (raw) => {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const out = {};
+  for (const key of NUTRITION_FIELDS) {
+    const value = Number(raw[key]);
+    if (Number.isFinite(value)) out[key] = value;
+  }
+  return Object.keys(out).length ? out : undefined;
+};
+
 // Helper map to route Axios urls to GraphQL ops
 function routeRequest(method, url, data) {
   // Normalize
@@ -299,11 +337,20 @@ function routeRequest(method, url, data) {
   // Normalize a food payload into FitnessFoodInput shape.
   // Frontend sends { name, brand, nutrition, serving: { size, unit }, barcode, source, ... }
   // Backend wants  { name, brand, serving_size, serving_unit, barcode, nutrition: {...} }
+  //
+  // `id` / `source` / `source_id` are carried through because
+  // `FoodLogInput.food_item` needs them: the gateway's findOrCreate dedupes on
+  // `barcode`, then `(source, source_id)`, then `(name, brand)`, and `id` is how
+  // it tells an existing catalog row from a search result. `addFitnessFood` /
+  // `updateFitnessFood` drop all three server-side, so POST/PUT /foods still
+  // mints a private `source: 'custom'` food — carrying them here is inert there.
   const normalizeFoodInput = (raw = {}) => {
     const serving_size = raw.serving_size ?? raw.serving?.size ?? 100;
     const serving_unit = raw.serving_unit ?? raw.serving?.unit ?? 'g';
     const n = raw.nutrition || {};
+    const id = raw.id ?? raw._id;
     return {
+      ...(id != null && id !== '' ? { id: String(id) } : {}),
       name: raw.name,
       brand: raw.brand || undefined,
       serving_size: Number(serving_size) || 100,
@@ -318,7 +365,52 @@ function routeRequest(method, url, data) {
         sugar_grams: Number(n.sugar_grams) || 0,
         sodium_mg: Number(n.sodium_mg) || 0,
       },
+      ...(raw.source ? { source: String(raw.source) } : {}),
+      ...(raw.source_id != null && raw.source_id !== '' ? { source_id: String(raw.source_id) } : {}),
     };
+  };
+
+  // POST /logs body -> FoodLogInput.
+  // REST's body was { food_item, log_date, meal_type, servings, notes, nutrition }
+  // where `food_item` was a whole object and the route decided between "look it
+  // up" and "findOrCreate" on whether its id cast to an ObjectId. Same fork here,
+  // expressed as the two mutually exclusive input fields the gateway exposes:
+  // an existing row goes out as `food_item_id`, anything else as `food_item`.
+  const normalizeFoodLogInput = (raw = {}) => {
+    const food = raw.food_item || {};
+    const foodId = food.id ?? food._id ?? raw.food_item_id;
+    const input = {
+      // A plain 'YYYY-MM-DD' calendar date; the gateway normalizes to UTC midnight.
+      log_date: raw.log_date,
+      meal_type: raw.meal_type,
+      servings: Number(raw.servings) || 1,
+    };
+    if (isObjectId(foodId)) {
+      input.food_item_id = String(foodId);
+    } else {
+      input.food_item = normalizeFoodInput(food);
+    }
+    if (raw.notes != null) input.notes = String(raw.notes);
+    const nutrition = normalizeLogNutrition(raw.nutrition);
+    if (nutrition) input.nutrition = nutrition;
+    return input;
+  };
+
+  // PUT /logs/:id body -> FoodLogUpdateInput, a partial patch. Only the fields
+  // actually present are sent; omitting `food_item_id` also skips the gateway's
+  // catalog accessibility check, which is what lets a servings-only edit succeed
+  // over a food that has since been soft-deleted (REST behaved the same way).
+  const normalizeFoodLogUpdateInput = (raw = {}) => {
+    const patch = {};
+    if (raw.log_date != null) patch.log_date = raw.log_date;
+    if (raw.meal_type != null) patch.meal_type = raw.meal_type;
+    if (raw.servings != null) patch.servings = Number(raw.servings);
+    if (raw.notes != null) patch.notes = String(raw.notes);
+    const foodId = raw.food_item_id ?? raw.food_item?.id ?? raw.food_item?._id;
+    if (isObjectId(foodId)) patch.food_item_id = String(foodId);
+    const nutrition = normalizeLogNutrition(raw.nutrition);
+    if (nutrition) patch.nutrition = nutrition;
+    return patch;
   };
 
   if (method === 'GET') {
@@ -438,17 +530,26 @@ function routeRequest(method, url, data) {
     if (base === '/insights/chat') return { mutation: AI_CHAT, variables: { message: data.message, history: data.history } };
     if (base === '/fitness/garmin/weight') return { mutation: UPDATE_GARMIN_WEIGHT, variables: { date: data.date, weightLbs: data.weightLbs, timezone: data.timezone } };
     if (base.match(/^\/summary\//)) return { mutation: REFRESH_DAILY_SUMMARY, variables: { date: parts[1] } };
-    if (base.match(/^\/meals\/.+\/add-to-log/)) return { mutation: LOG_MEAL, variables: { mealId: parts[1], date: data.date, mealType: data.mealType } };
+    // Body is REST's { log_date, meal_type }; the camelCase spellings are
+    // accepted too so an older caller does not silently send undefined.
+    if (base.match(/^\/meals\/.+\/add-to-log/)) {
+      return {
+        mutation: LOG_MEAL,
+        variables: {
+          mealId: parts[1],
+          date: data?.log_date ?? data?.date,
+          mealType: data?.meal_type ?? data?.mealType ?? null,
+        },
+      };
+    }
     if (base === '/weight') return { mutation: ADD_WEIGHT, variables: { input: data } };
     if (base === '/goals') return { mutation: SET_NUTRITION_GOALS, variables: { input: data } };
     // /foods creates a library FoodItem (not a log entry)
     if (base === '/foods') return { mutation: ADD_FITNESS_FOOD, variables: { input: normalizeFoodInput(data) } };
-    // NOT REACHABLE TODAY, AND NOT CORRECT IF IT WERE: fitnessGeekService.addFoodToLog
-    // deliberately uses restClient because REST POST /logs takes a whole `food_item`
-    // object and findOrCreate()s the catalog row. FoodLogInput needs an existing
-    // `food_item_id`, so this passthrough would fail validation. See DOCS/SUITE_TODO.md
-    // item 2 for the gateway change that has to land first.
-    if (base === '/logs') return { mutation: ADD_FOOD_LOG, variables: { input: data } };
+    // Creates a food log. `FoodLogInput.food_item` accepts a whole search result
+    // and the gateway findOrCreate()s the catalog row, so this is a like-for-like
+    // replacement for the old REST POST /api/logs (gateway side landed 79b1b57).
+    if (base === '/logs') return { mutation: ADD_FOOD_LOG, variables: { input: normalizeFoodLogInput(data) } };
     if (base === '/meals') return { mutation: ADD_MEAL, variables: { input: data } };
     if (base === '/medications' || base === '/meds') return { mutation: ADD_MEDICATION, variables: { input: data } };
     if (base === '/bp' || base === '/blood-pressure') return { mutation: ADD_BP, variables: { input: data } };
@@ -470,9 +571,9 @@ function routeRequest(method, url, data) {
     if (parts[0] === 'weight') return { mutation: UPDATE_WEIGHT, variables: { id, input: data } };
     // /foods/:id updates a library FoodItem (not a log entry)
     if (parts[0] === 'foods') return { mutation: UPDATE_FITNESS_FOOD, variables: { id, input: normalizeFoodInput(data) } };
-    // Same caveat as POST /logs: FoodLogInput's four fields are all non-null, so the
-    // partial body EditLogDialog sends would fail validation. See DOCS/SUITE_TODO.md item 2.
-    if (parts[0] === 'logs') return { mutation: UPDATE_FOOD_LOG, variables: { id, input: data } };
+    // Partial patch — see normalizeFoodLogUpdateInput. EditLogDialog sends only
+    // servings / meal_type / notes / nutrition and FoodLogUpdateInput allows it.
+    if (parts[0] === 'logs') return { mutation: UPDATE_FOOD_LOG, variables: { id, input: normalizeFoodLogUpdateInput(data) } };
     if (parts[0] === 'meals') return { mutation: UPDATE_MEAL, variables: { id, input: data } };
     if (parts[0] === 'medications' || parts[0] === 'meds') return { mutation: UPDATE_MEDICATION, variables: { id, input: data } };
     if (parts[0] === 'bp' || parts[0] === 'blood-pressure') return { mutation: UPDATE_BP, variables: { id, input: data } };

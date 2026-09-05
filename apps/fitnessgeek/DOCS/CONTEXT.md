@@ -194,6 +194,9 @@ cd apps/fitnessgeek/backend && npm run dev     # nodemon, port 3001
 # backend tests — 12 suites / 106 tests, hermetic (no Mongo, no Redis, no network)
 cd apps/fitnessgeek/backend && npm test
 
+# frontend tests — vitest + RTL, jsdom. Config is vitest.config.js, NOT vite.config.js
+cd apps/fitnessgeek/frontend && pnpm test
+
 # build the production image exactly as CI does (repo root as context)
 docker build -f apps/fitnessgeek/Dockerfile . -t fitnessgeek-local
 
@@ -242,7 +245,46 @@ sites (`MyFoods`, `MyMeals`, `Medications`, `Activity`) are unchanged. `PWAUpdat
 `OfflineIndicator` are mounted in `App.jsx` above the router, outside `GeekToastProvider`'s
 reach, and were deliberately left on their own `Snackbar`s. `FoodLog*` pages/components,
 `UnifiedFoodSearch.jsx` (a dependency of `FoodLog`'s `AddFoodDialog`), and `frontend/src/
-services/**` were not touched — see the food-log-to-GraphQL migration note above.
+services/**` were not touched — see "Frontend — where the writes go" below.
+
+---
+
+## Frontend — where the writes go (2026-09-05)
+
+Two clients, one rule: **domain data goes to basegeek's `/graphql`; only what
+the gateway has no equivalent for stays on this app's REST backend.**
+
+| Client | Module | What still goes through it |
+|---|---|---|
+| `apiService.js` | Apollo → `https://basegeek.clintgeek.com/graphql` | settings, weights, goals, food logs (**reads and writes**), meals, medications, blood pressure, streaks, summaries, households, food reports, insights, Garmin |
+| `restClient.js` | axios → this app's own `/api` | food **search** / barcode / favorites / recent (`foodService.js`), meds RxNorm lookup + med logs, InfluxDB, AI passthrough, `PUT /user/profile`, Garmin heart-rate detail |
+
+The four food-log writes — `addFoodToLog`, `updateFoodLog`, `deleteFoodLog`,
+`addMealToLog` in `services/fitnessGeekService.js` — moved from `restClient` to
+`apiService` on **2026-09-05**, once basegeek's `addFoodLog` / `updateFoodLog` /
+`deleteFoodLog` / `logMeal` became behaviour-equivalent (gateway side: `79b1b57`).
+What that means in practice:
+
+- `FoodLogInput.food_item` takes a whole search result and the gateway runs
+  `FoodItem.findOrCreate` — that is how a USDA / OpenFoodFacts / AI result with a
+  synthetic id (`usda_169705`) gets logged at all. `apiService`'s
+  `normalizeFoodLogInput()` picks the branch: an id that is a Mongo ObjectId goes
+  out as `food_item_id`, anything else as `food_item`. `normalizeFoodInput()`
+  therefore **must keep `id`, `source` and `source_id`** — the dedupe reads them.
+- `updateFoodLog` takes `FoodLogUpdateInput`, all-nullable, so `EditLogDialog`'s
+  partial patch (servings / meal_type / notes / nutrition) works, and omitting
+  `food_item_id` skips the catalog check — a servings edit over a soft-deleted
+  food succeeds.
+- `deleteFoodLog` returns a **Boolean**, not a body. The service throws on `false`
+  so both callers stay on the error path REST's 404 put them on.
+- Dates go out as plain `YYYY-MM-DD` (`@geeksuite/utils` `localDateString`); the
+  gateway normalizes to UTC midnight. Meals added to the log now land on the
+  correct UTC day — REST's add-to-log used local midnight and was a day early
+  west of UTC.
+
+Tests: `frontend/src/services/__tests__/fitnessGeekServiceFoodLogWrites.test.js`
+(vitest, Apollo mocked at `@geeksuite/api-client`) pins the operation name and
+variables for all four. CI job `test-fitnessgeek-web`.
 
 ---
 
@@ -263,21 +305,9 @@ services/**` were not touched — see the food-log-to-GraphQL migration note abo
 - **`KEY_VAULT_SECRET` is shared with basegeek**, and `packages/schemas` is now
   a *behavioural* dependency, not just a field list — a change there changes how
   both apps write to Mongo. Deploy the two from the same commit.
-- **The four food-log writes still go to this backend's REST routes on purpose.**
-  `frontend/src/services/fitnessGeekService.js` uses `restClient` — not `apiService`
-  — for `POST/PUT/DELETE /api/logs` and `POST /api/meals/:id/add-to-log`. basegeek's
-  gateway does expose `addFoodLog` / `updateFoodLog` / `deleteFoodLog` / `logMeal`,
-  and `apiService.js` even carries the documents, but three of the four are **not**
-  behaviour-equivalent and the switch is blocked on a gateway change (audited
-  2026-09-05 — the full gap list is `DOCS/SUITE_TODO.md`, "Ordered cheap-to-expensive"
-  item 2). The short version:
-    - `addFoodLog` needs an existing `food_item_id`; the REST route accepts a whole
-      `food_item` and `findOrCreate`s the catalog row, which is how every food-search
-      and AI result gets logged at all.
-    - `updateFoodLog`'s `FoodLogInput!` is all-non-null, so partial edits are
-      impossible over the wire.
-    - `logMeal` does not write the `notes: "Added from meal: <name>"` string that
-      `FoodLogItem.jsx` renders.
-  Do not "finish the migration" by pointing these at `apiService` until the gateway
-  side lands; the routing table in `apiService.js` maps them, but wrongly, and carries
-  comments saying so.
+- **The fitnessgeek backend still serves REST routes nothing in this repo calls.**
+  `POST/PUT/DELETE /api/logs` and `POST /api/meals/:id/add-to-log` lost their last
+  caller on 2026-09-05 (see "Where the writes go" above) but are still mounted.
+  Removing them is the next ticket; until then a stale service worker or an old
+  client can still reach them, and they write through this app's own duplicate
+  Mongoose models rather than the gateway's.
