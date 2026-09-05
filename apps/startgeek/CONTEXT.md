@@ -121,3 +121,7 @@ src/
   user record).
 - Whether the Reading block should also consider the `on-reader` shelf
   (currently `reading` only, decided in basegeek's glance resolver).
+
+## Hostname
+
+StartGeek is served at `start.clintgeek.com` (nginx: `/mnt/Media/Docker/nginx/config/sites-available/clintgeek.com_start.conf`, proxied to `192.168.1.17:3000`). Since 2026-09-05 the conventional name `startgeek.clintgeek.com` 301-redirects there, so the suite switcher, old bundles and bookmarks all land. The switcher's roster in `packages/ui/src/navigation/GeekAppSwitcher.jsx` carries the explicit `url` for this app.
