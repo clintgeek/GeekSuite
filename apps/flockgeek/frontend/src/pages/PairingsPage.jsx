@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useQuery, useMutation } from '@apollo/client';
-import { localDateString } from "@geeksuite/utils";
+import { localDateString, utcDateString } from "@geeksuite/utils";
 import { Container, Button, Box, Alert, TextField, MenuItem, Chip } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -85,7 +85,7 @@ const PairingsPage = () => {
     setEditingPairing(pairing);
     setEditFormData({
       name: pairing.name || "",
-      pairingDate: pairing.startDate ? localDateString(pairing.startDate) : "",
+      pairingDate: pairing.startDate ? utcDateString(pairing.startDate) : "",
       active: pairing.active ?? true,
       notes: pairing.notes || "",
     });

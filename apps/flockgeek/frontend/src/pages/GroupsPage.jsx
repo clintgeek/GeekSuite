@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useQuery, useMutation } from '@apollo/client';
-import { displayCalendarDate, localDateString } from "@geeksuite/utils";
+import { displayCalendarDate, localDateString, utcDateString } from "@geeksuite/utils";
 import {
   Container, Paper, Button, Box, Typography, CircularProgress, Alert,
   TextField, MenuItem, Chip, FormControl, InputLabel, Select, Accordion,
@@ -93,8 +93,8 @@ const GroupsPage = () => {
       name: group.name || "",
       purpose: group.purpose || "",
       type: group.type || "",
-      startDate: group.startDate ? localDateString(group.startDate) : "",
-      endDate: group.endDate ? localDateString(group.endDate) : "",
+      startDate: group.startDate ? utcDateString(group.startDate) : "",
+      endDate: group.endDate ? utcDateString(group.endDate) : "",
       description: group.description || "",
       notes: group.notes || "",
     });

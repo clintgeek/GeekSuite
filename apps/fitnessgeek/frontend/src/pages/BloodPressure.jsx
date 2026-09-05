@@ -29,7 +29,7 @@ import BPReport from '../components/BloodPressure/BPReport.jsx';
 import BPHRChart from '../components/BloodPressure/BPHRChart.jsx';
 import { bpService } from '../services/bpService.js';
 import { fitnessGeekService } from '../services/fitnessGeekService.js';
-import { localDateString } from '@geeksuite/utils';
+import { localDateString, utcDateString } from '@geeksuite/utils';
 import logger from '../utils/logger.js';
 
 const BloodPressure = () => {
@@ -225,10 +225,10 @@ const BloodPressure = () => {
   const getTodayBP = () => {
     const today = localDateString();
     return bpLogs.find(log => {
-      // Convert the stored UTC date to local date for comparison
-      const logDate = new Date(log.log_date);
-      const logDateLocal = localDateString(logDate);
-      return logDateLocal === today;
+      // log_date is stored as a UTC-midnight calendar date (the local day the
+      // reading was logged on), so it must be read back with utcDateString —
+      // localDateString(new Date(log.log_date)) rolls it back a day west of UTC.
+      return utcDateString(log.log_date) === today;
     });
   };
 

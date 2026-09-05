@@ -11,7 +11,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import ResponsiveTable from "../components/primitives/ResponsiveTable";
 import LedgerDialog from "../components/primitives/LedgerDialog";
-import { displayCalendarDate, localDateString } from "@geeksuite/utils";
+import { displayCalendarDate, utcDateString } from "@geeksuite/utils";
 import { GET_BIRDS, GET_LOCATIONS, GET_FLOCK_GROUPS, GET_GROUP_MEMBERSHIPS } from "../graphql/queries";
 import { CREATE_BIRD, UPDATE_BIRD, DELETE_ENTITY } from "../graphql/mutations";
 
@@ -56,7 +56,7 @@ const buildEditFormData = (bird) => {
     name: bird.name || "",
     sex: bird.sex || "",
     breed: bird.breed || "",
-    hatchDate: bird.hatchDate ? localDateString(bird.hatchDate) : "",
+    hatchDate: bird.hatchDate ? utcDateString(bird.hatchDate) : "",
     status: bird.status || "",
     species: bird.species || "",
     strain: bird.strain || "",
@@ -67,7 +67,7 @@ const buildEditFormData = (bird) => {
     damId: bird.damId || "",
     locationId: bird.locationId || "",
     temperamentScore: bird.temperamentScore ?? "",
-    statusDate: bird.statusDate ? localDateString(bird.statusDate) : "",
+    statusDate: bird.statusDate ? utcDateString(bird.statusDate) : "",
     statusReason: bird.statusReason || "",
     notes: bird.notes || ""
   };

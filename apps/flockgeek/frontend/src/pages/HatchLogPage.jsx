@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useQuery, useMutation } from '@apollo/client';
-import { displayCalendarDate, localDateString } from "@geeksuite/utils";
+import { displayCalendarDate, utcDateString } from "@geeksuite/utils";
 import { Container, Button, Box, Alert, TextField, Chip } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -71,8 +71,8 @@ const HatchLogPage = () => {
   const handleEditEvent = (event) => {
     setEditingEvent(event);
     setEditFormData({
-      setDate: event.setDate ? localDateString(event.setDate) : "",
-      hatchDate: event.hatchDate ? localDateString(event.hatchDate) : "",
+      setDate: event.setDate ? utcDateString(event.setDate) : "",
+      hatchDate: event.hatchDate ? utcDateString(event.hatchDate) : "",
       eggsSet: event.eggsSet || "", eggsFertile: event.eggsFertile || "",
       chicksHatched: event.chicksHatched || "", pullets: event.pullets || "",
       cockerels: event.cockerels || "", notes: event.notes || ""
