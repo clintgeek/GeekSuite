@@ -2,6 +2,25 @@
 
 _Last updated: 2026-09-05_
 
+## REST `create`/`update` let the body set/reassign `ownerId` (2026-09-05, BURN_REVIEW #4/#18)
+
+The legacy REST CRUD layer (see "Backend reality check" below) built its Mongoose `create`/
+`findOneAndUpdate` payloads by spreading `req.body` directly. `createEggProduction`/`createBird`
+spread it last, so a body `ownerId` won and minted the record under whatever account the caller
+named; the eight update handlers (`birdController`, `eggProductionController`,
+`healthRecordController`, `locationController`, `hatchEventController`, `groupController`,
+`pairingController`, `meatRunController`) spread it into an owner-scoped update, so a body `ownerId`
+could reassign an existing record to another account (self-transfer, not theft — the filter already
+required the caller's own `ownerId` to find the record at all).
+
+Fix: `backend/src/utils/ownerFields.js` exports `withoutOwnerFields(body)` — strips `ownerId`,
+`owner_id`, `owner`, `userId`, `user_id`, `_id` — and every create/update handler now routes
+`req.body` through it before merging. Ownership still comes only from `req.ownerId`
+(`authMiddleware.js`, derived from the SSO session). 12 new tests (create-spoofing on
+bird/eggProduction, update-reassignment on bird/eggProduction/group/meatRun, 6 unit tests on the
+helper); flockgeek's 57 baseline auth tests plus these are 69, all green. See
+`DOCS/BURN_REVIEW.md` #4 and #18.
+
 ## First-visit theme flicker (2026-09-05, TODO_ORDER #30)
 
 Cause: `theme/AppThemeProvider.jsx` mounted `@geeksuite/user`'s `<ThemeProvider

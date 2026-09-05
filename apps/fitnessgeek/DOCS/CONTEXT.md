@@ -3,6 +3,15 @@
 How this app is actually built, run and deployed. Paths, ports and commands
 here override any reasonable-looking default.
 
+**2026-09-05 (BURN_REVIEW #16 fix):** the household log view (`HouseholdLogView.jsx`) was dead
+twice over in `frontend/src/services/apiService.js`'s `routeRequest`. Both `/logs/household` (member
+list) and `/logs/household/:memberId/:date` (a member's logs) were shadowed by the earlier generic
+`base.startsWith('/logs/')` branch and routed to `GetFoodLogs` instead — sending "household"/a
+memberId as a `Date` scalar variable, which threw. Fixed by moving both household branches above the
+generic one, and by retyping `GetHouseholdMemberLogs`'s `$date` from `Date!` to `String!` to match the
+gateway's typeDefs. See `DOCS/BURN_REVIEW.md` #16 and
+`frontend/src/services/__tests__/apiServiceHouseholdLogs.test.js`.
+
 ---
 
 ## Runtime
@@ -32,7 +41,7 @@ The backend depends on five `workspace:*` packages:
 |---|---|
 | `@geeksuite/crypto-vault` | AES-256-GCM for the Garmin password at rest (`KEY_VAULT_SECRET`) |
 | `@geeksuite/logger` | pino logger + `createHttpLogger` |
-| `@geeksuite/schemas` | the shared field sets for every fitnessgeek collection with two writers — `UserSettings`, `Weight`, `BloodPressure`, `Medication`, `LoginStreak`, `WeightGoals`, `NutritionGoals`, `Meal` and `FoodItem` as of 2026-09-05. It also owns `Medication`'s enums and bounds (imported by `src/validation/schemas/medication.js`, by `models/MedicationLog.js` and by `routes/medicationRoutes.js` instead of restating), `BloodPressure`'s bounds, `Meal`'s `MEAL_TYPES` (imported by `routes/mealRoutes.js`) and its embedded food-item sub-schema, `FoodItem`'s `FOOD_SOURCES` enum **and its `findOrCreate` dedupe ladder** (`findOrCreateFoodItem` — the one static that moved, because a divergence there would fork the food catalog), and the instance-method arithmetic for `LoginStreak`, `NutritionGoals`, `Meal` and `FoodItem`. `FoodItem` also brings the only `unique` index in the package (`barcode`): changing a `unique` flag in a shared module means both processes redeploy together. Index and conventions in `USER_SETTINGS_SCHEMA.md`; the remaining two pairs — `FoodLog` and `DailySummary` — in `DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md` |
+| `@geeksuite/schemas` | the shared field sets for **every** fitnessgeek collection with two writers — `UserSettings`, `Weight`, `BloodPressure`, `Medication`, `LoginStreak`, `WeightGoals`, `NutritionGoals`, `Meal`, `FoodItem`, `FoodLog` and `DailySummary`, all eleven as of 2026-09-05. No model file on either side declares a schema literal any more. It also owns `Medication`'s enums and bounds (imported by `src/validation/schemas/medication.js`, by `models/MedicationLog.js` and by `routes/medicationRoutes.js` instead of restating), `BloodPressure`'s bounds, `MEAL_TYPES` — shared by `meals` **and** `foodlogs` and imported by `routes/mealRoutes.js` — and `Meal`'s embedded food-item sub-schema, `FoodItem`'s `FOOD_SOURCES` enum, the instance-method arithmetic for `LoginStreak`, `NutritionGoals`, `Meal` and `FoodItem`, and the two statics that moved because a divergence in them fails silently: `findOrCreateFoodItem` (the dedupe ladder — a divergence forks the food catalog) and `updateDailySummaryFromLogs` (the day's recompute — a divergence erases a macro from a stored day, which is what happened to `totals.net_carbs_grams`). Both apps' `updateFromLogs` statics keep only their guard, their model lookups and the date normalization: `toUtcMidnight` is ESM-only and cannot be `require`d from the CJS package, so the helper takes an already-normalized window. Two `unique` indexes live here (`FoodItem.barcode`, `DailySummary.{user_id,date}`): changing a `unique` flag in a shared module means both processes redeploy together. Index and conventions in `USER_SETTINGS_SCHEMA.md`; the full record in `DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md` (§12 carries the open follow-ups) |
 | `@geeksuite/user` | `attachUser()`, `csrfGuard()`, `meHandler()` |
 | `@geeksuite/utils` | **date handling** — `toUtcMidnight` and friends |
 
@@ -114,6 +123,100 @@ The repo's root `DEPLOY.md` still carries a "`KEY_VAULT_SECRET` | basegeek only
 | Never share across apps" row. **That row is out of date as of 2026-09-05** —
 fitnessgeek and basegeek now share it. Copy basegeek's existing value into
 fitnessgeek's `.env.production`; do not generate a new one.
+
+---
+
+## Settings writes are PARTIAL — one `$set`, dot paths, no `household`
+
+*Landed 2026-09-05 (burn review #5, #6, #9). Both writers of the `usersettings`
+collection now follow the same three rules; they disagreed before, and each
+disagreement lost data.*
+
+**1. Dot paths, never a whole sub-object.** Every client of both writers sends
+only the keys the user just touched — the Settings page sends
+`garmin: {enabled, username}` with `password` only when it is retyped;
+AIGoalPlanner's "Remove Goal" sends `{nutrition_goal: {enabled: false}}`.
+`$set` with a nested object **replaces the whole sub-document**, so those two
+saves used to delete the encrypted credential, both OAuth tokens and
+`last_connected_at`, and start/target weight, bmr, tdee, weekly_schedule and the
+keto block, respectively.
+
+- basegeek: `flattenSettingsUpdate()` in
+  `graphql/fitnessgeek/resolvers.js` (exported for its tests), applied before
+  `UserSettings.updateSettings`.
+- fitnessgeek: `flattenForSet()` in `routes/settingsRoutes.js`.
+
+Same rules in both: recurse into plain objects, stop at arrays (`card_order`,
+`weekly_schedule`), Dates, scalars and the two Mixed OAuth token blobs
+(`garmin.oauth1_token` / `oauth2_token` — a per-key merge there would splice two
+tokens together); drop `undefined` and empty objects. **These two helpers are
+twins and must stay in step.** Their proper home is
+`@geeksuite/schemas/fitnessgeek/userSettings` beside the encryption — see
+`USER_SETTINGS_SCHEMA.md`; they live app-side today only because the shared
+package deliberately carries no statics.
+
+Encryption is unaffected: the schema hook rewrites `garmin.password` in the
+dot-path shape as well as the nested one (`encryptGarminPasswordIn`), which both
+suites now pin.
+
+**2. Exactly one `$set` per update.** `PUT /api/settings` used to compose an
+object literal with *two* `$set` keys — Garmin's dot paths, then a second for
+the ordinary fields — and the second silently won. Any body carrying both (i.e.
+every save the Settings page makes) dropped the Garmin write, encrypted password
+and all. One `$set`, or `$setOnInsert: {user_id}` when nothing writable
+survives the allow-list — an empty `$set` is a MongoDB error.
+
+**3. `household` is not writable through the general settings write.** Neither
+`PUT /api/settings` nor `updateFitnessUserSettings` accepts it. Accepting
+`household.household_id` let a client PUT any 12-hex code and graft itself onto
+that household, bypassing `/household/join`'s "leave first" check and gaining
+member enumeration plus shared food-log reads. `household_id` is refused by the
+zod schema (a 400 naming it); the share flags and display name still validate,
+and are then dropped by the route's allow-list, exactly as the gateway drops
+them. Membership goes through `POST /api/settings/household/create|join`,
+`/leave`; the flags go through `PUT /api/settings/household`.
+
+---
+
+## Per-day reads take the browser's date, not the server's
+
+*Landed 2026-09-05 (burn review #14).* Every container runs in UTC — no image
+installs `tzdata`, so `TZ=America/Chicago` is inert (burn review #13) — so a
+server-side `format(new Date(), 'yyyy-MM-dd')` is *tomorrow* for a Central-time
+user any evening after 19:00, which is how the dashboard's insights card served
+an empty ring.
+
+- `dailySummary` and `refreshDailySummary` in the gateway go through
+  `requireCalendarDate()`: no date, or one that is not `YYYY-MM-DD`, is an
+  error. They never guess.
+- `frontend/src/services/apiService.js` sends `localDateString()` for
+  `/summary/today`, a bare `/summary`, a literal `/summary/today/refresh` and
+  `/insights/daily-summary` with no `?date=`. Writes already sent one
+  (`fitnessGeekService.toApiDate`).
+
+Still on the server clock, and still open: `backend/src/routes/goalRoutes.js`
+(the daily calorie target, `:165,174`) and the weekly plan's `todayIndex` in
+`graphql/fitnessgeek/resolvers.js`.
+
+---
+
+## Custom food edits are partial too — and the type is flat
+
+*Landed 2026-09-05 (burn review #15, #19).* GraphQL's `FitnessFood` is declared
+flat (`serving_size` / `serving_unit`); the shared `FoodItem` schema stores
+`serving: {size, unit}`. With no field resolvers both answered `null` for every
+row, and MyFoods' edit dialog — which pre-fills from the row it just read —
+rewrote each custom food's serving to its 100 g fallback on save. The gateway
+now resolves both fields from `serving.{size,unit}`, and `updateFitnessFood`
+writes `nutrition.<key>` / `serving.size` / `serving.unit` as dot paths for the
+keys the client actually sent (a calories-only edit no longer zeroes the other
+six macros; a unit-only edit no longer deletes `serving.size`, a
+`required, min: 0.1` path with update validators off).
+
+**Still open, frontend side:** `pages/MyFoods.jsx:80,95` reads
+`food.serving?.size || 100` and passes `editingFood._id` — it needs
+`food.serving_size` and `food.id ?? food._id` before the 100 g rewrite and the
+`PUT /foods/undefined` actually stop.
 
 ---
 

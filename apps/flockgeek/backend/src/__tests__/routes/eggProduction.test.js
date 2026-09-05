@@ -103,6 +103,21 @@ describe('PUT /api/egg-production/:id (updateEggProduction)', () => {
     const stored = fakeEggProduction._docs().find((r) => r._id === 'egg-1');
     expect(stored.eggsCount).toBe(5);
   });
+
+  // BURN_REVIEW #18: updateEggProduction used to spread req.body straight
+  // into the update document, so a body `ownerId` could reassign the
+  // record to another account even though the filter is owner-scoped.
+  test('a body ownerId cannot reassign the record — it stays with its owner', async () => {
+    const res = await request(buildApp())
+      .put('/api/egg-production/egg-1')
+      .set('x-test-owner', OWNER)
+      .send({ eggsCount: 9, ownerId: OTHER });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.eggProduction.ownerId).toBe(OWNER);
+    const stored = fakeEggProduction._docs().find((r) => r._id === 'egg-1');
+    expect(stored.ownerId).toBe(OWNER);
+  });
 });
 
 describe('DELETE /api/egg-production/:id (deleteEggProduction)', () => {
@@ -152,6 +167,20 @@ describe('POST /api/egg-production (createEggProduction)', () => {
       .send({ date: '2026-08-15' });
 
     expect(res.status).toBe(400);
+  });
+
+  // BURN_REVIEW #4: createEggProduction used to spread req.body last
+  // (`EggProduction.create({ ownerId, ...data })`), so a body `ownerId` won
+  // the spread and the record was created under whatever account the
+  // caller named.
+  test('a body ownerId cannot set the owner — the record is created for the session owner', async () => {
+    const res = await request(buildApp())
+      .post('/api/egg-production')
+      .set('x-test-owner', OWNER)
+      .send({ date: '2026-08-16', eggsCount: 4, ownerId: OTHER });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.eggProduction.ownerId).toBe(OWNER);
   });
 });
 

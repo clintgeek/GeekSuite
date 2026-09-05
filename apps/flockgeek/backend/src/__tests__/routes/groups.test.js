@@ -84,3 +84,22 @@ describe('POST /api/groups (createGroup) — startDate defaulting', () => {
     expect(res.status).toBe(400);
   });
 });
+
+// BURN_REVIEW #18: updateGroup used to spread req.body straight into the
+// update document, so a body `ownerId` could reassign the record even
+// though the filter is owner-scoped (`_id` + `ownerId`).
+describe('PUT /api/groups/:id (updateGroup) — ownerId reassignment', () => {
+  test('a body ownerId cannot reassign the group — it stays with its owner', async () => {
+    fakeGroup._reset([{ _id: 'group-1', ownerId: OWNER, name: 'Brood A' }]);
+
+    const res = await request(buildApp())
+      .put('/api/groups/group-1')
+      .set('x-test-owner', OWNER)
+      .send({ name: 'Brood A Renamed', ownerId: 'owner-2' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.group.ownerId).toBe(OWNER);
+    const stored = fakeGroup._docs().find((g) => g._id === 'group-1');
+    expect(stored.ownerId).toBe(OWNER);
+  });
+});

@@ -1,4 +1,5 @@
 import HealthRecord from "../models/HealthRecord.js";
+import { withoutOwnerFields } from "../utils/ownerFields.js";
 
 /**
  * POST /api/health-records
@@ -103,7 +104,7 @@ export const updateHealthRecord = async (req, res, next) => {
   try {
     const { ownerId } = req;
     const { id } = req.params;
-    const data = req.body;
+    const data = withoutOwnerFields(req.body);
 
     const record = await HealthRecord.findOneAndUpdate(
       { _id: id, ownerId, deletedAt: { $exists: false } },

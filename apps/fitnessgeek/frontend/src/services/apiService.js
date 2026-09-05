@@ -1,5 +1,6 @@
 import { createApolloClient } from '@geeksuite/api-client';
 import { gql } from '@apollo/client';
+import { localDateString } from '@geeksuite/utils';
 import logger from '../utils/logger.js';
 
 const apolloClient = createApolloClient('fitnessgeek');
@@ -218,8 +219,11 @@ const COPY_MEAL = gql`
   }
 `;
 
+// fitnessHouseholdMemberLogs(date: String!) — the gateway's typeDefs.js
+// declares `date` as a plain String, not the `Date` scalar; sending `Date!`
+// here was a validation error waiting on the routing bug above it.
 const GET_HOUSEHOLD_MEMBER_LOGS = gql`
-  query GetHouseholdMemberLogs($memberId: ID!, $date: Date!) { fitnessHouseholdMemberLogs(memberId: $memberId, date: $date) { id log_date meal_type servings calculatedNutrition { calories_per_serving protein_grams carbs_grams fat_grams fiber_grams sugar_grams sodium_mg } food_item_id { id name brand } } }
+  query GetHouseholdMemberLogs($memberId: ID!, $date: String!) { fitnessHouseholdMemberLogs(memberId: $memberId, date: $date) { id log_date meal_type servings calculatedNutrition { calories_per_serving protein_grams carbs_grams fat_grams fiber_grams sugar_grams sodium_mg } food_item_id { id name brand } } }
 `;
 
 // Report types resolve to FitnessJSON scalars on the backend — select them
@@ -429,7 +433,12 @@ function routeRequest(method, url, data) {
       const sp = new URLSearchParams(url.split('?')[1]);
       return { query: GET_FOOD_LOGS, variables: { date: sp.get('date'), startDate: sp.get('startDate'), endDate: sp.get('endDate'), mealType: sp.get('mealType') } };
     }
-    if (base.startsWith('/logs/ household/')) { // Handle potential space issue in old code
+    // Both household branches must come before the generic '/logs/' branch
+    // below — that pattern matches '/logs/household' and '/logs/household/…'
+    // too and was swallowing both routes, sending "household"/a memberId as
+    // a `Date` scalar and blowing up (BURN_REVIEW #16).
+    if (base === '/logs/household') return { query: GET_HOUSEHOLD }; // household member list
+    if (base.match(/^\/logs\/household\//)) {
       const sp = new URLSearchParams(url.split('?')[1]);
       return { query: GET_HOUSEHOLD_MEMBER_LOGS, variables: { memberId: parts[2], date: parts[3] || sp.get('date') } };
     }
@@ -441,16 +450,16 @@ function routeRequest(method, url, data) {
     if (parts[0] === 'blood-pressure' && parts[1]) return { query: GET_BPS }; // Handle /blood-pressure/:id
     if (parts[0] === 'weight' && parts[1]) return { query: GET_WEIGHTS }; // Handle /weight/:id
     if (base === '/streaks/login') return { query: GET_LOGIN_STREAK };
-    if (base === '/summary/today') return { query: GET_DAILY_SUMMARY };
+    // "today" is the BROWSER's today. The gateway runs in UTC and now refuses
+    // to guess (BURN_REVIEW #14): west of UTC it would have answered about
+    // tomorrow all evening, which is how the insights card went blank after
+    // 19:00 Central. Every one of these paths sends an explicit YYYY-MM-DD.
+    if (base === '/summary/today') return { query: GET_DAILY_SUMMARY, variables: { date: localDateString() } };
     if (base.match(/^\/summary\/week\//)) return { query: GET_WEEKLY_SUMMARY, variables: { startDate: parts[2] } };
-    if (base.match(/^\/summary\//)) return { query: GET_DAILY_SUMMARY, variables: { date: parts[1] } };
-    if (base === '/summary') return { query: GET_DAILY_SUMMARY };
+    if (base.match(/^\/summary\//)) return { query: GET_DAILY_SUMMARY, variables: { date: parts[1] === 'today' ? localDateString() : parts[1] } };
+    if (base === '/summary') return { query: GET_DAILY_SUMMARY, variables: { date: localDateString() } };
 
     if (base === '/settings/household') return { query: GET_HOUSEHOLD };
-    if (base.match(/^\/logs\/household\//)) {
-      const sp = new URLSearchParams(url.split('?')[1]);
-      return { query: GET_HOUSEHOLD_MEMBER_LOGS, variables: { memberId: parts[2], date: parts[3] || sp.get('date') } };
-    }
     if (base === '/food-reports/overview') {
       const sp = new URLSearchParams(url.split('?')[1]);
       return { query: GET_FOOD_REPORT_OVERVIEW, variables: { start: sp.get('start'), days: parseInt(sp.get('days')) || 7 } };
@@ -462,7 +471,8 @@ function routeRequest(method, url, data) {
     if (base === '/insights/morning-brief') return { query: GET_MORNING_BRIEF };
     if (base === '/insights/daily-summary') {
       const sp = new URLSearchParams(url.split('?')[1]);
-      return { query: GET_DAILY_INSIGHT_SUMMARY, variables: { date: sp.get('date') } };
+      // Same rule as /summary above: the browser owns the calendar day.
+      return { query: GET_DAILY_INSIGHT_SUMMARY, variables: { date: sp.get('date') || localDateString() } };
     }
     if (base === '/insights/correlations') return { query: GET_CORRELATIONS };
     if (base === '/insights/weekly-report') {
@@ -529,7 +539,7 @@ function routeRequest(method, url, data) {
     }
     if (base === '/insights/chat') return { mutation: AI_CHAT, variables: { message: data.message, history: data.history } };
     if (base === '/fitness/garmin/weight') return { mutation: UPDATE_GARMIN_WEIGHT, variables: { date: data.date, weightLbs: data.weightLbs, timezone: data.timezone } };
-    if (base.match(/^\/summary\//)) return { mutation: REFRESH_DAILY_SUMMARY, variables: { date: parts[1] } };
+    if (base.match(/^\/summary\//)) return { mutation: REFRESH_DAILY_SUMMARY, variables: { date: parts[1] === 'today' ? localDateString() : parts[1] } };
     // Body is REST's { log_date, meal_type }; the camelCase spellings are
     // accepted too so an older caller does not silently send undefined.
     if (base.match(/^\/meals\/.+\/add-to-log/)) {

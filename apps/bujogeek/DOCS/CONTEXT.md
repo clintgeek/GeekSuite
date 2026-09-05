@@ -4,6 +4,12 @@ Current state reference for development work. Update this when architecture, dat
 
 Last major revision: 2026-08-30 (bug/cleanup/feature pass — see git log for the commit series).
 Amended 2026-09-03: blocked ("parked") task state — gateway half.
+Amended 2026-09-05: BURN_REVIEW #8 fix — `TaskList.jsx`'s `getLocalDate` grouped tasks by the
+UTC day for `dueDate`/`createdAt`, which this app stores as **instants** (a task can carry a
+reminder time, `graphql/bujogeek/validation.js:25-28,84-85`), not calendar dates. Now uses
+`localDateString` from `@geeksuite/utils`. Only call site in the frontend (grepped). See
+`DOCS/BURN_REVIEW.md` #8 for the full account and the two new regression tests
+(`__tests__/components/TaskList.test.jsx`, run under `TZ=America/Chicago`).
 
 ---
 

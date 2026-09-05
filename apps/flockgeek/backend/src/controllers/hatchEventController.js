@@ -5,6 +5,7 @@ import GroupMembership from "../models/GroupMembership.js";
 import Pairing from "../models/Pairing.js";
 import MeatRun from "../models/MeatRun.js";
 import { utcDateString } from "@geeksuite/utils";
+import { withoutOwnerFields } from "../utils/ownerFields.js";
 
 /**
  * Get the next available tag ID starting from 2000
@@ -133,7 +134,7 @@ export const updateHatchEvent = async (req, res, next) => {
   try {
     const { ownerId } = req;
     const { id } = req.params;
-    const data = req.body;
+    const data = withoutOwnerFields(req.body);
 
     const event = await HatchEvent.findOneAndUpdate(
       { _id: id, ownerId, deletedAt: { $exists: false } },

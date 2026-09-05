@@ -120,6 +120,23 @@ describe('PUT /api/birds/:id (updateBird)', () => {
     const stored = fakeBird._docs().find((b) => b._id === 'bird-1');
     expect(stored.name).toBe('Henrietta');
   });
+
+  // BURN_REVIEW #18: updateBird used to spread req.body straight into the
+  // update document, so a caller who included `ownerId` in the body could
+  // reassign the record to another account. The filter is owner-scoped
+  // (`_id`+`ownerId`), so this was self-transfer rather than theft — but
+  // the record still ends up owned by whoever the caller names.
+  test('a body ownerId cannot reassign the bird — the record stays with its owner', async () => {
+    const res = await request(buildApp())
+      .put('/api/birds/bird-1')
+      .set('x-test-owner', OWNER)
+      .send({ name: 'Big Red', ownerId: OTHER });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.bird.ownerId).toBe(OWNER);
+    const stored = fakeBird._docs().find((b) => b._id === 'bird-1');
+    expect(stored.ownerId).toBe(OWNER);
+  });
 });
 
 describe('DELETE /api/birds/:id (deleteBird)', () => {
@@ -188,5 +205,21 @@ describe('POST /api/birds (createBird)', () => {
       .send({ tagId: 'T-001', name: 'Also T-001' });
 
     expect(res.status).toBe(201);
+  });
+
+  // BURN_REVIEW #4: createBird used to spread req.body last
+  // (`Bird.create({ ownerId, ...data })`), so a body `ownerId` won the
+  // spread and the record was created under whatever account the caller
+  // named — not the session's.
+  test('a body ownerId cannot set the owner — the bird is created for the session owner', async () => {
+    const res = await request(buildApp())
+      .post('/api/birds')
+      .set('x-test-owner', OWNER)
+      .send({ tagId: 'T-003', name: 'Spoofed', ownerId: OTHER });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.bird.ownerId).toBe(OWNER);
+    const stored = fakeBird._docs().find((b) => b.tagId === 'T-003');
+    expect(stored.ownerId).toBe(OWNER);
   });
 });

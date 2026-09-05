@@ -1,5 +1,6 @@
 import EggProduction from "../models/EggProduction.js";
 import Bird from "../models/Bird.js";
+import { withoutOwnerFields } from "../utils/ownerFields.js";
 
 // Clean up empty string values for enum fields
 const cleanEnumFields = (data) => {
@@ -14,7 +15,7 @@ const cleanEnumFields = (data) => {
 export const createEggProduction = async (req, res, next) => {
   try {
     const { ownerId } = req;
-    const data = { ...req.body };
+    const data = withoutOwnerFields(req.body);
 
     if (!data.date || data.eggsCount === undefined) {
       return res.status(400).json({
@@ -113,7 +114,7 @@ export const updateEggProduction = async (req, res, next) => {
   try {
     const { ownerId } = req;
     const { id } = req.params;
-    const data = { ...req.body };
+    const data = withoutOwnerFields(req.body);
 
     // Clean empty enum fields
     cleanEnumFields(data);

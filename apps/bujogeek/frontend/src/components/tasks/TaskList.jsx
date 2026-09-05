@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { localDateString, startOfLocalDay, utcDateString } from '@geeksuite/utils';
+import { localDateString, startOfLocalDay } from '@geeksuite/utils';
 import {
   List,
   ListItem,
@@ -44,12 +44,15 @@ const TaskList = ({ tasks = [], viewType = 'daily' }) => {
   // never duplicated).
   const filteredTasks = filterTasks(taskArray, filters);
 
-  // Group key for a stored calendar date. Calendar dates are stored as UTC
-  // midnight, so they are read in UTC; an unparseable one falls back to today
-  // rather than dropping the task out of the list.
+  // Group key for dueDate/createdAt. Both are stored as instants — a task's
+  // dueDate can carry a real reminder time (see
+  // graphql/bujogeek/validation.js and packages/utils/src/dates.js) — so they
+  // are grouped by the *local* day the user experiences them on, not the UTC
+  // day. An unparseable one falls back to today rather than dropping the
+  // task out of the list.
   const getLocalDate = (dateString) => {
     if (!dateString) return null;
-    return utcDateString(dateString) || utcDateString(new Date());
+    return localDateString(dateString) || localDateString(new Date());
   };
 
   // Group tasks by date (for non-daily views: weekly, search, etc.) — due

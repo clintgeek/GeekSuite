@@ -140,3 +140,20 @@ describe('POST /api/meat-runs/:id/record-mortality', () => {
     expect(fakeMeatRun.findOne).not.toHaveBeenCalled();
   });
 });
+
+// BURN_REVIEW #18: updateMeatRun used to spread req.body straight into the
+// update document, so a body `ownerId` could reassign the record even
+// though the filter is owner-scoped (`_id` + `ownerId`).
+describe('PUT /api/meat-runs/:id (updateMeatRun) — ownerId reassignment', () => {
+  test('a body ownerId cannot reassign the meat run — it stays with its owner', async () => {
+    const res = await request(buildApp())
+      .put('/api/meat-runs/run-1')
+      .set('x-test-owner', OWNER)
+      .send({ status: 'growing', ownerId: 'owner-2' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.meatRun.ownerId).toBe(OWNER);
+    const stored = fakeMeatRun._docs().find((r) => r._id === 'run-1');
+    expect(stored.ownerId).toBe(OWNER);
+  });
+});

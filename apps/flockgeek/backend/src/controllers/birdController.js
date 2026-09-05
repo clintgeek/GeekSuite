@@ -3,6 +3,7 @@ import Pairing from "../models/Pairing.js";
 import GroupMembership from "../models/GroupMembership.js";
 import Group from "../models/Group.js";
 import { logger } from "../utils/logger.js";
+import { withoutOwnerFields } from "../utils/ownerFields.js";
 
 const normalizeNullableRefs = (data) => {
   if (!data || typeof data !== "object") return;
@@ -23,7 +24,7 @@ const normalizeNullableRefs = (data) => {
 export const createBird = async (req, res, next) => {
   try {
     const { ownerId } = req;
-    const data = req.body || {};
+    const data = withoutOwnerFields(req.body);
 
     normalizeNullableRefs(data);
 
@@ -179,7 +180,7 @@ export const updateBird = async (req, res, next) => {
   try {
     const { ownerId } = req;
     const { id } = req.params;
-    const data = req.body || {};
+    const data = withoutOwnerFields(req.body);
 
     normalizeNullableRefs(data);
 

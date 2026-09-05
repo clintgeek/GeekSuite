@@ -2,6 +2,7 @@ import Group from "../models/Group.js";
 import GroupMembership from "../models/GroupMembership.js";
 import { logger } from "../utils/logger.js";
 import { utcMidnightToday } from "@geeksuite/utils";
+import { withoutOwnerFields } from "../utils/ownerFields.js";
 
 /**
  * POST /api/groups
@@ -116,7 +117,7 @@ export const updateGroup = async (req, res, next) => {
   try {
     const { ownerId } = req;
     const { id } = req.params;
-    const data = req.body;
+    const data = withoutOwnerFields(req.body);
 
     const group = await Group.findOneAndUpdate(
       { _id: id, ownerId, deletedAt: { $exists: false } },

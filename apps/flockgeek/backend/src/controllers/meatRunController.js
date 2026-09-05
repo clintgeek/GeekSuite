@@ -1,4 +1,5 @@
 import MeatRun from "../models/MeatRun.js";
+import { withoutOwnerFields } from "../utils/ownerFields.js";
 
 export const listMeatRuns = async (req, res, next) => {
   try {
@@ -61,7 +62,7 @@ export const updateMeatRun = async (req, res, next) => {
   try {
     const { ownerId } = req;
     const { id } = req.params;
-    const data = req.body;
+    const data = withoutOwnerFields(req.body);
 
     // Don't allow changing pairingId or hatchEventId
     delete data.pairingId;

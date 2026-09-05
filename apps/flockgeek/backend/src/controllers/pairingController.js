@@ -1,4 +1,5 @@
 import Pairing from "../models/Pairing.js";
+import { withoutOwnerFields } from "../utils/ownerFields.js";
 
 export const createPairing = async (req, res, next) => {
   try {
@@ -90,7 +91,7 @@ export const updatePairing = async (req, res, next) => {
   try {
     const { ownerId } = req;
     const { id } = req.params;
-    const data = req.body;
+    const data = withoutOwnerFields(req.body);
 
     const pairing = await Pairing.findOneAndUpdate(
       { _id: id, ownerId, deletedAt: { $exists: false } },
