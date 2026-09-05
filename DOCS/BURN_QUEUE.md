@@ -26,7 +26,7 @@ Push only after those two land, then re-run the check in a detached worktree of 
 |---|------|-------------|------|
 | Q1 | Mint service keys into storygeek + fitnessgeek `.env.production`, restart those two containers | R1 landed (`92e7bc9`); do after the next push deploys basegeek; announce restarts | XS |
 | Q6 | bookgeek web unit tests (vitest + RTL for LibraryView/FilterSheet/BookCard/detail) | none — launch next slot | M |
-| Q10 | Revoke the `LocalApps` key once the env grep and nginx sweep confirm no caller | background greps | XS |
+| Q10 | Revoke the `LocalApps` key — env grep: no .env under Projects carries it; nginx: zero hits on /openai/v1 or /api/ai/ in the retained log window; key lastUsed 2025-11-03 | ready — Chef's confirm, then revoke via the Apps & keys tab | XS |
 | Q11 | basegeek `Databases.jsx`: wire into nav or delete | Chef's call | XS |
 | Q13 | bookgeek CONTEXT.md says Runtime: Bun (it is node:20); verify COVERS_PATH now serves the old covers in the UI | after R? — trivial, next slot | XS |
 | Q16b | fitnessgeek/bujogeek VitePWA inline manifest theme_color (vite.config.js now free) | next slot | XS |
@@ -71,6 +71,8 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 - `70eb36e` — R13 — offline pages both modes ×6, manifests, storygeek manifest, notegeek dev-server fix
 - `1fc8623` — R5 — @geeksuite/utils dates (36 tz tests); 3 apps consume; 2 live off-by-one bugs documented → R26
 - `d53b008` — R9 — bujogeek subtasks (2 gateway bugs fixed) + cache rule (156/82 tests)
+- `` — Q6 — bookgeek web tests (96) + ci jobs bookgeek-web, utils
+- `fe29788` — R23 — storygeek service worker
 - `37e83b6` — R17 — 22 dead fitnessgeek files + broken dev compose deleted
 - `164f978` — R16 — notegeek relative-time tests; dev-server fix pending in vite.config.js (shared with R13)
 - `6c39d00` — R2 — Apps & keys tab; APIKeysPage retired; AppConfigDialog on GeekDialog
