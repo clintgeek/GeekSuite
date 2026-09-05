@@ -103,12 +103,28 @@ baseGeek's too.
 | The provider does not have that model | `404 invalid_request_error` / `model_not_found` |
 | The provider timed out | `504 server_error` / `upstream_timeout` |
 | Bad provider credential, or a provider 5xx | `502 server_error` / `upstream_error` |
+| The model answered, but not with JSON (`/parse-json` only) | `502 server_error` / `invalid_json_response` |
 | Nothing left in the rotation | `503 server_error` / `upstream_unavailable` |
 | Anything else | `500 server_error` / `internal_error` |
 
 Every message ends with `(request id: <id>)` — the `X-Request-Id` on the
 response, and the key to the log line that *does* hold the provider's full
 answer. Quote it when you ask an operator what actually went wrong.
+
+**This is one vocabulary, on every surface.** The table is
+`services/aiFailureEnvelope.js`, and the OpenAI-compat proxy, `POST /api/ai/call`
+(body *and* streaming error frame) and `POST /api/ai/parse-json` all render the
+same entries — only the envelope around them differs. `/openai/v1` speaks
+OpenAI's `{ error: { message, type, param, code } }`; the two REST routes speak
+baseGeek's `{ success: false, error: { message, type, code } }`. Same status,
+same `type`, same `code`, same words.
+
+Until 2026-09-05 the REST pair did not: `/call` put `error.message` in the body
+and `/parse-json` put it in `error.details`, and those strings are built as
+`` `<Provider> API error (<status>): <the vendor's whole JSON body>` ``. If you
+have code reading `error.details` off a `/parse-json` failure, or matching on
+the old `AI_CALL_ERROR` / `AI_JSON_ERROR` codes, it needs the codes above
+instead. Nothing in the suite did.
 
 ## Who is calling
 
@@ -187,6 +203,67 @@ asks the model steward what is free (StoryGeek does; FitnessGeek does not).
 
 `--app` refuses a `:feature` suffix: a key belongs to an app, and one minted
 for `fitnessGeek:mealPlan` would silently be a `fitnessgeek` key.
+
+### What each REST route asks for
+
+Every route under `/api/ai` sits behind `authenticateJWTOrAPIKey()`, so all of
+them need *a* credential. What follows is what each one asks for **beyond**
+that. Two rules make the table readable:
+
+- **A permission only ever narrows an API key.** `checkPermission` returns true
+  for a JWT unconditionally (`middleware/apiKeyAuth.js:159`) — a logged-in
+  person holds every permission in the enum. So the `ai:*` column is a
+  statement about keys, and never about a session.
+- **The admin gate only ever admits a person.** `requireAdminUser` refuses an
+  API key on sight, whatever it was minted with, and then re-reads `role` from
+  the userGeek document per request. So an admin route is unreachable by any
+  key, and a promotion lands without a re-login.
+
+| Route | Asks for | Before 2026-09-05 |
+|---|---|---|
+| `POST /call` | `ai:call` + caller identity | unchanged |
+| `POST /call-smart` | `ai:call` + caller identity | unchanged |
+| `POST /parse-json` | `ai:call` + caller identity | unchanged (gated `267c4e3`) |
+| `POST /conversation/message`, `/conversation/:id/archive`, `DELETE /conversation/:id`, `POST /context/reset/:id` | `ai:call` | unchanged |
+| `GET /stats`, `/capabilities`, `/families`, `/provider-health`, `/conversations`, `/conversation/:id` | `ai:stats` | unchanged |
+| `GET /providers` | **`ai:providers`** | nothing |
+| `GET /models/:provider` | **`ai:models`** | nothing |
+| `GET /director/models`, `/director/free-models` | `ai:director` | unchanged |
+| `POST /director/recommend` | **`ai:director`** | nothing |
+| `POST /director/analyze-cost` | **`ai:director`** | nothing |
+| `GET /usage/:provider`, `/usage/:provider/:modelId` | authentication; **answers only for the caller** | `?userId=` was honoured on the summary |
+| `GET`/`POST /config`, `POST /test` | admin (a person) | unchanged |
+| `POST /provider` | **admin** | nothing |
+| `POST /models/:provider/refresh` | **admin** | nothing |
+| `POST /reset-stats` | **admin** | nothing |
+| `POST /cache/clear` | **admin** | nothing |
+| `POST /summarization` | **admin** | nothing |
+| `POST /director/seed-pricing`, `/director/seed-free-tier`, `/director/force-refresh` | **admin** | nothing |
+
+`ai:providers`, `ai:models` and `ai:call` are in the default set every mint path
+grants, so a key minted with the defaults keeps everything it had. `ai:director`
+is **not** — a backend that asks the steward anything needs it named explicitly,
+which is why the StoryGeek example above passes `--permissions
+ai:call,ai:director`.
+
+The bolded rows had no check at all: any credential of any app, and any
+logged-in user of any of the eight apps under SSO, could set the suite's current
+provider, empty the shared response cache, reset the statistics every console
+reads, or reseed the pricing table that decides what everything routes to. Their
+GraphQL twins (`resetAIStats`, `syncProviderModels`, `seedDirectorPricing`,
+`seedDirectorFreeTier`) were admin-gated all along; the REST forms were the
+back door standing open beside them, and nothing in the suite was using it.
+
+`recommend` and `analyze-cost` are the deliberate exception. They mutate
+nothing, StoryGeek's epub pipeline calls `recommend` from a backend, and
+`requireAdminUser` refuses keys — so an admin gate there would be an outage
+dressed as a fix. They take `ai:director`, the same permission their GET
+siblings use.
+
+`ai:usage` is still unclaimed by any route: it is not in the default mint set,
+so gating the usage routes with it would be a breaking change to a permission
+nothing has been granted yet. The identity leak on `/usage/:provider` is closed
+regardless — that was never the same question as who may ask.
 
 ### What the App Routing row keys on
 

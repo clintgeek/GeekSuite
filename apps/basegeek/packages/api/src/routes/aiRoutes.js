@@ -3,6 +3,7 @@ import { requireRole } from '../middleware/auth.js';
 import { PROVIDER_IDS, keyHintFor } from '../config/aiProviders.js';
 import { authenticateJWTOrAPIKey, requirePermission } from '../middleware/apiKeyAuth.js';
 import { resolveCaller, declaresAppRouting, logCaller } from '../services/callerIdentity.js';
+import { resolveFailure } from '../services/aiFailureEnvelope.js';
 import logger from '../lib/logger.js';
 import aiService from '../services/aiService.js';
 import aiDirectorService from '../services/aiDirectorService.js';
@@ -75,6 +76,37 @@ const requireAdminUser = (req, res, next) => {
     });
   }
   return requireRole('admin')(req, res, next);
+};
+
+/**
+ * failUpstream — the REST twin of the OpenAI proxy's error envelope.
+ *
+ * Q46: `/call` put `error.message` into the body (and into its streaming error
+ * frame) and `/parse-json` put it into `error.details`. Those strings are built
+ * as `` `Anthropic API error (${status}): ${JSON.stringify(error.response.data)}` ``
+ * in aiService, so an `ai:call` key holder read the vendor's name and its raw
+ * error body — org and project ids, quota detail, a redacted key fragment. The
+ * proxy stopped doing that in `267c4e3`; these three sites were filed and are
+ * closed here, against the *same* allowlist, now shared from
+ * services/aiFailureEnvelope.js.
+ *
+ * The old `/call` catch also chose 400 vs 502 by testing the message for
+ * "required" or "Missing". Every genuine client-shaped refusal on this route
+ * returns before the try block reaches a provider, and the one aiService throw
+ * that says "missing" is a provider-shape failure, so the heuristic bought
+ * nothing and required reading the string it must not return. The classifier
+ * reads the upstream status instead.
+ */
+const failUpstream = (req, res, error, context = {}) => {
+  const failure = resolveFailure(req, res, error, context, '[ai] upstream failure');
+  return res.status(failure.status).json({
+    success: false,
+    error: {
+      message: failure.message,
+      type: failure.type,
+      code: failure.code
+    }
+  });
 };
 
 // The providers /config reads and writes — config/aiProviders.js is the one
@@ -600,12 +632,19 @@ router.post('/call', async (req, res) => {
         res.write('data: [DONE]\n\n');
         res.end();
       } catch (streamError) {
-        req.log.error({ err: streamError }, 'Error in streaming response');
+        // Headers are already out, so the frame is all the contract leaves us —
+        // but it says the same allowlisted words the non-streaming catch would,
+        // and the provider's body goes only to the redacting logger.
+        const failure = resolveFailure(
+          req, res, streamError,
+          { stage: 'call_stream', model: config.model ?? null },
+          '[ai] /call streaming upstream failure'
+        );
         const errorChunk = {
           error: {
-            message: streamError.message,
-            type: 'server_error',
-            code: 'ai_call_failed'
+            message: failure.message,
+            type: failure.type,
+            code: failure.code
           }
         };
         res.write(`data: ${JSON.stringify(errorChunk)}\n\n`);
@@ -657,17 +696,10 @@ router.post('/call', async (req, res) => {
     }
 
   } catch (error) {
-    req.log.error({ err: error }, 'Error in /api/ai/call');
     if (!res.headersSent) {
-      // Use 502 for upstream AI failures, 400 only for bad requests
-      const status = error.message?.includes('required') || error.message?.includes('Missing') ? 400 : 502;
-      res.status(status).json({
-        success: false,
-        error: {
-          message: error.message || 'AI call failed',
-          code: 'AI_CALL_ERROR'
-        }
-      });
+      failUpstream(req, res, error, { stage: 'call', model: req.body?.config?.model ?? null });
+    } else {
+      req.log.error({ err: error }, 'Error in /api/ai/call after headers sent');
     }
   }
 });
@@ -741,20 +773,33 @@ router.post('/parse-json', async (req, res) => {
     });
 
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: {
-        message: 'AI JSON parsing failed',
-        code: 'AI_JSON_ERROR',
-        details: error.message
-      }
-    });
+    // `details: error.message` was the leak here — the same provider body the
+    // proxy stopped relaying, on a different envelope. A JSON parse failure is
+    // an upstream one too: the model answered with something that was not JSON.
+    failUpstream(req, res, error, { stage: 'parse_json', model: req.body?.config?.model ?? null });
   }
 });
 
 // GET /api/ai/providers - Get available AI providers
+//
+// Q45: this had no permission check at all, which made it the one AI route any
+// authenticated credential could read whatever it was minted for. `ai:providers`
+// is the enum entry named for exactly this — until now nothing consulted it —
+// and it is in the default set every mint path grants (models/APIKey.js:45,
+// routes/apiKeys.js:61, the GraphQL createAPIKey resolver, scripts/mint-api-key.js
+// and the UI's apiKeyDraft), so no key minted through any of them loses access.
+// `ai:models` would have worked too; `ai:providers` is chosen because a
+// vocabulary with a dead word in it invites the next reader to add another.
+//
+// The one live caller is StoryGeek's own proxy (apps/storygeek/backend/src/
+// routes/ai.js:15), which forwards the browser's SSO cookie — so what arrives
+// here is a user JWT, and a JWT holds every permission. StoryGeek's settings
+// page is unaffected.
 router.get('/providers', async (req, res) => {
   try {
+    const permissionError = requirePermission(req, res, 'ai:providers');
+    if (permissionError) return;
+
     const availableProviders = aiService.getAvailableProviders();
     const providerInfo = availableProviders.map(provider => ({
       name: provider,
@@ -781,7 +826,12 @@ router.get('/providers', async (req, res) => {
 });
 
 // POST /api/ai/provider - Set AI provider
-router.post('/provider', async (req, res) => {
+//
+// Q45, admin: this rewrites `aiService.currentProvider` — process-wide state
+// that decides which vendor answers every rotation call the suite makes next,
+// for every app and every user. Same class of thing as `/config`, so the same
+// gate.
+router.post('/provider', requireAdminUser, async (req, res) => {
   try {
     const { provider } = req.body;
 
@@ -827,8 +877,14 @@ router.post('/provider', async (req, res) => {
 });
 
 // GET /api/ai/models/:provider - Get available models for a provider
+//
+// Q45: no permission check. `ai:models` is the obvious one and is in the
+// default mint set, so no existing key loses the catalog.
 router.get('/models/:provider', async (req, res) => {
   try {
+    const permissionError = requirePermission(req, res, 'ai:models');
+    if (permissionError) return;
+
     const { provider } = req.params;
 
     if (!provider) {
@@ -865,7 +921,11 @@ router.get('/models/:provider', async (req, res) => {
 });
 
 // POST /api/ai/models/:provider/refresh - Refresh models for a provider
-router.post('/models/:provider/refresh', async (req, res) => {
+//
+// Q45, admin: spends the suite's provider credential against the vendor's
+// catalog API and rewrites the shared AIModel collection every app then routes
+// against. Not a per-caller operation in any reading.
+router.post('/models/:provider/refresh', requireAdminUser, async (req, res) => {
   try {
     const { provider } = req.params;
 
@@ -1004,8 +1064,17 @@ router.get('/director/free-models', async (req, res) => {
 });
 
 // POST /api/ai/director/analyze-cost - Analyze cost for a specific prompt
+//
+// Q45: a POST that mutates nothing — it prices a hypothetical prompt against
+// the pricing table. It takes `ai:director`, the permission its two GET
+// siblings (`/director/models`, `/director/free-models`) already use, and not
+// the admin gate: requireAdminUser refuses API keys outright, and this is
+// documented in DOCS/API_KEYS.md as one of the endpoints a key may call.
 router.post('/director/analyze-cost', async (req, res) => {
   try {
+    const permissionError = requirePermission(req, res, 'ai:director');
+    if (permissionError) return;
+
     const { prompt, expectedResponseLength = 1000 } = req.body;
 
     if (!prompt) {
@@ -1038,8 +1107,18 @@ router.post('/director/analyze-cost', async (req, res) => {
 });
 
 // POST /api/ai/director/recommend - Get provider recommendations
+//
+// Q45: read-only like analyze-cost, and `ai:director` for a second reason —
+// StoryGeek's epub pipeline calls it from a backend
+// (apps/storygeek/backend/src/services/aiService.js:395, whose sibling
+// getDirectorModels already carries the note "Needs the ai:director permission
+// — mint the key with it"). An admin gate would refuse that credential on the
+// spot, because a key belongs to an app and not to a person.
 router.post('/director/recommend', async (req, res) => {
   try {
+    const permissionError = requirePermission(req, res, 'ai:director');
+    if (permissionError) return;
+
     const { task, budget, priority = 'cost', requirements = {}, freeOnly, limit } = req.body;
 
     if (!task) {
@@ -1082,7 +1161,10 @@ router.post('/director/recommend', async (req, res) => {
 });
 
 // POST /api/ai/director/seed-pricing - Seed initial pricing data
-router.post('/director/seed-pricing', async (req, res) => {
+//
+// Q45, admin: writes the shared pricing table every routing and cost decision
+// in the suite reads. The three director mutators below are the same case.
+router.post('/director/seed-pricing', requireAdminUser, async (req, res) => {
   try {
     await aiDirectorService.seedInitialPricing();
 
@@ -1105,7 +1187,7 @@ router.post('/director/seed-pricing', async (req, res) => {
 });
 
 // POST /api/ai/director/seed-free-tier - Seed free tier information
-router.post('/director/seed-free-tier', async (req, res) => {
+router.post('/director/seed-free-tier', requireAdminUser, async (req, res) => {
   try {
     await aiDirectorService.seedFreeTierInformation();
 
@@ -1128,7 +1210,7 @@ router.post('/director/seed-free-tier', async (req, res) => {
 });
 
 // POST /api/ai/director/force-refresh - Force refresh all providers
-router.post('/director/force-refresh', async (req, res) => {
+router.post('/director/force-refresh', requireAdminUser, async (req, res) => {
   try {
     const providers = ['anthropic', 'groq', 'gemini', 'together'];
     const results = {};
@@ -1206,10 +1288,29 @@ router.get('/usage/:provider/:modelId', async (req, res) => {
 });
 
 // GET /api/ai/usage/:provider - Get usage summary for a provider
+//
+// Q45: `req.query.userId || req.user.id` meant any authenticated credential
+// could read any user's usage summary for a provider by naming them — how much
+// they have spent, against which models, and how close to a free-tier ceiling
+// they are. "Allow session-level tracking" was the intent; taking an id off the
+// query string was the mechanism, and a query string is not a credential.
+//
+// The identity now comes from the caller, exactly as the sibling
+// `/usage/:provider/:modelId` two routes up has always done. `?userId=` is
+// ignored rather than refused: nothing in the suite sends it — nothing in the
+// suite calls this route at all over HTTP, the AIGeek console reads usage
+// through the in-process GraphQL `aiUsage` query — so a 400 would only turn a
+// silent no-op into a broken page for a caller who was never entitled to the
+// answer anyway.
+//
+// The route keeps its lack of an `ai:usage` permission check, which is a
+// separate question from whose data it returns: `ai:usage` is not in the
+// default mint set, so adding it here would be a breaking change to a
+// permission nothing has yet been granted. Filed, not fixed.
 router.get('/usage/:provider', async (req, res) => {
   try {
     const { provider } = req.params;
-    const userId = req.query.userId || req.user.id; // Allow session-level tracking
+    const userId = req.user.id;
 
     const usageSummary = await aiUsageService.getProviderUsageSummary(provider, userId);
 
@@ -1241,7 +1342,11 @@ router.get('/usage/:provider', async (req, res) => {
 });
 
 // POST /api/ai/reset-stats - Reset AI statistics
-router.post('/reset-stats', async (req, res) => {
+//
+// Q45, admin: `resetSessionStats()` is process-wide. One caller clearing the
+// counters blinds `/stats`, `/provider-health` and the AIGeek console for
+// everyone at once.
+router.post('/reset-stats', requireAdminUser, async (req, res) => {
   try {
     aiService.resetSessionStats();
 
@@ -1634,7 +1739,11 @@ router.post('/context/reset/:conversationId', async (req, res) => {
 });
 
 // POST /api/ai/cache/clear - Clear response cache
-router.post('/cache/clear', async (req, res) => {
+//
+// Q45, admin: the response cache is shared across every app. Emptying it on
+// demand is both a suite-wide operation and a way to make the suite pay a
+// provider for answers it already had.
+router.post('/cache/clear', requireAdminUser, async (req, res) => {
   try {
     aiService.clearCache();
     res.json({
@@ -1654,7 +1763,11 @@ router.post('/cache/clear', async (req, res) => {
 });
 
 // POST /api/ai/summarization - Configure summarization
-router.post('/summarization', async (req, res) => {
+//
+// Q45, admin: sets `aiService.summarizationEnabled` / `summarizationThreshold`
+// on the singleton — configuration, for every conversation in every app, from
+// an unguarded POST.
+router.post('/summarization', requireAdminUser, async (req, res) => {
   try {
     const { enabled, threshold } = req.body;
 

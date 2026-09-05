@@ -32,7 +32,7 @@ regressions. Seven are genuinely new today and are marked **new**.
 | 12 | **P1** | `gatewaySchemaLoads` is weaker than the boot path it guards | `__tests__/gatewaySchemaLoads.test.js:11` | `61d3109` |
 | 13 | **P1** | `TZ=America/Chicago` is inert in every container — no image installs `tzdata` | `apps/*/Dockerfile` | pre-existing |
 | 14 | **P1** | The gateway guesses "today" from the server clock, and the client asks it to (fixed) | `graphql/fitnessgeek/resolvers.js:453` | pre-existing, now live |
-| 15 | **P1** | `FitnessFood.serving_size`/`serving_unit` always null → editing a custom food rewrites its serving to 100 g (fixed, gateway half) | `graphql/fitnessgeek/resolvers.js:1138` | pre-existing |
+| 15 | **P1** | `FitnessFood.serving_size`/`serving_unit` always null → editing a custom food rewrites its serving to 100 g (fixed, gateway + frontend) | `graphql/fitnessgeek/resolvers.js:1138` | pre-existing |
 | 16 | **P1** | The household log view is dead twice over (routing shadow, then a variable-type mismatch) | `services/apiService.js:436`, `:222` | pre-existing |
 | 17 | **P1** | A request replayed after a token refresh carries the pre-rotation CSRF token (fixed) | `packages/auth/src/authClient.js:441` | `a3c4031` **new** |
 | 18 | **P1** | flockgeek update handlers let a caller reassign a record's `ownerId` | `birdController.js:205` +7 | pre-existing |
@@ -89,6 +89,23 @@ identity out of a body. Two adjacent gaps found and *not* fixed here, filed inst
 summary), and eleven admin-shaped routes — `POST /provider`, `/models/:provider/refresh`,
 `/reset-stats`, `/cache/clear`, `/summarization`, `/director/seed-*`, `/director/force-refresh` —
 mutate suite-wide AI state behind authentication with no permission check at all.
+
+**Both follow-ups closed (Q45).** The count was ten, not eleven, and two of the ten turned out not
+to belong in the list: `/director/recommend` and `/director/analyze-cost` mutate nothing, and
+StoryGeek's epub pipeline calls the first from a backend, where `requireAdminUser`'s blanket refusal
+of API keys would have been an outage dressed as a fix. Those two take `ai:director` — the
+permission their GET siblings already use. The remaining eight take `requireAdminUser`; all eight
+were dead REST routes whose GraphQL twins (`resetAIStats`, `syncProviderModels`,
+`seedDirectorPricing`, `seedDirectorFreeTier`) had been admin-gated all along, so this is the back
+door beside the front one, closed. Two reads that had no check either were gated on the way past:
+`GET /providers` takes `ai:providers` (an enum entry nothing had ever consulted) and
+`GET /models/:provider` takes `ai:models` — both in the default set every mint path grants, so no
+deployed key loses anything. `GET /usage/:provider` now takes its user id from the credential like
+its `/usage/:provider/:modelId` sibling; `?userId=` is ignored rather than refused, since nothing
+in the suite ever sent it. 39 new cases in `aiRoutesGates.test.js`, each asserted from both sides —
+a gate that refused everyone would pass a 403-only test. Permissions table for the whole REST
+surface in `apps/basegeek/DOCS/AIGEEK_USAGE.md`. Still filed: no route claims `ai:usage`, and
+gating one with it would be a breaking change to a permission nothing has been granted.
 
 ### 3. P0 (latent) — flipping `CSRF_TOKEN=enforce` logs the suite out (fixed — see BURN_QUEUE)
 
@@ -265,6 +282,22 @@ realistic leaky upstream body (org id, project id, key fragment, upstream reques
 in the response. Not covered, and filed: `/api/ai/call` and `/api/ai/parse-json` relay the same
 strings on their own (non-OpenAI) envelope.
 
+**Follow-up closed (Q46).** Three sites, not two — `/call` leaked through its catch *and* through
+its streaming error frame, which built `{ error: { message: streamError.message } }` by hand. The
+allowlist moved out of `openaiProxy.js` into `services/aiFailureEnvelope.js` and both routers import
+it, because two copies of one vocabulary is exactly how one of the two drifts back into leaking.
+`resolveFailure` does the classifying, the logging and the `Retry-After` / `X-Request-Id` headers;
+each router only renders — OpenAI's `{ error: { message, type, param, code } }` on `/openai/v1`,
+baseGeek's `{ success: false, error: { message, type, code } }` on the two REST routes. Same status,
+same code, same words either way. One entry was added: a `/parse-json` answer that is not JSON is a
+502 `invalid_json_response` rather than an anonymous 500, since that is both actionable and
+baseGeek's own observation about the answer, not the provider's about itself. `/call`'s old
+400-vs-502 heuristic — testing `error.message` for "required" or "Missing" — went with it; it
+required reading the string it must not return, and matched nothing that was actually a client
+error. 8 new cases in `aiRoutesGates.test.js`, each asserting a realistic leaky body (vendor name,
+org id, project id, key fragment, upstream request id) appears nowhere in the response or the SSE
+frame.
+
 ### 12. P1 — the tripwire is weaker than the boot path it guards
 
 `__tests__/gatewaySchemaLoads.test.js:11` calls `buildASTSchema(typeDefs)`, which never looks at
@@ -319,22 +352,28 @@ calorie target and the Garmin day-fetch. *Fix:* send `localDateString()` from th
 (`fitnessGeekService.js:10 toApiDate` already does elsewhere) and make the no-date resolver branch an
 error rather than a guess.
 
-### 15. P1 — `FitnessFood.serving_size` / `serving_unit` are always null (fixed — see BURN_QUEUE)
+### 15. P1 — `FitnessFood.serving_size` / `serving_unit` are always null (fixed)
 
 **Fixed (gateway half):** `FitnessFood` now has `serving_size` / `serving_unit` field resolvers over
 `serving.{size,unit}`, so the six live documents that select them get real values. Pinned by
 `__tests__/fitnessgeekFoodLogWrites.test.js` (“FitnessFood exposes the serving it actually stores”).
-**Still open:** `pages/MyFoods.jsx:80,95` reads `food.serving?.size || 100` and passes
-`editingFood._id` — it has to read `food.serving_size` and `food.id ?? food._id` before the 100 g
-rewrite and the `PUT /foods/undefined` actually stop.
+
+**Fixed (frontend half, 2026-09-05):** `pages/MyFoods.jsx` now reads `food.serving_size` /
+`food.serving_unit` and `editingFood.id ?? editingFood._id` (same fix on delete and the list key), and
+`handleEditSubmit` sends only the nutrition macros that actually changed — `apiService.js`'s PUT
+`/foods/:id` route now runs through a dedicated `normalizeFoodUpdateInput` so an unedited macro is
+left alone instead of zero-filled the way `addFitnessFood`'s creator-side normalizer does. The same
+`_id`/`serving.size` misreads, all against gateway results, were also live in `matcherService.js`,
+`pages/Medications.jsx`, `components/FoodLog/SaveMealDialog.jsx`, and
+`components/FoodSearch/FoodSearch.jsx`, and were fixed alongside it. Pinned by
+`services/__tests__/fitnessGeekServiceFoodWrites.test.js`.
 
 `graphql/fitnessgeek/typeDefs.js:236` declares them flat; the shared factory stores `serving.size` /
 `serving.unit`; `resolvers.js:1138` maps only `id`. Six live documents select them
-(`services/apiService.js:46,50,58,62,71,87`). `pages/MyFoods.jsx:80` pre-fills the edit dialog from
+(`services/apiService.js:46,50,58,62,71,87`). `pages/MyFoods.jsx:80` pre-filled the edit dialog from
 `food.serving?.size || 100` — and `serving` is not a field on the type — so **every custom-food edit
-rewrites its serving size to 100 g**. The same page passes `editingFood._id` (`:95`), which the
-GraphQL row does not carry, so the save issues `PUT /foods/undefined` and CastErrors first. *Fix:* add
-`serving_size`/`serving_unit` field resolvers, and use `food.id ?? food._id`.
+rewrote its serving size to 100 g**. The same page passed `editingFood._id` (`:95`), which the
+GraphQL row does not carry, so the save issued `PUT /foods/undefined` and CastErrors first.
 
 ### 16. P1 — the household log view is dead twice over (fixed — see BURN_QUEUE)
 

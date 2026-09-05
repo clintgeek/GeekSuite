@@ -96,8 +96,8 @@ All AI endpoints support API key authentication:
 - `POST /api/ai/parse-json` - AI calls with JSON parsing
 - `GET /api/ai/stats` - Get AI statistics
 - `GET /api/ai/director/models` - Get comprehensive model info
-- `POST /api/ai/director/analyze-cost` - Analyze costs
-- `POST /api/ai/director/recommend` - Get recommendations
+- `POST /api/ai/director/analyze-cost` - Analyze costs (needs `ai:director`, not in the default mint set — since 2026-09-05)
+- `POST /api/ai/director/recommend` - Get recommendations (needs `ai:director`; storygeek's key was minted with it)
 
 ### API Key Management (JWT Auth Required)
 

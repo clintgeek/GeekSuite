@@ -5,6 +5,7 @@ import { resolveCaller, logCaller } from '../services/callerIdentity.js';
 import aiService from '../services/aiService.js';
 import AIModel from '../models/AIModel.js';
 import { countMessageTokens, countTextTokens } from '../services/tokenCounter.js';
+import { resolveFailure } from '../services/aiFailureEnvelope.js';
 
 const router = express.Router();
 const ROTATION_MODEL_ALIAS = 'basegeek-rotation';
@@ -125,141 +126,18 @@ async function providerCatalog(provider) {
  * The error envelope for an upstream failure — the proxy's own words, never
  * the provider's.
  *
- * FINDING F-23: `error.message` went straight into the response, and those
- * messages are built as `` `Anthropic API error (${status}): ${JSON.stringify(
- * error.response.data)}` `` at services/aiService.js:2440 and ten sibling
- * sites. So any `ai:call` key holder learned which vendor sits behind the
- * rotation and read its raw error body — org and project ids, quota and
- * entitlement detail, and on a bad-credential case a vendor-redacted key
- * fragment. None of that is the caller's; the credential that failed is
- * baseGeek's, not theirs.
- *
- * The bodies still exist in full, in the logs, where the redacting logger
- * writes them (`logger.error({ err: error, ... })`) and an operator can
- * correlate them by the request id the response carries.
- *
- * The allowlist below is the whole vocabulary this surface will speak about an
- * upstream failure. Statuses follow what OpenAI answers for the same
- * situation: a provider rate limit is the caller's 429 (their request really
- * was throttled), a provider's rejection of the request shape is their 400,
- * and everything that is baseGeek's problem — a bad provider key, a provider
- * 500, nothing left in the rotation — is a 5xx, because it is.
- */
-const UPSTREAM_FAILURES = {
-  invalid_request: {
-    status: 400,
-    type: 'invalid_request_error',
-    code: 'upstream_invalid_request',
-    message: 'The upstream model provider rejected this request.'
-  },
-  model_not_found: {
-    status: 404,
-    type: 'invalid_request_error',
-    code: 'model_not_found',
-    message: 'The requested model is not available from the provider that owns it.'
-  },
-  rate_limited: {
-    status: 429,
-    type: 'rate_limit_error',
-    code: 'rate_limit_exceeded',
-    message: 'The upstream model provider rate-limited this request. Retry later.'
-  },
-  timeout: {
-    status: 504,
-    type: 'server_error',
-    code: 'upstream_timeout',
-    message: 'The upstream model provider did not respond in time.'
-  },
-  unavailable: {
-    status: 503,
-    type: 'server_error',
-    code: 'upstream_unavailable',
-    message: 'No upstream model provider was able to serve this request.'
-  },
-  upstream_error: {
-    status: 502,
-    type: 'server_error',
-    code: 'upstream_error',
-    message: 'The upstream model provider failed to complete this request.'
-  },
-  internal: {
-    status: 500,
-    type: 'server_error',
-    code: 'internal_error',
-    message: 'The request could not be completed.'
-  }
-};
-
-/** The HTTP status a provider answered with, if the failure carries one. */
-function upstreamStatusOf(error) {
-  const direct = error?.response?.status ?? error?.status;
-  if (Number.isInteger(direct) && direct >= 400) return direct;
-  // Every provider adapter that has a response rethrows as
-  // `<Provider> API error (<status>): <body>`; that prefix is the only part of
-  // the string this function reads, and none of it is returned to the caller.
-  const match = /API error \((\d{3})\)/.exec(String(error?.message || ''));
-  return match ? Number(match[1]) : null;
-}
-
-/**
- * Which entry of UPSTREAM_FAILURES a thrown error is. Unrecognised failures
- * are `internal` — a 500 that says nothing, which is the right answer for a
- * bug in this file and a safe one for anything else.
- */
-function classifyFailure(error) {
-  const message = String(error?.message || '');
-  const status = upstreamStatusOf(error);
-
-  if (status) {
-    if (status === 429) return 'rate_limited';
-    if (status === 404) return 'model_not_found';
-    if (status === 408 || status === 504) return 'timeout';
-    if (status === 401 || status === 403) return 'upstream_error';
-    if (status >= 400 && status < 500) return 'invalid_request';
-    return 'upstream_error';
-  }
-
-  // baseGeek's own free-tier accounting, not a provider's: callAI records it as
-  // `Model not available for <provider>: <reason>` and moves on, so it only
-  // reaches here when it was the last word.
-  if (/model not available for/i.test(message)) return 'rate_limited';
-  if (/rate limit|quota|too many requests/i.test(message)) return 'rate_limited';
-  if (/timeout|etimedout|econnaborted/i.test(message)) return 'timeout';
-  if (/all ai providers failed|failed to initialize|no .*providers/i.test(message)) return 'unavailable';
-  if (/econnrefused|enotfound|eai_again|socket hang up|network error/i.test(message)) {
-    return 'upstream_error';
-  }
-  return 'internal';
-}
-
-/**
- * Log the real failure, answer with the allowlisted one. The request id in the
- * message is the thread back to the log line — it is the only thing here that
- * varies with the request, and it is ours, not the provider's.
+ * FINDING F-23: `error.message` went straight into the response, and those are
+ * built as `` `Anthropic API error (${status}): ${JSON.stringify(...)}` `` at
+ * services/aiService.js:2440 and ten sibling sites, so an `ai:call` key holder
+ * read the vendor's raw error body. The allowlist that replaced it now lives in
+ * services/aiFailureEnvelope.js, because `/api/ai/call` and `/api/ai/parse-json`
+ * need exactly the same vocabulary and a second copy of it is how one of the
+ * two drifts back into leaking. This function is only the rendering half: the
+ * OpenAI error shape.
  */
 function failUpstream(req, res, error, context = {}) {
-  const kind = classifyFailure(error);
-  const mapped = UPSTREAM_FAILURES[kind];
-
-  req.log.error(
-    { err: error, ...context, mappedTo: mapped.code, mappedStatus: mapped.status },
-    '[OpenAI Proxy] upstream failure'
-  );
-
-  if (mapped.status === 429 && !res.getHeader('Retry-After')) {
-    res.setHeader('Retry-After', '60');
-  }
-
-  const requestId = res.getHeader('X-Request-Id') || req.id;
-  if (requestId && !res.getHeader('X-Request-Id')) {
-    res.setHeader('X-Request-Id', String(requestId));
-  }
-
-  const message = requestId
-    ? `${mapped.message} (request id: ${requestId})`
-    : mapped.message;
-
-  return openAIError(res, mapped.status, message, mapped.type, mapped.code);
+  const failure = resolveFailure(req, res, error, context, '[OpenAI Proxy] upstream failure');
+  return openAIError(res, failure.status, failure.message, failure.type, failure.code);
 }
 
 /**
