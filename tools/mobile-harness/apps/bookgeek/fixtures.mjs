@@ -1,7 +1,7 @@
 // BookGeek fixtures. Titles are Chef's real Goodreads export, because a
 // library of "Book One / Book Two" hides exactly the bugs this harness is
 // looking for: two-line clamps, long-title truncation, serif metrics.
-import { json, svg, sessionRoutes, graphqlRoute } from '../../lib/net.mjs';
+import { svg, sessionRoutes, graphqlRoute } from '../../lib/net.mjs';
 
 const BOOK_ROWS = [
   ['b1', 'Lock In', ['John Scalzi'], 'reading', 4, 336, '2014-08-26', 42, ['science fiction', 'mystery'], 'Tor Books', '#0c4a6e'],
@@ -45,6 +45,22 @@ export const SHELVES = {
   ],
 };
 
+const SAVED_FILTER = (id, name, over = {}) => ({
+  id, name, sortBy: 'title', sortDir: 'asc', searchQuery: '', authorFilter: '',
+  tagFilter: '', shelfFilter: 'all', ownedOnly: false, ownedFilter: 'all', ...over,
+});
+
+export const PROFILE = {
+  userId: 'chef',
+  kindleEmail: 'chef@kindle.com',
+  deviceWord: 'mustang',
+  customShelves: [{ id: 'custom-comfort-reads', label: 'Comfort reads' }],
+  savedFilters: [
+    SAVED_FILTER('f1', 'Kindle queue', { shelfFilter: 'on-reader' }),
+    SAVED_FILTER('f2', 'Unread sci-fi', { shelfFilter: 'unread', tagFilter: 'science fiction' }),
+  ],
+};
+
 // A cover stands in for the real jacket: the right aspect ratio, a real title
 // block, and a colour per book so the grid reads like a shelf in a screenshot.
 function coverSvg(book) {
@@ -62,30 +78,26 @@ function coverSvg(book) {
 
 export async function routes(ctx) {
   await sessionRoutes(ctx);
-  await ctx.route('**/api/profile/me', (r) =>
-    json(r, {
-      success: true,
-      data: {
-        kindleEmail: 'chef@kindle.com',
-        deviceWord: 'mustang',
-        customShelves: [{ id: 'custom-comfort-reads', label: 'Comfort reads' }],
-      },
-    }));
-  await ctx.route('**/api/profile/library-filters', (r) =>
-    json(r, {
-      success: true,
-      data: [
-        { id: 'f1', name: 'Kindle queue', filters: { shelf: 'on-reader' } },
-        { id: 'f2', name: 'Unread sci-fi', filters: { shelf: 'unread', tag: 'science fiction' } },
-      ],
-    }));
-  await ctx.route('**/api/ai/status', (r) => json(r, { success: true, data: { provider: 'gemini', ok: true } }));
   await ctx.route(/\/api\/books\/([^/]+)\/cover/, (r) => {
     const id = /\/api\/books\/([^/]+)\/cover/.exec(r.request().url())[1];
     return svg(r, coverSvg(BOOKS.find((b) => b.id === id) || BOOKS[0]));
   });
   await graphqlRoute(ctx, {
     GetShelves: { shelves: SHELVES },
+    // Profile data moved off bookgeek's REST onto the gateway 2026-09-05
+    // (SUITE_TODO consolidation item 3); these used to be `**/api/profile/*`
+    // and `**/api/ai/status` route stubs above.
+    GetBookProfile: { bookProfile: PROFILE },
+    GetLibraryFilters: { libraryFilters: PROFILE.savedFilters },
+    GetBookAiStatus: {
+      bookAiStatus: {
+        enabled: true,
+        apiKeyConfigured: true,
+        baseGeekUrl: 'https://basegeek.clintgeek.com',
+        model: 'basegeek-rotation',
+        providers: 3,
+      },
+    },
     GetBooks: (v) => {
       let items = BOOKS;
       if (v.shelf) items = items.filter((b) => b.shelf === v.shelf);

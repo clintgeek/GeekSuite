@@ -17,12 +17,8 @@ import { isAllowedCorsOrigin } from "./corsOrigins.js";
 import { logger } from "./utils/logger.js";
 import { ensureFormat, EnsureFormatError } from "./ebookFormats.js";
 import authRouter from "./routes/authRoutes.js";
-import aiRouter from "./routes/aiRoutes.js";
 import importRouter from "./routes/importRoutes.js";
-import deviceBasketRouter, {
-  isValidDeviceWord,
-  normalizeDeviceWord,
-} from "./deviceBasket.js";
+import deviceBasketRouter from "./deviceBasket.js";
 import { authenticateToken } from "./middleware/auth.js";
 import { csrfGuard, meHandler } from "@geeksuite/user/server";
 import { sendMail } from "./services/emailService.js";
@@ -72,7 +68,10 @@ app.use((req, res, next) => {
   next();
 });
 app.use("/api/auth", authRouter);
-app.use("/api/ai", aiRouter);
+// /api/ai was one route, GET /status, and it reported on bookgeek's own
+// AIGEEK_API_KEY env var. It moved to the gateway's `bookAiStatus` query
+// 2026-09-05, where the same question is answered against basegeek's actual
+// provider config — basegeek is where bookgeek's AI was always routed.
 app.use("/api/import", importRouter);
 
 const API_PORT = process.env.API_PORT || 1800;
@@ -1557,339 +1556,13 @@ app.get("/api/shelves", authenticateToken, async (req, res) => {
   }
 });
 
-app.get("/api/profile/me", authenticateToken, async (req, res) => {
-  try {
-    if (!MONGODB_URI || mongoose.connection.readyState !== 1) {
-      return res.status(503).json({ error: "Database not connected" });
-    }
-
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ error: "User not available from token" });
-    }
-
-    const profile = await Profile.findOne({ userId }).lean();
-    res.json({ success: true, data: profile || null });
-  } catch (err) {
-    console.error("/api/profile/me error", err);
-    res.status(500).json({ error: "Failed to load profile" });
-  }
-});
-
-app.put("/api/profile/me", authenticateToken, async (req, res) => {
-  try {
-    if (!MONGODB_URI || mongoose.connection.readyState !== 1) {
-      return res.status(503).json({ error: "Database not connected" });
-    }
-
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ error: "User not available from token" });
-    }
-
-    const update = {};
-    const unset = {};
-    if (typeof req.body?.kindleEmail === "string") {
-      update.kindleEmail = req.body.kindleEmail.trim();
-    }
-
-    if (typeof req.body?.deviceWord === "string") {
-      const word = normalizeDeviceWord(req.body.deviceWord);
-      if (!word) {
-        // Empty string clears the word.
-        unset.deviceWord = "";
-      } else if (!isValidDeviceWord(word)) {
-        return res.status(400).json({
-          error:
-            "Secret word must be 3-24 characters, start with a letter, and contain only letters, numbers or hyphens",
-        });
-      } else {
-        const taken = await Profile.findOne(
-          { deviceWord: word, userId: { $ne: userId } },
-          { _id: 1 }
-        ).lean();
-        if (taken) {
-          return res.status(409).json({ error: "That word is already taken" });
-        }
-        update.deviceWord = word;
-      }
-    }
-
-    const updateDoc = { $setOnInsert: { userId } };
-    if (Object.keys(update).length) updateDoc.$set = update;
-    if (Object.keys(unset).length) updateDoc.$unset = unset;
-
-    let profile;
-    try {
-      profile = await Profile.findOneAndUpdate({ userId }, updateDoc, {
-        upsert: true,
-        new: true,
-        lean: true,
-      });
-    } catch (err) {
-      // Racing writers can slip past the pre-check; the unique sparse index
-      // is the real arbiter.
-      if (err && err.code === 11000) {
-        return res.status(409).json({ error: "That word is already taken" });
-      }
-      throw err;
-    }
-
-    res.json({ success: true, data: profile });
-  } catch (err) {
-    console.error("/api/profile/me PUT error", err);
-    res.status(500).json({ error: "Failed to save profile" });
-  }
-});
-
-app.get("/api/profile/library-filters", authenticateToken, async (req, res) => {
-  try {
-    if (!MONGODB_URI || mongoose.connection.readyState !== 1) {
-      return res.status(503).json({ error: "Database not connected" });
-    }
-
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ error: "User not available from token" });
-    }
-
-    const profile = await Profile.findOne({ userId }).lean();
-    const filters = Array.isArray(profile?.savedFilters)
-      ? profile.savedFilters
-      : [];
-
-    return res.json({ success: true, data: filters });
-  } catch (err) {
-    console.error("/api/profile/library-filters GET error", err);
-    return res
-      .status(500)
-      .json({ error: "Failed to load saved library filters" });
-  }
-});
-
-app.post("/api/profile/library-filters", authenticateToken, async (req, res) => {
-  try {
-    if (!MONGODB_URI || mongoose.connection.readyState !== 1) {
-      return res.status(503).json({ error: "Database not connected" });
-    }
-
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ error: "User not available from token" });
-    }
-
-    const rawName = typeof req.body?.name === "string" ? req.body.name.trim() : "";
-    if (!rawName) {
-      return res.status(400).json({ error: "Filter name is required" });
-    }
-
-    const preset = {
-      id: generateFilterId(),
-      name: rawName,
-      sortBy:
-        typeof req.body?.sortBy === "string" && req.body.sortBy
-          ? req.body.sortBy
-          : undefined,
-      sortDir:
-        typeof req.body?.sortDir === "string" && req.body.sortDir
-          ? req.body.sortDir
-          : "asc",
-      searchQuery:
-        typeof req.body?.searchQuery === "string" ? req.body.searchQuery : "",
-      authorFilter:
-        typeof req.body?.authorFilter === "string" ? req.body.authorFilter : "",
-      tagFilter:
-        typeof req.body?.tagFilter === "string" ? req.body.tagFilter : "",
-      shelfFilter:
-        typeof req.body?.shelfFilter === "string" && req.body.shelfFilter
-          ? req.body.shelfFilter
-          : "all",
-      ownedFilter: (() => {
-        const raw =
-          typeof req.body?.ownedFilter === "string" && req.body.ownedFilter
-            ? req.body.ownedFilter
-            : "all";
-        if (raw === "owned" || raw === "unowned") return raw;
-        return "all";
-      })(),
-      ownedOnly: (() => {
-        // Backward compatibility: prefer explicit ownedFilter, but
-        // also respect legacy boolean ownedOnly from clients.
-        const rawFilter =
-          typeof req.body?.ownedFilter === "string" && req.body.ownedFilter
-            ? req.body.ownedFilter
-            : null;
-        if (rawFilter === "owned") return true;
-        if (rawFilter === "unowned") return false;
-        return !!req.body?.ownedOnly;
-      })(),
-    };
-
-    const profile = await Profile.findOneAndUpdate(
-      { userId },
-      {
-        $setOnInsert: { userId },
-        $push: { savedFilters: preset },
-      },
-      { upsert: true, new: true, lean: true }
-    );
-
-    const filters = Array.isArray(profile?.savedFilters)
-      ? profile.savedFilters
-      : [];
-
-    return res.json({
-      success: true,
-      data: {
-        filter: preset,
-        filters,
-      },
-    });
-  } catch (err) {
-    console.error("/api/profile/library-filters POST error", err);
-    return res
-      .status(500)
-      .json({ error: "Failed to save library filter preset" });
-  }
-});
-
-app.delete(
-  "/api/profile/library-filters/:id",
-  authenticateToken,
-  async (req, res) => {
-    try {
-      if (!MONGODB_URI || mongoose.connection.readyState !== 1) {
-        return res.status(503).json({ error: "Database not connected" });
-      }
-
-      const userId = req.user?.id;
-      if (!userId) {
-        return res
-          .status(401)
-          .json({ error: "User not available from token" });
-      }
-
-      const presetId = req.params.id;
-      if (!presetId) {
-        return res.status(400).json({ error: "Filter id is required" });
-      }
-
-      const profile = await Profile.findOneAndUpdate(
-        { userId },
-        { $pull: { savedFilters: { id: presetId } } },
-        { new: true, lean: true }
-      );
-
-      const filters = Array.isArray(profile?.savedFilters)
-        ? profile.savedFilters
-        : [];
-
-      return res.json({ success: true, data: { filters } });
-    } catch (err) {
-      console.error("/api/profile/library-filters DELETE error", err);
-      return res
-        .status(500)
-        .json({ error: "Failed to delete library filter preset" });
-    }
-  }
-);
-
-// ---- Custom shelves --------------------------------------------------------
-// Built-in shelf ids live in the web app and basegeek's bookgeek resolver.
-// Custom ones are per-user definitions on the Profile; the id is what gets
-// written to Book.shelf, so it is namespaced to never collide with a built-in.
-const CUSTOM_SHELF_PREFIX = "custom-";
-const MAX_CUSTOM_SHELVES = 20;
-const MAX_CUSTOM_SHELF_LABEL = 40;
-
-function customShelfIdFromLabel(label) {
-  const slug = String(label)
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return slug ? `${CUSTOM_SHELF_PREFIX}${slug}` : null;
-}
-
-app.post("/api/profile/shelves", authenticateToken, async (req, res) => {
-  try {
-    if (!MONGODB_URI || mongoose.connection.readyState !== 1) {
-      return res.status(503).json({ error: "Database not connected" });
-    }
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ error: "User not available from token" });
-    }
-
-    const label =
-      typeof req.body?.label === "string" ? req.body.label.trim().replace(/\s+/g, " ") : "";
-    if (!label) {
-      return res.status(400).json({ error: "Shelf name is required" });
-    }
-    if (label.length > MAX_CUSTOM_SHELF_LABEL) {
-      return res
-        .status(400)
-        .json({ error: `Shelf name must be ${MAX_CUSTOM_SHELF_LABEL} characters or fewer` });
-    }
-    const id = customShelfIdFromLabel(label);
-    if (!id) {
-      return res.status(400).json({ error: "Shelf name needs at least one letter or number" });
-    }
-
-    const existing = await Profile.findOne({ userId }).lean();
-    const current = Array.isArray(existing?.customShelves) ? existing.customShelves : [];
-    if (current.some((s) => s.id === id)) {
-      return res.status(409).json({ error: "You already have a shelf with that name" });
-    }
-    if (current.length >= MAX_CUSTOM_SHELVES) {
-      return res.status(400).json({ error: `You can have up to ${MAX_CUSTOM_SHELVES} custom shelves` });
-    }
-
-    const profile = await Profile.findOneAndUpdate(
-      { userId },
-      { $setOnInsert: { userId }, $push: { customShelves: { id, label } } },
-      { upsert: true, new: true, lean: true }
-    );
-    return res.json({ success: true, data: profile });
-  } catch (err) {
-    console.error("/api/profile/shelves POST error", err);
-    return res.status(500).json({ error: "Failed to add shelf" });
-  }
-});
-
-// Removing a shelf also clears it from any book sitting on it. Books are
-// shared across users, so those books land back on Unread for everyone.
-app.delete("/api/profile/shelves/:id", authenticateToken, async (req, res) => {
-  try {
-    if (!MONGODB_URI || mongoose.connection.readyState !== 1) {
-      return res.status(503).json({ error: "Database not connected" });
-    }
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ error: "User not available from token" });
-    }
-    const id = String(req.params.id || "");
-    if (!id.startsWith(CUSTOM_SHELF_PREFIX)) {
-      return res.status(400).json({ error: "Only custom shelves can be removed" });
-    }
-
-    const profile = await Profile.findOneAndUpdate(
-      { userId },
-      { $pull: { customShelves: { id } } },
-      { new: true, lean: true }
-    );
-    const cleared = await Book.updateMany({ shelf: id }, { $unset: { shelf: "" } });
-
-    return res.json({
-      success: true,
-      data: profile,
-      clearedBooks: cleared?.modifiedCount ?? 0,
-    });
-  } catch (err) {
-    console.error("/api/profile/shelves DELETE error", err);
-    return res.status(500).json({ error: "Failed to remove shelf" });
-  }
-});
+// The /api/profile/* routes (me, library-filters, shelves) lived here until
+// 2026-09-05. They were pure data with no file or long-job work, so they moved
+// to basegeek's gateway GraphQL (graphql/bookgeek/{typeDefs,resolvers}.js:
+// bookProfile / libraryFilters queries, saveBookProfile / saveLibraryFilter /
+// deleteLibraryFilter / addBookShelf / removeBookShelf mutations), which is
+// where the web app now reads and writes them. The Profile MODEL stays: the
+// send-to-kindle route below and deviceBasket.js both read it server-side.
 
 app.post(
   "/api/books/:id/send-to-kindle",
@@ -2485,14 +2158,6 @@ function shouldReplaceDescription(existingDesc, candidateDesc) {
   if (existingScore === 0) return candidateScore > 0;
   if (existingScore <= 80 && candidateScore > existingScore + 60) return true;
   return false;
-}
-
-function generateFilterId() {
-  return (
-    Date.now().toString(36) +
-    "-" +
-    Math.random().toString(36).slice(2, 8)
-  );
 }
 
 async function fetchJson(url) {

@@ -6,8 +6,23 @@ import { useUser, usePreferences, useAppPreferences, useThemeMode } from "@geeks
 import { registerReset, reset as resetUserStore } from "./utils/resetUserStore";
 import { LoginSplash } from "@geeksuite/ui";
 import { useApolloClient } from "@apollo/client";
-import { GET_BOOKS, GET_SHELVES } from "./graphql/queries.js";
-import { UPDATE_BOOK, DELETE_BOOK, CREATE_BOOK } from "./graphql/mutations.js";
+import {
+  GET_BOOKS,
+  GET_SHELVES,
+  GET_BOOK_PROFILE,
+  GET_LIBRARY_FILTERS,
+  GET_AI_STATUS,
+} from "./graphql/queries.js";
+import {
+  UPDATE_BOOK,
+  DELETE_BOOK,
+  CREATE_BOOK,
+  SAVE_BOOK_PROFILE,
+  SAVE_LIBRARY_FILTER,
+  DELETE_LIBRARY_FILTER,
+  ADD_BOOK_SHELF,
+  REMOVE_BOOK_SHELF,
+} from "./graphql/mutations.js";
 import { GeekShell, GeekAppFrame, GeekFab, GeekToastProvider } from "@geeksuite/ui";
 import { isFabHidden } from "./components/navConfig";
 import Sidebar from "./components/Sidebar";
@@ -19,12 +34,6 @@ import BookDetailModal from "./views/BookDetailModal";
 import ReaderModal from "./views/ReaderModal";
 import AddBookDialog from "./views/AddBookDialog";
 import DeviceBasketDialog from "./views/DeviceBasketDialog";
-
-let INCLUDE_CREDENTIALS = false;
-if (typeof window !== "undefined") {
-  const origin = window.location.origin.replace(/\/$/, "");
-  INCLUDE_CREDENTIALS = API_BASE.startsWith(`${ origin }/api`);
-}
 
 // Built-in shelves. The user's custom shelves (from their profile) are
 // appended inside the component; see `shelves` below.
@@ -319,31 +328,23 @@ export default function App() {
     setSaveFilterLoading(true);
     setSaveFilterError(null);
     try {
-      const res = await authFetch("/profile/library-filters", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      const { data } = await apolloClient.mutate({
+        mutation: SAVE_LIBRARY_FILTER,
+        variables: {
+          input: {
+            name: name.trim(),
+            sortBy,
+            sortDir,
+            searchQuery,
+            authorFilter,
+            tagFilter,
+            shelfFilter,
+          },
         },
-        body: JSON.stringify({
-          name: name.trim(),
-          sortBy,
-          sortDir,
-          searchQuery,
-          authorFilter,
-          tagFilter,
-          shelfFilter,
-        }),
       });
-      const json = await res.json().catch(() => null);
-      if (!res.ok || json?.success === false) {
-        const message =
-          json?.error?.message || json?.message || "Failed to save filter";
-        throw new Error(message);
-      }
-      const filters = Array.isArray(json.data?.filters)
-        ? json.data.filters
-        : [];
-      setSavedFilters(filters);
+      setSavedFilters(
+        Array.isArray(data?.saveLibraryFilter) ? data.saveLibraryFilter : []
+      );
     } catch (err) {
       setSaveFilterError(err.message || "Failed to save filter");
     } finally {
@@ -451,19 +452,13 @@ export default function App() {
     setDeleteFilterLoadingId(id);
     setSavedFiltersError(null);
     try {
-      const res = await authFetch(`/profile/library-filters/${ encodeURIComponent(id) }`, {
-        method: "DELETE",
+      const { data } = await apolloClient.mutate({
+        mutation: DELETE_LIBRARY_FILTER,
+        variables: { id },
       });
-      const json = await res.json().catch(() => null);
-      if (!res.ok || json?.success === false) {
-        const message =
-          json?.error?.message || json?.message || "Failed to delete filter";
-        throw new Error(message);
-      }
-      const filters = Array.isArray(json.data?.filters)
-        ? json.data.filters
-        : [];
-      setSavedFilters(filters);
+      setSavedFilters(
+        Array.isArray(data?.deleteLibraryFilter) ? data.deleteLibraryFilter : []
+      );
     } catch (err) {
       setSavedFiltersError(err.message || "Failed to delete filter");
     } finally {
@@ -681,15 +676,13 @@ export default function App() {
     setSavedFiltersLoading(true);
     setSavedFiltersError(null);
     try {
-      const res = await authFetch("/profile/library-filters");
-      const json = await res.json().catch(() => null);
-      if (!res.ok || json?.success === false) {
-        const message =
-          json?.error?.message || json?.message || "Failed to load saved filters";
-        throw new Error(message);
-      }
-      const filters = Array.isArray(json.data) ? json.data : [];
-      setSavedFilters(filters);
+      const { data } = await apolloClient.query({
+        query: GET_LIBRARY_FILTERS,
+        fetchPolicy: "no-cache",
+      });
+      setSavedFilters(
+        Array.isArray(data?.libraryFilters) ? data.libraryFilters : []
+      );
     } catch (err) {
       setSavedFiltersError(err.message || "Failed to load saved filters");
     } finally {
@@ -845,17 +838,15 @@ export default function App() {
       setProfileMessage(null);
 
       try {
-        const res = await authFetch("/profile/me");
-        const json = await res.json().catch(() => null);
-        if (!cancelled && res.ok && json?.success !== false) {
-          const data = json.data || null;
-          setProfile(data);
-          setKindleEmailInput(data?.kindleEmail || "");
-          setDeviceWordInput(data?.deviceWord || "");
-        } else if (!cancelled && !res.ok) {
-          setProfileError(
-            json?.error?.message || json?.message || "Failed to load profile"
-          );
+        const { data } = await apolloClient.query({
+          query: GET_BOOK_PROFILE,
+          fetchPolicy: "no-cache",
+        });
+        if (!cancelled) {
+          const profileData = data?.bookProfile || null;
+          setProfile(profileData);
+          setKindleEmailInput(profileData?.kindleEmail || "");
+          setDeviceWordInput(profileData?.deviceWord || "");
         }
       } catch (err) {
         if (!cancelled) {
@@ -1020,11 +1011,6 @@ export default function App() {
     }
   }, [readerTheme]);
 
-  function apiErrorMessage(json, fallback) {
-    if (typeof json?.error === "string") return json.error;
-    return json?.error?.message || json?.message || fallback;
-  }
-
   async function refreshShelfSummary() {
     try {
       const shelvesRes = await apolloClient.query({
@@ -1050,16 +1036,11 @@ export default function App() {
     setShelfEditLoading(true);
     setShelfEditError(null);
     try {
-      const res = await authFetch("/profile/shelves", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ label }),
+      const { data } = await apolloClient.mutate({
+        mutation: ADD_BOOK_SHELF,
+        variables: { label },
       });
-      const json = await res.json().catch(() => null);
-      if (!res.ok || json?.success === false) {
-        throw new Error(apiErrorMessage(json, "Failed to add shelf"));
-      }
-      setProfile(json.data || null);
+      setProfile(data?.addBookShelf || null);
       setNewShelfLabel("");
     } catch (err) {
       setShelfEditError(err.message || "Failed to add shelf");
@@ -1081,14 +1062,11 @@ export default function App() {
     setShelfEditLoading(true);
     setShelfEditError(null);
     try {
-      const res = await authFetch(`/profile/shelves/${encodeURIComponent(shelfId)}`, {
-        method: "DELETE",
+      const { data } = await apolloClient.mutate({
+        mutation: REMOVE_BOOK_SHELF,
+        variables: { id: shelfId },
       });
-      const json = await res.json().catch(() => null);
-      if (!res.ok || json?.success === false) {
-        throw new Error(apiErrorMessage(json, "Failed to remove shelf"));
-      }
-      setProfile(json.data || null);
+      setProfile(data?.removeBookShelf?.profile || null);
       if (shelfFilter === shelfId) setShelfFilter("all");
       if (defaultShelfPref === shelfId) setDefaultShelfPref("all");
       await refreshShelfSummary();
@@ -1111,29 +1089,20 @@ export default function App() {
     setProfileMessage(null);
 
     try {
-      const res = await authFetch("/profile/me", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
+      const { data } = await apolloClient.mutate({
+        mutation: SAVE_BOOK_PROFILE,
+        variables: {
+          input: {
+            kindleEmail: kindleEmailInput.trim() || null,
+            deviceWord: deviceWordInput.trim().toLowerCase(),
+          },
         },
-        body: JSON.stringify({
-          kindleEmail: kindleEmailInput.trim() || null,
-          deviceWord: deviceWordInput.trim().toLowerCase(),
-        }),
       });
-      const json = await res.json().catch(() => null);
-      if (!res.ok || json?.success === false) {
-        const message =
-          json?.error?.message ||
-          (typeof json?.error === "string" ? json.error : null) ||
-          json?.message ||
-          "Failed to save profile";
-        throw new Error(message);
-      }
 
-      setProfile(json.data || null);
-      setKindleEmailInput(json.data?.kindleEmail || "");
-      setDeviceWordInput(json.data?.deviceWord || "");
+      const saved = data?.saveBookProfile || null;
+      setProfile(saved);
+      setKindleEmailInput(saved?.kindleEmail || "");
+      setDeviceWordInput(saved?.deviceWord || "");
       setProfileMessage("Profile saved");
     } catch (err) {
       setProfileError(err.message || "Failed to save profile");
@@ -2037,19 +2006,12 @@ export default function App() {
     setAiStatusError(null);
 
     try {
-      const response = await authFetch("/ai/status");
+      const { data } = await apolloClient.query({
+        query: GET_AI_STATUS,
+        fetchPolicy: "no-cache",
+      });
 
-      const json = await response.json().catch(() => null);
-
-      if (!response.ok || json?.success === false) {
-        const message =
-          json?.error?.message ||
-          json?.message ||
-          `AI status failed (${ response.status })`;
-        throw new Error(message);
-      }
-
-      setAiStatus(json?.data || null);
+      setAiStatus(data?.bookAiStatus || null);
     } catch (err) {
       setAiStatusError(err.message || "Failed to load AI status");
     } finally {

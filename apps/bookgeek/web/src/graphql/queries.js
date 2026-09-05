@@ -63,3 +63,60 @@ export const GET_SHELVES = gql`
     }
   }
 `;
+
+// ---------------------------------------------------------------------------
+// Per-user profile data. These used to be `authFetch` REST calls against
+// bookgeek's own API (`/api/profile/*`, `/api/ai/status`); they moved to the
+// gateway 2026-09-05 — pure data belongs in GraphQL, and the REST that stays
+// is binary/long-job work only. See apps/bookgeek/DOCS/CONTEXT.md.
+// ---------------------------------------------------------------------------
+
+export const SAVED_FILTER_FIELDS = `
+  id
+  name
+  sortBy
+  sortDir
+  searchQuery
+  authorFilter
+  tagFilter
+  shelfFilter
+  ownedOnly
+  ownedFilter
+`;
+
+export const GET_BOOK_PROFILE = gql`
+  query GetBookProfile {
+    bookProfile {
+      userId
+      kindleEmail
+      deviceWord
+      customShelves {
+        id
+        label
+      }
+      savedFilters {
+        ${SAVED_FILTER_FIELDS}
+      }
+    }
+  }
+`;
+
+export const GET_LIBRARY_FILTERS = gql`
+  query GetLibraryFilters {
+    libraryFilters {
+      ${SAVED_FILTER_FIELDS}
+    }
+  }
+`;
+
+export const GET_AI_STATUS = gql`
+  query GetBookAiStatus {
+    bookAiStatus {
+      enabled
+      apiKeyConfigured
+      baseGeekUrl
+      model
+      providers
+    }
+  }
+`;

@@ -6,15 +6,18 @@
  * formatting.
  */
 
-export let API_BASE = "http://localhost:1800/api";
-
-if (typeof window !== "undefined") {
-  const hostname = window.location.hostname;
-  const origin = window.location.origin.replace(/\/$/, "");
-  if (hostname !== "localhost" && hostname !== "127.0.0.1") {
-    API_BASE = `${ origin }/api`;
-  }
-}
+/**
+ * Origin for the REST that legitimately stays on bookgeek's own API — file
+ * upload/download, covers, metadata enrich, merge, imports and device baskets.
+ * Pure data moved to basegeek's gateway (see `../graphql/`).
+ *
+ * The suite convention (notegeek, storygeek): `VITE_API_URL` from
+ * `vite.config.js`, falling back to the same-origin `/api`. In production the
+ * bookgeek container serves the built SPA and the API from one origin
+ * (`bookgeek.clintgeek.com`, port 1800), so `/api` is right; in dev the vite
+ * server proxies `/api` to `http://localhost:1800`. Nothing hardcodes a host.
+ */
+export const API_BASE = import.meta.env?.VITE_API_URL || "/api";
 
 export function decodeBasicHtmlEntities(input) {
   if (typeof input !== "string") return "";

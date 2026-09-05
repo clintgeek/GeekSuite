@@ -97,15 +97,91 @@ export const typeDefs = gql`
     owned: Boolean
   }
 
+
+  # ---------------------------------------------------------------------------
+  # Per-user bookgeek data. The library itself is shared (see resolvers.js), but
+  # the Profile — Kindle address, device secret word, custom shelves and saved
+  # library filters — is per-user and every field below is scoped to the caller.
+  # ---------------------------------------------------------------------------
+
+  type BookProfile {
+    userId: String
+    kindleEmail: String
+    deviceWord: String
+    customShelves: [BookCustomShelf!]!
+    savedFilters: [BookSavedFilter!]!
+    createdAt: Date
+    updatedAt: Date
+  }
+
+  type BookCustomShelf {
+    id: String!
+    label: String!
+  }
+
+  type BookSavedFilter {
+    id: String!
+    name: String!
+    sortBy: String
+    sortDir: String
+    searchQuery: String
+    authorFilter: String
+    tagFilter: String
+    shelfFilter: String
+    ownedOnly: Boolean
+    ownedFilter: String
+  }
+
+  type RemoveBookShelfResult {
+    profile: BookProfile
+    clearedBooks: Int!
+  }
+
+  # Whether the suite's AI subsystem (basegeek itself, which is where bookgeek's
+  # AI has always been routed) has a usable provider. Counts only — no key, no
+  # hint, nothing derived from a credential.
+  type BookAiStatus {
+    enabled: Boolean!
+    apiKeyConfigured: Boolean!
+    baseGeekUrl: String
+    model: String
+    providers: Int!
+  }
+
+  input BookProfileInput {
+    kindleEmail: String
+    deviceWord: String
+  }
+
+  input SaveLibraryFilterInput {
+    name: String!
+    sortBy: String
+    sortDir: String
+    searchQuery: String
+    authorFilter: String
+    tagFilter: String
+    shelfFilter: String
+    ownedOnly: Boolean
+    ownedFilter: String
+  }
+
   type Query {
     books(page: Int, limit: Int, sort: String, sortDir: String, author: String, tag: String, shelf: String, owned: String, q: String): BookPage!
     book(id: ID!): Book
     shelves: ShelfStats!
+    bookProfile: BookProfile
+    libraryFilters: [BookSavedFilter!]!
+    bookAiStatus: BookAiStatus!
   }
 
   type Mutation {
     createBook(input: CreateBookInput!): Book
     updateBook(id: ID!, input: UpdateBookInput!): Book
     deleteBook(id: ID!, deleteFiles: Boolean): DeleteBookResponse
+    saveBookProfile(input: BookProfileInput!): BookProfile
+    saveLibraryFilter(input: SaveLibraryFilterInput!): [BookSavedFilter!]!
+    deleteLibraryFilter(id: String!): [BookSavedFilter!]!
+    addBookShelf(label: String!): BookProfile
+    removeBookShelf(id: String!): RemoveBookShelfResult!
   }
 `;

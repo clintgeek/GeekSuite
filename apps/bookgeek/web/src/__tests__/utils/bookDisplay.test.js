@@ -8,8 +8,16 @@ import {
 import { BOOKS } from '../fixtures';
 
 describe('API_BASE', () => {
-  it('stays the localhost dev default under jsdom (hostname is "localhost")', () => {
-    expect(API_BASE).toBe('http://localhost:1800/api');
+  // The hardcoded `http://localhost:1800/api` died 2026-09-05: the base is now
+  // `import.meta.env.VITE_API_URL` (vite.config.js: `/api` in prod, the dev
+  // server's proxy target in dev) with a same-origin `/api` fallback. vitest
+  // defines no VITE_API_URL, so the fallback is what a test run sees.
+  it('falls back to the same-origin /api when VITE_API_URL is undefined', () => {
+    expect(API_BASE).toBe('/api');
+  });
+
+  it('never hardcodes a host', () => {
+    expect(API_BASE).not.toMatch(/^https?:\/\//);
   });
 });
 

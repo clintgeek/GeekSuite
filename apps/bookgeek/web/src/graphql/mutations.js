@@ -1,4 +1,5 @@
 import { gql } from '@apollo/client';
+import { SAVED_FILTER_FIELDS } from './queries.js';
 
 export const CREATE_BOOK = gql`
   mutation CreateBook($input: CreateBookInput!) {
@@ -63,6 +64,64 @@ export const DELETE_BOOK = gql`
     deleteBook(id: $id, deleteFiles: $deleteFiles) {
       success
       deletedId
+    }
+  }
+`;
+
+// ---------------------------------------------------------------------------
+// Per-user profile writes — formerly PUT/POST/DELETE against bookgeek's own
+// `/api/profile/*`. Moved to the gateway 2026-09-05.
+// ---------------------------------------------------------------------------
+
+const BOOK_PROFILE_FIELDS = `
+  userId
+  kindleEmail
+  deviceWord
+  customShelves {
+    id
+    label
+  }
+`;
+
+export const SAVE_BOOK_PROFILE = gql`
+  mutation SaveBookProfile($input: BookProfileInput!) {
+    saveBookProfile(input: $input) {
+      ${BOOK_PROFILE_FIELDS}
+    }
+  }
+`;
+
+export const SAVE_LIBRARY_FILTER = gql`
+  mutation SaveLibraryFilter($input: SaveLibraryFilterInput!) {
+    saveLibraryFilter(input: $input) {
+      ${SAVED_FILTER_FIELDS}
+    }
+  }
+`;
+
+export const DELETE_LIBRARY_FILTER = gql`
+  mutation DeleteLibraryFilter($id: String!) {
+    deleteLibraryFilter(id: $id) {
+      ${SAVED_FILTER_FIELDS}
+    }
+  }
+`;
+
+export const ADD_BOOK_SHELF = gql`
+  mutation AddBookShelf($label: String!) {
+    addBookShelf(label: $label) {
+      ${BOOK_PROFILE_FIELDS}
+    }
+  }
+`;
+
+export const REMOVE_BOOK_SHELF = gql`
+  mutation RemoveBookShelf($id: String!) {
+    removeBookShelf(id: $id) {
+      profile {
+        ${BOOK_PROFILE_FIELDS}
+      }
+      clearedBooks
     }
   }
 `;
