@@ -11,9 +11,6 @@ import connectDB from './config/db.js';
 import { getAllowedOrigins } from './config/corsOrigins.js';
 import { logger } from './lib/logger.js';
 import { notFound, errorHandler } from './middleware/errorMiddleware.js';
-import noteRoutes from './routes/notes.js';
-import tagRoutes from './routes/tags.js';
-import searchRoutes from './routes/search.js';
 import { protect } from './middleware/authMiddleware.js';
 import { csrfGuard, meHandler } from '@geeksuite/user/server';
 import authRoutes from './routes/auth.js';
@@ -128,10 +125,6 @@ async function start() {
 
   // Canonical auth check (cookie-first)
   app.get('/api/me', protect, meHandler());
-
-  app.use('/api/notes', noteRoutes);
-  app.use('/api/tags', tagRoutes);
-  app.use('/api/search', searchRoutes);
 
   // Health check — notegeek had no health route at all before this; every
   // other suite app (and basegeek's Home page health proxy, which defaults

@@ -110,7 +110,8 @@ book is visible to everyone; only the *definition* is per user. Limits: 20
 shelves, 40-char labels.
 
 **Where the list lives.** The live GraphQL for bookgeek is basegeek's
-`graphql/bookgeek/` module (the copy under `api/src/graphql/` is not mounted).
+`graphql/bookgeek/` module. (The unmounted dead copy that used to live under
+`api/src/graphql/` was deleted 2026-09-05 — see `DOCS/SUITE_TODO.md`.)
 Its `shelves` query counts the built-ins and then aggregates every other
 non-empty `shelf` value, so custom shelves get badge counts without basegeek
 knowing about profiles. The web app composes `BUILT_IN_SHELVES` plus

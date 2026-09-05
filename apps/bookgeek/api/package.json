@@ -10,7 +10,6 @@
   },
   "dependencies": {
     "better-sqlite3": "^11.8.1",
-    "@apollo/subgraph": "^2.9.3",
     "@geeksuite/logger": "workspace:*",
     "@geeksuite/user": "workspace:*",
     "axios": "^1.7.7",

@@ -151,6 +151,14 @@ pushVapidKey + save/removePushSubscription.
 
 ---
 
+**Housekeeping note (2026-09-05):** `DOCS/SUITE_TODO.md` still listed a
+"bujogeek duplicate model files (`userModel.js`/`User.js`,
+`templateModel.js`/`Template.js`)" cleanup item. Checked the repo — none of
+those files exist anywhere under `apps/bujogeek`; they (plus the entire
+legacy REST routes/controllers layer) were already deleted in `3af40cc`
+("remove dead REST layer and orphaned frontend code", 2026-08-30). The TODO
+entry was stale; struck it.
+
 ## Known Issues / Technical Debt
 
 - ~~Every Apollo query is `fetchPolicy: 'no-cache'`~~ — **superseded 2026-09-05** (`d53b008`
