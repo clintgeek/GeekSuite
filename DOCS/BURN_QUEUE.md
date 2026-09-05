@@ -15,10 +15,8 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | R5 | TODO #17 shared date utilities → `packages/utils`; bujogeek/fitnessgeek/flockgeek consume | opus | packages/utils, 3 apps (date code only) | 09-05 am |
 | R6 | TODO #18 shared logger → `packages/logger`; all backends' logger modules | sonnet | packages/logger, each backend's logger + server line | 09-05 am |
 | R7 | TODO #21 fitnessgeek UserSettings single schema + tripwire | opus | 2 model files, graphql/fitnessgeek, fitnessgeek settings routes | 09-05 am |
-| R8 | TODO #24 storygeek narration markdown | sonnet | storygeek frontend (message rendering) | 09-05 am |
 | R9 | TODO #25/#26 bujogeek subtasks UI + Apollo cache invalidation | opus | bujogeek frontend, its GraphQL surface | 09-05 am |
 | R10 | packages/ui leftovers: `GeekAppFrame fill`, sheet initialFocus/close/actionsAlign, dialog title hooks, reduced motion | sonnet | packages/ui | 09-05 am |
-| R11 | `DOCS/RUNBOOK.md` — the real operational context file | sonnet | DOCS only | 09-05 am |
 | R12 | `/login` and `/register` redirect home when already signed in (all apps) | sonnet | each frontend's router/auth files; skips files another agent has open | 09-05 11:25 |
 
 ## Queued (launch when files free / prerequisite lands)
@@ -37,6 +35,8 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | Q10 | Revoke the `LocalApps` key once the env grep and nginx sweep confirm no caller | background greps | XS |
 | Q11 | basegeek `Databases.jsx`: wire into nav or delete | Chef's call | XS |
 | Q12 | AIGeek: `aiDirectorService`/`rateLimitService` last `llm7` references | R1 owns those files | XS |
+| Q13 | bookgeek CONTEXT.md says Runtime: Bun (it is node:20); verify COVERS_PATH now serves the old covers in the UI | after R? — trivial, next slot | XS |
+| Q14 | storygeek CanonCard summary text through Narration too (agent left it as a separate render path) | Chef's call | XS |
 
 ## How to resume if this session is lost
 
@@ -67,4 +67,7 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 ## Landed during the burn
 
 (append as commits land: `sha — stream — one line`)
-- R3 — OpenAI-compat audit: `apps/basegeek/DOCS/OPENAI_COMPAT_AUDIT.md` + 72-test conformance suite (22 `it.failing` findings)
+- `2b22d05` — R11 — DOCS/RUNBOOK.md; surfaced the bookgeek covers volume bug
+- `c54845e` — bookgeek covers directory mounted and container recreated (80 covers visible again)
+- storygeek markdown (R8) — Narration.jsx, remark-gfm/breaks
+- `700112e` — R3 — OpenAI-compat audit: `apps/basegeek/DOCS/OPENAI_COMPAT_AUDIT.md` + 72-test conformance suite (22 `it.failing` findings)
