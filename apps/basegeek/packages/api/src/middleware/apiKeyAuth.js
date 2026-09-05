@@ -97,11 +97,15 @@ export const authenticateAPIKey = (requiredPermission = null) => {
       apiKeyDoc.incrementUsage();
       await apiKeyDoc.save();
 
-      // Add API key info to request
+      // Add API key info to request.
+      // `owner` is the userGeek id of whoever minted the key. A service key has
+      // no session, so when a caller does not name a user in the body this is
+      // who the call is attributed to — see services/callerIdentity.js.
       req.apiKey = {
         id: apiKeyDoc.keyId,
         name: apiKeyDoc.name,
         appName: apiKeyDoc.appName,
+        owner: apiKeyDoc.createdBy,
         permissions: apiKeyDoc.permissions,
         rateLimit: apiKeyDoc.rateLimit,
         usage: apiKeyDoc.usage
@@ -111,6 +115,7 @@ export const authenticateAPIKey = (requiredPermission = null) => {
       req.user = {
         id: `apikey_${apiKeyDoc.keyId}`,
         app: apiKeyDoc.appName,
+        owner: apiKeyDoc.createdBy,
         type: 'api_key'
       };
 

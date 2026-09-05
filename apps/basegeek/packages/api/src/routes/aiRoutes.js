@@ -2,6 +2,7 @@ import express from 'express';
 import { requireRole } from '../middleware/auth.js';
 import { PROVIDER_IDS, keyHintFor } from '../config/aiProviders.js';
 import { authenticateJWTOrAPIKey, requirePermission } from '../middleware/apiKeyAuth.js';
+import { resolveCaller, declaresAppRouting, logCaller, UNATTRIBUTED } from '../services/callerIdentity.js';
 import logger from '../lib/logger.js';
 import aiService from '../services/aiService.js';
 import aiDirectorService from '../services/aiDirectorService.js';
@@ -156,10 +157,16 @@ router.post('/conversation/message', async (req, res) => {
       contextWindow,
       provider,
       model,
-      freeOnly = false,
-      appName = 'unknown'
+      freeOnly = false
     } = req.body;
-    const userId = req.user.id;
+
+    // Same rule as /call: the app is the credential's, not the body's. The
+    // conversation record carries it too, so a conversation cannot be filed
+    // under an app its caller does not hold a credential for.
+    const caller = resolveCaller(req, req.body);
+    logCaller(req, caller, '[ai] /conversation/message caller');
+    const appName = caller.appId;
+    const userId = caller.userId || req.user.id;
 
     // Validate input
     if (!conversationId) {
@@ -196,6 +203,7 @@ router.post('/conversation/message', async (req, res) => {
       taskTypeHint: metadata?.taskTypeHint,
       userId,
       appName,
+      feature: caller.feature,
       freeOnly: freeOnly || provider === 'free',
     };
 
@@ -464,8 +472,12 @@ router.post('/call', async (req, res) => {
     const permissionError = requirePermission(req, res, 'ai:call');
     if (permissionError) return;
 
+    // Who is calling comes from the credential, never from the body. The body
+    // may still name a *feature* of that app.
+    const caller = resolveCaller(req, req.body);
+    logCaller(req, caller, '[ai] /call caller');
+
     const stream = req.body.stream || false;
-    const userId = req.user.id;
 
     // Support both legacy 'prompt' and OpenAI-style 'messages' array
     let messages = req.body.messages;
@@ -483,10 +495,18 @@ router.post('/call', async (req, res) => {
     if (config.provider === 'basegeek-app' || config.useAppConfig || req.body.useAppConfig) {
       config.useAppConfig = true;
       delete config.provider;
-    } else if (!config.provider && !config.freeOnly && config.appName && config.appName !== 'unknown') {
-      // Auto-trigger app config when app identifies itself but doesn't specify routing
+    } else if (!config.provider && !config.freeOnly && declaresAppRouting(req.body)) {
+      // Legacy auto-trigger: a body that names an app and no provider wants
+      // app routing. It is now only a *switch* — the row looked up is the
+      // resolved caller's, whatever name the body used. The AIGeek "Try it"
+      // panel still sends neither, so it still exercises the raw rotation.
       config.useAppConfig = true;
     }
+
+    // Identity is stamped last so nothing in the body can survive it.
+    config.appName = caller.appId;
+    config.feature = caller.feature;
+    config.userId = caller.userId;
 
     // If messages provided, use them directly (don't convert to string yet)
     if (Array.isArray(messages) && messages.length > 0) {
@@ -1275,7 +1295,12 @@ router.post('/config', requireAdminUser, async (req, res) => {
 // POST /api/ai/test - Test AI provider API key
 router.post('/test', requireAdminUser, async (req, res) => {
   try {
-    const { provider, appName = 'test' } = req.body;
+    const { provider } = req.body;
+    // /test is admin-gated, so the caller is always a JWT admin; the app is
+    // whatever their token says, not what the body claims.
+    const caller = resolveCaller(req, req.body);
+    logCaller(req, caller, '[ai] /test caller');
+    const appName = caller.appId;
     req.log.info({ provider }, '[AI Test] Testing provider');
 
     if (!provider) {
@@ -1318,7 +1343,11 @@ router.post('/test', requireAdminUser, async (req, res) => {
 
     // Test the provider with a simple prompt
     const testPrompt = 'Hello, this is a test message. Please respond with "OK" if you receive this.';
-    const result = await aiService.callProvider(provider, testPrompt, { maxTokens: 10, appName });
+    const result = await aiService.callProvider(provider, testPrompt, {
+      maxTokens: 10,
+      appName,
+      feature: caller.feature
+    });
 
     req.log.info({ provider, preview: result.content?.substring(0, 50) }, '[AI Test] API call successful');
 
@@ -1365,8 +1394,11 @@ router.post('/v1/chat/completions', async (req, res) => {
     const permissionError = requirePermission(req, res, 'ai:call');
     if (permissionError) return;
 
+    const caller = resolveCaller(req, req.body);
+    logCaller(req, caller, '[ai] /v1/chat/completions caller');
+
     const { model, messages, temperature, max_tokens, stream = false } = req.body;
-    const userId = req.user?.id || 'api-user';
+    const userId = caller.userId || req.user?.id || 'api-user';
 
     if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({
@@ -1403,7 +1435,10 @@ router.post('/v1/chat/completions', async (req, res) => {
       maxTokens: max_tokens,
       temperature,
       userId,
-      appName: 'codegeek' // Track CodeGeek usage separately
+      // Was hardcoded 'codegeek'. Now the credential decides, and 'codegeek'
+      // is only the fallback for a caller whose credential names no app.
+      appName: caller.appId === UNATTRIBUTED ? 'codegeek' : caller.appId,
+      feature: caller.feature
     };
 
     const result = await aiService.callAI(prompt, config);
@@ -1495,8 +1530,11 @@ router.post('/call-smart', async (req, res) => {
     const permissionError = requirePermission(req, res, 'ai:call');
     if (permissionError) return;
 
+    const caller = resolveCaller(req, req.body);
+    logCaller(req, caller, '[ai] /call-smart caller');
+
     const { messages, conversationId, taskTypeHint, dryRun } = req.body;
-    const userId = req.user.id;
+    const userId = caller.userId || req.user.id;
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({
@@ -1514,7 +1552,9 @@ router.post('/call-smart', async (req, res) => {
       taskTypeHint,
       dryRun,
       userId,
-      appName: req.body.appName || 'smart-routing'
+      // Credential, not body — see services/callerIdentity.js.
+      appName: caller.appId,
+      feature: caller.feature
     });
 
     res.json(result);

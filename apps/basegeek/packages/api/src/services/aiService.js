@@ -1339,6 +1339,7 @@ class AIService {
       model,
       userId = null,
       appName = 'unknown',
+      feature = null,
       messages = null,
       autoRotate = false,
       freeOnly = false,
@@ -1372,11 +1373,19 @@ class AIService {
       }
     }
 
-    // App config resolution: look up server-side routing for this appName
-    // Triggered by useAppConfig flag, model "basegeek-app", or when no explicit provider/model is given
+    // App config resolution: look up server-side routing for the *resolved*
+    // app id. The id reaches here from the caller's credential (see
+    // services/callerIdentity.js), never from a body field — routing decides
+    // which model answers and at whose expense, and a request body is not a
+    // credential. Normalizing again here covers in-process callers.
+    const appId = AIAppConfig.normalizeAppName(appName) || 'unknown';
+    const featureId = typeof feature === 'string' && feature.trim()
+      ? feature.trim().toLowerCase()
+      : null;
+
     if (useAppConfig || requestedProvider === 'basegeek-app') {
       try {
-        const appConfig = await AIAppConfig.findOne({ appName, enabled: true });
+        const appConfig = await this.findAppConfig(appId);
         if (appConfig) {
           // Update lastSeen
           appConfig.lastSeen = new Date();
@@ -1387,13 +1396,13 @@ class AIService {
             model = appConfig.model;
             autoRotate = false;
             freeOnly = false;
-            logger.info(`[AppConfig] ${appName} → specific: ${appConfig.provider}/${appConfig.model}`);
+            logger.info(`[AppConfig] ${appId} → specific: ${appConfig.provider}/${appConfig.model}`);
           } else if (appConfig.tier === 'free') {
             freeOnly = true;
-            logger.info(`[AppConfig] ${appName} → free tier`);
+            logger.info(`[AppConfig] ${appId} → free tier`);
           } else if (appConfig.tier === 'rotation') {
             autoRotate = true;
-            logger.info(`[AppConfig] ${appName} → rotation`);
+            logger.info(`[AppConfig] ${appId} → rotation`);
           }
 
           // Apply server-side defaults only if not specified in the request
@@ -1405,16 +1414,18 @@ class AIService {
           }
         } else {
           // Auto-discover: create a default config entry for this app
+          // Auto-discovery writes the normalized id, so the collection stops
+          // growing a new row per spelling.
           AIAppConfig.findOneAndUpdate(
-            { appName },
-            { appName, tier: 'free', autoDiscovered: true, lastSeen: new Date() },
+            { appName: appId },
+            { appName: appId, tier: 'free', autoDiscovered: true, lastSeen: new Date() },
             { upsert: true, new: true }
           ).catch(() => {});
           freeOnly = true;
-          logger.info(`[AppConfig] ${appName} → auto-discovered, defaulting to free tier`);
+          logger.info(`[AppConfig] ${appId} → auto-discovered, defaulting to free tier`);
         }
       } catch (appConfigError) {
-        logger.error({ err: appConfigError }, `[AppConfig] Failed to resolve config for ${appName}`);
+        logger.error({ err: appConfigError }, `[AppConfig] Failed to resolve config for ${appId}`);
         // Fall through to normal routing
       }
     }
@@ -1629,7 +1640,7 @@ class AIService {
           });
         }
         this.updateRateLimitUsage(currentProvider, totalTokens);
-        await this.updateStats(currentProvider, result.inputTokens || 0, result.outputTokens || 0, providerModel, appName);
+        await this.updateStats(currentProvider, result.inputTokens || 0, result.outputTokens || 0, providerModel, appId, featureId);
 
         const trackingUserId = userId || 'session';
         await aiUsageService.trackUsage(currentProvider, providerModel, trackingUserId, {
@@ -1688,7 +1699,8 @@ class AIService {
           freeOnly: true,
           messages,
           userId: options.userId,
-          appName: options.appName || 'free-tier'
+          appName: options.appName || 'free-tier',
+          feature: options.feature || null
         });
         return {
           success: true,
@@ -1737,7 +1749,8 @@ class AIService {
         provider,
         messages,
         userId: options.userId,
-        appName: options.appName || 'smart-routing'
+        appName: options.appName || 'smart-routing',
+        feature: options.feature || null
       });
 
       // Track latency and update provider score
@@ -1774,7 +1787,8 @@ class AIService {
           provider: fallbackProvider,
           messages,
           userId: options.userId,
-          appName: options.appName || 'smart-routing'
+          appName: options.appName || 'smart-routing',
+          feature: options.feature || null
         });
 
         const fallbackLatency = Date.now() - startTime;
@@ -2546,9 +2560,45 @@ class AIService {
   }
 
   /**
-   * Update usage statistics
+   * Find the routing row for a resolved app id.
+   *
+   * Two lookups, in this order:
+   *   1. the exact normalized id — what every row written from now on uses;
+   *   2. a case-insensitive match on the id or any `id:feature` spelling —
+   *      the legacy rows (`fitnessGeek`, `fitnessGeek:mealPlan`) an admin
+   *      configured before routing was keyed by credential.
+   *
+   * Without (2), collapsing `fitnessGeek` to `fitnessgeek` would silently
+   * un-route an app that has been pinned to a specific model for months.
+   * Migrating those rows is an admin decision, not a side effect of a deploy.
+   *
+   * @param {string} appId  normalized app id
+   * @returns {Promise<object|null>}
    */
-    async updateStats(provider, inputTokens, outputTokens, modelId = null, appName = 'unknown') {
+  async findAppConfig(appId) {
+    if (!appId) return null;
+
+    const exact = await AIAppConfig.findOne({ appName: appId, enabled: true });
+    if (exact) return exact;
+
+    const escaped = appId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return AIAppConfig.findOne({
+      appName: new RegExp(`^${escaped}(:|$)`, 'i'),
+      enabled: true
+    });
+  }
+
+  /**
+   * Update usage statistics.
+   *
+   * `appName` is the resolved app id and `feature` an optional slice of it.
+   * Both are grouped here rather than being separate apps: the breakdown used
+   * to show `fitnessGeek`, `fitnessgeek` and `fitnessGeek:mealPlan` as three
+   * unrelated consumers, which made "what does fitnessgeek cost" unanswerable.
+   * Now there is one app row with a `features` map inside it. The map is
+   * additive — existing readers of `appUsage[app].calls` are unaffected.
+   */
+    async updateStats(provider, inputTokens, outputTokens, modelId = null, appName = 'unknown', feature = null) {
     // Cost below is (tokens / 1000) * costPer1kTokens — per-1K, matching the
     // provider table's unit, NOT the per-1M unit of AIPricing/costForTokens.
     const totalTokens = inputTokens + outputTokens;
@@ -2626,31 +2676,61 @@ class AIService {
 
     logger.debug(`Updated provider stats for ${provider}: calls=${this.sessionStats.providerUsage[provider].calls}, tokens=${this.sessionStats.providerUsage[provider].tokens}, cost=${this.sessionStats.providerUsage[provider].cost}`);
 
-    // Track app usage
-    if (!this.sessionStats.providerUsage[provider].appUsage[appName]) {
-      this.sessionStats.providerUsage[provider].appUsage[appName] = {
+    // Track app usage, grouped by the resolved app id.
+    const appId = AIAppConfig.normalizeAppName(appName) || 'unknown';
+    const featureId = typeof feature === 'string' && feature.trim()
+      ? feature.trim().toLowerCase()
+      : null;
+
+    if (!this.sessionStats.providerUsage[provider].appUsage[appId]) {
+      this.sessionStats.providerUsage[provider].appUsage[appId] = {
         calls: 0,
         tokens: 0,
         cost: 0,
         freeCalls: 0,
-        paidCalls: 0
+        paidCalls: 0,
+        features: {}
       };
     }
 
-    this.sessionStats.providerUsage[provider].appUsage[appName].calls++;
-    this.sessionStats.providerUsage[provider].appUsage[appName].tokens += totalTokens;
-    this.sessionStats.providerUsage[provider].appUsage[appName].cost += actualCost;
+    const appStats = this.sessionStats.providerUsage[provider].appUsage[appId];
+    // Rows recorded before features existed have no map; give them one rather
+    // than letting the first featured call throw.
+    if (!appStats.features) appStats.features = {};
 
-    logger.debug(`Updated app stats for ${provider}/${appName}: calls=${this.sessionStats.providerUsage[provider].appUsage[appName].calls}, tokens=${this.sessionStats.providerUsage[provider].appUsage[appName].tokens}, cost=${this.sessionStats.providerUsage[provider].appUsage[appName].cost}`);
+    appStats.calls++;
+    appStats.tokens += totalTokens;
+    appStats.cost += actualCost;
+
+    let featureStats = null;
+    if (featureId) {
+      if (!appStats.features[featureId]) {
+        appStats.features[featureId] = {
+          calls: 0,
+          tokens: 0,
+          cost: 0,
+          freeCalls: 0,
+          paidCalls: 0
+        };
+      }
+      featureStats = appStats.features[featureId];
+      featureStats.calls++;
+      featureStats.tokens += totalTokens;
+      featureStats.cost += actualCost;
+    }
+
+    logger.debug(`Updated app stats for ${provider}/${appId}${featureId ? `:${featureId}` : ''}: calls=${appStats.calls}, tokens=${appStats.tokens}, cost=${appStats.cost}`);
 
     if (isFreeUsage) {
       this.sessionStats.providerUsage[provider].freeCalls =
         (this.sessionStats.providerUsage[provider].freeCalls || 0) + 1;
-      this.sessionStats.providerUsage[provider].appUsage[appName].freeCalls++;
+      appStats.freeCalls++;
+      if (featureStats) featureStats.freeCalls++;
     } else {
       this.sessionStats.providerUsage[provider].paidCalls =
         (this.sessionStats.providerUsage[provider].paidCalls || 0) + 1;
-      this.sessionStats.providerUsage[provider].appUsage[appName].paidCalls++;
+      appStats.paidCalls++;
+      if (featureStats) featureStats.paidCalls++;
     }
   }
 

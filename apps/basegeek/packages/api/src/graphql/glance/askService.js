@@ -30,6 +30,7 @@
 
 import logger from '../../lib/logger.js';
 import aiService from '../../services/aiService.js';
+import { internalCaller } from '../../services/callerIdentity.js';
 
 // aiGeek's App Routing alias. Expressed server-side as the same normalization
 // `/api/ai/call` performs for `model: "basegeek-app"`: useAppConfig + appName.
@@ -307,7 +308,18 @@ function callerId(context) {
   return context?.user?.id || context?.user?._id || null;
 }
 
-async function callModel({ system, user, schema, context }) {
+async function callModel({ system, user, schema, context, feature = null }) {
+  // In-process caller: there is no request body to distrust and no credential
+  // to read, so Ask names itself. `internalCaller` normalizes the id the same
+  // way `resolveCaller` does for HTTP callers, so `startgeek` here and a
+  // startgeek JWT arriving at /api/ai/call land in the same routing row and
+  // the same usage bucket.
+  const caller = internalCaller({
+    appId: ASK_APP_NAME,
+    userId: callerId(context),
+    feature,
+  });
+
   const content = await withTimeout(
     aiService.callAI(user, {
       messages: [
@@ -317,8 +329,9 @@ async function callModel({ system, user, schema, context }) {
       // aiGeek App Routing: `model: "basegeek-app"` for app id `startgeek`.
       // `/api/ai/call` normalizes that alias to exactly these two fields.
       useAppConfig: true,
-      appName: ASK_APP_NAME,
-      userId: callerId(context) ? String(callerId(context)) : null,
+      appName: caller.appId,
+      feature: caller.feature,
+      userId: caller.userId,
       responseFormat: { type: 'json_schema', json_schema: schema },
       temperature: 0,
     }),
@@ -429,6 +442,7 @@ export async function planQuery(query, context) {
       user: text,
       schema: PLAN_SCHEMA,
       context,
+      feature: 'plan',
     });
 
     if (!parsed) {
@@ -462,6 +476,7 @@ export async function answerFrom(query, context, { glanceToday, results } = {}) 
       user: `Question: ${text}\n\nContext:\n${JSON.stringify(contextPayload)}`,
       schema: ANSWER_SCHEMA,
       context,
+      feature: 'answer',
     });
 
     if (!parsed) {
@@ -636,6 +651,7 @@ export async function draftFrom(input, kind, context) {
       user: text,
       schema: isTask ? DRAFT_TASK_SCHEMA : DRAFT_NOTE_SCHEMA,
       context,
+      feature: 'draft',
     });
 
     if (!parsed) {

@@ -1,6 +1,7 @@
 import express from 'express';
 import crypto from 'crypto';
 import { authenticateAPIKey } from '../middleware/apiKeyAuth.js';
+import { resolveCaller, logCaller } from '../services/callerIdentity.js';
 import aiService from '../services/aiService.js';
 import AIModel from '../models/AIModel.js';
 import { countMessageTokens, countTextTokens } from '../services/tokenCounter.js';
@@ -169,7 +170,7 @@ router.post('/chat/completions', async (req, res) => {
       max_tokens: maxTokens,
       stream = false,
       top_p: topP,
-      user: userId,
+      user: bodyUserId,
       // Pass-through params for providers that support them
       stop,
       presence_penalty: presencePenalty,
@@ -180,6 +181,13 @@ router.post('/chat/completions', async (req, res) => {
       n,
       seed
     } = req.body || {};
+
+    // The key is the only auth on this router, so it is also the only thing
+    // that says which app is calling. OpenAI's `user` field is honoured as the
+    // per-user attribution it was designed to be, via resolveCaller.
+    const caller = resolveCaller(req, req.body || {});
+    logCaller(req, caller, '[OpenAI Proxy] caller');
+    const userId = caller.userId ?? bodyUserId;
 
     if (tools !== undefined && !Array.isArray(tools)) {
       return openAIError(res, 400, 'tools must be an array when provided.', 'invalid_request_error', 'invalid_tools');
@@ -245,7 +253,8 @@ router.post('/chat/completions', async (req, res) => {
       autoRotate: !useFreeAlias && !useAppAlias,
       freeOnly: useFreeAlias,
       useAppConfig: useAppAlias,
-      appName: req.apiKey?.appName || 'openai-proxy',
+      appName: caller.appId,
+      feature: caller.feature,
       cacheNamespace,
       // Pass through standard OpenAI params
       ...(stop !== undefined && { stop }),

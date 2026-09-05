@@ -1,33 +1,58 @@
 const logger = require('../config/logger');
 const axios = require('axios');
 
+/**
+ * aiCoachService — FitnessGeek's nutrition coach, over aiGeek.
+ *
+ * aiGeek keys routing and usage attribution on the *credential*, not on a body
+ * field, so this presents FitnessGeek's own service key (AI_GEEK_API_KEY,
+ * minted for app `fitnessgeek`) when one is configured and names the user in
+ * the body so per-user free-tier accounting survives. With no key it falls
+ * back to forwarding the user's JWT, which attributes the same way via that
+ * token's `app` claim. The old self-reported `appName: 'fitnessGeek'` is gone
+ * — the server ignores it — and `useAppConfig: true` now says explicitly what
+ * that field used to imply: route me by my app's AIAppConfig row.
+ */
 class AICoachService {
   constructor() {
     this.baseGeekUrl = process.env.BASEGEEK_URL || 'https://basegeek.clintgeek.com';
     this.jwtSecret = process.env.JWT_SECRET;
+    this.serviceKey = process.env.AI_GEEK_API_KEY || '';
   }
 
   /**
-   * Call baseGeek AI with system and user prompts
+   * Call baseGeek AI with system and user prompts.
+   *
+   * @param {string} systemPrompt
+   * @param {string} userPrompt
+   * @param {string|null} userToken  the user's JWT (fallback auth)
+   * @param {object} [opts]
+   * @param {string|null} [opts.userId]   who the call is for (attribution)
+   * @param {string|null} [opts.feature]  which coach feature is calling
    */
-  async callAI(systemPrompt, userPrompt, userToken = null) {
+  async callAI(systemPrompt, userPrompt, userToken = null, { userId = null, feature = null } = {}) {
     try {
+      const authToken = this.serviceKey || userToken;
+      const body = {
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        config: {
+          // No provider, model, or freeOnly — baseGeek resolves via AIAppConfig
+          useAppConfig: true
+        }
+      };
+      if (feature) body.feature = feature;
+      if (userId) body.userId = String(userId).slice(0, 64);
+
       const response = await axios.post(
         `${this.baseGeekUrl}/api/ai/call`,
-        {
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt }
-          ],
-          config: {
-            appName: 'fitnessGeek'
-            // No provider, model, or freeOnly — baseGeek resolves via AIAppConfig
-          }
-        },
+        body,
         {
           headers: {
             'Content-Type': 'application/json',
-            ...(userToken && { 'Authorization': `Bearer ${userToken}` })
+            ...(authToken && { 'Authorization': `Bearer ${authToken}` })
           },
           timeout: 30000
         }
@@ -77,7 +102,9 @@ Provide 3 specific meal suggestions that would help reach the goals. Return as J
 ]`;
 
     try {
-      const response = await this.callAI(systemPrompt, userPrompt, userToken);
+      const response = await this.callAI(systemPrompt, userPrompt, userToken, {
+        userId, feature: 'mealSuggestions'
+      });
       const jsonMatch = response.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
         return JSON.parse(jsonMatch[0]);
@@ -122,7 +149,9 @@ Provide:
 Keep it concise (under 200 words).`;
 
     try {
-      const response = await this.callAI(systemPrompt, userPrompt, userToken);
+      const response = await this.callAI(systemPrompt, userPrompt, userToken, {
+        userId, feature: 'eatingPatterns'
+      });
       return response;
     } catch (error) {
       logger.error('Failed to analyze eating patterns:', error);
@@ -160,7 +189,9 @@ Return as JSON array:
 ]`;
 
     try {
-      const response = await this.callAI(systemPrompt, userPrompt, userToken);
+      const response = await this.callAI(systemPrompt, userPrompt, userToken, {
+        userId, feature: 'microAdjustments'
+      });
       const jsonMatch = response.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
         return JSON.parse(jsonMatch[0]);
@@ -191,7 +222,9 @@ User context:
 Provide a helpful, personalized answer (under 150 words).`;
 
     try {
-      const response = await this.callAI(systemPrompt, userPrompt, userToken);
+      const response = await this.callAI(systemPrompt, userPrompt, userToken, {
+        userId, feature: 'nutritionQuestion'
+      });
       return response;
     } catch (error) {
       logger.error('Failed to answer nutrition question:', error);

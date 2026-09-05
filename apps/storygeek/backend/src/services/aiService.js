@@ -2,6 +2,30 @@ import axios from 'axios';
 import diceService from './diceService.js';
 
 /**
+ * The `id` claim out of an already-authenticated bearer token.
+ *
+ * Not a verification — StoryGeek's own auth middleware verified this token
+ * before the request reached any service, and aiGeek is not being asked to
+ * trust the token, only to file the usage under the right person. A malformed
+ * token yields null and the call is simply unattributed.
+ *
+ * @param {string|null} token
+ * @returns {string|null}
+ */
+function userIdFromToken(token) {
+  if (typeof token !== 'string') return null;
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+    const id = payload?.id ?? payload?.userId ?? payload?.sub;
+    return id ? String(id).slice(0, 64) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * aiService — StoryGeek's gateway to baseGeek/aiGeek.
  *
  * Model policy: the Game Master model is PINNED (narrative consistency
@@ -15,11 +39,23 @@ import diceService from './diceService.js';
  *
  * Auxiliary tasks (state extraction, summaries) use the aux model channel:
  * mechanical work on a cheap model, never competing with GM quality.
+ *
+ * Auth: aiGeek decides routing and usage attribution from the *credential*,
+ * not from a body field, so StoryGeek presents its own service key
+ * (AI_GEEK_API_KEY, minted for app `storygeek`) when it has one and forwards
+ * the player's id in the body so per-user free-tier accounting still works.
+ * Without a key it falls back to forwarding the player's JWT exactly as
+ * before — which attributes to `storygeek` too, via that token's `app` claim.
+ * Either way the old self-reported `appName: 'storyGeek'` is gone; the server
+ * ignores it now.
  */
 class AIService {
   constructor() {
     this.baseGeekUrl = process.env.BASEGEEK_URL || 'https://basegeek.clintgeek.com';
     this.jwtToken = process.env.BASEGEEK_JWT_TOKEN || '';
+    // Service key for aiGeek. Present → every call authenticates as storygeek
+    // regardless of which player triggered it. Absent → legacy JWT forwarding.
+    this.serviceKey = process.env.AI_GEEK_API_KEY || '';
     this.sessionStats = { totalCalls: 0, totalTokens: 0, totalCost: 0 };
     this.freeOnly = process.env.STORYGEEK_FREE_ONLY !== 'false';
 
@@ -55,16 +91,31 @@ class AIService {
     };
   }
 
-  async callBaseGeekAI(prompt, config = {}, userToken = null) {
+  /**
+   * The Authorization header for an aiGeek call, and whether it identifies a
+   * service (the key) or a person (the forwarded JWT).
+   */
+  authFor(userToken = null) {
+    if (this.serviceKey) return { token: this.serviceKey, viaKey: true };
+    const token = userToken || this.jwtToken;
+    return { token, viaKey: false };
+  }
+
+  async callBaseGeekAI(prompt, config = {}, userToken = null, feature = null) {
     try {
-      const configWithApp = { ...config, appName: 'storyGeek' };
-      const authToken = userToken || this.jwtToken;
+      const { token: authToken, viaKey } = this.authFor(userToken);
       if (!authToken) throw new Error('No authentication token available');
 
-      const response = await axios.post(`${this.baseGeekUrl}/api/ai/call`, {
-        prompt,
-        config: configWithApp
-      }, {
+      const body = { prompt, config: { ...config } };
+      if (feature) body.feature = feature;
+      // A service key has no session. Naming the player keeps free-tier quota
+      // accounting per-person instead of pooling every story into one bucket.
+      if (viaKey) {
+        const userId = userIdFromToken(userToken);
+        if (userId) body.userId = userId;
+      }
+
+      const response = await axios.post(`${this.baseGeekUrl}/api/ai/call`, body, {
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
         timeout: 45000
       });
@@ -74,7 +125,7 @@ class AIService {
       const data = response.data;
       const openAIContent = data?.choices?.[0]?.message?.content;
       if (openAIContent != null) {
-        this.updateStats(data?.model || configWithApp.provider);
+        this.updateStats(data?.model || config.provider);
         return openAIContent;
       }
       if (data?.success && data?.data?.response != null) {
@@ -133,7 +184,7 @@ class AIService {
       maxTokens: aiConfig.maxTokens || 2400,
       temperature: typeof aiConfig.temperature === 'number' ? aiConfig.temperature : 0.9,
       provider, model
-    }, userToken);
+    }, userToken, 'gm');
   }
 
   /** Which model aux work will run on (also used for observability). */
@@ -149,7 +200,7 @@ class AIService {
       maxTokens: config.maxTokens || 1500,
       temperature: typeof config.temperature === 'number' ? config.temperature : 0.2,
       provider, model
-    }, userToken);
+    }, userToken, 'aux');
   }
 
   /**
@@ -338,7 +389,7 @@ Rewrite your response as one final narration that keeps the scene, tone, and det
 
   /** Used by the epub export pipeline; falls back to the pinned GM model. */
   async recommendProviderModel(taskDescription, priority = 'cost', requirements = {}, userToken = null) {
-    const authToken = userToken || this.jwtToken;
+    const { token: authToken } = this.authFor(userToken);
     if (!authToken) throw new Error('No authentication token available');
     try {
       const response = await axios.post(`${this.baseGeekUrl}/api/ai/director/recommend`, {
@@ -359,7 +410,8 @@ Rewrite your response as one final narration that keeps the scene, tone, and det
   }
 
   async getDirectorModels(userToken = null) {
-    const authToken = userToken || this.jwtToken;
+    // Needs the ai:director permission — mint the key with it.
+    const { token: authToken } = this.authFor(userToken);
     if (!authToken) throw new Error('No authentication token available');
     const response = await axios.get(`${this.baseGeekUrl}/api/ai/director/models`, {
       headers: { 'Authorization': `Bearer ${authToken}` },

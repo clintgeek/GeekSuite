@@ -58,6 +58,86 @@ Known provider prefixes: `anthropic`, `groq`, `gemini`, `together`,
 deleted on 2026-09-05; pinning either now fails like any other unknown
 provider. See [AI_CATALOG.md](./AI_CATALOG.md#removed-2026-09-04).
 
+## Who is calling
+
+Two decisions turn on the answer: which `AIAppConfig` row routes the call — so,
+which model answers and at whose expense — and which app the usage lands
+against. Until 2026-09-05 both read `config.appName` out of the request body,
+which is to say aiGeek took the caller's word for it. Any holder of any key or
+token could route through, and bill, any app it named.
+
+The app now comes from the credential:
+
+| Credential | App id | `verified` |
+|---|---|---|
+| API key (`Authorization: Bearer bg_...`) | the key's `appName` | ✅ |
+| JWT | the token's `app` claim | ✅ |
+| in-process caller (StartGeek Ask) | named in code | ✅ |
+| a JWT with no `app` claim | `unattributed` | ❌ |
+
+Ids are normalized: lowercased, and everything from the first `:` dropped.
+`fitnessGeek`, `fitnessgeek` and `fitnessGeek:mealPlan` are one app.
+
+### What the body may still say
+
+One thing: **`feature`** — a slice of the app you already are.
+
+```js
+await axios.post('/api/ai/call', {
+  prompt,
+  feature: 'mealPlan',        // or config.feature
+  config: { useAppConfig: true }
+});
+```
+
+The legacy `appName: "app:feature"` spelling still works, but only its suffix
+survives: the app half is discarded and replaced with the resolved one. A body
+`appName` is now purely a *switch* — a body that names an app and no provider
+still auto-routes through app config, exactly as before, but the row looked up
+is the caller's own. `userId` in the body is honoured for **API-key callers
+only**, because a service key has no session; without it every call from a
+backend would share one free-tier quota bucket. The OpenAI proxy reads OpenAI's
+own `user` field for the same purpose.
+
+Usage groups the same way: one row per app, with `features` nested inside it,
+so "what does fitnessgeek cost" has one answer instead of three.
+
+### Minting a key for a backend
+
+Each backend gets its own key. On the baseGeek host:
+
+```sh
+cd apps/basegeek/packages/api
+node scripts/mint-api-key.js \
+  --app storygeek --name "storygeek backend" \
+  --permissions ai:call,ai:director \
+  --write-env ../../../storygeek/.env.production --var AI_GEEK_API_KEY
+```
+
+`--write-env` upserts `VAR=key` into the target file at mode 600, preserving
+every other line and **refusing to overwrite an existing value** unless
+`--replace` — clobbering a live key breaks a running app in a way that looks
+like an aiGeek outage. Without `--write-env` the key is printed once, to your
+scrollback and shell history; prefer the file. It prints `keyId`, `keyPrefix`,
+`appName`, the permissions and the env path — never a connection string.
+
+Permissions are the APIKey enum: `ai:call`, `ai:models`, `ai:providers`,
+`ai:stats`, `ai:director`, `ai:usage`. Add `ai:director` for a backend that
+asks the model steward what is free (StoryGeek does; FitnessGeek does not).
+
+`--app` refuses a `:feature` suffix: a key belongs to an app, and one minted
+for `fitnessGeek:mealPlan` would silently be a `fitnessgeek` key.
+
+### What the App Routing row keys on
+
+The resolved app id. An admin pinning a model for `fitnessgeek` pins it for
+every call from FitnessGeek — coach, meal plan and anything added later — and
+the feature shows up in the usage breakdown rather than as a second app to
+configure. Legacy rows are still honoured: the lookup falls back to a
+case-insensitive match on the id or any `id:feature` spelling, so a row an
+admin pinned months ago as `fitnessGeek` keeps routing. Nothing rewrites those
+rows; renaming one is an admin decision.
+
 ## Structured output
 
 `response_format: {type: "json_object" | "json_schema"}` works everywhere:
@@ -322,9 +402,11 @@ rotation exactly as a caller gets it; pick a provider to pin one. The JSON
 schema toggle sends `responseFormat` and accepts either a bare schema or the
 full `{ name, schema }` envelope.
 
-It deliberately sends no `appName`: the route auto-routes any call that names
-an app and no provider through that app's `AIAppConfig` row, which would stop
-the panel testing the rotation at all.
+It deliberately sends no `appName` and no `feature`: the route auto-routes any
+call that names either and no provider through the caller's `AIAppConfig` row,
+which would stop the panel testing the rotation at all. (Since routing is keyed
+on the credential, the *value* an admin could type there wouldn't matter — but
+its presence would still flip the switch.)
 
 Two additive fields on the non-streaming `/api/ai/call` response make this
 possible, and are useful to any caller:

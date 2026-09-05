@@ -1,39 +1,61 @@
 const axios = require('axios');
 const logger = require('../config/logger');
 
+/**
+ * fitnessGoalService — the nutrition-goal and meal-plan side of FitnessGeek.
+ *
+ * aiGeek resolves the calling app from the credential, so this presents
+ * FitnessGeek's service key (AI_GEEK_API_KEY, app `fitnessgeek`) when one is
+ * configured and forwards the user's JWT otherwise. The old
+ * `appName: 'fitnessGeek:mealPlan'` was two things wearing one field — an app
+ * and a feature — and made meal planning look like a separate app in the usage
+ * breakdown. It is now `feature: 'mealPlan'` on an app resolved from the key.
+ */
 class FitnessGoalService {
   constructor() {
     this.baseGeekUrl = process.env.BASEGEEK_URL || 'https://basegeek.clintgeek.com';
     this.jwtSecret = process.env.JWT_SECRET;
+    this.serviceKey = process.env.AI_GEEK_API_KEY || '';
   }
 
-  async callAI(prompt, config = {}, userToken = null) {
-    if (!userToken) {
+  async callAI(prompt, config = {}, userToken = null, userId = null) {
+    const authToken = this.serviceKey || userToken;
+    if (!authToken) {
       throw new Error('User token is required for AI calls');
     }
 
     try {
-      const response = await axios.post(`${this.baseGeekUrl}/api/ai/call`, {
+      const body = {
         prompt,
         config: {
-          ...config,
-          appName: 'fitnessGeek:mealPlan'
+          ...config
           // Provider/model/fallback controlled server-side via AIAppConfig
           // Default: anthropic for reasoning, configurable in baseGeek admin UI
-        }
-      }, {
+        },
+        feature: 'mealPlan'
+      };
+      if (userId) body.userId = String(userId).slice(0, 64);
+
+      const response = await axios.post(`${this.baseGeekUrl}/api/ai/call`, body, {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${userToken}`
+          'Authorization': `Bearer ${authToken}`
         },
         timeout: 60000 // Increased timeout
       });
 
-      if (!response.data.success) {
-        throw new Error(response.data.error?.message || 'AI service call failed');
+      // /api/ai/call answers in the OpenAI chat.completion shape. The legacy
+      // { success, data: { response } } envelope is kept as a fallback — this
+      // code only read the legacy one, which is why it threw on every call
+      // after the route was made OpenAI-compatible.
+      const openAIContent = response.data?.choices?.[0]?.message?.content;
+      if (openAIContent != null) return openAIContent;
+
+      if (response.data?.success && response.data?.data?.response != null) {
+        return response.data.data.response;
       }
 
-      return response.data.data.response;
+      throw new Error(response.data?.error?.message || 'AI service call failed');
     } catch (error) {
       logger.error('baseGeek AI call failed for nutrition goals', {
         error: error.message,
@@ -48,16 +70,17 @@ class FitnessGoalService {
    * Create nutrition-focused fitness goals
    * @param {string} userInput - User's goal description
    * @param {Object} userProfile - User profile data
-   * @param {string} userToken - User's JWT token
+   * @param {string} userToken - User's JWT token (fallback auth)
+   * @param {string} userId - Who the call is for (usage attribution)
    * @returns {Promise<Object>} Nutrition goals with phases
    */
-  async createNutritionGoals(userInput, userProfile = {}, userToken = null) {
+  async createNutritionGoals(userInput, userProfile = {}, userToken = null, userId = null) {
     const prompt = this.buildNutritionGoalPrompt(userInput, userProfile);
     const response = await this.callAI(prompt, {
       maxTokens: 3000,
       temperature: 0.6,
       provider: 'anthropic'
-    }, userToken);
+    }, userToken, userId);
     return this.parseNutritionGoalResponse(response);
   }
 
@@ -65,16 +88,17 @@ class FitnessGoalService {
    * Generate detailed meal plan based on goals
    * @param {Object} goal - Primary nutrition goal
    * @param {Object} userProfile - User profile data
-   * @param {string} userToken - User's JWT token
+   * @param {string} userToken - User's JWT token (fallback auth)
+   * @param {string} userId - Who the call is for (usage attribution)
    * @returns {Promise<Object>} Detailed meal plan
    */
-  async generateMealPlan(goal, userProfile = {}, userToken = null) {
+  async generateMealPlan(goal, userProfile = {}, userToken = null, userId = null) {
     const prompt = this.buildMealPlanPrompt(goal, userProfile);
     const response = await this.callAI(prompt, {
       maxTokens: 4000,
       temperature: 0.6,
       provider: 'anthropic'
-    }, userToken);
+    }, userToken, userId);
     return this.parseMealPlanResponse(response);
   }
 

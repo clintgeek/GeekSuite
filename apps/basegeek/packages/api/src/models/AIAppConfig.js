@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { getAIGeekConnection } from '../config/database.js';
+import { normalizeAppId } from '../services/callerIdentity.js';
 
 const PROVIDERS = ['anthropic', 'groq', 'gemini', 'together', 'cohere', 'openrouter', 'cerebras', 'cloudflare', 'ollama', 'llmgateway'];
 
@@ -65,6 +66,25 @@ const aiAppConfigSchema = new mongoose.Schema({
 }, {
   timestamps: true
 });
+
+/**
+ * The one spelling of an app id.
+ *
+ * Rows were created from whatever string a caller put in its request body, so
+ * the collection holds `fitnessGeek`, `fitnessgeek` and `fitnessGeek:mealPlan`
+ * for what is one app with one feature. Routing now resolves the caller's app
+ * from its credential and normalizes it through here before the lookup; the
+ * lookup itself still matches the legacy spellings case-insensitively (see
+ * aiService.findAppConfig), so no stored row is orphaned.
+ *
+ * Schema fields are deliberately untouched — the AIGeek UI reads them by name.
+ *
+ * @param {*} value
+ * @returns {string|null}
+ */
+aiAppConfigSchema.statics.normalizeAppName = function normalizeAppName(value) {
+  return normalizeAppId(value);
+};
 
 const aiGeekConnection = getAIGeekConnection();
 const AIAppConfig = aiGeekConnection.model('AIAppConfig', aiAppConfigSchema);
