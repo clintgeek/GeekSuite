@@ -39,17 +39,21 @@ per-app verification.
 
 ## fitnessgeek hardening pass — explicitly deferred
 
-- **Garmin password encrypted at rest.** Currently stored plaintext
-  in the `UserSettings` document. Response masks it but the DB
-  doesn't. See also **geekLock adoption** below — the right move is
-  probably to point fitnessgeek at geekLock's `/encrypt` rather than
-  extending basegeek's in-process `cryptoVault`. If geekLock adoption
-  is deferred, short-term fallback is to promote `cryptoVault` to
-  `@geeksuite/crypto-vault` and have fitnessgeek consume it.
-  **Step 1 done 2026-09-05** — `packages/crypto-vault` exists, basegeek's
-  api consumes it, byte-for-byte format-compatible with the old module
-  (see `DOCS/SUITE_TODO.md`). Still deferred: fitnessgeek actually wiring
-  Garmin password encryption + a backfill migration script (step 2).
+- ~~**Garmin password encrypted at rest.**~~ — **Done 2026-09-05.** Was:
+  stored plaintext in the `UserSettings` document; the response masked
+  it but the DB didn't. Step 1 promoted `cryptoVault` to
+  `packages/crypto-vault`; step 2 wired fitnessgeek up. The encryption
+  sits in the **shared schema** (`packages/schemas/fitnessgeek/userSettings.js`)
+  rather than in a fitnessgeek route, because basegeek's GraphQL gateway
+  is a live writer *and* reader of the same field — encrypt-on-write via
+  mongoose pre hooks, decrypt-on-read via a path getter, legacy plaintext
+  tolerated until backfilled. Backfill script:
+  `apps/fitnessgeek/backend/scripts/encryptGarminPasswords.js`.
+  **Not yet run in production** — see the two-step handover in
+  `DOCS/SUITE_TODO.md` (the shared `KEY_VAULT_SECRET`, then the one-time
+  backfill). The geekLock note below still stands as the longer-term
+  move; this is the interim in-process answer, and swapping it later means
+  changing one module rather than four call sites.
 
 ## Suite-wide — geekLock sidecar adoption
 

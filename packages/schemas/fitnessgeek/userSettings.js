@@ -38,7 +38,10 @@
  * bump on either side would split them — and a `Schema` built by mongoose
  * instance A blows up `instanceof` checks inside instance B's
  * `Connection.model()`. Taking mongoose from the caller makes that impossible
- * and keeps this package dependency-free.
+ * and keeps mongoose out of this package's own dependency list.
+ *
+ * The one real dependency this package has is `@geeksuite/crypto-vault`, and
+ * it is `require`d lazily — see the `garmin.password` section further down.
  *
  * This module is CommonJS on purpose: fitnessgeek's backend is CJS and
  * `require`s it directly, while basegeek's api is ESM and picks up the default
@@ -329,6 +332,186 @@ const userSettingsOptions = {
   }
 };
 
+/* -------------------------------------------------------------------------
+ * `garmin.password` encryption at rest  (DOCS/SUITE_TODO.md #20, step 2)
+ * -------------------------------------------------------------------------
+ * The Garmin Connect password is a *reusable* third-party credential: the two
+ * backends log in to Garmin on the user's behalf, so it cannot be hashed — it
+ * has to be recoverable. It is therefore encrypted with
+ * `@geeksuite/crypto-vault` (AES-256-GCM, `KEY_VAULT_SECRET`,
+ * `v1:{iv}:{tag}:{ciphertext}`) before it reaches MongoDB.
+ *
+ * WHY THE ENCRYPTION LIVES HERE AND NOT IN AN APP
+ * -----------------------------------------------
+ * This field has TWO writers and TWO readers, in two different processes:
+ *
+ *   write  fitnessgeek  routes/settingsRoutes.js  PUT /api/settings
+ *   write  basegeek     graphql/fitnessgeek/resolvers.js  updateFitnessUserSettings
+ *   read   fitnessgeek  services/garminConnectService.js  buildClient/getStatus
+ *   read   basegeek     graphql/fitnessgeek/resolvers.js  buildGarminClient/garminStatus
+ *
+ * Both processes build their model from `createUserSettingsSchema()` below, so
+ * this module is the ONLY choke point every one of those four sites passes
+ * through. Encrypting in either app alone would leave the other app writing
+ * plaintext and — far worse — reading ciphertext straight into a Garmin login.
+ *
+ * CONSEQUENCE FOR DEPLOYMENT: both apps must be configured with the SAME
+ * `KEY_VAULT_SECRET`. That contradicts the "basegeek only / never share across
+ * apps" row in the repo's `DEPLOY.md`; see `apps/fitnessgeek/DOCS/CONTEXT.md`
+ * for the rollout order.
+ *
+ * HOW IT IS WIRED
+ * ---------------
+ *   - `pre('save')` and `pre(<update ops>)` encrypt on the way in. Both are
+ *     idempotent: `isEncrypted()` short-circuits an already-packed value, so a
+ *     re-save, a replayed update, or a second backfill run is a no-op.
+ *   - A getter on the path decrypts on the way out. Mongoose does NOT apply
+ *     getters in `toObject()` / `toJSON()` (verified — they return the packed
+ *     ciphertext), so serialising a settings document still cannot leak the
+ *     plaintext; only explicit property access (`settings.garmin.password`),
+ *     which is exactly the Garmin login path, sees it.
+ *   - Legacy plaintext rows keep working until the backfill runs: a value that
+ *     is not `isEncrypted()` is passed through both ways untouched.
+ *   - A corrupt or wrong-key value fails CLOSED — `safeDecrypt()` logs and
+ *     returns null, so the Garmin login fails on bad credentials rather than
+ *     the request throwing.
+ *
+ * `@geeksuite/crypto-vault` is required LAZILY: it throws at module load when
+ * `KEY_VAULT_SECRET` is absent, and this schema module is imported by things
+ * that never touch a Garmin password. Fail-fast at boot is the app's job (see
+ * `apps/fitnessgeek/backend/src/config/keyVault.js`), not this module's.
+ */
+
+const GARMIN_PASSWORD_PATH = 'garmin.password';
+
+let _vault = null;
+let _vaultLoadError = null;
+
+function getVault() {
+  if (_vault || _vaultLoadError) return _vault;
+  try {
+    _vault = require('@geeksuite/crypto-vault');
+  } catch (err) {
+    // Message only. crypto-vault never puts the key material in its errors.
+    _vaultLoadError = err;
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[schemas/userSettings] @geeksuite/crypto-vault unavailable — ' +
+      'the Garmin password cannot be encrypted or decrypted: ' + err.message
+    );
+  }
+  return _vault;
+}
+
+/**
+ * Encrypt a Garmin password for storage. Idempotent.
+ *
+ * @param {*} value  the incoming value; anything that is not a non-empty
+ *                   string is returned untouched (clears, unsets, nulls).
+ * @returns {*} packed ciphertext, or the value unchanged.
+ * @throws {Error} if the vault is unavailable — a write must never silently
+ *                 fall back to storing plaintext.
+ */
+function encryptGarminPassword(value) {
+  if (typeof value !== 'string' || value === '') return value;
+
+  const vault = getVault();
+  if (!vault) {
+    throw new Error(
+      'Refusing to store the Garmin password: KEY_VAULT_SECRET is not configured ' +
+      '(see apps/fitnessgeek/DOCS/CONTEXT.md). Generate one with `openssl rand -hex 32`.'
+    );
+  }
+
+  if (vault.isEncrypted(value)) return value; // already packed — no double-wrap
+  return vault.encrypt(value);
+}
+
+/**
+ * Resolve a stored Garmin password back to plaintext for the login path.
+ * Never throws.
+ *
+ * @param {*} value  packed ciphertext, legacy plaintext, or nothing.
+ * @returns {*} plaintext, the untouched legacy value, or null when a packed
+ *              value cannot be decrypted (wrong key / tampered / no vault).
+ */
+function readGarminPassword(value) {
+  if (typeof value !== 'string' || value === '') return value;
+
+  const vault = getVault();
+  if (!vault) return null;                       // fail closed, already warned
+  if (!vault.isEncrypted(value)) return value;   // legacy plaintext, pre-backfill
+  return vault.safeDecrypt(value);               // null + console.warn on failure
+}
+
+/**
+ * Rewrite `garmin.password` inside one `$set`-shaped object, in both the
+ * dot-path form (`{'garmin.password': x}`) and the nested form
+ * (`{garmin: {password: x}}`). Both are used in production today.
+ */
+function encryptGarminPasswordIn(container) {
+  if (!container || typeof container !== 'object') return;
+
+  if (typeof container[GARMIN_PASSWORD_PATH] === 'string') {
+    container[GARMIN_PASSWORD_PATH] = encryptGarminPassword(container[GARMIN_PASSWORD_PATH]);
+  }
+  if (container.garmin && typeof container.garmin === 'object' &&
+      typeof container.garmin.password === 'string') {
+    container.garmin.password = encryptGarminPassword(container.garmin.password);
+  }
+}
+
+/**
+ * Attach the encrypt-on-write hooks and the decrypt-on-read getter to a
+ * freshly built schema. Called by `createUserSettingsSchema()`, so every
+ * consumer gets it whether it knows about it or not.
+ */
+function attachGarminPasswordEncryption(schema) {
+  // --- read: decrypt on property access -----------------------------------
+  const passwordPath = schema.path(GARMIN_PASSWORD_PATH);
+  if (passwordPath) passwordPath.get(readGarminPassword);
+
+  // --- write: document saves ----------------------------------------------
+  schema.pre('save', function encryptGarminPasswordOnSave(next) {
+    try {
+      if (this.isModified(GARMIN_PASSWORD_PATH)) {
+        // getters: false — read the stored value, not the decrypted view, or
+        // this re-encrypts a value the getter just unwrapped.
+        const raw = this.get(GARMIN_PASSWORD_PATH, null, { getters: false });
+        const packed = encryptGarminPassword(raw);
+        if (packed !== raw) this.set(GARMIN_PASSWORD_PATH, packed);
+      }
+      next();
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // --- write: query updates -----------------------------------------------
+  // Both writers reach this document through findOneAndUpdate($set); the rest
+  // are covered so a future caller cannot slip past the choke point.
+  schema.pre(
+    ['findOneAndUpdate', 'updateOne', 'updateMany', 'replaceOne'],
+    function encryptGarminPasswordOnUpdate(next) {
+      try {
+        const update = this.getUpdate();
+        // An aggregation-pipeline update is out of scope; nothing uses one here.
+        if (update && !Array.isArray(update)) {
+          encryptGarminPasswordIn(update);
+          encryptGarminPasswordIn(update.$set);
+          encryptGarminPasswordIn(update.$setOnInsert);
+          this.setUpdate(update);
+        }
+        next();
+      } catch (err) {
+        next(err);
+      }
+    }
+  );
+
+  return schema;
+}
+
 /**
  * Build a fresh `UserSettings` schema, indexes included.
  *
@@ -347,6 +530,9 @@ function createUserSettingsSchema(mongoose) {
   // Ensure one settings document per user.
   schema.index({ user_id: 1 }, { unique: true });
 
+  // Encrypt `garmin.password` at rest for every writer that builds from here.
+  attachGarminPasswordEncryption(schema);
+
   return schema;
 }
 
@@ -354,4 +540,10 @@ module.exports = {
   userSettingsDefinition,
   userSettingsOptions,
   createUserSettingsSchema,
+  // Garmin password encryption — exported for the Garmin login path, the
+  // backfill script (apps/fitnessgeek/backend/scripts/encryptGarminPasswords.js)
+  // and their tests. Ordinary reads and writes go through the schema itself.
+  encryptGarminPassword,
+  readGarminPassword,
+  attachGarminPasswordEncryption,
 };

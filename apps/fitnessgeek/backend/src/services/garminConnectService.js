@@ -6,6 +6,18 @@ import UserSettings from '../models/UserSettings.js';
 import logger from '../config/logger.js';
 import { createBreaker } from '../lib/breakers.js';
 
+// The stored Garmin password is AES-256-GCM ciphertext (see the
+// `garmin.password` section of @geeksuite/schemas/fitnessgeek/userSettings).
+// The schema's getter already decrypts on property access; calling
+// readGarminPassword() here anyway is deliberate and idempotent — it makes the
+// decrypt visible at the one place that needs plaintext, and it keeps working
+// if this ever reads through .lean(), which bypasses getters. A pre-backfill
+// plaintext value passes through untouched; a corrupt or wrong-key value comes
+// back null (logged by crypto-vault) so the login fails on credentials rather
+// than throwing mid-request.
+import userSettingsSchemaModule from '@geeksuite/schemas/fitnessgeek/userSettings';
+const { readGarminPassword } = userSettingsSchemaModule;
+
 // One breaker for every Garmin network call in this file — login plus each
 // data pull — so a struggling Garmin endpoint trips the same circuit no
 // matter which route triggered it. 15s timeout (vs. 6s for the REST food
@@ -19,9 +31,19 @@ async function buildClient(userId) {
     throw new Error('Garmin integration disabled');
   }
 
+  const password = readGarminPassword(settings.garmin.password);
+  if (settings.garmin.username && !password) {
+    // Only reachable when a stored ciphertext will not decrypt — a rotated or
+    // mismatched KEY_VAULT_SECRET. Say so once; never log the value.
+    logger.warn(
+      { userId },
+      'Stored Garmin password could not be decrypted — check KEY_VAULT_SECRET matches the value the credential was saved under'
+    );
+  }
+
   const client = new GarminConnect({
     username: settings.garmin.username,
-    password: settings.garmin.password
+    password
   });
 
   // Try token reuse first

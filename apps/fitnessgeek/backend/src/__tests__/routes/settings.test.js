@@ -4,7 +4,8 @@
 // jest-mocked; no live Mongo, no basegeek. Coverage focuses on:
 //   - auth is required on every settings route
 //   - reads/writes are scoped to the caller's own userId
-//   - the Garmin password is masked before it leaves the API
+//   - the Garmin password never leaves the API at all (it is stored encrypted
+//     and the response carries a `password_set` boolean instead)
 //   - the household join/create guards (already-in-household, unknown code)
 
 import { describe, test, expect, jest } from '@jest/globals';
@@ -60,12 +61,16 @@ describe('auth required', () => {
 });
 
 describe('GET /api/settings', () => {
-  test('reads the caller-scoped settings and masks the Garmin password', async () => {
+  test('reads the caller-scoped settings and drops the Garmin password entirely', async () => {
+    // What the model hands back is the AES-256-GCM ciphertext, because
+    // toObject() does not run the schema's decrypt getter. Shipping a user's
+    // ciphertext is still shipping it, so the route deletes the field.
+    const stored = 'v1:0011223344556677889900aa:bbccddeeff00112233445566778899aa:deadbeef';
     UserSettings.getOrCreate.mockResolvedValue({
       toObject: () => ({
         user_id: OWNER,
         theme: 'dark',
-        garmin: { enabled: true, username: 'me@example.com', password: 'super-secret' },
+        garmin: { enabled: true, username: 'me@example.com', password: stored },
       }),
     });
 
@@ -74,9 +79,26 @@ describe('GET /api/settings', () => {
     expect(res.status).toBe(200);
     // Settings are fetched for the authenticated user only.
     expect(UserSettings.getOrCreate).toHaveBeenCalledWith(OWNER);
-    // The real password must never be returned to the client.
-    expect(res.body.data.garmin.password).toBe('********');
-    expect(res.body.data.garmin.password).not.toBe('super-secret');
+    // Neither the plaintext nor the stored ciphertext may reach the client.
+    expect(res.body.data.garmin).not.toHaveProperty('password');
+    expect(JSON.stringify(res.body)).not.toContain(stored);
+    // The form only needs to know whether one is on file.
+    expect(res.body.data.garmin.password_set).toBe(true);
+    // Everything else survives.
+    expect(res.body.data.garmin.username).toBe('me@example.com');
+    expect(res.body.data.theme).toBe('dark');
+  });
+
+  test('password_set is false when no credential is stored', async () => {
+    UserSettings.getOrCreate.mockResolvedValue({
+      toObject: () => ({ user_id: OWNER, garmin: { enabled: false, username: '' } }),
+    });
+
+    const res = await request(buildApp()).get('/api/settings').set('x-test-user', OWNER);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.garmin.password_set).toBe(false);
+    expect(res.body.data.garmin).not.toHaveProperty('password');
   });
 });
 

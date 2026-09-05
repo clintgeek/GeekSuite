@@ -138,6 +138,37 @@ side. Same arrangement `@geeksuite/user` and `@geeksuite/logger` already use.
 (`@geeksuite/utils` is the exception — it is ESM-only, which is what forced
 fitnessgeek's backend off CommonJS in the first place.)
 
+### What the shared module gained on 2026-09-05 — behaviour, not just fields
+
+`createUserSettingsSchema()` now also attaches the `garmin.password`
+encryption: `pre('save')` / `pre(<update ops>)` hooks that encrypt with
+`@geeksuite/crypto-vault` on the way in, and a getter that decrypts on the way
+out. See `CONTEXT.md` for the full description and the backfill run order.
+
+It lives here for the same reason the field set does. `garmin.password` has two
+writers *and* two readers across two processes:
+
+| | Writes | Reads |
+|---|---|---|
+| REST (fitnessgeek) | `settingsRoutes.js` `PUT /api/settings` | `garminConnectService.js` `buildClient` / `getStatus` |
+| GraphQL (basegeek) | `resolvers.js` `updateFitnessUserSettings` | `resolvers.js` `buildGarminClient` / `garminStatus` |
+
+Encrypting in either app alone would leave the other writing plaintext and —
+much worse — reading ciphertext straight into a Garmin login. This function is
+the only choke point all four pass through.
+
+Two consequences worth carrying forward:
+
+1. **`@geeksuite/schemas` is no longer a pure data module.** A change here now
+   changes how both apps *write* to Mongo, not just which paths they accept.
+   Deploy the two apps from the same commit.
+2. **Both apps must hold the same `KEY_VAULT_SECRET`.** The root `DEPLOY.md`'s
+   "basegeek only / never share across apps" row is out of date.
+
+The parity tripwires are unaffected: hooks and getters do not appear in
+`schema.paths`, both models get them identically because both call
+`createUserSettingsSchema()`, and both suites stayed green.
+
 ### What deliberately stayed per-model
 
 The **statics**. `getOrCreate` and `updateSettings` differ on purpose:
@@ -210,7 +241,7 @@ declares the path — identical on both sides as of 2026-09-05.
 | `garmin.last_connected_at` | Date | — | ✅ | ✅ |
 | `garmin.oauth1_token` | Mixed | — | ✅ | ✅ |
 | `garmin.oauth2_token` | Mixed | — | ✅ | ✅ |
-| `garmin.password` | String | — | ✅ | ✅ |
+| `garmin.password` | String | **encrypted at rest** (AES-256-GCM); decrypt getter | ✅ | ✅ |
 | `garmin.username` | String | — | ✅ | ✅ |
 | `healthBaselines.lastUpdated` | Date | default `null` | ✅ | ✅ |
 | `healthBaselines.restingHR` | Number | default `null` | ✅ | ✅ |

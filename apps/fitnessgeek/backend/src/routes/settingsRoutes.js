@@ -7,6 +7,34 @@ import logger from '../config/logger.js';
 import { validate } from '../validation/validate.js';
 import { settingsUpdateSchema, aiUpdateSchema, dashboardUpdateSchema, householdUpdateSchema } from '../validation/schemas/settings.js';
 
+/**
+ * Strip the Garmin password out of anything headed for the client.
+ *
+ * The stored value is AES-256-GCM ciphertext (see the `garmin.password`
+ * section of @geeksuite/schemas/fitnessgeek/userSettings). `toObject()` does
+ * not run mongoose getters, so it is already the packed ciphertext here rather
+ * than the plaintext — but shipping a user's ciphertext is still shipping it,
+ * so the field is deleted outright and replaced with a boolean.
+ *
+ * This used to send `'********'`. That was worse than useless once encryption
+ * landed: a client that round-tripped the GET body back into a PUT would have
+ * had the literal eight asterisks encrypted and stored as the real password.
+ * `password_set` cannot be echoed into a credential.
+ *
+ * basegeek's GraphQL `GarminSettings` type never exposed `password` at all, and
+ * the frontend's Settings page rebuilds `garmin` from `enabled` + `username`
+ * only, so nothing on the client reads the removed field.
+ */
+function sanitizeSettings(doc) {
+  const sanitized = typeof doc?.toObject === 'function' ? doc.toObject() : { ...doc };
+  if (sanitized.garmin) {
+    sanitized.garmin = { ...sanitized.garmin };
+    sanitized.garmin.password_set = !!sanitized.garmin.password;
+    delete sanitized.garmin.password;
+  }
+  return sanitized;
+}
+
 // Apply authentication to all routes
 router.use(authenticateToken);
 
@@ -19,11 +47,8 @@ router.get('/', async (req, res) => {
 
     logger.info('User settings retrieved', { userId });
 
-    // Mask sensitive fields before sending
-    const sanitized = settings.toObject();
-    if (sanitized.garmin && sanitized.garmin.password) {
-      sanitized.garmin.password = '********';
-    }
+    // Never let the stored credential leave the API — see sanitizeSettings().
+    const sanitized = sanitizeSettings(settings);
 
     res.json({
       success: true,
@@ -94,10 +119,7 @@ router.put('/', validate({ body: settingsUpdateSchema }), async (req, res) => {
       updatedFields: Object.keys(validUpdateData)
     });
 
-    const sanitized = settings.toObject();
-    if (sanitized.garmin && sanitized.garmin.password) {
-      sanitized.garmin.password = '********';
-    }
+    const sanitized = sanitizeSettings(settings);
 
     res.json({
       success: true,

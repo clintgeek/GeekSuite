@@ -2,12 +2,20 @@ import mongoose from 'mongoose';
 import connectDB from './config/database.js';
 import redisClient from './config/redis.js';
 import logger from './config/logger.js';
+// Imported before ./app.js only for readability — app.js runs dotenv.config()
+// at import time, so process.env is populated by the time start() runs.
+import { assertKeyVaultSecret } from './config/keyVault.js';
 import app from './app.js';
 
 const PORT = process.env.PORT || 3001;
 
 // Boot sequence
 async function start() {
+  // Refuse to boot without the key that decrypts the Garmin password.
+  // Garmin is a core feature here, so a missing key is a broken app, not a
+  // degraded one — see src/config/keyVault.js for the reasoning.
+  assertKeyVaultSecret(logger);
+
   // Connect to MongoDB — fail fast on error
   try {
     await connectDB();

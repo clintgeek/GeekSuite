@@ -26,10 +26,11 @@ therefore not `require()`-able.
 
 ## Shared workspace packages
 
-The backend depends on four `workspace:*` packages:
+The backend depends on five `workspace:*` packages:
 
 | Package | Used for |
 |---|---|
+| `@geeksuite/crypto-vault` | AES-256-GCM for the Garmin password at rest (`KEY_VAULT_SECRET`) |
 | `@geeksuite/logger` | pino logger + `createHttpLogger` |
 | `@geeksuite/schemas` | the shared `UserSettings` field set (one collection, two writers — see `USER_SETTINGS_SCHEMA.md`) |
 | `@geeksuite/user` | `attachUser()`, `csrfGuard()`, `meHandler()` |
@@ -74,6 +75,113 @@ build will fail.
 
 ---
 
+## Environment — `KEY_VAULT_SECRET`
+
+**The server refuses to boot without it.** `src/config/keyVault.js` checks it in
+`start()` and exits 1 with a message naming the variable.
+
+| | |
+|---|---|
+| **Name** | `KEY_VAULT_SECRET` |
+| **Format** | exactly 64 hexadecimal characters (32 bytes). `openssl rand -hex 32` |
+| **Used for** | AES-256-GCM encryption of `garmin.password` at rest, via `@geeksuite/crypto-vault` |
+| **Declared in** | `backend/env.example` (name and format only — never a value) |
+
+Fail-at-boot rather than degrade-with-a-warning is deliberate: Garmin is a core
+feature here (the dashboard summary card, the activity page, sleep, the weight
+sync), and without the key every settings save carrying a password is refused
+and every stored password reads back as null. That is a broken app pretending to
+work. basegeek already fails fast on the same variable, so the behaviour is
+consistent across the suite.
+
+### It must be the SAME value basegeek uses
+
+This is the part that will bite. `apps/fitnessgeek/backend` is **not** the only
+process that reads and writes this field:
+
+| | Writer | Reader |
+|---|---|---|
+| fitnessgeek | `routes/settingsRoutes.js` (`PUT /api/settings`) | `services/garminConnectService.js` |
+| basegeek | `graphql/fitnessgeek/resolvers.js` (`updateFitnessUserSettings`) | `graphql/fitnessgeek/resolvers.js` (`buildGarminClient`, `garminStatus`) |
+
+The frontend's `apiService.js` rewrites most settings traffic to GraphQL, so
+basegeek's copy handles the majority of real reads and writes. Both build their
+model from `@geeksuite/schemas/fitnessgeek/userSettings`, which is where the
+encryption lives — so both must decode with the same key or Garmin login breaks
+in whichever process has the wrong one.
+
+The repo's root `DEPLOY.md` still carries a "`KEY_VAULT_SECRET` | basegeek only
+| Never share across apps" row. **That row is out of date as of 2026-09-05** —
+fitnessgeek and basegeek now share it. Copy basegeek's existing value into
+fitnessgeek's `.env.production`; do not generate a new one.
+
+---
+
+## How the Garmin password is encrypted
+
+Garmin Connect credentials cannot be hashed — the backends log in to Garmin as
+the user, so the password has to be recoverable. It is encrypted instead.
+
+**Choke point:** `packages/schemas/fitnessgeek/userSettings.js`, inside
+`createUserSettingsSchema()`. Not in a route, not in a service — both apps build
+their model from that function, so it is the only place all four read/write
+sites pass through.
+
+- **Write** — `pre('save')` and `pre(['findOneAndUpdate','updateOne','updateMany','replaceOne'])`
+  encrypt `garmin.password`, in both the dot-path (`{'garmin.password': x}`) and
+  nested (`{garmin: {password: x}}`) update shapes. Both are used in production.
+  Idempotent: `isEncrypted()` short-circuits an already-packed value.
+- **Read** — a getter on the path decrypts on property access. Mongoose does not
+  run getters in `toObject()` / `toJSON()`, so serialising a settings document
+  still yields ciphertext; only explicit access (the Garmin login path) sees
+  plaintext. `garminConnectService.buildClient()` calls `readGarminPassword()`
+  explicitly anyway, so the decrypt is visible where it matters and survives a
+  future `.lean()` read.
+- **Legacy plaintext** — a value that is not `isEncrypted()` passes through both
+  ways untouched, so rows written before the backfill keep working.
+- **Corruption / wrong key** — `safeDecrypt()` logs and returns null, so the
+  Garmin login fails on credentials rather than throwing mid-request.
+- **The API never returns it.** `GET`/`PUT /api/settings` delete `garmin.password`
+  from the response and send `garmin.password_set` (boolean) instead. It used to
+  send `'********'`, which became actively dangerous once encryption landed: a
+  client that round-tripped the GET body into a PUT would have had eight literal
+  asterisks encrypted and stored as the real password. basegeek's GraphQL
+  `GarminSettings` type never exposed the field at all, and the Settings page
+  rebuilds `garmin` from `enabled` + `username` only, so nothing reads it.
+
+### Backfill — production run order
+
+`backend/scripts/encryptGarminPasswords.js` encrypts rows written before the
+above landed. Idempotent, prints counts only, never a value.
+
+```bash
+# 1. Set KEY_VAULT_SECRET in apps/fitnessgeek/.env.production
+#    — the SAME value basegeek already uses. Do not generate a new one.
+
+# 2. Deploy. Both images must come from the same commit, because
+#    packages/schemas changed and both apps consume it.
+#    (Push to main → CI builds the matrix → Watchtower; or ./build.sh)
+
+# 3. Verify the app booted (a missing key exits 1 with a named message)
+docker logs --tail 20 fitnessgeek
+
+# 4. Dry run first — reports counts, writes nothing
+docker exec -w /app/apps/fitnessgeek/backend fitnessgeek \
+  node scripts/encryptGarminPasswords.js --dry-run
+
+# 5. Real run
+docker exec -w /app/apps/fitnessgeek/backend fitnessgeek \
+  node scripts/encryptGarminPasswords.js
+
+# 6. Re-run step 4. "WOULD encrypt : 0" means the backfill is complete.
+```
+
+Rotating or losing `KEY_VAULT_SECRET` afterwards makes every stored Garmin
+password undecryptable; users would have to re-enter them. It is a one-way door
+— store it with basegeek's copy.
+
+---
+
 ## Commands
 
 ```bash
@@ -83,7 +191,7 @@ pnpm install                                   # links workspace:* deps
 # backend (dev)
 cd apps/fitnessgeek/backend && npm run dev     # nodemon, port 3001
 
-# backend tests — 11 suites / 90 tests, hermetic (no Mongo, no Redis, no network)
+# backend tests — 12 suites / 106 tests, hermetic (no Mongo, no Redis, no network)
 cd apps/fitnessgeek/backend && npm test
 
 # build the production image exactly as CI does (repo root as context)
@@ -120,6 +228,24 @@ is scoped to `src/__tests__` so they never get picked up.
 
 ---
 
+## Frontend — shared feedback primitives (2026-09-05)
+
+`GeekEmptyState` / `GeekErrorState` / `GeekToastProvider`+`useToast` / `toneForMode` (all
+`@geeksuite/ui`) replaced this app's local `Snackbar`/`Alert` success-error patterns and its
+`isDark ? color : darken(color, 0.35)` tone branches — TODO_ORDER #15/#19 fan-out; detail in
+`DOCS/THE_UI_UNIFICATION_PLAN.md` §3a "Feedback primitives" ("fitnessgeek — done 2026-09-05").
+`GeekToastProvider` is mounted in `frontend/src/components/Layout/ModernLayout.jsx`, inside
+`GeekShell` and outside `GeekAppFrame` — new code should call `useToast()` for transient
+confirmations rather than adding another local `Snackbar`. The local
+`components/primitives/EmptyState.jsx` is now a thin wrapper over `GeekEmptyState`; its call
+sites (`MyFoods`, `MyMeals`, `Medications`, `Activity`) are unchanged. `PWAUpdatePrompt` and
+`OfflineIndicator` are mounted in `App.jsx` above the router, outside `GeekToastProvider`'s
+reach, and were deliberately left on their own `Snackbar`s. `FoodLog*` pages/components,
+`UnifiedFoodSearch.jsx` (a dependency of `FoodLog`'s `AddFoodDialog`), and `frontend/src/
+services/**` were not touched — see the food-log-to-GraphQL migration note above.
+
+---
+
 ## Known landmines
 
 - **Mongoose duplicate-index warnings** on boot (`user_id`) are pre-existing
@@ -134,3 +260,24 @@ is scoped to `src/__tests__` so they never get picked up.
   paths so a stale service worker cannot be poisoned on deploy.
 - **`/health` and `/api/health`** both answer, unauthenticated. No Docker
   `HEALTHCHECK` is defined for this service.
+- **`KEY_VAULT_SECRET` is shared with basegeek**, and `packages/schemas` is now
+  a *behavioural* dependency, not just a field list — a change there changes how
+  both apps write to Mongo. Deploy the two from the same commit.
+- **The four food-log writes still go to this backend's REST routes on purpose.**
+  `frontend/src/services/fitnessGeekService.js` uses `restClient` — not `apiService`
+  — for `POST/PUT/DELETE /api/logs` and `POST /api/meals/:id/add-to-log`. basegeek's
+  gateway does expose `addFoodLog` / `updateFoodLog` / `deleteFoodLog` / `logMeal`,
+  and `apiService.js` even carries the documents, but three of the four are **not**
+  behaviour-equivalent and the switch is blocked on a gateway change (audited
+  2026-09-05 — the full gap list is `DOCS/SUITE_TODO.md`, "Ordered cheap-to-expensive"
+  item 2). The short version:
+    - `addFoodLog` needs an existing `food_item_id`; the REST route accepts a whole
+      `food_item` and `findOrCreate`s the catalog row, which is how every food-search
+      and AI result gets logged at all.
+    - `updateFoodLog`'s `FoodLogInput!` is all-non-null, so partial edits are
+      impossible over the wire.
+    - `logMeal` does not write the `notes: "Added from meal: <name>"` string that
+      `FoodLogItem.jsx` renders.
+  Do not "finish the migration" by pointing these at `apiService` until the gateway
+  side lands; the routing table in `apiService.js` maps them, but wrongly, and carries
+  comments saying so.

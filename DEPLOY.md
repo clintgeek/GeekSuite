@@ -70,7 +70,7 @@ they form part of the SSO / suite boundary:
 |---|---|---|
 | `JWT_SECRET` | every app | basegeek issues tokens; every other app validates. Mismatch = nobody can log in. |
 | `MONGO_INITDB_ROOT_USERNAME/PASSWORD` | apps that share a Mongo instance | set once, reuse everywhere that connects to that Mongo. |
-| `KEY_VAULT_SECRET` | basegeek only | encrypts API keys at rest. Never share across apps. |
+| `KEY_VAULT_SECRET` | basegeek + fitnessgeek, **one shared value** | encrypts API keys (basegeek) and the Garmin password (`@geeksuite/schemas` UserSettings, written and read by both apps) at rest. Copy basegeek's value into fitnessgeek; a different value would make basegeek read ciphertext into a Garmin login. Other apps: never. |
 | `JWT_REFRESH_SECRET` | basegeek only | only basegeek signs/verifies refresh tokens. |
 
 When rotating `JWT_SECRET`, every app's `.env.production` has to be
