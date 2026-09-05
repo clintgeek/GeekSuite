@@ -9,6 +9,8 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
+| R81 | Q45 + Q46: aiGeek REST permissions (usage ?userId=, ten admin-shaped routes) + call/parse-json failure envelopes | opus | basegeek aiRoutes/openaiProxy + gate tests + AIGEEK_USAGE | 09-05 16:40 |
+| R82 | Q47 (MyFoods reads flat serving fields + id) + three stale "backend is CJS" comments | sonnet | fitnessgeek frontend MyFoods/apiService, comment-only edits, plan §12 | 09-05 16:40 |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
 ## Queued (launch when files free / prerequisite lands)
@@ -29,9 +31,6 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | Q42 | review #13: TZ=America/Chicago is inert in every alpine image (no tzdata) — today UTC-everywhere is what keeps the two services agreeing; decide: drop the misleading TZ env and document UTC, or install tzdata and re-audit every local-day site | Chef | S |
 | Q43 | review #21: `main` has no required status checks — enable branch protection requiring CI, syntax, boot-smoke and the harness | Chef (GitHub settings) | XS |
 | Q44 | basegeek config/database.js getAIGeekConnection has no error handler (a bad URI crashes the process); appConnections.js sibling has one | XS | XS |
-| Q45 | review #2 follow-ups: GET /api/ai/usage/:provider honours ?userId= for any credential; ten admin-shaped AI routes (provider, cache, stats, refresh, pricing seeds) have auth but no permission — gate with requireAdminUser or ai:admin | S | S |
-| Q46 | review #11 follow-up: /api/ai/call error.message and /parse-json error.details still relay provider strings — route them through the proxy's failure envelope | XS | XS |
-| Q47 | review #15 frontend half: MyFoods.jsx reads food.serving?.size || 100 and editingFood._id — use serving_size/serving_unit and id from the gateway type | XS | XS |
 | Q48 | consolidation plan §12: 14 open follow-ups (search vs foodCatalogFilter, third dedupe ladder, soft-deleted barcode, caller-less methods, goals_met dead flags, snapshot-vs-catalog recompute, …) — triage | Chef triage | M |
 | Q20b | aiGeek: simulated streaming (F-21) and user-gated selection (F-14) documented, not fixed | design | S |
 | Q14 | storygeek CanonCard summary text through Narration too (agent left it as a separate render path) | Chef's call | XS |
@@ -78,7 +77,7 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 
 - 09-05 15:39 — wave 7 (`120b54e`, 6 commits): R69, R70. Gates green; CI, Release and harness workflow green; Watchtower 15:50 (updated=7); all eight apps 200.
 
-- 09-05 16:55 — wave 8: R74, R75–R80 (all four P0s + 14 P1s from the review), consolidation complete. Gates: frozen install, syntax, boot-smoke, repo lint.
+- 09-05 16:35 — wave 8 (`7fd206b`, 22 commits): R74, R75–R80 (all four P0s + 14 P1s from the review), consolidation complete. Gates: frozen install, syntax, boot-smoke, repo lint.
 
 ## Landed during the burn
 
