@@ -309,7 +309,10 @@ Identity notes name what must survive. Effort assumes §2 primitives exist.
 
 ## 4b. Follow-ups surfaced by the passes (packages/ui)
 
-Recorded 2026-09-04 while landing M1 and the fitnessgeek half of M2; each is small.
+Recorded 2026-09-04 while landing M1 and the fitnessgeek half of M2; **all six primitive items
+landed the same night** (`useGeekPrimaryAction`, compact header action + `primaryActionSx`,
+`titleSx`, node titles, 12px floor in shell chrome, Escape on sheets — see THE_UI_UNIFICATION_PLAN §3b).
+The fitnessgeek dead files and the voice decision remain open.
 
 - **Primary-action registry.** `GeekFab` must mount as a sibling of `GeekAppFrame`, but the
   page owns the action. fitnessgeek wrote a 75-line context (`Layout/primaryAction.js`); every
