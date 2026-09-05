@@ -43,9 +43,12 @@
  * The one real dependency this package has is `@geeksuite/crypto-vault`, and
  * it is `require`d lazily — see the `garmin.password` section further down.
  *
- * This module is CommonJS on purpose: fitnessgeek's backend is CJS and
- * `require`s it directly, while basegeek's api is ESM and picks up the default
- * export through Node's ESM→CJS interop. Same arrangement as `@geeksuite/user`.
+ * This module is CommonJS on purpose: no build step, `require`-able and
+ * `import`-able by either consumer, matching the precedent set by
+ * `@geeksuite/crypto-vault`. Both fitnessgeek's backend and basegeek's api are
+ * ESM as of 2026-09-05 and pick it up through Node's ESM→CJS interop —
+ * fitnessgeek via a named import, basegeek via the default export. Same
+ * arrangement as `@geeksuite/user`.
  */
 
 /**

@@ -462,7 +462,7 @@ real two-model comparison, and both are worse than a bit of duplication.
 
 ## 5. Pre-work — fix these before consolidating anything
 
-### PRE-1 · Restore `totals.net_carbs_grams` on the gateway · **bug fix, ship alone** · S
+### PRE-1 · Restore `totals.net_carbs_grams` on the gateway · **bug fix, ship alone** · S · **DONE 2026-09-05**
 
 `apps/basegeek/packages/api/src/graphql/fitnessgeek/models/DailySummary.js`:
 
@@ -484,7 +484,16 @@ the food logs on every call, and the `dailySummary` query calls it (`resolvers.j
 days heal the next time they are viewed. No migration, no backfill script. Say so in the commit message
 so nobody writes one.
 
-### PRE-2 · Delete basegeek's two hand-rolled date normalizers · **bug fix** · XS
+**Done 2026-09-05.** Field and accumulation line added exactly as prescribed above; confirmed against
+`apps/fitnessgeek/backend/src/models/DailySummary.js` line by line — the two `updateFromLogs` statics
+now compute `net_carbs_grams` identically. Test added:
+`apps/basegeek/packages/api/src/__tests__/dailySummaryGatewayFixes.test.js` (schema-shape assertion,
+a two-log accumulation asserted via `.lean()`, the `Math.max(0, …)` floor, and a regression guard that
+a second `updateFromLogs` call — the gateway's read-triggers-recompute hot path — doesn't re-erase the
+field). No migration was run or needed, confirming the doc's claim: recompute-on-read heals each day
+the next time it's viewed.
+
+### PRE-2 · Delete basegeek's two hand-rolled date normalizers · **bug fix** · XS · **DONE 2026-09-05**
 
 Replace `toUtcDate` with `@geeksuite/utils`'s `toUtcMidnight` in both files. basegeek's api already has
 the dependency (`apps/basegeek/packages/api/package.json:19`), so this is an import swap and a
@@ -503,6 +512,17 @@ case to `packages/utils/src/__tests__/dates.test.js` for the ISO-instant input i
 This is also what makes pair 9 (`FoodLog`) drop from M to S, and removes two of the four conflicting
 divergences before consolidation starts.
 
+**Done 2026-09-05.** Both local `toUtcDate` helpers deleted; both files now
+`import { toUtcMidnight } from '@geeksuite/utils/dates'` (matching the import specifier already used by
+`graphql/fitnessgeek/resolvers.js` in the same package), and every call site swapped. The redundant
+`setUTCHours(0,0,0,0)` lines were left in place rather than pulled — harmless no-ops now, and touching
+them was out of scope for this pass; `utcDayRange()` was not adopted for the same reason. Test added
+in `dailySummaryGatewayFixes.test.js`: a `YYYY-MM-DD` string, a `Date`, and an ISO-instant string
+(`'2026-09-05T14:00:00Z'`) all resolve to `2026-09-05T00:00:00.000Z` — not the `2026-08-31` the old
+`toUtcDate` produced — through both `DailySummary.getOrCreate` and `FoodLog.getLogsForDate`. The
+ISO-instant case was already covered in `packages/utils/src/__tests__/dates.test.js`, so nothing was
+added there.
+
 ### PRE-3 · Delete the two orphan models · XS
 
 Step 0 above. Do it in the same pass as PRE-2; it is `rm` plus a `rg` to confirm.
@@ -516,12 +536,22 @@ so it is not exploitable today. Recommendation: **leave it**, note it as a harde
 to fitnessgeek's statics is a two-line change but it turns a silent over-fetch into a thrown error, and
 that belongs in a commit whose title says so.
 
-### PRE-5 · Correct the two stale "fitnessgeek is CJS" comments · XS
+**Confirmed 2026-09-05.** No code changed — per this doc's own recommendation, `apps/fitnessgeek/**`
+was not touched and basegeek's `Meal.js` statics (`findOwned`, `getActiveMeals`, `getMealsByType`,
+`searchMeals`, all `requireUser`-guarded) were left exactly as they are. Recorded here again as the
+hardening follow-up this doc already names.
+
+### PRE-5 · Correct the two stale "fitnessgeek is CJS" comments · XS · **PARTIALLY DONE 2026-09-05**
 
 `packages/schemas/fitnessgeek/userSettings.js:46-48` and
 `apps/basegeek/packages/api/src/__tests__/userSettingsSchemaParity.test.js:31`. Both predate the
 2026-09-05 ESM migration. The CJS choice for `@geeksuite/schemas` is still correct; only its stated
 reason is wrong. Fold this into whichever commit touches those files first.
+
+**`userSettings.js` fixed 2026-09-05**; the module header now cites no-build-step/dual-consumable/
+`@geeksuite/crypto-vault` precedent instead of "fitnessgeek's backend is CJS." The test-file comment at
+`userSettingsSchemaParity.test.js:31` is still stale — out of scope for this pass (see task note below)
+and left for whoever next touches that file.
 
 ### Not pre-work, but worth knowing
 

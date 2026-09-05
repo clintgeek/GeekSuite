@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { toUtcMidnight } from '@geeksuite/utils/dates';
 import { getAppConnection } from '../../shared/appConnections.js';
 import { requireUser } from '../ownership.js';
 
@@ -37,6 +38,11 @@ const dailySummarySchema = new mongoose.Schema({
       min: 0
     },
     fiber_grams: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    net_carbs_grams: {
       type: Number,
       default: 0,
       min: 0
@@ -94,22 +100,10 @@ const dailySummarySchema = new mongoose.Schema({
 // Compound index for user and date
 dailySummarySchema.index({ user_id: 1, date: 1 }, { unique: true });
 
-// Normalize a provided date (string YYYY-MM-DD or Date) to a UTC date at midnight.
-// This mirrors the behavior used when storing and querying FoodLog entries so that
-// dev (local) and prod (UTC) yield the same calendar day.
-function toUtcDate(input) {
-  if (typeof input === 'string') {
-    const [y, m, d] = input.split('-').map(Number);
-    return new Date(Date.UTC(y, (m || 1) - 1, d || 1));
-  }
-  const date = new Date(input);
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-}
-
 // Static method to get or create daily summary
 dailySummarySchema.statics.getOrCreate = async function(userId, date) {
   requireUser(userId);
-  const startDate = toUtcDate(date);
+  const startDate = toUtcMidnight(date);
   startDate.setUTCHours(0, 0, 0, 0);
 
   let summary = await this.findOne({
@@ -133,10 +127,10 @@ dailySummarySchema.statics.updateFromLogs = async function(userId, date) {
   requireUser(userId);
   const FoodLog = fitnessConn.model('FoodLog');
 
-  const startDate = toUtcDate(date);
+  const startDate = toUtcMidnight(date);
   startDate.setUTCHours(0, 0, 0, 0);
 
-  const endDate = toUtcDate(date);
+  const endDate = toUtcMidnight(date);
   endDate.setUTCHours(23, 59, 59, 999);
 
   // Get all logs for the date
@@ -152,6 +146,7 @@ dailySummarySchema.statics.updateFromLogs = async function(userId, date) {
     carbs_grams: 0,
     fat_grams: 0,
     fiber_grams: 0,
+    net_carbs_grams: 0,
     sugar_grams: 0,
     sodium_mg: 0
   };
@@ -180,6 +175,7 @@ dailySummarySchema.statics.updateFromLogs = async function(userId, date) {
     totals.carbs_grams += ((n.carbs_grams || 0) * multiplier);
     totals.fat_grams += ((n.fat_grams || 0) * multiplier);
     totals.fiber_grams += ((n.fiber_grams || 0) * multiplier);
+    totals.net_carbs_grams += Math.max(0, ((n.carbs_grams || 0) - (n.fiber_grams || 0)) * multiplier);
     totals.sugar_grams += ((n.sugar_grams || 0) * multiplier);
     totals.sodium_mg += ((n.sodium_mg || 0) * multiplier);
 
@@ -223,10 +219,10 @@ dailySummarySchema.statics.updateFromLogs = async function(userId, date) {
 // Static method to get summary for date range
 dailySummarySchema.statics.getSummaryRange = async function(userId, startDate, endDate) {
   requireUser(userId);
-  const start = toUtcDate(startDate);
+  const start = toUtcMidnight(startDate);
   start.setUTCHours(0, 0, 0, 0);
 
-  const end = toUtcDate(endDate);
+  const end = toUtcMidnight(endDate);
   end.setUTCHours(23, 59, 59, 999);
 
   return await this.find({
