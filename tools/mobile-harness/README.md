@@ -26,7 +26,7 @@ node tools/mobile-harness/shoot.mjs --app bujogeek --serve --no-build --label wi
 node tools/mobile-harness/shoot.mjs --app basegeek --serve --viewports all
 
 # Everything, the way CI runs it
-pnpm --filter @geeksuite/mobile-harness ci
+pnpm --filter @geeksuite/mobile-harness run ci
 node tools/mobile-harness/ci.mjs --app bookgeek --app flockgeek   # a subset
 
 # Unit coverage for the probe itself (no app build needed — a static fixture)

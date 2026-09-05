@@ -379,7 +379,7 @@ workers blocked, GraphQL stubbed by operation name), one `fixtures.mjs` +
 `scenes.mjs` per app, and a probe that asserts §6's measurable half in the live
 page — every visible interactive element ≥ 44×44, no readable string below 12px,
 no sideways scroll — plus a fail on any page error. `pnpm --filter
-@geeksuite/mobile-harness ci` builds each app, serves `dist` with `vite preview`
+@geeksuite/mobile-harness run ci` builds each app, serves `dist` with `vite preview`
 on a free port (the dev servers hardcode absolute API hosts), walks its scenes in
 both schemes and uploads the screenshots; `.github/workflows/mobile-harness.yml`
 runs it on pushes to main and on PRs touching `apps/**`, `packages/ui/**` or the

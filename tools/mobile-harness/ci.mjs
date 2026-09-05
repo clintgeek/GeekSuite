@@ -2,7 +2,7 @@
 // The gate. Builds every app, serves its dist, walks its scenes at 390x844 in
 // both schemes, and fails on any mobile-grammar violation or page error.
 //
-//   pnpm --filter @geeksuite/mobile-harness ci
+//   pnpm --filter @geeksuite/mobile-harness run ci
 //   node ci.mjs --app bookgeek --app bujogeek      # a subset
 //   node ci.mjs --no-build                          # reuse existing dist/
 import path from 'node:path';
