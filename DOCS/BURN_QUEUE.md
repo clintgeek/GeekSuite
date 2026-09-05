@@ -11,7 +11,6 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 |---|--------|-------|-------|-------|
 | R61 | TODO #30 fitnessgeek: Drawer landmine, BarcodeScanner media query, phone-native date pickers | sonnet | fitnessgeek frontend (not services), TODO docs | 09-05 14:04 |
 | R58 | consolidation step 3: bookgeek profile + ai/status → gateway GraphQL; hardcoded localhost:1800 removed; routes deleted | opus | bookgeek web + api, gateway bookgeek module, SUITE_TODO | 09-05 13:52 |
-| R57 | TODO #30 ×3: bujogeek TemplatePreview markdown, notegeek mind-map palette, flockgeek first-visit flicker | sonnet | three frontends, TODO docs | 09-05 13:42 |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
 ## Queued (launch when files free / prerequisite lands)
@@ -60,6 +59,8 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 
 - 09-05 13:28 — Watchtower deployed the wave (updated=8). **Incident:** basegeek crash-looped — `graphql/bujogeek/typeDefs.js` (d53b008) had raw backticks inside the gql template; no suite imported `graphql/index.js`. fitnessgeek crash-looped on the missing vault key because Watchtower recreates with the old env — fixed with `docker compose up -d` in apps/fitnessgeek (13:30, health 200). Hotfix `61d3109` (typeDefs escaped + `gatewaySchemaLoads` tripwire) pushed 13:32, CI green, Watchtower restarted basegeek 13:40 — healthy, gateway apps 200 (outage ≈13:28–13:40); an accidental push of `3a7c84b` (logger config, R52) went 20s earlier because the scope check's `grep -c` exits 1 on a zero count and broke the `&&` chain — never chain `&&` after the count.
 
+- 09-05 14:12 — wave 3: R50, R51, R53–R57, R59, R60, hotfix follow-ups, syntax gate, harness enforcing. Gate: frozen install, `pnpm -r lint`, syntax check all green before push.
+
 ## Landed during the burn
 
 (append as commits land: `sha — stream — one line`)
@@ -81,6 +82,7 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 - `363a820` — R4 — mobile harness in tools/ + CI (report-only); 698 probe findings
 - `d8521eb` — R27 — CSRF header in api-client authLink + startgeek clients
 - `1fda489` — R24 — bujogeek tag cloud + template journal cache; #25/#26 struck
+- `b867175` — R57 — TODO #30 ×3: bujogeek template markdown, notegeek mind-map palette, flockgeek first-visit flicker; lockfile
 - `a1cba80` — R59 — zod on storygeek's REST backend (jest 41 → 76; continue-without-input 500 fixed)
 - `a9672d9` — R60 — fitnessgeek REST food-log routes deleted; consolidation step 2 complete (104 tests)
 - `77f3236` — R53 — fitnessgeek food-log writes on the gateway; frontend vitest (17); ci jobs test-fitnessgeek-web + syntax (Q33)
