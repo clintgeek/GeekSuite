@@ -1416,6 +1416,16 @@ class AIService {
       autoRotate = false,
       freeOnly = false,
       useAppConfig = false,
+      // No cross-provider fallback: try the requested provider and stop.
+      //
+      // The fallback list below calls every other provider with *its own*
+      // default model, which is the right answer for a caller that asked for
+      // "an answer" and the wrong one for a caller that named a model. The
+      // OpenAI surface sets this whenever the request named a concrete model —
+      // a `<provider>/<model>` pin or a bare catalog id — so a pinned request
+      // whose provider is down or rate-limited fails as itself rather than
+      // being answered, and billed, as a model nobody asked for.
+      noFallback = false,
       cacheNamespace = 'default',
       responseFormat = null,
       tools = null,
@@ -1565,7 +1575,9 @@ class AIService {
 
     const rotationProviders = autoRotate
       ? this.rotationManager.getPriorityList()
-      : [requestedProvider, ...this.fallbackOrder.filter(p => p !== requestedProvider)];
+      : noFallback
+        ? [requestedProvider]
+        : [requestedProvider, ...this.fallbackOrder.filter(p => p !== requestedProvider)];
 
     if (autoRotate) {
       const selection = this.rotationManager.selectProvider();

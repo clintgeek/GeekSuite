@@ -673,10 +673,32 @@ router.post('/call', async (req, res) => {
 });
 
 // POST /api/ai/parse-json - AI call with JSON parsing
+//
+// The second front door onto aiService.callAI, and until 2026-09-05 the
+// unguarded one: no `ai:call` check and no resolveCaller, with `req.body.config`
+// handed to callAI whole — which reads `appName`, `userId` and `useAppConfig`
+// off it. Any credential, including a key minted with only `ai:models`, could
+// route through another app's AIAppConfig row and bill that app and any userId
+// it named. `92e7bc9` hardened five call sites and missed this one.
+//
+// It is gated exactly like /call now: same router-level auth, same permission,
+// same caller resolution, identity stamped from the credential last so nothing
+// in the body survives it. The body keeps the one thing it was ever entitled
+// to say — which *feature* of the caller's own app is asking — plus the
+// routing switches (`freeOnly`, `useAppConfig`), which choose a mode and not
+// an identity.
 router.post('/parse-json', async (req, res) => {
   try {
-    const { prompt, config = {} } = req.body;
-    const userId = req.user.id;
+    // Check permission for API key users
+    const permissionError = requirePermission(req, res, 'ai:call');
+    if (permissionError) return;
+
+    // Who is calling comes from the credential, never from the body.
+    const caller = resolveCaller(req, req.body);
+    logCaller(req, caller, '[ai] /parse-json caller');
+
+    const { prompt } = req.body;
+    const config = { ...(req.body.config || {}) };
 
     if (!prompt) {
       return res.status(400).json({
@@ -687,6 +709,24 @@ router.post('/parse-json', async (req, res) => {
         }
       });
     }
+
+    // The same routing switches /call honours, in the same order.
+    if (config.provider === 'free' || config.freeOnly || req.body.freeOnly) {
+      config.freeOnly = true;
+      delete config.provider;
+    }
+
+    if (config.provider === 'basegeek-app' || config.useAppConfig || req.body.useAppConfig) {
+      config.useAppConfig = true;
+      delete config.provider;
+    } else if (!config.provider && !config.freeOnly && declaresAppRouting(req.body)) {
+      config.useAppConfig = true;
+    }
+
+    // Identity is stamped last so nothing in the body can survive it.
+    config.appName = caller.appId;
+    config.feature = caller.feature;
+    config.userId = caller.userId;
 
     const response = await aiService.callAI(prompt, config);
     const parsedResult = aiService.parseJSONResponse(response);

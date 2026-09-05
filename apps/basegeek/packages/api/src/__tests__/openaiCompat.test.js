@@ -116,6 +116,12 @@ async function makeApiKey(overrides = {}) {
     appName: 'testgeek',
     permissions: ['ai:call'],
     createdBy: new mongoose.Types.ObjectId(),
+    // The schema default is 60 requests a minute, and this file shares one key
+    // across every case in it — so the suite passed only while it stayed under
+    // sixty requests a minute, and the case that tipped it over got a 429 that
+    // had nothing to do with what it was testing. The rate-limit case (F-15)
+    // mints its own throttled key and is unaffected.
+    rateLimit: { requestsPerMinute: 1000, requestsPerHour: 10000 },
     ...overrides,
   });
   return apiKey;
@@ -1107,12 +1113,120 @@ describe('error envelope', () => {
     expect(res.body.error.type).toBe('permission_error');
   });
 
-  it('500 with the envelope when every provider fails', async () => {
+  it('5xx with the envelope when every provider fails', async () => {
     patch(aiService, 'callAI', async () => { throw new Error('All AI providers failed'); });
     const res = await chat({ model: 'basegeek-rotation', messages: [{ role: 'user', content: 'hi' }] });
     expect(res.status).toBeGreaterThanOrEqual(500);
     expect(res.body.error.type).toBe('server_error');
-    expect(res.body.error.message).toMatch(/providers failed/);
+    // The message is the proxy's own (F-23), not the service's internal string.
+    expect(res.body.error.code).toBe('upstream_unavailable');
+    expect(typeof res.body.error.message).toBe('string');
+    expect(res.body.error.message).not.toMatch(/providers failed/);
+  });
+
+  // ── FINDING F-23 — CLOSED. The proxy put `error.message` straight into the
+  // response, and those messages are built as `<Provider> API error (<status>):
+  // <the provider's raw JSON body>` (services/aiService.js:2440 and ten
+  // siblings). So any ai:call key holder read the vendor's name, its org and
+  // project ids, its quota and entitlement detail, and — on a bad-credential
+  // case — the vendor-redacted key fragment it echoes back. The failing
+  // credential is baseGeek's, not the caller's. Upstream failures now map onto
+  // a small allowlist of the proxy's own messages; the body stays in the log,
+  // reachable by the request id the response carries.
+  //
+  // Every assertion below is written against a realistic upstream body, so a
+  // regression that reintroduces pass-through fails on the substring rather
+  // than on a shape.
+  const LEAKY_UPSTREAM_BODY = JSON.stringify({
+    error: {
+      message: 'Your credit balance is too low. Organization org-8fa21 (project proj_x91) has 0 remaining. API key sk-ant-...tR4q is valid.',
+      type: 'invalid_request_error',
+      request_id: 'req_011CQ7upstream',
+    },
+  });
+
+  function expectNoLeak(body) {
+    const serialized = JSON.stringify(body);
+    for (const secret of ['org-8fa21', 'proj_x91', 'sk-ant', 'tR4q', 'req_011CQ7upstream', 'credit balance']) {
+      expect(serialized).not.toContain(secret);
+    }
+  }
+
+  it('F-23: an upstream 401 is a 5xx in the proxy\'s own words, with nothing of the provider\'s in it', async () => {
+    patch(aiService, 'callAI', async () => {
+      throw new Error(`Anthropic API error (401): ${LEAKY_UPSTREAM_BODY}`);
+    });
+    const res = await chat({ model: 'basegeek-rotation', messages: [{ role: 'user', content: 'hi' }] });
+
+    // A provider key that does not work is baseGeek's problem, not the caller's.
+    expect(res.status).toBe(502);
+    expect(res.body.error.type).toBe('server_error');
+    expect(res.body.error.code).toBe('upstream_error');
+    expectNoLeak(res.body);
+    // Not even which vendor answered — that is what x_geeksuite is for, on
+    // the success path, where it is the caller's own request being described.
+    expect(JSON.stringify(res.body)).not.toMatch(/anthropic/i);
+  });
+
+  it('F-23: an upstream 429 keeps the status OpenAI would use, and adds Retry-After', async () => {
+    patch(aiService, 'callAI', async () => {
+      throw new Error(`Groq API error (429): ${LEAKY_UPSTREAM_BODY}`);
+    });
+    const res = await chat({ model: 'basegeek-rotation', messages: [{ role: 'user', content: 'hi' }] });
+
+    expect(res.status).toBe(429);
+    expect(res.body.error.type).toBe('rate_limit_error');
+    expect(res.body.error.code).toBe('rate_limit_exceeded');
+    expect(res.headers['retry-after']).toBeDefined();
+    expectNoLeak(res.body);
+  });
+
+  it('F-23: an upstream 400 stays a 400, without the provider\'s explanation', async () => {
+    patch(aiService, 'callAI', async () => {
+      throw new Error(`Gemini API error (400): ${LEAKY_UPSTREAM_BODY}`);
+    });
+    const res = await chat({ model: 'basegeek-rotation', messages: [{ role: 'user', content: 'hi' }] });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.type).toBe('invalid_request_error');
+    expect(res.body.error.code).toBe('upstream_invalid_request');
+    expectNoLeak(res.body);
+  });
+
+  it('F-23: the envelope is still spec-shaped, and carries the request id to correlate with the log', async () => {
+    patch(aiService, 'callAI', async () => {
+      throw new Error(`Cohere API error (500): ${LEAKY_UPSTREAM_BODY}`);
+    });
+    const res = await chat(
+      { model: 'basegeek-rotation', messages: [{ role: 'user', content: 'hi' }] },
+      { headers: { 'x-request-id': 'caller-supplied-id-42' } },
+    );
+
+    expect(res.status).toBe(502);
+    // spec: Error.required = [type, message, param, code].
+    expect(res.body.error).toHaveProperty('param');
+    expect(res.body.error).toHaveProperty('code');
+    expect(res.body.error.param).toBeNull();
+    // The one varying part of the message is ours: the id that finds the log
+    // line holding the provider's actual body.
+    expect(res.body.error.message).toContain('caller-supplied-id-42');
+    expectNoLeak(res.body);
+  });
+
+  it('F-23: a streamed request that fails before the first chunk gets the same envelope', async () => {
+    patch(aiService, 'callAI', async () => {
+      throw new Error(`Anthropic API error (429): ${LEAKY_UPSTREAM_BODY}`);
+    });
+    const res = await chat({
+      model: 'basegeek-rotation',
+      stream: true,
+      messages: [{ role: 'user', content: 'hi' }],
+    });
+
+    // F-07 keeps this an HTTP status rather than a 200 with an error frame.
+    expect(res.status).toBe(429);
+    expect(res.body.error.code).toBe('rate_limit_exceeded');
+    expectNoLeak(res.body);
   });
 
   // FINDING F-12 — CLOSED. spec: Error.required = [type, message, param, code].
@@ -1368,6 +1482,105 @@ describe('routing aliases', () => {
     });
     expect(res.status).toBe(200);
     expect(seen[0]).toEqual({ provider: 'anthropic', model: 'claude-3-5-sonnet-20241022' });
+  });
+
+  // ── FINDING F-22 — CLOSED. F-16 taught the proxy to 404 an unknown model id,
+  // but exempted the `<provider>/<model>` form: a pin was assumed to be
+  // self-validating, and it is not. `anthropic/gpt-4o-mini` names a real
+  // provider and a model it has never served — callAI split the pin, watched
+  // anthropic reject the id, and walked its fallback list, where every other
+  // provider is called with *its own* default model. The caller got a 200, a
+  // completion from a model it never named, and the bill for it. Same outcome
+  // for a valid pin whose provider was merely rate-limited.
+  //
+  // A named model is a promise now: checked against that provider's catalog,
+  // and answered by that provider or not at all.
+  function stubCatalog() {
+    patch(aiService, 'getModels', async (provider) => (
+      provider === 'anthropic'
+        ? [{ id: 'claude-3-5-sonnet-20241022' }, { id: 'claude-3-5-haiku-20241022' }]
+        : provider === 'groq'
+        ? [{ id: 'llama-3.3-70b-versatile' }]
+        : []
+    ));
+  }
+
+  it('F-22: a pin naming a model that provider does not serve is a 404 model_not_found', async () => {
+    stubCatalog();
+    const calls = stubCallAI();
+
+    const res = await chat({
+      model: 'anthropic/gpt-4o-mini',
+      messages: [{ role: 'user', content: 'hi' }],
+    });
+
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('model_not_found');
+    expect(res.body.error.type).toBe('invalid_request_error');
+    expect(res.body.error.param).toBe('model');
+    // The message has to teach the caller what to send instead.
+    expect(res.body.error.message).toContain('anthropic');
+    expect(res.body.error.message).toContain('basegeek-rotation');
+    // And nothing was spent finding out.
+    expect(calls).toHaveLength(0);
+  });
+
+  it('F-22: a pin the catalog does list is still served', async () => {
+    stubCatalog();
+    const calls = stubCallAI();
+
+    const res = await chat({
+      model: 'anthropic/claude-3-5-haiku-20241022',
+      messages: [{ role: 'user', content: 'hi' }],
+    });
+
+    expect(res.status).toBe(200);
+    expect(calls[0].config.model).toBe('anthropic/claude-3-5-haiku-20241022');
+  });
+
+  it('F-22: the basegeek-* aliases keep every bit of their rotation', async () => {
+    stubCatalog();
+    for (const alias of ['basegeek-rotation', 'basegeek-free', 'basegeek-app']) {
+      const calls = stubCallAI();
+      const res = await chat({ model: alias, messages: [{ role: 'user', content: 'hi' }] });
+      expect(res.status).toBe(200);
+      // An alias is the opposite promise: answer me from whatever is up.
+      expect(calls[0].config.noFallback).toBeFalsy();
+      expect(calls[0].config.provider).toBeUndefined();
+    }
+  });
+
+  it('F-22: a pinned request is not answered by another provider\'s default model', async () => {
+    stubCatalog();
+    const tried = [];
+    patch(aiService, 'callProvider', async (provider) => {
+      tried.push(provider);
+      if (provider === 'anthropic') {
+        throw new Error('Anthropic API error (429): {"error":{"message":"rate_limit"}}');
+      }
+      return { content: 'an answer nobody asked for', inputTokens: 1, outputTokens: 1 };
+    });
+    patch(aiService, 'updateStats', async () => {});
+    patch(aiUsageService, 'trackUsage', async () => {});
+    patch(aiService, 'providers', {
+      ...aiService.providers,
+      anthropic: { ...aiService.providers.anthropic, apiKey: 'test', enabled: true, model: 'claude-3-5-sonnet-20241022' },
+      groq: { ...aiService.providers.groq, apiKey: 'test', enabled: true, model: 'llama-3.3-70b-versatile' },
+    });
+    aiService.initialized = true;
+    aiService.clearCache();
+
+    const res = await chat({
+      model: 'anthropic/claude-3-5-sonnet-20241022',
+      messages: [{ role: 'user', content: 'hi' }],
+    });
+
+    // The pinned provider was the only one asked...
+    expect(tried).toEqual(['anthropic']);
+    // ...so the caller learns its request failed, rather than being handed
+    // groq's llama at 200 under the model name it pinned.
+    expect(res.status).toBe(429);
+    expect(res.body.error.code).toBe('rate_limit_exceeded');
   });
 
   it('a model id that merely contains a slash is not split (meta-llama/...)', async () => {

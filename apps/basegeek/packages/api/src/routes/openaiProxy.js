@@ -104,6 +104,165 @@ async function findModelOwner(modelId) {
 }
 
 /**
+ * Every model id `provider` lists in the catalog, or an empty array when the
+ * catalog cannot answer for it right now.
+ *
+ * Empty means *unknown*, not *empty*: `getModels` reads the AIModel collection
+ * and swallows its own failures, so a database blip or an unseeded provider
+ * would otherwise turn every pin into a 404. A pin is refused only against a
+ * catalog that actually listed something.
+ */
+async function providerCatalog(provider) {
+  try {
+    const models = await aiService.getModels(provider);
+    return Array.isArray(models) ? models.map(m => m?.id).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The error envelope for an upstream failure — the proxy's own words, never
+ * the provider's.
+ *
+ * FINDING F-23: `error.message` went straight into the response, and those
+ * messages are built as `` `Anthropic API error (${status}): ${JSON.stringify(
+ * error.response.data)}` `` at services/aiService.js:2440 and ten sibling
+ * sites. So any `ai:call` key holder learned which vendor sits behind the
+ * rotation and read its raw error body — org and project ids, quota and
+ * entitlement detail, and on a bad-credential case a vendor-redacted key
+ * fragment. None of that is the caller's; the credential that failed is
+ * baseGeek's, not theirs.
+ *
+ * The bodies still exist in full, in the logs, where the redacting logger
+ * writes them (`logger.error({ err: error, ... })`) and an operator can
+ * correlate them by the request id the response carries.
+ *
+ * The allowlist below is the whole vocabulary this surface will speak about an
+ * upstream failure. Statuses follow what OpenAI answers for the same
+ * situation: a provider rate limit is the caller's 429 (their request really
+ * was throttled), a provider's rejection of the request shape is their 400,
+ * and everything that is baseGeek's problem — a bad provider key, a provider
+ * 500, nothing left in the rotation — is a 5xx, because it is.
+ */
+const UPSTREAM_FAILURES = {
+  invalid_request: {
+    status: 400,
+    type: 'invalid_request_error',
+    code: 'upstream_invalid_request',
+    message: 'The upstream model provider rejected this request.'
+  },
+  model_not_found: {
+    status: 404,
+    type: 'invalid_request_error',
+    code: 'model_not_found',
+    message: 'The requested model is not available from the provider that owns it.'
+  },
+  rate_limited: {
+    status: 429,
+    type: 'rate_limit_error',
+    code: 'rate_limit_exceeded',
+    message: 'The upstream model provider rate-limited this request. Retry later.'
+  },
+  timeout: {
+    status: 504,
+    type: 'server_error',
+    code: 'upstream_timeout',
+    message: 'The upstream model provider did not respond in time.'
+  },
+  unavailable: {
+    status: 503,
+    type: 'server_error',
+    code: 'upstream_unavailable',
+    message: 'No upstream model provider was able to serve this request.'
+  },
+  upstream_error: {
+    status: 502,
+    type: 'server_error',
+    code: 'upstream_error',
+    message: 'The upstream model provider failed to complete this request.'
+  },
+  internal: {
+    status: 500,
+    type: 'server_error',
+    code: 'internal_error',
+    message: 'The request could not be completed.'
+  }
+};
+
+/** The HTTP status a provider answered with, if the failure carries one. */
+function upstreamStatusOf(error) {
+  const direct = error?.response?.status ?? error?.status;
+  if (Number.isInteger(direct) && direct >= 400) return direct;
+  // Every provider adapter that has a response rethrows as
+  // `<Provider> API error (<status>): <body>`; that prefix is the only part of
+  // the string this function reads, and none of it is returned to the caller.
+  const match = /API error \((\d{3})\)/.exec(String(error?.message || ''));
+  return match ? Number(match[1]) : null;
+}
+
+/**
+ * Which entry of UPSTREAM_FAILURES a thrown error is. Unrecognised failures
+ * are `internal` — a 500 that says nothing, which is the right answer for a
+ * bug in this file and a safe one for anything else.
+ */
+function classifyFailure(error) {
+  const message = String(error?.message || '');
+  const status = upstreamStatusOf(error);
+
+  if (status) {
+    if (status === 429) return 'rate_limited';
+    if (status === 404) return 'model_not_found';
+    if (status === 408 || status === 504) return 'timeout';
+    if (status === 401 || status === 403) return 'upstream_error';
+    if (status >= 400 && status < 500) return 'invalid_request';
+    return 'upstream_error';
+  }
+
+  // baseGeek's own free-tier accounting, not a provider's: callAI records it as
+  // `Model not available for <provider>: <reason>` and moves on, so it only
+  // reaches here when it was the last word.
+  if (/model not available for/i.test(message)) return 'rate_limited';
+  if (/rate limit|quota|too many requests/i.test(message)) return 'rate_limited';
+  if (/timeout|etimedout|econnaborted/i.test(message)) return 'timeout';
+  if (/all ai providers failed|failed to initialize|no .*providers/i.test(message)) return 'unavailable';
+  if (/econnrefused|enotfound|eai_again|socket hang up|network error/i.test(message)) {
+    return 'upstream_error';
+  }
+  return 'internal';
+}
+
+/**
+ * Log the real failure, answer with the allowlisted one. The request id in the
+ * message is the thread back to the log line — it is the only thing here that
+ * varies with the request, and it is ours, not the provider's.
+ */
+function failUpstream(req, res, error, context = {}) {
+  const kind = classifyFailure(error);
+  const mapped = UPSTREAM_FAILURES[kind];
+
+  req.log.error(
+    { err: error, ...context, mappedTo: mapped.code, mappedStatus: mapped.status },
+    '[OpenAI Proxy] upstream failure'
+  );
+
+  if (mapped.status === 429 && !res.getHeader('Retry-After')) {
+    res.setHeader('Retry-After', '60');
+  }
+
+  const requestId = res.getHeader('X-Request-Id') || req.id;
+  if (requestId && !res.getHeader('X-Request-Id')) {
+    res.setHeader('X-Request-Id', String(requestId));
+  }
+
+  const message = requestId
+    ? `${mapped.message} (request id: ${requestId})`
+    : mapped.message;
+
+  return openAIError(res, mapped.status, message, mapped.type, mapped.code);
+}
+
+/**
  * baseGeek's own metadata about how a completion was answered.
  *
  * FINDING F-20: README_OPENAI_PROXY.md has always documented a `provider` key
@@ -429,22 +588,57 @@ router.post('/chat/completions', async (req, res) => {
     // which is what an SDK's NotFoundError is for. Silent rotation would make
     // the "drop-in replacement" claim literally true at the cost of answering
     // a question the caller did not ask.
-    if (!useRotationAlias && !isProviderPin(requestedModel)) {
-      const owner = await findModelOwner(requestedModel);
-      if (!owner) {
-        return openAIError(
-          res,
-          404,
-          `The model '${requestedModel}' does not exist. This is baseGeek's ` +
-          `OpenAI-compatible endpoint, not OpenAI — it serves its own catalog. ` +
-          `Use one of the routing aliases (${VIRTUAL_ALIASES.join(', ')}), ` +
-          `pin a backend with '<provider>/<model>' (e.g. ` +
-          `'anthropic/claude-3-5-sonnet-20241022'), or name a model from ` +
-          `GET /openai/v1/models.`,
-          'invalid_request_error',
-          'model_not_found',
-          'model'
-        );
+    //
+    // FINDING F-22: the check above exempted the pinned `<provider>/<model>`
+    // form entirely, and a pin is not self-validating — `anthropic/gpt-4o-mini`
+    // named a real provider and a model it has never served. callAI split the
+    // pin, watched anthropic reject the id, and walked its fallback list, where
+    // every other provider is called with *its own* default model. The caller
+    // got a 200, a completion from a model it never named, and the bill.
+    //
+    // A named model is now a promise: the pin is checked against that
+    // provider's catalog, and a request that names a concrete model — pinned
+    // or bare — is answered by that model or not at all (`noFallback` below).
+    // The three `basegeek-*` aliases are the opposite promise and keep every
+    // bit of their rotation.
+    let ownerProvider = null;
+    if (!useRotationAlias) {
+      if (isProviderPin(requestedModel)) {
+        const slashIdx = requestedModel.indexOf('/');
+        ownerProvider = requestedModel.slice(0, slashIdx);
+        const pinnedModelId = requestedModel.slice(slashIdx + 1);
+        const catalog = await providerCatalog(ownerProvider);
+        if (catalog.length > 0 && !catalog.includes(pinnedModelId)) {
+          return openAIError(
+            res,
+            404,
+            `The model '${pinnedModelId}' does not exist on provider ` +
+            `'${ownerProvider}'. Pin a model that provider actually serves, ` +
+            `use one of the routing aliases (${VIRTUAL_ALIASES.join(', ')}), ` +
+            `or name a model from GET /openai/v1/models.`,
+            'invalid_request_error',
+            'model_not_found',
+            'model'
+          );
+        }
+      } else {
+        const owner = await findModelOwner(requestedModel);
+        if (!owner) {
+          return openAIError(
+            res,
+            404,
+            `The model '${requestedModel}' does not exist. This is baseGeek's ` +
+            `OpenAI-compatible endpoint, not OpenAI — it serves its own catalog. ` +
+            `Use one of the routing aliases (${VIRTUAL_ALIASES.join(', ')}), ` +
+            `pin a backend with '<provider>/<model>' (e.g. ` +
+            `'anthropic/claude-3-5-sonnet-20241022'), or name a model from ` +
+            `GET /openai/v1/models.`,
+            'invalid_request_error',
+            'model_not_found',
+            'model'
+          );
+        }
+        ownerProvider = owner;
       }
     }
 
@@ -508,6 +702,13 @@ router.post('/chat/completions', async (req, res) => {
 
     if (!useRotationAlias) {
       callConfig.model = requestedModel;
+      // The provider that owns the id, so a bare catalog id reaches its own
+      // backend rather than whichever provider happens to be current...
+      callConfig.provider = ownerProvider;
+      // ...and no other backend gets to answer in its place (F-22). Without
+      // this, a pin whose provider is merely rate-limited is served by the
+      // next provider's default model, at 200, under the pinned model's name.
+      callConfig.noFallback = true;
     }
 
     // What goes back in the response's `model` field.
@@ -542,8 +743,9 @@ router.post('/chat/completions', async (req, res) => {
       try {
         result = await aiService.callAI(promptForRouting, callConfig);
       } catch (error) {
-        req.log.error({ err: error }, '[OpenAI Proxy] Streaming error before first chunk');
-        return openAIError(res, 500, error.message || 'Internal server error', 'server_error', 'ai_call_error');
+        // F-23: the same envelope the non-streaming path returns, from the
+        // same allowlist — nothing the provider said reaches the caller.
+        return failUpstream(req, res, error, { stage: 'stream_before_first_chunk', model: requestedModel });
       }
 
       res.setHeader('Content-Type', 'text/event-stream');
@@ -645,8 +847,11 @@ router.post('/chat/completions', async (req, res) => {
         req.log.error({ err: error }, '[OpenAI Proxy] Streaming error after first chunk');
         res.write(`data: ${JSON.stringify({
           error: {
-            message: error.message || 'Internal server error',
+            // F-23: opaque here too. Reaching this point means a bug in the
+            // framing above, and the detail is in the log line just written.
+            message: 'The request could not be completed.',
             type: 'server_error',
+            param: null,
             code: 'stream_error'
           }
         })}\n\n`);
@@ -719,8 +924,10 @@ router.post('/chat/completions', async (req, res) => {
       x_geeksuite: geekSuiteMeta(providerInfo, caller)
     });
   } catch (error) {
-    req.log.error({ err: error }, '[OpenAI Proxy] Error');
-    openAIError(res, 500, error.message || 'Internal server error', 'server_error', 'ai_call_error');
+    // F-23: every failure that gets this far — a provider's 4xx/5xx, an
+    // exhausted rotation, a timeout, or a bug in this file — is answered from
+    // the allowlist in UPSTREAM_FAILURES and logged in full server-side.
+    failUpstream(req, res, error, { stage: 'chat_completions', model: req.body?.model ?? null });
   }
 });
 

@@ -8,16 +8,21 @@ service beneath it (`services/aiService.js`,
 (`middleware/apiKeyAuth.js`), and the legacy second endpoint at
 `/api/ai/v1/chat/completions` (`routes/aiRoutes.js:1391`).
 **Executable evidence:** `packages/api/src/__tests__/openaiCompat.test.js`
-— 73 cases, **all `it`, none `it.failing`.**
+— 82 cases, **all `it`, none `it.failing`.**
 **Method:** read-only. No source file was modified for this audit.
 
 ---
 
-> ## Status: all 22 findings closed — 2026-09-05
+> ## Status: all 24 findings closed — 2026-09-05
+>
+> *(22 from the morning audit; **F-22** and **F-23** were added by the
+> cross-stream burn review the same evening — see `DOCS/BURN_REVIEW.md` #10 and
+> #11 — and closed with it. Both are the same shape as the originals: silent,
+> HTTP 200 or a helpful-looking error, and wrong.)*
 >
 > The audit was written in the morning and worked through the same day. Every
 > `it.failing` case in the conformance suite has been promoted to `it`; the
-> suite is 73 green with no findings outstanding. The verdict column below is
+> suite is 82 green with no findings outstanding. The verdict column below is
 > the *post-fix* state, with the original verdict kept in parentheses so the
 > record of what was wrong survives — the narrative sections further down are
 > deliberately unedited except for a one-line resolution on each finding.
@@ -29,6 +34,17 @@ service beneath it (`services/aiService.js`,
 >   form. Option (b) — silently rerouting to the rotation — would have made
 >   the "drop-in replacement" claim literally true at the cost of answering a
 >   question the caller did not ask.
+> - **F-22** extends F-16's decision to the pinned form: a `<provider>/<model>`
+>   pin whose model that provider does not serve is the same 404, and a request
+>   that names a concrete model does not fall back to another provider. The
+>   alternative — keep answering, from whatever is up — is what the
+>   `basegeek-*` aliases are *for*, and a caller who wanted that would have
+>   asked for it.
+> - **F-23** answers upstream failures from a seven-entry allowlist of aiGeek's
+>   own messages. The rejected alternative was passing the provider's body
+>   through "for debuggability": the caller cannot act on an org id or a quota
+>   breakdown that isn't theirs, and an operator has the same body in the log,
+>   findable by the request id the response carries.
 > - **F-20** ships as `x_geeksuite: {provider, model, cached, app, feature}`
 >   rather than the bare `provider` key the docs promised, because the OpenAI
 >   response schema has no `provider` field and a strict client is entitled to
@@ -148,8 +164,11 @@ statement of what was wrong.)*
 | 403 for a key without `ai:call` | **pass** | `403 when the key lacks ai:call` |
 | 404 `model_not_found` on `/models/{id}` | **pass** | `GET /v1/models/{unknown} is a 404 model_not_found` |
 | 404 `model_not_found` on chat/completions | **pass** (was: fail F-16 — unknown model → 500) | `F-16: an unknown model id is a 404 model_not_found` |
+| 404 `model_not_found` for a `<provider>/<model>` pin the provider doesn't serve | **pass** (was: fail F-22 — pins skipped the check and rerouted) | `F-22: a pin naming a model that provider does not serve is a 404 model_not_found` |
+| A named model is answered by that model or not at all (no cross-provider fallback) | **pass** (was: fail F-22) | `F-22: a pinned request is not answered by another provider's default model` |
+| Upstream provider error bodies never reach the caller | **pass** (was: fail F-23 — relayed verbatim) | five `F-23:` cases |
 | 429 with `Retry-After` and `rate_limit_exceeded` | **pass** (was: fail F-15) | `F-15: a 429 carries Retry-After and code rate_limit_exceeded` |
-| 5xx envelope on total provider failure | **pass** | `500 with the envelope when every provider fails` |
+| 5xx envelope on total provider failure | **pass** | `5xx with the envelope when every provider fails` |
 | `GET /v1/models` list shape | **pass** | `returns {object:"list", data:[Model]}` |
 | `GET /v1/models/{id}` | **pass** | two cases |
 | `Authorization: Bearer` and `x-api-key` | **pass** | two cases |
@@ -228,6 +247,75 @@ as `basegeek-rotation` and say so in the echoed `model`. Option (b) makes the
 have answered a question the caller did not ask. The catalog lookup is shared
 with `GET /models/{id}`, so what the list advertises is exactly what chat
 accepts.
+
+**Reopened and re-closed the same evening as F-22** — see below. Option (a) was
+applied to bare ids only; the pinned form kept the old behaviour for another
+eight hours.
+
+---
+
+### 2b. F-22 — a `<provider>/<model>` pin reroutes to a different model
+
+*Added by the cross-stream burn review (`DOCS/BURN_REVIEW.md` #10), 2026-09-05
+evening. Closed the same night.*
+
+F-16's fix exempted the pinned form: `if (!useRotationAlias &&
+!isProviderPin(requestedModel))`. The exemption assumed a pin validates itself,
+and it does not. `anthropic/gpt-4o-mini` names a real provider and a model it
+has never served; `callAI` split the pin, watched anthropic reject the id, and
+walked `fallbackOrder`, where **every other provider is called with its own
+`DEFAULT_MODELS` entry** (`aiService.js:1566,1595`). The caller got a 200, a
+completion from a model it never named, and the bill for it. The same happened
+to a perfectly valid pin whose provider was merely rate-limited — which is the
+worse case, because it needs no mistake by the caller to trigger.
+
+**Who this breaks:** anyone pinning for determinism, which is the only reason to
+pin. geekPR pins so a PR review keeps one reviewer persona across retries; a
+silent reroute gives it a different reviewer and no way to know. And anyone
+reading a bill: usage lands against a model the caller never asked for.
+
+**Fixed.** The pin's model half is checked against that provider's catalog
+(fail-open on an empty catalog — `getModels` swallows its own DB errors, and
+"cannot enumerate" must not become "does not exist"), and any request naming a
+concrete model — pinned or a bare catalog id — is dispatched with `provider` set
+to the owner and `noFallback: true`, a new `callAI` option that tries the named
+provider and stops. The `basegeek-*` aliases are untouched and asserted
+untouched: they are the request that *wants* whatever is up.
+
+---
+
+### 2c. F-23 — the proxy relays the provider's error body verbatim
+
+*Added by the cross-stream burn review (`DOCS/BURN_REVIEW.md` #11), 2026-09-05
+evening. Closed the same night.*
+
+`openaiProxy.js` put `error.message` straight into the response envelope, and
+those messages are built as `` `Anthropic API error (${status}):
+${JSON.stringify(error.response.data)}` `` at `aiService.js:2440` and ten
+sibling sites. So any holder of an `ai:call` key learned which vendor sits
+behind the rotation and read that vendor's raw error body: organization and
+project ids, quota and entitlement detail, and — on a bad-credential case — the
+vendor-redacted key fragment providers echo back. None of it is the caller's.
+The credential that failed is baseGeek's.
+
+**Who this breaks:** nobody's client, which is exactly why it survived. It is a
+disclosure bug wearing a debuggability costume.
+
+**Fixed.** One allowlist, `UPSTREAM_FAILURES`, is the whole vocabulary this
+surface speaks about an upstream failure: seven entries, each a fixed message
+and a `type`/`code` pair, selected by the upstream status parsed out of the
+error string and nothing else. Statuses follow what OpenAI answers for the same
+situation — a provider rate limit is the caller's 429 with `Retry-After`, a
+provider's rejection of the request shape is their 400, a bad provider key or a
+provider 500 is a 502, an exhausted rotation is a 503, and an unrecognised
+failure is a bare 500 that says nothing. The provider's body is still written in
+full by the redacting logger; the response message ends with the request id that
+finds that log line. Applied at all three sites: the non-streaming catch, the
+pre-first-chunk streaming catch, and the terminal SSE error frame.
+
+**Still open, elsewhere:** `/api/ai/call` and `/api/ai/parse-json` relay the
+same strings on their own non-OpenAI envelope (`error.message` and
+`error.details`). Out of scope for this surface; filed on the burn queue.
 
 ---
 
@@ -493,10 +581,17 @@ cd apps/basegeek/packages/api
 pnpm test src/__tests__/openaiCompat.test.js
 ```
 
-73 tests, all green, **none of them `it.failing`**. The mechanism that got them
+82 tests, all green, **none of them `it.failing`**. The mechanism that got them
 there is worth keeping for the next audit: Jest passes a `failing` test whose
 body throws and **fails the run the moment the body starts passing**, so each
 finding announced its own closure and asked to be promoted. Each case still
 carries its finding id in the title and the spec citation in a comment above
 it, now reading "CLOSED" with a note on what changed — the tests are the
 durable record, and the regression tripwire.
+
+One harness note, added with F-22/F-23: `makeApiKey` mints its keys with
+`requestsPerMinute: 1000`. Every case in the file shares one key, and the schema
+default is 60 — so the suite passed only while it stayed under sixty requests a
+minute, and the case that tipped it over failed with a 429 that had nothing to
+do with what it was testing. The `F-15` rate-limit case mints its own throttled
+key and is unaffected.

@@ -58,6 +58,19 @@ await openai.chat.completions.create({
 Known provider prefixes: `anthropic`, `groq`, `gemini`, `together`,
 `cohere`, `openrouter`, `cerebras`, `cloudflare`, `ollama`, `llmgateway`.
 
+**A pin is a promise, and since 2026-09-05 it is kept.** The model half is
+checked against that provider's catalog: `anthropic/gpt-4o-mini` names a real
+provider and a model it has never served, and is a **404 `model_not_found`**
+rather than a 200 from somewhere else. A pinned request also does **not** fall
+back — if the pinned provider is down, rate-limited or out of quota, you get
+the error, not another provider's default model wearing the name you pinned.
+That is the whole point of pinning; if you would rather have *an* answer than
+*that* answer, use `basegeek-rotation`.
+
+(The catalog check fails open: if aiGeek cannot enumerate a provider's models
+at that moment, the pin is allowed through rather than refused. "Cannot list"
+is not "does not exist".)
+
 `llm7` and `onemin` were retired on 2026-09-04 and their implementations
 deleted on 2026-09-05; pinning either now fails like any other unknown
 provider. See [AI_CATALOG.md](./AI_CATALOG.md#removed-2026-09-04).
@@ -74,6 +87,28 @@ This is the one place aiGeek deliberately refuses to be a drop-in. LangChain's
 model. aiGeek serves its own catalog, and answering one of those with a
 different model's completion at HTTP 200 would be worse than saying so. Set the
 model as well as the base URL.
+
+### When a provider fails
+
+Upstream failures are reported in aiGeek's own words, from a fixed list — never
+the provider's error body, which is why you will not find an org id, a quota
+breakdown or a vendor's request id in a response. The provider that failed is
+baseGeek's business, not the caller's; the credential that was rejected is
+baseGeek's too.
+
+| What happened | You get |
+|---|---|
+| The provider rate-limited us | `429 rate_limit_error` / `rate_limit_exceeded`, with `Retry-After` |
+| The provider rejected the request shape | `400 invalid_request_error` / `upstream_invalid_request` |
+| The provider does not have that model | `404 invalid_request_error` / `model_not_found` |
+| The provider timed out | `504 server_error` / `upstream_timeout` |
+| Bad provider credential, or a provider 5xx | `502 server_error` / `upstream_error` |
+| Nothing left in the rotation | `503 server_error` / `upstream_unavailable` |
+| Anything else | `500 server_error` / `internal_error` |
+
+Every message ends with `(request id: <id>)` — the `X-Request-Id` on the
+response, and the key to the log line that *does* hold the provider's full
+answer. Quote it when you ask an operator what actually went wrong.
 
 ## Who is calling
 
@@ -118,6 +153,14 @@ own `user` field for the same purpose.
 
 Usage groups the same way: one row per app, with `features` nested inside it,
 so "what does fitnessgeek cost" has one answer instead of three.
+
+This holds on **every** route that spends: `/api/ai/call`, `/api/ai/call-smart`,
+`/api/ai/conversation/message`, `/api/ai/parse-json`, `/api/ai/test` and the
+OpenAI proxy. `/api/ai/parse-json` was the one that got away in the first pass —
+it had neither the `ai:call` check nor the resolver until 2026-09-05, so a key
+minted with only `ai:models` could call it and name any app and any user. If you
+have a key that has been reaching `/parse-json` without `ai:call`, it stops
+working: mint it the permission it was always supposed to have.
 
 ### Minting a key for a backend
 
