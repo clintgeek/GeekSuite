@@ -9,6 +9,8 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
+| R62 | plan: fitnessgeek 13-model consolidation (DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md, docs only) | opus | one new doc + SUITE_TODO line | 09-05 14:06 |
+| R63 | analysis: storygeek gateway module — drop / build / hybrid (DOCS/STORYGEEK_GATEWAY_DECISION.md, docs only) | sonnet | one new doc + SUITE_TODO line | 09-05 14:06 |
 | R61 | TODO #30 fitnessgeek: Drawer landmine, BarcodeScanner media query, phone-native date pickers | sonnet | fitnessgeek frontend (not services), TODO docs | 09-05 14:04 |
 | R58 | consolidation step 3: bookgeek profile + ai/status → gateway GraphQL; hardcoded localhost:1800 removed; routes deleted | opus | bookgeek web + api, gateway bookgeek module, SUITE_TODO | 09-05 13:52 |
 
@@ -59,7 +61,7 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 
 - 09-05 13:28 — Watchtower deployed the wave (updated=8). **Incident:** basegeek crash-looped — `graphql/bujogeek/typeDefs.js` (d53b008) had raw backticks inside the gql template; no suite imported `graphql/index.js`. fitnessgeek crash-looped on the missing vault key because Watchtower recreates with the old env — fixed with `docker compose up -d` in apps/fitnessgeek (13:30, health 200). Hotfix `61d3109` (typeDefs escaped + `gatewaySchemaLoads` tripwire) pushed 13:32, CI green, Watchtower restarted basegeek 13:40 — healthy, gateway apps 200 (outage ≈13:28–13:40); an accidental push of `3a7c84b` (logger config, R52) went 20s earlier because the scope check's `grep -c` exits 1 on a zero count and broke the `&&` chain — never chain `&&` after the count.
 
-- 09-05 14:12 — wave 3: R50, R51, R53–R57, R59, R60, hotfix follow-ups, syntax gate, harness enforcing. Gate: frozen install, `pnpm -r lint`, syntax check all green before push.
+- 09-05 14:05 — wave 3 (`8ce9296`, 34 commits): R50, R51, R53–R57, R59, R60, hotfix follow-ups, syntax gate, harness enforcing. Gate: frozen install, `pnpm -r lint`, syntax check all green before push.
 
 ## Landed during the burn
 
