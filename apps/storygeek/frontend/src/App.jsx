@@ -37,9 +37,11 @@ function AppShell() {
     );
   }
 
-  const authed = (page) =>
+  // `fill` hands the page the frame rather than the document flow — the play
+  // surface fills it with flex instead of guessing at the chrome height.
+  const authed = (page, layoutProps) =>
     isAuthenticated
-      ? <Layout>{page}</Layout>
+      ? <Layout {...layoutProps}>{page}</Layout>
       : <Navigate to="/login" replace />;
 
   return (
@@ -51,7 +53,7 @@ function AppShell() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/" element={authed(<StoryList />)} />
             <Route path="/create" element={authed(<StoryCreation />)} />
-            <Route path="/play/:storyId" element={authed(<StoryPlay />)} />
+            <Route path="/play/:storyId" element={authed(<StoryPlay />, { fill: true })} />
             <Route path="/characters/:storyId" element={authed(<CharacterSheet />)} />
             <Route path="/settings" element={authed(<Settings />)} />
             <Route path="*" element={<Navigate to={isAuthenticated ? '/' : '/login'} replace />} />

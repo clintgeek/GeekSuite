@@ -1,16 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Box, Typography, TextField, Button, Paper, CircularProgress,
-  Alert, Chip, IconButton, Tooltip, Divider, Dialog, DialogTitle,
-  DialogContent, DialogActions, LinearProgress, Drawer, alpha,
+  Alert, Chip, IconButton, Tooltip, LinearProgress, alpha,
 } from '@mui/material';
 import { useTheme, useMediaQuery, ButtonGroup } from '@mui/material';
 import {
-  Send as SendIcon, Casino as CasinoIcon, MenuBook as ExportIcon,
+  Send as SendIcon, MenuBook as ExportIcon, ContentCopy as CopyIcon,
+  IosShare as ShareIcon, Download as DownloadIcon,
   AutoStories as JournalIcon, Person as PersonIcon, Groups as PartyIcon,
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@geeksuite/auth';
+import { GeekSheet } from '@geeksuite/ui';
+import CodexDialog from '../components/primitives/CodexDialog';
 import useAISettingsStore from '../store/aiSettingsStore';
 import api from '../api';
 import ScenePanel from '../components/panels/ScenePanel';
@@ -77,18 +79,18 @@ function CanonCard({ canon, gold, theme }) {
                   label={e.kind === 'character'
                     ? `${e.name} · ${e.status}${e.locationName ? ` · at ${e.locationName}` : ''}`
                     : `${e.name} · ${e.state}`}
-                  sx={{ borderColor: alpha(gold, 0.4), color: 'text.primary', fontSize: '0.7rem' }} />
+                  sx={{ borderColor: alpha(gold, 0.4), color: 'text.primary' }} />
               ))}
             </Box>
             {/* What each character is recorded as knowing (player-visible only) */}
             {canon.entities.filter(e => e.knows?.length > 0).map((e, i) => (
               <Box key={`k${i}`} sx={{ mt: 0.75, pl: 1, borderLeft: `2px solid ${alpha(gold, 0.25)}` }}>
-                <Typography variant="caption" sx={{ color: alpha(gold, 0.7), fontSize: '0.62rem', fontWeight: 700 }}>
+                <Typography variant="caption" sx={{ color: alpha(gold, 0.7), fontWeight: 700 }}>
                   {e.name.toUpperCase()} KNOWS (as recorded)
                 </Typography>
                 {e.knows.map((k, j) => (
                   <Typography key={j} variant="body2" sx={{ fontSize: '0.78rem', color: 'text.secondary', lineHeight: 1.5 }}>
-                    • {k.text} <Typography component="span" sx={{ fontSize: '0.6rem', color: 'text.disabled', fontFamily: '"JetBrains Mono", monospace' }}>
+                    • {k.text} <Typography component="span" sx={{ fontSize: '0.75rem', color: 'text.disabled', fontFamily: '"JetBrains Mono", monospace' }}>
                       [{k.via}{k.turn != null ? ` · T${k.turn}` : ''}]
                     </Typography>
                   </Typography>
@@ -110,7 +112,7 @@ function CanonCard({ canon, gold, theme }) {
                   <Chip size="small"
                     label={`${prov.label}${f.turn != null ? ` · T${f.turn}` : ''}`}
                     sx={{
-                      height: 18, fontSize: '0.55rem', fontWeight: 700, flexShrink: 0, mt: 0.2,
+                      fontWeight: 700, flexShrink: 0, mt: 0.1,
                       backgroundColor: alpha(prov.color, 0.12), color: prov.color,
                       fontFamily: '"JetBrains Mono", monospace',
                     }} />
@@ -118,7 +120,7 @@ function CanonCard({ canon, gold, theme }) {
                     {f.text}
                     {f.visibility === 'secret' && (
                       <Chip size="small" label="secret" color="warning" variant="outlined"
-                        sx={{ ml: 0.5, height: 14, fontSize: '0.5rem', textTransform: 'uppercase' }} />
+                        sx={{ ml: 0.5, textTransform: 'uppercase' }} />
                     )}
                   </Typography>
                 </Box>
@@ -137,7 +139,7 @@ function CanonCard({ canon, gold, theme }) {
           </Box>
         )}
 
-        <Typography variant="caption" sx={{ color: 'text.disabled', fontStyle: 'italic', fontSize: '0.68rem' }}>
+        <Typography variant="caption" sx={{ color: 'text.disabled', fontStyle: 'italic' }}>
           {canon.note}
         </Typography>
       </Paper>
@@ -158,7 +160,19 @@ const getDiceColor = (result, isDark, gold) => {
 
 function StoryPlay() {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
+  // Each rail collapses to a sheet at the width where it stops fitting, and its
+  // toggle appears at exactly that width — so there is no band where a panel is
+  // both absent and unreachable. That band is what the audit found
+  // (MOBILE_UI_PLAN.md §4): both rails were gated on `lg` while the shell
+  // switched at `md`, so 900–1200px got desktop chrome with no rails.
+  //
+  // Gating both on `md` instead — the literal fix — is worse, not better: at
+  // 1000px the 220px nav, a 272px rail and a 300px rail leave the play column
+  // about 180px wide (verified in the harness). So the left rail (scene +
+  // character, the persistent HUD) returns at `md` and the right rail (party +
+  // threads, situational) at `lg`, and the play column never drops below ~350px.
+  const showLeftRail = useMediaQuery(theme.breakpoints.up('md'));
+  const showRightRail = useMediaQuery(theme.breakpoints.up('lg'));
   const { storyId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -177,9 +191,15 @@ function StoryPlay() {
   const [exportData, setExportData] = useState(null);
   const [journalOpen, setJournalOpen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState(null); // 'left' | 'right' | null
+  const [copied, setCopied] = useState(false);
   const containerRef = useRef(null);
   const endRef = useRef(null);
   const inputRef = useRef(null);
+  // Refocusing the composer is an answer to the player's own send, not to the
+  // narrator's reply. Autofocusing on every message re-opened the phone
+  // keyboard mid-narration and shoved the story off screen
+  // (MOBILE_UI_PLAN.md §2, "autofocus only on explicit user intent").
+  const refocusRef = useRef(false);
 
   const scrollToBottom = () => {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -187,6 +207,8 @@ function StoryPlay() {
 
   useEffect(() => {
     scrollToBottom();
+    if (!refocusRef.current) return;
+    refocusRef.current = false;
     if (inputRef.current) try { inputRef.current.focus(); } catch (_) {}
   }, [messages]);
 
@@ -239,11 +261,31 @@ function StoryPlay() {
     document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
   };
 
+  const handleCopyStory = async () => {
+    if (!exportData?.content) return;
+    try {
+      await navigator.clipboard.writeText(exportData.content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (e) { setExportError('Could not copy to the clipboard'); }
+  };
+
+  // Only offered where the platform actually has a share sheet — every phone,
+  // almost no desktop browser.
+  const canShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
+  const handleShareStory = async () => {
+    if (!exportData?.content) return;
+    try {
+      await navigator.share({ title: exportData.title || 'A tale', text: exportData.content });
+    } catch (e) { /* the user dismissed the share sheet */ }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!userInput.trim() || loading) return;
     const input = userInput.trim();
     setUserInput('');
+    refocusRef.current = true;
     setMessages(prev => [...prev, { type: 'user', content: input, timestamp: new Date() }]);
     setLoading(true); setError('');
 
@@ -415,7 +457,7 @@ function StoryPlay() {
                     {sit && (
                       <Chip size="small" label={sit.toUpperCase()}
                         sx={{
-                          height: 20, fontSize: '0.6rem', fontWeight: 700,
+                          fontWeight: 700,
                           backgroundColor: alpha(dColor, 0.12), color: dColor,
                           borderRadius: 1,
                         }}
@@ -433,7 +475,6 @@ function StoryPlay() {
           {/* Timestamp */}
           <Typography variant="caption" sx={{
             display: 'block', mt: 1, opacity: 0.6,
-            fontSize: '0.65rem',
           }}>
             {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </Typography>
@@ -470,13 +511,14 @@ function StoryPlay() {
   );
 
   const centerColumn = (
-    <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: 0, height: '100%' }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1, minHeight: 0 }}>
       {/* Header */}
       <Box sx={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        flexWrap: 'wrap', flexShrink: 0,
         gap: 1, mb: 1.5, pb: 1.25, borderBottom: `1px solid ${alpha(gold, 0.1)}`,
       }}>
-        <Box sx={{ minWidth: 0 }}>
+        <Box sx={{ minWidth: 0, flex: '1 1 auto' }}>
           <Typography variant="h4" sx={{ lineHeight: 1.15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {story.title}
           </Typography>
@@ -487,19 +529,34 @@ function StoryPlay() {
           </Box>
         </Box>
         <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', flexShrink: 0 }}>
-          {isMobile && (
-            <>
-              <IconButton size="small" onClick={() => setMobilePanel('left')} sx={{ color: 'text.secondary' }}>
-                <PersonIcon fontSize="small" />
+          {!showLeftRail && (
+            <Tooltip title="Scene & character">
+              <IconButton
+                aria-label="Scene and character"
+                onClick={() => setMobilePanel('left')}
+                sx={{ color: 'text.secondary' }}
+              >
+                <PersonIcon />
               </IconButton>
-              <IconButton size="small" onClick={() => setMobilePanel('right')} sx={{ color: 'text.secondary' }}>
-                <PartyIcon fontSize="small" />
-              </IconButton>
-            </>
+            </Tooltip>
           )}
+          {!showRightRail && (
+            <Tooltip title="Party & threads">
+              <IconButton
+                aria-label="Party and threads"
+                onClick={() => setMobilePanel('right')}
+                sx={{ color: 'text.secondary' }}
+              >
+                <PartyIcon />
+              </IconButton>
+            </Tooltip>
+          )}
+          {/* The tooltip is the desktop nicety; the aria-label is the label a
+              touch user's screen reader gets, and the sheet says "Journal" in
+              its own heading. A tooltip is never the only label. */}
           <Tooltip title="Journal — what your character knows">
-            <IconButton size="small" onClick={() => setJournalOpen(true)} sx={{ color: gold }}>
-              <JournalIcon fontSize="small" />
+            <IconButton aria-label="Journal" onClick={() => setJournalOpen(true)} sx={{ color: gold }}>
+              <JournalIcon />
             </IconButton>
           </Tooltip>
           <ButtonGroup size="small" variant="outlined">
@@ -523,7 +580,7 @@ function StoryPlay() {
       </Box>
 
       {/* Messages */}
-      <Box ref={containerRef} sx={{ flex: 1, overflow: 'auto', px: { xs: 0.5, md: 1.5 }, py: 1 }}>
+      <Box ref={containerRef} sx={{ flex: 1, minHeight: 0, overflow: 'auto', px: { xs: 0.5, md: 1.5 }, py: 1 }}>
         {messages.map(renderMessage)}
         {loading && (
           <Box sx={{ display: 'flex', justifyContent: 'flex-start', mb: 2 }}>
@@ -543,9 +600,14 @@ function StoryPlay() {
 
       {error && <Alert severity="error" sx={{ mb: 1, mx: 1 }} onClose={() => setError('')}>{error}</Alert>}
 
-      {/* Input */}
+      {/* Input — the thumb-zone primary action. Pinned to the bottom of the
+          frame (the column is a flex box, this row does not shrink) and padded
+          clear of the iOS home indicator, so no FAB is needed here. */}
       <Paper sx={{
-        p: { xs: 1.5, md: 2 }, borderTop: `1px solid ${alpha(gold, 0.1)}`, borderRadius: 0,
+        flexShrink: 0,
+        p: { xs: 1.5, md: 2 },
+        pb: { xs: 'calc(12px + env(safe-area-inset-bottom))', md: 2 },
+        borderTop: `1px solid ${alpha(gold, 0.1)}`, borderRadius: 0,
         background: theme.palette.mode === 'dark'
           ? alpha(theme.palette.background.default, 0.95)
           : alpha(theme.palette.background.paper, 0.95),
@@ -571,7 +633,7 @@ function StoryPlay() {
             {loading ? <CircularProgress size={20} sx={{ color: 'inherit' }} /> : <SendIcon />}
           </Button>
         </Box>
-        <Typography variant="body2" sx={{ mt: 0.75, fontSize: '0.7rem', color: 'text.disabled', textAlign: 'center' }}>
+        <Typography variant="body2" sx={{ mt: 0.75, fontSize: '0.75rem', color: 'text.disabled', textAlign: 'center' }}>
           /recall /checkpoint /back /char /info /end
         </Typography>
       </Paper>
@@ -579,57 +641,100 @@ function StoryPlay() {
   );
 
   return (
-    <Box sx={{ height: 'calc(100vh - 120px)', display: 'flex', gap: 1.5, minHeight: 0 }}>
-      {/* Left rail (desktop) */}
-      {!isMobile && (
-        <Box sx={{ width: 272, flexShrink: 0, overflowY: 'auto', pr: 0.5 }}>
+    // The frame, not a guess at it. This used to be `calc(100vh - 120px)` with
+    // a hardcoded 120 that matched neither the 60px top bar nor the container
+    // padding — too short on desktop, too tall on a phone with the URL bar
+    // showing. The shell already hands the route a correctly-sized box (dvh,
+    // top bar and safe areas subtracted); the play surface just fills it.
+    <Box sx={{ flex: 1, minHeight: 0, display: 'flex', gap: 1.5 }}>
+      {/* Left rail — back at `md` */}
+      {showLeftRail && (
+        <Box sx={{ width: { md: 244, lg: 272 }, flexShrink: 0, overflowY: 'auto', pr: 0.5 }}>
           {leftRail}
         </Box>
       )}
 
       {/* Center */}
-      <Box sx={{ flex: 1, minWidth: 0 }}>{centerColumn}</Box>
+      <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>{centerColumn}</Box>
 
-      {/* Right rail (desktop) */}
-      {!isMobile && (
+      {/* Right rail — back at `lg`, where there is room for both */}
+      {showRightRail && (
         <Box sx={{ width: 300, flexShrink: 0, overflowY: 'auto', pl: 0.5 }}>
           {rightRail}
         </Box>
       )}
 
-      {/* Mobile panel drawers */}
-      <Drawer anchor="left" open={mobilePanel === 'left'} onClose={() => setMobilePanel(null)}
-        PaperProps={{ sx: { width: '85%', maxWidth: 320, p: 1.5 } }}>
+      {/* A collapsed rail is a `GeekSheet`, not an 85%-wide side drawer: one
+          surface for every picker in the suite. Below `md` it slides up from
+          the bottom with a grab handle and the safe-area inset; at `md`+ (the
+          right rail between 900 and 1200px) the same component renders as a
+          centred dialog. Same panels either way. */}
+      <GeekSheet
+        open={mobilePanel === 'left'}
+        onClose={() => setMobilePanel(null)}
+        title="Scene & Character"
+        snap="full"
+        bodySx={{ px: 1.5 }}
+      >
         {leftRail}
-      </Drawer>
-      <Drawer anchor="right" open={mobilePanel === 'right'} onClose={() => setMobilePanel(null)}
-        PaperProps={{ sx: { width: '85%', maxWidth: 340, p: 1.5 } }}>
+      </GeekSheet>
+      <GeekSheet
+        open={mobilePanel === 'right'}
+        onClose={() => setMobilePanel(null)}
+        title="Party & Threads"
+        snap="full"
+        bodySx={{ px: 1.5 }}
+      >
         {rightRail}
-      </Drawer>
+      </GeekSheet>
 
       {/* Journal */}
       <JournalDrawer open={journalOpen} onClose={() => setJournalOpen(false)} story={story} />
 
-      {/* Bookify Dialog */}
-      <Dialog open={exportOpen} onClose={() => setExportOpen(false)} fullWidth maxWidth="md">
-        <DialogTitle sx={{ fontFamily: '"Cinzel", serif' }}>{exportData?.title || 'Bookify'}</DialogTitle>
-        <DialogContent dividers>
-          {exporting && <LinearProgress sx={{ mb: 2 }} />}
-          {exportError && <Alert severity="error" sx={{ mb: 2 }}>{exportError}</Alert>}
-          {exportData && (
-            <Typography component="pre" sx={{
-              whiteSpace: 'pre-wrap', fontFamily: '"Crimson Pro", serif',
-              fontSize: '1.05rem', lineHeight: 1.8,
-            }}>
-              {exportData.content}
-            </Typography>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setExportOpen(false)} sx={{ color: 'text.secondary' }}>Close</Button>
-          <Button onClick={handleDownloadTxt} disabled={!exportData} variant="contained">Download .txt</Button>
-        </DialogActions>
-      </Dialog>
+      {/* Bookify: a whole story in one scrolling body. Full-screen below `sm`
+          via CodexDialog, with Copy as the header action — the phone's answer
+          to "Download .txt", which a mobile browser has nowhere useful to put. */}
+      <CodexDialog
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        maxWidth="md"
+        title={exportData?.title || 'Bookify'}
+        primaryAction={
+          <Button
+            onClick={handleCopyStory}
+            disabled={!exportData}
+            variant="contained"
+            startIcon={<CopyIcon />}
+          >
+            {copied ? 'Copied' : 'Copy'}
+          </Button>
+        }
+        keepSecondaryOnMobile
+        secondaryAction={
+          <>
+            {canShare && (
+              <Button onClick={handleShareStory} disabled={!exportData} startIcon={<ShareIcon />}>
+                Share
+              </Button>
+            )}
+            <Button onClick={handleDownloadTxt} disabled={!exportData} startIcon={<DownloadIcon />}>
+              Download .txt
+            </Button>
+          </>
+        }
+        bodySx={{ overflowY: 'auto' }}
+      >
+        {exporting && <LinearProgress sx={{ mb: 2 }} />}
+        {exportError && <Alert severity="error" sx={{ mb: 2 }}>{exportError}</Alert>}
+        {exportData && (
+          <Typography component="pre" sx={{
+            whiteSpace: 'pre-wrap', fontFamily: '"Crimson Pro", serif',
+            fontSize: '1.05rem', lineHeight: 1.8, m: 0,
+          }}>
+            {exportData.content}
+          </Typography>
+        )}
+      </CodexDialog>
     </Box>
   );
 }

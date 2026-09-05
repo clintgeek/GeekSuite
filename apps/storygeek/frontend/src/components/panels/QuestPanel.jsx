@@ -23,7 +23,7 @@ export default function QuestPanel({ threads }) {
 
   return (
     <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'background.paper', border: `1px solid ${alpha(gold, 0.15)}` }}>
-      <Typography variant="overline" sx={{ color: alpha(gold, 0.65), fontSize: '0.62rem', letterSpacing: '0.12em', display: 'block', mb: 1 }}>
+      <Typography variant="overline" sx={{ color: alpha(gold, 0.65), fontSize: '0.75rem', letterSpacing: '0.12em', display: 'block', mb: 1 }}>
         Open Threads · {threads.length}
       </Typography>
       {threads.length === 0 ? (
@@ -50,15 +50,15 @@ export default function QuestPanel({ threads }) {
                       {t.dormant && (
                         <Tooltip title={`Quiet for ${t.age} turns — the GM may resurface it`}>
                           <Chip size="small" label="dormant" color="warning" variant="outlined"
-                            sx={{ height: 15, fontSize: '0.52rem', textTransform: 'uppercase', fontWeight: 700 }} />
+                            sx={{ textTransform: 'uppercase', fontWeight: 700 }} />
                         </Tooltip>
                       )}
                     </Box>
-                    <Typography variant="body2" sx={{ fontSize: '0.72rem', color: 'text.secondary', mt: 0.25, lineHeight: 1.45 }}>
+                    <Typography variant="body2" sx={{ fontSize: '0.8125rem', color: 'text.secondary', mt: 0.25, lineHeight: 1.45 }}>
                       {t.description}
                     </Typography>
                     {t.characterNames?.length > 0 && (
-                      <Typography variant="caption" sx={{ fontSize: '0.6rem', color: alpha(gold, 0.6) }}>
+                      <Typography variant="caption" sx={{ color: alpha(gold, 0.6) }}>
                         {meta.label} · {t.characterNames.join(', ')}
                       </Typography>
                     )}

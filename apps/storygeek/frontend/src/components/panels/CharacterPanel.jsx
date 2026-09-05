@@ -42,7 +42,7 @@ export default function CharacterPanel({ player }) {
             {player.name}
           </Typography>
           <Chip size="small" label={player.status || 'alive'} color={STATUS_COLOR[player.status] || 'success'}
-            sx={{ height: 17, fontSize: '0.58rem', textTransform: 'uppercase', fontWeight: 700, mt: 0.25 }} />
+            sx={{ textTransform: 'uppercase', fontWeight: 700, mt: 0.25 }} />
         </Box>
       </Box>
 
@@ -62,7 +62,6 @@ export default function CharacterPanel({ player }) {
                 label={`${it.name}${(it.quantity ?? 1) > 1 ? ` ×${it.quantity}` : ''}`}
                 variant="outlined"
                 sx={{
-                  height: 22, fontSize: '0.68rem',
                   borderColor: it.isEquipped ? gold : alpha(gold, 0.25),
                   color: it.isEquipped ? gold : 'text.secondary',
                 }} />
@@ -106,7 +105,7 @@ function PanelShell({ gold, title, children }) {
 function Label({ gold, children, block }) {
   return (
     <Typography variant="overline" sx={{
-      color: alpha(gold, 0.65), fontSize: '0.62rem', letterSpacing: '0.12em',
+      color: alpha(gold, 0.65), fontSize: '0.75rem', letterSpacing: '0.12em',
       display: block ? 'block' : 'inline',
     }}>
       {children}

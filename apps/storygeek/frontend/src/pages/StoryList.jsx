@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Box, Typography, Button, Card, CardContent, Grid, Chip,
-  Dialog, DialogTitle, DialogContent, DialogActions, TextField,
+  Box, Typography, Button, Card, CardContent, Grid, Chip, TextField,
   MenuItem, Alert, CircularProgress, IconButton, alpha,
 } from '@mui/material';
 import {
@@ -10,7 +9,9 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useTheme, lighten, darken } from '@mui/material/styles';
 import { useAuth } from '@geeksuite/auth';
+import { useGeekPrimaryAction } from '@geeksuite/ui';
 import api from '../api';
+import CodexDialog from '../components/primitives/CodexDialog';
 
 const genreAccents = {
   'Fantasy':          { color: '#7c4dff', icon: '\u{1F9D9}' },
@@ -104,6 +105,14 @@ function StoryList() {
 
   const formatDate = (d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
+  // The one create action, in the thumb zone below `md`. The header button
+  // stays at `md`+, where the top of the page is a reachable place to put it.
+  useGeekPrimaryAction({
+    label: 'New Tale',
+    icon: <AddIcon sx={{ fontSize: 26 }} />,
+    onClick: () => setOpenDialog(true),
+  });
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
@@ -124,7 +133,12 @@ function StoryList() {
             Tales & Quests
           </Typography>
         </Box>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpenDialog(true)}>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={() => setOpenDialog(true)}
+          sx={{ display: { xs: 'none', md: 'inline-flex' }, flexShrink: 0 }}
+        >
           New Tale
         </Button>
       </Box>
@@ -197,7 +211,7 @@ function StoryList() {
                         label={status.label}
                         color={status.color}
                         size="small"
-                        sx={{ height: 22, fontSize: '0.65rem' }}
+                        sx={{ flexShrink: 0 }}
                       />
                     </Box>
 
@@ -250,7 +264,7 @@ function StoryList() {
                           variant="outlined"
                           startIcon={<PlayIcon />}
                           onClick={() => navigate(`/play/${story._id}`)}
-                          sx={{ minWidth: 'auto', px: 1.5, py: 0.5, fontSize: '0.75rem' }}
+                          sx={{ minWidth: 'auto', px: 1.5, fontSize: '0.8125rem' }}
                         >
                           Continue
                         </Button>
@@ -273,10 +287,30 @@ function StoryList() {
         </Grid>
       )}
 
-      {/* New Story Dialog */}
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontFamily: '"Cinzel", serif' }}>Begin a New Tale</DialogTitle>
-        <DialogContent>
+      {/* New Story Dialog — full-screen below `sm`, so the prompt field is a
+          real writing surface on a phone instead of a 326px card. The form
+          carries an id so the header's "Begin" can submit it. */}
+      <CodexDialog
+        open={openDialog}
+        onClose={() => setOpenDialog(false)}
+        title="Begin a New Tale"
+        primaryAction={
+          <Button
+            type="submit" form="new-tale-form" variant="contained"
+            disabled={creatingStory || !startForm.prompt.trim()}
+            startIcon={creatingStory ? <CircularProgress size={18} /> : null}
+          >
+            {creatingStory ? 'Conjuring...' : 'Begin'}
+          </Button>
+        }
+        secondaryAction={
+          <Button onClick={() => setOpenDialog(false)} sx={{ color: 'text.secondary' }}>Cancel</Button>
+        }
+      >
+        <Box
+          component="form" id="new-tale-form"
+          onSubmit={(e) => { e.preventDefault(); handleStartStory(); }}
+        >
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
             Describe your vision. The AI Game Master will weave the world around your words.
           </Typography>
@@ -286,7 +320,7 @@ function StoryList() {
             multiline rows={4} placeholder="A wanderer arrives at a fog-shrouded crossroads..."
             required sx={{ mb: 2 }}
           />
-          <Grid container spacing={2}>
+          <Grid container columnSpacing={2} rowSpacing={3}>
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth label="Title (Optional)" value={startForm.title}
@@ -305,32 +339,18 @@ function StoryList() {
               </TextField>
             </Grid>
           </Grid>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setOpenDialog(false)} sx={{ color: 'text.secondary' }}>Cancel</Button>
-          <Button
-            onClick={handleStartStory} variant="contained"
-            disabled={creatingStory || !startForm.prompt.trim()}
-            startIcon={creatingStory ? <CircularProgress size={18} /> : null}
-          >
-            {creatingStory ? 'Conjuring...' : 'Begin'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        </Box>
+      </CodexDialog>
 
-      {/* Delete Confirmation */}
-      <Dialog open={!!storyToDelete} onClose={() => setStoryToDelete(null)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontFamily: '"Cinzel", serif' }}>Erase This Tale?</DialogTitle>
-        <DialogContent>
-          <Typography variant="body1" sx={{ mb: 1 }}>
-            "{storyToDelete?.title}" will be lost to the void.
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            All progress, characters, and events will be permanently destroyed.
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setStoryToDelete(null)} sx={{ color: 'text.secondary' }}>Spare It</Button>
+      {/* Delete confirmation — `mode="window"` on purpose: two lines of "are
+          you sure" do not earn the whole screen, on any width. */}
+      <CodexDialog
+        open={!!storyToDelete}
+        onClose={() => setStoryToDelete(null)}
+        title="Erase This Tale?"
+        mode="window"
+        maxWidth="xs"
+        primaryAction={
           <Button
             onClick={() => handleDeleteStory(storyToDelete?._id)}
             variant="contained" color="error"
@@ -338,8 +358,19 @@ function StoryList() {
           >
             {deletingStory ? 'Erasing...' : 'Destroy'}
           </Button>
-        </DialogActions>
-      </Dialog>
+        }
+        secondaryAction={
+          <Button onClick={() => setStoryToDelete(null)} sx={{ color: 'text.secondary' }}>Spare It</Button>
+        }
+      >
+        <Typography variant="body1" sx={{ mb: 1 }}>
+          "{storyToDelete?.title}" will be lost to the void.
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          All progress, characters, and events will be permanently destroyed.
+        </Typography>
+      </CodexDialog>
+
     </Box>
   );
 }

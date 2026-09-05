@@ -21,7 +21,7 @@ export default function PartyPanel({ npcs, player, story }) {
 
   return (
     <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'background.paper', border: `1px solid ${alpha(gold, 0.15)}` }}>
-      <Typography variant="overline" sx={{ color: alpha(gold, 0.65), fontSize: '0.62rem', letterSpacing: '0.12em', display: 'block', mb: 1 }}>
+      <Typography variant="overline" sx={{ color: alpha(gold, 0.65), fontSize: '0.75rem', letterSpacing: '0.12em', display: 'block', mb: 1 }}>
         Present · {npcs.length}
       </Typography>
       {npcs.length === 0 ? (
@@ -64,27 +64,27 @@ function NpcCard({ npc, player, story, gold }) {
           </Typography>
           {rel && (
             <Chip size="small" label={rel.relationshipType} color={REL_COLOR[rel.relationshipType] || 'default'}
-              sx={{ height: 15, fontSize: '0.55rem', textTransform: 'uppercase', fontWeight: 700 }} />
+              sx={{ textTransform: 'uppercase', fontWeight: 700, mt: 0.25 }} />
           )}
         </Box>
         {known.length > 0 && (open ? <ExpandLess sx={{ fontSize: 18, color: 'text.disabled' }} /> : <ExpandMore sx={{ fontSize: 18, color: 'text.disabled' }} />)}
       </Box>
 
       {npc.motivation && (
-        <Typography variant="body2" sx={{ fontSize: '0.72rem', color: 'text.secondary', mt: 0.5, fontStyle: 'italic' }}>
+        <Typography variant="body2" sx={{ fontSize: '0.8125rem', color: 'text.secondary', mt: 0.5, fontStyle: 'italic' }}>
           {npc.motivation}
         </Typography>
       )}
 
       {/* Bounded knowledge line */}
       <Box sx={{ mt: 0.5 }}>
-        <Typography variant="caption" sx={{ color: alpha(gold, 0.6), fontSize: '0.6rem' }}>
+        <Typography variant="caption" sx={{ color: alpha(gold, 0.6) }}>
           KNOWS {known.length > 0 ? `· ${known.length}` : '· nothing notable'}
         </Typography>
         <Collapse in={open} unmountOnExit>
           <Box sx={{ mt: 0.5, pl: 0.5, borderLeft: `2px solid ${alpha(gold, 0.2)}` }}>
             {known.map((f, i) => (
-              <Typography key={i} variant="body2" sx={{ fontSize: '0.72rem', color: 'text.secondary', pl: 0.75, py: 0.15 }}>
+              <Typography key={i} variant="body2" sx={{ fontSize: '0.8125rem', color: 'text.secondary', pl: 0.75, py: 0.25 }}>
                 • {f.fact}
               </Typography>
             ))}

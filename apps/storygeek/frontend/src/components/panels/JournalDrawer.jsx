@@ -29,7 +29,12 @@ export default function JournalDrawer({ open, onClose, story }) {
   return (
     <Drawer anchor="right" open={open} onClose={onClose}
       PaperProps={{ sx: { width: { xs: '100%', sm: 420 }, maxWidth: '100%' } }}>
-      <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Full-width on a phone already; the inset keeps the last entry clear
+          of the home indicator now that <body> no longer pads it. */}
+      <Box sx={{
+        p: 2, pb: { xs: 'calc(16px + env(safe-area-inset-bottom))', sm: 2 },
+        display: 'flex', flexDirection: 'column', height: '100%',
+      }}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
           <Box>
             <Typography variant="overline" sx={{ color: alpha(gold, 0.6) }}>Your Character Knows</Typography>
@@ -68,12 +73,12 @@ export default function JournalDrawer({ open, onClose, story }) {
                           {e.text}
                           {e.secret && (
                             <Chip size="small" label="secret" color="warning" variant="outlined"
-                              sx={{ ml: 0.75, height: 15, fontSize: '0.52rem', textTransform: 'uppercase', fontWeight: 700 }} />
+                              sx={{ ml: 0.75, textTransform: 'uppercase', fontWeight: 700 }} />
                           )}
                         </Typography>
                         {prov && (
                           <Typography variant="caption" sx={{
-                            fontSize: '0.58rem', color: alpha(prov.color, 0.75),
+                            color: alpha(prov.color, 0.75),
                             fontFamily: '"JetBrains Mono", monospace', letterSpacing: '0.04em',
                           }}>
                             {prov.label}
@@ -96,10 +101,10 @@ export default function JournalDrawer({ open, onClose, story }) {
               {settled.map((t, i) => (
                 <Box key={i} sx={{ py: 0.35 }}>
                   <Typography variant="body2" sx={{ fontSize: '0.82rem', fontWeight: 600, color: 'text.secondary' }}>
-                    {t.name} <Chip size="small" label={t.status} sx={{ height: 15, fontSize: '0.52rem', textTransform: 'uppercase' }} />
+                    {t.name} <Chip size="small" label={t.status} sx={{ ml: 0.75, textTransform: 'uppercase' }} />
                   </Typography>
                   {t.resolution && (
-                    <Typography variant="body2" sx={{ fontSize: '0.76rem', color: 'text.disabled', fontStyle: 'italic' }}>
+                    <Typography variant="body2" sx={{ fontSize: '0.8125rem', color: 'text.disabled', fontStyle: 'italic' }}>
                       {t.resolution}
                     </Typography>
                   )}

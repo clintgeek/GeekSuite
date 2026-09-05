@@ -54,7 +54,7 @@ export default function ScenePanel({ scene }) {
           {hasLocation && (
             <Chip size="small" label={badge.label} color={badge.color}
               variant={scene.state === 'intact' ? 'outlined' : 'filled'}
-              sx={{ height: 20, fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase' }} />
+              sx={{ fontWeight: 700, textTransform: 'uppercase' }} />
           )}
           <Typography variant="caption" sx={{ color: 'text.secondary', fontFamily: '"JetBrains Mono", monospace' }}>
             Day {scene.storyDay}
