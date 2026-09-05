@@ -9,8 +9,13 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
+| R75 | review #1 #7 #12: bookgeek publishedDate floor (P0), title:null, gatewaySchemaLoads via ApolloServer | opus | gateway shared/bookgeek validation + 2 tests | 09-05 16:30 |
+| R76 | review #5 #6 #9 #14 #15 #19: fitnessgeek settings/food write paths (gateway merge, REST double $set, household_id, "today", serving fields) | opus | gateway fitnessgeek resolvers/services, fitnessgeek settingsRoutes + settings validator, 2 fe call sites | 09-05 16:30 |
+| R77 | review #4 #18 (flockgeek REST ownerId, P0), #8 (bujogeek UTC-day grouping regression), #16 (fitnessgeek household log dead) | sonnet | flockgeek controllers, bujogeek TaskList, fitnessgeek apiService household | 09-05 16:30 |
+| R78 | review #20 #22: CI jobs for four untested shared packages; boot-smoke import gate | sonnet | ci.yml, tools/boot-smoke.mjs, RUNBOOK | 09-05 16:30 |
+| R79 | review #2 (parse-json ungated, P0), #10 (pin reroute), #11 (upstream error relay) | opus | basegeek aiRoutes, openaiProxy, conformance tests, audit docs | 09-05 16:30 |
+| R80 | review #3 (CSRF enforce would log the suite out, P0 latent), #17 (post-refresh replay token) | opus | packages/auth+user+api-client, six auth proxies, startgeek client, CONTEXT CSRF | 09-05 16:30 |
 | R74 | consolidation pairs 9–10: FoodLog + DailySummary (the last two; updateFromLogs is the helper candidate) | opus | packages/schemas, both apps' two models + parity suites | 09-05 16:12 |
-| R72 | adversarial review of today's ~130 pushed commits across streams → DOCS/BURN_REVIEW.md (read-only) | opus | one new doc | 09-05 15:53 |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
 ## Queued (launch when files free / prerequisite lands)
@@ -28,6 +33,8 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | Q39 | fitnessgeek: keep or delete the three caller-less instance methods (checkGoalsMet/getProgress/getNutrition); fix the sugar/sodium ceiling-vs-floor disagreement (mealRoutes' MEAL_TYPES part done `3b842e7`) | Chef on delete; the fix XS | XS |
 | Q40 | fitnessgeek FoodItem: soft-deleted rows keep their barcode under the unique index while findOrCreate filters is_deleted:false → E11000 on re-add; fix = partial index or clear barcode on soft delete (migration) | Chef: which | S |
 | Q41 | fitnessgeek FoodItem: reconcile search (user_id:null) with foodCatalogFilter (also $exists:false); foodRoutes.js:301 open-codes a third dedupe ladder minting user-owned rows — fold into findOrCreateFoodItem or keep | design | S |
+| Q42 | review #13: TZ=America/Chicago is inert in every alpine image (no tzdata) — today UTC-everywhere is what keeps the two services agreeing; decide: drop the misleading TZ env and document UTC, or install tzdata and re-audit every local-day site | Chef | S |
+| Q43 | review #21: `main` has no required status checks — enable branch protection requiring CI, syntax, boot-smoke and the harness | Chef (GitHub settings) | XS |
 | Q20b | aiGeek: simulated streaming (F-21) and user-gated selection (F-14) documented, not fixed | design | S |
 | Q14 | storygeek CanonCard summary text through Narration too (agent left it as a separate render path) | Chef's call | XS |
 
