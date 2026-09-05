@@ -101,6 +101,22 @@ jobs:
         working-directory: apps/bookgeek/web
         run: npx vitest run
 
+  test-flockgeek:
+    name: flockgeek frontend tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Run vitest
+        working-directory: apps/flockgeek/frontend
+        run: npx vitest run
+
   test-ui:
     name: shared ui tests (theme contrast)
     runs-on: ubuntu-latest
