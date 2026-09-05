@@ -11,10 +11,7 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 |---|--------|-------|-------|-------|
 | R22 | storygeek frontend vitest + RTL suite + CI job | sonnet | storygeek frontend, ci.yml (one job) | 09-05 13:50 |
 | R30 | probe burn-down: basegeek theme, bookgeek strip/sidebar, storygeek overline | sonnet | basegeek ui theme.js, bookgeek web components, storygeek theme.js | 09-05 |
-| R32 | probe burn-down: bujogeek | sonnet | bujogeek frontend | 09-05 |
-| R33 | probe burn-down: fitnessgeek | sonnet | fitnessgeek frontend | 09-05 |
 | R35 | Q17: fitnessgeek backend node 20 + ESM, consume @geeksuite/utils, drop 5 toUtcMidnight copies | opus | fitnessgeek backend, Dockerfile, lockfile | 09-05 12:35 |
-| R36 | Q20: callCohere case in callProvider + stale hardcoded model defaults (#31) | sonnet | basegeek api aiService/aiProviders/capabilities, AI_CATALOG | 09-05 12:35 |
 | R40 | TODO #15 fan-out: flockgeek on GeekEmptyState/GeekErrorState/useToast | sonnet | flockgeek frontend, UI plan | 09-05 12:35 |
 
 **Push gate:** `pnpm install --frozen-lockfile` on HEAD fails on `apps/storygeek/frontend/package.json` (R22) and
@@ -84,6 +81,9 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 - `363a820` — R4 — mobile harness in tools/ + CI (report-only); 698 probe findings
 - `d8521eb` — R27 — CSRF header in api-client authLink + startgeek clients
 - `1fda489` — R24 — bujogeek tag cloud + template journal cache; #25/#26 struck
+- `08be080` — R33 — fitnessgeek probe burn-down 95 → 0 (chip/select floors in theme)
+- `69a7e2f` — R32 — bujogeek probe burn-down 202 → 0 (controls bypassing the theme floor)
+- `bcdab09` — R36 — Cohere dispatch case + fallbacks from DEFAULT_MODELS (Q20, #31 stale defaults)
 - `10779eb` — R39 — startgeek luminance-adaptive wallpaper scrim (TODO #28 scrim part)
 - `82563af` — R38 — dead backend code: bookgeek graphql, notegeek legacy REST, 4 flockgeek models; flockgeek REST layer flagged
 - `50c0939` — R37 — @geeksuite/crypto-vault (25 tests, fixture-compatible); basegeek consumes; ci job
