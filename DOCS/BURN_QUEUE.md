@@ -10,7 +10,6 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
 | R87 | Q51 a11y burn-down: packages/ui muted-text contrast + shared control names; bujogeek, storygeek, flockgeek to 0 under --enforce-a11y | opus | packages/ui, three frontends, MOBILE_UI_PLAN | 09-05 17:35 |
-| R86 | Q50: browser clients heal a CSRF 403 once (retry with fresh header, then one reload per session) — auth, api-client, startgeek | sonnet | packages/auth, packages/api-client, startgeek lib, CONTEXT | 09-05 17:20 |
 | R83 | basegeek console gets its first vitest + RTL suite (Home, AIGeek tabs, ResponsiveTable, Account, UserGeek, safeRedirect) + ci job | sonnet | basegeek packages/ui, ci.yml, lockfile | 09-05 17:00 |
 | R85 | fitnessgeek frontend code-splitting: lazy routes, vendor chunks, on-demand heavy libs; SW precache check; harness stays 0 | opus | fitnessgeek frontend, CONTEXT | 09-05 17:00 |
 
