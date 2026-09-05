@@ -6,6 +6,8 @@ import { Profile } from "./models/profile.js";
 import { generateSlug, normalizeSlug } from "./slug.js";
 import { ensureFormat, EnsureFormatError } from "./ebookFormats.js";
 import { authenticateToken } from "./middleware/auth.js";
+import { validate } from "./validation/validate.js";
+import { createBasketBodySchema } from "./validation/schemas/deviceBaskets.js";
 
 // Basket lifetime. Defaults to 30 minutes per D1 in the plan; overridable via
 // env for local device testing (e.g. a 2-minute expiry).
@@ -199,7 +201,7 @@ function isDbReady() {
  * Authenticated. Body: { device?: string = "kindle", bookIds: string[] (1..50) }
  * Responds { slug, url, expiresAt }.
  */
-router.post("/api/device-baskets", authenticateToken, async (req, res) => {
+router.post("/api/device-baskets", authenticateToken, validate({ body: createBasketBodySchema }), async (req, res) => {
   try {
     if (!isDbReady()) {
       return res.status(503).json({ error: "Database not connected" });

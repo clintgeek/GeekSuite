@@ -22,6 +22,14 @@ import deviceBasketRouter from "./deviceBasket.js";
 import { authenticateToken } from "./middleware/auth.js";
 import { csrfGuard, meHandler } from "@geeksuite/user/server";
 import { sendMail } from "./services/emailService.js";
+import { validate } from "./validation/validate.js";
+import { bookIdParamsSchema } from "./validation/schemas/books.js";
+import {
+  searchCoversQuerySchema,
+  manualCoverBodySchema,
+} from "./validation/schemas/covers.js";
+import { mergeBodySchema } from "./validation/schemas/enrichMerge.js";
+import { downloadParamsSchema } from "./validation/schemas/kindle.js";
 
 dotenv.config();
 
@@ -959,6 +967,7 @@ app.post("/api/books", authenticateToken, async (req, res) => {
 app.post(
   "/api/books/:id/cover/upload",
   authenticateToken,
+  validate({ params: bookIdParamsSchema }),
   uploadToTemp.single("file"),
   async (req, res) => {
     try {
@@ -1010,7 +1019,7 @@ app.post(
   }
 );
 
-app.delete("/api/books/:id/cover", authenticateToken, async (req, res) => {
+app.delete("/api/books/:id/cover", authenticateToken, validate({ params: bookIdParamsSchema }), async (req, res) => {
   try {
     if (!MONGODB_URI || mongoose.connection.readyState !== 1) {
       return res.status(503).json({ error: "Database not connected" });
@@ -1047,6 +1056,7 @@ app.delete("/api/books/:id/cover", authenticateToken, async (req, res) => {
 app.post(
   "/api/books/:id/upload",
   authenticateToken,
+  validate({ params: bookIdParamsSchema }),
   uploadToTemp.single("file"),
   async (req, res) => {
     try {
@@ -1111,7 +1121,7 @@ app.post(
   }
 );
 
-app.get("/api/books/:id/download/:format", authenticateToken, async (req, res) => {
+app.get("/api/books/:id/download/:format", authenticateToken, validate({ params: downloadParamsSchema }), async (req, res) => {
   try {
     if (!MONGODB_URI || mongoose.connection.readyState !== 1) {
       return res.status(503).json({ error: "Database not connected" });
@@ -1323,7 +1333,7 @@ app.delete("/api/books/:id", authenticateToken, async (req, res) => {
   }
 });
 
-app.post("/api/books/merge", authenticateToken, async (req, res) => {
+app.post("/api/books/merge", authenticateToken, validate({ body: mergeBodySchema }), async (req, res) => {
   try {
     if (!MONGODB_URI || mongoose.connection.readyState !== 1) {
       return res.status(503).json({ error: "Database not connected" });
@@ -1418,7 +1428,7 @@ app.post("/api/books/merge", authenticateToken, async (req, res) => {
   }
 });
 
-app.get("/api/books/:id/cover", authenticateTokenOrKindle, async (req, res) => {
+app.get("/api/books/:id/cover", authenticateTokenOrKindle, validate({ params: bookIdParamsSchema }), async (req, res) => {
   try {
     if (!MONGODB_URI || mongoose.connection.readyState !== 1) {
       return res.status(503).json({ error: "Database not connected" });
@@ -1567,6 +1577,7 @@ app.get("/api/shelves", authenticateToken, async (req, res) => {
 app.post(
   "/api/books/:id/send-to-kindle",
   authenticateToken,
+  validate({ params: bookIdParamsSchema }),
   async (req, res) => {
     try {
       if (!MONGODB_URI || mongoose.connection.readyState !== 1) {
@@ -1677,7 +1688,7 @@ app.post(
   }
 );
 
-app.get("/api/books/:id/search-covers", authenticateToken, async (req, res) => {
+app.get("/api/books/:id/search-covers", authenticateToken, validate({ params: bookIdParamsSchema, query: searchCoversQuerySchema }), async (req, res) => {
   try {
     if (!MONGODB_URI || mongoose.connection.readyState !== 1) {
       return res.status(503).json({ error: "Database not connected" });
@@ -1793,7 +1804,7 @@ app.get("/api/books/:id/search-covers", authenticateToken, async (req, res) => {
   }
 });
 
-app.post("/api/books/:id/cover", authenticateToken, async (req, res) => {
+app.post("/api/books/:id/cover", authenticateToken, validate({ params: bookIdParamsSchema, body: manualCoverBodySchema }), async (req, res) => {
   try {
     if (!MONGODB_URI || mongoose.connection.readyState !== 1) {
       return res.status(503).json({ error: "Database not connected" });
@@ -1879,7 +1890,7 @@ app.post("/api/books/:id/cover", authenticateToken, async (req, res) => {
   }
 });
 
-app.post("/api/books/:id/enrich", authenticateToken, async (req, res) => {
+app.post("/api/books/:id/enrich", authenticateToken, validate({ params: bookIdParamsSchema }), async (req, res) => {
   try {
     if (!MONGODB_URI || mongoose.connection.readyState !== 1) {
       return res.status(503).json({ error: "Database not connected" });

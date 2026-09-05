@@ -211,6 +211,106 @@ Note the gateway origin is separate and unrelated: `bootstrapUser.js` uses
 
 ---
 
+## Backend — zod input validation (2026-09-05)
+
+TODO_ORDER #22 (input validation), bookgeek slice. Every mutating route in the
+binary/long-job REST that stayed after `01d35d4` (see "Which calls go where"
+above) now runs a zod schema first: `src/validation/validate.js` (mirrors
+`apps/fitnessgeek/backend/src/validation/validate.js` and
+`apps/storygeek/backend/src/validation/validate.js` exactly — same 400
+envelope, `{ success: false, error: { message, code: 'VALIDATION_ERROR',
+details: [{ path, message }] } }`) plus one schema file per route family under
+`src/validation/schemas/`. Book ids in params are checked as non-empty bounded
+strings (`common.js`'s `idParam`/`bookIdParamsSchema`), **not** Mongo
+ObjectIds — same call as storygeek's and bujogeek's zod passes, so a malformed
+id still falls through to the route's own existing "not found" or
+Mongoose-CastError handling instead of validation reinterpreting it.
+
+**Route families and what they enforce:**
+- `books.js` — thin re-export of `bookIdParamsSchema` for every plain
+  `/api/books/:id/*` route that reads nothing else: `POST .../cover/upload`,
+  `DELETE .../cover`, `POST .../upload`, `GET .../cover`.
+- `covers.js` — `GET /api/books/:id/search-covers` (`q` query, bounded, not
+  `.strict()` — see below) and `POST /api/books/:id/cover` (the JSON
+  "pick a cover found by search" route: `provider` enum, `coverId` as
+  string-or-number, `coverUrl` bounded). The *other* two cover/file routes are
+  raw multipart uploads with no other body fields — nothing to validate there
+  beyond the id param and multer's own handling (file count 1 via
+  `.single()`, size per the existing `uploadToTemp`/`upload` configs — both
+  already sane, nothing added).
+- `enrichMerge.js` — `POST /api/books/:id/enrich` reads only the id param
+  (no body at all); `POST /api/books/merge` takes exactly two ids
+  (`primaryId`/`secondaryId`), not an array — the general "id arrays <= 200"
+  TODO_ORDER guidance for this family doesn't map onto the route as actually
+  written, so bounded single ids is what's enforced. The handler's own
+  "must be different ids" / "must be exactly one Goodreads-import book"
+  business-logic checks are untouched.
+- `kindle.js` — `GET /api/books/:id/download/:format` (format enum
+  `epub`/`azw3`/`mobi`, mirroring the handler's own hand-check exactly) and
+  `POST /api/books/:id/send-to-kindle` (id param only — the "recipient" is
+  `Profile.kindleEmail`, resolved server-side and never taken from the
+  request, and the route only ever looks for an EPUB, so there's no
+  request-supplied format here either).
+- `importJobs.js` — `POST /api/import/calibre/rescan`'s `limit` query param
+  (positive integer, bounded; params only, no body, per the route as
+  written). `POST /api/import/goodreads` (multipart CSV) and
+  `POST /api/import/goodreads/dedupe` read no other fields today — no
+  "Goodreads options" or "dedupe flags" exist in the code to validate without
+  inventing one; both keep their existing hand-checks (no file / empty file /
+  CSV-parse failure) unchanged.
+- `deviceBaskets.js` — `POST /api/device-baskets`, shape only per the task:
+  `device` as a bounded string, `bookIds` as an array of bounded strings
+  (1–50, mirroring the handler's own `MAX_BOOKS_PER_BASKET`). The handler's
+  own per-item `mongoose.isValidObjectId()` check and its Book-existence
+  lookup (which reports exactly which ids are missing) stay exactly as they
+  were. Device *word* normalisation (`normalizeDeviceWord`/`isValidDeviceWord`
+  in `deviceBasket.js`) belongs to the public, unauthenticated
+  `POST /download-basket` word lookup — a different route that deliberately
+  never 400s on bad input (always the same neutral "no active basket" page,
+  so a scanner can't distinguish a bad word from a wrong one) — left
+  untouched.
+
+**Query schemas are deliberately not `.strict()`** (`searchCoversQuerySchema`,
+`calibreRescanQuerySchema`): an unrecognized query key is silently dropped
+rather than rejected, unlike every body/params schema. Body and route params
+come from a known, closed set (the client's own JSON, or Express's own route
+pattern); a query string is more likely to carry an incidental extra key
+(a cache-buster, a tracking param) that would otherwise 400 a caller with no
+malicious or malformed intent.
+
+**Behavior a real client could notice:** a handful of routes had hand-rolled
+400s that zod now catches first, so the response *body* shape changes (same
+400 status) — `GET .../download/:format` on an unsupported format, `POST
+.../cover` on an unsupported provider, `POST /api/device-baskets` on a
+missing/oversized `bookIds`. `POST /api/import/calibre/rescan?limit=` with a
+non-positive or non-numeric value now 400s instead of silently falling back
+to the default of 1000 rows. Nothing else — 200-path behavior is unchanged.
+
+zod pinned at `3.25.76` (same version fitnessgeek, basegeek, and storygeek
+pin). Installed via the pnpm workspace (`pnpm install` at the repo root;
+bookgeek's api has no own lockfile). 45 new node:test tests (78 → 123);
+per-schema unit tests in `test/validationSchemas.test.js`, one route-level
+suite proving the 400 envelope through a real app in
+`test/validationRoute.test.js`. Full route inventory and the reasoning behind
+each bound: see the TODO #22 report.
+
+**Left alone, deliberately:** the plain book-CRUD REST handlers
+(`GET/POST /api/books`, `GET/PATCH/DELETE /api/books/:id`, `GET
+/api/shelves`) still physically exist in `server.js` even though "Which calls
+go where" above documents them as replaced by basegeek's gateway
+(`createBook`/`updateBook`/`deleteBook`/`books`/`book`/`shelves`) — the web
+app calls the gateway, not these. They're out of this pass's scope (the task
+enumerated exactly the binary/long-job routes above) and weren't touched;
+whether they're genuinely dead and safe to delete, versus still relied on by
+something outside the web app, is worth a look but is a separate cleanup, not
+a validation gap. Likewise `POST /api/import/calibre` (the *original*,
+unauthenticated one-time Calibre import, distinct from `/calibre/rescan`)
+wasn't touched — it's not in the "Which calls go where" list of surviving
+routes either, and looks like one-time-use legacy left from before the
+Calibre import ran.
+
+---
+
 ## Feedback primitives (2026-09-05, TODO_ORDER #15 fan-out)
 
 `GeekToastProvider` is mounted in `App.jsx`, inside `GeekShell` and outside

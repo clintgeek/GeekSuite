@@ -8,6 +8,8 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import { Book } from "../models/book.js";
 import { authenticateToken } from "../middleware/auth.js";
+import { validate } from "../validation/validate.js";
+import { calibreRescanQuerySchema } from "../validation/schemas/importJobs.js";
 
 const router = express.Router();
 
@@ -400,7 +402,7 @@ function parseEbookMetaOutput(text) {
 // - For each Calibre book, finds existing Book docs by ISBN / Goodreads ID / title+author
 // - Attaches any missing files and coverPath from the filesystem and marks owned: true
 // - Only creates new Book docs when no existing match is found
-router.post("/calibre/rescan", authenticateToken, async (req, res) => {
+router.post("/calibre/rescan", authenticateToken, validate({ query: calibreRescanQuerySchema }), async (req, res) => {
   try {
     const libraryRoot = process.env.LIBRARY_PATH || "/data/library";
     const dbPath = path.join(libraryRoot, "metadata.db");
