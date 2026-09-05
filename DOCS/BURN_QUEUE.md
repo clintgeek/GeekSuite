@@ -9,6 +9,8 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
+| R72 | adversarial review of today's ~130 pushed commits across streams → DOCS/BURN_REVIEW.md (read-only) | opus | one new doc | 09-05 15:53 |
+| R73 | reconcile root docs (CONTEXT, RUNBOOK, CICD, DEPLOY, README, plans) with today's changes (docs only) | sonnet | root DOCS/*.md, DEPLOY.md, README.md | 09-05 15:53 |
 | R71 | consolidation pair 8: FoodItem (findOrCreate/search carve-out; barcode unique means both apps deploy together — they do) | opus | packages/schemas, both FoodItem models + parity suites | 09-05 15:38 |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
