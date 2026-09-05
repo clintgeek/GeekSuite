@@ -19,6 +19,13 @@
  * `GeekAppFrame`, whose route transition would otherwise capture a fixed
  * child. No page registered → no FAB.
  *
+ * Eight of the ten routes are `lazy()` (see `App.jsx`), so the `Outlet` is
+ * wrapped in a `Suspense` boundary. It sits INSIDE `GeekShell` and inside
+ * `GeekAppFrame`, at the same depth as the page itself: a boundary any higher
+ * would tear the sidebar, top bar and bottom tab bar down to a spinner every
+ * time a route chunk loads. The fallback is `RouteFallback` — the app's one
+ * loading visual, sized to the content area.
+ *
  * `GeekToastProvider` (TODO_ORDER #15) is mounted inside `GeekShell` and
  * outside `GeekAppFrame` for the same reason as the FAB: the frame's route
  * transition is a framer-motion element and becomes a containing block for
@@ -26,11 +33,13 @@
  * the page fade. Inside the shell so it can read `useGeekShell()` and place
  * itself clear of the sidebar and the mobile tab bar.
  */
+import { Suspense } from "react";
 import { Box, useMediaQuery, useTheme } from "@mui/material";
 import { Outlet, useLocation } from "react-router-dom";
 import { GeekShell, GeekAppFrame, GeekBottomNav, GeekToastProvider, geekLayout } from "@geeksuite/ui";
 import Sidebar from "./Sidebar";
 import TopBar from "./TopBar";
+import RouteFallback from "./RouteFallback";
 import { activeNavId, bottomNavItems } from "./navConfig";
 
 const LayoutShell = () => {
@@ -62,7 +71,9 @@ const LayoutShell = () => {
               py: { xs: 3, md: 4 }
             }}
           >
-            <Outlet />
+            <Suspense fallback={<RouteFallback />}>
+              <Outlet />
+            </Suspense>
           </Box>
         </GeekAppFrame>
       </GeekToastProvider>

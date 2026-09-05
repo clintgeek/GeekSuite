@@ -2,6 +2,128 @@
 
 _Last updated: 2026-09-05_
 
+## Bundle (2026-09-05)
+
+**Before:** one chunk. No `manualChunks` at all, every route a static import in
+`App.jsx` — `dist/assets/index-*.js` was 1060 kB (324 kB gzip) and rollup
+printed the "larger than 500 kB" warning on every build. First load (the entry
+script + every `modulepreload` `index.html` lists + the HTML) was 1072 kB raw /
+326 kB gzip.
+
+**After:** 1011 kB raw / 312 kB gzip, largest chunk 313 kB, no warning.
+
+| Chunk | Before | After | Eager? |
+|---|---|---|---|
+| app entry `index-*.js` | 1060 kB / 324 kB gz | **90 kB / 28 kB gz** | yes |
+| `mui` (`@mui`, `@emotion`) | — | 313 kB / 96 kB gz | yes |
+| `motion` (framer-motion) | — | 230 kB / 74 kB gz | yes |
+| `apollo` (`@apollo`, `graphql`, `@wry`…) | — | 200 kB / 58 kB gz | yes |
+| `react-vendor` (react, react-dom, router) | — | 165 kB / 53 kB gz | yes |
+| 8 route chunks + `ResponsiveTable`/`LedgerDialog` | — | 1.2–20 kB each, 60 kB total | on demand |
+| `index-*.css` | 10 kB / 1.7 kB gz | unchanged | yes |
+| **first load** | **1072 kB / 326 kB gz** | **1011 kB / 312 kB gz** | |
+
+Measure it the same way before claiming a change helped — the build log lists
+every chunk including the async ones, which is not the first load:
+
+```bash
+cd apps/flockgeek/frontend && pnpm build   # then sum index.html's own
+# <script src> + every <link rel=modulepreload> + the HTML, raw and via
+# zlib.gzipSync. No new deps; a ~20-line node script does it.
+```
+
+### What actually moved, and what didn't
+
+- **Routes are `lazy()`** — eight of ten, behind one `Suspense` boundary that
+  `LayoutShell` puts around the `Outlet` (inside `GeekAppFrame`, so the
+  sidebar/top bar/bottom nav never blink), falling back to
+  `components/RouteFallback.jsx` — the app's existing centred
+  `CircularProgress`, sized to the content area instead of `100vh`. That is
+  where the 61 kB came from: BirdsPage alone is 20 kB, and a visitor to Home
+  used to download all of it.
+- **`HomePage` and `LoginPage` stay eager, deliberately.** Home is the index
+  route — `/`, the first bottom-nav tab, and every post-login redirect — so a
+  chunk boundary there buys a second round-trip in front of the app's most
+  common first paint. It also registers the **harvest FAB**
+  (`QuickHarvestSheet` → `useGeekPrimaryAction`); lazy would mean the shell
+  paints and the FAB pops in a beat later, on the one screen where the FAB is
+  the point. `LoginPage` is 34 lines and is the entire unauthenticated app.
+  `EggLogPage` registers the same FAB and **is** lazy: it is a route you
+  navigate to, so its FAB registers exactly when its content appears — there
+  is no window where the page is up and its FAB is missing. Harness scene
+  `02-harvest-sheet` (the FAB's sheet) and `09-egg-log` are both clean, and
+  `QuickHarvestSheet.test.jsx` still asserts the registration.
+- **`manualChunks` is a path-matching function, never the object form.** The
+  object form matches resolved module ids and silently misses CJS packages
+  (react/react-dom arrive as commonjs proxies), which is how fitnessgeek ended
+  up with an empty `vendor` chunk and react-dom hidden inside `mui`
+  (`f61f7ce`). The function matches the last `node_modules/` path segment, so
+  it is proxy-proof and pnpm-proof.
+- **All four vendor groups are eager, and that is not a failure.** MUI, Apollo
+  (`main.jsx` mounts `GeekSuiteApolloProvider` above the router), framer-motion
+  (`GeekAppFrame` is a motion element) and react are on the first paint by
+  construction. Splitting them is a *caching* win: a deploy that touches one
+  page now re-downloads 90 kB, not 1 MB.
+- **The `mui` group is a measured trade, not a copied recipe.** Without it:
+  980 kB / 303 kB first load — 31 kB cheaper cold, because MUI parts only the
+  lazy routes use follow those routes — but MUI folds into the app entry chunk
+  (372 kB) and every push to main makes daily users re-download all of it.
+  Kept. (Pulling `@mui/icons-material` back out of the group: 1008 kB, noise.)
+  Note this is the *opposite* call from fitnessgeek, where the `mui` boundary
+  is load-bearing because dropping it hoists chart vendors onto the first load;
+  flockgeek has no chart vendors, so only the cache trade is in play.
+- **Nothing was deferred with `await import()`, because there is nothing to
+  defer.** flockgeek's whole dependency surface is react + router + MUI +
+  Apollo + framer-motion. No chart library, no date library, no PDF/canvas
+  exporter — no heavy, rarely-used module hiding behind a button. Every icon
+  is already deep-imported (`@mui/icons-material/Add`), not barrelled.
+- **Not attempted:** shrinking `motion` (230 kB, the second-heaviest eager
+  chunk). It comes in through `@geeksuite/ui`'s `GeekAppFrame`, which wraps
+  every page, so no app-side boundary can defer it — and `packages/*` was out
+  of scope. If framer-motion is ever worth attacking it has to happen in
+  `packages/ui` and it pays out across the whole suite at once.
+- **`resolve.dedupe` already listed `@mui/material`** (the suite landmine) and
+  a probe build confirmed it: exactly one `@mui/material`, one `react-dom` and
+  one `@emotion/react` `.pnpm` root reach the bundle.
+
+### Service worker
+
+`public/sw.js` is hand-rolled (PWA_STANDARD flavour B) and had **no build
+step**, so its precache list was three static URLs — fine when the app was one
+chunk, wrong the moment routes became lazy: a client still on the previous
+deploy would ask for a chunk hash the server had deleted, get the SPA
+fallback's 404 (`backend/src/server.js` has the extname guard), and the dynamic
+import would reject into a blank route.
+
+`swPrecache()` in `vite.config.js` closes that: after each build it rewrites
+`dist/sw.js`'s two placeholder constants with the full hashed `.js`/`.css` list
+and a `BUILD_ID` hashed from that list — the flavour-B equivalent of VitePWA's
+`globPatterns`. It only ever touches `dist/`, so `vite dev` keeps serving the
+source file, and it hard-errors if the placeholders go missing (a silent
+stamping failure would only show up as a stranger's broken route after a
+deploy). Verified: 16 precache entries, byte-identical to what is on disk.
+
+A content-hashed `BUILD_ID` also fixes an older bug. `CACHE_NAME` used to be
+the constant `flockgeek-cache-v2`, so the SW never reinstalled and the `"/"`
+entry cached on a user's first ever visit was served forever — the root route
+could not pick up a deploy. Now every build with different assets is a new
+cache name: install precaches the new files, activate drops the old cache, and
+the existing `controllerchange` reload in `main.jsx` takes the tab to it.
+
+Everything else about the SW is unchanged and re-verified: auth endpoints are
+network-only first, `/api/*` network-only next, static assets cache-first with
+a network fallback (so a chunk not in the cache — a new hash — is fetched
+normally), the `text/html` guard still refuses to store a SPA-fallback response
+under an asset URL (`2d0f5a5`), and a failed navigation still lands on
+`/offline.html`. `install` now uses per-URL `cache.add(...).catch()` instead of
+`cache.addAll`, so one bad URL can no longer leave the app with no SW at all.
+
+**Verified:** `pnpm lint` 24 warnings (baseline, none new); `npx vitest run`
+37/37; mobile harness `--enforce-a11y --viewports phone` 28 scenes, 0
+violations, 0 a11y findings, 0 page errors; `vite preview` + `curl` — `/` 200
+`text/html`, entry chunk and a lazy route chunk 200 `text/javascript`, `/sw.js`
+200 with the stamped manifest.
+
 ## Mobile-harness a11y pass: 16 findings → 0 (2026-09-05)
 
 All 16 axe findings flockgeek contributed to the suite baseline were the same
