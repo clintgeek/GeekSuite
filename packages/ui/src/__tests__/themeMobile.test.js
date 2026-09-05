@@ -24,6 +24,12 @@ describe('mobile theme rules', () => {
     expect(rule.visibility).toContain('visible');
   });
 
+  it('scopes the 220px drawer width to left-anchored drawers so bottom sheets span the viewport', () => {
+    const drawer = theme.components.MuiDrawer.styleOverrides;
+    expect(drawer.paper.width).toBeUndefined();
+    expect(drawer.paperAnchorLeft.width).toBe(geekLayout.sidebarWidth);
+  });
+
   it('keeps the shared 44px target and 12px caption floor', () => {
     expect(theme.components.MuiButton.styleOverrides.root.minHeight).toBe(44);
     expect(theme.components.MuiChip.styleOverrides.root.fontSize).toBe('0.75rem');

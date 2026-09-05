@@ -275,9 +275,14 @@ function buildComponents(themePalette) {
     MuiDrawer: {
       styleOverrides: {
         paper: {
+          backgroundImage: 'none',
+        },
+        // The 220px column is the *sidebar* rule. It used to sit on `paper`,
+        // which made every Drawer 220px wide — including GeekSheet's bottom
+        // sheet, which rendered as a narrow left-hand column (found 2026-09-04).
+        paperAnchorLeft: {
           width: layout.sidebarWidth,
           borderRight: `1px solid ${themePalette.divider}`,
-          backgroundImage: 'none',
         },
       },
     },
