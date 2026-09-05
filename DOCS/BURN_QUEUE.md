@@ -9,8 +9,8 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
+| R69 | consolidation pairs 6–7 per the plan (not the food family) | opus | packages/schemas, both apps' two models + parity suites | 09-05 15:08 |
 | R68 | TODO #22: zod on the notegeek + flockgeek gateway mutations (shared validateInput) | opus | basegeek api graphql/notegeek, graphql/flockgeek, graphql/shared, tests | 09-05 15:02 |
-| R67 | consolidation pairs 3–5 per the plan's order (Medication first; export enums the validators mirror) | opus | packages/schemas, both apps' three models + parity suites | 09-05 14:45 |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
 ## Queued (launch when files free / prerequisite lands)
@@ -88,6 +88,7 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 - `d8521eb` — R27 — CSRF header in api-client authLink + startgeek clients
 - `1fda489` — R24 — bujogeek tag cloud + template journal cache; #25/#26 struck
 - `x` — R62 — DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md (found the net_carbs_grams live bug → R65)
+- `1457a7d` — R67 — Medication, LoginStreak, WeightGoals shared (fitnessgeek 169, api 930); recordLogin moved; six shared models
 - `21be1c1` — R66 — Weight + BloodPressure shared schemas (fitnessgeek 129, api 889); two dead gateway models deleted; pipeline notes in the plan §8
 - Q37 done 14:36 — bookgeek's unused AIGEEK_API_KEY removed from its env file and the RUNBOOK env table
 - `605c99c` — R64 — zod on bookgeek's remaining REST api (78 → 123 tests); #22 done for storygeek + bookgeek
