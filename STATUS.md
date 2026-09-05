@@ -1,8 +1,9 @@
 # GeekSuite — Status
 
-*Updated 2026-09-05 14:30 CDT. Morning: three deploys (Pocket Pass M0–M5, AIGeek, Ask). Afternoon:
-the 28-hour quota burn — four more waves (last `c6c4136`), 65 streams landed, all verified live.
-The live board with every stream, incident and open decision is `DOCS/BURN_QUEUE.md`.*
+*Updated 2026-09-05 16:50 CDT. Morning: three deploys (Pocket Pass M0–M5, AIGeek, Ask). Afternoon:
+the 28-hour quota burn — eight more waves (last `7fd206b`), 80 streams landed, all verified live.
+The live board with every stream, incident and open decision is `DOCS/BURN_QUEUE.md`; the
+cross-stream review of the day's commits is `DOCS/BURN_REVIEW.md`.*
 
 ## Read this first
 
@@ -25,8 +26,15 @@ done; #19 done).
 **Consolidation.** fitnessgeek's food-log writes go through basegeek's gateway end to end and the
 REST routes are deleted; bookgeek's profile/filters/shelves/AI-status moved to the gateway and the
 hardcoded API origin is gone; dead backend code and 21 unused dependencies removed across four thin
-backends. Plans for the last two steps are written: `DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md`
-(first two pairs in flight) and `DOCS/STORYGEEK_GATEWAY_DECISION.md` (recommend delete — Chef).
+backends. **All 13 fitnessgeek models are now shared `@geeksuite/schemas` factories** with parity
+suites on both sides (`DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md`, §12 lists 14 follow-ups);
+`DOCS/STORYGEEK_GATEWAY_DECISION.md` recommends deleting the caller-less storygeek gateway module.
+
+**Review.** An adversarial read across all streams (`DOCS/BURN_REVIEW.md`) found 4 P0 and 18 P1;
+all four P0s and most P1s were fixed and deployed the same afternoon: books published before 2000
+were un-editable, `/api/ai/parse-json` was ungated, flipping `CSRF_TOKEN=enforce` would have logged
+the suite out (the six auth proxies now forward the token), flockgeek REST let the body set the
+owner. Zod now guards every REST backend except flockgeek's and every gateway module.
 
 **Security and correctness.** Zod validation on fitnessgeek, storygeek, bookgeek and the bujogeek
 gateway mutations; the Garmin password is encrypted at rest through the shared UserSettings schema
@@ -48,9 +56,10 @@ env var needs `docker compose up -d` in the app dir right after the deploy. The 
 been silently failing since it landed (`pnpm … ci` is pnpm's install alias, not the script).
 
 **Waiting on Chef** (details on the board): Q10 revoke the LocalApps key; Q1 restart storygeek to
-pick up its service key; Q22 flockgeek's caller-less REST layer; Q38 delete the storygeek gateway
-module; Q37 bookgeek's now-unused `AIGEEK_API_KEY`; Q11 `Databases.jsx`; Q14 CanonCard; Q18b flip
-`CSRF_TOKEN=enforce` after a clean day of report logs.
+pick up its service key; Q18b flip `CSRF_TOKEN=enforce` (safe after wave 8; wait for 24h of clean
+report-only logs); Q22 flockgeek's caller-less REST layer; Q38 delete the storygeek gateway module;
+Q42 the containers' `TZ` is inert (no tzdata) — keep UTC or install it; Q43 branch protection; Q48
+triage the consolidation follow-ups; Q11 `Databases.jsx`; Q14 CanonCard.
 
 ## What landed tonight (the morning)
 
