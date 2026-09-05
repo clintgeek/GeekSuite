@@ -1,41 +1,27 @@
 import mongoose from 'mongoose';
+import { createLoginStreakSchema } from '@geeksuite/schemas/fitnessgeek/loginStreak';
 
-const loginStreakSchema = new mongoose.Schema({
-  user_id: {
-    type: String,
-    required: true,
-    index: true
-  },
-  current_streak: {
-    type: Number,
-    default: 0
-  },
-  longest_streak: {
-    type: Number,
-    default: 0
-  },
-  last_login_date: {
-    type: Date,
-    default: null
-  },
-  streak_start_date: {
-    type: Date,
-    default: null
-  },
-  created_at: {
-    type: Date,
-    default: Date.now
-  },
-  updated_at: {
-    type: Date,
-    default: Date.now
-  }
-}, {
-  timestamps: true
-});
+// The field set, the index and the `recordLogin` instance method live in
+// @geeksuite/schemas so that this model and basegeek's GraphQL copy
+// (apps/basegeek/packages/api/src/graphql/fitnessgeek/models/LoginStreak.js)
+// cannot drift. Both write the `loginstreaks` collection in the same database,
+// and mongoose strict mode silently drops paths one side doesn't know about —
+// see the shared module's header and DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md.
+//
+// `recordLogin` moved because it is identical on both sides and a divergence
+// in it would corrupt a user's streak. The arithmetic is also exported as
+// `applyLoginToStreak(streak, now)` so it can be asserted without a database.
+//
+// Do NOT add fields here. Add them to the shared module; the tripwire tests in
+// both suites fail if this model stops matching it.
+const loginStreakSchema = createLoginStreakSchema(mongoose);
 
-// Index for efficient queries
-loginStreakSchema.index({ user_id: 1 });
+// Statics stay app-side. basegeek's copy of this one opens with
+// `requireUser(userId)` — its fail-closed ownership posture — and this side's
+// callers (src/routes/streakRoutes.js) are already past auth, so the two
+// writers deliberately disagree. Statics don't affect `schema.paths`, so that
+// disagreement cannot cause the strict-mode data loss the shared module exists
+// to prevent.
 
 // Static method to get or create login streak for user
 loginStreakSchema.statics.getOrCreateStreak = async function(userId) {
@@ -53,48 +39,6 @@ loginStreakSchema.statics.getOrCreateStreak = async function(userId) {
   }
 
   return streak;
-};
-
-// Method to record a login and update streak
-loginStreakSchema.methods.recordLogin = async function() {
-  // "Today" is the user's local calendar day, stored as UTC midnight so it
-  // lines up with the UTC-midnight dates read back elsewhere. Truncating the
-  // instant with setUTCHours would roll to tomorrow after ~18:00 US-Central.
-  const now = new Date();
-  const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
-
-  const lastLogin = this.last_login_date ? new Date(this.last_login_date) : null;
-  if (lastLogin) {
-    lastLogin.setUTCHours(0, 0, 0, 0); // Start of day (already UTC midnight)
-  }
-
-  const yesterday = new Date(today);
-  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-
-  // Check if this is a consecutive day
-  if (!lastLogin || lastLogin.getTime() === yesterday.getTime()) {
-    // Consecutive day - increment streak
-    this.current_streak += 1;
-
-    // Update longest streak if current is longer
-    if (this.current_streak > this.longest_streak) {
-      this.longest_streak = this.current_streak;
-    }
-
-    // Set streak start date if this is the first day
-    if (this.current_streak === 1) {
-      this.streak_start_date = today;
-    }
-  } else if (lastLogin && lastLogin.getTime() !== today.getTime()) {
-    // Not consecutive - reset streak
-    this.current_streak = 1;
-    this.streak_start_date = today;
-  }
-
-  this.last_login_date = today;
-  this.updated_at = new Date();
-
-  return await this.save();
 };
 
 export default mongoose.model('LoginStreak', loginStreakSchema);

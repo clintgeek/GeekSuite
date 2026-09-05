@@ -19,10 +19,10 @@ items are bug fixes that should ship on their own, ahead of any consolidation.**
 | | |
 |---|---|
 | Model pairs total | **13** |
-| Already consolidated | **3** (`UserSettings`, `Weight`, `BloodPressure` — all 2026-09-05) |
+| Already consolidated | **6** (`UserSettings`, `Weight`, `BloodPressure`, `Medication`, `LoginStreak`, `WeightGoals` — all 2026-09-05) |
 | basegeek orphans deleted | **2** (`AIFoodPromptCache`, `MedicationLog` — done 2026-09-05) |
-| Remaining | **8** |
-| …genuinely needing a shared schema | **8** |
+| Remaining | **5** (`NutritionGoals`, `Meal`, `FoodItem`, `FoodLog`, `DailySummary`) |
+| …genuinely needing a shared schema | **5** |
 | Conflicting divergences | **4** — 1 in the schema field set, 3 in statics |
 | Drift divergences | 3 (statics one side has and the other doesn't) |
 | Harmless divergences | the rest — connection binding, import order, trailing newline |
@@ -49,11 +49,11 @@ virtual, `toJSON`/`toObject` setting and instance method.
 |---|-------|-----------|---------------|---------|-----------------|---------|
 | 1 | `Weight` | `weights` | identical | identical | none either side | ✅ **DONE 2026-09-05** |
 | 2 | `BloodPressure` | `bloodpressures` | identical | identical | none either side | ✅ **DONE 2026-09-05** |
-| 3 | `LoginStreak` | `loginstreaks` | identical | identical | BG adds `requireUser` guard | drift (guard) |
-| 4 | `Medication` | `medications` | identical | identical | none either side | harmless only |
+| 3 | `LoginStreak` | `loginstreaks` | identical | identical | BG adds `requireUser` guard | ✅ **DONE 2026-09-05** (guard stayed app-side) |
+| 4 | `Medication` | `medications` | identical | identical | none either side | ✅ **DONE 2026-09-05** |
 | 5 | `MedicationLog` | `medicationlogs` | identical | identical | none either side | ✅ **DELETED 2026-09-05** |
 | 6 | `AIFoodPromptCache` | `aifoodpromptcaches` | identical | identical | none either side | ✅ **DELETED 2026-09-05** |
-| 7 | `WeightGoals` | `weightgoals` | identical | identical | BG adds `requireUser` ×3 | drift (guard) |
+| 7 | `WeightGoals` | `weightgoals` | identical | identical | BG adds `requireUser` ×3 | ✅ **DONE 2026-09-05** (guards stayed app-side) |
 | 8 | `NutritionGoals` | `nutritiongoals` | identical | identical | BG adds `requireUser` ×3 | drift (guard) |
 | 9 | `Meal` | `meals` | identical | identical | BG adds `findOwned`; BG's 3 list statics are owner-scoped, FG's are not | **conflicting** |
 | 10 | `FoodItem` | `fooditems` | identical | identical | BG adds `findAccessible`/`findAccessibleMany`; `findOrCreate` + `search` identical | drift (2 statics) |
@@ -357,8 +357,8 @@ applies.
 |---|------|--------|----------------|-------|
 | 1 | ✅ **`Weight`** *(done 2026-09-05)* | XS | ✅ | 47/50 lines. Zero statics, zero hooks, one compound index, `toJSON`/`toObject` virtuals identical (`:44-45` / `:47-48`). The only divergence is the connection binding |
 | 2 | ✅ **`BloodPressure`** *(done 2026-09-05)* | XS | ✅ | Same shape, 72/75 lines. **Correction:** the virtual is `status`, not `bpCategory`, and there are *two* virtuals — `formatted_date` (on `Weight` too) and `status`. Same `toJSON` settings |
-| 3 | `Medication` | XS | ✅ | 106/109 lines, shared `MED_TIME_OF_DAY` enum literal identical on both sides, no statics |
-| 4 | `LoginStreak` | XS | ✅ | One static, `getOrCreateStreak`; the only difference is basegeek's `requireUser` — stays app-side |
+| 3 | ✅ **`Medication`** *(done 2026-09-05)* | XS | ✅ | 106/109 lines, shared `MED_TIME_OF_DAY` enum literal identical on both sides, no statics. **Two more copies of the enums live in `validation/schemas/medication.js`; both now import.** See §9 |
+| 4 | ✅ **`LoginStreak`** *(done 2026-09-05)* | XS | ✅ | One static, `getOrCreateStreak`; the only difference is basegeek's `requireUser` — stayed app-side. **The plan missed an instance method, `recordLogin`, which did move.** See §9 |
 
 Note for 1 and 2: both use `userId` (camelCase) as the owner field while the other eleven use
 `user_id`. That is a pre-existing inconsistency in the collections themselves; **do not normalize it
@@ -368,7 +368,7 @@ during consolidation** — it would be a data migration wearing a refactor's clo
 
 | # | Pair | Effort | Rollback safe? | Notes |
 |---|------|--------|----------------|-------|
-| 5 | `WeightGoals` | S | ✅ | basegeek is the only writer; fitnessgeek reads via `aiInsightsService.js:15`. Three statics, `requireUser`-only divergence |
+| 5 | ✅ **`WeightGoals`** *(done 2026-09-05)* | S | ✅ | basegeek is the only writer; fitnessgeek reads via `aiInsightsService.js:15`. Three statics, `requireUser`-only divergence — all six copies stayed app-side. See §9 |
 | 6 | `NutritionGoals` | S | ✅ | Same shape. Note the naming trap: this is **not** `UserSettings.nutrition_goal`. Two different collections both describe nutrition goals, and `DailySummary.updateFromLogs` reads the *settings* one (`DailySummary.js:186-188`), not this one. Do not "helpfully" unify them |
 | 7 | `Meal` | S | ⚠️ see below | Statics conflict (C4). Consolidate the field definitions only; leave both sides' statics exactly as they are. If the tightened semantics are wanted in fitnessgeek, that is a separate, deliberate ticket with its own test |
 
@@ -757,6 +757,9 @@ between the two deploys either.
    rewired. Its header comment now points at `models/Weight.js` for numbers that live in
    `packages/schemas/fitnessgeek/weight.js` — a one-line comment fix, deliberately left out of this
    pass because that file was outside its touch list. **Follow-up: repoint that comment.**
+   ✅ **Closed** — the comment now reads "Mirrors the shared schema
+   `packages/schemas/fitnessgeek/weight.js` (`min: 0, max: 1000`), with a positive floor instead of
+   `min: 0`." The mirror itself is still deliberate and still not rewired.
 3. **Adding a pair is now a table row.** Both new suites are `describe.each` over a `PAIRS` array:
    model pair, factory, expected path list, expected virtual list, a probe document. Pair 3 should be
    under an hour of test work, not the 1.5 h in §6.
@@ -770,5 +773,191 @@ between the two deploys either.
 
 ---
 
-*Written 2026-09-05. Companion to `apps/fitnessgeek/DOCS/USER_SETTINGS_SCHEMA.md` (the completed pair)
-and `DOCS/SUITE_TODO.md` item 4.*
+## 9. Pairs 3, 4 and 5, done — and what changed in the picture
+
+**`Medication`, `LoginStreak` and `WeightGoals` were consolidated on 2026-09-05**, in §4's order
+(Tier 1 #3 and #4, then Tier 2 #5). §8's carry-forward held: the pipeline is a table row per pair
+plus a shared module, and none of the three took anything like §6's budget. What follows is the
+record, the corrections, and what pairs 6–10 should expect.
+
+### What shipped
+
+| | |
+|---|---|
+| New shared modules | `packages/schemas/fitnessgeek/medication.js` → `createMedicationSchema(mongoose)`<br>`packages/schemas/fitnessgeek/loginStreak.js` → `createLoginStreakSchema(mongoose)`<br>`packages/schemas/fitnessgeek/weightGoals.js` → `createWeightGoalsSchema(mongoose)` |
+| Wiring | one subpath each in `packages/schemas/package.json` `exports`, one entry each in `packages/schemas/index.js` |
+| Wrappers (6) | `apps/fitnessgeek/backend/src/models/{Medication,LoginStreak,WeightGoals}.js` — named import, `mongoose.model(...)`<br>`apps/basegeek/packages/api/src/graphql/fitnessgeek/models/{Medication,LoginStreak,WeightGoals}.js` — default import + destructure, `fitnessConn.model(...)` |
+| Statics — stayed app-side | `LoginStreak.getOrCreateStreak` (×2 copies), `WeightGoals.{getActiveWeightGoals,createWeightGoals,updateWeightGoals}` (×2 copies each). basegeek's keep `requireUser`; fitnessgeek's stay unguarded, per §3 and PRE-4 |
+| Instance method — moved | `LoginStreak.recordLogin`, plus `applyLoginToStreak(streak, now)` and `attachLoginStreakMethods(schema)` as named exports |
+| Third copies folded in | `apps/fitnessgeek/backend/src/validation/schemas/medication.js` now imports `MED_TIME_OF_DAY`, `MED_TYPES` and `medicationBounds` instead of restating two enum arrays and four numbers |
+| Parity rows added | 3 per suite, in both `fitnessgeekSchemaParity.test.js` and `sharedSchemaParity.test.js` |
+
+Test counts: fitnessgeek's backend **129 → 169**, basegeek's api **889 → 930** (47 suites, 1
+pre-existing skip, `gatewaySchemaLoads` green). `packages/schemas` lint clean;
+`node tools/syntax-check.mjs` 762 files clean. No `pnpm install`, no lockfile change.
+
+### Where the plan was wrong, per pair
+
+§8's correction #2 — *"assume every remaining pair has undocumented virtuals until you have read the
+file"* — should be widened. §1a is reliable about **field sets and indexes** and unreliable about
+**everything else on the schema object**: virtuals, instance methods, serialization settings and
+timestamp key renames are all under-reported.
+
+**Pair 3 · `Medication`** — §4 calls it "106/109 lines, shared `MED_TIME_OF_DAY` enum literal
+identical on both sides, no statics." All true. Three things it doesn't mention:
+
+1. **`timestamps: { createdAt: 'created_at', updatedAt: 'updatedAt' }`.** Snake on the way in, camel
+   on the way out. Every other renaming model in the set uses `updated_at`. This is what both copies
+   declare and what is in the `medications` collection, so it moved verbatim; the parity rows spell
+   `updatedAt` out in the expected-path list so nobody "fixes" it by accident. Fixing it properly is
+   a migration with its own backfill, not a line in a refactor.
+2. **`toJSON: { virtuals: true }` / `toObject: { virtuals: true }` with no virtual declared.** The
+   only effect is that mongoose's automatic `id` virtual is serialized — and it *is* on the wire, so
+   it stayed. This is also why the parity suites grew a per-pair `serializesVirtuals` flag: three of
+   the five consolidated pairs opt in and two do not, and which is which is itself contract.
+3. **There were two more enum copies, not one.** §8's carry-forward named `TIME_OF_DAY` in
+   `validation/schemas/medication.js:5`. The same file also declared `MED_TYPES` at `:4` (the
+   `med_type` enum) and restated the `days_supply` (1–3650) and `notes` (500) bounds inline. All
+   four now come from the shared module.
+
+**Pair 4 · `LoginStreak`** — §4 calls it "one static, `getOrCreateStreak`; the only difference is
+basegeek's `requireUser`." The static part is right. Missed:
+
+1. **An instance method, `recordLogin`** — 40 lines of streak arithmetic, byte-identical on both
+   sides, mutating `current_streak`, `longest_streak`, `streak_start_date` and `last_login_date`. It
+   moved. §3 already says instance methods belong in the shared module and the reason applies with
+   force here: a divergence would silently corrupt a user's streak rather than throw. It is the first
+   instance method any of these modules carries.
+2. **Four timestamp paths.** The definition declares `created_at`/`updated_at` by hand *and* the
+   options pass `timestamps: true`, so mongoose adds `createdAt`/`updatedAt` on top. `recordLogin`
+   stamps the hand-rolled one; mongoose stamps the other. Both copies did this. Moved verbatim.
+3. **`user_id` is indexed twice** — path-level `index: true` plus `schema.index({ user_id: 1 })`.
+   That is where the `[MONGOOSE] Warning: Duplicate schema index on {"user_id":1}` line at boot comes
+   from; it predates this work and now appears twice per process because both the model and the
+   parity suite build the schema. Left alone: removing one would make the shared definition stop
+   being byte-equivalent to what is deployed, which is the property the whole rollback claim rests on.
+
+**Pair 5 · `WeightGoals`** — §4's description is accurate: three statics, `requireUser`-only
+divergence, basegeek the only writer. Two things worth recording:
+
+1. **The `UserSettings.weight_goal` trap is real, and it is the same trap §4 flags for
+   `NutritionGoals`.** `validation/schemas/settings.js:117-118` declares
+   `startWeight: boundedNumber(0, 2000)` and `targetWeight: boundedNumber(0, 2000)` — field names
+   that match this model exactly. It is validating a *nested sub-document on the `usersettings`
+   collection*, not this collection: different bounds (this schema has `min: 0` and no max), extra
+   fields (`enabled`, `ratePerWeek`, `unit`, `lastRecalculated`), and `routes/goalRoutes.js` reads
+   both and merges them. **It was deliberately not rewired.** Pointing it at these numbers would
+   silently change what a settings write accepts. This is a mirror that *looks* like a third copy and
+   isn't — the §8 carry-forward's "grep for the third copy" needs a companion rule: *and then check
+   it is the same collection*.
+2. **Mixed field naming**, like `Weight`'s `userId`: `user_id` and `is_active` are snake_case,
+   `startWeight`/`targetWeight`/`startDate`/`goalDate` are camelCase, in one document. Pre-existing,
+   left alone, recorded.
+
+### Third copies: what was found and what was done
+
+| Copy | Location | Disposition |
+|---|---|---|
+| `TIME_OF_DAY` enum | `validation/schemas/medication.js:5` | **Rewired** — imports `MED_TIME_OF_DAY` |
+| `MED_TYPES` enum | `validation/schemas/medication.js:4` | **Rewired** — imports `MED_TYPES` |
+| `days_supply` 1–3650, `notes` 500 | `validation/schemas/medication.js:37-38` | **Rewired** — imports `medicationBounds` |
+| `MED_TIME_OF_DAY` — a **fourth** copy | `apps/fitnessgeek/backend/src/models/MedicationLog.js:3` | **Left.** Outside this pass's touch list, and `MedicationLog` is single-writer (basegeek's copy was deleted as an orphan in PRE-3) so it is not a two-writer drift hazard. Still a hand-synced enum. **Follow-up: import it.** |
+| `['rx','otc','supplement']` inline ×2 | `routes/medicationRoutes.js:114, :194` | **Left.** Routes are outside the touch list. The zod layer in front of them already rejects an invalid `med_type`, so these two ternaries are now dead defaulting logic rather than a second opinion. **Follow-up: import `MED_TYPES` or delete the ternaries.** |
+| `startWeight`/`targetWeight` bounds | `validation/schemas/settings.js:117-118` | **Left, deliberately** — it validates `UserSettings.weight_goal`, a different collection. See pair 5 above. Not a third copy. |
+| `Weight` bounds | `validation/schemas/weight.js` | **Still a deliberate mirror** (positive floor instead of `min: 0`, documented reason). §8's follow-up to repoint its header comment is now **closed**. |
+
+### What the tripwires grew
+
+Both suites are still `describe.each` over a `PAIRS` array; three rows went into each. Two additions
+to the harness, both driven by the new pairs and both worth having for pairs 6–10:
+
+- **`serializesVirtuals`, per pair.** The old assertion hard-coded
+  `expect(schema.options.toJSON).toEqual({ virtuals: true })`, which is true of `Weight`,
+  `BloodPressure` and `Medication` and false of `LoginStreak` and `WeightGoals`. It now asserts the
+  shipped answer either way, so "someone turned virtual serialization on" is a failure and not a pass.
+- **`ownerField`, per pair.** The write-through helper filtered on `{ userId: OWNER }` because the
+  first two pairs are the only two using the camelCase owner field. Every remaining pair uses
+  `user_id`. It now takes the field from the row.
+
+Three new behaviour describes, because presence assertions prove nothing about logic:
+
+- **`Medication` enums and bounds** — both models declare the shared enums; an out-of-enum
+  `med_type` or `times_of_day` slot fails `validateSync()` on both; and the zod layer accepts and
+  rejects exactly what the schema does, walked over every enum member and both ends of both bounds.
+- **`LoginStreak` arithmetic** — the six branches of `applyLoginToStreak` (first login, consecutive
+  day, beating the record, gap-reset, same-day no-op, and the local-calendar-day rule that
+  `setUTCHours` would get wrong after ~18:00 US-Central) asserted hermetically on the fitnessgeek
+  side, plus `recordLogin` persisting through a real collection on basegeek's in-memory Mongo, plus
+  a check that both sides' method bodies are the same source.
+- **The statics divergence, asserted as a decision** — the gateway's `getOrCreateStreak` and all
+  three `WeightGoals` statics reject an unscoped call with `UNAUTHORIZED`; fitnessgeek's copy bound
+  to the same collection returns `null` instead; the two implementations are provably distinct
+  objects; and the fitnessgeek wrapper source contains no `requireUser` and no `ownership.js` import.
+  If someone "helpfully" unifies them, they have to delete these assertions to ship — which is the
+  point, because that unification is PRE-4's separate ticket, not a refactor.
+
+One harness wrinkle worth knowing: `Object.keys(schema.methods)` on a compiled model includes
+mongoose's own `initializeTimestamps`. The suite filters it by name rather than comparing against a
+bare schema, because the compiled and uncompiled method sets differ.
+
+### The rollback claim, confirmed for pairs 3–5
+
+§4's claim — *both apps keep working if only one side has switched, because the collection is the
+contract* — holds unconditionally for these three. It was verified mechanically, not argued: each
+model was built from `git show HEAD:<path>` under a temporary model name and compared to the
+switched model on path set, per-path description (type, enum, default, required, index/unique/sparse
+flags, min/max/maxlength), normalized index list, schema options, and the statics and methods key
+sets. All three came back **identical**.
+
+| | `Medication` | `LoginStreak` | `WeightGoals` |
+|---|---|---|---|
+| Collection, both sides | `medications` | `loginstreaks` | `weightgoals` |
+| Indexes, both sides | `{user_id:1}`, `{med_type:1}`, `{rxcui:1}`, `{user_id:1, display_name:1}` | `{user_id:1}` ×2 (the duplicate) | `{user_id:1}`, `{is_active:1}`, `{user_id:1, is_active:1}` |
+| `unique` / `sparse` / TTL anywhere | none | none | none |
+| Paths added / removed / retyped / re-defaulted | none | none | none |
+
+No `unique` flag anywhere in the three, so §4's `FoodItem` caveat about redeploying both processes
+together does not apply here. The shared definitions are byte-equivalent to what both sides already
+declared, so a half-switched deploy is indistinguishable at the database level and either app can be
+deployed or rolled back alone, in either order.
+
+**The production image resolves the new subpaths.** `docker build -f apps/fitnessgeek/Dockerfile .`
+then a `--network none` run: the app boots, mounts routes, and dies at `MongoDB connection failed` —
+not at an import. Importing the three models inside the image returns `medications`/`loginstreaks`/
+`weightgoals`, 23/11/10 paths, the full index lists above, `med_type` enum intact, `recordLogin`
+present, `WeightGoals`' three statics present, and the rewired zod validator accepting a
+`times_of_day: ['bedtime']`, `days_supply: 3650` payload. The image was removed afterwards.
+
+### Carry-forward for pairs 6–10
+
+1. **Read the whole model file, not §1a's row.** Three pairs, three under-reported things: an
+   instance method, an asymmetric timestamp rename, and a doubled index. §1a's field-set and index
+   columns have been right five times out of five; nothing else in it has been.
+2. **Grep for the third copy — then check it is the same collection.** `validation/schemas/` turned
+   up a real third copy for `Medication` and a convincing false positive for `WeightGoals`
+   (`settings.js` validating `UserSettings.weight_goal`). Pair 6 (`NutritionGoals`) walks straight
+   into the same trap and §4 already warns about it: `UserSettings.nutrition_goal` is a different
+   document, and `DailySummary.updateFromLogs` reads the *settings* one.
+3. **Two enum copies are still outstanding and both are cheap.** `models/MedicationLog.js:3` and the
+   two inline `['rx','otc','supplement']` ternaries in `routes/medicationRoutes.js`. Neither is a
+   two-writer hazard, so neither blocked this pass; fold them into whichever commit next touches
+   those files.
+4. **Statics policy survived first contact.** Pair 5 was the first pair where the divergence was
+   real and load-bearing (three guarded statics vs three unguarded), and "leave them app-side" cost
+   nothing and needed no negotiation. Expect the same for pair 6 (`NutritionGoals`, the same three
+   `requireUser` guards) and pair 7 (`Meal`, where C4 makes it the *only* safe answer).
+5. **Instance methods are the exception to "statics stay."** The rule is not "behaviour stays
+   app-side" — it is *does this mutate declared paths?* `recordLogin` does, so it moved; the
+   `requireUser` guards don't, so they stayed. `FoodItem.findOrCreate` (pair 8) is a static that
+   fails the first test but passes the spirit of the second — §4 already carves it out, and pair 4's
+   split is the precedent for how to carve it: move the logic, export the pure part by name so a
+   test can call it.
+6. **§6's estimates are now clearly high for Tiers 1–2.** Pairs 3–5 together, including the
+   validation rewire, two new harness features, three behaviour describes, a full image build and
+   the HEAD-baseline verification, came in far under the 6 h §6 budgets. The judgment-heavy pairs
+   (8–10) are still where the time is; nothing here changes that.
+
+---
+
+*Written 2026-09-05. Companion to `apps/fitnessgeek/DOCS/USER_SETTINGS_SCHEMA.md` (the shared-schema
+index) and `DOCS/SUITE_TODO.md` item 4.*

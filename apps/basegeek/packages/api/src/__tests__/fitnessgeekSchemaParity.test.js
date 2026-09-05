@@ -44,6 +44,30 @@ const { default: BloodPressureRest } = await import(
 );
 const { default: bpShared } = await import('@geeksuite/schemas/fitnessgeek/bloodPressure');
 
+const { default: MedicationGraphQL } = await import(
+  '../graphql/fitnessgeek/models/Medication.js'
+);
+const { default: MedicationRest } = await import(
+  '../../../../../fitnessgeek/backend/src/models/Medication.js'
+);
+const { default: medicationShared } = await import('@geeksuite/schemas/fitnessgeek/medication');
+
+const { default: LoginStreakGraphQL } = await import(
+  '../graphql/fitnessgeek/models/LoginStreak.js'
+);
+const { default: LoginStreakRest } = await import(
+  '../../../../../fitnessgeek/backend/src/models/LoginStreak.js'
+);
+const { default: loginStreakShared } = await import('@geeksuite/schemas/fitnessgeek/loginStreak');
+
+const { default: WeightGoalsGraphQL } = await import(
+  '../graphql/fitnessgeek/models/WeightGoals.js'
+);
+const { default: WeightGoalsRest } = await import(
+  '../../../../../fitnessgeek/backend/src/models/WeightGoals.js'
+);
+const { default: weightGoalsShared } = await import('@geeksuite/schemas/fitnessgeek/weightGoals');
+
 const OWNER = String(new mongoose.Types.ObjectId());
 
 const PAIRS = [
@@ -62,6 +86,8 @@ const PAIRS = [
       'updated_at',
     ],
     expectedVirtuals: ['formatted_date'],
+    serializesVirtuals: true,
+    ownerField: 'userId',
     // A document each side must accept and persist whole.
     doc: () => ({
       userId: OWNER,
@@ -88,6 +114,8 @@ const PAIRS = [
       'updated_at',
     ],
     expectedVirtuals: ['formatted_date', 'status'],
+    serializesVirtuals: true,
+    ownerField: 'userId',
     doc: () => ({
       userId: OWNER,
       systolic: 128,
@@ -98,7 +126,131 @@ const PAIRS = [
     }),
     probe: (doc) => ({ pulse: doc.pulse, notes: doc.notes }),
   },
+  {
+    name: 'Medication',
+    Rest: MedicationRest,
+    GraphQL: MedicationGraphQL,
+    createSchema: medicationShared.createMedicationSchema,
+    // `updatedAt` (camel) alongside `created_at` (snake) is what both shipped
+    // copies declared. See the shared module's header before "fixing" it.
+    expectedPaths: [
+      'user_id',
+      'display_name',
+      'is_supplement',
+      'med_type',
+      'rxcui',
+      'ingredient_name',
+      'brand_name',
+      'form',
+      'route',
+      'strength',
+      'dose_value',
+      'dose_unit',
+      'sig',
+      'times_of_day',
+      'suggested_indications',
+      'user_indications',
+      'supply_start_date',
+      'days_supply',
+      'notes',
+      'created_at',
+      'updatedAt',
+    ],
+    // No virtual is declared; both copies still pass `virtuals: true`, so
+    // mongoose's automatic `id` is serialized and nothing else is.
+    expectedVirtuals: [],
+    serializesVirtuals: true,
+    ownerField: 'user_id',
+    doc: () => ({
+      user_id: OWNER,
+      display_name: 'Metformin 500mg',
+      med_type: 'rx',
+      rxcui: '860975',
+      times_of_day: ['morning', 'bedtime'],
+      user_indications: ['type 2 diabetes'],
+      supply_start_date: new Date('2026-09-01T00:00:00.000Z'),
+      days_supply: 90,
+      notes: 'post-consolidation probe',
+    }),
+    // times_of_day and days_supply are the ones a drifted copy would eat.
+    probe: (doc) => ({
+      times_of_day: [...doc.times_of_day],
+      days_supply: doc.days_supply,
+      rxcui: doc.rxcui,
+      notes: doc.notes,
+    }),
+  },
+  {
+    name: 'LoginStreak',
+    Rest: LoginStreakRest,
+    GraphQL: LoginStreakGraphQL,
+    createSchema: loginStreakShared.createLoginStreakSchema,
+    // Four timestamp paths: `created_at`/`updated_at` by hand, plus
+    // `createdAt`/`updatedAt` from `timestamps: true`. Both copies did this.
+    expectedPaths: [
+      'user_id',
+      'current_streak',
+      'longest_streak',
+      'last_login_date',
+      'streak_start_date',
+      'created_at',
+      'updated_at',
+      'createdAt',
+      'updatedAt',
+    ],
+    expectedVirtuals: [],
+    serializesVirtuals: false,
+    ownerField: 'user_id',
+    doc: () => ({
+      user_id: OWNER,
+      current_streak: 6,
+      longest_streak: 11,
+      last_login_date: new Date('2026-09-05T00:00:00.000Z'),
+      streak_start_date: new Date('2026-08-31T00:00:00.000Z'),
+    }),
+    probe: (doc) => ({
+      current_streak: doc.current_streak,
+      longest_streak: doc.longest_streak,
+      streak_start_date: doc.streak_start_date,
+    }),
+  },
+  {
+    name: 'WeightGoals',
+    Rest: WeightGoalsRest,
+    GraphQL: WeightGoalsGraphQL,
+    createSchema: weightGoalsShared.createWeightGoalsSchema,
+    expectedPaths: [
+      'user_id',
+      'startWeight',
+      'targetWeight',
+      'startDate',
+      'goalDate',
+      'is_active',
+      'created_at',
+      'updated_at',
+    ],
+    expectedVirtuals: [],
+    serializesVirtuals: false,
+    ownerField: 'user_id',
+    doc: () => ({
+      user_id: OWNER,
+      startWeight: 212.5,
+      targetWeight: 185,
+      startDate: new Date('2026-09-01T00:00:00.000Z'),
+      goalDate: new Date('2026-12-01T00:00:00.000Z'),
+      is_active: true,
+    }),
+    probe: (doc) => ({
+      startWeight: doc.startWeight,
+      targetWeight: doc.targetWeight,
+      goalDate: doc.goalDate,
+      is_active: doc.is_active,
+    }),
+  },
 ];
+
+/** The filter that scopes a pair's probe rows to this run's owner. */
+const ownerFilter = (pair) => ({ [pair.ownerField]: OWNER });
 
 // ---------------------------------------------------------------------------
 // Helpers (lifted verbatim from userSettingsSchemaParity.test.js where they
@@ -205,9 +357,16 @@ describe.each(PAIRS.map((p) => [p.name, p]))(
       expect(virtuals(pair.Rest)).toEqual([...pair.expectedVirtuals].sort());
       expect(virtuals(pair.GraphQL)).toEqual([...pair.expectedVirtuals].sort());
 
+      // Which pairs opt into virtual serialization is itself part of the wire
+      // contract, so assert the shipped answer either way.
       for (const m of [pair.Rest, pair.GraphQL]) {
-        expect(m.schema.options.toJSON).toEqual({ virtuals: true });
-        expect(m.schema.options.toObject).toEqual({ virtuals: true });
+        if (pair.serializesVirtuals) {
+          expect(m.schema.options.toJSON).toEqual({ virtuals: true });
+          expect(m.schema.options.toObject).toEqual({ virtuals: true });
+        } else {
+          expect(m.schema.options.toJSON).toBeUndefined();
+          expect(m.schema.options.toObject).toBeUndefined();
+        }
       }
     });
   }
@@ -299,7 +458,7 @@ describe.each(PAIRS.map((p) => [p.name, p]))(
     });
 
     afterEach(async () => {
-      await pair.GraphQL.deleteMany({ userId: OWNER });
+      await pair.GraphQL.deleteMany(ownerFilter(pair));
     });
 
     test('both models resolve to the same collection', () => {
@@ -312,7 +471,7 @@ describe.each(PAIRS.map((p) => [p.name, p]))(
       const doc = pair.doc();
       await RestSide.create(doc);
 
-      const after = await pair.GraphQL.findOne({ userId: OWNER }).lean();
+      const after = await pair.GraphQL.findOne(ownerFilter(pair)).lean();
       expect(after).toBeTruthy();
       expect(pair.probe(after)).toEqual(pair.probe(doc));
     });
@@ -321,7 +480,7 @@ describe.each(PAIRS.map((p) => [p.name, p]))(
       const doc = pair.doc();
       await pair.GraphQL.create(doc);
 
-      const after = await RestSide.findOne({ userId: OWNER }).lean();
+      const after = await RestSide.findOne(ownerFilter(pair)).lean();
       expect(after).toBeTruthy();
       expect(pair.probe(after)).toEqual(pair.probe(doc));
     });
@@ -330,14 +489,193 @@ describe.each(PAIRS.map((p) => [p.name, p]))(
       // If this ever fails, strict mode is off and the two tests above prove
       // nothing — they would pass no matter how far the schemas drifted.
       await pair.GraphQL.findOneAndUpdate(
-        { userId: OWNER },
+        ownerFilter(pair),
         { $set: { ...pair.doc(), not_a_real_field: 'nope' } },
         { upsert: true, new: true }
       );
 
-      const after = await pair.GraphQL.findOne({ userId: OWNER }).lean();
+      const after = await pair.GraphQL.findOne(ownerFilter(pair)).lean();
       expect(after).toBeTruthy();
       expect(after.not_a_real_field).toBeUndefined();
     });
   }
 );
+
+// ---------------------------------------------------------------------------
+// Medication — the enums and bounds, enforced by both models
+// ---------------------------------------------------------------------------
+
+describe('Medication enums and bounds', () => {
+  const { MED_TIME_OF_DAY, MED_TYPES, medicationBounds } = medicationShared;
+
+  test('both models declare the shared enums, not a local copy', () => {
+    for (const Model of [MedicationRest, MedicationGraphQL]) {
+      const p = Model.schema.paths;
+      expect(p.med_type.enumValues).toEqual([...MED_TYPES]);
+      expect(p.med_type.options.default).toBe('rx');
+      expect(p.times_of_day.caster.enumValues).toEqual([...MED_TIME_OF_DAY]);
+    }
+  });
+
+  test('both models enforce the shared numeric bounds', () => {
+    const { days_supply: DS, notes: NOTES } = medicationBounds;
+    for (const Model of [MedicationRest, MedicationGraphQL]) {
+      const p = Model.schema.paths;
+      expect([p.days_supply.options.min, p.days_supply.options.max]).toEqual([DS.min, DS.max]);
+      expect(p.notes.options.maxlength).toBe(NOTES.maxlength);
+    }
+  });
+
+  test('an out-of-enum med_type is rejected by both, not silently coerced', () => {
+    for (const Model of [MedicationRest, MedicationGraphQL]) {
+      const err = new Model({
+        user_id: OWNER,
+        display_name: 'X',
+        med_type: 'prescription',
+      }).validateSync();
+      expect(err && err.errors.med_type).toBeTruthy();
+    }
+  });
+
+  test('an out-of-enum times_of_day slot is rejected by both', () => {
+    for (const Model of [MedicationRest, MedicationGraphQL]) {
+      const err = new Model({
+        user_id: OWNER,
+        display_name: 'X',
+        times_of_day: ['noon'],
+      }).validateSync();
+      expect(err).toBeTruthy();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// LoginStreak — the shared instance method, against a real collection
+// ---------------------------------------------------------------------------
+
+describe('LoginStreak recordLogin (shared instance method)', () => {
+  const { applyLoginToStreak } = loginStreakShared;
+  const day = (y, m, d) => new Date(Date.UTC(y, m, d));
+  const todayUtc = () => {
+    const n = new Date();
+    return day(n.getFullYear(), n.getMonth(), n.getDate());
+  };
+
+  afterEach(async () => {
+    await LoginStreakGraphQL.deleteMany({ user_id: OWNER });
+  });
+
+  test('both models carry it, from the same implementation', () => {
+    // Two separate `createLoginStreakSchema(mongoose)` calls, so these are two
+    // function objects — but they are the same source, because they come from
+    // the one factory. That is the property worth asserting: not that a method
+    // by this name exists on both, but that neither side wrote its own.
+    expect(typeof LoginStreakRest.schema.methods.recordLogin).toBe('function');
+    expect(String(LoginStreakGraphQL.schema.methods.recordLogin)).toBe(
+      String(LoginStreakRest.schema.methods.recordLogin)
+    );
+    expect(String(LoginStreakRest.schema.methods.recordLogin)).toContain('applyLoginToStreak');
+  });
+
+  test('it persists the incremented streak through the real collection', async () => {
+    const doc = await LoginStreakGraphQL.create({
+      user_id: OWNER,
+      current_streak: 3,
+      longest_streak: 3,
+      last_login_date: new Date(todayUtc().getTime() - 24 * 60 * 60 * 1000),
+    });
+
+    await doc.recordLogin();
+
+    const after = await LoginStreakGraphQL.findOne({ user_id: OWNER }).lean();
+    expect(after.current_streak).toBe(4);
+    expect(after.longest_streak).toBe(4);
+    expect(new Date(after.last_login_date)).toEqual(todayUtc());
+  });
+
+  test('a gap resets it, and the reset persists', async () => {
+    const doc = await LoginStreakGraphQL.create({
+      user_id: OWNER,
+      current_streak: 9,
+      longest_streak: 9,
+      last_login_date: day(2026, 0, 1),
+    });
+
+    await doc.recordLogin();
+
+    const after = await LoginStreakGraphQL.findOne({ user_id: OWNER }).lean();
+    expect(after.current_streak).toBe(1);
+    expect(after.longest_streak).toBe(9);
+  });
+
+  test('the exported arithmetic matches what the method does', () => {
+    // `applyLoginToStreak` is what the hermetic fitnessgeek suite asserts
+    // against; this proves it is the same code the method runs.
+    const plain = {
+      current_streak: 3,
+      longest_streak: 3,
+      last_login_date: new Date(todayUtc().getTime() - 24 * 60 * 60 * 1000),
+      streak_start_date: null,
+    };
+    applyLoginToStreak(plain);
+    expect(plain.current_streak).toBe(4);
+    expect(plain.last_login_date).toEqual(todayUtc());
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The statics divergence is deliberate, and it survived the move
+// ---------------------------------------------------------------------------
+
+describe('ownership guards stayed app-side (statics policy)', () => {
+  // DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md §3: fields, indexes, virtuals and
+  // instance methods move into @geeksuite/schemas; statics do not, because the
+  // gateway fails closed on an unscoped query while fitnessgeek's callers are
+  // already past auth. Statics don't affect `schema.paths`, so the two writers
+  // are free to disagree. These assertions are what makes that a decision
+  // rather than an accident.
+  let WeightGoalsRestSide;
+
+  beforeAll(() => {
+    // fitnessgeek's own schema — statics included, since they live on the
+    // schema — bound to the in-memory connection on the same collection.
+    WeightGoalsRestSide = WeightGoalsGraphQL.db.model(
+      'WeightGoalsGuardProbe',
+      WeightGoalsRest.schema,
+      WeightGoalsGraphQL.collection.name
+    );
+  });
+
+  test('the gateway refuses an unscoped getOrCreateStreak', async () => {
+    await expect(LoginStreakGraphQL.getOrCreateStreak(undefined)).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    });
+  });
+
+  test.each(['getActiveWeightGoals', 'createWeightGoals', 'updateWeightGoals'])(
+    'the gateway refuses an unscoped %s',
+    async (name) => {
+      await expect(WeightGoalsGraphQL[name](undefined, {})).rejects.toMatchObject({
+        code: 'UNAUTHORIZED',
+      });
+    }
+  );
+
+  test('fitnessgeek’s copy is unguarded, deliberately, and still works', async () => {
+    // Not a bug to fix here: every fitnessgeek caller is post-auth. Tightening
+    // it is the hardening follow-up the plan names (PRE-4), and it belongs in
+    // a commit whose title says so.
+    await expect(WeightGoalsRestSide.getActiveWeightGoals(undefined)).resolves.toBeNull();
+  });
+
+  test('the two sides really are separate implementations', () => {
+    expect(LoginStreakGraphQL.schema.statics.getOrCreateStreak).not.toBe(
+      LoginStreakRest.schema.statics.getOrCreateStreak
+    );
+    for (const name of ['getActiveWeightGoals', 'createWeightGoals', 'updateWeightGoals']) {
+      expect(WeightGoalsGraphQL.schema.statics[name]).not.toBe(
+        WeightGoalsRest.schema.statics[name]
+      );
+    }
+  });
+});

@@ -1,43 +1,28 @@
 import mongoose from 'mongoose';
+import { createWeightGoalsSchema } from '@geeksuite/schemas/fitnessgeek/weightGoals';
 
-const weightGoalsSchema = new mongoose.Schema({
-  user_id: {
-    type: String,
-    required: true,
-    index: true
-  },
-  startWeight: {
-    type: Number,
-    required: true,
-    min: 0
-  },
-  targetWeight: {
-    type: Number,
-    required: true,
-    min: 0
-  },
-  startDate: {
-    type: Date,
-    required: true,
-    default: Date.now
-  },
-  goalDate: {
-    type: Date
-  },
-  is_active: {
-    type: Boolean,
-    default: true,
-    index: true
-  }
-}, {
-  timestamps: {
-    createdAt: 'created_at',
-    updatedAt: 'updated_at'
-  }
-});
+// The field set and both indexes live in @geeksuite/schemas so that this model
+// and basegeek's GraphQL copy
+// (apps/basegeek/packages/api/src/graphql/fitnessgeek/models/WeightGoals.js)
+// cannot drift. Both point at the `weightgoals` collection in the same
+// database — basegeek is the only writer, this side reads through
+// src/services/aiInsightsService.js — and mongoose strict mode silently drops
+// paths one side doesn't know about. See the shared module's header and
+// DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md.
+//
+// This is NOT `UserSettings.weight_goal`. That is a nested sub-document on a
+// different collection with different bounds and extra fields; the shared
+// module's header spells out the difference. Do not unify them.
+//
+// Do NOT add fields here. Add them to the shared module; the tripwire tests in
+// both suites fail if this model stops matching it.
+const weightGoalsSchema = createWeightGoalsSchema(mongoose);
 
-// Compound index for user and active status
-weightGoalsSchema.index({ user_id: 1, is_active: 1 });
+// Statics stay app-side. basegeek's copies of these three open with
+// `requireUser(userId)` — its fail-closed ownership posture — and this side's
+// callers are already past auth, so the two writers deliberately disagree.
+// Statics don't affect `schema.paths`, so that disagreement cannot cause the
+// strict-mode data loss the shared module exists to prevent.
 
 // Static method to get active weight goals for user
 weightGoalsSchema.statics.getActiveWeightGoals = async function(userId) {

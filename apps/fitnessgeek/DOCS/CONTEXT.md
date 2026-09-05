@@ -32,7 +32,7 @@ The backend depends on five `workspace:*` packages:
 |---|---|
 | `@geeksuite/crypto-vault` | AES-256-GCM for the Garmin password at rest (`KEY_VAULT_SECRET`) |
 | `@geeksuite/logger` | pino logger + `createHttpLogger` |
-| `@geeksuite/schemas` | the shared field sets for every fitnessgeek collection with two writers — `UserSettings`, `Weight`, `BloodPressure` as of 2026-09-05. Index and conventions in `USER_SETTINGS_SCHEMA.md`; the remaining eight pairs in `DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md` |
+| `@geeksuite/schemas` | the shared field sets for every fitnessgeek collection with two writers — `UserSettings`, `Weight`, `BloodPressure`, `Medication`, `LoginStreak`, `WeightGoals` as of 2026-09-05. It also owns `Medication`'s enums and bounds and `BloodPressure`'s bounds, which the zod validators in `src/validation/schemas/` import instead of restating. Index and conventions in `USER_SETTINGS_SCHEMA.md`; the remaining five pairs in `DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md` |
 | `@geeksuite/user` | `attachUser()`, `csrfGuard()`, `meHandler()` |
 | `@geeksuite/utils` | **date handling** — `toUtcMidnight` and friends |
 

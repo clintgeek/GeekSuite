@@ -2,44 +2,32 @@ import mongoose from 'mongoose';
 import { getAppConnection } from '../../shared/appConnections.js';
 import { requireUser } from '../ownership.js';
 
+// The field set, the index and the `recordLogin` instance method live in
+// @geeksuite/schemas so that this model and fitnessgeek's REST copy
+// (apps/fitnessgeek/backend/src/models/LoginStreak.js) cannot drift. Both
+// write the `loginstreaks` collection in the same database, and mongoose
+// strict mode silently drops paths one side doesn't know about. See the shared
+// module's header and DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md.
+//
+// Do NOT add fields here. Add them to the shared module (and to typeDefs.js if
+// they should cross GraphQL); the tripwire tests in both suites fail if this
+// model stops matching the shared definition.
+//
+// Default import + destructure: the shared module is CommonJS (no build step,
+// `require`-able and `import`-able by both consumers), and this is the interop
+// form that works identically under Node ESM and jest's
+// --experimental-vm-modules.
+import loginStreakSchemaModule from '@geeksuite/schemas/fitnessgeek/loginStreak';
+
+const { createLoginStreakSchema } = loginStreakSchemaModule;
+
 const fitnessConn = getAppConnection('fitnessgeek');
 
-const loginStreakSchema = new mongoose.Schema({
-  user_id: {
-    type: String,
-    required: true,
-    index: true
-  },
-  current_streak: {
-    type: Number,
-    default: 0
-  },
-  longest_streak: {
-    type: Number,
-    default: 0
-  },
-  last_login_date: {
-    type: Date,
-    default: null
-  },
-  streak_start_date: {
-    type: Date,
-    default: null
-  },
-  created_at: {
-    type: Date,
-    default: Date.now
-  },
-  updated_at: {
-    type: Date,
-    default: Date.now
-  }
-}, {
-  timestamps: true
-});
+const loginStreakSchema = createLoginStreakSchema(mongoose);
 
-// Index for efficient queries
-loginStreakSchema.index({ user_id: 1 });
+// The ownership guard stays here, not in the shared module: this gateway fails
+// closed on an unscoped query, fitnessgeek's callers are already past auth, and
+// statics don't affect `schema.paths`, so the two writers are free to disagree.
 
 // Static method to get or create login streak for user
 loginStreakSchema.statics.getOrCreateStreak = async function(userId) {
@@ -58,48 +46,6 @@ loginStreakSchema.statics.getOrCreateStreak = async function(userId) {
   }
 
   return streak;
-};
-
-// Method to record a login and update streak
-loginStreakSchema.methods.recordLogin = async function() {
-  // "Today" is the user's local calendar day, stored as UTC midnight so it
-  // lines up with the UTC-midnight dates read back elsewhere. Truncating the
-  // instant with setUTCHours would roll to tomorrow after ~18:00 US-Central.
-  const now = new Date();
-  const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
-
-  const lastLogin = this.last_login_date ? new Date(this.last_login_date) : null;
-  if (lastLogin) {
-    lastLogin.setUTCHours(0, 0, 0, 0); // Start of day (already UTC midnight)
-  }
-
-  const yesterday = new Date(today);
-  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-
-  // Check if this is a consecutive day
-  if (!lastLogin || lastLogin.getTime() === yesterday.getTime()) {
-    // Consecutive day - increment streak
-    this.current_streak += 1;
-
-    // Update longest streak if current is longer
-    if (this.current_streak > this.longest_streak) {
-      this.longest_streak = this.current_streak;
-    }
-
-    // Set streak start date if this is the first day
-    if (this.current_streak === 1) {
-      this.streak_start_date = today;
-    }
-  } else if (lastLogin && lastLogin.getTime() !== today.getTime()) {
-    // Not consecutive - reset streak
-    this.current_streak = 1;
-    this.streak_start_date = today;
-  }
-
-  this.last_login_date = today;
-  this.updated_at = new Date();
-
-  return await this.save();
 };
 
 export default fitnessConn.model('LoginStreak', loginStreakSchema);

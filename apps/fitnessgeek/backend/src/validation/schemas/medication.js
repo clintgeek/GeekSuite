@@ -1,8 +1,18 @@
 import { z } from 'zod';
+import {
+  MED_TIME_OF_DAY,
+  MED_TYPES,
+  medicationBounds,
+} from '@geeksuite/schemas/fitnessgeek/medication';
 import { logDateSchema } from './common.js';
 
-const MED_TYPES = ['rx', 'otc', 'supplement'];
-const TIME_OF_DAY = ['morning', 'afternoon', 'evening', 'bedtime'];
+// The enums and the numeric bounds come from the schema itself rather than
+// being restated here. This file used to declare its own `MED_TYPES` and
+// `TIME_OF_DAY` arrays and its own `days_supply`/`notes` numbers — a hand-sync
+// in a different language, the same failure mode consolidation is meant to
+// end. @geeksuite/schemas is now the one place they live, for both the
+// Mongoose validators and this zod layer.
+const { days_supply: DAYS_SUPPLY, notes: NOTES } = medicationBounds;
 
 // The controller lowercases and validates med_type itself
 // (`['rx','otc','supplement'].includes((body.med_type||'').toLowerCase())`),
@@ -30,12 +40,12 @@ const baseFields = {
   dose_value: z.coerce.number().min(0).max(100000).nullable().optional(),
   dose_unit: nullableString(50),
   sig: nullableString(500),
-  times_of_day: z.array(z.enum(TIME_OF_DAY)).max(TIME_OF_DAY.length).optional(),
+  times_of_day: z.array(z.enum(MED_TIME_OF_DAY)).max(MED_TIME_OF_DAY.length).optional(),
   suggested_indications: z.array(z.string().max(200)).max(50).optional(),
   user_indications: z.array(z.string().max(200)).max(50).optional(),
   supply_start_date: logDateSchema.nullable().optional(),
-  days_supply: z.coerce.number().int().min(1).max(3650).nullable().optional(),
-  notes: z.string().max(500).optional(),
+  days_supply: z.coerce.number().int().min(DAYS_SUPPLY.min).max(DAYS_SUPPLY.max).nullable().optional(),
+  notes: z.string().max(NOTES.maxlength).optional(),
 };
 
 // POST / requires display_name (route: `if (!payload.display_name) return 400`).

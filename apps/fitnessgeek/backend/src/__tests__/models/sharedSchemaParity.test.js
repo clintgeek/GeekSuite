@@ -46,10 +46,25 @@ import {
   bloodPressureBounds,
   classifyBloodPressure,
 } from '@geeksuite/schemas/fitnessgeek/bloodPressure';
+import {
+  createMedicationSchema,
+  MED_TIME_OF_DAY,
+  MED_TYPES,
+  medicationBounds,
+} from '@geeksuite/schemas/fitnessgeek/medication';
+import {
+  createLoginStreakSchema,
+  applyLoginToStreak,
+} from '@geeksuite/schemas/fitnessgeek/loginStreak';
+import { createWeightGoalsSchema } from '@geeksuite/schemas/fitnessgeek/weightGoals';
 
 import Weight from '../../models/Weight.js';
 import BloodPressure from '../../models/BloodPressure.js';
+import Medication from '../../models/Medication.js';
+import LoginStreak from '../../models/LoginStreak.js';
+import WeightGoals from '../../models/WeightGoals.js';
 import { createBPSchema } from '../../validation/schemas/bloodPressure.js';
+import { createMedicationSchema as createMedicationZodSchema } from '../../validation/schemas/medication.js';
 
 // ESM has no __dirname; the source-level checks below resolve sibling files
 // relative to this test file.
@@ -63,6 +78,9 @@ const basegeekModel = (name) =>
 
 // `_id` and `__v` appear only once a schema is compiled into a model.
 const COMPILED_ONLY = new Set(['_id', '__v']);
+// Mongoose's own timestamps plugin installs this on every schema that renames
+// or enables timestamps. It is not ours and it is not a divergence.
+const MONGOOSE_BUILT_IN_METHODS = new Set(['initializeTimestamps']);
 const fieldKeys = (paths) => Object.keys(paths).filter((k) => !COMPILED_ONLY.has(k)).sort();
 
 const PAIRS = [
@@ -75,6 +93,8 @@ const PAIRS = [
     modelFile: '../../models/Weight.js',
     expectedPaths: ['userId', 'weight_value', 'log_date', 'notes', 'created_at', 'updated_at'],
     expectedVirtuals: ['formatted_date'],
+    serializesVirtuals: true,
+    expectedStatics: [],
   },
   {
     name: 'BloodPressure',
@@ -94,6 +114,94 @@ const PAIRS = [
       'updated_at',
     ],
     expectedVirtuals: ['formatted_date', 'status'],
+    serializesVirtuals: true,
+    expectedStatics: [],
+  },
+  {
+    name: 'Medication',
+    Model: Medication,
+    createSchema: createMedicationSchema,
+    factory: 'createMedicationSchema',
+    specifier: '@geeksuite/schemas/fitnessgeek/medication',
+    modelFile: '../../models/Medication.js',
+    // `updatedAt` (camel) is not a typo: this model renames `createdAt` to
+    // `created_at` and leaves `updatedAt` alone. Both shipped copies did, and
+    // that is what is on disk. See the shared module's header.
+    expectedPaths: [
+      'user_id',
+      'display_name',
+      'is_supplement',
+      'med_type',
+      'rxcui',
+      'ingredient_name',
+      'brand_name',
+      'form',
+      'route',
+      'strength',
+      'dose_value',
+      'dose_unit',
+      'sig',
+      'times_of_day',
+      'suggested_indications',
+      'user_indications',
+      'supply_start_date',
+      'days_supply',
+      'notes',
+      'created_at',
+      'updatedAt',
+    ],
+    // No virtual is declared, but both copies pass `virtuals: true` — so
+    // mongoose's automatic `id` virtual is serialized and nothing else is.
+    expectedVirtuals: [],
+    serializesVirtuals: true,
+    expectedStatics: [],
+  },
+  {
+    name: 'LoginStreak',
+    Model: LoginStreak,
+    createSchema: createLoginStreakSchema,
+    factory: 'createLoginStreakSchema',
+    specifier: '@geeksuite/schemas/fitnessgeek/loginStreak',
+    modelFile: '../../models/LoginStreak.js',
+    // Four timestamp paths: `created_at`/`updated_at` are declared by hand and
+    // `createdAt`/`updatedAt` are added by `timestamps: true`. Both shipped
+    // copies did this; see the shared module's header.
+    expectedPaths: [
+      'user_id',
+      'current_streak',
+      'longest_streak',
+      'last_login_date',
+      'streak_start_date',
+      'created_at',
+      'updated_at',
+      'createdAt',
+      'updatedAt',
+    ],
+    expectedVirtuals: [],
+    serializesVirtuals: false,
+    expectedMethods: ['recordLogin'],
+    expectedStatics: ['getOrCreateStreak'],
+  },
+  {
+    name: 'WeightGoals',
+    Model: WeightGoals,
+    createSchema: createWeightGoalsSchema,
+    factory: 'createWeightGoalsSchema',
+    specifier: '@geeksuite/schemas/fitnessgeek/weightGoals',
+    modelFile: '../../models/WeightGoals.js',
+    expectedPaths: [
+      'user_id',
+      'startWeight',
+      'targetWeight',
+      'startDate',
+      'goalDate',
+      'is_active',
+      'created_at',
+      'updated_at',
+    ],
+    expectedVirtuals: [],
+    serializesVirtuals: false,
+    expectedStatics: ['getActiveWeightGoals', 'createWeightGoals', 'updateWeightGoals'],
   },
 ];
 
@@ -141,8 +249,33 @@ describe.each(PAIRS.map((p) => [p.name, p]))(
         .filter((v) => v !== 'id')
         .sort();
       expect(virtuals).toEqual([...pair.expectedVirtuals].sort());
-      expect(pair.Model.schema.options.toJSON).toEqual({ virtuals: true });
-      expect(pair.Model.schema.options.toObject).toEqual({ virtuals: true });
+
+      // Not every pair opts into virtual serialization, and which ones do is
+      // itself part of the wire contract — `Weight`, `BloodPressure` and
+      // `Medication` ship `virtuals: true`, `LoginStreak` and `WeightGoals`
+      // do not. Assert the shipped answer either way rather than assuming one.
+      if (pair.serializesVirtuals) {
+        expect(pair.Model.schema.options.toJSON).toEqual({ virtuals: true });
+        expect(pair.Model.schema.options.toObject).toEqual({ virtuals: true });
+      } else {
+        expect(pair.Model.schema.options.toJSON).toBeUndefined();
+        expect(pair.Model.schema.options.toObject).toBeUndefined();
+      }
+    });
+
+    test('its shared instance methods came across, and its statics stayed here', () => {
+      // Instance methods move into @geeksuite/schemas (they mutate declared
+      // paths, so a divergence corrupts data); statics stay app-side, because
+      // the two writers deliberately disagree about ownership guards and
+      // statics don't affect `schema.paths`.
+      const methods = Object.keys(pair.Model.schema.methods)
+        .filter((m) => !MONGOOSE_BUILT_IN_METHODS.has(m))
+        .sort();
+      expect(methods).toEqual([...(pair.expectedMethods || [])].sort());
+
+      for (const name of pair.expectedStatics || []) {
+        expect(typeof pair.Model[name]).toBe('function');
+      }
     });
 
     test('the model file declares no schema of its own', () => {
@@ -235,5 +368,167 @@ describe('the BloodPressure status virtual and bounds', () => {
     const p = BloodPressure.schema.paths;
     expect([p.systolic.options.min, p.systolic.options.max]).toEqual([SYS.min, SYS.max]);
     expect([p.diastolic.options.min, p.diastolic.options.max]).toEqual([DIA.min, DIA.max]);
+  });
+});
+
+describe('the Medication enums and bounds', () => {
+  test('the zod request validator enforces the shared enums, not its own copies', () => {
+    // src/validation/schemas/medication.js used to declare its own MED_TYPES
+    // and TIME_OF_DAY arrays and its own days_supply/notes numbers. It now
+    // imports them, so this asserts the two really are one thing.
+    const ok = (body) =>
+      createMedicationZodSchema.safeParse({ display_name: 'Metformin', ...body }).success;
+
+    for (const t of MED_TYPES) expect(ok({ med_type: t })).toBe(true);
+    expect(ok({ med_type: 'prescription' })).toBe(false);
+
+    for (const slot of MED_TIME_OF_DAY) expect(ok({ times_of_day: [slot] })).toBe(true);
+    expect(ok({ times_of_day: ['noon'] })).toBe(false);
+    // The array cannot be longer than the enum it draws from.
+    expect(ok({ times_of_day: [...MED_TIME_OF_DAY, 'morning'] })).toBe(false);
+
+    const { days_supply: DS, notes: NOTES } = medicationBounds;
+    expect(ok({ days_supply: DS.min })).toBe(true);
+    expect(ok({ days_supply: DS.max })).toBe(true);
+    expect(ok({ days_supply: DS.min - 1 })).toBe(false);
+    expect(ok({ days_supply: DS.max + 1 })).toBe(false);
+    expect(ok({ notes: 'x'.repeat(NOTES.maxlength) })).toBe(true);
+    expect(ok({ notes: 'x'.repeat(NOTES.maxlength + 1) })).toBe(false);
+  });
+
+  test('and the model enforces exactly the same ones, path for path', () => {
+    const p = Medication.schema.paths;
+    expect(p.med_type.enumValues).toEqual([...MED_TYPES]);
+    expect(p.med_type.options.default).toBe('rx');
+    expect(p.times_of_day.caster.enumValues).toEqual([...MED_TIME_OF_DAY]);
+    expect([p.days_supply.options.min, p.days_supply.options.max]).toEqual([
+      medicationBounds.days_supply.min,
+      medicationBounds.days_supply.max,
+    ]);
+    expect(p.notes.options.maxlength).toBe(medicationBounds.notes.maxlength);
+  });
+
+  test('a document rejects an out-of-enum value rather than storing it', () => {
+    const bad = new Medication({ user_id: 'u1', display_name: 'X', med_type: 'prescription' });
+    const err = bad.validateSync();
+    expect(err && err.errors.med_type).toBeTruthy();
+  });
+});
+
+describe('the LoginStreak arithmetic', () => {
+  // `recordLogin` calls `this.save()`, so the shared module exports the same
+  // arithmetic as `applyLoginToStreak(streak, now)` — which is what lets this
+  // hermetic suite (no Mongo) assert the branches at all.
+  const NOW = new Date(2026, 8, 5, 19, 30); // local 2026-09-05 19:30
+  const day = (y, m, d) => new Date(Date.UTC(y, m, d));
+
+  const base = (over = {}) => ({
+    current_streak: 0,
+    longest_streak: 0,
+    last_login_date: null,
+    streak_start_date: null,
+    updated_at: null,
+    ...over,
+  });
+
+  test('a first-ever login starts the streak at 1 and seeds the start date', () => {
+    const s = applyLoginToStreak(base(), NOW);
+    expect(s.current_streak).toBe(1);
+    expect(s.longest_streak).toBe(1);
+    expect(s.streak_start_date).toEqual(day(2026, 8, 5));
+    expect(s.last_login_date).toEqual(day(2026, 8, 5));
+  });
+
+  test('a login the day after yesterday increments and keeps the start date', () => {
+    const started = day(2026, 8, 1);
+    const s = applyLoginToStreak(
+      base({ current_streak: 4, longest_streak: 9, last_login_date: day(2026, 8, 4), streak_start_date: started }),
+      NOW
+    );
+    expect(s.current_streak).toBe(5);
+    expect(s.longest_streak).toBe(9); // not beaten yet
+    expect(s.streak_start_date).toEqual(started);
+  });
+
+  test('beating the record raises longest_streak too', () => {
+    const s = applyLoginToStreak(
+      base({ current_streak: 9, longest_streak: 9, last_login_date: day(2026, 8, 4) }),
+      NOW
+    );
+    expect(s.current_streak).toBe(10);
+    expect(s.longest_streak).toBe(10);
+  });
+
+  test('a gap resets to 1 and re-seeds the start date, leaving longest alone', () => {
+    const s = applyLoginToStreak(
+      base({ current_streak: 7, longest_streak: 7, last_login_date: day(2026, 8, 1) }),
+      NOW
+    );
+    expect(s.current_streak).toBe(1);
+    expect(s.longest_streak).toBe(7);
+    expect(s.streak_start_date).toEqual(day(2026, 8, 5));
+  });
+
+  test('a second login the same day changes neither counter', () => {
+    const started = day(2026, 8, 1);
+    const s = applyLoginToStreak(
+      base({ current_streak: 5, longest_streak: 5, last_login_date: day(2026, 8, 5), streak_start_date: started }),
+      NOW
+    );
+    expect(s.current_streak).toBe(5);
+    expect(s.longest_streak).toBe(5);
+    expect(s.streak_start_date).toEqual(started);
+    expect(s.last_login_date).toEqual(day(2026, 8, 5));
+  });
+
+  test('"today" is the LOCAL calendar day stored at UTC midnight, not a UTC truncation', () => {
+    // The regression this guards: `setUTCHours(0,0,0,0)` on the raw instant
+    // would roll the day forward after ~18:00 US-Central. 19:30 local on the
+    // 5th must still be the 5th.
+    const s = applyLoginToStreak(base(), new Date(2026, 8, 5, 19, 30));
+    expect(s.last_login_date.toISOString()).toBe('2026-09-05T00:00:00.000Z');
+  });
+
+  test('the real model carries recordLogin and it is the shared implementation', () => {
+    const doc = new LoginStreak({ user_id: 'u1' });
+    expect(typeof doc.recordLogin).toBe('function');
+    // Same arithmetic, applied to the document directly (no save, no Mongo).
+    applyLoginToStreak(doc, NOW);
+    expect(doc.current_streak).toBe(1);
+    expect(doc.last_login_date).toEqual(day(2026, 8, 5));
+  });
+});
+
+describe("the deliberate statics divergence is still deliberate", () => {
+  // §3 of DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md: statics stay app-side
+  // precisely so the gateway can fail closed while this side stays post-auth.
+  // If someone "helpfully" unifies them, that is a behaviour change and it
+  // should have to delete these assertions to ship.
+  test.each([
+    ['LoginStreak', ['getOrCreateStreak']],
+    ['WeightGoals', ['getActiveWeightGoals', 'createWeightGoals', 'updateWeightGoals']],
+  ])("basegeek's %s still guards its statics with requireUser", (name, statics) => {
+    const src = fs.readFileSync(basegeekModel(name), 'utf8');
+    expect(src).toContain("from '../ownership.js'");
+    for (const s of statics) {
+      expect(src).toContain(`statics.${s}`);
+      // The guard is the first statement of each.
+      expect(src).toMatch(new RegExp(`statics\\.${s} = async function[^{]*\\{\\s*requireUser\\(`));
+    }
+  });
+
+  test.each([
+    ['LoginStreak', '../../models/LoginStreak.js'],
+    ['WeightGoals', '../../models/WeightGoals.js'],
+  ])('fitnessgeek %s keeps its own unguarded statics', (name, file) => {
+    const raw = fs.readFileSync(path.resolve(__dirname, file), 'utf8');
+    // The wrappers explain the divergence in prose, so strip comments before
+    // asserting there is no actual guard — otherwise the explanation trips it.
+    const code = raw
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('//'))
+      .join('\n');
+    expect(code).not.toContain('ownership.js');
+    expect(code).not.toContain('requireUser');
   });
 });

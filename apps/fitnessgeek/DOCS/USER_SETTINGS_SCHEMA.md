@@ -24,6 +24,9 @@ own connection. **Add a field to the shared module, never to a wrapper.**
 | `UserSettings` | `packages/schemas/fitnessgeek/userSettings.js` | `usersettings` | 2026-09-05 | `encryptGarminPassword`, `readGarminPassword`, `attachGarminPasswordEncryption` |
 | `Weight` | `packages/schemas/fitnessgeek/weight.js` | `weights` | 2026-09-05 | — |
 | `BloodPressure` | `packages/schemas/fitnessgeek/bloodPressure.js` | `bloodpressures` | 2026-09-05 | `bloodPressureBounds`, `classifyBloodPressure` |
+| `Medication` | `packages/schemas/fitnessgeek/medication.js` | `medications` | 2026-09-05 | `MED_TIME_OF_DAY`, `MED_TYPES`, `medicationBounds` |
+| `LoginStreak` | `packages/schemas/fitnessgeek/loginStreak.js` | `loginstreaks` | 2026-09-05 | `applyLoginToStreak`, `attachLoginStreakMethods` |
+| `WeightGoals` | `packages/schemas/fitnessgeek/weightGoals.js` | `weightgoals` | 2026-09-05 | — |
 
 The wrappers, per model:
 
@@ -34,9 +37,23 @@ The wrappers, per model:
 | Binding | `mongoose.model('<M>', schema)` (default connection) | `fitnessConn.model('<M>', schema)` where `fitnessConn = getAppConnection('fitnessgeek')` |
 | Statics | its own, post-authentication | its own, `requireUser`-guarded — the gateway is multi-tenant and fails closed |
 
-`Weight` and `BloodPressure` have **no statics on either side**. `UserSettings`
-has `getOrCreate` / `updateSettings` on both, deliberately different — see
-"What deliberately stayed per-model" below.
+Statics and instance methods, per consolidated model:
+
+| Model | Statics (app-side) | Instance methods (shared) |
+|---|---|---|
+| `UserSettings` | `getOrCreate`, `updateSettings` on both, deliberately different | — |
+| `Weight` | none on either side | — |
+| `BloodPressure` | none on either side | — |
+| `Medication` | none on either side | — |
+| `LoginStreak` | `getOrCreateStreak` on both; basegeek's opens with `requireUser` | `recordLogin` |
+| `WeightGoals` | `getActiveWeightGoals`, `createWeightGoals`, `updateWeightGoals` on both; basegeek's all open with `requireUser` | — |
+
+`recordLogin` is the first *instance method* to move into a shared module. It
+mutates four declared paths, so a divergence in it would corrupt a user's
+streak rather than merely throw — which is the same reason fields move. Its
+arithmetic is also exported as `applyLoginToStreak(streak, now)` so it can be
+asserted without a database (the method itself calls `this.save()`), exactly
+as `classifyBloodPressure` is exported for the `status` virtual.
 
 ### Two things that are *not* in the shared modules
 
@@ -58,15 +75,32 @@ has `getOrCreate` / `updateSettings` on both, deliberately different — see
   imported by `apps/fitnessgeek/backend/src/validation/schemas/bloodPressure.js`,
   which used to restate them in zod under a comment promising it mirrored the
   model. One set of numbers, two languages, one source.
+- `Medication`'s two enums and its `days_supply` / `notes` bounds are exported
+  the same way and imported by
+  `apps/fitnessgeek/backend/src/validation/schemas/medication.js`, which used to
+  declare its own `MED_TYPES` and `TIME_OF_DAY` arrays.
+- `Medication` renames `createdAt` → `created_at` but leaves `updatedAt`
+  camelCase. Asymmetric, on disk, and moved verbatim. Every other renaming
+  model uses `updated_at`.
+- `LoginStreak` declares `created_at`/`updated_at` by hand **and** passes
+  `timestamps: true`, so it carries four timestamp paths; and it indexes
+  `user_id` twice (path-level `index: true` plus a `schema.index()` call, which
+  is where the "Duplicate schema index" warning at boot comes from). Both are
+  pre-existing on both sides and moved verbatim — changing either would stop
+  the shared definition being byte-equivalent to what is deployed.
+- `WeightGoals` is **not** `UserSettings.weight_goal`. Two collections describe
+  a weight goal with overlapping field names and different bounds;
+  `routes/goalRoutes.js` reads both and merges them. `validation/schemas/settings.js`
+  validates the *other* one and was deliberately not rewired.
 
 ### The tripwires
 
 | Suite | Covers |
 |---|---|
 | `apps/basegeek/packages/api/src/__tests__/userSettingsSchemaParity.test.js` | `UserSettings` — both real models, path-by-path, plus write-through on in-memory Mongo |
-| `apps/basegeek/packages/api/src/__tests__/fitnessgeekSchemaParity.test.js` | table-driven over `Weight` and `BloodPressure`: paths, per-path type/default/bound/flag, indexes, virtuals, virtual *behaviour*, write-through, and a strict-mode control. **Add pair 3+ as a row here.** |
+| `apps/basegeek/packages/api/src/__tests__/fitnessgeekSchemaParity.test.js` | table-driven over `Weight`, `BloodPressure`, `Medication`, `LoginStreak`, `WeightGoals`: paths, per-path type/default/bound/flag, indexes, virtuals and whether they serialize, virtual *behaviour*, `recordLogin` against a real collection, the `requireUser` divergence, write-through, and a strict-mode control. **Add pair 6+ as a row here.** |
 | `apps/fitnessgeek/backend/src/__tests__/models/userSettingsSchemaParity.test.js` | `UserSettings`, hermetic: model vs shared definition, source-level checks on basegeek's copy, REST allow-list resolution |
-| `apps/fitnessgeek/backend/src/__tests__/models/sharedSchemaParity.test.js` | `Weight` / `BloodPressure`, hermetic: same shape, plus the zod-bounds check and a guard that basegeek's two deleted orphan models stay deleted |
+| `apps/fitnessgeek/backend/src/__tests__/models/sharedSchemaParity.test.js` | `Weight` / `BloodPressure` / `Medication` / `LoginStreak` / `WeightGoals`, hermetic: same shape, plus the zod bounds-and-enum checks, the `applyLoginToStreak` branch cases, an assertion that the ownership guards stayed app-side, and a guard that basegeek's two deleted orphan models stay deleted |
 
 The fitnessgeek suites are hermetic by design and basegeek's models open a
 connection at import time, so the fitnessgeek half does its cross-check at

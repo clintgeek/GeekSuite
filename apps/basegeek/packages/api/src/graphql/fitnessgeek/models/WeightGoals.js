@@ -2,46 +2,36 @@ import mongoose from 'mongoose';
 import { getAppConnection } from '../../shared/appConnections.js';
 import { requireUser } from '../ownership.js';
 
+// The field set and both indexes live in @geeksuite/schemas so that this model
+// and fitnessgeek's REST copy (apps/fitnessgeek/backend/src/models/WeightGoals.js)
+// cannot drift. Both point at the `weightgoals` collection in the same
+// database — this gateway is the only writer, fitnessgeek reads through its
+// aiInsightsService — and mongoose strict mode silently drops paths one side
+// doesn't know about. See the shared module's header and
+// DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md.
+//
+// This is NOT `UserSettings.weight_goal`, which is a nested sub-document on a
+// different collection with different bounds. Do not unify them.
+//
+// Do NOT add fields here. Add them to the shared module (and to typeDefs.js if
+// they should cross GraphQL); the tripwire tests in both suites fail if this
+// model stops matching the shared definition.
+//
+// Default import + destructure: the shared module is CommonJS (no build step,
+// `require`-able and `import`-able by both consumers), and this is the interop
+// form that works identically under Node ESM and jest's
+// --experimental-vm-modules.
+import weightGoalsSchemaModule from '@geeksuite/schemas/fitnessgeek/weightGoals';
+
+const { createWeightGoalsSchema } = weightGoalsSchemaModule;
+
 const fitnessConn = getAppConnection('fitnessgeek');
 
-const weightGoalsSchema = new mongoose.Schema({
-  user_id: {
-    type: String,
-    required: true,
-    index: true
-  },
-  startWeight: {
-    type: Number,
-    required: true,
-    min: 0
-  },
-  targetWeight: {
-    type: Number,
-    required: true,
-    min: 0
-  },
-  startDate: {
-    type: Date,
-    required: true,
-    default: Date.now
-  },
-  goalDate: {
-    type: Date
-  },
-  is_active: {
-    type: Boolean,
-    default: true,
-    index: true
-  }
-}, {
-  timestamps: {
-    createdAt: 'created_at',
-    updatedAt: 'updated_at'
-  }
-});
+const weightGoalsSchema = createWeightGoalsSchema(mongoose);
 
-// Compound index for user and active status
-weightGoalsSchema.index({ user_id: 1, is_active: 1 });
+// The ownership guards stay here, not in the shared module: this gateway fails
+// closed on an unscoped query, fitnessgeek's callers are already past auth, and
+// statics don't affect `schema.paths`, so the two writers are free to disagree.
 
 // Static method to get active weight goals for user
 weightGoalsSchema.statics.getActiveWeightGoals = async function(userId) {
