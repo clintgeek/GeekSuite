@@ -68,10 +68,55 @@ plugins: [{
 
 This is a **mitigation, not the cure**. The cure is the extname-404 guard in the
 server's SPA fallback — a path with a file extension must return 404, not the
-index document. bujogeek, notegeek and bookgeek have it; **fitnessgeek's
-`backend/src/app.js` does not** (verified 2026-09-05: `GET /assets/gone-DEAD.js`
-returns 200 `text/html`). The guard makes the bad response uncacheable; only the
-404 makes the failure honest.
+index document. The guard makes the bad response uncacheable; only the 404
+makes the failure honest.
+
+**Suite requirement, as of 2026-09-05 (Q53): every app is guarded, both ends.**
+Both rules below are mandatory for any app that serves its own SPA and/or ships
+a service worker — not a per-app judgment call.
+
+1. **Every Express SPA fallback must 404 a path with a file extension**, ahead
+   of `res.sendFile(index.html)`, keeping any `/api/*` and `/graphql`
+   passthroughs already in front of it:
+   ```js
+   if (path.extname(req.path)) {
+     return res.status(404).type('text/plain').send('Not found');
+   }
+   ```
+   Present in: `apps/bujogeek/backend/src/app.js`, `apps/notegeek/backend/server.js`,
+   `apps/bookgeek/api/src/server.js`, `apps/fitnessgeek/backend/src/app.js` (fixed
+   2026-09-05 — previously the one gap: `GET /assets/gone-DEAD.js` returned 200
+   `text/html`), `apps/storygeek/backend/src/app.js` (added 2026-09-05),
+   `apps/flockgeek/backend/src/server.js` (added 2026-09-05), and
+   `apps/basegeek/packages/api/src/server.js` (added 2026-09-05 — no service
+   worker exists for basegeek, but the same Express SPA fallback did, and needed
+   the same guard). **startgeek** has no Express backend — it is a static bundle
+   served by the `serve` npm package in its own container
+   (`apps/startgeek/Dockerfile`). `serve -s`/`--single` rewrites *every*
+   not-found request to `index.html` regardless of path shape, which is the same
+   landmine (verified locally: `GET /assets/<deleted-hash>.js` came back 200
+   `text/html`). Fixed 2026-09-05 by dropping `-s` entirely — startgeek has no
+   client-side router (no react-router dependency, no `Route` definitions;
+   `src/App.jsx` is the whole page), so there are no deep-link SPA routes that
+   need a not-found rewrite, and plain `serve` already 404s a missing file,
+   hashed asset or otherwise (verified locally the same way).
+2. **Every service worker's asset-caching path must refuse to store a
+   `text/html` response** under a script/style/font/image request, so a
+   SPA-fallback response that gets through anyway (a font extension outside a
+   VitePWA `globPatterns` list, a cross-origin script, or simply a request
+   in flight before the deploy that added the guard above) can never poison
+   the cache. VitePWA/Workbox apps use the `cacheWillUpdate` plugin shown
+   above (`apps/fitnessgeek/frontend/vite.config.js`'s `fitnessgeek-assets`
+   rule); `apps/bujogeek/frontend/vite.config.js` and
+   `apps/notegeek/frontend/vite.config.js` carry no runtime-caching rule for
+   scripts/styles/fonts/images at all (precache only), so there is nothing for
+   this rule to guard there today — if either app ever adds a
+   StaleWhileRevalidate asset rule, it must ship with the same plugin. Every
+   hand-rolled `public/sw.js` (Flavor B) must check
+   `response.headers.get('content-type')` before `cache.put(...)` in its fetch
+   handler's static-asset branch: `apps/bookgeek/web/public/sw.js`,
+   `apps/flockgeek/frontend/public/sw.js`, `apps/storygeek/frontend/public/sw.js`,
+   `apps/startgeek/public/sw.js` (all added 2026-09-05).
 
 ### 2. Two SW Flavors in the Suite
 
@@ -162,18 +207,19 @@ The offline page should:
 
 ## Current Status (per app)
 
-*Updated 2026-09-05 — offline-pages-per-mode + theme-color/manifest audit (TODO_ORDER #30).*
+*Updated 2026-09-05 — offline-pages-per-mode + theme-color/manifest audit (TODO_ORDER #30);
+SPA-fallback / SW-poisoning guard added suite-wide (Q53, see §1a and "Remaining work" below).*
 
-| App | SW Type | Auth Safe | Manifest | Offline Page | Installable |
-|-----|---------|-----------|----------|--------------|-------------|
-| bookgeek | Hand-rolled | ✅ | ✅ | ✅ — now matches both light/dark palettes via `prefers-color-scheme` | ✅ |
-| bujogeek | VitePWA/Workbox | ✅ | ✅ — `scope` added, `theme_color` now matches default (light) page | ✅ (new) — precached, but **not** wired as `navigateFallback` (see note) | ✅ |
-| fitnessgeek | VitePWA/Workbox | ✅ | ✅ — inline `manifest` in `vite.config.js` replaced with `manifest: false`; `public/manifest.json` (linked in `index.html`) is now the single source, fixing the duplicate `<link rel="manifest">` in built `dist/index.html` | ✅ (new) — precached; `navigateFallback` stays `/index.html` (SPA routing), not repointed (see note) | ✅ |
-| notegeek | VitePWA/Workbox | ✅ | ✅ — `theme_color` now matches default (light) page; `apple-touch-icon` link added | ✅ (new) — precached, not wired as `navigateFallback` (see note) | ✅ |
-| flockgeek | Hand-rolled | ✅ | ✅ — `scope` added, `theme_color` now matches default (dark) page; `apple-touch-icon` link added | ✅ — now matches both palettes via `prefers-color-scheme` | ✅ |
-| storygeek | Hand-rolled (new) | ✅ | ✅ (new) — `manifest.json` + manifest/apple-touch-icon links created | ✅ — hand-rolled SW added, per-mode `offline.html` now served via navigation fallback | ✅ (new) |
-| startgeek | Hand-rolled | ✅ | ✅ | ✅ — dark-only by design (app has one mode, no light palette exists) | ✅ |
-| basegeek | None | N/A | — (none exists; left untouched per scope) | — | ❌ |
+| App | SW Type | Auth Safe | SPA Fallback Guard | SW Asset-Cache Guard | Manifest | Offline Page | Installable |
+|-----|---------|-----------|---------------------|-----------------------|----------|--------------|-------------|
+| bookgeek | Hand-rolled | ✅ | ✅ had | ✅ added | ✅ | ✅ — now matches both light/dark palettes via `prefers-color-scheme` | ✅ |
+| bujogeek | VitePWA/Workbox | ✅ | ✅ had | n/a — no asset runtime-caching rule exists | ✅ — `scope` added, `theme_color` now matches default (light) page | ✅ (new) — precached, but **not** wired as `navigateFallback` (see note) | ✅ |
+| fitnessgeek | VitePWA/Workbox | ✅ | ✅ added (2026-09-05, Q53) | ✅ had (`cacheWillUpdate`) | ✅ — inline `manifest` in `vite.config.js` replaced with `manifest: false`; `public/manifest.json` (linked in `index.html`) is now the single source, fixing the duplicate `<link rel="manifest">` in built `dist/index.html` | ✅ (new) — precached; `navigateFallback` stays `/index.html` (SPA routing), not repointed (see note) | ✅ |
+| notegeek | VitePWA/Workbox | ✅ | ✅ had | n/a — no asset runtime-caching rule exists | ✅ — `theme_color` now matches default (light) page; `apple-touch-icon` link added | ✅ (new) — precached, not wired as `navigateFallback` (see note) | ✅ |
+| flockgeek | Hand-rolled | ✅ | ✅ added (Q53) | ✅ added (Q53) | ✅ — `scope` added, `theme_color` now matches default (dark) page; `apple-touch-icon` link added | ✅ — now matches both palettes via `prefers-color-scheme` | ✅ |
+| storygeek | Hand-rolled (new) | ✅ | ✅ added (Q53) | ✅ added (Q53) | ✅ (new) — `manifest.json` + manifest/apple-touch-icon links created | ✅ — hand-rolled SW added, per-mode `offline.html` now served via navigation fallback | ✅ (new) |
+| startgeek | Hand-rolled | ✅ | ✅ — `serve -s` flag dropped (Q53) | ✅ added (Q53) | ✅ | ✅ — dark-only by design (app has one mode, no light palette exists) | ✅ |
+| basegeek | None | N/A | ✅ added (Q53) | n/a — no service worker exists (out of scope by design) | — (none exists; left untouched per scope) | — | ❌ |
 
 ### Note on VitePWA `navigateFallback`
 
@@ -204,9 +250,31 @@ needs `workbox-recipes`' `offlineFallback()` / a custom `setCatchHandler`, which
   **Also 2026-09-05 (bundle split):** fitnessgeek's chunks were re-split — 62
   js/css files on disk, all 62 precached (64 entries with `index.html` +
   `offline.html`) — and the `fitnessgeek-assets` StaleWhileRevalidate rule
-  gained the §1a `cacheWillUpdate` guard. Still open, and the real fix:
-  `apps/fitnessgeek/backend/src/app.js`'s `GET *` fallback answers a deleted
-  `/assets/<hash>.js` with 200 `text/html` instead of 404.
+  gained the §1a `cacheWillUpdate` guard. The real fix — `apps/fitnessgeek/backend/src/app.js`'s
+  `GET *` fallback answering a deleted `/assets/<hash>.js` with 200 `text/html`
+  instead of 404 — landed the same day (Q53, below).
+- **Q53 (2026-09-05): every app's SPA fallback guarded, every SW refuses to
+  cache HTML under an asset URL.** See §1a's suite-requirement box above for
+  the full file list. Summary: `apps/storygeek/backend/src/app.js`,
+  `apps/flockgeek/backend/src/server.js` and
+  `apps/basegeek/packages/api/src/server.js` gained the extname-404 guard
+  (bujogeek, notegeek, bookgeek, and fitnessgeek already had it).
+  `apps/startgeek/Dockerfile` dropped `serve`'s `-s` flag — the same
+  landmine, confirmed by local repro, closed by removing the flag rather than
+  reworking the rewrite, since the app has no client-side router to protect.
+  `apps/bookgeek/web/public/sw.js`, `apps/flockgeek/frontend/public/sw.js`,
+  `apps/storygeek/frontend/public/sw.js` and `apps/startgeek/public/sw.js`
+  (all hand-rolled, Flavor B) gained a `content-type` check ahead of
+  `cache.put(...)` in their static-asset fetch handler. bujogeek's and
+  notegeek's VitePWA configs carry no runtime-caching rule for
+  scripts/styles/fonts/images (precache only), so neither needed the
+  `cacheWillUpdate` plugin. Proof: a new `spaFallback.test.js` per fixed
+  backend (storygeek, flockgeek, basegeek jest; bookgeek node:test, proving
+  the pattern it already shipped) asserting `GET /assets/nope-DEAD.js` → 404
+  `text/plain` and `GET /some/spa/route` → 200 index.html; `node
+  tools/syntax-check.mjs`; `node --check` on every touched `sw.js`; the
+  flockgeek mobile harness (`--label sw-guard --viewports phone`) — 28
+  scenes, 0 page errors, SW active.
 - **bujogeek**: no change needed — already `manifest: false` with `public/manifest.json`
   (`theme_color` `#FAF8F5`) as the sole source, matching the default (light) page
   background. Verified via `pnpm build`: one manifest link in `dist/index.html`.

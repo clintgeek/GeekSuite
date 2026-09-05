@@ -563,28 +563,37 @@ set and is the quicker check.
   `cjs-module-lexer` cannot see, so it must be imported as a default and
   destructured (`src/services/garminConnectService.js`). A plain
   `import { GarminConnect } from 'garmin-connect'` throws at load.
-- **The backend serves the SPA, and its fallback does NOT 404 asset paths.**
-  `src/app.js:223` has a `GET *` catch-all that sends `public/index.html` for
-  anything that is not `/api/*` or `/graphql` — including
-  `/assets/<hash>.js` for a hash a deploy has just deleted. Verified
-  2026-09-05 against a real build (`vite preview` behaves identically to the
-  Express fallback): `GET /assets/gone-DEAD.js` answers **200 text/html** with
-  the index document, where it should answer 404. That is the suite-wide
-  landmine in the root `DOCS/`; bujogeek, notegeek and bookgeek carry the
-  extname-404 guard and fitnessgeek does not. **This is still open** — the
-  fix is a `path.extname(req.path)` check in that handler, and it belongs to
-  whoever next touches `backend/src/app.js`.
+- **The backend serves the SPA, and its fallback did NOT 404 asset paths — fixed
+  2026-09-05 (Q53), all apps guarded as of 2026-09-05.** `src/app.js`'s `GET *`
+  catch-all now checks `path.extname(req.path)` ahead of `res.sendFile`, so a
+  request for `/assets/<hash>.js` naming a hash a deploy has just deleted gets
+  a 404, not the index document. Before the fix (verified 2026-09-05 against a
+  real build, `vite preview` behaving identically to the Express fallback):
+  `GET /assets/gone-DEAD.js` answered **200 text/html**. This was the
+  suite-wide landmine in the root `DOCS/` (see `DOCS/PWA_STANDARD.md` §1a);
+  bujogeek, notegeek and bookgeek already carried the extname-404 guard, and
+  as of the Q53 pass so do fitnessgeek, storygeek, flockgeek and basegeek's
+  gateway. startgeek (no Express backend, static bundle via the `serve` npm
+  package) carried the equivalent gap through `serve -s`'s unconditional
+  not-found rewrite, closed by dropping `-s` (the app has no client-side
+  router, so no deep-link fallback was ever needed). Every app's service
+  worker also confirmed or gained a content-type check ahead of caching a
+  static-asset response, so a poisoned response that slips through anyway
+  before a deploy propagates can never get written into the cache under the
+  asset's URL. Full file list and per-app detail: `DOCS/PWA_STANDARD.md`
+  §1a and its "Remaining work" Q53 entry.
 
-  Two things currently keep it from biting. First, `generateSW` precaches
-  every hashed `.js`/`.css`, so an old client keeps serving the old chunks out
-  of its own precache rather than re-fetching a URL the server no longer has.
-  Second, the `fitnessgeek-assets` runtime rule now carries a `cacheWillUpdate`
-  plugin (`frontend/vite.config.js`) that declines to cache any `text/html`
-  response for a script/style/font request, which covers what precaching does
-  not: the 38 hashed `@fontsource` `.woff`/`.woff2` files (generateSW's
-  `globPatterns` do not match them) and the cross-origin ZXing script. Neither
-  is a substitute for the server-side 404 — the guard makes the poisoned
-  response uncacheable, it does not make the asset load.
+  Two things kept it from biting even before the server-side fix. First,
+  `generateSW` precaches every hashed `.js`/`.css`, so an old client keeps
+  serving the old chunks out of its own precache rather than re-fetching a URL
+  the server no longer has. Second, the `fitnessgeek-assets` runtime rule
+  carries a `cacheWillUpdate` plugin (`frontend/vite.config.js`) that declines
+  to cache any `text/html` response for a script/style/font request, which
+  covers what precaching does not: the 38 hashed `@fontsource`
+  `.woff`/`.woff2` files (generateSW's `globPatterns` do not match them) and
+  the cross-origin ZXing script. Neither was a substitute for the server-side
+  404 — the guard makes a poisoned response uncacheable, it does not make the
+  asset load; the 404 above is the actual cure.
 - **`/health` and `/api/health`** both answer, unauthenticated. No Docker
   `HEALTHCHECK` is defined for this service.
 - **`KEY_VAULT_SECRET` is shared with basegeek**, and `packages/schemas` is now

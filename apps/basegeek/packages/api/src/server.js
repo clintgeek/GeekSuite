@@ -464,7 +464,16 @@ try {
 }
 
 // Fallback route for SPA (MUST be after all API and static routes)
+//
+// Paths with a file extension (e.g. a stale hashed /assets/*.css requested by
+// an old service worker after a deploy) must 404 — answering them with
+// index.html poisons browser/SW caches and renders the app unstyled.
+// DOCS/CONTEXT.md landmine; bujogeek/notegeek/bookgeek/fitnessgeek carry the
+// same guard.
 app.get('*', (req, res) => {
+  if (path.extname(req.path)) {
+    return res.status(404).type('text/plain').send('Not found');
+  }
   res.sendFile(path.join(uiBuildPath, 'index.html'), (err) => {
     if (err) {
       req.log.error({ err }, 'Error serving index.html');

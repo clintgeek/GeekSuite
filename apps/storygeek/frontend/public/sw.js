@@ -55,6 +55,15 @@ self.addEventListener("fetch", (event) => {
           if (!response || response.status !== 200 || response.type !== "basic") {
             return response;
           }
+          // SPA-fallback poisoning guard (DOCS/CONTEXT.md landmine). A
+          // deleted hashed asset path answered by the backend's SPA
+          // catch-all comes back 200 text/html — never cache that under
+          // the script/style/font/image URL it was requested as, or every
+          // later load serves the wrong body until the cache is cleared.
+          const contentType = response.headers.get("content-type") || "";
+          if (contentType.includes("text/html")) {
+            return response;
+          }
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
           return response;

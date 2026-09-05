@@ -31,4 +31,14 @@ RUN npm install -g serve@14
 COPY --from=build /app/dist ./dist
 
 EXPOSE 3000
-CMD ["serve", "-s", "dist", "-l", "3000"]
+# No `-s`/`--single`: startgeek has no client-side router (no react-router
+# dependency, no Route definitions — src/App.jsx is the whole page), so there
+# are no deep-link SPA routes that need a not-found rewrite to index.html.
+# `-s` rewrites EVERY not-found request to index.html regardless of path
+# shape, which includes a deleted hashed asset path — verified locally
+# (`serve -s .`): GET /assets/<hash>.js for a hash that no longer exists on
+# disk returns 200 text/html (the index document), the exact SPA-fallback
+# cache-poisoning landmine (DOCS/CONTEXT.md). Plain `serve` 404s any path
+# with no matching file, hashed asset or otherwise, which is the correct
+# behavior here — verified the same way (404, not 200).
+CMD ["serve", "dist", "-l", "3000"]
