@@ -443,6 +443,11 @@ function routeRequest(method, url, data) {
     if (base === '/goals') return { mutation: SET_NUTRITION_GOALS, variables: { input: data } };
     // /foods creates a library FoodItem (not a log entry)
     if (base === '/foods') return { mutation: ADD_FITNESS_FOOD, variables: { input: normalizeFoodInput(data) } };
+    // NOT REACHABLE TODAY, AND NOT CORRECT IF IT WERE: fitnessGeekService.addFoodToLog
+    // deliberately uses restClient because REST POST /logs takes a whole `food_item`
+    // object and findOrCreate()s the catalog row. FoodLogInput needs an existing
+    // `food_item_id`, so this passthrough would fail validation. See DOCS/SUITE_TODO.md
+    // item 2 for the gateway change that has to land first.
     if (base === '/logs') return { mutation: ADD_FOOD_LOG, variables: { input: data } };
     if (base === '/meals') return { mutation: ADD_MEAL, variables: { input: data } };
     if (base === '/medications' || base === '/meds') return { mutation: ADD_MEDICATION, variables: { input: data } };
@@ -465,6 +470,8 @@ function routeRequest(method, url, data) {
     if (parts[0] === 'weight') return { mutation: UPDATE_WEIGHT, variables: { id, input: data } };
     // /foods/:id updates a library FoodItem (not a log entry)
     if (parts[0] === 'foods') return { mutation: UPDATE_FITNESS_FOOD, variables: { id, input: normalizeFoodInput(data) } };
+    // Same caveat as POST /logs: FoodLogInput's four fields are all non-null, so the
+    // partial body EditLogDialog sends would fail validation. See DOCS/SUITE_TODO.md item 2.
     if (parts[0] === 'logs') return { mutation: UPDATE_FOOD_LOG, variables: { id, input: data } };
     if (parts[0] === 'meals') return { mutation: UPDATE_MEAL, variables: { id, input: data } };
     if (parts[0] === 'medications' || parts[0] === 'meds') return { mutation: UPDATE_MEDICATION, variables: { id, input: data } };

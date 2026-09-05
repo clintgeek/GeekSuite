@@ -368,8 +368,30 @@ slots but have **zero consumers**; every app hand-rolls both. Per-app structural
   `AIConfig.js`, `aiRoutes.js`, `graphql/basegeek/resolvers.js`); the old `lib/cryptoVault.js` and
   its standalone test were deleted, coverage moved to `packages/crypto-vault/src/__tests__`.
   basegeek's own suite stayed green (42 suites / 800 passed / 1 skipped). New CI job
-  `test-crypto-vault` mirrors `test-utils`. **Step 2 remaining**: wire fitnessgeek's Garmin
-  password encryption + backfill migration script. (`DEFERRED_WORK.md`)
+  `test-crypto-vault` mirrors `test-utils`. **Step 2 done 2026-09-05** — fitnessgeek's Garmin
+  password is encrypted at rest. The encryption lives in
+  `packages/schemas/fitnessgeek/userSettings.js` (`createUserSettingsSchema`), not in a
+  fitnessgeek route or service: `garmin.password` has **two writers and two readers across two
+  processes** (fitnessgeek's `settingsRoutes.js` + `garminConnectService.js`, basegeek's
+  `graphql/fitnessgeek/resolvers.js` `updateFitnessUserSettings` + `buildGarminClient`), and both
+  build their model from that one function. `pre('save')` / `pre(findOneAndUpdate|updateOne|
+  updateMany|replaceOne)` encrypt on the way in (both the dot-path and nested `$set` shapes,
+  idempotent via `isEncrypted`); a path getter decrypts on the way out — and mongoose does not run
+  getters in `toObject()`/`toJSON()`, so serialising a settings document still yields ciphertext.
+  Legacy plaintext passes through untouched until backfilled; a corrupt value fails closed through
+  `safeDecrypt`. `GET`/`PUT /api/settings` now delete the field and return `garmin.password_set`
+  instead of the old `'********'` mask (which would have been encrypted and stored verbatim if a
+  client ever round-tripped it). The server refuses to boot without `KEY_VAULT_SECRET`
+  (`backend/src/config/keyVault.js`); 12 suites / 106 tests green, basegeek's parity tripwire still
+  green. **Two things Sage still owes production:**
+    1. `KEY_VAULT_SECRET` must be set in fitnessgeek's `.env.production` **to the same value
+       basegeek already uses** — both processes read this field. That contradicts the
+       "`KEY_VAULT_SECRET` | basegeek only | Never share across apps" row in the root `DEPLOY.md`,
+       which needs updating. Deploy both apps from the same commit (`packages/schemas` changed).
+    2. Run the backfill **once**, after that deploy:
+       `docker exec fitnessgeek node scripts/encryptGarminPasswords.js --dry-run` then without the
+       flag. Idempotent, counts only. Full run order in `apps/fitnessgeek/DOCS/CONTEXT.md`.
+  (`DEFERRED_WORK.md`)
 
 - **Shared date utilities** — the timezone bug analysis identified a `toUtcMidnight()` /
   `localDateString()` / `displayCalendarDate()` pattern needed across bujogeek, fitnessgeek, and
@@ -407,7 +429,7 @@ reality stands, per app:
 | flockgeek | Apollo → basegeek | ✅ frontend fully on GraphQL (only `/api/health` ping). ~~All 13 Mongoose models duplicated~~ — **corrected 2026-09-05**: only 4 (`BirdNote`, `BirdTrait`, `Event`, `LineageCache`) were actually orphaned and are now deleted. The other 9 are imported by a full, live, *mounted* REST CRUD API (`routes/api.js` → birds/groups/group-memberships/health-records/egg-production/pairings/locations/hatch-events/meat-runs) that nothing in the repo calls anymore but which still runs in the server. See `apps/flockgeek/CONTEXT.md` — deciding whether to unmount that whole REST layer is a follow-up, not done here. |
 | notegeek | Apollo → basegeek | ✅ frontend fully on GraphQL. ~~Own backend still carries legacy REST~~ — **deleted 2026-09-05**: `routes/notes.js`, `tags.js`, `search.js`, their controllers, and duplicate `models/Note.js`. This also resolved the `getTagHierarchy` 500 below. Follow-up prune, same day: `migrations/migrateNotesBetweenUsers.js` and `convertFoldersToTags.js` still imported the deleted `Note` model and had no caller (no npm script, no server import) — deleted, along with the now-empty `migrations/` directory. `utils/tagValidation.js` was imported only by its own test — both deleted. Backend suite still green (24 passed, 8 skipped); no dependency in `package.json` became unused as a result. |
 | bookgeek | Apollo for library CRUD; `authFetch` REST for the rest | ⚠️ mostly. Legit REST: upload/download/cover/enrich/merge/import/device-baskets (binary + long jobs). Not legit: `/api/profile/*` (`library-filters`, `me`) and `/api/ai/status` — pure data, should be GraphQL. `App.jsx:15` hardcodes `http://localhost:1800/api`. ~~`api/src/graphql/{schema,resolvers}.js` is an **unmounted dead GraphQL server**~~ — **deleted 2026-09-05** (plus the unused `@apollo/subgraph` dep). 4 duplicated models remain (not yet touched). |
-| fitnessgeek | `apiService.js` shims REST→GraphQL, but `restClient.js` still hits own backend | ⚠️ mostly. Still REST: food search/barcode/favorites/recent (`foodService.js`), `POST/PUT/DELETE /logs` + `POST /meals/:id/add-to-log` (`fitnessGeekService.js` — **these have GraphQL equivalents `addFoodLog`/`updateFoodLog`/`deleteFoodLog`/`logMeal` already**), meds RxNorm + med logs, influx, AI, `PUT /user/profile`. **All 13 models duplicated** — this is the `UserSettings` drift hazard above, times 13. |
+| fitnessgeek | `apiService.js` shims REST→GraphQL, but `restClient.js` still hits own backend | ⚠️ mostly. Still REST: food search/barcode/favorites/recent (`foodService.js`), `POST/PUT/DELETE /logs` + `POST /meals/:id/add-to-log` (`fitnessGeekService.js` — **the GraphQL equivalents `addFoodLog`/`updateFoodLog`/`deleteFoodLog`/`logMeal` exist but are NOT drop-in — audited 2026-09-05, see item 2 below; no writes moved**), meds RxNorm + med logs, influx, AI, `PUT /user/profile`. **All 13 models duplicated** — this is the `UserSettings` drift hazard above, times 13. |
 | storygeek | axios REST to own backend | ❌ not on GraphQL. `apolloClient.js` exists but is never imported. basegeek's storygeek schema (`stories`, `story`, 3 mutations) is unused by the app and too thin to replace `/stories/*/continue`, `/export/*`, `/ai/*`. Decide: either build out the schema or drop the basegeek storygeek module as dead code. |
 
 Ordered cheap-to-expensive:
@@ -420,6 +442,48 @@ Ordered cheap-to-expensive:
    already done in an earlier pass (`3af40cc`, 2026-08-30) — nothing left to delete there.
 2. fitnessgeek: point `foodLogs` writes at the existing GraphQL mutations; remove those REST
    routes. Then food search/favorites/recent → new queries.
+   **Blocked on a gateway change — audited 2026-09-05, nothing shipped.** The four mutations
+   exist but three of them are not behaviour-equivalent to the REST routes they would replace,
+   so switching the frontend today would lose data or add a new failure mode. `deleteFoodLog`
+   is the only clean one, and moving it alone buys nothing toward removing the routes. Gateway
+   ticket, all in `apps/basegeek/packages/api/src/graphql/fitnessgeek/`:
+
+   - **`addFoodLog` cannot create a `FoodItem` on the fly.** `FoodLogInput.food_item_id: ID!`
+     must already exist and pass `FoodItem.findAccessible`. REST `POST /api/logs` takes a whole
+     `food_item` object and, when its id is not an ObjectId, calls
+     `FoodItem.findOrCreate(food_item, userId)` — which dedupes by `barcode`, then
+     `(source, source_id)`, then `(name, brand)`, and creates a **global** (`user_id: null`) row
+     carrying `source`/`source_id`. Every food-search result is exactly that case: `foodApiService`
+     mints synthetic ids (`usda_<fdcId>`, `openfoodfacts_<code>`), as do AI results. Pre-creating
+     via `addFitnessFood` is lossy three ways — `FitnessFoodInput` has no `source`/`source_id`,
+     the resolver hardcodes `source: 'custom'` + `user_id: user.id` (private, not global), and it
+     does not dedupe, so every log of the same searched food mints another row.
+     *Fix*: accept an optional `food_item: FitnessFoodInput` (plus `source`/`source_id`) on
+     `FoodLogInput` and run the `findOrCreate` branch server-side.
+   - **`updateFoodLog` takes `FoodLogInput!`, whose `log_date`/`meal_type`/`food_item_id`/`servings`
+     are all non-null**, so a partial edit is impossible over the wire (the gateway's own tests call
+     the resolver directly and never hit schema validation). Forcing the client to resend
+     `food_item_id` re-runs `assertAccessibleFoodItems`, which filters `is_deleted: false` — so
+     editing the servings on a log whose custom food was since soft-deleted would start failing
+     with "Food item not found" where REST `PUT /api/logs/:id` succeeds.
+     *Fix*: a `FoodLogUpdateInput` with every field nullable, and skip the food check when
+     `food_item_id` is absent.
+   - **`logMeal` does not write the `notes` provenance string.** REST `POST /api/meals/:id/add-to-log`
+     stamps each created log with `notes: "Added from meal: <name>"`, and `FoodLogItem.jsx` renders
+     `notes` as a visible caption. *Fix*: one line in the `logMeal` resolver.
+   - Not blocking, but worth doing in the same pass: `addFoodLog`/`updateFoodLog`/`deleteFoodLog`
+     skip `DailySummary.updateFromLogs`, which all three REST routes call (`logMeal` and
+     `copyFitnessMeal` do call it). Harmless today only because `dailySummary` recomputes on read
+     and the food reports read `FoodLog` directly; `weeklySummary` reads stored summaries and would
+     go stale, but it has no frontend caller.
+   - `logMeal` is a genuine **improvement** on one axis: REST's `parseLocalDate()` writes *local*
+     midnight while `POST /logs` writes *UTC* midnight via `toUtcMidnight`, so meals added to the
+     log already land on the wrong UTC day in negative-offset zones. The gateway passes the plain
+     `YYYY-MM-DD` through Mongoose casting, i.e. UTC midnight, matching the read path.
+   - Landmine for whoever picks this up: `apiService.js`'s `routeRequest` already maps
+     `POST /logs` → `ADD_FOOD_LOG` and `PUT /logs/:id` → `UPDATE_FOOD_LOG` by passing the REST body
+     straight through as `input`. Both mappings are wrong for the reasons above and are unreachable
+     today only because `fitnessGeekService` deliberately uses `restClient` for these four calls.
 3. bookgeek: `profile` + `ai/status` → GraphQL; kill the hardcoded `localhost:1800`.
 4. fitnessgeek model consolidation (13 pairs) — biggest risk, do last, one model at a time.
 5. storygeek decision.
