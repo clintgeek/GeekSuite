@@ -125,3 +125,59 @@ describe('POST /api/auth/logout', () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// X-CSRF-Token forwarding (BURN_REVIEW #3)
+// ---------------------------------------------------------------------------
+// basegeek runs a double-submit CSRF token: a cookie-authenticated mutation
+// must carry `X-CSRF-Token` matching the `geek_csrf` cookie
+// (apps/basegeek/packages/api/src/middleware/csrfToken.js). These routes replay
+// the browser's cookies server-to-server, so a proxy that drops the header
+// turns `CSRF_TOKEN=enforce` into a suite-wide logout: every /auth/refresh
+// 403s, and @geeksuite/auth reads 403 as session-expired.
+describe('X-CSRF-Token forwarding', () => {
+  const CSRF = 'Rk9y3wQm-P2sLtVb8XcZa1NdHgJ0eIuY4TpS6MkOwQe';
+  const COOKIE = `geek_token=jwt; geek_refresh_token=r3fr3sh; geek_csrf=${ CSRF }`;
+
+  it('forwards the browser token upstream on /refresh', async () => {
+    mockAxios.post.mockResolvedValueOnce({ status: 200, data: {}, headers: {} });
+
+    await request(app)
+      .post('/api/auth/refresh')
+      .set('Cookie', [COOKIE])
+      .set('X-CSRF-Token', CSRF);
+
+    const [, , config] = mockAxios.post.mock.calls[0];
+    expect(config.headers['X-CSRF-Token']).toBe(CSRF);
+    expect(config.headers.Cookie).toBe(COOKIE);
+  });
+
+  it('forwards the browser token upstream on /logout', async () => {
+    mockAxios.post.mockResolvedValueOnce({ status: 200, data: {}, headers: {} });
+
+    await request(app)
+      .post('/api/auth/logout')
+      .set('Cookie', [COOKIE])
+      .set('X-CSRF-Token', CSRF);
+
+    const [, , config] = mockAxios.post.mock.calls[0];
+    expect(config.headers['X-CSRF-Token']).toBe(CSRF);
+  });
+
+  it('sends no token when the browser sent none — it never mints one from the cookie', async () => {
+    // geek_csrf is right there in the replayed Cookie header. A proxy that read
+    // it and echoed it back would hand every proxied path a permanent pass
+    // through the check basegeek is about to enforce.
+    mockAxios.post.mockResolvedValueOnce({ status: 200, data: {}, headers: {} });
+
+    await request(app)
+      .post('/api/auth/refresh')
+      .set('Cookie', [COOKIE]);
+
+    const [, , config] = mockAxios.post.mock.calls[0];
+    expect(config.headers['X-CSRF-Token']).toBeUndefined();
+    expect(Object.keys(config.headers).map((k) => k.toLowerCase()))
+      .not.toContain('x-csrf-token');
+    expect(config.headers.Cookie).toBe(COOKIE);
+  });
+});
