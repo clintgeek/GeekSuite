@@ -124,6 +124,26 @@ export const GLANCE_ASK = `
   }
 `
 
+export const GLANCE_DRAFT = `
+  query GlanceDraft($input: String!, $kind: String!) {
+    glanceDraft(input: $input, kind: $kind) {
+      kind
+      draft {
+        content
+        title
+        dueDate
+        priority
+        tags
+        signifier
+      }
+      summary
+      provider
+      model
+      degraded
+    }
+  }
+`
+
 export const CREATE_TASK = `
   mutation CreateTask(
     $content: String!

@@ -54,11 +54,13 @@ answer is not in the context, the schema forces `"answer": null` and the card is
 
 ### 3. Route commands the parser cannot
 
-`>` capture already has a deterministic parser (`lib/parseTaskInput.js`). Keep it first. Only
+*Landed 2026-09-05.*
+
+`>` capture already has a deterministic parser (`lib/parseTaskInput.js`). It stays first. Only
 when it fails or the text is ambiguous ("remind me to call the vet friday afternoon #flock")
 does aiGeek produce a `CREATE_TASK` / `CREATE_NOTE` payload against the mutation's schema; the
-box shows it as a preview chip ("Task · Fri 2 PM · #flock") and Enter confirms. Same UX, one
-more escape hatch.
+box shows it as a preview chip row ("Task · Fri 2:00 PM · !high · #flock") and Enter confirms.
+Same UX, one more escape hatch.
 
 ## Where the code goes
 
@@ -89,8 +91,10 @@ type GlanceIntent {
 ```
 
 The result type is the existing `GlanceSearchResult` that `glanceSearch` already
-returns, not a new `GlanceResult` — one shape, one place. `draft` is not built;
-it belongs to step 5.
+returns, not a new `GlanceResult` — one shape, one place. Drafting turned out
+not to belong on `GlanceAsk` at all: a draft answers a different question, from
+a different prefix, and shares only the routing. It landed in step 5 as its own
+query, `glanceDraft`, and `GlanceAsk` was left alone.
 
 `askService.planQuery` calls `aiService.callAI` server-side with
 `useAppConfig: true, appName: 'startgeek'` — the same normalization
@@ -125,6 +129,61 @@ cited rows with an accent rule. Any error falls back to running the plain
 `localStorage`); with it off, `??` shows a one-line hint and a button that opens
 settings.
 
+**Capture drafting (S).** *Landed 2026-09-05.* A second query in the same
+module, deliberately not a mutation — the server drafts, the browser writes:
+
+```graphql
+glanceDraft(input: String!, kind: String!): GlanceDraft!   # kind: "task" | "note"
+
+type GlanceDraft {
+  kind: String!                  # echoes the kind asked for
+  draft: GlanceDraftFields       # null when degraded
+  summary: String                # one line, shown above the actions
+  provider: String
+  model: String
+  degraded: Boolean!             # true = no draft; behave as if AI were off
+}
+
+type GlanceDraftFields {         # one shape for both kinds
+  content: String!               # the task, or the note body
+  title: String                  # notes only
+  dueDate: String                # "YYYY-MM-DDTHH:MM:SS", local, or null
+  priority: Int                  # 1 high · 2 medium · 3 low, or null
+  tags: [String!]!
+  signifier: String              # * @ - ! ? — tasks only
+}
+```
+
+`askService.draftFrom(input, kind, context)` calls aiService exactly as
+`planQuery` does — `useAppConfig: true, appName: 'startgeek'`, a `json_schema`
+response format, the same 3 s budget — with a system prompt carrying BujoGeek's
+own grammar (`#tag`, `!priority`, `/date`, `^note`, `~blocked`) and the server's
+date and weekday, so the model produces what the parser would have. Normalization
+is a whitelist, not a filter: an out-of-range priority, an unknown signifier and
+an unparseable date are dropped rather than passed on, a bare date becomes 09:00
+as the parser defaults it, and **a tag that is not already in the input is
+thrown away** — the model may never invent one. Any failure, timeout, non-JSON
+reply or empty draft returns `degraded: true, draft: null`. 23 Jest tests in
+`src/__tests__/glanceDraft.test.js`, including one asserting nothing is ever
+written by the draft path.
+
+On the client (`apps/startgeek/src/lib/captureDraft.js`, `components/DraftPreview.jsx`)
+the parser still runs first and its output is judged rather than guessed at:
+`readTaskInput` returns `{ ok, confidence, reasons }` — 0 when there is no
+content, 0.5 when the parser produced an entry but left intent on the floor (a
+`/token` it could not read, a weekday or "afternoon" in words with no due date,
+"urgent" with no priority), 1 when it is clean. `parseTaskInput.js` itself is
+untouched: it is a byte-copy of BujoGeek's and stays that way. Only `!ok`, with
+the Ask setting on, and three or more words, reaches `GLANCE_DRAFT`. The preview
+is a chip row over the console ground — kind, due, priority, tags — with the
+summary, provider · model in mono 12px, and two 44px actions: Enter/Create runs
+the same `CREATE_TASK` / `CREATE_NOTE` the parser path runs, Esc/Edit writes the
+draft back into the box as shorthand (`> Call the vet #flock !high
+/2026-09-11 2:00pm`) so the deterministic path takes it from there — and never
+re-drafts the line it just handed back. A degraded draft, a GraphQL error and
+the setting being off are all the same thing to the box: today's behaviour,
+one toast.
+
 ## Decisions (Chef, 2026-09-04)
 
 1. **Opt-in.** The AI layer is off by default; a StartGeek setting ("Ask the suite with AI")
@@ -152,6 +211,9 @@ settings.
    responses and assert the merged results, the degraded path, and the locked-note exclusion.
 3. ~~startgeek answer card + `??` prefix~~ **landed 2026-09-04.**
 4. ~~Grounded answers from `glanceToday`~~ **landed 2026-09-04.**
-5. Command routing fallback for `>` and `<` (the `draft` field on `GlanceAsk`). **S** — not started.
+5. ~~Command routing fallback for `>` and `<`~~ **landed 2026-09-05.** Shipped as its own
+   query, `glanceDraft(input, kind)`, rather than a `draft` field on `GlanceAsk` — different
+   prefix, different question, same routing. The parser stays first; the model only ever
+   drafts, and the person confirms.
 
 Effort overall: **M**. Depends on nothing in the Pocket Pass.

@@ -169,7 +169,9 @@ const SettingsSheet = ({ open, onClose }) => {
                   <span className="flex-1 min-w-0">
                     <span className="block text-ink">Ask the suite with AI</span>
                     <span className="block text-xs text-ink-3">
-                      Type <span className="font-mono">??</span> in the command box
+                      Type <span className="font-mono">??</span> to ask · drafts{' '}
+                      <span className="font-mono">&gt;</span> and{' '}
+                      <span className="font-mono">&lt;</span> captures the parser can’t read
                     </span>
                   </span>
                   <span className="switch" aria-hidden="true" />
@@ -179,6 +181,13 @@ const SettingsSheet = ({ open, onClose }) => {
                   to aiGeek, which answers from that and nothing else. Locked and
                   encrypted notes are never included. Off by default;
                   <span className="font-mono"> ? </span> stays a plain, local search.
+                </p>
+                <p className="text-[12.5px] leading-relaxed text-ink-3 mt-2">
+                  It also drafts captures: when the shorthand parser can’t read a
+                  <span className="font-mono"> &gt; </span> or
+                  <span className="font-mono"> &lt; </span> line, aiGeek proposes the
+                  task or note and you confirm it. The parser is still tried first,
+                  and nothing is saved until you press Enter.
                 </p>
               </Group>
             )}

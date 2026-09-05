@@ -15,7 +15,7 @@ import Bird from '../flockgeek/models/Bird.js';
 import EggProduction from '../flockgeek/models/EggProduction.js';
 
 import { resolvers as fitnessResolvers } from '../fitnessgeek/resolvers.js';
-import { planQuery, answerFrom } from './askService.js';
+import { planQuery, answerFrom, draftFrom } from './askService.js';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -580,6 +580,18 @@ export const resolvers = {
       }
 
       return { intent, answer, citations, results, provider, model };
+    },
+
+    /**
+     * Draft a capture the deterministic parser could not read.
+     *
+     * Read-only by construction: it shapes the variables `createTask` /
+     * `createNote` take and hands them back. Nothing is written here — the
+     * client previews the draft and the person runs the mutation themselves.
+     */
+    glanceDraft: async (_, { input, kind }, context) => {
+      getUserId(context);
+      return draftFrom(input, kind, context);
     },
 
     calendarEvents: async (_, { sources, from, to }, context) => {

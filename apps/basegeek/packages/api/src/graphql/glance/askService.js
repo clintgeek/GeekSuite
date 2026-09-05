@@ -13,6 +13,12 @@
  *     the user's day plus the top search hits and must answer *from that*,
  *     citing the ids it used, or return null.
  *
+ *   draftFrom(input, kind, context)
+ *     A sentence the deterministic capture parser could not read, turned into
+ *     the variables `createTask` / `createNote` already take. Drafting only:
+ *     nothing is written here. The client previews the draft and the user
+ *     confirms, so a wrong draft costs a keystroke, not a bad row.
+ *
  * Routing goes through aiGeek's App Routing config for app id `startgeek`
  * (the `basegeek-app` virtual model): whatever model the App Routing dialog
  * points at is what answers. No provider or key detail is chosen here.
@@ -107,6 +113,100 @@ const ANSWER_SCHEMA = {
     additionalProperties: false,
   },
 };
+
+// BujoGeek's capture grammar, as the deterministic parser implements it
+// (`apps/startgeek/src/lib/parseTaskInput.js`). The model is asked for the
+// fields that grammar would have produced, so a drafted task and a typed one
+// are the same row.
+const BUJO_GRAMMAR = `The person types tasks in a shorthand their parser understands:
+  #tag            a tag (letters, digits, hyphen, underscore)
+  !high !medium !low   priority — high = 1, medium = 2, low = 3
+  /today /tomorrow /friday /next-week /2026-03-15   a due date
+  9am 2:30pm 14:30                                  a time, after the date
+  ^note text      a note attached to the task, always last
+  ~blocked reason parks the task, always last
+  * @ - ! ?       the first character is a signifier:
+                  * task (default), @ event, - note, ! important, ? question
+When they write the same thing in plain words instead, produce the fields the
+shorthand would have produced.`;
+
+const DRAFT_TASK_SCHEMA = {
+  name: 'GlanceTaskDraft',
+  description: 'The variables BujoGeek\'s createTask mutation takes.',
+  schema: {
+    type: 'object',
+    properties: {
+      content: { type: 'string' },
+      dueDate: { type: ['string', 'null'] },
+      priority: { type: ['integer', 'null'], enum: [1, 2, 3, null] },
+      tags: { type: 'array', items: { type: 'string' } },
+      signifier: { type: 'string', enum: ['*', '@', '-', '!', '?'] },
+      summary: { type: 'string' },
+    },
+    required: ['content', 'dueDate', 'priority', 'tags', 'signifier', 'summary'],
+    additionalProperties: false,
+  },
+};
+
+const DRAFT_NOTE_SCHEMA = {
+  name: 'GlanceNoteDraft',
+  description: 'The variables NoteGeek\'s createNote mutation takes.',
+  schema: {
+    type: 'object',
+    properties: {
+      title: { type: ['string', 'null'] },
+      content: { type: 'string' },
+      tags: { type: 'array', items: { type: 'string' } },
+      summary: { type: 'string' },
+    },
+    required: ['title', 'content', 'tags', 'summary'],
+    additionalProperties: false,
+  },
+};
+
+function draftTaskPrompt(today) {
+  return `You turn one line of plain English into a task for the person's own bullet journal.
+
+${BUJO_GRAMMAR}
+
+Today is ${today.iso} (${today.weekday}). Return JSON only, matching the schema.
+
+- content: the task itself, imperative and short. Strip the framing ("remind me
+  to", "I need to", "don't forget to") — keep the thing to be done. Never leave
+  it empty.
+- dueDate: a local date-time, "YYYY-MM-DDTHH:MM:SS", with no timezone suffix,
+  or null when the line names no time at all. A bare weekday means the next one
+  still to come — if they name today's weekday, they mean next week's. Times of
+  day: morning 09:00, noon 12:00, afternoon 14:00, evening 18:00, night 20:00.
+  With a date but no time, use 09:00.
+- priority: 1 high, 2 medium, 3 low — only when the line says so ("urgent",
+  "asap", "important", "whenever"). Otherwise null.
+- tags: only tags the line already contains, with or without the leading #.
+  Never invent one. Usually this is exactly the #tags they typed.
+- signifier: "@" when it is an appointment or meeting at a set time, "?" when
+  it is a question to answer, otherwise "*".
+- summary: one short line, sentence case, saying what will be created — this is
+  shown to the person before anything is saved.`;
+}
+
+function draftNotePrompt(today) {
+  return `You turn one line of plain English into a note for the person's own notebook.
+
+Today is ${today.iso} (${today.weekday}). Return JSON only, matching the schema.
+
+- title: a short title, at most 60 characters, or null when the line is too
+  slight to deserve one.
+- content: the note body. Keep the person's own words — tidy the punctuation,
+  do not rewrite, do not add anything they did not say. Never leave it empty.
+- tags: only tags the line already contains, with or without the leading #.
+  Never invent one.
+- summary: one short line saying what will be saved — this is shown to the
+  person before anything is saved.`;
+}
+
+const KNOWN_SIGNIFIERS = new Set(['*', '@', '-', '!', '?']);
+const DRAFT_KINDS = new Set(['task', 'note']);
+const MAX_TITLE = 60;
 
 const KNOWN_APPS = new Set(['notegeek', 'bujogeek', 'bookgeek', 'flockgeek']);
 const KNOWN_TYPES = new Set(['note', 'task', 'book', 'bird']);
@@ -388,4 +488,189 @@ export async function answerFrom(query, context, { glanceToday, results } = {}) 
   }
 }
 
-export default { planQuery, answerFrom, degradedIntent, normalizeIntent, trimGlanceToday, sanitizeResults };
+// ── Capture drafting ────────────────────────────────────────────────────────
+
+/** Today, as the model needs to see it: the date and the weekday name. */
+export function serverToday(now = new Date()) {
+  return {
+    iso: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`,
+    weekday: now.toLocaleDateString('en-US', { weekday: 'long' }),
+  };
+}
+
+/**
+ * A local date-time the client can hand straight to `new Date()`.
+ *
+ * A bare date becomes 09:00, exactly as the parser's default does. A zone
+ * suffix the model chose to send is kept; without one the string is floating,
+ * which is what the parser produces (local time, from a local `new Date()`).
+ */
+export function normalizeDraftDate(value) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return Number.isNaN(Date.parse(`${trimmed}T09:00:00`)) ? null : `${trimmed}T09:00:00`;
+  }
+
+  const match = trimmed.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})(?::(\d{2}))?(Z|[+-]\d{2}:?\d{2})?$/);
+  if (!match) return null;
+
+  const [, date, hm, sec, zone] = match;
+  const iso = `${date}T${hm}:${sec || '00'}${zone || ''}`;
+  return Number.isNaN(Date.parse(zone ? iso : `${iso}Z`)) ? null : iso;
+}
+
+/**
+ * Tags the model may keep: only the ones already in the line.
+ *
+ * The rule is Chef's and it is absolute — a drafted task must never carry a
+ * tag the person did not type. `#flock` and a bare `flock` both count; a
+ * helpfully-inferred `#chores` does not.
+ */
+export function keepOnlyInputTags(value, input) {
+  const haystack = String(input ?? '').toLowerCase();
+  const out = [];
+  for (const tag of stringList(value, null, 8)) {
+    const clean = tag.replace(/^#+/, '').trim();
+    if (!clean || !/^[a-zA-Z0-9_-]+$/.test(clean)) continue;
+    if (!haystack.includes(clean.toLowerCase())) continue;
+    if (out.includes(clean)) continue;
+    out.push(clean);
+  }
+  return out;
+}
+
+function summaryOrNull(value) {
+  return typeof value === 'string' && value.trim() ? value.trim().slice(0, 140) : null;
+}
+
+/**
+ * Coerce a task draft into the exact variables `CREATE_TASK` takes.
+ * Returns null when there is no content — a task with nothing to do is a
+ * failure, not a draft, and the caller degrades.
+ */
+export function normalizeTaskDraft(raw, input) {
+  if (!raw || typeof raw !== 'object') return null;
+
+  const content = typeof raw.content === 'string' ? raw.content.trim() : '';
+  if (!content) return null;
+
+  const priority = Number.isInteger(raw.priority) && raw.priority >= 1 && raw.priority <= 3
+    ? raw.priority
+    : null;
+
+  const signifier = typeof raw.signifier === 'string' && KNOWN_SIGNIFIERS.has(raw.signifier.trim())
+    ? raw.signifier.trim()
+    : '*';
+
+  return {
+    content,
+    title: null,
+    dueDate: normalizeDraftDate(raw.dueDate),
+    priority,
+    tags: keepOnlyInputTags(raw.tags, input),
+    signifier,
+  };
+}
+
+/** The same, for `CREATE_NOTE`. Null when the body is empty. */
+export function normalizeNoteDraft(raw, input) {
+  if (!raw || typeof raw !== 'object') return null;
+
+  const content = typeof raw.content === 'string' ? raw.content.trim() : '';
+  if (!content) return null;
+
+  const title = typeof raw.title === 'string' && raw.title.trim()
+    ? raw.title.trim().slice(0, MAX_TITLE)
+    : null;
+
+  return {
+    content,
+    title,
+    dueDate: null,
+    priority: null,
+    tags: keepOnlyInputTags(raw.tags, input),
+    signifier: null,
+  };
+}
+
+/** What the client shows when the model gave no usable summary of its own. */
+function fallbackSummary(kind, draft) {
+  if (!draft) return null;
+  if (kind === 'note') {
+    return `Note: ${draft.title || draft.content}`.slice(0, 140);
+  }
+  return `Task: ${draft.content}`.slice(0, 140);
+}
+
+/** The shape every failure returns: nothing drafted, and said so. */
+function degradedDraft(kind, provider = null, model = null) {
+  return { kind, draft: null, summary: null, provider, model, degraded: true };
+}
+
+/**
+ * Draft a task or a note from a line the deterministic parser could not read.
+ *
+ * Drafting only — nothing is written. The client previews what comes back and
+ * the person presses Enter to run the mutation they would have run anyway.
+ * Always resolves: `degraded: true` means "carry on as if AI were off".
+ */
+export async function draftFrom(input, kind, context) {
+  const text = String(input ?? '').trim();
+  const wanted = String(kind ?? '').trim().toLowerCase();
+
+  if (!DRAFT_KINDS.has(wanted)) {
+    logger.warn({ kind }, 'glanceDraft: unknown kind; degrading');
+    return degradedDraft(DRAFT_KINDS.has(wanted) ? wanted : 'task');
+  }
+  if (!text) return degradedDraft(wanted);
+
+  const today = serverToday();
+  const isTask = wanted === 'task';
+
+  try {
+    const { parsed, provider, model } = await callModel({
+      system: isTask ? draftTaskPrompt(today) : draftNotePrompt(today),
+      user: text,
+      schema: isTask ? DRAFT_TASK_SCHEMA : DRAFT_NOTE_SCHEMA,
+      context,
+    });
+
+    if (!parsed) {
+      logger.warn({ kind: wanted }, 'glanceDraft: response was not JSON; degrading');
+      return degradedDraft(wanted, provider, model);
+    }
+
+    const draft = isTask ? normalizeTaskDraft(parsed, text) : normalizeNoteDraft(parsed, text);
+    if (!draft) {
+      logger.warn({ kind: wanted }, 'glanceDraft: draft had no content; degrading');
+      return degradedDraft(wanted, provider, model);
+    }
+
+    return {
+      kind: wanted,
+      draft,
+      summary: summaryOrNull(parsed.summary) || fallbackSummary(wanted, draft),
+      provider,
+      model,
+      degraded: false,
+    };
+  } catch (err) {
+    logger.warn({ err, kind: wanted }, 'glanceDraft: call failed; degrading to the parser');
+    return degradedDraft(wanted);
+  }
+}
+
+export default {
+  planQuery,
+  answerFrom,
+  draftFrom,
+  degradedIntent,
+  normalizeIntent,
+  normalizeTaskDraft,
+  normalizeNoteDraft,
+  trimGlanceToday,
+  sanitizeResults,
+};

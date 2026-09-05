@@ -133,6 +133,11 @@ const HelpModal = ({ open, onClose }) => {
               <li><span className="font-mono text-white/80">~blocked reason</span> park the task</li>
               <li><span className="font-mono text-white/80">@</span> at the start marks an event</li>
             </ul>
+            <p className="mt-2 text-sm text-white/60 leading-relaxed">
+              With Ask on, a line the shorthand can’t read — “remind me to call the
+              vet friday afternoon” — is drafted by aiGeek and previewed first:
+              Enter creates it, Esc drops it back in the box to edit.
+            </p>
           </section>
 
           <section>
@@ -141,6 +146,10 @@ const HelpModal = ({ open, onClose }) => {
             </h3>
             <p className="text-sm text-white/70 leading-relaxed">
               <code className="font-mono text-white/90">&lt; remember the milk</code>
+            </p>
+            <p className="mt-2 text-sm text-white/60 leading-relaxed">
+              With Ask on, a long line or one carrying <span className="font-mono text-white/80">#tags</span>{' '}
+              is drafted with a title first — Enter saves it, Esc drops it back to edit.
             </p>
           </section>
 

@@ -6,17 +6,20 @@ import { gql, UnauthorizedError } from '../lib/graphql'
 import { ENGINES } from '../lib/engines'
 import { detectMode } from '../lib/commandMode'
 import parseTaskInput from '../lib/parseTaskInput'
+import { shouldDraft, draftToSyntax } from '../lib/captureDraft'
 import {
   CREATE_TASK,
   BLOCK_TASK,
   CREATE_NOTE,
   GLANCE_SEARCH,
   GLANCE_ASK,
+  GLANCE_DRAFT,
 } from '../lib/queries'
 import HelpButton from './HelpButton'
 import HelpModal from './HelpModal'
 import SearchResults from './SearchResults'
 import AnswerCard from './AnswerCard'
+import DraftPreview from './DraftPreview'
 import Toast from './Toast'
 
 const ENGINE_STORAGE_KEY = 'startgeek.engine'
@@ -32,15 +35,15 @@ const getInitialEngineIndex = () => {
   }
 }
 
-const getModeLabel = (mode, engine, status, asking) => {
+const getModeLabel = (mode, engine, status, asking, drafting) => {
   if (mode === 'web') return engine.label
   if (status !== 'in') {
     return mode === 'suite' || mode === 'ask'
       ? 'Sign in to search the suite'
       : 'Sign in to capture'
   }
-  if (mode === 'task') return 'Task → BujoGeek'
-  if (mode === 'note') return 'Note → NoteGeek'
+  if (mode === 'task') return drafting ? 'Drafting…' : 'Task → BujoGeek'
+  if (mode === 'note') return drafting ? 'Drafting…' : 'Note → NoteGeek'
   if (mode === 'suite') return 'Suite search'
   if (mode === 'ask') return asking ? 'Thinking…' : 'Ask the suite'
   return engine.label
@@ -86,14 +89,31 @@ const CommandBox = ({ onOpenSettings }) => {
   const [searchLoading, setSearchLoading] = useState(false)
   const [ask, setAsk] = useState(null)
   const [askLoading, setAskLoading] = useState(false)
+  const [draft, setDraft] = useState(null)
+  const [draftLoading, setDraftLoading] = useState(false)
 
   const inputRef = useRef(null)
   const searchDebounceRef = useRef(null)
+  // The line "Edit" just handed back. It came from the model once already;
+  // sending it straight back would be a loop, so the parser gets it whole.
+  const skipDraftRef = useRef(null)
 
   const { mode, query } = useMemo(() => detectMode(value), [value])
   const engine = ENGINES[engineIndex]
-  const modeLabel = getModeLabel(mode, engine, status, askLoading)
+  const modeLabel = getModeLabel(mode, engine, status, askLoading, draftLoading)
   const showAskHint = mode === 'ask' && status === 'in' && !askEnabled
+
+  // "Edit": the draft goes back into the box as the shorthand the parser
+  // reads, so the next Enter is the deterministic path, not another model call.
+  const handleEditDraft = useCallback(() => {
+    if (!draft?.draft) return
+    const prefix = draft.kind === 'note' ? '<' : '>'
+    const text = `${prefix} ${draftToSyntax(draft)}`
+    skipDraftRef.current = text.slice(1).trim()
+    setDraft(null)
+    setValue(text)
+    inputRef.current?.focus()
+  }, [draft])
 
   // Persist engine choice
   useEffect(() => {
@@ -160,6 +180,14 @@ const CommandBox = ({ onOpenSettings }) => {
         return
       }
 
+      // A draft on screen is an offer, not a state to escape from: Esc takes
+      // it into the box to edit rather than throwing the sentence away.
+      if (draft?.draft) {
+        e.preventDefault()
+        handleEditDraft()
+        return
+      }
+
       if (results.length || ask) {
         e.preventDefault()
         setResults([])
@@ -174,7 +202,7 @@ const CommandBox = ({ onOpenSettings }) => {
 
     document.addEventListener('keydown', handleKey)
     return () => document.removeEventListener('keydown', handleKey)
-  }, [helpOpen, results.length, ask])
+  }, [helpOpen, results.length, ask, draft, handleEditDraft])
 
   // Suite search debounce
   useEffect(() => {
@@ -193,6 +221,8 @@ const CommandBox = ({ onOpenSettings }) => {
       setResults([])
       setSelectedIndex(-1)
       setAsk(null)
+      // Editing the line invalidates the draft made from it.
+      setDraft(null)
       if (searchDebounceRef.current) {
         clearTimeout(searchDebounceRef.current)
         searchDebounceRef.current = null
@@ -249,6 +279,56 @@ const CommandBox = ({ onOpenSettings }) => {
     []
   )
 
+  /**
+   * The one place a task is written, whether the fields came from the parser
+   * or from a draft the person confirmed. Unchanged from the parser's own
+   * path — including defaulting to today at 9am, as BujoGeek's quick-add does.
+   */
+  const createTaskFromFields = useCallback(
+    async (fields) => {
+      let dueDate = fields.dueDate ? new Date(fields.dueDate) : null
+      if (!dueDate || Number.isNaN(dueDate.getTime())) {
+        dueDate = new Date()
+        dueDate.setHours(9, 0, 0, 0)
+      }
+
+      const { createTask: task } = await gql(CREATE_TASK, {
+        content: fields.content || '',
+        signifier: fields.signifier || '*',
+        priority: fields.priority || null,
+        tags: fields.tags?.length ? fields.tags : null,
+        dueDate: dueDate.toISOString(),
+        note: fields.note || null,
+        recurrenceRule: fields.recurrenceRule || null,
+      })
+
+      if (fields.noteGeekNote) {
+        await handleCreateNote(fields.noteGeekNote)
+      }
+
+      if (fields.blocked) {
+        await gql(BLOCK_TASK, {
+          id: task.id,
+          reason: fields.blockedReason || null,
+        })
+      }
+    },
+    [handleCreateNote]
+  )
+
+  /** Captured. Clear the box, say so once, and let the modules catch up. */
+  const captureDone = useCallback(
+    (message) => {
+      setDraft(null)
+      skipDraftRef.current = null
+      setToast(message)
+      setValue('')
+      inputRef.current?.focus()
+      refetch()
+    },
+    [refetch]
+  )
+
   const handleEnter = useCallback(async () => {
     if (mode === 'web') {
       const q = query.trim()
@@ -259,64 +339,71 @@ const CommandBox = ({ onOpenSettings }) => {
 
     if (status !== 'in') return
 
-    if (mode === 'task') {
+    if (mode === 'task' || mode === 'note') {
       const q = query.trim()
       if (!q) return
 
-      const parsed = parseTaskInput(q)
+      // A draft is on screen: this Enter confirms it. The model's fields only
+      // ever become a row here, on a keystroke the person made.
+      if (draft?.draft) {
+        try {
+          if (draft.kind === 'note') {
+            await gql(CREATE_NOTE, {
+              title: draft.draft.title || null,
+              content: draft.draft.content,
+              type: 'text',
+              tags: draft.draft.tags || [],
+            })
+            captureDone('Note saved')
+          } else {
+            await createTaskFromFields(draft.draft)
+            captureDone('Task added')
+          }
+        } catch (err) {
+          if (err instanceof UnauthorizedError) {
+            markOut()
+          }
+        }
+        return
+      }
 
-      // Default to today 9am local when the user doesn't give a date, mirroring
-      // BujoGeek's quick-add so bare `> buy milk` shows up as due today.
-      if (!parsed.dueDate) {
-        const today = new Date()
-        today.setHours(9, 0, 0, 0)
-        parsed.dueDate = today
+      // The deterministic parser goes first, always. Only a line it could not
+      // read — with Ask on, and enough words to have a shape — reaches the
+      // model, and even then it only drafts: nothing is saved yet.
+      const askForDraft =
+        skipDraftRef.current !== q && shouldDraft({ mode, text: q, askEnabled })
+
+      if (askForDraft) {
+        setDraftLoading(true)
+        try {
+          const data = await gql(GLANCE_DRAFT, { input: q, kind: mode })
+          const drafted = data.glanceDraft
+          if (drafted && !drafted.degraded && drafted.draft) {
+            setDraft(drafted)
+            return
+          }
+          // Degraded: the model is off, slow or wrong. Carry on as if it were
+          // never wired up.
+        } catch (err) {
+          if (err instanceof UnauthorizedError) {
+            markOut()
+            return
+          }
+          // Anything else falls through to today's behaviour, silently — the
+          // only thing the person sees is the usual capture toast.
+        } finally {
+          setDraftLoading(false)
+        }
       }
 
       try {
-        const { createTask: task } = await gql(CREATE_TASK, {
-          content: parsed.content || '',
-          signifier: parsed.signifier,
-          priority: parsed.priority,
-          tags: parsed.tags || null,
-          dueDate: parsed.dueDate.toISOString(),
-          note: parsed.note || null,
-          recurrenceRule: parsed.recurrenceRule || null,
-        })
-
-        if (parsed.noteGeekNote) {
-          await handleCreateNote(parsed.noteGeekNote)
+        if (mode === 'note') {
+          await handleCreateNote(q)
+          captureDone('Note saved')
+        } else {
+          await createTaskFromFields(parseTaskInput(q))
+          captureDone('Task added')
         }
-
-        if (parsed.blocked) {
-          await gql(BLOCK_TASK, {
-            id: task.id,
-            reason: parsed.blockedReason || null,
-          })
-        }
-
-        setToast('Task added')
-        setValue('')
-        inputRef.current?.focus()
-        refetch()
-      } catch (err) {
-        if (err instanceof UnauthorizedError) {
-          markOut()
-        }
-      }
-      return
-    }
-
-    if (mode === 'note') {
-      const q = query.trim()
-      if (!q) return
-
-      try {
-        await handleCreateNote(q)
-        setToast('Note saved')
-        setValue('')
-        inputRef.current?.focus()
-        refetch()
       } catch (err) {
         if (err instanceof UnauthorizedError) {
           markOut()
@@ -416,11 +503,13 @@ const CommandBox = ({ onOpenSettings }) => {
     status,
     results,
     selectedIndex,
-    refetch,
     markOut,
     handleCreateNote,
+    createTaskFromFields,
+    captureDone,
     ask,
     askEnabled,
+    draft,
   ])
 
   const handleKeyDown = (e) => {
@@ -466,7 +555,11 @@ const CommandBox = ({ onOpenSettings }) => {
   return (
     // Ask stacks a card above the result list, which is taller than the plain
     // `?` dropdown — it needs to clear the dock. `?` keeps its original z-20.
-    <section className={`relative w-full ${mode === 'ask' ? 'z-40' : 'z-20'}`}>
+    <section
+      className={`relative w-full ${
+        mode === 'ask' || draft || draftLoading ? 'z-40' : 'z-20'
+      }`}
+    >
       <div
         className="relative flex items-center gap-3 h-14 pl-5 pr-3.5 rounded-xl border border-hair-strong transition-[border-color,box-shadow] duration-150 focus-within:border-[rgba(127,180,230,0.65)] focus-within:shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_0_0_4px_rgba(127,180,230,0.12),0_10px_40px_rgba(0,0,0,0.35)]"
         style={{
@@ -491,7 +584,7 @@ const CommandBox = ({ onOpenSettings }) => {
           aria-controls={mode === 'suite' || mode === 'ask' ? 'search-results' : undefined}
         />
 
-        {(searchLoading && mode === 'suite') || askLoading ? (
+        {(searchLoading && mode === 'suite') || askLoading || draftLoading ? (
           <span className="w-1.5 h-1.5 rounded-full bg-ink-2 animate-pulse" aria-hidden="true" />
         ) : null}
         <span className="shrink-0 font-mono text-[12px] tracking-[0.06em] uppercase text-ink-2 px-2.5 py-1.5 rounded-md border border-hair truncate max-w-[11rem]">
@@ -538,12 +631,22 @@ const CommandBox = ({ onOpenSettings }) => {
             />
           </div>
         ) : (
-          <SearchResults
-            results={results}
-            selectedIndex={selectedIndex}
-            onSelect={handleSelectResult}
-            onHover={handleHoverResult}
-          />
+          <>
+            {/* The capture fallback sits in the same slot the `?` dropdown
+                uses — nothing is saved until Create is pressed. */}
+            <DraftPreview
+              draft={draft}
+              loading={draftLoading}
+              onCreate={handleEnter}
+              onEdit={handleEditDraft}
+            />
+            <SearchResults
+              results={results}
+              selectedIndex={selectedIndex}
+              onSelect={handleSelectResult}
+              onHover={handleHoverResult}
+            />
+          </>
         )}
       </div>
 

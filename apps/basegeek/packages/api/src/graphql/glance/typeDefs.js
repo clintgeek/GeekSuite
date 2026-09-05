@@ -116,6 +116,36 @@ export const typeDefs = gql`
     model: String
   }
 
+  """
+  One drafted capture: the variables the create mutation already takes.
+
+  Both kinds share one shape so the client has one thing to render. A task
+  fills content / dueDate / priority / tags / signifier; a note fills
+  title / content / tags and leaves the rest null.
+  """
+  type GlanceDraftFields {
+    content: String!
+    title: String
+    dueDate: String
+    priority: Int
+    tags: [String!]!
+    signifier: String
+  }
+
+  """
+  What the model made of a > or < capture line the deterministic parser could
+  not read. Drafting only — nothing is written until the person confirms.
+  A degraded draft is null: carry on exactly as if AI were off.
+  """
+  type GlanceDraft {
+    kind: String!                  # "task" | "note"
+    draft: GlanceDraftFields
+    summary: String
+    provider: String
+    model: String
+    degraded: Boolean!
+  }
+
   input CalendarSourceInput {
     url: String!
     color: String
@@ -135,6 +165,7 @@ export const typeDefs = gql`
     glanceToday(date: String): GlanceToday!
     glanceSearch(query: String!, limit: Int = 12): [GlanceSearchResult!]!
     glanceAsk(query: String!, limit: Int = 12): GlanceAsk!
+    glanceDraft(input: String!, kind: String!): GlanceDraft!
     calendarEvents(sources: [CalendarSourceInput!]!, from: Date, to: Date): [CalendarEvent!]!
   }
 `;
