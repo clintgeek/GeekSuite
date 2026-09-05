@@ -75,6 +75,7 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 - `373f69f` — R28 — fitnessgeek single manifest source (bujogeek already right)
 - `363a820` — R4 — mobile harness in tools/ + CI (report-only); 698 probe findings
 - `d8521eb` — R27 — CSRF header in api-client authLink + startgeek clients
+- `1fda489` — R24 — bujogeek tag cloud + template journal cache; #25/#26 struck
 - `37e83b6` — R17 — 22 dead fitnessgeek files + broken dev compose deleted
 - `164f978` — R16 — notegeek relative-time tests; dev-server fix pending in vite.config.js (shared with R13)
 - `6c39d00` — R2 — Apps & keys tab; APIKeysPage retired; AppConfigDialog on GeekDialog
