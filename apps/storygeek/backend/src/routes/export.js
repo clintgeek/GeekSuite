@@ -3,11 +3,16 @@ import bookService from '../services/bookService.js';
 import { createEpub } from '../services/epubService.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { requireStoryOwner } from '../middleware/storyOwner.js';
+import { validate } from '../validation/validate.js';
+import { storyIdParamsSchema } from '../validation/schemas/export.js';
 
 const router = express.Router();
 
 router.use(authenticateToken);
-// Only the story's owner may export/bookify it.
+// storyId is checked (non-empty, bounded string) before requireStoryOwner
+// spends a Mongo round trip loading it. Only the story's owner may
+// export/bookify it.
+router.use('/stories/:storyId', validate({ params: storyIdParamsSchema }));
 router.use('/stories/:storyId', requireStoryOwner);
 
 // POST /api/export/stories/:storyId/bookify

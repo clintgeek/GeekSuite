@@ -2,11 +2,23 @@ import express from 'express';
 import Story from '../models/Story.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { requireStoryOwner } from '../middleware/storyOwner.js';
+import { validate } from '../validation/validate.js';
+import {
+  storyIdParamsSchema,
+  characterNameParamsSchema,
+  inventoryItemParamsSchema,
+  createCharacterSchema,
+  updateCharacterSchema,
+  addInventoryItemSchema,
+} from '../validation/schemas/characters.js';
 
 const router = express.Router();
 
 router.use(authenticateToken);
-// Every route here is keyed by :storyId — only the story's owner may touch its characters.
+// storyId is checked (non-empty, bounded string) before requireStoryOwner
+// spends a Mongo round trip loading it — every route under here is keyed by
+// :storyId, and only the story's owner may touch its characters.
+router.use('/story/:storyId', validate({ params: storyIdParamsSchema }));
 router.use('/story/:storyId', requireStoryOwner);
 
 router.get('/story/:storyId', async (req, res) => {
@@ -33,7 +45,7 @@ router.get('/story/:storyId/character/:characterName', async (req, res) => {
   }
 });
 
-router.post('/story/:storyId', async (req, res) => {
+router.post('/story/:storyId', validate({ body: createCharacterSchema }), async (req, res) => {
   try {
     const story = await Story.findById(req.params.storyId);
     if (!story) return res.status(404).json({ error: 'Story not found' });
@@ -48,7 +60,7 @@ router.post('/story/:storyId', async (req, res) => {
   }
 });
 
-router.put('/story/:storyId/character/:characterName', async (req, res) => {
+router.put('/story/:storyId/character/:characterName', validate({ params: characterNameParamsSchema, body: updateCharacterSchema }), async (req, res) => {
   try {
     const story = await Story.findById(req.params.storyId);
     if (!story) return res.status(404).json({ error: 'Story not found' });
@@ -63,7 +75,7 @@ router.put('/story/:storyId/character/:characterName', async (req, res) => {
   }
 });
 
-router.delete('/story/:storyId/character/:characterName', async (req, res) => {
+router.delete('/story/:storyId/character/:characterName', validate({ params: characterNameParamsSchema }), async (req, res) => {
   try {
     const story = await Story.findById(req.params.storyId);
     if (!story) return res.status(404).json({ error: 'Story not found' });
@@ -78,7 +90,7 @@ router.delete('/story/:storyId/character/:characterName', async (req, res) => {
   }
 });
 
-router.patch('/story/:storyId/character/:characterName/toggle', async (req, res) => {
+router.patch('/story/:storyId/character/:characterName/toggle', validate({ params: characterNameParamsSchema }), async (req, res) => {
   try {
     const story = await Story.findById(req.params.storyId);
     if (!story) return res.status(404).json({ error: 'Story not found' });
@@ -93,7 +105,7 @@ router.patch('/story/:storyId/character/:characterName/toggle', async (req, res)
   }
 });
 
-router.post('/story/:storyId/character/:characterName/inventory', async (req, res) => {
+router.post('/story/:storyId/character/:characterName/inventory', validate({ params: characterNameParamsSchema, body: addInventoryItemSchema }), async (req, res) => {
   try {
     const story = await Story.findById(req.params.storyId);
     if (!story) return res.status(404).json({ error: 'Story not found' });
@@ -109,7 +121,7 @@ router.post('/story/:storyId/character/:characterName/inventory', async (req, re
   }
 });
 
-router.delete('/story/:storyId/character/:characterName/inventory/:itemName', async (req, res) => {
+router.delete('/story/:storyId/character/:characterName/inventory/:itemName', validate({ params: inventoryItemParamsSchema }), async (req, res) => {
   try {
     const story = await Story.findById(req.params.storyId);
     if (!story) return res.status(404).json({ error: 'Story not found' });

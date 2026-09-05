@@ -1,5 +1,7 @@
 import express from 'express';
 import axios from 'axios';
+import { validate } from '../validation/validate.js';
+import { refreshSchema } from '../validation/schemas/auth.js';
 
 const router = express.Router();
 
@@ -60,7 +62,7 @@ router.post('/logout', async (req, res) => {
 });
 
 // POST /api/auth/refresh — proxy to baseGeek
-router.post('/refresh', async (req, res) => {
+router.post('/refresh', validate({ body: refreshSchema }), async (req, res) => {
   try {
     const refreshToken = req.body?.refreshToken;
     const refreshCookie = req.cookies?.geek_refresh_token;

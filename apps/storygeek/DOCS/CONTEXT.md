@@ -5,6 +5,59 @@ This file is StoryGeek's project-context note (servers/ports/known-quirks), sepa
 `LOCAL_DEV.md`/`SETUP.md` (dev setup). It didn't exist before 2026-09-05; this is its first
 entry.
 
+## Backend — zod input validation (2026-09-05)
+
+TODO_ORDER #22 (input validation), storygeek slice. Every mutating REST route
+(POST/PUT/PATCH/DELETE with a body or meaningful params) now runs a zod
+schema first: `src/validation/validate.js` (mirrors
+`apps/fitnessgeek/backend/src/validation/validate.js` exactly — same 400
+envelope, `{ success: false, error: { message, code: 'VALIDATION_ERROR',
+details: [{ path, message }] } }`) plus one schema file per route family
+under `src/validation/schemas/` — `stories.js`, `characters.js`, `export.js`
+(a thin re-export, see below), `auth.js`. Ids in params (`storyId`,
+`characterName`'s neighbor-lookup, `characterId` in a relationship) are
+checked as non-empty bounded strings, **not** Mongo ObjectIds, so a
+malformed id still falls through to each route's existing "not found"
+handling instead of validation reinterpreting it — same call as bujogeek's
+zod pass.
+
+**Route families and what they enforce:**
+- `stories.js` — `POST /start` (prompt required, ≤20000 chars; title/genre
+  ≤200/100; description ≤5000; provider/model bounded strings, no fixed enum
+  since aiService resolves them dynamically against basegeek's live list),
+  `POST /:storyId/continue` (userInput required ≤20000 chars — this closes a
+  real gap: the controller read `userInput.startsWith('/')` with **no**
+  prior null-check, so a missing body previously 500'd; now a clean 400),
+  `PATCH /:storyId/status` (status enum, mirrors `Story.status` exactly),
+  `DELETE /:storyId` (storyId param only).
+- `characters.js` — schemas mirror the **embedded** `characterSchema` in
+  `models/Story.js` (this route family reads/writes `story.characters`, not
+  the separate, effectively-dead standalone `models/Character.js`, which only
+  `characterService.js` touches and no route calls). `POST /story/:storyId`
+  and `PUT .../character/:characterName` validate the full character shape
+  (status/relationshipType/learnedVia enums; knowledge/relationships/
+  inventory/skills arrays ≤100 items — the model itself is unbounded).
+  `storyId` is now checked by a router-level `validate()` mounted just ahead
+  of `requireStoryOwner`, so a malformed id 400s before the extra Mongo round
+  trip; `characterName`/`itemName` params get their own bounded-string check
+  since `requireStoryOwner` doesn't see them.
+- `export.js` — no body (bookify/epub only ever read `storyId` and the
+  Authorization header); `schemas/export.js` re-exports the shared storyId
+  params schema rather than duplicating it, wired the same router-level way
+  as characters.js.
+- `auth.js` — only `POST /refresh` had a validatable body (`refreshToken`,
+  `app`); `app` is bounded to basegeek's `VALID_APPS` list (SSO_OVERVIEW.md/
+  `DOCS/CONTEXT.md`'s SSO section). `GET /me` and `POST /logout` take no body
+  worth checking (cookie/header only).
+- `ai.js` — all three routes are GET with no body/params; nothing to
+  validate, so there's no `schemas/ai.js` (a schema file with nothing in it
+  would just be dead code).
+
+zod pinned at `3.25.76` (same version fitnessgeek and basegeek's API pin).
+35 new jest tests (41 → 76); node's `--test` suite (65) is untouched — it
+covers services, not routes. Full route inventory, bounds rationale, and
+what's still open for the rest of the suite: see the TODO #22 report.
+
 ## Frontend — shared feedback primitives (2026-09-05)
 
 `GeekEmptyState` / `GeekErrorState` / `GeekToastProvider`+`useToast` / `toneForMode` (all

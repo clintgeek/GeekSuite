@@ -2,6 +2,13 @@ import express from 'express';
 import storyController from '../controllers/storyController.js';
 import aiService from '../services/aiService.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { validate } from '../validation/validate.js';
+import {
+  storyIdParamsSchema,
+  startStorySchema,
+  continueStorySchema,
+  updateStoryStatusSchema,
+} from '../validation/schemas/stories.js';
 
 const router = express.Router();
 
@@ -24,12 +31,12 @@ router.get('/test-debug', storyController.testEndpoint);
 // Protected routes - require authentication
 router.use(authenticateToken);
 
-router.post('/start', storyController.startStory);
-router.post('/:storyId/continue', storyController.continueStory);
+router.post('/start', validate({ body: startStorySchema }), storyController.startStory);
+router.post('/:storyId/continue', validate({ params: storyIdParamsSchema, body: continueStorySchema }), storyController.continueStory);
 router.get('/user/:userId', storyController.getUserStories);
 router.get('/:storyId/summary', storyController.getStorySummary);
 router.get('/:storyId', storyController.getStory);
-router.patch('/:storyId/status', storyController.updateStoryStatus);
-router.delete('/:storyId', storyController.deleteStory);
+router.patch('/:storyId/status', validate({ params: storyIdParamsSchema, body: updateStoryStatusSchema }), storyController.updateStoryStatus);
+router.delete('/:storyId', validate({ params: storyIdParamsSchema }), storyController.deleteStory);
 
 export default router;
