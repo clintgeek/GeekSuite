@@ -39,6 +39,27 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | Q11 | basegeek `Databases.jsx`: wire into nav or delete | Chef's call | XS |
 | Q12 | AIGeek: `aiDirectorService`/`rateLimitService` last `llm7` references | R1 owns those files | XS |
 
+## How to resume if this session is lost
+
+1. `git status --short` — every uncommitted path belongs to one running stream above (match by
+   directory). Agents never commit; Sage does. Nothing is lost while the tree holds it.
+2. Per stream, verify before committing: the app's `pnpm build && pnpm lint` (startgeek: npm; lint
+   must add no warnings), tests where they exist (`packages/ui` vitest 340+, basegeek api jest 589+,
+   notegeek vitest 141, fitnessgeek backend jest 45, bookgeek api `npm test`).
+3. Commit with the scope check: `git add <stream paths>` then
+   `git diff --cached --name-only | grep -vcE '<allowed pattern>'` must print `0`. Use `git commit -F -`
+   with a heredoc; messages say what changed and how it was verified.
+4. Push = deploy (all eight images rebuild; Watchtower restarts changed digests; basegeek publishes
+   ~1 min after the rest and lands one 5-minute scan later). After a push: `docker ps` ages, then
+   `curl https://<app>.clintgeek.com/api/health`.
+5. Q1 after R1 deploys: `node apps/basegeek/packages/api/scripts/mint-api-key.js --app storygeek
+   --name "storygeek backend" --permissions ai:call,ai:director --write-env
+   apps/storygeek/.env.production --var AI_GEEK_API_KEY` and the same for fitnessgeek
+   (`--replace` if the var exists); then `docker compose up -d` in each of those two app dirs. Tell
+   Chef before the restarts. Never paste a key into chat.
+6. Session quota: 5-hour window; if capped, pause until the reset (~3:50 pm Central on 09-05) and
+   continue from this board. Memory: `project_burn_program.md` in Sage's memory dir mirrors this.
+
 ## Landed today (before the burn)
 
 M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask step 5; nginx
