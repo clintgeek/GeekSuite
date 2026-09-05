@@ -21,7 +21,7 @@ const has = (name) => argv.includes(`--${name}`);
 
 const app = flag('app');
 if (!app || !APP_NAMES.includes(app)) {
-  console.error(`usage: node shoot.mjs --app <${APP_NAMES.join('|')}> [--base URL | --serve] [--label NAME] [--viewports phone|desktop|all] [--no-build] [--no-shots]`);
+  console.error(`usage: node shoot.mjs --app <${APP_NAMES.join('|')}> [--base URL | --serve] [--label NAME] [--viewports phone|desktop|all] [--no-build] [--no-shots] [--no-a11y] [--enforce-a11y]`);
   process.exit(2);
 }
 
@@ -59,8 +59,9 @@ try {
     outDir,
     viewports,
     screenshots: !has('no-shots') && !has('probe-only'),
+    a11y: !has('no-a11y'),
   });
-  const summary = summarize([run]);
+  const summary = summarize([run], { enforceA11y: has('enforce-a11y') });
   report(summary);
   process.exitCode = summary.ok ? 0 : 1;
 } finally {

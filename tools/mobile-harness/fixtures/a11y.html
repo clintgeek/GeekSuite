@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>a11y probe fixture</title>
+    <style>
+      /* Deliberately boring and high-contrast: the only axe violations on this
+         page must be the two planted ones. Black on white is 21:1, so the
+         color-contrast rule (which the harness leaves ON — see lib/a11y.mjs)
+         has nothing to say here. Everything is 16px and 44x44 so the three
+         grammar rules stay quiet too. */
+      html, body { margin: 0; padding: 0; background: #ffffff; color: #000000; }
+      body { font: 16px/1.5 system-ui, sans-serif; padding: 16px; }
+      h1 { font-size: 20px; margin: 0 0 12px; }
+      section { margin-bottom: 20px; }
+      button { min-width: 44px; min-height: 44px; font-size: 16px; background: #ffffff; color: #000000; border: 2px solid #000000; }
+      img { display: block; width: 60px; height: 60px; }
+    </style>
+  </head>
+  <body>
+    <h1>axe fixture</h1>
+
+    <!-- ── the two planted violations ──────────────────────────────────── -->
+    <section>
+      <!-- image-alt: an image with no alt attribute at all -->
+      <img id="bad-image" src="data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20width%3D'60'%20height%3D'60'%3E%3Crect%20width%3D'60'%20height%3D'60'%20fill%3D'%23000000'%2F%3E%3C%2Fsvg%3E" />
+
+      <!-- button-name: a visible button with no text, no aria-label, no title -->
+      <button id="bad-button"></button>
+    </section>
+
+    <!-- ── the clean controls ──────────────────────────────────────────── -->
+    <section>
+      <img id="good-image" alt="A solid black square, for scale." src="data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20width%3D'60'%20height%3D'60'%3E%3Crect%20width%3D'60'%20height%3D'60'%20fill%3D'%23000000'%2F%3E%3C%2Fsvg%3E" />
+      <button id="good-button">Save</button>
+      <button id="good-icon-button" aria-label="Close">&times;</button>
+    </section>
+  </body>
+</html>

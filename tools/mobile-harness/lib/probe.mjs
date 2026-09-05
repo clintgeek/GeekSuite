@@ -15,10 +15,22 @@
 //
 // It runs in the page, so it sees computed styles rather than source. That
 // catches the whole class of "the sx says 44 but a parent squeezed it".
+//
+// A fourth category, `a11y`, is the axe-core pass (WCAG 2 A + AA, see
+// `lib/a11y.mjs`). It is **report-only** unless `--enforce-a11y` is passed:
+// the three grammar rules above stay the gate, a11y is a burn-down list.
+//
+// Every finding carries a `category` (one of GRAMMAR_RULES plus `a11y`) and a
+// `rule`. For the grammar rules the two are the same string; for a11y the
+// category is `a11y` and the rule is the axe rule id (`image-alt`,
+// `color-contrast`, …), so findings group by rule id in the report.
 
-const RULES = ['tap-target', 'text-floor', 'h-scroll'];
+import { AXE_OPTIONS, ensureAxe } from './a11y.mjs';
 
-const collect = (isPhone) => {
+const GRAMMAR_RULES = ['tap-target', 'text-floor', 'h-scroll'];
+const CATEGORIES = [...GRAMMAR_RULES, 'a11y'];
+
+const collect = async ({ isPhone, a11y = false, axeOptions = null }) => {
   const INTERACTIVE = [
     'a[href]', 'button', 'input:not([type=hidden])', 'select', 'textarea', 'summary',
     '[role=button]', '[role=link]', '[role=tab]', '[role=switch]', '[role=checkbox]',
@@ -261,6 +273,7 @@ const collect = (isPhone) => {
         }
         violations.push({
           rule: 'tap-target',
+          category: 'tap-target',
           el: describe(el),
           hint: selectorHint(el),
           detail,
@@ -285,6 +298,7 @@ const collect = (isPhone) => {
       flagged.add(el);
       violations.push({
         rule: 'text-floor',
+        category: 'text-floor',
         el: describe(el),
         hint: selectorHint(el),
         detail: `${size.toFixed(1)}px "${raw.slice(0, 40)}"`,
@@ -305,34 +319,117 @@ const collect = (isPhone) => {
     }
     violations.push({
       rule: 'h-scroll',
+      category: 'h-scroll',
       el: worst ? describe(worst.el) : 'document',
       hint: worst ? selectorHint(worst.el) : 'document',
       detail: `scrollWidth ${doc.scrollWidth} > clientWidth ${doc.clientWidth}`,
     });
   }
 
+  // ── a11y (axe-core) ─────────────────────────────────────────────────────
+  // One harness finding per axe *rule*, not per node: a page with 40 unlabelled
+  // icon buttons is one `button-name` problem with 40 instances, and reading it
+  // as 40 findings drowns everything else. The node count rides along in
+  // `nodes`, and the first offending element is described with the same
+  // `describe`/`selectorHint` the grammar rules use, so a fix pass greps for
+  // exactly the same kind of selector it already knows.
+  if (a11y && typeof window.axe !== 'undefined') {
+    // axe target entries are CSS selectors. A nested array means the node is
+    // inside an iframe (`[['#frame', '#el']]`); the last segment is the
+    // element itself, which is the useful half.
+    const leaf = (target) => {
+      let t = target;
+      while (Array.isArray(t)) t = t[t.length - 1];
+      return t == null ? '' : String(t);
+    };
+    const res = await window.axe.run(document, axeOptions || undefined);
+    for (const v of res.violations || []) {
+      const nodes = v.nodes || [];
+      const sel = nodes.length ? leaf(nodes[0].target) : '';
+      let el = null;
+      try {
+        el = sel ? document.querySelector(sel) : null;
+      } catch {
+        el = null; // an axe shadow-DOM target is not a document-level selector
+      }
+      const why = String((nodes[0] && nodes[0].failureSummary) || v.help || '')
+        .replace(/\s+/g, ' ')
+        .replace(/^Fix (any|all) of the following:\s*/i, '')
+        .trim()
+        .slice(0, 140);
+      violations.push({
+        rule: v.id,
+        category: 'a11y',
+        impact: v.impact || 'unknown',
+        nodes: nodes.length,
+        helpUrl: v.helpUrl || '',
+        el: el ? describe(el) : sel || '(document)',
+        hint: el ? selectorHint(el) : sel || 'document',
+        // Up to five raw axe selectors, so a `{ rule, selector }` waiver can
+        // match an instance that is not the first one reported.
+        targets: nodes.slice(0, 5).map((n) => leaf(n.target)),
+        detail: `${v.impact || 'unknown'} · ${nodes.length} node(s) · ${why}`,
+      });
+    }
+  }
+
   return violations;
 };
 
-// `isPhone` gates tap-target (see the RULES comment above); text-floor and
+// `isPhone` gates tap-target (see the header comment above); text-floor and
 // h-scroll run regardless of viewport.
-export async function probePage(page, { isPhone = true } = {}) {
-  return page.evaluate(collect, isPhone);
+// `a11y` runs the axe-core pass as well; it is opt-in at this level (the
+// runner turns it on, `selftest.mjs`'s tap-target fixture leaves it off) and
+// costs one 580KB script injection per scene.
+export async function probePage(page, { isPhone = true, a11y = false, axeOptions = AXE_OPTIONS } = {}) {
+  if (a11y) {
+    const ready = await ensureAxe(page);
+    if (!ready) throw new Error('axe-core did not inject into the page (see lib/a11y.mjs)');
+  }
+  return page.evaluate(collect, { isPhone, a11y, axeOptions: a11y ? axeOptions : null });
 }
 
-// A waiver is { rule, match, why, scenes? }. `match` is a string (substring)
-// or a RegExp tested against the element description. Waivers exist so a
-// known, ticketed violation does not hold the gate shut — every one of them
-// carries a reason and should die when the app is fixed.
+// A waiver is `{ rule?, category?, match?, selector?, scenes?, why }`. Every
+// field present must match (they AND together), and at least one of
+// `rule`/`category`/`match`/`selector` has to be there — a waiver that only
+// names scenes would silently waive the whole scene.
+//
+//   rule       exact: a grammar rule name (`text-floor`) or an axe rule id
+//              (`color-contrast`).
+//   category   exact: `tap-target` | `text-floor` | `h-scroll` | `a11y`.
+//   match      substring or RegExp against "<el description> <detail>".
+//   selector   substring or RegExp against the finding's `hint` plus, for an
+//              a11y finding, the raw axe target selectors. This is the a11y
+//              shape: `{ rule: 'color-contrast', selector: '[data-geek-x]' }`.
+//   scenes     narrows the waiver to named scenes.
+//
+// Waivers exist so a known, ticketed violation does not hold the gate shut —
+// every one of them carries a reason and should die when the app is fixed.
 export function partition(violations, waivers = [], sceneName) {
   const open = [];
   const waived = [];
+  const hits = (pattern, hay) => (pattern instanceof RegExp ? pattern.test(hay) : hay.includes(pattern));
   for (const v of violations) {
     const hit = waivers.find((w) => {
-      if (w.rule && w.rule !== v.rule) return false;
+      let qualified = false; // did this waiver actually assert anything?
       if (w.scenes && !w.scenes.includes(sceneName)) return false;
-      const hay = `${v.el} ${v.detail}`;
-      return w.match instanceof RegExp ? w.match.test(hay) : hay.includes(w.match);
+      if (w.category) {
+        if (w.category !== (v.category || v.rule)) return false;
+        qualified = true;
+      }
+      if (w.rule) {
+        if (w.rule !== v.rule) return false;
+        qualified = true;
+      }
+      if (w.match != null) {
+        if (!hits(w.match, `${v.el} ${v.detail}`)) return false;
+        qualified = true;
+      }
+      if (w.selector != null) {
+        if (!hits(w.selector, [v.hint, ...(v.targets || [])].join(' '))) return false;
+        qualified = true;
+      }
+      return qualified;
     });
     if (hit) waived.push({ ...v, why: hit.why });
     else open.push(v);
@@ -340,4 +437,6 @@ export function partition(violations, waivers = [], sceneName) {
   return { open, waived };
 }
 
-export { RULES };
+export const isA11y = (v) => (v.category || v.rule) === 'a11y';
+
+export { GRAMMAR_RULES, CATEGORIES };

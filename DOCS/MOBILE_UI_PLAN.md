@@ -98,6 +98,38 @@ Rules, not screens. Every app inherits these; identity stays in `sx`.
 | Tables | Below `md` a table renders as a card or definition list. App-owned layout, shared rule. | per app |
 | Keyboard | Composer/inputs pinned to the bottom use `dvh` + `interactive-widget=resizes-content`; autofocus only on explicit user intent. | per app |
 | Motion | Sheets slide 180ms on the standard curve; route fades unchanged; both honor `prefers-reduced-motion`. | `geekMotion` |
+| Accessibility | No axe-core violation at WCAG 2 A or AA, colour contrast included. **Report-only** — see below. | harness (`a11y` category) |
+
+### The `a11y` rule is report-only (added 2026-09-05)
+
+The mobile harness runs [axe-core](https://github.com/dequelabs/axe-core) on every scene it
+walks, restricted to the `wcag2a` and `wcag2aa` tags — the standard, not the best-practice
+opinions. The `color-contrast` rule is left **on** deliberately: `packages/ui` carries its own
+contrast ratchet, so a disagreement between axe and the ratchet is a finding worth reading, not
+noise worth muting.
+
+Findings are reported under a fourth probe category, `a11y`, alongside `tap-target`,
+`text-floor` and `h-scroll`. Unlike those three it **does not fail the build**. It is a
+burn-down list: one row per axe rule id, with the apps it fires in and how many findings each
+contributed, printed by the harness and written to `out/<label>/SUMMARY.md` (uploaded as a CI
+artifact).
+
+**Baseline, 2026-09-05:** a full local run — 140 scenes, eight apps, iPhone 14 dark and light —
+reported **0 grammar violations, 0 page errors and 112 a11y findings**. Two thirds of that is
+three rules, and all three are suite-level rather than app-level: `color-contrast` (40, mostly
+muted secondary text and `overline`/`Chip` labels, measured in the 2.4–4.1 band against a 4.5
+floor), `button-name` (18, MUI `IconButton` with no `aria-label`) and `aria-input-field-name`
+(16, MUI `Select` with no paired `InputLabel`/`labelId`). The per-rule, per-app table lives in
+`tools/mobile-harness/README.md`.
+
+**The flip criterion: 0 open a11y findings across all eight apps.** When a full
+`pnpm --filter @geeksuite/mobile-harness run ci` reports `a11y: 0`, add `--enforce-a11y` to the
+run step in `.github/workflows/mobile-harness.yml` and the category becomes a gate like the
+other three. Waived findings do not count as open, so a rule that is genuinely a false positive
+for this suite can be parked with a reason (`{ rule, selector, why }` in the app's
+`scenes.mjs`) rather than blocking the flip forever — but a waiver is a ratchet, not a parking
+lot, and every one of them should die when the app is fixed. See
+`tools/mobile-harness/README.md` for the flag, the waiver shape and the current top rules.
 
 ### New primitives (litmus test: every app would use it, it encodes a rule, no domain)
 

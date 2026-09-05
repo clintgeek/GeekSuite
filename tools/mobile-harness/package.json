@@ -10,6 +10,7 @@
     "ci": "node ci.mjs"
   },
   "devDependencies": {
+    "axe-core": "4.13.0",
     "playwright": "1.58.2"
   }
 }
