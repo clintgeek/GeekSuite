@@ -118,7 +118,7 @@ const CalendarModule = () => {
       <div className="flex-1 min-h-0 overflow-y-auto -mr-1 pr-1" onScroll={handleScroll}>
         {grouped.map(([date, dayEvents]) => (
           <div key={date} className="mb-3">
-            <h4 className="text-[10px] font-medium uppercase tracking-wider text-ink-3 mb-1.5">
+            <h4 className="text-[12px] font-medium uppercase tracking-wider text-ink-3 mb-1.5">
               {date}
             </h4>
             <div className="flex flex-col gap-2">
@@ -131,7 +131,7 @@ const CalendarModule = () => {
                   />
                   <div className="flex-1 min-w-0">
                     <p className="text-[13px] text-ink leading-tight truncate">{ev.summary}</p>
-                    <p className="text-[11px] text-ink-3">{formatEventTime(ev)}</p>
+                    <p className="text-[12px] text-ink-3">{formatEventTime(ev)}</p>
                   </div>
                 </div>
               ))}

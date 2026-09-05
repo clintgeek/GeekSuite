@@ -29,7 +29,7 @@ const Skeleton = ({ className = '' }) => (
 )
 
 const GroupLabel = ({ children }) => (
-  <div className="label !text-[10px] !text-ink-3 pt-2 first:pt-0">{children}</div>
+  <div className="label !text-[12px] !text-ink-3 pt-2 first:pt-0">{children}</div>
 )
 
 // Short due label for an upcoming task: weekday within the week, else "Sep 12".

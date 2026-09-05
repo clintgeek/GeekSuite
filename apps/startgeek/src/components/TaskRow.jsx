@@ -72,7 +72,7 @@ const TaskRow = ({ task, late = false, today, aside = null }) => {
         href="https://bujogeek.clintgeek.com/"
         target="_blank"
         rel="noopener noreferrer"
-        className={`flex-1 min-w-0 text-sm leading-snug transition-colors no-underline ${
+        className={`task-link flex-1 min-w-0 text-sm leading-snug transition-colors no-underline ${
           late ? 'text-ink-2 hover:text-ink' : 'text-ink hover:text-white'
         }`}
       >

@@ -65,11 +65,13 @@
   .font-mono { font-family: var(--font-mono); }
   .tnum { font-variant-numeric: tabular-nums; }
 
-  /* Small uppercase tracked label in mono. The console's caption voice. */
+  /* Small uppercase tracked label in mono. The console's caption voice.
+     12px text floor (MOBILE_UI_PLAN §2); letter-spacing tightened slightly
+     so the wider glyph doesn't loosen the rhythm the 11px tracking set. */
   .label {
     font-family: var(--font-mono);
-    font-size: 11px;
-    letter-spacing: 0.12em;
+    font-size: 12px;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--ink-2);
   }
@@ -197,7 +199,7 @@
   .seg { display: inline-flex; border: 1px solid var(--hair-strong); border-radius: 8px; overflow: hidden; }
   .seg > button {
     padding: 7px 14px;
-    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+    font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase;
     color: var(--ink-3);
     transition: background 120ms var(--ease), color 120ms var(--ease);
   }
@@ -319,3 +321,16 @@
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
+
+/* ---- Phone tap targets (MOBILE_UI_PLAN §2: 44px, no exceptions) ----
+   Below `md` these real text links/buttons grow to a genuine 44px box;
+   `.hit44` and `.dot`'s invisible centered ::before already give their
+   glyph-sized controls a real 44px hit area, so they're not touched here
+   (a visible 44px chip would blow up the console's density for nothing). */
+@media (max-width: 899px) {
+  .module-link { min-height: 44px; }
+  .task-link { min-height: 44px; }
+  .signout-btn { min-height: 44px; display: inline-flex; align-items: center; }
+  .seg > button { min-height: 44px; display: flex; align-items: center; justify-content: center; }
+  input[aria-label="Command box"] { min-height: 44px; }
+}

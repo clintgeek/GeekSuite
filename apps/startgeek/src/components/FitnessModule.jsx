@@ -44,7 +44,7 @@ const FitnessModule = ({ fitness }) => {
               </small>
             </div>
             {streak && (
-              <b className="shrink-0 font-mono text-[11px] tracking-wide text-ink">
+              <b className="shrink-0 font-mono text-[12px] tracking-wide text-ink">
                 {streak}
               </b>
             )}
@@ -55,7 +55,7 @@ const FitnessModule = ({ fitness }) => {
         </>
       )}
       {(meals || lastActivity) && (
-        <div className="flex justify-between gap-3 font-mono text-[11px] text-ink-3 tracking-wide tnum">
+        <div className="flex justify-between gap-3 font-mono text-[12px] text-ink-3 tracking-wide tnum">
           <span className="truncate">{meals}</span>
           {lastActivity && <span className="truncate text-right">{lastActivity}</span>}
         </div>

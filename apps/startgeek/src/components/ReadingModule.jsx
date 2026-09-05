@@ -57,7 +57,7 @@ const ReadingModule = ({ book }) => {
             {book.title}
           </span>
           {authorText && <span className="text-[12.5px] text-ink-3 truncate">{authorText}</span>}
-          {pages && <span className="font-mono text-[11px] text-ink-3 tnum">{pages} pages</span>}
+          {pages && <span className="font-mono text-[12px] text-ink-3 tnum">{pages} pages</span>}
         </span>
       </a>
       {progress != null ? (
@@ -65,13 +65,13 @@ const ReadingModule = ({ book }) => {
           <span className="meter" aria-hidden="true">
             <i style={{ width: `${Math.min(100, Math.max(0, progress))}%` }} />
           </span>
-          <span className="flex justify-between font-mono text-[11px] text-ink-3 tnum">
+          <span className="flex justify-between font-mono text-[12px] text-ink-3 tnum">
             <span>{progress}% read</span>
             {page != null && <span className="text-ink font-medium">p. {page}</span>}
           </span>
         </div>
       ) : (
-        <span className="mt-auto font-mono text-[11px] text-ink-3">No progress set</span>
+        <span className="mt-auto font-mono text-[12px] text-ink-3">No progress set</span>
       )}
     </Module>
   )

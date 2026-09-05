@@ -14,7 +14,7 @@ const SessionButton = () => {
         <span className="text-ink">{user.username}</span>
         <button
           onClick={signOut}
-          className="text-xs text-ink-3 hover:text-ink transition-colors rounded"
+          className="signout-btn text-xs text-ink-3 hover:text-ink transition-colors rounded"
         >
           Sign out
         </button>
