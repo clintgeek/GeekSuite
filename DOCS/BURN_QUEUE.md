@@ -13,7 +13,6 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | R57 | TODO #30 ×3: bujogeek TemplatePreview markdown, notegeek mind-map palette, flockgeek first-visit flicker | sonnet | three frontends, TODO docs | 09-05 13:42 |
 | R53 | Q33: fitnessgeek frontend food-log writes → gateway mutations; vitest setup + ci job | opus | fitnessgeek frontend, ci.yml, lockfile, SUITE_TODO | 09-05 13:40 |
 | R54 | Q32: tools/syntax-check.mjs + CI `syntax` job (parse every backend/package .js) | sonnet | tools/, root package.json, ci.yml, RUNBOOK | 09-05 13:40 |
-| R55 | Q34: deflake aiServiceCache.test.js (fake timers / cleared cache) | sonnet | basegeek api one test (+aiService if a clock is needed) | 09-05 13:40 |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
 ## Queued (launch when files free / prerequisite lands)
@@ -27,7 +26,6 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | Q13 | verify COVERS_PATH now serves the old covers in the bookgeek UI (CONTEXT.md runtime line already fixed) | Chef eyeballs the UI | XS |
 | Q18b | After R27 deploys: a day of clean `CSRF token check (report-only)` logs, then `CSRF_TOKEN=enforce` in basegeek's env and a container restart | Chef's call after the log window | XS |
 | Q22 | flockgeek backend still mounts a full REST CRUD API (9 models) with no caller in the repo — decide: delete the layer or keep as API surface | Chef's call | S |
-| Q31 | After the R46 deploy: `docker exec fitnessgeek node scripts/encryptGarminPasswords.js --dry-run`, then real, then dry-run again (expect 0) | after deploy | XS |
 | Q20b | aiGeek: simulated streaming (F-21) and user-gated selection (F-14) documented, not fixed | design | S |
 | Q14 | storygeek CanonCard summary text through Narration too (agent left it as a separate render path) | Chef's call | XS |
 
@@ -84,6 +82,8 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 - `363a820` — R4 — mobile harness in tools/ + CI (report-only); 698 probe findings
 - `d8521eb` — R27 — CSRF header in api-client authLink + startgeek clients
 - `1fda489` — R24 — bujogeek tag cloud + template journal cache; #25/#26 struck
+- `3c20444` — R55 — aiServiceCache on fake timers (Q34)
+- Q31 done 13:44 — Garmin backfill: 1 document encrypted, second dry-run 0 remaining
 - `c76152f` — R51 — storygeek on shared feedback primitives; #15 fan-out complete (7/7), #19 closed
 - `79b1b57` — R50 — gateway food-log mutations drop-in for REST (Q29; 26 tests, api 826)
 - `61d3109` — hotfix: bujogeek typeDefs backticks + gatewaySchemaLoads tripwire
