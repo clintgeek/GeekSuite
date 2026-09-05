@@ -65,7 +65,7 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 
 - 09-05 14:43 — wave 5 (`9712fe8`, 8 commits): R66 + harness readiness fix (`15aaf38`). Gates green; CI + Release green; Watchtower 14:53 (updated=7); all eight apps 200. **Mobile harness workflow green in CI for the first time (14:54) — M6 guardrails done, enforcing.**
 
-- 09-05 15:20 — wave 6: R67, R68, comment fixes. Gates green.
+- 09-05 15:12 — wave 6 (`d224d40`, 9 commits): R67, R68, comment fixes. Gates green; CI, Release and harness workflow green; Watchtower 15:23 (updated=7); all eight apps 200.
 
 ## Landed during the burn
 
