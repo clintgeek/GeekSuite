@@ -75,6 +75,8 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 - `363a820` — R4 — mobile harness in tools/ + CI (report-only); 698 probe findings
 - `d8521eb` — R27 — CSRF header in api-client authLink + startgeek clients
 - `1fda489` — R24 — bujogeek tag cloud + template journal cache; #25/#26 struck
+- `3265b1c` — R25 — zod on the ten bujogeek gateway mutations (37 tests; api 815)
+- `4856227` — R26 — 8 calendar-date off-by-one sites fixed (flockgeek ×7, fitnessgeek getTodayBP)
 - `8879e94` — R19 — OpenAI-compat: 22 findings closed (api 778); unknown model → 404
 - `37e83b6` — R17 — 22 dead fitnessgeek files + broken dev compose deleted
 - `164f978` — R16 — notegeek relative-time tests; dev-server fix pending in vite.config.js (shared with R13)
