@@ -10,6 +10,7 @@ export default defineConfig({
     plugins: [react()],
     test: {
         environment: 'jsdom',
+        testTimeout: 15000, // full-page renders (StoryPlay) take 2–3s on a loaded runner; 5s flaked
         globals: true,
         setupFiles: ['./src/test/setup.js'],
         include: ['src/**/*.test.{js,jsx}'],
