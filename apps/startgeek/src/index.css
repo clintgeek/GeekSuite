@@ -21,7 +21,9 @@
   --hair-strong: rgba(255, 255, 255, 0.18);
   --ink: #e9edf2;
   --ink-2: #cfdfef;
-  --ink-3: #cfdfef;
+  /* A genuinely lower step than --ink-2 (was an accidental duplicate) —
+     still >= 4.5:1 on the panel. This is the caption/muted-secondary tier. */
+  --ink-3: #8ca3ba;
   --ink-4: #3f5871;
   --accent: #e6b35a;
   --accent-dim: rgba(230, 179, 90, 0.18);
@@ -99,6 +101,12 @@
     border-color: var(--hair-strong);
     background: var(--panel-hover);
   }
+  /* No mouse, no hover — the lit-up border is the resting state instead. */
+  @media (hover: none) {
+    .mod {
+      border-color: var(--hair-strong);
+    }
+  }
   .mod-head {
     display: flex;
     align-items: center;
@@ -119,7 +127,7 @@
     padding: 10px 16px 12px;
     border-top: 1px solid var(--hair);
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: 12px;
     letter-spacing: 0.03em;
     color: var(--ink-3);
   }
@@ -138,7 +146,8 @@
     position: relative;
     transition: background 120ms var(--ease);
   }
-  .dot::before { content: ''; position: absolute; inset: -9px; }
+  /* 9px visual dot, 44px hit area (centered, invisible). */
+  .dot::before { content: ''; position: absolute; inset: -17.5px; }
   .dot.on { background: currentColor; }
   .dot.event { border-radius: 2px; }
 
@@ -205,14 +214,79 @@
     mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, black 20%, transparent 100%);
     -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, black 20%, transparent 100%);
   }
+
+  /* ---- 44px hit area, any visual size ----
+     An invisible centered pseudo-element so a small glyph (gear, ?, ✕, ×)
+     still gets a full touch target without growing on screen. */
+  .hit44 { position: relative; }
+  .hit44::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    transform: translate(-50%, -50%);
+  }
+
+  /* Dock label: always on below the icon, with a soft scrim so it reads
+     over bright wallpaper without a hover state to lean on. */
+  .dock-label {
+    font-size: 12px;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55), 0 1px 8px rgba(0, 0, 0, 0.35);
+  }
 }
 
 /* ---- Layout ---- */
+/* A hover-revealed cue (the weather "Details" hint, the module's open link)
+   needs a resting affordance where there is no hover at all. This has to
+   live outside `@layer components` — Tailwind's utilities layer (which owns
+   `.text-ink-3`) always outranks a components-layer rule regardless of
+   source order, so nesting it up there silently loses the override. */
+@media (hover: none) {
+  .weather-details-link,
+  .module-link {
+    color: var(--accent);
+  }
+}
 /* Hero: clock left, weather right, equal height. Splits at 820px so a
    laptop-width window still gets two columns. */
 .hero { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; align-items: stretch; }
 @media (min-width: 820px) {
   .hero.with-weather { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 32px; }
+}
+
+/* Clock and temperature numerals. Both clamp to a 72px floor by default;
+   below 640px that floor is too tall for a phone's first screen, so it
+   drops further and the two blocks stack left-aligned instead of the
+   left/right zig-zag. */
+.hero-clock-num,
+.hero-weather-num {
+  font-size: clamp(72px, 11vw, 148px);
+}
+@media (max-width: 639px) {
+  .hero-clock-num { font-size: clamp(56px, 15vw, 96px); }
+  .hero-weather-num { font-size: clamp(40px, 11vw, 72px); }
+  .hero-weather {
+    align-items: flex-start;
+    text-align: left;
+    margin-right: 0;
+    padding-right: 0;
+  }
+}
+
+/* Safe-area utilities (viewport-fit=cover makes these resolve). One place
+   for the calc so call sites read as plain padding/position rules. */
+.pt-safe-top { padding-top: calc(1rem + env(safe-area-inset-top)); }
+.pb-safe-sheet { padding-bottom: calc(2rem + env(safe-area-inset-bottom)); }
+.dock-safe-bottom { bottom: calc(18px + env(safe-area-inset-bottom)); }
+.toast-safe-bottom { bottom: calc(6rem + env(safe-area-inset-bottom)); }
+
+/* The Ask card + result list is one bounded, scrolling block above the
+   dock; on phones its lower bound also has to clear the home indicator. */
+.ask-bounds { max-height: calc(40vh - env(safe-area-inset-bottom)); }
+@media (min-width: 768px) {
+  .ask-bounds { max-height: calc(46vh - env(safe-area-inset-bottom)); }
 }
 
 /* Module row: Calendar and Tasks each span two rows; Fitness and Reading

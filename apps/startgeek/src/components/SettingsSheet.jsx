@@ -11,7 +11,7 @@ const FOCUSABLE =
 const Group = ({ title, children }) => (
   <div className="border-t border-hair py-4">
     {title && (
-      <h3 className="label !text-[10px] !text-ink-3 mb-2.5 font-normal">{title}</h3>
+      <h3 className="label !text-[12px] !text-ink-3 mb-2.5 font-normal">{title}</h3>
     )}
     {children}
   </div>
@@ -113,7 +113,7 @@ const SettingsSheet = ({ open, onClose }) => {
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ duration: REDUCED_MOTION ? 0 : ANIMATION.FAST, ease: ANIMATION.EASE }}
-            className="fixed top-0 bottom-0 right-0 z-50 w-[min(400px,100%)] overflow-y-auto px-6 pt-5 pb-8 border-l border-hair-strong"
+            className="pb-safe-sheet fixed top-0 bottom-0 right-0 z-50 w-[min(400px,100%)] overflow-y-auto px-6 pt-5 border-l border-hair-strong"
             style={{
               background: 'rgba(12, 15, 21, 0.92)',
               backdropFilter: 'blur(24px)',
@@ -125,7 +125,7 @@ const SettingsSheet = ({ open, onClose }) => {
               <button
                 type="button"
                 onClick={onClose}
-                className="w-8 h-8 rounded-lg grid place-items-center text-ink-3 hover:text-ink hover:bg-panel transition-colors"
+                className="hit44 w-8 h-8 rounded-lg grid place-items-center text-ink-3 hover:text-ink hover:bg-panel transition-colors"
                 aria-label="Close"
               >
                 ✕
@@ -215,7 +215,7 @@ const SettingsSheet = ({ open, onClose }) => {
                   <button
                     type="button"
                     onClick={() => removeCalendar(idx)}
-                    className="shrink-0 w-7 h-7 rounded-lg grid place-items-center text-ink-3 hover:text-ink hover:bg-panel transition-colors"
+                    className="hit44 shrink-0 w-7 h-7 rounded-lg grid place-items-center text-ink-3 hover:text-ink hover:bg-panel transition-colors"
                     aria-label={`Remove ${cal.label || 'calendar'}`}
                   >
                     ×
@@ -225,7 +225,7 @@ const SettingsSheet = ({ open, onClose }) => {
               <button
                 type="button"
                 onClick={addCalendar}
-                className="font-mono text-[11px] tracking-wide px-3 py-1.5 rounded-full border border-hair-strong text-ink hover:bg-panel-hover transition-colors"
+                className="font-mono text-[12px] tracking-wide px-3 py-1.5 rounded-full border border-hair-strong text-ink hover:bg-panel-hover transition-colors min-h-[44px]"
               >
                 Add calendar
               </button>
@@ -268,7 +268,7 @@ const SettingsSheet = ({ open, onClose }) => {
               <button
                 type="button"
                 onClick={reset}
-                className="font-mono text-[11px] tracking-wide px-3 py-1.5 rounded-full border border-hair-strong text-ink hover:bg-panel-hover transition-colors"
+                className="font-mono text-[12px] tracking-wide px-3 py-1.5 rounded-full border border-hair-strong text-ink hover:bg-panel-hover transition-colors min-h-[44px]"
               >
                 Reset to defaults
               </button>

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>StartGeek — Offline</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { color-scheme: dark; }
+    body {
+      font-family: 'Geist', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100vh; min-height: 100dvh;
+      background: #0a0d12; color: #e9edf2;
+      text-align: center;
+      padding: 2rem;
+      padding-top: calc(2rem + env(safe-area-inset-top));
+      padding-bottom: calc(2rem + env(safe-area-inset-bottom));
+    }
+    .card { max-width: 360px; }
+    .glyph {
+      font-family: 'Geist Mono', monospace;
+      font-size: 2rem;
+      color: #e6b35a;
+      margin-bottom: 1.25rem;
+      line-height: 1;
+    }
+    h1 { font-size: 1.25rem; font-weight: 500; margin-bottom: 0.6rem; }
+    p { font-size: 0.95rem; line-height: 1.6; color: #cfdfef; margin-bottom: 1.75rem; }
+    button {
+      font-family: inherit;
+      background: transparent;
+      color: #e6b35a;
+      border: 1px solid rgba(230, 179, 90, 0.4);
+      padding: 0.75rem 1.75rem;
+      border-radius: 999px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      min-height: 44px;
+    }
+    button:hover { background: rgba(230, 179, 90, 0.12); }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="glyph" aria-hidden="true">&gt;</div>
+    <h1>You're offline</h1>
+    <p>StartGeek needs a connection to reach the suite. Check your connection and try again.</p>
+    <button onclick="window.location.reload()">Retry</button>
+  </div>
+</body>
+</html>

@@ -20,7 +20,13 @@ const BackgroundManager = () => {
     let cancelled = false
 
     const loadBackground = () => {
-      const url = `https://picsum.photos/1920/1080.webp?t=${Date.now()}`
+      // Fetch a wallpaper sized to the actual screen instead of always
+      // pulling a fixed 1920×1080 — a phone at 3x DPR needs far less than a
+      // desktop, and a huge desktop is capped rather than requesting more.
+      const dpr = window.devicePixelRatio || 1
+      const width = Math.min(Math.round(window.innerWidth * dpr), 1920)
+      const height = Math.round((width * 1080) / 1920)
+      const url = `https://picsum.photos/${width}/${height}.webp?t=${Date.now()}`
       const img = new Image()
       let settled = false
 
@@ -85,7 +91,7 @@ const BackgroundManager = () => {
         style={{
           opacity: photo ? 1 : 0,
           background:
-            'linear-gradient(180deg, rgba(10,13,18,0.18) 0%, rgba(10,13,18,0.28) 45%, rgba(10,13,18,0.62) 100%)',
+            'linear-gradient(180deg, rgba(10,13,18,0.30) 0%, rgba(10,13,18,0.34) 45%, rgba(10,13,18,0.62) 100%)',
         }}
       />
 

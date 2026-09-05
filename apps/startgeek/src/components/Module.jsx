@@ -29,14 +29,14 @@ const Module = ({ label, count, link, foot, className = '', children }) => (
     <div className="mod-head">
       <span className="label">{label}</span>
       {count != null && (
-        <span className="font-mono text-[11px] text-ink-3 tnum">{count}</span>
+        <span className="font-mono text-[12px] text-ink-3 tnum">{count}</span>
       )}
       {link && (
         <a
           href={link.href}
           target="_blank"
           rel="noopener noreferrer"
-          className="ml-auto inline-flex items-center gap-1.5 font-mono text-[11px] tracking-wide text-ink-3 hover:text-accent transition-colors no-underline"
+          className="module-link ml-auto inline-flex items-center gap-1.5 font-mono text-[12px] tracking-wide text-ink-3 hover:text-accent transition-colors no-underline"
         >
           {link.label}
           <OpenGlyph />

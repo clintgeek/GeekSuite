@@ -52,14 +52,14 @@ function Console() {
     <div className="min-h-screen relative overflow-hidden font-sans">
       <BackgroundManager />
 
-      <main className="relative z-10 max-w-[1180px] mx-auto px-5 sm:px-7 pt-4 pb-32">
+      <main className="relative z-10 max-w-[1180px] mx-auto px-5 sm:px-7 pt-safe-top pb-32">
         {/* Rail: session and settings, right-aligned */}
         <header className="flex items-center justify-end gap-3.5 pb-3 border-b border-hair">
           <SessionButton />
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}
-            className="w-[30px] h-[30px] rounded-lg grid place-items-center text-ink-3 border border-transparent hover:text-ink hover:border-hair-strong hover:bg-panel transition-colors"
+            className="hit44 w-[30px] h-[30px] rounded-lg grid place-items-center text-ink-3 border border-transparent hover:text-ink hover:border-hair-strong hover:bg-panel transition-colors"
             aria-label="Blocks and backdrop"
             title="Blocks and backdrop  ( , )"
           >
@@ -71,8 +71,9 @@ function Console() {
         <section className={`hero pt-10 pb-5 ${showWeather ? 'with-weather' : ''}`}>
           <div className="flex flex-col justify-end">
             <DateTime />
+            {/* A keyboard-shortcut row is dead weight on touch — hide it below 640px. */}
             <div
-              className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 font-mono text-[11px] tracking-wide text-ink-2 tnum"
+              className="hidden sm:flex mt-1.5 flex-wrap gap-x-4 gap-y-1 font-mono text-[12px] tracking-wide text-ink-2 tnum"
               style={{ textShadow: '0 1px 4px rgba(0,0,0,0.25)' }}
             >
               <span><kbd className="px-1 border border-hair rounded">/</kbd> focus</span>

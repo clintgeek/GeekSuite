@@ -24,11 +24,8 @@ const DateTime = () => {
       className="select-none flex flex-col gap-1.5"
     >
       <h1
-        className="flex items-baseline gap-3.5 font-extralight leading-[0.92] tracking-[-0.035em] tnum text-ink"
-        style={{
-          fontSize: 'clamp(72px, 11vw, 148px)',
-          textShadow: '0 2px 30px rgba(0,0,0,0.35)',
-        }}
+        className="hero-clock-num flex items-baseline gap-3.5 font-extralight leading-[0.92] tracking-[-0.035em] tnum text-ink"
+        style={{ textShadow: '0 2px 30px rgba(0,0,0,0.35)' }}
       >
         <span>
           {displayHours}:{minutes}

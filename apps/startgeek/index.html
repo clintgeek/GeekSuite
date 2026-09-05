@@ -8,6 +8,8 @@
     <meta name="theme-color" content="#0a0d12" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.svg" />
 
     <!-- Open Graph -->
     <meta property="og:title" content="GeekSuite Launcher" />
@@ -25,5 +27,24 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+          var refreshing = false;
+          navigator.serviceWorker.addEventListener('controllerchange', function() {
+            if (refreshing) return;
+            refreshing = true;
+            window.location.reload();
+          });
+
+          navigator.serviceWorker
+            .register('/sw.js')
+            .then(function(registration) {
+              registration.update().catch(function() {});
+            })
+            .catch(function() {});
+        });
+      }
+    </script>
   </body>
 </html>

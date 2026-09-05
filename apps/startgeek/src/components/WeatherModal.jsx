@@ -15,12 +15,14 @@ const hhmm = (iso) => {
 
 const Detail = ({ k, v }) => (
   <div className="flex flex-col gap-1 min-w-0 border-t border-hair pt-3">
-    <span className="font-mono text-[10px] tracking-[0.1em] uppercase text-ink-3">{k}</span>
+    <span className="font-mono text-[12px] tracking-[0.1em] uppercase text-ink-3">{k}</span>
     <span className="text-[15px] text-ink tnum truncate">{v ?? '--'}</span>
   </div>
 )
 
-// Seven days as hi/lo range bars on one shared scale.
+// Seven days as hi/lo range bars on one shared scale. All seven render at
+// every width — on a phone the row scrolls with snap instead of hiding
+// three of them.
 const Week = ({ days }) => {
   if (!days || days.length < 2) return null
   const min = Math.min(...days.map((d) => d.lowTemp)) - 3
@@ -28,7 +30,7 @@ const Week = ({ days }) => {
   const pos = (t) => (1 - (t - min) / (max - min)) * 100
 
   return (
-    <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
+    <div className="flex sm:grid sm:grid-cols-7 gap-2 overflow-x-auto snap-x snap-mandatory pb-1 -mx-1 px-1 sm:mx-0 sm:px-0 sm:overflow-visible">
       {days.map((d, i) => {
         const top = pos(d.highTemp)
         const height = pos(d.lowTemp) - top
@@ -36,22 +38,22 @@ const Week = ({ days }) => {
         return (
           <div
             key={d.date}
-            className={`grid gap-1.5 text-center px-1 pt-1.5 pb-1 rounded-lg ${
+            className={`snap-start shrink-0 w-[84px] sm:w-auto grid gap-1.5 text-center px-1 pt-1.5 pb-1 rounded-lg ${
               today ? 'bg-white/[0.04] border border-hair' : ''
-            } ${i >= 4 ? 'hidden sm:grid' : ''}`}
+            }`}
             style={{ gridTemplateRows: 'auto auto 1fr auto' }}
           >
-            <div className={`font-mono text-[11px] tracking-[0.08em] uppercase ${today ? 'text-accent' : 'text-ink-3'}`}>
+            <div className={`font-mono text-[12px] tracking-[0.08em] uppercase ${today ? 'text-accent' : 'text-ink-3'}`}>
               {today ? 'Today' : d.dayName}
             </div>
-            <div className="text-[11.5px] text-ink-2 truncate">{d.condition}</div>
+            <div className="text-[12px] text-ink-2 truncate">{d.condition}</div>
             <div className="range">
               <i style={{ top: `${top}%`, height: `${height}%` }} />
             </div>
-            <div className="font-mono text-[11px] text-ink-2 tnum">
+            <div className="font-mono text-[12px] text-ink-2 tnum">
               <b className="font-medium text-ink">{d.highTemp}</b> / {d.lowTemp}
               {d.precipProbability > 0 && (
-                <span className="ml-1.5 text-[10px] text-sky">{d.precipProbability}%</span>
+                <span className="ml-1.5 text-[12px] text-sky">{d.precipProbability}%</span>
               )}
             </div>
           </div>
@@ -138,7 +140,7 @@ const WeatherModal = ({ open, onClose }) => {
               <button
                 type="button"
                 onClick={onClose}
-                className="w-8 h-8 rounded-lg grid place-items-center text-ink-3 hover:text-ink hover:bg-panel transition-colors shrink-0"
+                className="hit44 w-8 h-8 rounded-lg grid place-items-center text-ink-3 hover:text-ink hover:bg-panel transition-colors shrink-0"
                 aria-label="Close"
               >
                 ✕

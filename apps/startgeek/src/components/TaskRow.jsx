@@ -77,21 +77,21 @@ const TaskRow = ({ task, late = false, today, aside = null }) => {
         }`}
       >
         <span className="break-words">{task.content}</span>
-        {priorityTag && <span className="ml-1.5 font-mono text-[10px] text-ink-3">{priorityTag}</span>}
+        {priorityTag && <span className="ml-1.5 font-mono text-[12px] text-ink-3">{priorityTag}</span>}
         {task.tags?.length > 0 &&
           task.tags.map((tag) => (
-            <span key={tag} className="ml-1.5 font-mono text-[10px] text-ink-3">
+            <span key={tag} className="ml-1.5 font-mono text-[12px] text-ink-3">
               #{tag}
             </span>
           ))}
         {lateTag && (
-          <span className="ml-1.5 align-[1px] font-mono text-[10px] tracking-[0.06em] uppercase px-1.5 py-px rounded border border-[rgba(240,113,120,0.4)] text-critical">
+          <span className="ml-1.5 align-[1px] font-mono text-[12px] tracking-[0.06em] uppercase px-1.5 py-px rounded border border-[rgba(240,113,120,0.4)] text-critical">
             {lateTag}
           </span>
         )}
       </a>
       {(time || aside) && (
-        <span className="font-mono text-[11px] text-ink-3 tnum pt-0.5 shrink-0">{time || aside}</span>
+        <span className="font-mono text-[12px] text-ink-3 tnum pt-0.5 shrink-0">{time || aside}</span>
       )}
     </div>
   )

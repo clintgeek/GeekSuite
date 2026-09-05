@@ -109,12 +109,14 @@ const CommandBox = ({ onOpenSettings }) => {
     inputRef.current?.focus()
   }, [])
 
-  // Refocus when the window regains focus
+  // Refocus when the window regains focus — but only where a mouse makes
+  // that free (a hardware keyboard is implied). On a phone this would pop
+  // the on-screen keyboard every time the user returns to the tab.
   useEffect(() => {
     const handleWindowFocus = () => {
-      if (!helpOpen) {
-        inputRef.current?.focus()
-      }
+      if (helpOpen) return
+      if (!window.matchMedia?.('(hover: hover)').matches) return
+      inputRef.current?.focus()
     }
     window.addEventListener('focus', handleWindowFocus)
     return () => window.removeEventListener('focus', handleWindowFocus)
@@ -492,7 +494,7 @@ const CommandBox = ({ onOpenSettings }) => {
         {(searchLoading && mode === 'suite') || askLoading ? (
           <span className="w-1.5 h-1.5 rounded-full bg-ink-2 animate-pulse" aria-hidden="true" />
         ) : null}
-        <span className="shrink-0 font-mono text-[11px] tracking-[0.06em] uppercase text-ink-2 px-2.5 py-1.5 rounded-md border border-hair truncate max-w-[11rem]">
+        <span className="shrink-0 font-mono text-[12px] tracking-[0.06em] uppercase text-ink-2 px-2.5 py-1.5 rounded-md border border-hair truncate max-w-[11rem]">
           {modeLabel}
         </span>
         <HelpButton onClick={() => setHelpOpen(true)} />
@@ -500,7 +502,7 @@ const CommandBox = ({ onOpenSettings }) => {
         {mode === 'ask' ? (
           // Card and list are one bounded block: the card stays put, the
           // list scrolls inside it, and neither runs under the dock.
-          <div className="absolute left-0 right-0 top-full mt-2 z-40 flex flex-col gap-2 rounded-xl bg-ground max-h-[40vh] md:max-h-[46vh]">
+          <div className="ask-bounds absolute left-0 right-0 top-full mt-2 z-40 flex flex-col gap-2 rounded-xl bg-ground">
             {showAskHint ? (
               <div
                 className="shrink-0 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-hair-strong px-4 py-2.5 bg-ground"

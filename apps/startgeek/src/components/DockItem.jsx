@@ -12,7 +12,7 @@ const DockItem = ({ icon, label, url, onClick, badge }) => {
       whileHover={{ y: -3 }}
       whileTap={{ scale: 0.94 }}
       transition={{ type: 'spring', stiffness: 500, damping: 26 }}
-      className="group relative flex flex-col items-center gap-1 w-14 sm:w-[68px] px-1 py-1.5 rounded-[10px] text-ink-3 hover:text-ink hover:bg-panel transition-colors"
+      className="snap-center shrink-0 group relative flex flex-col items-center gap-1 w-14 sm:w-[68px] px-1 py-1.5 rounded-[10px] text-ink-3 hover:text-ink hover:bg-panel transition-colors"
     >
       <span className="w-10 h-10 flex items-center justify-center [&>svg]:w-[22px] [&>svg]:h-[22px]">
         {icon}
@@ -24,7 +24,7 @@ const DockItem = ({ icon, label, url, onClick, badge }) => {
         </span>
       )}
 
-      <span className="hidden sm:block font-mono text-[10px] tracking-[0.06em] uppercase leading-tight truncate w-full text-center">
+      <span className="dock-label block font-mono tracking-[0.06em] uppercase leading-tight truncate w-full text-center">
         {label}
       </span>
     </motion.button>

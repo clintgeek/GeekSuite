@@ -46,12 +46,12 @@ const WeatherBlock = ({ onOpen }) => {
       initial={REDUCED_MOTION ? false : { opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: ANIMATION.SLOW, ease: ANIMATION.EASE, delay: 0.1 }}
-      className="group flex flex-col items-end justify-end gap-1.5 text-right select-none rounded-lg -mr-2 pr-2"
+      className="hero-weather group flex flex-col items-end justify-end gap-1.5 text-right select-none rounded-lg -mr-2 pr-2"
       aria-label={`Weather in ${city}: ${w.temperature} degrees, ${w.description}. Open details`}
     >
       <span
-        className="flex items-baseline gap-3.5 font-extralight leading-[0.92] tracking-[-0.035em] tnum text-ink"
-        style={{ fontSize: 'clamp(72px, 11vw, 148px)', ...SHADOW }}
+        className="hero-weather-num flex items-baseline gap-3.5 font-extralight leading-[0.92] tracking-[-0.035em] tnum text-ink"
+        style={SHADOW}
       >
         {w.temperature}°
       </span>
@@ -63,9 +63,9 @@ const WeatherBlock = ({ onOpen }) => {
       </span>
 
       {stats.length > 0 && (
-        <span className="font-mono text-[11px] tracking-[0.06em] uppercase text-ink-2 tnum" style={SHADOW_SM}>
+        <span className="font-mono text-[12px] tracking-[0.06em] uppercase text-ink-2 tnum" style={SHADOW_SM}>
           {stats.join('   ')}
-          <span className="ml-3 text-ink-3 group-hover:text-accent transition-colors">Details</span>
+          <span className="weather-details-link ml-3 text-ink-3 group-hover:text-accent transition-colors">Details</span>
         </span>
       )}
     </motion.button>
