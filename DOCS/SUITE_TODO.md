@@ -164,21 +164,26 @@ Hardening = pino logging, request IDs, graceful shutdown, env-driven CORS, data-
   delete gated, `scripts/setUserRole.js`). Promote with
   `docker exec basegeek node scripts/setUserRole.js <username> admin` on the box.
 
-- **CSRF protection** — 🟡 **Pending review** on branch `csrf-protection` (not merged, not
-  deployed). Shipped there: `csrfGuard()` in `packages/user/src/server/csrfGuard.js`, mounted
-  ahead of `cors()` in all seven backends including basegeek's `/graphql`. Origin (falling back
-  to `Referer`) must be on the app's own CORS allow-list for any cookie-authenticated
-  POST/PUT/PATCH/DELETE, else 403 `csrf_origin_rejected`. `CSRF_GUARD=off|report` is the
-  restart-only escape hatch. Cookie attributes untouched — both auth cookies were already
-  `SameSite=Lax`, and `Strict` was rejected because it breaks the SSO navigation flow.
-  Design, exemptions (none) and mount points: [`DOCS/SSO_OVERVIEW.md#csrf`](SSO_OVERVIEW.md#csrf).
+- **CSRF protection** — ✅ merged to main. `csrfGuard()` (`packages/user/src/server/csrfGuard.js`),
+  the Origin allow-list guard, is mounted ahead of `cors()` in all seven backends including
+  basegeek's `/graphql`; `CSRF_GUARD=off|report` is the restart-only escape hatch. Design,
+  exemptions (none) and mount points: [`DOCS/SSO_OVERVIEW.md#csrf`](SSO_OVERVIEW.md#csrf).
 
-  **Still open after that branch merges:** an origin allow-list cannot stop an XSS'd *sibling*
-  subdomain from mutating **basegeek**, whose list must contain every app origin because every
-  frontend calls its GraphQL API (bookgeek is similarly wide — its rule is any
-  `*.clintgeek.com` host). Closing that needs a per-app double-submit token in
-  `@geeksuite/auth` + every frontend. Third-party CSRF is closed everywhere, and
-  sibling-subdomain CSRF is closed against the six consumer backends. (`DEFERRED_WORK.md`)
+  basegeek additionally issues a double-submit `geek_csrf` cookie (commit `a3c4031`) to close the
+  one gap the Origin guard can't — a sibling `*.clintgeek.com` subdomain mutating **basegeek**
+  itself, whose allow-list must contain every app origin. Full contract, the `CSRF_TOKEN`
+  rollout lever, and the client list: [`DOCS/CONTEXT.md`](CONTEXT.md) → "CSRF: the double-submit
+  token."
+
+  **Enforce checklist** — flip `CSRF_TOKEN=enforce` on basegeek and restart only once every box
+  below is checked:
+  - [x] `@geeksuite/auth` sends the header (`logout()`, `doTokenRefresh()`,
+    `setupAxiosInterceptors()`)
+  - [x] basegeek's own `packages/ui/src/api.js` interceptor sends it
+  - [x] `packages/api-client`'s shared Apollo `authLink` sends it (basegeek-ui, bujogeek,
+    notegeek, storygeek, bookgeek, fitnessgeek, flockgeek)
+  - [x] `apps/startgeek/src/lib/graphql.js` and `apps/startgeek/src/lib/basegeek.js` send it
+  - [ ] a full day with zero `CSRF token check (report-only)` warnings in basegeek's logs
 
 - **HttpOnly cookies + stop persisting tokens in localStorage** — ✅ resolved across all apps
   (April 2026). Dead localStorage token reads removed from all frontends; StoryGeek's Zustand

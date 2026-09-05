@@ -11,10 +11,17 @@ const httpLink = createHttpLink({
     credentials: 'include',
 });
 
-const authLink = setContext((_, { headers }) => {
+// Exported (not just used below) so it can be unit-tested directly without
+// standing up a whole ApolloClient/link chain.
+export const authLink = setContext((_, { headers }) => {
     // Extract token. In GeekSuite, it might be stored in localStorage by auth pkg
     const token = localStorage.getItem('geek_token');
-    const nextHeaders = { ...headers };
+    // Double-submit CSRF token for basegeek (see DOCS/CONTEXT.md "CSRF: the
+    // double-submit token"). GraphQL is POST-only, so every query and mutation
+    // goes through this link; csrfHeaders() with no method reads geek_csrf off
+    // document.cookie and returns {} when there is none yet, so it's harmless
+    // to attach on queries too.
+    const nextHeaders = { ...headers, ...csrfHeaders() };
     if (token) {
         nextHeaders.authorization = `Bearer ${ token }`;
     }
@@ -22,7 +29,7 @@ const authLink = setContext((_, { headers }) => {
 });
 
 import { onError } from '@apollo/client/link/error';
-import { logout, loginRedirect } from '@geeksuite/auth';
+import { logout, loginRedirect, csrfHeaders } from '@geeksuite/auth';
 
 const errorLink = (appName) => onError(({ graphQLErrors, networkError }) => {
     let unauthenticated = false;
