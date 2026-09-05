@@ -473,3 +473,58 @@ describe('mobile grammar (DOCS/MOBILE_UI_PLAN.md §2)', () => {
     expect(markup).toContain('env(safe-area-inset-top, 0px)');
   });
 });
+
+describe('GeekTopBar compact below the nav breakpoint', () => {
+  const account = { name: 'Chef Crocker', onSignOut: () => {} };
+  const bar = (
+    <GeekTopBar
+      title="Library"
+      themeMode="dark"
+      onThemeToggle={() => {}}
+      currentApp="bookgeek"
+      actions={[<button key="a" data-test-action="add" />, <button key="b" data-test-action="merge" />]}
+      account={account}
+    />
+  );
+
+  it('keeps every control on desktop', () => {
+    const markup = render(bar, DESKTOP);
+    expect(markup).toContain('data-geek-topbar="theme"');
+    expect(markup).toContain('data-test-action="add"');
+    expect(markup).toContain('data-test-action="merge"');
+    expect(markup).not.toContain('data-geek-topbar-menu="theme"');
+  });
+
+  it('folds the theme toggle into the account menu and keeps one action on mobile', () => {
+    const markup = render(bar, MOBILE);
+    expect(markup).not.toContain('data-geek-topbar="theme"');
+    expect(markup).toContain('data-geek-topbar-menu="theme"');
+    expect(markup).toContain('Light mode');
+    expect(markup).toContain('data-geek-topbar="switcher"');
+    expect(markup).toContain('data-test-action="add"');
+    expect(markup).not.toContain('data-test-action="merge"');
+    expectOrdered(markup, [
+      'data-geek-topbar="menu"',
+      'data-geek-topbar="title"',
+      'data-test-action="add"',
+      'data-geek-topbar="switcher"',
+      'data-geek-topbar="account"',
+    ]);
+  });
+
+  it('honors mobileActions, including null for none', () => {
+    const chosen = render(
+      <GeekTopBar title="T" actions={<button data-test-action="add" />} mobileActions={<button data-test-action="search" />} />,
+      MOBILE
+    );
+    expect(chosen).toContain('data-test-action="search"');
+    expect(chosen).not.toContain('data-test-action="add"');
+    const none = render(<GeekTopBar title="T" actions={<button data-test-action="add" />} mobileActions={null} />, MOBILE);
+    expect(none).not.toContain('data-test-action="add"');
+  });
+
+  it('keeps the theme toggle visible on mobile when there is no account menu to fold into', () => {
+    const markup = render(<GeekTopBar title="T" themeMode="light" onThemeToggle={() => {}} />, MOBILE);
+    expect(markup).toContain('data-geek-topbar="theme"');
+  });
+});

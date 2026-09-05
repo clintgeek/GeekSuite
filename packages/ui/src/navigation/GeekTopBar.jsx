@@ -15,10 +15,17 @@
  * back-compat) or `{ id, label, icon?, onClick }` objects (or an array mixing
  * both) — the primitive wraps object-form `onClick` to close the menu first.
  *
+ * Below the nav breakpoint the bar is *compact* (mobile grammar,
+ * DOCS/MOBILE_UI_PLAN.md §2): hamburger → title → at most one app action →
+ * switcher → avatar. Six 44px targets do not fit in 390px, so the theme toggle
+ * folds into the account menu as a "Dark mode" / "Light mode" row (when there
+ * is an account menu to fold into), and `actions` is reduced to its first
+ * child unless the app passes `mobileActions` to choose what survives.
+ *
  * Legacy `showSuiteControls`, `settings`, `profile` and `appName` still work;
  * the legacy slots render after the cluster.
  */
-import { forwardRef, isValidElement, useCallback, useState } from 'react';
+import { Children, forwardRef, isValidElement, useCallback, useState } from 'react';
 import AppBar from '@mui/material/AppBar';
 import Avatar from '@mui/material/Avatar';
 import Box from '@mui/material/Box';
@@ -95,7 +102,38 @@ function renderExtraItems(extraItems, closeMenu) {
   });
 }
 
-function AccountMenu({ account }) {
+/** Sun / moon glyphs for the folded theme row; mirrors GeekThemeToggle. */
+function ThemeGlyph({ dark }) {
+  return (
+    <Box
+      component="svg"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+      sx={{
+        display: 'block',
+        width: 18,
+        height: 18,
+        fill: 'none',
+        stroke: 'currentColor',
+        strokeWidth: 1.75,
+        strokeLinecap: 'round',
+        strokeLinejoin: 'round',
+      }}
+    >
+      {dark ? (
+        <>
+          <circle cx="12" cy="12" r="4.25" />
+          <path d="M12 2.5v2.25M12 19.25v2.25M4.22 4.22l1.6 1.6M18.18 18.18l1.6 1.6M2.5 12h2.25M19.25 12h2.25M4.22 19.78l1.6-1.6M18.18 5.82l1.6-1.6" />
+        </>
+      ) : (
+        <path d="M20.5 14.3A8.5 8.5 0 0 1 9.7 3.5a8.5 8.5 0 1 0 10.8 10.8Z" />
+      )}
+    </Box>
+  );
+}
+
+function AccountMenu({ account, themeRow }) {
   const [anchorEl, setAnchorEl] = useState(null);
   const open = Boolean(anchorEl);
   const handleOpen = useCallback((event) => setAnchorEl(event.currentTarget), []);
@@ -190,6 +228,18 @@ function AccountMenu({ account }) {
           </Box>
         ) : null}
         {name || secondary ? <Divider /> : null}
+        {themeRow ? (
+          <MenuItem
+            data-geek-topbar-menu="theme"
+            onClick={run(themeRow.onToggle)}
+            sx={{ minHeight: geekLayout.minClickTarget }}
+          >
+            <Box component="span" sx={{ display: 'inline-flex', mr: 1.5 }}>
+              <ThemeGlyph dark={themeRow.mode === 'dark'} />
+            </Box>
+            {themeRow.mode === 'dark' ? 'Light mode' : 'Dark mode'}
+          </MenuItem>
+        ) : null}
         {renderExtraItems(extraItems, handleClose)}
         {onAccount ? (
           <MenuItem
@@ -231,6 +281,9 @@ export const GeekTopBar = forwardRef(function GeekTopBar(
     menuLabel = 'Open navigation',
     search,
     actions,
+    // What survives of `actions` below the nav breakpoint. Defaults to the
+    // first child of `actions`; pass `null` to show none on mobile.
+    mobileActions,
     account,
     profile,
     settings,
@@ -247,8 +300,22 @@ export const GeekTopBar = forwardRef(function GeekTopBar(
 ) {
   const { isMobile, hasNav, toggleNav, mobileOpen } = useGeekShell();
 
-  const showThemeToggle = showSuiteControls || Boolean(onThemeToggle);
+  const hasThemeToggle = showSuiteControls || Boolean(onThemeToggle);
   const showSwitcher = showSuiteControls || Boolean(currentApp);
+
+  // Compact cluster below the nav breakpoint: the theme toggle folds into the
+  // account menu when there is one; without an account menu it stays visible
+  // (a control must not vanish with nowhere to go).
+  const foldTheme = isMobile && hasThemeToggle && Boolean(account) && Boolean(onThemeToggle);
+  const showThemeToggle = hasThemeToggle && !foldTheme;
+  const themeRow = foldTheme ? { mode: themeMode, onToggle: onThemeToggle } : null;
+
+  const resolvedActions = (() => {
+    if (!isMobile) return actions;
+    if (mobileActions !== undefined) return mobileActions;
+    const first = Children.toArray(actions)[0];
+    return first ?? null;
+  })();
 
   // Default leading slot: a hamburger, below `md` only, and only when the shell
   // actually owns a nav panel to open.
@@ -316,7 +383,7 @@ export const GeekTopBar = forwardRef(function GeekTopBar(
             ml: 'auto',
           }}
         >
-          {actions}
+          {resolvedActions}
           {/* Fixed suite cluster: theme → switcher → account. */}
           {showThemeToggle ? (
             <GeekThemeToggle
@@ -328,7 +395,7 @@ export const GeekTopBar = forwardRef(function GeekTopBar(
           {showSwitcher ? (
             <GeekAppSwitcher data-geek-topbar="switcher" currentApp={currentApp} />
           ) : null}
-          {account ? <AccountMenu account={account} /> : null}
+          {account ? <AccountMenu account={account} themeRow={themeRow} /> : null}
           {settings}
           {profile}
         </Box>
