@@ -9,6 +9,8 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
+| R56 | Q27: StoryPlay tests stall — bisect the render loop, fix, re-enable 6 tests | opus | storygeek frontend (+packages/ui if the loop is there) | 09-05 13:42 |
+| R57 | TODO #30 ×3: bujogeek TemplatePreview markdown, notegeek mind-map palette, flockgeek first-visit flicker | sonnet | three frontends, TODO docs | 09-05 13:42 |
 | R53 | Q33: fitnessgeek frontend food-log writes → gateway mutations; vitest setup + ci job | opus | fitnessgeek frontend, ci.yml, lockfile, SUITE_TODO | 09-05 13:40 |
 | R54 | Q32: tools/syntax-check.mjs + CI `syntax` job (parse every backend/package .js) | sonnet | tools/, root package.json, ci.yml, RUNBOOK | 09-05 13:40 |
 | R55 | Q34: deflake aiServiceCache.test.js (fake timers / cleared cache) | sonnet | basegeek api one test (+aiService if a clock is needed) | 09-05 13:40 |
@@ -25,7 +27,6 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | Q13 | verify COVERS_PATH now serves the old covers in the bookgeek UI (CONTEXT.md runtime line already fixed) | Chef eyeballs the UI | XS |
 | Q18b | After R27 deploys: a day of clean `CSRF token check (report-only)` logs, then `CSRF_TOKEN=enforce` in basegeek's env and a container restart | Chef's call after the log window | XS |
 | Q22 | flockgeek backend still mounts a full REST CRUD API (9 models) with no caller in the repo — decide: delete the layer or keep as API surface | Chef's call | S |
-| Q27 | storygeek StoryPlay tests (6, skipped): interaction tests stall jsdom at high CPU on that tree — find the render loop, re-enable | own ticket | S |
 | Q31 | After the R46 deploy: `docker exec fitnessgeek node scripts/encryptGarminPasswords.js --dry-run`, then real, then dry-run again (expect 0) | after deploy | XS |
 | Q20b | aiGeek: simulated streaming (F-21) and user-gated selection (F-14) documented, not fixed | design | S |
 | Q14 | storygeek CanonCard summary text through Narration too (agent left it as a separate render path) | Chef's call | XS |
