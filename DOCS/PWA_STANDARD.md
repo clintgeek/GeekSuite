@@ -125,7 +125,7 @@ The offline page should:
 | TemplateGeek | Hand-rolled | ✅ | ✅ | ✅ | ✅ |
 | MusicGeek | Hand-rolled | ✅ | ✅ (new) | ✅ | ✅ |
 | photoGeek | Hand-rolled | ✅ | ✅ (new) | ✅ | ✅ |
-| bookgeek | Hand-rolled | ✅ | ✅ (new) | ✅ | ✅ |
+| bookgeek | Hand-rolled | ✅ | ✅ | ✅ | ✅ — **was 404 in production until 2026-09-05**: the files sat in `web/` instead of `web/public/`, so Vite never copied them into `dist` |
 | geekSuite | None (Bun) | N/A | — | — | ❌ |
 | baseGeek | None | N/A | — | — | ❌ |
 
