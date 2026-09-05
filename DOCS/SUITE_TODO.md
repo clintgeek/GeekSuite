@@ -429,7 +429,7 @@ reality stands, per app:
 | flockgeek | Apollo → basegeek | ✅ frontend fully on GraphQL (only `/api/health` ping). ~~All 13 Mongoose models duplicated~~ — **corrected 2026-09-05**: only 4 (`BirdNote`, `BirdTrait`, `Event`, `LineageCache`) were actually orphaned and are now deleted. The other 9 are imported by a full, live, *mounted* REST CRUD API (`routes/api.js` → birds/groups/group-memberships/health-records/egg-production/pairings/locations/hatch-events/meat-runs) that nothing in the repo calls anymore but which still runs in the server. See `apps/flockgeek/CONTEXT.md` — deciding whether to unmount that whole REST layer is a follow-up, not done here. |
 | notegeek | Apollo → basegeek | ✅ frontend fully on GraphQL. ~~Own backend still carries legacy REST~~ — **deleted 2026-09-05**: `routes/notes.js`, `tags.js`, `search.js`, their controllers, and duplicate `models/Note.js`. This also resolved the `getTagHierarchy` 500 below. Follow-up prune, same day: `migrations/migrateNotesBetweenUsers.js` and `convertFoldersToTags.js` still imported the deleted `Note` model and had no caller (no npm script, no server import) — deleted, along with the now-empty `migrations/` directory. `utils/tagValidation.js` was imported only by its own test — both deleted. Backend suite still green (24 passed, 8 skipped); no dependency in `package.json` became unused as a result. |
 | bookgeek | Apollo for library CRUD; `authFetch` REST for the rest | ⚠️ mostly. Legit REST: upload/download/cover/enrich/merge/import/device-baskets (binary + long jobs). Not legit: `/api/profile/*` (`library-filters`, `me`) and `/api/ai/status` — pure data, should be GraphQL. `App.jsx:15` hardcodes `http://localhost:1800/api`. ~~`api/src/graphql/{schema,resolvers}.js` is an **unmounted dead GraphQL server**~~ — **deleted 2026-09-05** (plus the unused `@apollo/subgraph` dep). 4 duplicated models remain (not yet touched). |
-| fitnessgeek | `apiService.js` shims REST→GraphQL, but `restClient.js` still hits own backend | ⚠️ mostly. ~~Still REST: `POST/PUT/DELETE /logs` + `POST /meals/:id/add-to-log`~~ — **food-log writes switched 2026-09-05** (gateway `79b1b57`, frontend same day): `fitnessGeekService.addFoodToLog`/`updateFoodLog`/`deleteFoodLog`/`addMealToLog` now go through `apiService` to `addFoodLog`/`updateFoodLog`/`deleteFoodLog`/`logMeal`. **The four REST routes are caller-less and should be deleted — next ticket** (see item 2). Still REST: food search/barcode/favorites/recent (`foodService.js`), meds RxNorm + med logs, influx, AI, `PUT /user/profile`, Garmin heart-rate detail. **All 13 models duplicated** — this is the `UserSettings` drift hazard above, times 13. |
+| fitnessgeek | `apiService.js` shims REST→GraphQL, but `restClient.js` still hits own backend | ⚠️ mostly. ~~Still REST: `POST/PUT/DELETE /logs` + `POST /meals/:id/add-to-log`~~ — **food-log writes switched 2026-09-05** (gateway `79b1b57`, frontend same day): `fitnessGeekService.addFoodToLog`/`updateFoodLog`/`deleteFoodLog`/`addMealToLog` now go through `apiService` to `addFoodLog`/`updateFoodLog`/`deleteFoodLog`/`logMeal`. ~~The four REST routes are caller-less and should be deleted — next ticket~~ — **backend routes deleted 2026-09-05** (see item 2 — done). Still REST: food search/barcode/favorites/recent (`foodService.js`), meds RxNorm + med logs, influx, AI, `PUT /user/profile`, Garmin heart-rate detail. **All 13 models duplicated** — this is the `UserSettings` drift hazard above, times 13. |
 | storygeek | axios REST to own backend | ❌ not on GraphQL. `apolloClient.js` exists but is never imported. basegeek's storygeek schema (`stories`, `story`, 3 mutations) is unused by the app and too thin to replace `/stories/*/continue`, `/export/*`, `/ai/*`. Decide: either build out the schema or drop the basegeek storygeek module as dead code. |
 
 Ordered cheap-to-expensive:
@@ -442,8 +442,10 @@ Ordered cheap-to-expensive:
    already done in an earlier pass (`3af40cc`, 2026-08-30) — nothing left to delete there.
 2. fitnessgeek: point `foodLogs` writes at the existing GraphQL mutations; remove those REST
    routes. Then food search/favorites/recent → new queries.
-   **Gateway side done 2026-09-05 (`79b1b57`). Frontend switched 2026-09-05. REST route
-   removal is what remains — see "What the backend ticket has to delete" at the end.**
+   **Gateway side done 2026-09-05 (`79b1b57`). Frontend switched 2026-09-05. Backend REST
+   route removal done 2026-09-05 — see "What the backend ticket had to delete" at the end.
+   Item 2 fully done as of 2026-09-05; food search/favorites/recent → new queries is not
+   part of this item and stays open (tracked in the fitnessgeek row above: "Still REST").**
 
    The four mutations in `apps/basegeek/packages/api/src/graphql/fitnessgeek/` are now
    behaviour-equivalent to the REST routes they replace. What landed:
@@ -522,16 +524,26 @@ Ordered cheap-to-expensive:
      UTC day now (REST put them a day early west of UTC), and `nutrition` on a log created from
      a `food_item` snapshots the food's nutrition when the client sends none, same as REST.
 
-   **What the backend ticket has to delete** — these have no caller left in the repo:
+   **What the backend ticket had to delete** — done 2026-09-05, no caller was left in the repo
+   (repo-wide grep for `/api/logs`, `add-to-log`, and `restClient.post/put/delete` against
+   either path under fitnessgeek/frontend, startgeek, and basegeek/packages confirmed it):
 
    - `router.post('/')`, `router.put('/:id')`, `router.delete('/:id')` in
-     `apps/fitnessgeek/backend/src/routes/logRoutes.js` (`POST/PUT/DELETE /api/logs`).
-     `GET /api/logs`, `POST /api/logs/copy` and the rest of the file stay.
-   - `router.post('/:id/add-to-log')` in `apps/fitnessgeek/backend/src/routes/mealRoutes.js`.
-     Confirmed: it is the **only** caller of that file's `parseLocalDate()` helper (the buggy
-     local-midnight one), so both go together. In `logRoutes.js` check the
-     `FoodItem.findOrCreate` / `DailySummary` / `cacheService` imports the same way before
-     dropping them — `GET /api/logs` and `POST /api/logs/copy` stay and may still need some.
+     `apps/fitnessgeek/backend/src/routes/logRoutes.js` (`POST/PUT/DELETE /api/logs`) —
+     **deleted**. `GET /api/logs`, `POST /api/logs/copy` and the rest of the file stay.
+     `FoodItem` and `cacheService` were only used by the deleted routes and came out with
+     them; `mongoose` (only used for the `isMongoId` check in the deleted `POST /`) came out
+     too. `DailySummary` and `toUtcMidnight` stayed — `POST /api/logs/copy` still needs both.
+   - `router.post('/:id/add-to-log')` in `apps/fitnessgeek/backend/src/routes/mealRoutes.js` —
+     **deleted**, along with that file's `parseLocalDate()` helper (confirmed the only caller,
+     the buggy local-midnight one) and the `FoodLog` import (only used by that route).
+   - Test fallout: `src/__tests__/routes/logs.test.js` lost its `DELETE /api/logs/:id`
+     describe block (2 tests) and the now-unused `cacheService`/`FoodItem` mocks; nothing
+     else in the suite targeted the deleted routes. 12 suites / 104 tests (was 106), all
+     green. `node --check` clean on both route files, repo-wide `node tools/syntax-check.mjs`
+     clean, and the production image (`docker build -f apps/fitnessgeek/Dockerfile .`) boots
+     past config/routes and fails at the expected Mongo-connect step with `--network none`
+     (no import error). Full detail and the route table: `apps/fitnessgeek/DOCS/CONTEXT.md`.
 
    One delta the removal makes permanent, and it is inert today: the REST writes called
    `cacheService.invalidateUserAI` / `invalidateUserReports` against fitnessgeek's Redis; the
