@@ -9,14 +9,8 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
-| R22 | storygeek frontend vitest + RTL suite + CI job | sonnet | storygeek frontend, ci.yml (one job) | 09-05 13:50 |
-| R42 | Q21: harness recognises ::before/::after hit-area expansion; selftest fixture | sonnet | tools/mobile-harness | 09-05 12:50 |
-| R43 | TODO #15 fan-out: notegeek on shared feedback primitives | sonnet | notegeek frontend, UI plan | 09-05 12:50 |
-| R44 | TODO #15 fan-out: fitnessgeek on shared feedback primitives (+#19 toneForMode) | sonnet | fitnessgeek frontend except services/food-log | 09-05 12:50 |
-| R45 | consolidation step 2 (frontend): fitnessgeek food-log writes → gateway mutations | opus | fitnessgeek frontend services + food-log callers, SUITE_TODO | 09-05 12:50 |
 
-**Push gate:** `pnpm install --frozen-lockfile` on HEAD fails only on `apps/storygeek/frontend/package.json` (R22). Push after R22 commits; re-run the check first.
-
+**Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
 ## Queued (launch when files free / prerequisite lands)
 
 | # | Item | Why waiting | Size |
@@ -28,7 +22,8 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | Q13 | verify COVERS_PATH now serves the old covers in the bookgeek UI (CONTEXT.md runtime line already fixed) | Chef eyeballs the UI | XS |
 | Q18b | After R27 deploys: a day of clean `CSRF token check (report-only)` logs, then `CSRF_TOKEN=enforce` in basegeek's env and a container restart | Chef's call after the log window | XS |
 | Q22 | flockgeek backend still mounts a full REST CRUD API (9 models) with no caller in the repo — decide: delete the layer or keep as API surface | Chef's call | S |
-| Q25 | consolidation step 2 (backend half): delete fitnessgeek REST food-log routes once R45 lands | after R45 | S |
+| Q27 | storygeek StoryPlay tests (6, skipped): interaction tests stall jsdom at high CPU on that tree — find the render loop, re-enable | own ticket | S |
+| Q31 | After the R46 deploy: `docker exec fitnessgeek node scripts/encryptGarminPasswords.js --dry-run`, then real, then dry-run again (expect 0) | after deploy | XS |
 | Q20b | aiGeek: simulated streaming (F-21) and user-gated selection (F-14) documented, not fixed | design | S |
 | Q14 | storygeek CanonCard summary text through Narration too (agent left it as a separate render path) | Chef's call | XS |
 
@@ -79,6 +74,15 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 - `363a820` — R4 — mobile harness in tools/ + CI (report-only); 698 probe findings
 - `d8521eb` — R27 — CSRF header in api-client authLink + startgeek clients
 - `1fda489` — R24 — bujogeek tag cloud + template journal cache; #25/#26 struck
+- `1142e72` — R44 — fitnessgeek on shared feedback primitives + toneForMode; UI plan records four apps
+- `3bafe54` — R47 — 21 unused deps dropped from four thin backends; lockfile regenerated
+- `5b0bc9f` — R45 — food-log writes cannot move yet: three gateway mutation gaps documented (Q29)
+- `17e33bb` — R46 — Garmin password encrypted at rest via the shared schema; backfill script; DEPLOY.md row (106 tests)
+- `b39d29c` — R48 — bookgeek on shared feedback primitives (96 tests, 12 scenes clean)
+- `23b3b79` — R49 — basegeek console on shared feedback primitives; new basegeek DOCS/CONTEXT.md
+- `ca05d3b` — R43 — notegeek on shared feedback primitives (151 tests, 8 scenes clean)
+- `db44ccb` — R42 — harness unions positioned pseudo hit boxes; selftest; startgeek 52 → 0
+- `410aeab` — R22 — storygeek frontend vitest suite (31 tests; 6 StoryPlay skipped → Q27); ci job
 - `e85fc43` — R30 — probe burn-down basegeek 68 / bookgeek 14 / storygeek 4 → 0
 - `cdb4cd2` — R41 — notegeek backend prune (dead migrations, tagValidation)
 - `17cc6a7` — R35 — fitnessgeek backend node 20 + ESM; utils replaces 5 date copies (90 tests; image boots)
