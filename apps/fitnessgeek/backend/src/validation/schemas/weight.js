@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { logDateSchema } from './common.js';
 
-// Mirrors models/Weight.js (`min: 0, max: 1000`), with a positive floor
+// Mirrors the shared schema packages/schemas/fitnessgeek/weight.js (`min: 0, max: 1000`), with a positive floor
 // instead of `min: 0`. Safe: the controller already treats a falsy
 // weight_value (including 0) as "missing" (`if (!weight_value)`), so nothing
 // that was previously accepted stops being accepted.

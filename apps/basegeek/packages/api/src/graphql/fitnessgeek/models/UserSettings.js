@@ -13,9 +13,10 @@ import { requireUser } from '../ownership.js';
 // they should cross GraphQL); the tripwire tests in both suites fail if this
 // model stops matching the shared definition.
 //
-// Default import + destructure: the shared module is CommonJS (fitnessgeek's
-// backend is CJS and requires it directly), and this is the interop form that
-// works identically under Node ESM and jest's --experimental-vm-modules.
+// Default import + destructure: the shared module is CommonJS on purpose (no
+// build step, consumable from any module system — both apps are ESM since
+// 2026-09-05), and this is the interop form that works identically under Node
+// ESM and jest's --experimental-vm-modules.
 import userSettingsSchemaModule from '@geeksuite/schemas/fitnessgeek/userSettings';
 
 const { createUserSettingsSchema } = userSettingsSchemaModule;
