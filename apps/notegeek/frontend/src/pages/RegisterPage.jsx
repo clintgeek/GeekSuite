@@ -55,6 +55,10 @@ function RegisterPage() {
         <Box
             sx={{
                 minHeight: '100vh',
+                // `dvh` tracks the visible viewport on mobile Safari, where
+                // `100vh` is the largest viewport and clips behind the URL bar
+                // (same pattern as GeekShell.jsx).
+                '@supports (height: 100dvh)': { minHeight: '100dvh' },
                 bgcolor: 'background.default',
                 display: 'flex',
                 flexDirection: 'column',

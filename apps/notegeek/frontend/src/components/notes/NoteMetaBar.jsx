@@ -148,11 +148,13 @@ function NoteMetaBar({
           />
         </Box>
 
-        {/* Desktop-only actions (Save/Cancel/Delete) */}
+        {/* Desktop-only actions (Save/Cancel/Delete). Pairs with NoteShell's
+            mobile sticky bar — both gate on `md` so exactly one renders at
+            every width. */}
         {actions && (
           <Box
             sx={{
-              display: { xs: 'none', sm: 'flex' },
+              display: { xs: 'none', md: 'flex' },
               gap: 1,
               flexShrink: 0,
               alignItems: 'center',

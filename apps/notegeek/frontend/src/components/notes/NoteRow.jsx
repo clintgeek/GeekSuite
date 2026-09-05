@@ -130,11 +130,11 @@ function NoteRow({ note, to, onClick, query, maxPreview = 120 }) {
                 )}
             </Box>
 
-            {/* Tag pills — hidden on xs */}
+            {/* Tag pills — hidden below `md` (the suite's mobile/desktop split) */}
             {note.tags && note.tags.length > 0 && (
                 <Box
                     sx={{
-                        display: { xs: 'none', sm: 'flex' },
+                        display: { xs: 'none', md: 'flex' },
                         gap: 0.5,
                         flexShrink: 0,
                         alignSelf: 'center',

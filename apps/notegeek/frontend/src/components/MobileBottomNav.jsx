@@ -78,17 +78,20 @@ function MobileBottomNav() {
     <GeekBottomNav
       items={items}
       activeId={value}
+      // Mono, uppercase, letterspaced labels — `labelSx` merges directly onto
+      // the primitive's label Typography, so identity comes from the
+      // primitive's own slot instead of a nested `.MuiTypography-caption`
+      // selector reaching in from outside (THE_UI_UNIFICATION_PLAN.md §3b).
+      labelSx={{
+        fontFamily: theme.typography.fontFamilyMono,
+        letterSpacing: '0.06em',
+        textTransform: 'uppercase',
+      }}
       itemSx={{
-        // Mono, uppercase, letterspaced labels — the same treatment every
-        // other NoteGeek label gets, recreated since the primitive's label
-        // typography isn't itself overridable per app.
-        '& .MuiTypography-caption': {
-          fontFamily: theme.typography.fontFamilyMono,
-          letterSpacing: '0.06em',
-          textTransform: 'uppercase',
-        },
         // Ink-stamp active indicator — a 3px top bar, same treatment the
         // bespoke bar used, recreated off the primitive's own `aria-current`.
+        // Not expressible through `labelSx` (it targets the item, not the
+        // label), so it stays here.
         position: 'relative',
         '&[aria-current="page"]::before': {
           content: '""',

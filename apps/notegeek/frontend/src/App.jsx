@@ -61,10 +61,16 @@ function App() {
             <Router>
                 {isHydrating ? (
                     <Box
-                        display="flex"
-                        justifyContent="center"
-                        alignItems="center"
-                        minHeight="100vh"
+                        sx={{
+                            display: 'flex',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            minHeight: '100vh',
+                            // `dvh` tracks the visible viewport on mobile Safari,
+                            // where `100vh` is the largest viewport and clips
+                            // behind the URL bar (same pattern as GeekShell.jsx).
+                            '@supports (height: 100dvh)': { minHeight: '100dvh' },
+                        }}
                     >
                         <CircularProgress />
                     </Box>

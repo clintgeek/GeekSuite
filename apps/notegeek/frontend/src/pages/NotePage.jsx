@@ -44,10 +44,15 @@ function NotePage() {
     const renderEditor = () => {
         if (noteToDisplay?.type === 'mindmap') {
             return (
+                // `height: '100%'` rather than a viewport-relative magic
+                // number: this Box sits inside GeekAppFrame's route
+                // transition, which resolves a real height off the shell's
+                // own 100dvh chain (same pattern NoteEditorPage's root
+                // relies on), so it fills exactly what the shell gives it.
                 <Box sx={{
                     display: 'flex',
                     flexGrow: 1,
-                    height: 'calc(100vh - 100px)',
+                    height: '100%',
                     width: '100%',
                     overflow: 'hidden',
                     position: 'relative'

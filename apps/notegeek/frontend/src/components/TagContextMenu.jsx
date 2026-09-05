@@ -4,10 +4,6 @@ import {
     MenuItem,
     ListItemIcon,
     ListItemText,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
     Button,
     TextField,
 } from '@mui/material';
@@ -15,6 +11,7 @@ import {
 // '@mui/icons-material' barrel.
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import { GeekDialog } from '@geeksuite/ui';
 import useTagStore from '../store/tagStore';
 
 function TagContextMenu({ anchorEl, open, onClose, tag }) {
@@ -71,27 +68,32 @@ function TagContextMenu({ anchorEl, open, onClose, tag }) {
                 </MenuItem>
             </Menu>
 
-            <Dialog open={renameDialogOpen} onClose={() => setRenameDialogOpen(false)}>
-                <DialogTitle>Rename Tag</DialogTitle>
-                <DialogContent>
-                    <TextField
-                        autoFocus
-                        margin="dense"
-                        label="New Tag Name"
-                        type="text"
-                        fullWidth
-                        value={newTagName}
-                        onChange={(e) => setNewTagName(e.target.value)}
-                        variant="outlined"
-                    />
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setRenameDialogOpen(false)}>Cancel</Button>
+            {/* A form dialog — default `GeekDialog` mode (full-screen below
+                `sm`). The primitive's own ✕ is the mobile cancel. */}
+            <GeekDialog
+                open={renameDialogOpen}
+                onClose={() => setRenameDialogOpen(false)}
+                title="Rename Tag"
+                primaryAction={
                     <Button onClick={handleRename} variant="contained" color="primary">
                         Rename
                     </Button>
-                </DialogActions>
-            </Dialog>
+                }
+                secondaryAction={
+                    <Button onClick={() => setRenameDialogOpen(false)}>Cancel</Button>
+                }
+            >
+                <TextField
+                    autoFocus
+                    margin="dense"
+                    label="New Tag Name"
+                    type="text"
+                    fullWidth
+                    value={newTagName}
+                    onChange={(e) => setNewTagName(e.target.value)}
+                    variant="outlined"
+                />
+            </GeekDialog>
         </>
     );
 }

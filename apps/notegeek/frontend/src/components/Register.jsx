@@ -52,6 +52,10 @@ function Register() {
                 justifyContent: 'center',
                 alignItems: 'center',
                 minHeight: '100vh',
+                // `dvh` tracks the visible viewport on mobile Safari, where
+                // `100vh` is the largest viewport and clips behind the URL bar
+                // (same pattern as GeekShell.jsx).
+                '@supports (height: 100dvh)': { minHeight: '100dvh' },
                 bgcolor: isDark ? '#1C1917' : '#F0EEEB',
                 position: 'relative',
                 overflow: 'hidden',

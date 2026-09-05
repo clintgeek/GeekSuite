@@ -36,7 +36,13 @@ const MenuBar = ({ editor }) => {
         mb: 1.5,
         flexShrink: 0,
         display: 'flex',
+        // Below `md` there isn't room for eight buttons in one row without
+        // horizontal scroll clipping the last few tools; wrap to a second
+        // row instead. `ButtonGroup`'s grouped-corner styling assumes one
+        // row, so the wrapped row's end buttons get their own rounding.
+        flexWrap: { xs: 'wrap', md: 'nowrap' },
         justifyContent: 'center',
+        rowGap: 1,
         '& .MuiButton-root': {
           py: 0.5
         }
@@ -183,7 +189,10 @@ const RichTextEditor = ({ content = '', setContent = () => {}, isLoading = false
       }}
     >
       <MenuBar editor={editor} />
-      <Box sx={{ flexGrow: 1, overflow: 'auto', maxHeight: 'calc(100vh - 240px)', '& .ProseMirror': { fontSize: `${fontSize}px` } }}>
+      {/* Fills whatever height the flex chain above (NoteShell's content
+          zone, ultimately the shell's own 100dvh) actually gives this column
+          — no viewport-relative magic number to fight it. */}
+      <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', '& .ProseMirror': { fontSize: `${fontSize}px` } }}>
         <EditorContent editor={editor} />
       </Box>
     </Box>

@@ -1,13 +1,7 @@
 import React from 'react';
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogContentText,
-  DialogActions,
-  Button
-} from '@mui/material';
+import { DialogContentText, Button } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
+import { GeekDialog } from '@geeksuite/ui';
 import useNoteStore from '../store/noteStore';
 
 function DeleteNoteDialog({ open, onClose, noteId, noteTitle, isUnsavedNote }) {
@@ -34,33 +28,33 @@ function DeleteNoteDialog({ open, onClose, noteId, noteTitle, isUnsavedNote }) {
   };
 
   return (
-    <Dialog
+    // `mode="window"` — a two-line confirm doesn't need the full-screen
+    // form treatment (MOBILE_UI_PLAN.md §4 notegeek: "full-screen rule is
+    // for forms"); the centered card is the right shape at every width.
+    <GeekDialog
       open={open}
       onClose={onClose}
-      aria-labelledby="delete-note-dialog-title"
-      aria-describedby="delete-note-dialog-description"
-    >
-      <DialogTitle id="delete-note-dialog-title">
-        Delete Note
-      </DialogTitle>
-      <DialogContent>
-        <DialogContentText id="delete-note-dialog-description">
-          {isUnsavedNote ? (
-            "Are you sure you want to discard this unsaved note?"
-          ) : (
-            `Are you sure you want to delete ${noteTitle || 'this note'}? This action cannot be undone.`
-          )}
-        </DialogContentText>
-      </DialogContent>
-      <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
-        <Button onClick={onClose} variant="text" color="inherit">
-          Cancel
-        </Button>
+      mode="window"
+      title="Delete Note"
+      primaryAction={
         <Button onClick={handleDelete} variant="contained" color="error" autoFocus>
           {isUnsavedNote ? 'Discard' : 'Delete'}
         </Button>
-      </DialogActions>
-    </Dialog>
+      }
+      secondaryAction={
+        <Button onClick={onClose} variant="text" color="inherit">
+          Cancel
+        </Button>
+      }
+    >
+      <DialogContentText id="delete-note-dialog-description">
+        {isUnsavedNote ? (
+          "Are you sure you want to discard this unsaved note?"
+        ) : (
+          `Are you sure you want to delete ${noteTitle || 'this note'}? This action cannot be undone.`
+        )}
+      </DialogContentText>
+    </GeekDialog>
   );
 }
 

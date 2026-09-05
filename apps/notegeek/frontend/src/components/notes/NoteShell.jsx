@@ -101,7 +101,10 @@ function NoteShell({
           data-mobile-actions
           sx={{
             flexShrink: 0,
-            display: { xs: 'block', sm: 'none' },
+            // Mobile sticky bar. Gates on `md` — the same breakpoint the
+            // shell, drawer and bottom nav switch at (MOBILE_UI_PLAN.md §2) —
+            // so 600-900px doesn't get desktop actions with mobile chrome.
+            display: { xs: 'block', md: 'none' },
             bgcolor: paper,
             borderTop: `1px solid ${theme.palette.divider}`,
             pb: 'env(safe-area-inset-bottom)',
