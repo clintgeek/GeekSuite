@@ -28,10 +28,11 @@ const { default: UserSettingsGraphQL } = await import(
   '../graphql/fitnessgeek/models/UserSettings.js'
 );
 
-// fitnessgeek's backend is CommonJS and lives in a sibling workspace package.
-// Importing it here is the whole point: the tripwire has to compare the two
-// REAL models, not two copies of the shared definition (which would be
-// tautological). Node's ESM→CJS interop hands us the compiled model.
+// fitnessgeek's backend lives in a sibling workspace package (ESM since
+// 2026-09-05 — the shared schema module is the CommonJS one, not the app).
+// Importing the model here is the whole point: the tripwire has to compare the
+// two REAL models, not two copies of the shared definition, which would be
+// tautological.
 const { default: UserSettingsRest } = await import(
   '../../../../../fitnessgeek/backend/src/models/UserSettings.js'
 );

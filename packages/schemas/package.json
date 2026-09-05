@@ -6,7 +6,9 @@
   "main": "index.js",
   "exports": {
     ".": "./index.js",
-    "./fitnessgeek/userSettings": "./fitnessgeek/userSettings.js"
+    "./fitnessgeek/bloodPressure": "./fitnessgeek/bloodPressure.js",
+    "./fitnessgeek/userSettings": "./fitnessgeek/userSettings.js",
+    "./fitnessgeek/weight": "./fitnessgeek/weight.js"
   },
   "scripts": {
     "lint": "eslint ."

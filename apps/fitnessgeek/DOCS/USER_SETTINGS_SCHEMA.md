@@ -3,6 +3,81 @@
 *Written 2026-09-05 for `DOCS/TODO_ORDER.md` #21. Supersedes the "Duplicated
 `UserSettings` schema" entry in `DOCS/CONTEXT.md`.*
 
+*Widened 2026-09-05: `UserSettings` was the first pair through this pipeline,
+not the only one. The section immediately below is the index of every
+fitnessgeek model whose schema now lives in `@geeksuite/schemas`; the rest of
+this document remains the `UserSettings` case study — the incident that
+motivated the work and the reference walkthrough for the next pair.*
+
+---
+
+## Shared schemas — the index
+
+`packages/schemas/fitnessgeek/*` holds the field definitions for every
+fitnessgeek collection with more than one writer. Each module exports a
+`create<Model>Schema(mongoose)` factory; each app's model file is a thin
+wrapper that calls it, attaches its own statics, and binds the result to its
+own connection. **Add a field to the shared module, never to a wrapper.**
+
+| Model | Shared module | Collection | Consolidated | Exports beyond the factory |
+|---|---|---|---|---|
+| `UserSettings` | `packages/schemas/fitnessgeek/userSettings.js` | `usersettings` | 2026-09-05 | `encryptGarminPassword`, `readGarminPassword`, `attachGarminPasswordEncryption` |
+| `Weight` | `packages/schemas/fitnessgeek/weight.js` | `weights` | 2026-09-05 | — |
+| `BloodPressure` | `packages/schemas/fitnessgeek/bloodPressure.js` | `bloodpressures` | 2026-09-05 | `bloodPressureBounds`, `classifyBloodPressure` |
+
+The wrappers, per model:
+
+| | fitnessgeek (REST) | basegeek (GraphQL gateway) |
+|---|---|---|
+| File | `apps/fitnessgeek/backend/src/models/<M>.js` | `apps/basegeek/packages/api/src/graphql/fitnessgeek/models/<M>.js` |
+| Import form | named — `import { create<M>Schema } from '@geeksuite/schemas/fitnessgeek/<m>'` | default + destructure — the form that survives jest's `--experimental-vm-modules` |
+| Binding | `mongoose.model('<M>', schema)` (default connection) | `fitnessConn.model('<M>', schema)` where `fitnessConn = getAppConnection('fitnessgeek')` |
+| Statics | its own, post-authentication | its own, `requireUser`-guarded — the gateway is multi-tenant and fails closed |
+
+`Weight` and `BloodPressure` have **no statics on either side**. `UserSettings`
+has `getOrCreate` / `updateSettings` on both, deliberately different — see
+"What deliberately stayed per-model" below.
+
+### Two things that are *not* in the shared modules
+
+- **Statics.** They do not appear in `schema.paths`, so they cannot cause the
+  strict-mode data loss these modules exist to prevent, and the two writers
+  legitimately need different ones. The one planned exception is
+  `FoodItem.findOrCreate`, whose dedupe ladder must stay identical or the two
+  writers will mint duplicate catalog rows.
+- **The connection.** No shared module opens a connection or registers a model.
+  That is the whole reason the factory takes `mongoose` as a parameter.
+
+### Notes carried over, not fixed
+
+- `Weight` and `BloodPressure` use `userId` (camelCase) as the owner field
+  while every other fitnessgeek model uses `user_id`. Pre-existing in the
+  collections themselves; normalizing it would be a data migration wearing a
+  refactor's clothes. Left alone deliberately.
+- `BloodPressure`'s numeric bounds are exported as `bloodPressureBounds` and
+  imported by `apps/fitnessgeek/backend/src/validation/schemas/bloodPressure.js`,
+  which used to restate them in zod under a comment promising it mirrored the
+  model. One set of numbers, two languages, one source.
+
+### The tripwires
+
+| Suite | Covers |
+|---|---|
+| `apps/basegeek/packages/api/src/__tests__/userSettingsSchemaParity.test.js` | `UserSettings` — both real models, path-by-path, plus write-through on in-memory Mongo |
+| `apps/basegeek/packages/api/src/__tests__/fitnessgeekSchemaParity.test.js` | table-driven over `Weight` and `BloodPressure`: paths, per-path type/default/bound/flag, indexes, virtuals, virtual *behaviour*, write-through, and a strict-mode control. **Add pair 3+ as a row here.** |
+| `apps/fitnessgeek/backend/src/__tests__/models/userSettingsSchemaParity.test.js` | `UserSettings`, hermetic: model vs shared definition, source-level checks on basegeek's copy, REST allow-list resolution |
+| `apps/fitnessgeek/backend/src/__tests__/models/sharedSchemaParity.test.js` | `Weight` / `BloodPressure`, hermetic: same shape, plus the zod-bounds check and a guard that basegeek's two deleted orphan models stay deleted |
+
+The fitnessgeek suites are hermetic by design and basegeek's models open a
+connection at import time, so the fitnessgeek half does its cross-check at
+source level. Keep that split.
+
+The remaining eight pairs, in order, with their divergences and risks:
+`DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md` — §8 is what the first two pairs
+taught the pipeline.
+
+---
+
 ## The shape of the problem
 
 One document. One collection (`usersettings` in the `fitnessgeek` database).

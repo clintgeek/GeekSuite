@@ -1,76 +1,30 @@
 import mongoose from 'mongoose';
 import { getAppConnection } from '../../shared/appConnections.js';
 
+// The field set, the bounds, the compound index and both virtuals
+// (`formatted_date`, `status`) live in @geeksuite/schemas so that this model
+// and fitnessgeek's REST copy
+// (apps/fitnessgeek/backend/src/models/BloodPressure.js) cannot drift. Both
+// write the `bloodpressures` collection in the same database, and mongoose
+// strict mode silently drops paths one side doesn't know about. See the shared
+// module's header and DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md.
+//
+// Do NOT add fields here. Add them to the shared module (and to typeDefs.js if
+// they should cross GraphQL); the tripwire tests in both suites fail if this
+// model stops matching the shared definition.
+//
+// Default import + destructure: the shared module is CommonJS, and this is the
+// interop form that works identically under Node ESM and jest's
+// --experimental-vm-modules.
+import bloodPressureSchemaModule from '@geeksuite/schemas/fitnessgeek/bloodPressure';
+
+const { createBloodPressureSchema } = bloodPressureSchemaModule;
+
 const fitnessConn = getAppConnection('fitnessgeek');
 
-const bloodPressureSchema = new mongoose.Schema({
-  userId: {
-    type: String,
-    required: true
-  },
-  systolic: {
-    type: Number,
-    required: true,
-    min: 70,
-    max: 200
-  },
-  diastolic: {
-    type: Number,
-    required: true,
-    min: 40,
-    max: 130
-  },
-  pulse: {
-    type: Number,
-    min: 40,
-    max: 200,
-    default: null
-  },
-  log_date: {
-    type: Date,
-    required: true,
-    default: Date.now
-  },
-  notes: {
-    type: String,
-    maxlength: 500,
-    default: ''
-  },
-  created_at: {
-    type: Date,
-    default: Date.now
-  },
-  updated_at: {
-    type: Date,
-    default: Date.now
-  }
-}, {
-  timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' }
-});
+const bloodPressureSchema = createBloodPressureSchema(mongoose);
 
-// Compound index for efficient queries
-bloodPressureSchema.index({ userId: 1, log_date: -1 });
-
-// Virtual for formatted date
-bloodPressureSchema.virtual('formatted_date').get(function() {
-  return this.log_date.toISOString().split('T')[0];
-});
-
-// Virtual for BP status
-bloodPressureSchema.virtual('status').get(function() {
-  const sys = this.systolic;
-  const dia = this.diastolic;
-
-  if (sys < 120 && dia < 80) return 'Normal';
-  if (sys < 130 && dia < 80) return 'Elevated';
-  if (sys < 140 && dia < 90) return 'High Normal';
-  if (sys < 160 && dia < 100) return 'Stage 1';
-  if (sys < 180 && dia < 110) return 'Stage 2';
-  return 'Crisis';
-});
-
-// Ensure virtuals are serialized
-bloodPressureSchema.set('toJSON', { virtuals: true });
-bloodPressureSchema.set('toObject', { virtuals: true });
+// No ownership statics on this model today — the resolvers scope their own
+// queries. If that changes, the guards belong here, not in the shared module.
 
 export default fitnessConn.model('BloodPressure', bloodPressureSchema);

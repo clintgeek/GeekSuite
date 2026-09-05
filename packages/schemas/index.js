@@ -9,6 +9,8 @@
 
 module.exports = {
   fitnessgeek: {
+    bloodPressure: require('./fitnessgeek/bloodPressure.js'),
     userSettings: require('./fitnessgeek/userSettings.js'),
+    weight: require('./fitnessgeek/weight.js'),
   },
 };

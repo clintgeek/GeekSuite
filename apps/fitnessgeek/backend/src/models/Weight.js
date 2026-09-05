@@ -1,48 +1,19 @@
 import mongoose from 'mongoose';
+import { createWeightSchema } from '@geeksuite/schemas/fitnessgeek/weight';
 
-const weightSchema = new mongoose.Schema({
-  userId: {
-    type: String,
-    required: true
-  },
-  weight_value: {
-    type: Number,
-    required: true,
-    min: 0,
-    max: 1000
-  },
-  log_date: {
-    type: Date,
-    required: true,
-    default: Date.now
-  },
-  notes: {
-    type: String,
-    maxlength: 500,
-    default: ''
-  },
-  created_at: {
-    type: Date,
-    default: Date.now
-  },
-  updated_at: {
-    type: Date,
-    default: Date.now
-  }
-}, {
-  timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' }
-});
+// The field set, the compound index and the `formatted_date` virtual live in
+// @geeksuite/schemas so that this model and basegeek's GraphQL copy
+// (apps/basegeek/packages/api/src/graphql/fitnessgeek/models/Weight.js) cannot
+// drift. Both write the `weights` collection in the same database, and
+// mongoose strict mode silently drops paths one side doesn't know about — see
+// the shared module's header and DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md.
+//
+// Do NOT add fields here. Add them to the shared module; the tripwire tests in
+// both suites fail if this model stops matching it.
+const weightSchema = createWeightSchema(mongoose);
 
-// Compound index for efficient queries
-weightSchema.index({ userId: 1, log_date: -1 });
-
-// Virtual for formatted date
-weightSchema.virtual('formatted_date').get(function() {
-  return this.log_date.toISOString().split('T')[0];
-});
-
-// Ensure virtuals are serialized
-weightSchema.set('toJSON', { virtuals: true });
-weightSchema.set('toObject', { virtuals: true });
+// No statics on either side. If this side ever needs one, it belongs here and
+// not in the shared module — statics don't affect `schema.paths`, so the two
+// writers are free to disagree about them.
 
 export default mongoose.model('Weight', weightSchema);

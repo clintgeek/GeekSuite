@@ -30,6 +30,40 @@ v6, zustand (via `@geeksuite/user`). Routes render inside `Layout.jsx`
 
 ---
 
+## The fitnessgeek GraphQL gateway's Mongoose models (2026-09-05)
+
+Out of this file's usual scope — it covers the admin console — but there is no
+other basegeek context doc, and this is the sort of thing that reads as missing
+code if you don't know the history.
+
+`apps/basegeek/packages/api/src/graphql/fitnessgeek/models/*` declares Mongoose
+models against collections in the **`fitnessgeek`** database, bound to
+`getAppConnection('fitnessgeek')`. fitnessgeek's own backend declares models
+against the same collections. Two writers, one collection — and Mongoose strict
+mode drops unknown paths from a `$set` silently, so drift between the two copies
+destroys data without an error anywhere. The full audit, the remaining work and
+the ordering are in `DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md`.
+
+**Three of those models no longer declare a schema here.** `UserSettings`,
+`Weight` and `BloodPressure` build from `@geeksuite/schemas` — the file in this
+directory is a thin wrapper: a factory call, its own ownership statics, and the
+`fitnessConn.model(...)` binding. Do not add fields to the wrapper; add them to
+`packages/schemas/fitnessgeek/*` and, if they must cross GraphQL, to
+`typeDefs.js`. Tripwires in both apps' suites fail if a wrapper stops consuming
+the shared module. Import form here is default-import-plus-destructure — the
+shared modules are CommonJS, and that is the interop form that behaves
+identically under Node ESM and jest's `--experimental-vm-modules`.
+
+**Two models were deleted on 2026-09-05.** `AIFoodPromptCache` and
+`MedicationLog` were declared here with zero consumers in this package — no
+resolver, no typeDef, no test. fitnessgeek is the sole reader and writer of
+both collections. Deleting `AIFoodPromptCache` also stopped this process racing
+fitnessgeek to build a 45-day TTL index on a collection it never read. There is
+no barrel in `models/` — resolvers import each file directly — so a deletion is
+a file-level operation.
+
+---
+
 ## UI unification — shared feedback primitives (TODO_ORDER #15, 2026-09-05)
 
 `GeekEmptyState` / `GeekErrorState` / `GeekToastProvider` / `useToast` (from

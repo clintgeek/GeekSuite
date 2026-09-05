@@ -19,10 +19,10 @@ items are bug fixes that should ship on their own, ahead of any consolidation.**
 | | |
 |---|---|
 | Model pairs total | **13** |
-| Already consolidated | **1** (`UserSettings`, 2026-09-05) |
-| Remaining | **12** |
-| …of which are basegeek orphans (delete, don't consolidate) | **2** (`AIFoodPromptCache`, `MedicationLog`) |
-| …genuinely needing a shared schema | **10** |
+| Already consolidated | **3** (`UserSettings`, `Weight`, `BloodPressure` — all 2026-09-05) |
+| basegeek orphans deleted | **2** (`AIFoodPromptCache`, `MedicationLog` — done 2026-09-05) |
+| Remaining | **8** |
+| …genuinely needing a shared schema | **8** |
 | Conflicting divergences | **4** — 1 in the schema field set, 3 in statics |
 | Drift divergences | 3 (statics one side has and the other doesn't) |
 | Harmless divergences | the rest — connection binding, import order, trailing newline |
@@ -47,12 +47,12 @@ virtual, `toJSON`/`toObject` setting and instance method.
 
 | # | Model | Collection | Schema fields | Indexes | Statics / hooks | Verdict |
 |---|-------|-----------|---------------|---------|-----------------|---------|
-| 1 | `Weight` | `weights` | identical | identical | none either side | harmless only |
-| 2 | `BloodPressure` | `bloodpressures` | identical | identical | none either side | harmless only |
+| 1 | `Weight` | `weights` | identical | identical | none either side | ✅ **DONE 2026-09-05** |
+| 2 | `BloodPressure` | `bloodpressures` | identical | identical | none either side | ✅ **DONE 2026-09-05** |
 | 3 | `LoginStreak` | `loginstreaks` | identical | identical | BG adds `requireUser` guard | drift (guard) |
 | 4 | `Medication` | `medications` | identical | identical | none either side | harmless only |
-| 5 | `MedicationLog` | `medicationlogs` | identical | identical | none either side | **BG orphan — delete** |
-| 6 | `AIFoodPromptCache` | `aifoodpromptcaches` | identical | identical | none either side | **BG orphan — delete** |
+| 5 | `MedicationLog` | `medicationlogs` | identical | identical | none either side | ✅ **DELETED 2026-09-05** |
+| 6 | `AIFoodPromptCache` | `aifoodpromptcaches` | identical | identical | none either side | ✅ **DELETED 2026-09-05** |
 | 7 | `WeightGoals` | `weightgoals` | identical | identical | BG adds `requireUser` ×3 | drift (guard) |
 | 8 | `NutritionGoals` | `nutritiongoals` | identical | identical | BG adds `requireUser` ×3 | drift (guard) |
 | 9 | `Meal` | `meals` | identical | identical | BG adds `findOwned`; BG's 3 list statics are owner-scoped, FG's are not | **conflicting** |
@@ -340,7 +340,7 @@ Every pair follows the same five steps. They are cheap after the first one.
 >    goes away is the *schema literal*, in step 4. Then add the source-level "does not re-declare the
 >    schema inline" assertion (see the tests below) so it cannot come back.
 
-### Step 0 — the two free deletions (do these first, they are not consolidations)
+### Step 0 — the two free deletions (do these first, they are not consolidations) · ✅ **DONE 2026-09-05**
 
 | Pair | Action | Why it is safe |
 |---|---|---|
@@ -355,8 +355,8 @@ applies.
 
 | # | Pair | Effort | Rollback safe? | Notes |
 |---|------|--------|----------------|-------|
-| 1 | **`Weight`** | XS | ✅ | 47/50 lines. Zero statics, zero hooks, one compound index, `toJSON`/`toObject` virtuals identical (`:44-45` / `:47-48`). The only divergence is the connection binding |
-| 2 | **`BloodPressure`** | XS | ✅ | Same shape, 72/75 lines, one virtual (`bpCategory`), same `toJSON` settings |
+| 1 | ✅ **`Weight`** *(done 2026-09-05)* | XS | ✅ | 47/50 lines. Zero statics, zero hooks, one compound index, `toJSON`/`toObject` virtuals identical (`:44-45` / `:47-48`). The only divergence is the connection binding |
+| 2 | ✅ **`BloodPressure`** *(done 2026-09-05)* | XS | ✅ | Same shape, 72/75 lines. **Correction:** the virtual is `status`, not `bpCategory`, and there are *two* virtuals — `formatted_date` (on `Weight` too) and `status`. Same `toJSON` settings |
 | 3 | `Medication` | XS | ✅ | 106/109 lines, shared `MED_TIME_OF_DAY` enum literal identical on both sides, no statics |
 | 4 | `LoginStreak` | XS | ✅ | One static, `getOrCreateStreak`; the only difference is basegeek's `requireUser` — stays app-side |
 
@@ -523,9 +523,21 @@ in `dailySummaryGatewayFixes.test.js`: a `YYYY-MM-DD` string, a `Date`, and an I
 ISO-instant case was already covered in `packages/utils/src/__tests__/dates.test.js`, so nothing was
 added there.
 
-### PRE-3 · Delete the two orphan models · XS
+### PRE-3 · Delete the two orphan models · XS · ✅ **DONE 2026-09-05**
 
 Step 0 above. Do it in the same pass as PRE-2; it is `rm` plus a `rg` to confirm.
+
+**Done 2026-09-05.** Re-proved before deleting: across all of `apps/basegeek/packages`, the only
+occurrence of either identifier was its own `export default fitnessConn.model(...)` line — no
+resolver, no typeDef, no test, no service, and (checked case-insensitively) no reference to the
+`aifoodpromptcaches` / `medicationlogs` collection names either. Both files deleted. **There is no
+barrel to update:** `graphql/fitnessgeek/models/` has no `index.js`; `resolvers.js` imports each
+model file directly. `gatewaySchemaLoads` — the tripwire that would catch a dangling import — stayed
+green. fitnessgeek's own copies are untouched and remain the sole reader and writer of both
+collections. A regression guard now asserts both files stay gone
+(`apps/fitnessgeek/backend/src/__tests__/models/sharedSchemaParity.test.js`), because a
+re-declaration would put a second process back in the race to build `AIFoodPromptCache`'s 45-day TTL
+index on a collection basegeek never reads.
 
 ### PRE-4 · Decide `Meal`'s static semantics · XS (a decision, not code)
 
@@ -541,7 +553,7 @@ was not touched and basegeek's `Meal.js` statics (`findOwned`, `getActiveMeals`,
 `searchMeals`, all `requireUser`-guarded) were left exactly as they are. Recorded here again as the
 hardening follow-up this doc already names.
 
-### PRE-5 · Correct the two stale "fitnessgeek is CJS" comments · XS · **PARTIALLY DONE 2026-09-05**
+### PRE-5 · Correct the two stale "fitnessgeek is CJS" comments · XS · ✅ **DONE 2026-09-05**
 
 `packages/schemas/fitnessgeek/userSettings.js:46-48` and
 `apps/basegeek/packages/api/src/__tests__/userSettingsSchemaParity.test.js:31`. Both predate the
@@ -549,9 +561,18 @@ hardening follow-up this doc already names.
 reason is wrong. Fold this into whichever commit touches those files first.
 
 **`userSettings.js` fixed 2026-09-05**; the module header now cites no-build-step/dual-consumable/
-`@geeksuite/crypto-vault` precedent instead of "fitnessgeek's backend is CJS." The test-file comment at
-`userSettingsSchemaParity.test.js:31` is still stale — out of scope for this pass (see task note below)
-and left for whoever next touches that file.
+`@geeksuite/crypto-vault` precedent instead of "fitnessgeek's backend is CJS."
+
+**Closed 2026-09-05** with pairs 1–2: the comment at
+`apps/basegeek/packages/api/src/__tests__/userSettingsSchemaParity.test.js:31` now says the backend is
+ESM and that CommonJS is a property of the shared schema module, not of the app. The two new shared
+modules (`weight.js`, `bloodPressure.js`) carry the corrected justification from the start.
+
+**One stale claim of the same family survives, outside this item's scope:**
+`apps/basegeek/packages/api/src/graphql/fitnessgeek/models/UserSettings.js:16-18` still reads
+"fitnessgeek's backend is CJS and requires it directly" in its interop comment. The *conclusion* —
+use the default-import form — is still correct and is what the two new basegeek wrappers do; only the
+reason is wrong. Fold the fix into whichever commit next touches that file.
 
 ### Not pre-work, but worth knowing
 
@@ -622,6 +643,130 @@ Together they also settle the `userId`-vs-`user_id` question early (§4, Tier 1 
 two models in the set using the camelCase owner field, so getting both through the pipeline without
 touching it establishes the precedent that consolidation is a pure refactor. That precedent is what
 makes `DailySummary` safe to attempt ten pairs later.
+
+---
+
+## 8. Pairs 1 and 2, done — and what the pipeline actually taught us
+
+**`Weight` and `BloodPressure` were consolidated on 2026-09-05**, together with the two orphan
+deletions (PRE-3). The five-step pipeline in §4 held. What follows is the record and the corrections,
+written for whoever picks up pairs 3–10.
+
+### What shipped
+
+| | |
+|---|---|
+| New shared modules | `packages/schemas/fitnessgeek/weight.js` → `createWeightSchema(mongoose)`<br>`packages/schemas/fitnessgeek/bloodPressure.js` → `createBloodPressureSchema(mongoose)` |
+| Wiring | one subpath each in `packages/schemas/package.json` `exports`, one entry each in `packages/schemas/index.js` |
+| Wrappers (4) | `apps/fitnessgeek/backend/src/models/{Weight,BloodPressure}.js` — named import, `mongoose.model(...)`<br>`apps/basegeek/packages/api/src/graphql/fitnessgeek/models/{Weight,BloodPressure}.js` — default import + destructure, `fitnessConn.model(...)` |
+| Statics moved | **none — there are none.** Both models have zero statics on both sides, as §1a said. The wrappers carry a comment saying that if either side ever needs one it belongs in the wrapper, not the shared module |
+| New tripwires | `apps/basegeek/packages/api/src/__tests__/fitnessgeekSchemaParity.test.js` (table-driven, in-memory Mongo)<br>`apps/fitnessgeek/backend/src/__tests__/models/sharedSchemaParity.test.js` (hermetic, source-level) |
+| Third copy folded in | `apps/fitnessgeek/backend/src/validation/schemas/bloodPressure.js` now imports `bloodPressureBounds` instead of restating the four numbers |
+| Deleted | `apps/basegeek/packages/api/src/graphql/fitnessgeek/models/{AIFoodPromptCache,MedicationLog}.js` |
+
+Test counts: fitnessgeek's backend **104 → 129**, basegeek's api **856 → 889** (47 suites, 1 pre-existing
+skip). `packages/schemas` lint clean; `node tools/syntax-check.mjs` 759 files clean.
+
+### Where the plan was wrong
+
+Three corrections, all in the same direction — **§1a is reliable about field sets and indexes and
+loose about everything else on the schema object.**
+
+1. **`BloodPressure`'s virtual is `status`, not `bpCategory`.** §4 and §7 both name it `bpCategory`.
+   The shipped name on both sides is `status`, and because both schemas set
+   `toJSON: { virtuals: true }`, it is on the wire in every API response. It was moved under its
+   shipped name. Renaming it would be a behaviour change wearing a refactor's clothes.
+2. **There are two virtuals, not one — and `Weight` has one too.** §4 Tier 1 describes `Weight` as
+   having "no statics, no hooks, one compound index, `toJSON`/`toObject` virtuals identical" without
+   naming `formatted_date`, and calls `BloodPressure` "one virtual". Both models carry
+   `formatted_date`; `BloodPressure` adds `status`. Assume every remaining pair has undocumented
+   virtuals until you have read the file.
+3. **The bounds had a *third* copy, outside both model files.**
+   `apps/fitnessgeek/backend/src/validation/schemas/bloodPressure.js` opened with the comment
+   *"Mirrors models/BloodPressure.js bounds exactly"* — the same hand-sync this exercise exists to
+   end, in zod instead of Mongoose. It now imports `bloodPressureBounds` from the shared module, and
+   a test asserts the zod layer rejects exactly what the schema rejects. §1 counted divergences
+   between the two *model* files only; it did not look for mirrored constants elsewhere in either app.
+
+### What the tripwire had to grow
+
+The `UserSettings` tripwire's helpers do not generalize as-is. Two real gaps, both fixed in the new
+table-driven suite and both worth back-porting when someone next touches
+`userSettingsSchemaParity.test.js`:
+
+- **`describePath()` ignored `min`, `max` and `maxlength`.** For `UserSettings` that never mattered —
+  none of its 81 paths has a numeric bound. For `BloodPressure` the bounds *are* the interesting part
+  of the contract, and for `DailySummary` every `totals.*` path carries `min: 0`. The new copy adds
+  those three keys. Without them a divergence on `systolic.max` would sail straight through.
+- **Virtuals appear nowhere in `schema.paths`.** A virtual that exists on one side only — or one
+  whose logic drifts — is invisible to a path-set comparison. The new suite asserts the virtual name
+  set on both models, that `toJSON`/`toObject` still serialize them, and, for `status`, its output at
+  every band boundary (13 cases) against both real models *and* the exported
+  `classifyBloodPressure()`. That is why the classifier is a named export rather than an inline
+  closure: a behaviour assertion needs something to call.
+
+The index assertion §4 asked for works, with one adjustment: feed it a `Schema`, not a `Model`, and
+keep the normalizer to `{ unique, sparse, expireAfterSeconds }` — Mongoose adds `background: true`
+to every index's options, so a raw comparison of the options object is noisier than it needs to be.
+
+### The mechanical facts, confirmed
+
+- **The import forms in §3 are exactly right.** Named import from fitnessgeek, default-import +
+  destructure in basegeek. Both work under Node ESM, under each app's jest harness, and inside the
+  production image. Keep `module.exports = { … }` as an object literal.
+- **No `pnpm install`, no lockfile churn.** Adding a subpath to an existing package's `exports` is not
+  a dependency change; both apps already depend on `@geeksuite/schemas`. `pnpm-lock.yaml` is
+  untouched, so the frozen-lockfile install in the image build is unaffected. This should hold for
+  every remaining pair — none of them adds a dependency.
+- **The production image resolves the new subpaths.** `docker build -f apps/fitnessgeek/Dockerfile .`
+  then a `--network none` run: the app boots, mounts routes, and dies at `MongoDB connection failed`
+  — not at an import. Importing the two models inside the image directly returns the full path list,
+  the compound index, and `status` = `Stage 1` for 145/88. The image was removed afterwards.
+- **There is no barrel in `graphql/fitnessgeek/models/`.** Resolvers import model files directly, so
+  promoting or deleting one is a file-level operation with nothing else to update.
+
+### The rollback claim, confirmed for pairs 1 and 2
+
+§4's claim — *both apps keep working if only one side has switched, because the collection is the
+contract* — holds unconditionally for these two, and it is now asserted rather than argued:
+
+| | `Weight` | `BloodPressure` |
+|---|---|---|
+| Collection, both sides | `weights` | `bloodpressures` |
+| Indexes, both sides | `{ userId: 1, log_date: -1 }` — no `unique`, no `sparse`, no TTL | `{ userId: 1, log_date: -1 }` — same |
+| Paths added / removed / retyped / re-defaulted | none | none |
+
+Neither side passes an explicit `collection:` option and the model names match, so Mongoose's default
+pluralization lands both on the same collection — the new suite asserts
+`Rest.collection.name === GraphQL.collection.name` per pair rather than trusting that. The shared
+definition is byte-equivalent to what both sides already declared, so switching one side changes
+`schema.paths` by exactly nothing; a half-switched deploy is indistinguishable from today's state at
+the database level, and each app can be deployed and rolled back independently. Identical indexes
+mean neither process depends on an index the other creates, so there is no ordering constraint
+between the two deploys either.
+
+### Carry-forward for pairs 3–10
+
+1. **Grep for the third copy before you start.** Not just `models/`: also
+   `apps/fitnessgeek/backend/src/validation/schemas/`. Pair 3 (`Medication`) already has one —
+   `validation/schemas/medication.js:5` restates `TIME_OF_DAY = ['morning','afternoon','evening','bedtime']`,
+   which is `MED_TIME_OF_DAY` in `models/Medication.js:3`. Export the enum from the shared module and
+   have both consume it, the way `bloodPressureBounds` now works.
+2. **One mirror is deliberate — leave it.** `validation/schemas/weight.js` mirrors `Weight`'s bounds
+   but *intentionally* uses a positive floor instead of `min: 0`, with a documented reason. It was not
+   rewired. Its header comment now points at `models/Weight.js` for numbers that live in
+   `packages/schemas/fitnessgeek/weight.js` — a one-line comment fix, deliberately left out of this
+   pass because that file was outside its touch list. **Follow-up: repoint that comment.**
+3. **Adding a pair is now a table row.** Both new suites are `describe.each` over a `PAIRS` array:
+   model pair, factory, expected path list, expected virtual list, a probe document. Pair 3 should be
+   under an hour of test work, not the 1.5 h in §6.
+4. **Assert the expected path list literally, not just `length > N`.** The new suites compare against
+   an explicit array of field names. That is what makes a failure say *which* field went missing
+   instead of *some field* went missing, and it is cheap when the model has eight paths rather than 81.
+5. **§6's estimates are high for Tier 1.** Pairs 1 and 2 together — including building the shared
+   harness both suites now use, the validation-file rewire, a full image build and the two deletions —
+   came in well under the 5.5 h §6 budgets for them. Pairs 3 and 4 should be genuinely mechanical.
+   The judgment-heavy pairs (8–10) are unaffected by any of this.
 
 ---
 
