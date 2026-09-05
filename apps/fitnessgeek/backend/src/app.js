@@ -12,7 +12,7 @@ const cookieParser = require('cookie-parser');
 const axios = require('axios');
 const dotenv = require('dotenv');
 const crypto = require('crypto');
-const pinoHttp = require('pino-http');
+const { createHttpLogger } = require('@geeksuite/logger');
 const path = require('path');
 const logger = require('./config/logger');
 const { authenticateToken } = require('./middleware/auth');
@@ -105,10 +105,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 // Attach request ID and structured logger to every request
-const httpLogger = pinoHttp({
-  logger,
-  genReqId: (req) => req.headers['x-request-id'] || crypto.randomUUID(),
-});
+const httpLogger = createHttpLogger(logger);
 app.use((req, res, next) => {
   httpLogger(req, res);
   res.setHeader('X-Request-Id', req.id);

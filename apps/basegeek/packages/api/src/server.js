@@ -10,7 +10,7 @@ dotenv.config();
 import cors from 'cors';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
-import pinoHttp from 'pino-http';
+import { createHttpLogger } from '@geeksuite/logger';
 import logger from './lib/logger.js';
 import mongoose from 'mongoose';
 import mongoRoutes from './routes/mongo.js';
@@ -149,10 +149,7 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(cookieParser());
 
 // Attach request ID and structured logger to every request
-const httpLogger = pinoHttp({
-  logger,
-  genReqId: (req) => req.headers['x-request-id'] || crypto.randomUUID(),
-});
+const httpLogger = createHttpLogger(logger);
 app.use((req, res, next) => {
   httpLogger(req, res);
   res.setHeader('X-Request-Id', req.id);

@@ -6,7 +6,7 @@ import express from "express";
 import helmet from "helmet";
 import mongoose from "mongoose";
 import path from "path";
-import pinoHttp from "pino-http";
+import { createHttpLogger } from "@geeksuite/logger";
 import { fileURLToPath } from "url";
 import { allowedOrigins } from "./config/corsOrigins.js";
 import { env } from "./config/env.js";
@@ -51,10 +51,7 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-const httpLogger = pinoHttp({
-  logger,
-  genReqId: (req) => req.headers["x-request-id"] || crypto.randomUUID(),
-});
+const httpLogger = createHttpLogger(logger);
 app.use((req, res, next) => {
   httpLogger(req, res);
   res.setHeader("X-Request-Id", req.id);

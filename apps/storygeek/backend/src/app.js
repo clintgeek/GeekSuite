@@ -5,7 +5,7 @@ import crypto from 'crypto';
 import express from 'express';
 import helmet from 'helmet';
 import path from 'path';
-import pinoHttp from 'pino-http';
+import { createHttpLogger } from '@geeksuite/logger';
 import rateLimit from 'express-rate-limit';
 import { fileURLToPath } from 'url';
 import { attachUser, csrfGuard, meHandler } from '@geeksuite/user/server';
@@ -82,10 +82,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Structured request logging + request IDs
-const httpLogger = pinoHttp({
-  logger,
-  genReqId: (req) => req.headers['x-request-id'] || crypto.randomUUID(),
-});
+const httpLogger = createHttpLogger(logger);
 app.use((req, res, next) => {
   httpLogger(req, res);
   res.setHeader('X-Request-Id', req.id);

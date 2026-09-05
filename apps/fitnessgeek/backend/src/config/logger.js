@@ -1,19 +1,9 @@
-const pino = require('pino');
+const { createLogger } = require('@geeksuite/logger');
 
-const isDev = process.env.NODE_ENV !== 'production';
-
-const logger = pino({
-  level: process.env.LOG_LEVEL || (isDev ? 'debug' : 'info'),
-  ...(isDev && {
-    transport: {
-      target: 'pino-pretty',
-      options: {
-        colorize: true,
-        translateTime: 'SYS:standard',
-        ignore: 'pid,hostname',
-      },
-    },
-  }),
-});
+// Same level/pretty-print rules every backend used (LOG_LEVEL env, else
+// debug in dev / info in production), now shared via @geeksuite/logger.
+// `name` is new — additive `name` binding on every log line, doesn't change
+// any existing field.
+const logger = createLogger({ name: 'fitnessgeek' });
 
 module.exports = logger;

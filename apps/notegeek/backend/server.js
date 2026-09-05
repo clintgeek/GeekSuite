@@ -5,8 +5,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { randomUUID } from 'node:crypto';
-import pinoHttp from 'pino-http';
+import { createHttpLogger } from '@geeksuite/logger';
 import mongoose from 'mongoose';
 import connectDB from './config/db.js';
 import { getAllowedOrigins } from './config/corsOrigins.js';
@@ -117,10 +116,7 @@ async function start() {
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
   // Structured HTTP request logging (replaces morgan)
-  const httpLogger = pinoHttp({
-    logger,
-    genReqId: (req) => req.headers['x-request-id'] || randomUUID(),
-  });
+  const httpLogger = createHttpLogger(logger);
   app.use((req, res, next) => {
     httpLogger(req, res);
     res.setHeader('X-Request-Id', req.id);

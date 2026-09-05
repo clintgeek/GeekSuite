@@ -15,6 +15,7 @@
   "license": "ISC",
   "dependencies": {
     "@apollo/subgraph": "^2.13.1",
+    "@geeksuite/logger": "workspace:*",
     "@geeksuite/user": "workspace:*",
     "axios": "^1.13.2",
     "bcryptjs": "^2.4.3",

@@ -7,7 +7,7 @@ import fs from "fs";
 import mongoose from "mongoose";
 import multer from "multer";
 import path from "path";
-import pinoHttp from "pino-http";
+import { createHttpLogger } from "@geeksuite/logger";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { fileURLToPath } from "url";
@@ -65,10 +65,7 @@ app.use(
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
-const httpLogger = pinoHttp({
-  logger,
-  genReqId: (req) => req.headers["x-request-id"] || crypto.randomUUID(),
-});
+const httpLogger = createHttpLogger(logger);
 app.use((req, res, next) => {
   httpLogger(req, res);
   res.setHeader("X-Request-Id", req.id);

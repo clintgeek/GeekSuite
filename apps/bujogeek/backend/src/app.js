@@ -4,7 +4,7 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { randomUUID } from 'node:crypto';
-import pinoHttp from 'pino-http';
+import { createHttpLogger } from '@geeksuite/logger';
 import logger from './lib/logger.js';
 
 // Import routes
@@ -70,10 +70,7 @@ export function createApp() {
   app.use(express.json());
 
   // Attach request ID and structured logger to every request
-  const httpLogger = pinoHttp({
-    logger,
-    genReqId: (req) => req.headers['x-request-id'] || randomUUID(),
-  });
+  const httpLogger = createHttpLogger(logger);
   app.use((req, res, next) => {
     httpLogger(req, res);
     res.setHeader('X-Request-Id', req.id);

@@ -12,7 +12,9 @@
   },
   "dependencies": {
     "@apollo/subgraph": "^2.9.3",
+    "@geeksuite/logger": "workspace:*",
     "@geeksuite/user": "workspace:*",
+    "@geeksuite/utils": "workspace:*",
     "axios": "^1.12.2",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.6",

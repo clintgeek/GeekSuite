@@ -363,9 +363,19 @@ slots but have **zero consumers**; every app hand-rolls both. Per-app structural
   flockgeek. Promote to `packages/utils/src/dates.js` and import from there.
   (Full spec in `DOCS/ARCHIVE/THE_TIME_ISSUE.md`)
 
-- **Shared logger** — basegeek has a pino logger module; fitnessgeek and bujogeek got the same
-  pattern in their hardening passes. Consider extracting to `@geeksuite/logger` to ensure
-  consistent JSON structure + pretty-dev behavior across all apps.
+- ~~**Shared logger**~~ — **Done 2026-09-05.** `@geeksuite/logger` (`packages/logger`) extracts the
+  pino pattern all seven backends (basegeek, bujogeek, fitnessgeek, flockgeek, storygeek, notegeek,
+  bookgeek) had copied: `createLogger({ name, level?, pretty? })` (LOG_LEVEL/env level, dev
+  pretty-print via pino-pretty), `createHttpLogger(logger, opts?)` (pino-http, same `genReqId`
+  every backend used), `installShutdownHooks(logger, server, { onClose })`. Plain CommonJS (no
+  `type: module`, matching `@geeksuite/user`) so fitnessgeek's CJS backend can `require()` it while
+  the six ESM backends `import` it via Node's interop. New hardening, not just extraction: none of
+  the seven redacted anything before — `createLogger` now always redacts `authorization`, `cookie`,
+  `x-api-key` request headers, `set-cookie` (req+res), and `req.body.password`/`apiKey`; `createHttpLogger`
+  quiets auto-logging for `/api/health` and `/health`. 7 vitest tests in `packages/logger/src/__tests__`.
+  Each backend's logger module and the one `pinoHttp(...)` line in its server file were swapped over;
+  routes/services/middleware untouched. `installShutdownHooks` is built and exported but not yet wired
+  into any backend (each has a bespoke shutdown sequence today — follow-up if wanted).
 
 - **`UserSettings` schema consolidation (fitnessgeek)** — schema lives in both
   `apps/fitnessgeek/backend/src/models/UserSettings.js` and

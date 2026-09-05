@@ -70,7 +70,7 @@ cycle so the ordering rationale stays visible; detail moved to `SUITE_TODO.md` "
 17. **Shared date utilities** — M. `toUtcMidnight` / `localDateString` / `displayCalendarDate`
     into `packages/utils`; bujogeek, fitnessgeek, flockgeek consume. Spec exists in
     `ARCHIVE/THE_TIME_ISSUE.md`. *Shared libs*
-18. **Shared logger** — S–M. Extract the pino pattern already in three apps. *Shared libs*
+18. ~~**Shared logger**~~ — **Done 2026-09-05** (`@geeksuite/logger`; detail in `SUITE_TODO.md`). *Shared libs*
 19. ~~`toneForMode` helper + themed tooltips~~ — **Done 2026-09-03** (bujogeek's three sites converted;
     storygeek/fitnessgeek sites convert during the #15 fan-out). Auth splash still open — S. *UI*
 20. **cryptoVault → `@geeksuite/crypto-vault`** — M. Step 1 promote; step 2 fitnessgeek Garmin
