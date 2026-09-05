@@ -10,7 +10,6 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
 | R4 | M6 guardrails: mobile harness into `tools/mobile-harness`, CI workflow | opus | tools/, .github/workflows/mobile-harness.yml | 09-05 am |
-| R18 | flockgeek frontend vitest + RTL suite + CI job | sonnet | flockgeek frontend, ci.yml (one job) | 09-05 12:45 |
 | R19 | Q8: OpenAI-compat fixes (flip the 22 it.failing) + last llm7 refs (Q12) | opus | openaiProxy, aiRoutes, aiService, capabilities, director/rateLimit refs, docs | 09-05 13:15 |
 | R21 | Q3 first slice: Zod validation on fitnessgeek settings + weight/BP routes | sonnet | fitnessgeek backend routes + new validation/ | 09-05 13:50 |
 | R22 | storygeek frontend vitest + RTL suite + CI job | sonnet | storygeek frontend, ci.yml (one job) | 09-05 13:50 |
@@ -74,6 +73,7 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 - `` — Q6 — bookgeek web tests (96) + ci jobs bookgeek-web, utils
 - `fe29788` — R23 — storygeek service worker
 - `a3c4031` — R20 — CSRF double-submit token (report mode), @geeksuite/auth sends the header
+- `71066ba` — R18 — flockgeek frontend tests (30) + ci job
 - `37e83b6` — R17 — 22 dead fitnessgeek files + broken dev compose deleted
 - `164f978` — R16 — notegeek relative-time tests; dev-server fix pending in vite.config.js (shared with R13)
 - `6c39d00` — R2 — Apps & keys tab; APIKeysPage retired; AppConfigDialog on GeekDialog
