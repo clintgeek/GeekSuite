@@ -306,7 +306,11 @@ export default function Medications() {
   const saveMedication = async () => {
     const payload = buildPayload();
     const r = await medsService.save(payload);
-    setMyMeds((prev) => [r.data, ...prev.filter(m => m._id !== r.data._id)]);
+    // Gateway shape: `id`, not `_id` — `fitnessMedications`/`addFitnessMedication`
+    // never carry `_id`, so this dedupe always matched `undefined === undefined`
+    // and dropped every existing medication from the list on each add.
+    const savedId = r.data.id ?? r.data._id;
+    setMyMeds((prev) => [r.data, ...prev.filter(m => (m.id ?? m._id) !== savedId)]);
     setSelected(null);
     setEditingMed(null);
   };
@@ -314,8 +318,9 @@ export default function Medications() {
   const updateMedication = async () => {
     if (!editingMed) return;
     const payload = buildPayload();
-    const r = await medsService.update(editingMed._id, payload);
-    setMyMeds(prev => prev.map(m => (m._id === editingMed._id ? r.data : m)));
+    const editingId = editingMed.id ?? editingMed._id;
+    const r = await medsService.update(editingId, payload);
+    setMyMeds(prev => prev.map(m => ((m.id ?? m._id) === editingId ? r.data : m)));
     setSelected(null);
     setEditingMed(null);
   };
@@ -366,8 +371,9 @@ export default function Medications() {
   };
 
   const removeMed = async (med) => {
-    await medsService.remove(med._id);
-    setMyMeds(prev => prev.filter(m => m._id !== med._id));
+    const medId = med.id ?? med._id;
+    await medsService.remove(medId);
+    setMyMeds(prev => prev.filter(m => (m.id ?? m._id) !== medId));
   };
 
   // Helper to get med type color
@@ -583,7 +589,7 @@ export default function Medications() {
 
                     return (
                       <Surface
-                        key={m._id}
+                        key={m.id ?? m._id}
                         variant="inset"
                         sx={{
                           py: 1.75,

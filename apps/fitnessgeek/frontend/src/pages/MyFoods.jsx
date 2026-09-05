@@ -77,8 +77,8 @@ const MyFoods = () => {
       fiber_grams: food.nutrition.fiber_grams || 0,
       sugar_grams: food.nutrition.sugar_grams || 0,
       sodium_mg: food.nutrition.sodium_mg || 0,
-      serving_size: food.serving?.size || 100,
-      serving_unit: food.serving?.unit || 'g'
+      serving_size: food.serving_size || 100,
+      serving_unit: food.serving_unit || 'g'
     });
     setEditDialogOpen(true);
   };
@@ -92,23 +92,43 @@ const MyFoods = () => {
     if (!editingFood) return;
 
     setEditLoading(true);
-    const success = await updateFood(editingFood._id, {
+
+    // Gateway shape: `id`, not `_id` — the GraphQL row never carries the
+    // latter. Falling back to `_id` only guards a REST-shaped caller.
+    const foodId = editingFood.id ?? editingFood._id;
+
+    // `FitnessFoodInput` declares `name`/`serving_size`/`serving_unit` as
+    // required, so those three always go out with their current-or-edited
+    // value. Nutrition is the genuinely partial part: `updateFitnessFood`
+    // merges it as dot paths for exactly the keys it receives (BURN_REVIEW
+    // #19), so only the macros the dialog actually changed are included —
+    // the rest are left alone instead of round-tripping today's value.
+    const patch = {
       name: editForm.name,
       brand: editForm.brand,
-      nutrition: {
-        calories_per_serving: editForm.calories_per_serving,
-        protein_grams: editForm.protein_grams,
-        carbs_grams: editForm.carbs_grams,
-        fat_grams: editForm.fat_grams,
-        fiber_grams: editForm.fiber_grams,
-        sugar_grams: editForm.sugar_grams,
-        sodium_mg: editForm.sodium_mg
-      },
-      serving: {
-        size: editForm.serving_size,
-        unit: editForm.serving_unit
-      }
+      serving_size: editForm.serving_size,
+      serving_unit: editForm.serving_unit
+    };
+
+    const currentNutrition = editingFood.nutrition || {};
+    const nutritionKeys = [
+      'calories_per_serving',
+      'protein_grams',
+      'carbs_grams',
+      'fat_grams',
+      'fiber_grams',
+      'sugar_grams',
+      'sodium_mg'
+    ];
+    const nutritionPatch = {};
+    nutritionKeys.forEach((key) => {
+      const before = currentNutrition[key] || 0;
+      const after = editForm[key];
+      if (after !== before) nutritionPatch[key] = after;
     });
+    if (Object.keys(nutritionPatch).length) patch.nutrition = nutritionPatch;
+
+    const success = await updateFood(foodId, patch);
 
     setEditLoading(false);
     if (success) {
@@ -122,7 +142,8 @@ const MyFoods = () => {
     if (!deletingFood) return;
 
     setDeleteLoading(true);
-    const success = await deleteFood(deletingFood._id);
+    // Gateway shape: `id`, not `_id` — see handleEditSubmit.
+    const success = await deleteFood(deletingFood.id ?? deletingFood._id);
 
     setDeleteLoading(false);
     if (success) {
@@ -206,7 +227,7 @@ const MyFoods = () => {
           <List sx={{ p: 0 }}>
             {filteredFoods.map((food) => (
               <FoodListItem
-                key={food._id}
+                key={food.id ?? food._id}
                 food={food}
                 onEdit={handleEditFood}
                 onDelete={handleDeleteFood}

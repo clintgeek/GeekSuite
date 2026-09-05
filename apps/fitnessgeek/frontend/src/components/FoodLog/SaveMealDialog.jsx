@@ -30,7 +30,11 @@ const SaveMealDialog = ({
         food_items: logs.map(log => {
           const food = log.food_item || log.food_item_id || {};
           const rawId = log.food_item_id || food._id;
-          const foodId = typeof rawId === 'object' ? rawId?._id : rawId;
+          // `log.food_item_id` is the gateway's populated FoodLog row — a
+          // flat FitnessFood object with `id`, never `_id`. Without the
+          // `.id` read every logged item fell through to the "no id"
+          // fallback below and re-created the food instead of referencing it.
+          const foodId = typeof rawId === 'object' ? (rawId?.id ?? rawId?._id) : rawId;
           const servings = log.servings || 1;
           if (foodId) {
             return { food_item_id: foodId, servings };

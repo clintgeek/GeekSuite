@@ -104,7 +104,7 @@ const FoodSearch = ({
           return sum + (c * (it.servings || 1));
         }, 0);
         return {
-          _id: m._id,
+          _id: m._id || m.id, // GQL serializes as 'id'; REST returns '_id'
           name: m.name,
           source: 'meal',
           type: 'meal',

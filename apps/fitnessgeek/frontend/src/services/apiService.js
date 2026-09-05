@@ -374,6 +374,36 @@ function routeRequest(method, url, data) {
     };
   };
 
+  // PUT /foods/:id body -> FitnessFoodInput, but a genuine partial patch:
+  // `updateFitnessFood`'s resolver merges nutrition as dot paths for exactly
+  // the keys it receives (BURN_REVIEW #19). `normalizeFoodInput` above
+  // zero-fills every nutrition macro because `addFitnessFood` is minting a
+  // brand-new document that needs a real value for each one — reusing it
+  // here would silently re-zero the six macros an edit didn't touch, the
+  // same landmine BURN_REVIEW #19 already fixed once on the gateway side.
+  // `name`/`serving_size`/`serving_unit` stay required (FitnessFoodInput
+  // declares them non-null); MyFoods.jsx always sends the current value for
+  // those three even when unchanged.
+  const normalizeFoodUpdateInput = (raw = {}) => {
+    const serving_size = raw.serving_size ?? raw.serving?.size ?? 100;
+    const serving_unit = raw.serving_unit ?? raw.serving?.unit ?? 'g';
+    const n = raw.nutrition || {};
+    const nutrition = {};
+    for (const key of NUTRITION_FIELDS) {
+      if (n[key] === undefined) continue;
+      const value = Number(n[key]);
+      if (Number.isFinite(value)) nutrition[key] = value;
+    }
+    return {
+      name: raw.name,
+      brand: raw.brand || undefined,
+      serving_size: Number(serving_size) || 100,
+      serving_unit: String(serving_unit || 'g'),
+      ...(raw.barcode ? { barcode: String(raw.barcode) } : {}),
+      nutrition,
+    };
+  };
+
   // POST /logs body -> FoodLogInput.
   // REST's body was { food_item, log_date, meal_type, servings, notes, nutrition }
   // where `food_item` was a whole object and the route decided between "look it
@@ -579,8 +609,9 @@ function routeRequest(method, url, data) {
     if (base === '/settings/household') return { mutation: UPDATE_HOUSEHOLD_SETTINGS, variables: { input: data } };
     if (parts[0] === 'settings') return { mutation: UPDATE_USER_SETTINGS, variables: { input: sanitizeSettingsInput(data) } }; // /settings/dashboard etc
     if (parts[0] === 'weight') return { mutation: UPDATE_WEIGHT, variables: { id, input: data } };
-    // /foods/:id updates a library FoodItem (not a log entry)
-    if (parts[0] === 'foods') return { mutation: UPDATE_FITNESS_FOOD, variables: { id, input: normalizeFoodInput(data) } };
+    // /foods/:id updates a library FoodItem (not a log entry) — partial
+    // patch, see normalizeFoodUpdateInput.
+    if (parts[0] === 'foods') return { mutation: UPDATE_FITNESS_FOOD, variables: { id, input: normalizeFoodUpdateInput(data) } };
     // Partial patch — see normalizeFoodLogUpdateInput. EditLogDialog sends only
     // servings / meal_type / notes / nutrition and FoodLogUpdateInput allows it.
     if (parts[0] === 'logs') return { mutation: UPDATE_FOOD_LOG, variables: { id, input: normalizeFoodLogUpdateInput(data) } };

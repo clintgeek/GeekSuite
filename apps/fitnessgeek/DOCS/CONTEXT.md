@@ -213,10 +213,17 @@ keys the client actually sent (a calories-only edit no longer zeroes the other
 six macros; a unit-only edit no longer deletes `serving.size`, a
 `required, min: 0.1` path with update validators off).
 
-**Still open, frontend side:** `pages/MyFoods.jsx:80,95` reads
-`food.serving?.size || 100` and passes `editingFood._id` — it needs
-`food.serving_size` and `food.id ?? food._id` before the 100 g rewrite and the
-`PUT /foods/undefined` actually stop.
+**Frontend half landed 2026-09-05.** `pages/MyFoods.jsx` now reads
+`food.serving_size`/`food.serving_unit` and `editingFood.id ?? editingFood._id`
+(same fix on delete and the list key), and its save only sends the nutrition
+macros that actually changed — `apiService.js` gained a genuine partial-patch
+normalizer (`normalizeFoodUpdateInput`) for `PUT /foods/:id` so an omitted
+macro is left alone instead of zero-filled like `addFitnessFood`'s creator
+path does. The same `id`/`serving.size` misreads were also live in
+`matcherService.js`, `Medications.jsx`, `SaveMealDialog.jsx`, and
+`components/FoodSearch/FoodSearch.jsx` (all gateway-result readers) and were
+fixed alongside it; `UnifiedFoodSearch.jsx` and `foodService.js`'s own reads
+are REST results and were already correct as-is.
 
 ---
 

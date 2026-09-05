@@ -13,13 +13,17 @@ function similarity(a, b) {
   return inter / Math.max(A.size, B.size);
 }
 
+// `f` is a gateway `FitnessFood` row (from fitnessGeekService.searchFoods,
+// GraphQL via apiService): flat `id`/`serving_size`/`serving_unit`, no
+// `_id` and no nested `serving`. Keep the `_id` fallback for any REST-shaped
+// caller that still sends the old nested shape.
 function mapFoodToCandidate(f) {
   return {
-    _id: f._id,
+    _id: f.id ?? f._id,
     name: f.name,
     brand: f.brand,
     source: f.source || 'food',
-    serving: { size: f.serving?.size || 100, unit: f.serving?.unit || 'g' },
+    serving: { size: f.serving_size ?? f.serving?.size ?? 100, unit: f.serving_unit ?? f.serving?.unit ?? 'g' },
     nutrition: f.nutrition || {},
   };
 }
@@ -35,7 +39,7 @@ export const matcherService = {
 
     const foodCandidates = (foods || []).map(mapFoodToCandidate);
     const mealCandidates = (meals || []).map((m) => ({
-      _id: m._id,
+      _id: m.id ?? m._id,
       name: m.name,
       brand: m.brand,
       source: 'meal',
