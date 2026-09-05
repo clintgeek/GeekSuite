@@ -1,13 +1,13 @@
 # GeekSuite — Status
 
-*Written 2026-09-04, end of session. 37 commits on `main` ahead of `origin/main`, nothing pushed.
-Working tree clean.*
+*Updated 2026-09-05 after the second wave. First wave (38 commits) deployed 2026-09-05 ~02:30; the
+second wave (M3–M5) is pushed with this update.*
 
 ## Read this first
 
-- **Nothing has been deployed.** Every push to `main` rebuilds and restarts all eight apps via
-  Watchtower (`DOCS/CICD.md`). Push when you have looked; afterward check `docker ps` ages against
-  the release, and if an app did not update see the Watchtower digest note in `DOCS/CICD.md`.
+- Pushes to `main` rebuild all eight images; Watchtower restarts only the containers whose image
+  digest changed (observed 2026-09-05: a bookgeek-only fix restarted bookgeek and basegeek).
+  After a push check `docker ps` ages; if an app did not update see the digest note in `DOCS/CICD.md`.
 - Every change is a separate commit with a message that says what it does and how it was verified.
   `git log origin/main..HEAD` lists them; each is safe to revert on its own.
 
@@ -22,13 +22,14 @@ Working tree clean.*
 | M2 fitnessgeek | **Done** | FAB for logging food, all dialogs full-screen below sm on the Studio Slate skin, grids, 44px targets. |
 | M2 bujogeek | **Done** | Quick-add FAB + sheet, row action sheet, full-screen editors on a BujoDialog skin, week strip + agenda on the monthly calendar, More sheet on GeekSheet. |
 | M2 notegeek | **Done, not screenshot-verified** | Build, lint and 141 tests green. The dev server fails with a pre-existing esbuild optimizer fault (`styled_default is not a function`); production build is fine. |
-| M3 flockgeek | Not started | Tables → cards, harvest FAB, bottom-nav decision. |
-| M4 storygeek, basegeek | Not started | |
-| M5 startgeek | Not started | Manifest + safe areas first. |
-| M6 guardrails | Not started | Harness into the repo with a saved sign-in state Chef creates once. |
+| M3 flockgeek | **Done** | Bottom tab bar, harvest FAB + sheet, four tables as cards with sort/filter sheets, eleven Ledger dialogs. |
+| M4 storygeek, basegeek | **Done** | storygeek: rails as sheets, flex play surface, Codex dialogs, Bookify full-screen. basegeek: console dialogs, responsive tables, scrollable tabs, dvh public pages. |
+| M5 startgeek | **Done** | First manifest/SW/offline page, safe areas, labelled dock, phone hero, 44px targets. |
+| M6 guardrails | Not started | Harness into the repo (fix the moved Playwright path first), review checklist in CI. |
 
-Open follow-ups are in `MOBILE_UI_PLAN.md` §4b (a `GeekSheet` autofocus prop, the notegeek
-dev-server fault, three bujogeek dialogs not converted, fitnessgeek dead files).
+Open follow-ups are in `MOBILE_UI_PLAN.md` §4b and the M3–M5 list under it (GeekAppFrame `fill`,
+GeekSheet close control, notegeek dev-server fault, basegeek `Databases.jsx` orphan, the moved
+Playwright path).
 
 ### basegeek
 
@@ -76,6 +77,6 @@ app with no new warnings.
 
 ## Next
 
-1. Push, watch the fleet come back.
-2. M3 flockgeek.
+1. Poke at every app on a phone; report what feels wrong.
+2. M6 guardrails.
 3. Ask step 5, when wanted.

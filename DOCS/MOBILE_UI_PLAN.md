@@ -343,6 +343,22 @@ The fitnessgeek dead files and the voice decision remain open. Added after bujog
   and 10–11px chart ticks / editorial mono labels outside the Log surfaces are a voice decision
   for Chef, not a fix.
 
+### Follow-ups surfaced by M3–M5 (2026-09-05)
+
+- **`GeekAppFrame` needs a `fill` contract** for full-height pages (a pinned composer, a board):
+  storygeek reaches through the route `motion.div` with `& > div` to flex it. Add a `fill` prop. **S**
+- **`GeekSheet`**: no visible close control in sheet mode (handle, backdrop, Escape only) — thin for a
+  full-snap panel opened from an icon; `actions` has no alignment prop. **XS**
+- **`GeekDialog`** `data-geek-dialog="title"` is shared by the full-mode `h3` and the window
+  `DialogTitle`, so `titleSx` is not a clean window-only slot. **XS**
+- **basegeek `Databases.jsx` is orphaned** (no route, no nav entry) — converted anyway; wiring is
+  Chef's call. The theme's 11px `overline`/`subtitle2` tokens are a suite typography call.
+- **storygeek**: rails collapse at md (left) and lg (right) by design — gating both at md left a
+  ~180px play column at 1000px.
+- **Harness**: the Playwright install moved from `~/.agents/skills/playwright` to
+  `~/.agents/skills.bak-20260904-233317/playwright`; scripts import from the latter. Fix the
+  skills path (ai-setup) before M6 puts the harness in the repo.
+
 ## 5. Rollout
 
 | Pass | Scope | Effort | Why this order |
@@ -350,9 +366,9 @@ The fitnessgeek dead files and the voice decision remain open. Added after bujog
 | M0 | ~~§2 primitives + shell fixes + `viewport-fit`~~ **landed 2026-09-04** (`daf2071`..`578e5ba`, plus `fafac74` drawer-width fix) | M | Everything else consumes it |
 | M1 | ~~BookGeek pilot (§3)~~ **landed 2026-09-04** (see §3.7) | L | Heaviest case, clearest mobile job, drained the Tailwind CDN debt |
 | M2 | fitnessgeek → bujogeek → notegeek | M each | Bottom navs exist; mostly sheets, dialogs, targets |
-| M3 | flockgeek | L | Tables → cards is the big one; bottom nav decision |
-| M4 | storygeek, basegeek | M + S–M | Breakpoint alignment and dialogs |
-| M5 | startgeek | S–M | Standalone build; safe-area + manifest first |
+| M3 | ~~flockgeek~~ **landed 2026-09-05** (`706ae1a`; bottom nav: yes) | L | Tables → cards is the big one |
+| M4 | ~~storygeek, basegeek~~ **landed 2026-09-05** (`7fe5e44`, `816dc02`) | M + S–M | Breakpoint alignment and dialogs |
+| M5 | ~~startgeek~~ **landed 2026-09-05** (`13a922e`; first manifest/SW/offline page) | S–M | Standalone build |
 | M6 | Guardrails | S | Mobile checklist in the review list; `packages/ui` tests for sheet/dialog/fab; a Playwright screenshot script at iPhone 14 (`~/.agents/skills/playwright` has the browser) using a saved `storageState` that Chef creates once by signing in |
 
 Run it like the 2026-09-02 sweep: per-app commits, incremental deploys, worktree builds when the
@@ -373,4 +389,4 @@ Before merging any UI work, at 390×844 in both modes:
 - Safe areas respected in standalone (notch, home indicator).
 - Identity survives: the app's fonts, chrome color, accent, and voice are present on the phone.
 
-*Drafted 2026-09-04; M0 and M1 landed the same day. Next: M3 flockgeek, then M4 storygeek/basegeek, M5 startgeek, M6 guardrails.*
+*Drafted 2026-09-04; M0 and M1 landed the same day. M3–M5 landed 2026-09-05. Next: M6 guardrails (harness into the repo, review checklist in CI).*
