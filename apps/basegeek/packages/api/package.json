@@ -13,6 +13,7 @@
   "dependencies": {
     "@apollo/server": "^5.4.0",
     "@as-integrations/express4": "^1.1.2",
+    "@geeksuite/crypto-vault": "workspace:*",
     "@geeksuite/logger": "workspace:*",
     "@geeksuite/schemas": "workspace:*",
     "@geeksuite/utils": "workspace:*",

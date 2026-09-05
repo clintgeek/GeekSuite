@@ -1,6 +1,6 @@
 import APIKey from '../../models/APIKey.js';
 import AIConfig from '../../models/AIConfig.js';
-import { encrypt } from '../../lib/cryptoVault.js';
+import { encrypt } from '@geeksuite/crypto-vault';
 import AIPricing from '../../models/AIPricing.js';
 import AIFreeTier from '../../models/AIFreeTier.js';
 import AIAppConfig from '../../models/AIAppConfig.js';

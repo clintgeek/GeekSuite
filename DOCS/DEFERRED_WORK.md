@@ -46,6 +46,10 @@ per-app verification.
   extending basegeek's in-process `cryptoVault`. If geekLock adoption
   is deferred, short-term fallback is to promote `cryptoVault` to
   `@geeksuite/crypto-vault` and have fitnessgeek consume it.
+  **Step 1 done 2026-09-05** — `packages/crypto-vault` exists, basegeek's
+  api consumes it, byte-for-byte format-compatible with the old module
+  (see `DOCS/SUITE_TODO.md`). Still deferred: fitnessgeek actually wiring
+  Garmin password encryption + a backfill migration script (step 2).
 
 ## Suite-wide — geekLock sidecar adoption
 

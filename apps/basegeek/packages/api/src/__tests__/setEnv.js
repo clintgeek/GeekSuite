@@ -3,8 +3,8 @@
  *
  * Runs inside each test worker SYNCHRONOUSLY, before any module is imported.
  * Sets all environment variables that module-load-time guards check:
- *   - authService.js  → JWT_SECRET, JWT_REFRESH_SECRET (≥32 chars)
- *   - cryptoVault.js  → KEY_VAULT_SECRET (64 hex chars = 32 bytes)
+ *   - authService.js         → JWT_SECRET, JWT_REFRESH_SECRET (≥32 chars)
+ *   - @geeksuite/crypto-vault → KEY_VAULT_SECRET (64 hex chars = 32 bytes)
  *   - user.js         → USERGEEK_MONGODB_URI (points at in-memory Mongo)
  *   - database.js     → AIGEEK_MONGODB_URI
  *
@@ -15,7 +15,7 @@
 import { readFileSync } from 'fs';
 
 // ── Auth secrets ─────────────────────────────────────────────────────────────
-// Must be set before authService.js or cryptoVault.js are imported.
+// Must be set before authService.js or @geeksuite/crypto-vault are imported.
 process.env.JWT_SECRET          = 'test-jwt-secret-at-least-32-chars!!';
 process.env.JWT_REFRESH_SECRET  = 'test-refresh-secret-at-least-32chars!';
 // AES key — exactly 64 lowercase hex chars (32 bytes)

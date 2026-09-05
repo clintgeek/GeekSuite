@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { getAIGeekConnection } from '../config/database.js';
-import { encrypt, safeDecrypt, isEncrypted } from '../lib/cryptoVault.js';
+import { encrypt, safeDecrypt, isEncrypted } from '@geeksuite/crypto-vault';
 import { logger } from '../lib/logger.js';
 
 // Track doc IDs for which we have already emitted the legacy-plaintext warning,

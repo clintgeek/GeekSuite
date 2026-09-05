@@ -47,7 +47,7 @@ const {
   InvalidStateError,
 } = await import('../services/oauthConnectionService.js');
 const { default: OAuthConnection } = await import('../models/OAuthConnection.js');
-const { encrypt } = await import('../lib/cryptoVault.js');
+const { encrypt } = await import('@geeksuite/crypto-vault');
 
 // ── Lifecycle ────────────────────────────────────────────────────────────────
 

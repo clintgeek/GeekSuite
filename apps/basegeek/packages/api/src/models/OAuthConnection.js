@@ -3,15 +3,15 @@
  *
  * Household-wide OAuth token storage. Any SSO-logged-in user can connect a
  * provider (Google, Spotify, …); the resulting access + refresh tokens are
- * stored encrypted at rest via cryptoVault and refreshed centrally by the
- * oauthRefreshJobService.
+ * stored encrypted at rest via @geeksuite/crypto-vault and refreshed centrally
+ * by the oauthRefreshJobService.
  *
  * Never store plaintext tokens. Never return token material from HTTP
  * responses — use listConnections() in oauthConnectionService.js for that.
  */
 
 import mongoose from 'mongoose';
-import { encrypt, safeDecrypt } from '../lib/cryptoVault.js';
+import { encrypt, safeDecrypt } from '@geeksuite/crypto-vault';
 
 const OAUTH_PROVIDERS = ['google', 'spotify'];
 

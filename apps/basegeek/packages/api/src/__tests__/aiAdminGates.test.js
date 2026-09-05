@@ -42,7 +42,7 @@ const { default: AIConfig } = await import('../models/AIConfig.js');
 const { default: APIKey } = await import('../models/APIKey.js');
 const { default: aiRoutes } = await import('../routes/aiRoutes.js');
 const { resolvers } = await import('../graphql/basegeek/resolvers.js');
-const { encrypt } = await import('../lib/cryptoVault.js');
+const { encrypt } = await import('@geeksuite/crypto-vault');
 
 function buildApp() {
   const app = express();

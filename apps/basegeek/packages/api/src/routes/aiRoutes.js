@@ -10,7 +10,7 @@ import aiUsageService from '../services/aiUsageService.js';
 import conversationService from '../services/conversationService.js';
 import { countTextTokens, countMessageTokens } from '../services/tokenCounter.js';
 import AIConfig from '../models/AIConfig.js';
-import { encrypt } from '../lib/cryptoVault.js';
+import { encrypt } from '@geeksuite/crypto-vault';
 import AIModel from '../models/AIModel.js';
 import jwt from 'jsonwebtoken';
 import { formatResponse, formatStreamChunk } from '../utils/responseFormatter.js';
