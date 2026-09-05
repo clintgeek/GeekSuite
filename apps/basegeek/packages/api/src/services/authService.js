@@ -270,6 +270,13 @@ export const getUserProfile = async (userId) => {
       id: user._id,
       username: user.username,
       email: user.email,
+      // Additive, and the same field `GET /api/users/me` already returns:
+      // basegeek's AuthContext bootstraps from /auth/profile, so without this
+      // the client had no way to know an admin from anyone else and had to
+      // discover it by watching admin-only calls fail. Not a secret — the
+      // role is not a credential, and every gate that matters is still
+      // enforced server-side by requireAdmin / requireAdminUser.
+      role: user.role || 'user',
       profile: user.profile,
       lastLogin: user.lastLogin
     };

@@ -111,8 +111,17 @@ export function AuthProvider({ children }) {
     window.location.href = '/login';
   }, []);
 
+  // `role` comes from GET /auth/profile (authService.getUserProfile). It is a
+  // convenience for the chrome — hiding a nav row the API would refuse anyway —
+  // and never the gate itself: every admin-only route and mutation is enforced
+  // server-side by requireAdmin / requireAdminUser. A client that lies about
+  // its role gets a 403, not a provider key.
+  const role = user?.role ?? null;
+
   return (
-    <AuthContext.Provider value={{ user, loading, isAuthenticated: !!user, logout }}>
+    <AuthContext.Provider
+      value={{ user, role, isAdmin: role === 'admin', loading, isAuthenticated: !!user, logout }}
+    >
       <UserStoreSync />
       {children}
     </AuthContext.Provider>

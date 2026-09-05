@@ -13,7 +13,8 @@
 import { Box, Typography, alpha, useTheme } from '@mui/material';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { GeekSidebar, useGeekShell } from '@geeksuite/ui';
-import { activeNavId, navSections } from './navConfig';
+import { activeNavId, visibleNavSections } from './navConfig';
+import { useBaseGeekAuth } from './AuthContext';
 
 /**
  * Brand block. Passed as a node rather than the primitive's
@@ -98,11 +99,15 @@ function Brand() {
 
 export default function Sidebar() {
   const location = useLocation();
+  // Admin-only rows (DataGeek, UserGeek, AIGeek) are hidden from everyone else;
+  // the routes themselves are gated by `RequireAdmin` in App.jsx and by
+  // requireAdmin on the API. This only stops the nav offering a dead end.
+  const { isAdmin } = useBaseGeekAuth();
 
   return (
     <GeekSidebar
       brand={<Brand />}
-      sections={navSections}
+      sections={visibleNavSections(isAdmin)}
       activeId={activeNavId(location.pathname)}
       // Hairline under the brand band, where the old bespoke Divider used to be.
       brandSx={{ borderBottom: (theme) => `1px solid ${theme.palette.divider}` }}

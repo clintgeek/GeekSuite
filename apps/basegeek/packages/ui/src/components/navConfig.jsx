@@ -35,9 +35,12 @@ export const navSections = [
   {
     label: 'Services',
     items: [
-      { id: '/datageek', label: 'DataGeek', to: '/datageek', icon: <StorageIcon /> },
-      { id: '/usergeek', label: 'UserGeek', to: '/usergeek', icon: <PeopleIcon /> },
-      { id: '/aigeek', label: 'AIGeek', to: '/aigeek', icon: <SmartToyIcon /> },
+      // `adminOnly` rows are hidden from non-admins by `visibleNavSections`.
+      // All three sit behind `requireAdmin` / `requireAdminUser` on the API,
+      // so for anyone else the row was a link to a page full of 403s.
+      { id: '/datageek', label: 'DataGeek', to: '/datageek', icon: <StorageIcon />, adminOnly: true },
+      { id: '/usergeek', label: 'UserGeek', to: '/usergeek', icon: <PeopleIcon />, adminOnly: true },
+      { id: '/aigeek', label: 'AIGeek', to: '/aigeek', icon: <SmartToyIcon />, adminOnly: true },
     ],
   },
   {
@@ -47,6 +50,22 @@ export const navSections = [
     ],
   },
 ];
+
+/**
+ * The sections a given role should see. Sections that empty out entirely are
+ * dropped rather than left as a bare heading over nothing.
+ *
+ * `pageTitle` and `activeNavId` deliberately keep working off the full list: a
+ * hidden row is still a real route, and a non-admin who types the URL should
+ * get the redirect from `RequireAdmin` with the right title in the top bar on
+ * the way past — not "baseGeek" and a blank.
+ */
+export function visibleNavSections(isAdmin) {
+  if (isAdmin) return navSections;
+  return navSections
+    .map((section) => ({ ...section, items: section.items.filter((item) => !item.adminOnly) }))
+    .filter((section) => section.items.length > 0);
+}
 
 /** Routes reachable only from the chrome (footer chip / Settings row / menu). */
 const chromeTitles = {
