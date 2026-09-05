@@ -46,7 +46,7 @@ const MacroMicroBar = ({ label, current = 0, goal = 0, color }) => {
       >
         <Typography
           sx={{
-            fontSize: '0.625rem',
+            fontSize: '0.75rem',
             fontWeight: 700,
             textTransform: 'uppercase',
             letterSpacing: '0.12em',
@@ -70,7 +70,7 @@ const MacroMicroBar = ({ label, current = 0, goal = 0, color }) => {
           <Typography
             sx={{
               fontFamily: "'JetBrains Mono', monospace",
-              fontSize: '0.625rem',
+              fontSize: '0.75rem',
               color: theme.palette.text.secondary,
             }}
           >
@@ -165,7 +165,7 @@ const DailyTicket = ({
           <Typography
             sx={{
               fontFamily: "'JetBrains Mono', monospace",
-              fontSize: '0.625rem',
+              fontSize: '0.75rem',
               fontWeight: 700,
               textTransform: 'uppercase',
               letterSpacing: '0.18em',
@@ -194,7 +194,7 @@ const DailyTicket = ({
         {greeting && (
           <Typography
             sx={{
-              fontSize: '0.625rem',
+              fontSize: '0.75rem',
               fontWeight: 700,
               textTransform: 'uppercase',
               letterSpacing: '0.14em',
@@ -264,7 +264,7 @@ const DailyTicket = ({
             sx={{
               fontFamily: "'JetBrains Mono', monospace",
               fontVariantNumeric: 'tabular-nums',
-              fontSize: '0.6875rem',
+              fontSize: '0.75rem',
               fontWeight: 600,
               color: muted,
               mt: 0.5,

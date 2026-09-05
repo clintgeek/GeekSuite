@@ -147,7 +147,7 @@ export default function MealCard({
             sx={{
               fontFamily: "'JetBrains Mono', monospace",
               fontVariantNumeric: 'tabular-nums',
-              fontSize: '0.6875rem',
+              fontSize: '0.75rem',
               fontWeight: 600,
               color: muted,
               flexShrink: 0,
@@ -233,7 +233,7 @@ export default function MealCard({
                   {(food.brand || food.servings !== 1) && (
                     <Typography
                       sx={{
-                        fontSize: '0.6875rem',
+                        fontSize: '0.75rem',
                         color: muted,
                         display: 'flex',
                         alignItems: 'center',
@@ -304,7 +304,7 @@ export default function MealCard({
               size="small"
               startIcon={<AddIcon sx={{ fontSize: 14 }} />}
               sx={{
-                fontSize: '0.6875rem',
+                fontSize: '0.75rem',
                 fontWeight: 700,
                 textTransform: 'uppercase',
                 letterSpacing: '0.08em',

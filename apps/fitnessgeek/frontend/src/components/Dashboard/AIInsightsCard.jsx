@@ -208,7 +208,7 @@ const AIInsightsCard = () => {
             <Typography
               sx={{
                 fontWeight: 600,
-                fontSize: '0.625rem',
+                fontSize: '0.75rem',
                 textTransform: 'uppercase',
                 letterSpacing: '0.06em',
                 color: theme.palette.text.secondary,
@@ -382,7 +382,7 @@ const AIInsightsCard = () => {
                     display: 'block',
                     mt: 1,
                     color: theme.palette.text.disabled,
-                    fontSize: '0.625rem',
+                    fontSize: '0.75rem',
                   }}
                 >
                   Generated {new Date(insight.generatedAt).toLocaleTimeString()}

@@ -85,6 +85,56 @@ function buildFitnessOverrides(mode) {
           },
         },
       },
+
+      // ─── Mobile grammar (MOBILE_UI_PLAN.md §2) ───────────────────────
+      // The probe (tools/mobile-harness) flagged clickable chips at 40px
+      // tall on Home/Log/BP and 10-11.2px chip labels/captions — both below
+      // the suite floor (44px hit area, 12px text) on phones. Fixed here so
+      // every chip/icon-button/select in the app inherits it, rather than
+      // patching each `sx={{ height: 40 }}` call site.
+      MuiChip: {
+        styleOverrides: {
+          // `min-height`/`min-width` win over an inline `sx={{ height: 40 }}`
+          // regardless of specificity — CSS clamps the used height to at
+          // least min-height — so this reaches every chip without touching
+          // the per-component sx that sets the visual (40px) size.
+          root: {
+            '@media (max-width:899.95px)': {
+              '&.MuiChip-clickable': {
+                minHeight: 44,
+                minWidth: 44,
+              },
+            },
+          },
+          label: {
+            fontSize: '0.75rem', // 12px floor — was inheriting an 11.2px small-chip default
+          },
+        },
+      },
+      MuiIconButton: {
+        styleOverrides: {
+          root: {
+            '@media (max-width:899.95px)': {
+              '&.MuiIconButton-sizeSmall': {
+                minWidth: 44,
+                minHeight: 44,
+              },
+            },
+          },
+        },
+      },
+      // Bare `<Select>`/`<OutlinedInput>` outside a `<TextField>` (e.g. Copy
+      // Meal's source/destination pickers) don't get the suite's
+      // TextField-scoped 44px floor — give outlined inputs their own below md.
+      MuiOutlinedInput: {
+        styleOverrides: {
+          root: {
+            '@media (max-width:899.95px)': {
+              minHeight: 44,
+            },
+          },
+        },
+      },
     }
   };
 }

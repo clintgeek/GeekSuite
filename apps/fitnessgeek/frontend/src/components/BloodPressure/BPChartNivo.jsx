@@ -139,7 +139,7 @@ const BPChartNivo = ({ data, unit = 'mmHg' }) => {
       />
       <Typography
         sx={{
-          fontSize: '0.625rem',
+          fontSize: '0.75rem',
           fontWeight: 700,
           textTransform: 'uppercase',
           letterSpacing: '0.12em',
@@ -235,7 +235,7 @@ const BPChartNivo = ({ data, unit = 'mmHg' }) => {
                 <Typography
                   sx={{
                     fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: '0.625rem',
+                    fontSize: '0.75rem',
                     fontWeight: 700,
                     textTransform: 'uppercase',
                     letterSpacing: '0.12em',
@@ -265,7 +265,7 @@ const BPChartNivo = ({ data, unit = 'mmHg' }) => {
                           backgroundColor: systolicColor,
                         }}
                       />
-                      <Typography sx={{ fontSize: '0.6875rem', color: muted, fontWeight: 600 }}>
+                      <Typography sx={{ fontSize: '0.75rem', color: muted, fontWeight: 600 }}>
                         Systolic
                       </Typography>
                     </Box>
@@ -300,7 +300,7 @@ const BPChartNivo = ({ data, unit = 'mmHg' }) => {
                           backgroundColor: diastolicColor,
                         }}
                       />
-                      <Typography sx={{ fontSize: '0.6875rem', color: muted, fontWeight: 600 }}>
+                      <Typography sx={{ fontSize: '0.75rem', color: muted, fontWeight: 600 }}>
                         Diastolic
                       </Typography>
                     </Box>

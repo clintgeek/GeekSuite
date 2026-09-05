@@ -150,7 +150,7 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
       />
       <Typography
         sx={{
-          fontSize: '0.625rem',
+          fontSize: '0.75rem',
           fontWeight: 700,
           textTransform: 'uppercase',
           letterSpacing: '0.12em',
@@ -162,7 +162,7 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
       {suffix && (
         <Typography
           sx={{
-            fontSize: '0.625rem',
+            fontSize: '0.75rem',
             fontWeight: 700,
             textTransform: 'uppercase',
             letterSpacing: '0.08em',
@@ -264,7 +264,7 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
               <Typography
                 sx={{
                   fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: '0.625rem',
+                  fontSize: '0.75rem',
                   fontWeight: 700,
                   textTransform: 'uppercase',
                   letterSpacing: '0.12em',
@@ -297,7 +297,7 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
                     />
                     <Typography
                       sx={{
-                        fontSize: '0.6875rem',
+                        fontSize: '0.75rem',
                         color: muted,
                         fontWeight: 600,
                       }}

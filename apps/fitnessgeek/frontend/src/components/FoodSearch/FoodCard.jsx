@@ -166,7 +166,7 @@ const FoodCard = ({
             backgroundColor: primary,
             color: theme.palette.primary.contrastText,
             fontFamily: "'JetBrains Mono', monospace",
-            fontSize: '0.6875rem',
+            fontSize: '0.75rem',
             fontWeight: 700,
             letterSpacing: '0.04em',
             boxShadow: `0 6px 14px -4px ${alpha(primary, 0.55)}`,
@@ -387,7 +387,7 @@ const FoodCard = ({
             }}
           />
           {ketoMode ? (
-            <Typography variant="caption" sx={{ color: theme.palette.warning.dark, fontSize: '0.7rem', fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>
+            <Typography variant="caption" sx={{ color: theme.palette.warning.dark, fontSize: '0.75rem', fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>
               NC: {netCarbsDisplay}g{isMissingFiber ? '*' : ''} · F: {Math.round(fat)}g
             </Typography>
           ) : (
@@ -395,7 +395,7 @@ const FoodCard = ({
               variant="caption"
               sx={{
                 color: secondary,
-                fontSize: '0.7rem',
+                fontSize: '0.75rem',
                 fontWeight: 500
               }}
             >

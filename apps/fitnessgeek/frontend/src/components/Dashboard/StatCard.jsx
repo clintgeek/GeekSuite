@@ -122,7 +122,7 @@ export default function StatCard({
             <Typography
               sx={{
                 fontFamily: "'JetBrains Mono', monospace",
-                fontSize: '0.6875rem',
+                fontSize: '0.75rem',
                 fontWeight: 600,
                 textTransform: 'uppercase',
                 letterSpacing: '0.08em',
@@ -147,7 +147,7 @@ export default function StatCard({
             sx={{
               color: isPositive ? theme.palette.success.main : theme.palette.error.main,
               fontWeight: 600,
-              fontSize: '0.6875rem',
+              fontSize: '0.75rem',
               letterSpacing: '0.02em',
             }}
           >

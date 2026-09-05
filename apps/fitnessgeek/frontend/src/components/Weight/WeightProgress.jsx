@@ -234,7 +234,7 @@ const WeightProgress = ({
                 borderRadius: '999px',
                 textTransform: 'uppercase',
                 fontWeight: 700,
-                fontSize: '0.6875rem',
+                fontSize: '0.75rem',
                 letterSpacing: '0.1em',
                 color: theme.palette.primary.main,
                 flexShrink: 0,

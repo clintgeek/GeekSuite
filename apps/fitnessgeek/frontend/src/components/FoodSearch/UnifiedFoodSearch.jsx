@@ -726,7 +726,7 @@ const UnifiedFoodSearch = ({
                             sx={{
                               textTransform: 'uppercase',
                               fontWeight: 700,
-                              fontSize: '0.6875rem',
+                              fontSize: '0.75rem',
                               letterSpacing: '0.12em',
                               color: muted
                             }}
@@ -787,7 +787,7 @@ const UnifiedFoodSearch = ({
             <Button
               onClick={() => setShowMyMealsSection(!showMyMealsSection)}
               endIcon={showMyMealsSection ? <CollapseIcon /> : <ExpandIcon />}
-              sx={{ color: muted, textTransform: 'uppercase', fontWeight: 700, fontSize: '0.6875rem', letterSpacing: '0.12em' }}
+              sx={{ color: muted, textTransform: 'uppercase', fontWeight: 700, fontSize: '0.75rem', letterSpacing: '0.12em' }}
             >
               {showMyMealsSection ? 'Hide' : 'Show'}
             </Button>
@@ -826,7 +826,7 @@ const UnifiedFoodSearch = ({
                 color: muted,
                 textTransform: 'uppercase',
                 fontWeight: 700,
-                fontSize: '0.6875rem',
+                fontSize: '0.75rem',
                 letterSpacing: '0.12em'
               }}
             >
@@ -848,7 +848,7 @@ const UnifiedFoodSearch = ({
             <Button
               onClick={() => setShowMyFoodsSection(!showMyFoodsSection)}
               endIcon={showMyFoodsSection ? <CollapseIcon /> : <ExpandIcon />}
-              sx={{ color: muted, textTransform: 'uppercase', fontWeight: 700, fontSize: '0.6875rem', letterSpacing: '0.12em' }}
+              sx={{ color: muted, textTransform: 'uppercase', fontWeight: 700, fontSize: '0.75rem', letterSpacing: '0.12em' }}
             >
               {showMyFoodsSection ? 'Hide' : 'Show'}
             </Button>
