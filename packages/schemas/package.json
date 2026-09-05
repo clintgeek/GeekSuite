@@ -1,0 +1,24 @@
+{
+  "name": "@geeksuite/schemas",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mongoose schema definitions shared by more than one GeekSuite writer.",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./fitnessgeek/userSettings": "./fitnessgeek/userSettings.js"
+  },
+  "scripts": {
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@geeksuite/eslint-config": "workspace:*",
+    "eslint": "^9.39.2"
+  },
+  "peerDependencies": {
+    "mongoose": ">=7"
+  },
+  "peerDependenciesMeta": {
+    "mongoose": { "optional": true }
+  }
+}

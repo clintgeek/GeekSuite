@@ -20,6 +20,8 @@
   "license": "MIT",
   "dependencies": {
     "@apollo/subgraph": "^2.9.3",
+    "@geeksuite/logger": "workspace:*",
+    "@geeksuite/schemas": "workspace:*",
     "@geeksuite/user": "workspace:*",
     "axios": "^1.13.2",
     "bcryptjs": "^2.4.3",
