@@ -207,6 +207,26 @@
   .seg > button[aria-pressed="true"] { background: var(--accent-dim); color: var(--accent); }
   .seg > button:hover:not([aria-pressed="true"]) { color: var(--ink); }
 
+  /* ---- Adaptive wallpaper scrim ----
+     --scrim-alpha is a unitless multiplier set by BackgroundManager from the
+     wallpaper's sampled luminance (0 black .. 1 white -> factor 0.75 .. 1.4,
+     see scrimFactorForLuminance). It defaults to 1, which reproduces the
+     original fixed alphas below exactly — so Void mode (no --scrim-alpha
+     ever set) and any sampling failure (cross-origin block, decode error)
+     both render identically to the pre-adaptive scrim. */
+  .wallpaper-scrim {
+    background: linear-gradient(
+      180deg,
+      rgba(10, 13, 18, calc(0.30 * var(--scrim-alpha, 1))) 0%,
+      rgba(10, 13, 18, calc(0.34 * var(--scrim-alpha, 1))) 45%,
+      rgba(10, 13, 18, calc(0.62 * var(--scrim-alpha, 1))) 100%
+    );
+    transition: opacity 700ms var(--ease), background 700ms var(--ease);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .wallpaper-scrim { transition: opacity 700ms var(--ease); }
+  }
+
   /* ---- Backdrop grid (void mode) ---- */
   .void-grid {
     background-image:

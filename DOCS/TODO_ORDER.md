@@ -95,7 +95,8 @@ cycle so the ordering rationale stays visible; detail moved to `SUITE_TODO.md` "
     Pocket Pass (DOCS/MOBILE_UI_PLAN.md): every view rewritten in MUI, CDN script removed
     (`5b6bb3f`). *UI*
 28. **startgeek joins the suite** — theme wiring means pulling a deliberately standalone app
-    into the workspace build. Do the **adaptive wallpaper scrim** alone (S); defer the wiring
+    into the workspace build. ~~Do the **adaptive wallpaper scrim** alone (S)~~ — **Done
+    2026-09-05**, see `apps/startgeek/CONTEXT.md`; defer the wiring
     until there's a second reason to touch that build. *UI*
 29. **Mongo connection topology (basegeek)** — investigated, not a duplicate pool; deferred
     with the hazard noted. *Infra*

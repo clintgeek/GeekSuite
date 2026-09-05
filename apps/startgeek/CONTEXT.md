@@ -64,6 +64,26 @@ and the backdrop/clock controls show.
   `void`: no photo, flat ground with a faint grid.
 - **Clock** `12` (default) or `24`.
 
+### Adaptive wallpaper scrim (2026-09-05)
+
+The Photo-mode scrim's darkness follows the wallpaper's own luminance —
+`BackgroundManager.jsx` draws a second, independent 32×32 probe image
+(`crossOrigin="anonymous"`) to an offscreen canvas once per wallpaper change,
+averages its luma, and maps it through a clamped linear ramp
+(`scrimFactorForLuminance`: luminance 0 → 0.75x, 1 → 1.4x the fixed scrim
+alphas) into a `--scrim-alpha` CSS custom property on the backdrop root.
+`.wallpaper-scrim` in `index.css` consumes it via `calc()`. picsum.photos
+answers CORS with `Access-Control-Allow-Origin: *` (confirmed by hand, needs
+an `Origin` header to appear — a plain `curl -I` won't show it), so sampling
+works today; if a future host doesn't answer CORS, the probe's `onload` never
+fires (or `getImageData` throws on a tainted canvas) and it's caught, falling
+back to `--scrim-alpha: 1` — the original fixed scrim, unchanged. The probe
+is deliberately separate from the `<img>` that drives the visible wallpaper,
+so a CORS failure can never break the wallpaper itself. Void mode is
+untouched — the scrim div's opacity still goes straight to 0. No light theme
+exists in this app (`color-scheme: dark` only), so there was no second theme
+state to wire the ramp against.
+
 ## Tech Stack
 
 - React 18 + Vite 5
