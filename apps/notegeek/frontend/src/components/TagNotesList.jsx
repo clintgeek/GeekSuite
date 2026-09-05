@@ -5,8 +5,8 @@ import {
     Breadcrumbs,
     Link,
     Box,
-    Alert
 } from '@mui/material';
+import { GeekErrorState } from '@geeksuite/ui';
 import { Link as RouterLink } from 'react-router-dom';
 import NoteList from './NoteList';
 
@@ -16,7 +16,11 @@ const TagNotesList = () => {
     if (!tag) {
         return (
             <Box sx={{ p: 2 }}>
-                <Alert severity="error">No tag parameter found in URL</Alert>
+                <GeekErrorState
+                    compact
+                    title="Invalid tag link"
+                    description="No tag parameter found in URL"
+                />
             </Box>
         );
     }

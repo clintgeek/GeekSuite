@@ -3,7 +3,6 @@ import ReactMarkdown from 'react-markdown';
 import {
     Paper,
     Typography,
-    Alert,
     Box,
     IconButton,
     Tooltip,
@@ -11,6 +10,7 @@ import {
     alpha,
     Fade,
 } from '@mui/material';
+import { GeekEmptyState, GeekErrorState } from '@geeksuite/ui';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@apollo/client';
 import { GET_NOTE_BY_ID } from '../graphql/queries';
@@ -38,14 +38,13 @@ function NoteViewer() {
     const { id } = useParams();
     const navigate = useNavigate();
 
-    const { data, loading: isLoadingSelected, error } = useQuery(GET_NOTE_BY_ID, {
+    const { data, loading: isLoadingSelected, error, refetch } = useQuery(GET_NOTE_BY_ID, {
         variables: { id },
         skip: !id,
         fetchPolicy: 'cache-and-network',
     });
 
     const noteToView = data?.note;
-    const selectedError = error?.message;
 
     const handleEdit = () => {
         if (noteToView) {
@@ -67,20 +66,12 @@ function NoteViewer() {
         );
     }
 
-    if (selectedError && !noteToView?.content) {
-        return (
-            <Alert severity="warning" sx={{ borderRadius: 2 }}>
-                {selectedError}
-            </Alert>
-        );
+    if (error && !noteToView?.content) {
+        return <GeekErrorState error={error} onRetry={() => refetch()} />;
     }
 
     if (!noteToView) {
-        return (
-            <Box sx={{ textAlign: 'center', py: 8 }}>
-                <Typography color="text.secondary">Note not found or not selected.</Typography>
-            </Box>
-        );
+        return <GeekEmptyState title="Note not found or not selected." />;
     }
 
     const noteType = noteToView.type || 'text';

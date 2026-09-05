@@ -8,10 +8,9 @@ import {
   TextField,
   Button,
   Divider,
-  Snackbar,
-  Alert,
   useTheme,
 } from '@mui/material';
+import { GeekEmptyState, useToast } from '@geeksuite/ui';
 import ArrowForward from '@mui/icons-material/ArrowForward';
 import { NOTE_TYPES } from '../components/notes/NoteTypeRouter';
 import NoteRow from '../components/notes/NoteRow';
@@ -46,7 +45,7 @@ function QuickCaptureHome() {
   const { user } = useAuthStore();
   const { notes, fetchNotes, isLoadingList, createNote } = useNoteStore();
   const [captureText, setCaptureText] = useState('');
-  const [captureToast, setCaptureToast] = useState(false);
+  const { notify } = useToast();
 
   useEffect(() => {
     fetchNotes({ limit: 50 });
@@ -62,7 +61,7 @@ function QuickCaptureHome() {
     });
     if (created) {
       setCaptureText('');
-      setCaptureToast(true);
+      notify('Note captured', { tone: 'success' });
       // Stay on home — refresh the list so the new note appears in Recent
       fetchNotes({ limit: 50 });
     }
@@ -225,15 +224,11 @@ function QuickCaptureHome() {
           ))}
         </Box>
       ) : notes.length === 0 ? (
-        <Box sx={{ py: { xs: 4, sm: 6 }, textAlign: 'center' }}>
-          <Typography variant="body1" sx={{ color: 'text.muted', mb: 0.75 }}>
-            Nothing here yet
-          </Typography>
-          <Typography variant="body2" sx={{ color: 'text.muted', maxWidth: 340, mx: 'auto' }}>
-            The strip above is for quick text notes — type a thought and press Capture.
-            For richer formats like Markdown, code, or mind maps, use the type pills below it.
-          </Typography>
-        </Box>
+        <GeekEmptyState
+          title="Nothing here yet"
+          description="The strip above is for quick text notes — type a thought and press Capture.
+            For richer formats like Markdown, code, or mind maps, use the type pills below it."
+        />
       ) : (
         <Box>
           {/* Section header */}
@@ -284,27 +279,6 @@ function QuickCaptureHome() {
           </Box>
         </Box>
       )}
-
-      {/* Quick-capture success toast */}
-      <Snackbar
-        open={captureToast}
-        autoHideDuration={1800}
-        onClose={() => setCaptureToast(false)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert
-          severity="success"
-          onClose={() => setCaptureToast(false)}
-          sx={{
-            bgcolor: glow(theme).soft,
-            color: 'text.primary',
-            border: `1px solid ${border(theme)}`,
-            '& .MuiAlert-icon': { color: 'primary.main' },
-          }}
-        >
-          Note captured
-        </Alert>
-      </Snackbar>
     </Box>
   );
 }

@@ -6,7 +6,6 @@ import {
     ListItemIcon,
     ListItemText,
     Typography,
-    Alert,
     CircularProgress,
     Box,
     TextField,
@@ -15,6 +14,7 @@ import {
     useTheme,
     alpha,
 } from '@mui/material';
+import { GeekEmptyState, GeekErrorState } from '@geeksuite/ui';
 // Deep-import (see RichTextEditor.jsx for why) instead of the
 // '@mui/icons-material' barrel.
 import SearchIcon from '@mui/icons-material/Search';
@@ -260,11 +260,10 @@ function Sidebar() {
     const [contextMenu, setContextMenu] = useState(null);
     const [selectedTag, setSelectedTag] = useState(null);
 
-    const { data, loading: tagsLoading, error } = useQuery(GET_TAGS, {
+    const { data, loading: tagsLoading, error: tagsError, refetch: refetchTags } = useQuery(GET_TAGS, {
         fetchPolicy: 'cache-and-network',
     });
     const tags = data?.noteTags || [];
-    const tagsError = error?.message;
 
 
     // Single context menu handler for all tag rows
@@ -414,24 +413,22 @@ function Sidebar() {
                     </Box>
                 )}
                 {tagsError && (
-                    <Alert severity="error" sx={{ mx: 1.5, my: 1, borderRadius: '6px' }}>
-                        {tagsError}
-                    </Alert>
+                    <GeekErrorState
+                        compact
+                        sx={{ mx: 1.5, my: 1 }}
+                        error={tagsError}
+                        onRetry={() => refetchTags()}
+                    />
                 )}
                 {!tagsLoading && !tagsError && Object.keys(tagHierarchy).length === 0 && (
-                    <Box sx={{ px: 2, py: 3, textAlign: 'center' }}>
-                        <TagIcon sx={{ fontSize: 24, color: 'text.muted', mb: 0.75 }} />
-                        <Typography
-                            variant="body2"
-                            color="text.secondary"
-                            sx={{ mb: 0.25 }}
-                        >
-                            No tags yet
-                        </Typography>
-                        <Typography variant="caption" color="text.muted">
-                            Add tags to your notes to organize them here
-                        </Typography>
-                    </Box>
+                    <GeekEmptyState
+                        compact
+                        icon={<TagIcon sx={{ fontSize: 24 }} />}
+                        title="No tags yet"
+                        titleSx={{ typography: 'body2', color: 'text.secondary', mb: 0.25 }}
+                        description="Add tags to your notes to organize them here"
+                        descriptionSx={{ typography: 'caption' }}
+                    />
                 )}
                 {!tagsLoading && !tagsError && Object.keys(filteredHierarchy).length > 0 && (
                     <TagTree
@@ -443,11 +440,11 @@ function Sidebar() {
                     />
                 )}
                 {!tagsLoading && !tagsError && tagFilter && Object.keys(filteredHierarchy).length === 0 && (
-                    <Box sx={{ px: 2, py: 2, textAlign: 'center' }}>
-                        <Typography variant="caption" color="text.muted">
-                            No tags match "{tagFilter}"
-                        </Typography>
-                    </Box>
+                    <GeekEmptyState
+                        compact
+                        description={`No tags match "${tagFilter}"`}
+                        descriptionSx={{ typography: 'caption' }}
+                    />
                 )}
             </Box>
         </Box>

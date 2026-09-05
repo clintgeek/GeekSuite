@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { useParams, useMatch, useNavigate } from 'react-router-dom';
-import { CircularProgress, Alert, Box, Button, Typography } from '@mui/material';
+import { CircularProgress, Box, Button, Typography } from '@mui/material';
+import { GeekEmptyState, GeekErrorState } from '@geeksuite/ui';
 import useAuthStore from '../store/authStore';
 import NoteViewer from '../components/NoteViewer';
 import NoteEditorPage from './NoteEditorPage';
@@ -15,14 +16,13 @@ function NotePage() {
 
     const isNewNote = id === 'new';
 
-    const { data, loading: isLoadingSelected, error: queryError } = useQuery(GET_NOTE_BY_ID, {
+    const { data, loading: isLoadingSelected, error: queryError, refetch } = useQuery(GET_NOTE_BY_ID, {
         variables: { id },
         skip: isNewNote || id === 'undefined' || !isAuthenticated,
         fetchPolicy: 'cache-and-network',
     });
 
     const noteToDisplay = data?.note;
-    const selectedError = queryError?.message;
 
     // Add or remove 'mindmap-view' class from body when viewing mind maps
     useEffect(() => {
@@ -83,17 +83,15 @@ function NotePage() {
     if (!isAuthenticated) {
         return (
             <Box sx={{ maxWidth: 500, mx: 'auto', py: 8 }}>
-                <Alert
-                    severity="error"
-                    sx={{ borderRadius: 3 }}
+                <GeekEmptyState
+                    title="Sign in required"
+                    description="You need to be logged in to view this note."
                     action={
-                        <Button color="inherit" size="small" onClick={() => navigate('/login')}>
+                        <Button variant="outlined" onClick={() => navigate('/login')}>
                             Login
                         </Button>
                     }
-                >
-                    You need to be logged in to view this note.
-                </Alert>
+                />
             </Box>
         );
     }
@@ -120,39 +118,35 @@ function NotePage() {
     }
 
     // Show error if note couldn't be loaded
-    if (selectedError) {
+    if (queryError) {
         return (
             <Box sx={{ maxWidth: 500, mx: 'auto', py: 8 }}>
-                <Alert
-                    severity="error"
-                    sx={{ borderRadius: 3 }}
+                <GeekErrorState
+                    error={queryError}
+                    description="Could not load note."
+                    onRetry={() => refetch()}
                     action={
-                        <Button color="inherit" size="small" onClick={() => navigate('/')}>
+                        <Button variant="text" onClick={() => navigate('/')}>
                             Back to Notes
                         </Button>
                     }
-                >
-                    {selectedError || 'Could not load note.'}
-                </Alert>
+                />
             </Box>
         );
     }
 
-    // Show warning if note not found or id is 'undefined'
+    // Show empty state if note not found or id is 'undefined'
     if (!isLoadingSelected && !noteToDisplay && !isNewNote || id === 'undefined') {
         return (
             <Box sx={{ maxWidth: 500, mx: 'auto', py: 8 }}>
-                <Alert
-                    severity="warning"
-                    sx={{ borderRadius: 3 }}
+                <GeekEmptyState
+                    title="Note not found or may have been deleted."
                     action={
-                        <Button color="inherit" size="small" onClick={() => navigate('/')}>
+                        <Button variant="outlined" onClick={() => navigate('/')}>
                             Back to Notes
                         </Button>
                     }
-                >
-                    Note not found or may have been deleted.
-                </Alert>
+                />
             </Box>
         );
     }

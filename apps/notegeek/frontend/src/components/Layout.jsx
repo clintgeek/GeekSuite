@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTheme, useMediaQuery } from '@mui/material';
-import { GeekShell, GeekAppFrame } from '@geeksuite/ui';
+import { GeekShell, GeekAppFrame, GeekToastProvider } from '@geeksuite/ui';
 import useAuthStore from '../store/authStore';
 import Sidebar from './Sidebar';
 import MobileBottomNav from './MobileBottomNav';
@@ -20,6 +20,13 @@ import Header from './Header';
  * only on mobile — `GeekAppFrame`'s bottom inset is driven by whether
  * `bottomNav` is non-null, so passing it unconditionally would reserve 56px
  * of dead padding on desktop, where the bar never renders.
+ *
+ * `GeekToastProvider` is mounted *inside* `GeekShell` and *outside*
+ * `GeekAppFrame` (TODO_ORDER #15 fan-out), same placement as bujogeek and
+ * flockgeek: inside the shell so it can read `useGeekShell()` and clear the
+ * sidebar/tab bar; outside the frame because the frame's route transition is
+ * a framer-motion element and would drag a `position: fixed` toast along
+ * with the page fade.
  */
 function Layout({ children }) {
     const theme = useTheme();
@@ -33,17 +40,19 @@ function Layout({ children }) {
             topBar={<Header />}
             bottomNav={showNavigation && isMobile ? <MobileBottomNav /> : null}
         >
-            {/* Main content with route transitions */}
-            <GeekAppFrame
-                sx={{
-                    // NoteGeek specific: Mindmap editor wants overflow: hidden
-                    '&.mindmap-container': {
-                        overflow: 'hidden',
-                    },
-                }}
-            >
-                {children}
-            </GeekAppFrame>
+            <GeekToastProvider>
+                {/* Main content with route transitions */}
+                <GeekAppFrame
+                    sx={{
+                        // NoteGeek specific: Mindmap editor wants overflow: hidden
+                        '&.mindmap-container': {
+                            overflow: 'hidden',
+                        },
+                    }}
+                >
+                    {children}
+                </GeekAppFrame>
+            </GeekToastProvider>
         </GeekShell>
     );
 }

@@ -7,11 +7,11 @@ import {
     TextField,
     Button,
     Link,
-    Alert,
     IconButton,
     InputAdornment,
     useTheme,
 } from '@mui/material';
+import { useToast } from '@geeksuite/ui';
 // Deep-import (see RichTextEditor.jsx for why) instead of the
 // '@mui/icons-material' barrel.
 import Visibility from '@mui/icons-material/Visibility';
@@ -25,29 +25,31 @@ function RegisterPage() {
     const [confirmPassword, setConfirmPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-    const [formError, setFormError] = useState(null);
     const register = useAuthStore((state) => state.register);
     const isLoading = useAuthStore((state) => state.isLoading);
-    const apiError = useAuthStore((state) => state.error);
     const navigate = useNavigate();
+    const { notify } = useToast();
 
     const handleSubmit = async (event) => {
         event.preventDefault();
-        setFormError(null);
         useAuthStore.setState({ error: null });
 
         if (password !== confirmPassword) {
-            setFormError('Passwords do not match');
+            notify('Passwords do not match', { tone: 'error' });
             return;
         }
         if (password.length < 6) {
-            setFormError('Password must be at least 6 characters');
+            notify('Password must be at least 6 characters', { tone: 'error' });
             return;
         }
 
         const success = await register(email, password);
         if (success) {
             navigate('/');
+        } else {
+            const message = useAuthStore.getState().error;
+            if (message) notify(message, { tone: 'error' });
+            useAuthStore.setState({ error: null });
         }
     };
 
@@ -133,19 +135,6 @@ function RegisterPage() {
                         Sign in
                     </Link>
                 </Typography>
-
-                {(formError || apiError) && (
-                    <Alert
-                        severity="error"
-                        onClose={() => {
-                            setFormError(null);
-                            useAuthStore.setState({ error: null });
-                        }}
-                        sx={{ mb: 2.5 }}
-                    >
-                        {formError || apiError}
-                    </Alert>
-                )}
 
                 <Box
                     component="form"

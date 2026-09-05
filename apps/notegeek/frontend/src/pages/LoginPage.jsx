@@ -7,36 +7,33 @@ import {
     TextField,
     Button,
     Link,
-    Alert,
     IconButton,
     InputAdornment,
-    Snackbar,
     useTheme,
 } from '@mui/material';
+import { useToast } from '@geeksuite/ui';
 // Deep-import (see RichTextEditor.jsx for why) instead of the
 // '@mui/icons-material' barrel.
 import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import useAuthStore from '../store/authStore';
-import { border, glow } from '../theme/tokens';
 
 function LoginPage() {
     const theme = useTheme();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
-    const [signedOutToast, setSignedOutToast] = useState(false);
     const login = useAuthStore((state) => state.login);
     const isLoading = useAuthStore((state) => state.isLoading);
-    const error = useAuthStore((state) => state.error);
     const navigate = useNavigate();
     const location = useLocation();
+    const { notify } = useToast();
 
     // Show "Signed out" toast when redirected from logout
     useEffect(() => {
         const params = new URLSearchParams(location.search);
         if (params.get('signedOut') === '1') {
-            setSignedOutToast(true);
+            notify('Signed out', { tone: 'info' });
             // Clean the query param from history without re-render loop
             navigate('/login', { replace: true });
         }
@@ -48,6 +45,10 @@ function LoginPage() {
         const success = await login(email, password);
         if (success) {
             navigate('/');
+        } else {
+            const message = useAuthStore.getState().error;
+            if (message) notify(message, { tone: 'error' });
+            useAuthStore.setState({ error: null });
         }
     };
 
@@ -145,16 +146,6 @@ function LoginPage() {
                     </Link>
                 </Typography>
 
-                {error && (
-                    <Alert
-                        severity="error"
-                        onClose={() => useAuthStore.setState({ error: null })}
-                        sx={{ mb: 2.5 }}
-                    >
-                        {error}
-                    </Alert>
-                )}
-
                 <Box
                     component="form"
                     onSubmit={handleSubmit}
@@ -236,26 +227,6 @@ function LoginPage() {
                 Part of the GeekSuite
             </Typography>
 
-            {/* Signed-out confirmation toast */}
-            <Snackbar
-                open={signedOutToast}
-                autoHideDuration={2500}
-                onClose={() => setSignedOutToast(false)}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-            >
-                <Alert
-                    severity="info"
-                    onClose={() => setSignedOutToast(false)}
-                    sx={{
-                        bgcolor: glow(theme).soft,
-                        color: 'text.primary',
-                        border: `1px solid ${border(theme)}`,
-                        '& .MuiAlert-icon': { color: 'primary.main' },
-                    }}
-                >
-                    Signed out
-                </Alert>
-            </Snackbar>
         </Box>
     );
 }

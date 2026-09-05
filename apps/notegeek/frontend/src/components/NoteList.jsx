@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import {
     Typography,
-    Alert,
     Box,
     ButtonBase,
     Skeleton,
     Divider,
     useTheme,
 } from '@mui/material';
+import { GeekEmptyState, GeekErrorState } from '@geeksuite/ui';
 import { gql, useQuery } from '@apollo/client';
 import NoteRow from './notes/NoteRow';
 import { NOTE_TYPES } from './notes/NoteTypeRouter';
@@ -51,13 +51,12 @@ function NoteList({ tag, prefix }) {
     const [typeFilter, setTypeFilter] = useState(null);
     const [sortBy, setSortBy] = useState('updated');
 
-    const { loading: isLoadingList, error, data } = useQuery(GET_NOTES, {
+    const { loading: isLoadingList, error, data, refetch } = useQuery(GET_NOTES, {
         variables: { tag, prefix, type: typeFilter, limit: 200 },
         fetchPolicy: 'cache-and-network',
     });
 
     const notes = React.useMemo(() => data?.notes || [], [data]);
-    const listError = error?.message;
 
     // Client-side sort — the resolver already returns by updatedAt desc,
     // but we offer created/title sorts too. For 'updated' we skip re-sorting.
@@ -82,11 +81,13 @@ function NoteList({ tag, prefix }) {
         );
     }
 
-    if (listError) {
+    if (error) {
         return (
-            <Alert severity="error" sx={{ width: '100%', borderRadius: 2 }}>
-                {listError}
-            </Alert>
+            <GeekErrorState
+                sx={{ maxWidth: layout.contentWidth, mx: 'auto' }}
+                error={error}
+                onRetry={() => refetch()}
+            />
         );
     }
 
@@ -193,16 +194,10 @@ function NoteList({ tag, prefix }) {
 
             {/* Editorial list */}
             {sortedNotes.length === 0 ? (
-                <Box sx={{ py: 8, textAlign: 'center' }}>
-                    <Typography variant="body1" sx={{ color: 'text.muted', mb: 0.5 }}>
-                        {tag ? 'No notes tagged here yet.' : 'No notes yet'}
-                    </Typography>
-                    {!tag && (
-                        <Typography variant="caption" sx={{ color: 'text.muted' }}>
-                            Create your first note to get started
-                        </Typography>
-                    )}
-                </Box>
+                <GeekEmptyState
+                    title={tag ? 'No notes tagged here yet.' : 'No notes yet'}
+                    description={!tag ? 'Create your first note to get started' : undefined}
+                />
             ) : (
                 <Box>
                     {sortedNotes.map((note, idx) => (

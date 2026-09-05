@@ -4,7 +4,6 @@ import {
     Box,
     TextField,
     Typography,
-    Alert,
     InputAdornment,
     IconButton,
     Skeleton,
@@ -12,6 +11,7 @@ import {
     Divider,
     useTheme,
 } from '@mui/material';
+import { GeekEmptyState, GeekErrorState } from '@geeksuite/ui';
 // Deep-import (see RichTextEditor.jsx for why) instead of the
 // '@mui/icons-material' barrel.
 import SearchIcon from '@mui/icons-material/Search';
@@ -101,7 +101,11 @@ function SearchResults() {
                     ))}
                 </Box>
             ) : searchError ? (
-                <Alert severity="error">{searchError}</Alert>
+                <GeekErrorState
+                    compact
+                    error={searchError}
+                    onRetry={() => searchNotes(query)}
+                />
             ) : searchResults.length > 0 ? (
                 <Box>
                     <Box sx={{ mb: 1.5, px: 0.5 }}>
@@ -121,23 +125,16 @@ function SearchResults() {
                     </Box>
                 </Box>
             ) : query ? (
-                <Box sx={{ py: 6, textAlign: 'center' }}>
-                    <Typography variant="body1" sx={{ color: 'text.secondary', mb: 0.5 }}>
-                        No matches for &ldquo;{query}&rdquo;
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: 'text.muted' }}>
-                        Try a tag path (e.g. work/ideas) or a partial word
-                    </Typography>
-                </Box>
+                <GeekEmptyState
+                    title={`No matches for “${query}”`}
+                    titleSx={{ color: 'text.secondary' }}
+                    description="Try a tag path (e.g. work/ideas) or a partial word"
+                />
             ) : (
-                <Box sx={{ py: 6, textAlign: 'center' }}>
-                    <Typography variant="body1" sx={{ color: 'text.muted', mb: 0.5 }}>
-                        Search by title, content, or tags
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: 'text.muted' }}>
-                        Press / from anywhere to focus search
-                    </Typography>
-                </Box>
+                <GeekEmptyState
+                    title="Search by title, content, or tags"
+                    description="Press / from anywhere to focus search"
+                />
             )}
         </Box>
     );
