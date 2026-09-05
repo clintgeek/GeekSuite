@@ -1,3 +1,5 @@
+import { shouldHealCsrf, triggerCsrfReloadOnce } from './csrfHeal.js'
+
 export const BASEGEEK =
   import.meta.env.VITE_BASEGEEK_URL || 'https://basegeek.clintgeek.com'
 
@@ -36,11 +38,33 @@ function readCsrfToken() {
   return null
 }
 
-export const logout = () => {
+function postLogout() {
   const token = readCsrfToken()
   return fetch(`${BASEGEEK}/api/auth/logout`, {
     method: 'POST',
     credentials: 'include',
     headers: token ? { [CSRF_HEADER_NAME]: token } : undefined,
   })
+}
+
+/**
+ * Log out, healing a stale CSRF header the same way graphql.js does: if
+ * basegeek's CSRF guard rejects it with a 403 shouldHealCsrf() recognizes,
+ * retry once with a freshly-read cookie; if the retry hits the same wall,
+ * reload the tab once per session — see csrfHeal.js.
+ */
+export async function logout() {
+  let res = await postLogout()
+  if (res.status !== 403) return res
+
+  let body = await res.clone().json().catch(() => null)
+  if (!shouldHealCsrf(res.status, body)) return res
+
+  res = await postLogout()
+  if (res.status !== 403) return res
+
+  body = await res.clone().json().catch(() => null)
+  if (shouldHealCsrf(res.status, body)) triggerCsrfReloadOnce()
+
+  return res
 }

@@ -29,9 +29,56 @@ export const authLink = setContext((_, { headers }) => {
 });
 
 import { onError } from '@apollo/client/link/error';
-import { logout, loginRedirect, csrfHeaders } from '@geeksuite/auth';
+import { Observable } from '@apollo/client/utilities';
+import { logout, loginRedirect, csrfHeaders, isCsrfFailure, triggerCsrfReloadOnce } from '@geeksuite/auth';
 
-const errorLink = (appName) => onError(({ graphQLErrors, networkError }) => {
+/**
+ * errorLink, exported for testing: the shared Apollo error link every
+ * consumer app's client goes through.
+ *
+ * ## Stale-tab CSRF heal (2026-09-05)
+ *
+ * A tab whose JS predates the CSRF rollout — or whose `geek_csrf` cookie
+ * rotated out from under it (another tab refreshed) — posts a mutation with
+ * no header, or a stale one. basegeek's csrfTokenGuard rejects it as a plain
+ * HTTP 403 *before* GraphQL ever executes, which Apollo Client surfaces as a
+ * `networkError` (not a `graphQLErrors` entry) carrying `statusCode: 403` and
+ * `result: { error: 'csrf_token_missing' | 'csrf_token_invalid' }`.
+ *
+ * `forward(operation)` re-sends the operation through the rest of the chain
+ * — `authLink` then `httpLink` — and `authLink` re-reads `geek_csrf` off
+ * `document.cookie` fresh on every pass (see its comment above), so simply
+ * forwarding again already picks up a cookie that was just (re)issued or
+ * rotated; there is nothing extra to stamp here.
+ *
+ * `onError` only invokes this handler once per *original* failure — if the
+ * observable we hand back from a retry fails too, Apollo just propagates
+ * that new error without calling us again. So "retry once, then reload if it
+ * fails the same way" has to be handled by hand inside the Observable we
+ * return, rather than by relying on a second invocation of this function.
+ * `triggerCsrfReloadOnce()` is the same reload guard `@geeksuite/auth`'s
+ * axios interceptor uses, so a tab that trips this from both a GraphQL call
+ * and a REST call still only reloads once.
+ */
+export const errorLink = (appName) => onError(({ graphQLErrors, networkError, operation, forward }) => {
+    if (networkError && isCsrfFailure(networkError.statusCode, networkError.result)) {
+        return new Observable((observer) => {
+            const sub = forward(operation).subscribe({
+                next: (result) => observer.next(result),
+                error: (retryError) => {
+                    // Never reaches here for any other networkError —
+                    // isCsrfFailure() gates on basegeek's specific CSRF codes.
+                    if (isCsrfFailure(retryError.statusCode, retryError.result)) {
+                        triggerCsrfReloadOnce();
+                    }
+                    observer.error(retryError);
+                },
+                complete: () => observer.complete(),
+            });
+            return () => sub.unsubscribe();
+        });
+    }
+
     let unauthenticated = false;
 
     if (graphQLErrors) {

@@ -1,3 +1,5 @@
+import { shouldHealCsrf, triggerCsrfReloadOnce } from './csrfHeal.js'
+
 const URL =
   import.meta.env.VITE_GRAPHQL_API_URL || 'https://basegeek.clintgeek.com/graphql'
 
@@ -33,9 +35,9 @@ function readCsrfToken() {
   return null
 }
 
-export async function gql(query, variables) {
+function postGraphql(query, variables) {
   const token = readCsrfToken()
-  const res = await fetch(URL, {
+  return fetch(URL, {
     method: 'POST',
     credentials: 'include',
     headers: {
@@ -44,6 +46,34 @@ export async function gql(query, variables) {
     },
     body: JSON.stringify({ query, variables }),
   })
+}
+
+/**
+ * POST once; if basegeek's CSRF guard rejects it with a 403 that
+ * shouldHealCsrf() recognizes (a stale tab loaded before the header existed,
+ * or the cookie rotated between page load and this call), retry once with a
+ * freshly-read cookie before giving up. If the retry hits the same wall,
+ * reload the tab once per session — see csrfHeal.js. Any other response
+ * (success, a non-CSRF 403, a 401) is returned untouched.
+ */
+async function postGraphqlWithCsrfHeal(query, variables) {
+  let res = await postGraphql(query, variables)
+  if (res.status !== 403) return res
+
+  let body = await res.clone().json().catch(() => null)
+  if (!shouldHealCsrf(res.status, body)) return res
+
+  res = await postGraphql(query, variables)
+  if (res.status !== 403) return res
+
+  body = await res.clone().json().catch(() => null)
+  if (shouldHealCsrf(res.status, body)) triggerCsrfReloadOnce()
+
+  return res
+}
+
+export async function gql(query, variables) {
+  const res = await postGraphqlWithCsrfHeal(query, variables)
 
   if (res.status === 401) throw new UnauthorizedError()
 

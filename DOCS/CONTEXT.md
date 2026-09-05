@@ -125,6 +125,24 @@ Also sending it: `packages/api-client/src/index.js`'s shared Apollo `authLink` (
 and startgeek's dependency-free `apps/startgeek/src/lib/{graphql,basegeek}.js`, which read the
 cookie inline per call. `d8521eb`.
 
+**The stale-tab heal.** A tab whose JS predates this rollout — or whose `geek_csrf` cookie rotated
+out from under it while the tab sat open — sends no header, or a stale one, and 403s as
+`csrf_token_missing` / `csrf_token_invalid` on every mutation under `CSRF_TOKEN=enforce` until
+reloaded. Every browser client heals the same way: on that specific 403, retry the request **once**
+with a freshly-read cookie (the value may have just been back-filled by `ensureCsrfCookie()` on the
+very response that rejected it, or rotated by a concurrent refresh in another tab); if the retry
+fails with the same code, reload the tab **once per session**, guarded by a `sessionStorage` flag so
+a setup that is genuinely broken (cookies blocked, storage disabled) can't loop. Never fires for any
+other 403. `packages/auth/src/authClient.js`'s axios response interceptor, `packages/api-client`'s
+Apollo error link (which retries by hand-building an `Observable` around `forward(operation)`, since
+`onError` only invokes its handler once per original failure), and startgeek's
+`apps/startgeek/src/lib/csrfHeal.js` (`shouldHealCsrf()` / `triggerCsrfReloadOnce()`, imported by
+both `graphql.js` and `basegeek.js`) all share the same `geeksuite:csrf-reload-attempted`
+sessionStorage key, so a tab that trips the guard from a REST call and a GraphQL call in the same
+page load still reloads only once. A reload drops unsaved page state — worth knowing, since it's the
+one part of this that is user-visible — but it's the last resort after a same-cookie retry has
+already failed, not the first response to any 403.
+
 **Server-to-server: the six auth proxies.** notegeek, bujogeek, fitnessgeek, storygeek, flockgeek
 and bookgeek expose `POST /api/auth/{refresh,logout}` as thin proxies — the browser calls its own
 app's backend, the backend replays the browser's cookies up to basegeek with axios. That upstream

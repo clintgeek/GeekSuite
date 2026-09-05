@@ -22,6 +22,10 @@ import {
   setupAxiosInterceptors,
   CSRF_COOKIE_NAME,
   CSRF_HEADER_NAME,
+  CSRF_RELOAD_FLAG_KEY,
+  extractCsrfErrorCode,
+  isCsrfFailure,
+  triggerCsrfReloadOnce,
 } from '../authClient.js';
 
 const TOKEN = 'oO2xk5Yz1QqFbn-8LmvTz7cRk2sQeWpUvHgJdNaBcDe';
@@ -38,7 +42,35 @@ function setCookieJar(value) {
 afterEach(() => {
   delete globalThis.document;
   delete globalThis.fetch;
+  delete globalThis.window;
+  delete globalThis.localStorage;
 });
+
+/** A minimal, in-memory sessionStorage stand-in. */
+function makeSessionStorage(initial = {}) {
+  const store = { ...initial };
+  return {
+    getItem: (key) => (Object.prototype.hasOwnProperty.call(store, key) ? store[key] : null),
+    setItem: (key, value) => { store[key] = String(value); },
+  };
+}
+
+/**
+ * Stub `window` with just what triggerCsrfReloadOnce / the browser-only paths
+ * read. Also stubs the bare `localStorage` global the request interceptor
+ * reads once `window` exists — the two are one browser environment in
+ * production, and authClient's `typeof window === 'undefined'` guards assume
+ * that pairing.
+ */
+function setBrowserEnv({ sessionStorage } = {}) {
+  const reloadCalls = [];
+  globalThis.window = {
+    location: { reload: () => { reloadCalls.push(true); } },
+    sessionStorage: sessionStorage === undefined ? makeSessionStorage() : sessionStorage,
+  };
+  globalThis.localStorage = makeSessionStorage();
+  return reloadCalls;
+}
 
 describe('readCsrfToken', () => {
   test('pulls geek_csrf out of a jar with several cookies', () => {
@@ -298,5 +330,196 @@ describe('setupAxiosInterceptors', () => {
     config.method = 'get';
     ax.requestInterceptor(config);
     assert.equal(config.headers[CSRF_HEADER_NAME], undefined);
+  });
+});
+
+// -- the stale-tab heal (a tab loaded before CSRF_TOKEN=enforce) ------------
+//
+// A tab whose JS predates the CSRF rollout entirely sends no header at all;
+// under `enforce` every mutation 403s as csrf_token_missing. These cover the
+// predicate, the reload guard, and the interceptor wiring that ties them
+// together: retry once with a fresh header, reload once if that still fails,
+// never reload for anything else.
+
+describe('extractCsrfErrorCode / isCsrfFailure', () => {
+  test('reads the bare shape csrfTokenGuard actually sends', () => {
+    assert.equal(extractCsrfErrorCode({ error: 'csrf_token_missing' }), 'csrf_token_missing');
+    assert.equal(isCsrfFailure(403, { error: 'csrf_token_missing' }), true);
+    assert.equal(isCsrfFailure(403, { error: 'csrf_token_invalid' }), true);
+  });
+
+  test('also reads a { code } or nested { error: { code } } wrapper', () => {
+    assert.equal(extractCsrfErrorCode({ code: 'csrf_token_invalid' }), 'csrf_token_invalid');
+    assert.equal(extractCsrfErrorCode({ error: { code: 'csrf_token_missing' } }), 'csrf_token_missing');
+  });
+
+  test('is false for a 403 with an unrelated code, or no body', () => {
+    assert.equal(isCsrfFailure(403, { error: 'forbidden' }), false);
+    assert.equal(isCsrfFailure(403, null), false);
+    assert.equal(isCsrfFailure(403, undefined), false);
+  });
+
+  test('is false for a non-403 status even with a matching code', () => {
+    assert.equal(isCsrfFailure(401, { error: 'csrf_token_missing' }), false);
+    assert.equal(isCsrfFailure(200, { error: 'csrf_token_missing' }), false);
+  });
+});
+
+describe('triggerCsrfReloadOnce', () => {
+  test('does nothing outside a browser (no window)', () => {
+    // no globalThis.window set
+    assert.doesNotThrow(() => triggerCsrfReloadOnce());
+  });
+
+  test('reloads once, and sets the sessionStorage guard', () => {
+    const reloadCalls = setBrowserEnv();
+    triggerCsrfReloadOnce();
+    assert.equal(reloadCalls.length, 1);
+    assert.equal(window.sessionStorage.getItem(CSRF_RELOAD_FLAG_KEY), '1');
+  });
+
+  test('does not reload again once the flag is already set, even across a fresh call', () => {
+    const reloadCalls = setBrowserEnv({ sessionStorage: makeSessionStorage({ [CSRF_RELOAD_FLAG_KEY]: '1' }) });
+    triggerCsrfReloadOnce();
+    assert.equal(reloadCalls.length, 0);
+  });
+
+  test('a broken sessionStorage does not prevent the one reload it cannot guard', () => {
+    const reloadCalls = [];
+    globalThis.window = {
+      location: { reload: () => { reloadCalls.push(true); } },
+      get sessionStorage() { throw new Error('storage disabled'); },
+    };
+    assert.doesNotThrow(() => triggerCsrfReloadOnce());
+    assert.equal(reloadCalls.length, 1);
+  });
+});
+
+describe('setupAxiosInterceptors — CSRF-heal on 403', () => {
+  /**
+   * A fakeAxios that, like the real thing, threads every dispatched request —
+   * including one triggered from inside the response interceptor itself via
+   * `axiosInstance(originalRequest)` — back through both interceptors. Each
+   * entry in `responses` is consumed by the next dispatch, in order.
+   */
+  function fakeAxios() {
+    const instance = function callAxios(config) {
+      const finalConfig = instance.requestInterceptor ? instance.requestInterceptor(config) : config;
+      instance.calls.push(finalConfig);
+      const next = instance.responses.shift();
+      if (!next) throw new Error('fakeAxios: no response queued for this call');
+      const settled = next.error
+        ? Promise.reject(Object.assign(next.error, { config: finalConfig }))
+        : Promise.resolve({ ...next.response, config: finalConfig });
+      return settled.then(
+        (response) => (instance.responseFulfilled ? instance.responseFulfilled(response) : response),
+        (error) => (instance.responseRejected ? instance.responseRejected(error) : Promise.reject(error)),
+      );
+    };
+    instance.calls = [];
+    instance.responses = [];
+    instance.requestInterceptor = null;
+    instance.responseFulfilled = null;
+    instance.responseRejected = null;
+    instance.interceptors = {
+      request: { use: (fn) => { instance.requestInterceptor = fn; } },
+      response: { use: (onFulfilled, onRejected) => { instance.responseFulfilled = onFulfilled; instance.responseRejected = onRejected; } },
+    };
+    return instance;
+  }
+
+  function csrfError(code = 'csrf_token_missing') {
+    const error = new Error('Request failed with status code 403');
+    error.response = { status: 403, data: { error: code } };
+    return error;
+  }
+
+  beforeEach(() => {
+    setCookieJar(`${ CSRF_COOKIE_NAME }=${ TOKEN }`);
+  });
+
+  test('retries once with the freshly-read header, and succeeds', async () => {
+    setBrowserEnv();
+    const ax = fakeAxios();
+    setupAxiosInterceptors(ax);
+
+    const config = { method: 'post', url: '/graphql', headers: {} };
+    ax.responses.push({ error: csrfError() }, { response: { status: 200, data: {} } });
+
+    const result = await ax(config);
+
+    assert.equal(ax.calls.length, 2, 'the original dispatch plus exactly one retry');
+    assert.equal(config._csrfHealRetried, true);
+    assert.equal(config.headers[CSRF_HEADER_NAME], TOKEN, 'the retry carries the live cookie value');
+    assert.equal(result.status, 200);
+    assert.equal(window.sessionStorage.getItem(CSRF_RELOAD_FLAG_KEY), null, 'no reload on a successful retry');
+  });
+
+  test('picks up a cookie rotated between the first failure and the retry', async () => {
+    setBrowserEnv();
+    const ax = fakeAxios();
+    setupAxiosInterceptors(ax);
+
+    const config = { method: 'post', headers: {} };
+    ax.responses.push({ error: csrfError() }, { response: { status: 200, data: {} } });
+
+    // The dispatch that stamps the first (soon-to-be-stale) header has to
+    // happen before the cookie rotates, so run the retry's queued success on
+    // the next microtask tick and rotate the cookie in between.
+    const promise = ax(config);
+    setCookieJar(`${ CSRF_COOKIE_NAME }=rotated-value`);
+    await promise;
+
+    assert.equal(config.headers[CSRF_HEADER_NAME], 'rotated-value');
+  });
+
+  test('reloads once, per session, when the retry fails with the same code', async () => {
+    const reloadCalls = setBrowserEnv();
+    const ax = fakeAxios();
+    setupAxiosInterceptors(ax);
+
+    const config = { method: 'post', headers: {} };
+    ax.responses.push({ error: csrfError('csrf_token_invalid') }, { error: csrfError('csrf_token_invalid') });
+
+    await assert.rejects(() => ax(config));
+
+    assert.equal(ax.calls.length, 2, 'retried exactly once, not looped');
+    assert.equal(reloadCalls.length, 1);
+  });
+
+  test('never reloads for an unrelated 403', async () => {
+    const reloadCalls = setBrowserEnv();
+    const ax = fakeAxios();
+    setupAxiosInterceptors(ax);
+
+    // Routed at the refresh endpoint so, once the CSRF branch declines it,
+    // the pre-existing 401/403 branch bails out on its own short-circuit
+    // instead of attempting a real token refresh — irrelevant to what this
+    // test is checking.
+    const config = { method: 'post', headers: {}, url: '/api/auth/refresh' };
+    const error = new Error('nope');
+    error.response = { status: 403, data: { error: 'forbidden' } };
+    ax.responses.push({ error });
+
+    await assert.rejects(() => ax(config));
+    assert.equal(config._csrfHealRetried, undefined, 'the CSRF-heal branch never engaged');
+    assert.equal(ax.calls.length, 1, 'no retry of any kind for an unrelated 403');
+    assert.equal(reloadCalls.length, 0);
+  });
+
+  test('does not reload twice in the same session across two different failing requests', async () => {
+    const reloadCalls = setBrowserEnv();
+    const ax = fakeAxios();
+    setupAxiosInterceptors(ax);
+
+    const configA = { method: 'post', headers: {} };
+    ax.responses.push({ error: csrfError() }, { error: csrfError() });
+    await assert.rejects(() => ax(configA));
+    assert.equal(reloadCalls.length, 1);
+
+    const configB = { method: 'post', headers: {} };
+    ax.responses.push({ error: csrfError() }, { error: csrfError() });
+    await assert.rejects(() => ax(configB));
+    assert.equal(reloadCalls.length, 1, 'the sessionStorage flag from the first request suppresses this one');
   });
 });

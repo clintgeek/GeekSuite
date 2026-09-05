@@ -97,6 +97,72 @@ export function csrfHeaders(method) {
 const CSRF_HEADER_LOWER = CSRF_HEADER_NAME.toLowerCase();
 
 /**
+ * The two 403 codes basegeek's csrfTokenGuard returns under `CSRF_TOKEN=enforce`
+ * (apps/basegeek/packages/api/src/middleware/csrfToken.js's `violation()`):
+ * no header at all, or a header that does not match the cookie.
+ */
+export const CSRF_FAILURE_CODES = ['csrf_token_missing', 'csrf_token_invalid'];
+
+/**
+ * Pull the CSRF failure code out of a 403 response body, tolerating the one
+ * shape csrfTokenGuard actually sends (`{ error: 'csrf_token_missing' }`)
+ * alongside `{ code }` / `{ error: { code } }` for any wrapper — GraphQL's
+ * error formatting among them — that ends up nesting it differently.
+ */
+export function extractCsrfErrorCode(data) {
+  if (!data || typeof data !== 'object') return null;
+  if (typeof data.code === 'string') return data.code;
+  if (typeof data.error === 'string') return data.error;
+  if (data.error && typeof data.error === 'object' && typeof data.error.code === 'string') {
+    return data.error.code;
+  }
+  return null;
+}
+
+/** True when `status`/`data` is one of basegeek's CSRF-guard 403s. */
+export function isCsrfFailure(status, data) {
+  return status === 403 && CSRF_FAILURE_CODES.includes(extractCsrfErrorCode(data));
+}
+
+/** sessionStorage key guarding the one-reload-per-session rule below. */
+export const CSRF_RELOAD_FLAG_KEY = 'geeksuite:csrf-reload-attempted';
+
+/**
+ * Heal a tab that predates the CSRF rollout (or hit some other unrecoverable
+ * mismatch) by reloading it once. Only ever called after a retry with a
+ * freshly-read cookie has *already* failed with the same code, so this is
+ * the last resort, not the first.
+ *
+ * Guarded by a sessionStorage flag rather than an in-memory one: the flag has
+ * to survive the reload itself, or a setup that is genuinely broken (cookies
+ * blocked, third-party storage disabled) would reload forever. If
+ * sessionStorage itself is unreachable, there is no way to remember across a
+ * future load — this reloads once for this page and accepts that risk rather
+ * than never healing at all.
+ *
+ * A full reload is not free: it drops any unsaved state in the page (an open
+ * form, an in-progress edit) exactly like any other forced navigation would.
+ * That's the tradeoff for a tab that cannot otherwise get out of a 403 loop;
+ * it never fires for anything but this specific, otherwise-unrecoverable
+ * CSRF mismatch, and at most once per browser session.
+ */
+export function triggerCsrfReloadOnce() {
+  if (typeof window === 'undefined' || !window.location) return;
+
+  try {
+    if (window.sessionStorage) {
+      if (window.sessionStorage.getItem(CSRF_RELOAD_FLAG_KEY)) return;
+      window.sessionStorage.setItem(CSRF_RELOAD_FLAG_KEY, '1');
+    }
+  } catch {
+    // sessionStorage inaccessible (private browsing, storage disabled) — fall
+    // through and reload anyway; see the note above.
+  }
+
+  window.location.reload();
+}
+
+/**
  * Stamp the *current* CSRF token onto an axios request config, replacing
  * whatever was there.
  *
@@ -501,6 +567,30 @@ export function setupAxiosInterceptors(axiosInstance, onSessionExpired) {
     },
     async (error) => {
       const originalRequest = error.config;
+
+      // A stale tab loaded before this rollout (or before the cookie rotated
+      // under it) can post with no header, or the pre-rotation one. Handle
+      // that ahead of the generic 401/403 branch below — it needs one retry
+      // with a freshly-read cookie, not a JWT refresh.
+      if (originalRequest && error.response && isCsrfFailure(error.response.status, error.response.data)) {
+        if (!originalRequest._csrfHealRetried) {
+          originalRequest._csrfHealRetried = true;
+          // The cookie may have just been (re)issued — ensureCsrfCookie()
+          // back-fills it on the very response we're reacting to — or rotated
+          // by a concurrent refresh in another tab. applyCsrfHeader() always
+          // reads the live cookie, never the stale value this request was
+          // built with.
+          applyCsrfHeader(originalRequest);
+          return axiosInstance(originalRequest);
+        }
+
+        // Retried once with a freshly-read cookie and still the same
+        // failure: this isn't a rotation race, so the only fix left is a
+        // reload. Never reaches here for any other 403 — isCsrfFailure()
+        // gates on the specific codes.
+        triggerCsrfReloadOnce();
+        return Promise.reject(error);
+      }
 
       // Check if it's a 401/403 Auth error and we haven't already retried
       if (
