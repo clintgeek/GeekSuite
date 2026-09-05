@@ -243,14 +243,14 @@ export const typeDefs = gql`
     """
     unblockTask(id: ID!): Task!
     """
-    Add a step to `parentId`. The new task is an ordinary Task carrying
-    `parentTask`, appended to the parent's ordered `subtasks` list. One level
+    Add a step to \`parentId\`. The new task is an ordinary Task carrying
+    \`parentTask\`, appended to the parent's ordered \`subtasks\` list. One level
     only: adding a step to something that is itself a step is a
     BAD_USER_INPUT (400) error.
     """
     addSubtask(parentId: ID!, content: String!, signifier: String, status: String, priority: Int, tags: [String], dueDate: Date): Task!
     """
-    Rewrite the order of `parentId`'s steps. `orderedSubtaskIds` must name
+    Rewrite the order of \`parentId\`'s steps. \`orderedSubtaskIds\` must name
     every one of its children exactly once — a partial or unknown list is a
     BAD_USER_INPUT (400) error rather than a silent drop. Returns the parent.
     """
