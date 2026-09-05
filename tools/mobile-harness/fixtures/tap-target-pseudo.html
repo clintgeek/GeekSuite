@@ -1,0 +1,79 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>tap-target pseudo fixture</title>
+<style>
+  /* Plain reset so measured boxes are exact px, no borders/margins to fudge
+     the 44px arithmetic this fixture is trying to pin down. */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font: 14px sans-serif; padding: 20px; }
+  button { border: 0; background: #ddd; display: block; margin-bottom: 40px; }
+
+  /* (a) 30px button, ::before positioned via inset:-7px — 30 + 7 + 7 = 44.
+     Must PASS: a real, absolutely positioned, containing-block-is-the-button
+     pseudo big enough to clear 44x44. */
+  #positioned-inset { width: 30px; height: 30px; position: relative; }
+  #positioned-inset::before {
+    content: '';
+    position: absolute;
+    inset: -7px;
+  }
+
+  /* (b) 30px button, ::before present but NOT positioned (position: static,
+     the default) — it paints inline with content and cannot enlarge the hit
+     area. Must FAIL: real box is still 30x30. */
+  #unpositioned { width: 30px; height: 30px; position: relative; }
+  #unpositioned::before {
+    content: '';
+    display: inline-block;
+    width: 44px;
+    height: 44px;
+  }
+
+  /* (c) 30px button, ::before positioned and large enough (inset:-7px, same
+     as (a)) but pointer-events:none — it can never receive the tap. Must
+     FAIL: the enlarged box does not count. */
+  #pointer-events-none { width: 30px; height: 30px; position: relative; }
+  #pointer-events-none::before {
+    content: '';
+    position: absolute;
+    inset: -7px;
+    pointer-events: none;
+  }
+
+  /* (d) startgeek's real `.dot`: a 9px visual dot, 44px invisible centred
+     pseudo via inset:-17.5px (9 + 17.5 + 17.5 = 44). Must PASS. */
+  .dot {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    border: 1.5px solid #333;
+    position: relative;
+  }
+  .dot::before { content: ''; position: absolute; inset: -17.5px; }
+
+  /* (e) startgeek's real `.hit44`: a 30px visual button, centred 44x44
+     pseudo via top/left:50% + translate(-50%,-50%) rather than inset. Must
+     PASS — exercises the transform branch of pseudoHitBox. */
+  .hit44 { position: relative; }
+  .hit44::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    transform: translate(-50%, -50%);
+  }
+</style>
+</head>
+<body>
+  <button id="positioned-inset" aria-label="positioned-inset">a</button>
+  <button id="unpositioned" aria-label="unpositioned">b</button>
+  <button id="pointer-events-none" aria-label="pointer-events-none">c</button>
+  <button class="dot" aria-label="dot"></button>
+  <button class="hit44" style="width:30px;height:30px" aria-label="hit44">e</button>
+</body>
+</html>

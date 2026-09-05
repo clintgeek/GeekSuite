@@ -5,7 +5,11 @@
 //               phone viewport only (MOBILE_UI_PLAN §2: 44px is the rule
 //               below `md`; nothing in the grammar promises it at desktop
 //               widths, and grading a 1280-wide layout against it is just
-//               noise on the gate).
+//               noise on the gate). The measured box is a union of the
+//               element's own rect with any absolutely positioned
+//               `::before`/`::after` hit-area pseudo (see `pseudoHitBox`
+//               below), so `.hit44`/`.dot`-style invisible expanded targets
+//               are not false positives.
 //   text-floor  no visible readable string below 12px — every viewport.
 //   h-scroll    the document does not scroll sideways — every viewport.
 //
@@ -92,6 +96,94 @@ const collect = (isPhone) => {
   // often a decorative header — and that focus stop is not a tap target.
   const REAL = INTERACTIVE.split(',').filter((s) => !s.startsWith('[tabindex')).join(',');
 
+  // A control can enlarge its own hit area with an invisible, absolutely
+  // positioned `::before`/`::after` — startgeek's `.hit44` (a centred 44x44
+  // pseudo behind a small glyph) and `.dot` (a 9px status dot, 44px pseudo)
+  // are the suite's pattern for this. getBoundingClientRect cannot see a
+  // pseudo-element, so its box has to be derived from computed style:
+  //
+  //  - The pseudo only counts if it has real content, is itself
+  //    `position: absolute|fixed`, and `el` is its containing block (i.e.
+  //    `el`'s own position is not `static`). An unpositioned decorative
+  //    pseudo cannot enlarge anything a finger can land on.
+  //  - `pointer-events: none` on the pseudo means it never receives the tap,
+  //    so it is ignored even when positioned and large.
+  //  - Offsets/size are read off the computed longhands (`inset: -Npx` is
+  //    exposed as four resolved longhands) relative to `el`'s own rect
+  //    (border box). That is a deliberate simplification of the true
+  //    containing block (the padding box, per spec) — Chromium rounds a
+  //    fractional border-width to a whole pixel (`.dot`'s 1.5px ring
+  //    included), which shrinks the *true* padding box and would silently
+  //    turn a hand-tuned `inset: -17.5px` into ~42x44 instead of 44x44.
+  //    Measuring against the rect a human actually laid `inset` out against
+  //    is more useful here than being technically pure about the containing
+  //    block. Percentages resolve against the rect's own width/height.
+  //  - Width/height is derived from a matched offset pair (`left`+`right`,
+  //    `top`+`bottom`) against the rect when both resolve — the `inset`
+  //    pattern — falling back to the pseudo's own resolved `width`/`height`
+  //    when a transform is present or an offset pair does not resolve (the
+  //    `.hit44` pattern: explicit `width`/`height`, positioned by a single
+  //    `top`/`left` anchor + `translate(-50%,-50%)`, where the size *is* the
+  //    authored value, not something to re-derive). `auto` offsets that
+  //    leave an axis with neither a resolvable pair nor a usable anchor mean
+  //    the pseudo is skipped rather than guessed at.
+  //  - The engine already resolves a percentage `translate()` into a pixel
+  //    matrix, so it is just read back out of `matrix(...)`.
+  const pseudoHitBox = (el, pseudo) => {
+    const elCS = getComputedStyle(el);
+    if (elCS.position === 'static') return null; // el is not a containing block
+    const cs = getComputedStyle(el, pseudo);
+    if (!cs || cs.content === 'none') return null;
+    if (cs.position !== 'absolute' && cs.position !== 'fixed') return null;
+    if (cs.pointerEvents === 'none') return null;
+    if (cs.display === 'none' || cs.visibility === 'hidden' || Number(cs.opacity) === 0) return null;
+
+    const cb = el.getBoundingClientRect();
+    const cw = cb.width;
+    const ch = cb.height;
+
+    const len = (raw, base) => {
+      if (raw == null || raw === 'auto') return null;
+      const s = String(raw).trim();
+      if (s.endsWith('%')) {
+        const pct = parseFloat(s);
+        return Number.isFinite(pct) ? (pct / 100) * base : null;
+      }
+      const n = parseFloat(s);
+      return Number.isFinite(n) ? n : null;
+    };
+
+    const left = len(cs.left, cw);
+    const right = len(cs.right, cw);
+    const top = len(cs.top, ch);
+    const bottom = len(cs.bottom, ch);
+    const hasTransform = cs.transform && cs.transform !== 'none';
+
+    const width = !hasTransform && left != null && right != null ? cw - left - right : len(cs.width, cw);
+    const height = !hasTransform && top != null && bottom != null ? ch - top - bottom : len(cs.height, ch);
+    if (width == null || height == null || !(width > 0) || !(height > 0)) return null;
+
+    let boxLeft;
+    if (left != null) boxLeft = cb.left + left;
+    else if (right != null) boxLeft = cb.left + cw - right - width;
+    else return null; // neither horizontal offset resolvable
+
+    let boxTop;
+    if (top != null) boxTop = cb.top + top;
+    else if (bottom != null) boxTop = cb.top + ch - bottom - height;
+    else return null; // neither vertical offset resolvable
+
+    if (hasTransform) {
+      const m = cs.transform.match(/matrix\(([^,]+),([^,]+),([^,]+),([^,]+),([^,]+),([^,]+)\)/);
+      if (m) {
+        boxLeft += parseFloat(m[5]);
+        boxTop += parseFloat(m[6]);
+      }
+    }
+
+    return { left: boxLeft, top: boxTop, right: boxLeft + width, bottom: boxTop + height };
+  };
+
   // ── tap-target ──────────────────────────────────────────────────────────
   // Phone only: MOBILE_UI_PLAN §2 makes 44px a rule below `md`, not a
   // universal one, so a desktop-viewport scene has nothing to fail here.
@@ -141,12 +233,37 @@ const collect = (isPhone) => {
         w = Math.max(w, sr.width);
         h = Math.max(h, sr.height);
       }
+      // Pseudo-element hit-area expansion (`.hit44`, `.dot`): union each
+      // pseudo's derived box with the element's own rect. The control passes
+      // if that union clears 44x44 even when the paint does not.
+      const pseudoNames = [];
+      let ux1 = r.left;
+      let uy1 = r.top;
+      let ux2 = r.right;
+      let uy2 = r.bottom;
+      for (const pseudo of ['::before', '::after']) {
+        const box = pseudoHitBox(el, pseudo);
+        if (!box) continue;
+        pseudoNames.push(pseudo);
+        ux1 = Math.min(ux1, box.left);
+        uy1 = Math.min(uy1, box.top);
+        ux2 = Math.max(ux2, box.right);
+        uy2 = Math.max(uy2, box.bottom);
+      }
+      if (pseudoNames.length) {
+        w = Math.max(w, ux2 - ux1);
+        h = Math.max(h, uy2 - uy1);
+      }
       if (w < 43.5 || h < 43.5) {
+        let detail = `${Math.round(w)}x${Math.round(h)}`;
+        if (pseudoNames.length) {
+          detail += ` (with ${pseudoNames.join('+')} ${Math.round(ux2 - ux1)}x${Math.round(uy2 - uy1)})`;
+        }
         violations.push({
           rule: 'tap-target',
           el: describe(el),
           hint: selectorHint(el),
-          detail: `${Math.round(w)}x${Math.round(h)}`,
+          detail,
         });
       }
     }

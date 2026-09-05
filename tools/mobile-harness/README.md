@@ -28,12 +28,27 @@ node tools/mobile-harness/shoot.mjs --app basegeek --serve --viewports all
 # Everything, the way CI runs it
 pnpm --filter @geeksuite/mobile-harness ci
 node tools/mobile-harness/ci.mjs --app bookgeek --app flockgeek   # a subset
+
+# Unit coverage for the probe itself (no app build needed — a static fixture)
+node tools/mobile-harness/selftest.mjs
 ```
 
 Screenshots land in `out/<label>/<app>/<app>-<scene>-<scheme>[-desktop].png`.
 `out/` is gitignored. Exit code is 0 only when every scene is clean.
 
 Apps: `bookgeek fitnessgeek bujogeek notegeek flockgeek storygeek basegeek startgeek`.
+
+### Testing the probe itself
+
+There is no test runner in this tool, so `selftest.mjs` is a small standalone
+script: it loads `fixtures/tap-target-pseudo.html` (a static page, no build
+step) through the same `probePage` the harness uses, and asserts the
+tap-target rule passes/fails the fixture's known-good and known-bad controls
+— in particular the `::before`/`::after` hit-area cases (`.hit44`-style
+transform-centred, `.dot`-style `inset`, an unpositioned decorative pseudo,
+and one with `pointer-events: none`). Add a case to the fixture and to the
+`CASES` list in `selftest.mjs` alongside any change to the pseudo-box logic
+in `lib/probe.mjs`.
 
 ### Playwright
 
@@ -58,8 +73,10 @@ lib/
 apps/<app>/
   fixtures.mjs     `routes(ctx, { base, scheme, viewport })` — every API call stubbed
   scenes.mjs       `scenes` (the screens this app shoots) and `waivers`
+fixtures/          static HTML fixtures for testing the probe itself (not an app)
 shoot.mjs          one app
 ci.mjs             every app, the gate
+selftest.mjs       unit coverage for lib/probe.mjs against fixtures/
 ```
 
 ### Why `vite preview` and not the dev server
@@ -161,6 +178,27 @@ It measures the *hit area*, not the paint — a form control is measured at its
 skips inline links inside prose, off-canvas drawers, `aria-hidden` subtrees,
 and elements that are focusable only because MUI cloned a `tabIndex` onto
 them.
+
+`tap-target` also unions in any absolutely positioned `::before`/`::after`
+hit-area pseudo — startgeek's `.hit44` (a centred invisible pseudo behind a
+small glyph) and `.dot` (a 9px status dot with a 44px pseudo) are the pattern
+this exists for. `getBoundingClientRect` can't see a pseudo-element, so its
+box is derived from `getComputedStyle(el, '::before'|'::after')`: it counts
+only when the pseudo has real content, is itself `position: absolute|fixed`,
+`el` is its containing block (`el`'s own position isn't `static`), and
+`pointer-events` on the pseudo isn't `none` (it would never receive the tap).
+Size/offsets are read relative to `el`'s own rect — a deliberate
+simplification of the true containing block (the padding box), because
+Chromium rounds a fractional border-width (`.dot`'s 1.5px ring) to a whole
+pixel, which would otherwise shave a couple of px off a hand-tuned inset like
+`-17.5px`. Width/height prefers a derived offset pair (`left`+`right`, the
+`inset: -Npx` pattern) over the pseudo's own resolved size, falling back to
+that resolved size when a transform is present or an offset pair doesn't
+resolve (`.hit44`'s `top/left: 50%` + `translate(-50%,-50%)` pattern, where
+the size is the authored value, not something to re-derive). A failing
+control that still had a pseudo considered says so in its `detail` (e.g.
+`30x30 (with ::before 38x38)`), so a fix pass knows the expansion was seen
+and still came up short.
 
 ### Violation shape
 
