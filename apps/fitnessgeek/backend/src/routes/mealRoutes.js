@@ -2,6 +2,7 @@ import express from 'express';
 const router = express.Router();
 import { authenticateToken } from '../middleware/auth.js';
 import Meal from '../models/Meal.js';
+import { MEAL_TYPES } from '@geeksuite/schemas/fitnessgeek/meal';
 import logger from '../config/logger.js';
 
 // Apply authentication to all routes
@@ -104,8 +105,8 @@ router.post('/', async (req, res) => {
     }
 
     // Validate meal type
-    const validMealTypes = ['breakfast', 'lunch', 'dinner', 'snack'];
-    if (!validMealTypes.includes(meal_type)) {
+
+    if (!MEAL_TYPES.includes(meal_type)) {
       return res.status(400).json({
         success: false,
         error: {
@@ -197,8 +198,8 @@ router.put('/:id', async (req, res) => {
     }
 
     if (meal_type !== undefined) {
-      const validMealTypes = ['breakfast', 'lunch', 'dinner', 'snack'];
-      if (!validMealTypes.includes(meal_type)) {
+
+      if (!MEAL_TYPES.includes(meal_type)) {
         return res.status(400).json({
           success: false,
           error: {

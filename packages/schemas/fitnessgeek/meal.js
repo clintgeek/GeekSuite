@@ -70,12 +70,10 @@
  *
  * `MEAL_TYPES` — AND THE COPIES THAT ARE STILL OUT THERE
  * ------------------------------------------------------
- * The `meal_type` enum is exported so a consumer can stop restating it. Three
- * copies are still hand-written as of 2026-09-05:
+ * The `meal_type` enum is exported so a consumer can stop restating it.
+ * `apps/fitnessgeek/backend/src/routes/mealRoutes.js` imports it (2026-09-05).
+ * One copy is still hand-written:
  *
- *   - `apps/fitnessgeek/backend/src/routes/mealRoutes.js:107` and `:200`
- *     (`const validMealTypes = [...]`) — routes, left for whichever commit
- *     next touches that file
  *   - `models/FoodLog.js` on BOTH sides — the same four strings on a
  *     *different* collection (`foodlogs`). Pair 9. Whether the two collections
  *     share one enum constant or keep their own is a decision for that pair;
