@@ -9,6 +9,7 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
+| R87 | Q51 a11y burn-down: packages/ui muted-text contrast + shared control names; bujogeek, storygeek, flockgeek to 0 under --enforce-a11y | opus | packages/ui, three frontends, MOBILE_UI_PLAN | 09-05 17:35 |
 | R86 | Q50: browser clients heal a CSRF 403 once (retry with fresh header, then one reload per session) — auth, api-client, startgeek | sonnet | packages/auth, packages/api-client, startgeek lib, CONTEXT | 09-05 17:20 |
 | R83 | basegeek console gets its first vitest + RTL suite (Home, AIGeek tabs, ResponsiveTable, Account, UserGeek, safeRedirect) + ci job | sonnet | basegeek packages/ui, ci.yml, lockfile | 09-05 17:00 |
 | R85 | fitnessgeek frontend code-splitting: lazy routes, vendor chunks, on-demand heavy libs; SW precache check; harness stays 0 | opus | fitnessgeek frontend, CONTEXT | 09-05 17:00 |
@@ -34,7 +35,7 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | Q44 | basegeek config/database.js getAIGeekConnection has no error handler (a bad URI crashes the process); appConnections.js sibling has one | XS | XS |
 | Q48 | consolidation plan §12: 14 open follow-ups (search vs foodCatalogFilter, third dedupe ladder, soft-deleted barcode, caller-less methods, goals_met dead flags, snapshot-vs-catalog recompute, …) — triage | Chef triage | M |
 | Q49 | ai:usage permission is claimed by no route and not in the default mint set — either gate the two /usage routes with it and add it to the defaults, or drop the enum value | XS | XS |
-| Q51 | a11y burn-down (report-only → enforce): packages/ui muted text tokens to ≥4.5:1 (40 findings), aria-label on every IconButton (18), InputLabel/labelId on every Select (16), then per-app leftovers; flip --enforce-a11y at 0 | next slots — suite-level first | M |
+| Q51 | a11y burn-down: R87 covers packages/ui + bujogeek/storygeek/flockgeek; **fitnessgeek (29) and basegeek console (2) remain** once R85/R83 free those trees; then flip --enforce-a11y at 0 | after R87 + R85/R83 | S |
 | Q20b | aiGeek: simulated streaming (F-21) and user-gated selection (F-14) documented, not fixed | design | S |
 | Q14 | storygeek CanonCard summary text through Narration too (agent left it as a separate render path) | Chef's call | XS |
 
