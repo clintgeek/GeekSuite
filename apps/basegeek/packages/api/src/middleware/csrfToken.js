@@ -87,6 +87,22 @@ export const CSRF_HEADER_NAME = 'x-csrf-token';
 /** Methods that cannot change state, per RFC 9110. Never checked. */
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS', 'TRACE']);
 
+/**
+ * Non-secret request context for report-only lines, so a violation can be
+ * traced to a client: which origin/referer page sent it, what UA, and which
+ * credential shape it carried (cookie session vs bearer). Never the values.
+ */
+function callerContext(req) {
+  const h = req.headers || {};
+  const referer = typeof h.referer === 'string' ? h.referer.split('?')[0].slice(0, 200) : undefined;
+  return {
+    origin: typeof h.origin === 'string' ? h.origin.slice(0, 200) : undefined,
+    referer,
+    ua: typeof h['user-agent'] === 'string' ? h['user-agent'].slice(0, 160) : undefined,
+    auth: h.authorization ? 'bearer' : (h.cookie ? 'cookie' : 'none'),
+  };
+}
+
 /** The SSO cookies whose presence makes a request CSRF-relevant. */
 export const DEFAULT_AUTH_COOKIES = ['geek_token', 'geek_refresh_token'];
 
@@ -317,7 +333,7 @@ export function csrfTokenGuard(options = {}) {
     // make the browser omit a cookie it holds.
     if (!cookieValue) {
       reqLog.warn(
-        { app: appName, method, path: reqPath, csrfToken: mode, reason: 'no_csrf_cookie', hasHeader: !!headerValue },
+        { app: appName, method, path: reqPath, csrfToken: mode, reason: 'no_csrf_cookie', hasHeader: !!headerValue, ...callerContext(req) },
         'CSRF token check: session has no geek_csrf cookie yet — allowing and issuing one',
       );
       return next();
@@ -325,13 +341,13 @@ export function csrfTokenGuard(options = {}) {
 
     if (!headerValue) {
       return violation(res, reqLog, {
-        app: appName, method, path: reqPath, csrfToken: mode, reason: 'missing_header',
+        app: appName, method, path: reqPath, csrfToken: mode, reason: 'missing_header', ...callerContext(req),
       }, 'csrf_token_missing', mode, next);
     }
 
     if (!tokensMatch(headerValue, cookieValue)) {
       return violation(res, reqLog, {
-        app: appName, method, path: reqPath, csrfToken: mode, reason: 'header_cookie_mismatch',
+        app: appName, method, path: reqPath, csrfToken: mode, reason: 'header_cookie_mismatch', ...callerContext(req),
       }, 'csrf_token_invalid', mode, next);
     }
 
