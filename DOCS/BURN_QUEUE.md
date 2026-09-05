@@ -9,6 +9,7 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
+| R70 | TODO #22: zod on the bookgeek gateway mutations (closes the gateway side) | sonnet | basegeek api graphql/bookgeek, test, TODO docs | 09-05 15:28 |
 | R69 | consolidation pairs 6–7 per the plan (not the food family) | opus | packages/schemas, both apps' two models + parity suites | 09-05 15:08 |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
