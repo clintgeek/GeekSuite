@@ -258,3 +258,41 @@ export const onHabitLogToggled = (habitId, dateKey) => (cache, { data }) => {
     },
   });
 };
+
+/* ─── Journal ────────────────────────────────────────────────────────────── */
+
+/**
+ * A journal entry was created — currently only reachable via
+ * `createJournalFromTemplate` (the "apply a template" path that produces a
+ * journal entry rather than tasks; see the note on `TemplateContext.jsx`).
+ * Clause 2: `journalEntries` is a root list filtered by `$type`/`$tags`, so
+ * each cached variant decides for itself whether the new entry belongs — the
+ * same shape as `habitLogs` deciding per date window in `onHabitLogToggled`.
+ * There is no derived count on a journal entry for clause 3 to evict.
+ */
+export const onJournalEntryCreated = (cache, { data }) => {
+  const entry = data?.createJournalFromTemplate ?? data?.createJournalEntry;
+  if (!entry) return;
+  cache.modify({
+    fields: {
+      journalEntries(existing = [], { toReference, readField, storeFieldName }) {
+        // storeFieldName carries the args this cached list was read with,
+        // e.g. journalEntries({"tags":["daily"],"type":"daily"}) — the same
+        // trick `onHabitLogToggled` uses for its date-window args.
+        const typeMatch = /"type":"([^"]*)"/.exec(storeFieldName);
+        if (typeMatch && typeMatch[1] !== entry.type) return existing;
+
+        const tagsMatch = /"tags":\[([^\]]*)\]/.exec(storeFieldName);
+        if (tagsMatch && tagsMatch[1]) {
+          const wanted = tagsMatch[1].split(',').map((s) => s.replace(/^"|"$/g, ''));
+          if (!wanted.some((tag) => (entry.tags || []).includes(tag))) return existing;
+        }
+
+        const ref = toReference(entry);
+        if (!ref) return existing;
+        if (existing.some((e) => readField('id', e) === entry.id)) return existing;
+        return [...existing, ref];
+      },
+    },
+  });
+};

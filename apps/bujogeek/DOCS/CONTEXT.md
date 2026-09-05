@@ -153,9 +153,16 @@ pushVapidKey + save/removePushSubscription.
 
 ## Known Issues / Technical Debt
 
-- Every Apollo query is `fetchPolicy: 'no-cache'` — PWA has no offline data; caching strategy is future work.
+- ~~Every Apollo query is `fetchPolicy: 'no-cache'`~~ — **superseded 2026-09-05** (`d53b008`
+  + same-day follow-up). The cache rule — four clauses, plus the one documented exception — is
+  the doc comment at the top of `apps/bujogeek/frontend/src/apolloClient.js`; the `update`
+  functions it describes live in `graphql/cacheUpdates.js`. The task LOG views
+  (dailyTasks/weeklyTasks/monthlyTasks/allTasks/blockedTasks) remain `no-cache`, mirrored into
+  React state by `TaskContext` — that part of this line is still true, see the rule's own
+  "documented exception" section for why.
 - TaskContext still holds dual array/object state shapes (works, but a refactor candidate).
-- Subtasks: schema fields exist (`parentTask`/`subtasks`, addSubtask mutation) but no frontend UI.
+- ~~Subtasks: schema fields exist (`parentTask`/`subtasks`, addSubtask mutation) but no frontend
+  UI.~~ — **done 2026-09-05** (`d53b008`).
 - CompletedSection not in keyboard nav.
 - No frontend test coverage (gateway suites cover the data layer).
 - Upcoming section reuses `monthlyTasks` for a 7-day window; the client-side filter does the real windowing.

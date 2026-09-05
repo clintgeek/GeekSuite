@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useQuery } from '@apollo/client';
 import { useSearchParams } from 'react-router-dom';
 import {
   Box,
@@ -27,9 +28,19 @@ const TagsPage = () => {
   const { updateTaskStatus, deleteTask } = useTaskContext();
   const [searchParams, setSearchParams] = useSearchParams();
 
+  // The tag index (`GET_TASK_TAGS`) is one of the derived root fields every
+  // task/collection mutation evicts (`TASK_DERIVED_ROOT_FIELDS` in
+  // `graphql/cacheUpdates.js`). `useQuery` keeps this page subscribed to that
+  // field, so an eviction anywhere else in the app is what refreshes the
+  // cloud here — cache-first because there is nothing to show until the
+  // eviction (or the first mount) makes the field missing and Apollo goes to
+  // the network on its own.
+  const { data: taskTagsData, loading: tagsLoading } = useQuery(GET_TASK_TAGS, {
+    fetchPolicy: 'cache-first',
+  });
+  const allTags = useMemo(() => taskTagsData?.taskTags || [], [taskTagsData]);
+
   // State
-  const [allTags, setAllTags] = useState([]);
-  const [tagsLoading, setTagsLoading] = useState(true);
   const [selectedTag, setSelectedTag] = useState(null);
   const [tagTasks, setTagTasks] = useState([]);
   const [tasksLoading, setTasksLoading] = useState(false);
@@ -51,22 +62,6 @@ const TagsPage = () => {
       setTasksLoading(false);
     }
   }, [setSearchParams]);
-
-  // Fetch all tags on mount
-  useEffect(() => {
-    const fetchTags = async () => {
-      setTagsLoading(true);
-      try {
-        const { data } = await apolloClient.query({ query: GET_TASK_TAGS, fetchPolicy: 'network-only' });
-        setAllTags(data.taskTags || []);
-      } catch {
-        setAllTags([]);
-      } finally {
-        setTagsLoading(false);
-      }
-    };
-    fetchTags();
-  }, []);
 
   // Auto-select tag from ?tag= query param
   useEffect(() => {

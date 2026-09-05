@@ -430,7 +430,7 @@ being replaced by `graphql/glance/` under `DOCS/DASHGEEK_PLAN.md`. `notes` has n
   EPUB/AZW3/MOBI with cover embedding, shared `ensureFormat()`, used by both normal
   downloads and the device basket.
 
-- **bujogeek subtasks UI** — backend model has `parentTask`/`subtasks` fields; no frontend UI.
+- **bujogeek subtasks UI** — backend model has `parentTask`/`subtasks` fields; no frontend UI. — **Done 2026-09-05** (`d53b008`: gateway resolvers fixed + UI).
 
 - **storygeek markdown rendering** — AI narration and Bookify output render as plain
   `pre-wrap` text, so `**bold**` shows literal asterisks. `react-markdown`,
@@ -487,7 +487,7 @@ being replaced by `graphql/glance/` under `DOCS/DASHGEEK_PLAN.md`. `notes` has n
 
 - ~~**`fitnessgeek docker-compose.dev.yml`**~~ — **deleted 2026-09-05**, see `DEFERRED_WORK.md`.
 
-- **bujogeek Apollo cache invalidation on mutations** — currently refreshing the view gives latest
+- **bujogeek Apollo cache invalidation on mutations** — currently refreshing the view gives latest — **Done 2026-09-05** (`d53b008` + follow-up; rule at `apolloClient.js`).
   data; mutations don't invalidate the cache. Proper `refetchQueries` or cache update on write.
   `apps/bujogeek/DOCS/CONTEXT.md`
 

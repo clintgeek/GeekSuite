@@ -86,8 +86,8 @@ cycle so the ordering rationale stays visible; detail moved to `SUITE_TODO.md` "
 
 24. **storygeek markdown rendering** — S. Narration shows literal asterisks; the deps are
     already declared. Style from the palette. *Feature*
-25. **bujogeek subtasks UI** — M. Backend already has the fields. *Feature*
-26. **bujogeek Apollo cache invalidation on mutations** — S–M. *Feature / correctness*
+25. ~~**bujogeek subtasks UI**~~ — **Done 2026-09-05** (`d53b008`). *Feature*
+26. ~~**bujogeek Apollo cache invalidation on mutations**~~ — **Done 2026-09-05** (`d53b008`, plus same-day follow-up; see `apps/bujogeek/DOCS/CONTEXT.md`). *Feature / correctness*
 
 ## Tier 5 — Deferred or challenged (do the mitigation, not the migration)
 

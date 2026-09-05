@@ -1,5 +1,8 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import templateService from '../services/templateService';
+import { apolloClient } from '../apolloClient';
+import { CREATE_JOURNAL_FROM_TEMPLATE } from '../graphql/mutations';
+import { onJournalEntryCreated } from '../graphql/cacheUpdates';
 
 const TemplateContext = createContext();
 
@@ -66,7 +69,19 @@ export const TemplateProvider = ({ children }) => {
 
   const applyTemplate = async (id, variables) => {
     try {
-      return await templateService.applyTemplate(id, variables);
+      // Not routed through templateService: the cache rule (apolloClient.js)
+      // needs `update` in the same `mutate()` call that writes the result, so
+      // this is the one template call the context makes directly — the same
+      // shape TaskContext uses for every task mutation.
+      const { data } = await apolloClient.mutate({
+        mutation: CREATE_JOURNAL_FROM_TEMPLATE,
+        variables: { templateId: id, ...variables },
+        // Clause 2: the entry this creates has to join whichever cached
+        // `journalEntries` list its type/tags satisfy. It was landing in the
+        // database with no cache consequence at all — a silent mutation.
+        update: onJournalEntryCreated,
+      });
+      return data?.createJournalFromTemplate;
     } catch (err) {
       setError(err.message);
       throw err;
