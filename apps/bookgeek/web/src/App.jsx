@@ -925,6 +925,14 @@ export default function App() {
         const url = `${ API_BASE }/books/${ (selectedBook.id || selectedBook._id) }/download/epub`;
         const book = ePub(url, { openAs: "epub" });
         readerBookRef.current = book;
+        // epub.js never rejects `book.opened` on a failed open — it only emits
+        // `openFailed` — so without this the `display()` below hangs forever
+        // and the reader shows a blank page with no error.
+        book.on("openFailed", (openErr) => {
+          if (!cancelled) {
+            setReaderError(openErr?.message || "Could not open this EPUB.");
+          }
+        });
 
         const rendition = book.renderTo(readerContainerRef.current, {
           width: "100%",
@@ -938,11 +946,11 @@ export default function App() {
         if (rendition.themes) {
           rendition.themes.register("light", {
             [readerTextSelectors]: {
-              color: "#0f172a !important",
+              color: "#1f2937 !important",
               "background-color": "transparent !important",
             },
             "body": {
-              "background-color": "#ffffff !important",
+              "background-color": "#f6f1e7 !important",
             },
             "a, a:link, a:visited, a:hover, a:active": {
               color: "#2563eb !important",
@@ -955,7 +963,7 @@ export default function App() {
               "background-color": "transparent !important",
             },
             "body": {
-              "background-color": "#020617 !important",
+              "background-color": "#0f172a !important",
             },
             "a, a:link, a:visited, a:hover, a:active": {
               color: "#60a5fa !important",
