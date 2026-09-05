@@ -179,6 +179,50 @@ export const resolvers = {
       return result.data;
     },
 
+    /**
+     * aiFreeModels / aiRecommendModel — the model steward.
+     *
+     * Authenticated, deliberately *not* admin. These are how an app fills in
+     * its own routing (StartGeek Ask asks "which free model turns a query into
+     * a JSON search plan?"), and under SSO the caller is an ordinary logged-in
+     * user of one of the suite apps. Nothing here returns a credential, a key
+     * hint, or anything derived from one — only which models exist and what
+     * they can do. The mutations that *change* routing stay admin-gated.
+     */
+    aiFreeModels: async (_, __, { user }) => {
+      requireAuth(user);
+      const result = await aiDirectorService.listFreeModels();
+      if (!result.success) throw new GraphQLError(result.error?.message || 'Failed to list free models');
+      return result.data.models;
+    },
+
+    aiRecommendModel: async (_, { task, priority, freeOnly, limit }, { user }) => {
+      requireAuth(user);
+      if (!task?.trim()) throw new GraphQLError('task is required');
+
+      const result = await aiDirectorService.recommendProvider(task, {
+        priority: priority || 'cost',
+        // The steward's default is free: the App Routing dialog and the apps
+        // asking are both looking for something that costs nothing. A caller
+        // that wants paid candidates has to say so.
+        freeOnly: freeOnly !== false,
+        limit: limit ?? null
+      });
+      if (!result.success) throw new GraphQLError(result.error?.message || 'Failed to recommend a model');
+
+      const { recommendations, requirements, ...rest } = result.data;
+      return {
+        ...rest,
+        requirements,
+        recommendations: recommendations.map(entry => ({
+          ...aiDirectorService.describeModel(entry.provider, entry.model),
+          reasoning: entry.reasoning,
+          score: entry.score,
+          isFree: entry.isFree
+        }))
+      };
+    },
+
     aiUsage: async (_, { provider }, { user }) => {
       requireAuth(user);
       const usageSummary = await aiUsageService.getProviderUsageSummary(provider, 'session');

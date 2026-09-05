@@ -855,6 +855,48 @@ router.get('/director/models', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/ai/director/free-models — REST parity for the GraphQL
+ * `aiFreeModels` query. Every model the suite can call for nothing right now,
+ * with the properties needed to pick between them: context window, JSON and
+ * tool support, speed/quality/reasoning tiers, and the free-tier rate limits.
+ *
+ * Same `ai:director` permission as /director/models, and the same envelope, so
+ * an API-key caller that can already read the catalog can read this.
+ */
+router.get('/director/free-models', async (req, res) => {
+  try {
+    const permissionError = requirePermission(req, res, 'ai:director');
+    if (permissionError) return;
+
+    const result = await aiDirectorService.listFreeModels();
+
+    if (result.success) {
+      res.json({ success: true, data: result.data });
+    } else {
+      req.log.error({ err: result.error }, 'Free model listing failed');
+      res.status(500).json({
+        success: false,
+        error: {
+          message: 'Failed to list free models',
+          code: 'DIRECTOR_FREE_MODELS_ERROR',
+          details: result.error?.details || 'Unknown error'
+        }
+      });
+    }
+  } catch (error) {
+    req.log.error({ err: error }, 'AI Director free-models endpoint error');
+    res.status(500).json({
+      success: false,
+      error: {
+        message: 'Failed to list free models',
+        code: 'DIRECTOR_FREE_MODELS_ERROR',
+        details: error.message
+      }
+    });
+  }
+});
+
 // POST /api/ai/director/analyze-cost - Analyze cost for a specific prompt
 router.post('/director/analyze-cost', async (req, res) => {
   try {
@@ -892,7 +934,7 @@ router.post('/director/analyze-cost', async (req, res) => {
 // POST /api/ai/director/recommend - Get provider recommendations
 router.post('/director/recommend', async (req, res) => {
   try {
-    const { task, budget, priority = 'cost', requirements = {} } = req.body;
+    const { task, budget, priority = 'cost', requirements = {}, freeOnly, limit } = req.body;
 
     if (!task) {
       return res.status(400).json({
@@ -904,7 +946,17 @@ router.post('/director/recommend', async (req, res) => {
       });
     }
 
-    const result = await aiDirectorService.recommendProvider(task, budget, priority, requirements);
+    // `freeOnly` and `limit` are additive: a body without them behaves exactly
+    // as it did before, which is what StoryGeek's epub pipeline sends
+    // (apps/storygeek/backend/src/services/aiService.js — task, priority,
+    // requirements, and it reads recommendations[0].model.id back out).
+    const result = await aiDirectorService.recommendProvider(task, {
+      budget: budget ?? null,
+      priority,
+      requirements,
+      freeOnly: freeOnly === true,
+      limit: Number.isInteger(limit) ? limit : null
+    });
 
     if (result.success) {
       res.json(result);

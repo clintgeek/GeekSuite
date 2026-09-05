@@ -29,6 +29,9 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  MenuItem,
+  ToggleButton,
+  ToggleButtonGroup,
   useMediaQuery
 } from '@mui/material';
 import {
@@ -47,13 +50,88 @@ import {
   Apps as AppsIcon,
   Add as AddIcon,
   Delete as DeleteIcon,
-  DeleteSweep as DeleteSweepIcon
+  DeleteSweep as DeleteSweepIcon,
+  AutoAwesome as AutoAwesomeIcon
 } from '@mui/icons-material';
 import { alpha, useTheme } from '@mui/material/styles';
+import { gql } from '@apollo/client';
 import { GeekEmptyState, GeekErrorState, useToast } from '@geeksuite/ui';
 import { apolloClient } from '../apolloClient';
 import { GET_AI_CONFIG, GET_AI_STATS, GET_AI_DIRECTOR_MODELS, GET_AI_APP_CONFIGS } from '../graphql/queries';
 import { SAVE_AI_CONFIG, TEST_AI_PROVIDER, RESET_AI_STATS, SEED_DIRECTOR_PRICING, SEED_DIRECTOR_FREE_TIER, SYNC_PROVIDER_MODELS, UPDATE_MODEL_PRICING, UPDATE_MODEL_FREE_TIER, RESET_ALL_FREE_TIERS, BULK_UPDATE_FREE_TIERS, SAVE_AI_APP_CONFIG, DELETE_AI_APP_CONFIG } from '../graphql/mutations';
+
+/**
+ * The model steward queries, declared here rather than in graphql/queries.js.
+ *
+ * They are read by exactly one dialog on one page and by nothing else in the
+ * app; keeping them next to the block that renders them means the field list
+ * and the JSX that consumes it move together. If a second surface ever needs
+ * them, promote them to graphql/queries.js with the rest.
+ *
+ * Both are authenticated but not admin on the server — an app filling in its
+ * own routing has to be able to ask the same questions this page does.
+ */
+const GET_AI_FREE_MODELS = gql`
+  query GetAIFreeModels {
+    aiFreeModels {
+      provider
+      modelId
+      name
+      contextWindow
+      supportsFunctionCalling
+      supportsJSONOutput
+      supportsVision
+      isFree
+      performance { speed quality reasoning }
+      freeLimits { requestsPerMinute requestsPerDay tokensPerMinute tokensPerDay }
+      pricing { input output }
+      notes
+      lastSeen
+      updatedAt
+    }
+  }
+`;
+
+const RECOMMEND_AI_MODEL = gql`
+  query RecommendAIModel($task: String!, $priority: String, $freeOnly: Boolean, $limit: Int) {
+    aiRecommendModel(task: $task, priority: $priority, freeOnly: $freeOnly, limit: $limit) {
+      task
+      priority
+      freeOnly
+      requirements {
+        needsVision
+        needsAudio
+        needsFunctionCalling
+        needsReasoning
+        needsCodeGeneration
+        needsJSONOutput
+      }
+      recommendations {
+        provider
+        modelId
+        name
+        reasoning
+        score
+        isFree
+        contextWindow
+        supportsFunctionCalling
+        supportsJSONOutput
+        supportsVision
+        performance { speed quality reasoning }
+      }
+    }
+  }
+`;
+
+/** A context window as a compact label: 131072 → "131k ctx". */
+const formatContextWindow = (tokens) =>
+  typeof tokens === 'number' && tokens > 0
+    ? `${Math.round(tokens / 1000)}k ctx`
+    : 'context unknown';
+
+/** "name · provider · 131k ctx" — the one-line identity of a model. */
+const freeModelSummary = (model) =>
+  [model.name, model.provider, formatContextWindow(model.contextWindow)].join(' · ');
 
 /**
  * The providers this page can configure. Mirrors the server's one list in
@@ -204,6 +282,18 @@ const AIGeekPage = () => {
   const [appConfigsLoading, setAppConfigsLoading] = useState(false);
   const [editingApp, setEditingApp] = useState(null);
   const [newAppName, setNewAppName] = useState('');
+
+  // Model steward — the "which free model fits this?" block in the app dialog.
+  // The catalog is fetched lazily on first open: it is a several-second
+  // provider sweep on the server and most visits to this page never open the
+  // dialog at all.
+  const [freeModels, setFreeModels] = useState([]);
+  const [freeModelsLoaded, setFreeModelsLoaded] = useState(false);
+  const [freeModelsLoading, setFreeModelsLoading] = useState(false);
+  const [recommendTask, setRecommendTask] = useState('');
+  const [recommendPriority, setRecommendPriority] = useState('cost');
+  const [recommendations, setRecommendations] = useState(null);
+  const [recommending, setRecommending] = useState(false);
 
   useEffect(() => {
     loadConfiguration();
@@ -545,6 +635,64 @@ const AIGeekPage = () => {
       notify(`Failed to delete app config: ${err.message}`, { tone: 'error' });
     }
   };
+
+  // ── Model steward ──────────────────────────────────────────────────────────
+
+  const loadFreeModels = async () => {
+    try {
+      setFreeModelsLoading(true);
+      const { data } = await apolloClient.query({
+        query: GET_AI_FREE_MODELS,
+        fetchPolicy: 'network-only'
+      });
+      setFreeModels(data?.aiFreeModels || []);
+      setFreeModelsLoaded(true);
+    } catch (err) {
+      notify(`Couldn't load free models: ${err.message}`, { tone: 'error' });
+    } finally {
+      setFreeModelsLoading(false);
+    }
+  };
+
+  const runRecommendation = async () => {
+    const task = recommendTask.trim();
+    if (!task) return;
+    try {
+      setRecommending(true);
+      const { data } = await apolloClient.query({
+        query: RECOMMEND_AI_MODEL,
+        variables: { task, priority: recommendPriority, freeOnly: true, limit: 3 },
+        fetchPolicy: 'network-only'
+      });
+      setRecommendations(data?.aiRecommendModel?.recommendations || []);
+    } catch (err) {
+      notify(`Recommendation failed: ${err.message}`, { tone: 'error' });
+    } finally {
+      setRecommending(false);
+    }
+  };
+
+  /**
+   * Choosing a model — from a recommendation row or the browse list — pins the
+   * app to it. Tier flips to `specific` because that is the only tier that
+   * reads provider/model; leaving it on `free` would save the choice into a
+   * field the router never looks at.
+   */
+  const pickModel = (provider, modelId) => {
+    setEditingApp(prev => ({ ...prev, tier: 'specific', provider, model: modelId }));
+  };
+
+  // Opening the dialog seeds the task box from the app's notes (which is where
+  // "what this app asks the model to do" already tends to be written) and
+  // clears any recommendation left from the previous app.
+  useEffect(() => {
+    if (!editingApp) return;
+    setRecommendTask(editingApp.notes || '');
+    setRecommendations(null);
+    if (!freeModelsLoaded && !freeModelsLoading) loadFreeModels();
+    // Keyed on the app being configured, not on every keystroke in the dialog.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingApp?.appName]);
 
   const addDiscoveredApp = (appName) => {
     setEditingApp({
@@ -1592,6 +1740,210 @@ const AIGeekPage = () => {
               />
             </>
           )}
+
+          {/*
+            Model steward. Two ways to fill in the pin above without leaving
+            the dialog: describe the job and let aiGeek rank the free models,
+            or browse the free catalog and choose by hand. Both write
+            tier/provider/model into the same form, so the chosen model is
+            data in AIAppConfig — StartGeek Ask routes via `basegeek-app` with
+            app id `startgeek` and never names a model in code.
+          */}
+          <Box
+            sx={{
+              mt: 2,
+              p: 1.5,
+              border: '1px solid',
+              borderColor: 'divider',
+              borderRadius: 1,
+              bgcolor: alpha(theme.palette.primary.main, 0.03)
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+              <AutoAwesomeIcon fontSize="small" color="primary" />
+              <Typography variant="subtitle2">Recommend a free model</Typography>
+            </Box>
+
+            <TextField
+              fullWidth
+              label="What will this app ask the model to do?"
+              placeholder="e.g. turn a search query into a JSON search plan"
+              value={recommendTask}
+              onChange={(e) => setRecommendTask(e.target.value)}
+              multiline
+              rows={2}
+              size="small"
+              helperText="Prefilled from Notes. Mentioning JSON, tools, images or code narrows the ranking."
+            />
+
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center', mt: 1.5 }}>
+              <ToggleButtonGroup
+                exclusive
+                size="small"
+                value={recommendPriority}
+                onChange={(_, value) => { if (value) setRecommendPriority(value); }}
+                aria-label="Recommendation priority"
+              >
+                <ToggleButton value="cost" sx={{ minHeight: 44, px: 2, fontSize: 12 }}>Cost</ToggleButton>
+                <ToggleButton value="speed" sx={{ minHeight: 44, px: 2, fontSize: 12 }}>Speed</ToggleButton>
+                <ToggleButton value="quality" sx={{ minHeight: 44, px: 2, fontSize: 12 }}>Quality</ToggleButton>
+              </ToggleButtonGroup>
+
+              <Button
+                variant="contained"
+                onClick={runRecommendation}
+                disabled={recommending || !recommendTask.trim()}
+                startIcon={recommending ? <CircularProgress size={16} color="inherit" /> : <AutoAwesomeIcon />}
+                sx={{ minHeight: 44 }}
+              >
+                {recommending ? 'Asking…' : 'Recommend'}
+              </Button>
+            </Box>
+
+            {recommendations && recommendations.length === 0 && (
+              <Alert severity="warning" sx={{ mt: 1.5 }}>
+                No free model matched that description. Loosen the requirements, or
+                pick one from the list below.
+              </Alert>
+            )}
+
+            {recommendations && recommendations.length > 0 && (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 1.5 }}>
+                {recommendations.map((rec) => {
+                  const selected = editingApp?.tier === 'specific'
+                    && editingApp?.provider === rec.provider
+                    && editingApp?.model === rec.modelId;
+                  return (
+                    <Box
+                      key={`${rec.provider}::${rec.modelId}`}
+                      role="button"
+                      tabIndex={0}
+                      aria-pressed={selected}
+                      onClick={() => pickModel(rec.provider, rec.modelId)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          pickModel(rec.provider, rec.modelId);
+                        }
+                      }}
+                      sx={{
+                        minHeight: 44,
+                        p: 1.25,
+                        borderRadius: 1,
+                        cursor: 'pointer',
+                        border: '1px solid',
+                        borderColor: selected ? 'primary.main' : 'divider',
+                        bgcolor: selected
+                          ? alpha(theme.palette.primary.main, 0.1)
+                          : 'background.paper',
+                        '&:hover': { borderColor: 'primary.main' }
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          {rec.name}
+                        </Typography>
+                        {typeof rec.score === 'number' && (
+                          <Chip
+                            size="small"
+                            label={`fit ${rec.score}`}
+                            color={selected ? 'primary' : 'default'}
+                            sx={{ fontSize: 12 }}
+                          />
+                        )}
+                      </Box>
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: 12 }}>
+                        {rec.provider} · {rec.modelId} · {formatContextWindow(rec.contextWindow)}
+                      </Typography>
+                      <Typography variant="caption" display="block" sx={{ fontSize: 12, mt: 0.5 }}>
+                        {rec.reasoning}
+                      </Typography>
+                    </Box>
+                  );
+                })}
+              </Box>
+            )}
+
+            <Divider sx={{ my: 2 }} />
+
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>Browse free models</Typography>
+
+            {freeModelsLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+                <CircularProgress size={24} />
+              </Box>
+            ) : freeModels.length === 0 ? (
+              <GeekEmptyState
+                compact
+                title="No free models available"
+                description="Enable a provider with a free tier on the Configuration tab, then seed the free-tier data from the Models tab."
+                action={
+                  <Button onClick={loadFreeModels} sx={{ minHeight: 44 }}>Retry</Button>
+                }
+              />
+            ) : (
+              <TextField
+                fullWidth
+                select
+                size="small"
+                label="Free models"
+                // displayEmpty renders a placeholder into the field, so the
+                // label has to stay shrunk or the two overlap.
+                InputLabelProps={{ shrink: true }}
+                value={
+                  editingApp?.tier === 'specific'
+                    && freeModels.some(m => m.provider === editingApp?.provider && m.modelId === editingApp?.model)
+                    ? `${editingApp.provider}::${editingApp.model}`
+                    : ''
+                }
+                onChange={(e) => {
+                  const [provider, ...rest] = e.target.value.split('::');
+                  pickModel(provider, rest.join('::'));
+                }}
+                SelectProps={{
+                  displayEmpty: true,
+                  // Each option is two lines and a row of chips; the closed
+                  // field gets the one-line summary instead of all of that
+                  // crammed into the input.
+                  renderValue: (value) => {
+                    if (!value) return 'Choose a model…';
+                    const chosen = freeModels.find(m => `${m.provider}::${m.modelId}` === value);
+                    return chosen ? freeModelSummary(chosen) : value;
+                  }
+                }}
+                helperText={`${freeModels.length} free model${freeModels.length === 1 ? '' : 's'} reachable right now`}
+              >
+                {freeModels.map((model) => (
+                  <MenuItem
+                    key={`${model.provider}::${model.modelId}`}
+                    value={`${model.provider}::${model.modelId}`}
+                    sx={{ minHeight: 44, display: 'block', py: 1 }}
+                  >
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {freeModelSummary(model)}
+                    </Typography>
+                    <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.5 }}>
+                      {model.performance?.speed && (
+                        <Chip size="small" variant="outlined" label={model.performance.speed} sx={{ fontSize: 12 }} />
+                      )}
+                      {model.performance?.quality && (
+                        <Chip size="small" variant="outlined" label={model.performance.quality} sx={{ fontSize: 12 }} />
+                      )}
+                      {model.supportsJSONOutput && (
+                        <Chip size="small" variant="outlined" color="success" label="JSON" sx={{ fontSize: 12 }} />
+                      )}
+                      {model.supportsFunctionCalling && (
+                        <Chip size="small" variant="outlined" color="success" label="tools" sx={{ fontSize: 12 }} />
+                      )}
+                      {model.supportsVision && (
+                        <Chip size="small" variant="outlined" color="success" label="vision" sx={{ fontSize: 12 }} />
+                      )}
+                    </Box>
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
+          </Box>
 
           <Grid container spacing={2} sx={{ mt: 0 }}>
             <Grid item xs={6}>

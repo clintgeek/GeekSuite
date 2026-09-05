@@ -161,3 +161,124 @@ Providers without native support for a given feature fall through to
 either prompt-injection fallback (structured output) or capability-skip
 (tools). See [AIGEEK_POLISH.md](./AIGEEK_POLISH.md) for the design
 rationale.
+
+## Model steward
+
+The free tiers move — a model that was free in June is retired in August, and
+the fastest free model this month is not the one from last month. So aiGeek
+answers two questions rather than making callers hardcode an answer:
+
+- **`aiFreeModels`** — what free models exist right now, with their properties.
+- **`aiRecommendModel`** — which of them fits a described task.
+
+Both are **authenticated but not admin**: an app filling in its own routing has
+to be able to ask. Neither returns a credential, a key hint, or anything
+derived from one. The mutations that *change* routing (`saveAIAppConfig`) stay
+admin-gated as before.
+
+"Free" is the AIFreeTier record's `isFree`, never a guess from a `$0.00` price
+— a zero price on a paid account is still a paid account. Providers that are
+disabled or hold no key are excluded: a free model aiGeek cannot reach is not
+an option.
+
+### Browse the free catalog
+
+```graphql
+query FreeModels {
+  aiFreeModels {
+    provider
+    modelId
+    name
+    contextWindow
+    supportsFunctionCalling
+    supportsJSONOutput
+    supportsVision
+    performance { speed quality reasoning }
+    freeLimits { requestsPerMinute requestsPerDay tokensPerMinute tokensPerDay }
+    pricing { input output }
+    notes
+    lastSeen    # when the catalog last confirmed this id exists upstream
+    updatedAt   # when what we believe about it last changed
+  }
+}
+```
+
+Capability flags are non-null booleans, so `supportsJSONOutput: false` means
+false and not "we never asked". `contextWindow`, `pricing` and the freshness
+stamps are nullable — those are the fields the catalog genuinely may not know.
+
+REST parity: `GET /api/ai/director/free-models` (permission `ai:director`),
+returning `{ success, data: { models, count, providers } }`.
+
+### Ask which model fits
+
+```graphql
+query Recommend {
+  aiRecommendModel(
+    task: "turn a natural language query into a JSON search plan"
+    priority: "speed"      # cost (default) | speed | quality
+    freeOnly: true         # default; pass false to include paid candidates
+    limit: 3
+  ) {
+    priority
+    freeOnly
+    requirements { needsJSONOutput needsFunctionCalling needsVision }
+    recommendations {
+      provider
+      modelId
+      name
+      reasoning     # the human sentence: "Free tier available, Returns structured JSON, 131k context window"
+      score         # 0-100 capability fit
+      contextWindow
+      performance { speed quality }
+    }
+  }
+}
+```
+
+REST parity: `POST /api/ai/director/recommend` takes `freeOnly` and `limit` as
+optional body fields alongside the existing `task`, `budget`, `priority` and
+`requirements`. A body without them behaves exactly as it always has, and the
+response still nests the model as `recommendations[].model.id` — StoryGeek's
+epub pipeline reads that shape.
+
+**Ordering vs. score.** The list is ranked by `priority` — cheapest, fastest or
+best, as it always was. `score` is capability fit, and only breaks ties inside
+that ordering. It is what tells you two equally free models are not
+interchangeable.
+
+### How a task description is read
+
+`priority` says how to rank; the task description says what to filter on.
+Requirements are keyword-sniffed from it, and an explicit `requirements` field
+always wins over the keywords:
+
+| Requirement | Keywords (case-insensitive substrings) |
+|---|---|
+| `needsVision` | image, vision, photo, screenshot, ocr |
+| `needsAudio` | audio, speech, whisper, transcri(be\|ption) |
+| `needsFunctionCalling` | function, tool |
+| `needsReasoning` | reason, logic, solve |
+| `needsCodeGeneration` | code, program, script |
+| `needsJSONOutput` | json, structured, schema, search plan |
+
+A model that cannot meet a parsed requirement is not a candidate — describe the
+job honestly and the ranking narrows itself.
+
+### Setting the answer: the model is data, not code
+
+AIGeek's **App Routing** tab (`aiFreeModels` + `aiRecommendModel` in the app
+config dialog) writes the chosen provider/model into that app's `AIAppConfig`
+row at tier `specific`. Callers then route through it:
+
+```js
+await openai.chat.completions.create({
+  model: 'basegeek-app',           // or useAppConfig: true
+  messages: [...]
+});
+```
+
+StartGeek Ask (`DOCS/AI_SEARCH_PLAN.md`) does exactly this, with app id
+`startgeek`. Which model answers a suite search is therefore a row in the
+database that an admin can re-ask the steward about whenever the free tiers
+shift — not a constant anyone has to redeploy.
