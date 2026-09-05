@@ -1,88 +1,24 @@
 /**
  * AppConfigDialog — one app's routing, plus the model steward that fills it in.
  *
- * The steward block is the point of this dialog. Free tiers move: a model that
- * was free in June is retired in August, and the fastest free model this month
- * is not last month's. So rather than an admin hardcoding a model id here from
- * memory, two questions are asked of the server — "what is free right now?"
- * (`aiFreeModels`) and "which of those fits this job?" (`aiRecommendModel`) —
- * and either answer writes straight into the pin above.
+ * The steward block moved to `../ModelStewardBlock.jsx` when the Apps & keys
+ * tab grew an inline copy of it: same questions, same answers, two hosts. This
+ * dialog's version writes into the open draft (`onPatch` via `onPickModel`),
+ * the tab's writes straight to the saved routing row.
+ *
+ * It sits on `ConsoleDialog` (and so on `GeekDialog`) rather than a bare MUI
+ * `Dialog`: this form is tall, it is now reached from the Apps & keys tab on a
+ * phone, and a windowed dialog at 390px put a two-line title, a steward block
+ * and a footer into about 60% of the viewport. Full-screen below `sm` is the
+ * suite rule (MOBILE_UI_PLAN §4b) and the primitive already owns it.
  *
  * Both write `tier: 'specific'` along with the provider and model, because
  * `specific` is the only tier the router reads provider/model from; saving a
  * choice while the tier stayed `free` would put it in a field nothing looks at.
  */
-import {
-  Alert,
-  Box,
-  Button,
-  Chip,
-  CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Divider,
-  FormControlLabel,
-  Grid,
-  MenuItem,
-  Switch,
-  TextField,
-  ToggleButton,
-  ToggleButtonGroup,
-  Typography,
-} from '@mui/material';
-import { alpha, useTheme } from '@mui/material/styles';
-import { AutoAwesome as AutoAwesomeIcon } from '@mui/icons-material';
-import { GeekEmptyState } from '@geeksuite/ui';
-import { formatContextWindow, freeModelSummary } from '../format';
-
-/** One ranked suggestion, clickable and keyboard-reachable. */
-function RecommendationRow({ rec, selected, onPick }) {
-  const theme = useTheme();
-  return (
-    <Box
-      role="button"
-      tabIndex={0}
-      aria-pressed={selected}
-      onClick={onPick}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onPick();
-        }
-      }}
-      sx={{
-        minHeight: 44,
-        p: 1.25,
-        borderRadius: 1,
-        cursor: 'pointer',
-        border: '1px solid',
-        borderColor: selected ? 'primary.main' : 'divider',
-        bgcolor: selected ? alpha(theme.palette.primary.main, 0.1) : 'background.paper',
-        '&:hover': { borderColor: 'primary.main' },
-      }}
-    >
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}>
-        <Typography variant="body2" sx={{ fontWeight: 600 }}>{rec.name}</Typography>
-        {typeof rec.score === 'number' && (
-          <Chip
-            size="small"
-            label={`fit ${rec.score}`}
-            color={selected ? 'primary' : 'default'}
-            sx={{ fontSize: 12 }}
-          />
-        )}
-      </Box>
-      <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: 12 }}>
-        {rec.provider} · {rec.modelId} · {formatContextWindow(rec.contextWindow)}
-      </Typography>
-      <Typography variant="caption" display="block" sx={{ fontSize: 12, mt: 0.5 }}>
-        {rec.reasoning}
-      </Typography>
-    </Box>
-  );
-}
+import { Box, Button, FormControlLabel, Grid, Switch, TextField } from '@mui/material';
+import ConsoleDialog from '../../../components/primitives/ConsoleDialog';
+import ModelStewardBlock from '../ModelStewardBlock';
 
 export default function AppConfigDialog({
   editing,
@@ -102,16 +38,19 @@ export default function AppConfigDialog({
   onCancel,
   onSave,
 }) {
-  const theme = useTheme();
   const isPinned = (provider, modelId) =>
     editing?.tier === 'specific' && editing?.provider === provider && editing?.model === modelId;
 
   return (
-    <Dialog open={!!editing} onClose={onCancel} maxWidth="sm" fullWidth>
-      <DialogTitle>
-        {editing?.appName ? `Configure — ${editing.appName}` : 'New app config'}
-      </DialogTitle>
-      <DialogContent>
+    <ConsoleDialog
+      open={!!editing}
+      onClose={onCancel}
+      eyebrow="Routing"
+      title={editing?.appName ? `Configure — ${editing.appName}` : 'New app config'}
+      primaryAction={<Button variant="contained" onClick={onSave} sx={{ minHeight: 44 }}>Save</Button>}
+      secondaryAction={<Button onClick={onCancel} sx={{ minHeight: 44 }}>Cancel</Button>}
+    >
+      <Box sx={{ pt: 0.5 }}>
         <TextField
           fullWidth
           label="Display name"
@@ -162,154 +101,21 @@ export default function AppConfigDialog({
           </>
         )}
 
-        <Box
-          sx={{
-            mt: 2,
-            p: 1.5,
-            border: '1px solid',
-            borderColor: 'divider',
-            borderRadius: 1,
-            bgcolor: alpha(theme.palette.primary.main, 0.03),
-          }}
-        >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.75 }}>
-            <AutoAwesomeIcon fontSize="small" color="primary" />
-            <Typography variant="subtitle2">Recommend a free model</Typography>
-          </Box>
-
-          <TextField
-            fullWidth
-            label="What will this app ask the model to do?"
-            placeholder="e.g. turn a search query into a JSON search plan"
-            value={recommendTask}
-            onChange={(e) => onTaskChange(e.target.value)}
-            multiline
-            rows={2}
-            size="small"
-            helperText="Prefilled from Notes. Mentioning JSON, tools, images or code narrows the ranking."
-          />
-
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center', mt: 1.5 }}>
-            <ToggleButtonGroup
-              exclusive
-              size="small"
-              value={recommendPriority}
-              onChange={(_, value) => { if (value) onPriorityChange(value); }}
-              aria-label="Recommendation priority"
-            >
-              <ToggleButton value="cost" sx={{ minHeight: 44, px: 2, fontSize: 12 }}>Cost</ToggleButton>
-              <ToggleButton value="speed" sx={{ minHeight: 44, px: 2, fontSize: 12 }}>Speed</ToggleButton>
-              <ToggleButton value="quality" sx={{ minHeight: 44, px: 2, fontSize: 12 }}>Quality</ToggleButton>
-            </ToggleButtonGroup>
-
-            <Button
-              variant="contained"
-              onClick={onRecommend}
-              disabled={recommending || !recommendTask.trim()}
-              startIcon={recommending ? <CircularProgress size={16} color="inherit" /> : <AutoAwesomeIcon />}
-              sx={{ minHeight: 44 }}
-            >
-              {recommending ? 'Asking…' : 'Recommend'}
-            </Button>
-          </Box>
-
-          {recommendations && recommendations.length === 0 && (
-            <Alert severity="warning" sx={{ mt: 1.5, fontSize: 12 }}>
-              No free model matched that description. Loosen the requirements, or pick one
-              from the list below.
-            </Alert>
-          )}
-
-          {recommendations && recommendations.length > 0 && (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 1.5 }}>
-              {recommendations.map((rec) => (
-                <RecommendationRow
-                  key={`${rec.provider}::${rec.modelId}`}
-                  rec={rec}
-                  selected={isPinned(rec.provider, rec.modelId)}
-                  onPick={() => onPickModel(rec.provider, rec.modelId)}
-                />
-              ))}
-            </Box>
-          )}
-
-          <Divider sx={{ my: 2 }} />
-
-          <Typography variant="subtitle2" sx={{ mb: 1 }}>Browse free models</Typography>
-
-          {freeModelsLoading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-              <CircularProgress size={24} />
-            </Box>
-          ) : freeModels.length === 0 ? (
-            <GeekEmptyState
-              compact
-              title="No free models available"
-              description="Enable a provider with a free tier on the Configuration tab, then tick its models Free on the Catalog tab."
-              action={<Button onClick={onLoadFreeModels} sx={{ minHeight: 44 }}>Retry</Button>}
-            />
-          ) : (
-            <TextField
-              fullWidth
-              select
-              size="small"
-              label="Free models"
-              // displayEmpty renders a placeholder into the field, so the label
-              // has to stay shrunk or the two overlap.
-              InputLabelProps={{ shrink: true }}
-              value={
-                editing?.tier === 'specific'
-                  && freeModels.some(m => m.provider === editing?.provider && m.modelId === editing?.model)
-                  ? `${editing.provider}::${editing.model}`
-                  : ''
-              }
-              onChange={(e) => {
-                const [provider, ...rest] = e.target.value.split('::');
-                onPickModel(provider, rest.join('::'));
-              }}
-              SelectProps={{
-                displayEmpty: true,
-                // Each option is two lines and a row of chips; the closed field
-                // gets the one-line summary instead of all of that crammed in.
-                renderValue: (value) => {
-                  if (!value) return 'Choose a model…';
-                  const chosen = freeModels.find(m => `${m.provider}::${m.modelId}` === value);
-                  return chosen ? freeModelSummary(chosen) : value;
-                },
-              }}
-              helperText={`${freeModels.length} free model${freeModels.length === 1 ? '' : 's'} reachable right now`}
-            >
-              {freeModels.map((model) => (
-                <MenuItem
-                  key={`${model.provider}::${model.modelId}`}
-                  value={`${model.provider}::${model.modelId}`}
-                  sx={{ minHeight: 44, display: 'block', py: 1 }}
-                >
-                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                    {freeModelSummary(model)}
-                  </Typography>
-                  <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.5 }}>
-                    {model.performance?.speed && (
-                      <Chip size="small" variant="outlined" label={model.performance.speed} sx={{ fontSize: 12 }} />
-                    )}
-                    {model.performance?.quality && (
-                      <Chip size="small" variant="outlined" label={model.performance.quality} sx={{ fontSize: 12 }} />
-                    )}
-                    {model.supportsJSONOutput && (
-                      <Chip size="small" variant="outlined" color="success" label="JSON" sx={{ fontSize: 12 }} />
-                    )}
-                    {model.supportsFunctionCalling && (
-                      <Chip size="small" variant="outlined" color="success" label="tools" sx={{ fontSize: 12 }} />
-                    )}
-                    {model.supportsVision && (
-                      <Chip size="small" variant="outlined" color="success" label="vision" sx={{ fontSize: 12 }} />
-                    )}
-                  </Box>
-                </MenuItem>
-              ))}
-            </TextField>
-          )}
-        </Box>
+        <ModelStewardBlock
+          sx={{ mt: 2 }}
+          freeModels={freeModels}
+          freeModelsLoading={freeModelsLoading}
+          recommendTask={recommendTask}
+          recommendPriority={recommendPriority}
+          recommendations={recommendations}
+          recommending={recommending}
+          isPinned={isPinned}
+          onTaskChange={onTaskChange}
+          onPriorityChange={onPriorityChange}
+          onRecommend={onRecommend}
+          onPickModel={onPickModel}
+          onLoadFreeModels={onLoadFreeModels}
+        />
 
         <Grid container spacing={2} sx={{ mt: 0 }}>
           <Grid item xs={6}>
@@ -354,11 +160,7 @@ export default function AppConfigDialog({
           )}
           label="Enabled"
         />
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onCancel} sx={{ minHeight: 44 }}>Cancel</Button>
-        <Button variant="contained" onClick={onSave} sx={{ minHeight: 44 }}>Save</Button>
-      </DialogActions>
-    </Dialog>
+      </Box>
+    </ConsoleDialog>
   );
 }

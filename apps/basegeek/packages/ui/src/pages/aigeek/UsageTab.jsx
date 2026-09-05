@@ -6,6 +6,13 @@
  * number wraps mid-digit. MOBILE_UI_PLAN §2 makes this a shared rule ("below
  * md a table renders as a card or definition list") with the layout left to
  * the app. The tables themselves are unchanged at md and up.
+ *
+ * The app breakdown leads with the app, not the provider, and sorts by app id:
+ * aiGeek now resolves the caller from its API key and records a `feature`
+ * sub-label under it, so "what is storygeek spending, and on what" is the
+ * question this table is asked. The feature line renders only where the server
+ * actually recorded one — an app that never sets a feature gets no empty
+ * second line.
  */
 import {
   Box,
@@ -24,7 +31,7 @@ import {
 } from '@mui/material';
 import { DeleteSweep as DeleteSweepIcon } from '@mui/icons-material';
 import { GeekEmptyState, GeekErrorState } from '@geeksuite/ui';
-import { formatCost, formatTokens } from './format';
+import { formatCost, formatTokens, featureLine, normalizeAppId } from './format';
 
 /**
  * The compact form of a usage table.
@@ -45,6 +52,11 @@ const UsageCardList = ({ rows }) => (
               sx={{ textTransform: 'capitalize', display: 'block' }}
             >
               {row.subtitle}
+            </Typography>
+          )}
+          {row.note && (
+            <Typography variant="caption" color="text.muted" sx={{ display: 'block', fontSize: 12 }}>
+              {row.note}
             </Typography>
           )}
           <Box sx={{ mt: 1, display: 'grid', gridTemplateColumns: '1fr', rowGap: 0.5 }}>
@@ -92,9 +104,23 @@ const TotalCard = ({ label, value }) => (
 export default function UsageTab({ stats, statsError, isCompact, onRetry, onResetStats }) {
   const providerUsage = stats.providerUsage || {};
   const providerRows = Object.entries(providerUsage);
-  const hasAppBreakdown = providerRows.some(
-    ([, usage]) => usage.appUsage && Object.keys(usage.appUsage).length > 0
-  );
+
+  /**
+   * One row per (app, provider) pair, ordered by app id so every row for an
+   * app sits together. Grouping harder than this would have to sum costs
+   * across providers, which hides the one number an admin comes here for.
+   */
+  const appRows = providerRows
+    .flatMap(([provider, usage]) =>
+      Object.entries(usage.appUsage || {}).map(([appName, appUsage]) => ({
+        key: `${provider}-${appName}`,
+        appId: normalizeAppId(appName) || appName,
+        provider,
+        usage: appUsage,
+        features: featureLine(appUsage),
+      }))
+    )
+    .sort((a, b) => a.appId.localeCompare(b.appId) || a.provider.localeCompare(b.provider));
 
   return (
     <Card>
@@ -171,28 +197,27 @@ export default function UsageTab({ stats, statsError, isCompact, onRetry, onRese
           </TableContainer>
         )}
 
-        {hasAppBreakdown && (
+        {appRows.length > 0 && (
           <>
             <Typography variant="h6" sx={{ mt: 4, mb: 2 }}>App Usage Breakdown</Typography>
 
             {isCompact ? (
               <UsageCardList
-                rows={providerRows.flatMap(([provider, usage]) =>
-                  Object.entries(usage.appUsage || {}).map(([appName, appUsage]) => ({
-                    key: `${provider}-${appName}`,
-                    title: appName,
-                    subtitle: provider,
-                    fields: usageFields(appUsage),
-                  }))
-                )}
+                rows={appRows.map(row => ({
+                  key: row.key,
+                  title: row.appId,
+                  subtitle: row.provider,
+                  note: row.features,
+                  fields: usageFields(row.usage),
+                }))}
               />
             ) : (
               <TableContainer component={Paper}>
                 <Table>
                   <TableHead>
                     <TableRow>
-                      <TableCell>Provider</TableCell>
                       <TableCell>App</TableCell>
+                      <TableCell>Provider</TableCell>
                       <TableCell>Total Calls</TableCell>
                       <TableCell>Free Calls</TableCell>
                       <TableCell>Paid Calls</TableCell>
@@ -201,19 +226,24 @@ export default function UsageTab({ stats, statsError, isCompact, onRetry, onRese
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {providerRows.map(([provider, usage]) =>
-                      usage.appUsage && Object.entries(usage.appUsage).map(([appName, appUsage]) => (
-                        <TableRow key={`${provider}-${appName}`}>
-                          <TableCell sx={{ textTransform: 'capitalize' }}>{provider}</TableCell>
-                          <TableCell sx={{ textTransform: 'capitalize', fontWeight: 'bold' }}>{appName}</TableCell>
-                          <TableCell>{appUsage.calls || 0}</TableCell>
-                          <TableCell sx={{ color: 'success.main' }}>{appUsage.freeCalls || 0}</TableCell>
-                          <TableCell sx={{ color: 'warning.main' }}>{appUsage.paidCalls || 0}</TableCell>
-                          <TableCell>{formatTokens(appUsage.tokens || 0)}</TableCell>
-                          <TableCell>{formatCost(appUsage.cost || 0)}</TableCell>
-                        </TableRow>
-                      ))
-                    )}
+                    {appRows.map(row => (
+                      <TableRow key={row.key}>
+                        <TableCell>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold' }}>{row.appId}</Typography>
+                          {row.features && (
+                            <Typography variant="caption" color="text.muted" sx={{ fontSize: 12 }}>
+                              {row.features}
+                            </Typography>
+                          )}
+                        </TableCell>
+                        <TableCell sx={{ textTransform: 'capitalize' }}>{row.provider}</TableCell>
+                        <TableCell>{row.usage.calls || 0}</TableCell>
+                        <TableCell sx={{ color: 'success.main' }}>{row.usage.freeCalls || 0}</TableCell>
+                        <TableCell sx={{ color: 'warning.main' }}>{row.usage.paidCalls || 0}</TableCell>
+                        <TableCell>{formatTokens(row.usage.tokens || 0)}</TableCell>
+                        <TableCell>{formatCost(row.usage.cost || 0)}</TableCell>
+                      </TableRow>
+                    ))}
                   </TableBody>
                 </Table>
               </TableContainer>

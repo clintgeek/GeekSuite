@@ -12,7 +12,6 @@ import BaseGeekHome from './pages/BaseGeekHome';
 import DataGeekPage from './pages/DataGeekPage';
 import UserGeekPage from './pages/UserGeekPage';
 import AIGeekPage from './pages/AIGeekPage';
-import APIKeysPage from './pages/APIKeysPage';
 import Settings from './pages/Settings';
 import AccountPage from './pages/AccountPage';
 import { AuthProvider, useBaseGeekAuth } from './components/AuthContext';
@@ -83,7 +82,18 @@ function AppContent() {
               <Route path="datageek" element={<RequireAdmin label="DataGeek"><DataGeekPage /></RequireAdmin>} />
               <Route path="usergeek" element={<RequireAdmin label="UserGeek"><UserGeekPage /></RequireAdmin>} />
               <Route path="aigeek" element={<RequireAdmin label="AIGeek"><AIGeekPage /></RequireAdmin>} />
-              <Route path="api-keys" element={<APIKeysPage />} />
+              {/*
+                * API keys stopped being their own page when aiGeek started
+                * resolving the caller from the key's `appName`: a key is an
+                * app's identity, so it lives beside that app's routing row on
+                * the AIGeek console. The route is kept as a redirect because
+                * the old one is bookmarked and linked from runbooks.
+                *
+                * Note this makes keys admin-only, which they effectively
+                * already were — every mutation worth reaching from here is
+                * behind `requireAdminUser`.
+                */}
+              <Route path="api-keys" element={<Navigate to="/aigeek?tab=keys" replace />} />
               <Route path="account" element={<AccountPage />} />
               <Route path="settings" element={<Settings />} />
             </Route>

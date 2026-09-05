@@ -15,13 +15,17 @@ import HomeIcon from '@mui/icons-material/Home';
 import StorageIcon from '@mui/icons-material/Storage';
 import PeopleIcon from '@mui/icons-material/People';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
-import KeyIcon from '@mui/icons-material/Key';
 
 /**
- * Three sections, grouped by what the operator is doing:
+ * Two sections, grouped by what the operator is doing:
  *   Overview — the control room itself
  *   Services — the shared backends baseGeek fronts
- *   Access   — the credentials that reach them
+ *
+ * There is no longer an Access section. API keys were a row of their own until
+ * aiGeek began resolving the calling app from the key's `appName`; a key is now
+ * an app's identity rather than a standalone credential, so it lives on the
+ * AIGeek console beside the routing row it decides. `/api-keys` redirects to
+ * that tab (see App.jsx) — the route still resolves, it just has no nav row.
  */
 export const navSections = [
   {
@@ -41,12 +45,6 @@ export const navSections = [
       { id: '/datageek', label: 'DataGeek', to: '/datageek', icon: <StorageIcon />, adminOnly: true },
       { id: '/usergeek', label: 'UserGeek', to: '/usergeek', icon: <PeopleIcon />, adminOnly: true },
       { id: '/aigeek', label: 'AIGeek', to: '/aigeek', icon: <SmartToyIcon />, adminOnly: true },
-    ],
-  },
-  {
-    label: 'Access',
-    items: [
-      { id: '/api-keys', label: 'API Keys', to: '/api-keys', icon: <KeyIcon /> },
     ],
   },
 ];

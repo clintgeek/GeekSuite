@@ -21,14 +21,19 @@
 import { useCallback, useEffect, useMemo, useReducer } from 'react';
 import { gql } from '@apollo/client';
 import { apolloClient } from '../../apolloClient';
-import { FREE_TIER_DEFAULTS } from './format';
+import { FREE_TIER_DEFAULTS, UNATTRIBUTED_APP_ID, normalizeAppId } from './format';
+import { emptyKeyDraft, keyDraftFrom } from './apiKeyDraft';
 import {
   GET_AI_CONFIG,
   GET_AI_STATS,
   GET_AI_DIRECTOR_MODELS,
   GET_AI_APP_CONFIGS,
+  GET_API_KEYS,
 } from '../../graphql/queries';
 import {
+  CREATE_API_KEY,
+  UPDATE_API_KEY,
+  DELETE_API_KEY,
   SAVE_AI_CONFIG,
   TEST_AI_PROVIDER,
   RESET_AI_STATS,
@@ -151,6 +156,14 @@ const withKeyDrafts = (serverConfig) => Object.fromEntries(
 /** `provider::modelId` — the key a pending free-tier edit is filed under. */
 export const freeTierKey = (provider, modelId) => `${provider}::${modelId}`;
 
+/**
+ * Apps that reach aiGeek from inside the suite's own process boundary rather
+ * than over the wire with a key. Minting a key for one of these would create a
+ * credential nothing ever presents, so the console offers a chip instead of a
+ * Mint button.
+ */
+export const INTERNAL_APP_IDS = new Set(['startgeek']);
+
 const initialState = {
   activeTab: 0,
   // The Configuration tab's own busy flag: save, and the per-provider key test.
@@ -193,6 +206,21 @@ const initialState = {
   appConfigsLoading: false,
   editingApp: null,
   newAppName: '',
+
+  // Apps & keys — the API keys that decide which app a call is attributed to.
+  apiKeys: [],
+  apiKeysLoading: false,
+  apiKeysError: null,
+  editingKey: null,
+  savingKey: false,
+  // The plaintext, held exactly as long as the "saved it?" dialog is open.
+  newKeyPlaintext: null,
+  revokingKey: null,
+  revoking: false,
+  // Which app group has the inline model steward expanded. One at a time:
+  // the steward's task box and its answers are a single slot, and two open
+  // blocks fighting over them is how the old page grew its worst bug.
+  stewardApp: null,
 
   // Model steward — the "which free model fits this?" block in the app dialog.
   freeModels: [],
@@ -340,6 +368,51 @@ function reducer(state, action) {
     case 'appDialog/close':
       return { ...state, editingApp: null };
 
+    // ── API keys ───────────────────────────────────────────────────────────
+    case 'keys/loading':
+      return { ...state, apiKeysLoading: true, apiKeysError: null };
+    case 'keys/loaded':
+      return { ...state, apiKeysLoading: false, apiKeys: action.keys };
+    case 'keys/failed':
+      return { ...state, apiKeysLoading: false, apiKeysError: action.error };
+
+    case 'keyDialog/open':
+      return { ...state, editingKey: action.value };
+    case 'keyDialog/patch':
+      return { ...state, editingKey: { ...state.editingKey, ...action.patch } };
+    case 'keyDialog/rate':
+      return {
+        ...state,
+        editingKey: {
+          ...state.editingKey,
+          rateLimit: {
+            ...state.editingKey?.rateLimit,
+            // Keep the box empty while it is being retyped; the save coerces.
+            [action.field]: action.value === '' ? '' : parseInt(action.value, 10) || 0,
+          },
+        },
+      };
+    case 'keyDialog/close':
+      return { ...state, editingKey: null };
+    case 'keys/saving':
+      return { ...state, savingKey: action.value };
+
+    case 'keys/minted':
+      return { ...state, newKeyPlaintext: action.apiKey };
+    case 'keys/mintedDismissed':
+      return { ...state, newKeyPlaintext: null };
+
+    case 'keys/revokeOpen':
+      return { ...state, revokingKey: action.value };
+    case 'keys/revokeClose':
+      return { ...state, revokingKey: null, revoking: false };
+    case 'keys/revoking':
+      return { ...state, revoking: action.value };
+
+    // ── Inline steward ─────────────────────────────────────────────────────
+    case 'steward/set':
+      return { ...state, stewardApp: action.appId };
+
     // ── Model steward ──────────────────────────────────────────────────────
     case 'freeModels/loading':
       return { ...state, freeModelsLoading: true };
@@ -419,6 +492,25 @@ export function useAIGeek(notify) {
     }
   }, []);
 
+  /**
+   * The keys, which are also the app roster.
+   *
+   * `apiKeys` is scoped server-side to `createdBy: user.id` and `isActive`,
+   * and every key mutation is scoped the same way — so this page shows exactly
+   * the keys it can act on. A key another admin minted is invisible here and
+   * would have been un-editable anyway; the Unattributed bucket and the app
+   * routing rows are what surface its traffic.
+   */
+  const loadApiKeys = useCallback(async () => {
+    dispatch({ type: 'keys/loading' });
+    try {
+      const { data } = await apolloClient.query({ query: GET_API_KEYS, fetchPolicy: 'network-only' });
+      dispatch({ type: 'keys/loaded', keys: data?.apiKeys || [] });
+    } catch (err) {
+      dispatch({ type: 'keys/failed', error: err });
+    }
+  }, []);
+
   const loadFreeModels = useCallback(async () => {
     dispatch({ type: 'freeModels/loading' });
     try {
@@ -435,7 +527,8 @@ export function useAIGeek(notify) {
     loadStatistics();
     loadDirectorData();
     loadAppConfigs();
-  }, [loadConfiguration, loadStatistics, loadDirectorData, loadAppConfigs]);
+    loadApiKeys();
+  }, [loadConfiguration, loadStatistics, loadDirectorData, loadAppConfigs, loadApiKeys]);
 
   // ── Configuration ────────────────────────────────────────────────────────
 
@@ -685,6 +778,106 @@ export function useAIGeek(notify) {
     });
   }, []);
 
+  // ── API keys ─────────────────────────────────────────────────────────────
+
+  const openCreateKey = useCallback((appName) => {
+    dispatch({ type: 'keyDialog/open', value: emptyKeyDraft(appName) });
+  }, []);
+
+  const openEditKey = useCallback((apiKey) => {
+    dispatch({ type: 'keyDialog/open', value: keyDraftFrom(apiKey) });
+  }, []);
+
+  const patchKey = useCallback((patch) => dispatch({ type: 'keyDialog/patch', patch }), []);
+  const patchKeyRate = useCallback(
+    (field, value) => dispatch({ type: 'keyDialog/rate', field, value }),
+    []
+  );
+  const closeKeyDialog = useCallback(() => dispatch({ type: 'keyDialog/close' }), []);
+
+  const saveApiKey = useCallback(async () => {
+    const editing = state.editingKey;
+    if (!editing?.name?.trim()) return;
+
+    // An emptied rate box means "leave it alone", not zero — the server floors
+    // every one of these at 1 and would reject a 0.
+    const rateLimit = Object.fromEntries(
+      Object.entries(editing.rateLimit || {})
+        .filter(([, value]) => value !== '' && value != null)
+        .map(([field, value]) => [field, Number(value)])
+    );
+    const expiresAt = editing.expiresAt ? new Date(editing.expiresAt).toISOString() : null;
+
+    dispatch({ type: 'keys/saving', value: true });
+    try {
+      if (editing.mode === 'create') {
+        const { data } = await apolloClient.mutate({
+          mutation: CREATE_API_KEY,
+          variables: {
+            name: editing.name.trim(),
+            appName: editing.appName,
+            description: editing.description || '',
+            permissions: editing.permissions,
+            rateLimit,
+            expiresAt,
+          },
+        });
+        dispatch({ type: 'keyDialog/close' });
+        dispatch({ type: 'keys/minted', apiKey: data?.createAPIKey?.apiKey || null });
+        notify(`Key minted for ${editing.appName}`, { tone: 'success' });
+      } else {
+        await apolloClient.mutate({
+          mutation: UPDATE_API_KEY,
+          variables: {
+            id: editing.id,
+            name: editing.name.trim(),
+            description: editing.description || '',
+            permissions: editing.permissions,
+            rateLimit,
+            expiresAt,
+            isActive: editing.isActive !== false,
+          },
+        });
+        dispatch({ type: 'keyDialog/close' });
+        notify(`Key updated for ${editing.appName}`, { tone: 'success' });
+      }
+      await loadApiKeys();
+      await loadAppConfigs();
+    } catch (err) {
+      notify(err.message || 'Failed to save API key', { tone: 'error' });
+    } finally {
+      dispatch({ type: 'keys/saving', value: false });
+    }
+  }, [state.editingKey, notify, loadApiKeys, loadAppConfigs]);
+
+  const revokeApiKey = useCallback(async () => {
+    const target = state.revokingKey;
+    if (!target) return;
+    dispatch({ type: 'keys/revoking', value: true });
+    try {
+      await apolloClient.mutate({ mutation: DELETE_API_KEY, variables: { id: target.id } });
+      notify(`Revoked “${target.name}”`, { tone: 'success' });
+      dispatch({ type: 'keys/revokeClose' });
+      await loadApiKeys();
+    } catch (err) {
+      notify(err.message || 'Failed to revoke API key', { tone: 'error' });
+      dispatch({ type: 'keys/revoking', value: false });
+    }
+  }, [state.revokingKey, notify, loadApiKeys]);
+
+  /**
+   * The clipboard is best-effort: it is unavailable on an insecure origin and
+   * throws rather than resolving false, which used to take the toast with it.
+   */
+  const copyText = useCallback(async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      notify('Copied to clipboard', { tone: 'success' });
+    } catch {
+      notify('Clipboard blocked — select and copy the text instead', { tone: 'warning' });
+    }
+  }, [notify]);
+
   // ── Model steward ────────────────────────────────────────────────────────
 
   const runRecommendation = useCallback(async () => {
@@ -729,6 +922,57 @@ export function useAIGeek(notify) {
     // Keyed on the app being configured, not on every keystroke in the dialog.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingAppName]);
+
+  /**
+   * The Apps & keys tab's inline steward, which is the same block with a
+   * different destination: a pick here goes straight to the saved routing row
+   * rather than into an open draft. Toggling the same app closes it.
+   */
+  const toggleSteward = useCallback((appId) => {
+    dispatch({ type: 'steward/set', appId: state.stewardApp === appId ? null : appId });
+  }, [state.stewardApp]);
+
+  const stewardApp = state.stewardApp;
+  const stewardNotes = state.appConfigs.find(c => normalizeAppId(c.appName) === stewardApp)?.notes;
+  useEffect(() => {
+    if (!stewardApp) return;
+    dispatch({ type: 'recommend/reset', task: stewardNotes || '' });
+    if (!freeModelsLoaded && !freeModelsLoading) loadFreeModels();
+    // Same rule as the dialog: keyed on which app, not on the task box.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stewardApp]);
+
+  /**
+   * Pin a model from the inline steward. There may be no routing row yet — an
+   * app can arrive here from a key alone — so this writes the whole row through
+   * the upsert rather than patching one that might not exist.
+   */
+  const pinModelForApp = useCallback(async (appId, provider, modelId) => {
+    const existing = state.appConfigs.find(c => normalizeAppId(c.appName) === appId);
+    try {
+      await apolloClient.mutate({
+        mutation: SAVE_AI_APP_CONFIG,
+        variables: {
+          appName: existing?.appName || appId,
+          config: {
+            displayName: existing?.displayName || '',
+            tier: 'specific',
+            provider,
+            model: modelId,
+            fallbackOrder: existing?.fallbackOrder || [],
+            maxTokens: existing?.maxTokens ?? null,
+            temperature: existing?.temperature ?? null,
+            notes: existing?.notes || '',
+            enabled: existing?.enabled !== false,
+          },
+        },
+      });
+      notify(`${appId} now routes to ${provider}/${modelId}`, { tone: 'success' });
+      await loadAppConfigs();
+    } catch (err) {
+      notify(`Failed to pin the model: ${err.message}`, { tone: 'error' });
+    }
+  }, [state.appConfigs, notify, loadAppConfigs]);
 
   // ── Selectors ────────────────────────────────────────────────────────────
 
@@ -796,6 +1040,79 @@ export function useAIGeek(notify) {
     [state.freeTierEdits]
   );
 
+  /**
+   * The Apps & keys roster: one group per normalized app id, from three
+   * sources that each know something the others don't.
+   *
+   * - **API keys** are the authority on identity. aiGeek resolves the caller
+   *   from the key's `appName`, so a key is what makes an app real.
+   * - **Routing rows** say where that app's calls go. A row can exist with no
+   *   key — `startgeek` calls in-process and never presents one.
+   * - **Discovered apps** are names seen in traffic with neither of the above
+   *   yet, kept so the admin can start a row from one tap.
+   *
+   * Ordering: apps with keys first (those are the ones being administered),
+   * then alphabetical inside each half.
+   */
+  const appGroups = useMemo(() => {
+    const groups = new Map();
+    const ensure = (appId) => {
+      if (!groups.has(appId)) {
+        groups.set(appId, { appId, config: null, keys: [], discovered: false });
+      }
+      return groups.get(appId);
+    };
+
+    for (const config of state.appConfigs) {
+      ensure(normalizeAppId(config.appName)).config = config;
+    }
+    for (const key of state.apiKeys) {
+      ensure(normalizeAppId(key.appName)).keys.push(key);
+    }
+    for (const appName of state.discoveredApps) {
+      ensure(normalizeAppId(appName)).discovered = true;
+    }
+    // The unattributed bucket is not an app and gets its own section.
+    groups.delete(UNATTRIBUTED_APP_ID);
+    groups.delete('');
+
+    return [...groups.values()]
+      .map(group => ({
+        ...group,
+        displayName: group.config?.displayName || group.appId,
+        isInternal: INTERNAL_APP_IDS.has(group.appId),
+        keys: [...group.keys].sort((a, b) => (a.name || '').localeCompare(b.name || '')),
+      }))
+      .sort((a, b) => {
+        if ((a.keys.length > 0) !== (b.keys.length > 0)) return a.keys.length > 0 ? -1 : 1;
+        return a.appId.localeCompare(b.appId);
+      });
+  }, [state.appConfigs, state.apiKeys, state.discoveredApps]);
+
+  /**
+   * Everything aiGeek recorded that it could not attribute to an app, summed
+   * across providers. Returns null when the server exposes no such bucket —
+   * an empty Unattributed card is worse than none, because it reads as a
+   * claim that nothing is unattributed rather than "nobody is counting".
+   */
+  const unattributedUsage = useMemo(() => {
+    const providers = Object.entries(state.stats.providerUsage || {});
+    const rows = providers
+      .map(([provider, usage]) => [provider, usage.appUsage?.[UNATTRIBUTED_APP_ID]])
+      .filter(([, usage]) => usage);
+    if (rows.length === 0) return null;
+
+    const total = rows.reduce((acc, [, usage]) => ({
+      calls: acc.calls + (usage.calls || 0),
+      freeCalls: acc.freeCalls + (usage.freeCalls || 0),
+      paidCalls: acc.paidCalls + (usage.paidCalls || 0),
+      tokens: acc.tokens + (usage.tokens || 0),
+      cost: acc.cost + (usage.cost || 0),
+    }), { calls: 0, freeCalls: 0, paidCalls: 0, tokens: 0, cost: 0 });
+
+    return { total, byProvider: rows.map(([provider, usage]) => ({ provider, ...usage })) };
+  }, [state.stats]);
+
   return {
     state,
     dispatch,
@@ -804,6 +1121,7 @@ export function useAIGeek(notify) {
     loadStatistics,
     loadDirectorData,
     loadAppConfigs,
+    loadApiKeys,
     loadFreeModels,
     // configuration
     setConfigField,
@@ -822,9 +1140,20 @@ export function useAIGeek(notify) {
     saveAppConfig,
     deleteAppConfig,
     addDiscoveredApp,
+    // api keys
+    openCreateKey,
+    openEditKey,
+    patchKey,
+    patchKeyRate,
+    closeKeyDialog,
+    saveApiKey,
+    revokeApiKey,
+    copyText,
     // steward
     runRecommendation,
     pickModel,
+    toggleSteward,
+    pinModelForApp,
     // dialogs
     openPricingDialog,
     openFreeTierDialog,
@@ -832,5 +1161,7 @@ export function useAIGeek(notify) {
     modelFreeTier,
     isModelDirty,
     dirtyCount,
+    appGroups,
+    unattributedUsage,
   };
 }

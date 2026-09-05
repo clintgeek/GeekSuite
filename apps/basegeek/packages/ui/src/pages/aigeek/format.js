@@ -46,6 +46,68 @@ export const formatContextWindow = (tokens) =>
 export const freeModelSummary = (model) =>
   [model.name, model.provider, formatContextWindow(model.contextWindow)].join(' · ');
 
+/**
+ * A timestamp from the API, whatever shape it arrived in.
+ *
+ * The GraphQL `Date` scalar serializes to epoch milliseconds *as a string*
+ * (which is why the old routing card called `parseInt` on `lastSeen`), while
+ * the same instant nested inside a `JSON` scalar — `usage.lastUsed` — comes
+ * through as an ISO string. One parser, so a row never renders "Invalid Date"
+ * because it read the field from the other envelope.
+ */
+export const parseWhen = (value) => {
+  if (!value) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  const raw = String(value);
+  const date = /^\d+$/.test(raw) ? new Date(parseInt(raw, 10)) : new Date(raw);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+/** A timestamp as a local date/time, or a fallback when there isn't one. */
+export const formatWhen = (value, fallback = 'Never') => {
+  const date = parseWhen(value);
+  return date ? date.toLocaleString() : fallback;
+};
+
+/**
+ * The app id aiGeek files a call under when it could not name the caller —
+ * no API key, or a key whose `appName` resolved to nothing. It is a real
+ * bucket rather than a missing row, so the console can show what is calling
+ * without identifying itself instead of quietly dropping it.
+ */
+export const UNATTRIBUTED_APP_ID = 'unattributed';
+
+/** The server normalizes a key's `appName` to lowercase; the console must agree. */
+export const normalizeAppId = (appName) => (appName || '').trim().toLowerCase();
+
+/**
+ * The per-feature rows inside one app's usage entry, as `[{ feature, ...usage }]`.
+ *
+ * The server groups usage by resolved app id and hangs a `feature` sub-label
+ * off it. Which container it uses is the server's business and has changed
+ * once already, so read both shapes and an array, and return `[]` when there
+ * is no sub-label at all — a caller that never sets one is the common case
+ * and must not render an empty second line.
+ */
+export const featureRows = (appUsage) => {
+  const raw = appUsage?.featureUsage ?? appUsage?.features ?? null;
+  if (!raw) return [];
+  const entries = Array.isArray(raw)
+    ? raw.map(entry => [entry.feature ?? entry.name, entry])
+    : Object.entries(raw);
+  return entries
+    .filter(([feature]) => feature)
+    .map(([feature, usage]) => ({ feature, ...(usage || {}) }))
+    .sort((a, b) => (b.calls || 0) - (a.calls || 0));
+};
+
+/** "search ×803 · summarize ×120" — the feature line under an app's name. */
+export const featureLine = (appUsage) => {
+  const rows = featureRows(appUsage);
+  if (rows.length === 0) return null;
+  return rows.map(row => (row.calls ? `${row.feature} ×${row.calls}` : row.feature)).join(' · ');
+};
+
 /** Free-tier limits applied when a model has no stored limits of its own. */
 export const FREE_TIER_DEFAULTS = {
   requestsPerMinute: 30,

@@ -70,6 +70,28 @@ export function ResetFreeTiersDialog({ open, busy, onCancel, onConfirm }) {
   );
 }
 
+/**
+ * Revoking a key. `deleteAPIKey` flips `isActive` false rather than deleting
+ * the document, but the key itself stops working immediately and the plaintext
+ * cannot be re-minted — so from the caller's side this is destruction, and the
+ * copy says so rather than hiding behind "deactivate".
+ */
+export function RevokeKeyDialog({ apiKey, busy, onCancel, onConfirm }) {
+  return (
+    <ConfirmDialog
+      open={!!apiKey}
+      title={apiKey ? `Revoke “${apiKey.name}”?` : 'Revoke key?'}
+      color="error"
+      confirmLabel="Revoke key"
+      busy={busy}
+      warning={apiKey ? `Anything calling aiGeek as ${apiKey.appName} with this key starts failing immediately.` : undefined}
+      body="The key stops working the moment you confirm, and it cannot be shown or restored. Mint a replacement first if something is live on it."
+      onCancel={onCancel}
+      onConfirm={onConfirm}
+    />
+  );
+}
+
 export function RestoreDefaultsDialog({ open, busy, onCancel, onConfirm }) {
   return (
     <ConfirmDialog
