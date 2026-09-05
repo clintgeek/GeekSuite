@@ -47,6 +47,8 @@ const {
   CSRF_COOKIE_NAME,
   CSRF_HEADER_NAME,
 } = await import('../middleware/csrfToken.js');
+const { csrfGuard } = await import('@geeksuite/user/server');
+const { resolveAllowedOrigins } = await import('../lib/corsOrigins.js');
 
 const SESSION_COOKIE = 'geek_token=a-valid-jwt';
 const TOKEN = 'oO2xk5Yz1QqFbn-8LmvTz7cRk2sQeWpUvHgJdNaBcDe';
@@ -465,5 +467,137 @@ describe('routes/auth.js issues and rotates the token', () => {
 
     expect(replay.status).toBe(401);
     expect(parseCookies(replay)[CSRF_COOKIE_NAME]).toBe('');
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 4. The proxied refresh — what the enforce flip actually rests on
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('a consumer backend proxying /auth/refresh (BURN_REVIEW #3)', () => {
+  // Six consumer backends expose POST /api/auth/{refresh,logout} as thin
+  // proxies: the browser calls its own app's backend, the backend replays the
+  // browser's Cookie (and, since this fix, X-CSRF-Token) up to basegeek with
+  // axios, and hands the Set-Cookie back down.
+  //
+  // That upstream call is NOT a browser request. It carries no Origin and no
+  // Referer, so csrfGuard's documented step 4 ("neither header present ->
+  // pass", packages/user/src/server/csrfGuard.js) lets it through and the
+  // double-submit token is the only control standing in front of it. These
+  // tests pin exactly what flipping CSRF_TOKEN=enforce depends on, with both
+  // guards mounted in server.js's order.
+
+  const PROXY_COOKIE = `geek_token=a-valid-jwt; geek_refresh_token=r3fr3sh; ${ CSRF_COOKIE_NAME }=${ TOKEN }`;
+
+  /** server.js's order: csrfGuard, then csrfTokenGuard, then the routes. */
+  function buildProxiedApp({ mode = 'enforce' } = {}) {
+    const app = express();
+    app.use(csrfGuard({
+      allowedOrigins: resolveAllowedOrigins({ NODE_ENV: 'production' }).origins,
+      appName: 'basegeek',
+      env: {},
+    }));
+    app.use(csrfTokenGuard({ appName: 'basegeek', env: {}, mode }));
+    app.use(express.json());
+    app.use(cookieParser());
+    app.post('/api/auth/refresh', (req, res) => {
+      reached.push('refresh');
+      res.json({ token: 'new.jwt' });
+    });
+    app.post('/api/auth/logout', (req, res) => {
+      reached.push('logout');
+      res.json({ success: true });
+    });
+    return app;
+  }
+
+  beforeEach(() => {
+    reached = [];
+  });
+
+  it('accepts the double-submit pair from an originless server-to-server call', async () => {
+    const res = await request(buildProxiedApp())
+      .post('/api/auth/refresh')
+      .set('Cookie', PROXY_COOKIE)
+      .set(CSRF_HEADER_NAME, TOKEN)
+      .send({ app: 'bujogeek' });
+
+    expect(res.status).toBe(200);
+    expect(reached).toEqual(['refresh']);
+  });
+
+  it('accepts it on /auth/logout too', async () => {
+    const res = await request(buildProxiedApp())
+      .post('/api/auth/logout')
+      .set('Cookie', PROXY_COOKIE)
+      .set(CSRF_HEADER_NAME, TOKEN)
+      .send({});
+
+    expect(res.status).toBe(200);
+    expect(reached).toEqual(['logout']);
+  });
+
+  it('rejects the same call when the proxy drops the header — the bug this fix closes', async () => {
+    // This is the pre-fix behavior of all six proxies: cookies replayed, token
+    // left behind. Under enforce it is a 403 on every refresh, which
+    // @geeksuite/auth reads as session-expired.
+    const res = await request(buildProxiedApp())
+      .post('/api/auth/refresh')
+      .set('Cookie', PROXY_COOKIE)
+      .send({ app: 'bujogeek' });
+
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({ error: 'csrf_token_missing' });
+    expect(reached).toEqual([]);
+  });
+
+  it('rejects a pre-rotation token replayed after a refresh (BURN_REVIEW #17)', async () => {
+    // The cookie has rotated; the client replayed the header it built the
+    // request with. Nothing about coming through a proxy softens this, which
+    // is why the fix has to be in @geeksuite/auth's request interceptor.
+    const res = await request(buildProxiedApp())
+      .post('/api/auth/refresh')
+      .set('Cookie', PROXY_COOKIE)
+      .set(CSRF_HEADER_NAME, OTHER_TOKEN)
+      .send({ app: 'bujogeek' });
+
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({ error: 'csrf_token_invalid' });
+  });
+
+  it('still accepts the pair when the proxy does forward a suite Origin', async () => {
+    // Not what axios does today, but a proxy that passed Origin through would
+    // be sending a sibling app's origin — which is on basegeek's allow-list by
+    // necessity, so the origin guard cannot be what protects this path either.
+    const res = await request(buildProxiedApp())
+      .post('/api/auth/refresh')
+      .set('Cookie', PROXY_COOKIE)
+      .set('Origin', 'https://bujogeek.clintgeek.com')
+      .set(CSRF_HEADER_NAME, TOKEN)
+      .send({ app: 'bujogeek' });
+
+    expect(res.status).toBe(200);
+    expect(reached).toEqual(['refresh']);
+  });
+
+  it('a Referer from a suite app is no different', async () => {
+    const res = await request(buildProxiedApp())
+      .post('/api/auth/refresh')
+      .set('Cookie', PROXY_COOKIE)
+      .set('Referer', 'https://notegeek.clintgeek.com/notes/42')
+      .set(CSRF_HEADER_NAME, TOKEN)
+      .send({ app: 'notegeek' });
+
+    expect(res.status).toBe(200);
+  });
+
+  it('report mode lets the header-less proxy call through — today, before the flip', async () => {
+    const res = await request(buildProxiedApp({ mode: 'report' }))
+      .post('/api/auth/refresh')
+      .set('Cookie', PROXY_COOKIE)
+      .send({ app: 'bujogeek' });
+
+    expect(res.status).toBe(200);
+    expect(reached).toEqual(['refresh']);
   });
 });

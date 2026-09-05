@@ -181,7 +181,10 @@ describe('setupAxiosInterceptors', () => {
     assert.equal(config.headers[CSRF_HEADER_NAME], undefined);
   });
 
-  test('does not clobber a header a call site set deliberately', () => {
+  test('the cookie wins over a header already on the config', () => {
+    // Not politeness — correctness. The jar is the only thing that knows the
+    // current token, and the one caller that reliably arrives with a header
+    // already set is the post-refresh replay below, carrying a stale one.
     const ax = fakeAxios();
     setupAxiosInterceptors(ax);
 
@@ -189,7 +192,7 @@ describe('setupAxiosInterceptors', () => {
       method: 'put',
       headers: { [CSRF_HEADER_NAME]: 'explicit-value' },
     });
-    assert.equal(config.headers[CSRF_HEADER_NAME], 'explicit-value');
+    assert.equal(config.headers[CSRF_HEADER_NAME], TOKEN);
   });
 
   test('adds nothing when the session has no token yet', () => {
@@ -198,6 +201,102 @@ describe('setupAxiosInterceptors', () => {
     setupAxiosInterceptors(ax);
 
     const config = ax.requestInterceptor({ method: 'post', headers: {} });
+    assert.equal(config.headers[CSRF_HEADER_NAME], undefined);
+  });
+
+  // -- the post-rotation replay (BURN_REVIEW #17) ---------------------------
+  //
+  // basegeek rotates `geek_csrf` on every /auth/refresh. The response
+  // interceptor recovers from a 401/403 by refreshing and replaying the
+  // *original* config — which already carries the header stamped on it before
+  // the refresh. Under CSRF_TOKEN=enforce, replaying that pre-rotation value
+  // is a 403 `csrf_token_invalid`, and the recovery that was supposed to save
+  // the session ends it instead.
+
+  test('a replayed request picks up the rotated token, not the one it was built with', () => {
+    const ax = fakeAxios();
+    setupAxiosInterceptors(ax);
+
+    // First pass: the request is built and stamped with the live token.
+    const config = ax.requestInterceptor({ method: 'post', headers: {} });
+    assert.equal(config.headers[CSRF_HEADER_NAME], TOKEN);
+
+    // basegeek refreshes and rotates the cookie.
+    setCookieJar(`${ CSRF_COOKIE_NAME }=rotated-after-refresh`);
+
+    // Second pass: axios re-runs the same config object through the request
+    // interceptors on `axiosInstance(originalRequest)`.
+    const replayed = ax.requestInterceptor(config);
+    assert.equal(replayed.headers[CSRF_HEADER_NAME], 'rotated-after-refresh');
+  });
+
+  test('a stale header spelled in a different case is replaced, not duplicated', () => {
+    // axios normalizes header names on a config that has already been sent, so
+    // the stale value can come back lowercase.
+    const ax = fakeAxios();
+    setupAxiosInterceptors(ax);
+
+    const config = ax.requestInterceptor({
+      method: 'post',
+      headers: { 'x-csrf-token': 'pre-rotation' },
+    });
+
+    const present = Object.keys(config.headers)
+      .filter((k) => k.toLowerCase() === CSRF_HEADER_NAME.toLowerCase());
+    assert.deepEqual(present, [CSRF_HEADER_NAME]);
+    assert.equal(config.headers[CSRF_HEADER_NAME], TOKEN);
+  });
+
+  test('a stale header is dropped when the session no longer has a token', () => {
+    // Logging out clears geek_csrf. Replaying the old value would be a
+    // guaranteed mismatch — worse than sending nothing, which basegeek reads
+    // as an un-issued session and lets through while it re-issues.
+    const ax = fakeAxios();
+    setupAxiosInterceptors(ax);
+
+    const config = { method: 'post', headers: { [CSRF_HEADER_NAME]: 'pre-logout' } };
+    setCookieJar('geek_theme=dark');
+    ax.requestInterceptor(config);
+
+    assert.equal(config.headers[CSRF_HEADER_NAME], undefined);
+    assert.equal(
+      Object.keys(config.headers).some((k) => k.toLowerCase() === 'x-csrf-token'),
+      false,
+    );
+  });
+
+  test('works against an AxiosHeaders-shaped headers bag (set/delete methods)', () => {
+    // axios 1.x hands the interceptor an AxiosHeaders instance, whose delete()
+    // is case-insensitive and whose set() is the supported way to write.
+    class FakeAxiosHeaders {
+      constructor(initial = {}) { Object.assign(this, initial); }
+      set(name, value) { this[name] = value; }
+      delete(name) {
+        for (const key of Object.keys(this)) {
+          if (key.toLowerCase() === name.toLowerCase()) delete this[key];
+        }
+      }
+    }
+
+    const ax = fakeAxios();
+    setupAxiosInterceptors(ax);
+
+    const headers = new FakeAxiosHeaders({ 'x-csrf-token': 'pre-rotation' });
+    const config = ax.requestInterceptor({ method: 'patch', headers });
+
+    assert.equal(config.headers[CSRF_HEADER_NAME], TOKEN);
+    assert.equal(config.headers['x-csrf-token'], undefined);
+  });
+
+  test('a GET replay does not inherit a token from an earlier POST config', () => {
+    const ax = fakeAxios();
+    setupAxiosInterceptors(ax);
+
+    const config = ax.requestInterceptor({ method: 'post', headers: {} });
+    assert.equal(config.headers[CSRF_HEADER_NAME], TOKEN);
+
+    config.method = 'get';
+    ax.requestInterceptor(config);
     assert.equal(config.headers[CSRF_HEADER_NAME], undefined);
   });
 });

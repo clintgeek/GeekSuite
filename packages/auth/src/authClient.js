@@ -93,6 +93,51 @@ export function csrfHeaders(method) {
   return token ? { [CSRF_HEADER_NAME]: token } : {};
 }
 
+/** Lowercase form, for the case-insensitive sweep below. */
+const CSRF_HEADER_LOWER = CSRF_HEADER_NAME.toLowerCase();
+
+/**
+ * Stamp the *current* CSRF token onto an axios request config, replacing
+ * whatever was there.
+ *
+ * The replacement is the point. basegeek rotates `geek_csrf` on every
+ * `/auth/refresh` (setSSOCookies in its routes/auth.js), and the response
+ * interceptor below recovers from a 401/403 by refreshing and then replaying
+ * the *original* config through this same interceptor. That config still
+ * carries the header we stamped on it before the refresh — i.e. the
+ * pre-rotation value. A `if (!headers[name])` guard would preserve it, and
+ * under `CSRF_TOKEN=enforce` basegeek would 403 the retry as
+ * `csrf_token_invalid`, turning a recoverable expiry into a logout.
+ *
+ * The cookie is the only source of truth here, so an explicitly-set header
+ * loses to it — a caller cannot know the token better than the jar does.
+ *
+ * Clears any case-variant first: axios normalizes header names on a config
+ * that has already been through a request, so the stale value can come back
+ * spelled differently than we wrote it.
+ *
+ * @param {object} config axios request config (headers may be a plain object
+ *   or an AxiosHeaders instance).
+ */
+function applyCsrfHeader(config) {
+  const headers = config?.headers;
+  if (!headers || typeof headers !== 'object') return;
+
+  if (typeof headers.delete === 'function') {
+    headers.delete(CSRF_HEADER_NAME);
+  } else {
+    for (const key of Object.keys(headers)) {
+      if (key.toLowerCase() === CSRF_HEADER_LOWER) delete headers[key];
+    }
+  }
+
+  const token = csrfHeaders(config.method)[CSRF_HEADER_NAME];
+  if (!token) return;
+
+  if (typeof headers.set === 'function') headers.set(CSRF_HEADER_NAME, token);
+  else headers[CSRF_HEADER_NAME] = token;
+}
+
 let refreshTimerId = null;
 let isRefreshing = false;
 let refreshQueue = [];
@@ -436,12 +481,11 @@ export function setupAxiosInterceptors(axiosInstance, onSessionExpired) {
         config.headers['Authorization'] = `Bearer ${ token }`;
       }
       // Double-submit CSRF token on anything that can change state. Set here
-      // rather than at each call site so an app cannot forget it, and read per
-      // request because basegeek rotates the cookie on every refresh.
-      const csrf = csrfHeaders(config.method);
-      for (const [name, value] of Object.entries(csrf)) {
-        if (!config.headers[name]) config.headers[name] = value;
-      }
+      // rather than at each call site so an app cannot forget it, read per
+      // request because basegeek rotates the cookie on every refresh, and
+      // *overwritten* rather than merged so a post-refresh replay cannot carry
+      // the pre-rotation value. See applyCsrfHeader().
+      applyCsrfHeader(config);
       return config;
     },
     (error) => {

@@ -1,8 +1,15 @@
 import express from "express";
 import axios from "axios";
+import { authProxyHeaders } from "@geeksuite/user/server/authProxyHeaders";
 
 const router = express.Router();
 const BASEGEEK_URL = process.env.BASEGEEK_URL || "https://basegeek.clintgeek.com";
+
+// Cookie + Authorization + X-CSRF-Token, forwarded exactly as the browser sent
+// them. The token matters: basegeek's double-submit guard checks it on every
+// cookie-authenticated mutation, and under CSRF_TOKEN=enforce a refresh that
+// replays the cookie without the header is a 403 — i.e. a suite-wide logout.
+// See packages/user/src/server/authProxyHeaders.js.
 
 function forwardSetCookieHeaders(res, upstreamHeaders) {
   const setCookie = upstreamHeaders?.["set-cookie"];
@@ -46,11 +53,6 @@ router.post("/login", async (req, res) => {
         identifier,
         password,
         app: app || "bookgeek",
-      },
-      {
-        headers: {
-          Cookie: req.headers.cookie || "",
-        },
       }
     );
 
@@ -107,11 +109,6 @@ router.post("/register", async (req, res) => {
         email,
         password,
         app: app || "bookgeek",
-      },
-      {
-        headers: {
-          Cookie: req.headers.cookie || "",
-        },
       }
     );
 
@@ -169,10 +166,9 @@ router.post("/refresh", async (req, res) => {
         app: app || "bookgeek",
       },
       {
-        headers: {
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-          Cookie: req.headers.cookie || "",
-        },
+        headers: authProxyHeaders(req, {
+          extra: accessToken ? { Authorization: `Bearer ${accessToken}` } : null,
+        }),
       }
     );
 
@@ -244,10 +240,9 @@ router.post("/logout", (req, res) => {
         `${BASEGEEK_URL}/api/auth/logout`,
         null,
         {
-          headers: {
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            Cookie: req.headers.cookie || "",
-          },
+          headers: authProxyHeaders(req, {
+            extra: token ? { Authorization: `Bearer ${token}` } : null,
+          }),
         }
       );
       forwardSetCookieHeaders(res, response.headers);

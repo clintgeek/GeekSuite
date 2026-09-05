@@ -95,8 +95,24 @@ a cookie it holds, so that branch is only reachable by a not-yet-issued session.
   send the header yet. Unlike `CSRF_GUARD`, an unset or unrecognized value means `report`, not
   `enforce`.
 - **Flip to `enforce`** — set `CSRF_TOKEN=enforce` in basegeek's env and restart — only after
-  (a) a day with no `CSRF token check (report-only)` warnings in the logs and (b) every direct
-  caller below is sending the header. `off` is the escape hatch if enforcing goes wrong.
+  a day with no `CSRF token check (report-only)` warnings in the logs. `off` is the escape hatch
+  if enforcing goes wrong.
+
+  Every caller is now sending the header (2026-09-05, BURN_REVIEW #3/#17), so the remaining gate
+  is the log window, not the code. The procedure:
+
+  1. Deploy the #3/#17 fix (it ships with the normal push-to-main wave).
+  2. Watch basegeek for a day: `docker logs --since 24h basegeek | grep -i 'report-only'`
+     (container `basegeek`, `apps/basegeek/docker-compose.yml`). Zero `CSRF token check
+     (report-only)` warnings over 24h is the gate. A warning names the `app`, `method`, `path`
+     and `reason` — that is a caller still to fix, not a reason to flip anyway.
+  3. Set `CSRF_TOKEN=enforce` in basegeek's `.env.production` and restart the container. The
+     value is read once at boot; there is no hot reload.
+  4. Smoke it: log into any app, leave a tab open past the 1h `geek_token` TTL (or force a
+     refresh), and confirm the session survives. A regression here looks like every app logging
+     out at once, and `CSRF_TOKEN=off` + restart is the immediate undo.
+
+  Q18b stays Chef's call.
 
 **Clients.** `@geeksuite/auth` (`packages/auth/src/authClient.js`) reads the cookie and adds the
 header on every non-GET call it makes (`logout()`, `doTokenRefresh()`, and the
@@ -104,13 +120,23 @@ header on every non-GET call it makes (`logout()`, `doTokenRefresh()`, and the
 exports `csrfHeaders(method?)` for callers that reach basegeek without it. basegeek's own
 `packages/ui/src/api.js` adds it via its own request interceptor.
 
-**Still to do** (these call basegeek directly and do not yet send the header — harmless while the
-lever is `report`, must be fixed before `enforce`):
+Also sending it: `packages/api-client/src/index.js`'s shared Apollo `authLink` (spreads
+`csrfHeaders()` last, so it covers every app's GraphQL mutations and cannot carry a stale value),
+and startgeek's dependency-free `apps/startgeek/src/lib/{graphql,basegeek}.js`, which read the
+cookie inline per call. `d8521eb`.
 
-- `packages/api-client/src/index.js` — the shared Apollo `authLink`. Covers basegeek-ui, bujogeek,
-  notegeek, storygeek, bookgeek, fitnessgeek and flockgeek GraphQL mutations in one change.
-- `apps/startgeek/src/lib/graphql.js` — startgeek's hand-rolled `gql()` fetch.
-- `apps/startgeek/src/lib/basegeek.js` — startgeek's hand-rolled `logout()` fetch.
+**Server-to-server: the six auth proxies.** notegeek, bujogeek, fitnessgeek, storygeek, flockgeek
+and bookgeek expose `POST /api/auth/{refresh,logout}` as thin proxies — the browser calls its own
+app's backend, the backend replays the browser's cookies up to basegeek with axios. That upstream
+call is not a browser request: it sends no `Origin` and no `Referer`, so `csrfGuard`'s "neither
+header present → pass" branch lets it through and the double-submit token is the only control in
+front of it. All six build their upstream headers with `authProxyHeaders()`
+(`packages/user/src/server/authProxyHeaders.js`), which forwards `Cookie`, `Authorization` and
+`X-CSRF-Token` as received and never synthesizes a token from the replayed cookie — a proxy that
+did would hand every proxied path a standing pass through the check. bookgeek's `/login` and
+`/register` forward no cookie at all: they are credential exchanges that need no session.
+Before this (BURN_REVIEW #3) none of the six forwarded the header, which would have made the
+enforce flip a suite-wide logout inside an hour.
 
 **What it does not do.** A token cannot stop full script execution on an allow-listed origin: the
 cookie is readable by any `*.clintgeek.com` page by design (that is how a sibling app attaches the

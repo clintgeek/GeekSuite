@@ -1,6 +1,7 @@
 import axios from "axios";
 import { env } from "../config/env.js";
 import { logger } from "../utils/logger.js";
+import { authProxyHeaders } from "@geeksuite/user/server/authProxyHeaders";
 
 const SSO_ACCESS_COOKIE = "geek_token";
 
@@ -15,6 +16,12 @@ function getTokenFromRequest(req) {
 
   return null;
 }
+
+// Cookie + Authorization + X-CSRF-Token, forwarded exactly as the browser sent
+// them. The token matters: basegeek's double-submit guard checks it on every
+// cookie-authenticated mutation, and under CSRF_TOKEN=enforce a refresh that
+// replays the cookie without the header is a 403 — i.e. a suite-wide logout.
+// See packages/user/src/server/authProxyHeaders.js.
 
 function forwardSetCookieHeaders(res, upstreamResponse) {
   const cookies = upstreamResponse?.headers?.["set-cookie"];
@@ -171,12 +178,7 @@ export const refresh = async (req, res) => {
         refreshToken,
         app: env.appName
       },
-      {
-        headers: {
-          Cookie: req.headers.cookie || '',
-          Authorization: req.headers.authorization || ''
-        }
-      }
+      { headers: authProxyHeaders(req) }
     );
 
     forwardSetCookieHeaders(res, response);
@@ -207,13 +209,10 @@ export const refresh = async (req, res) => {
 export const logout = (req, res) => {
   (async () => {
     try {
-      const cookie = req.headers.cookie;
       const upstream = await axios.post(
         `${env.basegeekUrl}/api/auth/logout`,
         {},
-        {
-          headers: cookie ? { Cookie: cookie } : undefined
-        }
+        { headers: authProxyHeaders(req) }
       );
       forwardSetCookieHeaders(res, upstream);
     } catch (error) {
