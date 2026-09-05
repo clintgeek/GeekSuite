@@ -6,6 +6,7 @@ packages:
     - "apps/*/api"
     - "apps/*/packages/*"
     - "packages/*"
+    - "tools/*"
 
 overrides:
     "@mui/material": "^5.0.0"

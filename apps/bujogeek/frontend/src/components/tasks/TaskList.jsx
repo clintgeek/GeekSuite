@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { toLocalDateString } from '../../utils/dateUtils';
+import { localDateString, startOfLocalDay, utcDateString } from '@geeksuite/utils';
 import {
   List,
   ListItem,
@@ -44,24 +44,12 @@ const TaskList = ({ tasks = [], viewType = 'daily' }) => {
   // never duplicated).
   const filteredTasks = filterTasks(taskArray, filters);
 
-  // Helper to get local date string
+  // Group key for a stored calendar date. Calendar dates are stored as UTC
+  // midnight, so they are read in UTC; an unparseable one falls back to today
+  // rather than dropping the task out of the list.
   const getLocalDate = (dateString) => {
     if (!dateString) return null;
-    try {
-      const date = new Date(dateString);
-      // Check if date is valid
-      if (isNaN(date.getTime())) {
-        return getLocalDate(new Date().toISOString()); // fallback to today if invalid
-      }
-      // Use UTC accessors since calendar dates are stored as UTC midnight
-      const y = date.getUTCFullYear();
-      const m = String(date.getUTCMonth() + 1).padStart(2, '0');
-      const d = String(date.getUTCDate()).padStart(2, '0');
-      return `${y}-${m}-${d}`;
-    } catch (error) {
-      console.warn('Invalid date:', dateString);
-      return getLocalDate(new Date().toISOString()); // fallback to today if error
-    }
+    return utcDateString(dateString) || utcDateString(new Date());
   };
 
   // Group tasks by date (for non-daily views: weekly, search, etc.) — due
@@ -153,7 +141,7 @@ const TaskList = ({ tasks = [], viewType = 'daily' }) => {
 
     // Persist order for daily only
     try {
-      const dateKey = toLocalDateString(currentDate || new Date());
+      const dateKey = localDateString(currentDate || new Date());
       setLocalOrder(updated.map(t => t._id));
       await saveDailyOrder(dateKey, updated.map(t => t._id));
     } catch (err) {
@@ -215,11 +203,10 @@ const TaskList = ({ tasks = [], viewType = 'daily' }) => {
     let isCarriedOver = false;
     let isOverdue = false;
     if (!task.dueDate && task.status === 'pending') {
-      const created = new Date(task.createdAt);
-      const now = new Date();
-      // Set both to local midnight for comparison
-      created.setHours(0, 0, 0, 0);
-      now.setHours(0, 0, 0, 0);
+      // Local midnight on both sides: "created before today" has to mean
+      // today on the user's own wall clock.
+      const created = startOfLocalDay(task.createdAt);
+      const now = startOfLocalDay();
       if (created < now) {
         isCarriedOver = true;
         // Check if carried over more than 7 days

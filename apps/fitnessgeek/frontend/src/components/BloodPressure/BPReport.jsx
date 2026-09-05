@@ -21,7 +21,7 @@ import {
 import BPChartNivo from './BPChartNivo.jsx';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
 import { categorizeBP } from '../../utils/bpUtils.js';
-import { getTodayLocal } from '../../utils/dateUtils';
+import { localDateString } from '@geeksuite/utils';
 import { ThemeProvider } from '@mui/material/styles';
 import { createAppTheme } from '../../theme/theme';
 import html2canvas from 'html2canvas';
@@ -141,7 +141,7 @@ const BPReport = ({ bpLogs, onClose }) => {
         heightLeft -= pageHeight;
       }
 
-      pdf.save(`blood-pressure-report-${getTodayLocal()}.pdf`);
+      pdf.save(`blood-pressure-report-${localDateString()}.pdf`);
     } catch (error) {
       console.error('Error generating PDF:', error);
     }
@@ -184,7 +184,7 @@ const BPReport = ({ bpLogs, onClose }) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `blood-pressure-report-${getTodayLocal()}.md`;
+    a.download = `blood-pressure-report-${localDateString()}.md`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -208,7 +208,7 @@ const BPReport = ({ bpLogs, onClose }) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `blood-pressure-readings-${getTodayLocal()}.csv`;
+    a.download = `blood-pressure-readings-${localDateString()}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

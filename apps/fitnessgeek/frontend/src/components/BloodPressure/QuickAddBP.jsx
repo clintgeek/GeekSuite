@@ -15,7 +15,7 @@ import {
   MonitorHeart as BPIcon
 } from '@mui/icons-material';
 import { useGeekPrimaryAction } from '@geeksuite/ui';
-import { getTodayLocal } from '../../utils/dateUtils.js';
+import { localDateString } from '@geeksuite/utils';
 import AddBPDialog from './AddBPDialog.jsx';
 
 const QuickAddBP = ({ onAdd, unit = "mmHg", existingTodayBP = null }) => {
@@ -24,7 +24,7 @@ const QuickAddBP = ({ onAdd, unit = "mmHg", existingTodayBP = null }) => {
   const [systolic, setSystolic] = useState('');
   const [diastolic, setDiastolic] = useState('');
   const [pulse, setPulse] = useState('');
-  const [date, setDate] = useState(getTodayLocal());
+  const [date, setDate] = useState(localDateString());
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -88,7 +88,7 @@ const QuickAddBP = ({ onAdd, unit = "mmHg", existingTodayBP = null }) => {
       setSystolic('');
       setDiastolic('');
       setPulse('');
-      setDate(getTodayLocal());
+      setDate(localDateString());
     } finally {
       setLoading(false);
     }

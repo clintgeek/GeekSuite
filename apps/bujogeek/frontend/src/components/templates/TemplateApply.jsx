@@ -14,7 +14,7 @@ import {
 import { X, Play, FileText } from 'lucide-react';
 import { useTaskContext } from '../../context/TaskContext';
 import { colors } from '../../theme/colors';
-import { toLocalDateString } from '../../utils/dateUtils';
+import { localDateString } from '@geeksuite/utils';
 import { useToast } from '@geeksuite/ui';
 
 /**
@@ -73,7 +73,7 @@ const TemplateApply = ({ template, onClose, onApplied }) => {
     setLoading(true);
     setError(null);
 
-    const today = toLocalDateString(new Date());
+    const today = localDateString(new Date());
     let created = 0;
 
     try {

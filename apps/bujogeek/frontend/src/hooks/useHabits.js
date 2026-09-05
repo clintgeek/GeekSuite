@@ -7,6 +7,7 @@ import {
   DELETE_HABIT,
   TOGGLE_HABIT_LOG,
 } from '../graphql/mutations';
+import { onHabitCreated, onHabitDeleted, onHabitLogToggled } from '../graphql/cacheUpdates';
 
 /**
  * useHabits — the user's habits plus the log window the tracker grid renders.
@@ -20,15 +21,19 @@ import {
  * is. A failure rolls the cell back and rethrows so the page can toast.
  * Overrides survive until the log window changes, which keeps a week's worth of
  * taps stable without a refetch per tap.
+ *
+ * Cache handling follows the rule in `apolloClient.js`. What changed with
+ * SUITE_TODO #26:
+ *   - create and delete `cache.modify` the `habits` list instead of the
+ *     `await refetchHabits()` they used to run (clause 2);
+ *   - update needs nothing — the mutation selects every field the grid reads
+ *     (clause 1);
+ *   - toggle now writes the log into every cached `habitLogs` window the date
+ *     falls inside. The local overrides below are still what makes the cell
+ *     flip in the same frame as the tap; the cache write is what makes the
+ *     answer survive leaving the page and coming back, which it previously
+ *     did not.
  */
-
-/** `yyyy-MM-dd` from a Date, read in the local calendar (what the user sees). */
-export const toDateKey = (date) => {
-  const d = new Date(date);
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${d.getFullYear()}-${m}-${day}`;
-};
 
 const cellKey = (habitId, dateKey) => `${habitId}|${dateKey}`;
 
@@ -89,7 +94,10 @@ const useHabits = ({ startDate, endDate, skip = false } = {}) => {
       const previous = key in overrides ? overrides[key] : serverDone.has(key);
       setOverrides((prev) => ({ ...prev, [key]: !previous }));
       try {
-        const res = await toggleMutation({ variables: { habitId, date: dateKey } });
+        const res = await toggleMutation({
+          variables: { habitId, date: dateKey },
+          update: onHabitLogToggled(habitId, dateKey),
+        });
         // Trust the server's answer over our guess — they agree in every
         // ordinary case, and disagree only if the day was already toggled
         // somewhere else. The habit's new streak rides along in the payload and
@@ -111,29 +119,30 @@ const useHabits = ({ startDate, endDate, skip = false } = {}) => {
     async ({ name, daysOfWeek, color }) => {
       const res = await createMutation({
         variables: { name, daysOfWeek: daysOfWeek ?? [], color: color ?? null },
+        update: onHabitCreated,
       });
-      await refetchHabits();
       return res.data?.createHabit;
     },
-    [createMutation, refetchHabits]
+    [createMutation]
   );
 
   const updateHabit = useCallback(
     async (id, updates) => {
       const res = await updateMutation({ variables: { id, ...updates } });
-      await refetchHabits();
       return res.data?.updateHabit;
     },
-    [updateMutation, refetchHabits]
+    [updateMutation]
   );
 
   const deleteHabit = useCallback(
     async (id) => {
-      const res = await deleteMutation({ variables: { id } });
-      await refetchHabits();
+      const res = await deleteMutation({
+        variables: { id },
+        update: onHabitDeleted(id),
+      });
       return res.data?.deleteHabit;
     },
-    [deleteMutation, refetchHabits]
+    [deleteMutation]
   );
 
   return {

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useQuery, useMutation } from '@apollo/client';
-import { toLocalDateString } from "../utils/dateUtils";
+import { displayCalendarDate, localDateString } from "@geeksuite/utils";
 import {
   Container, Paper, Button, Box, Typography, CircularProgress, Alert,
   TextField, MenuItem, Chip, FormControl, InputLabel, Select, Accordion,
@@ -93,8 +93,8 @@ const GroupsPage = () => {
       name: group.name || "",
       purpose: group.purpose || "",
       type: group.type || "",
-      startDate: group.startDate ? toLocalDateString(group.startDate) : "",
-      endDate: group.endDate ? toLocalDateString(group.endDate) : "",
+      startDate: group.startDate ? localDateString(group.startDate) : "",
+      endDate: group.endDate ? localDateString(group.endDate) : "",
       description: group.description || "",
       notes: group.notes || "",
     });
@@ -149,7 +149,7 @@ const GroupsPage = () => {
     <Container maxWidth="lg" disableGutters sx={{ py: { xs: 0, md: 4 }, px: { xs: 0, md: 2 } }}>
       <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 3 }}>
         <Button variant="contained" startIcon={<AddIcon />}
-          onClick={() => { setAddFormData({ ...emptyForm, startDate: toLocalDateString(new Date()) }); setAddDialogOpen(true); }}>
+          onClick={() => { setAddFormData({ ...emptyForm, startDate: localDateString(new Date()) }); setAddDialogOpen(true); }}>
           Add Group
         </Button>
       </Box>
@@ -205,9 +205,9 @@ const GroupsPage = () => {
                 <AccordionDetails>
                   {group.description && <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{group.description}</Typography>}
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                    {group.startDate ? new Date(group.startDate).toLocaleDateString(undefined, { timeZone: 'UTC' }) : "No start"}
+                    {group.startDate ? displayCalendarDate(group.startDate) : "No start"}
                     {" → "}
-                    {group.endDate ? new Date(group.endDate).toLocaleDateString(undefined, { timeZone: 'UTC' }) : "Ongoing"}
+                    {group.endDate ? displayCalendarDate(group.endDate) : "Ongoing"}
                   </Typography>
                   {members.length === 0 ? (
                     <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>No birds in this group</Typography>

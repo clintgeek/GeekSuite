@@ -12,7 +12,7 @@ import { getTaskAge } from '../utils/taskAging';
 import { normalizeTasks } from '../utils/normalizeTasks';
 import { colors } from '../theme/colors';
 import { addDays } from 'date-fns';
-import { toLocalDateString } from '../utils/dateUtils';
+import { localDateString } from '@geeksuite/utils';
 
 const MODES = [
   { value: 'endofday', label: 'End of Day' },
@@ -79,7 +79,7 @@ const ReviewPage = () => {
 
   const handleKeep = useCallback(
     async (task) => {
-      const todayStr = toLocalDateString(new Date());
+      const todayStr = localDateString(new Date());
       await updateTask((task.id || task._id), { ...task, dueDate: todayStr });
       markReviewed((task.id || task._id));
     },
@@ -88,7 +88,7 @@ const ReviewPage = () => {
 
   const handleMoveTomorrow = useCallback(
     async (task) => {
-      const tomorrowStr = toLocalDateString(addDays(new Date(), 1));
+      const tomorrowStr = localDateString(addDays(new Date(), 1));
       await updateTask((task.id || task._id), {
         ...task,
         dueDate: tomorrowStr,
@@ -101,7 +101,7 @@ const ReviewPage = () => {
 
   const handleMoveToDate = useCallback(
     async (task, date) => {
-      const dateStr = toLocalDateString(date);
+      const dateStr = localDateString(date);
       await updateTask((task.id || task._id), {
         ...task,
         dueDate: dateStr,

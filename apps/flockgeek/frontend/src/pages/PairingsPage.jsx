@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useQuery, useMutation } from '@apollo/client';
-import { toLocalDateString } from "../utils/dateUtils";
+import { localDateString } from "@geeksuite/utils";
 import { Container, Button, Box, Alert, TextField, MenuItem, Chip } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -85,7 +85,7 @@ const PairingsPage = () => {
     setEditingPairing(pairing);
     setEditFormData({
       name: pairing.name || "",
-      pairingDate: pairing.startDate ? toLocalDateString(pairing.startDate) : "",
+      pairingDate: pairing.startDate ? localDateString(pairing.startDate) : "",
       active: pairing.active ?? true,
       notes: pairing.notes || "",
     });
@@ -158,7 +158,7 @@ const PairingsPage = () => {
   return (
     <Container maxWidth="lg" disableGutters sx={{ py: { xs: 0, md: 4 }, px: { xs: 0, md: 2 } }}>
       <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 3 }}>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => { setAddFormData({ ...emptyForm, pairingDate: toLocalDateString(new Date()) }); setAddDialogOpen(true); }}>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={() => { setAddFormData({ ...emptyForm, pairingDate: localDateString(new Date()) }); setAddDialogOpen(true); }}>
           Add Pairing
         </Button>
       </Box>

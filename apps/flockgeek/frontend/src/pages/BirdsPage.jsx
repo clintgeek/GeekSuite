@@ -11,7 +11,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import ResponsiveTable from "../components/primitives/ResponsiveTable";
 import LedgerDialog from "../components/primitives/LedgerDialog";
-import { toLocalDateString } from "../utils/dateUtils";
+import { displayCalendarDate, localDateString } from "@geeksuite/utils";
 import { GET_BIRDS, GET_LOCATIONS, GET_FLOCK_GROUPS, GET_GROUP_MEMBERSHIPS } from "../graphql/queries";
 import { CREATE_BIRD, UPDATE_BIRD, DELETE_ENTITY } from "../graphql/mutations";
 
@@ -56,7 +56,7 @@ const buildEditFormData = (bird) => {
     name: bird.name || "",
     sex: bird.sex || "",
     breed: bird.breed || "",
-    hatchDate: bird.hatchDate ? toLocalDateString(bird.hatchDate) : "",
+    hatchDate: bird.hatchDate ? localDateString(bird.hatchDate) : "",
     status: bird.status || "",
     species: bird.species || "",
     strain: bird.strain || "",
@@ -67,7 +67,7 @@ const buildEditFormData = (bird) => {
     damId: bird.damId || "",
     locationId: bird.locationId || "",
     temperamentScore: bird.temperamentScore ?? "",
-    statusDate: bird.statusDate ? toLocalDateString(bird.statusDate) : "",
+    statusDate: bird.statusDate ? localDateString(bird.statusDate) : "",
     statusReason: bird.statusReason || "",
     notes: bird.notes || ""
   };
@@ -219,7 +219,7 @@ const BirdsPage = () => {
 
   const setEF = (key, val) => setEditFormData(p => ({ ...p, [key]: val }));
 
-  const asDate = (value) => value ? new Date(value).toLocaleDateString(undefined, { timeZone: 'UTC' }) : "-";
+  const asDate = (value) => displayCalendarDate(value) || "-";
   const titleCase = (value) => value ? value.charAt(0).toUpperCase() + value.slice(1) : "";
   const originLabel = (value) => value ? value.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : '-';
 

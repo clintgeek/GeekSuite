@@ -1,5 +1,5 @@
 import { apiService } from './apiService.js';
-import { formatDateLocal } from '../utils/dateUtils.js';
+import { localDateString } from '@geeksuite/utils';
 
 const BASE_URL = '/blood-pressure';
 
@@ -85,7 +85,7 @@ export const bpService = {
       diastolic: parseInt(diastolic),
       pulse: pulse ? parseInt(pulse) : null,
       log_date: date instanceof Date
-        ? formatDateLocal(date)
+        ? localDateString(date)
         : date,
       notes
     };

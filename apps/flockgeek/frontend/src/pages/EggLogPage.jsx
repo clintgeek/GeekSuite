@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useQuery, useMutation } from '@apollo/client';
-import { toLocalDateString } from "../utils/dateUtils";
+import { displayCalendarDate, localDateString } from "@geeksuite/utils";
 import {
   Container, Button, Box, Typography, Alert, TextField, MenuItem,
   FormControl, InputLabel, Select, IconButton
@@ -116,7 +116,7 @@ const EggLogPage = () => {
 
   const getLocationName = (locId) => locations.find(l => l.id === locId)?.name ?? "-";
 
-  const asDate = (value) => value ? new Date(value).toLocaleDateString(undefined, { timeZone: 'UTC' }) : "-";
+  const asDate = (value) => displayCalendarDate(value) || "-";
 
   /**
    * Below `md` each harvest is a card titled by its date; the two 20px icon
@@ -192,7 +192,7 @@ const EggLogPage = () => {
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 2, flexWrap: "wrap", mb: 3 }}>
         <Typography variant="h6" sx={{ color: "text.secondary" }}>Harvest History</Typography>
         <Button variant="outlined" startIcon={<AddIcon />} sx={{ minHeight: 44 }}
-          onClick={() => { setAddFormData({ date: toLocalDateString(new Date()), eggsCount: "", daysObserved: 1, locationId: locations.length === 1 ? locations[0].id : "", notes: "" }); setAddDialogOpen(true); }}>
+          onClick={() => { setAddFormData({ date: localDateString(new Date()), eggsCount: "", daysObserved: 1, locationId: locations.length === 1 ? locations[0].id : "", notes: "" }); setAddDialogOpen(true); }}>
           Add Detailed Entry
         </Button>
       </Box>

@@ -1,5 +1,5 @@
 import { apiService } from './apiService';
-import { formatDateLocal } from '../utils/dateUtils';
+import { localDateString } from '@geeksuite/utils';
 
 const BASE_URL = '/weight';
 
@@ -100,7 +100,7 @@ export const weightService = {
   async addWeightLog(weight, date = new Date(), notes = '') {
     let logDate;
     if (date instanceof Date) {
-      logDate = formatDateLocal(date);
+      logDate = localDateString(date);
     } else {
       logDate = date; // already a YYYY-MM-DD string
     }

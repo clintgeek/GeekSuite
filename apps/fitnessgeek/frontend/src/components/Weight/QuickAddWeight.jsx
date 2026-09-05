@@ -11,13 +11,13 @@ import {
   MonitorWeight as WeightIcon
 } from '@mui/icons-material';
 import { useGeekPrimaryAction } from '@geeksuite/ui';
-import { getTodayLocal } from '../../utils/dateUtils.js';
+import { localDateString } from '@geeksuite/utils';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
 
 const QuickAddWeight = ({ onAdd, unit = 'lbs' }) => {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState('');
-  const [date, setDate] = useState(getTodayLocal());
+  const [date, setDate] = useState(localDateString());
   const [loading, setLoading] = useState(false);
 
   // The page's thumb-zone action. `GeekFab` (mounted by the shell) reads the
@@ -40,7 +40,7 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs' }) => {
       });
 
       setValue('');
-      setDate(getTodayLocal());
+      setDate(localDateString());
       setOpen(false);
     } catch (error) {
       console.error('Error adding weight:', error);

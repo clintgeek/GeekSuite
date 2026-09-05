@@ -75,6 +75,7 @@ export default defineConfig(({ command, mode }) => {
       alias: {
         '@': path.resolve(__dirname, './src'),
         '@geeksuite/ui': path.resolve(__dirname, '../../../packages/ui/src/index.js'),
+        '@geeksuite/utils': path.resolve(__dirname, '../../../packages/utils/src/index.js'),
       },
       // packages/ui is compiled from source (alias above), and pnpm materializes
       // its own @mui/material@5 to satisfy the package's peer range. Without

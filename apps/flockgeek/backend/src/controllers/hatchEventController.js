@@ -4,6 +4,7 @@ import Group from "../models/Group.js";
 import GroupMembership from "../models/GroupMembership.js";
 import Pairing from "../models/Pairing.js";
 import MeatRun from "../models/MeatRun.js";
+import { utcDateString } from "@geeksuite/utils";
 
 /**
  * Get the next available tag ID starting from 2000
@@ -228,9 +229,10 @@ export const registerChicks = async (req, res, next) => {
       });
     }
 
-    const hatchDateStr = hatchEvent.hatchDate
-      ? hatchEvent.hatchDate.toISOString().split("T")[0]
-      : hatchEvent.setDate.toISOString().split("T")[0];
+    // Both are calendar dates stored at UTC midnight, so read them in UTC —
+    // `toISOString().split("T")[0]` only agrees by accident when the value is
+    // exactly midnight.
+    const hatchDateStr = utcDateString(hatchEvent.hatchDate || hatchEvent.setDate);
 
     // Handle based on purpose
     if (hatchEvent.purpose === "meat") {

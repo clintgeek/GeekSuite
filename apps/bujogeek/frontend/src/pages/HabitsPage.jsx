@@ -19,7 +19,8 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
-import useHabits, { toDateKey } from '../hooks/useHabits';
+import useHabits from '../hooks/useHabits';
+import { localDateString, startOfLocalDay } from '@geeksuite/utils';
 import useGlobalShortcuts from '../hooks/useGlobalShortcuts';
 import BujoDialog from '../components/primitives/BujoDialog';
 import SkeletonLoader from '../components/shared/SkeletonLoader';
@@ -54,12 +55,6 @@ const HABIT_COLORS = [
   colors.gold.muted,
 ];
 
-const startOfDay = (date) => {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
-};
-
 const addDays = (date, n) => {
   const d = new Date(date);
   d.setDate(d.getDate() + n);
@@ -82,15 +77,15 @@ const HabitsPage = () => {
   const [saving, setSaving] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
 
-  const todayKey = toDateKey(new Date());
+  const todayKey = localDateString(new Date());
 
   const days = useMemo(() => {
-    const end = addDays(startOfDay(new Date()), -weeksBack * DAYS_SHOWN);
+    const end = addDays(startOfLocalDay(new Date()), -weeksBack * DAYS_SHOWN);
     return Array.from({ length: DAYS_SHOWN }, (_, i) => addDays(end, i - (DAYS_SHOWN - 1)));
   }, [weeksBack]);
 
-  const startDate = toDateKey(days[0]);
-  const endDate = toDateKey(days[days.length - 1]);
+  const startDate = localDateString(days[0]);
+  const endDate = localDateString(days[days.length - 1]);
 
   const {
     active,
@@ -112,7 +107,7 @@ const HabitsPage = () => {
     !habit.daysOfWeek?.length || habit.daysOfWeek.includes(date.getDay());
 
   const handleToggle = async (habit, date) => {
-    const key = toDateKey(date);
+    const key = localDateString(date);
     try {
       await toggle(habit.id, key);
     } catch {
@@ -272,7 +267,7 @@ const HabitsPage = () => {
         {/* The week's cells */}
         <Box sx={{ display: 'flex', gap: { xs: 0.375, sm: 0.75 }, flexShrink: 0 }}>
           {days.map((date) => {
-            const key = toDateKey(date);
+            const key = localDateString(date);
             const scheduled = isScheduled(habit, date);
             const done = isDone(habit.id, key);
             const inert = !scheduled || habit.archived;
@@ -480,7 +475,7 @@ const HabitsPage = () => {
 
               <Box sx={{ display: 'flex', gap: { xs: 0.375, sm: 0.75 }, flexShrink: 0 }}>
                 {days.map((date) => {
-                  const key = toDateKey(date);
+                  const key = localDateString(date);
                   const isToday = key === todayKey;
                   return (
                     <Box

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useQuery, useMutation } from '@apollo/client';
-import { toLocalDateString } from "../utils/dateUtils";
+import { displayCalendarDate, localDateString, startOfLocalDay } from "@geeksuite/utils";
 import {
   Paper,
   Box,
@@ -64,8 +64,7 @@ const QuickHarvestEntry = ({ onSuccess, locations = [], variant = "panel" }) => 
     const last = forLocation[0];
     const lastUTCDate = new Date(last.date);
     const lastDateLocal = new Date(lastUTCDate.getUTCFullYear(), lastUTCDate.getUTCMonth(), lastUTCDate.getUTCDate());
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const today = startOfLocalDay();
     const diffDays = Math.round((today - lastDateLocal) / (1000 * 60 * 60 * 24));
     return { lastHarvest: last, daysSinceLastHarvest: Math.max(1, diffDays) };
   }, [locationId, allEggs]);
@@ -94,7 +93,7 @@ const QuickHarvestEntry = ({ onSuccess, locations = [], variant = "panel" }) => 
     if (eggCount === 0) { setError("Enter at least 1 egg"); return; }
     setError("");
     const payload = {
-      date: toLocalDateString(new Date()),
+      date: localDateString(new Date()),
       eggsCount: eggCount,
       daysObserved: days,
       source: "manual",
@@ -143,7 +142,7 @@ const QuickHarvestEntry = ({ onSuccess, locations = [], variant = "panel" }) => 
           {lastHarvest ? (
             <Chip
               size="small"
-              label={`Last harvest: ${ new Date(lastHarvest.date).toLocaleDateString(undefined, { timeZone: 'UTC' }) } (${ daysSinceLastHarvest } day${ daysSinceLastHarvest !== 1 ? "s" : "" } ago) — ${ lastHarvest.eggsCount } egg${ lastHarvest.eggsCount !== 1 ? "s" : "" }`}
+              label={`Last harvest: ${ displayCalendarDate(lastHarvest.date) } (${ daysSinceLastHarvest } day${ daysSinceLastHarvest !== 1 ? "s" : "" } ago) — ${ lastHarvest.eggsCount } egg${ lastHarvest.eggsCount !== 1 ? "s" : "" }`}
               sx={{ bgcolor: (theme) => alpha(theme.palette.success.main, 0.1), color: "text.primary" }}
             />
           ) : (
@@ -160,6 +159,7 @@ const QuickHarvestEntry = ({ onSuccess, locations = [], variant = "panel" }) => 
         <IconButton
           onClick={() => setEggCount(prev => Math.max(0, prev - 1))}
           disabled={eggCount === 0}
+          aria-label="Remove one egg"
           sx={{
             width: 56, height: 56,
             bgcolor: (theme) => alpha(theme.palette.error.main, 0.08),
@@ -180,6 +180,7 @@ const QuickHarvestEntry = ({ onSuccess, locations = [], variant = "panel" }) => 
 
         <IconButton
           onClick={() => setEggCount(prev => prev + 1)}
+          aria-label="Add one egg"
           sx={{
             width: 56, height: 56,
             bgcolor: (theme) => alpha(theme.palette.success.main, 0.08),

@@ -1,5 +1,5 @@
 import { apiService } from './apiService.js';
-import { formatDateLocal } from '../utils/dateUtils.js';
+import { localDateString } from '@geeksuite/utils';
 import logger from '../utils/logger.js';
 import { restClient as restApi } from './restClient.js';
 
@@ -389,7 +389,7 @@ export const fitnessGeekService = {
   // Format date for API
   formatDate: (date) => {
     if (typeof date === 'string') return date;
-    return formatDateLocal(date);
+    return localDateString(date);
   },
 
   // Get meal type display name

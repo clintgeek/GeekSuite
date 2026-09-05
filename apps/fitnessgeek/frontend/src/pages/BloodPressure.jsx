@@ -29,7 +29,7 @@ import BPReport from '../components/BloodPressure/BPReport.jsx';
 import BPHRChart from '../components/BloodPressure/BPHRChart.jsx';
 import { bpService } from '../services/bpService.js';
 import { fitnessGeekService } from '../services/fitnessGeekService.js';
-import { getTodayLocal, formatDateLocal } from '../utils/dateUtils.js';
+import { localDateString } from '@geeksuite/utils';
 import logger from '../utils/logger.js';
 
 const BloodPressure = () => {
@@ -154,7 +154,7 @@ const BloodPressure = () => {
 
   const loadHRSeries = async (date) => {
     try {
-      const ymd = (date || getTodayLocal());
+      const ymd = (date || localDateString());
       const resp = await fitnessGeekService.get(`/fitness/garmin/heart-rate/${ymd}`);
       const data = resp.data || resp?.data?.data || resp;
       if (data && data.series) setHrSeries(data.series);
@@ -223,11 +223,11 @@ const BloodPressure = () => {
   };
 
   const getTodayBP = () => {
-    const today = getTodayLocal();
+    const today = localDateString();
     return bpLogs.find(log => {
       // Convert the stored UTC date to local date for comparison
       const logDate = new Date(log.log_date);
-      const logDateLocal = formatDateLocal(logDate);
+      const logDateLocal = localDateString(logDate);
       return logDateLocal === today;
     });
   };

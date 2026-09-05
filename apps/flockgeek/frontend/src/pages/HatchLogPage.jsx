@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useQuery, useMutation } from '@apollo/client';
-import { toLocalDateString } from "../utils/dateUtils";
+import { displayCalendarDate, localDateString } from "@geeksuite/utils";
 import { Container, Button, Box, Alert, TextField, Chip } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -71,8 +71,8 @@ const HatchLogPage = () => {
   const handleEditEvent = (event) => {
     setEditingEvent(event);
     setEditFormData({
-      setDate: event.setDate ? toLocalDateString(event.setDate) : "",
-      hatchDate: event.hatchDate ? toLocalDateString(event.hatchDate) : "",
+      setDate: event.setDate ? localDateString(event.setDate) : "",
+      hatchDate: event.hatchDate ? localDateString(event.hatchDate) : "",
       eggsSet: event.eggsSet || "", eggsFertile: event.eggsFertile || "",
       chicksHatched: event.chicksHatched || "", pullets: event.pullets || "",
       cockerels: event.cockerels || "", notes: event.notes || ""
@@ -107,7 +107,7 @@ const HatchLogPage = () => {
 
   const isHatched = (event) => event.hatchDate && new Date(event.hatchDate) <= new Date();
   const hatchSuccessRate = (event) => !event.eggsSet ? 0 : Math.round((event.chicksHatched / event.eggsSet) * 100);
-  const asDate = (value) => value ? new Date(value).toLocaleDateString(undefined, { timeZone: 'UTC' }) : "-";
+  const asDate = (value) => displayCalendarDate(value) || "-";
 
   /**
    * Ten columns is the widest table in the suite; below `md` `ResponsiveTable`

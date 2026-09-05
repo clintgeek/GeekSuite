@@ -29,7 +29,8 @@ export default defineConfig(({ mode }) => {
     },
     resolve: {
       alias: {
-        '@geeksuite/ui': path.resolve(__dirname, '../../../packages/ui/src/index.js')
+        '@geeksuite/ui': path.resolve(__dirname, '../../../packages/ui/src/index.js'),
+        '@geeksuite/utils': path.resolve(__dirname, '../../../packages/utils/src/index.js')
       },
       // packages/ui is compiled from source (alias above) and pnpm materializes
       // a private @mui/material for its peer range; two MUI copies split the

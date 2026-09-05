@@ -1,5 +1,5 @@
 import { format } from 'date-fns';
-import { toLocalDateString } from './dateUtils';
+import { localDateString } from '@geeksuite/utils';
 
 // Priority is 1=High, 2=Medium, 3=Low, null/undefined=None (sorts last) —
 // matches the app-wide convention documented in context/TaskContext.jsx.
@@ -62,7 +62,7 @@ function formatTaskLine(task) {
 export function tasksToMarkdown(tasks) {
   const groups = new Map();
   (tasks || []).forEach((task) => {
-    const key = task.dueDate ? toLocalDateString(task.dueDate) : null;
+    const key = task.dueDate ? localDateString(task.dueDate) : null;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(task);
   });
@@ -95,5 +95,5 @@ export function downloadFile(content, filename, mimeType) {
 }
 
 export function exportFilename(extension) {
-  return `bujogeek-export-${toLocalDateString(new Date())}.${extension}`;
+  return `bujogeek-export-${localDateString(new Date())}.${extension}`;
 }

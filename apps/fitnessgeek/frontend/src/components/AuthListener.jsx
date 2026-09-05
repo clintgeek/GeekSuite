@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useAuth } from '@geeksuite/auth';
 import { streakService } from '../services/streakService';
-import { getTodayLocal } from '../utils/dateUtils';
+import { localDateString } from '@geeksuite/utils';
 import logger from '../utils/logger';
 
 /**
@@ -19,7 +19,7 @@ export default function AuthListener() {
 
   const recordDailyLoginIfNeeded = async () => {
     try {
-      const todayLocal = getTodayLocal();
+      const todayLocal = localDateString();
 
       const key = 'fitnessgeek_last_login_recorded';
       const last = localStorage.getItem(key);

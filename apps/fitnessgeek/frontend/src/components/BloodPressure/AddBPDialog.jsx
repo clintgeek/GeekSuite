@@ -11,7 +11,7 @@ import {
   MonitorHeart as BPIcon,
   Add as AddIcon
 } from '@mui/icons-material';
-import { getTodayLocal } from '../../utils/dateUtils.js';
+import { localDateString } from '@geeksuite/utils';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
 
 const AddBPDialog = ({ open, onClose, onAdd, existingTodayBP = null }) => {
@@ -20,7 +20,7 @@ const AddBPDialog = ({ open, onClose, onAdd, existingTodayBP = null }) => {
   const [systolic, setSystolic] = useState('');
   const [diastolic, setDiastolic] = useState('');
   const [pulse, setPulse] = useState('');
-  const [date, setDate] = useState(getTodayLocal());
+  const [date, setDate] = useState(localDateString());
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -76,7 +76,7 @@ const AddBPDialog = ({ open, onClose, onAdd, existingTodayBP = null }) => {
       setSystolic('');
       setDiastolic('');
       setPulse('');
-      setDate(getTodayLocal());
+      setDate(localDateString());
       setError('');
       onClose();
     } catch (error) {
@@ -90,7 +90,7 @@ const AddBPDialog = ({ open, onClose, onAdd, existingTodayBP = null }) => {
     setSystolic('');
     setDiastolic('');
     setPulse('');
-    setDate(getTodayLocal());
+    setDate(localDateString());
     setError('');
     onClose();
   };

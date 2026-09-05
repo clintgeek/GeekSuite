@@ -24,7 +24,7 @@ import {
   Star as StarIcon
 } from '@mui/icons-material';
 import { reportsService } from '../services/reportsService.js';
-import { getTodayLocal } from '../utils/dateUtils';
+import { localDateString } from '@geeksuite/utils';
 import { insightsService } from '../services/insightsService.js';
 
 const RANGE_OPTIONS = ['7', '14', '30'];
@@ -91,7 +91,7 @@ const Reports = () => {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `fitnessgeek-food-report-${getTodayLocal()}.csv`;
+      a.download = `fitnessgeek-food-report-${localDateString()}.csv`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

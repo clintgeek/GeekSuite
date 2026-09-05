@@ -1,12 +1,12 @@
 import { useQuery } from '@apollo/client';
 import { GET_BIRDS, GET_FLOCK_GROUPS, GET_EGG_PRODUCTIONS, GET_HATCH_EVENTS } from '../graphql/queries';
-import { toLocalDateString } from '../utils/dateUtils';
+import { localDateString } from '@geeksuite/utils';
 
 const now = new Date();
-const todayStr = toLocalDateString(now);
+const todayStr = localDateString(now);
 const fourteenDaysAgo = new Date(now);
 fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
-const rollingStartStr = toLocalDateString(fourteenDaysAgo);
+const rollingStartStr = localDateString(fourteenDaysAgo);
 
 export default function useHomeData() {
   const { data: birdsData, loading: birdsLoading, error: birdsError } = useQuery(GET_BIRDS);
