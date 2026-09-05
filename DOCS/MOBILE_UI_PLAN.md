@@ -191,7 +191,12 @@ DM Serif Display wordmark and sheet titles; slate midnight surfaces `#010409/#0f
 sky accent; amber progress; frosted top bar; shelf icon set in the drawer; the serif is never
 below 18px.
 
-### 3.7 Order of work (each step deploys on its own)
+### 3.7 Order of work (each step deploys on its own) — **all seven landed 2026-09-04**
+
+Commits, in order: fonts/manifest `f7425b4` · views extracted `d78e5a2` · theme tones
+`b4fb471` · library `108995a` · settings/add/basket `13cbc42` · detail `cc04cc4` · reader
+`d4a5f73` · Tailwind removed `5b6bb3f`. Verified with a Playwright harness that intercepts the
+API with fixtures (scratch, not in repo) at iPhone 14 in both modes and at 1280px.
 1. Shared primitives + shell fixes (§2) with tests in `packages/ui/src/__tests__`. **M**
 2. Fonts and manifest: load DM Serif Display, drop Libre Baskerville, fix `theme_color`
    and `short_name`. **XS**
@@ -306,8 +311,8 @@ Identity notes name what must survive. Effort assumes §2 primitives exist.
 
 | Pass | Scope | Effort | Why this order |
 |------|-------|--------|----------------|
-| M0 | §2 primitives + `GeekShell`/`GeekTopBar` fixes + `viewport-fit` in all eight `index.html` | M | Everything else consumes it; the `dvh`/safe-area fix alone improves every app |
-| M1 | BookGeek pilot (§3), one deploy per step | L | Heaviest case, clearest mobile job, drains the Tailwind CDN debt |
+| M0 | ~~§2 primitives + shell fixes + `viewport-fit`~~ **landed 2026-09-04** (`daf2071`..`578e5ba`, plus `fafac74` drawer-width fix) | M | Everything else consumes it |
+| M1 | ~~BookGeek pilot (§3)~~ **landed 2026-09-04** (see §3.7) | L | Heaviest case, clearest mobile job, drained the Tailwind CDN debt |
 | M2 | fitnessgeek → bujogeek → notegeek | M each | Bottom navs exist; mostly sheets, dialogs, targets |
 | M3 | flockgeek | L | Tables → cards is the big one; bottom nav decision |
 | M4 | storygeek, basegeek | M + S–M | Breakpoint alignment and dialogs |
@@ -332,4 +337,4 @@ Before merging any UI work, at 390×844 in both modes:
 - Safe areas respected in standalone (notch, home indicator).
 - Identity survives: the app's fonts, chrome color, accent, and voice are present on the phone.
 
-*Drafted 2026-09-04. Status: proposal — awaiting Chef's read.*
+*Drafted 2026-09-04; M0 and M1 landed the same day. Next: M2 (fitnessgeek → bujogeek → notegeek).*

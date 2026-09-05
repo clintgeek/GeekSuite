@@ -91,9 +91,9 @@ cycle so the ordering rationale stays visible; detail moved to `SUITE_TODO.md` "
 
 ## Tier 5 — Deferred or challenged (do the mitigation, not the migration)
 
-27. **bookgeek off the runtime Tailwind CDN** — XL as a migration. Mitigate instead: vendor the
-    CDN script (S) so the PWA works offline, and keep the incremental MUI migration from the
-    unification audit. *UI*
+27. ~~**bookgeek off the runtime Tailwind CDN**~~ — **Done 2026-09-04** as a side effect of the
+    Pocket Pass (DOCS/MOBILE_UI_PLAN.md): every view rewritten in MUI, CDN script removed
+    (`5b6bb3f`). *UI*
 28. **startgeek joins the suite** — theme wiring means pulling a deliberately standalone app
     into the workspace build. Do the **adaptive wallpaper scrim** alone (S); defer the wiring
     until there's a second reason to touch that build. *UI*
