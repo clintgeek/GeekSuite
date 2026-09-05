@@ -9,6 +9,7 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
+| R86 | Q50: browser clients heal a CSRF 403 once (retry with fresh header, then one reload per session) — auth, api-client, startgeek | sonnet | packages/auth, packages/api-client, startgeek lib, CONTEXT | 09-05 17:20 |
 | R83 | basegeek console gets its first vitest + RTL suite (Home, AIGeek tabs, ResponsiveTable, Account, UserGeek, safeRedirect) + ci job | sonnet | basegeek packages/ui, ci.yml, lockfile | 09-05 17:00 |
 | R84 | harness: axe-core a11y pass per scene, report-only (--enforce-a11y), waivers, selftest fixture, top-rules report | opus | tools/mobile-harness, mobile-harness.yml, lockfile, MOBILE_UI_PLAN §2 | 09-05 17:00 |
 | R85 | fitnessgeek frontend code-splitting: lazy routes, vendor chunks, on-demand heavy libs; SW precache check; harness stays 0 | opus | fitnessgeek frontend, CONTEXT | 09-05 17:00 |
@@ -34,7 +35,6 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | Q44 | basegeek config/database.js getAIGeekConnection has no error handler (a bad URI crashes the process); appConnections.js sibling has one | XS | XS |
 | Q48 | consolidation plan §12: 14 open follow-ups (search vs foodCatalogFilter, third dedupe ladder, soft-deleted barcode, caller-less methods, goals_met dead flags, snapshot-vs-catalog recompute, …) — triage | Chef triage | M |
 | Q49 | ai:usage permission is claimed by no route and not in the default mint set — either gate the two /usage routes with it and add it to the defaults, or drop the enum value | XS | XS |
-| Q50 | startgeek (and the shared auth client): on a 403 csrf_token_missing/invalid, refresh the page once so a stale pre-deploy tab heals itself instead of failing silently under enforce | XS | XS |
 | Q20b | aiGeek: simulated streaming (F-21) and user-gated selection (F-14) documented, not fixed | design | S |
 | Q14 | storygeek CanonCard summary text through Narration too (agent left it as a separate render path) | Chef's call | XS |
 
