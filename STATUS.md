@@ -1,7 +1,7 @@
 # GeekSuite — Status
 
-*Updated 2026-09-05 after the second wave. First wave (38 commits) deployed 2026-09-05 ~02:30; the
-second wave (M3–M5) is pushed with this update.*
+*Updated 2026-09-05. Three deploys today: first wave ~02:30, second wave (M3–M5) ~08:30, and
+Chef's three follow-ups ~10:00 — all verified live.*
 
 ## Read this first
 
@@ -53,7 +53,21 @@ Chef's decisions: opt-in (off by default), `??` prefix, model chosen by aiGeek a
 Built: `glanceAsk` on the server (`e80cb5a`) and the `??` mode with answer card and setting on the
 client (`b0fe9c4`). To use it: turn on "Ask the suite with AI" in StartGeek settings, and set the
 `startgeek` row in AIGeek → App Routing (the dialog can recommend a free model).
-Step 5 (command routing fallback for `>` / `<`) is not built.
+Step 5 (command routing fallback) landed 2026-09-05 (`dfe7473`).
+
+### Chef's three follow-ups (2026-09-05, deployed)
+
+- **basegeek Home data** (`f45a5af`): the app registry seeds its missing default rows on boot —
+  production had *zero* rows; the first boot created all ten. fitnessgeek and notegeek now
+  answer `/api/health`, so Home's dots reflect a real 200.
+- **AIGeek phase D** (`4d4cdc2`, `f265a0b`, `13a7205`): dead providers deleted, Anthropic rate
+  0.006; admin-only routes (AIGeek, UserGeek, DataGeek) gated on the client with a toast redirect
+  and hidden from the sidebar; the page split into `pages/aigeek/` (hook + tabs + dialogs), Free
+  Tier merged into Catalog with inline editing, a test-prompt playground. Two one-line `llm7`
+  references remain in `aiDirectorService.js`/`rateLimitService.js` (a ghost zero-model card).
+- **Ask step 5** (`dfe7473`): `>` / `<` capture falls back to an aiGeek draft with a preview chip
+  when the parser can't read the line and Ask is on. The `<` gate is a judgement call in
+  `apps/startgeek/src/lib/captureDraft.js`.
 
 ### Housekeeping
 
@@ -78,5 +92,5 @@ app with no new warnings.
 ## Next
 
 1. Poke at every app on a phone; report what feels wrong.
-2. M6 guardrails.
-3. Ask step 5, when wanted.
+2. M6 guardrails (harness into the repo; fix the moved Playwright path first).
+3. `DOCS/TODO_ORDER.md` #17 shared date utilities, #21 fitnessgeek UserSettings consolidation.
