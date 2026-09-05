@@ -1,0 +1,599 @@
+# fitnessgeek Model Consolidation — the plan for the remaining 12 pairs
+
+fitnessgeek's backend (`apps/fitnessgeek/backend/src/models/*`) and basegeek's GraphQL gateway
+(`apps/basegeek/packages/api/src/graphql/fitnessgeek/models/*`) each declare thirteen Mongoose
+models against **the same thirteen collections in the same `fitnessgeek` database**. One of the
+thirteen, `UserSettings`, was consolidated on 2026-09-05 into
+`packages/schemas/fitnessgeek/userSettings.js` behind `createUserSettingsSchema(mongoose)`, with a
+tripwire test on each side and the Garmin encryption hooks living in the shared module. That is the
+template. This document diffs the remaining twelve pairs field by field, says who reads and writes
+each collection from each side, orders the work safest-to-riskiest, and lists what has to be fixed
+*before* any of it starts — because the audit turned up one divergence that is destroying data in
+production right now and three more that are latent. **Read the pre-work list (§5) first; two of its
+items are bug fixes that should ship on their own, ahead of any consolidation.**
+
+---
+
+## 0. Scope and headline numbers
+
+| | |
+|---|---|
+| Model pairs total | **13** |
+| Already consolidated | **1** (`UserSettings`, 2026-09-05) |
+| Remaining | **12** |
+| …of which are basegeek orphans (delete, don't consolidate) | **2** (`AIFoodPromptCache`, `MedicationLog`) |
+| …genuinely needing a shared schema | **10** |
+| Conflicting divergences | **4** — 1 in the schema field set, 3 in statics |
+| Drift divergences | 3 (statics one side has and the other doesn't) |
+| Harmless divergences | the rest — connection binding, import order, trailing newline |
+| Index divergences | **0.** Every index on every pair is identical, character for character |
+| Estimated total | **≈ 32–36 hours**, ~55% of it in the last three pairs |
+
+The good news, and it is the single most important finding: **the schema field definitions are
+byte-identical on 11 of the 12 remaining pairs.** `diff` on each pair produces only the connection
+binding (`mongoose.model` → `fitnessConn.model`, plus the `getAppConnection` import), the
+`requireUser`/ownership imports, and basegeek's extra ownership statics. The one exception is
+`DailySummary`. This makes consolidation a much smaller job than "13× the UserSettings drift hazard"
+in `DOCS/SUITE_TODO.md` implies — but the one exception is live and it is losing data.
+
+---
+
+## 1. Divergence tables
+
+### 1a. Every pair, at a glance
+
+Read "schema" as the object literal passed to `new mongoose.Schema(...)` plus every `.index()`,
+virtual, `toJSON`/`toObject` setting and instance method.
+
+| # | Model | Collection | Schema fields | Indexes | Statics / hooks | Verdict |
+|---|-------|-----------|---------------|---------|-----------------|---------|
+| 1 | `Weight` | `weights` | identical | identical | none either side | harmless only |
+| 2 | `BloodPressure` | `bloodpressures` | identical | identical | none either side | harmless only |
+| 3 | `LoginStreak` | `loginstreaks` | identical | identical | BG adds `requireUser` guard | drift (guard) |
+| 4 | `Medication` | `medications` | identical | identical | none either side | harmless only |
+| 5 | `MedicationLog` | `medicationlogs` | identical | identical | none either side | **BG orphan — delete** |
+| 6 | `AIFoodPromptCache` | `aifoodpromptcaches` | identical | identical | none either side | **BG orphan — delete** |
+| 7 | `WeightGoals` | `weightgoals` | identical | identical | BG adds `requireUser` ×3 | drift (guard) |
+| 8 | `NutritionGoals` | `nutritiongoals` | identical | identical | BG adds `requireUser` ×3 | drift (guard) |
+| 9 | `Meal` | `meals` | identical | identical | BG adds `findOwned`; BG's 3 list statics are owner-scoped, FG's are not | **conflicting** |
+| 10 | `FoodItem` | `fooditems` | identical | identical | BG adds `findAccessible`/`findAccessibleMany`; `findOrCreate` + `search` identical | drift (2 statics) |
+| 11 | `FoodLog` | `foodlogs` | identical | identical | different date normalizer | **conflicting** |
+| 12 | `DailySummary` | `dailysummaries` | **BG is missing `totals.net_carbs_grams`** | identical | different date normalizer; BG's `updateFromLogs` omits the net-carb accumulation | **conflicting ×2** |
+
+Neither side passes an explicit `collection:` option anywhere, and every model name matches across
+the two sides, so Mongoose's default pluralization lands both models on the same collection. That is
+verified, not assumed — `grep -rn "collection:" ` over both model directories returns nothing.
+
+### 1b. The conflicting divergences, in detail
+
+#### C1 — `DailySummary.totals.net_carbs_grams` is missing on the gateway side · **live data loss**
+
+| | fitnessgeek | basegeek |
+|---|---|---|
+| Schema path | `apps/fitnessgeek/backend/src/models/DailySummary.js:41-45` — `{ type: Number, default: 0, min: 0 }` | **absent.** `models/DailySummary.js:39` (`fiber_grams`) is followed directly by `:44` (`sugar_grams`) |
+| Accumulator init | `DailySummary.js:143` — `net_carbs_grams: 0` | **absent** (`models/DailySummary.js:149-156`) |
+| Accumulation | `DailySummary.js:172` — `Math.max(0, (carbs − fiber) × multiplier)` | **absent** |
+| Write | `DailySummary.js:201-209` — `findOneAndUpdate(..., { totals, meals, goals_met, ... })` | `models/DailySummary.js:209-218` — same shape |
+
+Both `updateFromLogs` implementations write the whole `totals` sub-document through
+`findOneAndUpdate`. Mongoose strict mode drops an undeclared path from that write silently. So **every
+call to basegeek's `updateFromLogs` erases `totals.net_carbs_grams` from the stored document**, and
+basegeek's is now the copy that runs on the hot path:
+
+- `apps/basegeek/packages/api/src/graphql/fitnessgeek/resolvers.js:456` — the `dailySummary` **query**
+  calls `updateFromLogs`, so merely *reading* the day wipes the field
+- `resolvers.js:791` — `refreshDailySummary`
+- `resolvers.js:822, 917, 935, 948, 1130` — every food-log create / update / delete / `logMeal`
+  mutation, i.e. the four writes the frontend switched onto the gateway on 2026-09-05
+  (`DOCS/SUITE_TODO.md` item 2, gateway commit `79b1b57`)
+
+Meanwhile the field is a declared, queried, rendered part of the product:
+
+- `apps/basegeek/packages/api/src/graphql/fitnessgeek/typeDefs.js:436` — `net_carbs_grams: Float` on
+  `DailySummaryTotals`
+- `apps/fitnessgeek/frontend/src/services/apiService.js:147` and `:283` — both the daily-summary query
+  and the `RefreshDailySummary` mutation select it
+- `apps/fitnessgeek/frontend/src/pages/DashboardNew.jsx:173` —
+  `consumed: summary.totals?.net_carbs_grams || 0`, the keto net-carb ring
+
+The resolver returns `summary.totals` straight from the model, so the ring reads `0` for any user
+whose day has been touched through the gateway. Given the frontend now writes food logs through the
+gateway, that is every keto user, every day. **This is a shipped regression from 2026-09-05, not a
+consolidation risk.** Fix it standalone (§5, PRE-1).
+
+Classification: nominally *drift* — one side has a field the other lacks — but because both sides
+write the parent sub-document wholesale, it behaves as a *conflict* and destroys committed data.
+
+#### C2 / C3 — two hand-rolled date normalizers vs `@geeksuite/utils`
+
+| | fitnessgeek | basegeek |
+|---|---|---|
+| `DailySummary` | `import { toUtcMidnight } from '@geeksuite/utils'` (`DailySummary.js:2`), used at `:101, :124, :127, :215, :218` | local `toUtcDate()` at `models/DailySummary.js:100-109`, used at `:112, :136, :139, :226, :229` |
+| `FoodLog` | `import { toUtcMidnight } from '@geeksuite/utils'` (`FoodLog.js:2`), used at `:104, :107, :120, :123, :144, :147` | local `toUtcDate()` at `models/FoodLog.js:106-117`, used at `:121, :124, :138, :141, :164, :167` |
+
+These are not equivalent. basegeek's copy branches on `typeof === 'string'` and splits on `-`
+unconditionally; `packages/utils/src/dates.js:65-74` gates that branch behind a `YYYY-MM-DD` regex and
+falls through to `new Date(value)` otherwise. Measured:
+
+| input | basegeek `toUtcDate` | `@geeksuite/utils` `toUtcMidnight` |
+|---|---|---|
+| `'2026-09-05'` | Sep 5 00:00Z ✅ | Sep 5 00:00Z ✅ |
+| `'2026-09-05T14:00:00Z'` | **Aug 31 00:00Z** ❌ | Sep 5 00:00Z ✅ |
+| `'2026-09-05T14:00:00.000Z'` | **Aug 31 00:00Z** ❌ | Sep 5 00:00Z ✅ |
+| a numeric timestamp | keeps time-of-day (`FoodLog` variant) ❌ | Sep 4 00:00Z ✅ |
+
+`Number('05T14:00:00Z')` is `NaN`, `Date.UTC(2026, 8, NaN)` is not an error, and the result is a
+plausible-looking Date four days off. Every caller today passes `yyyy-MM-dd`
+(`resolvers.js:453`, `:790` both `format(new Date(), 'yyyy-MM-dd')`), so this is **latent, not live** —
+but the GraphQL type is `date: String`, so nothing stops a client sending an ISO instant, and it would
+silently read and write the wrong calendar day. `apps/fitnessgeek/DOCS/CONTEXT.md` is explicit about
+this class of bug: five private copies of this normalizer were deleted into `@geeksuite/utils` on
+2026-09-05, with "**Do not add a sixth** — import it." basegeek has copies six and seven.
+
+basegeek's api already depends on `@geeksuite/utils` (`apps/basegeek/packages/api/package.json:19`), so
+the fix is a one-line import swap per file. Do it as pre-work (§5, PRE-2), not during consolidation.
+
+#### C4 — `Meal`'s list statics disagree on what a missing `userId` means
+
+| static | fitnessgeek (`models/Meal.js`) | basegeek (`models/Meal.js`) |
+|---|---|---|
+| `getActiveMeals` | `:55-60` — `if (userId) query.user_id = userId;` → **no userId returns every user's meals** | `:71-77` — `requireUser(userId)` throws `UNAUTHORIZED` |
+| `getMealsByType` | `:62-67` — same optional scoping | `:79-85` — `requireUser` |
+| `searchMeals` | `:69-75` — same optional scoping | `:87-93` — `requireUser` |
+| `findOwned` | absent | `:64-69` — id-validated, owner-scoped, returns `null` for malformed / missing / deleted / not-yours |
+
+Every live fitnessgeek caller does pass a `userId` — `apps/fitnessgeek/backend/src/routes/mealRoutes.js:19,
+:21, :23` all take it from the authenticated request — so this is latent too. But it means the two
+sides do **not** have the same static, and moving basegeek's version into a shared module would be a
+deliberate behavior tightening on the fitnessgeek side, not a refactor. See §4 (pair 9) for how to
+handle that, and §3 for why the answer is probably "don't share the statics at all."
+
+### 1c. The drift divergences
+
+| Model | What one side has | Who depends on it |
+|---|---|---|
+| `FoodItem` | BG `findAccessible` (`models/FoodItem.js:122-127`) and `findAccessibleMany` (`:129-135`) — global-or-mine catalog read scope, built on `foodCatalogFilter` in `graphql/fitnessgeek/ownership.js:40-48` | basegeek only: `resolvers.js:32, 76, 82, 396`. fitnessgeek has no equivalent and no caller — its REST routes hand-roll the same filter inline (`routes/foodRoutes.js:49, 92, 191, 237, 385, 442`) |
+| `LoginStreak`, `WeightGoals`, `NutritionGoals` | BG `requireUser(userId)` at the head of each static | basegeek's fail-closed ownership posture (`ownership.js:22-29`, mirroring the bujogeek service layer). fitnessgeek's callers are all post-auth, so nothing there depends on the *absence* of the guard |
+| `DailySummary`, `FoodLog`, `Meal` | same `requireUser` additions | as above |
+
+`FoodItem.findOrCreate` (FG `:116-171` / BG `:137-192`) and `FoodItem.search` (FG `:173-205` / BG
+`:194-226`) are **identical**, including the barcode → `(source, source_id)` → `(name, brand)` dedupe
+ladder. That matters: the gateway's `addFoodLog` took over the on-the-fly food creation path on
+2026-09-05 and runs the same dedupe REST used to, so the two sides cannot mint different rows for the
+same food.
+
+### 1d. Harmless divergences (present on all 12)
+
+- Connection binding: FG `export default mongoose.model('X', schema)` (default connection, opened by
+  `apps/fitnessgeek/backend/src/config/database.js:18` against `…/fitnessgeek`); BG
+  `export default fitnessConn.model('X', schema)` where `fitnessConn = getAppConnection('fitnessgeek')`
+  (`graphql/shared/appConnections.js:21-41`, `mongoose.createConnection` against the same database).
+  **This stays app-side forever** — it is the whole reason the shared factory takes `mongoose` as a
+  parameter and never registers a model itself.
+- Import block ordering and the `ownership.js` import.
+- `BloodPressure` and `Weight` both end without a trailing newline on both sides. Leave it; changing it
+  adds diff noise to a file you are about to delete.
+
+---
+
+## 2. Who reads and writes each collection
+
+Which side's semantics must win is a function of who actually calls it. Tests and mocks excluded.
+
+| Collection | fitnessgeek backend | basegeek gateway | Semantics owner |
+|---|---|---|---|
+| `usersettings` | `routes/settingsRoutes.js:5`, `goalRoutes.js:4`, `logRoutes.js:7`, `foodRoutes.js:6`, `userRoutes.js:6`, `influxRoutes.js:7`, `services/unifiedFoodService.js:24`, `services/aiRecoveryService.js:3`, `services/garminConnectService.js:5`, `controllers/weightController.js:5`, `scripts/encryptGarminPasswords.js:133` | `resolvers.js:8` | **shared** (done) |
+| `weights` | `controllers/weightController.js:2`, `services/foodReportService.js:4`, `services/aiInsightsService.js:12`, `scripts/importWeight.js:12` | `resolvers.js:9` | tie — schemas identical |
+| `bloodpressures` | `controllers/bloodPressureController.js:2`, `services/aiInsightsService.js:13`, `scripts/importBloodPressureSimple.js:12` | `resolvers.js:15` | tie |
+| `loginstreaks` | `routes/streakRoutes.js:4` | `resolvers.js:16` | tie |
+| `medications` | `routes/medicationRoutes.js:4` | `resolvers.js:14` | tie |
+| `medicationlogs` | `routes/medicationRoutes.js:5` (create `:231`, read `:257`, cascade delete `:276`) | **nobody** | **fitnessgeek** |
+| `aifoodpromptcaches` | `services/aiClassificationCacheService.js:14`, `services/aiFoodPromptCacheService.js:3` | **nobody** | **fitnessgeek** |
+| `weightgoals` | `services/aiInsightsService.js:15` (read-only) | `resolvers.js:18` | **basegeek** (only writer) |
+| `nutritiongoals` | `routes/aiCoachRoutes.js:6`, `services/foodReportService.js:3`, `services/aiInsightsService.js:14` | `resolvers.js:10` | **basegeek** |
+| `meals` | `routes/mealRoutes.js:4` | `resolvers.js:13` (`:415, :416, :420, :796`) | **basegeek** — tighter, and it owns `logMeal` |
+| `fooditems` | `routes/foodRoutes.js:4`, `services/unifiedFoodService.js:22` | `resolvers.js:11` | **basegeek** for catalog reads (`findAccessible`); dedupe is identical |
+| `foodlogs` | `routes/logRoutes.js:5`, `foodRoutes.js:5`, `aiCoachRoutes.js:5`, `services/foodReportService.js:2`, `aiInsightsService.js:11`, `unifiedFoodService.js:23` | `resolvers.js:12` | **basegeek** for writes (took over 2026-09-05); fitnessgeek still reads heavily |
+| `dailysummaries` | `routes/logRoutes.js:6` (`:367`), `routes/summaryRoutes.js:4` (`:18, :48, :79, :111, :149`) | `resolvers.js:17` (`:456, :791, :822, :917, :935, :948, :1130`) | **fitnessgeek** — its field set is the superset (see C1) |
+
+Two things fall out of this table:
+
+1. **`AIFoodPromptCache` and `MedicationLog` are basegeek orphans.** Nothing outside the model file
+   itself mentions either name anywhere in `apps/basegeek/packages` — no resolver, no typeDef, no
+   test. basegeek's medication schema exposes `fitnessMedications` / `addFitnessMedication` /
+   `updateFitnessMedication` / `deleteFitnessMedication` (`typeDefs.js:607-608, 648-650`) but nothing
+   for medication *logs*. These two are not consolidation candidates; they are the flockgeek/notegeek
+   dead-code deletion from `DOCS/SUITE_TODO.md` item 1, one directory over. Delete them and the pair
+   count drops from 12 to 10 for free.
+2. **`DailySummary` is the one collection where fitnessgeek's semantics must win**, and it is also the
+   riskiest pair. The shared definition must be the *union* — fitnessgeek's, `net_carbs_grams`
+   included. Promoting basegeek's copy would make the live bug permanent.
+
+---
+
+## 3. The runtime constraint, and how hooks and statics move
+
+### The module-system facts
+
+| Package | `"type"` | Consequence |
+|---|---|---|
+| `apps/fitnessgeek/backend` | `module` (ESM), node 20 | `import`s the shared module through Node's ESM→CJS interop |
+| `apps/basegeek/packages/api` | `module` (ESM), node 20 | same |
+| `packages/schemas` | *unset* → **CommonJS, deliberately** | `require`-able and `import`-able; no build step; usable by a future CJS consumer |
+| `packages/crypto-vault` | *unset* → CommonJS | the precedent `@geeksuite/schemas` already depends on |
+| `packages/utils` | `module` — **ESM-only, no CJS entry** | **cannot be `require()`d from `packages/schemas`** |
+
+> **Correction to file in flight.** `packages/schemas/fitnessgeek/userSettings.js:46-48` and
+> `apps/basegeek/packages/api/src/__tests__/userSettingsSchemaParity.test.js:31` both say
+> "fitnessgeek's backend is CJS." That stopped being true on 2026-09-05 when the backend moved to
+> node 20 + ESM specifically so it could consume `@geeksuite/utils` (`apps/fitnessgeek/DOCS/CONTEXT.md`,
+> Runtime table). The CJS decision for `@geeksuite/schemas` is still right — it just needs a different
+> justification (no build step, dual-consumable, matches `@geeksuite/crypto-vault`). Fix the comments
+> when you next touch those files.
+
+### The import form
+
+Both apps are ESM, but they use different interop forms, and both work in their own test harness:
+
+```js
+// fitnessgeek — apps/fitnessgeek/backend/src/models/UserSettings.js:2
+import { createUserSettingsSchema } from '@geeksuite/schemas/fitnessgeek/userSettings';
+
+// basegeek — apps/basegeek/packages/api/src/graphql/fitnessgeek/models/UserSettings.js:19-21
+import userSettingsSchemaModule from '@geeksuite/schemas/fitnessgeek/userSettings';
+const { createUserSettingsSchema } = userSettingsSchemaModule;
+```
+
+Named import works because `cjs-module-lexer` statically detects the `module.exports = { … }` object
+literal at `packages/schemas/fitnessgeek/userSettings.js:538-548`. basegeek uses the default-import
+form because that detection is not reliable under jest's `--experimental-vm-modules`
+(`models/UserSettings.js:16-18` records exactly this). **Rule for every new module: keep the
+`module.exports = { … }` object-literal form — never `exports.foo = …` or a computed export — and use
+the default-import form in basegeek, either form in fitnessgeek.**
+
+### The factory shape
+
+```js
+// packages/schemas/fitnessgeek/<model>.js  (CommonJS)
+function <model>Definition(mongoose) {
+  if (!mongoose || !mongoose.Schema) throw new TypeError('…: pass your own mongoose instance');
+  const { ObjectId } = mongoose.Schema.Types;
+  return { /* field definitions */ };
+}
+const <model>Options = { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } };
+function create<Model>Schema(mongoose) {
+  const schema = new mongoose.Schema(<model>Definition(mongoose), <model>Options);
+  schema.index({ /* … */ });          // indexes belong here — they are part of the contract
+  attach<Whatever>Hooks(schema);      // hooks belong here — see below
+  return schema;
+}
+module.exports = { <model>Definition, <model>Options, create<Model>Schema, /* helpers */ };
+```
+
+`mongoose` is a parameter, never a dependency —
+`packages/schemas/fitnessgeek/userSettings.js:34-41` gives the reason: the two consumers have their
+own mongoose ranges, and a `Schema` built by instance A fails `instanceof` inside instance B's
+`Connection.model()`. `mongoose` stays an optional peer dep in `packages/schemas/package.json`.
+
+Each new module needs a subpath in `packages/schemas/package.json` `exports` and a line in
+`packages/schemas/index.js`.
+
+### What moves and what doesn't
+
+**Fields, indexes, virtuals, instance methods, `toJSON`/`toObject` settings → the shared module.**
+These are the contract. `schema.paths` divergence is the failure mode the whole exercise exists to
+prevent (strict mode drops the unknown path silently), and index divergence means one process
+creating an index the other's queries depend on.
+
+**Hooks with one meaning for every writer → the shared module.** The Garmin password encryption is the
+worked example: `attachGarminPasswordEncryption(schema)` at
+`packages/schemas/fitnessgeek/userSettings.js:468-512` attaches a getter on the path plus
+`pre('save')` and `pre(['findOneAndUpdate','updateOne','updateMany','replaceOne'])`, and
+`createUserSettingsSchema` calls it at `:533` so every consumer gets it whether it knows or not
+(`:344-356` spells out why: four call sites in two processes, and encrypting in one app alone would
+leave the other writing plaintext and reading ciphertext into a Garmin login). Helper functions the
+hooks use are exported alongside the factory (`:545-547`) for scripts and tests. **None of the twelve
+remaining pairs has a hook on either side** — no `pre`, no `post`, nothing but the `pre('save')`
+`updated_at` stamp in `Meal.js` which is identical on both sides. So this machinery is available but
+unused for now.
+
+**Statics → stay in the app models.** `packages/schemas/fitnessgeek/userSettings.js:516-521` states the
+policy and the reason: the two writers need different ones (the gateway enforces caller ownership;
+fitnessgeek has already authenticated), and statics do not affect `schema.paths`, so they cannot cause
+the silent data loss the module exists to prevent. That policy resolves C4 and all three `requireUser`
+drift rows at a stroke: **do not move `requireUser` into the shared module.** basegeek keeps its
+fail-closed guards, fitnessgeek keeps its post-auth statics, and neither is blocked on the other.
+
+**The exception that proves it:** `DailySummary` and `FoodLog` are the two pairs whose *divergence lives
+in the statics* — the net-carb accumulation (C1) and the date normalizer (C2/C3). Those cannot be
+resolved by "leave the statics alone." And they cannot be resolved by moving the statics into
+`packages/schemas` either, because the correct date helper is `@geeksuite/utils`, which is ESM-only and
+therefore un-`require`-able from a CJS package. **The answer for both is to fix the statics in place,
+in basegeek, as pre-work (§5), and then consolidate only the field definitions.** Do not add a CJS
+build to `@geeksuite/utils` for this; do not pass `toUtcMidnight` in as a factory parameter; and
+absolutely do not inline an eighth copy of the normalizer.
+
+---
+
+## 4. The ordered plan
+
+Ordering principle: read-mostly reference data and single-writer collections first; the food-log
+family last, because the gateway only took over its writes on 2026-09-05 and it is the least-settled
+code in the app. Within a tier, fewest statics first.
+
+Every pair follows the same five steps. They are cheap after the first one.
+
+> **The five steps**
+> 1. **Promote** — create `packages/schemas/fitnessgeek/<model>.js` with `create<Model>Schema(mongoose)`,
+>    add the subpath to `packages/schemas/package.json` `exports` and the entry to
+>    `packages/schemas/index.js`. Copy the field definitions verbatim from whichever side §2 names as
+>    the semantics owner.
+> 2. **Test** — add the pair to a parity tripwire *before* either model switches, so it proves the
+>    definition matches what is already deployed rather than what you just wrote.
+> 3. **Switch fitnessgeek** — replace the inline schema in `apps/fitnessgeek/backend/src/models/<M>.js`
+>    with the factory call. Statics stay. Deploy; the parity test still passes because basegeek's copy
+>    still matches the shared definition.
+> 4. **Switch basegeek** — same, in `apps/basegeek/packages/api/src/graphql/fitnessgeek/models/<M>.js`.
+>    Keep `getAppConnection` and the ownership statics.
+> 5. **Delete the duplicate** — nothing to delete, in fact: both model files survive, each shrunk to
+>    an import, a factory call, its own statics, and its own connection binding. "The duplicate" that
+>    goes away is the *schema literal*, in step 4. Then add the source-level "does not re-declare the
+>    schema inline" assertion (see the tests below) so it cannot come back.
+
+### Step 0 — the two free deletions (do these first, they are not consolidations)
+
+| Pair | Action | Why it is safe |
+|---|---|---|
+| `AIFoodPromptCache` | delete `apps/basegeek/packages/api/src/graphql/fitnessgeek/models/AIFoodPromptCache.js` | The only mention of the identifier anywhere in `apps/basegeek/packages` is its own `export default` line. Deleting it also stops basegeek from declaring a TTL index (`:52`, `expireAfterSeconds: 3888000`) on a collection it never reads — a background index whose only effect today is a second process racing fitnessgeek to create it |
+| `MedicationLog` | delete `.../models/MedicationLog.js` | Same: no resolver, no typeDef, no test. fitnessgeek is the sole reader and writer (`routes/medicationRoutes.js:231, :257, :276`) |
+
+Verify with `rg -n 'AIFoodPromptCache' apps/basegeek/packages` and the same for `MedicationLog` before
+deleting — the `DOCS/SUITE_TODO.md` item 1 flockgeek lesson (13 "orphans" that turned out to be 4)
+applies.
+
+### Tier 1 — reference-shaped, no statics, single semantics · **do these as the proof**
+
+| # | Pair | Effort | Rollback safe? | Notes |
+|---|------|--------|----------------|-------|
+| 1 | **`Weight`** | XS | ✅ | 47/50 lines. Zero statics, zero hooks, one compound index, `toJSON`/`toObject` virtuals identical (`:44-45` / `:47-48`). The only divergence is the connection binding |
+| 2 | **`BloodPressure`** | XS | ✅ | Same shape, 72/75 lines, one virtual (`bpCategory`), same `toJSON` settings |
+| 3 | `Medication` | XS | ✅ | 106/109 lines, shared `MED_TIME_OF_DAY` enum literal identical on both sides, no statics |
+| 4 | `LoginStreak` | XS | ✅ | One static, `getOrCreateStreak`; the only difference is basegeek's `requireUser` — stays app-side |
+
+Note for 1 and 2: both use `userId` (camelCase) as the owner field while the other eleven use
+`user_id`. That is a pre-existing inconsistency in the collections themselves; **do not normalize it
+during consolidation** — it would be a data migration wearing a refactor's clothes. Record it and move on.
+
+### Tier 2 — one writer, guarded statics
+
+| # | Pair | Effort | Rollback safe? | Notes |
+|---|------|--------|----------------|-------|
+| 5 | `WeightGoals` | S | ✅ | basegeek is the only writer; fitnessgeek reads via `aiInsightsService.js:15`. Three statics, `requireUser`-only divergence |
+| 6 | `NutritionGoals` | S | ✅ | Same shape. Note the naming trap: this is **not** `UserSettings.nutrition_goal`. Two different collections both describe nutrition goals, and `DailySummary.updateFromLogs` reads the *settings* one (`DailySummary.js:186-188`), not this one. Do not "helpfully" unify them |
+| 7 | `Meal` | S | ⚠️ see below | Statics conflict (C4). Consolidate the field definitions only; leave both sides' statics exactly as they are. If the tightened semantics are wanted in fitnessgeek, that is a separate, deliberate ticket with its own test |
+
+### Tier 3 — the food family · **the gateway took these over on 2026-09-05; let them settle**
+
+| # | Pair | Effort | Rollback safe? | Notes |
+|---|------|--------|----------------|-------|
+| 8 | `FoodItem` | M | ⚠️ see below | The `findOrCreate` dedupe ladder (`FG :116-171` / `BG :137-192`) is identical today and **must stay identical** — it is the only thing stopping the two writers from minting duplicate rows for the same USDA/OpenFoodFacts item. Promote it into the shared module *with the fields*, as an exception to the statics policy: unlike `requireUser`, it has one correct meaning for both writers and a divergence would corrupt the catalog. `findAccessible`/`findAccessibleMany` stay app-side (basegeek-only ownership scoping). `search` is identical too — promote it as well |
+| 9 | `FoodLog` | M | ✅ *after* PRE-2 | Field definitions identical; the whole divergence is the date normalizer. Once PRE-2 has landed, this drops to an S |
+| 10 | `DailySummary` | M | ❌ *before* PRE-1 | The riskiest pair, and it must be **last**. The shared definition must be fitnessgeek's superset. Until PRE-1 lands, a half-switched state is not neutral — see below |
+
+### The rollback claim, verified per model
+
+The claim under test: *both apps keep working if only one side has switched, because the collection is
+the contract.*
+
+**True, unconditionally, for pairs 1–7 and 9.** For each of those the shared definition is
+byte-equivalent to what both sides already declare, so switching one side changes `schema.paths` by
+exactly nothing. The half-switched state is indistinguishable from today's state at the database
+level, and each app can be deployed and rolled back independently. That is not a hopeful reading — it
+is why the index audit mattered: identical indexes mean neither process is depending on an index the
+other creates.
+
+**True for pair 8 (`FoodItem`) with one caveat.** `barcode` carries `unique: true, sparse: true` on
+both sides (`FG :17-19` / `BG :21-23`), so whichever process reaches `syncIndexes` first creates it and
+the other is a no-op. Identical on both sides today, so no risk — but if you ever change a `unique`
+flag in the shared module, both processes must be redeployed together or one will try to build an
+index the other's data violates. Note it in the module header.
+
+**FALSE for pair 10 (`DailySummary`), and this is the one to call out.** The two schemas are *not*
+equivalent today, so a one-sided switch is a behavior change either way:
+
+- Switch **fitnessgeek** first to a shared definition that includes `net_carbs_grams`: no change (that
+  is already its definition). Safe.
+- Switch **basegeek** first to the same definition: the field starts being written again. That is a
+  *fix*, but it is a live behavior change shipping under a refactor's changelog entry, which is exactly
+  the sort of thing that makes a bad afternoon hard to diagnose.
+- Switch either side to a shared definition derived from **basegeek's** copy: fitnessgeek stops writing
+  `net_carbs_grams` too, and the last path that still repairs the field is gone.
+
+This is why PRE-1 exists. Land the field fix on basegeek as its own commit, with its own test and its
+own deploy, confirm the keto ring reads correctly in production, and *then* the two schemas are
+equivalent and pair 10 becomes as safe as the rest.
+
+### The tests that prove parity
+
+Model them on the existing pair, which is split across the two suites for a reason worth preserving.
+
+**basegeek side** — `apps/basegeek/packages/api/src/__tests__/` — has `mongodb-memory-server` and a
+shared in-memory Mongo (`jest.config.js` `globalSetup`, `maxWorkers: 1`). This is where the real
+comparison lives. Extend `userSettingsSchemaParity.test.js` into a table-driven
+`fitnessgeekSchemaParity.test.js` over all consolidated pairs, reusing its two helpers verbatim:
+
+- `describePath()` (`userSettingsSchemaParity.test.js:45-58`) — the stable JSON description of one path
+  (`instance`, `enum`, `default`, `required`, `index`, `unique`, `sparse`, `trim`, `ref`)
+- the three assertions at `:61-96` — same path set, same per-path description, both matching the shared
+  factory output with `_id`/`__v` stripped
+- the write-through pattern at `:99-135` — bind fitnessgeek's *own* schema object to basegeek's
+  connection on basegeek's collection name (`:106-108`), then write from each side and read from the
+  other. Per pair, pick the field that would actually have been lost: `totals.net_carbs_grams` for
+  `DailySummary`, `barcode` for `FoodItem`
+- the control at `:155-163` — prove strict mode is really on, or the whole suite proves nothing
+
+Add one **index** assertion the current test doesn't have, because indexes are part of the contract and
+`describePath` only sees the path-level `index: true` flag, not `schema.index()` calls:
+
+```js
+const norm = (m) => m.schema.indexes()
+  .map(([keys, opts]) => JSON.stringify([keys, { unique: !!opts.unique, sparse: !!opts.sparse,
+                                                 expireAfterSeconds: opts.expireAfterSeconds }]))
+  .sort();
+expect(norm(RestModel)).toEqual(norm(GraphQLModel));
+```
+
+**fitnessgeek side** — `apps/fitnessgeek/backend/src/__tests__/models/` — is **hermetic by design**: no
+Mongo, no Redis, no network (`userSettingsSchemaParity.test.js:20-24`). It cannot import basegeek's
+model, because that model calls `getAppConnection('fitnessgeek')` at import time and would leave an
+open handle. So this half does two things and only two:
+
+- fitnessgeek's real model vs the shared factory, path set only (`:60-74`)
+- **source-level** checks on basegeek's file read as text (`:91-102`): that it contains the
+  `@geeksuite/schemas/fitnessgeek/<model>` specifier, that it matches
+  `/create<Model>Schema\s*\(\s*mongoose\s*\)/`, and — the one that actually prevents regression —
+  `expect(src).not.toMatch(/new\s+mongoose\.Schema\s*\(\s*\{/)`. That last assertion is what stops
+  someone pasting a schema literal back in
+
+Keep the split. Merging the two halves means either giving up fitnessgeek's hermeticity or giving up the
+real two-model comparison, and both are worse than a bit of duplication.
+
+---
+
+## 5. Pre-work — fix these before consolidating anything
+
+### PRE-1 · Restore `totals.net_carbs_grams` on the gateway · **bug fix, ship alone** · S
+
+`apps/basegeek/packages/api/src/graphql/fitnessgeek/models/DailySummary.js`:
+
+1. Add `net_carbs_grams: { type: Number, default: 0, min: 0 }` to the `totals` block, between
+   `fiber_grams` (`:39-43`) and `sugar_grams` (`:44-48`), matching
+   `apps/fitnessgeek/backend/src/models/DailySummary.js:41-45` exactly.
+2. Add `net_carbs_grams: 0` to the accumulator at `:149-156` (FG `:143`).
+3. Add the accumulation line after `totals.fiber_grams` at `:182`:
+   `totals.net_carbs_grams += Math.max(0, ((n.carbs_grams || 0) - (n.fiber_grams || 0)) * multiplier);`
+   (FG `:172`).
+
+Test: a memory-Mongo case that writes two food logs with known carbs and fiber, calls
+`updateFromLogs`, and asserts the persisted `totals.net_carbs_grams` — reading it back from a `.lean()`
+query, not from the returned document, so strict-mode stripping is actually exercised. Assert the
+`Math.max(0, …)` floor too: a food with more fiber than carbs must not push the day negative.
+
+Repair for existing data: none needed. `updateFromLogs` recomputes the whole `totals` sub-document from
+the food logs on every call, and the `dailySummary` query calls it (`resolvers.js:456`), so each user's
+days heal the next time they are viewed. No migration, no backfill script. Say so in the commit message
+so nobody writes one.
+
+### PRE-2 · Delete basegeek's two hand-rolled date normalizers · **bug fix** · XS
+
+Replace `toUtcDate` with `@geeksuite/utils`'s `toUtcMidnight` in both files. basegeek's api already has
+the dependency (`apps/basegeek/packages/api/package.json:19`), so this is an import swap and a
+deletion:
+
+- `graphql/fitnessgeek/models/DailySummary.js` — delete `:100-109`, replace the six call sites
+  (`:112, :136, :139, :226, :229` and the `getOrCreate` use)
+- `graphql/fitnessgeek/models/FoodLog.js` — delete `:106-117`, replace the six call sites
+  (`:121, :124, :138, :141, :164, :167`)
+
+The `setUTCHours(0,0,0,0)` immediately after each call is now redundant (`toUtcMidnight` already
+returns UTC midnight); leave the `setUTCHours(23,59,59,999)` end-of-day ones, or better, switch those
+pairs to `utcDayRange()` from `packages/utils/src/dates.js:106-111`, which is exactly this idiom. Add a
+case to `packages/utils/src/__tests__/dates.test.js` for the ISO-instant input if one isn't there.
+
+This is also what makes pair 9 (`FoodLog`) drop from M to S, and removes two of the four conflicting
+divergences before consolidation starts.
+
+### PRE-3 · Delete the two orphan models · XS
+
+Step 0 above. Do it in the same pass as PRE-2; it is `rm` plus a `rg` to confirm.
+
+### PRE-4 · Decide `Meal`'s static semantics · XS (a decision, not code)
+
+Pair 7 is blocked on an answer to one question: does fitnessgeek's `getActiveMeals(undefined)` returning
+every user's meals need fixing? Every current caller passes a userId (`routes/mealRoutes.js:19, 21, 23`),
+so it is not exploitable today. Recommendation: **leave it**, note it as a hardening follow-up alongside
+`DOCS/SUITE_TODO.md`'s auth-isolation suites, and consolidate only `Meal`'s fields. Adding `requireUser`
+to fitnessgeek's statics is a two-line change but it turns a silent over-fetch into a thrown error, and
+that belongs in a commit whose title says so.
+
+### PRE-5 · Correct the two stale "fitnessgeek is CJS" comments · XS
+
+`packages/schemas/fitnessgeek/userSettings.js:46-48` and
+`apps/basegeek/packages/api/src/__tests__/userSettingsSchemaParity.test.js:31`. Both predate the
+2026-09-05 ESM migration. The CJS choice for `@geeksuite/schemas` is still correct; only its stated
+reason is wrong. Fold this into whichever commit touches those files first.
+
+### Not pre-work, but worth knowing
+
+- `packages/schemas` currently depends on `@geeksuite/crypto-vault` and nothing else, and requires it
+  *lazily* (`userSettings.js:390-403`) because it throws at load without `KEY_VAULT_SECRET`. None of the
+  twelve remaining models needs the vault, so this stays a one-dependency package. Keep it that way.
+- Adding a `workspace:*` dependency needs a root `pnpm install` or the frozen-lockfile install in the
+  image build fails (`apps/fitnessgeek/DOCS/CONTEXT.md`, "How production gets the workspace packages").
+  Consolidation adds no new deps — both apps already depend on `@geeksuite/schemas` — so this shouldn't
+  bite, but it is the reason to check `pnpm-lock.yaml` is in step before pushing.
+
+---
+
+## 6. Effort estimates
+
+XS ≈ 1–2 h · S ≈ 3–4 h · M ≈ 6–8 h. Includes writing the shared module, extending the parity test,
+both switches, and a deploy of each app.
+
+| Item | Size | Hours |
+|---|---|---|
+| PRE-1 `net_carbs_grams` fix + test + deploy | S | 3 |
+| PRE-2 date normalizers | XS | 1.5 |
+| PRE-3 orphan deletions | XS | 1 |
+| PRE-4 / PRE-5 decision + comments | XS | 0.5 |
+| **Pre-work subtotal** | | **6** |
+| 1 `Weight` — includes building the parity-test harness | S | 4 |
+| 2 `BloodPressure` | XS | 1.5 |
+| 3 `Medication` | XS | 1.5 |
+| 4 `LoginStreak` | XS | 1.5 |
+| 5 `WeightGoals` | S | 3 |
+| 6 `NutritionGoals` | S | 3 |
+| 7 `Meal` | S | 3.5 |
+| 8 `FoodItem` (fields + `findOrCreate` + `search`) | M | 7 |
+| 9 `FoodLog` (M → S once PRE-2 lands) | S | 4 |
+| 10 `DailySummary` (M → S once PRE-1 lands) | S | 4 |
+| **Consolidation subtotal** | | **33** |
+| **Total** | | **≈ 39 h ≈ 5 working days** |
+
+Pair 1 carries most of the fixed cost — the table-driven parity test, the `exports` plumbing, the
+first-time decisions. Pairs 2–4 are near-mechanical once it exists. Pairs 8–10 are where the judgment
+is, which is why they are last. If the pre-work lands and pairs 8–10 get deferred, the first seven
+pairs are **≈ 18 hours** and leave the suite in a strictly better place than it is now.
+
+## 7. The proof: do `Weight` and `BloodPressure` first
+
+**`Weight`** (`apps/fitnessgeek/backend/src/models/Weight.js`, 47 lines /
+`apps/basegeek/packages/api/src/graphql/fitnessgeek/models/Weight.js`, 50 lines) is the smallest pair in
+the set and has the least behavioral surface of any: no statics, no hooks, no `findOrCreate`, one
+compound index (`weightSchema.index({ userId: 1, log_date: -1 })`, identical line on both sides),
+identical `toJSON`/`toObject` virtual settings. `diff` between the two files produces exactly three
+lines of connection binding. It exercises the full five-step pipeline — promote, test, switch, switch,
+delete — with a divergence surface of zero, which is precisely what a proof wants: if something goes
+wrong, the problem is in the *pattern*, not in the model. And it is genuinely two-sided
+(`controllers/weightController.js:2`, `services/foodReportService.js:4`,
+`services/aiInsightsService.js:12`, `scripts/importWeight.js:12` on one side; `resolvers.js:9` on the
+other), including a standalone import script — so the shared module gets exercised from a process that
+is neither app's server, which is a real property of this package worth confirming early.
+
+**`BloodPressure`** is the right second because it is the same shape but *not* a copy: it adds a virtual
+with logic (`bpCategory`), a wider field set, and its own bounds that a hand-written validation file
+mirrors (`apps/fitnessgeek/backend/src/validation/schemas/bloodPressure.js:4` — "Mirrors
+models/BloodPressure.js bounds exactly"). That makes it the first pair where the parity test has to
+prove something non-trivial — that a virtual survives the move into the factory, and that the shared
+definition is still the thing the validation layer is mirroring. Doing it second, immediately after a
+pair with zero surprises, means any failure is unambiguously about the new thing.
+
+Together they also settle the `userId`-vs-`user_id` question early (§4, Tier 1 note): they are the only
+two models in the set using the camelCase owner field, so getting both through the pipeline without
+touching it establishes the precedent that consolidation is a pure refactor. That precedent is what
+makes `DailySummary` safe to attempt ten pairs later.
+
+---
+
+*Written 2026-09-05. Companion to `apps/fitnessgeek/DOCS/USER_SETTINGS_SCHEMA.md` (the completed pair)
+and `DOCS/SUITE_TODO.md` item 4.*
