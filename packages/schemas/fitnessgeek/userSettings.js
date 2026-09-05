@@ -394,7 +394,6 @@ function getVault() {
   } catch (err) {
     // Message only. crypto-vault never puts the key material in its errors.
     _vaultLoadError = err;
-    // eslint-disable-next-line no-console
     console.warn(
       '[schemas/userSettings] @geeksuite/crypto-vault unavailable — ' +
       'the Garmin password cannot be encrypted or decrypted: ' + err.message

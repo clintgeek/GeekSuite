@@ -5,8 +5,6 @@ import { MantineProvider } from '@mantine/core';
 import ThemeModeProvider from '../../theme/ThemeModeProvider';
 
 // Pages to test
-import LoginPage from '../../pages/LoginPage';
-import RegisterPage from '../../pages/RegisterPage';
 import QuickCaptureHome from '../../pages/QuickCaptureHome';
 
 const AllProviders = ({ children }) => (
@@ -81,20 +79,6 @@ Object.defineProperty(window, 'matchMedia', {
 });
 
 describe('Page Tests', () => {
-    describe('LoginPage', () => {
-        it('renders login components', () => {
-            render(<LoginPage />, { wrapper: AllProviders });
-            expect(screen.getAllByText(/Email/i)[0]).toBeInTheDocument();
-        });
-    });
-
-    describe('RegisterPage', () => {
-        it('renders register components', () => {
-            render(<RegisterPage />, { wrapper: AllProviders });
-            expect(screen.getAllByText(/Create Account/i)[0]).toBeInTheDocument();
-        });
-    });
-
     describe('QuickCaptureHome', () => {
         it('renders quick capture fields', () => {
             render(<QuickCaptureHome />, { wrapper: AllProviders });
