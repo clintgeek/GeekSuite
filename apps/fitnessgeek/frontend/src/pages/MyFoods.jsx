@@ -3,7 +3,6 @@ import {
   Box,
   Typography,
   List,
-  Alert,
   CircularProgress,
   TextField
 } from '@mui/material';
@@ -11,6 +10,7 @@ import {
   Restaurant as FoodIcon,
   Search as SearchIcon
 } from '@mui/icons-material';
+import { useToast } from '@geeksuite/ui';
 import { useFoodManagement } from '../hooks/useFoodManagement.js';
 import FoodListItem from '../components/MyFoods/FoodListItem.jsx';
 import FoodEditDialog from '../components/MyFoods/FoodEditDialog.jsx';
@@ -35,6 +35,22 @@ const MyFoods = () => {
     clearError,
     clearSuccess
   } = useFoodManagement();
+  const { notify } = useToast();
+
+  // successMessage/error come from useFoodManagement's own auto-clearing
+  // state; forward each to the shared toast stack in place of the local
+  // Alert pair, then clear the source so a re-render doesn't re-fire it.
+  useEffect(() => {
+    if (!successMessage) return;
+    notify(successMessage, { tone: 'success' });
+    clearSuccess();
+  }, [successMessage, notify, clearSuccess]);
+
+  useEffect(() => {
+    if (!error) return;
+    notify(error, { tone: 'error' });
+    clearError();
+  }, [error, notify, clearError]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -147,19 +163,6 @@ const MyFoods = () => {
           Your custom entries and everything you've saved for quick access.
         </Typography>
       </Box>
-
-      {/* Success/Error Messages */}
-      {successMessage && (
-        <Alert severity="success" sx={{ mb: 2 }} onClose={clearSuccess}>
-          {successMessage}
-        </Alert>
-      )}
-
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={clearError}>
-          {error}
-        </Alert>
-      )}
 
       {/* Search — theme-aware, no hardcoded colors */}
       <TextField

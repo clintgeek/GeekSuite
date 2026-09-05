@@ -1,6 +1,7 @@
-import React from 'react';
-import { Box, Typography, Alert, Snackbar, CircularProgress } from '@mui/material';
+import React, { useEffect } from 'react';
+import { Box, Typography, CircularProgress } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
+import { useToast } from '@geeksuite/ui';
 import { useWeight } from '../hooks/useWeight.js';
 import {
   WeightTimeline,
@@ -27,6 +28,22 @@ const Weight = () => {
     clearSuccessMessage,
     clearErrorMessage
   } = useWeight();
+  const { notify } = useToast();
+
+  // Success/error come from useWeight's own auto-clearing state; forward each
+  // to the shared toast stack in place of the local Snackbar pair, then clear
+  // the source so a re-render doesn't re-fire it.
+  useEffect(() => {
+    if (!success) return;
+    notify(success, { tone: 'success' });
+    clearSuccessMessage();
+  }, [success, notify, clearSuccessMessage]);
+
+  useEffect(() => {
+    if (!error) return;
+    notify(error, { tone: 'error' });
+    clearErrorMessage();
+  }, [error, notify, clearErrorMessage]);
 
   if (loading) {
     return (
@@ -85,45 +102,6 @@ const Weight = () => {
           unit="lbs"
         />
       </Box>
-
-      {/* Success/Error Messages */}
-      <Snackbar
-        open={!!success}
-        autoHideDuration={4000}
-        onClose={clearSuccessMessage}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert
-          onClose={clearSuccessMessage}
-          severity="success"
-          sx={{
-            width: '100%',
-            borderRadius: '12px',
-            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)'
-          }}
-        >
-          {success}
-        </Alert>
-      </Snackbar>
-
-      <Snackbar
-        open={!!error}
-        autoHideDuration={4000}
-        onClose={clearErrorMessage}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert
-          onClose={clearErrorMessage}
-          severity="error"
-          sx={{
-            width: '100%',
-            borderRadius: '12px',
-            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)'
-          }}
-        >
-          {error}
-        </Alert>
-      </Snackbar>
     </Box>
   );
 };

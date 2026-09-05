@@ -1,6 +1,6 @@
 import { Outlet, useLocation } from 'react-router-dom';
 import { useMediaQuery, useTheme } from '@mui/material';
-import { GeekShell, GeekAppFrame, GeekBottomNav, geekLayout } from '@geeksuite/ui';
+import { GeekShell, GeekAppFrame, GeekBottomNav, GeekToastProvider, geekLayout } from '@geeksuite/ui';
 import { activeNavId, bottomNavItems } from './navConfig.jsx';
 import Sidebar from './Sidebar.jsx';
 import TopBar from './TopBar.jsx';
@@ -25,6 +25,11 @@ import TopBar from './TopBar.jsx';
  * motion element and would capture a fixed child). The 75-line registry this
  * app used to carry moved into `packages/ui` — MOBILE_UI_PLAN.md §4b — so
  * there is no provider to wrap here any more. No page registered → no FAB.
+ *
+ * `GeekToastProvider` mounts here (TODO_ORDER #15 fan-out) — inside
+ * `GeekShell` so it can read shell placement (sidebar offset, bottom-nav
+ * inset), outside `GeekAppFrame` because the frame's route transition is a
+ * motion element and would capture a fixed toast under it.
  */
 export default function ModernLayout() {
   const theme = useTheme();
@@ -46,9 +51,11 @@ export default function ModernLayout() {
         ) : null
       }
     >
-      <GeekAppFrame>
-        <Outlet />
-      </GeekAppFrame>
+      <GeekToastProvider>
+        <GeekAppFrame>
+          <Outlet />
+        </GeekAppFrame>
+      </GeekToastProvider>
     </GeekShell>
   );
 }

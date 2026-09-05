@@ -8,7 +8,6 @@ import {
   Button,
   Switch,
   FormControlLabel,
-  Alert,
   CircularProgress,
   Divider,
   List,
@@ -30,14 +29,14 @@ import {
   Restaurant as FoodIcon,
   FitnessCenter as MealsIcon
 } from '@mui/icons-material';
+import { useToast } from '@geeksuite/ui';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
 import { settingsService } from '../../services/settingsService';
 
 const HouseholdSettings = () => {
+  const { notify } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
 
   // Household data
   const [householdData, setHouseholdData] = useState(null);
@@ -54,6 +53,7 @@ const HouseholdSettings = () => {
 
   useEffect(() => {
     loadHouseholdSettings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only load; loadHouseholdSettings now closes over `notify` from useToast(), which the linter can't prove is stable.
   }, []);
 
   const loadHouseholdSettings = async () => {
@@ -63,7 +63,7 @@ const HouseholdSettings = () => {
       setHouseholdData(response.data);
       setDisplayName(response.data?.display_name || '');
     } catch (err) {
-      setError('Failed to load household settings');
+      notify('Failed to load household settings', { tone: 'error' });
     } finally {
       setLoading(false);
     }
@@ -71,19 +71,18 @@ const HouseholdSettings = () => {
 
   const handleCreateHousehold = async () => {
     if (!displayName.trim()) {
-      setError('Please enter your display name');
+      notify('Please enter your display name', { tone: 'error' });
       return;
     }
 
     try {
       setSaving(true);
-      setError('');
       const response = await settingsService.createHousehold(displayName);
-      setSuccess(response.data.message);
+      notify(response.data.message, { tone: 'success' });
       setShowCreateDialog(false);
       await loadHouseholdSettings();
     } catch (err) {
-      setError(err.response?.data?.error?.message || 'Failed to create household');
+      notify(err.response?.data?.error?.message || 'Failed to create household', { tone: 'error' });
     } finally {
       setSaving(false);
     }
@@ -91,23 +90,22 @@ const HouseholdSettings = () => {
 
   const handleJoinHousehold = async () => {
     if (!joinCode.trim()) {
-      setError('Please enter the household code');
+      notify('Please enter the household code', { tone: 'error' });
       return;
     }
     if (!displayName.trim()) {
-      setError('Please enter your display name');
+      notify('Please enter your display name', { tone: 'error' });
       return;
     }
 
     try {
       setSaving(true);
-      setError('');
       const response = await settingsService.joinHousehold(joinCode, displayName);
-      setSuccess(response.data.message);
+      notify(response.data.message, { tone: 'success' });
       setShowJoinDialog(false);
       await loadHouseholdSettings();
     } catch (err) {
-      setError(err.response?.data?.error?.message || 'Failed to join household');
+      notify(err.response?.data?.error?.message || 'Failed to join household', { tone: 'error' });
     } finally {
       setSaving(false);
     }
@@ -116,13 +114,12 @@ const HouseholdSettings = () => {
   const handleLeaveHousehold = async () => {
     try {
       setSaving(true);
-      setError('');
       await settingsService.leaveHousehold();
-      setSuccess('Successfully left household');
+      notify('Successfully left household', { tone: 'success' });
       setShowLeaveDialog(false);
       await loadHouseholdSettings();
     } catch (err) {
-      setError(err.response?.data?.error?.message || 'Failed to leave household');
+      notify(err.response?.data?.error?.message || 'Failed to leave household', { tone: 'error' });
     } finally {
       setSaving(false);
     }
@@ -131,13 +128,11 @@ const HouseholdSettings = () => {
   const handleUpdateSharing = async (field, value) => {
     try {
       setSaving(true);
-      setError('');
       await settingsService.updateHouseholdSettings({ [field]: value });
       setHouseholdData(prev => ({ ...prev, [field]: value }));
-      setSuccess('Sharing settings updated');
-      setTimeout(() => setSuccess(''), 2000);
+      notify('Sharing settings updated', { tone: 'success' });
     } catch (err) {
-      setError('Failed to update sharing settings');
+      notify('Failed to update sharing settings', { tone: 'error' });
     } finally {
       setSaving(false);
     }
@@ -172,17 +167,6 @@ const HouseholdSettings = () => {
         <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
           Share food logs and meals with family members. See what they ate and easily copy their meals.
         </Typography>
-
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
-            {error}
-          </Alert>
-        )}
-        {success && (
-          <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess('')}>
-            {success}
-          </Alert>
-        )}
 
         {!isInHousehold ? (
           // Not in a household - show create/join options

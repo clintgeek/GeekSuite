@@ -424,6 +424,143 @@ fit any of the three primitives; its sibling error case *was* converted (`GeekEr
 compact, `onRetry={fetchHealth}`). Mobile harness: 28 scenes, 0 violations — unchanged from
 baseline.
 
+**notegeek — done 2026-09-05.** No local `EmptyState`/`ErrorState`/toast component existed
+either; every site was a hand-rolled `<Box><Typography>` block or a page-level `Snackbar` +
+`Alert`. `GeekToastProvider` is now mounted in `Layout.jsx`, inside `GeekShell` and outside
+`GeekAppFrame`. Query-driven surfaces (`NoteList`, `SearchResults`, `Sidebar`'s tag tree,
+`NoteViewer`, `NotePage`) grew a destructured `refetch` (or reused the store's re-fetch
+action) so their `GeekErrorState` sites carry a real `onRetry`. Converted: `NoteList`'s
+`listError` Alert and both "No notes yet" / "No notes tagged here yet" blocks;
+`SearchResults`'s `searchError` Alert, its "No matches for …" empty state, and its
+default "Search by title…" prompt; `TagNotesList`'s "no tag in URL" guard Alert;
+`Sidebar`'s tag-query error Alert, "No tags yet" block (kept the `TagIcon` ornament), and
+"No tags match …" filtered-empty caption; `NoteViewer`'s load-error Alert and "note not
+found" block; `NotePage`'s auth-wall, load-error, and not-found Alerts (kept their
+Login/Back-to-Notes actions via `action`, retry via `onRetry` on the real error case);
+`QuickCaptureHome`'s "Nothing here yet" block and its `captureToast` Snackbar (now
+`notify('Note captured', { tone: 'success' })`). Two long-dead, unrouted duplicates —
+`pages/LoginPage.jsx` and `pages/RegisterPage.jsx` (App.jsx routes `/login` and `/register`
+through `components/Login.jsx` and `components/Register.jsx` instead; only a test file
+still imports the `pages/` versions) — were swept the same way for consistency: their
+`Snackbar`/inline `Alert` patterns became `useToast()` calls. Left alone:
+`components/Register.jsx`'s inline validation `Alert` (password mismatch, API error) — that
+page renders outside `GeekShell`/`GeekToastProvider` entirely (auth screens have no shell
+chrome), so converting it to a toast would mean standing up a second provider outside this
+fan-out's scope; and `MarkdownEditor`'s inline "Nothing to preview yet…" — a single-line
+placeholder inside a live preview pane, not a list/panel-level empty state. Mobile harness:
+8 scenes (phone only, per task), 0 violations — unchanged from baseline.
+
+**basegeek — done 2026-09-05.** This is the admin console (registry, users, AI console,
+databases, account), and its `pages/aigeek/*` split (config/catalog/usage/keys tabs, the
+inline model-steward block) had already picked up `GeekEmptyState`/`GeekErrorState`/`useToast`
+during this week's AIGeek polish pass — nothing to convert there, and `GeekToastProvider` was
+already mounted in `Layout.jsx` (inside `GeekShell`, outside `GeekAppFrame`) from that same
+pass. The rest of the console had not: `ResponsiveTable` (the app's own primitive, shared by
+`Databases` and `AppsKeysTab`'s key tables) grew the same `error`/`errorTitle`/`onRetry` props
+as flockgeek's and notegeek's `ResponsiveTable`s, plus swapped its plain `<Typography>` empty
+message for `GeekEmptyState` (compact). `AccountPage`'s shared `error` `useState` (profile save,
+preferences save) and its two `saved`-flag auto-clear checkmarks (`setTimeout`, one per section)
+collapsed into `notify(msg, { tone })` calls at each save's success/catch, and its "No
+app-specific preferences yet" `<Typography>` block became `GeekEmptyState`; the store's own
+bootstrap-failure `error` (`storeError`) now surfaces the same way, via a `useEffect` that calls
+`notify` rather than an inline `Alert` that a `!loaded` early return made unreachable anyway.
+`UserGeekPage`'s single `error` state split in two: the initial (or retried) user-list load
+failure now renders `GeekErrorState` with `onRetry={fetchUsers}` in place of the list, while a
+delete or create failure — which doesn't invalidate a list the admin can already see — became
+`notify(msg, { tone: 'error' })`; "No users found" became `GeekEmptyState`. Left alone:
+`MongoStatus`/`RedisStatus`/`PostgresStatus`/`InfluxStatus` (all on `DataGeekPage`) and
+`BaseGeekHome`/`PortalPage`'s app-health tiles — standing connection/health readouts on a 30s
+or 60s poll, not transient confirmations or failures, so none of the three primitives fit;
+`LoginPage`/`RegisterPage`'s inline error `Alert`s — same gap as notegeek's auth screens, public
+routes rendered outside `GeekShell`/`GeekToastProvider` (TODO_ORDER #19 already tracks this as
+"Auth splash still open"). No local `EmptyState`/`ErrorState`/toast component and no
+`isDark ? lighten(…) : darken(…)` tone helper existed here (basegeek derives its brand-color ink
+via `theme.js`'s own `brandInk()` instead), so nothing to delete and nothing for `toneForMode`
+to replace. `packages/ui` gaps found: none. Mobile harness: 26 scenes, 0 violations — unchanged
+from baseline (`e85fc43`).
+
+**bookgeek — done 2026-09-05.** Unlike its siblings, this app's Pocket Pass rewrite (earlier
+the same week) had already put `GeekEmptyState`/`GeekErrorState` on the one surface that
+matters most — `LibraryView`'s "No books here yet" / "Nothing matches these filters" empties
+and its load-error-with-retry — so that half of the fan-out was already landed; the remaining
+gap was entirely toast. No local `EmptyState`/`ErrorState`/toast component existed, so nothing
+to delete. `GeekToastProvider` is now mounted in `App.jsx`, inside `GeekShell` and outside
+`GeekAppFrame` (App.jsx is one big component that renders its own shell, so the provider had
+to wrap `GeekAppFrame` from inside App's own return — the effect-on-prop-change pattern below
+means none of App's ~30 handler functions needed touching, only the views that already receive
+the result as props). Converted to `notify()`: `SettingsView`'s Send-to-device save
+(`profileError`/`profileMessage`), default-shelf save (`prefSaveError`/`prefSaveMessage`), and
+custom-shelf add/remove (`shelfEditError`); its three library-maintenance jobs — Goodreads
+import, Goodreads dedupe, Calibre rescan — are the suite's "long-running job" pattern
+(TODO_ORDER #15's import/enrich carve-out): each `SpinnerButton`'s loading state stayed
+inline as progress, but the terminal multi-metric summary/error became a toast (summaries get
+an 8s duration to stay readable). `BookDetailModal`'s metadata-enrich terminal notice
+(`enrichError`/`enrichSummary`) and its More sheet's book-file attach outcome
+(`uploadError`/`uploadMessage`) converted the same way, dropping both out of the sheet's
+`statusLines` ticker and the row's secondary text. AI status check's error became a compact
+`GeekErrorState` with `onRetry={handleCheckAiStatus}` in place of the persistent status line
+— flockgeek's health-check shape exactly — while the success readout stays a standing status
+(left alone, same reasoning). `LibraryView`'s selection-bar validation captions
+(`basketError`, `mergeSelectionError`) — fire-and-forget feedback on a bar that stays on
+screen regardless — became toasts too. Left alone: every error the user must act on inside an
+open dialog it belongs to (`AddBookDialog`'s `addBookError`, `EditMetadataDialog`'s
+`editError`, the delete-confirm `GeekDialog`'s `deleteError`, `CoverTools`' `coverSearchError`,
+`ProgressRow`'s field-level `progressError`) — converting these would move the answer off the
+surface the user is still looking at; `BookDetailModal`'s `sendToKindleError`/
+`sendToKindleStatus` and its "No EPUB yet" reminder, which stay in the sticky-bar `statusLines`
+ticker (a fire-and-forget action, and a reasonable next toast candidate, but left with its
+cohesive sibling rather than fragmenting the ticker for one entry); `ReaderModal`'s
+`readerError` — a persistent inline status in the reader's own non-theme-token page/ink chrome,
+not a transient notice; `Sidebar`/`FilterSheet`'s duplicated `savedFiltersError` (a background
+saved-filters list-load failure rendered in two places already, minor enough that a toast adds
+noise without adding clarity); `SettingsView`'s `authError` `Alert` in its `!user` branch — dead
+code in the real app (App.jsx gates on `!user` earlier with `LoginSplash`, which owns this via
+its own `error` prop), same auth-screen gap notegeek and basegeek both hit. No
+`isDark ? lighten(…) : darken(…)` tone helper existed anywhere in bookgeek/web — `theme.js`'s
+own `isDark ? darkColors : lightColors` is base-palette construction, not the domain-color
+pattern `toneForMode` replaces — and no local `MuiTooltip` override either, so nothing for
+#19 to convert. `packages/ui` gaps found: none. Mobile harness: 12 scenes (phone only, per
+task), 0 violations — unchanged from baseline (`e85fc43`).
+
+**fitnessgeek — done 2026-09-05.** The local `components/primitives/EmptyState.jsx` named
+above (the second-most-developed local `EmptyState`) is now a thin wrapper: structure,
+44px action target and `text.muted` copy moved to `GeekEmptyState`; the app's own
+identity — the dashed "ghost" `Surface` card and the circular icon-in-a-ring ornament —
+stayed, and all four call sites (`MyFoods`, `MyMeals`, `Medications`, `Activity`'s "no
+recent activities" case) kept their `icon`/`title`/`copy` props untouched. `GeekToastProvider`
+is now mounted in `ModernLayout.jsx`, inside `GeekShell` and outside `GeekAppFrame`. Converted
+to `notify()`: `Weight`'s and the `FoodSearch` page's `useState`-driven `Snackbar` pairs;
+`Settings`/`Profile`/`MyFoods`/`MyMeals`/`BloodPressure`/`DashboardNew`/`HouseholdSettings`/
+`InfluxDBSettings`/`FoodSearch` component/`AIGoalPlanner`'s inline success/error `Alert`s.
+`HouseholdSettings`' conversion was also a real bug fix: its error/success banner lived in
+`CardContent`, behind the `PremiumDialog` modal its own validation errors need to be seen
+through — a toast floats above the dialog instead. `Settings`' dead-content "Failed to load
+settings" fallback, `Reports`' load failure (both content and the top banner), and `Activity`'s
+generic load failure became `GeekErrorState` with `onRetry`; `Activity`'s "Garmin isn't
+connected" branch became `GeekEmptyState` with a Settings deep link instead of a `warning`
+`Alert` — that state is normal-empty (nothing to connect yet), not broken. `toneForMode` (#19)
+replaced the `isDark ? color : darken(color, 0.35)` branches in `BPLogList`, `BPInsights`, and
+`Activity`'s sleep-stage/metric tiles (`{ lightenBy: 0, darkenBy: 0.35 }` — these hues were
+authored for dark tints and only ever needed the light-mode darken half). Left alone
+(dialog/form-adjacent, the user must act right there): `QuickAddBP`/`AddBPDialog`'s field
+validation, `BarcodeScanner`'s camera-permission and lookup errors, `WeightGoalWizard`'s field
+errors. Also left alone: `PWAUpdatePrompt` and `OfflineIndicator`, both mounted in `App.jsx`
+above the router entirely (public routes included), so no `GeekToastProvider` is in scope —
+and `PWAUpdatePrompt`'s banner auto-applies in 15s, which is an action prompt, not a courtesy;
+`SleepAnalysis`/`RecoveryCoach`/`MealImpactVisualization`/`HealthDashboard`'s `Alert`s carrying
+real analysis (cardiovascular dip, sleep apnea flags, AI insight cards) — substantive content,
+not an empty/error/toast shape. `UnifiedFoodSearch.jsx` sits outside `components/FoodLog*`
+but is a direct dependency of `AddFoodDialog` (a FoodLog component another agent had mid-flight
+for the GraphQL migration), so its error state is flagged here rather than touched.
+`FoodLog*` pages/components and `services/**` were not touched, per that same migration.
+`packages/ui` gaps found: none. One process note: converting `setError`/`setSuccess` (stable
+`useState` setters) to `notify` (from `useToast()`) inside six mount-effect load functions —
+`Settings`/`MyMeals`/`BloodPressure`/`DashboardNew`/`HouseholdSettings`/`InfluxDBSettings` —
+newly tripped `react-hooks/exhaustive-deps`, since the linter can't prove `notify`'s identity
+is stable the way a state setter's is; each got a one-line disable comment rather than an
+effect-dependency change that risked a reload loop. Lint held at the existing 55-warning
+baseline. Mobile harness: 20 scenes, 0 violations — unchanged from baseline.
+
 ---
 
 ## 3b. Mobile Grammar

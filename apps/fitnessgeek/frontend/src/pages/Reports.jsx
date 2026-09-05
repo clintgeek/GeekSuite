@@ -8,12 +8,12 @@ import {
   ToggleButton,
   Button,
   CircularProgress,
-  Alert,
   Chip,
   LinearProgress,
   useTheme
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
+import { GeekErrorState, useToast } from '@geeksuite/ui';
 import DayRibbon from '../components/Reports/DayRibbon.jsx';
 import { Surface, SectionLabel, DisplayHeading, StatNumber } from '../components/primitives';
 import {
@@ -41,6 +41,7 @@ const metricLabels = {
 const SECTION_PADDING = 3;
 const Reports = () => {
   const theme = useTheme();
+  const { notify } = useToast();
   const [range, setRange] = useState('7');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -98,7 +99,7 @@ const Reports = () => {
       window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error(err);
-      setError('Failed to export report');
+      notify('Failed to export report', { tone: 'error' });
     } finally {
       setExporting(false);
     }
@@ -206,16 +207,16 @@ const Reports = () => {
         </Box>
       </Box>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 3 }}>
-          {error}
-        </Alert>
-      )}
-
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
           <CircularProgress />
         </Box>
+      ) : error ? (
+        <GeekErrorState
+          title="Couldn't load reports"
+          error={error}
+          onRetry={fetchReports}
+        />
       ) : (
         <Box>
           {/* Average metrics — compact 6-up grid of Surfaces with StatNumber */}

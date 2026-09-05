@@ -7,7 +7,6 @@ import {
   ToggleButton,
   ToggleButtonGroup,
   CircularProgress,
-  Alert,
   Tabs,
   Tab,
   useTheme,
@@ -19,6 +18,7 @@ import {
   Assessment as ReportIcon,
   PictureAsPdf as PdfIcon
 } from '@mui/icons-material';
+import { useToast } from '@geeksuite/ui';
 import { SectionLabel, DisplayHeading } from '../components/primitives';
 import BPChartNivo from '../components/BloodPressure/BPChartNivo.jsx';
 import BPInsights from '../components/BloodPressure/BPInsights.jsx';
@@ -35,10 +35,9 @@ import logger from '../utils/logger.js';
 const BloodPressure = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const { notify } = useToast();
   const [bpLogs, setBPLogs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const [showReport, setShowReport] = useState(false);
   const [hrSeries, setHrSeries] = useState([]);
 
@@ -133,6 +132,7 @@ const BloodPressure = () => {
   useEffect(() => {
     loadBPData();
     loadHRSeries();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only load; loadBPData now closes over `notify` from useToast(), which the linter can't prove is stable.
   }, []);
 
   const loadBPData = async () => {
@@ -142,10 +142,10 @@ const BloodPressure = () => {
       if (response.success) {
         setBPLogs(response.data);
       } else {
-        setError('Failed to load blood pressure logs');
+        notify('Failed to load blood pressure logs', { tone: 'error' });
       }
     } catch (error) {
-      setError('Failed to load blood pressure data');
+      notify('Failed to load blood pressure data', { tone: 'error' });
       logger.error('Error loading BP data:', error);
     } finally {
       setLoading(false);
@@ -175,22 +175,21 @@ const BloodPressure = () => {
       if (response.success) {
         // Reload BP data to get the updated list
         await loadBPData();
-        setSuccess('Blood pressure reading logged successfully!');
-        setTimeout(() => setSuccess(''), 3000);
+        notify('Blood pressure reading logged successfully!', { tone: 'success' });
       } else {
-        setError(response.message || 'Failed to add blood pressure reading');
+        notify(response.message || 'Failed to add blood pressure reading', { tone: 'error' });
       }
     } catch (error) {
       // Handle specific error cases
       if (error.message && error.message.includes('already exists for this date')) {
         const todayBP = getTodayBP();
         if (todayBP) {
-          setError(`You already have a blood pressure reading for today (${todayBP.systolic}/${todayBP.diastolic}${todayBP.pulse ? `, pulse: ${todayBP.pulse}` : ''}). You can update the existing entry or delete it first.`);
+          notify(`You already have a blood pressure reading for today (${todayBP.systolic}/${todayBP.diastolic}${todayBP.pulse ? `, pulse: ${todayBP.pulse}` : ''}). You can update the existing entry or delete it first.`, { tone: 'error' });
         } else {
-          setError('You already have a blood pressure reading for today. You can update the existing entry or delete it first.');
+          notify('You already have a blood pressure reading for today. You can update the existing entry or delete it first.', { tone: 'error' });
         }
       } else {
-        setError('Failed to add blood pressure reading');
+        notify('Failed to add blood pressure reading', { tone: 'error' });
       }
       logger.error('Error adding BP reading:', error);
     }
@@ -203,13 +202,12 @@ const BloodPressure = () => {
       if (response.success) {
         // Reload BP data to get the updated list
         await loadBPData();
-        setSuccess('Blood pressure reading deleted successfully!');
-        setTimeout(() => setSuccess(''), 3000);
+        notify('Blood pressure reading deleted successfully!', { tone: 'success' });
       } else {
-        setError(response.message || 'Failed to delete blood pressure reading');
+        notify(response.message || 'Failed to delete blood pressure reading', { tone: 'error' });
       }
     } catch (error) {
-      setError('Failed to delete blood pressure reading');
+      notify('Failed to delete blood pressure reading', { tone: 'error' });
       logger.error('Error deleting BP reading:', error);
     }
   };
@@ -259,22 +257,6 @@ const BloodPressure = () => {
           Track your blood pressure and heart health over time.
         </Typography>
       </Box>
-
-      {/* Success/Error Messages */}
-      {success && (
-        <Box sx={{ mb: 3 }}>
-          <Alert severity="success" onClose={() => setSuccess('')}>
-            {success}
-          </Alert>
-        </Box>
-      )}
-      {error && (
-        <Box sx={{ mb: 3 }}>
-          <Alert severity="error" onClose={() => setError('')}>
-            {error}
-          </Alert>
-        </Box>
-      )}
 
       {/* Insights and Category Distribution - Stacked */}
       <Box sx={{ mb: 3 }}>

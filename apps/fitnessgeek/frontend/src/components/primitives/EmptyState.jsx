@@ -1,14 +1,28 @@
 import React from 'react';
-import { Box, Typography } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
+import { Box } from '@mui/material';
+import { GeekEmptyState } from '@geeksuite/ui';
 import Surface from './Surface';
-import DisplayHeading from './DisplayHeading';
+
+// The card-size step of DisplayHeading's scale, reproduced as `titleSx` —
+// `GeekEmptyState` always wraps `title` in its own `<Typography component="p">`,
+// so a heading component can't be handed in directly without nesting a
+// block element (`DisplayHeading`'s `h3`) inside a `<p>`.
+const TITLE_SX = {
+  fontFamily: "'DM Serif Display', Georgia, serif",
+  fontWeight: 400,
+  fontSize: { xs: '1.25rem', sm: '1.5rem' },
+  lineHeight: 1.15,
+  letterSpacing: '-0.01em',
+};
 
 /**
- * EmptyState — a consistent empty-state component with voice.
+ * EmptyState — FitnessGeek's ghost-card empty state.
  *
- * Instead of "No items found" everywhere, pages pass a title + copy + optional
- * icon and action. The result feels deliberate instead of skipped.
+ * Thin wrapper over `@geeksuite/ui`'s `GeekEmptyState` (TODO_ORDER #15 fan-out):
+ * structure (title/description/action layout, 44px action target, `text.muted`
+ * copy) moved to `packages/ui`; this file keeps the app's own identity — the
+ * dashed "ghost" `Surface` card and the circular icon ornament — and every
+ * call site (`icon`, `title`, `copy`, `action`) stays untouched.
  */
 const EmptyState = ({
   icon: Icon,
@@ -17,59 +31,45 @@ const EmptyState = ({
   action,
   variant = 'ghost',
   sx,
-}) => {
-  const theme = useTheme();
-
-  return (
-    <Surface
-      variant={variant}
-      sx={{
-        textAlign: 'center',
-        py: { xs: 5, sm: 7 },
-        px: 3,
-        ...sx,
-      }}
-    >
-      {Icon && (
-        <Box
-          sx={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: 56,
-            height: 56,
-            borderRadius: '50%',
-            backgroundColor: theme.palette.background.paper,
-            border: `1px solid ${theme.palette.divider}`,
-            color: theme.palette.primary.main,
-            mb: 2.5,
-          }}
-        >
-          <Icon sx={{ fontSize: 28 }} />
-        </Box>
-      )}
-      {title && (
-        <DisplayHeading size="card" sx={{ mb: 1 }}>
-          {title}
-        </DisplayHeading>
-      )}
-      {copy && (
-        <Typography
-          sx={{
-            color: theme.palette.text.secondary,
-            fontSize: '0.9375rem',
-            maxWidth: 380,
-            mx: 'auto',
-            lineHeight: 1.55,
-            mb: action ? 3 : 0,
-          }}
-        >
-          {copy}
-        </Typography>
-      )}
-      {action && <Box sx={{ mt: action ? 0 : 2 }}>{action}</Box>}
-    </Surface>
-  );
-};
+  ...props
+}) => (
+  <Surface
+    variant={variant}
+    // `GeekEmptyState` owns its own vertical/horizontal rhythm — no padding
+    // here, or the two stack and the card reads as oversized.
+    padded={false}
+    sx={sx}
+  >
+    <GeekEmptyState
+      icon={
+        Icon ? (
+          <Box
+            sx={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 56,
+              height: 56,
+              borderRadius: '50%',
+              backgroundColor: 'background.paper',
+              border: (theme) => `1px solid ${theme.palette.divider}`,
+              color: 'primary.main',
+            }}
+          >
+            <Icon sx={{ fontSize: 28 }} />
+          </Box>
+        ) : undefined
+      }
+      iconSx={{ mb: 2.5 }}
+      title={title}
+      titleSx={TITLE_SX}
+      description={copy}
+      descriptionSx={{ fontSize: '0.9375rem', lineHeight: 1.55 }}
+      action={action}
+      maxWidth={380}
+      {...props}
+    />
+  </Surface>
+);
 
 export default EmptyState;

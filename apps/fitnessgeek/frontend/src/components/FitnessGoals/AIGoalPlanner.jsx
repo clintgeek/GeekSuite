@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Box, Paper, Typography, TextField, Button, CircularProgress, Alert, Chip, Card, CardContent,
+  Box, Paper, Typography, TextField, Button, CircularProgress, Chip, Card, CardContent,
   Stepper, Step, StepLabel, Divider, FormControl, InputLabel, Select, MenuItem
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
@@ -8,6 +8,7 @@ import {
   Restaurant as FoodIcon, Timeline as TimelineIcon, CheckCircle as CheckCircleIcon,
   Calculate as CalculateIcon, TrendingUp as TrendingUpIcon
 } from '@mui/icons-material';
+import { useToast } from '@geeksuite/ui';
 import { userService } from '../../services/userService.js';
 import { settingsService } from '../../services/settingsService.js';
 import { useAuth } from '@geeksuite/auth';
@@ -17,6 +18,7 @@ import KetoPlanStep from './KetoPlanStep';
 const CalorieGoalWizard = () => {
   const { user } = useAuth();
   const theme = useTheme();
+  const { notify } = useToast();
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [activeStep, setActiveStep] = useState(0);
   const [mode, setMode] = useState('standard');
@@ -25,7 +27,6 @@ const CalorieGoalWizard = () => {
     track_net_carbs: true,
     macro_split: { preset: 'classic', fat_pct: 70, protein_pct: 25, carb_pct: 5 }
   });
-  const [success, setSuccess] = useState('');
 
   // User profile data
   const [profile, setProfile] = useState({
@@ -264,11 +265,11 @@ const CalorieGoalWizard = () => {
 
       if (Object.keys(profileUpdates).length > 0) {
         await userService.updateProfile(profileUpdates);
-        setSuccess('Profile updated successfully!');
-        setTimeout(() => setSuccess(''), 3000);
+        notify('Profile updated successfully!', { tone: 'success' });
       }
     } catch (error) {
       console.error('Failed to update profile:', error);
+      notify('Failed to update profile', { tone: 'error' });
     }
   };
 
@@ -291,9 +292,6 @@ const CalorieGoalWizard = () => {
           {steps.map((label) => (<Step key={label}><StepLabel>{label}</StepLabel></Step>))}
         </Stepper>
       )}
-
-      {/* Success Display */}
-      {success && (<Alert severity="success" sx={{ mb: 3 }}>{success}</Alert>)}
 
       {/* Step 0: Mode Selector */}
       {!hasExistingGoal && activeStep === 0 && (
@@ -537,12 +535,12 @@ const CalorieGoalWizard = () => {
                       keto: ketoConfig
                     }
                   });
-                  setSuccess('Keto goal saved. Tracking started!');
+                  notify('Keto goal saved. Tracking started!', { tone: 'success' });
                   setHasExistingGoal(true);
                   await loadExistingGoal();
-                  setTimeout(() => setSuccess(''), 5000);
                 } catch (e) {
                   console.error('Failed to save keto goal', e);
+                  notify('Failed to save keto goal', { tone: 'error' });
                 }
               }}
             >
@@ -601,10 +599,10 @@ const CalorieGoalWizard = () => {
                   await settingsService.updateSettings({ nutrition_goal: { enabled: false } });
                   setHasExistingGoal(false);
                   setPlan(null);
-                  setSuccess('Keto goal removed.');
-                  setTimeout(() => setSuccess(''), 3000);
+                  notify('Keto goal removed.', { tone: 'success' });
                 } catch (e) {
                   console.error('Failed to remove keto goal', e);
+                  notify('Failed to remove keto goal', { tone: 'error' });
                 }
               }}
             >
@@ -779,10 +777,10 @@ const CalorieGoalWizard = () => {
                       await settingsService.updateSettings({ nutrition_goal: { enabled: false } });
                       setHasExistingGoal(false);
                       setPlan(null);
-                      setSuccess('Calorie goal removed.');
-                      setTimeout(() => setSuccess(''), 3000);
+                      notify('Calorie goal removed.', { tone: 'success' });
                     } catch (e) {
                       console.error('Failed to remove nutrition goal', e);
+                      notify('Failed to remove calorie goal', { tone: 'error' });
                     }
                   }}
                 >
@@ -825,13 +823,13 @@ const CalorieGoalWizard = () => {
                           keto: mode === 'keto' ? ketoConfig : undefined
                         }
                       });
-                      setSuccess('Calorie goal saved. Tracking started!');
+                      notify('Calorie goal saved. Tracking started!', { tone: 'success' });
                       setHasExistingGoal(true);
                       // Refresh from backend to ensure we reflect the persisted state
                       await loadExistingGoal();
-                      setTimeout(() => setSuccess(''), 5000);
                     } catch (e) {
                       console.error('Failed to save nutrition goal', e);
+                      notify('Failed to save calorie goal', { tone: 'error' });
                     }
                   }}
                   sx={{ bgcolor: 'success.main', '&:hover': { bgcolor: 'success.dark' } }}

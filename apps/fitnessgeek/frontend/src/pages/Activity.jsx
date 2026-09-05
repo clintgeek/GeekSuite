@@ -4,11 +4,12 @@ import {
   Typography,
   Grid,
   CircularProgress,
-  Alert,
+  Button,
   Chip,
   LinearProgress,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   DirectionsWalk as StepsIcon,
   LocalFireDepartment as FireIcon,
@@ -26,7 +27,8 @@ import {
   Psychology as RemIcon,
   Visibility as AwakeIcon,
 } from '@mui/icons-material';
-import { alpha, darken } from '@mui/material/styles';
+import { alpha } from '@mui/material/styles';
+import { GeekEmptyState, GeekErrorState, toneForMode } from '@geeksuite/ui';
 import { fitnessGeekService } from '../services/fitnessGeekService';
 import { Surface, SectionLabel, DisplayHeading, StatNumber, EmptyState } from '../components/primitives';
 
@@ -37,7 +39,7 @@ const SleepStageTile = ({ icon: Icon, minutes = 0, label, color }) => {
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
   const theme = useTheme();
-  const textColor = theme.palette.mode === 'dark' ? color : darken(color, 0.35);
+  const textColor = toneForMode(color, theme, { lightenBy: 0, darkenBy: 0.35 });
   return (
     <Box
       sx={{
@@ -89,7 +91,7 @@ const SleepStageTile = ({ icon: Icon, minutes = 0, label, color }) => {
  */
 const MetricTile = ({ icon: Icon, label, value, unit, color, subtext }) => {
   const theme = useTheme();
-  const textColor = theme.palette.mode === 'dark' ? color : darken(color, 0.35);
+  const textColor = toneForMode(color, theme, { lightenBy: 0, darkenBy: 0.35 });
   return (
     <Box
       sx={{
@@ -344,6 +346,7 @@ const Activity = () => {
   const theme = useTheme();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [garminNotEnabled, setGarminNotEnabled] = useState(false);
   const [dailyData, setDailyData] = useState(null);
   const [sleepData, setSleepData] = useState(null);
   const [activities, setActivities] = useState([]);
@@ -356,6 +359,7 @@ const Activity = () => {
   const loadData = async () => {
     setLoading(true);
     setError(null);
+    setGarminNotEnabled(false);
 
     try {
       // Check Garmin status first
@@ -363,7 +367,7 @@ const Activity = () => {
       setGarminStatus(statusRes?.data || statusRes);
 
       if (!statusRes?.data?.enabled && !statusRes?.enabled) {
-        setError('Garmin integration is not enabled. Go to Settings to connect your Garmin account.');
+        setGarminNotEnabled(true);
         setLoading(false);
         return;
       }
@@ -418,11 +422,24 @@ const Activity = () => {
         </Typography>
       </Box>
 
-      {error && (
-        <Alert severity="warning" sx={{ mb: 3 }}>
-          {error}
-        </Alert>
-      )}
+      {garminNotEnabled ? (
+        <GeekEmptyState
+          icon={<WorkoutIcon sx={{ fontSize: 28 }} />}
+          title="Garmin isn't connected"
+          description="Connect your Garmin account in Settings to see steps, sleep, heart rate and activities here."
+          action={
+            <Button component={RouterLink} to="/settings" variant="outlined">
+              Go to Settings
+            </Button>
+          }
+        />
+      ) : error ? (
+        <GeekErrorState
+          title="Couldn't load activity data"
+          error={error}
+          onRetry={loadData}
+        />
+      ) : null}
 
       {/* Daily Stats */}
       {dailyData && (

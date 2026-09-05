@@ -11,7 +11,8 @@ import {
   ListItemText,
   ListItemSecondaryAction
 } from '@mui/material';
-import { useTheme, darken } from '@mui/material/styles';
+import { useTheme } from '@mui/material/styles';
+import { toneForMode } from '@geeksuite/ui';
 import {
   Delete as DeleteIcon,
   MonitorHeart as BPIcon
@@ -19,9 +20,8 @@ import {
 
 const BPLogList = ({ logs, onDelete, unit = "mmHg" }) => {
   const theme = useTheme();
-  const isDark = theme.palette.mode === 'dark';
   // Status hues are tuned for dark tints; darken for legible text on light-mode tints.
-  const statusTextColor = (color) => (isDark ? color : darken(color, 0.35));
+  const statusTextColor = (color) => toneForMode(color, theme, { lightenBy: 0, darkenBy: 0.35 });
   const getBPStatus = (systolic, diastolic) => {
     // BP Categories based on American Heart Association guidelines
     if (systolic < 120 && diastolic < 80) return { status: 'Normal', color: '#10b981' };

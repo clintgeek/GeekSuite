@@ -9,7 +9,6 @@ import {
   ListItem,
   ListItemText,
   IconButton,
-  Alert,
   Divider
 } from '@mui/material';
 import {
@@ -17,6 +16,7 @@ import {
   Close as CloseIcon,
   Add as AddIcon
 } from '@mui/icons-material';
+import { useToast } from '@geeksuite/ui';
 import { fitnessGeekService } from '../../services/fitnessGeekService';
 import BarcodeScanner from '../BarcodeScanner/BarcodeScanner.jsx';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
@@ -51,7 +51,7 @@ const FoodSearch = ({
   const [searchResults, setSearchResults] = useState([]);
   const [recentFoods, setRecentFoods] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const { notify } = useToast();
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
   const [selectedFood, setSelectedFood] = useState(null);
   const [servings, setServings] = useState(1);
@@ -90,7 +90,6 @@ const FoodSearch = ({
     }
 
     setLoading(true);
-    setError(null);
 
     try {
       const [foods, meals] = await Promise.all([
@@ -116,7 +115,7 @@ const FoodSearch = ({
       // Show saved meals first
       setSearchResults([...(mappedMeals || []), ...(foods || [])]);
     } catch (err) {
-      setError(err.message);
+      notify(err.message, { tone: 'error' });
       setSearchResults([]);
     } finally {
       setLoading(false);
@@ -262,13 +261,6 @@ const FoodSearch = ({
           }}
         />
       </Box>
-
-      {/* Error Message */}
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
 
       {/* Search Results */}
       {searchQuery.length >= 2 && (

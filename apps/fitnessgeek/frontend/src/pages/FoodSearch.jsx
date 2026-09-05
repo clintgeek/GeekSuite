@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Box, Typography, Alert, Snackbar, Button } from '@mui/material';
+import { Box, Typography, Button } from '@mui/material';
 import { Add as AddIcon, AutoAwesome as WandIcon } from '@mui/icons-material';
+import { useToast } from '@geeksuite/ui';
 import AddFoodDialog from '../components/FoodLog/AddFoodDialog';
 import { fitnessGeekService } from '../services/fitnessGeekService.js';
 import {
@@ -17,8 +18,7 @@ import {
  * from the nav, rather than from a meal slot in the Food Log.
  */
 const FoodSearchPage = () => {
-  const [message, setMessage] = useState(null);
-  const [messageType, setMessageType] = useState('success');
+  const { notify } = useToast();
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
 
@@ -55,12 +55,12 @@ const FoodSearchPage = () => {
     }
 
     if (ok > 0) {
-      setMessage(`Added ${ok} item${ok !== 1 ? 's' : ''} to today's snack.`);
-      setMessageType(fail > 0 ? 'warning' : 'success');
+      notify(`Added ${ok} item${ok !== 1 ? 's' : ''} to today's snack.`, {
+        tone: fail > 0 ? 'warning' : 'success',
+      });
     }
     if (fail > 0 && ok === 0) {
-      setMessage(`Failed to add ${fail} item${fail !== 1 ? 's' : ''}.`);
-      setMessageType('error');
+      notify(`Failed to add ${fail} item${fail !== 1 ? 's' : ''}.`, { tone: 'error' });
     }
 
     return { ok, fail };
@@ -78,13 +78,11 @@ const FoodSearchPage = () => {
         nutrition: food.nutrition,
       };
       await fitnessGeekService.addFoodToLog(logData);
-      setMessage(`Added "${food.name}" to today's log`);
-      setMessageType('success');
+      notify(`Added "${food.name}" to today's log`, { tone: 'success' });
       setShowAddDialog(false);
     } catch (error) {
       console.error('Error adding food to log:', error);
-      setMessage('Failed to add food. Please try again.');
-      setMessageType('error');
+      notify('Failed to add food. Please try again.', { tone: 'error' });
     }
   };
 
@@ -172,21 +170,6 @@ const FoodSearchPage = () => {
         showBarcodeScanner={showBarcodeScanner}
         onShowBarcodeScanner={setShowBarcodeScanner}
       />
-
-      <Snackbar
-        open={!!message}
-        autoHideDuration={4000}
-        onClose={() => setMessage(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert
-          onClose={() => setMessage(null)}
-          severity={messageType}
-          sx={{ width: '100%', borderRadius: 2 }}
-        >
-          {message}
-        </Alert>
-      </Snackbar>
     </Box>
   );
 };

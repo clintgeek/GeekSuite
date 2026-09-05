@@ -8,7 +8,6 @@ import {
   IconButton,
   Typography,
   CircularProgress,
-  Alert,
   DialogContentText,
   Button,
 } from '@mui/material';
@@ -17,6 +16,7 @@ import {
   Delete as DeleteIcon,
   Restaurant as MealIcon,
 } from '@mui/icons-material';
+import { useToast } from '@geeksuite/ui';
 import { fitnessGeekService } from '../services/fitnessGeekService.js';
 import EditMealDialog from '../components/Meals/EditMealDialog.jsx';
 import {
@@ -29,9 +29,9 @@ import {
 } from '../components/primitives';
 
 const MyMeals = () => {
+  const { notify } = useToast();
   const [meals, setMeals] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [query, setQuery] = useState('');
   const [editingMeal, setEditingMeal] = useState(null);
   const [editOpen, setEditOpen] = useState(false);
@@ -43,6 +43,7 @@ const MyMeals = () => {
 
   useEffect(() => {
     loadMeals();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only load; loadMeals now closes over `notify` from useToast(), which the linter can't prove is stable.
   }, []);
 
   const loadMeals = async () => {
@@ -51,7 +52,7 @@ const MyMeals = () => {
       const data = await fitnessGeekService.getMeals();
       setMeals(data || []);
     } catch (e) {
-      setError('Failed to load meals');
+      notify('Failed to load meals', { tone: 'error' });
     } finally {
       setLoading(false);
     }
@@ -78,7 +79,7 @@ const MyMeals = () => {
       await loadMeals();
       setMealToDelete(null);
     } catch (e) {
-      setError('Failed to delete meal');
+      notify('Failed to delete meal', { tone: 'error' });
     } finally {
       setDeleting(false);
     }
@@ -93,7 +94,7 @@ const MyMeals = () => {
       setEditingMeal(null);
       await loadMeals();
     } catch (e) {
-      setError('Failed to save meal');
+      notify('Failed to save meal', { tone: 'error' });
     } finally {
       setSaving(false);
     }
@@ -129,12 +130,6 @@ const MyMeals = () => {
           size="small"
         />
       </Box>
-
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
-          {error}
-        </Alert>
-      )}
 
       {loading ? (
         <SurfaceSkeleton rows={4} />

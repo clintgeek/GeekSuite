@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   Box,
   Container,
-  Alert,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -12,6 +11,7 @@ import {
   DirectionsWalk as StepsIcon,
   Whatshot as StreakIcon,
 } from '@mui/icons-material';
+import { useToast } from '@geeksuite/ui';
 
 // Import new components
 import DailyTicket from '../components/Dashboard/DailyTicket.jsx';
@@ -30,8 +30,8 @@ import { streakService } from '../services/streakService.js';
 import { settingsService } from '../services/settingsService.js';
 
 const DashboardNew = () => {
+  const { notify } = useToast();
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [removingLogIds, setRemovingLogIds] = useState(new Set());
   // Keto mode state
   const [nutritionGoal, setNutritionGoal] = useState(null);
@@ -59,6 +59,7 @@ const DashboardNew = () => {
 
   useEffect(() => {
     loadDashboardData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only load; loadDashboardData now closes over `notify` from useToast(), which the linter can't prove is stable.
   }, []);
 
   // Load nutrition goal (mode + keto config) independently from dashboard data
@@ -322,7 +323,7 @@ const DashboardNew = () => {
       setLoading(false);
     } catch (err) {
       console.error('Error loading dashboard:', err);
-      setError('Failed to load dashboard data');
+      notify('Failed to load dashboard data', { tone: 'error' });
       setLoading(false);
     }
   };
@@ -345,7 +346,7 @@ const DashboardNew = () => {
       }, 220);
     } catch (err) {
       console.error('Failed to remove food log:', err);
-      setError('Could not remove that item. Try again.');
+      notify('Could not remove that item. Try again.', { tone: 'error' });
       setRemovingLogIds((prev) => {
         const next = new Set(prev);
         next.delete(logId);
@@ -387,12 +388,6 @@ const DashboardNew = () => {
         <SectionLabel sx={{ mb: 0.75 }}>Today's Log</SectionLabel>
         <DisplayHeading size="page">{greeting}.</DisplayHeading>
       </Box>
-
-      {error && (
-        <Alert severity="error" sx={{ mb: 3 }}>
-          {error}
-        </Alert>
-      )}
 
       {/* Dashboard Grid */}
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>

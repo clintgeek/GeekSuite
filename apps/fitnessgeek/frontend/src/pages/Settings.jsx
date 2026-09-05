@@ -4,7 +4,6 @@ import {
   Typography,
   Switch,
   FormControlLabel,
-  Alert,
   CircularProgress,
   Button,
   FormControl,
@@ -23,6 +22,7 @@ import {
   RestartAlt as DiscardIcon,
 } from '@mui/icons-material';
 import { useTheme, alpha } from '@mui/material/styles';
+import { GeekErrorState, useToast } from '@geeksuite/ui';
 import { settingsService } from '../services/settingsService.js';
 import logger from '../utils/logger.js';
 import { useThemeMode as useAppTheme } from '@geeksuite/user';
@@ -55,11 +55,11 @@ const Settings = () => {
   const [garminPassword, setGarminPassword] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const { notify } = useToast();
 
   useEffect(() => {
     loadSettings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only load; loadSettings now closes over `notify` from useToast(), which the linter can't prove is stable.
   }, []);
 
   const loadSettings = async () => {
@@ -83,7 +83,7 @@ const Settings = () => {
       setBaseline(JSON.parse(JSON.stringify(normalized)));
     } catch (err) {
       console.error('Error loading settings:', err);
-      setError('Failed to load settings');
+      notify('Failed to load settings — showing defaults', { tone: 'error' });
       const defaultSettings = {
         dashboard: settingsService.getDefaultDashboardSettings(),
         theme: 'light',
@@ -131,8 +131,6 @@ const Settings = () => {
   const saveSettings = async () => {
     try {
       setSaving(true);
-      setError('');
-      setSuccess('');
       const payload = {
         ...settings,
         garmin: {
@@ -146,11 +144,10 @@ const Settings = () => {
       setBaseline(JSON.parse(JSON.stringify(settings)));
       setGarminUsernameBaseline(garminUsername);
       setGarminPassword('');
-      setSuccess('Settings saved');
-      setTimeout(() => setSuccess(''), 2800);
+      notify('Settings saved', { tone: 'success' });
     } catch (err) {
       console.error('Error saving settings:', err);
-      setError('Failed to save settings');
+      notify('Failed to save settings', { tone: 'error' });
     } finally {
       setSaving(false);
     }
@@ -184,7 +181,11 @@ const Settings = () => {
   if (!settings) {
     return (
       <Box sx={{ p: 2 }}>
-        <Alert severity="error">Failed to load settings</Alert>
+        <GeekErrorState
+          title="Couldn't load settings"
+          description="Something went wrong fetching your settings."
+          onRetry={loadSettings}
+        />
       </Box>
     );
   }
@@ -207,18 +208,6 @@ const Settings = () => {
           Customize your FitnessGeek experience. Changes stay local until you save.
         </Typography>
       </Box>
-
-      {/* Success/Error */}
-      {success && (
-        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess('')}>
-          {success}
-        </Alert>
-      )}
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
-          {error}
-        </Alert>
-      )}
 
       {/* Household Sharing */}
       <Box sx={{ mb: 2 }}>

@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { Box, Typography, Card, CardContent, Chip } from '@mui/material';
-import { useTheme, darken } from '@mui/material/styles';
+import { useTheme } from '@mui/material/styles';
+import { toneForMode } from '@geeksuite/ui';
 import {
   Favorite as HeartIcon,
   TrendingUp as TrendingUpIcon,
@@ -195,7 +196,7 @@ const BPInsights = ({ bpLogs = [] }) => {
             label={insights.currentCategory.name}
             sx={{
               backgroundColor: `${insights.currentCategory.color}15`,
-              color: isDark ? insights.currentCategory.color : darken(insights.currentCategory.color, 0.35),
+              color: toneForMode(insights.currentCategory.color, theme, { lightenBy: 0, darkenBy: 0.35 }),
               fontWeight: 700,
               border: `1px solid ${insights.currentCategory.color}30`,
               borderRadius: '999px'

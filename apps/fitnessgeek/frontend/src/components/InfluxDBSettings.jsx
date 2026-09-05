@@ -25,12 +25,14 @@ import {
   Warning as WarningIcon,
   Info as InfoIcon
 } from '@mui/icons-material';
+import { useToast } from '@geeksuite/ui';
 
 /**
  * InfluxDB Settings Component
  * Allows users to toggle between legacy Garmin API and InfluxDB data sources
  */
 export default function InfluxDBSettings({ onSettingsChange }) {
+  const { notify } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
@@ -43,8 +45,6 @@ export default function InfluxDBSettings({ onSettingsChange }) {
     }
   });
   const [connectionStatus, setConnectionStatus] = useState(null);
-  const [error, setError] = useState(null);
-  const [successMessage, setSuccessMessage] = useState(null);
 
   // Temporary state for baseline inputs
   const [hrvInput, setHrvInput] = useState('');
@@ -52,6 +52,7 @@ export default function InfluxDBSettings({ onSettingsChange }) {
 
   useEffect(() => {
     fetchSettings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only load; fetchSettings now closes over `notify` from useToast(), which the linter can't prove is stable.
   }, []);
 
   useEffect(() => {
@@ -65,7 +66,6 @@ export default function InfluxDBSettings({ onSettingsChange }) {
 
   async function fetchSettings() {
     setLoading(true);
-    setError(null);
 
     try {
       const response = await apiService.get('/user/settings');
@@ -80,7 +80,7 @@ export default function InfluxDBSettings({ onSettingsChange }) {
       });
     } catch (err) {
       console.error('Error fetching settings:', err);
-      setError('Failed to load settings');
+      notify('Failed to load settings', { tone: 'error' });
     } finally {
       setLoading(false);
     }
@@ -89,7 +89,6 @@ export default function InfluxDBSettings({ onSettingsChange }) {
   async function testInfluxConnection() {
     setTestingConnection(true);
     setConnectionStatus(null);
-    setError(null);
 
     try {
       const response = await influxService.getStatus();
@@ -112,8 +111,6 @@ export default function InfluxDBSettings({ onSettingsChange }) {
   async function handleToggleInflux(event) {
     const newValue = event.target.checked;
     setSaving(true);
-    setError(null);
-    setSuccessMessage(null);
 
     try {
       await apiService.patch('/user/settings', {
@@ -121,10 +118,11 @@ export default function InfluxDBSettings({ onSettingsChange }) {
       });
 
       setSettings(prev => ({ ...prev, influxEnabled: newValue }));
-      setSuccessMessage(
+      notify(
         newValue
           ? 'InfluxDB enabled! Your health data will now come from your personal InfluxDB instance.'
-          : 'Switched back to legacy Garmin API.'
+          : 'Switched back to legacy Garmin API.',
+        { tone: 'success' }
       );
 
       // Notify parent component of the change
@@ -138,7 +136,7 @@ export default function InfluxDBSettings({ onSettingsChange }) {
       }
     } catch (err) {
       console.error('Error updating settings:', err);
-      setError(err.response?.data?.error || 'Failed to update settings');
+      notify(err.response?.data?.error || 'Failed to update settings', { tone: 'error' });
     } finally {
       setSaving(false);
     }
@@ -146,8 +144,6 @@ export default function InfluxDBSettings({ onSettingsChange }) {
 
   async function handleUpdateBaselines() {
     setSaving(true);
-    setError(null);
-    setSuccessMessage(null);
 
     try {
       const newBaselines = {
@@ -161,10 +157,10 @@ export default function InfluxDBSettings({ onSettingsChange }) {
       });
 
       setSettings(prev => ({ ...prev, healthBaselines: newBaselines }));
-      setSuccessMessage('Health baselines updated successfully!');
+      notify('Health baselines updated successfully!', { tone: 'success' });
     } catch (err) {
       console.error('Error updating baselines:', err);
-      setError(err.response?.data?.error || 'Failed to update baselines');
+      notify(err.response?.data?.error || 'Failed to update baselines', { tone: 'error' });
     } finally {
       setSaving(false);
     }
@@ -186,20 +182,6 @@ export default function InfluxDBSettings({ onSettingsChange }) {
           <StorageIcon sx={{ verticalAlign: 'middle', mr: 1 }} />
           Data Source Settings
         </Typography>
-
-        {/* Status Messages */}
-        {error && (
-          <Alert severity="error" onClose={() => setError(null)}>
-            <AlertTitle>Error</AlertTitle>
-            {error}
-          </Alert>
-        )}
-
-        {successMessage && (
-          <Alert severity="success" onClose={() => setSuccessMessage(null)}>
-            {successMessage}
-          </Alert>
-        )}
 
         {/* Main Toggle Card */}
         <Card>

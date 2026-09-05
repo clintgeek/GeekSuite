@@ -5,7 +5,6 @@ import {
   Button,
   TextField,
   Avatar,
-  Alert,
   CircularProgress,
   Grid,
   List,
@@ -22,15 +21,15 @@ import {
 } from '@mui/icons-material';
 import { Link as RouterLink } from 'react-router-dom';
 import { useAuth } from '@geeksuite/auth';
+import { useToast } from '@geeksuite/ui';
 import { userService } from '../services/userService.js';
 import HouseholdSettings from '../components/Settings/HouseholdSettings';
 import { Surface, SectionLabel, DisplayHeading, PremiumDialog } from '../components/primitives';
 
 const Profile = () => {
   const { user, logout } = useAuth();
+  const { notify } = useToast();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editData, setEditData] = useState({
     username: user?.username || user?.name || '',
@@ -84,17 +83,15 @@ const Profile = () => {
       // Update profile in baseGeek
       const result = await userService.updateProfile(profileData);
       if (result.success) {
-        setSuccess('Profile updated successfully!');
+        notify('Profile updated successfully!', { tone: 'success' });
         setShowEditDialog(false);
         // Reload user profile data
         await loadUserProfile();
       } else {
-        setError('Failed to update profile');
+        notify('Failed to update profile', { tone: 'error' });
       }
-      setTimeout(() => setSuccess(''), 3000);
     } catch (error) {
-      setError(error.message || 'Failed to update profile');
-      setTimeout(() => setError(''), 3000);
+      notify(error.message || 'Failed to update profile', { tone: 'error' });
     } finally {
       setLoading(false);
     }
@@ -110,9 +107,6 @@ const Profile = () => {
           Your identity and account. App preferences live in Settings.
         </Typography>
       </Box>
-
-      {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
       <Grid container spacing={3}>
         {/* Profile Card */}

@@ -66,16 +66,81 @@ cycle so the ordering rationale stays visible; detail moved to `SUITE_TODO.md` "
     GeekErrorState, GeekToastProvider/useToast in packages/ui; bujogeek is the proof). **flockgeek
     fan-out done 2026-09-05** (ResponsiveTable grew error/onRetry props; Groups/LocationsPage
     converted directly; all mutation errors + QuickHarvestEntry's success/error state became
-    toast; GeekToastProvider mounted in LayoutShell). Remaining fan-out: fitnessgeek, notegeek,
-    storygeek, bookgeek, basegeek; list of local patterns is in THE_UI_UNIFICATION_PLAN.md
-    "Feedback primitives". *UI*
+    toast; GeekToastProvider mounted in LayoutShell). **notegeek fan-out done 2026-09-05**
+    (GeekToastProvider mounted in Layout.jsx; NoteList/SearchResults/Sidebar/NoteViewer/NotePage
+    query errors converted with real onRetry; QuickCaptureHome's capture Snackbar became a
+    toast; two dead unrouted pages swept for consistency; Register.jsx's inline validation
+    Alert left alone — no shell/provider on that route). **basegeek fan-out done 2026-09-05**
+    (AIGeek's `pages/aigeek/*` was already converted from this week's polish pass, nothing to
+    do there; `ResponsiveTable` grew the same `error`/`errorTitle`/`onRetry` props as flockgeek's
+    plus a `GeekEmptyState` empty row; AccountPage's inline error `Alert` and its two
+    `saved`-state auto-clear checkmarks became `notify()` calls, its "No app-specific
+    preferences yet" block became `GeekEmptyState`; UserGeekPage's load failure became
+    `GeekErrorState` with `onRetry={fetchUsers}`, its delete/create failures became toasts, its
+    "No users found" `ListItem` became `GeekEmptyState`. `GeekToastProvider` was already mounted
+    in `Layout.jsx` from an earlier pass. Left alone: Mongo/Redis/Postgres/InfluxDB status cards
+    and BaseGeekHome/PortalPage's app-health tiles — standing connection readouts, not toasts;
+    LoginPage/RegisterPage's inline error `Alert`s — public routes outside the shell, no
+    `GeekToastProvider` to reach (same gap TODO_ORDER #19 already flags as "Auth splash still
+    open"). No local `EmptyState`/`ErrorState`/toast component or `isDark ? lighten` tone helper
+    existed here, so nothing to delete. Mobile harness: 26 scenes, 0 violations — unchanged from
+    baseline (`e85fc43`)). **bookgeek fan-out done 2026-09-05** (this week's Pocket Pass rewrite
+    had already put `GeekEmptyState`/`GeekErrorState` on `LibraryView`'s empties and its
+    load-error-with-retry, so the gap was entirely toast; `GeekToastProvider` mounted in
+    `App.jsx`, inside `GeekShell` and outside `GeekAppFrame`. Converted: SettingsView's
+    profile-save, default-shelf-save, and shelf-edit errors/messages; its three
+    Goodreads-import/dedupe/Calibre-rescan jobs' terminal summaries/errors (loading state
+    stayed inline, per the import/enrich carve-out); BookDetailModal's enrich terminal notice
+    and its More sheet's upload outcome; LibraryView's basket/merge-selection validation
+    captions. AI status error became a compact `GeekErrorState` with `onRetry`, flockgeek's
+    health-check shape. Left alone: every error inside an open dialog the user must act on
+    right there (add-book, edit-metadata, delete-confirm, cover-search, progress); the sticky
+    detail sheet's send-to-kindle status/no-EPUB reminder (a toast candidate, left with its
+    ticker sibling); the reader's own non-theme-token error line; the duplicated
+    saved-filters-load error (Sidebar + FilterSheet); SettingsView's dead-code auth `Alert`
+    (App.jsx gates on `!user` earlier via `LoginSplash`, same auth-screen gap as notegeek/
+    basegeek). No local EmptyState/ErrorState/toast component or `isDark ? lighten` tone
+    helper existed here, so nothing to delete and nothing for #19. Mobile harness: 12 scenes
+    (phone only), 0 violations — unchanged from baseline (`e85fc43`)). **fitnessgeek fan-out
+    done 2026-09-05** (`GeekToastProvider` mounted in `ModernLayout.jsx`, inside `GeekShell` and
+    outside `GeekAppFrame`; local `components/primitives/EmptyState.jsx` — the
+    second-most-developed local empty state named in this section — kept as a thin wrapper:
+    the dashed "ghost" `Surface` card and circular icon ornament stayed, structure/spacing moved
+    to `GeekEmptyState`, all four call sites (MyFoods, MyMeals, Medications, Activity)
+    untouched. Converted to toast: Weight's and FoodSearch page's `Snackbar` pairs;
+    Settings/Profile/MyFoods/MyMeals/BloodPressure/DashboardNew/HouseholdSettings/
+    InfluxDBSettings/FoodSearch component/AIGoalPlanner's `useState`-driven success/error
+    `Alert`s (HouseholdSettings' banner sat behind its own `PremiumDialog`, so this was also a
+    real bug fix, not just a style swap). Settings' and Reports' and Activity's dead-content
+    load failures became `GeekErrorState` with `onRetry`; Activity's "Garmin not enabled" branch
+    became `GeekEmptyState` with a Settings deep link instead of a `warning` `Alert`, since it's
+    normal-empty, not broken. `toneForMode` (#19) replaced the `isDark ? color : darken(color,
+    0.35)` branches in `BPLogList`, `BPInsights`, and `Activity`'s two sleep/metric tiles. Left
+    alone (dialog/form-adjacent, user must act right there): `QuickAddBP`/`AddBPDialog`'s and
+    `BarcodeScanner`'s inline validation and camera/lookup errors, `WeightGoalWizard`'s field
+    errors; `PWAUpdatePrompt` and `OfflineIndicator` (mounted in `App.jsx` above the
+    router/shell entirely — no `GeekToastProvider` in scope, and `PWAUpdatePrompt`'s is a
+    15s-auto-apply action banner, not a courtesy); `SleepAnalysis`/`RecoveryCoach`/
+    `MealImpactVisualization`/`HealthDashboard`'s analytical insight `Alert`s (substantive
+    content, not empty/error/toast-shaped); `UnifiedFoodSearch.jsx` (outside `components/
+    FoodLog*` but tightly coupled to `AddFoodDialog`, which another agent was mid-migration on
+    — flagged instead of touched). `FoodLog*` pages/components and `services/**` untouched per
+    the food-log GraphQL migration in flight. Lint held at the 55-warning baseline: adopting
+    `notify` inside six mount-effect load functions (Settings/MyMeals/BloodPressure/
+    DashboardNew/HouseholdSettings/InfluxDBSettings) newly tripped
+    `react-hooks/exhaustive-deps`, since the linter can't prove `useToast()`'s `notify` is
+    stable the way a `useState` setter is; each got a one-line disable comment rather than a
+    behavior-risking dependency-array change. Mobile harness: 20 scenes, 0 violations —
+    unchanged from baseline. Remaining fan-out: storygeek; list of local patterns is in
+    THE_UI_UNIFICATION_PLAN.md "Feedback primitives". *UI*
 16. ~~Shared mobile bottom-nav primitive~~ — folded into #15a.
 17. **Shared date utilities** — M. `toUtcMidnight` / `localDateString` / `displayCalendarDate`
     into `packages/utils`; bujogeek, fitnessgeek, flockgeek consume. Spec exists in
     `ARCHIVE/THE_TIME_ISSUE.md`. *Shared libs*
 18. ~~**Shared logger**~~ — **Done 2026-09-05** (`@geeksuite/logger`; detail in `SUITE_TODO.md`). *Shared libs*
 19. ~~`toneForMode` helper + themed tooltips~~ — **Done 2026-09-03** (bujogeek's three sites converted;
-    storygeek/fitnessgeek sites convert during the #15 fan-out). Auth splash still open — S. *UI*
+    fitnessgeek's three sites — `BPLogList`, `BPInsights`, `Activity`'s two tiles — converted
+    2026-09-05 during the #15 fan-out; storygeek's still pending). Auth splash still open — S. *UI*
 20. **cryptoVault → `@geeksuite/crypto-vault`** — M. Step 1 promote; step 2 fitnessgeek Garmin
     password encryption + backfill. *Shared libs / security*
 21. **fitnessgeek `UserSettings` schema consolidation** — S. Silent-data-loss hazard documented
