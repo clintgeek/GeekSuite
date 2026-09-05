@@ -10,20 +10,15 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
 | R22 | storygeek frontend vitest + RTL suite + CI job | sonnet | storygeek frontend, ci.yml (one job) | 09-05 13:50 |
-| R29 | harness: phone-only tap-target rule, rerun, per-app lists, SUMMARY.md | sonnet | tools/mobile-harness | 09-05 |
 | R30 | probe burn-down: basegeek theme, bookgeek strip/sidebar, storygeek overline | sonnet | basegeek ui theme.js, bookgeek web components, storygeek theme.js | 09-05 |
-| R31 | probe burn-down: notegeek | sonnet | notegeek frontend | 09-05 |
 | R32 | probe burn-down: bujogeek | sonnet | bujogeek frontend | 09-05 |
 | R33 | probe burn-down: fitnessgeek | sonnet | fitnessgeek frontend | 09-05 |
 | R35 | Q17: fitnessgeek backend node 20 + ESM, consume @geeksuite/utils, drop 5 toUtcMidnight copies | opus | fitnessgeek backend, Dockerfile, lockfile | 09-05 12:35 |
 | R36 | Q20: callCohere case in callProvider + stale hardcoded model defaults (#31) | sonnet | basegeek api aiService/aiProviders/capabilities, AI_CATALOG | 09-05 12:35 |
-| R37 | TODO #20 step 1: @geeksuite/crypto-vault promoted, basegeek consumes; ci job | sonnet | packages/crypto-vault, basegeek api lib + package.json, lockfile, ci.yml | 09-05 12:35 |
-| R39 | TODO #28: startgeek adaptive wallpaper scrim (luminance-sampled) | sonnet | startgeek src (not CommandBox/graphql/basegeek) | 09-05 12:35 |
 | R40 | TODO #15 fan-out: flockgeek on GeekEmptyState/GeekErrorState/useToast | sonnet | flockgeek frontend, UI plan | 09-05 12:35 |
-| R38 | SUITE_TODO consolidation step 1: dead backend code (bookgeek unmounted graphql, notegeek legacy REST+Note, flockgeek dup models, bujogeek dup model files) | sonnet | four backends, SUITE_TODO | 09-05 12:35 |
 
-**Push gate:** `pnpm install --frozen-lockfile` on HEAD now fails only on `apps/storygeek/frontend/package.json`
-(test devDeps, R22 in flight). Push after R22 commits; re-run the check first.
+**Push gate:** `pnpm install --frozen-lockfile` on HEAD fails on `apps/storygeek/frontend/package.json` (R22) and
+`apps/fitnessgeek/backend/package.json` (R35, lockfile already carries its utils link). Push after both commit; re-run the check first.
 
 ## Queued (launch when files free / prerequisite lands)
 
@@ -36,6 +31,9 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | Q13 | verify COVERS_PATH now serves the old covers in the bookgeek UI (CONTEXT.md runtime line already fixed) | Chef eyeballs the UI | XS |
 | Q18b | After R27 deploys: a day of clean `CSRF token check (report-only)` logs, then `CSRF_TOKEN=enforce` in basegeek's env and a container restart | Chef's call after the log window | XS |
 | Q21 | harness: recognize ::before/::after hit-area expansion (startgeek .hit44/.dot) so the 52 startgeek false positives clear | after R29 lands | S |
+| Q22 | flockgeek backend still mounts a full REST CRUD API (9 models) with no caller in the repo — decide: delete the layer or keep as API surface | Chef's call | S |
+| Q23 | notegeek backend: migrations/*.js import the deleted Note model; utils/tagValidation.js dead — prune | next slot | XS |
+| Q24 | TODO #20 step 2: fitnessgeek Garmin password encryption via @geeksuite/crypto-vault + backfill script | after R35 (ESM) lands | M |
 | Q20b | aiGeek: simulated streaming (F-21) and user-gated selection (F-14) documented, not fixed | design | S |
 | Q14 | storygeek CanonCard summary text through Narration too (agent left it as a separate render path) | Chef's call | XS |
 
@@ -86,6 +84,11 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 - `363a820` — R4 — mobile harness in tools/ + CI (report-only); 698 probe findings
 - `d8521eb` — R27 — CSRF header in api-client authLink + startgeek clients
 - `1fda489` — R24 — bujogeek tag cloud + template journal cache; #25/#26 struck
+- `10779eb` — R39 — startgeek luminance-adaptive wallpaper scrim (TODO #28 scrim part)
+- `82563af` — R38 — dead backend code: bookgeek graphql, notegeek legacy REST, 4 flockgeek models; flockgeek REST layer flagged
+- `50c0939` — R37 — @geeksuite/crypto-vault (25 tests, fixture-compatible); basegeek consumes; ci job
+- `574920f` — R29 — harness: tap-target phone-only, selector hints; 139 scenes / 371 open
+- `b2e9c95` — R31 — notegeek probe burn-down 84 → 0 (GlobalStyles min-height:auto was the real bug)
 - `6249ef4` — R34 — startgeek probe burn-down 218 → 52 (52 = ::before hit-area false positives)
 - `3265b1c` — R25 — zod on the ten bujogeek gateway mutations (37 tests; api 815)
 - `4856227` — R26 — 8 calendar-date off-by-one sites fixed (flockgeek ×7, fitnessgeek getTodayBP)
