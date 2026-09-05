@@ -11,7 +11,6 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 |---|--------|-------|-------|-------|
 | R76 | review #5 #6 #9 #14 #15 #19: fitnessgeek settings/food write paths (gateway merge, REST double $set, household_id, "today", serving fields) | opus | gateway fitnessgeek resolvers/services, fitnessgeek settingsRoutes + settings validator, 2 fe call sites | 09-05 16:30 |
 | R77 | review #4 #18 (flockgeek REST ownerId, P0), #8 (bujogeek UTC-day grouping regression), #16 (fitnessgeek household log dead) | sonnet | flockgeek controllers, bujogeek TaskList, fitnessgeek apiService household | 09-05 16:30 |
-| R78 | review #20 #22: CI jobs for four untested shared packages; boot-smoke import gate | sonnet | ci.yml, tools/boot-smoke.mjs, RUNBOOK | 09-05 16:30 |
 | R79 | review #2 (parse-json ungated, P0), #10 (pin reroute), #11 (upstream error relay) | opus | basegeek aiRoutes, openaiProxy, conformance tests, audit docs | 09-05 16:30 |
 | R80 | review #3 (CSRF enforce would log the suite out, P0 latent), #17 (post-refresh replay token) | opus | packages/auth+user+api-client, six auth proxies, startgeek client, CONTEXT CSRF | 09-05 16:30 |
 | R74 | consolidation pairs 9–10: FoodLog + DailySummary (the last two; updateFromLogs is the helper candidate) | opus | packages/schemas, both apps' two models + parity suites | 09-05 16:12 |
@@ -34,6 +33,7 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | Q41 | fitnessgeek FoodItem: reconcile search (user_id:null) with foodCatalogFilter (also $exists:false); foodRoutes.js:301 open-codes a third dedupe ladder minting user-owned rows — fold into findOrCreateFoodItem or keep | design | S |
 | Q42 | review #13: TZ=America/Chicago is inert in every alpine image (no tzdata) — today UTC-everywhere is what keeps the two services agreeing; decide: drop the misleading TZ env and document UTC, or install tzdata and re-audit every local-day site | Chef | S |
 | Q43 | review #21: `main` has no required status checks — enable branch protection requiring CI, syntax, boot-smoke and the harness | Chef (GitHub settings) | XS |
+| Q44 | basegeek config/database.js getAIGeekConnection has no error handler (a bad URI crashes the process); appConnections.js sibling has one | XS | XS |
 | Q20b | aiGeek: simulated streaming (F-21) and user-gated selection (F-14) documented, not fixed | design | S |
 | Q14 | storygeek CanonCard summary text through Narration too (agent left it as a separate render path) | Chef's call | XS |
 
