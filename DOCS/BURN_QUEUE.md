@@ -23,7 +23,7 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | Q10 | Revoke the `LocalApps` key — env grep: no .env under Projects carries it; nginx: zero hits on /openai/v1 or /api/ai/ in the retained log window; key lastUsed 2025-11-03 | ready — Chef's confirm, then revoke via the Apps & keys tab | XS |
 | Q11 | basegeek `Databases.jsx`: wire into nav or delete | Chef's call | XS |
 | Q13 | verify COVERS_PATH now serves the old covers in the bookgeek UI (CONTEXT.md runtime line already fixed) | Chef eyeballs the UI | XS |
-| Q18b | `CSRF_TOKEN=enforce`: proxies fixed (R80, deployed wave 8). **Not clean yet** — one report-only hit within 10 min of the restart: POST /graphql, cookie present, header missing, caller unidentified (every frontend uses the shared link). Report lines now carry origin/referer/UA/credential kind (next wave); review `docker logs basegeek \| grep report-only` after 24h, fix the caller, then flip | after the log review | XS |
+| Q18b | `CSRF_TOKEN=enforce`: proxies fixed (R80, wave 8). Report lines since 17:00: **only startgeek** (start.clintgeek.com, Firefox), POST /graphql every ~10 min, cookie present, header missing. The deployed startgeek client sends the header and the cookie is domain-wide, so this fits a startgeek tab loaded before this morning's CSRF deploy running the old bundle. **Chef: reload the startgeek tab**, then re-check `docker logs basegeek \| grep report-only` after 24h; flip when clean | Chef: reload + log review | XS |
 | Q22 | flockgeek backend still mounts a full REST CRUD API (9 models) with no caller in the repo — decide: delete the layer or keep as API surface | Chef's call | S |
 | Q38 | storygeek gateway module: delete (typeDefs/resolvers/model/test + merge lines + the frontend's dead Apollo plumbing) per DOCS/STORYGEEK_GATEWAY_DECISION.md — or build out | Chef's call | XS |
 | Q39 | fitnessgeek: keep or delete the three caller-less instance methods (checkGoalsMet/getProgress/getNutrition); fix the sugar/sodium ceiling-vs-floor disagreement (mealRoutes' MEAL_TYPES part done `3b842e7`) | Chef on delete; the fix XS | XS |
@@ -34,6 +34,7 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | Q44 | basegeek config/database.js getAIGeekConnection has no error handler (a bad URI crashes the process); appConnections.js sibling has one | XS | XS |
 | Q48 | consolidation plan §12: 14 open follow-ups (search vs foodCatalogFilter, third dedupe ladder, soft-deleted barcode, caller-less methods, goals_met dead flags, snapshot-vs-catalog recompute, …) — triage | Chef triage | M |
 | Q49 | ai:usage permission is claimed by no route and not in the default mint set — either gate the two /usage routes with it and add it to the defaults, or drop the enum value | XS | XS |
+| Q50 | startgeek (and the shared auth client): on a 403 csrf_token_missing/invalid, refresh the page once so a stale pre-deploy tab heals itself instead of failing silently under enforce | XS | XS |
 | Q20b | aiGeek: simulated streaming (F-21) and user-gated selection (F-14) documented, not fixed | design | S |
 | Q14 | storygeek CanonCard summary text through Narration too (agent left it as a separate render path) | Chef's call | XS |
 
