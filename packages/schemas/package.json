@@ -8,7 +8,9 @@
     ".": "./index.js",
     "./fitnessgeek/bloodPressure": "./fitnessgeek/bloodPressure.js",
     "./fitnessgeek/loginStreak": "./fitnessgeek/loginStreak.js",
+    "./fitnessgeek/meal": "./fitnessgeek/meal.js",
     "./fitnessgeek/medication": "./fitnessgeek/medication.js",
+    "./fitnessgeek/nutritionGoals": "./fitnessgeek/nutritionGoals.js",
     "./fitnessgeek/userSettings": "./fitnessgeek/userSettings.js",
     "./fitnessgeek/weight": "./fitnessgeek/weight.js",
     "./fitnessgeek/weightGoals": "./fitnessgeek/weightGoals.js"

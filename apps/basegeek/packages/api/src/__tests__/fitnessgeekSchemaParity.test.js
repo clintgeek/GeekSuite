@@ -68,6 +68,27 @@ const { default: WeightGoalsRest } = await import(
 );
 const { default: weightGoalsShared } = await import('@geeksuite/schemas/fitnessgeek/weightGoals');
 
+const { default: NutritionGoalsGraphQL } = await import(
+  '../graphql/fitnessgeek/models/NutritionGoals.js'
+);
+const { default: NutritionGoalsRest } = await import(
+  '../../../../../fitnessgeek/backend/src/models/NutritionGoals.js'
+);
+const { default: nutritionGoalsShared } = await import(
+  '@geeksuite/schemas/fitnessgeek/nutritionGoals'
+);
+
+const { default: MealGraphQL } = await import('../graphql/fitnessgeek/models/Meal.js');
+const { default: MealRest } = await import(
+  '../../../../../fitnessgeek/backend/src/models/Meal.js'
+);
+const { default: mealShared } = await import('@geeksuite/schemas/fitnessgeek/meal');
+
+// Not under test here — imported only so `FoodItem` is registered on the
+// gateway's connection, because `Meal`'s list statics `.populate()` its ref.
+// (Pair 8; it still declares its own schema today.)
+const { default: FoodItemGraphQL } = await import('../graphql/fitnessgeek/models/FoodItem.js');
+
 const OWNER = String(new mongoose.Types.ObjectId());
 
 const PAIRS = [
@@ -245,6 +266,95 @@ const PAIRS = [
       targetWeight: doc.targetWeight,
       goalDate: doc.goalDate,
       is_active: doc.is_active,
+    }),
+  },
+  {
+    name: 'NutritionGoals',
+    Rest: NutritionGoalsRest,
+    GraphQL: NutritionGoalsGraphQL,
+    createSchema: nutritionGoalsShared.createNutritionGoalsSchema,
+    // NOT `UserSettings.nutrition_goal` — a different collection with a
+    // different field set. See the shared module's header.
+    expectedPaths: [
+      'user_id',
+      'calories',
+      'protein_grams',
+      'carbs_grams',
+      'fat_grams',
+      'fiber_grams',
+      'sugar_grams',
+      'sodium_mg',
+      'start_date',
+      'end_date',
+      'is_active',
+      'created_at',
+      'updated_at',
+    ],
+    expectedVirtuals: [],
+    serializesVirtuals: false,
+    ownerField: 'user_id',
+    doc: () => ({
+      user_id: OWNER,
+      calories: 2100,
+      protein_grams: 165,
+      carbs_grams: 40,
+      fat_grams: 140,
+      fiber_grams: 25,
+      sugar_grams: 30,
+      sodium_mg: 2300,
+      start_date: new Date('2026-09-01T00:00:00.000Z'),
+      end_date: new Date('2026-12-01T00:00:00.000Z'),
+      is_active: true,
+    }),
+    // Every macro is a path a drifted copy could have eaten silently.
+    probe: (doc) => ({
+      calories: doc.calories,
+      protein_grams: doc.protein_grams,
+      carbs_grams: doc.carbs_grams,
+      fat_grams: doc.fat_grams,
+      fiber_grams: doc.fiber_grams,
+      sugar_grams: doc.sugar_grams,
+      sodium_mg: doc.sodium_mg,
+      end_date: doc.end_date,
+    }),
+  },
+  {
+    name: 'Meal',
+    Rest: MealRest,
+    GraphQL: MealGraphQL,
+    createSchema: mealShared.createMealSchema,
+    // The only model in the set with no schema options at all: `created_at`
+    // and `updated_at` are ordinary declared paths, not `timestamps`.
+    expectedPaths: [
+      'user_id',
+      'name',
+      'meal_type',
+      'food_items',
+      'is_deleted',
+      'created_at',
+      'updated_at',
+    ],
+    expectedVirtuals: [],
+    serializesVirtuals: false,
+    ownerField: 'user_id',
+    doc: () => ({
+      user_id: OWNER,
+      name: 'Post-consolidation probe bowl',
+      meal_type: 'lunch',
+      food_items: [
+        { food_item_id: new mongoose.Types.ObjectId(), servings: 2 },
+        { food_item_id: new mongoose.Types.ObjectId(), servings: 0.5 },
+      ],
+      is_deleted: false,
+    }),
+    // `food_items` is a DocumentArray of a shared sub-schema — the one path in
+    // this set whose contents a drifted copy would eat item-by-item.
+    probe: (doc) => ({
+      name: doc.name,
+      meal_type: doc.meal_type,
+      is_deleted: doc.is_deleted,
+      servings: doc.food_items.map((i) => i.servings),
+      refs: doc.food_items.map((i) => String(i.food_item_id)),
     }),
   },
 ];
@@ -635,6 +745,8 @@ describe('ownership guards stayed app-side (statics policy)', () => {
   // are free to disagree. These assertions are what makes that a decision
   // rather than an accident.
   let WeightGoalsRestSide;
+  let NutritionGoalsRestSide;
+  let MealRestSide;
 
   beforeAll(() => {
     // fitnessgeek's own schema — statics included, since they live on the
@@ -644,6 +756,20 @@ describe('ownership guards stayed app-side (statics policy)', () => {
       WeightGoalsRest.schema,
       WeightGoalsGraphQL.collection.name
     );
+    NutritionGoalsRestSide = NutritionGoalsGraphQL.db.model(
+      'NutritionGoalsGuardProbe',
+      NutritionGoalsRest.schema,
+      NutritionGoalsGraphQL.collection.name
+    );
+    MealRestSide = MealGraphQL.db.model(
+      'MealGuardProbe',
+      MealRest.schema,
+      MealGraphQL.collection.name
+    );
+  });
+
+  afterEach(async () => {
+    await MealGraphQL.deleteMany({});
   });
 
   test('the gateway refuses an unscoped getOrCreateStreak', async () => {
@@ -668,6 +794,19 @@ describe('ownership guards stayed app-side (statics policy)', () => {
     await expect(WeightGoalsRestSide.getActiveWeightGoals(undefined)).resolves.toBeNull();
   });
 
+  test.each(['getActiveGoals', 'createGoals', 'updateGoals'])(
+    'the gateway refuses an unscoped NutritionGoals.%s',
+    async (name) => {
+      await expect(NutritionGoalsGraphQL[name](undefined, {})).rejects.toMatchObject({
+        code: 'UNAUTHORIZED',
+      });
+    }
+  );
+
+  test('fitnessgeek’s NutritionGoals copy is unguarded, deliberately', async () => {
+    await expect(NutritionGoalsRestSide.getActiveGoals(undefined)).resolves.toBeNull();
+  });
+
   test('the two sides really are separate implementations', () => {
     expect(LoginStreakGraphQL.schema.statics.getOrCreateStreak).not.toBe(
       LoginStreakRest.schema.statics.getOrCreateStreak
@@ -676,6 +815,282 @@ describe('ownership guards stayed app-side (statics policy)', () => {
       expect(WeightGoalsGraphQL.schema.statics[name]).not.toBe(
         WeightGoalsRest.schema.statics[name]
       );
+    }
+    for (const name of ['getActiveGoals', 'createGoals', 'updateGoals']) {
+      expect(NutritionGoalsGraphQL.schema.statics[name]).not.toBe(
+        NutritionGoalsRest.schema.statics[name]
+      );
+    }
+    for (const name of ['getActiveMeals', 'getMealsByType', 'searchMeals']) {
+      expect(MealGraphQL.schema.statics[name]).not.toBe(MealRest.schema.statics[name]);
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // Meal — divergence C4, asserted as a decision rather than described as one
+  // -------------------------------------------------------------------------
+
+  test('FoodItem is registered, so the populating statics can actually run', () => {
+    // Guard for the three tests below: without this the `populate()` inside
+    // fitnessgeek's list statics would throw MissingSchemaError and the
+    // "returns everybody's meals" assertion would pass for the wrong reason.
+    expect(FoodItemGraphQL.modelName).toBe('FoodItem');
+  });
+
+  test.each([
+    ['getActiveMeals', []],
+    ['getMealsByType', ['lunch']],
+    ['searchMeals', ['bowl']],
+    ['findOwned', [String(new mongoose.Types.ObjectId())]],
+  ])('the gateway refuses an unscoped Meal.%s', async (name, args) => {
+    await expect(MealGraphQL[name](...args, undefined)).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    });
+  });
+
+  test('fitnessgeek’s Meal copy returns EVERY user’s meals when unscoped', async () => {
+    // This is the divergence, not a bug being introduced: fitnessgeek's
+    // statics scope only `if (userId)`. Every live caller passes one
+    // (routes/mealRoutes.js:19, :21, :23 take it from the authenticated
+    // request), so this is latent — but it is why neither side's statics were
+    // promoted. Tightening this is its own ticket with its own test; if
+    // someone does it, this assertion is what makes them say so.
+    const other = String(new mongoose.Types.ObjectId());
+    await MealGraphQL.create([
+      { user_id: OWNER, name: 'Mine', meal_type: 'lunch' },
+      { user_id: other, name: 'Somebody else’s', meal_type: 'dinner' },
+    ]);
+
+    const all = await MealRestSide.getActiveMeals(undefined);
+    expect(all.map((m) => m.name).sort()).toEqual(['Mine', 'Somebody else’s']);
+
+    const mine = await MealRestSide.getActiveMeals(OWNER);
+    expect(mine.map((m) => m.name)).toEqual(['Mine']);
+  });
+
+  test('findOwned exists only on the gateway', () => {
+    expect(typeof MealGraphQL.findOwned).toBe('function');
+    expect(MealRest.schema.statics.findOwned).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// NutritionGoals — the shared instance methods, behaviour not presence
+// ---------------------------------------------------------------------------
+
+describe('NutritionGoals goal arithmetic (shared instance methods)', () => {
+  const { evaluateGoalsMet, computeGoalProgress } = nutritionGoalsShared;
+
+  const GOALS = {
+    user_id: OWNER,
+    calories: 2000,
+    protein_grams: 150,
+    carbs_grams: 50,
+    fat_grams: 130,
+    fiber_grams: 25,
+    sugar_grams: 30,
+    sodium_mg: 2300,
+  };
+
+  test('both models carry both methods, from the same implementation', () => {
+    for (const name of ['checkGoalsMet', 'getProgress']) {
+      expect(typeof NutritionGoalsRest.schema.methods[name]).toBe('function');
+      expect(String(NutritionGoalsGraphQL.schema.methods[name])).toBe(
+        String(NutritionGoalsRest.schema.methods[name])
+      );
+    }
+    expect(String(NutritionGoalsRest.schema.methods.checkGoalsMet)).toContain(
+      'evaluateGoalsMet'
+    );
+    expect(String(NutritionGoalsRest.schema.methods.getProgress)).toContain(
+      'computeGoalProgress'
+    );
+  });
+
+  test('sugar and sodium are ceilings while the other five are floors', () => {
+    // The one piece of real logic in `checkGoalsMet`, and it was a trailing
+    // comment on two lines in two files before it lived in one module.
+    const totals = {
+      calories: 2000,
+      protein_grams: 150,
+      carbs_grams: 50,
+      fat_grams: 130,
+      fiber_grams: 25,
+      sugar_grams: 30,
+      sodium_mg: 2300,
+    };
+    const onTheNose = evaluateGoalsMet(GOALS, totals);
+    expect(onTheNose).toEqual({
+      calories: true,
+      protein: true,
+      carbs: true,
+      fat: true,
+      fiber: true,
+      sugar: true,
+      sodium: true,
+    });
+
+    const overEverything = evaluateGoalsMet(GOALS, {
+      ...totals,
+      calories: 2500,
+      sugar_grams: 31,
+      sodium_mg: 2301,
+    });
+    expect(overEverything.calories).toBe(true); // more is better
+    expect(overEverything.sugar).toBe(false); // more is worse
+    expect(overEverything.sodium).toBe(false);
+  });
+
+  test('an unset goal reads as not-met and zero progress, not as met', () => {
+    const bare = { user_id: OWNER };
+    const totals = { calories: 9999, sugar_grams: 0 };
+    expect(evaluateGoalsMet(bare, totals).calories).toBe(false);
+    expect(evaluateGoalsMet(bare, totals).sugar).toBe(false);
+    expect(computeGoalProgress(bare, totals).calories).toBe(0);
+  });
+
+  test('progress is clamped at 100 and matches the model’s own method', () => {
+    const doc = new NutritionGoalsGraphQL(GOALS);
+    const totals = {
+      calories: 3000,
+      protein_grams: 75,
+      carbs_grams: 50,
+      fat_grams: 0,
+      fiber_grams: 25,
+      sugar_grams: 15,
+      sodium_mg: 1150,
+    };
+    const viaMethod = doc.getProgress(totals);
+    expect(viaMethod).toEqual(computeGoalProgress(GOALS, totals));
+    expect(viaMethod.calories).toBe(100); // clamped, not 150
+    expect(viaMethod.protein).toBe(50);
+    expect(viaMethod.fat).toBe(0);
+    // Sugar and sodium are floors HERE even though they are ceilings in
+    // checkGoalsMet. Shipped asymmetry, moved verbatim, asserted so nobody
+    // "fixes" one without the other.
+    expect(viaMethod.sugar).toBe(50);
+    expect(viaMethod.sodium).toBe(50);
+  });
+
+  test('and the REST model’s method agrees with the GraphQL one', () => {
+    const totals = { calories: 1000, protein_grams: 150, sugar_grams: 60, sodium_mg: 3000 };
+    expect(new NutritionGoalsRest(GOALS).checkGoalsMet(totals)).toEqual(
+      new NutritionGoalsGraphQL(GOALS).checkGoalsMet(totals)
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Meal — the sub-schema, the hook and the nutrition arithmetic
+// ---------------------------------------------------------------------------
+
+describe('Meal sub-schema, hook and getNutrition', () => {
+  const { sumMealNutrition, MEAL_TYPES } = mealShared;
+
+  const food = (over = {}) => ({
+    food_item_id: {
+      nutrition: {
+        calories_per_serving: 100,
+        protein_grams: 10,
+        carbs_grams: 5,
+        fat_grams: 4,
+        fiber_grams: 2,
+        sugar_grams: 1,
+        sodium_mg: 200,
+        ...over,
+      },
+    },
+    servings: 1,
+  });
+
+  afterEach(async () => {
+    await MealGraphQL.deleteMany({ user_id: OWNER });
+  });
+
+  test('both models embed the same food_items sub-schema', () => {
+    const sub = (M) => M.schema.paths.food_items.schema;
+    expect(Object.keys(sub(MealRest).paths).sort()).toEqual(
+      Object.keys(sub(MealGraphQL).paths).sort()
+    );
+    expect(Object.keys(sub(MealGraphQL).paths).sort()).toEqual([
+      '_id',
+      'food_item_id',
+      'servings',
+    ]);
+    expect(sub(MealGraphQL).paths.food_item_id.options.ref).toBe('FoodItem');
+    expect(sub(MealGraphQL).paths.servings.options.default).toBe(1);
+  });
+
+  test('both models declare the shared meal_type enum', () => {
+    for (const M of [MealRest, MealGraphQL]) {
+      expect(M.schema.paths.meal_type.enumValues).toEqual([...MEAL_TYPES]);
+    }
+    const err = new MealGraphQL({ name: 'X', meal_type: 'brunch' }).validateSync();
+    expect(err && err.errors.meal_type).toBeTruthy();
+  });
+
+  test('the pre(save) hook stamps updated_at on both sides', async () => {
+    // The only hook either side declares. It fires on save() only — nothing
+    // stamps updated_at on a findOneAndUpdate, on either side. Shipped
+    // behaviour; see the shared module's header.
+    const doc = await MealGraphQL.create({
+      user_id: OWNER,
+      name: 'Hook probe',
+      meal_type: 'snack',
+      updated_at: new Date('2020-01-01T00:00:00.000Z'),
+    });
+    expect(doc.updated_at.getFullYear()).toBeGreaterThan(2020);
+  });
+
+  test('getNutrition multiplies by servings and rounds to the shipped precision', () => {
+    const items = [food(), { ...food(), servings: 2.5 }];
+    const totals = sumMealNutrition(items);
+    expect(totals).toEqual({
+      calories: 350,
+      protein_grams: 35,
+      carbs_grams: 17.5,
+      fat_grams: 14,
+      fiber_grams: 7,
+      sugar_grams: 3.5,
+      sodium_mg: 700,
+    });
+    // Grams to one decimal, calories and sodium to the unit.
+    expect(sumMealNutrition([{ ...food({ protein_grams: 3.33 }), servings: 1 }]).protein_grams)
+      .toBe(3.3);
+  });
+
+  test('an un-populated or nutrition-less item contributes nothing, not NaN', () => {
+    const zero = {
+      calories: 0,
+      protein_grams: 0,
+      carbs_grams: 0,
+      fat_grams: 0,
+      fiber_grams: 0,
+      sugar_grams: 0,
+      sodium_mg: 0,
+    };
+    expect(sumMealNutrition([{ food_item_id: new mongoose.Types.ObjectId(), servings: 3 }]))
+      .toEqual(zero);
+    expect(sumMealNutrition([{ food_item_id: {}, servings: 3 }])).toEqual(zero);
+    expect(sumMealNutrition([])).toEqual(zero);
+    expect(sumMealNutrition(undefined)).toEqual(zero);
+  });
+
+  test('both models’ method is the shared implementation and agrees with it', () => {
+    expect(String(MealGraphQL.schema.methods.getNutrition)).toBe(
+      String(MealRest.schema.methods.getNutrition)
+    );
+    expect(String(MealRest.schema.methods.getNutrition)).toContain('sumMealNutrition');
+
+    // Called against a stand-in `this` rather than a real document: assigning
+    // a populated food item to an ObjectId path by hand would hit mongoose's
+    // caster, and what is under test here is that the method body delegates.
+    for (const M of [MealRest, MealGraphQL]) {
+      const totals = M.schema.methods.getNutrition.call({
+        food_items: [{ ...food(), servings: 2 }],
+      });
+      expect(totals.calories).toBe(200);
+      expect(totals).toEqual(sumMealNutrition([{ ...food(), servings: 2 }]));
     }
   });
 });

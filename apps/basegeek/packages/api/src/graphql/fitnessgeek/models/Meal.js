@@ -2,58 +2,38 @@ import mongoose from 'mongoose';
 import { getAppConnection } from '../../shared/appConnections.js';
 import { requireUser, isValidObjectId } from '../ownership.js';
 
+// The field set, the embedded meal-item sub-schema, the `pre('save')`
+// `updated_at` stamp and the `getNutrition` instance method live in
+// @geeksuite/schemas so that this model and fitnessgeek's REST copy
+// (apps/fitnessgeek/backend/src/models/Meal.js) cannot drift. Both point at
+// the `meals` collection in the same database — this gateway through its
+// `meals`/`meal`/`logMeal` resolvers, fitnessgeek through its mealRoutes — and
+// mongoose strict mode silently drops paths one side doesn't know about. See
+// the shared module's header and DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md.
+//
+// Do NOT add fields here. Add them to the shared module (and to typeDefs.js if
+// they should cross GraphQL); the tripwire tests in both suites fail if this
+// model stops matching the shared definition.
+//
+// Default import + destructure: the shared module is CommonJS (no build step,
+// `require`-able and `import`-able by both consumers), and this is the interop
+// form that works identically under Node ESM and jest's
+// --experimental-vm-modules.
+import mealSchemaModule from '@geeksuite/schemas/fitnessgeek/meal';
+
+const { createMealSchema } = mealSchemaModule;
+
 const fitnessConn = getAppConnection('fitnessgeek');
 
-const mealItemSchema = new mongoose.Schema({
-  food_item_id: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'FoodItem',
-    required: true
-  },
-  servings: {
-    type: Number,
-    required: true,
-    default: 1
-  }
-});
+const mealSchema = createMealSchema(mongoose);
 
-const mealSchema = new mongoose.Schema({
-  user_id: {
-    type: String,
-    required: false,
-    index: true,
-    default: null
-  },
-  name: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  meal_type: {
-    type: String,
-    enum: ['breakfast', 'lunch', 'dinner', 'snack'],
-    required: true
-  },
-  food_items: [mealItemSchema],
-  is_deleted: {
-    type: Boolean,
-    default: false
-  },
-  created_at: {
-    type: Date,
-    default: Date.now
-  },
-  updated_at: {
-    type: Date,
-    default: Date.now
-  }
-});
-
-// Update the updated_at field before saving
-mealSchema.pre('save', function(next) {
-  this.updated_at = new Date();
-  next();
-});
+// The ownership guards stay here, not in the shared module — and for this
+// model that is the only safe answer rather than merely the tidy one.
+// fitnessgeek's copies of the three list statics treat a missing userId as
+// "no filter" and return every user's meals; these throw. It also has no
+// `findOwned`. Promoting either version would be a behaviour change on one
+// side wearing a refactor's clothes (divergence C4 in the plan), so both sides
+// keep exactly what they shipped.
 
 // Meals are personal data: every lookup below is owner-scoped, and a missing
 // userId is a hard failure rather than a silent "return everybody's meals".
@@ -90,43 +70,6 @@ mealSchema.statics.searchMeals = async function(searchTerm, userId) {
   return this.find({ name: regex, is_deleted: false, user_id: userId })
     .populate('food_items.food_item_id')
     .sort({ name: 1 });
-};
-
-// Calculate total nutrition for the meal
-mealSchema.methods.getNutrition = function() {
-  let totals = {
-    calories: 0,
-    protein_grams: 0,
-    carbs_grams: 0,
-    fat_grams: 0,
-    fiber_grams: 0,
-    sugar_grams: 0,
-    sodium_mg: 0
-  };
-
-  this.food_items.forEach(item => {
-    if (item.food_item_id && item.food_item_id.nutrition) {
-      const multiplier = item.servings || 1;
-      totals.calories += item.food_item_id.nutrition.calories_per_serving * multiplier;
-      totals.protein_grams += item.food_item_id.nutrition.protein_grams * multiplier;
-      totals.carbs_grams += item.food_item_id.nutrition.carbs_grams * multiplier;
-      totals.fat_grams += item.food_item_id.nutrition.fat_grams * multiplier;
-      totals.fiber_grams += item.food_item_id.nutrition.fiber_grams * multiplier;
-      totals.sugar_grams += item.food_item_id.nutrition.sugar_grams * multiplier;
-      totals.sodium_mg += item.food_item_id.nutrition.sodium_mg * multiplier;
-    }
-  });
-
-  // Round to reasonable precision
-  return {
-    calories: Math.round(totals.calories),
-    protein_grams: Math.round(totals.protein_grams * 10) / 10,
-    carbs_grams: Math.round(totals.carbs_grams * 10) / 10,
-    fat_grams: Math.round(totals.fat_grams * 10) / 10,
-    fiber_grams: Math.round(totals.fiber_grams * 10) / 10,
-    sugar_grams: Math.round(totals.sugar_grams * 10) / 10,
-    sodium_mg: Math.round(totals.sodium_mg)
-  };
 };
 
 export default fitnessConn.model('Meal', mealSchema);

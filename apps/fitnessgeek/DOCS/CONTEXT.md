@@ -32,7 +32,7 @@ The backend depends on five `workspace:*` packages:
 |---|---|
 | `@geeksuite/crypto-vault` | AES-256-GCM for the Garmin password at rest (`KEY_VAULT_SECRET`) |
 | `@geeksuite/logger` | pino logger + `createHttpLogger` |
-| `@geeksuite/schemas` | the shared field sets for every fitnessgeek collection with two writers — `UserSettings`, `Weight`, `BloodPressure`, `Medication`, `LoginStreak`, `WeightGoals` as of 2026-09-05. It also owns `Medication`'s enums and bounds and `BloodPressure`'s bounds, which the zod validators in `src/validation/schemas/` import instead of restating. Index and conventions in `USER_SETTINGS_SCHEMA.md`; the remaining five pairs in `DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md` |
+| `@geeksuite/schemas` | the shared field sets for every fitnessgeek collection with two writers — `UserSettings`, `Weight`, `BloodPressure`, `Medication`, `LoginStreak`, `WeightGoals`, `NutritionGoals` and `Meal` as of 2026-09-05. It also owns `Medication`'s enums and bounds (imported by `src/validation/schemas/medication.js`, by `models/MedicationLog.js` and by `routes/medicationRoutes.js` instead of restating), `BloodPressure`'s bounds, `Meal`'s `MEAL_TYPES` and its embedded food-item sub-schema, and the instance-method arithmetic for `LoginStreak`, `NutritionGoals` and `Meal`. Index and conventions in `USER_SETTINGS_SCHEMA.md`; the remaining three pairs — the food family — in `DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md` |
 | `@geeksuite/user` | `attachUser()`, `csrfGuard()`, `meHandler()` |
 | `@geeksuite/utils` | **date handling** — `toUtcMidnight` and friends |
 

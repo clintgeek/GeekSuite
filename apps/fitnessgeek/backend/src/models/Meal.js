@@ -1,55 +1,29 @@
 import mongoose from 'mongoose';
+import { createMealSchema } from '@geeksuite/schemas/fitnessgeek/meal';
 
-const mealItemSchema = new mongoose.Schema({
-  food_item_id: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'FoodItem',
-    required: true
-  },
-  servings: {
-    type: Number,
-    required: true,
-    default: 1
-  }
-});
+// The field set, the embedded meal-item sub-schema, the `pre('save')`
+// `updated_at` stamp and the `getNutrition` instance method live in
+// @geeksuite/schemas so that this model and basegeek's GraphQL copy
+// (apps/basegeek/packages/api/src/graphql/fitnessgeek/models/Meal.js) cannot
+// drift. Both point at the `meals` collection in the same database — this side
+// through routes/mealRoutes.js, the gateway through its `meals`/`meal`/
+// `logMeal` resolvers — and mongoose strict mode silently drops paths one side
+// doesn't know about. See the shared module's header and
+// DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md.
+//
+// Do NOT add fields here. Add them to the shared module; the tripwire tests in
+// both suites fail if this model stops matching it.
+const mealSchema = createMealSchema(mongoose);
 
-const mealSchema = new mongoose.Schema({
-  user_id: {
-    type: String,
-    required: false,
-    index: true,
-    default: null
-  },
-  name: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  meal_type: {
-    type: String,
-    enum: ['breakfast', 'lunch', 'dinner', 'snack'],
-    required: true
-  },
-  food_items: [mealItemSchema],
-  is_deleted: {
-    type: Boolean,
-    default: false
-  },
-  created_at: {
-    type: Date,
-    default: Date.now
-  },
-  updated_at: {
-    type: Date,
-    default: Date.now
-  }
-});
-
-// Update the updated_at field before saving
-mealSchema.pre('save', function(next) {
-  this.updated_at = new Date();
-  next();
-});
+// Statics stay app-side, and for this model that is the *only* safe answer
+// rather than merely the tidy one: the two sides do not agree about what a
+// missing userId means. These three treat it as "no filter" and will return
+// every user's meals; basegeek's throw UNAUTHORIZED, and it also has a
+// `findOwned` this side has no equivalent of. Every caller here passes a
+// userId from the authenticated request, so nothing is broken — but promoting
+// either version would be a behaviour change on one side wearing a refactor's
+// clothes. That is divergence C4 in the plan; tightening this side is its own
+// ticket with its own test.
 
 // Get all active meals for a user
 mealSchema.statics.getActiveMeals = async function(userId) {
@@ -71,43 +45,6 @@ mealSchema.statics.searchMeals = async function(searchTerm, userId) {
   const query = { name: regex, is_deleted: false };
   if (userId) query.user_id = userId;
   return this.find(query).populate('food_items.food_item_id').sort({ name: 1 });
-};
-
-// Calculate total nutrition for the meal
-mealSchema.methods.getNutrition = function() {
-  let totals = {
-    calories: 0,
-    protein_grams: 0,
-    carbs_grams: 0,
-    fat_grams: 0,
-    fiber_grams: 0,
-    sugar_grams: 0,
-    sodium_mg: 0
-  };
-
-  this.food_items.forEach(item => {
-    if (item.food_item_id && item.food_item_id.nutrition) {
-      const multiplier = item.servings || 1;
-      totals.calories += item.food_item_id.nutrition.calories_per_serving * multiplier;
-      totals.protein_grams += item.food_item_id.nutrition.protein_grams * multiplier;
-      totals.carbs_grams += item.food_item_id.nutrition.carbs_grams * multiplier;
-      totals.fat_grams += item.food_item_id.nutrition.fat_grams * multiplier;
-      totals.fiber_grams += item.food_item_id.nutrition.fiber_grams * multiplier;
-      totals.sugar_grams += item.food_item_id.nutrition.sugar_grams * multiplier;
-      totals.sodium_mg += item.food_item_id.nutrition.sodium_mg * multiplier;
-    }
-  });
-
-  // Round to reasonable precision
-  return {
-    calories: Math.round(totals.calories),
-    protein_grams: Math.round(totals.protein_grams * 10) / 10,
-    carbs_grams: Math.round(totals.carbs_grams * 10) / 10,
-    fat_grams: Math.round(totals.fat_grams * 10) / 10,
-    fiber_grams: Math.round(totals.fiber_grams * 10) / 10,
-    sugar_grams: Math.round(totals.sugar_grams * 10) / 10,
-    sodium_mg: Math.round(totals.sodium_mg)
-  };
 };
 
 export default mongoose.model('Meal', mealSchema);

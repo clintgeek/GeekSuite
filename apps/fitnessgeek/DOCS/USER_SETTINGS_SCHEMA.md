@@ -27,6 +27,8 @@ own connection. **Add a field to the shared module, never to a wrapper.**
 | `Medication` | `packages/schemas/fitnessgeek/medication.js` | `medications` | 2026-09-05 | `MED_TIME_OF_DAY`, `MED_TYPES`, `medicationBounds` |
 | `LoginStreak` | `packages/schemas/fitnessgeek/loginStreak.js` | `loginstreaks` | 2026-09-05 | `applyLoginToStreak`, `attachLoginStreakMethods` |
 | `WeightGoals` | `packages/schemas/fitnessgeek/weightGoals.js` | `weightgoals` | 2026-09-05 | — |
+| `NutritionGoals` | `packages/schemas/fitnessgeek/nutritionGoals.js` | `nutritiongoals` | 2026-09-05 | `evaluateGoalsMet`, `computeGoalProgress`, `attachNutritionGoalsMethods` |
+| `Meal` | `packages/schemas/fitnessgeek/meal.js` | `meals` | 2026-09-05 | `MEAL_TYPES`, `sumMealNutrition`, `createMealItemSchema`, `attachMealTimestamps`, `attachMealMethods` |
 
 The wrappers, per model:
 
@@ -47,13 +49,31 @@ Statics and instance methods, per consolidated model:
 | `Medication` | none on either side | — |
 | `LoginStreak` | `getOrCreateStreak` on both; basegeek's opens with `requireUser` | `recordLogin` |
 | `WeightGoals` | `getActiveWeightGoals`, `createWeightGoals`, `updateWeightGoals` on both; basegeek's all open with `requireUser` | — |
+| `NutritionGoals` | `getActiveGoals`, `createGoals`, `updateGoals` on both; basegeek's all open with `requireUser` | `checkGoalsMet`, `getProgress` |
+| `Meal` | `getActiveMeals`, `getMealsByType`, `searchMeals` on both **and they disagree** — basegeek's throw on an unscoped call, fitnessgeek's return every user's meals; `findOwned` is basegeek-only | `getNutrition` |
 
-`recordLogin` is the first *instance method* to move into a shared module. It
+`recordLogin` was the first *instance method* to move into a shared module. It
 mutates four declared paths, so a divergence in it would corrupt a user's
 streak rather than merely throw — which is the same reason fields move. Its
 arithmetic is also exported as `applyLoginToStreak(streak, now)` so it can be
 asserted without a database (the method itself calls `this.save()`), exactly
 as `classifyBloodPressure` is exported for the `status` virtual.
+
+Four more instance methods followed on 2026-09-05, and they widen the rule.
+`NutritionGoals.checkGoalsMet` / `getProgress` and `Meal.getNutrition` do **not**
+mutate anything — they read declared paths and return a number or a boolean.
+They moved anyway, because the failure mode is what matters: a divergence there
+does not throw, it quietly tells each caller a different answer. **The rule is
+§3's — instance methods live in the shared module. The "does it mutate?"
+question is why *statics* are the exception, not a second gate methods have to
+pass.** Each one's arithmetic is exported by name (`evaluateGoalsMet`,
+`computeGoalProgress`, `sumMealNutrition`) so the hermetic suite can call it.
+
+`Meal` also carries the first two things of their kind in these modules: an
+**embedded sub-schema** (`food_items`, exported as `createMealItemSchema` — it
+must be built from the caller's own mongoose, exactly as the parent is) and a
+**`pre('save')` hook** (`attachMealTimestamps`, the only hook outside
+`UserSettings`' Garmin encryption).
 
 ### Two things that are *not* in the shared modules
 
@@ -88,6 +108,26 @@ as `classifyBloodPressure` is exported for the `status` virtual.
   is where the "Duplicate schema index" warning at boot comes from). Both are
   pre-existing on both sides and moved verbatim — changing either would stop
   the shared definition being byte-equivalent to what is deployed.
+- `Meal` is the only shared model that passes **no schema options at all** — no
+  `timestamps`, no `toJSON`. `created_at`/`updated_at` are ordinary declared
+  paths and the `pre('save')` hook maintains the latter, which means nothing
+  stamps `updated_at` on a `findOneAndUpdate`, on either side. Pre-existing on
+  both sides, moved verbatim.
+- `NutritionGoals`' two methods disagree about sugar and sodium on purpose:
+  `checkGoalsMet` treats them as ceilings (under the limit is good),
+  `getProgress` treats them as floors like the other five (under the limit
+  reads as low progress). Both shipped copies did this; both suites assert the
+  asymmetry so nobody fixes half of it.
+- `NutritionGoals.{checkGoalsMet,getProgress}` and `Meal.getNutrition` have **no
+  callers** in either app today. They were promoted rather than deleted so the
+  shared definition stays byte-equivalent to what is deployed; deleting them is
+  its own ticket.
+- `NutritionGoals` is **not** `UserSettings.nutrition_goal`. That one is a
+  *planning* sub-document on `usersettings` — `plan_type`, `weekly_schedule`,
+  `bmr`, `tdee`, a `keto` block — and shares not one field name with this
+  collection. `DailySummary.updateFromLogs` reads *that* one.
+  `validation/schemas/settings.js` validates it and was deliberately not
+  rewired.
 - `WeightGoals` is **not** `UserSettings.weight_goal`. Two collections describe
   a weight goal with overlapping field names and different bounds;
   `routes/goalRoutes.js` reads both and merges them. `validation/schemas/settings.js`
@@ -98,17 +138,18 @@ as `classifyBloodPressure` is exported for the `status` virtual.
 | Suite | Covers |
 |---|---|
 | `apps/basegeek/packages/api/src/__tests__/userSettingsSchemaParity.test.js` | `UserSettings` — both real models, path-by-path, plus write-through on in-memory Mongo |
-| `apps/basegeek/packages/api/src/__tests__/fitnessgeekSchemaParity.test.js` | table-driven over `Weight`, `BloodPressure`, `Medication`, `LoginStreak`, `WeightGoals`: paths, per-path type/default/bound/flag, indexes, virtuals and whether they serialize, virtual *behaviour*, `recordLogin` against a real collection, the `requireUser` divergence, write-through, and a strict-mode control. **Add pair 6+ as a row here.** |
+| `apps/basegeek/packages/api/src/__tests__/fitnessgeekSchemaParity.test.js` | table-driven over `Weight`, `BloodPressure`, `Medication`, `LoginStreak`, `WeightGoals`, `NutritionGoals`, `Meal`: paths, per-path type/default/bound/flag, indexes, virtuals and whether they serialize, virtual *behaviour*, `recordLogin` against a real collection, the `requireUser` divergence, write-through, and a strict-mode control. **Add pair 6+ as a row here.** |
 | `apps/fitnessgeek/backend/src/__tests__/models/userSettingsSchemaParity.test.js` | `UserSettings`, hermetic: model vs shared definition, source-level checks on basegeek's copy, REST allow-list resolution |
-| `apps/fitnessgeek/backend/src/__tests__/models/sharedSchemaParity.test.js` | `Weight` / `BloodPressure` / `Medication` / `LoginStreak` / `WeightGoals`, hermetic: same shape, plus the zod bounds-and-enum checks, the `applyLoginToStreak` branch cases, an assertion that the ownership guards stayed app-side, and a guard that basegeek's two deleted orphan models stay deleted |
+| `apps/fitnessgeek/backend/src/__tests__/models/sharedSchemaParity.test.js` | `Weight` / `BloodPressure` / `Medication` / `LoginStreak` / `WeightGoals` / `NutritionGoals` / `Meal`, hermetic: same shape, plus the zod bounds-and-enum checks, the `applyLoginToStreak` branch cases, an assertion that the ownership guards stayed app-side, and a guard that basegeek's two deleted orphan models stay deleted |
 
 The fitnessgeek suites are hermetic by design and basegeek's models open a
 connection at import time, so the fitnessgeek half does its cross-check at
 source level. Keep that split.
 
-The remaining eight pairs, in order, with their divergences and risks:
-`DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md` — §8 is what the first two pairs
-taught the pipeline.
+The remaining three pairs — the food family, `FoodItem` / `FoodLog` /
+`DailySummary` — with their divergences and risks:
+`DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md`. §8, §9 and §10 are what the first
+seven pairs taught the pipeline; §10's carry-forward is the live list.
 
 ---
 

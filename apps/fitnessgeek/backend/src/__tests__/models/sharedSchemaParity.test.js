@@ -57,12 +57,25 @@ import {
   applyLoginToStreak,
 } from '@geeksuite/schemas/fitnessgeek/loginStreak';
 import { createWeightGoalsSchema } from '@geeksuite/schemas/fitnessgeek/weightGoals';
+import {
+  createNutritionGoalsSchema,
+  evaluateGoalsMet,
+  computeGoalProgress,
+} from '@geeksuite/schemas/fitnessgeek/nutritionGoals';
+import {
+  createMealSchema,
+  createMealItemSchema,
+  sumMealNutrition,
+  MEAL_TYPES,
+} from '@geeksuite/schemas/fitnessgeek/meal';
 
 import Weight from '../../models/Weight.js';
 import BloodPressure from '../../models/BloodPressure.js';
 import Medication from '../../models/Medication.js';
 import LoginStreak from '../../models/LoginStreak.js';
 import WeightGoals from '../../models/WeightGoals.js';
+import NutritionGoals from '../../models/NutritionGoals.js';
+import Meal from '../../models/Meal.js';
 import { createBPSchema } from '../../validation/schemas/bloodPressure.js';
 import { createMedicationSchema as createMedicationZodSchema } from '../../validation/schemas/medication.js';
 
@@ -202,6 +215,62 @@ const PAIRS = [
     expectedVirtuals: [],
     serializesVirtuals: false,
     expectedStatics: ['getActiveWeightGoals', 'createWeightGoals', 'updateWeightGoals'],
+  },
+  {
+    name: 'NutritionGoals',
+    Model: NutritionGoals,
+    createSchema: createNutritionGoalsSchema,
+    factory: 'createNutritionGoalsSchema',
+    specifier: '@geeksuite/schemas/fitnessgeek/nutritionGoals',
+    modelFile: '../../models/NutritionGoals.js',
+    // NOT `UserSettings.nutrition_goal`, which is a nested sub-document on the
+    // `usersettings` collection describing a *plan*. Different collection,
+    // different field set, and `DailySummary` reads that one, not this.
+    expectedPaths: [
+      'user_id',
+      'calories',
+      'protein_grams',
+      'carbs_grams',
+      'fat_grams',
+      'fiber_grams',
+      'sugar_grams',
+      'sodium_mg',
+      'start_date',
+      'end_date',
+      'is_active',
+      'created_at',
+      'updated_at',
+    ],
+    expectedVirtuals: [],
+    serializesVirtuals: false,
+    expectedMethods: ['checkGoalsMet', 'getProgress'],
+    expectedStatics: ['getActiveGoals', 'createGoals', 'updateGoals'],
+  },
+  {
+    name: 'Meal',
+    Model: Meal,
+    createSchema: createMealSchema,
+    factory: 'createMealSchema',
+    specifier: '@geeksuite/schemas/fitnessgeek/meal',
+    modelFile: '../../models/Meal.js',
+    // The only pair with no schema options at all: no `timestamps`, no
+    // `toJSON`. `created_at`/`updated_at` are ordinary declared paths and a
+    // `pre('save')` hook maintains the latter. See the shared module's header.
+    expectedPaths: [
+      'user_id',
+      'name',
+      'meal_type',
+      'food_items',
+      'is_deleted',
+      'created_at',
+      'updated_at',
+    ],
+    expectedVirtuals: [],
+    serializesVirtuals: false,
+    expectedMethods: ['getNutrition'],
+    // `findOwned` is basegeek-only. These three are this side's, and they
+    // scope only `if (userId)` — divergence C4. Left alone deliberately.
+    expectedStatics: ['getActiveMeals', 'getMealsByType', 'searchMeals'],
   },
 ];
 
@@ -413,6 +482,21 @@ describe('the Medication enums and bounds', () => {
     const err = bad.validateSync();
     expect(err && err.errors.med_type).toBeTruthy();
   });
+
+  test('the last two hand-written copies of these enums are gone', () => {
+    // Follow-ups carried over from pairs 3-5: `models/MedicationLog.js`
+    // restated MED_TIME_OF_DAY, and `routes/medicationRoutes.js` had the
+    // med_type list inline in two defaulting ternaries. Both now import.
+    const read = (f) => fs.readFileSync(path.resolve(__dirname, f), 'utf8');
+
+    const log = read('../../models/MedicationLog.js');
+    expect(log).toContain('@geeksuite/schemas/fitnessgeek/medication');
+    expect(log).not.toMatch(/\[\s*'morning'\s*,/);
+
+    const routes = read('../../routes/medicationRoutes.js');
+    expect(routes).toContain('@geeksuite/schemas/fitnessgeek/medication');
+    expect(routes).not.toContain("'rx','otc','supplement'");
+  });
 });
 
 describe('the LoginStreak arithmetic', () => {
@@ -507,6 +591,8 @@ describe("the deliberate statics divergence is still deliberate", () => {
   test.each([
     ['LoginStreak', ['getOrCreateStreak']],
     ['WeightGoals', ['getActiveWeightGoals', 'createWeightGoals', 'updateWeightGoals']],
+    ['NutritionGoals', ['getActiveGoals', 'createGoals', 'updateGoals']],
+    ['Meal', ['findOwned', 'getActiveMeals', 'getMealsByType', 'searchMeals']],
   ])("basegeek's %s still guards its statics with requireUser", (name, statics) => {
     const src = fs.readFileSync(basegeekModel(name), 'utf8');
     expect(src).toContain("from '../ownership.js'");
@@ -520,6 +606,8 @@ describe("the deliberate statics divergence is still deliberate", () => {
   test.each([
     ['LoginStreak', '../../models/LoginStreak.js'],
     ['WeightGoals', '../../models/WeightGoals.js'],
+    ['NutritionGoals', '../../models/NutritionGoals.js'],
+    ['Meal', '../../models/Meal.js'],
   ])('fitnessgeek %s keeps its own unguarded statics', (name, file) => {
     const raw = fs.readFileSync(path.resolve(__dirname, file), 'utf8');
     // The wrappers explain the divergence in prose, so strip comments before
@@ -530,5 +618,189 @@ describe("the deliberate statics divergence is still deliberate", () => {
       .join('\n');
     expect(code).not.toContain('ownership.js');
     expect(code).not.toContain('requireUser');
+  });
+});
+
+describe('the NutritionGoals goal arithmetic', () => {
+  // `checkGoalsMet` and `getProgress` are instance methods on a document, so
+  // the shared module exports the same arithmetic as `evaluateGoalsMet(goals,
+  // totals)` and `computeGoalProgress(goals, totals)` — which is what lets
+  // this hermetic suite (no Mongo) assert the branches at all.
+  const GOALS = {
+    calories: 2000,
+    protein_grams: 150,
+    carbs_grams: 50,
+    fat_grams: 130,
+    fiber_grams: 25,
+    sugar_grams: 30,
+    sodium_mg: 2300,
+  };
+  const HIT = {
+    calories: 2000,
+    protein_grams: 150,
+    carbs_grams: 50,
+    fat_grams: 130,
+    fiber_grams: 25,
+    sugar_grams: 30,
+    sodium_mg: 2300,
+  };
+
+  test('the five macro targets are floors: at or over the goal is met', () => {
+    const met = evaluateGoalsMet(GOALS, { ...HIT, calories: 2400, protein_grams: 200 });
+    expect(met.calories).toBe(true);
+    expect(met.protein).toBe(true);
+    const short = evaluateGoalsMet(GOALS, { ...HIT, calories: 1999, protein_grams: 149 });
+    expect(short.calories).toBe(false);
+    expect(short.protein).toBe(false);
+  });
+
+  test('sugar and sodium are ceilings: over the goal is NOT met', () => {
+    // The one asymmetry in the function, and it was a trailing comment on two
+    // lines in two files before it lived in one module.
+    expect(evaluateGoalsMet(GOALS, HIT).sugar).toBe(true);
+    expect(evaluateGoalsMet(GOALS, HIT).sodium).toBe(true);
+    expect(evaluateGoalsMet(GOALS, { ...HIT, sugar_grams: 31 }).sugar).toBe(false);
+    expect(evaluateGoalsMet(GOALS, { ...HIT, sodium_mg: 2301 }).sodium).toBe(false);
+  });
+
+  test('an unset or zero goal reads as not-met, not as trivially met', () => {
+    expect(evaluateGoalsMet({}, HIT)).toEqual({
+      calories: false,
+      protein: false,
+      carbs: false,
+      fat: false,
+      fiber: false,
+      sugar: false,
+      sodium: false,
+    });
+    expect(evaluateGoalsMet({ ...GOALS, sugar_grams: 0 }, { ...HIT, sugar_grams: 0 }).sugar)
+      .toBe(false);
+  });
+
+  test('progress is a percentage clamped at 100, and 0 for an unset goal', () => {
+    const p = computeGoalProgress(GOALS, { ...HIT, calories: 4000, protein_grams: 75 });
+    expect(p.calories).toBe(100);
+    expect(p.protein).toBe(50);
+    expect(computeGoalProgress({}, HIT).calories).toBe(0);
+  });
+
+  test('progress treats sugar and sodium as floors even though checkGoalsMet does not', () => {
+    // Shipped asymmetry between the two methods, moved verbatim. Asserted so
+    // nobody "fixes" one of them without noticing the other.
+    const halfway = computeGoalProgress(GOALS, { ...HIT, sugar_grams: 15, sodium_mg: 1150 });
+    expect(halfway.sugar).toBe(50);
+    expect(halfway.sodium).toBe(50);
+    expect(evaluateGoalsMet(GOALS, { ...HIT, sugar_grams: 15, sodium_mg: 1150 }).sugar).toBe(true);
+  });
+
+  test('the real model carries both methods and they are the shared implementation', () => {
+    const doc = new NutritionGoals({ user_id: 'u1', ...GOALS });
+    expect(typeof doc.checkGoalsMet).toBe('function');
+    expect(typeof doc.getProgress).toBe('function');
+    expect(doc.checkGoalsMet(HIT)).toEqual(evaluateGoalsMet(GOALS, HIT));
+    expect(doc.getProgress(HIT)).toEqual(computeGoalProgress(GOALS, HIT));
+  });
+});
+
+describe('the Meal sub-schema, enum and nutrition arithmetic', () => {
+  const food = (over = {}) => ({
+    food_item_id: {
+      nutrition: {
+        calories_per_serving: 100,
+        protein_grams: 10,
+        carbs_grams: 5,
+        fat_grams: 4,
+        fiber_grams: 2,
+        sugar_grams: 1,
+        sodium_mg: 200,
+        ...over,
+      },
+    },
+    servings: 1,
+  });
+  const ZERO = {
+    calories: 0,
+    protein_grams: 0,
+    carbs_grams: 0,
+    fat_grams: 0,
+    fiber_grams: 0,
+    sugar_grams: 0,
+    sodium_mg: 0,
+  };
+
+  test('food_items embeds the shared sub-schema, ref and servings default intact', () => {
+    const sub = Meal.schema.paths.food_items.schema;
+    expect(Object.keys(sub.paths).sort()).toEqual(['_id', 'food_item_id', 'servings']);
+    expect(sub.paths.food_item_id.options.ref).toBe('FoodItem');
+    expect(sub.paths.servings.options.default).toBe(1);
+    // Same shape as a stand-alone build of the exported sub-schema factory.
+    const standalone = createMealItemSchema(mongoose);
+    expect(Object.keys(standalone.paths).sort()).toEqual(Object.keys(sub.paths).sort());
+  });
+
+  test('meal_type is the shared enum and an unknown value is rejected', () => {
+    expect(Meal.schema.paths.meal_type.enumValues).toEqual([...MEAL_TYPES]);
+    const err = new Meal({ name: 'X', meal_type: 'brunch' }).validateSync();
+    expect(err && err.errors.meal_type).toBeTruthy();
+  });
+
+  test('the pre(save) hook is attached by the shared factory', () => {
+    // The schema passes no `timestamps` option, so this hook is the only thing
+    // that maintains `updated_at` — and it fires on save() only, on both
+    // sides. See the shared module's header before changing that.
+    // Compiling a model adds mongoose's own pre-save hooks, so count is not
+    // the comparison — presence of *this* hook is.
+    const stamps = (schema) =>
+      (schema.s.hooks._pres.get('save') || []).some((h) =>
+        String(h.fn).includes('this.updated_at = new Date()')
+      );
+    expect(stamps(createMealSchema(mongoose))).toBe(true);
+    expect(stamps(Meal.schema)).toBe(true);
+    // And the wrapper does not declare one of its own. Comments stripped
+    // first: the wrapper explains the hook in prose.
+    const code = fs
+      .readFileSync(path.resolve(__dirname, '../../models/Meal.js'), 'utf8')
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('//'))
+      .join('\n');
+    expect(code).not.toContain("pre('save'");
+  });
+
+  test('getNutrition multiplies by servings and rounds to the shipped precision', () => {
+    expect(sumMealNutrition([food(), { ...food(), servings: 2.5 }])).toEqual({
+      calories: 350,
+      protein_grams: 35,
+      carbs_grams: 17.5,
+      fat_grams: 14,
+      fiber_grams: 7,
+      sugar_grams: 3.5,
+      sodium_mg: 700,
+    });
+    // Grams round to one decimal; calories and sodium to the unit.
+    expect(sumMealNutrition([food({ protein_grams: 3.33 })]).protein_grams).toBe(3.3);
+    expect(sumMealNutrition([food({ calories_per_serving: 100.6 })]).calories).toBe(101);
+  });
+
+  test('a missing servings count means one serving, not zero', () => {
+    expect(sumMealNutrition([{ food_item_id: food().food_item_id }]).calories).toBe(100);
+  });
+
+  test('an un-populated item contributes nothing rather than NaN', () => {
+    // The realistic failure: a caller that forgot to `.populate()`. Both sides
+    // return zeros quietly; that is shipped behaviour, asserted so it stays
+    // deliberate.
+    expect(sumMealNutrition([{ food_item_id: new mongoose.Types.ObjectId(), servings: 3 }]))
+      .toEqual(ZERO);
+    expect(sumMealNutrition([{ food_item_id: {}, servings: 3 }])).toEqual(ZERO);
+    expect(sumMealNutrition([])).toEqual(ZERO);
+    expect(sumMealNutrition(undefined)).toEqual(ZERO);
+  });
+
+  test('the real model carries getNutrition and it is the shared implementation', () => {
+    const items = [{ ...food(), servings: 2 }];
+    expect(Meal.schema.methods.getNutrition.call({ food_items: items })).toEqual(
+      sumMealNutrition(items)
+    );
+    expect(String(Meal.schema.methods.getNutrition)).toContain('sumMealNutrition');
   });
 });

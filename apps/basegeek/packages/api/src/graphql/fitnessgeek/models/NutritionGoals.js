@@ -2,70 +2,39 @@ import mongoose from 'mongoose';
 import { getAppConnection } from '../../shared/appConnections.js';
 import { requireUser } from '../ownership.js';
 
+// The field set, the compound index and both instance methods
+// (`checkGoalsMet`, `getProgress`) live in @geeksuite/schemas so that this
+// model and fitnessgeek's REST copy
+// (apps/fitnessgeek/backend/src/models/NutritionGoals.js) cannot drift. Both
+// point at the `nutritiongoals` collection in the same database — this gateway
+// is the only writer, fitnessgeek reads through its aiCoach routes and its
+// report/insight services — and mongoose strict mode silently drops paths one
+// side doesn't know about. See the shared module's header and
+// DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md.
+//
+// This is NOT `UserSettings.nutrition_goal`, which is a nested sub-document on
+// a different collection describing a *plan* and sharing no field name with
+// this one. Do not unify them.
+//
+// Do NOT add fields here. Add them to the shared module (and to typeDefs.js if
+// they should cross GraphQL); the tripwire tests in both suites fail if this
+// model stops matching the shared definition.
+//
+// Default import + destructure: the shared module is CommonJS (no build step,
+// `require`-able and `import`-able by both consumers), and this is the interop
+// form that works identically under Node ESM and jest's
+// --experimental-vm-modules.
+import nutritionGoalsSchemaModule from '@geeksuite/schemas/fitnessgeek/nutritionGoals';
+
+const { createNutritionGoalsSchema } = nutritionGoalsSchemaModule;
+
 const fitnessConn = getAppConnection('fitnessgeek');
 
-const nutritionGoalsSchema = new mongoose.Schema({
-  user_id: {
-    type: String,
-    required: true,
-    index: true
-  },
-  calories: {
-    type: Number,
-    min: 0,
-    max: 10000
-  },
-  protein_grams: {
-    type: Number,
-    min: 0,
-    max: 1000
-  },
-  carbs_grams: {
-    type: Number,
-    min: 0,
-    max: 2000
-  },
-  fat_grams: {
-    type: Number,
-    min: 0,
-    max: 500
-  },
-  fiber_grams: {
-    type: Number,
-    min: 0,
-    max: 200
-  },
-  sugar_grams: {
-    type: Number,
-    min: 0,
-    max: 500
-  },
-  sodium_mg: {
-    type: Number,
-    min: 0,
-    max: 10000
-  },
-  start_date: {
-    type: Date,
-    default: Date.now
-  },
-  end_date: {
-    type: Date
-  },
-  is_active: {
-    type: Boolean,
-    default: true,
-    index: true
-  }
-}, {
-  timestamps: {
-    createdAt: 'created_at',
-    updatedAt: 'updated_at'
-  }
-});
+const nutritionGoalsSchema = createNutritionGoalsSchema(mongoose);
 
-// Compound index for user and active status
-nutritionGoalsSchema.index({ user_id: 1, is_active: 1 });
+// The ownership guards stay here, not in the shared module: this gateway fails
+// closed on an unscoped query, fitnessgeek's callers are already past auth, and
+// statics don't affect `schema.paths`, so the two writers are free to disagree.
 
 // Static method to get active goals for user
 nutritionGoalsSchema.statics.getActiveGoals = async function(userId) {
@@ -108,32 +77,6 @@ nutritionGoalsSchema.statics.updateGoals = async function(userId, goalsData) {
 
   Object.assign(existingGoals, goalsData);
   return await existingGoals.save();
-};
-
-// Method to check if goals are met
-nutritionGoalsSchema.methods.checkGoalsMet = function(actualTotals) {
-  return {
-    calories: this.calories ? actualTotals.calories >= this.calories : false,
-    protein: this.protein_grams ? actualTotals.protein_grams >= this.protein_grams : false,
-    carbs: this.carbs_grams ? actualTotals.carbs_grams >= this.carbs_grams : false,
-    fat: this.fat_grams ? actualTotals.fat_grams >= this.fat_grams : false,
-    fiber: this.fiber_grams ? actualTotals.fiber_grams >= this.fiber_grams : false,
-    sugar: this.sugar_grams ? actualTotals.sugar_grams <= this.sugar_grams : false, // Sugar is a limit
-    sodium: this.sodium_mg ? actualTotals.sodium_mg <= this.sodium_mg : false // Sodium is a limit
-  };
-};
-
-// Method to get progress percentages
-nutritionGoalsSchema.methods.getProgress = function(actualTotals) {
-  return {
-    calories: this.calories ? Math.min((actualTotals.calories / this.calories) * 100, 100) : 0,
-    protein: this.protein_grams ? Math.min((actualTotals.protein_grams / this.protein_grams) * 100, 100) : 0,
-    carbs: this.carbs_grams ? Math.min((actualTotals.carbs_grams / this.carbs_grams) * 100, 100) : 0,
-    fat: this.fat_grams ? Math.min((actualTotals.fat_grams / this.fat_grams) * 100, 100) : 0,
-    fiber: this.fiber_grams ? Math.min((actualTotals.fiber_grams / this.fiber_grams) * 100, 100) : 0,
-    sugar: this.sugar_grams ? Math.min((actualTotals.sugar_grams / this.sugar_grams) * 100, 100) : 0,
-    sodium: this.sodium_mg ? Math.min((actualTotals.sodium_mg / this.sodium_mg) * 100, 100) : 0
-  };
 };
 
 export default fitnessConn.model('NutritionGoals', nutritionGoalsSchema);

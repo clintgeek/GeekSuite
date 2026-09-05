@@ -1,6 +1,10 @@
 import mongoose from 'mongoose';
-
-const MED_TIME_OF_DAY = ['morning', 'afternoon', 'evening', 'bedtime'];
+// The `time_of_day` slots are `Medication`'s enum, one document down. This
+// file used to restate the four strings; it now imports the same frozen array
+// the shared schema and the zod validator use. This model is single-writer
+// (basegeek's copy was deleted as an orphan on 2026-09-05) so it is not a
+// two-writer drift hazard — it was simply the last hand-synced copy left.
+import { MED_TIME_OF_DAY } from '@geeksuite/schemas/fitnessgeek/medication';
 
 const medicationLogSchema = new mongoose.Schema({
   user_id: {

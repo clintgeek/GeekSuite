@@ -44,17 +44,27 @@ mode drops unknown paths from a `$set` silently, so drift between the two copies
 destroys data without an error anywhere. The full audit, the remaining work and
 the ordering are in `DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md`.
 
-**Six of those models no longer declare a schema here.** `UserSettings`,
-`Weight`, `BloodPressure`, `Medication`, `LoginStreak` and `WeightGoals` build
-from `@geeksuite/schemas` — the file in this directory is a thin wrapper: a
-factory call, its own ownership statics, and the `fitnessConn.model(...)`
-binding. The `requireUser` guards on `LoginStreak.getOrCreateStreak` and the
-three `WeightGoals` statics stayed here on purpose — this gateway fails closed
-on an unscoped query while fitnessgeek's callers are already past auth, and
-statics don't appear in `schema.paths` so the two writers are free to disagree.
-`LoginStreak.recordLogin` went the other way: it is an *instance method* that
-mutates declared paths, so it lives in the shared module and both sides run the
-same implementation. Do not add fields to the wrapper; add them to
+**Eight of those models no longer declare a schema here.** `UserSettings`,
+`Weight`, `BloodPressure`, `Medication`, `LoginStreak`, `WeightGoals`,
+`NutritionGoals` and `Meal` build from `@geeksuite/schemas` — the file in this
+directory is a thin wrapper: a factory call, its own ownership statics, and the
+`fitnessConn.model(...)` binding. Only the food family (`FoodItem`, `FoodLog`,
+`DailySummary`) still declares a schema literal here. The `requireUser` guards
+stayed here on purpose — on `LoginStreak.getOrCreateStreak`, the three
+`WeightGoals` statics, the three `NutritionGoals` statics and all four `Meal`
+statics — because this gateway fails closed on an unscoped query while
+fitnessgeek's callers are already past auth, and statics don't appear in
+`schema.paths` so the two writers are free to disagree. For `Meal` that
+disagreement is load-bearing rather than cosmetic: fitnessgeek's list statics
+return **every user's meals** when called without a userId, and both apps' test
+suites assert that divergence as a decision. Do not unify them here; tightening
+fitnessgeek's copy is its own ticket.
+
+Instance methods went the other way and live in the shared modules, so both
+sides run one implementation: `LoginStreak.recordLogin`,
+`NutritionGoals.checkGoalsMet` / `getProgress`, and `Meal.getNutrition` — along
+with `Meal`'s embedded food-item sub-schema and its `pre('save')`
+`updated_at` stamp. Do not add fields to the wrapper; add them to
 `packages/schemas/fitnessgeek/*` and, if they must cross GraphQL, to
 `typeDefs.js`. Tripwires in both apps' suites fail if a wrapper stops consuming
 the shared module. Import form here is default-import-plus-destructure — the

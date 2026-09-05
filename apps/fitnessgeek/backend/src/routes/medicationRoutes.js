@@ -8,6 +8,10 @@ import { suggestIndications } from '../services/indicationMap.js';
 import logger from '../config/logger.js';
 import { validate } from '../validation/validate.js';
 import { createMedicationSchema, updateMedicationSchema } from '../validation/schemas/medication.js';
+// The `med_type` enum, from the shared schema — the same array the model and
+// the zod validator above enforce. The two defaulting ternaries below used to
+// restate it inline.
+import { MED_TYPES } from '@geeksuite/schemas/fitnessgeek/medication';
 
 // Search medications (RxNav approximate search)
 router.get('/search', authenticateToken, async (req, res) => {
@@ -111,7 +115,7 @@ router.post('/', authenticateToken, validate({ body: createMedicationSchema }), 
       user_id: userId,
       display_name: body.display_name,
       is_supplement: !!body.is_supplement,
-      med_type: ['rx','otc','supplement'].includes((body.med_type||'').toLowerCase()) ? body.med_type.toLowerCase() : 'rx',
+      med_type: MED_TYPES.includes((body.med_type||'').toLowerCase()) ? body.med_type.toLowerCase() : 'rx',
       rxcui: body.rxcui || null,
       ingredient_name: body.ingredient_name || null,
       brand_name: body.brand_name || null,
@@ -191,7 +195,7 @@ router.put('/:id', authenticateToken, validate({ body: updateMedicationSchema })
     const up = {
       display_name: body.display_name ?? med.display_name,
       is_supplement: body.is_supplement ?? med.is_supplement,
-      med_type: ['rx','otc','supplement'].includes((body.med_type||'').toLowerCase()) ? body.med_type.toLowerCase() : (med.med_type||'rx'),
+      med_type: MED_TYPES.includes((body.med_type||'').toLowerCase()) ? body.med_type.toLowerCase() : (med.med_type||'rx'),
       rxcui: body.rxcui ?? med.rxcui,
       ingredient_name: body.ingredient_name ?? med.ingredient_name,
       brand_name: body.brand_name ?? med.brand_name,
