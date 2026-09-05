@@ -9,7 +9,6 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
-| R65 | pre-work from the consolidation plan: DailySummary net_carbs_grams (live bug since 79b1b57), toUtcDate → utils, Meal static | sonnet | basegeek api graphql/fitnessgeek models + tests | 09-05 14:22 |
 | R64 | TODO #22: zod validation on bookgeek's remaining REST api | sonnet | bookgeek api, TODO docs, lockfile | 09-05 14:15 |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
@@ -85,6 +84,7 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 - `d8521eb` — R27 — CSRF header in api-client authLink + startgeek clients
 - `1fda489` — R24 — bujogeek tag cloud + template journal cache; #25/#26 struck
 - `x` — R62 — DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md (found the net_carbs_grams live bug → R65)
+- `0cecb4a` — R65 — gateway DailySummary net_carbs_grams restored (keto ring), toUtcDate → utils (api 856)
 - `6ffaf87` — R61 — fitnessgeek TODO #30: scanner theme/breakpoints, shared DateField ×6 (27 tests)
 - `a80da35` — R63 — DOCS/STORYGEEK_GATEWAY_DECISION.md: no live caller of the gateway storygeek module; recommend delete (Chef: Q38)
 - `01d35d4` — R58 — bookgeek profile/filters/shelves/ai-status on the gateway; drifted Profile model fixed; localhost:1800 gone (step 3)
