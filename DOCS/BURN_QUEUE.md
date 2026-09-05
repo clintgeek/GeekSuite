@@ -68,7 +68,7 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 
 - 09-05 15:12 — wave 6 (`d224d40`, 9 commits): R67, R68, comment fixes. Gates green; CI, Release and harness workflow green; Watchtower 15:23 (updated=7); all eight apps 200.
 
-- 09-05 15:39 — wave 7 (`120b54e`, 6 commits): R69, R70. Gates green.
+- 09-05 15:39 — wave 7 (`120b54e`, 6 commits): R69, R70. Gates green; CI, Release and harness workflow green; Watchtower 15:50 (updated=7); all eight apps 200.
 
 ## Landed during the burn
 
