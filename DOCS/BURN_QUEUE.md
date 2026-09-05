@@ -9,7 +9,6 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
-| R50 | Q29: gateway fitnessgeek food-log mutations — food_item findOrCreate, nullable update input, logMeal notes, DailySummary | opus | basegeek api graphql/fitnessgeek | 09-05 13:22 |
 | R51 | TODO #15 fan-out: storygeek on shared feedback primitives (last app) | sonnet | storygeek frontend src, UI plan | 09-05 13:22 |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
@@ -26,6 +25,8 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | Q22 | flockgeek backend still mounts a full REST CRUD API (9 models) with no caller in the repo — decide: delete the layer or keep as API surface | Chef's call | S |
 | Q27 | storygeek StoryPlay tests (6, skipped): interaction tests stall jsdom at high CPU on that tree — find the render loop, re-enable | own ticket | S |
 | Q32 | Add `node --check` over `apps/*/**/src/**/*.js` (or import-every-module tests) to CI so a template-literal typo cannot pass a green suite again | S — next slot | S |
+| Q33 | consolidation step 2 (frontend): UPDATE_FOOD_LOG → FoodLogUpdateInput, normalizeFoodInput keeps id/source/source_id, fitnessGeekService off restClient for the four writes; then Q25-style REST route removal | ready — fitnessgeek frontend free | M |
+| Q34 | basegeek api aiServiceCache.test.js flakes under box load (passes alone) — make its timing deterministic | XS | XS |
 | Q31 | After the R46 deploy: `docker exec fitnessgeek node scripts/encryptGarminPasswords.js --dry-run`, then real, then dry-run again (expect 0) | after deploy | XS |
 | Q20b | aiGeek: simulated streaming (F-21) and user-gated selection (F-14) documented, not fixed | design | S |
 | Q14 | storygeek CanonCard summary text through Narration too (agent left it as a separate render path) | Chef's call | XS |
@@ -83,6 +84,8 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 - `363a820` — R4 — mobile harness in tools/ + CI (report-only); 698 probe findings
 - `d8521eb` — R27 — CSRF header in api-client authLink + startgeek clients
 - `1fda489` — R24 — bujogeek tag cloud + template journal cache; #25/#26 struck
+- `79b1b57` — R50 — gateway food-log mutations drop-in for REST (Q29; 26 tests, api 826)
+- `61d3109` — hotfix: bujogeek typeDefs backticks + gatewaySchemaLoads tripwire
 - `f5ea782` — R52 — notegeek dead LoginPage/RegisterPage removed (149 tests); schemas eslint config
 - `e183fdd` — logger eslint config (CI fix)
 - `1142e72` — R44 — fitnessgeek on shared feedback primitives + toneForMode; UI plan records four apps
