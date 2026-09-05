@@ -98,7 +98,7 @@ function InfraChip({ svc, status }) {
         <Typography sx={{ fontSize: '0.78rem', fontWeight: 600, color: 'text.primary', lineHeight: 1.2 }}>
           {svc.name}
         </Typography>
-        <Typography sx={{ fontSize: '0.6rem', fontFamily: '"Geist Mono", monospace', color: 'text.muted' }}>
+        <Typography sx={{ fontSize: '0.75rem', fontFamily: '"Geist Mono", monospace', color: 'text.muted' }}>
           {checking ? 'checking...' : online ? `${status.latency}ms` : 'offline'}
         </Typography>
       </Box>
@@ -157,8 +157,9 @@ function AppCard({ app, health }) {
             {app.displayName}
           </Typography>
           <Chip label={app.tag} size="small" sx={{
-            height: 18, fontSize: '0.55rem', fontWeight: 700, letterSpacing: '0.04em',
+            height: 20, fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.04em',
             backgroundColor: `${tagColor}18`, color: brandInk(theme, tagColor), border: 'none', mt: 0.3,
+            '& .MuiChip-label': { px: 0.9 },
           }} />
         </Box>
       </Box>
@@ -172,7 +173,7 @@ function AppCard({ app, health }) {
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.6 }}>
         {app.stack.map((s) => (
           <Typography key={s} sx={{
-            fontSize: '0.58rem', fontFamily: '"Geist Mono", monospace',
+            fontSize: '0.75rem', fontFamily: '"Geist Mono", monospace',
             color: 'text.muted', px: 0.8, py: 0.2,
             border: `1px solid ${theme.palette.line.panel}`, borderRadius: '4px',
           }}>{s}</Typography>
@@ -180,7 +181,7 @@ function AppCard({ app, health }) {
       </Box>
 
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Typography sx={{ fontSize: '0.62rem', fontFamily: '"Geist Mono", monospace', color: 'text.muted' }}>
+        <Typography sx={{ fontSize: '0.75rem', fontFamily: '"Geist Mono", monospace', color: 'text.muted' }}>
           {checking ? 'checking...' : online ? `${health.latency}ms RTT` : 'offline'}
           {health?.version ? ` · v${health.version}` : ''}
         </Typography>
@@ -210,7 +211,11 @@ function SidecarCard({ svc }) {
         </Box>
         <Tooltip title="View source on GitHub" arrow>
           <Box component="a" href={svc.repo} target="_blank" rel="noopener noreferrer"
-            sx={{ display: 'flex', color: 'text.muted', '&:hover': { color: 'text.secondary' }, transition: 'color 150ms' }}>
+            sx={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              minWidth: 44, minHeight: 44, color: 'text.muted',
+              '&:hover': { color: 'text.secondary' }, transition: 'color 150ms',
+            }}>
             <GitHubIcon sx={{ fontSize: 16 }} />
           </Box>
         </Tooltip>
@@ -221,7 +226,7 @@ function SidecarCard({ svc }) {
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.6 }}>
         {svc.stack.map((s) => (
           <Typography key={s} sx={{
-            fontSize: '0.58rem', fontFamily: '"Geist Mono", monospace',
+            fontSize: '0.75rem', fontFamily: '"Geist Mono", monospace',
             color: 'text.muted', px: 0.8, py: 0.2,
             border: `1px solid ${theme.palette.line.panel}`, borderRadius: '4px',
           }}>{s}</Typography>
@@ -282,21 +287,27 @@ export default function PortalPage() {
 
   return (
     <Box sx={{
-      minHeight: '100vh', background: theme.palette.surfaces.deep,
+      minHeight: '100vh',
+      '@supports (height: 100dvh)': { minHeight: '100dvh' },
+      background: theme.palette.surfaces.deep,
       backgroundImage: `radial-gradient(circle at 20% 20%, ${alpha(theme.palette.primary.main, 0.04)} 0%, transparent 50%), radial-gradient(circle at 80% 80%, ${alpha(theme.palette.info.main, 0.03)} 0%, transparent 50%)`,
       fontFamily: '"Geist", -apple-system, sans-serif',
       color: 'text.primary',
     }}>
 
       {/* ─── Header ─── */}
-      <Box sx={{ borderBottom: '1px solid', borderColor: 'divider', px: { xs: 3, md: 8 }, py: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <Box sx={{
+        borderBottom: '1px solid', borderColor: 'divider', px: { xs: 3, md: 8 }, py: 4,
+        display: 'flex', flexDirection: { xs: 'column', sm: 'row' },
+        justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' }, gap: { xs: 2, sm: 0 },
+      }}>
         <Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5, flexWrap: 'wrap' }}>
             <Typography sx={{ fontWeight: 800, fontSize: '1.1rem', letterSpacing: '-0.02em', color: 'text.primary' }}>
               Geek<span style={{ color: theme.palette.primary.main }}>Suite</span>
             </Typography>
             <Box sx={{ px: 1, py: 0.2, borderRadius: '4px', border: `1px solid ${theme.palette.glow.border}`, backgroundColor: alpha(theme.palette.primary.main, 0.08) }}>
-              <Typography sx={{ fontSize: '0.55rem', fontFamily: '"Geist Mono", monospace', color: 'primary.main', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+              <Typography sx={{ fontSize: '0.75rem', fontFamily: '"Geist Mono", monospace', color: 'primary.main', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
                 Public Portal
               </Typography>
             </Box>
@@ -311,15 +322,15 @@ export default function PortalPage() {
           ) : (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <StatusDot online={onlineCount === totalCount} checking={false} size={8} />
-              <Typography sx={{ fontSize: '0.7rem', fontFamily: '"Geist Mono", monospace', color: 'text.secondary' }}>
+              <Typography sx={{ fontSize: '0.75rem', fontFamily: '"Geist Mono", monospace', color: 'text.secondary' }}>
                 {onlineCount}/{totalCount} online
               </Typography>
             </Box>
           )}
           <Box component="a" href="https://clintgeek.com" target="_blank" rel="noopener noreferrer"
-            sx={{ display: 'flex', alignItems: 'center', gap: 0.75, textDecoration: 'none',
-              px: 2, py: 1, borderRadius: '8px', border: `1px solid ${theme.palette.line.panel}`,
-              color: 'text.secondary', fontSize: '0.7rem', fontFamily: '"Geist Mono", monospace',
+            sx={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 0.75, textDecoration: 'none',
+              minHeight: 44, px: 2, py: 1, borderRadius: '8px', border: `1px solid ${theme.palette.line.panel}`,
+              color: 'text.secondary', fontSize: '0.75rem', fontFamily: '"Geist Mono", monospace',
               transition: 'all 150ms', '&:hover': { color: 'text.primary', borderColor: theme.palette.line.strong },
             }}>
             Portfolio <ArrowForwardIcon sx={{ fontSize: 12 }} />
@@ -343,7 +354,7 @@ export default function PortalPage() {
 
         {/* ─── Infrastructure Status ─── */}
         <Box sx={{ mb: 10 }}>
-          <Typography sx={{ fontSize: '0.65rem', fontFamily: '"Geist Mono", monospace', color: 'text.secondary', letterSpacing: '0.12em', textTransform: 'uppercase', mb: 2 }}>
+          <Typography sx={{ fontSize: '0.75rem', fontFamily: '"Geist Mono", monospace', color: 'text.secondary', letterSpacing: '0.12em', textTransform: 'uppercase', mb: 2 }}>
             // Infrastructure Layer
           </Typography>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
@@ -359,7 +370,7 @@ export default function PortalPage() {
               <StatusDot online={true} checking={false} />
               <Box>
                 <Typography sx={{ fontSize: '0.78rem', fontWeight: 600, color: 'text.primary', lineHeight: 1.2 }}>Nginx</Typography>
-                <Typography sx={{ fontSize: '0.6rem', fontFamily: '"Geist Mono", monospace', color: 'text.muted' }}>TLS 1.3 · A+</Typography>
+                <Typography sx={{ fontSize: '0.75rem', fontFamily: '"Geist Mono", monospace', color: 'text.muted' }}>TLS 1.3 · A+</Typography>
               </Box>
             </Box>
           </Box>
@@ -367,11 +378,11 @@ export default function PortalPage() {
 
         {/* ─── Application Directory ─── */}
         <Box sx={{ mb: 10 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-            <Typography sx={{ fontSize: '0.65rem', fontFamily: '"Geist Mono", monospace', color: 'text.secondary', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 3 }}>
+            <Typography sx={{ fontSize: '0.75rem', fontFamily: '"Geist Mono", monospace', color: 'text.secondary', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
               // Application Directory ({totalCount} apps)
             </Typography>
-            <Typography sx={{ fontSize: '0.65rem', fontFamily: '"Geist Mono", monospace', color: 'text.secondary' }}>
+            <Typography sx={{ fontSize: '0.75rem', fontFamily: '"Geist Mono", monospace', color: 'text.secondary' }}>
               Live health · 60s refresh
             </Typography>
           </Box>
@@ -388,7 +399,7 @@ export default function PortalPage() {
 
         {/* ─── Sidecar Services ─── */}
         <Box sx={{ mb: 10 }}>
-          <Typography sx={{ fontSize: '0.65rem', fontFamily: '"Geist Mono", monospace', color: 'text.secondary', letterSpacing: '0.12em', textTransform: 'uppercase', mb: 3 }}>
+          <Typography sx={{ fontSize: '0.75rem', fontFamily: '"Geist Mono", monospace', color: 'text.secondary', letterSpacing: '0.12em', textTransform: 'uppercase', mb: 3 }}>
             // Sidecar Services
           </Typography>
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
@@ -402,7 +413,7 @@ export default function PortalPage() {
           border: `1px solid ${alpha(theme.palette.primary.main, 0.12)}`,
           background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.04)} 0%, transparent 100%)`,
         }}>
-          <Typography sx={{ fontSize: '0.65rem', fontFamily: '"Geist Mono", monospace', color: 'primary.main', letterSpacing: '0.12em', textTransform: 'uppercase', mb: 2 }}>
+          <Typography sx={{ fontSize: '0.75rem', fontFamily: '"Geist Mono", monospace', color: 'primary.main', letterSpacing: '0.12em', textTransform: 'uppercase', mb: 2 }}>
             // Architecture Note
           </Typography>
           <Typography sx={{ fontSize: '0.85rem', color: 'text.secondary', lineHeight: 1.7, maxWidth: 700 }}>
@@ -412,7 +423,7 @@ export default function PortalPage() {
             {[['Nginx', 'Reverse Proxy'], ['Docker', 'Orchestration'], ['Ollama', 'Local LLM'], ['geekLock', 'Cryptography'], ['geekGrep', 'RAG / Search'],].map(([label, sublabel]) => (
               <Box key={label}>
                 <Typography sx={{ fontSize: '0.75rem', fontWeight: 600, color: 'text.primary' }}>{label}</Typography>
-                <Typography sx={{ fontSize: '0.6rem', fontFamily: '"Geist Mono", monospace', color: 'text.secondary' }}>{sublabel}</Typography>
+                <Typography sx={{ fontSize: '0.75rem', fontFamily: '"Geist Mono", monospace', color: 'text.secondary' }}>{sublabel}</Typography>
               </Box>
             ))}
           </Box>
@@ -421,13 +432,17 @@ export default function PortalPage() {
 
       {/* ─── Footer ─── */}
       <Box sx={{ borderTop: '1px solid', borderColor: 'divider', px: { xs: 3, md: 8 }, py: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
-        <Typography sx={{ fontSize: '0.64rem', fontFamily: '"Geist Mono", monospace', color: 'text.muted' }}>
+        <Typography sx={{ fontSize: '0.75rem', fontFamily: '"Geist Mono", monospace', color: 'text.muted' }}>
           GeekSuite · clintgeek.com · Established 1996
         </Typography>
-        <Box sx={{ display: 'flex', gap: 3 }}>
+        <Box sx={{ display: 'flex', gap: 1 }}>
           {[['Portfolio', 'https://clintgeek.com'], ['GitHub', 'https://github.com/clintgeek'], ['LinkedIn', 'https://linkedin.com/in/clintcrocker']].map(([label, href]) => (
             <Box key={label} component="a" href={href} target="_blank" rel="noopener noreferrer"
-              sx={{ fontSize: '0.64rem', fontFamily: '"Geist Mono", monospace', color: 'text.secondary', textDecoration: 'none', transition: 'color 150ms', '&:hover': { color: 'primary.main' } }}>
+              sx={{
+                display: 'inline-flex', alignItems: 'center', minHeight: 44, px: 1,
+                fontSize: '0.75rem', fontFamily: '"Geist Mono", monospace', color: 'text.secondary',
+                textDecoration: 'none', transition: 'color 150ms', '&:hover': { color: 'primary.main' },
+              }}>
               {label}
             </Box>
           ))}

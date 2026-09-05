@@ -304,7 +304,14 @@ export default function DataGeekPage() {
         mb: 3,
         overflow: 'hidden',
       }}>
-        <Tabs value={tab} onChange={(_, v) => setTab(v)} centered>
+        <Tabs
+          value={tab}
+          onChange={(_, v) => setTab(v)}
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
+          sx={{ '& .MuiTabs-flexContainer': { justifyContent: { xs: 'flex-start', sm: 'center' } } }}
+        >
           <Tab label="Mongo" />
           <Tab label="Redis" />
           <Tab label="Postgres" />

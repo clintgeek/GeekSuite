@@ -1,19 +1,8 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import {
   Button,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Typography,
   IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   TextField
 } from '@mui/material';
 import {
@@ -21,8 +10,19 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon
 } from '@mui/icons-material';
+import ConsoleDialog from '../components/primitives/ConsoleDialog';
+import ResponsiveTable from '../components/primitives/ResponsiveTable';
+
+const COLUMNS = [
+  { key: 'name', label: 'Name', card: false },
+  { key: 'type', label: 'Type' },
+  { key: 'host', label: 'Host' },
+  { key: 'port', label: 'Port' },
+  { key: 'status', label: 'Status' },
+];
 
 function Databases() {
+  const formId = useId();
   const [open, setOpen] = useState(false);
   const [databases, setDatabases] = useState([
     {
@@ -51,6 +51,11 @@ function Databases() {
     setOpen(false);
   };
 
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    handleClose();
+  };
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -66,43 +71,37 @@ function Databases() {
         </Button>
       </div>
 
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Name</TableCell>
-              <TableCell>Type</TableCell>
-              <TableCell>Host</TableCell>
-              <TableCell>Port</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell>Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {databases.map((db) => (
-              <TableRow key={db.id}>
-                <TableCell>{db.name}</TableCell>
-                <TableCell>{db.type}</TableCell>
-                <TableCell>{db.host}</TableCell>
-                <TableCell>{db.port}</TableCell>
-                <TableCell>{db.status}</TableCell>
-                <TableCell>
-                  <IconButton size="small" color="primary">
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton size="small" color="error">
-                    <DeleteIcon />
-                  </IconButton>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      <ResponsiveTable
+        columns={COLUMNS}
+        rows={databases}
+        renderCardHeader={(db) => (
+          <Typography sx={{ fontWeight: 600, fontSize: '0.9rem', color: 'text.primary' }}>
+            {db.name}
+          </Typography>
+        )}
+        renderActions={() => (
+          <>
+            <IconButton size="small" color="primary" sx={{ minWidth: 44, minHeight: 44 }}>
+              <EditIcon />
+            </IconButton>
+            <IconButton size="small" color="error" sx={{ minWidth: 44, minHeight: 44 }}>
+              <DeleteIcon />
+            </IconButton>
+          </>
+        )}
+      />
 
-      <Dialog open={open} onClose={handleClose}>
-        <DialogTitle>Add New Database</DialogTitle>
-        <DialogContent>
+      <ConsoleDialog
+        open={open}
+        onClose={handleClose}
+        eyebrow="Database"
+        title="Add database"
+        primaryAction={
+          <Button type="submit" form={formId} variant="contained">Add</Button>
+        }
+        secondaryAction={<Button onClick={handleClose}>Cancel</Button>}
+      >
+        <form id={formId} onSubmit={handleSubmit}>
           <TextField
             autoFocus
             margin="dense"
@@ -149,12 +148,8 @@ function Databases() {
             fullWidth
             variant="outlined"
           />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleClose}>Cancel</Button>
-          <Button onClick={handleClose} variant="contained">Add</Button>
-        </DialogActions>
-      </Dialog>
+        </form>
+      </ConsoleDialog>
     </div>
   );
 }

@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
-import { Box, Paper, Typography, List, ListItem, ListItemText, IconButton, CircularProgress, Alert, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Button, Stack } from '@mui/material';
+import { useEffect, useId, useState } from 'react';
+import { Box, Paper, Typography, List, ListItem, ListItemText, IconButton, CircularProgress, Alert, TextField, Button, Stack } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
+import ConsoleDialog from '../components/primitives/ConsoleDialog';
 import api from '../api';
 
 export default function UserGeekPage() {
+  const formId = useId();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -48,7 +50,8 @@ export default function UserGeekPage() {
     setOpenCreate(true);
   };
 
-  const handleCreate = async () => {
+  const handleCreate = async (e) => {
+    e?.preventDefault?.();
     try {
       setCreating(true);
       setError('');
@@ -149,9 +152,25 @@ export default function UserGeekPage() {
         </List>
       </Box>
 
-      <Dialog open={openCreate} onClose={() => setOpenCreate(false)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontWeight: 600, fontSize: '1rem' }}>Create User</DialogTitle>
-        <DialogContent>
+      <ConsoleDialog
+        open={openCreate}
+        onClose={() => setOpenCreate(false)}
+        eyebrow="User"
+        title="Create user"
+        primaryAction={
+          <Button
+            type="submit"
+            form={formId}
+            variant="contained"
+            size="small"
+            disabled={creating || !form.username || !form.email || !form.password}
+          >
+            {creating ? <CircularProgress size={18} /> : 'Create'}
+          </Button>
+        }
+        secondaryAction={<Button onClick={() => setOpenCreate(false)} disabled={creating} size="small">Cancel</Button>}
+      >
+        <form id={formId} onSubmit={handleCreate}>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField
               label="Username"
@@ -175,14 +194,8 @@ export default function UserGeekPage() {
               size="small"
             />
           </Stack>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setOpenCreate(false)} disabled={creating} size="small">Cancel</Button>
-          <Button onClick={handleCreate} variant="contained" size="small" disabled={creating || !form.username || !form.email || !form.password}>
-            {creating ? <CircularProgress size={18} /> : 'Create'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        </form>
+      </ConsoleDialog>
     </Box>
   );
 }

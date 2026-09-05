@@ -94,7 +94,7 @@ function SaveButton({ saving, saved, onClick, label = 'Save' }) {
         onClick={onClick}
         disabled={saving}
         startIcon={saving ? <CircularProgress size={14} /> : <SaveIcon sx={{ fontSize: 14 }} />}
-        sx={{ fontSize: '0.7rem', py: 0.5, px: 1.5, minWidth: 0 }}
+        sx={{ fontSize: '0.75rem', py: 0.5, px: 1.5, minWidth: 0 }}
       >
         {saving ? '...' : label}
       </Button>
@@ -436,7 +436,7 @@ export default function AccountPage() {
             </Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Box sx={{ width: 12, height: 12, borderRadius: '3px', backgroundColor: prefsForm.accentColor }} />
-              <Typography sx={{ fontSize: '0.7rem', color: 'text.muted', fontFamily: '"Geist Mono", monospace' }}>
+              <Typography sx={{ fontSize: '0.75rem', color: 'text.muted', fontFamily: '"Geist Mono", monospace' }}>
                 {prefsForm.accentColor}
               </Typography>
             </Box>
@@ -477,7 +477,7 @@ export default function AccountPage() {
                           label={`${key}: ${val}`}
                           size="small"
                           variant="outlined"
-                          sx={{ fontSize: '0.65rem', fontFamily: '"Geist Mono", monospace' }}
+                          sx={{ fontSize: '0.75rem', fontFamily: '"Geist Mono", monospace' }}
                         />
                       ))}
                     </Box>
@@ -497,8 +497,8 @@ export default function AccountPage() {
 function DetailRow({ label, value }) {
   return (
     <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.5 }}>
-      <Typography sx={{ fontSize: '0.7rem', color: 'text.muted' }}>{label}</Typography>
-      <Typography sx={{ fontSize: '0.7rem', color: 'text.secondary', fontFamily: '"Geist Mono", monospace' }}>
+      <Typography sx={{ fontSize: '0.75rem', color: 'text.muted' }}>{label}</Typography>
+      <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', fontFamily: '"Geist Mono", monospace' }}>
         {value}
       </Typography>
     </Box>

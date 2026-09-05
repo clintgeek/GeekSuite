@@ -52,6 +52,7 @@ export default function LoginPage() {
       justifyContent: 'center',
       alignItems: 'center',
       minHeight: '100vh',
+      '@supports (height: 100dvh)': { minHeight: '100dvh' },
       backgroundColor: theme.palette.surfaces.deep,
       position: 'relative',
       overflow: 'hidden',
@@ -105,7 +106,7 @@ export default function LoginPage() {
             baseGeek
           </Typography>
           <Typography sx={{
-            fontSize: '0.7rem',
+            fontSize: '0.75rem',
             color: 'text.secondary',
             fontFamily: '"Geist Mono", monospace',
             letterSpacing: '0.08em',
@@ -217,7 +218,7 @@ export default function LoginPage() {
         <Typography sx={{
           textAlign: 'center',
           mt: 3,
-          fontSize: '0.7rem',
+          fontSize: '0.75rem',
           color: 'text.muted',
           fontFamily: '"Geist Mono", monospace',
         }}>

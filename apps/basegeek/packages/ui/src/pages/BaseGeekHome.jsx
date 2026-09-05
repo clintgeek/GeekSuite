@@ -347,7 +347,7 @@ export default function BaseGeekHome() {
                     </Typography>
                     {health?.version && (
                       <Typography sx={{
-                        fontSize: '0.6875rem',
+                        fontSize: '0.75rem',
                         fontFamily: '"Geist Mono", monospace',
                         color: 'text.muted',
                         px: 0.6,

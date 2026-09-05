@@ -82,7 +82,7 @@ function Brand() {
           noWrap
           sx={{
             display: 'block',
-            fontSize: '0.6rem',
+            fontSize: '0.75rem',
             color: 'text.secondary',
             fontFamily: '"Geist Mono", monospace',
             letterSpacing: '0.05em',

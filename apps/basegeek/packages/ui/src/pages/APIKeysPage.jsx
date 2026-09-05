@@ -1,16 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useId, useState, useEffect } from 'react';
 import {
   Box,
   Typography,
   Button,
   Card,
   CardContent,
-  CardActions,
   Grid,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   TextField,
   FormControl,
   InputLabel,
@@ -20,13 +15,6 @@ import {
   IconButton,
   Alert,
   Snackbar,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
   Tooltip,
   Switch,
   FormControlLabel,
@@ -40,13 +28,13 @@ import {
   Edit as EditIcon,
   Refresh as RefreshIcon,
   ContentCopy as CopyIcon,
-  Visibility as VisibilityIcon,
-  VisibilityOff as VisibilityOffIcon,
   ExpandMore as ExpandMoreIcon
 } from '@mui/icons-material';
 import { apolloClient } from '../apolloClient';
 import { GET_API_KEYS, GET_API_KEYS_APPS_LIST } from '../graphql/queries';
 import { CREATE_API_KEY, UPDATE_API_KEY, DELETE_API_KEY, REGENERATE_API_KEY } from '../graphql/mutations';
+import ConsoleDialog from '../components/primitives/ConsoleDialog';
+import ResponsiveTable from '../components/primitives/ResponsiveTable';
 
 const AVAILABLE_PERMISSIONS = [
   { value: 'ai:call', label: 'AI Calls', description: 'Make AI API calls' },
@@ -58,6 +46,8 @@ const AVAILABLE_PERMISSIONS = [
 ];
 
 const APIKeysPage = () => {
+  const createFormId = useId();
+  const editFormId = useId();
   const [apiKeys, setApiKeys] = useState([]);
   const [apps, setApps] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -111,7 +101,8 @@ const APIKeysPage = () => {
     setSnackbar({ open: true, message, severity });
   };
 
-  const handleCreateApiKey = async () => {
+  const handleCreateApiKey = async (e) => {
+    e?.preventDefault?.();
     try {
       const { data } = await apolloClient.mutate({
         mutation: CREATE_API_KEY,
@@ -136,7 +127,8 @@ const APIKeysPage = () => {
     }
   };
 
-  const handleUpdateApiKey = async () => {
+  const handleUpdateApiKey = async (e) => {
+    e?.preventDefault?.();
     try {
       await apolloClient.mutate({
         mutation: UPDATE_API_KEY,
@@ -303,118 +295,123 @@ const APIKeysPage = () => {
               No API keys found. Create your first API key to get started.
             </Typography>
           ) : (
-            <TableContainer component={Paper} variant="outlined">
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Name</TableCell>
-                    <TableCell>App</TableCell>
-                    <TableCell>Key Prefix</TableCell>
-                    <TableCell>Permissions</TableCell>
-                    <TableCell>Usage</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell>Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {apiKeys.map((apiKey) => (
-                    <TableRow key={apiKey.id}>
-                      <TableCell>
-                        <Box>
-                          <Typography variant="body2" fontWeight="bold">
-                            {apiKey.name}
-                          </Typography>
-                          {apiKey.description && (
-                            <Typography variant="caption" color="text.secondary">
-                              {apiKey.description}
-                            </Typography>
-                          )}
-                        </Box>
-                      </TableCell>
-                      <TableCell>{apiKey.appName}</TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Typography variant="body2" fontFamily="monospace">
-                            {apiKey.keyPrefix}...
-                          </Typography>
-                          <Tooltip title="Copy prefix">
-                            <IconButton size="small" onClick={() => copyToClipboard(apiKey.keyPrefix)}>
-                              <CopyIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                          {apiKey.permissions.map((perm) => (
-                            <Chip
-                              key={perm}
-                              label={perm.replace('ai:', '')}
-                              size="small"
-                              variant="outlined"
-                            />
-                          ))}
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {formatUsage(apiKey.usage)}
-                        </Typography>
-                        {apiKey.usage.lastUsed && (
-                          <Typography variant="caption" color="text.secondary">
-                            Last: {formatDate(apiKey.usage.lastUsed)}
-                          </Typography>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Box>
-                          <Chip
-                            label={apiKey.isActive ? 'Active' : 'Inactive'}
-                            color={apiKey.isActive ? 'success' : 'default'}
-                            size="small"
-                          />
-                          {apiKey.isExpired && (
-                            <Chip
-                              label="Expired"
-                              color="error"
-                              size="small"
-                              sx={{ ml: 1 }}
-                            />
-                          )}
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', gap: 1 }}>
-                          <Tooltip title="Edit">
-                            <IconButton size="small" onClick={() => openEditDialog(apiKey)}>
-                              <EditIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="Regenerate">
-                            <IconButton size="small" onClick={() => handleRegenerateApiKey(apiKey.id)}>
-                              <RefreshIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="Delete">
-                            <IconButton size="small" onClick={() => handleDeleteApiKey(apiKey.id)}>
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+            <ResponsiveTable
+              rowKey={(apiKey) => apiKey.id}
+              renderCardHeader={(apiKey) => (
+                <Box>
+                  <Typography variant="body2" fontWeight="bold">
+                    {apiKey.name}
+                  </Typography>
+                  {apiKey.description && (
+                    <Typography variant="caption" color="text.secondary">
+                      {apiKey.description}
+                    </Typography>
+                  )}
+                </Box>
+              )}
+              columns={[
+                { key: 'name', label: 'Name', card: false, render: (apiKey) => (
+                  <Box>
+                    <Typography variant="body2" fontWeight="bold">
+                      {apiKey.name}
+                    </Typography>
+                    {apiKey.description && (
+                      <Typography variant="caption" color="text.secondary">
+                        {apiKey.description}
+                      </Typography>
+                    )}
+                  </Box>
+                ) },
+                { key: 'appName', label: 'App' },
+                { key: 'keyPrefix', label: 'Key Prefix', render: (apiKey) => (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="body2" fontFamily="monospace">
+                      {apiKey.keyPrefix}...
+                    </Typography>
+                    <Tooltip title="Copy prefix">
+                      <IconButton size="small" onClick={() => copyToClipboard(apiKey.keyPrefix)} sx={{ minWidth: 44, minHeight: 44 }}>
+                        <CopyIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                ) },
+                { key: 'permissions', label: 'Permissions', render: (apiKey) => (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, justifyContent: { xs: 'flex-end', md: 'flex-start' } }}>
+                    {apiKey.permissions.map((perm) => (
+                      <Chip
+                        key={perm}
+                        label={perm.replace('ai:', '')}
+                        size="small"
+                        variant="outlined"
+                      />
+                    ))}
+                  </Box>
+                ) },
+                { key: 'usage', label: 'Usage', render: (apiKey) => (
+                  <Box>
+                    <Typography variant="body2">
+                      {formatUsage(apiKey.usage)}
+                    </Typography>
+                    {apiKey.usage.lastUsed && (
+                      <Typography variant="caption" color="text.secondary">
+                        Last: {formatDate(apiKey.usage.lastUsed)}
+                      </Typography>
+                    )}
+                  </Box>
+                ) },
+                { key: 'status', label: 'Status', render: (apiKey) => (
+                  <Box>
+                    <Chip
+                      label={apiKey.isActive ? 'Active' : 'Inactive'}
+                      color={apiKey.isActive ? 'success' : 'default'}
+                      size="small"
+                    />
+                    {apiKey.isExpired && (
+                      <Chip
+                        label="Expired"
+                        color="error"
+                        size="small"
+                        sx={{ ml: 1 }}
+                      />
+                    )}
+                  </Box>
+                ) },
+              ]}
+              rows={apiKeys}
+              renderActions={(apiKey) => (
+                <>
+                  <Tooltip title="Edit">
+                    <IconButton size="small" onClick={() => openEditDialog(apiKey)} sx={{ minWidth: 44, minHeight: 44 }}>
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Regenerate">
+                    <IconButton size="small" onClick={() => handleRegenerateApiKey(apiKey.id)} sx={{ minWidth: 44, minHeight: 44 }}>
+                      <RefreshIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Delete">
+                    <IconButton size="small" onClick={() => handleDeleteApiKey(apiKey.id)} sx={{ minWidth: 44, minHeight: 44 }}>
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </>
+              )}
+            />
           )}
         </CardContent>
       </Card>
 
       {/* Create API Key Dialog */}
-      <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>Create New API Key</DialogTitle>
-        <DialogContent>
+      <ConsoleDialog
+        open={createDialogOpen}
+        onClose={() => setCreateDialogOpen(false)}
+        eyebrow="API Key"
+        title="Create new API key"
+        primaryAction={<Button type="submit" form={createFormId} variant="contained">Create</Button>}
+        secondaryAction={<Button onClick={() => setCreateDialogOpen(false)}>Cancel</Button>}
+      >
+        <form id={createFormId} onSubmit={handleCreateApiKey}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
             <TextField
               label="Name"
@@ -516,17 +513,19 @@ const APIKeysPage = () => {
               helperText="Leave empty for no expiration"
             />
           </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleCreateApiKey} variant="contained">Create</Button>
-        </DialogActions>
-      </Dialog>
+        </form>
+      </ConsoleDialog>
 
       {/* Edit API Key Dialog */}
-      <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>Edit API Key</DialogTitle>
-        <DialogContent>
+      <ConsoleDialog
+        open={editDialogOpen}
+        onClose={() => setEditDialogOpen(false)}
+        eyebrow="API Key"
+        title="Edit API key"
+        primaryAction={<Button type="submit" form={editFormId} variant="contained">Update</Button>}
+        secondaryAction={<Button onClick={() => setEditDialogOpen(false)}>Cancel</Button>}
+      >
+        <form id={editFormId} onSubmit={handleUpdateApiKey}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
             <TextField
               label="Name"
@@ -588,37 +587,35 @@ const APIKeysPage = () => {
               label="Active"
             />
           </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setEditDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleUpdateApiKey} variant="contained">Update</Button>
-        </DialogActions>
-      </Dialog>
+        </form>
+      </ConsoleDialog>
 
       {/* New API Key Display Dialog */}
-      <Dialog open={showNewApiKey} onClose={() => setShowNewApiKey(false)} maxWidth="md" fullWidth>
-        <DialogTitle>API Key Created Successfully</DialogTitle>
-        <DialogContent>
-          <Alert severity="warning" sx={{ mb: 2 }}>
-            This is the only time you will see this API key. Please copy and store it securely.
-          </Alert>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 2, bgcolor: 'background.default', border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
-            <Typography variant="body2" fontFamily="monospace" sx={{ flexGrow: 1, wordBreak: 'break-all' }}>
-              {newApiKey}
-            </Typography>
-            <Tooltip title="Copy API Key">
-              <IconButton onClick={() => copyToClipboard(newApiKey)}>
-                <CopyIcon />
-              </IconButton>
-            </Tooltip>
-          </Box>
-        </DialogContent>
-        <DialogActions>
+      <ConsoleDialog
+        open={showNewApiKey}
+        onClose={() => setShowNewApiKey(false)}
+        eyebrow="API Key"
+        title="API key created"
+        primaryAction={
           <Button onClick={() => setShowNewApiKey(false)} variant="contained">
             I've Saved the Key
           </Button>
-        </DialogActions>
-      </Dialog>
+        }
+      >
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          This is the only time you will see this API key. Please copy and store it securely.
+        </Alert>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 2, bgcolor: 'background.default', border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+          <Typography variant="body2" fontFamily="monospace" sx={{ flexGrow: 1, wordBreak: 'break-all' }}>
+            {newApiKey}
+          </Typography>
+          <Tooltip title="Copy API Key">
+            <IconButton onClick={() => copyToClipboard(newApiKey)} sx={{ minWidth: 44, minHeight: 44 }}>
+              <CopyIcon />
+            </IconButton>
+          </Tooltip>
+        </Box>
+      </ConsoleDialog>
 
       {/* Snackbar */}
       <Snackbar
