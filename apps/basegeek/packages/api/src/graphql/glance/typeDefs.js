@@ -89,6 +89,33 @@ export const typeDefs = gql`
     updatedAt: Date
   }
 
+  """
+  What the model understood the query to be asking for. Shown back to the user
+  as chips so a wrong reading is visible and correctable.
+  """
+  type GlanceIntent {
+    kind: String!                  # "search" | "answer"
+    keywords: [String!]!
+    apps: [String!]!
+    types: [String!]!
+    since: String
+    shelf: String
+    tags: [String!]!
+  }
+
+  """
+  StartGeek Ask: an AI-planned search over the user's own Things, with an
+  optional grounded answer. The answer is null unless the context contained it.
+  """
+  type GlanceAsk {
+    intent: GlanceIntent!
+    answer: String
+    citations: [ID!]!
+    results: [GlanceSearchResult!]!
+    provider: String
+    model: String
+  }
+
   input CalendarSourceInput {
     url: String!
     color: String
@@ -107,6 +134,7 @@ export const typeDefs = gql`
   extend type Query {
     glanceToday(date: String): GlanceToday!
     glanceSearch(query: String!, limit: Int = 12): [GlanceSearchResult!]!
+    glanceAsk(query: String!, limit: Int = 12): GlanceAsk!
     calendarEvents(sources: [CalendarSourceInput!]!, from: Date, to: Date): [CalendarEvent!]!
   }
 `;
