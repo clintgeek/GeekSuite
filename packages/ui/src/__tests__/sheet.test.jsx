@@ -110,6 +110,94 @@ describe('GeekSheet', () => {
   });
 });
 
+describe('GeekSheet — close in sheet mode (snap="full")', () => {
+  it('adds a visible close button only for snap="full", reusing the dialog-mode hook', () => {
+    expect(render({ mode: 'sheet', snap: 'content' })).not.toContain('data-geek-sheet="close"');
+    expect(render({ mode: 'sheet', snap: 'full' })).toContain('data-geek-sheet="close"');
+  });
+
+  it('sizes the full-snap close button at the 44px touch target', () => {
+    const markup = render({ mode: 'sheet', snap: 'full' });
+    const idx = markup.indexOf('data-geek-sheet="close"');
+    const tagStart = markup.lastIndexOf('<', idx);
+    const classMatch = markup.slice(tagStart, markup.indexOf('>', idx) + 1).match(/class="([^"]*)"/);
+    const cls = classMatch[1].split(' ').find((c) => c.startsWith('css-'));
+    const ruleIdx = markup.indexOf(`.${cls}{`);
+    const rule = markup.slice(ruleIdx, markup.indexOf('}', ruleIdx) + 1);
+    expect(rule).toContain('min-width:44px');
+    expect(rule).toContain('min-height:44px');
+  });
+
+  it('never adds the close button in dialog mode regardless of snap (already there)', () => {
+    const full = render({ mode: 'dialog', snap: 'full' });
+    expect(full.match(/data-geek-sheet="close"/g)).toHaveLength(1);
+  });
+});
+
+describe('GeekSheet — actionsAlign', () => {
+  const one = <button type="button">Apply</button>;
+  const two = [
+    <button key="cancel" type="button">Cancel</button>,
+    <button key="confirm" type="button">Confirm</button>,
+  ];
+
+  it('defaults a single action to stretch, in both modes', () => {
+    for (const mode of ['sheet', 'dialog']) {
+      const markup = render({ mode, actions: one });
+      const idx = markup.indexOf('data-geek-sheet="actions"');
+      const classMatch = markup.slice(markup.lastIndexOf('<', idx), markup.indexOf('>', idx) + 1)
+        .match(/class="([^"]*)"/);
+      const cls = classMatch[1].split(' ').find((c) => c.startsWith('css-'));
+      const rules = markup.match(new RegExp(`\\.${cls}[^{]*\\{[^}]*\\}`, 'g')).join('\n');
+      expect(rules, mode).toContain('justify-content:stretch');
+    }
+  });
+
+  it('defaults multiple actions to end, in both modes', () => {
+    for (const mode of ['sheet', 'dialog']) {
+      const markup = render({ mode, actions: two });
+      const idx = markup.indexOf('data-geek-sheet="actions"');
+      const classMatch = markup.slice(markup.lastIndexOf('<', idx), markup.indexOf('>', idx) + 1)
+        .match(/class="([^"]*)"/);
+      const cls = classMatch[1].split(' ').find((c) => c.startsWith('css-'));
+      const rules = markup.match(new RegExp(`\\.${cls}[^{]*\\{[^}]*\\}`, 'g')).join('\n');
+      expect(rules, mode).toContain('justify-content:flex-end');
+    }
+  });
+
+  it('lets actionsAlign override the default in either direction', () => {
+    const startWithTwo = render({ mode: 'sheet', actions: two, actionsAlign: 'start' });
+    const idx = startWithTwo.indexOf('data-geek-sheet="actions"');
+    const classMatch = startWithTwo
+      .slice(startWithTwo.lastIndexOf('<', idx), startWithTwo.indexOf('>', idx) + 1)
+      .match(/class="([^"]*)"/);
+    const cls = classMatch[1].split(' ').find((c) => c.startsWith('css-'));
+    const rules = startWithTwo.match(new RegExp(`\\.${cls}[^{]*\\{[^}]*\\}`, 'g')).join('\n');
+    expect(rules).toContain('justify-content:flex-start');
+
+    const endWithOne = render({ mode: 'sheet', actions: one, actionsAlign: 'end' });
+    expect(endWithOne).not.toContain('justify-content:stretch');
+  });
+});
+
+describe('GeekSheet — initialFocus', () => {
+  /**
+   * `initialFocus` fires from `SlideProps.onEntered` / `TransitionProps.
+   * onEntered`, which `react-dom/server` never calls — there is no real
+   * transition under static markup. What's asserted here is the contract
+   * that matters at this layer: the prop is accepted, renders without
+   * throwing, and the body it targets is present in both modes.
+   */
+  it('accepts a boolean or a selector string without changing the markup contract', () => {
+    for (const mode of ['sheet', 'dialog']) {
+      expect(() => render({ mode, initialFocus: true })).not.toThrow();
+      expect(() => render({ mode, initialFocus: '[data-test-body]' })).not.toThrow();
+      const markup = render({ mode, initialFocus: true });
+      expect(markup).toContain('data-geek-sheet="body"');
+    }
+  });
+});
+
 describe('GeekSheet — Escape', () => {
   /**
    * MUI listens for Escape on the modal root, which only hears the key when

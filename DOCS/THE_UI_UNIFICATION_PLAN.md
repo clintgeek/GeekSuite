@@ -412,7 +412,8 @@ six page-level `Snackbar`s), then notegeek, flockgeek, storygeek, bookgeek, base
 Landed 2026-09-04 as the shared half of [`MOBILE_UI_PLAN.md`](MOBILE_UI_PLAN.md) (the
 "Pocket Pass"). Same shape as the shell grammar: the rule lives in `packages/ui`, identity
 stays in the app. All exported from `@geeksuite/ui`; all under `packages/ui/src/surfaces`
-unless noted.
+unless noted. The `GeekAppFrame fill` contract, the `GeekSheet`/`GeekDialog` follow-ups and
+reduced motion below landed 2026-09-05 (MOBILE_UI_PLAN.md §4b, "Follow-ups surfaced by M3–M5").
 
 - **`GeekShell`** sizes itself in `100dvh` (with `vh` as the `@supports` fallback).
   `GeekTopBar` pads the top safe-area inset; `GeekBottomNav` and the toast stack pad the
@@ -424,6 +425,13 @@ unless noted.
   row (`data-geek-topbar-menu="theme"`) when there is an account menu; `actions` reduces to
   its first child, or to `mobileActions` when the app names what survives (`null` for none).
 - **`GeekBottomNav`** gains `labelSx` so label identity comes from the primitive.
+- **`GeekAppFrame`** takes a `fill` prop: the frame becomes a non-scrolling
+  (`overflow: hidden`) flex column and its route-transition `motion.div` is itself flexed
+  (`display: flex; flexDirection: column; flex: 1; minHeight: 0`), so a page can pin a
+  composer or a board to the frame instead of reaching through the transition div with a
+  `& > div` selector (storygeek's old workaround). Default (`fill` omitted) is unchanged —
+  the frame scrolls itself and the transition div is a plain `minHeight: 100%` block. Hook:
+  `data-geek-frame="fill"`.
 - **`useGeekPrimaryAction({ label, icon, onClick, showOn, hidden })`** (in
   `packages/ui/src/navigation`) — the page names its one thumb-zone action and
   `GeekShell` renders it as a `GeekFab`, as a sibling of the content column
@@ -436,14 +444,24 @@ unless noted.
   app-built shell, and `createPrimaryActionRegistry()`, the plain-JS stack the
   rule is tested against.
 - **`GeekSheet`** — `open`, `onClose`, `title`, `description`, `children`, `actions`,
-  `snap: 'content' | 'full'`, `mode: 'auto' | 'sheet' | 'dialog'`, `maxWidth`, `sx`,
+  `actionsAlign: 'start' | 'end' | 'stretch'`, `snap: 'content' | 'full'`,
+  `mode: 'auto' | 'sheet' | 'dialog'`, `maxWidth`, `initialFocus`, `sx`,
   `bodySx`, `headerSx`, `drawerProps`, `dialogProps`, `keepMounted`. Bottom sheet
   (`SwipeableDrawer`, grab handle, 16px top radius, 92dvh cap, safe-area padding) below `md`;
   centered Dialog with a close button at `md`+. Detects the breakpoint itself, so it works
   outside a shell. In sheet mode the paper is focusable (`tabIndex={-1}`), takes focus after
   open when MUI's trap left it outside, and carries its own Escape handler — MUI listens for
   Escape on the modal root, which never hears the key while focus sits on whatever opened the
-  sheet. Hooks: `data-geek-sheet="root|handle|paper|header|title|description|body|
+  sheet. `snap="full"` sheets also get a visible close `IconButton` (44px, top-right of the
+  header) — a full-snap panel opened from an icon had no dismissal short of the handle, the
+  backdrop or Escape; it reuses the `data-geek-sheet="close"` hook the dialog-mode close
+  button already carries. `initialFocus` (`true` for the first focusable element in the body,
+  or a selector string) is applied once the open transition actually finishes — sheet mode off
+  `SwipeableDrawer`'s `SlideProps.onEntered`, dialog mode off `Dialog`'s `TransitionProps.
+  onEntered` — rather than a caller-derived timeout (bujogeek's old 260ms guess). `actionsAlign`
+  defaults to `'stretch'` for a single action child (a full-width "Apply") and `'end'` for more
+  than one (a right-aligned Cancel/Confirm pair); `'start'` left-aligns; an explicit value
+  always wins. Hooks: `data-geek-sheet="root|handle|paper|header|title|description|body|
   actions|close"`, `data-geek-sheet-mode`.
 - **`GeekDialog`** — `open`, `onClose`, `title`, `children`, `primaryAction`,
   `secondaryAction`, `keepSecondaryOnMobile`, `mode: 'auto' | 'full' | 'window'`,
@@ -458,8 +476,13 @@ unless noted.
   `titleSx` its window-mode counterpart, `DialogTitle`, so identity styling no longer has to
   go through `PaperProps`; and a node `title` in full mode keeps the `h3` wrapper (and the
   `aria-labelledby` target) but drops `noWrap` and lets overflow show, so an eyebrow-over-title
-  block is not clipped. Hooks: `data-geek-dialog="root|header|close|title|
-  primary|body|actions|footer"`, `data-geek-dialog-mode`.
+  block is not clipped. The full-mode header title and the window `DialogTitle` now carry
+  distinct hooks — `data-geek-dialog="title"` used to sit on both, which made `titleSx` (a
+  window-only slot) and any selector built on the hook ambiguous; it now stays on the window
+  `DialogTitle` only, for back-compat, and the full-mode header title carries
+  `data-geek-dialog="header-title"` instead. `aria-labelledby` on the root keeps pointing at
+  whichever one is rendered, in both modes. Hooks: `data-geek-dialog="root|header|close|
+  header-title (full) | title (window) |primary|body|actions|footer"`, `data-geek-dialog-mode`.
 - **`GeekFab`** — `label` (required), `icon`, `onClick`, `extended`, `showOn: 'mobile' |
   'always'`, `hidden`, `bottomInset`, `color`, `disabled`, `sx`. 56px squircle pinned
   bottom-right above the shell's `bottomInset` and the safe-area inset; hidden at `md`+ by
@@ -467,12 +490,20 @@ unless noted.
   would trap a fixed element — or, for the page's one primary action, register with
   `useGeekPrimaryAction()` and let `GeekShell` mount it there for you. Hook:
   `data-geek-fab="icon|extended"`.
+- **Reduced motion** — `packages/ui/src/motion.js` exports `useReducedMotion()`, a shared
+  `useMediaQuery('(prefers-reduced-motion: reduce)')` wrapper (SSR-safe: resolves `false`
+  under `node`, same as every other `useMediaQuery` consumer here). `GeekAppFrame`'s route
+  fade uses it to skip the initial fade (`initial={false}`) and drop the transition duration
+  to 0; `GeekSheet` (already computing this inline) and `GeekDialog` (which previously left
+  MUI's default `Fade`/`Slide` duration untouched) both now collapse their open/close
+  transition to 0ms the same way.
 - **Theme** — inputs lift to 16px below `sm` (`geekLayout.phoneMaxWidth`) so iOS does not
   zoom on focus; anything marked `data-geek-hover-reveal` is forced visible under
   `@media (hover: none)`.
 
-Tests: `__tests__/navigation.test.jsx` (mobile grammar + compact top bar), `sheet.test.jsx`,
-`dialog.test.jsx`, `fab.test.jsx`, `primaryAction.test.jsx`, `themeMobile.test.js`.
+Tests: `__tests__/navigation.test.jsx` (mobile grammar + compact top bar), `frame.test.jsx`,
+`sheet.test.jsx`, `dialog.test.jsx`, `fab.test.jsx`, `primaryAction.test.jsx`,
+`themeMobile.test.js`, `motion.test.jsx`.
 
 ---
 

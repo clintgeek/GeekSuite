@@ -115,10 +115,15 @@ describe('GeekDialog — full mode', () => {
   it('orders close → title → primary, with no DialogActions', () => {
     expectOrdered(markup, [
       'data-geek-dialog="close"',
-      'data-geek-dialog="title"',
+      'data-geek-dialog="header-title"',
       'data-geek-dialog="primary"',
     ]);
     expect(markup).not.toContain('data-geek-dialog="actions"');
+  });
+
+  it('carries the full-mode title hook, not the window one', () => {
+    expect(markup).toContain('data-geek-dialog="header-title"');
+    expect(markup).not.toContain('data-geek-dialog="title"');
   });
 
   it('renders the body content and hook', () => {
@@ -146,7 +151,7 @@ describe('GeekDialog — full mode', () => {
   });
 
   it('matches aria-labelledby on the root to the title id', () => {
-    const titleId = idFor(markup, 'data-geek-dialog="title"');
+    const titleId = idFor(markup, 'data-geek-dialog="header-title"');
     expect(titleId).toBeTruthy();
     expect(markup).toContain(`aria-labelledby="${titleId}"`);
   });
@@ -268,7 +273,7 @@ describe('GeekDialog — node title in full mode', () => {
 
   it('renders the block whole: no ellipsis, overflow visible', () => {
     const markup = renderDialog({ mode: 'full', title: nodeTitle });
-    const styles = stylesFor(markup, 'data-geek-dialog="title"');
+    const styles = stylesFor(markup, 'data-geek-dialog="header-title"');
     expect(markup).toContain('data-test-eyebrow');
     expect(styles).toContain('overflow:visible');
     expect(styles).not.toContain('text-overflow:ellipsis');
@@ -276,13 +281,13 @@ describe('GeekDialog — node title in full mode', () => {
   });
 
   it('keeps clipping a plain string title', () => {
-    const styles = stylesFor(renderDialog({ mode: 'full' }), 'data-geek-dialog="title"');
+    const styles = stylesFor(renderDialog({ mode: 'full' }), 'data-geek-dialog="header-title"');
     expect(styles).toContain('text-overflow:ellipsis');
   });
 
   it('keeps the id the root points at with aria-labelledby', () => {
     const markup = renderDialog({ mode: 'full', title: nodeTitle });
-    const titleId = idFor(markup, 'data-geek-dialog="title"');
+    const titleId = idFor(markup, 'data-geek-dialog="header-title"');
     expect(titleId).toBeTruthy();
     expect(markup).toContain(`aria-labelledby="${titleId}"`);
   });

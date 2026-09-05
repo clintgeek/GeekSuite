@@ -28,8 +28,22 @@
  *     `titleSx` is the window-mode counterpart.
  *   - a node `title` in full mode is not clipped: `noWrap` and the ellipsis go
  *     away and overflow stays visible, so an eyebrow-over-title block renders
- *     whole. The `h3` wrapper (and with it the `aria-labelledby` target and the
- *     `data-geek-dialog="title"` hook) stays either way.
+ *     whole. The `h3` wrapper (and with it the `aria-labelledby` target) stays
+ *     either way.
+ *
+ * Distinct title hooks (MOBILE_UI_PLAN.md §4b "Follow-ups surfaced by
+ * M3–M5"): `data-geek-dialog="title"` used to sit on *both* the full-mode
+ * `h3` and the window-mode `DialogTitle`, which made `titleSx` (a window-only
+ * slot) and any selector built on the hook ambiguous. `data-geek-dialog="title"`
+ * now stays on the window `DialogTitle` only, for back-compat; the full-mode
+ * header title carries `data-geek-dialog="header-title"` instead.
+ * `aria-labelledby` on the dialog root keeps pointing at whichever one is
+ * rendered, in both modes.
+ *
+ * Reduced motion (DOCS/MOBILE_UI_PLAN.md §2 "Motion" / §4b): `prefers-
+ * reduced-motion: reduce` collapses MUI's own enter/exit `Fade` transition
+ * to 0ms via `transitionDuration`, using the same `useReducedMotion()`
+ * helper `GeekAppFrame` and `GeekSheet` share.
  */
 import { forwardRef, useId } from 'react';
 import Box from '@mui/material/Box';
@@ -42,6 +56,7 @@ import Typography from '@mui/material/Typography';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import { geekLayout, geekShape } from '../designTokens.js';
+import { useReducedMotion } from '../motion.js';
 
 /** Inline SVG — @mui/icons-material is not a peer dependency of this package. */
 function CloseGlyph() {
@@ -105,6 +120,7 @@ export const GeekDialog = forwardRef(function GeekDialog(
   const titleId = useId();
   const autoFull = useGeekDialogFullScreen(fullScreenBelow);
   const full = mode === 'auto' ? autoFull : mode === 'full';
+  const prefersReducedMotion = useReducedMotion();
   // A string/number title is a headline the header may safely clip; anything
   // else is a composed block (eyebrow over title, a chip beside it) that must
   // not be.
@@ -126,6 +142,7 @@ export const GeekDialog = forwardRef(function GeekDialog(
       fullWidth={full ? false : fullWidth}
       keepMounted={keepMounted}
       disablePortal={typeof document === 'undefined'}
+      transitionDuration={prefersReducedMotion ? 0 : undefined}
       aria-labelledby={titleId}
       data-geek-dialog="root"
       data-geek-dialog-mode={full ? 'full' : 'window'}
@@ -171,7 +188,7 @@ export const GeekDialog = forwardRef(function GeekDialog(
               variant="h3"
               noWrap={plainTitle}
               id={titleId}
-              data-geek-dialog="title"
+              data-geek-dialog="header-title"
               sx={{
                 flex: 1,
                 minWidth: 0,
