@@ -10,7 +10,6 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
 | R22 | storygeek frontend vitest + RTL suite + CI job | sonnet | storygeek frontend, ci.yml (one job) | 09-05 13:50 |
-| R30 | probe burn-down: basegeek theme, bookgeek strip/sidebar, storygeek overline | sonnet | basegeek ui theme.js, bookgeek web components, storygeek theme.js | 09-05 |
 | R42 | Q21: harness recognises ::before/::after hit-area expansion; selftest fixture | sonnet | tools/mobile-harness | 09-05 12:50 |
 | R43 | TODO #15 fan-out: notegeek on shared feedback primitives | sonnet | notegeek frontend, UI plan | 09-05 12:50 |
 | R44 | TODO #15 fan-out: fitnessgeek on shared feedback primitives (+#19 toneForMode) | sonnet | fitnessgeek frontend except services/food-log | 09-05 12:50 |
@@ -29,9 +28,7 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | Q13 | verify COVERS_PATH now serves the old covers in the bookgeek UI (CONTEXT.md runtime line already fixed) | Chef eyeballs the UI | XS |
 | Q18b | After R27 deploys: a day of clean `CSRF token check (report-only)` logs, then `CSRF_TOKEN=enforce` in basegeek's env and a container restart | Chef's call after the log window | XS |
 | Q22 | flockgeek backend still mounts a full REST CRUD API (9 models) with no caller in the repo — decide: delete the layer or keep as API surface | Chef's call | S |
-| Q24 | TODO #20 step 2: fitnessgeek Garmin password encryption via @geeksuite/crypto-vault + backfill script | ready (R35 landed); fitnessgeek backend free | M |
 | Q25 | consolidation step 2 (backend half): delete fitnessgeek REST food-log routes once R45 lands | after R45 | S |
-| Q26 | dependency pass: @apollo/subgraph unused in notegeek + flockgeek backends; bookgeek graphql-tag | next slot | XS |
 | Q20b | aiGeek: simulated streaming (F-21) and user-gated selection (F-14) documented, not fixed | design | S |
 | Q14 | storygeek CanonCard summary text through Narration too (agent left it as a separate render path) | Chef's call | XS |
 
@@ -82,6 +79,7 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 - `363a820` — R4 — mobile harness in tools/ + CI (report-only); 698 probe findings
 - `d8521eb` — R27 — CSRF header in api-client authLink + startgeek clients
 - `1fda489` — R24 — bujogeek tag cloud + template journal cache; #25/#26 struck
+- `e85fc43` — R30 — probe burn-down basegeek 68 / bookgeek 14 / storygeek 4 → 0
 - `cdb4cd2` — R41 — notegeek backend prune (dead migrations, tagValidation)
 - `17cc6a7` — R35 — fitnessgeek backend node 20 + ESM; utils replaces 5 date copies (90 tests; image boots)
 - `79d49e5` — R40 — flockgeek on GeekEmptyState/GeekErrorState/useToast (TODO #15)
