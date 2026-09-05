@@ -72,6 +72,7 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 - `a3c4031` — R20 — CSRF double-submit token (report mode), @geeksuite/auth sends the header
 - `71066ba` — R18 — flockgeek frontend tests (30) + ci job
 - `00ef0b7` — R21 — zod validation on fitnessgeek settings/weight/BP/medication (90 tests)
+- `373f69f` — R28 — fitnessgeek single manifest source (bujogeek already right)
 - `37e83b6` — R17 — 22 dead fitnessgeek files + broken dev compose deleted
 - `164f978` — R16 — notegeek relative-time tests; dev-server fix pending in vite.config.js (shared with R13)
 - `6c39d00` — R2 — Apps & keys tab; APIKeysPage retired; AppConfigDialog on GeekDialog
