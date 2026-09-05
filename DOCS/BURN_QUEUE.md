@@ -12,7 +12,6 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | R53 | Q33: fitnessgeek frontend food-log writes → gateway mutations; vitest setup + ci job | opus | fitnessgeek frontend, ci.yml, lockfile, SUITE_TODO | 09-05 13:40 |
 | R54 | Q32: tools/syntax-check.mjs + CI `syntax` job (parse every backend/package .js) | sonnet | tools/, root package.json, ci.yml, RUNBOOK | 09-05 13:40 |
 | R55 | Q34: deflake aiServiceCache.test.js (fake timers / cleared cache) | sonnet | basegeek api one test (+aiService if a clock is needed) | 09-05 13:40 |
-| R51 | TODO #15 fan-out: storygeek on shared feedback primitives (last app) | sonnet | storygeek frontend src, UI plan | 09-05 13:22 |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
 ## Queued (launch when files free / prerequisite lands)
@@ -84,6 +83,7 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 - `363a820` — R4 — mobile harness in tools/ + CI (report-only); 698 probe findings
 - `d8521eb` — R27 — CSRF header in api-client authLink + startgeek clients
 - `1fda489` — R24 — bujogeek tag cloud + template journal cache; #25/#26 struck
+- `c76152f` — R51 — storygeek on shared feedback primitives; #15 fan-out complete (7/7), #19 closed
 - `79b1b57` — R50 — gateway food-log mutations drop-in for REST (Q29; 26 tests, api 826)
 - `61d3109` — hotfix: bujogeek typeDefs backticks + gatewaySchemaLoads tripwire
 - `f5ea782` — R52 — notegeek dead LoginPage/RegisterPage removed (149 tests); schemas eslint config
