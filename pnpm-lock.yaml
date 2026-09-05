@@ -41,6 +41,9 @@ importers:
       '@geeksuite/schemas':
         specifier: workspace:*
         version: link:../../../../packages/schemas
+      '@geeksuite/utils':
+        specifier: workspace:*
+        version: link:../../../../packages/utils
       '@graphql-tools/merge':
         specifier: ^9.1.7
         version: 9.1.7(graphql@16.13.1)
@@ -128,6 +131,9 @@ importers:
       web-push:
         specifier: ^3.6.7
         version: 3.6.7
+      zod:
+        specifier: 3.25.76
+        version: 3.25.76
     devDependencies:
       jest:
         specifier: ^29.7.0

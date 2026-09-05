@@ -5,6 +5,30 @@ import taskService from './services/taskService.js';
 import collectionService from './services/collectionService.js';
 import habitService from './services/habitService.js';
 import reminderService from './services/reminderService.js';
+import {
+  validateInput,
+  createTaskSchema,
+  updateTaskArgsSchema,
+  addSubtaskArgsSchema,
+  reorderSubtasksArgsSchema,
+  createHabitArgsSchema,
+  updateHabitArgsSchema,
+  toggleHabitLogArgsSchema,
+  createCollectionArgsSchema,
+  updateCollectionArgsSchema,
+  createJournalFromTemplateArgsSchema,
+} from './validation.js';
+
+const validateCreateTask = validateInput(createTaskSchema);
+const validateUpdateTask = validateInput(updateTaskArgsSchema);
+const validateAddSubtask = validateInput(addSubtaskArgsSchema);
+const validateReorderSubtasks = validateInput(reorderSubtasksArgsSchema);
+const validateCreateHabit = validateInput(createHabitArgsSchema);
+const validateUpdateHabit = validateInput(updateHabitArgsSchema);
+const validateToggleHabitLog = validateInput(toggleHabitLogArgsSchema);
+const validateCreateCollection = validateInput(createCollectionArgsSchema);
+const validateUpdateCollection = validateInput(updateCollectionArgsSchema);
+const validateCreateJournalFromTemplate = validateInput(createJournalFromTemplateArgsSchema);
 
 /**
  * The service layer throws transport-agnostic errors tagged with a `code`;
@@ -140,18 +164,20 @@ export const resolvers = {
   },
 
   Mutation: {
-    createTask: async (_, args, context) => {
+    createTask: async (_, rawArgs, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
+      const args = validateCreateTask(rawArgs);
       const taskData = { ...args, createdBy: userId };
       if (args.createdAt) taskData.createdAt = new Date(args.createdAt);
       if (args.dueDate) taskData.dueDate = new Date(args.dueDate);
       if (args.updatedAt) taskData.updatedAt = new Date(args.updatedAt);
       return taskService.createTask(taskData);
     },
-    updateTask: async (_, { id, input, editScope }, context) => {
+    updateTask: async (_, rawArgs, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
+      const { id, input, editScope } = validateUpdateTask(rawArgs);
       // Sanitize: only pass fields that exist on the Task schema.
       // taskType is a virtual, createdAt/updatedAt/createdBy are managed server-side.
       const { taskType, createdAt, updatedAt, createdBy, __typename, ...safeInput } = input || {};
@@ -207,9 +233,10 @@ export const resolvers = {
       if (!task) throw new Error('Task not found');
       return task;
     },
-    addSubtask: async (_, { parentId, ...data }, context) => {
+    addSubtask: async (_, rawArgs, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
+      const { parentId, ...data } = validateAddSubtask(rawArgs);
       try {
         const { subtask } = await taskService.addSubtask({ parentId, userId, ...data });
         return subtask;
@@ -217,9 +244,10 @@ export const resolvers = {
         return rethrowUserError(err);
       }
     },
-    reorderSubtasks: async (_, { parentId, orderedSubtaskIds }, context) => {
+    reorderSubtasks: async (_, rawArgs, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
+      const { parentId, orderedSubtaskIds } = validateReorderSubtasks(rawArgs);
       let parent;
       try {
         parent = await taskService.reorderSubtasks(parentId, orderedSubtaskIds, userId);
@@ -248,14 +276,16 @@ export const resolvers = {
       const doc = await taskService.saveDailyOrder({ userId, dateKey, orderedTaskIds });
       return { success: true, updatedAt: doc.updatedAt.toISOString() };
     },
-    createCollection: async (_, { name, description }, context) => {
+    createCollection: async (_, rawArgs, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
+      const { name, description } = validateCreateCollection(rawArgs);
       return collectionService.createCollection({ name, description, createdBy: userId });
     },
-    updateCollection: async (_, { id, ...updates }, context) => {
+    updateCollection: async (_, rawArgs, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
+      const { id, ...updates } = validateUpdateCollection(rawArgs);
       const collection = await collectionService.updateCollection(id, updates, userId);
       if (!collection) throw new Error('Collection not found');
       return collection;
@@ -272,14 +302,16 @@ export const resolvers = {
           : 'Collection deleted; its entries were kept',
       };
     },
-    createHabit: async (_, { name, daysOfWeek, color }, context) => {
+    createHabit: async (_, rawArgs, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
+      const { name, daysOfWeek, color } = validateCreateHabit(rawArgs);
       return habitService.createHabit({ name, daysOfWeek, color, createdBy: userId });
     },
-    updateHabit: async (_, { id, ...updates }, context) => {
+    updateHabit: async (_, rawArgs, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
+      const { id, ...updates } = validateUpdateHabit(rawArgs);
       const habit = await habitService.updateHabit(id, updates, userId);
       if (!habit) throw new Error('Habit not found');
       return habit;
@@ -291,9 +323,10 @@ export const resolvers = {
       if (!habit) throw new Error('Habit not found');
       return { success: true, message: 'Habit deleted with its history' };
     },
-    toggleHabitLog: async (_, { habitId, date }, context) => {
+    toggleHabitLog: async (_, rawArgs, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
+      const { habitId, date } = validateToggleHabitLog(rawArgs);
       const result = await habitService.toggleHabitLog(habitId, date, userId);
       if (!result) throw new Error('Habit not found');
       return result;
@@ -319,9 +352,10 @@ export const resolvers = {
       if (!entry) throw new Error('Entry not found');
       return { success: true, message: 'Entry deleted successfully' };
     },
-    createJournalFromTemplate: async (_, { templateId, date }, context) => {
+    createJournalFromTemplate: async (_, rawArgs, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
+      const { templateId, date } = validateCreateJournalFromTemplate(rawArgs);
       const { default: Template } = await import('./models/Template.js');
       const template = await Template.findOne({ _id: templateId, createdBy: userId });
       if (!template) throw new Error('Template not found');
