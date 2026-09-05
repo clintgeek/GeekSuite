@@ -1,7 +1,8 @@
 # GeekSuite — Status
 
-*Updated 2026-09-05. Three deploys today: first wave ~02:30, second wave (M3–M5) ~08:30, and
-Chef's three follow-ups ~10:00 — all verified live.*
+*Updated 2026-09-05 14:30 CDT. Morning: three deploys (Pocket Pass M0–M5, AIGeek, Ask). Afternoon:
+the 28-hour quota burn — four more waves (last `c6c4136`), 65 streams landed, all verified live.
+The live board with every stream, incident and open decision is `DOCS/BURN_QUEUE.md`.*
 
 ## Read this first
 
@@ -11,7 +12,47 @@ Chef's three follow-ups ~10:00 — all verified live.*
 - Every change is a separate commit with a message that says what it does and how it was verified.
   `git log origin/main..HEAD` lists them; each is safe to revert on its own.
 
-## What landed tonight
+
+## The burn (2026-09-05 afternoon) — what changed, in one screen
+
+**Mobile.** Every app is at 0 findings in the mobile harness (`tools/mobile-harness`, 139 scenes,
+phone dark + light), and the workflow is enforcing. Root causes were structural, not one-offs:
+a notegeek GlobalStyles rule undoing the 44px input floor, controls bypassing the theme floor in
+bujogeek, chip/select floors missing in fitnessgeek's theme, pseudo-element hit areas the probe
+could not see (it can now). Shared empty/error/toast primitives are in all seven MUI apps (TODO #15
+done; #19 done).
+
+**Consolidation.** fitnessgeek's food-log writes go through basegeek's gateway end to end and the
+REST routes are deleted; bookgeek's profile/filters/shelves/AI-status moved to the gateway and the
+hardcoded API origin is gone; dead backend code and 21 unused dependencies removed across four thin
+backends. Plans for the last two steps are written: `DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md`
+(first two pairs in flight) and `DOCS/STORYGEEK_GATEWAY_DECISION.md` (recommend delete — Chef).
+
+**Security and correctness.** Zod validation on fitnessgeek, storygeek, bookgeek and the bujogeek
+gateway mutations; the Garmin password is encrypted at rest through the shared UserSettings schema
+(backfilled; `KEY_VAULT_SECRET` is now shared basegeek↔fitnessgeek — see `DEPLOY.md`); aiGeek
+routing and attribution keyed by API key with service keys (storygeek's minted, restart pending);
+the OpenAI-compatible proxy passes its 73-test conformance suite; eight calendar-date off-by-one
+sites fixed; a latent StoryPlay render loop fixed; the keto net-carb ring regression (a drifted
+gateway model) fixed the same afternoon it was introduced.
+
+**Platform.** `@geeksuite/utils` (dates), `@geeksuite/logger` (pino + redaction), `@geeksuite/schemas`,
+`@geeksuite/crypto-vault`, fitnessgeek backend on node 20 + ESM, CSRF double-submit token in report
+mode, storygeek/bookgeek/flockgeek/fitnessgeek frontend test suites in CI, a `node --check` syntax
+gate in CI (born from the basegeek outage below).
+
+**Incidents (all closed).** basegeek crash-looped after wave 2 on an unescaped backtick in a gql
+template no test imported (hotfix + `gatewaySchemaLoads` tripwire; ≈12 min outage). fitnessgeek
+crash-looped on the new vault key because Watchtower recreates containers with their old env — a new
+env var needs `docker compose up -d` in the app dir right after the deploy. The harness workflow had
+been silently failing since it landed (`pnpm … ci` is pnpm's install alias, not the script).
+
+**Waiting on Chef** (details on the board): Q10 revoke the LocalApps key; Q1 restart storygeek to
+pick up its service key; Q22 flockgeek's caller-less REST layer; Q38 delete the storygeek gateway
+module; Q37 bookgeek's now-unused `AIGEEK_API_KEY`; Q11 `Databases.jsx`; Q14 CanonCard; Q18b flip
+`CSRF_TOKEN=enforce` after a clean day of report logs.
+
+## What landed tonight (the morning)
 
 ### Mobile UI plan — the "Pocket Pass" (`DOCS/MOBILE_UI_PLAN.md`)
 
