@@ -8,9 +8,43 @@ service beneath it (`services/aiService.js`,
 (`middleware/apiKeyAuth.js`), and the legacy second endpoint at
 `/api/ai/v1/chat/completions` (`routes/aiRoutes.js:1391`).
 **Executable evidence:** `packages/api/src/__tests__/openaiCompat.test.js`
-— 72 cases, 50 asserting conformance we have, 22 marked `it.failing` and
-carrying a finding id from this document.
+— 73 cases, **all `it`, none `it.failing`.**
 **Method:** read-only. No source file was modified for this audit.
+
+---
+
+> ## Status: all 22 findings closed — 2026-09-05
+>
+> The audit was written in the morning and worked through the same day. Every
+> `it.failing` case in the conformance suite has been promoted to `it`; the
+> suite is 73 green with no findings outstanding. The verdict column below is
+> the *post-fix* state, with the original verdict kept in parentheses so the
+> record of what was wrong survives — the narrative sections further down are
+> deliberately unedited except for a one-line resolution on each finding.
+>
+> Two findings were closed by a decision rather than only by code:
+>
+> - **F-16** took option (a): an unknown model id is a `404 model_not_found`
+>   whose message names the `basegeek-*` aliases and the `<provider>/<model>`
+>   form. Option (b) — silently rerouting to the rotation — would have made
+>   the "drop-in replacement" claim literally true at the cost of answering a
+>   question the caller did not ask.
+> - **F-20** ships as `x_geeksuite: {provider, model, cached, app, feature}`
+>   rather than the bare `provider` key the docs promised, because the OpenAI
+>   response schema has no `provider` field and a strict client is entitled to
+>   reject an unknown one. The `x_` namespace is unmistakably an extension.
+>
+> **F-21** (streaming is simulated) and **F-14** (`user` gates provider
+> selection) are the two that are *documented* rather than fixed — both are
+> now said out loud in `README_OPENAI_PROXY.md` and `AIGEEK_USAGE.md`. Neither
+> ever had a failing test; they were notes, not findings.
+>
+> The one test rewritten rather than merely promoted is **F-19's**. Its
+> original assertion was a source grep for the string `/v1/chat/completions`
+> in `aiRoutes.js`, which a 308 alias would still trip. It now asserts the
+> property that actually matters: the path still answers (nobody's client
+> 404s), it answers `308` to `/openai/v1/chat/completions`, and the file
+> registers no `/v1` handler of its own.
 
 > **The tree was mid-edit while this was written.** Two other agents were
 > working in `routes/`, `services/` and the UI. `openaiProxy.js`,
@@ -61,6 +95,12 @@ to — becomes a 500.
 None of that is loud. Every one of those failures is silent: HTTP 200, a
 well-formed body, the wrong answer.
 
+*(Written 2026-09-05 morning. All twelve of those parameters now reach a
+provider, tool calling is advertised only where it is implemented, the response
+text is not touched, and an unrecognised model id is a 404 that says what to
+send instead. See the status banner above; this paragraph is kept as the
+statement of what was wrong.)*
+
 ---
 
 ## Compatibility matrix
@@ -69,58 +109,58 @@ well-formed body, the wrong answer.
 |---|---|---|
 | `chat.completion` envelope (`id` `chatcmpl-*`, `object`, `created`, `model`) | **pass** | `returns id/object/created/model and a well-formed choices[0]` |
 | `choices[].index / message.role / message.content / finish_reason` | **pass** | same |
-| `choices[].logprobs` (spec-required key, nullable) | **fail** F-11 | `F-11: choices[] carries the spec-required logprobs key` |
+| `choices[].logprobs` (spec-required key, nullable) | **pass** (was: fail F-11) | `F-11: choices[] carries the spec-required logprobs key` |
 | `usage.prompt_tokens / completion_tokens / total_tokens` | **pass** (locally estimated, not provider-reported) | `returns a usage block whose totals add up` |
 | `system_fingerprint` | not offered (optional + deprecated in spec) | — |
-| Assistant content returned verbatim | **fail** F-01 | `F-01: assistant content is returned verbatim` |
+| Assistant content returned verbatim | **pass** (was: fail F-01) | `F-01: assistant content is returned verbatim` |
 | SSE transport, `chat.completion.chunk`, stable `id`/`created`, `data: [DONE]` | **pass** | `streams text/event-stream chunks terminated by data: [DONE]` |
 | `finish_reason` null on content chunks, set once on the last | **pass** | `sets finish_reason on exactly one terminal chunk` |
-| First chunk carries `delta.role` | **fail** F-05 | `F-05: the first streamed chunk carries delta.role` |
-| `stream_options: {include_usage:true}` usage chunk | **not offered** F-06 | `F-06: stream_options {include_usage:true} emits a usage-only final chunk` |
-| Streaming errors as an HTTP status | **fail** F-07 (always 200 + an error frame) | `F-07: an upstream failure before the first chunk is an HTTP error status` |
-| Real token-by-token streaming | **partial** F-21 (buffered, then re-chunked at 50 chars) | see notes |
+| First chunk carries `delta.role` | **pass** (was: fail F-05) | `F-05: the first streamed chunk carries delta.role` |
+| `stream_options: {include_usage:true}` usage chunk | **pass** (was: not offered, F-06) | `F-06: stream_options {include_usage:true} emits a usage-only final chunk` |
+| Streaming errors as an HTTP status | **pass** (was: fail F-07 — always 200 + an error frame) | `F-07: an upstream failure before the first chunk is an HTTP error status` |
+| Real token-by-token streaming | **partial** F-21 — unchanged, now documented as simulated | see notes |
 | `messages[]` preserved end to end (multi-turn, `system`, `name`) | **pass** at the transport | `the route hands aiService the whole array`; `callAI dispatches the messages array unflattened` |
-| Conversation history in the cache key | **fail** F-03 | `F-03: two conversations sharing a last user turn get different answers` |
+| Conversation history in the cache key | **pass** (was: fail F-03) | `F-03: two conversations sharing a last user turn get different answers` |
 | `tools` / `tool_choice` accepted and forwarded | **pass** (all four `tool_choice` forms) | `passes tools and tool_choice %j through to the service` |
 | `tools` reach Anthropic natively | **pass** | `callClaude translates OpenAI tools and every tool_choice form` |
-| `tools` reach Groq (advertised as native) | **fail** F-04 | `F-04: callGroq forwards tools that the capability matrix says it supports` |
+| `tools` reach Groq (advertised as native) | **pass** (was: fail F-04) | `F-04: callGroq forwards tools that the capability matrix says it supports` |
 | `message.tool_calls[]` shape, `arguments` as a JSON string, `finish_reason: tool_calls` | **pass** | `returns OpenAI-shaped tool_calls with arguments as a JSON string` |
 | `role:"tool"` follow-up turn accepted by the route | **pass** | `accepts a follow-up turn with role:"tool" and tool_call_id` |
-| `role:"tool"` follow-up turn survives to the provider | **fail** F-02 | `F-02: callClaude round-trips an assistant tool_calls turn and its tool result` |
-| Streaming `delta.tool_calls[].index` | **fail** F-08 | `F-08: streamed delta.tool_calls entries carry an index` |
+| `role:"tool"` follow-up turn survives to the provider | **pass** (was: fail F-02) — anthropic + gemini + groq | `F-02: callClaude round-trips an assistant tool_calls turn and its tool result` |
+| Streaming `delta.tool_calls[].index` | **pass** (was: fail F-08) | `F-08: streamed delta.tool_calls entries carry an index` |
 | Tool-incapable providers skipped by rotation, not failed | **pass** | `rotation skips a tool-incapable provider` |
 | `response_format: json_object` / `json_schema` accepted | **pass** | `passes response_format %j to the service` |
 | Native pass-through where supported (anthropic, gemini) | **pass** | `reaches a natively capable provider unchanged` |
 | Prompt-injection fallback + JSON repair elsewhere | **pass** | `falls back to prompt injection on an incapable provider` |
 | Cache key segregates response formats | **pass** (moot — structured requests bypass the cache) | `the cache key separates identical prompts`; `structured and tool requests bypass the cache entirely` |
 | `temperature`, `max_tokens` | **pass** | `temperature and max_tokens reach the provider` |
-| `top_p` | **fail** F-09 | `F-09: top_p reaches the provider` |
-| `stop` (string and array) | **fail** F-09 | `F-09: stop (string form)…`, `…(array form)…` |
-| `seed` | **fail** F-09 | `F-09: seed reaches the provider` |
-| `presence_penalty` / `frequency_penalty` | **fail** F-09 | `F-09: presence_penalty and frequency_penalty reach the provider` |
-| `max_completion_tokens` | **not offered** F-10 | `F-10: max_completion_tokens is honoured as an alias for max_tokens` |
+| `top_p` | **pass** (was: fail F-09) | `F-09: top_p reaches the provider` |
+| `stop` (string and array) | **pass** (was: fail F-09) | `F-09: stop (string form)…`, `…(array form)…` |
+| `seed` | **pass** (was: fail F-09) — dropped at anthropic/gemini, which have no equivalent | `F-09: seed reaches the provider` |
+| `presence_penalty` / `frequency_penalty` | **pass** (was: fail F-09) — dropped at anthropic/gemini | `F-09: presence_penalty and frequency_penalty reach the provider` |
+| `max_completion_tokens` | **pass** (was: not offered, F-10) | `F-10: max_completion_tokens is honoured as an alias for max_tokens` |
 | `n > 1` rejected with the OpenAI envelope | **pass** (documented out of scope) | `rejects n > 1 with the OpenAI error envelope` |
 | `logit_bias`, `logprobs`, `top_logprobs`, `store`, `metadata`, `service_tier`, `parallel_tool_calls` ignored gracefully | **pass** | `ignores logit_bias / logprobs / top_logprobs rather than 500ing` |
-| `user` accepted | **partial** F-14 (used as the quota subject) | `accepts the "user" end-user identifier` |
-| Error envelope `{error:{message,type,param,code}}` | **fail** F-12 (`param` never emitted; `code` dropped when null) | `F-12: a 400 carries the spec-required param and code keys` |
-| 401 `invalid_api_key` | **fail** F-13 (`authentication_error` / `INVALID_API_KEY`) | `F-13: an invalid key reports code invalid_api_key` |
+| `user` accepted | **partial** F-14 — unchanged, now documented | `accepts the "user" end-user identifier` |
+| Error envelope `{error:{message,type,param,code}}` | **pass** (was: fail F-12) — both keys always present | `F-12: a 400 carries the spec-required param and code keys` |
+| 401 `invalid_api_key` | **pass** (was: fail F-13) | `F-13: an invalid key reports code invalid_api_key` |
 | 400 `invalid_request_error` | **pass** | `400 for a missing messages array` |
 | 403 for a key without `ai:call` | **pass** | `403 when the key lacks ai:call` |
 | 404 `model_not_found` on `/models/{id}` | **pass** | `GET /v1/models/{unknown} is a 404 model_not_found` |
-| 404 `model_not_found` on chat/completions | **fail** F-16 (unknown model → 500) | `F-16: an unknown model id is a 404 model_not_found` |
-| 429 with `Retry-After` and `rate_limit_exceeded` | **fail** F-15 | `F-15: a 429 carries Retry-After and code rate_limit_exceeded` |
+| 404 `model_not_found` on chat/completions | **pass** (was: fail F-16 — unknown model → 500) | `F-16: an unknown model id is a 404 model_not_found` |
+| 429 with `Retry-After` and `rate_limit_exceeded` | **pass** (was: fail F-15) | `F-15: a 429 carries Retry-After and code rate_limit_exceeded` |
 | 5xx envelope on total provider failure | **pass** | `500 with the envelope when every provider fails` |
 | `GET /v1/models` list shape | **pass** | `returns {object:"list", data:[Model]}` |
 | `GET /v1/models/{id}` | **pass** | two cases |
 | `Authorization: Bearer` and `x-api-key` | **pass** | two cases |
 | `OpenAI-Organization` / `-Project` / `-Beta` ignored | **pass** | `ignores OpenAI-Organization, OpenAI-Project and OpenAI-Beta` |
 | `X-Request-Id` on responses, caller-supplied id echoed | **pass** | two cases |
-| CORS preflight | **fail** F-17 (the key gate answers `OPTIONS`) | `F-17: a CORS preflight is answered before the API-key gate` |
+| CORS preflight | **pass** (was: fail F-17 — the key gate answered `OPTIONS`) | `F-17: a CORS preflight is answered before the API-key gate` |
 | `basegeek-rotation` / `basegeek-free` aliases | **pass** | two cases |
-| `basegeek-app` alias | **partial** F-18 (echoes `basegeek-rotation` back) | `F-18: basegeek-app echoes the model the caller actually asked for` |
+| `basegeek-app` alias | **pass** (was: partial F-18 — echoed `basegeek-rotation` back) | `F-18: basegeek-app echoes the model the caller actually asked for` |
 | `<provider>/<model>` pinning; slashy model ids left alone | **pass** | two cases |
-| `provider` metadata on the response (README promises it) | **fail** F-20 (never emitted) | see notes |
-| One endpoint per contract | **fail** F-19 (a second, worse one at `/api/ai/v1`) | `F-19: only one endpoint in this service claims OpenAI compatibility` |
+| `provider` metadata on the response (README promises it) | **pass** (was: fail F-20) — as `x_geeksuite` | see notes |
+| One endpoint per contract | **pass** (was: fail F-19) — `/api/ai/v1/*` is a 308 | `F-19: only one endpoint in this service claims OpenAI compatibility` |
 | **Anthropic Messages API (`/v1/messages`)** | **not offered** | `is not offered at /openai/v1/messages` |
 
 ---
@@ -149,6 +189,14 @@ translation for `callClaude` (`stop` → `stop_sequences`, no penalties, no seed
 and `callGemini` (`generationConfig.topP`, `.stopSequences`).
 **Size:** ~40 lines, one afternoon. Flip six `it.failing` to `it`.
 
+**Resolved 2026-09-05.** All five plus `max_completion_tokens` travel
+`callAI` → `callProvider` → the adapter now. `openAISamplingFields()` and
+`stopSequencesFrom()` in `aiService.js` do the per-provider spelling; a knob a
+provider cannot express is dropped at that adapter rather than sent upstream to
+become a 400. Cloudflare loses `stop` (Workers AI has no such field and
+rejects unknown properties); Anthropic and Gemini lose `seed` and the two
+penalties.
+
 ---
 
 ### 2. F-16 — an unrecognised model id is a 500, not a `model_not_found`
@@ -173,6 +221,13 @@ prefix and matches no id in the catalog, either (a) return
 as `basegeek-rotation` and say so in the echoed `model`. Option (b) makes the
 "drop-in replacement" claim literally true.
 **Size:** ~25 lines in `openaiProxy.js`, plus a decision from Chef on (a) vs (b).
+
+**Resolved 2026-09-05, option (a).** An id that is neither an alias, nor a
+`<provider>/<model>` pin, nor anything `GET /openai/v1/models` lists is a 404
+`model_not_found` whose message names all three routes back. Option (b) would
+have answered a question the caller did not ask. The catalog lookup is shared
+with `GET /models/{id}`, so what the list advertises is exactly what chat
+accepts.
 
 ---
 
@@ -213,6 +268,20 @@ is a five-line change per provider plus a `tool_calls` reader on the response).
 **Size:** (a) ~30 lines and a test; (b) ~60 lines and the fiddliest work in this
 document. Do (a) first — it is the one that is actively lying.
 
+**Resolved 2026-09-05, both halves.** (a) `callGroq` forwards `tools` and
+`tool_choice` verbatim (Groq's API is OpenAI-shaped — re-verified against
+`console.groq.com/docs/api-reference`) and reads `tool_calls` back off the
+response, *and* `supportsToolCalling` is now gated on a new
+`TOOL_FORWARDING_PROVIDERS` set, so the matrix structurally cannot advertise
+what no adapter implements. The legacy `supportsFunctionCalling` keeps its old
+meaning ("can this model call functions") for aiDirectorService; the two flags
+are now allowed to disagree, which is the point. (b)
+`aiService.anthropicMessagesFrom()` and `geminiContentsFrom()` translate the
+assistant `tool_calls` turn and the `role:"tool"` turn into `tool_use` /
+`tool_result` blocks and `functionCall` / `functionResponse` parts. Gemini keys
+a response by function name rather than id, so the id→name map is built while
+walking the assistant turns.
+
 ---
 
 ### 4. F-01 — the proxy rewrites the model's answer
@@ -249,6 +318,11 @@ CodeGeek client. If it has to stay, gate it behind an explicit opt-in
 **Size:** one line to remove, plus checking whether CodeGeek is calling through
 this endpoint rather than `/api/ai/call`.
 
+**Resolved 2026-09-05.** Both calls (streaming and not) deleted from
+`openaiProxy.js`; the completion is returned exactly as the provider produced
+it. `formatResponse` still lives on `/api/ai/*` in `aiRoutes.js`, where
+CodeGeek's XML tool UI is its actual audience.
+
 ---
 
 ### 5. F-03 — the response cache ignores the conversation
@@ -274,6 +348,12 @@ for the key). Nothing else needs to change; the structured fingerprint work from
 `AIGEEK_POLISH` item 2 already sits alongside it.
 **Size:** ~5 lines. The cheapest large win in this document.
 
+**Resolved 2026-09-05.** `aiService.conversationCacheSubject()` builds the key
+subject from the whole normalized array — role, content, `name`, and both
+halves of a tool loop — instead of the routing prompt. The proxy's redundant
+namespace hash was left alone; it is harmless now that the key itself carries
+the history.
+
 *(Honourable mentions just off the list: **F-07**, every streaming failure
 arriving as a 200 with an error frame the SDK cannot classify as an error;
 **F-15**, a 429 with no `Retry-After`, which disables the automatic retry in
@@ -289,22 +369,22 @@ stale: most of it shipped. Item by item.
 
 | # | Plan item | Reality |
 |---|---|---|
-| 1 | Capability matrix (`supportsJSONMode/JSONSchema/ToolCalling`) | **Landed.** `aiModelCapabilitiesService.js:21-60`, `:1301-1313`. Tested in `aiModelCapabilities.test.js`. But it over-claims: twelve Groq models are marked tool-capable with no implementation behind them → **F-04**. |
-| 2 | Cache key includes `response_format` + `tools` | **Landed** (`structuredOutputFingerprint`, `aiService.js:754-766`) **and then made moot** — `aiService.js:1529` now bypasses the cache entirely for structured and tool requests. The plan diagnosed a real cache bug at the wrong altitude: the damaging collision is history-blindness, which the plan never mentions → **F-03**. |
-| 3 | Preserve the messages array end to end | **Landed at the transport.** Proxy → `callAI` → `callProvider` → provider all carry the array, and `name` survives. **Not landed at the provider translations**: `callClaude` and `callGemini` still collapse every non-assistant role to `user` → **F-02**. |
+| 1 | Capability matrix (`supportsJSONMode/JSONSchema/ToolCalling`) | **Landed.** `aiModelCapabilitiesService.js`. Tested in `aiModelCapabilities.test.js`. It over-claimed — twelve Groq models marked tool-capable with no implementation behind them (**F-04**) — until `TOOL_FORWARDING_PROVIDERS` made the claim structural on 2026-09-05. |
+| 2 | Cache key includes `response_format` + `tools` | **Landed** (`structuredOutputFingerprint`) **and then made moot** — structured and tool requests bypass the cache entirely. The plan diagnosed a real cache bug at the wrong altitude: the damaging collision is history-blindness, which the plan never mentions (**F-03**, fixed 2026-09-05 by `conversationCacheSubject()`). |
+| 3 | Preserve the messages array end to end | **Landed at the transport.** Proxy → `callAI` → `callProvider` → provider all carry the array, and `name` survives. The provider translations followed on 2026-09-05: `callClaude` and `callGemini` collapsed every non-assistant role to `user` (**F-02**) until `anthropicMessagesFrom()` / `geminiContentsFrom()` landed. |
 | 4 | `response_format` native pass-through | **Landed** for Anthropic (tool-forcing / assistant prefill, `aiService.js:2049-2059`) and Gemini (`responseMimeType` + `responseSchema`). |
 | 5 | Prompt-injection fallback | **Landed.** `wrapMessagesForStructuredFallback` + `repairJSONContent`, tested in `aiServiceHelpers.test.js`. Solid work. |
-| 6 | `tools` / `tool_choice` native | **Partially landed.** Real in `callClaude` and `callGemini`, including all four `tool_choice` forms. Absent everywhere else while the matrix says otherwise → **F-04**. |
+| 6 | `tools` / `tool_choice` native | **Landed.** Real in `callClaude`, `callGemini` and — since 2026-09-05 — `callGroq`, all four `tool_choice` forms each. Absent everywhere else, and the matrix now says so (**F-04**). |
 | 7 | Explicit `<provider>/<model>` pinning | **Landed** (`aiService.js:1360-1372`), including the "don't split `meta-llama/…`" rule. Now covered by tests. |
 | 8 | Streaming correctness with structured output | **Landed** — single-chunk emission when `tools` or `response_format` is active (`openaiProxy.js:294-318`). |
 | 9 | Tests | **Half landed.** The two unit files exist (`aiServiceHelpers.test.js`, `aiModelCapabilities.test.js`) and cover the fingerprint, the repair and the matrix. The plan's other three cases — rotation skipping incapable providers, fallback producing schema-valid JSON end to end, explicit pinning — had **no test until this audit**. Nothing tested the HTTP contract at all. |
-| 10 | Docs | **Landed** — `README_OPENAI_PROXY.md` rewritten, `AIGEEK_USAGE.md` written, `AI_CATALOG.md` updated. Two claims in them are not true of the code: Groq native tool calling (**F-04**), and `response.provider` / streaming provider metadata (**F-20** — `openaiProxy.js:398-415` emits no `provider` key, and the final SSE chunk carries none either, though `README_OPENAI_PROXY.md` shows both). |
+| 10 | Docs | **Landed** — `README_OPENAI_PROXY.md` rewritten, `AIGEEK_USAGE.md` written, `AI_CATALOG.md` updated. Two claims in them were not true of the code: Groq native tool calling (**F-04**) and `response.provider` / streaming provider metadata (**F-20**). Both were made true on 2026-09-05 — Groq forwards, and the metadata ships as `x_geeksuite` on the response and the terminal SSE chunk. The docs were rewritten again to match. |
 
 The plan's "explicitly out of scope" list mostly held: `n > 1` is still rejected,
 no embeddings, no vision, rotation state still file-backed. One exception —
 "streaming tool calls (complex; geekPR doesn't need it)" was half-implemented
-anyway (`openaiProxy.js:294-308`), and the half that shipped is missing the
-`index` field that makes it usable → **F-08**.
+anyway (`openaiProxy.js`), and the half that shipped was missing the `index`
+field that makes it usable (**F-08**, stamped on 2026-09-05).
 
 ---
 
@@ -318,11 +398,18 @@ anyway (`openaiProxy.js:294-308`), and the half that shipped is missing the
   than `provider/model` for pinning. It is not documented in either aiGeek doc.
   Anyone who finds it will conclude aiGeek is far less compatible than it is.
   Recommend deleting it or 308-redirecting it to `/openai/v1`.
+  **Resolved 2026-09-05:** 308, for both `/v1/chat/completions` and
+  `/v1/models`, registered above the router's auth gate so a stale caller
+  learns the address changed rather than that its credentials are wrong. 308
+  rather than 301/302 because it preserves the method and the body.
 - **F-21 — streaming is simulated.** `openaiProxy.js:279` awaits the *entire*
   completion, then re-chunks it at 50 characters. The frames are spec-shaped and
   a client works fine, but time-to-first-token equals time-to-last-token, so
   streaming buys the caller nothing but a nicer-looking spinner. Worth saying out
   loud in the docs, since "streaming works" implies otherwise.
+  **Not fixed, now said out loud** (2026-09-05): both `README_OPENAI_PROXY.md`
+  and `AIGEEK_USAGE.md` state it, and so does the comment on the streaming
+  branch. Real token streaming needs a streaming adapter per provider.
 - **F-14 — `user` is treated as an account.** OpenAI's `user` is an opaque
   abuse-monitoring tag for their trust-and-safety pipeline, not an identity the
   API resolves. `openaiProxy.js:174-189` reads it as `bodyUserId` and resolves
@@ -333,6 +420,10 @@ anyway (`openaiProxy.js:294-308`), and the half that shipped is missing the
   finding the concurrent caller-identity work has already moved — the
   attribution is now deliberate rather than accidental; what remains is that an
   opaque tag still gates provider selection.)
+  **Not fixed, now documented** (2026-09-05): `README_OPENAI_PROXY.md` says
+  `user` is used for per-user usage attribution, so a caller sending a
+  per-end-user id knows what it is buying. Changing the quota subject is a
+  quota-model decision, not a conformance one.
 - **F-17 — preflight.** `openaiProxy.js:90` mounts the key gate with
   `router.use`, which runs on `OPTIONS` too. In production the global `cors()`
   at `server.js:119-143` answers preflights from allowlisted origins before the
@@ -340,11 +431,19 @@ anyway (`openaiProxy.js:294-308`), and the half that shipped is missing the
   (and a disallowed origin gets a *500*, by the deliberate design noted at
   `server.js:100-116`). Server-side callers are unaffected; browser callers
   outside the suite cannot use this endpoint at all.
+  **Resolved 2026-09-05:** the router answers its own preflight ahead of the
+  key gate, so its correctness no longer depends on where it is mounted. No
+  `Access-Control-Allow-Credentials` — the endpoint authenticates by header,
+  never by cookie.
 - **The cache is on by default for plain completions**, 30-minute TTL, keyed
   without `max_tokens` or the messages history. Combined with F-03 this means a
   caller at `temperature: 1` asking the same question twice gets the identical
   answer — surprising for anyone who knows OpenAI's semantics. Consider honouring
   `store: false` or a `x-basegeek-cache: bypass` header.
+  **Partly resolved 2026-09-05:** the messages history is in the key now
+  (F-03). `max_tokens` still is not, and no bypass header was added — both are
+  open, and both are now stated in `README_OPENAI_PROXY.md`'s caching section
+  so nobody is surprised by them.
 
 ---
 
@@ -375,7 +474,12 @@ the second one rotted precisely because nobody tested it.
 
 So: fix F-01, F-03, F-04, F-09 and F-16 first, get the OpenAI surface to the
 point where the suite's `it.failing` count is near zero, and *then* build
-`/anthropic/v1/messages` on top of a service that is actually honest. At that
+`/anthropic/v1/messages` on top of a service that is actually honest.
+
+**That precondition is met as of 2026-09-05** — the count is zero, not near it.
+The Messages surface is now the next thing this document recommends rather than
+a thing it warns against, and `aiService.anthropicMessagesFrom()` (written for
+F-02) is most of the request-translation half already. At that
 point it is a weekend, it opens the door to the Claude SDKs and to
 `ANTHROPIC_BASE_URL`-style tooling, and the audit for it is this file with the
 nouns changed.
@@ -389,8 +493,10 @@ cd apps/basegeek/packages/api
 pnpm test src/__tests__/openaiCompat.test.js
 ```
 
-72 tests, all green. The 22 `it.failing` cases are the findings: Jest passes a
-`failing` test whose body throws, and **fails the run the moment the body starts
-passing**. So the day someone closes a gap, the suite says so and asks for the
-test to be promoted to `it`. Each carries its finding id in the title and the
-spec citation in a comment above it.
+73 tests, all green, **none of them `it.failing`**. The mechanism that got them
+there is worth keeping for the next audit: Jest passes a `failing` test whose
+body throws and **fails the run the moment the body starts passing**, so each
+finding announced its own closure and asked to be promoted. Each case still
+carries its finding id in the title and the spec citation in a comment above
+it, now reading "CLOSED" with a note on what changed — the tests are the
+durable record, and the regression tripwire.

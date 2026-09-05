@@ -24,19 +24,6 @@ class RateLimitService {
         maxContextTokens: 8193,
         priority: 2
       },
-      llm7: {
-        tokensPerMinute: 100000,
-        requestsPerMinute: 150,
-        maxContextTokens: 32768,
-        priority: 3
-      },
-      onemin: {
-        // No token limit, uses monthly credits
-        requestsPerMinute: 180,
-        creditsPerMonth: 1000000,
-        maxContextTokens: 85600,
-        priority: 4
-      },
       groq: {
         tokensPerMinute: 12000,
         requestsPerMinute: 30,

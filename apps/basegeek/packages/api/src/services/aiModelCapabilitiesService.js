@@ -27,6 +27,33 @@ const JSON_MODE_SUPPORTED = new Set([
   'gemini:*'
 ]);
 
+// TOOL_FORWARDING_PROVIDERS: the providers whose adapter in aiService actually
+// puts `tools` on the wire and reads `tool_calls` back off it.
+//
+// FINDING F-04: this set is the difference between a capability matrix and a
+// wish. `supportsToolCalling` gates the rotation (aiService.js — a `tools`
+// request skips any provider the matrix calls incapable), so a provider marked
+// capable with no adapter behind it does not fail loudly: it is *selected*, the
+// `tools` array is quietly dropped at the adapter, and the caller gets prose and
+// finish_reason "stop" where the contract promised tool_calls. Groq was marked
+// capable on twelve models for exactly that reason, and both aiGeek docs said
+// so; callGroq now forwards, so the claim is true.
+//
+// The rule: a provider goes in here the same day its call*() learns to forward
+// `tools` — never before. Everything else falls out of the rotation for tool
+// requests, which is the correct answer, because tool calling has no
+// prompt-injection fallback the way structured output does: a tool_calls
+// response shape can only come from native provider support.
+const TOOL_FORWARDING_PROVIDERS = new Set([
+  'anthropic',  // callClaude — tools + all four tool_choice forms + tool_use readback
+  'gemini',     // callGemini — functionDeclarations + toolConfig + functionCall readback
+  'groq'        // callGroq   — OpenAI-shaped tools/tool_choice, verbatim
+]);
+
+function forwardsTools(provider) {
+  return TOOL_FORWARDING_PROVIDERS.has(provider);
+}
+
 // TOOL_CALLING_CORRECTIONS: overrides for supportsFunctionCalling/supportsToolCalling.
 // The legacy data in knownCapabilities predates Groq's function-calling support — this
 // set patches those entries without rewriting 50 blocks.
@@ -1260,18 +1287,29 @@ class AIModelCapabilitiesService {
 
   /**
    * Populate canonical OpenAI-compatible capability flags across all entries:
-   *   - supportsToolCalling (mirrors supportsFunctionCalling, with corrections)
+   *   - supportsToolCalling (the model can do it AND we forward `tools` to it)
    *   - supportsJSONMode    (mirrors supportsJSONOutput)
    *   - supportsJSONSchema  (explicit allowlist)
+   *
+   * The two tool flags answer different questions and are deliberately allowed
+   * to disagree (F-04):
+   *
+   *   supportsFunctionCalling — "can this model call functions at all?" A fact
+   *     about the model, used by aiDirectorService when it scores candidates.
+   *   supportsToolCalling     — "will a `tools` request routed here actually
+   *     arrive?" A fact about *our* adapter, used by the rotation gate. False
+   *     for every provider outside TOOL_FORWARDING_PROVIDERS, however capable
+   *     the model itself is, because a request that reaches an adapter which
+   *     drops `tools` comes back as prose with finish_reason "stop".
    */
   normalizeCapabilities() {
     for (const [provider, models] of Object.entries(this.knownCapabilities)) {
       for (const [modelId, caps] of Object.entries(models)) {
         const toolCallingCorrected = toolCallingCorrectedFor(provider, modelId);
-        const toolCalling = caps.supportsFunctionCalling || toolCallingCorrected;
+        const modelCanCall = caps.supportsFunctionCalling || toolCallingCorrected;
 
-        caps.supportsToolCalling = toolCalling;
-        caps.supportsFunctionCalling = toolCalling;
+        caps.supportsFunctionCalling = modelCanCall;
+        caps.supportsToolCalling = modelCanCall && forwardsTools(provider);
         // supportsJSONMode / supportsJSONSchema reflect whether aiService has
         // a native response_format translation for this pair; the legacy
         // supportsJSONOutput flag is a looser "model is generally JSON-capable"
@@ -1291,13 +1329,17 @@ class AIModelCapabilitiesService {
     const known = this.knownCapabilities[provider]?.[modelId];
     if (known) return known;
     const inferred = this.inferCapabilities(modelId);
-    inferred.supportsToolCalling = inferred.supportsFunctionCalling;
+    inferred.supportsToolCalling = inferred.supportsFunctionCalling && forwardsTools(provider);
     inferred.supportsJSONMode = jsonModeSupportedFor(provider, modelId);
     inferred.supportsJSONSchema = schemaSupportedFor(provider, modelId);
     return inferred;
   }
 
-  /** True if this provider/model accepts OpenAI-style `tools` parameter. */
+  /**
+   * True if a `tools` request routed to this provider/model will actually reach
+   * it as `tools` — i.e. the model can call functions AND aiService's adapter
+   * for this provider forwards the parameter. See TOOL_FORWARDING_PROVIDERS.
+   */
   supportsTools(provider, modelId) {
     return !!this.getCapabilities(provider, modelId).supportsToolCalling;
   }

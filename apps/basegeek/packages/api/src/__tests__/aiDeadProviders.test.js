@@ -61,6 +61,50 @@ describe('aiService no longer carries the retired providers', () => {
   });
 });
 
+describe('the services that carry per-provider tables have no retired providers', () => {
+  // These two outlived the roster by a day: rateLimitService kept a throttling
+  // bucket for each, and aiDirectorService both priced `llm7` and named it in
+  // the provider list it walks when it collects model information. Neither is
+  // reachable — aiService.providers defines no such provider — which is
+  // exactly why they sat there. Removed 2026-09-05 with the OpenAI-compat pass.
+  it('rateLimitService defines no limit bucket for either', async () => {
+    const { default: rateLimitService } = await import('../services/rateLimitService.js');
+    for (const dead of DEAD) {
+      expect(rateLimitService.limits[dead]).toBeUndefined();
+    }
+    expect(rateLimitService.limits.groq).toBeDefined();
+  });
+
+  it('aiDirectorService prices neither, and walks neither', async () => {
+    const { default: aiDirectorService } = await import('../services/aiDirectorService.js');
+    for (const dead of DEAD) {
+      expect(aiDirectorService.providerPricing[dead]).toBeUndefined();
+    }
+    expect(aiDirectorService.providerPricing.groq).toBeDefined();
+
+    // The hardcoded provider list inside collectModelInformation is the one
+    // place a retired id can come back by copy-paste, so read the source.
+    const { readFile } = await import('node:fs/promises');
+    const source = await readFile(
+      new URL('../services/aiDirectorService.js', import.meta.url),
+      'utf8'
+    );
+    // Comments are allowed to name them — that is how the removal stays
+    // explained. Code is not.
+    const code = source.split('\n').filter(line => !line.trim().startsWith('//')).join('\n');
+    expect(code).not.toMatch(/llm7|onemin|LLM7|OneMin/i);
+  });
+
+  it('rateLimitService carries no retired provider in its source either', async () => {
+    const { readFile } = await import('node:fs/promises');
+    const source = await readFile(
+      new URL('../services/rateLimitService.js', import.meta.url),
+      'utf8'
+    );
+    expect(source).not.toMatch(/llm7|onemin|LLM7|OneMin/i);
+  });
+});
+
 describe('the capability matrix has no retired providers', () => {
   it('drops the llm7 block', () => {
     for (const dead of DEAD) {

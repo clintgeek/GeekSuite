@@ -2,7 +2,7 @@ import express from 'express';
 import { requireRole } from '../middleware/auth.js';
 import { PROVIDER_IDS, keyHintFor } from '../config/aiProviders.js';
 import { authenticateJWTOrAPIKey, requirePermission } from '../middleware/apiKeyAuth.js';
-import { resolveCaller, declaresAppRouting, logCaller, UNATTRIBUTED } from '../services/callerIdentity.js';
+import { resolveCaller, declaresAppRouting, logCaller } from '../services/callerIdentity.js';
 import logger from '../lib/logger.js';
 import aiService from '../services/aiService.js';
 import aiDirectorService from '../services/aiDirectorService.js';
@@ -16,6 +16,37 @@ import jwt from 'jsonwebtoken';
 import { formatResponse, formatStreamChunk } from '../utils/responseFormatter.js';
 
 const router = express.Router();
+
+/**
+ * FINDING F-19 — the second front door, retired 2026-09-05.
+ *
+ * `/api/ai/v1/chat/completions` was an older, much worse implementation of the
+ * same contract `/openai/v1/chat/completions` implements. It flattened the
+ * whole `messages` array into one `"role: content"` string, accepted `stream`
+ * and ignored it, supported neither `tools` nor `response_format`, and used
+ * `provider:model` instead of `provider/model` for pinning. It appeared in no
+ * aiGeek doc, so anyone who found it concluded aiGeek was far less compatible
+ * than it is — and it rotted precisely because nothing tested it. Two
+ * endpoints claiming one contract is one endpoint too many.
+ *
+ * A 308 rather than a delete: 308 is the redirect that preserves the method
+ * and the body (307/308, unlike 301/302, forbid rewriting POST to GET), so a
+ * client still pointed here follows it and its completion still happens.
+ * `fetch` and every HTTP client an SDK is built on follow it by default.
+ *
+ * Registered above `authenticateJWTOrAPIKey()` deliberately: there is nothing
+ * here to protect, and a caller should learn the address has changed rather
+ * than that its credentials are wrong. The real gate is on the other side.
+ *
+ * `/v1/models` goes with it — it was the same second surface, listing model
+ * ids in a `provider:model` spelling the live endpoint does not accept.
+ */
+const OPENAI_SURFACE = '/openai/v1';
+for (const legacyPath of ['/v1/chat/completions', '/v1/models']) {
+  router.all(legacyPath, (req, res) => {
+    res.redirect(308, `${OPENAI_SURFACE}${legacyPath.slice('/v1'.length)}`);
+  });
+}
 
 // Apply authentication to all routes (JWT or API key)
 // Note: Individual routes can override with specific permission requirements
@@ -1381,134 +1412,6 @@ router.post('/test', requireAdminUser, async (req, res) => {
         message: 'Failed to test API key',
         code: 'API_KEY_TEST_ERROR',
         details: error.message
-      }
-    });
-  }
-});
-
-// OpenAI-compatible endpoint for CodeGeek and other clients
-// POST /api/ai/v1/chat/completions - OpenAI-compatible chat completions
-router.post('/v1/chat/completions', async (req, res) => {
-  try {
-    // Check permission for API key users
-    const permissionError = requirePermission(req, res, 'ai:call');
-    if (permissionError) return;
-
-    const caller = resolveCaller(req, req.body);
-    logCaller(req, caller, '[ai] /v1/chat/completions caller');
-
-    const { model, messages, temperature, max_tokens, stream = false } = req.body;
-    const userId = caller.userId || req.user?.id || 'api-user';
-
-    if (!messages || !Array.isArray(messages)) {
-      return res.status(400).json({
-        error: {
-          message: 'messages is required and must be an array',
-          type: 'invalid_request_error',
-          code: 'missing_messages'
-        }
-      });
-    }
-
-    // Parse model string: supports "provider:model" or just "model"
-    let provider, modelName;
-    if (model && model.includes(':')) {
-      [provider, modelName] = model.split(':', 2);
-    } else {
-      // Use default provider and specified model, or fall back to service defaults
-      provider = aiService.currentProvider;
-      modelName = model || aiService.providers[provider]?.model;
-    }
-
-    // Convert OpenAI message format to our internal format
-    const prompt = messages.map(msg => {
-      if (typeof msg.content === 'string') {
-        return `${msg.role}: ${msg.content}`;
-      }
-      return `${msg.role}: ${JSON.stringify(msg.content)}`;
-    }).join('\n\n');
-
-    // Call AI service with specified provider and model
-    const config = {
-      provider,
-      model: modelName,
-      maxTokens: max_tokens,
-      temperature,
-      userId,
-      // Was hardcoded 'codegeek'. Now the credential decides, and 'codegeek'
-      // is only the fallback for a caller whose credential names no app.
-      appName: caller.appId === UNATTRIBUTED ? 'codegeek' : caller.appId,
-      feature: caller.feature
-    };
-
-    const result = await aiService.callAI(prompt, config);
-
-    // Return OpenAI-compatible response
-    res.json({
-      id: `chatcmpl-${Date.now()}`,
-      object: 'chat.completion',
-      created: Math.floor(Date.now() / 1000),
-      model: `${provider}:${modelName}`,
-      choices: [
-        {
-          index: 0,
-          message: {
-            role: 'assistant',
-            content: result.content || result // Handle both formats
-          },
-          finish_reason: 'stop'
-        }
-      ],
-      usage: {
-        prompt_tokens: result.inputTokens || 0,
-        completion_tokens: result.outputTokens || 0,
-        total_tokens: (result.inputTokens || 0) + (result.outputTokens || 0)
-      }
-    });
-
-  } catch (error) {
-    req.log.error({ err: error }, 'OpenAI-compatible endpoint error');
-    res.status(500).json({
-      error: {
-        message: error.message || 'AI call failed',
-        type: 'server_error',
-        code: 'ai_call_error'
-      }
-    });
-  }
-});
-
-// GET /api/ai/v1/models - OpenAI-compatible models list
-router.get('/v1/models', async (req, res) => {
-  try {
-    const providers = ['groq', 'together', 'gemini', 'anthropic'];
-    const allModels = [];
-
-    for (const provider of providers) {
-      const models = await aiService.getModels(provider);
-      models.forEach(model => {
-        allModels.push({
-          id: `${provider}:${model.id}`,
-          object: 'model',
-          created: Math.floor(Date.now() / 1000),
-          owned_by: provider,
-          provider: provider,
-          modelId: model.id
-        });
-      });
-    }
-
-    res.json({
-      object: 'list',
-      data: allModels
-    });
-
-  } catch (error) {
-    res.status(500).json({
-      error: {
-        message: 'Failed to list models',
-        type: 'server_error',
-        code: 'models_list_error'
       }
     });
   }

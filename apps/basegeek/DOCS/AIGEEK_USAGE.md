@@ -12,10 +12,14 @@ worked example per use case.
 
 ### 1. Rotation (default — "keep me coding for free")
 
-Pick a `basegeek-rotation` model (or any model name not prefixed with a
-known provider). aiGeek cycles through free-tier providers by priority,
-respects per-provider quotas, and cools providers after 429s. Best for
-high-volume or cost-sensitive workloads.
+Pick `basegeek-rotation` — or send no `model` at all. aiGeek cycles through
+free-tier providers by priority, respects per-provider quotas, and cools
+providers after 429s. Best for high-volume or cost-sensitive workloads.
+
+(This used to say "or any model name not prefixed with a known provider".
+That is no longer true, and was never a good idea: since 2026-09-05 a model
+id aiGeek does not recognise is a **404 `model_not_found`** rather than a
+silent reroute. See *Unknown model ids* below.)
 
 ```js
 await openai.chat.completions.create({
@@ -57,6 +61,19 @@ Known provider prefixes: `anthropic`, `groq`, `gemini`, `together`,
 `llm7` and `onemin` were retired on 2026-09-04 and their implementations
 deleted on 2026-09-05; pinning either now fails like any other unknown
 provider. See [AI_CATALOG.md](./AI_CATALOG.md#removed-2026-09-04).
+
+### Unknown model ids
+
+Anything that is not one of the three `basegeek-*` aliases, not a
+`<provider>/<model>` pin, and not an id from `GET /openai/v1/models` is a
+**404 `model_not_found`** whose message names the alternatives.
+
+This is the one place aiGeek deliberately refuses to be a drop-in. LangChain's
+`ChatOpenAI` defaults to `gpt-4o-mini`; Continue and Cursor-style tools ship a
+`gpt-4o` default; every curl example copied from OpenAI's docs names a `gpt-*`
+model. aiGeek serves its own catalog, and answering one of those with a
+different model's completion at HTTP 200 would be worse than saying so. Set the
+model as well as the base URL.
 
 ## Who is calling
 
@@ -191,9 +208,16 @@ person = client.chat.completions.create(
 are skipped by the rotation (no fallback — tool-call contract demands
 machine-parseable structure).
 
-Supported today: **Anthropic** (all models), **Gemini** (1.5-flash/pro),
-**Groq** (llama-3.3-70b-versatile, llama-3.1-70b-versatile, llama-4-*,
-gpt-oss-*, and others).
+Supported today: **Anthropic** (all models), **Gemini**, **Groq**
+(llama-3.3-70b-versatile, llama-3.1-70b-versatile, llama-4-*, gpt-oss-*, and
+the others in `TOOL_CALLING_CORRECTIONS`).
+
+That list is now identical to the list of providers whose adapter actually puts
+`tools` on the wire (`TOOL_FORWARDING_PROVIDERS`). It has to be: the rotation
+*selects* on `supportsToolCalling`, so a provider advertised as capable with no
+adapter behind it is not skipped — it is chosen, the `tools` array is dropped,
+and the caller gets prose with `finish_reason: "stop"`. Groq was in exactly
+that state until 2026-09-05, on twelve models, and this doc said so.
 
 ```js
 await openai.chat.completions.create({
@@ -215,11 +239,46 @@ await openai.chat.completions.create({
 });
 ```
 
+### Feeding the result back
+
+The second half of the loop — the turn every agent framework runs — works on
+all three native providers. Send the assistant's `tool_calls` turn back
+unchanged, then a `role: "tool"` turn carrying the matching `tool_call_id`:
+
+```js
+messages: [
+  { role: 'user', content: "What's the weather in Paris?" },
+  { role: 'assistant', content: null, tool_calls: [
+    { id: 'call_1', type: 'function',
+      function: { name: 'get_weather', arguments: '{"location":"Paris"}' } }
+  ]},
+  { role: 'tool', tool_call_id: 'call_1', content: '{"tempC":18}' }
+]
+```
+
+aiGeek translates both turns into each provider's idiom: Anthropic `tool_use` /
+`tool_result` blocks, Gemini `functionCall` / `functionResponse` parts (keyed by
+name, which aiGeek resolves from the `tool_call_id`), and Groq verbatim. Before
+2026-09-05 both turns were flattened to plain text, so the first tool call
+worked and the turn that fed the result back did not.
+
 ## Streaming
 
 `stream: true` for SSE. Plain text streams in 50-char chunks for
 responsive UX. When `tools` or `response_format` is active, the content
 is emitted in a single chunk so the payload stays parseable.
+
+- The first chunk carries `delta: {role: "assistant", content: ""}`.
+- Streamed `delta.tool_calls[]` entries carry `index`.
+- `stream_options: {include_usage: true}` emits a `choices: []` usage chunk
+  before `data: [DONE]`.
+- A failure before the first byte is a real HTTP error status, not a 200 with
+  an error frame in the body.
+- The terminal chunk carries `x_geeksuite` — which provider actually answered.
+
+**Streaming is simulated.** The whole completion is awaited and then re-chunked,
+so time-to-first-token equals time-to-last-token. The frames are spec-shaped and
+every SSE client works; you just do not get the words any sooner.
 
 ## When to use which mode
 
@@ -238,7 +297,11 @@ Per-provider support for `response_format` and `tools` is tracked in
 
 - `supportsJSONMode` — `response_format: {type:'json_object'}` native
 - `supportsJSONSchema` — `response_format: {type:'json_schema'}` native
-- `supportsToolCalling` — `tools` / `tool_choice` native
+- `supportsToolCalling` — `tools` / `tool_choice` reach the provider. Note this
+  is a claim about *our adapter*, not only about the model: it is false for
+  every provider outside `TOOL_FORWARDING_PROVIDERS` however capable the model
+  is. The looser "this model can call functions at all" signal is the legacy
+  `supportsFunctionCalling`, which aiDirectorService scores on.
 
 Providers without native support for a given feature fall through to
 either prompt-injection fallback (structured output) or capability-skip

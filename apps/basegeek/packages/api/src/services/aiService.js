@@ -80,6 +80,44 @@ function normalizeMessages(messages) {
   }));
 }
 
+/**
+ * The OpenAI sampling parameters, in OpenAI's own spelling, ready to spread
+ * into the body of any OpenAI-shaped provider (groq, cerebras, together,
+ * openrouter, llmgateway — all of which take these verbatim).
+ *
+ * FINDING F-09: these five used to be read off the request at the proxy door
+ * and then dropped — `callAI` never destructured them and `callProvider` built
+ * its downstream config from a whitelist that did not include them. They
+ * travelled exactly one function call and died, at HTTP 200, with no hint to
+ * the caller that `stop: ["\n\n"]` had been ignored.
+ *
+ * Absent values are omitted rather than sent as null, so a provider never has
+ * to have an opinion about a key the caller never set.
+ */
+function openAISamplingFields({ topP, stop, seed, presencePenalty, frequencyPenalty } = {}) {
+  return {
+    ...(topP != null && { top_p: topP }),
+    ...(stop != null && { stop }),
+    ...(seed != null && { seed }),
+    ...(presencePenalty != null && { presence_penalty: presencePenalty }),
+    ...(frequencyPenalty != null && { frequency_penalty: frequencyPenalty })
+  };
+}
+
+/**
+ * OpenAI's `stop` (string | string[] | null) as the array form Anthropic
+ * (`stop_sequences`) and Gemini (`generationConfig.stopSequences`) want.
+ * Returns null when there is nothing worth sending.
+ */
+function stopSequencesFrom(stop) {
+  if (typeof stop === 'string') return stop ? [stop] : null;
+  if (Array.isArray(stop)) {
+    const list = stop.filter(s => typeof s === 'string' && s.length > 0);
+    return list.length > 0 ? list : null;
+  }
+  return null;
+}
+
 // Cloud-based summarization using existing free AI providers
 
 /**
@@ -762,6 +800,40 @@ class AIService {
   }
 
   /**
+   * The conversation, as the string the cache key is built from.
+   *
+   * FINDING F-03: the key used to be built from the *routing prompt* — which
+   * the proxy derives from the last user message alone. Two different
+   * conversations whose last turn is "continue" (or "why?", "go on",
+   * "summarise that", "fix it" — the whole vocabulary of multi-turn chat)
+   * therefore shared one cache entry, and the second caller was served the
+   * first caller's answer for up to thirty minutes. Since the cache is
+   * process-global, across a shared baseGeek that meant one app's completion
+   * answered out of another app's conversation: a small cross-tenant leak
+   * wearing an HTTP 200.
+   *
+   * Every field that changes what the model sees goes in: role, content, the
+   * speaker `name`, and both halves of a tool loop (an assistant turn's
+   * tool_calls and a tool turn's tool_call_id), so a conversation that differs
+   * only in which tool result came back is a different entry.
+   *
+   * Falls back to the prompt when there is no messages array — a caller that
+   * only ever passes a prompt string has no history to be blind to.
+   */
+  conversationCacheSubject(messages, prompt) {
+    if (!Array.isArray(messages) || messages.length === 0) return prompt || '';
+    return JSON.stringify(messages.map(m => [
+      m?.role ?? '',
+      m?.content ?? '',
+      m?.name ?? '',
+      m?.tool_call_id ?? '',
+      Array.isArray(m?.tool_calls)
+        ? m.tool_calls.map(tc => [tc?.id ?? '', tc?.function?.name ?? '', tc?.function?.arguments ?? ''])
+        : ''
+    ]));
+  }
+
+  /**
    * Structured-output prompt-injection fallback (item 5).
    *
    * When a provider/model lacks native response_format support but the caller
@@ -1347,7 +1419,16 @@ class AIService {
       cacheNamespace = 'default',
       responseFormat = null,
       tools = null,
-      toolChoice = null
+      toolChoice = null,
+      // Sampling controls (F-09). Every one of these is a documented
+      // CreateChatCompletionRequest field; they are carried here so
+      // callProvider can hand them to an adapter that knows what to do with
+      // them, and dropped by the adapters that genuinely cannot honour them.
+      topP = null,
+      stop = null,
+      seed = null,
+      presencePenalty = null,
+      frequencyPenalty = null
     } = config;
 
     // Fingerprint for structured-output cache-key segregation (item 2).
@@ -1476,6 +1557,12 @@ class AIService {
       basePrompt = normalizedMessages.map(m => `${m.role}: ${m.content ?? ''}`).join('\n');
     }
 
+    // What the cache is actually keyed on: the whole conversation, not the
+    // last turn of it (F-03). The structured fingerprint above covers tools
+    // and response_format; together they make two requests share an entry only
+    // when they would genuinely produce the same answer.
+    const cacheSubject = this.conversationCacheSubject(normalizedMessages, basePrompt);
+
     const rotationProviders = autoRotate
       ? this.rotationManager.getPriorityList()
       : [requestedProvider, ...this.fallbackOrder.filter(p => p !== requestedProvider)];
@@ -1529,7 +1616,7 @@ class AIService {
       const bypassCache = !!(tools || responseFormat);
       const cacheKeyBase = bypassCache
         ? null
-        : this.getCacheKey(basePrompt || '', currentProvider, providerModel, temperature, cacheNamespace, structuredFingerprint);
+        : this.getCacheKey(cacheSubject, currentProvider, providerModel, temperature, cacheNamespace, structuredFingerprint);
       const cached = bypassCache ? null : this.getCachedResponse(cacheKeyBase);
       if (cached) {
         this.lastProviderInfo = {
@@ -1620,7 +1707,12 @@ class AIService {
           messages: dispatchMessages,
           responseFormat: dispatchResponseFormat,
           tools,
-          toolChoice
+          toolChoice,
+          topP,
+          stop,
+          seed,
+          presencePenalty,
+          frequencyPenalty
         });
 
         if (needsJSONRepair && result?.content) {
@@ -1830,12 +1922,29 @@ class AIService {
       throw new Error(`${provider} API key not configured`);
     }
 
-    const { maxTokens = providerConfig.maxTokens, temperature = providerConfig.temperature, model = providerConfig.model, messages = null, responseFormat = null, tools = null, toolChoice = null } = config;
+    const {
+      maxTokens = providerConfig.maxTokens,
+      temperature = providerConfig.temperature,
+      model = providerConfig.model,
+      messages = null,
+      responseFormat = null,
+      tools = null,
+      toolChoice = null,
+      topP = null,
+      stop = null,
+      seed = null,
+      presencePenalty = null,
+      frequencyPenalty = null
+    } = config;
 
-    // Pass messages + structured-output params to all provider calls.
-    // Providers that don't support them ignore them; native support lives in
-    // the provider-specific call*() methods (items 4 and 6).
-    const callConfig = { maxTokens, temperature, model, messages, responseFormat, tools, toolChoice };
+    // Pass messages + structured-output + sampling params to all provider
+    // calls. Providers that don't support one ignore it — an unsupported
+    // sampling knob is dropped at the adapter, never sent upstream to become a
+    // 400 and never silently swallowed at this layer (F-09).
+    const callConfig = {
+      maxTokens, temperature, model, messages, responseFormat, tools, toolChoice,
+      topP, stop, seed, presencePenalty, frequencyPenalty
+    };
 
     switch (provider) {
       case 'anthropic':
@@ -1890,7 +1999,14 @@ class AIService {
         `${this.providers.cloudflare.baseURL}/${accountId}/ai/run/${model}`,
         {
           prompt: formattedPrompt,
-          max_tokens: maxTokens
+          max_tokens: maxTokens,
+          // Workers AI documents top_p / seed / the two penalties for
+          // text-generation but not `stop`, and validates its input schema
+          // strictly — an unknown property is a 400, so `stop` is dropped here.
+          ...(config.topP != null && { top_p: config.topP }),
+          ...(config.seed != null && { seed: config.seed }),
+          ...(config.presencePenalty != null && { presence_penalty: config.presencePenalty }),
+          ...(config.frequencyPenalty != null && { frequency_penalty: config.frequencyPenalty })
         },
         {
           headers: {
@@ -1939,7 +2055,13 @@ class AIService {
         stream: false,
         options: {
           temperature: temperature,
-          num_predict: maxTokens
+          num_predict: maxTokens,
+          // Ollama takes the same knobs under different names, in `options`.
+          ...(config.topP != null && { top_p: config.topP }),
+          ...(stopSequencesFrom(config.stop) && { stop: stopSequencesFrom(config.stop) }),
+          ...(config.seed != null && { seed: config.seed }),
+          ...(config.presencePenalty != null && { presence_penalty: config.presencePenalty }),
+          ...(config.frequencyPenalty != null && { frequency_penalty: config.frequencyPenalty })
         }
       }, {
         headers: {
@@ -1979,7 +2101,8 @@ class AIService {
         model: model,
         max_tokens: maxTokens,
         temperature: temperature,
-        messages: requestMessages
+        messages: requestMessages,
+        ...openAISamplingFields(config)
       }, {
         headers: {
           'Content-Type': 'application/json',
@@ -2006,6 +2129,158 @@ class AIService {
   }
 
   /**
+   * The OpenAI conversation as Anthropic content blocks.
+   *
+   * FINDING F-02 — the second half of the tool loop. This used to be one line:
+   *
+   *   messages.map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user',
+   *                        content: m.content ?? '' }))
+   *
+   * which is correct for plain chat and destroys a tool loop. An assistant
+   * turn carrying `tool_calls` became an assistant turn with empty content
+   * (which Anthropic rejects outright), and the `role:"tool"` result became a
+   * `user` turn with its `tool_call_id` thrown away — so Anthropic saw a
+   * tool_use it had never been given a result for. The first tool call worked;
+   * the turn that feeds the result back did not. Every agent framework runs
+   * exactly that loop.
+   *
+   * The translation:
+   *   assistant + tool_calls[] → content blocks: the text (if any), then one
+   *     {type:"tool_use", id, name, input} per call, `input` parsed back out
+   *     of OpenAI's JSON-string `arguments`.
+   *   role:"tool"              → a user turn holding
+   *     {type:"tool_result", tool_use_id, content}. Consecutive tool results
+   *     merge into one user turn, because Anthropic wants the results for a
+   *     parallel tool_use batch in a single message.
+   *   everything else          → unchanged.
+   *
+   * System turns are the caller's job to strip (Anthropic takes `system` at
+   * the top level); they are skipped here.
+   */
+  anthropicMessagesFrom(messages) {
+    const out = [];
+
+    for (const m of messages) {
+      if (!m || m.role === 'system') continue;
+
+      if (m.role === 'tool') {
+        const block = {
+          type: 'tool_result',
+          tool_use_id: m.tool_call_id,
+          content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content ?? '')
+        };
+        const prev = out[out.length - 1];
+        if (prev && prev.role === 'user' && Array.isArray(prev.content)) {
+          prev.content.push(block);
+        } else {
+          out.push({ role: 'user', content: [block] });
+        }
+        continue;
+      }
+
+      if (m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.length > 0) {
+        const blocks = [];
+        const text = typeof m.content === 'string' ? m.content : '';
+        if (text) blocks.push({ type: 'text', text });
+        for (const tc of m.tool_calls) {
+          let input = {};
+          try {
+            const raw = tc?.function?.arguments;
+            input = typeof raw === 'string' ? (raw ? JSON.parse(raw) : {}) : (raw ?? {});
+          } catch {
+            // A model that emitted unparseable arguments is a provider problem,
+            // not a reason to drop the block and desynchronize the loop.
+            input = {};
+          }
+          blocks.push({ type: 'tool_use', id: tc?.id, name: tc?.function?.name, input });
+        }
+        out.push({ role: 'assistant', content: blocks });
+        continue;
+      }
+
+      out.push({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content ?? '' });
+    }
+
+    return out;
+  }
+
+  /**
+   * The OpenAI conversation as Gemini `contents[]`.
+   *
+   * Same finding as anthropicMessagesFrom (F-02), same collapse: every
+   * non-assistant role became `user` and every tool detail was dropped.
+   *
+   *   assistant + tool_calls[] → {role:"model", parts:[{functionCall:{name,args}}]}
+   *   role:"tool"              → {role:"user", parts:[{functionResponse:{name,response}}]}
+   *
+   * Gemini keys a function response by *name*, not by an id — it issues no
+   * tool-call ids at all (callGemini synthesizes them on the way out). So the
+   * id→name map built while walking the assistant turns is what lets a
+   * `tool_call_id` coming back from a client be resolved to the name Gemini
+   * expects.
+   *
+   * System turns are skipped; they go in `systemInstruction`.
+   */
+  geminiContentsFrom(messages) {
+    const out = [];
+    const nameByCallId = new Map();
+
+    for (const m of messages) {
+      if (!m || m.role === 'system') continue;
+
+      if (m.role === 'tool') {
+        const name = nameByCallId.get(m.tool_call_id) || m.name || m.tool_call_id || 'tool';
+        let response;
+        try {
+          const parsed = typeof m.content === 'string' ? JSON.parse(m.content) : m.content;
+          response = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+            ? parsed
+            : { result: parsed };
+        } catch {
+          // Gemini wants an object; a bare string result gets wrapped rather
+          // than dropped.
+          response = { result: m.content ?? '' };
+        }
+        const part = { functionResponse: { name, response } };
+        const prev = out[out.length - 1];
+        if (prev && prev.role === 'user' && prev.parts.every(p => p.functionResponse)) {
+          prev.parts.push(part);
+        } else {
+          out.push({ role: 'user', parts: [part] });
+        }
+        continue;
+      }
+
+      if (m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.length > 0) {
+        const parts = [];
+        const text = typeof m.content === 'string' ? m.content : '';
+        if (text) parts.push({ text });
+        for (const tc of m.tool_calls) {
+          let args = {};
+          try {
+            const raw = tc?.function?.arguments;
+            args = typeof raw === 'string' ? (raw ? JSON.parse(raw) : {}) : (raw ?? {});
+          } catch {
+            args = {};
+          }
+          const name = tc?.function?.name;
+          if (tc?.id) nameByCallId.set(tc.id, name);
+          parts.push({ functionCall: { name, args } });
+        }
+        out.push({ role: 'model', parts });
+        continue;
+      }
+
+      out.push({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: m.content ?? '' }]
+      });
+    }
+
+    return out;
+  }
+
+  /**
    * Call Claude API
    */
   async callClaude(prompt, config = {}) {
@@ -2019,9 +2294,7 @@ class AIService {
     if (messages && Array.isArray(messages) && messages.length > 0) {
       const systemMsgs = messages.filter(m => m.role === 'system');
       systemText = systemMsgs.map(m => m.content ?? '').filter(Boolean).join('\n\n');
-      chatMessages = messages
-        .filter(m => m.role !== 'system')
-        .map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content ?? '' }));
+      chatMessages = this.anthropicMessagesFrom(messages);
       if (chatMessages.length === 0) {
         chatMessages = [{ role: 'user', content: prompt }];
       }
@@ -2037,6 +2310,14 @@ class AIService {
         messages: chatMessages
       };
       if (systemText) body.system = systemText;
+
+      // Sampling controls the Messages API actually has (F-09). Anthropic
+      // offers top_p and stop_sequences; it has no seed and no presence/
+      // frequency penalties, so those two are dropped here rather than sent
+      // upstream to become a 400.
+      if (config.topP != null) body.top_p = config.topP;
+      const anthStop = stopSequencesFrom(config.stop);
+      if (anthStop) body.stop_sequences = anthStop;
 
       // Translate OpenAI-style response_format into Anthropic's idioms.
       // Anthropic has no native response_format field, so:
@@ -2164,19 +2445,40 @@ class AIService {
    * Call Groq API
    */
   async callGroq(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = 'llama-3.3-70b-versatile', messages = null } = config;
+    const { maxTokens = 1000, temperature = 0.7, model = 'llama-3.3-70b-versatile', messages = null, tools = null, toolChoice = null } = config;
 
     const requestMessages = (messages && Array.isArray(messages) && messages.length > 0)
       ? messages
       : [{ role: 'user', content: prompt }];
 
     try {
-      const response = await axios.post(`${this.providers.groq.baseURL}/chat/completions`, {
+      const body = {
         model: model,
         max_tokens: maxTokens,
         temperature: temperature,
-        messages: requestMessages
-      }, {
+        messages: requestMessages,
+        ...openAISamplingFields(config)
+      };
+
+      // FINDING F-04. Groq's chat/completions is OpenAI-shaped down to the
+      // field names — verified against console.groq.com/docs/api-reference
+      // (2026-09-05): `tools` is "a list of tools the model may call", and
+      // `tool_choice` takes none / auto / required / {type:"function",...}.
+      // So there is nothing to translate: the caller's own objects go on the
+      // wire verbatim, and the whole OpenAI-format conversation above
+      // (assistant.tool_calls turns, role:"tool" results with tool_call_id)
+      // is already in Groq's format too — no message rewriting either.
+      //
+      // Before this, callGroq destructured only {maxTokens, temperature,
+      // model, messages} while the capability matrix advertised twelve Groq
+      // models as tool-capable, so the rotation routed tool requests here and
+      // the caller got prose.
+      if (Array.isArray(tools) && tools.length > 0 && toolChoice !== 'none') {
+        body.tools = tools;
+        if (toolChoice) body.tool_choice = toolChoice;
+      }
+
+      const response = await axios.post(`${this.providers.groq.baseURL}/chat/completions`, body, {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.providers.groq.apiKey}`
@@ -2184,12 +2486,39 @@ class AIService {
         timeout: 60000
       });
 
-      const result = response.data.choices[0].message.content;
+      const choice = response.data.choices?.[0] || {};
+      const result = choice.message?.content ?? '';
+
+      // Read tool_calls back off the response in the same shape the OpenAI
+      // surface hands to the client — Groq already emits it, so this is a
+      // pass-through with a defensive normalize.
+      let toolCalls = null;
+      let finishReason = choice.finish_reason || 'stop';
+      const rawCalls = choice.message?.tool_calls;
+      if (Array.isArray(rawCalls) && rawCalls.length > 0) {
+        toolCalls = rawCalls.map((tc, i) => ({
+          id: tc?.id || `call_${i}`,
+          type: 'function',
+          function: {
+            name: tc?.function?.name,
+            arguments: typeof tc?.function?.arguments === 'string'
+              ? tc.function.arguments
+              : JSON.stringify(tc?.function?.arguments ?? {})
+          }
+        }));
+        finishReason = 'tool_calls';
+      } else if (finishReason === 'length') {
+        finishReason = 'length';
+      } else if (finishReason !== 'stop') {
+        finishReason = 'stop';
+      }
 
       return {
         content: result,
         inputTokens: response.data.usage?.prompt_tokens || 0,
-        outputTokens: response.data.usage?.completion_tokens || 0
+        outputTokens: response.data.usage?.completion_tokens || 0,
+        toolCalls,
+        finishReason
       };
     } catch (error) {
       logger.error({ err: error }, 'Groq API error');
@@ -2217,12 +2546,7 @@ class AIService {
       if (systemText) {
         systemInstruction = { parts: [{ text: systemText }] };
       }
-      contents = messages
-        .filter(m => m.role !== 'system')
-        .map(m => ({
-          role: m.role === 'assistant' ? 'model' : 'user',
-          parts: [{ text: m.content ?? '' }]
-        }));
+      contents = this.geminiContentsFrom(messages);
       if (contents.length === 0) {
         contents = [{ role: 'user', parts: [{ text: prompt }] }];
       }
@@ -2233,7 +2557,12 @@ class AIService {
     try {
       const generationConfig = {
         maxOutputTokens: maxTokens,
-        temperature: temperature
+        temperature: temperature,
+        // Gemini's names for the two knobs it shares with OpenAI (F-09).
+        // seed and the two penalties are not in generationConfig for the
+        // model families this proxy routes to, so they are dropped here.
+        ...(config.topP != null && { topP: config.topP }),
+        ...(stopSequencesFrom(config.stop) && { stopSequences: stopSequencesFrom(config.stop) })
       };
       // Native OpenAI-style response_format → Gemini generationConfig mapping.
       if (responseFormat?.type === 'json_object') {
@@ -2341,7 +2670,8 @@ class AIService {
         max_tokens: maxTokens,
         temperature: temperature,
         messages: requestMessages,
-        stream: false
+        stream: false,
+        ...openAISamplingFields(config)
       }, {
         headers: {
           'Content-Type': 'application/json',
@@ -2442,7 +2772,8 @@ class AIService {
         model: model,
         max_tokens: maxTokens,
         temperature: temperature,
-        messages: requestMessages
+        messages: requestMessages,
+        ...openAISamplingFields(config)
       }, {
         headers: {
           'Content-Type': 'application/json',
@@ -2515,7 +2846,8 @@ class AIService {
         model: model,
         max_tokens: maxTokens,
         temperature: temperature,
-        messages: requestMessages
+        messages: requestMessages,
+        ...openAISamplingFields(config)
       }, {
         headers: {
           'Content-Type': 'application/json',

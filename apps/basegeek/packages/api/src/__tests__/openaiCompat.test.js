@@ -44,12 +44,18 @@
  *
  * ## Reading the failures
  *
- * Tests marked `it.failing(...)` are FINDINGS, not flakes: each names a finding
- * id from DOCS/OPENAI_COMPAT_AUDIT.md. Jest passes a `failing` test when its
- * body throws and *fails the run* when the body starts passing — so the day
- * someone closes the gap, this suite tells them to promote the test to `it`.
- * The suite is therefore green today and green after the fix, and red only in
+ * When this file was written, 22 cases were marked `it.failing(...)`: FINDINGS,
+ * not flakes, each naming a finding id from DOCS/OPENAI_COMPAT_AUDIT.md. Jest
+ * passes a `failing` test when its body throws and *fails the run* when the
+ * body starts passing — so the day someone closed a gap, the suite told them to
+ * promote the test to `it`. Green before the fix, green after, red only in
  * between.
+ *
+ * **All 22 were closed on 2026-09-05.** Every case here is a plain `it` now.
+ * The finding ids stay in the titles and the comments stay above them, reading
+ * CLOSED with a note on what changed — this file is the durable record of what
+ * was wrong and the tripwire against it coming back. A future audit should add
+ * its findings the same way.
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, jest } from '@jest/globals';
@@ -283,19 +289,22 @@ describe('POST /v1/chat/completions — the chat.completion object', () => {
     expect(res.headers['content-type']).toMatch(/^application\/json/);
   });
 
-  // FINDING F-11 (cosmetic). spec: CreateChatCompletionResponse.choices[].required
-  // includes `logprobs`. Nullable, but required to be present.
-  it.failing('F-11: choices[] carries the spec-required logprobs key (may be null)', async () => {
+  // FINDING F-11 — CLOSED. spec:
+  // CreateChatCompletionResponse.choices[].required includes `logprobs`.
+  // Nullable, but required to be present; the proxy omitted the key entirely.
+  it('F-11: choices[] carries the spec-required logprobs key (may be null)', async () => {
     stubCallAI();
     const res = await chat({ model: 'basegeek-rotation', messages: [{ role: 'user', content: 'hi' }] });
     expect(res.body.choices[0]).toHaveProperty('logprobs');
   });
 
-  // FINDING F-01. Nothing in the OpenAI contract permits a proxy to rewrite the
-  // assistant's text. utils/responseFormatter.js:180 runs every completion
-  // through convertFunctionCallToXML(), which rewrites any `word(args)` whose
-  // word is in its CodeGeek TOOL_TAGS list into XML and prepends invented prose.
-  it.failing('F-01: assistant content is returned verbatim, not rewritten by responseFormatter', async () => {
+  // FINDING F-01 — CLOSED. Nothing in the OpenAI contract permits a proxy to
+  // rewrite the assistant's text. The proxy used to run every completion
+  // through utils/responseFormatter.formatResponse(), whose
+  // convertFunctionCallToXML() rewrites any `word(args)` whose word is in its
+  // CodeGeek TOOL_TAGS list into XML and prepends invented prose. The call is
+  // gone from openaiProxy.js; CodeGeek keeps the transform on its own route.
+  it('F-01: assistant content is returned verbatim, not rewritten by responseFormatter', async () => {
     const answer = 'Use grep("needle") to find it, then list_dir("/src") to browse.';
     stubCallAI(() => answer);
     const res = await chat({
@@ -363,11 +372,12 @@ describe('POST /v1/chat/completions — streaming', () => {
     expect(withReason[0].choices[0].delta).toEqual({});
   });
 
-  // FINDING F-05. spec: the first streamed chunk in the documented example is
-  // `{"delta":{"role":"assistant","content":""}, ...}`. Clients that build the
-  // message from deltas (LangChain's stream handler, Vercel AI SDK, the Python
-  // SDK's ChatCompletionStreamState) key off that role.
-  it.failing('F-05: the first streamed chunk carries delta.role = "assistant"', async () => {
+  // FINDING F-05 — CLOSED. spec: the first streamed chunk in the documented
+  // example is `{"delta":{"role":"assistant","content":""}, ...}`. Clients that
+  // build the message from deltas (LangChain's stream handler, Vercel AI SDK,
+  // the Python SDK's ChatCompletionStreamState) key off that role. Every
+  // stream now opens with it, tool-call and structured streams included.
+  it('F-05: the first streamed chunk carries delta.role = "assistant"', async () => {
     stubCallAI(() => 'hello there');
     const res = await chat({
       model: 'basegeek-rotation',
@@ -378,11 +388,11 @@ describe('POST /v1/chat/completions — streaming', () => {
     expect(frames[0].choices[0].delta.role).toBe('assistant');
   });
 
-  // FINDING F-06. spec: ChatCompletionStreamOptions.include_usage — "an
-  // additional chunk will be streamed before the `data: [DONE]` message. The
-  // `usage` field on this chunk shows the token usage statistics for the entire
-  // request, and the `choices` field will always be an empty array."
-  it.failing('F-06: stream_options {include_usage:true} emits a usage-only final chunk', async () => {
+  // FINDING F-06 — CLOSED. spec: ChatCompletionStreamOptions.include_usage —
+  // "an additional chunk will be streamed before the `data: [DONE]` message.
+  // The `usage` field on this chunk shows the token usage statistics for the
+  // entire request, and the `choices` field will always be an empty array."
+  it('F-06: stream_options {include_usage:true} emits a usage-only final chunk', async () => {
     stubCallAI(() => 'hello there');
     const res = await chat({
       model: 'basegeek-rotation',
@@ -398,12 +408,13 @@ describe('POST /v1/chat/completions — streaming', () => {
     expect(last.usage.total_tokens).toBe(last.usage.prompt_tokens + last.usage.completion_tokens);
   });
 
-  // FINDING F-07. A failure that happens before a single byte of body is
-  // written is an ordinary HTTP error in the OpenAI contract — the SDK raises
-  // APIError with a status. openaiProxy.js:264-267 commits a 200 and the
-  // event-stream content type *before* awaiting the provider, so every upstream
-  // failure arrives as a 200 carrying an error frame the SDK cannot classify.
-  it.failing('F-07: an upstream failure before the first chunk is an HTTP error status', async () => {
+  // FINDING F-07 — CLOSED. A failure that happens before a single byte of body
+  // is written is an ordinary HTTP error in the OpenAI contract — the SDK
+  // raises APIError with a status. The proxy used to commit a 200 and the
+  // event-stream content type *before* awaiting the provider, so every
+  // upstream failure arrived as a 200 carrying an error frame the SDK cannot
+  // classify. The completion is awaited first now; headers follow it.
+  it('F-07: an upstream failure before the first chunk is an HTTP error status', async () => {
     patch(aiService, 'callAI', async () => { throw new Error('All AI providers failed'); });
     const res = await chat({
       model: 'basegeek-rotation',
@@ -476,13 +487,14 @@ describe('the messages array survives the trip', () => {
     expect(dispatched[3].content).toBe('And the host?');
   });
 
-  // FINDING F-03. openaiProxy.js:197-198 derives the routing prompt from the
-  // LAST user message only, and aiService.getCacheKey (aiService.js:742) hashes
-  // that prompt — never the earlier turns. Two different conversations whose
-  // last user turn matches therefore share a cache entry, and the second caller
-  // is served the first caller's answer. Multi-turn chat is exactly the case
-  // where the last turn ("And the host?", "continue", "why?") repeats.
-  it.failing('F-03: two conversations sharing a last user turn get different answers', async () => {
+  // FINDING F-03 — CLOSED. openaiProxy derives the routing prompt from the LAST
+  // user message only, and aiService.getCacheKey hashed that prompt — never the
+  // earlier turns. Two different conversations whose last user turn matched
+  // therefore shared a cache entry, and the second caller was served the first
+  // caller's answer. Multi-turn chat is exactly the case where the last turn
+  // ("And the host?", "continue", "why?") repeats. The key is now built from
+  // aiService.conversationCacheSubject — the whole normalized array.
+  it('F-03: two conversations sharing a last user turn get different answers', async () => {
     let n = 0;
     patch(aiService, 'callProvider', async () => ({
       content: `answer ${++n}`, inputTokens: 5, outputTokens: 2,
@@ -631,12 +643,12 @@ describe('tools and tool_choice', () => {
     expect(sent[2].tool_call_id).toBe('call_1');
   });
 
-  // FINDING F-08. spec: streaming tool calls arrive as
+  // FINDING F-08 — CLOSED. spec: streaming tool calls arrive as
   // `delta.tool_calls[{index, id, type, function:{name, arguments}}]`. `index`
   // is what lets a client reassemble fragments into the right call; the OpenAI
-  // SDK's stream accumulator keys on it. openaiProxy.js:296 forwards the
-  // non-streaming tool_calls array verbatim, with no `index`.
-  it.failing('F-08: streamed delta.tool_calls entries carry an index', async () => {
+  // SDK's stream accumulator keys on it. The proxy forwarded the non-streaming
+  // tool_calls array verbatim, with no `index`; it is stamped on now.
+  it('F-08: streamed delta.tool_calls entries carry an index', async () => {
     stubCallAI(() => '', {
       toolCalls: [{ id: 'call_1', type: 'function', function: { name: 'get_weather', arguments: '{"location":"Paris"}' } }],
       finishReason: 'tool_calls',
@@ -718,13 +730,14 @@ describe('tools and tool_choice', () => {
     }
   });
 
-  // FINDING F-02. The second half of the tool loop. aiService.js:2022-2024 maps
+  // FINDING F-02 — CLOSED. The second half of the tool loop. callClaude mapped
   // every non-system turn to `{role: m.role === 'assistant' ? 'assistant' :
   // 'user', content: m.content ?? ''}` — so the assistant turn's `tool_calls`
-  // are dropped, and the `role:"tool"` result becomes a `user` turn with no
-  // `tool_use_id`. Anthropic then sees a tool_use it never issued a result for
-  // (and an empty assistant turn), so the turn after any tool call is broken.
-  it.failing('F-02: callClaude round-trips an assistant tool_calls turn and its tool result', async () => {
+  // were dropped, and the `role:"tool"` result became a `user` turn with no
+  // `tool_use_id`. Anthropic then saw a tool_use it had never been given a
+  // result for (and an empty assistant turn), so the turn after any tool call
+  // was broken. aiService.anthropicMessagesFrom now translates both halves.
+  it('F-02: callClaude round-trips an assistant tool_calls turn and its tool result', async () => {
     const srv = await captureServer(() => ({
       content: [{ type: 'text', text: 'It is 18C.' }],
       stop_reason: 'end_turn',
@@ -762,13 +775,15 @@ describe('tools and tool_choice', () => {
     }
   });
 
-  // FINDING F-04. The capability matrix marks a dozen Groq models tool-capable
-  // (aiModelCapabilitiesService.js:33-46 TOOL_CALLING_CORRECTIONS), so the
-  // rotation happily routes a `tools` request to Groq — but callGroq
-  // (aiService.js:2167-2179) destructures only {maxTokens, temperature, model,
-  // messages} and never puts `tools` on the wire. The caller gets prose and
-  // finish_reason "stop" where the contract promised tool_calls.
-  it.failing('F-04: callGroq forwards tools that the capability matrix says it supports', async () => {
+  // FINDING F-04 — CLOSED. The capability matrix marks a dozen Groq models
+  // tool-capable (TOOL_CALLING_CORRECTIONS), so the rotation happily routed a
+  // `tools` request to Groq — but callGroq destructured only {maxTokens,
+  // temperature, model, messages} and never put `tools` on the wire. The
+  // caller got prose and finish_reason "stop" where the contract promised
+  // tool_calls. callGroq now forwards both (Groq's API is OpenAI-shaped, so
+  // verbatim), and supportsToolCalling is gated on TOOL_FORWARDING_PROVIDERS
+  // so the matrix can no longer advertise what no adapter implements.
+  it('F-04: callGroq forwards tools that the capability matrix says it supports', async () => {
     expect(aiModelCapabilitiesService.supportsTools('groq', 'llama-3.3-70b-versatile')).toBe(true);
 
     const srv = await captureServer(() => ({
@@ -951,12 +966,13 @@ describe('sampling and control parameters', () => {
     expect(dispatched.maxTokens).toBe(123);
   });
 
-  // FINDING F-09. openaiProxy.js:171 reads top_p into callConfig.topP, but
-  // aiService.callAI (aiService.js:1335-1351) never destructures topP and
-  // callProvider (aiService.js:1838) never forwards it. Same for stop,
-  // presence_penalty, frequency_penalty and seed — the proxy accepts them, the
-  // service drops them on the floor.
-  it.failing('F-09: top_p reaches the provider', async () => {
+  // FINDING F-09 — CLOSED. The proxy read top_p into callConfig.topP, but
+  // aiService.callAI never destructured topP and callProvider never forwarded
+  // it. Same for stop, presence_penalty, frequency_penalty and seed — the
+  // proxy accepted them, the service dropped them on the floor. All five now
+  // travel callAI → callProvider → the adapter, in each provider's own
+  // spelling (openAISamplingFields / stopSequencesFrom in aiService.js).
+  it('F-09: top_p reaches the provider', async () => {
     const { dispatched } = await dispatchWith({
       messages: [{ role: 'user', content: 'hi' }],
       top_p: 0.42,
@@ -964,7 +980,7 @@ describe('sampling and control parameters', () => {
     expect(dispatched.topP ?? dispatched.top_p).toBe(0.42);
   });
 
-  it.failing('F-09: stop (string form) reaches the provider', async () => {
+  it('F-09: stop (string form) reaches the provider', async () => {
     const { dispatched } = await dispatchWith({
       messages: [{ role: 'user', content: 'hi' }],
       stop: 'END',
@@ -972,7 +988,7 @@ describe('sampling and control parameters', () => {
     expect(dispatched.stop).toBe('END');
   });
 
-  it.failing('F-09: stop (array form) reaches the provider', async () => {
+  it('F-09: stop (array form) reaches the provider', async () => {
     const { dispatched } = await dispatchWith({
       messages: [{ role: 'user', content: 'hi' }],
       stop: ['END', '\n\n'],
@@ -980,7 +996,7 @@ describe('sampling and control parameters', () => {
     expect(dispatched.stop).toEqual(['END', '\n\n']);
   });
 
-  it.failing('F-09: seed reaches the provider', async () => {
+  it('F-09: seed reaches the provider', async () => {
     const { dispatched } = await dispatchWith({
       messages: [{ role: 'user', content: 'hi' }],
       seed: 7,
@@ -988,7 +1004,7 @@ describe('sampling and control parameters', () => {
     expect(dispatched.seed).toBe(7);
   });
 
-  it.failing('F-09: presence_penalty and frequency_penalty reach the provider', async () => {
+  it('F-09: presence_penalty and frequency_penalty reach the provider', async () => {
     const { dispatched } = await dispatchWith({
       messages: [{ role: 'user', content: 'hi' }],
       presence_penalty: 0.5,
@@ -998,12 +1014,13 @@ describe('sampling and control parameters', () => {
     expect(dispatched.frequencyPenalty).toBe(-0.5);
   });
 
-  // FINDING F-10. spec: max_tokens is deprecated in favour of
+  // FINDING F-10 — CLOSED. spec: max_tokens is deprecated in favour of
   // max_completion_tokens, "An upper bound for the number of tokens that can be
   // generated for a completion". Current SDK versions and every reasoning-model
-  // caller send max_completion_tokens; openaiProxy.js:169 reads only max_tokens,
-  // so the cap is silently the provider default.
-  it.failing('F-10: max_completion_tokens is honoured as an alias for max_tokens', async () => {
+  // caller send max_completion_tokens; the proxy read only max_tokens, so the
+  // cap was silently the provider default. Both spellings are now read, the
+  // newer one winning when a caller sends both.
+  it('F-10: max_completion_tokens is honoured as an alias for max_tokens', async () => {
     const { dispatched } = await dispatchWith({
       messages: [{ role: 'user', content: 'hi' }],
       max_completion_tokens: 321,
@@ -1098,22 +1115,24 @@ describe('error envelope', () => {
     expect(res.body.error.message).toMatch(/providers failed/);
   });
 
-  // FINDING F-12. spec: Error.required = [type, message, param, code]. The
-  // OpenAI Python SDK reads `err.param` when raising BadRequestError, and
-  // `instructor` surfaces it in retry prompts. openaiProxy.js:49-53 never emits
-  // `param`, and omits `code` entirely when it is null rather than sending null.
-  it.failing('F-12: a 400 carries the spec-required param and code keys', async () => {
+  // FINDING F-12 — CLOSED. spec: Error.required = [type, message, param, code].
+  // The OpenAI Python SDK reads `err.param` when raising BadRequestError, and
+  // `instructor` surfaces it in retry prompts. openAIError never emitted
+  // `param`, and omitted `code` entirely when it was null rather than sending
+  // null. Both are always present now, and the request validations name the
+  // field they rejected.
+  it('F-12: a 400 carries the spec-required param and code keys', async () => {
     const res = await chat({ model: 'basegeek-rotation' });
     expect(res.body.error).toHaveProperty('param');
     expect(res.body.error).toHaveProperty('code');
     expect(res.body.error.param).toBe('messages');
   });
 
-  // FINDING F-13. OpenAI answers a bad key with
-  // {type:"invalid_request_error", code:"invalid_api_key"}. openaiProxy.js:74
-  // emits type "authentication_error" and passes through baseGeek's
-  // "INVALID_API_KEY" code, so client code branching on either misses.
-  it.failing('F-13: an invalid key reports code invalid_api_key', async () => {
+  // FINDING F-13 — CLOSED. OpenAI answers a bad key with
+  // {type:"invalid_request_error", code:"invalid_api_key"}. The proxy emitted
+  // type "authentication_error" and passed through baseGeek's own
+  // "INVALID_API_KEY" code, so client code branching on either missed both.
+  it('F-13: an invalid key reports code invalid_api_key', async () => {
     const res = await chat(
       { model: 'basegeek-rotation', messages: [{ role: 'user', content: 'hi' }] },
       { key: `bg_${'0'.repeat(64)}` },
@@ -1123,10 +1142,12 @@ describe('error envelope', () => {
     expect(res.body.error.type).toBe('invalid_request_error');
   });
 
-  // FINDING F-15. spec/guide: a 429 carries `Retry-After` and
-  // code "rate_limit_exceeded"; every OpenAI SDK's automatic retry reads the
-  // header. middleware/apiKeyAuth.js:76-83 sets neither.
-  it.failing('F-15: a 429 carries Retry-After and code rate_limit_exceeded', async () => {
+  // FINDING F-15 — CLOSED. spec/guide: a 429 carries `Retry-After` and code
+  // "rate_limit_exceeded"; every OpenAI SDK's automatic retry reads the header,
+  // and finding none hands the error straight to the caller. The key gate set
+  // neither; the proxy's envelope translation now sets both, with the wait
+  // derived from which of the three buckets (minute/hour/day) was hit.
+  it('F-15: a 429 carries Retry-After and code rate_limit_exceeded', async () => {
     // A key whose daily budget is already spent — the schema floors every
     // limit at 1, so exhaust the counter rather than setting a zero limit.
     const throttled = await makeApiKey({
@@ -1142,15 +1163,21 @@ describe('error envelope', () => {
     expect(res.body.error.code).toBe('rate_limit_exceeded');
   });
 
-  // FINDING F-16. A model id the proxy does not know is not rejected: line 203
-  // treats anything that is not one of the three aliases as a pinned model, and
-  // line 261 hands it to whichever provider happens to be current. LangChain,
-  // Continue, Cursor and most curl users send `gpt-4o-mini` by default.
-  it.failing('F-16: an unknown model id is a 404 model_not_found, not a provider error', async () => {
+  // FINDING F-16 — CLOSED. A model id the proxy did not know was not rejected:
+  // anything that was not one of the three aliases was treated as a pinned
+  // model and handed to whichever provider happened to be current. LangChain,
+  // Continue, Cursor and most curl users send `gpt-4o-mini` by default, and
+  // got a generic 500. The decision was (a) in the audit: 404 model_not_found,
+  // with the aliases named in the message.
+  it('F-16: an unknown model id is a 404 model_not_found, not a provider error', async () => {
     patch(aiService, 'callAI', async () => { throw new Error('Groq API error (404): model not found'); });
     const res = await chat({ model: 'gpt-4o-mini', messages: [{ role: 'user', content: 'hi' }] });
     expect(res.status).toBe(404);
     expect(res.body.error.code).toBe('model_not_found');
+    // The message has to teach the caller what to send instead, or the 404 is
+    // just a friendlier dead end than the 500 was.
+    expect(res.body.error.message).toContain('basegeek-rotation');
+    expect(res.body.error.message).toContain('<provider>/<model>');
   });
 });
 
@@ -1262,19 +1289,23 @@ describe('transport', () => {
     expect(res.headers['x-request-id']).toBe('req_audit_1');
   });
 
-  // FINDING F-17. openaiProxy.js:89 mounts the API-key gate with `router.use`,
-  // which runs on OPTIONS too. In production the global cors() at
-  // server.js:119 short-circuits a preflight *from an allowlisted origin*
-  // before the router sees it — but any other origin (i.e. any browser client
-  // that is not one of the eight suite apps) reaches this 401, and the router
-  // has no exemption of its own.
-  it.failing('F-17: a CORS preflight is answered before the API-key gate', async () => {
+  // FINDING F-17 — CLOSED. The API-key gate was mounted with `router.use`,
+  // which runs on OPTIONS too. In production the global cors() in server.js
+  // short-circuits a preflight *from an allowlisted origin* before the router
+  // sees it — but any other origin (i.e. any browser client that is not one of
+  // the eight suite apps) reached that 401, and the router had no exemption of
+  // its own. It answers its own preflight now, ahead of the gate.
+  it('F-17: a CORS preflight is answered before the API-key gate', async () => {
     const res = await request(app)
       .options('/openai/v1/chat/completions')
       .set('Origin', 'https://example.com')
       .set('Access-Control-Request-Method', 'POST')
       .set('Access-Control-Request-Headers', 'authorization,content-type');
     expect(res.status).toBeLessThan(400);
+    expect(res.headers['access-control-allow-origin']).toBe('https://example.com');
+    expect(res.headers['access-control-allow-methods']).toMatch(/POST/);
+    // The browser only sends the headers it intends to use; echo those back.
+    expect(res.headers['access-control-allow-headers']).toBe('authorization,content-type');
   });
 });
 
@@ -1307,10 +1338,10 @@ describe('routing aliases', () => {
     expect(calls[0].config.useAppConfig).toBe(true);
   });
 
-  // FINDING F-18 (cosmetic). openaiProxy.js:274-276 echoes basegeek-rotation
-  // for the basegeek-app alias. Clients that log or key off the returned model
-  // see a request they never made.
-  it.failing('F-18: basegeek-app echoes the model the caller actually asked for', async () => {
+  // FINDING F-18 — CLOSED. The proxy echoed basegeek-rotation for the
+  // basegeek-app alias, so clients that log or key off the returned model saw
+  // a request they never made. An alias echoes itself now.
+  it('F-18: basegeek-app echoes the model the caller actually asked for', async () => {
     stubCallAI();
     const res = await chat({ model: 'basegeek-app', messages: [{ role: 'user', content: 'hi' }] });
     expect(res.body.model).toBe('basegeek-app');
@@ -1406,13 +1437,50 @@ describe('Anthropic Messages API shape', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('the legacy /api/ai/v1 endpoint', () => {
-  // FINDING F-19. aiRoutes.js:1418-1423 collapses the messages array into a
-  // single "role: content" string, ignores stream/tools/response_format, and
-  // uses "provider:model" instead of "provider/model" for pinning. Two
-  // endpoints claiming one contract is one endpoint too many.
-  it.failing('F-19: only one endpoint in this service claims OpenAI compatibility', async () => {
+  // FINDING F-19 — CLOSED. aiRoutes.js carried a second, much older
+  // "OpenAI-compatible" endpoint: it collapsed the messages array into a single
+  // "role: content" string, ignored stream/tools/response_format, and used
+  // "provider:model" instead of "provider/model" for pinning. Two endpoints
+  // claiming one contract is one endpoint too many, and the second one rotted
+  // precisely because nothing tested it.
+  //
+  // The original assertion here was a source grep for the string
+  // "/v1/chat/completions", which a 308 alias would still trip — so it is
+  // replaced by the property that actually matters: the path still answers
+  // (nobody's client 404s), but it holds no implementation of its own.
+  // 308 preserves the method and body, so a POST redirected here still
+  // completes; 301/302 would rewrite it to a GET.
+  it('F-19: only one endpoint in this service implements OpenAI compatibility', async () => {
+    const { default: aiRoutes } = await import('../routes/aiRoutes.js');
+    const legacy = express();
+    legacy.use(express.json());
+    legacy.use('/api/ai', aiRoutes);
+
+    const res = await request(legacy)
+      .post('/api/ai/v1/chat/completions')
+      .redirects(0)
+      .send({ model: 'basegeek-rotation', messages: [{ role: 'user', content: 'hi' }] });
+    expect(res.status).toBe(308);
+    expect(res.headers.location).toBe('/openai/v1/chat/completions');
+
+    // The redirect is not a wrapper around a surviving implementation: this
+    // file registers no `/v1` handler of its own any more, only the redirect
+    // loop. (It still *builds* chat.completion-shaped bodies on /api/ai/call
+    // and /api/ai/conversation/message — those are baseGeek's own API
+    // borrowing a familiar envelope, not a second claim on the contract.)
     const { readFile } = await import('node:fs/promises');
     const source = await readFile(new URL('../routes/aiRoutes.js', import.meta.url), 'utf8');
-    expect(source).not.toMatch(/\/v1\/chat\/completions/);
+    expect(source).not.toMatch(/router\.(get|post|put|patch|delete)\(\s*['"`]\/v1/);
+  });
+
+  it('F-19: the legacy models list redirects too, rather than listing provider:model ids', async () => {
+    const { default: aiRoutes } = await import('../routes/aiRoutes.js');
+    const legacy = express();
+    legacy.use(express.json());
+    legacy.use('/api/ai', aiRoutes);
+
+    const res = await request(legacy).get('/api/ai/v1/models').redirects(0);
+    expect(res.status).toBe(308);
+    expect(res.headers.location).toBe('/openai/v1/models');
   });
 });

@@ -106,9 +106,6 @@ class AIDirectorService {
       ollama: {
         'qwen3-coder:480b-cloud': { input: 0.0, output: 0.0 }
       },
-      llm7: {
-        'Qwen2.5-Coder-32B-Instruct': { input: 0.0, output: 0.0 }
-      },
       llmgateway: {
         'llama-4-maverick-free': { input: 0.0, output: 0.0 }
       }
@@ -133,7 +130,10 @@ class AIDirectorService {
       }
 
       logger.info('Starting AI Director collectModelInformation...');
-      const providers = ['anthropic', 'groq', 'gemini', 'together', 'cohere', 'openrouter', 'cerebras', 'cloudflare', 'ollama', 'llm7', 'llmgateway'];
+      // config/aiProviders.js is the one roster; this list is the subset the
+      // director prices and scores. `llm7` was in it until 2026-09-05, three
+      // months after the provider was retired from every other surface.
+      const providers = ['anthropic', 'groq', 'gemini', 'together', 'cohere', 'openrouter', 'cerebras', 'cloudflare', 'ollama', 'llmgateway'];
       const modelInfo = {};
 
       for (const provider of providers) {
