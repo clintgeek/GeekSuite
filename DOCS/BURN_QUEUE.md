@@ -9,6 +9,9 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
+| R53 | Q33: fitnessgeek frontend food-log writes → gateway mutations; vitest setup + ci job | opus | fitnessgeek frontend, ci.yml, lockfile, SUITE_TODO | 09-05 13:40 |
+| R54 | Q32: tools/syntax-check.mjs + CI `syntax` job (parse every backend/package .js) | sonnet | tools/, root package.json, ci.yml, RUNBOOK | 09-05 13:40 |
+| R55 | Q34: deflake aiServiceCache.test.js (fake timers / cleared cache) | sonnet | basegeek api one test (+aiService if a clock is needed) | 09-05 13:40 |
 | R51 | TODO #15 fan-out: storygeek on shared feedback primitives (last app) | sonnet | storygeek frontend src, UI plan | 09-05 13:22 |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
@@ -24,9 +27,6 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | Q18b | After R27 deploys: a day of clean `CSRF token check (report-only)` logs, then `CSRF_TOKEN=enforce` in basegeek's env and a container restart | Chef's call after the log window | XS |
 | Q22 | flockgeek backend still mounts a full REST CRUD API (9 models) with no caller in the repo — decide: delete the layer or keep as API surface | Chef's call | S |
 | Q27 | storygeek StoryPlay tests (6, skipped): interaction tests stall jsdom at high CPU on that tree — find the render loop, re-enable | own ticket | S |
-| Q32 | Add `node --check` over `apps/*/**/src/**/*.js` (or import-every-module tests) to CI so a template-literal typo cannot pass a green suite again | S — next slot | S |
-| Q33 | consolidation step 2 (frontend): UPDATE_FOOD_LOG → FoodLogUpdateInput, normalizeFoodInput keeps id/source/source_id, fitnessGeekService off restClient for the four writes; then Q25-style REST route removal | ready — fitnessgeek frontend free | M |
-| Q34 | basegeek api aiServiceCache.test.js flakes under box load (passes alone) — make its timing deterministic | XS | XS |
 | Q31 | After the R46 deploy: `docker exec fitnessgeek node scripts/encryptGarminPasswords.js --dry-run`, then real, then dry-run again (expect 0) | after deploy | XS |
 | Q20b | aiGeek: simulated streaming (F-21) and user-gated selection (F-14) documented, not fixed | design | S |
 | Q14 | storygeek CanonCard summary text through Narration too (agent left it as a separate render path) | Chef's call | XS |
