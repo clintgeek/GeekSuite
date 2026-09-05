@@ -9,12 +9,11 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
-| R4 | M6 guardrails: mobile harness into `tools/mobile-harness`, CI workflow | opus | tools/, .github/workflows/mobile-harness.yml | 09-05 am |
 | R19 | Q8: OpenAI-compat fixes (flip the 22 it.failing) + last llm7 refs (Q12) | opus | openaiProxy, aiRoutes, aiService, capabilities, director/rateLimit refs, docs | 09-05 13:15 |
 | R22 | storygeek frontend vitest + RTL suite + CI job | sonnet | storygeek frontend, ci.yml (one job) | 09-05 13:50 |
 
-**Push gate:** `pnpm install --frozen-lockfile` on HEAD now fails only on `packages/api-client/package.json`
-(@geeksuite/auth dep, R27 in flight). Push after R27 commits; re-run the check in a detached worktree of HEAD first.
+**Push gate:** `pnpm install --frozen-lockfile` on HEAD now fails only on `apps/storygeek/frontend/package.json`
+(test devDeps, R22 in flight). Push after R22 commits; re-run the check first.
 
 ## Queued (launch when files free / prerequisite lands)
 
@@ -27,6 +26,7 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | Q13 | bookgeek CONTEXT.md says Runtime: Bun (it is node:20); verify COVERS_PATH now serves the old covers in the UI | after R? — trivial, next slot | XS |
 | Q17 | fitnessgeek backend: node 18 CJS cannot consume ESM @geeksuite/utils — bump base image to node 20 + ESM migration, then drop its five toUtcMidnight copies | its own ticket, M | M |
 | Q18b | After R27 deploys: a day of clean `CSRF token check (report-only)` logs, then `CSRF_TOKEN=enforce` in basegeek's env and a container restart | Chef's call after the log window | XS |
+| Q19 | Probe burn-down, large: bujogeek (tag chips 22px, habit grid 28px, 11px labels, week-strip 40px, 40px selects), fitnessgeek (40px chips, 10–11px labels), startgeek (.label 11px, 18–19px links, 31px buttons) | after R29's phone-only lists | M each |
 | Q14 | storygeek CanonCard summary text through Narration too (agent left it as a separate render path) | Chef's call | XS |
 
 ## How to resume if this session is lost
@@ -73,6 +73,8 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 - `71066ba` — R18 — flockgeek frontend tests (30) + ci job
 - `00ef0b7` — R21 — zod validation on fitnessgeek settings/weight/BP/medication (90 tests)
 - `373f69f` — R28 — fitnessgeek single manifest source (bujogeek already right)
+- `363a820` — R4 — mobile harness in tools/ + CI (report-only); 698 probe findings
+- `d8521eb` — R27 — CSRF header in api-client authLink + startgeek clients
 - `37e83b6` — R17 — 22 dead fitnessgeek files + broken dev compose deleted
 - `164f978` — R16 — notegeek relative-time tests; dev-server fix pending in vite.config.js (shared with R13)
 - `6c39d00` — R2 — Apps & keys tab; APIKeysPage retired; AppConfigDialog on GeekDialog
