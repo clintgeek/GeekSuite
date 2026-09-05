@@ -19,7 +19,7 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 | # | Item | Why waiting | Size |
 |---|------|-------------|------|
-| Q1 | Mint service keys into storygeek + fitnessgeek `.env.production`, restart those two containers | R1 landed (`92e7bc9`); do after the next push deploys basegeek; announce restarts | XS |
+| Q1 | Service keys: **storygeek minted 13:41** into `apps/storygeek/.env.production` (ai:call, ai:director) — container restart pending Chef's OK (`docker compose up -d` in apps/storygeek). fitnessgeek already carries a key (prefix bg_4ff4136b) — attribution check in progress; `--replace` if it is not fitnessgeek's. | Chef: OK the storygeek restart | XS |
 | Q6 | bookgeek web unit tests (vitest + RTL for LibraryView/FilterSheet/BookCard/detail) | none — launch next slot | M |
 | Q10 | Revoke the `LocalApps` key — env grep: no .env under Projects carries it; nginx: zero hits on /openai/v1 or /api/ai/ in the retained log window; key lastUsed 2025-11-03 | ready — Chef's confirm, then revoke via the Apps & keys tab | XS |
 | Q11 | basegeek `Databases.jsx`: wire into nav or delete | Chef's call | XS |
