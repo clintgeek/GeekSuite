@@ -3,6 +3,7 @@ import {
   Drawer, Box, Typography, IconButton, Divider, Chip, alpha, useTheme,
 } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
+import { GeekEmptyState } from '@geeksuite/ui';
 import { buildJournal, getClosedThreads } from '../../game/projections';
 
 /**
@@ -46,9 +47,12 @@ export default function JournalDrawer({ open, onClose, story }) {
 
         <Box sx={{ flex: 1, overflowY: 'auto', pr: 0.5 }}>
           {totalKnown === 0 && settled.length === 0 && (
-            <Typography variant="body2" sx={{ color: 'text.disabled', fontStyle: 'italic' }}>
-              Nothing recorded yet. As you learn and establish facts, they'll be gathered here.
-            </Typography>
+            <GeekEmptyState
+              align="start"
+              description="Nothing recorded yet. As you learn and establish facts, they'll be gathered here."
+              descriptionSx={{ color: 'text.disabled', fontStyle: 'italic' }}
+              sx={{ py: 0 }}
+            />
           )}
 
           {SECTIONS.map((s) => {

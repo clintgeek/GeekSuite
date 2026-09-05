@@ -139,4 +139,33 @@ describe('StoryList', () => {
 
     await waitFor(() => expect(api.delete).toHaveBeenCalledWith('/stories/story-2'));
   });
+
+  // TODO_ORDER #15: the load-error branch now renders `GeekErrorState` with a
+  // real retry, replacing the empty-shelves card a failed load used to show
+  // indistinguishably from a genuinely empty library.
+  it('shows GeekEmptyState when the library is genuinely empty', async () => {
+    api.get.mockResolvedValue({ data: [] });
+    renderStoryList();
+    expect(await screen.findByText('The shelves are empty')).toBeInTheDocument();
+    expect(document.querySelector('[data-geek-empty-state]')).not.toBeNull();
+  });
+
+  it('shows GeekErrorState with a working retry when the load fails', async () => {
+    const user = userEvent.setup();
+    // Persistent (not `-Once`): the test's `useAuth` mock returns a fresh
+    // `user` object every render, so StoryList's `[user]` effect re-fires on
+    // its own re-renders too — every one of those calls must fail the same
+    // way, or the retry assertion below would race a call this test didn't
+    // trigger itself.
+    api.get.mockRejectedValue(new Error('network down'));
+    renderStoryList();
+
+    expect(await screen.findByText(/shelves won't open/i)).toBeInTheDocument();
+    expect(document.querySelector('[data-geek-error-state]')).not.toBeNull();
+
+    api.get.mockResolvedValue({ data: storyFixtures });
+    await user.click(screen.getByRole('button', { name: /try again/i }));
+
+    expect(await screen.findByText('The Fog-Bound Crossroads')).toBeInTheDocument();
+  });
 });

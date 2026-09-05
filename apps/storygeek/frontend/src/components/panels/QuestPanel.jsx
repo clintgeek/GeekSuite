@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box, Typography, Chip, Tooltip, alpha, useTheme } from '@mui/material';
+import { GeekEmptyState } from '@geeksuite/ui';
 
 /**
  * QuestPanel — threads as living objects (ideas #6). Active obligations,
@@ -27,9 +28,13 @@ export default function QuestPanel({ threads }) {
         Open Threads · {threads.length}
       </Typography>
       {threads.length === 0 ? (
-        <Typography variant="body2" sx={{ color: 'text.disabled', fontStyle: 'italic', fontSize: '0.8rem' }}>
-          No unresolved threads yet.
-        </Typography>
+        <GeekEmptyState
+          compact
+          align="start"
+          description="No unresolved threads yet."
+          descriptionSx={{ color: 'text.disabled', fontStyle: 'italic', fontSize: '0.8rem' }}
+          sx={{ py: 0 }}
+        />
       ) : (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
           {threads.map((t) => {

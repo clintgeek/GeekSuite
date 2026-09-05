@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Box, Typography, Chip, Avatar, Collapse, alpha, useTheme } from '@mui/material';
 import { ExpandMore, ExpandLess } from '@mui/icons-material';
+import { GeekEmptyState } from '@geeksuite/ui';
 import { npcRelationshipToPlayer, npcKnownFacts } from '../../game/projections';
 
 /**
@@ -25,9 +26,13 @@ export default function PartyPanel({ npcs, player, story }) {
         Present · {npcs.length}
       </Typography>
       {npcs.length === 0 ? (
-        <Typography variant="body2" sx={{ color: 'text.disabled', fontStyle: 'italic', fontSize: '0.8rem' }}>
-          No one else is here.
-        </Typography>
+        <GeekEmptyState
+          compact
+          align="start"
+          description="No one else is here."
+          descriptionSx={{ color: 'text.disabled', fontStyle: 'italic', fontSize: '0.8rem' }}
+          sx={{ py: 0 }}
+        />
       ) : (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
           {npcs.map((npc) => (

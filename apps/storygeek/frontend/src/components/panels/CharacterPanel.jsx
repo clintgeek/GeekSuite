@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box, Typography, Chip, Avatar, Divider, alpha, useTheme } from '@mui/material';
+import { GeekEmptyState } from '@geeksuite/ui';
 
 /**
  * CharacterPanel — the persistent character HUD (ideas #3). "Who am I, how
@@ -15,9 +16,13 @@ export default function CharacterPanel({ player }) {
   if (!player) {
     return (
       <PanelShell gold={gold} title="Character">
-        <Typography variant="body2" sx={{ color: 'text.disabled', fontStyle: 'italic' }}>
-          Your character will take shape as the tale begins.
-        </Typography>
+        <GeekEmptyState
+          compact
+          align="start"
+          description="Your character will take shape as the tale begins."
+          descriptionSx={{ color: 'text.disabled', fontStyle: 'italic' }}
+          sx={{ py: 0 }}
+        />
       </PanelShell>
     );
   }

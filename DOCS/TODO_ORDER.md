@@ -131,8 +131,33 @@ cycle so the ordering rationale stays visible; detail moved to `SUITE_TODO.md` "
     `react-hooks/exhaustive-deps`, since the linter can't prove `useToast()`'s `notify` is
     stable the way a `useState` setter is; each got a one-line disable comment rather than a
     behavior-risking dependency-array change. Mobile harness: 20 scenes, 0 violations —
-    unchanged from baseline. Remaining fan-out: storygeek; list of local patterns is in
-    THE_UI_UNIFICATION_PLAN.md "Feedback primitives". *UI*
+    unchanged from baseline. **storygeek fan-out done 2026-09-05 — fan-out complete, all
+    seven apps.** No local EmptyState/ErrorState/toast component existed. `GeekToastProvider`
+    mounted in Layout.jsx. StoryList's "shelves are empty" card became `GeekEmptyState`; its
+    load failure split into a dedicated `loadError` → `GeekErrorState` with
+    `onRetry={loadStories}` (previously indistinguishable from a genuinely empty library);
+    its dialog-adjacent validation/delete errors — page-level Alerts that rendered *behind*
+    the open CodexDialog's backdrop — became toasts, the same backdrop-visibility fix as
+    fitnessgeek's HouseholdSettings. Settings' AI-provider load failure became a compact
+    `GeekErrorState` with `onRetry` (load lifted into a `useCallback` so retry could call it).
+    StoryPlay: `loadError` gates the whole play surface via `GeekErrorState` in place of the
+    infinite spinner a failed load used to leave; "failed to continue"/EPUB-export failures
+    became toasts; Bookify's own job failure stayed `GeekErrorState` inside the dialog body
+    (an empty dialog with nothing else to show, the primitive's own contract); the Copy
+    button's `copied` boolean + `setTimeout` label swap collapsed into one `notify()` call.
+    Four small in-panel empties (CharacterPanel, PartyPanel, QuestPanel, JournalDrawer) became
+    compact `GeekEmptyState`s via `description` only, preserving each panel's muted-italic
+    caption voice. CharacterSheet's "coming soon" card converted like StoryList's. `toneForMode`
+    (#19) replaced StoryList's genre-swatch-as-text branch. Left alone: StoryCreation.jsx's
+    inline validation (full-page form, dialog/form-adjacent carve-out); Narration's in-story
+    markdown and the composer's status line (content, not feedback); StoryPlay's
+    `getDiceColor` isDark ternary (distinct per-tier hex values, not a lighten/darken pair);
+    theme.js's palette-construction ternaries; LoginPage (public route, no shell/provider).
+    `packages/ui` gaps found: none. Lint held at the 3-warning baseline. Tests: 33 passing / 6
+    skipped (up from 31 — two new StoryList cases cover the empty/error-with-retry branches;
+    StoryPlay's suite stays skipped per the burn queue). Mobile harness: 18 scenes (phone
+    only), 0 violations — unchanged from baseline. Full detail in
+    THE_UI_UNIFICATION_PLAN.md "3a. Feedback Primitives". *UI*
 16. ~~Shared mobile bottom-nav primitive~~ — folded into #15a.
 17. **Shared date utilities** — M. `toUtcMidnight` / `localDateString` / `displayCalendarDate`
     into `packages/utils`; bujogeek, fitnessgeek, flockgeek consume. Spec exists in
@@ -140,7 +165,9 @@ cycle so the ordering rationale stays visible; detail moved to `SUITE_TODO.md` "
 18. ~~**Shared logger**~~ — **Done 2026-09-05** (`@geeksuite/logger`; detail in `SUITE_TODO.md`). *Shared libs*
 19. ~~`toneForMode` helper + themed tooltips~~ — **Done 2026-09-03** (bujogeek's three sites converted;
     fitnessgeek's three sites — `BPLogList`, `BPInsights`, `Activity`'s two tiles — converted
-    2026-09-05 during the #15 fan-out; storygeek's still pending). Auth splash still open — S. *UI*
+    2026-09-05 during the #15 fan-out; storygeek's one site — StoryList's genre-swatch-as-text
+    branch — converted 2026-09-05 too, closing this out; no `MuiTooltip` override exists in
+    storygeek's theme, so nothing there to convert). Auth splash still open — S. *UI*
 20. **cryptoVault → `@geeksuite/crypto-vault`** — M. Step 1 promote; step 2 fitnessgeek Garmin
     password encryption + backfill. *Shared libs / security*
 21. **fitnessgeek `UserSettings` schema consolidation** — S. Silent-data-loss hazard documented

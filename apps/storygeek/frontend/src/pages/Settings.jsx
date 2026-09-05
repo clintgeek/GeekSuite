@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Box, Typography, Card, CardContent, Grid, FormControl, InputLabel,
-  Select, MenuItem, Chip, Alert, CircularProgress, alpha,
+  Select, MenuItem, Chip, CircularProgress, alpha,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
+import { GeekErrorState } from '@geeksuite/ui';
 import useAISettingsStore from '../store/aiSettingsStore';
 import api from '../api';
 
@@ -16,46 +17,45 @@ function Settings() {
   const [providers, setProviders] = useState([]);
   const [modelsByProvider, setModelsByProvider] = useState({});
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        setLoading(true); setError('');
-        const [providersRes, directorRes, gmConfigRes] = await Promise.all([
-          api.get('/ai/providers'),
-          api.get('/ai/director/models'),
-          api.get('/ai/gm-config').catch(() => ({ data: null })),
-        ]);
-        const enabledProviders = providersRes.data?.data?.providers || [];
-        setProviders(enabledProviders);
-        const modelInfo = directorRes.data?.data?.providers || {};
-        const mapped = {};
-        for (const [prov, info] of Object.entries(modelInfo)) {
-          mapped[prov] = (info.models || []).map(m => ({ id: m.id, name: m.name, isFree: !!m.freeTier?.isFree }));
+  const load = useCallback(async () => {
+    try {
+      setLoading(true); setError('');
+      const [providersRes, directorRes, gmConfigRes] = await Promise.all([
+        api.get('/ai/providers'),
+        api.get('/ai/director/models'),
+        api.get('/ai/gm-config').catch(() => ({ data: null })),
+      ]);
+      const enabledProviders = providersRes.data?.data?.providers || [];
+      setProviders(enabledProviders);
+      const modelInfo = directorRes.data?.data?.providers || {};
+      const mapped = {};
+      for (const [prov, info] of Object.entries(modelInfo)) {
+        mapped[prov] = (info.models || []).map(m => ({ id: m.id, name: m.name, isFree: !!m.freeTier?.isFree }));
+      }
+      setModelsByProvider(mapped);
+      if (!selectedProvider && enabledProviders.length > 0) {
+        // Default to the backend's pinned GM model — narrative consistency
+        // beats whatever model happens to top the list.
+        const gm = gmConfigRes?.data;
+        const gmAvailable = gm && enabledProviders.some(p => p.name === gm.provider) &&
+          mapped[gm.provider]?.some(m => m.id === gm.model);
+        if (gmAvailable) {
+          setSelection(gm.provider, gm.model);
+        } else if (enabledProviders.some(p => p.name === 'gemini') && mapped['gemini']?.length > 0) {
+          const flash = mapped['gemini']
+            .filter(m => /flash/i.test(m.id))
+            .sort((a, b) => b.id.localeCompare(a.id))[0];
+          setSelection('gemini', (flash || mapped['gemini'][0]).id);
+        } else {
+          const provKey = enabledProviders[0].name;
+          setSelection(provKey, mapped[provKey]?.[0]?.id || null);
         }
-        setModelsByProvider(mapped);
-        if (!selectedProvider && enabledProviders.length > 0) {
-          // Default to the backend's pinned GM model — narrative consistency
-          // beats whatever model happens to top the list.
-          const gm = gmConfigRes?.data;
-          const gmAvailable = gm && enabledProviders.some(p => p.name === gm.provider) &&
-            mapped[gm.provider]?.some(m => m.id === gm.model);
-          if (gmAvailable) {
-            setSelection(gm.provider, gm.model);
-          } else if (enabledProviders.some(p => p.name === 'gemini') && mapped['gemini']?.length > 0) {
-            const flash = mapped['gemini']
-              .filter(m => /flash/i.test(m.id))
-              .sort((a, b) => b.id.localeCompare(a.id))[0];
-            setSelection('gemini', (flash || mapped['gemini'][0]).id);
-          } else {
-            const provKey = enabledProviders[0].name;
-            setSelection(provKey, mapped[provKey]?.[0]?.id || null);
-          }
-        }
-      } catch (e) { setError(e.message || 'Failed to load AI settings'); }
-      finally { setLoading(false); }
-    };
-    load();
+      }
+    } catch (e) { setError(e.message || 'Failed to load AI settings'); }
+    finally { setLoading(false); }
   }, [selectedProvider, setSelection]);
+
+  useEffect(() => { load(); }, [load]);
 
   const currentModels = useMemo(() => modelsByProvider[selectedProvider] || [], [modelsByProvider, selectedProvider]);
 
@@ -66,8 +66,6 @@ function Settings() {
         <Typography variant="h2" sx={{ mt: 0.5 }}>Settings</Typography>
       </Box>
 
-      {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
-
       <Card>
         <CardContent sx={{ p: 3 }}>
           <Typography variant="h5" sx={{ mb: 2.5 }}>AI Oracle</Typography>
@@ -75,7 +73,15 @@ function Settings() {
             Choose which intelligence powers your Game Master. Free-tier models are marked.
           </Typography>
 
-          {loading ? (
+          {error ? (
+            <GeekErrorState
+              compact
+              error={error}
+              onRetry={load}
+              title="The Oracle is silent"
+              description="Couldn't reach the AI providers."
+            />
+          ) : loading ? (
             <Box sx={{ py: 3, textAlign: 'center' }}><CircularProgress size={24} sx={{ color: gold }} /></Box>
           ) : (
             <Grid container spacing={2.5}>

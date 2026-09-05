@@ -25,6 +25,9 @@ vi.mock('@geeksuite/ui', () => ({
   GeekAppFrame: ({ children, fill = false }) => (
     <div data-geek-frame={fill ? 'fill' : undefined}>{children}</div>
   ),
+  // Layout mounts this between GeekShell and GeekAppFrame (TODO_ORDER #15) —
+  // a passthrough is enough to exercise the wiring under test.
+  GeekToastProvider: ({ children }) => <>{children}</>,
 }));
 
 describe('Layout', () => {

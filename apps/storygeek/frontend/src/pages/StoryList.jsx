@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import {
   Box, Typography, Button, Card, CardContent, Grid, Chip, TextField,
-  MenuItem, Alert, CircularProgress, IconButton, alpha,
+  MenuItem, CircularProgress, IconButton, alpha,
 } from '@mui/material';
 import {
   Add as AddIcon, PlayArrow as PlayIcon, Delete as DeleteIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { useTheme, lighten, darken } from '@mui/material/styles';
+import { useTheme } from '@mui/material/styles';
 import { useAuth } from '@geeksuite/auth';
-import { useGeekPrimaryAction } from '@geeksuite/ui';
+import { GeekEmptyState, GeekErrorState, toneForMode, useGeekPrimaryAction, useToast } from '@geeksuite/ui';
 import api from '../api';
 import CodexDialog from '../components/primitives/CodexDialog';
 
@@ -42,11 +42,15 @@ function StoryList() {
   const theme = useTheme();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { notify } = useToast();
   const gold = theme.palette.codex?.gold || '#c9a84c';
 
   const [stories, setStories] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  // `loadError` gates the whole shelf (GeekErrorState replaces the grid/empty
+  // card, with a real retry) — distinct from the transient, dialog-adjacent
+  // failures below, which are fire-and-forget toasts.
+  const [loadError, setLoadError] = useState('');
   const [openDialog, setOpenDialog] = useState(false);
   const [startForm, setStartForm] = useState({ prompt: '', title: '', genre: 'Fantasy' });
   const [creatingStory, setCreatingStory] = useState(false);
@@ -60,11 +64,12 @@ function StoryList() {
 
   const loadStories = async () => {
     try {
-      if (!user || !user.id) { setError('Authentication required'); setLoading(false); return; }
+      if (!user || !user.id) { setLoadError('Authentication required'); setLoading(false); return; }
+      setLoadError('');
       const response = await api.get(`/stories/user/${user.id}`);
       setStories(response.data);
     } catch (err) {
-      setError('Failed to load stories');
+      setLoadError('Failed to load stories');
       console.error('Error loading stories:', err);
     } finally {
       setLoading(false);
@@ -72,9 +77,12 @@ function StoryList() {
   };
 
   const handleStartStory = async () => {
-    if (!startForm.prompt.trim()) { setError('Please provide a story prompt'); return; }
-    if (!user || !user.id) { setError('Authentication required'); return; }
-    setCreatingStory(true); setError('');
+    // The New Tale dialog sits above this page — a page-level Alert here
+    // used to render behind its backdrop. A toast floats above the dialog
+    // instead (same fix as fitnessgeek's HouseholdSettings, TODO_ORDER #15).
+    if (!startForm.prompt.trim()) { notify('Please provide a story prompt', { tone: 'error' }); return; }
+    if (!user || !user.id) { notify('Authentication required', { tone: 'error' }); return; }
+    setCreatingStory(true);
     try {
       const response = await api.post('/stories/start', {
         userId: user.id, prompt: startForm.prompt,
@@ -82,7 +90,7 @@ function StoryList() {
       });
       navigate(`/play/${response.data.storyId}`);
     } catch (err) {
-      setError('Failed to start story');
+      notify('Failed to start story', { tone: 'error' });
       console.error('Error starting story:', err);
     } finally {
       setCreatingStory(false);
@@ -90,14 +98,14 @@ function StoryList() {
   };
 
   const handleDeleteStory = async (storyId) => {
-    if (!user || !user.id) { setError('Authentication required'); return; }
-    setDeletingStory(true); setError('');
+    if (!user || !user.id) { notify('Authentication required', { tone: 'error' }); return; }
+    setDeletingStory(true);
     try {
       await api.delete(`/stories/${storyId}`);
       await loadStories();
       setStoryToDelete(null);
     } catch (err) {
-      setError('Failed to delete story');
+      notify('Failed to delete story', { tone: 'error' });
     } finally {
       setDeletingStory(false);
     }
@@ -143,26 +151,31 @@ function StoryList() {
         </Button>
       </Box>
 
-      {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
-
-      {stories.length === 0 ? (
+      {loadError ? (
         <Card sx={{ textAlign: 'center', py: 8 }}>
           <CardContent>
-            <Typography sx={{
-              fontFamily: '"Cinzel Decorative", serif', fontSize: '2rem',
-              color: alpha(gold, 0.3), mb: 2,
-            }}>
-              {'\u{1F4DC}'}
-            </Typography>
-            <Typography variant="h4" sx={{ mb: 1 }}>
-              The shelves are empty
-            </Typography>
-            <Typography variant="body1" color="text.secondary" sx={{ mb: 3, maxWidth: 400, mx: 'auto' }}>
-              Every great library begins with a single tale. Start your first story and let the ink flow.
-            </Typography>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpenDialog(true)}>
-              Begin Your First Tale
-            </Button>
+            <GeekErrorState
+              error={loadError}
+              onRetry={loadStories}
+              title="The shelves won't open"
+              description="Something kept the library from answering. Try again."
+            />
+          </CardContent>
+        </Card>
+      ) : stories.length === 0 ? (
+        <Card sx={{ textAlign: 'center', py: 8 }}>
+          <CardContent>
+            <GeekEmptyState
+              icon={<Typography sx={{ fontFamily: '"Cinzel Decorative", serif', fontSize: '2rem' }}>{'\u{1F4DC}'}</Typography>}
+              iconSx={{ color: alpha(gold, 0.3) }}
+              title="The shelves are empty"
+              description="Every great library begins with a single tale. Start your first story and let the ink flow."
+              action={
+                <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpenDialog(true)}>
+                  Begin Your First Tale
+                </Button>
+              }
+            />
           </CardContent>
         </Card>
       ) : (
@@ -199,10 +212,8 @@ function StoryList() {
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
                       <Typography variant="caption" sx={{
                         // Raw genre color is tuned for the edge strip; shift
-                        // it toward the text pole when used as type.
-                        color: theme.palette.mode === 'dark'
-                          ? lighten(genre.color, 0.35)
-                          : darken(genre.color, 0.3),
+                        // it toward the text pole when used as type (#19).
+                        color: toneForMode(genre.color, theme),
                         fontWeight: 600,
                       }}>
                         {genre.icon} {story.genre}

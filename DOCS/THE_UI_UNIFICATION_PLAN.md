@@ -561,6 +561,59 @@ is stable the way a state setter's is; each got a one-line disable comment rathe
 effect-dependency change that risked a reload loop. Lint held at the existing 55-warning
 baseline. Mobile harness: 20 scenes, 0 violations — unchanged from baseline.
 
+**storygeek — done 2026-09-05, the last app in the fan-out.** No local
+`EmptyState`/`ErrorState`/toast component existed, so nothing to delete. `GeekToastProvider`
+is now mounted in `Layout.jsx`, inside `GeekShell` and outside `GeekAppFrame`. `StoryList`'s
+"The shelves are empty" card became `GeekEmptyState` (kept the parchment `Card` wrapper and the
+scroll glyph as `icon`); its load failure split off a dedicated `loadError` into `GeekErrorState`
+with `onRetry={loadStories}` in the same slot — previously a failed load and a genuinely empty
+library rendered identically. Its dialog-adjacent validation ("Please provide a story prompt",
+"Authentication required") and its delete-confirm failure were page-level `Alert`s that rendered
+*behind* the open `CodexDialog`'s backdrop — invisible until the dialog closed; converted to
+`notify()`, the same backdrop-visibility fix fitnessgeek's `HouseholdSettings` made. `Settings`'
+AI-provider load failure became a compact `GeekErrorState` with `onRetry` in place of the
+picker Grid (the load function was lifted out of its `useEffect` into a `useCallback` so retry
+could call it directly). `StoryPlay` — the play surface, its rails, sheets, and the Bookify
+dialog — got the widest split: `loadError` (initial story load) is the only branch that gates
+the whole surface, rendered as `GeekErrorState` with `onRetry={loadStory}` in place of the
+infinite spinner a failed load used to leave behind (the early `if (!story)` return had no
+error branch at all); "Failed to continue story" and the header's EPUB-export failure became
+`notify()` — mid-play failures the player can just retry by typing again; Bookify's own job
+failure (`exportError`) stayed as a compact `GeekErrorState` with `onRetry={handleBookify}`
+inside the dialog body, since an empty dialog with nothing else to show is exactly the
+primitive's own contract, not a toast-shaped fire-and-forget; the clipboard-copy failure that
+used to share that same `exportError` state split off into its own `notify()` so a stale-content
+redisplay never gets clobbered by a copy error. The Copy button's local `copied` boolean +
+`setTimeout` label swap ("Copy" → "Copied" → back) collapsed into one `notify('Copied to
+clipboard', { tone: 'success' })` call and lost its state, per the primitive's own migration
+note. Four small in-panel empties — `CharacterPanel`'s pre-character fallback, `PartyPanel`'s
+"No one else is here", `QuestPanel`'s "No unresolved threads yet", `JournalDrawer`'s "Nothing
+recorded yet" — converted to compact `GeekEmptyState`s used through their `description` slot
+only (no `title`), preserving each panel's tiny muted-italic caption voice exactly rather than
+promoting them to a headline empty state a 220–300px rail has no room for. `CharacterSheet`'s
+page-level "coming soon" card converted the same way as `StoryList`'s (kept the `Card` wrapper,
+moved to `GeekEmptyState` inside it). `toneForMode` (#19) replaced `StoryList`'s
+`isDark ? lighten(genre.color, 0.35) : darken(genre.color, 0.3)` genre-swatch-as-text
+branch — literally the case `color.js`'s own doc comment names. Left alone: `StoryCreation.jsx`
+(the `/create` route)'s inline validation `Alert`s — a full-page form the user is looking
+straight at, same dialog/form-adjacent carve-out as bookgeek's `AddBookDialog`; `Narration`'s
+in-story markdown and the composer's own `/recall /checkpoint …` status line — content, not
+feedback, per the task brief; `StoryPlay`'s `getDiceColor` `isDark` ternary — distinct hex
+values per dice-result tier, not a lighten/darken pair of one base color, so it isn't the
+`toneForMode` shape; `theme.js`'s palette-construction `isDark ? … : …` pairs — base-palette
+authoring, the same non-domain-color case bookgeek and basegeek both hit; `LoginPage` — public
+route outside `GeekShell`/`GeekToastProvider`, same auth-screen gap every sibling app left open.
+No `MuiTooltip` override exists in storygeek's theme, so nothing for #19's tooltip half to
+touch — TODO_ORDER #19 is now fully closed. `packages/ui` gaps found: none. Lint held at the
+existing 3-warning baseline. Tests: 33 passing / 6 skipped (up from 31; two new
+`StoryList` cases cover the `GeekEmptyState`/`GeekErrorState`-with-retry branches — the
+`StoryPlay` suite stays skipped per the burn-queue note, untouched). Mobile harness: 18 scenes
+(phone only, per task), 0 violations — unchanged from baseline.
+
+This closes the #15 fan-out: all seven MUI apps (flockgeek, notegeek, basegeek, bookgeek,
+fitnessgeek, storygeek) plus bujogeek (the original proof) now share
+`GeekEmptyState`/`GeekErrorState`/`GeekToastProvider`/`useToast`.
+
 ---
 
 ## 3b. Mobile Grammar

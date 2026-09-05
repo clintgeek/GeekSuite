@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Box, Typography, TextField, Button, Paper, CircularProgress,
-  Alert, Chip, IconButton, Tooltip, LinearProgress, alpha,
+  Chip, IconButton, Tooltip, LinearProgress, alpha,
 } from '@mui/material';
 import { useTheme, useMediaQuery, ButtonGroup } from '@mui/material';
 import {
@@ -11,7 +11,7 @@ import {
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@geeksuite/auth';
-import { GeekSheet } from '@geeksuite/ui';
+import { GeekErrorState, GeekSheet, useToast } from '@geeksuite/ui';
 import CodexDialog from '../components/primitives/CodexDialog';
 import Narration from '../components/Narration';
 import useAISettingsStore from '../store/aiSettingsStore';
@@ -177,6 +177,7 @@ function StoryPlay() {
   const { storyId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { notify } = useToast();
   const { selectedProvider, selectedModelId } = useAISettingsStore();
   const gold = theme.palette.codex?.gold || '#c9a84c';
   const isDark = theme.palette.mode === 'dark';
@@ -185,14 +186,16 @@ function StoryPlay() {
   const [messages, setMessages] = useState([]);
   const [userInput, setUserInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  // `loadError` gates the whole play surface (nothing else can render until
+  // the story loads) — a real GeekErrorState with retry, not a toast. Every
+  // other failure below is transient and fire-and-forget.
+  const [loadError, setLoadError] = useState('');
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState('');
   const [exportOpen, setExportOpen] = useState(false);
   const [exportData, setExportData] = useState(null);
   const [journalOpen, setJournalOpen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState(null); // 'left' | 'right' | null
-  const [copied, setCopied] = useState(false);
   const containerRef = useRef(null);
   const endRef = useRef(null);
   const inputRef = useRef(null);
@@ -219,13 +222,14 @@ function StoryPlay() {
 
   const loadStory = async () => {
     try {
-      if (!user || !user.id) { setError('Authentication required'); return; }
+      if (!user || !user.id) { setLoadError('Authentication required'); return; }
+      setLoadError('');
       const response = await api.get(`/stories/${storyId}`);
       const storyData = response.data;
       setStory(storyData);
       setMessages(storyData.events.map(eventToMessage));
     } catch (err) {
-      setError('Failed to load story');
+      setLoadError('Failed to load story');
       console.error('Error loading story:', err);
     }
   };
@@ -266,9 +270,8 @@ function StoryPlay() {
     if (!exportData?.content) return;
     try {
       await navigator.clipboard.writeText(exportData.content);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (e) { setExportError('Could not copy to the clipboard'); }
+      notify('Copied to clipboard', { tone: 'success' });
+    } catch (e) { notify('Could not copy to the clipboard', { tone: 'error' }); }
   };
 
   // Only offered where the platform actually has a share sheet — every phone,
@@ -288,7 +291,7 @@ function StoryPlay() {
     setUserInput('');
     refocusRef.current = true;
     setMessages(prev => [...prev, { type: 'user', content: input, timestamp: new Date() }]);
-    setLoading(true); setError('');
+    setLoading(true);
 
     try {
       // Only send provider/model when the user explicitly picked one —
@@ -312,7 +315,7 @@ function StoryPlay() {
       // turn's changes (new NPCs, location, threads, facts, scene, …).
       refreshStory();
     } catch (err) {
-      setError('Failed to continue story');
+      notify('Failed to continue story', { tone: 'error' });
       console.error('Error continuing story:', err);
     } finally { setLoading(false); }
   };
@@ -485,6 +488,13 @@ function StoryPlay() {
   };
 
   if (!story) {
+    if (loadError) {
+      return (
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh', px: 2 }}>
+          <GeekErrorState error={loadError} onRetry={loadStory} title="The tale would not open" />
+        </Box>
+      );
+    }
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
         <CircularProgress sx={{ color: gold }} />
@@ -573,7 +583,7 @@ function StoryPlay() {
                 const a = document.createElement('a');
                 a.href = url; a.download = `${(story.title || 'story').replace(/[^a-z0-9\-_]+/gi, '_')}.epub`;
                 document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-              } catch (e) { setError(e.message || 'EPUB export failed'); }
+              } catch (e) { notify(e.message || 'EPUB export failed', { tone: 'error' }); }
               finally { setExporting(false); }
             }}>EPUB</Button>
           </ButtonGroup>
@@ -598,8 +608,6 @@ function StoryPlay() {
         )}
         <div ref={endRef} />
       </Box>
-
-      {error && <Alert severity="error" sx={{ mb: 1, mx: 1 }} onClose={() => setError('')}>{error}</Alert>}
 
       {/* Input — the thumb-zone primary action. Pinned to the bottom of the
           frame (the column is a flex box, this row does not shrink) and padded
@@ -707,7 +715,7 @@ function StoryPlay() {
             variant="contained"
             startIcon={<CopyIcon />}
           >
-            {copied ? 'Copied' : 'Copy'}
+            Copy
           </Button>
         }
         keepSecondaryOnMobile
@@ -726,7 +734,14 @@ function StoryPlay() {
         bodySx={{ overflowY: 'auto' }}
       >
         {exporting && <LinearProgress sx={{ mb: 2 }} />}
-        {exportError && <Alert severity="error" sx={{ mb: 2 }}>{exportError}</Alert>}
+        {!exporting && exportError && (
+          <GeekErrorState
+            compact
+            error={exportError}
+            onRetry={handleBookify}
+            title="The tale would not bind"
+          />
+        )}
         {exportData && (
           <Typography component="pre" sx={{
             whiteSpace: 'pre-wrap', fontFamily: '"Crimson Pro", serif',

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Typography, Card, CardContent, alpha } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
+import { GeekEmptyState } from '@geeksuite/ui';
 
 function CharacterSheet() {
   const theme = useTheme();
@@ -15,11 +16,14 @@ function CharacterSheet() {
 
       <Card sx={{ textAlign: 'center', py: 6 }}>
         <CardContent>
-          <Typography sx={{ fontSize: '2.5rem', mb: 2, opacity: 0.3 }}>{'\u{1F9D9}'}</Typography>
-          <Typography variant="h4" sx={{ mb: 1 }}>The pages are blank... for now</Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 400, mx: 'auto' }}>
-            Character management is being inscribed. Use the <code>/char</code> command during gameplay to view your companions.
-          </Typography>
+          <GeekEmptyState
+            icon={<Typography sx={{ fontSize: '2.5rem' }}>{'\u{1F9D9}'}</Typography>}
+            iconSx={{ opacity: 0.3 }}
+            title="The pages are blank... for now"
+            description={
+              <>Character management is being inscribed. Use the <code>/char</code> command during gameplay to view your companions.</>
+            }
+          />
         </CardContent>
       </Card>
     </Box>

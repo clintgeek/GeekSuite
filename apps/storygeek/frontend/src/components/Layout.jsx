@@ -14,9 +14,16 @@
  * it's the frame's child, and it stops scrolling and becomes a flex column so
  * a page can size itself with `flex: 1` rather than guessing at the chrome
  * with `calc(100vh - N)`.
+ *
+ * `GeekToastProvider` is mounted *inside* `GeekShell` and *outside*
+ * `GeekAppFrame` (TODO_ORDER #15) — inside the shell so it can read
+ * `useGeekShell()` for placement, outside the frame because the frame's
+ * route-transition `motion.div` becomes a containing block for
+ * `position: fixed` children, which would drag a toast along with the page
+ * fade.
  */
 import { Container } from '@mui/material';
-import { GeekShell, GeekAppFrame } from '@geeksuite/ui';
+import { GeekShell, GeekAppFrame, GeekToastProvider } from '@geeksuite/ui';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 
@@ -29,17 +36,19 @@ function Layout({ children, fill = false }) {
       navSx={{ bgcolor: 'background.paper' }}
       topBar={<TopBar />}
     >
-      <GeekAppFrame fill={fill}>
-        <Container
-          maxWidth="xl"
-          sx={{
-            py: { xs: 2, md: 3 },
-            ...(fill ? { py: { xs: 1.5, md: 2 }, flex: 1, ...fillColumn } : null),
-          }}
-        >
-          {children}
-        </Container>
-      </GeekAppFrame>
+      <GeekToastProvider>
+        <GeekAppFrame fill={fill}>
+          <Container
+            maxWidth="xl"
+            sx={{
+              py: { xs: 2, md: 3 },
+              ...(fill ? { py: { xs: 1.5, md: 2 }, flex: 1, ...fillColumn } : null),
+            }}
+          >
+            {children}
+          </Container>
+        </GeekAppFrame>
+      </GeekToastProvider>
     </GeekShell>
   );
 }
