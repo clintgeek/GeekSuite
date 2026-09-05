@@ -20,6 +20,7 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | R9 | TODO #25/#26 bujogeek subtasks UI + Apollo cache invalidation | opus | bujogeek frontend, its GraphQL surface | 09-05 am |
 | R10 | packages/ui leftovers: `GeekAppFrame fill`, sheet initialFocus/close/actionsAlign, dialog title hooks, reduced motion | sonnet | packages/ui | 09-05 am |
 | R11 | `DOCS/RUNBOOK.md` — the real operational context file | sonnet | DOCS only | 09-05 am |
+| R12 | `/login` and `/register` redirect home when already signed in (all apps) | sonnet | each frontend's router/auth files; skips files another agent has open | 09-05 11:25 |
 
 ## Queued (launch when files free / prerequisite lands)
 
