@@ -34,8 +34,6 @@ import {
   Settings as SettingsIcon,
   Analytics as AnalyticsIcon,
   Key as KeyIcon,
-  Visibility as VisibilityIcon,
-  VisibilityOff as VisibilityOffIcon,
   Save as SaveIcon,
   Warning as WarningIcon,
   CheckCircle as CheckCircleIcon,
@@ -47,12 +45,53 @@ import {
   AttachMoney as MoneyIcon,
   Apps as AppsIcon,
   Add as AddIcon,
-  Delete as DeleteIcon
+  Delete as DeleteIcon,
+  DeleteSweep as DeleteSweepIcon
 } from '@mui/icons-material';
 import { alpha } from '@mui/material/styles';
+import { GeekEmptyState, GeekErrorState, useToast } from '@geeksuite/ui';
 import { apolloClient } from '../apolloClient';
 import { GET_AI_CONFIG, GET_AI_STATS, GET_AI_DIRECTOR_MODELS, GET_AI_APP_CONFIGS } from '../graphql/queries';
 import { SAVE_AI_CONFIG, TEST_AI_PROVIDER, RESET_AI_STATS, SEED_DIRECTOR_PRICING, SEED_DIRECTOR_FREE_TIER, SYNC_PROVIDER_MODELS, UPDATE_MODEL_PRICING, UPDATE_MODEL_FREE_TIER, RESET_ALL_FREE_TIERS, BULK_UPDATE_FREE_TIERS, SAVE_AI_APP_CONFIG, DELETE_AI_APP_CONFIG } from '../graphql/mutations';
+
+/**
+ * The providers this page can configure — the ones AIConfig's schema enum will
+ * actually persist. The server's masked config may carry more (onemin), which
+ * `withKeyDrafts` drops rather than render a card whose Save would fail
+ * validation.
+ */
+const CONFIG_PROVIDERS = [
+  'anthropic', 'groq', 'gemini', 'together', 'cohere', 'openrouter',
+  'cerebras', 'cloudflare', 'ollama', 'llm7', 'llmgateway'
+];
+
+/** A provider entry before the server has been heard from. */
+const emptyProviderConfig = (provider) => ({
+  hasKey: false,
+  keyHint: '',
+  enabled: false,
+  apiKey: '',
+  ...(provider === 'cloudflare' ? { accountId: '' } : {})
+});
+
+const emptyConfig = () => Object.fromEntries(
+  CONFIG_PROVIDERS.map(provider => [provider, emptyProviderConfig(provider)])
+);
+
+/**
+ * The server sends `{ hasKey, keyHint, enabled }` and never the credential, so
+ * `apiKey` here is a *draft* — whatever the admin has typed into the box this
+ * session. Blank means "keep the stored key", which is why Save omits it.
+ */
+const withKeyDrafts = (serverConfig) => Object.fromEntries(
+  CONFIG_PROVIDERS
+    .filter(provider => serverConfig?.[provider])
+    .map(provider => [provider, {
+      ...emptyProviderConfig(provider),
+      ...serverConfig[provider],
+      apiKey: ''
+    }])
+);
 
 // Free-tier limits applied when a model has no stored limits of its own.
 const FREE_TIER_DEFAULTS = {
@@ -63,25 +102,19 @@ const FREE_TIER_DEFAULTS = {
 };
 
 const AIGeekPage = () => {
+  const { notify } = useToast();
   const [activeTab, setActiveTab] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+
+  // One error slot per fetch, so a failed load renders a GeekErrorState with a
+  // retry in the section that failed. Everything transient is a toast.
+  const [configError, setConfigError] = useState(null);
+  const [statsError, setStatsError] = useState(null);
+  const [directorError, setDirectorError] = useState(null);
+  const [appConfigsError, setAppConfigsError] = useState(null);
 
   // Configuration state
-  const [config, setConfig] = useState({
-    anthropic: { apiKey: '', enabled: true },
-    groq: { apiKey: '', enabled: false },
-    gemini: { apiKey: '', enabled: false },
-    together: { apiKey: '', enabled: false },
-    cohere: { apiKey: '', enabled: false },
-    openrouter: { apiKey: '', enabled: false },
-    cerebras: { apiKey: '', enabled: false },
-    cloudflare: { apiKey: '', accountId: '', enabled: false },
-    ollama: { apiKey: '', enabled: false },
-    llm7: { apiKey: '', enabled: false },
-    llmgateway: { apiKey: '', enabled: false }
-  });
+  const [config, setConfig] = useState(emptyConfig);
 
   // Usage statistics
   const [stats, setStats] = useState({
@@ -91,9 +124,6 @@ const AIGeekPage = () => {
     providerUsage: {},
     appUsage: {}
   });
-
-  // Show/hide API keys
-  const [showKeys, setShowKeys] = useState(false);
 
   // AI Director state
   const [directorData, setDirectorData] = useState(null);
@@ -128,12 +158,13 @@ const AIGeekPage = () => {
   const loadConfiguration = async () => {
     try {
       setLoading(true);
+      setConfigError(null);
       const { data } = await apolloClient.query({ query: GET_AI_CONFIG, fetchPolicy: 'network-only' });
       if (data && data.aiConfig) {
-        setConfig(data.aiConfig);
+        setConfig(withKeyDrafts(data.aiConfig));
       }
-    } catch (error) {
-      setError('Failed to load AI configuration');
+    } catch (err) {
+      setConfigError(err);
     } finally {
       setLoading(false);
     }
@@ -141,25 +172,27 @@ const AIGeekPage = () => {
 
   const loadStatistics = async () => {
     try {
+      setStatsError(null);
       const { data } = await apolloClient.query({ query: GET_AI_STATS, fetchPolicy: 'network-only' });
       if (data && data.aiStats) {
         setStats(data.aiStats.data || data.aiStats);
       }
-    } catch (error) {
-      setError(`Failed to load statistics: ${error.message}`);
+    } catch (err) {
+      setStatsError(err);
     }
   };
 
   const loadDirectorData = async () => {
     try {
       setDirectorLoading(true);
+      setDirectorError(null);
 
       const { data } = await apolloClient.query({ query: GET_AI_DIRECTOR_MODELS, fetchPolicy: 'network-only' });
       if (data && data.aiDirectorModels) {
         setDirectorData(data.aiDirectorModels);
       }
-    } catch (error) {
-      setError(`Failed to load AI Director data: ${error.message}`);
+    } catch (err) {
+      setDirectorError(err);
     } finally {
       setDirectorLoading(false);
     }
@@ -168,15 +201,14 @@ const AIGeekPage = () => {
   const restoreHardcodedDefaults = async () => {
     try {
       setSavingBulk(true);
-      setError('');
       await apolloClient.mutate({ mutation: SEED_DIRECTOR_PRICING });
       await apolloClient.mutate({ mutation: SEED_DIRECTOR_FREE_TIER });
-      setSuccess('Hardcoded defaults restored. Your manual selections have been overwritten.');
+      notify('Hardcoded defaults restored. Your manual selections have been overwritten.', { tone: 'warning' });
       setShowRestoreDefaultsConfirm(false);
       setFreeTierEdits({});
       await loadDirectorData();
-    } catch (error) {
-      setError(`Failed to restore defaults: ${error.message}`);
+    } catch (err) {
+      notify(`Failed to restore defaults: ${err.message}`, { tone: 'error' });
     } finally {
       setSavingBulk(false);
     }
@@ -185,14 +217,25 @@ const AIGeekPage = () => {
   const saveConfiguration = async () => {
     try {
       setLoading(true);
-      setError('');
-      setSuccess('');
 
-      await apolloClient.mutate({ mutation: SAVE_AI_CONFIG, variables: { config } });
-      setSuccess('AI configuration saved successfully');
+      // Send the toggles for every provider, but a key only where one was
+      // actually typed: an omitted key means "keep the stored one", and the
+      // client no longer has the stored one to echo back.
+      const payload = {};
+      for (const [provider, providerConfig] of Object.entries(config)) {
+        const entry = { enabled: !!providerConfig.enabled };
+        if (provider === 'cloudflare') entry.accountId = providerConfig.accountId || '';
+        const draftKey = (providerConfig.apiKey || '').trim();
+        if (draftKey) entry.apiKey = draftKey;
+        payload[provider] = entry;
+      }
+
+      await apolloClient.mutate({ mutation: SAVE_AI_CONFIG, variables: { config: payload } });
+      notify('AI configuration saved', { tone: 'success' });
+      await loadConfiguration(); // re-read the hints and clear the drafts
       await loadStatistics(); // Refresh stats after config change
-    } catch (error) {
-      setError(error.message || 'Failed to save AI configuration');
+    } catch (err) {
+      notify(err.message || 'Failed to save AI configuration', { tone: 'error' });
     } finally {
       setLoading(false);
     }
@@ -203,12 +246,12 @@ const AIGeekPage = () => {
       setLoading(true);
       const { data } = await apolloClient.mutate({ mutation: TEST_AI_PROVIDER, variables: { provider } });
       if (data && data.testAIProvider) {
-        setSuccess(`${provider} API key is valid`);
+        notify(`${provider} API key is valid`, { tone: 'success' });
       } else {
-        setError(`${provider} API key is invalid`);
+        notify(`${provider} API key is invalid`, { tone: 'error' });
       }
-    } catch (error) {
-      setError(`Failed to test ${provider} API key`);
+    } catch (err) {
+      notify(`Failed to test ${provider} API key: ${err.message}`, { tone: 'error' });
     } finally {
       setLoading(false);
     }
@@ -217,11 +260,11 @@ const AIGeekPage = () => {
   const resetStatistics = async () => {
     try {
       await apolloClient.mutate({ mutation: RESET_AI_STATS });
-      setSuccess('Statistics reset successfully');
+      notify('Statistics reset', { tone: 'success' });
       setShowResetStatsConfirm(false);
       await loadStatistics();
-    } catch (error) {
-      setError('Failed to reset statistics');
+    } catch (err) {
+      notify(`Failed to reset statistics: ${err.message}`, { tone: 'error' });
     }
   };
 
@@ -239,17 +282,16 @@ const AIGeekPage = () => {
   const syncProviderModels = async (provider) => {
     try {
       setSyncingProvider(provider);
-      setError('');
       const { data } = await apolloClient.mutate({
         mutation: SYNC_PROVIDER_MODELS,
         variables: { provider }
       });
       const result = data?.syncProviderModels;
-      setSuccess(`${provider}: Synced ${result?.modelsFound || 0} models from API`);
+      notify(`${provider}: synced ${result?.modelsFound || 0} models from API`, { tone: 'success' });
       // Reload director data to show updated models
       await loadDirectorData();
-    } catch (error) {
-      setError(`Failed to sync ${provider} models: ${error.message}`);
+    } catch (err) {
+      notify(`Failed to sync ${provider} models: ${err.message}`, { tone: 'error' });
     } finally {
       setSyncingProvider(null);
     }
@@ -259,7 +301,6 @@ const AIGeekPage = () => {
   const savePricing = async () => {
     if (!editingPricing) return;
     try {
-      setError('');
       await apolloClient.mutate({
         mutation: UPDATE_MODEL_PRICING,
         variables: {
@@ -269,11 +310,11 @@ const AIGeekPage = () => {
           outputPrice: parseFloat(editingPricing.outputPrice) || 0
         }
       });
-      setSuccess(`Pricing updated for ${editingPricing.modelId}`);
+      notify(`Pricing updated for ${editingPricing.modelId}`, { tone: 'success' });
       setEditingPricing(null);
       await loadDirectorData();
-    } catch (error) {
-      setError(`Failed to update pricing: ${error.message}`);
+    } catch (err) {
+      notify(`Failed to update pricing: ${err.message}`, { tone: 'error' });
     }
   };
 
@@ -281,7 +322,6 @@ const AIGeekPage = () => {
   const saveFreeTier = async () => {
     if (!editingFreeTier) return;
     try {
-      setError('');
       await apolloClient.mutate({
         mutation: UPDATE_MODEL_FREE_TIER,
         variables: {
@@ -292,7 +332,7 @@ const AIGeekPage = () => {
           notes: editingFreeTier.notes || ''
         }
       });
-      setSuccess(`Free tier updated for ${editingFreeTier.modelId}`);
+      notify(`Free tier updated for ${editingFreeTier.modelId}`, { tone: 'success' });
       // Clear dirty state for this model since backend now has truth
       const key = getFreeTierKey(editingFreeTier.provider, editingFreeTier.modelId);
       setFreeTierEdits(prev => {
@@ -302,8 +342,8 @@ const AIGeekPage = () => {
       });
       setEditingFreeTier(null);
       await loadDirectorData();
-    } catch (error) {
-      setError(`Failed to update free tier: ${error.message}`);
+    } catch (err) {
+      notify(`Failed to update free tier: ${err.message}`, { tone: 'error' });
     }
   };
 
@@ -351,7 +391,6 @@ const AIGeekPage = () => {
     if (Object.keys(freeTierEdits).length === 0) return;
     try {
       setSavingBulk(true);
-      setError('');
       const updates = Object.entries(freeTierEdits).map(([key, edit]) => {
         const [provider, modelId] = key.split('::');
         // Find original model to merge limits
@@ -369,11 +408,11 @@ const AIGeekPage = () => {
         mutation: BULK_UPDATE_FREE_TIERS,
         variables: { updates }
       });
-      setSuccess(`${updates.length} model${updates.length !== 1 ? 's' : ''} updated`);
+      notify(`${updates.length} model${updates.length !== 1 ? 's' : ''} updated`, { tone: 'success' });
       setFreeTierEdits({});
       await loadDirectorData();
-    } catch (error) {
-      setError(`Failed to save free tier changes: ${error.message}`);
+    } catch (err) {
+      notify(`Failed to save free tier changes: ${err.message}`, { tone: 'error' });
     } finally {
       setSavingBulk(false);
     }
@@ -382,15 +421,14 @@ const AIGeekPage = () => {
   const resetAllFreeTiers = async () => {
     try {
       setSavingBulk(true);
-      setError('');
       const { data } = await apolloClient.mutate({ mutation: RESET_ALL_FREE_TIERS });
       const count = data?.resetAllFreeTiers ?? 0;
-      setSuccess(`Reset ${count} model${count !== 1 ? 's' : ''} to non-free`);
+      notify(`Reset ${count} model${count !== 1 ? 's' : ''} to non-free`, { tone: 'success' });
       setShowResetConfirm(false);
       setFreeTierEdits({});
       await loadDirectorData();
-    } catch (error) {
-      setError(`Failed to reset free tiers: ${error.message}`);
+    } catch (err) {
+      notify(`Failed to reset free tiers: ${err.message}`, { tone: 'error' });
     } finally {
       setSavingBulk(false);
     }
@@ -400,13 +438,14 @@ const AIGeekPage = () => {
   const loadAppConfigs = async () => {
     try {
       setAppConfigsLoading(true);
+      setAppConfigsError(null);
       const { data } = await apolloClient.query({ query: GET_AI_APP_CONFIGS, fetchPolicy: 'network-only' });
       if (data?.aiAppConfigs) {
         setAppConfigs(data.aiAppConfigs.configs || []);
         setDiscoveredApps(data.aiAppConfigs.discoveredApps || []);
       }
-    } catch (error) {
-      setError(`Failed to load app configs: ${error.message}`);
+    } catch (err) {
+      setAppConfigsError(err);
     } finally {
       setAppConfigsLoading(false);
     }
@@ -415,7 +454,6 @@ const AIGeekPage = () => {
   const saveAppConfig = async () => {
     if (!editingApp) return;
     try {
-      setError('');
       await apolloClient.mutate({
         mutation: SAVE_AI_APP_CONFIG,
         variables: {
@@ -433,21 +471,21 @@ const AIGeekPage = () => {
           }
         }
       });
-      setSuccess(`App config saved for ${editingApp.appName}`);
+      notify(`App config saved for ${editingApp.appName}`, { tone: 'success' });
       setEditingApp(null);
       await loadAppConfigs();
-    } catch (error) {
-      setError(`Failed to save app config: ${error.message}`);
+    } catch (err) {
+      notify(`Failed to save app config: ${err.message}`, { tone: 'error' });
     }
   };
 
   const deleteAppConfig = async (appName) => {
     try {
       await apolloClient.mutate({ mutation: DELETE_AI_APP_CONFIG, variables: { appName } });
-      setSuccess(`App config deleted for ${appName}`);
+      notify(`App config deleted for ${appName}`, { tone: 'success' });
       await loadAppConfigs();
-    } catch (error) {
-      setError(`Failed to delete app config: ${error.message}`);
+    } catch (err) {
+      notify(`Failed to delete app config: ${err.message}`, { tone: 'error' });
     }
   };
 
@@ -490,7 +528,9 @@ const AIGeekPage = () => {
 
   const getProviderStatus = (provider) => {
     const providerConfig = config[provider];
-    if (!providerConfig.apiKey) return 'not-configured';
+    if (!providerConfig) return 'not-configured';
+    // hasKey is what the server stores; a draft is only a key once saved.
+    if (!providerConfig.hasKey) return 'not-configured';
     if (!providerConfig.enabled) return 'disabled';
     return 'configured';
   };
@@ -515,18 +555,6 @@ const AIGeekPage = () => {
 
   return (
     <Box sx={{ p: 3 }}>
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
-
-      {success && (
-        <Alert severity="success" sx={{ mb: 2 }}>
-          {success}
-        </Alert>
-      )}
-
       <Tabs
         value={activeTab}
         onChange={(e, newValue) => setActiveTab(newValue)}
@@ -548,6 +576,15 @@ const AIGeekPage = () => {
             <Typography variant="h6" gutterBottom>
               AI Provider Configuration
             </Typography>
+
+            {configError && (
+              <GeekErrorState
+                title="Couldn't load provider configuration"
+                description="Provider keys are admin-only; if you are not an admin this is expected."
+                error={configError}
+                onRetry={loadConfiguration}
+              />
+            )}
 
             <Grid container spacing={3}>
               {Object.entries(config).map(([provider, providerConfig]) => (
@@ -579,17 +616,15 @@ const AIGeekPage = () => {
                       <TextField
                         fullWidth
                         label="API Key"
-                        type={showKeys ? 'text' : 'password'}
-                        value={providerConfig.apiKey}
+                        type="password"
+                        autoComplete="new-password"
+                        value={providerConfig.apiKey || ''}
                         onChange={(e) => handleConfigChange(provider, 'apiKey', e.target.value)}
                         margin="normal"
-                        InputProps={{
-                          endAdornment: (
-                            <IconButton onClick={() => setShowKeys(!showKeys)}>
-                              {showKeys ? <VisibilityOffIcon /> : <VisibilityIcon />}
-                            </IconButton>
-                          )
-                        }}
+                        placeholder={providerConfig.hasKey ? providerConfig.keyHint : 'Paste a key'}
+                        helperText={providerConfig.hasKey
+                          ? 'A key is stored — leave blank to keep it'
+                          : 'No key stored yet'}
                       />
 
                       {provider === 'cloudflare' && (
@@ -609,7 +644,7 @@ const AIGeekPage = () => {
                           variant="outlined"
                           size="small"
                           onClick={() => testProvider(provider)}
-                          disabled={loading || !providerConfig.apiKey}
+                          disabled={loading || !providerConfig.hasKey}
                         >
                           Test API Key
                         </Button>
@@ -645,11 +680,20 @@ const AIGeekPage = () => {
                 variant="outlined"
                 size="small"
                 onClick={() => setShowResetStatsConfirm(true)}
-                startIcon={<RefreshIcon />}
+                startIcon={<DeleteSweepIcon />}
+                color="error"
               >
                 Reset Stats
               </Button>
             </Box>
+
+            {statsError && (
+              <GeekErrorState
+                title="Couldn't load usage statistics"
+                error={statsError}
+                onRetry={loadStatistics}
+              />
+            )}
 
             <Grid container spacing={3}>
               <Grid item xs={12} md={4}>
@@ -696,32 +740,40 @@ const AIGeekPage = () => {
               Provider Usage
             </Typography>
 
-            <TableContainer component={Paper}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Provider</TableCell>
-                    <TableCell>Total Calls</TableCell>
-                    <TableCell>Free Calls</TableCell>
-                    <TableCell>Paid Calls</TableCell>
-                    <TableCell>Tokens</TableCell>
-                    <TableCell>Cost</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {Object.entries(stats.providerUsage || {}).map(([provider, usage]) => (
-                    <TableRow key={provider}>
-                      <TableCell sx={{ textTransform: 'capitalize' }}>{provider}</TableCell>
-                      <TableCell>{usage.calls || 0}</TableCell>
-                      <TableCell sx={{ color: 'success.main' }}>{usage.freeCalls || 0}</TableCell>
-                      <TableCell sx={{ color: 'warning.main' }}>{usage.paidCalls || 0}</TableCell>
-                      <TableCell>{formatTokens(usage.tokens || 0)}</TableCell>
-                      <TableCell>{formatCost(usage.cost || 0)}</TableCell>
+            {Object.keys(stats.providerUsage || {}).length === 0 ? (
+              <GeekEmptyState
+                compact
+                title="No usage recorded yet"
+                description="Provider rows appear once an app makes its first call through aiGeek."
+              />
+            ) : (
+              <TableContainer component={Paper}>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Provider</TableCell>
+                      <TableCell>Total Calls</TableCell>
+                      <TableCell>Free Calls</TableCell>
+                      <TableCell>Paid Calls</TableCell>
+                      <TableCell>Tokens</TableCell>
+                      <TableCell>Cost</TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                  </TableHead>
+                  <TableBody>
+                    {Object.entries(stats.providerUsage || {}).map(([provider, usage]) => (
+                      <TableRow key={provider}>
+                        <TableCell sx={{ textTransform: 'capitalize' }}>{provider}</TableCell>
+                        <TableCell>{usage.calls || 0}</TableCell>
+                        <TableCell sx={{ color: 'success.main' }}>{usage.freeCalls || 0}</TableCell>
+                        <TableCell sx={{ color: 'warning.main' }}>{usage.paidCalls || 0}</TableCell>
+                        <TableCell>{formatTokens(usage.tokens || 0)}</TableCell>
+                        <TableCell>{formatCost(usage.cost || 0)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
 
             {/* App Usage Breakdown */}
             {Object.entries(stats.providerUsage || {}).some(([_, usage]) => usage.appUsage && Object.keys(usage.appUsage).length > 0) && (
@@ -821,7 +873,13 @@ const AIGeekPage = () => {
               Check the <strong>Free</strong> checkbox to enable free tier for a model. Limit fields are disabled when unchecked. Click <strong>Save All</strong> to persist all changes in one go. Use the <EditIcon sx={{ fontSize: 14, verticalAlign: 'middle' }} /> button for rate limits.
             </Alert>
 
-            {directorLoading ? (
+            {directorError ? (
+              <GeekErrorState
+                title="Couldn't load model data"
+                error={directorError}
+                onRetry={loadDirectorData}
+              />
+            ) : directorLoading ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
                 <CircularProgress />
               </Box>
@@ -982,9 +1040,11 @@ const AIGeekPage = () => {
                             </Box>
                           );
                         }) : (
-                          <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
-                            No models — click Sync on the AI Catalog tab
-                          </Typography>
+                          <GeekEmptyState
+                            compact
+                            title="No models"
+                            description="Sync this provider on the AI Catalog tab to fetch its models."
+                          />
                         )}
                       </CardContent>
                     </Card>
@@ -992,11 +1052,15 @@ const AIGeekPage = () => {
                 ))}
               </Grid>
             ) : (
-              <Box sx={{ textAlign: 'center', py: 4 }}>
-                <Typography variant="body1" color="text.secondary">
-                  Click "Refresh" to load model data
-                </Typography>
-              </Box>
+              <GeekEmptyState
+                title="No model data loaded"
+                description="Pricing and free-tier limits are fetched on demand."
+                action={(
+                  <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadDirectorData}>
+                    Refresh
+                  </Button>
+                )}
+              />
             )}
           </CardContent>
         </Card>
@@ -1016,6 +1080,14 @@ const AIGeekPage = () => {
                 Refresh Data
               </Button>
             </Box>
+
+            {directorError && (
+              <GeekErrorState
+                title="Couldn't load the catalog"
+                error={directorError}
+                onRetry={loadDirectorData}
+              />
+            )}
 
             {directorLoading && (
               <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
@@ -1178,9 +1250,11 @@ const AIGeekPage = () => {
                               ))}
                             </Box>
                           ) : (
-                            <Typography variant="body2" color="text.secondary">
-                              No models available — click Sync to fetch from API
-                            </Typography>
+                            <GeekEmptyState
+                              compact
+                              title="No models"
+                              description="Click Sync to fetch this provider's models from its API."
+                            />
                           )}
                         </CardContent>
                       </Card>
@@ -1190,12 +1264,16 @@ const AIGeekPage = () => {
               </Box>
             )}
 
-            {!directorData && !directorLoading && (
-              <Box sx={{ textAlign: 'center', py: 4 }}>
-                <Typography variant="body1" color="text.secondary">
-                  Click "Refresh Data" to load model information and pricing
-                </Typography>
-              </Box>
+            {!directorData && !directorLoading && !directorError && (
+              <GeekEmptyState
+                title="No catalog loaded"
+                description="Model information and pricing are fetched on demand."
+                action={(
+                  <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadDirectorData}>
+                    Refresh Data
+                  </Button>
+                )}
+              />
             )}
           </CardContent>
         </Card>
@@ -1224,7 +1302,13 @@ const AIGeekPage = () => {
               specifying a provider will also be routed here automatically.
             </Alert>
 
-            {appConfigsLoading ? (
+            {appConfigsError ? (
+              <GeekErrorState
+                title="Couldn't load app routing"
+                error={appConfigsError}
+                onRetry={loadAppConfigs}
+              />
+            ) : appConfigsLoading ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}><CircularProgress /></Box>
             ) : (
               <>
@@ -1343,11 +1427,10 @@ const AIGeekPage = () => {
                 </Grid>
 
                 {appConfigs.length === 0 && !appConfigsLoading && (
-                  <Box sx={{ textAlign: 'center', py: 4 }}>
-                    <Typography color="text.secondary">
-                      No app configs yet. Apps will be auto-discovered when they connect, or add one manually above.
-                    </Typography>
-                  </Box>
+                  <GeekEmptyState
+                    title="No app configs yet"
+                    description="Apps are auto-discovered when they connect, or add one manually above."
+                  />
                 )}
               </>
             )}

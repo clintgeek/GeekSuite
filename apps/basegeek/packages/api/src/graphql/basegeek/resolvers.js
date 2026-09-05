@@ -7,6 +7,7 @@ import AIAppConfig from '../../models/AIAppConfig.js';
 import aiService from '../../services/aiService.js';
 import aiDirectorService from '../../services/aiDirectorService.js';
 import aiUsageService from '../../services/aiUsageService.js';
+import { User } from '../../models/user.js';
 import { GraphQLError } from 'graphql';
 
 const requireAuth = (user) => {
@@ -15,6 +16,50 @@ const requireAuth = (user) => {
       extensions: { code: 'UNAUTHENTICATED' }
     });
   }
+};
+
+/**
+ * requireAdminUser — the GraphQL half of the admin gate on aiGeek.
+ *
+ * Same rule and same source of truth as the REST `requireRole('admin')`: the
+ * role is read from the userGeek document on every call, never from the JWT,
+ * so a promotion or demotion lands without a re-login. The thrown shape
+ * mirrors the REST body — `admin role required`, code ADMIN_REQUIRED, and the
+ * `admin_required` error tag — so a client can branch on one thing across both
+ * transports.
+ *
+ * API keys are refused before the lookup: a key belongs to an app, carries no
+ * user document, and its synthetic `apikey_<id>` id is not an ObjectId.
+ */
+const requireAdminUser = async (user) => {
+  requireAuth(user);
+
+  const deny = () => {
+    throw new GraphQLError('admin role required', {
+      extensions: { code: 'ADMIN_REQUIRED', error: 'admin_required' }
+    });
+  };
+
+  if (user.type === 'api_key') deny();
+
+  const record = await User.findById(user.id).select('role').lean();
+  if (!record || (record.role || 'user') !== 'admin') deny();
+};
+
+/**
+ * The providers the AI config query and mutation cover. Kept in step with the
+ * REST twin in routes/aiRoutes.js by hand for now — worth hoisting to a shared
+ * config module the next time either list changes.
+ */
+const CONFIG_PROVIDERS = [
+  'anthropic', 'groq', 'gemini', 'together', 'cohere', 'openrouter',
+  'cerebras', 'cloudflare', 'ollama', 'llm7', 'llmgateway', 'onemin'
+];
+
+/** The only part of a provider credential that leaves the server. */
+const keyHintFor = (plaintext) => {
+  if (typeof plaintext !== 'string' || plaintext.length < 4) return '';
+  return `…${plaintext.slice(-4)}`;
 };
 
 export const resolvers = {
@@ -110,30 +155,25 @@ export const resolvers = {
     // AI Geek
     // ----------------------------------------------------------------------
     aiConfig: async (_, __, { user }) => {
-      requireAuth(user);
+      await requireAdminUser(user);
       const configs = await AIConfig.find({});
-      const config = {
-        anthropic: { apiKey: '', enabled: false },
-        groq: { apiKey: '', enabled: false },
-        gemini: { apiKey: '', enabled: false },
-        together: { apiKey: '', enabled: false },
-        cohere: { apiKey: '', enabled: false },
-        openrouter: { apiKey: '', enabled: false },
-        cerebras: { apiKey: '', enabled: false },
-        cloudflare: { apiKey: '', accountId: '', enabled: false },
-        ollama: { apiKey: '', enabled: false },
-        llm7: { apiKey: '', enabled: false },
-        llmgateway: { apiKey: '', enabled: false },
-        onemin: { apiKey: '', enabled: false }
-      };
+
+      // Masked, exactly as the REST /api/ai/config does: { hasKey, keyHint,
+      // enabled } per provider and never the credential itself.
+      const config = {};
+      for (const provider of CONFIG_PROVIDERS) {
+        config[provider] = { hasKey: false, keyHint: '', enabled: false };
+      }
+      config.cloudflare.accountId = '';
 
       for (const dbConfig of configs) {
-        if (config[dbConfig.provider]) {
-          config[dbConfig.provider].apiKey = dbConfig.getDecryptedKey() ?? '';
-          config[dbConfig.provider].enabled = dbConfig.enabled;
-          if (dbConfig.provider === 'cloudflare' && dbConfig.accountId) {
-            config[dbConfig.provider].accountId = dbConfig.accountId;
-          }
+        if (!config[dbConfig.provider]) continue;
+        const key = dbConfig.getDecryptedKey() ?? '';
+        config[dbConfig.provider].hasKey = Boolean(key);
+        config[dbConfig.provider].keyHint = keyHintFor(key);
+        config[dbConfig.provider].enabled = dbConfig.enabled;
+        if (dbConfig.provider === 'cloudflare' && dbConfig.accountId) {
+          config[dbConfig.provider].accountId = dbConfig.accountId;
         }
       }
       return config;
@@ -336,25 +376,35 @@ export const resolvers = {
     // AI Geek
     // ----------------------------------------------------------------------
     saveAIConfig: async (_, { config }, { user }) => {
-      requireAuth(user);
-      const providersToUpdate = Object.keys(config)
-        .filter(key => config[key] && config[key].apiKey !== undefined)
-        .map(key => ({ provider: key, ...config[key] }));
+      await requireAdminUser(user);
+
+      // A blank apiKey means "keep the stored one" — the client can no longer
+      // read it back to echo it. enabled/accountId are written either way; the
+      // old shape skipped the whole entry without a key, so toggling Enabled
+      // on a configured provider silently did nothing.
+      const providersToUpdate = CONFIG_PROVIDERS
+        .filter(provider => config[provider] && typeof config[provider] === 'object')
+        .map(provider => ({ provider, ...config[provider] }));
 
       for (const providerConfig of providersToUpdate) {
-        if (providerConfig.apiKey && providerConfig.apiKey !== '***') {
-          const updateData = {
-            apiKey: encrypt(providerConfig.apiKey.trim()), // encrypt before persisting
-            enabled: providerConfig.enabled || false
-          };
-          if (providerConfig.provider === 'cloudflare' && providerConfig.accountId) {
-            updateData.accountId = providerConfig.accountId.trim();
-          }
+        const newKey = typeof providerConfig.apiKey === 'string' ? providerConfig.apiKey.trim() : '';
+        const hasNewKey = newKey !== '' && newKey !== '***';
+
+        const updateData = { enabled: providerConfig.enabled || false };
+        if (providerConfig.provider === 'cloudflare' && providerConfig.accountId) {
+          updateData.accountId = providerConfig.accountId.trim();
+        }
+
+        if (hasNewKey) {
+          updateData.apiKey = encrypt(newKey); // encrypt before persisting
           await AIConfig.findOneAndUpdate(
             { provider: providerConfig.provider },
             updateData,
             { upsert: true, new: true }
           );
+        } else {
+          // No upsert without a key: AIConfig.apiKey is required.
+          await AIConfig.updateOne({ provider: providerConfig.provider }, { $set: updateData });
         }
       }
 
@@ -363,7 +413,7 @@ export const resolvers = {
     },
 
     testAIProvider: async (_, { provider }, { user }) => {
-      requireAuth(user);
+      await requireAdminUser(user);
       const providerConfig = aiService.providers[provider];
       if (!providerConfig || !providerConfig.apiKey) throw new GraphQLError('Provider not supported or API key not configured');
 
@@ -377,26 +427,26 @@ export const resolvers = {
     },
 
     resetAIStats: async (_, __, { user }) => {
-      requireAuth(user);
+      await requireAdminUser(user);
       aiService.resetSessionStats();
       return true;
     },
 
     seedDirectorPricing: async (_, __, { user }) => {
-      requireAuth(user);
+      await requireAdminUser(user);
       await aiDirectorService.seedInitialPricing();
       return true;
     },
 
     seedDirectorFreeTier: async (_, __, { user }) => {
-      requireAuth(user);
+      await requireAdminUser(user);
       await aiDirectorService.seedFreeTierInformation();
       return true;
     },
 
     // Model Management
     syncProviderModels: async (_, { provider }, { user }) => {
-      requireAuth(user);
+      await requireAdminUser(user);
       try {
         const models = await aiService.refreshModels(provider);
         // Also update pricing for any new models
@@ -408,7 +458,7 @@ export const resolvers = {
     },
 
     updateModelPricing: async (_, { provider, modelId, inputPrice, outputPrice }, { user }) => {
-      requireAuth(user);
+      await requireAdminUser(user);
       const pricing = await AIPricing.findOneAndUpdate(
         { provider, modelId },
         { inputPrice, outputPrice, lastUpdated: new Date(), isActive: true },
@@ -418,13 +468,13 @@ export const resolvers = {
     },
 
     deleteModelPricing: async (_, { provider, modelId }, { user }) => {
-      requireAuth(user);
+      await requireAdminUser(user);
       await AIPricing.deleteOne({ provider, modelId });
       return true;
     },
 
     updateModelFreeTier: async (_, { provider, modelId, isFree, freeLimits, notes }, { user }) => {
-      requireAuth(user);
+      await requireAdminUser(user);
       const freeTier = await AIFreeTier.findOneAndUpdate(
         { provider, modelId },
         {
@@ -439,19 +489,19 @@ export const resolvers = {
     },
 
     deleteModelFreeTier: async (_, { provider, modelId }, { user }) => {
-      requireAuth(user);
+      await requireAdminUser(user);
       await AIFreeTier.deleteOne({ provider, modelId });
       return true;
     },
 
     resetAllFreeTiers: async (_, __, { user }) => {
-      requireAuth(user);
+      await requireAdminUser(user);
       const result = await AIFreeTier.updateMany({}, { isFree: false, lastUpdated: new Date() });
       return result.modifiedCount;
     },
 
     bulkUpdateFreeTiers: async (_, { updates }, { user }) => {
-      requireAuth(user);
+      await requireAdminUser(user);
       const results = await Promise.all(
         updates.map(({ provider, modelId, isFree, freeLimits, notes }) =>
           AIFreeTier.findOneAndUpdate(
@@ -472,7 +522,7 @@ export const resolvers = {
 
     // App Routing
     saveAIAppConfig: async (_, { appName, config }, { user }) => {
-      requireAuth(user);
+      await requireAdminUser(user);
       if (!appName?.trim()) throw new GraphQLError('appName is required');
       const update = {
         appName: appName.trim(),
@@ -495,7 +545,7 @@ export const resolvers = {
     },
 
     deleteAIAppConfig: async (_, { appName }, { user }) => {
-      requireAuth(user);
+      await requireAdminUser(user);
       await AIAppConfig.deleteOne({ appName });
       return true;
     }

@@ -11,10 +11,18 @@
  *
  * Public routes (Portal, Login, Register) render outside this shell and are
  * untouched.
+ *
+ * `GeekToastProvider` sits *inside* `GeekShell` and *outside* `GeekAppFrame`,
+ * which is the only placement that works: the provider reads `useGeekShell()`
+ * to offset toasts past the permanent nav panel and above any `bottomInset`,
+ * so it has to be under the shell — but `GeekAppFrame` owns the route
+ * transition and remounts on navigation, and a provider inside it would take
+ * the toast stack down with every route change, including the "saved" that
+ * triggered the navigation.
  */
 import { Box } from '@mui/material';
 import { Outlet } from 'react-router-dom';
-import { GeekShell, GeekAppFrame } from '@geeksuite/ui';
+import { GeekShell, GeekAppFrame, GeekToastProvider } from '@geeksuite/ui';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 
@@ -25,13 +33,15 @@ export default function Layout() {
       navSx={{ bgcolor: 'background.default' }}
       topBar={<TopBar />}
     >
-      <GeekAppFrame>
-        <Box sx={{ p: { xs: 2, sm: 3, md: 4 } }}>
-          <Box sx={{ maxWidth: 1400, mx: 'auto' }}>
-            <Outlet />
+      <GeekToastProvider>
+        <GeekAppFrame>
+          <Box sx={{ p: { xs: 2, sm: 3, md: 4 } }}>
+            <Box sx={{ maxWidth: 1400, mx: 'auto' }}>
+              <Outlet />
+            </Box>
           </Box>
-        </Box>
-      </GeekAppFrame>
+        </GeekAppFrame>
+      </GeekToastProvider>
     </GeekShell>
   );
 }

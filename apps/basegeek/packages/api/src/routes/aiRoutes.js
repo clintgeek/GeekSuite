@@ -1,5 +1,5 @@
 import express from 'express';
-import { authenticateToken } from '../middleware/auth.js';
+import { requireRole } from '../middleware/auth.js';
 import { authenticateJWTOrAPIKey, requirePermission } from '../middleware/apiKeyAuth.js';
 import logger from '../lib/logger.js';
 import aiService from '../services/aiService.js';
@@ -18,6 +18,46 @@ const router = express.Router();
 // Apply authentication to all routes (JWT or API key)
 // Note: Individual routes can override with specific permission requirements
 router.use(authenticateJWTOrAPIKey());
+
+/**
+ * requireAdminUser — the admin gate for the provider-credential routes.
+ *
+ * The router already authenticated the caller above, so this only has to
+ * settle *who* they are. API keys are refused outright: a key belongs to an
+ * app, not a person, has no userGeek document to carry a role, and no app has
+ * any business reading or rewriting the suite's provider credentials. Its
+ * req.user.id is a synthetic `apikey_<id>` string, so letting it reach
+ * requireRole's User.findById would only produce a 500 cast error anyway.
+ *
+ * Everyone else falls through to the shared requireRole('admin'), so the
+ * denial body is the same { error: 'admin_required' } shape every other admin
+ * gate in the suite emits (see adminGates.test.js).
+ */
+const requireAdminUser = (req, res, next) => {
+  if (req.user?.type === 'api_key') {
+    return res.status(403).json({
+      error: 'admin_required',
+      message: 'admin role required',
+      code: 'ADMIN_REQUIRED'
+    });
+  }
+  return requireRole('admin')(req, res, next);
+};
+
+/** The providers /config reads and writes. */
+const CONFIG_PROVIDERS = [
+  'anthropic', 'groq', 'gemini', 'together', 'cohere', 'openrouter',
+  'cerebras', 'cloudflare', 'ollama', 'llm7', 'llmgateway', 'onemin'
+];
+
+/**
+ * A key hint is the *only* part of a provider credential that leaves the
+ * server: enough to tell two keys apart in the UI, useless to a thief.
+ */
+export const keyHintFor = (plaintext) => {
+  if (typeof plaintext !== 'string' || plaintext.length < 4) return '';
+  return `…${plaintext.slice(-4)}`;
+};
 
 // GET /api/ai/stats - Get AI service statistics
 router.get('/stats', async (req, res) => {
@@ -1076,34 +1116,30 @@ router.post('/reset-stats', async (req, res) => {
 });
 
 // GET /api/ai/config - Get AI configuration
-router.get('/config', async (req, res) => {
+router.get('/config', requireAdminUser, async (req, res) => {
   try {
     const configs = await AIConfig.find({});
-    const config = {
-      anthropic: { apiKey: '', enabled: false },
-      groq: { apiKey: '', enabled: false },
-      gemini: { apiKey: '', enabled: false },
-      together: { apiKey: '', enabled: false },
-      cohere: { apiKey: '', enabled: false },
-      openrouter: { apiKey: '', enabled: false },
-      cerebras: { apiKey: '', enabled: false },
-      cloudflare: { apiKey: '', accountId: '', enabled: false },
-      ollama: { apiKey: '', enabled: false },
-      llm7: { apiKey: '', enabled: false },
-      llmgateway: { apiKey: '', enabled: false },
-      onemin: { apiKey: '', enabled: false }
-    };
 
-    // Load configurations from database — decrypt key before sending to client
+    // Never the key itself: { hasKey, keyHint, enabled } per provider. The
+    // admin UI needs to know a key is *there* and which one it is, and
+    // nothing more — a decrypted credential on the wire is a credential in
+    // every proxy log and browser cache between here and the tab.
+    const config = {};
+    for (const provider of CONFIG_PROVIDERS) {
+      config[provider] = { hasKey: false, keyHint: '', enabled: false };
+    }
+    config.cloudflare.accountId = '';
+
     for (const dbConfig of configs) {
-      if (config[dbConfig.provider]) {
-        config[dbConfig.provider].apiKey = dbConfig.getDecryptedKey() ?? '';
-        config[dbConfig.provider].enabled = dbConfig.enabled;
+      if (!config[dbConfig.provider]) continue;
+      const key = dbConfig.getDecryptedKey() ?? '';
+      config[dbConfig.provider].hasKey = Boolean(key);
+      config[dbConfig.provider].keyHint = keyHintFor(key);
+      config[dbConfig.provider].enabled = dbConfig.enabled;
 
-        // Handle Cloudflare-specific fields
-        if (dbConfig.provider === 'cloudflare' && dbConfig.accountId) {
-          config[dbConfig.provider].accountId = dbConfig.accountId;
-        }
+      // Handle Cloudflare-specific fields
+      if (dbConfig.provider === 'cloudflare' && dbConfig.accountId) {
+        config[dbConfig.provider].accountId = dbConfig.accountId;
       }
     }
 
@@ -1120,43 +1156,41 @@ router.get('/config', async (req, res) => {
 });
 
 // POST /api/ai/config - Update AI configuration
-router.post('/config', async (req, res) => {
+router.post('/config', requireAdminUser, async (req, res) => {
   try {
-    const { anthropic, groq, gemini, together, cohere, openrouter, cerebras, cloudflare, ollama, llm7, llmgateway, onemin } = req.body;
-
-    // Update configurations in database
-    const configs = [
-      { provider: 'anthropic', ...anthropic },
-      { provider: 'groq', ...groq },
-      { provider: 'gemini', ...gemini },
-      { provider: 'together', ...together },
-      { provider: 'cohere', ...cohere },
-      { provider: 'openrouter', ...openrouter },
-      { provider: 'cerebras', ...cerebras },
-      { provider: 'cloudflare', ...cloudflare },
-      { provider: 'ollama', ...ollama },
-      { provider: 'llm7', ...llm7 },
-      { provider: 'llmgateway', ...llmgateway },
-      { provider: 'onemin', ...onemin }
-    ].filter(config => config.apiKey !== undefined); // Only process providers that were sent
+    // Only providers actually present in the body are touched. A provider may
+    // now arrive with no apiKey at all — the client can no longer read the
+    // stored key back, so a blank field means "keep what's there", never
+    // "clear it". Everything else on the entry (enabled, accountId) is still
+    // written, which the old shape could not do: it skipped the whole update
+    // unless a key came with it, so toggling Enabled on a configured provider
+    // silently did nothing.
+    const configs = CONFIG_PROVIDERS
+      .filter(provider => req.body[provider] && typeof req.body[provider] === 'object')
+      .map(provider => ({ provider, ...req.body[provider] }));
 
     for (const config of configs) {
-      if (config.apiKey && config.apiKey !== '***') {
-        const updateData = {
-          apiKey: encrypt(config.apiKey.trim()), // encrypt before persisting
-          enabled: config.enabled || false
-        };
+      const newKey = typeof config.apiKey === 'string' ? config.apiKey.trim() : '';
+      const hasNewKey = newKey !== '' && newKey !== '***';
 
-        // Handle Cloudflare-specific fields
-        if (config.provider === 'cloudflare' && config.accountId) {
-          updateData.accountId = config.accountId.trim();
-        }
+      const updateData = { enabled: config.enabled || false };
 
+      // Handle Cloudflare-specific fields
+      if (config.provider === 'cloudflare' && config.accountId) {
+        updateData.accountId = config.accountId.trim();
+      }
+
+      if (hasNewKey) {
+        updateData.apiKey = encrypt(newKey); // encrypt before persisting
         await AIConfig.findOneAndUpdate(
           { provider: config.provider },
           updateData,
           { upsert: true, new: true }
         );
+      } else {
+        // No upsert without a key: AIConfig.apiKey is required, so creating a
+        // keyless doc would only throw. Nothing stored, nothing to update.
+        await AIConfig.updateOne({ provider: config.provider }, { $set: updateData });
       }
     }
 
@@ -1182,7 +1216,7 @@ router.post('/config', async (req, res) => {
 });
 
 // POST /api/ai/test - Test AI provider API key
-router.post('/test', async (req, res) => {
+router.post('/test', requireAdminUser, async (req, res) => {
   try {
     const { provider, appName = 'test' } = req.body;
     req.log.info({ provider }, '[AI Test] Testing provider');
