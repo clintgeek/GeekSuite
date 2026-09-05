@@ -15,6 +15,7 @@ const crypto = require('crypto');
 const { createHttpLogger } = require('@geeksuite/logger');
 const path = require('path');
 const logger = require('./config/logger');
+const { breakerStats } = require('./lib/breakers');
 const { authenticateToken } = require('./middleware/auth');
 const { csrfGuard, meHandler } = require('@geeksuite/user/server');
 
@@ -130,6 +131,17 @@ app.get('/health', healthHandler);
 // docker-compose*.yml — no HEALTHCHECK is defined for this service at all),
 // but removing a previously-public path isn't this change's job.
 app.get('/api/health', healthHandler);
+
+// Circuit breaker stats for the external food/fitness APIs (USDA,
+// OpenFoodFacts, CalorieNinjas, Garmin — DOCS/TODO_ORDER.md #23). Read-only,
+// no auth — matches /api/health above.
+app.get('/api/health/breakers', (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    breakers: breakerStats(),
+  });
+});
 
 // Session identity endpoint
 app.get('/api/me', authenticateToken, meHandler());

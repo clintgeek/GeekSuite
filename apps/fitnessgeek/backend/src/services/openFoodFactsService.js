@@ -1,5 +1,10 @@
 const axios = require('axios');
 const logger = require('../config/logger');
+const { createBreaker } = require('../lib/breakers');
+
+// Same 'openfoodfacts' breaker/state as foodApiService.js's OFF calls — one
+// upstream, one circuit, regardless of which service file calls it.
+const openFoodFactsBreaker = createBreaker('openfoodfacts', (task) => task());
 
 class OpenFoodFactsService {
   constructor() {
@@ -15,14 +20,14 @@ class OpenFoodFactsService {
   async searchFoods(query, limit = 25) {
     try {
 
-      const response = await axios.get(`${this.baseURL}/cgi/search.pl`, {
+      const response = await openFoodFactsBreaker.fire(() => axios.get(`${this.baseURL}/cgi/search.pl`, {
         params: {
           search_terms: query,
           page_size: limit,
           json: 1
         },
         timeout: 10000
-      });
+      }));
 
       if (!response.data || !response.data.products) {
         return [];
@@ -49,10 +54,10 @@ class OpenFoodFactsService {
    */
   async getFoodByBarcode(barcode) {
     try {
-      const response = await axios.get(`${this.baseURL}/api/v0/product/${barcode}`, {
+      const response = await openFoodFactsBreaker.fire(() => axios.get(`${this.baseURL}/api/v0/product/${barcode}`, {
         params: { json: 1 },
         timeout: 10000
-      });
+      }));
 
       if (!response.data || response.data.status === 0) {
         return null;

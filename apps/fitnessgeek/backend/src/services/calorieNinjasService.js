@@ -10,6 +10,9 @@
 const axios = require('axios');
 const logger = require('../config/logger');
 const cacheService = require('./cacheService');
+const { createBreaker } = require('../lib/breakers');
+
+const calorieNinjasBreaker = createBreaker('calorieninjas', (task) => task());
 
 class CalorieNinjasService {
   constructor() {
@@ -46,13 +49,13 @@ class CalorieNinjasService {
 
       return cacheService.wrap(cacheKey, async () => {
         try {
-          const response = await axios.get(`${this.baseUrl}/nutrition`, {
+          const response = await calorieNinjasBreaker.fire(() => axios.get(`${this.baseUrl}/nutrition`, {
             params: { query },
             headers: {
               'X-Api-Key': this.apiKey
             },
             timeout: 10000
-          });
+          }));
 
           if (!response.data || !response.data.items) {
             return [];

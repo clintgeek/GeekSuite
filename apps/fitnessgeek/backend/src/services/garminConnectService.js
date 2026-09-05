@@ -1,6 +1,14 @@
 const { GarminConnect } = require('garmin-connect');
 const UserSettings = require('../models/UserSettings');
 const logger = require('../config/logger');
+const { createBreaker } = require('../lib/breakers');
+
+// One breaker for every Garmin network call in this file — login plus each
+// data pull — so a struggling Garmin endpoint trips the same circuit no
+// matter which route triggered it. 15s timeout (vs. 6s for the REST food
+// APIs): garmin-connect makes its own sequential HTTP calls under the hood
+// and doesn't expose a per-call timeout of its own.
+const garminBreaker = createBreaker('garmin', (task) => task());
 
 async function buildClient(userId) {
   const settings = await UserSettings.getOrCreate(userId);
@@ -24,7 +32,7 @@ async function buildClient(userId) {
   }
 
   // Login and persist tokens
-  await client.login();
+  await garminBreaker.fire(() => client.login());
   await persistTokens(userId, client);
   return { client, settings };
 }
@@ -60,7 +68,7 @@ async function getStatus(userId) {
 async function getHeartRate(userId, date) {
   const { client } = await buildClient(userId);
   const d = date ? new Date(date) : new Date();
-  const hr = await client.getHeartRate(d);
+  const hr = await garminBreaker.fire(() => client.getHeartRate(d));
   // Persist token refresh if needed
   await persistTokens(userId, client);
   return hr;
@@ -71,14 +79,14 @@ async function getDaily(userId, date) {
   const d = date ? new Date(date) : new Date();
 
   const [hrRes, weightRes, stepsRes, sleepRes, activitiesRes] = await Promise.allSettled([
-    client.getHeartRate(d),
-    client.getDailyWeightInPounds(d),
+    garminBreaker.fire(() => client.getHeartRate(d)),
+    garminBreaker.fire(() => client.getDailyWeightInPounds(d)),
     // Steps count (if supported by client)
-    client.getSteps ? client.getSteps(d) : Promise.reject(new Error('getSteps not supported')),
+    client.getSteps ? garminBreaker.fire(() => client.getSteps(d)) : Promise.reject(new Error('getSteps not supported')),
     // Sleep duration (returns { hours, minutes })
-    client.getSleepDuration ? client.getSleepDuration(d) : Promise.reject(new Error('getSleepDuration not supported')),
+    client.getSleepDuration ? garminBreaker.fire(() => client.getSleepDuration(d)) : Promise.reject(new Error('getSleepDuration not supported')),
     // Activities to approximate active calories for the day
-    client.getActivities ? client.getActivities(0, 50) : Promise.reject(new Error('getActivities not supported'))
+    client.getActivities ? garminBreaker.fire(() => client.getActivities(0, 50)) : Promise.reject(new Error('getActivities not supported'))
   ]);
 
   const result = {
@@ -135,7 +143,7 @@ async function getDaily(userId, date) {
 
 async function updateWeightToGarmin(userId, date, weightLbs, timezone) {
   const { client } = await buildClient(userId);
-  await client.updateWeight(date ? new Date(date) : new Date(), weightLbs, timezone || 'America/Los_Angeles');
+  await garminBreaker.fire(() => client.updateWeight(date ? new Date(date) : new Date(), weightLbs, timezone || 'America/Los_Angeles'));
   await persistTokens(userId, client);
   return { success: true };
 }
@@ -145,7 +153,7 @@ async function getSleepData(userId, date) {
   const d = date ? new Date(date) : new Date();
 
   try {
-    const sleepData = await client.getSleepData(d);
+    const sleepData = await garminBreaker.fire(() => client.getSleepData(d));
     await persistTokens(userId, client);
 
     // Comprehensive health metrics for pattern analysis
@@ -270,7 +278,7 @@ async function getActivities(userId, start = 0, limit = 20) {
   const { client } = await buildClient(userId);
 
   try {
-    const activities = await client.getActivities(start, limit);
+    const activities = await garminBreaker.fire(() => client.getActivities(start, limit));
     await persistTokens(userId, client);
 
     // Transform activities to a consistent format

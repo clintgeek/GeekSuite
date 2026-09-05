@@ -2,6 +2,13 @@ const axios = require('axios');
 const cacheService = require('./cacheService');
 const foodQualityService = require('./foodQualityService');
 const logger = require('../config/logger');
+const { createBreaker } = require('../lib/breakers');
+
+// One breaker per upstream, shared across every call site below (and, for
+// 'openfoodfacts', with openFoodFactsService.js — same upstream, same
+// circuit). See src/lib/breakers.js.
+const usdaBreaker = createBreaker('usda', (task) => task());
+const openFoodFactsBreaker = createBreaker('openfoodfacts', (task) => task());
 
 class FoodApiService {
   constructor() {
@@ -61,7 +68,7 @@ class FoodApiService {
     }
 
     try {
-      const response = await axios.get('https://api.nal.usda.gov/fdc/v1/foods/search', {
+      const response = await usdaBreaker.fire(() => axios.get('https://api.nal.usda.gov/fdc/v1/foods/search', {
         params: {
           api_key: this.usdaApiKey,
           query: query,
@@ -69,7 +76,7 @@ class FoodApiService {
           dataType: 'Foundation,SR Legacy,Survey (FNDDS)'
         },
         timeout: 10000
-      });
+      }));
 
       if (!response.data || !response.data.foods) {
         return [];
@@ -92,14 +99,14 @@ class FoodApiService {
    */
   async searchOpenFoodFacts(query, limit = 10) {
     try {
-      const response = await axios.get(`${this.openFoodFactsBaseUrl}/cgi/search.pl`, {
+      const response = await openFoodFactsBreaker.fire(() => axios.get(`${this.openFoodFactsBaseUrl}/cgi/search.pl`, {
         params: {
           search_terms: query,
           page_size: limit,
           json: 1
         },
         timeout: 10000
-      });
+      }));
 
       if (!response.data || !response.data.products) {
         return [];
@@ -144,10 +151,10 @@ class FoodApiService {
    */
   async getOpenFoodFactsByBarcode(barcode) {
     try {
-      const response = await axios.get(`${this.openFoodFactsBaseUrl}/api/v0/product/${barcode}`, {
+      const response = await openFoodFactsBreaker.fire(() => axios.get(`${this.openFoodFactsBaseUrl}/api/v0/product/${barcode}`, {
         params: { json: 1 },
         timeout: 10000
-      });
+      }));
 
       if (!response.data || response.data.status === 0) {
         return null;
