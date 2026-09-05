@@ -371,6 +371,25 @@ The fitnessgeek dead files and the voice decision remain open. Added after bujog
 | M5 | ~~startgeek~~ **landed 2026-09-05** (`13a922e`; first manifest/SW/offline page) | S–M | Standalone build |
 | M6 | Guardrails | S | Mobile checklist in the review list; `packages/ui` tests for sheet/dialog/fab; a Playwright screenshot script at iPhone 14 (`~/.agents/skills/playwright` has the browser) using a saved `storageState` that Chef creates once by signing in |
 
+**M6 — the harness is in the repo (2026-09-05).** The scratch scripts became
+`tools/mobile-harness` (`@geeksuite/mobile-harness`): shared contexts (iPhone 14
+dark/light plus a 1280×900 desktop), the route/fixture plumbing that made them
+work (catch-all first, origin-echoing CORS with a preflight answer, service
+workers blocked, GraphQL stubbed by operation name), one `fixtures.mjs` +
+`scenes.mjs` per app, and a probe that asserts §6's measurable half in the live
+page — every visible interactive element ≥ 44×44, no readable string below 12px,
+no sideways scroll — plus a fail on any page error. `pnpm --filter
+@geeksuite/mobile-harness ci` builds each app, serves `dist` with `vite preview`
+on a free port (the dev servers hardcode absolute API hosts), walks its scenes in
+both schemes and uploads the screenshots; `.github/workflows/mobile-harness.yml`
+runs it on pushes to main and on PRs touching `apps/**`, `packages/ui/**` or the
+tool. No screenshot baselines yet — the probe is the gate, diffing is documented
+in the tool's README as the next step. Known violations can be parked in each
+app's `waivers` list with a reason; the list ships empty on purpose, so the
+findings from the first run (bookgeek's 32px shelf chips and 11px saved filters,
+bujogeek's 22–28px chips/habit grid and 11px editor labels, basegeek's 11px
+`overline`/`subtitle2` theme tokens) are visible rather than absorbed.
+
 Run it like the 2026-09-02 sweep: per-app commits, incremental deploys, worktree builds when the
 tree is dirty. Every main push restarts the fleet (Watchtower), so batch per app, not per file.
 

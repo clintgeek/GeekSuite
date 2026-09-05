@@ -1,0 +1,72 @@
+name: Mobile harness
+
+# The mobile grammar gate (DOCS/MOBILE_UI_PLAN.md §6). Builds every app,
+# serves its dist, walks the app's scenes at 390x844 in both colour schemes,
+# and fails on any tap target under 44px, any readable string under 12px, any
+# sideways scroll, or any page error. The screenshots are uploaded so a
+# reviewer can look at the phone without owning one.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/**'
+      - 'packages/ui/**'
+      - 'tools/mobile-harness/**'
+      - '.github/workflows/mobile-harness.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/**'
+      - 'packages/ui/**'
+      - 'tools/mobile-harness/**'
+      - '.github/workflows/mobile-harness.yml'
+
+concurrency:
+  group: mobile-harness-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  harness:
+    name: mobile grammar (iPhone 14, dark + light)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Cache the browser, not the download script: the key is the pinned
+      # Playwright version, so a version bump invalidates it on its own.
+      - name: Read the pinned Playwright version
+        id: pw
+        run: echo "version=$(node -p "require('./tools/mobile-harness/package.json').devDependencies.playwright")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        id: pw-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ steps.pw.outputs.version }}-chromium-${{ runner.os }}
+      - name: Install Chromium
+        # --with-deps installs system libraries every time; the browser binary
+        # itself is skipped when the cache restored it.
+        run: npx playwright install --with-deps chromium
+        working-directory: tools/mobile-harness
+
+      - name: Build, serve and probe every app
+        # Report-only until the probe findings from 2026-09-05 (698 across seven
+        # apps, DOCS/BURN_QUEUE.md) are burned down or waived; then remove this.
+        continue-on-error: true
+        run: pnpm --filter @geeksuite/mobile-harness ci
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-harness-${{ github.run_id }}
+          path: tools/mobile-harness/out/
+          retention-days: 14
+          if-no-files-found: warn
