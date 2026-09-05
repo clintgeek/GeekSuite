@@ -10,8 +10,8 @@ import {
   Add as AddIcon,
   MonitorWeight as WeightIcon
 } from '@mui/icons-material';
+import { useGeekPrimaryAction } from '@geeksuite/ui';
 import { getTodayLocal } from '../../utils/dateUtils.js';
-import { useRegisterPrimaryAction } from '../Layout/primaryAction.js';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
 
 const QuickAddWeight = ({ onAdd, unit = 'lbs' }) => {
@@ -23,7 +23,7 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs' }) => {
   // The page's thumb-zone action. `GeekFab` (mounted by the shell) reads the
   // bottom-nav inset and the safe area, so the old hardcoded `bottom: 80` —
   // which also rendered on desktop, beside the Quick Add card — is gone.
-  useRegisterPrimaryAction({
+  useGeekPrimaryAction({
     label: 'Log weight',
     icon: <AddIcon />,
     onClick: () => setOpen(true)

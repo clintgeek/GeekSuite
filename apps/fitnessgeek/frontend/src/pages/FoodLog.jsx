@@ -33,8 +33,8 @@ import { useFoodLog } from '../hooks/useFoodLog.js';
 import { fitnessGeekService } from '../services/fitnessGeekService.js';
 import { settingsService } from '../services/settingsService.js';
 import { goalsService } from '../services/goalsService.js';
+import { useGeekPrimaryAction } from '@geeksuite/ui';
 import { Surface, SectionLabel, DisplayHeading, StatNumber } from '../components/primitives';
-import { useRegisterPrimaryAction } from '../components/Layout/primaryAction.js';
 import { netCarbs as calcNetCarbs, ketoStatus } from '../utils/ketoMath.js';
 
 /**
@@ -197,7 +197,7 @@ const FoodLog = () => {
   };
 
   // The page's one primary action, rendered by the shell in the thumb zone.
-  useRegisterPrimaryAction({
+  useGeekPrimaryAction({
     label: 'Log food',
     icon: <AddIcon />,
     onClick: () => handleAddFood(mealTypeForNow())
