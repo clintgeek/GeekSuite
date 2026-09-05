@@ -11,7 +11,7 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 |---|--------|-------|-------|-------|
 | R4 | M6 guardrails: mobile harness into `tools/mobile-harness`, CI workflow | opus | tools/, .github/workflows/mobile-harness.yml | 09-05 am |
 | R5 | TODO #17 shared date utilities → `packages/utils`; bujogeek/fitnessgeek/flockgeek consume | opus | packages/utils, 3 apps (date code only) | 09-05 am |
-| R9 | TODO #25/#26 bujogeek subtasks UI + Apollo cache invalidation | opus | bujogeek frontend, its GraphQL surface | 09-05 am |
+| R9 | TODO #25/#26 bujogeek subtasks + Apollo cache — **done, commit held**: TaskList/ReviewPage/HabitsPage also carry R5's in-flight date-utils edits; commit both when R5 lands (gateway 156 tests, frontend 82) | opus | bujogeek frontend, graphql/bujogeek | 09-05 am |
 | R18 | flockgeek frontend vitest + RTL suite + CI job | sonnet | flockgeek frontend, ci.yml (one job) | 09-05 12:45 |
 | R19 | Q8: OpenAI-compat fixes (flip the 22 it.failing) + last llm7 refs (Q12) | opus | openaiProxy, aiRoutes, aiService, capabilities, director/rateLimit refs, docs | 09-05 13:15 |
 | R20 | Q7: CSRF double-submit token (report mode default) + packages/auth header | opus | basegeek middleware/csrf*, server.js order, auth routes, packages/auth, ui api.js | 09-05 13:15 |
@@ -33,6 +33,7 @@ Push only after those two land, then re-run the check in a detached worktree of 
 | Q10 | Revoke the `LocalApps` key once the env grep and nginx sweep confirm no caller | background greps | XS |
 | Q11 | basegeek `Databases.jsx`: wire into nav or delete | Chef's call | XS |
 | Q13 | bookgeek CONTEXT.md says Runtime: Bun (it is node:20); verify COVERS_PATH now serves the old covers in the UI | after R? — trivial, next slot | XS |
+| Q15 | bujogeek: TagsPage tag cloud onto the cached GET_TASK_TAGS query; TemplateContext.applyTemplate cache handling (R9 leftovers); strike #25/#26 in docs | after R9 commits | S |
 | Q14 | storygeek CanonCard summary text through Narration too (agent left it as a separate render path) | Chef's call | XS |
 
 ## How to resume if this session is lost
