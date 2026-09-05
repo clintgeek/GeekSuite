@@ -53,6 +53,35 @@ function buildBookOverrides(mode) {
         muted:     isDark ? "#9aa4b2" : "#5b6472",
       },
       divider: colors.border,
+      // Identity tones, not semantics. `progress` is the one amber in the app
+      // (reading progress on covers and the detail slider); `shelf` colors the
+      // shelf state of a book everywhere it appears. Light mode steps each
+      // hue down so it clears 3:1 as a graphic on white.
+      progress: {
+        main: isDark ? "#f59e0b" : "#b45309",
+        contrastText: "#0b1220",
+      },
+      shelf: isDark
+        ? {
+            reading: "#f59e0b",
+            "on-reader": "#2dd4bf",
+            unread: "#94a3b8",
+            read: "#38bdf8",
+            "want-to-read": "#a78bfa",
+            abandoned: "#fb7185",
+            "need-to-find": "#fb923c",
+            custom: "#94a3b8",
+          }
+        : {
+            reading: "#b45309",
+            "on-reader": "#0f766e",
+            unread: "#475569",
+            read: "#0369a1",
+            "want-to-read": "#6d28d9",
+            abandoned: "#be123c",
+            "need-to-find": "#c2410c",
+            custom: "#475569",
+          },
     },
 
     typography: {
