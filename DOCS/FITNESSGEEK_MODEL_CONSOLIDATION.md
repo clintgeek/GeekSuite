@@ -19,10 +19,10 @@ items are bug fixes that should ship on their own, ahead of any consolidation.**
 | | |
 |---|---|
 | Model pairs total | **13** |
-| Already consolidated | **9** (`UserSettings`, `Weight`, `BloodPressure`, `Medication`, `LoginStreak`, `WeightGoals`, `NutritionGoals`, `Meal`, `FoodItem` — all 2026-09-05) |
+| Already consolidated | **11 — all of them.** `UserSettings` (pair 0), `Weight`, `BloodPressure`, `Medication`, `LoginStreak`, `WeightGoals`, `NutritionGoals`, `Meal`, `FoodItem`, `FoodLog`, `DailySummary` — every one on 2026-09-05 |
 | basegeek orphans deleted | **2** (`AIFoodPromptCache`, `MedicationLog` — done 2026-09-05) |
-| Remaining | **2** (`FoodLog`, `DailySummary` — the rest of the food family) |
-| …genuinely needing a shared schema | **2** |
+| Remaining | **0 — CONSOLIDATION COMPLETE (11/11, 2026-09-05).** No fitnessgeek collection has two hand-synced schemas any more; see §12 for the record and the open follow-ups |
+| …genuinely needing a shared schema | **0 left** |
 | Conflicting divergences | **4** — 1 in the schema field set, 3 in statics |
 | Drift divergences | 3 (statics one side has and the other doesn't) |
 | Harmless divergences | the rest — connection binding, import order, trailing newline |
@@ -57,8 +57,8 @@ virtual, `toJSON`/`toObject` setting and instance method.
 | 8 | `NutritionGoals` | `nutritiongoals` | identical | identical | BG adds `requireUser` ×3 | ✅ **DONE 2026-09-05** (guards stayed app-side; two instance methods moved) |
 | 9 | `Meal` | `meals` | identical | identical | BG adds `findOwned`; BG's 3 list statics are owner-scoped, FG's are not | ✅ **DONE 2026-09-05** (fields only; the C4 statics stayed put on both sides) |
 | 10 | `FoodItem` | `fooditems` | identical | identical | BG adds `findAccessible`/`findAccessibleMany`; `findOrCreate` + `search` identical | ✅ **DONE 2026-09-05** (`findOrCreate`'s ladder moved as a shared helper; `search` and the two `findAccessible*` stayed app-side) |
-| 11 | `FoodLog` | `foodlogs` | identical | identical | different date normalizer | **conflicting** |
-| 12 | `DailySummary` | `dailysummaries` | **BG is missing `totals.net_carbs_grams`** | identical | different date normalizer; BG's `updateFromLogs` omits the net-carb accumulation | **conflicting ×2** |
+| 11 | `FoodLog` | `foodlogs` | identical | identical | ~~different date normalizer~~ (fixed in `0cecb4a`); BG adds `requireUser` ×4 | ✅ **DONE 2026-09-05** (pair 9 — the four list statics stayed app-side; the `calculatedNutrition` virtual and the `meal_type` enum moved) |
+| 12 | `DailySummary` | `dailysummaries` | ~~**BG is missing `totals.net_carbs_grams`**~~ (restored in `0cecb4a`) → identical | identical | ~~different date normalizer; BG's `updateFromLogs` omits the net-carb accumulation~~ (both fixed in `0cecb4a`); BG adds `requireUser` ×3 | ✅ **DONE 2026-09-05** (pair 10 — `updateFromLogs`'s recompute moved as a helper; `getOrCreate` / `getSummaryRange` and all date handling stayed app-side) |
 
 Neither side passes an explicit `collection:` option anywhere, and every model name matches across
 the two sides, so Mongoose's default pluralization lands both models on the same collection. That is
@@ -379,8 +379,8 @@ during consolidation** — it would be a data migration wearing a refactor's clo
 | 8 | ✅ **`FoodItem`** *(done 2026-09-05)* | M | ⚠️ see below | The `findOrCreate` dedupe ladder (`FG :116-171` / `BG :137-192`) is identical today and **must stay identical** — it is the only thing stopping the two writers from minting duplicate rows for the same USDA/OpenFoodFacts item. Promote it into the shared module *with the fields*, as an exception to the statics policy: unlike `requireUser`, it has one correct meaning for both writers and a divergence would corrupt the catalog. `findAccessible`/`findAccessibleMany` stay app-side (basegeek-only ownership scoping). `search` is identical too — promote it as well |
 
 > **Correction, written after the fact.** `search` was **not** promoted. It is an ownership-scoping read and the two sides do not actually agree about what a visible catalog row is — `search` matches `{user_id: null}`, `foodCatalogFilter` (used by `findAccessible`, in the same file) also matches `{user_id: {$exists: false}}`. Promoting one would freeze a live disagreement into the shared contract, and a read static has no corruption failure mode to buy for that price. `findOrCreate` was split instead: the ladder and the global-row creation are the shared `findOrCreateFoodItem(Model, foodData)`, each side keeps a one-line delegating static. See §11 |
-| 9 | `FoodLog` | M | ✅ *after* PRE-2 | Field definitions identical; the whole divergence is the date normalizer. Once PRE-2 has landed, this drops to an S |
-| 10 | `DailySummary` | M | ❌ *before* PRE-1 | The riskiest pair, and it must be **last**. The shared definition must be fitnessgeek's superset. Until PRE-1 lands, a half-switched state is not neutral — see below |
+| 9 | ✅ **`FoodLog`** *(done 2026-09-05)* | S | ✅ | PRE-2 had already landed, so the date normalizer was no longer a divergence and the two copies differed only by the connection binding and `requireUser` ×4. **The plan missed a serialized virtual (`calculatedNutrition`) and the asymmetric `updatedAt` timestamp rename; both moved verbatim.** Also the pair where the cross-collection `MEAL_TYPES` question got answered — see §12 |
+| 10 | ✅ **`DailySummary`** *(done 2026-09-05)* | S | ✅ | No longer the riskiest pair: PRE-1 restored `totals.net_carbs_grams` on the gateway in `0cecb4a`, so the two schemas were already equivalent and the half-switched state was as neutral as everybody else's. `updateFromLogs` moved as `updateDailySummaryFromLogs(...)`, the second carve-out from the statics policy; the date normalization and the `requireUser` guard stayed app-side |
 
 ### The rollback claim, verified per model
 
@@ -400,8 +400,12 @@ the other is a no-op. Identical on both sides today, so no risk — but if you e
 flag in the shared module, both processes must be redeployed together or one will try to build an
 index the other's data violates. Note it in the module header.
 
-**FALSE for pair 10 (`DailySummary`), and this is the one to call out.** The two schemas are *not*
-equivalent today, so a one-sided switch is a behavior change either way:
+**~~FALSE for pair 10 (`DailySummary`), and this is the one to call out.~~ Superseded — PRE-1 landed
+first (`0cecb4a`, 2026-09-05), so by the time pair 10 was done the two schemas *were* equivalent and
+its half-switched state was neutral like every other pair's. The analysis below is kept because it is
+why PRE-1 was sequenced ahead of the pair, and it is the worked example of when a one-sided switch is
+NOT safe.** The two schemas were *not* equivalent when this was written, so a one-sided switch would
+have been a behavior change either way:
 
 - Switch **fitnessgeek** first to a shared definition that includes `net_carbs_grams`: no change (that
   is already its definition). Safe.
@@ -1369,5 +1373,275 @@ was removed afterwards.
 
 ---
 
+## 12. Pairs 9 and 10, done — **consolidation complete (11/11)**
+
+**`FoodLog` and `DailySummary` were consolidated on 2026-09-05**, in §4's order (Tier 3 #9 and #10).
+That is the last of them. Thirteen model pairs went into this exercise: **eleven are now shared, two
+were basegeek orphans and were deleted.** There is no fitnessgeek collection left with two
+hand-synced Mongoose schemas, and both apps' tripwire suites fail if one comes back.
+
+§11's first rule held to the end: **§1a's field-set and index columns were right 10/10, and nothing
+else in it was right once.**
+
+### What shipped
+
+| | |
+|---|---|
+| New shared modules | `packages/schemas/fitnessgeek/foodLog.js` → `createFoodLogSchema(mongoose)`<br>`packages/schemas/fitnessgeek/dailySummary.js` → `createDailySummarySchema(mongoose)` |
+| Wiring | one subpath each in `packages/schemas/package.json` `exports`, one entry each in `packages/schemas/index.js` |
+| Wrappers (4) | `apps/fitnessgeek/backend/src/models/{FoodLog,DailySummary}.js` — named import, `mongoose.model(...)`<br>`apps/basegeek/packages/api/src/graphql/fitnessgeek/models/{FoodLog,DailySummary}.js` — default import + destructure, `fitnessConn.model(...)` |
+| Statics — stayed app-side | all four `FoodLog` list statics (`getLogsForDate`, `getLogsForDateRange`, `getRecentLogs`, `getLogsByMealType`) ×2 copies, and `DailySummary.{getOrCreate,getSummaryRange}` ×2. basegeek's keep `requireUser`; fitnessgeek's stay unguarded |
+| Static — **split** | `DailySummary.updateFromLogs` — the recompute **moved** as `updateDailySummaryFromLogs({SummaryModel, FoodLogModel, UserSettingsModel, userId, startDate, endDate})`; each side keeps a static holding its guard, its two model lookups and its date normalization |
+| Virtual — moved | `FoodLog.calculatedNutrition` (and it **is** serialized — this pair passes `toJSON`/`toObject: {virtuals: true}`) |
+| Also exported | `scaleLogNutrition`, `foodLogBounds` (foodLog); `summarizeFoodLogs`, `evaluateDailyGoalsMet`, `emptyDailyTotals`, `emptyMealBreakdown`, `mealBreakdownDefinition` (dailySummary) |
+| Enum decision | `foodlogs` **imports** `MEAL_TYPES` from `meal.js` and re-exports it; `dailySummary.js` builds its four `meals.*` blocks from the same constant. See "The `MEAL_TYPES` decision" below |
+| Third copies folded in | **none — there were none.** See below |
+| Parity rows added | 2 per suite, plus two behaviour describes per suite |
+
+Test counts: fitnessgeek's backend **229 → 267**; basegeek's api **1111 → 1149** (50 suites, 1
+pre-existing skip, `gatewaySchemaLoads`, `fitnessgeekFoodLogWrites` and `dailySummaryGatewayFixes`
+all green). `packages/schemas` lint clean; `node tools/syntax-check.mjs` **777 files** clean. No
+`pnpm install`, no lockfile change.
+
+### The `MEAL_TYPES` decision — share it, and here is why
+
+§11's carry-forward #4 left this open: `FoodLog` and `Meal` declare the same four meal-type strings
+on **different collections**, and §9's rule is "grep for the third copy — *then check it is the same
+collection*". It is not the same collection. It is still one enum, and `foodlogs` now imports
+`meal.js`'s `MEAL_TYPES` rather than freezing a fourth copy.
+
+The bar the rule exists to enforce is not "do these strings match?" — it is "would a divergence hurt?"
+Here it would, twice, and both failures are silent:
+
+1. **`logMeal` copies the value across collections.** `resolvers.js:811` writes
+   `mealType || meal.meal_type || 'snack'` — a saved **Meal**'s `meal_type` — straight into a new
+   **FoodLog** row. A value legal on `meals` and not on `foodlogs` makes a saved meal unloggable, and
+   the failure lands as a mongoose `ValidationError` at the end of a mutation, not at the point the
+   meal was created.
+2. **`DailySummary` buckets logs by it, under a guard.** `summarizeFoodLogs` does
+   `if (meals[log.meal_type])`, so a value legal on `foodlogs` alone counts in `totals` and
+   **vanishes** from the per-meal breakdown. A day whose macros do not add up, silently, per user.
+
+Contrast the false positive §9 caught: `validation/schemas/settings.js`'s `startWeight` /
+`targetWeight` bounds look exactly like `WeightGoals`' and were deliberately *not* rewired, because
+they validate a sub-document on a different collection with no coupling between them. **The
+distinguishing question is coupling, not spelling** — and that is the rule to carry forward if this
+ever comes up again in another app.
+
+Mechanically: `foodLog.js` does `const { MEAL_TYPES } = require('./meal.js')` and re-exports it, so a
+consumer of either module gets the same frozen array *object* (asserted with `toBe`, not `toEqual`).
+`dailySummary.js` requires it too and generates its `meals` block with
+`Object.fromEntries(MEAL_TYPES.map(...))` — key order is the array's order, which is the shipped
+order, and the rollback check confirms the generated definition is path-for-path and description-for-
+description identical to the four hand-written blocks it replaced. `models/FoodLog.js` ×2 was the
+last hand-written copy in the suite; a test asserts neither file contains the literal any more.
+
+### Where the plan was wrong, per pair
+
+**Pair 9 · `FoodLog`** — §4 calls it "field definitions identical; the whole divergence is the date
+normalizer", and after `0cecb4a` even that was gone. True as far as it goes. Missed:
+
+1. **A virtual, `calculatedNutrition`, and it is on the wire.** 17 lines of fallback arithmetic,
+   byte-identical on both sides, and this pair passes `toJSON: {virtuals: true}` — so it is in every
+   API response that carries a log. It moved, with the arithmetic exported as
+   `scaleLogNutrition(stored, food, servings)`. Two shipped behaviours inside it are easy to misread
+   as bugs and were preserved verbatim: the output key is `calories` (already multiplied) while the
+   input is `calories_per_serving`, and the fallback is `||` not `??`, so **a stored zero falls
+   through to the catalog value** — a genuinely zero-calorie entry reads the food's number instead of
+   its own zero.
+2. **The asymmetric timestamp rename, again.** `timestamps: { createdAt: 'created_at', updatedAt:
+   'updatedAt' }` — snake in, camel out, exactly like `Medication` and unlike every other renaming
+   model here. On disk, moved verbatim, spelled out in both suites' expected-path lists.
+3. **Seven indexes, not three.** Four path-level (`user_id`, `log_date`, `meal_type`,
+   `food_item_id`) plus the three compound ones §1a implies. None unique, none sparse, no TTL.
+4. **`nutrition` is a flattened object**, like `FoodItem`'s — not a sub-schema. §11's carry-forward
+   #5 said to check; checked.
+5. **Every `nutrition.*` leaf has `default: 0` and no `min`.** `FoodItem.nutrition.*` and
+   `DailySummary.totals.*` both floor at 0; this one does not, so a negative is accepted here.
+   Pre-existing on both sides, left alone.
+
+**Pair 10 · `DailySummary`** — §4's description of the *risk* was right and its sequencing (PRE-1
+first) is what defused it. What it did not say:
+
+1. **`updateFromLogs` is the only writer of three sub-documents, on both sides.** Nothing else in
+   either app writes `totals`, `meals` or `goals_met`. That is what made C1 a data-loss bug rather
+   than a stale-field bug, and it is why the recompute moved: it is the second carve-out from the
+   statics policy, on §11's stated shape — *ownership scoping stays app-side; a rule with one correct
+   meaning for both writers moves, as a helper that takes the model or the document, with its pure
+   part exported by name.* Here it takes **three** models, and the pure parts are `summarizeFoodLogs`
+   and `evaluateDailyGoalsMet`.
+2. **The date could not go with it, exactly as §11 predicted.** `toUtcMidnight` is ESM-only. The
+   helper takes an already-normalized `startDate` / `endDate` and each app's static normalizes. This
+   is the one boundary in the whole exercise drawn by a module system rather than by semantics, and
+   it is worth remembering the next time somebody proposes making `packages/schemas` ESM.
+3. **`totals` and `meals` are nested objects, not sub-schemas — 32 declared paths.** Confirmed rather
+   than assumed, per §11's carry-forward #5. `describePath()` sees every leaf's `min: 0` directly.
+4. **The unique index is the second one in the package.** `{user_id: 1, date: 1}, {unique: true}` —
+   one row per user per day, which is what makes the upsert safe under concurrency. Unchanged by
+   consolidation, so no rebuild; but the `FoodItem.barcode` redeploy rule now applies to two indexes.
+5. **The net-carb floor is per log, not per day.** `Math.max(0, (carbs − fiber) × servings)` inside
+   the loop. That is not cosmetic: flooring the day's sum instead would let one high-fibre food
+   subtract net carbs from the rest of the day, and it is what keeps the value inside the schema's
+   `min: 0`.
+
+### Found by consolidating — two live oddities, neither fixed
+
+Both are identical on both sides, so neither is a consolidation hazard; both are now **asserted**, so
+they are known properties rather than future mysteries.
+
+1. **The recompute ignores the log's stored nutrition snapshot.** `FoodLog.nutrition` exists so a log
+   keeps the numbers it was written with, and `calculatedNutrition` reads it first — but
+   `summarizeFoodLogs` reads `log.food_item_id.nutrition`, the *current* catalog row, and skips any
+   log whose food is un-populated or has no nutrition block. So editing a catalog food silently
+   restates every past day that used it, and a day recomputed from un-populated logs is all zeros.
+   Two features of the same data disagreeing about which number is true.
+2. **Three of `goals_met`'s four flags can never be true.** `evaluateDailyGoalsMet` reads
+   `goals.protein_grams`, `goals.carbs_grams` and `goals.fat_grams` off
+   `UserSettings.nutrition_goal` — which declares **none of them**. That sub-document carries
+   `daily_calorie_target` plus `protein_g_per_lb_goal` / `fat_g_per_lb_goal`, which are ratios, not
+   gram targets. So `goals_met.protein`, `.carbs` and `.fat` are permanently `false` in production,
+   on both sides, and have been since the field set was written. Only `calories` works. The parity
+   suite writes a settings document with `protein_grams` set, watches strict mode drop it, and
+   asserts the resulting `false` — plus a direct call to the helper with a goal object that *does*
+   carry the macro, to show the arithmetic is fine and the gap is in the settings schema.
+
+Also worth knowing, though it is a property of the *statics* and therefore unchanged: `goals_met`
+treats every macro as a **floor** (`actual >= goal`), including carbs and fat, so a keto user under
+their carb ceiling reads as not meeting the carb goal. `NutritionGoals.checkGoalsMet` disagrees with
+itself about ceilings in the same way (§10). Same product question, two collections.
+
+### Third copies: what was found, what was rejected
+
+§9's rule fired for the last time and found nothing to rewire.
+
+| Copy | Location | Disposition |
+|---|---|---|
+| a zod validator for `foodlogs` | — | **Does not exist.** `src/validation/schemas/` holds `bloodPressure`, `common`, `medication`, `settings`, `weight` and nothing else. `foodLogBounds` is exported anyway, for the day one is written |
+| a zod validator for `dailysummaries` | — | **Does not exist** either. `settings.js:82`'s `track_net_carbs` is a display toggle on `usersettings`, not a bound on this collection |
+| `['breakfast','lunch','dinner','snack']` | `models/FoodLog.js` on **both** sides | **Rewired** — both now take `MEAL_TYPES` from the shared `meal.js`. These were the last two hand-written copies in the suite; `routes/mealRoutes.js` went in `3b842e7`. A test asserts neither file contains the literal |
+| the same four strings as **object keys** | `DailySummary.meals` on both sides, and its accumulator | **Rewired** — the schema block and the accumulator are both generated from `MEAL_TYPES`, proven path-for-path identical to the hand-written version |
+| `mealTiming` / per-meal stats maps | `graphql/fitnessgeek/resolvers.js:149, :230` | **Left — not enums.** They build buckets from whatever `log.meal_type` values the data actually holds, rather than declaring the vocabulary. Resolvers were outside this pass's touch list |
+
+### What the tripwires grew
+
+No new harness features were needed — `serializesVirtuals` and `ownerField` covered both rows
+(`FoodLog` is `true`, `DailySummary` is `false`; both are `user_id`). Four new behaviour describes:
+
+- **`FoodLog` enum and arithmetic** (hermetic, fitnessgeek): the shared-enum object identity, that
+  neither model file restates the four strings, that `foodlogs` and `meals` reject the same
+  non-member, the stored-snapshot-wins rule, the `||`-not-`??` zero fall-through, and the real
+  model's virtual agreeing with `scaleLogNutrition`.
+- **`FoodLog` against real Mongo** (basegeek): the **populated** fallback branch the hermetic half
+  cannot reach — a log with no snapshot reads the catalog row through `populate` and reads zeros
+  without it — both models computing the virtual identically, it being on the wire via `toJSON`, and
+  the four list statics rejecting an unscoped call on the gateway while fitnessgeek's copy returns
+  `[]`.
+- **`DailySummary` arithmetic** (hermetic, fitnessgeek): the eight totals, the per-log net-carb
+  floor, the skipped log (no food / no nutrition), `servings || 1`, the breakdown's keys being
+  `MEAL_TYPES`, an unrecognised meal type counting in `totals` and vanishing from the breakdown, the
+  unset-goal branch, the floors-not-ceilings asymmetry — plus a fake-model test that pins the *shape*
+  of the write (whole `totals` sub-document, one upsert, the given window) and a check that
+  `toUtcMidnight` did not sneak into the CJS package.
+- **`DailySummary` against real Mongo** (basegeek): the gateway's recompute persisting every macro
+  read back with `.lean()`; **the same logs recomputed through fitnessgeek's own schema object
+  producing a byte-identical document**, and both matching `summarizeFoodLogs` run directly; a second
+  recompute not erasing the first (the read-triggers-write hot path); `goals_met` coming from
+  `UserSettings.nutrition_goal` with three flags stuck false; both wrappers delegating and neither
+  restating the arithmetic; and the guard asymmetry.
+
+The comment-stripping wrinkle came up a fourth time, as §11 predicted it would: both wrappers explain
+the delegation in their own prose, so the "neither side restated the arithmetic" assertions strip
+`//` lines before matching.
+
+### The rollback claim, confirmed for pairs 9 and 10
+
+Verified mechanically, not argued: all four switched model files were rebuilt from
+`git show HEAD:<path>` under temporary names, compiled into models so that mongoose's own
+`options.pluralization` could not masquerade as a divergence, and compared to the working-tree models
+and to the shared factory's output on path set, per-path description (type, enum, default, required,
+index/unique/sparse flags, min/max/maxlength), sub-schema path sets, normalized index list including
+`weights`, `schema.options`, virtuals, instance methods and statics key sets — plus, for `FoodLog`,
+the virtual's actual output. **HEAD ≡ working tree ≡ shared, on every dimension, for all four files**,
+and `Object.keys(schema.paths)` came back in the identical *order* too, which is the check that
+mattered for `DailySummary`'s generated `meals` block.
+
+| | `FoodLog` | `DailySummary` |
+|---|---|---|
+| Collection, both sides | `foodlogs` | `dailysummaries` |
+| Declared paths | 15 (17 with `_id`/`__v`) | 32 (34 with `_id`/`__v`) |
+| Indexes, both sides | 4 path-level (`user_id`, `log_date`, `meal_type`, `food_item_id`) + 3 compound (`{user_id,log_date}`, `{user_id,meal_type}`, `{user_id,food_item_id}`) | 2 path-level (`user_id`, `date`) + `{user_id:1, date:1}` **unique** |
+| `unique` / `sparse` / TTL | none | `{user_id, date}` unique. **Unchanged**, so no index rebuild in production |
+| Schema options | `timestamps: {createdAt: 'created_at', updatedAt: 'updatedAt'}`; `toJSON`/`toObject: {virtuals: true}` | `timestamps: {createdAt: 'created_at', updatedAt: 'updated_at'}`; no `toJSON`/`toObject` |
+| Paths added / removed / retyped / re-defaulted | none | none |
+| Statics, FG / BG | 4 / 4 (guards differ) | 3 / 3 (guards differ; `updateFromLogs` delegates on both) |
+| Virtuals, both sides | `calculatedNutrition` (serialized) | none |
+
+The shared definitions are byte-equivalent to what both sides already declared, so a half-switched
+deploy is indistinguishable at the database level and either app can be deployed or rolled back
+alone, in either order. `DailySummary`'s unique index is unchanged, so §4's redeploy caveat is a
+caveat about *future* changes here too, not about this one.
+
+**The production image resolves the new subpaths.** `docker build -f apps/fitnessgeek/Dockerfile .`
+then a `--network none` run: the app boots, mounts routes, and dies at `MongoDB connection failed` —
+not at an import. Importing the two models inside the image returns `foodlogs` / `dailysummaries`,
+17 / 34 paths, the full index lists above with `{user_id, date}` still unique, the `meal_type` enum
+intact, `calculatedNutrition` computing correctly, all seven statics present, and
+`summarizeFoodLogs` returning the right net-carb floor with a `MEAL_TYPES`-keyed breakdown. The only
+mongoose warnings at boot are the pre-existing `LoginStreak` duplicate-index ones. The image was
+removed afterwards.
+
+### What the whole exercise cost, against §6
+
+§6 budgeted **≈ 39 h**. The actual work came in far under it, and the shape of the saving is the
+useful part: pair 1 carried the fixed cost (the table-driven harness, the `exports` plumbing, the
+first-time decisions) and every pair after it was a table row plus a module. Pairs 8–10 were where
+the judgment was, exactly as predicted — but the judgment was about *statics*, not about fields:
+§1a's field-set and index columns were right 10 times out of 10, and every single correction in
+§§8–12 was about something else on the schema object (virtuals, instance methods, hooks, sub-schemas,
+options, timestamp renames, doubled indexes).
+
+### The statics policy, final score
+
+Six pairs had real static divergence (`LoginStreak`, `WeightGoals`, `NutritionGoals`, `Meal`,
+`FoodLog`, `DailySummary`) and "leave the ownership guards app-side" cost nothing every time. Two
+statics moved, both as helpers taking the model, both because a divergence in them fails **silently**
+rather than throwing: `FoodItem.findOrCreate`'s dedupe ladder and `DailySummary.updateFromLogs`'s
+recompute. The rule that decided every case, stated as it finally reads:
+
+> **Fields, indexes, virtuals, instance methods, hooks and sub-schemas move.** They are the contract,
+> and mongoose drops what one side doesn't declare without saying so.
+> **Statics stay app-side when they express *who may see what*** — the two writers legitimately
+> disagree, and statics never touch `schema.paths`.
+> **A static moves when it has one correct meaning for both writers and a divergence would corrupt
+> rather than throw** — as a helper taking the model or the document, with its pure part exported by
+> name so a hermetic test can call it.
+
+### Open follow-ups — the whole list, collected from §§8–11 and this pass
+
+Everything still outstanding at the end of the exercise, in one place. All of it is cheap, none of it
+blocks anything, and none of it is a two-writer drift hazard any more.
+
+| # | Follow-up | Where it came from | Notes |
+|---|---|---|---|
+| 1 | **Reconcile `FoodItem.search` with `foodCatalogFilter`, or write down why they differ.** `search` matches `{user_id: null}`; `foodCatalogFilter` also matches `{user_id: {$exists: false}}`, so a legacy row with no `user_id` key is reachable through one and not the other — *inside a single process* | §11 | Two live definitions of "a visible catalog row". Neither was promoted, deliberately; both suites assert the disagreement |
+| 2 | **Decide `foodRoutes.js:301-348` (`POST /api/foods`) vs `FoodItem.findOrCreate`.** That route open-codes a *third*, subtly different ladder — two rungs, `if`/`else if` rather than sequential, no `(name, brand)` rung — and then mints a **user-owned** row where `findOrCreate` always mints a global one. Meanwhile fitnessgeek's `findOrCreate` static has no caller at all | §11 | Either point the route at `findOrCreateFoodItem` (a behaviour change: global vs user-owned) or delete the dead static. Do not leave three ladders |
+| 3 | **Decide the soft-deleted-barcode collision.** Every rung of the dedupe ladder filters `is_deleted: false`; the `unique` index on `barcode` does not. A soft-deleted row holding a barcode makes `findOrCreate` return `E11000` instead of a row | §11 | Partial unique index (`partialFilterExpression: {is_deleted: false}`) or clear `barcode` on soft delete. Both are migrations, and both change a `unique` index — see the redeploy rule |
+| 4 | **Decide whether the caller-less instance methods live or die** — `NutritionGoals.checkGoalsMet`, `NutritionGoals.getProgress`, `Meal.getNutrition`. Nothing in either app calls any of them | §10, §11 | They were promoted rather than deleted because deleting changes the schema's method key set and breaks the byte-equivalence the rollback claim rested on. That claim has now been banked, so deleting them is cheap — but decide, don't drift |
+| 5 | **Fix the two stale "fitnessgeek's backend is CJS" comments** in `packages/schemas/fitnessgeek/userSettings.js:46-48` and `apps/basegeek/packages/api/src/__tests__/userSettingsSchemaParity.test.js:31` | §3, §10, §11 | The backend moved to node 20 + ESM on 2026-09-05. The *conclusion* (keep `@geeksuite/schemas` CommonJS) is still right; only the stated reason is wrong. `apps/basegeek/.../models/UserSettings.js:16-18` has a third instance of the same claim |
+| 6 | **`NutritionGoals.checkGoalsMet` and `getProgress` disagree about ceilings.** `checkGoalsMet` treats `sugar_grams` and `sodium_mg` as ceilings; `getProgress` treats them as floors, so a day well under the sodium limit reads as 50 % progress | §10 | Shipped on both sides, moved verbatim, asserted so nobody fixes half of it. A product question |
+| 7 | **`DailySummary.goals_met` treats every macro as a floor**, carbs and fat included — so a keto user under their carb ceiling reads as not meeting the goal | §12 | Same product question as #6, one collection over |
+| 8 | **Three of `goals_met`'s four flags can never be true.** `UserSettings.nutrition_goal` declares `daily_calorie_target` and no `protein_grams` / `carbs_grams` / `fat_grams` | §12 | Decide what a macro goal on the settings document *is* — a gram target, a ratio (`protein_g_per_lb_goal` already exists), or a read of the `nutritiongoals` collection. Then either add the fields or stop computing the flags |
+| 9 | **`DailySummary.updateFromLogs` ignores `FoodLog.nutrition`** and reads the current catalog row instead, so editing a food restates every past day that used it | §12 | Two features of the same data disagreeing about which number is true. Pick one: the snapshot (history is immutable) or the catalog (corrections propagate) |
+| 10 | **`PRE-4` — tighten fitnessgeek's `Meal` list statics.** `getActiveMeals(undefined)` returns every user's meals; basegeek's throw `UNAUTHORIZED`. Every live caller passes a userId, so it is latent | §4 PRE-4, §9, §10 | A two-line change that turns a silent over-fetch into a thrown error. It belongs in a commit whose title says so, with the parity assertion updated in the same commit — it is written as a decision precisely so somebody has to |
+| 11 | **`LoginStreak`'s doubled `user_id` index and its four timestamp paths.** Path-level `index: true` plus `schema.index({user_id: 1})` — the source of the "Duplicate schema index" warning at every boot — and `created_at`/`updated_at` declared by hand alongside `timestamps: true` | §9 | Both pre-existing on both sides and moved verbatim, because changing either would stop the shared definition being byte-equivalent to what is deployed. Now that consolidation is done, cleaning them up is a normal (small) migration |
+| 12 | **`Weight` and `BloodPressure` use `userId` while the other nine use `user_id`** | §4 Tier 1 note, §8 | Normalizing is a data migration wearing a refactor's clothes. Recorded, not fixed |
+| 13 | **`FoodLog.nutrition.*` has no `min`** where `FoodItem.nutrition.*` and `DailySummary.totals.*` both floor at 0, so a negative macro is accepted on a log | §12 | A validation decision, not a refactor. Cheap if wanted |
+| 14 | **`Meal` stamps `updated_at` only on `save()`.** It passes no schema options, so nothing stamps it on a `findOneAndUpdate` / `updateOne`, on either side | §10 | Shipped behaviour, left alone |
+
+---
+
 *Written 2026-09-05. Companion to `apps/fitnessgeek/DOCS/USER_SETTINGS_SCHEMA.md` (the shared-schema
-index) and `DOCS/SUITE_TODO.md` item 4.*
+index) and `DOCS/SUITE_TODO.md` item 4. **The consolidation is finished — 11/11 pairs shared, 2
+orphans deleted, 2026-09-05.** What remains of this document is a record: §§1–7 are the audit and the
+plan as written, §§8–12 are what actually happened, pair by pair, and §12's table is the only list of
+open work.*

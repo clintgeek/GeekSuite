@@ -480,12 +480,14 @@ reality stands, per app:
 | flockgeek | Apollo → basegeek | ✅ frontend fully on GraphQL (only `/api/health` ping). ~~All 13 Mongoose models duplicated~~ — **corrected 2026-09-05**: only 4 (`BirdNote`, `BirdTrait`, `Event`, `LineageCache`) were actually orphaned and are now deleted. The other 9 are imported by a full, live, *mounted* REST CRUD API (`routes/api.js` → birds/groups/group-memberships/health-records/egg-production/pairings/locations/hatch-events/meat-runs) that nothing in the repo calls anymore but which still runs in the server. See `apps/flockgeek/CONTEXT.md` — deciding whether to unmount that whole REST layer is a follow-up, not done here. |
 | notegeek | Apollo → basegeek | ✅ frontend fully on GraphQL. ~~Own backend still carries legacy REST~~ — **deleted 2026-09-05**: `routes/notes.js`, `tags.js`, `search.js`, their controllers, and duplicate `models/Note.js`. This also resolved the `getTagHierarchy` 500 below. Follow-up prune, same day: `migrations/migrateNotesBetweenUsers.js` and `convertFoldersToTags.js` still imported the deleted `Note` model and had no caller (no npm script, no server import) — deleted, along with the now-empty `migrations/` directory. `utils/tagValidation.js` was imported only by its own test — both deleted. Backend suite still green (24 passed, 8 skipped); no dependency in `package.json` became unused as a result. |
 | bookgeek | Apollo for library CRUD **and profile data**; `authFetch` REST only for binary/long jobs | ✅ **done 2026-09-05** (item 3 below). All pure data is on the gateway: `bookProfile` / `libraryFilters` / `bookAiStatus` queries and `saveBookProfile` / `saveLibraryFilter` / `deleteLibraryFilter` / `addBookShelf` / `removeBookShelf` mutations. The whole `/api/profile/*` family and `/api/ai/status` (with `routes/aiRoutes.js` and `services/aiGeekService.js`) are deleted from the bookgeek API. Remaining REST is legit only: upload/download/cover/enrich/merge/import/device-baskets/health. The hardcoded `http://localhost:1800/api` is gone — `utils/bookDisplay.js` now uses `import.meta.env.VITE_API_URL \|\| "/api"`, the notegeek/storygeek convention. ~~`api/src/graphql/{schema,resolvers}.js` is an **unmounted dead GraphQL server**~~ — **deleted 2026-09-05** (plus the unused `@apollo/subgraph` dep). Duplicated models: `Profile` is now read/written from both sides, so the two copies are field-identical and carry a tripwire (`bookgeekProfile.test.js`); `book`/`ingestionJob`/`recommendation` still duplicated, untouched. |
-| fitnessgeek | `apiService.js` shims REST→GraphQL, but `restClient.js` still hits own backend | ⚠️ mostly. ~~Still REST: `POST/PUT/DELETE /logs` + `POST /meals/:id/add-to-log`~~ — **food-log writes switched 2026-09-05** (gateway `79b1b57`, frontend same day): `fitnessGeekService.addFoodToLog`/`updateFoodLog`/`deleteFoodLog`/`addMealToLog` now go through `apiService` to `addFoodLog`/`updateFoodLog`/`deleteFoodLog`/`logMeal`. ~~The four REST routes are caller-less and should be deleted — next ticket~~ — **backend routes deleted 2026-09-05** (see item 2 — done). Still REST: food search/barcode/favorites/recent (`foodService.js`), meds RxNorm + med logs, influx, AI, `PUT /user/profile`, Garmin heart-rate detail. **Model duplication: 8 of 13 consolidated, a 9th (`FoodItem`) in flight
-(`DOCS/BURN_QUEUE.md` R71)** — `UserSettings`, `Weight`, `BloodPressure`, `Medication`,
-`LoginStreak`, `WeightGoals`, `NutritionGoals`, `Meal` and `FoodItem` (R71, `be79702`) now share
-one `@geeksuite/schemas` definition the way `UserSettings` does above; `MedicationLog` and
-`AIFoodPromptCache` had no gateway consumer and were deleted from the gateway; `FoodLog` and
-`DailySummary` are in flight (R74). See `DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md` for the pairing plan and progress. |
+| fitnessgeek | `apiService.js` shims REST→GraphQL, but `restClient.js` still hits own backend | ⚠️ mostly. ~~Still REST: `POST/PUT/DELETE /logs` + `POST /meals/:id/add-to-log`~~ — **food-log writes switched 2026-09-05** (gateway `79b1b57`, frontend same day): `fitnessGeekService.addFoodToLog`/`updateFoodLog`/`deleteFoodLog`/`addMealToLog` now go through `apiService` to `addFoodLog`/`updateFoodLog`/`deleteFoodLog`/`logMeal`. ~~The four REST routes are caller-less and should be deleted — next ticket~~ — **backend routes deleted 2026-09-05** (see item 2 — done). Still REST: food search/barcode/favorites/recent (`foodService.js`), meds RxNorm + med logs, influx, AI, `PUT /user/profile`, Garmin heart-rate detail. **Model duplication: DONE 2026-09-05 — 11 of 13 consolidated, the other 2 deleted.**
+`UserSettings`, `Weight`, `BloodPressure`, `Medication`, `LoginStreak`, `WeightGoals`,
+`NutritionGoals`, `Meal`, `FoodItem`, `FoodLog` and `DailySummary` all share one
+`@geeksuite/schemas` definition; `MedicationLog` and `AIFoodPromptCache` had no gateway consumer
+and were deleted from the gateway. Two statics moved with the fields because a divergence in them
+fails silently — `FoodItem.findOrCreate`'s dedupe ladder and `DailySummary.updateFromLogs`'s
+recompute; every ownership guard stayed app-side. See `DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md`
+§12 for the record and the open follow-ups. |
 | storygeek | axios REST to own backend | ❌ not on GraphQL. `apolloClient.js` exists but is never imported. basegeek's storygeek schema (`stories`, `story`, 3 mutations) is unused by the app and too thin to replace `/stories/*/continue`, `/export/*`, `/ai/*`. Decide: either build out the schema or drop the basegeek storygeek module as dead code. |
 
 Ordered cheap-to-expensive:
@@ -644,10 +646,16 @@ Ordered cheap-to-expensive:
      mobile harness `--app bookgeek --serve --viewports phone` 12 scenes, 0 violations
      (its `**/api/profile/*` and `**/api/ai/status` route stubs became `GetBookProfile` /
      `GetLibraryFilters` / `GetBookAiStatus` entries in `graphqlRoute`).
-4. fitnessgeek model consolidation (13 pairs) — biggest risk, do last, one model at a time.
-   **Planned 2026-09-05**: full pair-by-pair diff, ordering, pre-work and estimates in
-   `DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md` (12 pairs left; 2 are basegeek orphans to delete,
-   and one — `DailySummary.totals.net_carbs_grams` — is losing data in production today).
+4. ~~fitnessgeek model consolidation (13 pairs)~~ — **DONE 2026-09-05.** All eleven genuine
+   pairs now build from `@geeksuite/schemas/fitnessgeek/*`; the two basegeek orphans
+   (`AIFoodPromptCache`, `MedicationLog`) were deleted, and a test asserts they stay gone. No
+   fitnessgeek collection has two hand-synced Mongoose schemas any more, and tripwire suites on
+   both sides fail if a wrapper stops consuming the shared module. The production bug the audit
+   found — `DailySummary.totals.net_carbs_grams` being erased on every gateway read — shipped
+   ahead of the refactor as PRE-1 (`0cecb4a`), along with the two hand-rolled `toUtcDate`
+   normalizers (PRE-2). **The record and the only list of remaining work are in
+   `DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md` §12** — fourteen follow-ups, all cheap, none of them
+   a two-writer drift hazard.
 5. storygeek decision. **Analyzed 2026-09-05**: no live caller of the gateway module anywhere
    in the suite — see `DOCS/STORYGEEK_GATEWAY_DECISION.md` (recommendation: drop it).
 

@@ -1,103 +1,35 @@
 import mongoose from 'mongoose';
 import { toUtcMidnight } from '@geeksuite/utils';
+import { createFoodLogSchema } from '@geeksuite/schemas/fitnessgeek/foodLog';
 
-const foodLogSchema = new mongoose.Schema({
-  user_id: {
-    type: String,
-    required: true,
-    index: true
-  },
-  log_date: {
-    type: Date,
-    required: true,
-    index: true
-  },
-  meal_type: {
-    type: String,
-    required: true,
-    enum: ['breakfast', 'lunch', 'dinner', 'snack'],
-    index: true
-  },
-  food_item_id: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'FoodItem',
-    required: true,
-    index: true
-  },
-  servings: {
-    type: Number,
-    required: true,
-    min: 0.1,
-    max: 100
-  },
-  notes: {
-    type: String,
-    trim: true,
-    maxlength: 500
-  },
-  // Store nutrition information at the time of logging (in case food item changes later)
-  nutrition: {
-    calories_per_serving: {
-      type: Number,
-      default: 0
-    },
-    protein_grams: {
-      type: Number,
-      default: 0
-    },
-    carbs_grams: {
-      type: Number,
-      default: 0
-    },
-    fat_grams: {
-      type: Number,
-      default: 0
-    },
-    fiber_grams: {
-      type: Number,
-      default: 0
-    },
-    sugar_grams: {
-      type: Number,
-      default: 0
-    },
-    sodium_mg: {
-      type: Number,
-      default: 0
-    }
-  }
-}, {
-  timestamps: {
-    createdAt: 'created_at',
-    updatedAt: 'updatedAt'
-  },
-  toJSON: { virtuals: true },
-  toObject: { virtuals: true }
-});
+// The field set, the three compound indexes, the `meal_type` enum, the
+// timestamp rename and the `calculatedNutrition` virtual live in
+// @geeksuite/schemas so that this model and basegeek's GraphQL copy
+// (apps/basegeek/packages/api/src/graphql/fitnessgeek/models/FoodLog.js)
+// cannot drift. Both point at the `foodlogs` collection in the same database —
+// this side through routes/logRoutes.js, foodRoutes.js, aiCoachRoutes.js and
+// three services, the gateway through its `addFoodLog` / `updateFoodLog` /
+// `deleteFoodLog` / `logMeal` / `copyFitnessMeal` resolvers, which took the
+// writes over on 2026-09-05 — and mongoose strict mode silently drops paths
+// one side doesn't know about. See the shared module's header and
+// DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md.
+//
+// Do NOT add fields here. Add them to the shared module; the tripwire tests in
+// both suites fail if this model stops matching it.
+//
+// The `meal_type` enum is `MEAL_TYPES` from the shared `meal.js`, not a fourth
+// copy of the four strings: `logMeal` writes a saved Meal's `meal_type`
+// straight into a row here, and `DailySummary` buckets these rows by it. See
+// the shared module's header for why that coupling clears the
+// "different collection" bar that `settings.js`'s weight bounds did not.
+const foodLogSchema = createFoodLogSchema(mongoose);
 
-// Compound indexes for better query performance
-foodLogSchema.index({ user_id: 1, log_date: 1 });
-foodLogSchema.index({ user_id: 1, meal_type: 1 });
-foodLogSchema.index({ user_id: 1, food_item_id: 1 });
-
-// Virtual for calculated nutrition values
-foodLogSchema.virtual('calculatedNutrition').get(function() {
-  const multiplier = this.servings;
-
-  // Use stored nutrition data if available, otherwise use food item nutrition
-  const nutrition = this.nutrition || {};
-  const food = this.populated('food_item_id') ? this.food_item_id : null;
-
-  return {
-    calories: (nutrition.calories_per_serving || (food?.nutrition?.calories_per_serving || 0)) * multiplier,
-    protein_grams: (nutrition.protein_grams || (food?.nutrition?.protein_grams || 0)) * multiplier,
-    carbs_grams: (nutrition.carbs_grams || (food?.nutrition?.carbs_grams || 0)) * multiplier,
-    fat_grams: (nutrition.fat_grams || (food?.nutrition?.fat_grams || 0)) * multiplier,
-    fiber_grams: (nutrition.fiber_grams || (food?.nutrition?.fiber_grams || 0)) * multiplier,
-    sugar_grams: (nutrition.sugar_grams || (food?.nutrition?.sugar_grams || 0)) * multiplier,
-    sodium_mg: (nutrition.sodium_mg || (food?.nutrition?.sodium_mg || 0)) * multiplier
-  };
-});
+// Statics stay app-side, on the plan's §3 rule and for a second reason
+// specific to this pair: they are where the date normalization lives, and
+// `toUtcMidnight` comes from @geeksuite/utils, which is ESM-only and cannot be
+// `require`d from the CommonJS shared package. basegeek's four copies are
+// these four with `requireUser(userId)` at the head — its fail-closed
+// ownership posture; every caller on this side is already past auth.
 
 // Static method to get logs for a specific date
 foodLogSchema.statics.getLogsForDate = async function(userId, date) {

@@ -76,6 +76,18 @@ import {
   foodItemDefaults,
   FOOD_SOURCES,
 } from '@geeksuite/schemas/fitnessgeek/foodItem';
+import {
+  createFoodLogSchema,
+  scaleLogNutrition,
+  MEAL_TYPES as FOOD_LOG_MEAL_TYPES,
+} from '@geeksuite/schemas/fitnessgeek/foodLog';
+import {
+  createDailySummarySchema,
+  summarizeFoodLogs,
+  evaluateDailyGoalsMet,
+  updateDailySummaryFromLogs,
+  emptyMealBreakdown,
+} from '@geeksuite/schemas/fitnessgeek/dailySummary';
 
 import Weight from '../../models/Weight.js';
 import BloodPressure from '../../models/BloodPressure.js';
@@ -85,6 +97,8 @@ import WeightGoals from '../../models/WeightGoals.js';
 import NutritionGoals from '../../models/NutritionGoals.js';
 import Meal from '../../models/Meal.js';
 import FoodItem from '../../models/FoodItem.js';
+import FoodLog from '../../models/FoodLog.js';
+import DailySummary from '../../models/DailySummary.js';
 import { createBPSchema } from '../../validation/schemas/bloodPressure.js';
 import { createMedicationSchema as createMedicationZodSchema } from '../../validation/schemas/medication.js';
 
@@ -320,6 +334,101 @@ const PAIRS = [
     // `search` is genuinely this side's; `findAccessible`/`findAccessibleMany`
     // are basegeek-only.
     expectedStatics: ['findOrCreate', 'search'],
+  },
+  {
+    name: 'FoodLog',
+    Model: FoodLog,
+    createSchema: createFoodLogSchema,
+    factory: 'createFoodLogSchema',
+    specifier: '@geeksuite/schemas/fitnessgeek/foodLog',
+    modelFile: '../../models/FoodLog.js',
+    // `nutrition` is a nested OBJECT (dotted paths), not a sub-schema. And
+    // `updatedAt` (camel) beside `created_at` (snake) is the asymmetric
+    // timestamp rename both copies shipped — the `Medication` quirk again.
+    // Spelled out here so nobody "fixes" it by accident.
+    expectedPaths: [
+      'user_id',
+      'log_date',
+      'meal_type',
+      'food_item_id',
+      'servings',
+      'notes',
+      'nutrition.calories_per_serving',
+      'nutrition.protein_grams',
+      'nutrition.carbs_grams',
+      'nutrition.fat_grams',
+      'nutrition.fiber_grams',
+      'nutrition.sugar_grams',
+      'nutrition.sodium_mg',
+      'created_at',
+      'updatedAt',
+    ],
+    // Declared AND serialized — this pair passes `virtuals: true`, so
+    // `calculatedNutrition` is on the wire in every response carrying a log.
+    expectedVirtuals: ['calculatedNutrition'],
+    serializesVirtuals: true,
+    // The four list statics stayed here: basegeek's are these plus
+    // `requireUser`, and they are also where `toUtcMidnight` is called —
+    // @geeksuite/utils is ESM-only and cannot be required from the CJS
+    // shared package.
+    expectedStatics: [
+      'getLogsForDate',
+      'getLogsForDateRange',
+      'getRecentLogs',
+      'getLogsByMealType',
+    ],
+  },
+  {
+    name: 'DailySummary',
+    Model: DailySummary,
+    createSchema: createDailySummarySchema,
+    factory: 'createDailySummarySchema',
+    specifier: '@geeksuite/schemas/fitnessgeek/dailySummary',
+    modelFile: '../../models/DailySummary.js',
+    // 32 paths, all nested OBJECTS rather than sub-schemas. The one that
+    // matters is `totals.net_carbs_grams` — divergence C1, the field the
+    // gateway's copy was missing and therefore erasing on every read.
+    expectedPaths: [
+      'user_id',
+      'date',
+      'totals.calories',
+      'totals.protein_grams',
+      'totals.carbs_grams',
+      'totals.fat_grams',
+      'totals.fiber_grams',
+      'totals.net_carbs_grams',
+      'totals.sugar_grams',
+      'totals.sodium_mg',
+      'meals.breakfast.calories',
+      'meals.breakfast.protein_grams',
+      'meals.breakfast.carbs_grams',
+      'meals.breakfast.fat_grams',
+      'meals.lunch.calories',
+      'meals.lunch.protein_grams',
+      'meals.lunch.carbs_grams',
+      'meals.lunch.fat_grams',
+      'meals.dinner.calories',
+      'meals.dinner.protein_grams',
+      'meals.dinner.carbs_grams',
+      'meals.dinner.fat_grams',
+      'meals.snack.calories',
+      'meals.snack.protein_grams',
+      'meals.snack.carbs_grams',
+      'meals.snack.fat_grams',
+      'goals_met.calories',
+      'goals_met.protein',
+      'goals_met.carbs',
+      'goals_met.fat',
+      'created_at',
+      'updated_at',
+    ],
+    expectedVirtuals: [],
+    serializesVirtuals: false,
+    // `updateFromLogs` is here but it is a delegate to the shared
+    // `updateDailySummaryFromLogs` — the second carve-out from the statics
+    // policy after `FoodItem.findOrCreate`. `getOrCreate` and
+    // `getSummaryRange` are genuinely this side's.
+    expectedStatics: ['getOrCreate', 'updateFromLogs', 'getSummaryRange'],
   },
 ];
 
@@ -647,6 +756,11 @@ describe("the deliberate statics divergence is still deliberate", () => {
     ['WeightGoals', ['getActiveWeightGoals', 'createWeightGoals', 'updateWeightGoals']],
     ['NutritionGoals', ['getActiveGoals', 'createGoals', 'updateGoals']],
     ['Meal', ['findOwned', 'getActiveMeals', 'getMealsByType', 'searchMeals']],
+    [
+      'FoodLog',
+      ['getLogsForDate', 'getLogsForDateRange', 'getRecentLogs', 'getLogsByMealType'],
+    ],
+    ['DailySummary', ['getOrCreate', 'updateFromLogs', 'getSummaryRange']],
   ])("basegeek's %s still guards its statics with requireUser", (name, statics) => {
     const src = fs.readFileSync(basegeekModel(name), 'utf8');
     expect(src).toContain("from '../ownership.js'");
@@ -662,6 +776,8 @@ describe("the deliberate statics divergence is still deliberate", () => {
     ['WeightGoals', '../../models/WeightGoals.js'],
     ['NutritionGoals', '../../models/NutritionGoals.js'],
     ['Meal', '../../models/Meal.js'],
+    ['FoodLog', '../../models/FoodLog.js'],
+    ['DailySummary', '../../models/DailySummary.js'],
   ])('fitnessgeek %s keeps its own unguarded statics', (name, file) => {
     const raw = fs.readFileSync(path.resolve(__dirname, file), 'utf8');
     // The wrappers explain the divergence in prose, so strip comments before
@@ -1080,5 +1196,297 @@ describe('the FoodItem dedupe ladder and catalog contract', () => {
     expect(code).not.toContain('ownership.js');
     expect(code).not.toContain('requireUser');
     expect(code).not.toContain('findAccessible');
+  });
+});
+
+describe('the FoodLog meal-type enum and nutrition arithmetic', () => {
+  // Pair 9's decision, asserted rather than described: `foodlogs` uses
+  // `meal.js`'s MEAL_TYPES rather than a fourth frozen copy of the four
+  // strings, because `logMeal` writes a saved Meal's `meal_type` straight into
+  // a FoodLog row and `DailySummary` buckets those rows by it. If somebody
+  // splits them again, these fail.
+
+  test('FoodLog and Meal share one enum object, not two equal arrays', () => {
+    // Object identity at the module level: foodLog.js re-exports meal.js's
+    // constant rather than freezing its own. (Mongoose copies the array into
+    // `enumValues` when it builds the path, so the paths themselves can only
+    // be compared by value.)
+    expect(FOOD_LOG_MEAL_TYPES).toBe(MEAL_TYPES);
+    expect(MEAL_TYPES).toEqual(['breakfast', 'lunch', 'dinner', 'snack']);
+    expect(FoodLog.schema.paths.meal_type.enumValues).toEqual([...MEAL_TYPES]);
+    expect(Meal.schema.paths.meal_type.enumValues).toEqual([...MEAL_TYPES]);
+  });
+
+  test('neither model file restates the four strings', () => {
+    // The last two hand-written copies were here. `mealRoutes.js` was rewired
+    // in 3b842e7; these two were the remainder.
+    for (const file of [
+      path.resolve(__dirname, '../../models/FoodLog.js'),
+      basegeekModel('FoodLog'),
+    ]) {
+      expect(fs.readFileSync(file, 'utf8')).not.toContain("'breakfast'");
+    }
+  });
+
+  test('both collections reject the same non-member', () => {
+    const log = new FoodLog({
+      user_id: 'u1',
+      log_date: new Date('2026-09-05T00:00:00.000Z'),
+      meal_type: 'brunch',
+      food_item_id: new mongoose.Types.ObjectId(),
+      servings: 1,
+    });
+    expect(log.validateSync().errors.meal_type).toBeTruthy();
+
+    const meal = new Meal({ name: 'x', meal_type: 'brunch' });
+    expect(meal.validateSync().errors.meal_type).toBeTruthy();
+  });
+
+  test('the stored snapshot wins, and an un-populated food contributes zero', () => {
+    const stored = {
+      calories_per_serving: 200,
+      protein_grams: 10,
+      carbs_grams: 20,
+      fat_grams: 5,
+      fiber_grams: 4,
+      sugar_grams: 3,
+      sodium_mg: 100,
+    };
+    // Stored values, doubled. Note the output key is `calories`, not
+    // `calories_per_serving`, and it is already multiplied.
+    expect(scaleLogNutrition(stored, null, 2)).toEqual({
+      calories: 400,
+      protein_grams: 20,
+      carbs_grams: 40,
+      fat_grams: 10,
+      fiber_grams: 8,
+      sugar_grams: 6,
+      sodium_mg: 200,
+    });
+    // No snapshot and no populated food: zeros, not NaN and not a throw.
+    expect(scaleLogNutrition({}, null, 3).calories).toBe(0);
+    expect(scaleLogNutrition(undefined, null, 3).sodium_mg).toBe(0);
+  });
+
+  test('a stored ZERO falls through to the catalog value — `||`, not `??`', () => {
+    // Shipped coercion on both sides. A genuinely zero-calorie entry reads the
+    // food's number instead of its own zero. Preserved verbatim; asserted so
+    // that "fixing" it has to be a deliberate commit.
+    const food = { nutrition: { calories_per_serving: 90, sodium_mg: 7 } };
+    expect(scaleLogNutrition({ calories_per_serving: 0 }, food, 1).calories).toBe(90);
+    expect(scaleLogNutrition({ calories_per_serving: 150 }, food, 1).calories).toBe(150);
+  });
+
+  test('the real model’s virtual is the shared arithmetic, and it is serialized', () => {
+    const doc = new FoodLog({
+      user_id: 'u1',
+      log_date: new Date('2026-09-05T00:00:00.000Z'),
+      meal_type: 'lunch',
+      food_item_id: new mongoose.Types.ObjectId(),
+      servings: 2.5,
+      nutrition: { calories_per_serving: 210, protein_grams: 21 },
+    });
+    // Un-populated here (no Mongo in this suite), which is the `food = null`
+    // branch; the populated branch is asserted against real Mongo in
+    // basegeek's half.
+    expect(doc.calculatedNutrition).toEqual(scaleLogNutrition(doc.nutrition, null, 2.5));
+    expect(doc.calculatedNutrition.calories).toBe(525);
+    expect(doc.toJSON().calculatedNutrition.calories).toBe(525);
+  });
+});
+
+describe('the DailySummary recompute (the shared updateFromLogs)', () => {
+  // Pair 10's carve-out. `updateFromLogs` is the ONLY writer of `totals`,
+  // `meals` and `goals_met` on either side and both write the whole
+  // sub-document at once, so a divergence erases rather than throws — which is
+  // exactly what happened to `totals.net_carbs_grams` (C1). The arithmetic is
+  // exported so this hermetic suite can assert it with no database.
+
+  const food = (over = {}) => ({
+    nutrition: {
+      calories_per_serving: 100,
+      protein_grams: 5,
+      carbs_grams: 20,
+      fat_grams: 2,
+      fiber_grams: 4,
+      sugar_grams: 3,
+      sodium_mg: 10,
+      ...over,
+    },
+  });
+  const log = (over = {}) => ({
+    meal_type: 'lunch',
+    servings: 1,
+    food_item_id: food(),
+    ...over,
+  });
+
+  test('totals sum every macro, and net carbs are carbs minus fiber', () => {
+    const { totals } = summarizeFoodLogs([log(), log({ servings: 2 })]);
+    expect(totals).toEqual({
+      calories: 300,
+      protein_grams: 15,
+      carbs_grams: 60,
+      fat_grams: 6,
+      fiber_grams: 12,
+      net_carbs_grams: 48,
+      sugar_grams: 9,
+      sodium_mg: 30,
+    });
+  });
+
+  test('net carbs are floored PER LOG, so a high-fibre food cannot go negative', () => {
+    // Floored per log rather than on the day's sum: one very fibrous food
+    // must not subtract net carbs from the rest of the day. It is also what
+    // keeps the value inside the schema's `min: 0`.
+    const fibrous = log({ food_item_id: food({ carbs_grams: 2, fiber_grams: 30 }) });
+    expect(summarizeFoodLogs([fibrous]).totals.net_carbs_grams).toBe(0);
+    expect(summarizeFoodLogs([fibrous, log()]).totals.net_carbs_grams).toBe(16);
+  });
+
+  test('a log with no populated food, or no nutrition, is skipped whole', () => {
+    const bare = { meal_type: 'lunch', servings: 5, food_item_id: new mongoose.Types.ObjectId() };
+    const { totals, meals } = summarizeFoodLogs([bare, { ...bare, food_item_id: {} }, log()]);
+    expect(totals.calories).toBe(100);
+    expect(meals.lunch.calories).toBe(100);
+  });
+
+  test('a missing or zero servings count means one', () => {
+    expect(summarizeFoodLogs([log({ servings: 0 })]).totals.calories).toBe(100);
+    expect(summarizeFoodLogs([log({ servings: undefined })]).totals.calories).toBe(100);
+  });
+
+  test('the breakdown has one block per MEAL_TYPES entry, four macros each', () => {
+    const empty = emptyMealBreakdown();
+    expect(Object.keys(empty)).toEqual([...MEAL_TYPES]);
+    expect(Object.keys(empty.breakfast)).toEqual([
+      'calories',
+      'protein_grams',
+      'carbs_grams',
+      'fat_grams',
+    ]);
+  });
+
+  test('an unrecognised meal type counts in totals and vanishes from the breakdown', () => {
+    // The guarded bucketing (`if (meals[log.meal_type])`) is shipped
+    // behaviour, and it is the reason FoodLog's enum and MEAL_TYPES have to
+    // stay one list: split them and a day's macros stop adding up.
+    const { totals, meals } = summarizeFoodLogs([log({ meal_type: 'brunch' })]);
+    expect(totals.calories).toBe(100);
+    expect(Object.keys(meals)).toEqual([...MEAL_TYPES]);
+    expect(meals.lunch.calories).toBe(0);
+  });
+
+  test('goals_met reads UserSettings.nutrition_goal, and an unset goal is NOT met', () => {
+    const totals = { calories: 2000, protein_grams: 150, carbs_grams: 40, fat_grams: 130 };
+    expect(evaluateDailyGoalsMet(totals, null)).toEqual({
+      calories: false,
+      protein: false,
+      carbs: false,
+      fat: false,
+    });
+    expect(evaluateDailyGoalsMet(totals, { daily_calorie_target: 0 }).calories).toBe(false);
+    // `daily_calorie_target`, not `calories` — this is the UserSettings
+    // sub-document, not the `nutritiongoals` collection.
+    expect(evaluateDailyGoalsMet(totals, { calories: 1800 }).calories).toBe(false);
+    expect(evaluateDailyGoalsMet(totals, { daily_calorie_target: 1800 }).calories).toBe(true);
+  });
+
+  test('every goal is a FLOOR, including carbs and fat', () => {
+    // Shipped, and it means a keto user under their carb ceiling reads as not
+    // meeting the carb goal. `NutritionGoals.checkGoalsMet` disagrees with
+    // itself the same way (plan §10). A product question, not a refactor.
+    const under = { calories: 0, protein_grams: 0, carbs_grams: 10, fat_grams: 0 };
+    expect(evaluateDailyGoalsMet(under, { carbs_grams: 50 }).carbs).toBe(false);
+    expect(evaluateDailyGoalsMet({ ...under, carbs_grams: 50 }, { carbs_grams: 50 }).carbs).toBe(
+      true
+    );
+  });
+
+  test('the helper writes the whole triple through one upsert, on the given window', async () => {
+    // Fake models: this suite has no Mongo. What is being pinned down is the
+    // shape of the write — the whole `totals` sub-document at once, which is
+    // what made C1 a data-loss bug rather than a stale-field bug.
+    const seen = {};
+    const FoodLogModel = {
+      find(filter) {
+        seen.filter = filter;
+        return {
+          populate(field) {
+            seen.populated = field;
+            return Promise.resolve([log()]);
+          },
+        };
+      },
+    };
+    const UserSettingsModel = {
+      findOne: async () => ({ nutrition_goal: { daily_calorie_target: 50 } }),
+    };
+    const SummaryModel = {
+      findOneAndUpdate: async (filter, update, options) => {
+        Object.assign(seen, { filter2: filter, update, options });
+        return { ok: true };
+      },
+    };
+
+    const startDate = new Date('2026-09-05T00:00:00.000Z');
+    const endDate = new Date('2026-09-05T23:59:59.999Z');
+    const out = await updateDailySummaryFromLogs({
+      SummaryModel,
+      FoodLogModel,
+      UserSettingsModel,
+      userId: 'u1',
+      startDate,
+      endDate,
+    });
+
+    expect(out).toEqual({ ok: true });
+    expect(seen.populated).toBe('food_item_id');
+    expect(seen.filter).toEqual({ user_id: 'u1', log_date: { $gte: startDate, $lte: endDate } });
+    expect(seen.filter2).toEqual({ user_id: 'u1', date: startDate });
+    expect(seen.options).toEqual({ upsert: true, new: true });
+    expect(Object.keys(seen.update).sort()).toEqual([
+      'goals_met',
+      'meals',
+      'totals',
+      'updated_at',
+    ]);
+    expect(seen.update.totals.net_carbs_grams).toBe(16);
+    expect(seen.update.goals_met.calories).toBe(true);
+  });
+
+  test('the date normalization did NOT move into the CJS package', () => {
+    // @geeksuite/utils is ESM-only, so `toUtcMidnight` cannot be required from
+    // @geeksuite/schemas. The helper takes an already-normalized window and
+    // each app's static does the normalizing. Plan §3, §11.
+    expect(String(updateDailySummaryFromLogs)).not.toContain('toUtcMidnight');
+    expect(String(summarizeFoodLogs)).not.toContain('toUtcMidnight');
+  });
+
+  test('both wrappers delegate the recompute instead of restating it', () => {
+    const files = [
+      fs.readFileSync(path.resolve(__dirname, '../../models/DailySummary.js'), 'utf8'),
+      fs.readFileSync(basegeekModel('DailySummary'), 'utf8'),
+    ];
+    for (const raw of files) {
+      const code = raw
+        .split('\n')
+        .filter((line) => !line.trim().startsWith('//'))
+        .join('\n');
+      expect(code).toContain('updateDailySummaryFromLogs');
+      // Neither side keeps its own accumulator, its own net-carb line, or its
+      // own goal comparison. This is the assertion C1 would have failed.
+      expect(code).not.toContain('net_carbs_grams');
+      expect(code).not.toContain('Math.max(');
+      expect(code).not.toContain('daily_calorie_target');
+      // But the date normalization IS still here, on both sides.
+      expect(code).toContain('toUtcMidnight');
+    }
+  });
+
+  test('the real model still exposes updateFromLogs as a static', () => {
+    expect(typeof DailySummary.updateFromLogs).toBe('function');
+    expect(typeof DailySummary.getOrCreate).toBe('function');
+    expect(typeof DailySummary.getSummaryRange).toBe('function');
   });
 });

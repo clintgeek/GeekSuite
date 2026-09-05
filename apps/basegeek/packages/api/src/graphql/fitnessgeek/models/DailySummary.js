@@ -3,104 +3,45 @@ import { toUtcMidnight } from '@geeksuite/utils/dates';
 import { getAppConnection } from '../../shared/appConnections.js';
 import { requireUser } from '../ownership.js';
 
+// The field set, the unique `(user_id, date)` index, the options and — the
+// carve-out for this pair — the recompute behind `updateFromLogs` live in
+// @geeksuite/schemas so that this model and fitnessgeek's REST copy
+// (apps/fitnessgeek/backend/src/models/DailySummary.js) cannot drift. Both
+// point at the `dailysummaries` collection in the same database — this gateway
+// through its `dailySummary` query, `refreshDailySummary` and every food-log
+// mutation (seven call sites, all hot since 79b1b57), fitnessgeek through its
+// logRoutes and summaryRoutes — and mongoose strict mode silently drops paths
+// one side doesn't know about.
+//
+// This is the pair where that stopped being theoretical: `updateFromLogs`
+// writes the WHOLE `totals` sub-document, and for one day THIS copy of the
+// schema was missing `totals.net_carbs_grams`, so merely reading a day through
+// the gateway erased the keto ring's number from the stored document. See the
+// shared module's header and DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md (C1,
+// PRE-1, fixed in 0cecb4a).
+//
+// Do NOT add fields here. Add them to the shared module (and to typeDefs.js if
+// they should cross GraphQL); the tripwire tests in both suites fail if this
+// model stops matching the shared definition.
+//
+// Default import + destructure: the shared module is CommonJS (no build step,
+// `require`-able and `import`-able by both consumers), and this is the interop
+// form that works identically under Node ESM and jest's
+// --experimental-vm-modules.
+import dailySummarySchemaModule from '@geeksuite/schemas/fitnessgeek/dailySummary';
+
+const { createDailySummarySchema, updateDailySummaryFromLogs } = dailySummarySchemaModule;
+
 const fitnessConn = getAppConnection('fitnessgeek');
 
-const dailySummarySchema = new mongoose.Schema({
-  user_id: {
-    type: String,
-    required: true,
-    index: true
-  },
-  date: {
-    type: Date,
-    required: true,
-    index: true
-  },
-  totals: {
-    calories: {
-      type: Number,
-      default: 0,
-      min: 0
-    },
-    protein_grams: {
-      type: Number,
-      default: 0,
-      min: 0
-    },
-    carbs_grams: {
-      type: Number,
-      default: 0,
-      min: 0
-    },
-    fat_grams: {
-      type: Number,
-      default: 0,
-      min: 0
-    },
-    fiber_grams: {
-      type: Number,
-      default: 0,
-      min: 0
-    },
-    net_carbs_grams: {
-      type: Number,
-      default: 0,
-      min: 0
-    },
-    sugar_grams: {
-      type: Number,
-      default: 0,
-      min: 0
-    },
-    sodium_mg: {
-      type: Number,
-      default: 0,
-      min: 0
-    }
-  },
-  meals: {
-    breakfast: {
-      calories: { type: Number, default: 0, min: 0 },
-      protein_grams: { type: Number, default: 0, min: 0 },
-      carbs_grams: { type: Number, default: 0, min: 0 },
-      fat_grams: { type: Number, default: 0, min: 0 }
-    },
-    lunch: {
-      calories: { type: Number, default: 0, min: 0 },
-      protein_grams: { type: Number, default: 0, min: 0 },
-      carbs_grams: { type: Number, default: 0, min: 0 },
-      fat_grams: { type: Number, default: 0, min: 0 }
-    },
-    dinner: {
-      calories: { type: Number, default: 0, min: 0 },
-      protein_grams: { type: Number, default: 0, min: 0 },
-      carbs_grams: { type: Number, default: 0, min: 0 },
-      fat_grams: { type: Number, default: 0, min: 0 }
-    },
-    snack: {
-      calories: { type: Number, default: 0, min: 0 },
-      protein_grams: { type: Number, default: 0, min: 0 },
-      carbs_grams: { type: Number, default: 0, min: 0 },
-      fat_grams: { type: Number, default: 0, min: 0 }
-    }
-  },
-  goals_met: {
-    calories: { type: Boolean, default: false },
-    protein: { type: Boolean, default: false },
-    carbs: { type: Boolean, default: false },
-    fat: { type: Boolean, default: false }
-  }
-}, {
-  timestamps: {
-    createdAt: 'created_at',
-    updatedAt: 'updated_at'
-  }
-});
+const dailySummarySchema = createDailySummarySchema(mongoose);
 
-// Compound index for user and date
-dailySummarySchema.index({ user_id: 1, date: 1 }, { unique: true });
-
-// Static method to get or create daily summary
+// Static method to get or create daily summary.
+//
+// Stays app-side: it normalizes the date with `toUtcMidnight` from
+// @geeksuite/utils, which is ESM-only and cannot be `require`d from the
+// CommonJS shared package, and it opens with this gateway's `requireUser`
+// guard. fitnessgeek's copy is this one without the guard.
 dailySummarySchema.statics.getOrCreate = async function(userId, date) {
   requireUser(userId);
   const startDate = toUtcMidnight(date);
@@ -122,10 +63,23 @@ dailySummarySchema.statics.getOrCreate = async function(userId, date) {
   return summary;
 };
 
-// Static method to update daily summary from food logs
+// Static method to update daily summary from food logs.
+//
+// THE RECOMPUTE IS SHARED. This static is the only writer of `totals`,
+// `meals` and `goals_met` on this side, fitnessgeek's twin is the only writer
+// on that side, and both write the whole sub-document at once — so if the two
+// implementations ever disagreed about a macro, one of them would quietly
+// erase the other's number rather than fail. That is exactly what happened to
+// `net_carbs_grams`, and it is why `updateDailySummaryFromLogs` is the second
+// carve-out from the "statics stay app-side" rule after
+// `FoodItem.findOrCreate`.
+//
+// What stays here: the `requireUser` guard, the two model lookups (this
+// gateway's own fitnessgeek connection) and the date normalization, which
+// cannot move — see `getOrCreate` above. The helper takes the
+// already-normalized boundaries.
 dailySummarySchema.statics.updateFromLogs = async function(userId, date) {
   requireUser(userId);
-  const FoodLog = fitnessConn.model('FoodLog');
 
   const startDate = toUtcMidnight(date);
   startDate.setUTCHours(0, 0, 0, 0);
@@ -133,87 +87,14 @@ dailySummarySchema.statics.updateFromLogs = async function(userId, date) {
   const endDate = toUtcMidnight(date);
   endDate.setUTCHours(23, 59, 59, 999);
 
-  // Get all logs for the date
-  const logs = await FoodLog.find({
-    user_id: userId,
-    log_date: { $gte: startDate, $lte: endDate }
-  }).populate('food_item_id');
-
-  // Calculate totals
-  const totals = {
-    calories: 0,
-    protein_grams: 0,
-    carbs_grams: 0,
-    fat_grams: 0,
-    fiber_grams: 0,
-    net_carbs_grams: 0,
-    sugar_grams: 0,
-    sodium_mg: 0
-  };
-
-  const meals = {
-    breakfast: { calories: 0, protein_grams: 0, carbs_grams: 0, fat_grams: 0 },
-    lunch: { calories: 0, protein_grams: 0, carbs_grams: 0, fat_grams: 0 },
-    dinner: { calories: 0, protein_grams: 0, carbs_grams: 0, fat_grams: 0 },
-    snack: { calories: 0, protein_grams: 0, carbs_grams: 0, fat_grams: 0 }
-  };
-
-  logs.forEach(log => {
-    const food = log.food_item_id;
-    const multiplier = log.servings || 1;
-
-    // Skip if food or nutrition is missing
-    if (!food || !food.nutrition) {
-      return;
-    }
-
-    const n = food.nutrition;
-
-    // Add to totals (with null safety)
-    totals.calories += ((n.calories_per_serving || 0) * multiplier);
-    totals.protein_grams += ((n.protein_grams || 0) * multiplier);
-    totals.carbs_grams += ((n.carbs_grams || 0) * multiplier);
-    totals.fat_grams += ((n.fat_grams || 0) * multiplier);
-    totals.fiber_grams += ((n.fiber_grams || 0) * multiplier);
-    totals.net_carbs_grams += Math.max(0, ((n.carbs_grams || 0) - (n.fiber_grams || 0)) * multiplier);
-    totals.sugar_grams += ((n.sugar_grams || 0) * multiplier);
-    totals.sodium_mg += ((n.sodium_mg || 0) * multiplier);
-
-    // Add to meal breakdown
-    if (meals[log.meal_type]) {
-      meals[log.meal_type].calories += ((n.calories_per_serving || 0) * multiplier);
-      meals[log.meal_type].protein_grams += ((n.protein_grams || 0) * multiplier);
-      meals[log.meal_type].carbs_grams += ((n.carbs_grams || 0) * multiplier);
-      meals[log.meal_type].fat_grams += ((n.fat_grams || 0) * multiplier);
-    }
+  return updateDailySummaryFromLogs({
+    SummaryModel: this,
+    FoodLogModel: fitnessConn.model('FoodLog'),
+    UserSettingsModel: fitnessConn.model('UserSettings'),
+    userId,
+    startDate,
+    endDate,
   });
-
-  // Get user's goals
-  const UserSettings = fitnessConn.model('UserSettings');
-  const userSettings = await UserSettings.findOne({ user_id: userId });
-  const goals = userSettings?.nutrition_goal || null;
-
-  // Check if goals are met
-  const goals_met = {
-    calories: goals && goals.daily_calorie_target ? totals.calories >= goals.daily_calorie_target : false,
-    protein: goals && goals.protein_grams ? totals.protein_grams >= goals.protein_grams : false,
-    carbs: goals && goals.carbs_grams ? totals.carbs_grams >= goals.carbs_grams : false,
-    fat: goals && goals.fat_grams ? totals.fat_grams >= goals.fat_grams : false
-  };
-
-  // Update or create daily summary
-  const summary = await this.findOneAndUpdate(
-    { user_id: userId, date: startDate },
-    {
-      totals,
-      meals,
-      goals_met,
-      updated_at: new Date()
-    },
-    { upsert: true, new: true }
-  );
-
-  return summary;
 };
 
 // Static method to get summary for date range

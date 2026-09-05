@@ -94,6 +94,29 @@ const { default: FoodItemRest } = await import(
 );
 const { default: foodItemShared } = await import('@geeksuite/schemas/fitnessgeek/foodItem');
 
+// Pair 9.
+const { default: FoodLogGraphQL } = await import('../graphql/fitnessgeek/models/FoodLog.js');
+const { default: FoodLogRest } = await import(
+  '../../../../../fitnessgeek/backend/src/models/FoodLog.js'
+);
+const { default: foodLogShared } = await import('@geeksuite/schemas/fitnessgeek/foodLog');
+
+// Pair 10. `UserSettings` is imported only so the recompute can read
+// `nutrition_goal` off this connection — it is not under test here (it has its
+// own suite next door).
+const { default: DailySummaryGraphQL } = await import(
+  '../graphql/fitnessgeek/models/DailySummary.js'
+);
+const { default: DailySummaryRest } = await import(
+  '../../../../../fitnessgeek/backend/src/models/DailySummary.js'
+);
+const { default: dailySummaryShared } = await import(
+  '@geeksuite/schemas/fitnessgeek/dailySummary'
+);
+const { default: UserSettingsGraphQL } = await import(
+  '../graphql/fitnessgeek/models/UserSettings.js'
+);
+
 const OWNER = String(new mongoose.Types.ObjectId());
 
 const PAIRS = [
@@ -425,6 +448,144 @@ const PAIRS = [
       calories: doc.nutrition.calories_per_serving,
       sodium: doc.nutrition.sodium_mg,
       serving: { size: doc.serving.size, unit: doc.serving.unit },
+    }),
+  },
+  {
+    name: 'FoodLog',
+    Rest: FoodLogRest,
+    GraphQL: FoodLogGraphQL,
+    createSchema: foodLogShared.createFoodLogSchema,
+    // `nutrition` is a nested OBJECT (dotted paths). `updatedAt` (camel)
+    // beside `created_at` (snake) is the asymmetric rename both copies
+    // shipped — the `Medication` quirk again. Spelled out so nobody
+    // "fixes" it by accident.
+    expectedPaths: [
+      'user_id',
+      'log_date',
+      'meal_type',
+      'food_item_id',
+      'servings',
+      'notes',
+      'nutrition.calories_per_serving',
+      'nutrition.protein_grams',
+      'nutrition.carbs_grams',
+      'nutrition.fat_grams',
+      'nutrition.fiber_grams',
+      'nutrition.sugar_grams',
+      'nutrition.sodium_mg',
+      'created_at',
+      'updatedAt',
+    ],
+    expectedVirtuals: ['calculatedNutrition'],
+    serializesVirtuals: true,
+    ownerField: 'user_id',
+    doc: () => ({
+      user_id: OWNER,
+      log_date: new Date('2026-09-05T00:00:00.000Z'),
+      meal_type: 'lunch',
+      food_item_id: new mongoose.Types.ObjectId(),
+      servings: 1.5,
+      notes: 'post-consolidation probe',
+      nutrition: {
+        calories_per_serving: 210,
+        protein_grams: 21,
+        carbs_grams: 4,
+        fat_grams: 12,
+        fiber_grams: 9,
+        sugar_grams: 1,
+        sodium_mg: 140,
+      },
+    }),
+    // The stored nutrition snapshot is the point of this collection — it is
+    // what a log keeps when the catalog row later changes — so it is what a
+    // drifted copy would eat.
+    probe: (doc) => ({
+      meal_type: doc.meal_type,
+      servings: doc.servings,
+      notes: doc.notes,
+      nutrition: {
+        calories_per_serving: doc.nutrition.calories_per_serving,
+        fiber_grams: doc.nutrition.fiber_grams,
+        sodium_mg: doc.nutrition.sodium_mg,
+      },
+    }),
+  },
+  {
+    name: 'DailySummary',
+    Rest: DailySummaryRest,
+    GraphQL: DailySummaryGraphQL,
+    createSchema: dailySummaryShared.createDailySummarySchema,
+    // 32 paths, every one of them a leaf of a nested OBJECT. This is the pair
+    // the whole exercise is named after: `totals.net_carbs_grams` was missing
+    // from the gateway's copy, and because `updateFromLogs` writes the whole
+    // `totals` sub-document, reading a day through the gateway erased it.
+    expectedPaths: [
+      'user_id',
+      'date',
+      'totals.calories',
+      'totals.protein_grams',
+      'totals.carbs_grams',
+      'totals.fat_grams',
+      'totals.fiber_grams',
+      'totals.net_carbs_grams',
+      'totals.sugar_grams',
+      'totals.sodium_mg',
+      'meals.breakfast.calories',
+      'meals.breakfast.protein_grams',
+      'meals.breakfast.carbs_grams',
+      'meals.breakfast.fat_grams',
+      'meals.lunch.calories',
+      'meals.lunch.protein_grams',
+      'meals.lunch.carbs_grams',
+      'meals.lunch.fat_grams',
+      'meals.dinner.calories',
+      'meals.dinner.protein_grams',
+      'meals.dinner.carbs_grams',
+      'meals.dinner.fat_grams',
+      'meals.snack.calories',
+      'meals.snack.protein_grams',
+      'meals.snack.carbs_grams',
+      'meals.snack.fat_grams',
+      'goals_met.calories',
+      'goals_met.protein',
+      'goals_met.carbs',
+      'goals_met.fat',
+      'created_at',
+      'updated_at',
+    ],
+    expectedVirtuals: [],
+    serializesVirtuals: false,
+    ownerField: 'user_id',
+    doc: () => ({
+      user_id: OWNER,
+      date: new Date('2026-09-05T00:00:00.000Z'),
+      totals: {
+        calories: 1840,
+        protein_grams: 142,
+        carbs_grams: 46,
+        fat_grams: 121,
+        fiber_grams: 19,
+        net_carbs_grams: 27,
+        sugar_grams: 12,
+        sodium_mg: 2410,
+      },
+      meals: {
+        breakfast: { calories: 420, protein_grams: 32, carbs_grams: 8, fat_grams: 30 },
+        lunch: { calories: 610, protein_grams: 48, carbs_grams: 14, fat_grams: 41 },
+        dinner: { calories: 700, protein_grams: 54, carbs_grams: 18, fat_grams: 44 },
+        snack: { calories: 110, protein_grams: 8, carbs_grams: 6, fat_grams: 6 },
+      },
+      goals_met: { calories: true, protein: true, carbs: false, fat: true },
+    }),
+    // `totals.net_carbs_grams` is the field the plan names for this pair: the
+    // one a drifted copy actually ate in production.
+    probe: (doc) => ({
+      net_carbs: doc.totals.net_carbs_grams,
+      fiber: doc.totals.fiber_grams,
+      sodium: doc.totals.sodium_mg,
+      lunch: doc.meals.lunch.calories,
+      snack_fat: doc.meals.snack.fat_grams,
+      goals_met: { ...doc.goals_met },
     }),
   },
 ];
@@ -1463,5 +1624,366 @@ describe('FoodItem findOrCreate (the shared dedupe ladder)', () => {
       // No toJSON: {virtuals: true} on this pair — shipped behaviour.
       expect(doc.toJSON().totalCalories).toBeUndefined();
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FoodLog — the shared enum and the virtual, against a real collection
+// ---------------------------------------------------------------------------
+
+describe('FoodLog meal types and calculatedNutrition', () => {
+  let food;
+
+  beforeAll(async () => {
+    await FoodLogGraphQL.db.asPromise();
+  }, 60000);
+
+  beforeEach(async () => {
+    food = await FoodItemGraphQL.create({
+      name: 'Parity probe food',
+      nutrition: {
+        calories_per_serving: 100,
+        protein_grams: 5,
+        carbs_grams: 20,
+        fat_grams: 2,
+        fiber_grams: 4,
+        sugar_grams: 3,
+        sodium_mg: 10,
+      },
+      serving: { size: 100, unit: 'g' },
+      source: 'custom',
+      user_id: OWNER,
+    });
+  });
+
+  afterEach(async () => {
+    await Promise.all([
+      FoodLogGraphQL.deleteMany({}),
+      FoodItemGraphQL.deleteMany({}),
+    ]);
+  });
+
+  test('both models take their meal_type enum from the shared meal.js', () => {
+    // Pair 9's decision. `logMeal` writes a saved Meal's `meal_type` straight
+    // into a row here, and `DailySummary` buckets these rows by it, so the two
+    // collections share ONE vocabulary rather than two equal literals.
+    expect(foodLogShared.MEAL_TYPES).toBe(mealShared.MEAL_TYPES);
+    for (const M of [FoodLogRest, FoodLogGraphQL]) {
+      expect(M.schema.paths.meal_type.enumValues).toEqual([...mealShared.MEAL_TYPES]);
+    }
+    expect(MealGraphQL.schema.paths.meal_type.enumValues).toEqual([
+      ...FoodLogGraphQL.schema.paths.meal_type.enumValues,
+    ]);
+  });
+
+  test('both models reject a meal type Meal would reject', async () => {
+    await expect(
+      FoodLogGraphQL.create({
+        user_id: OWNER,
+        log_date: new Date('2026-09-05T00:00:00.000Z'),
+        meal_type: 'brunch',
+        food_item_id: food._id,
+        servings: 1,
+      })
+    ).rejects.toThrow(/meal_type/);
+  });
+
+  test('the virtual falls back to the POPULATED food when no snapshot was stored', async () => {
+    // The branch the hermetic half cannot reach: this needs a real populate.
+    await FoodLogGraphQL.create({
+      user_id: OWNER,
+      log_date: new Date('2026-09-05T00:00:00.000Z'),
+      meal_type: 'dinner',
+      food_item_id: food._id,
+      servings: 2,
+    });
+
+    const populated = await FoodLogGraphQL.findOne({ user_id: OWNER }).populate('food_item_id');
+    expect(populated.calculatedNutrition).toEqual({
+      calories: 200,
+      protein_grams: 10,
+      carbs_grams: 40,
+      fat_grams: 4,
+      fiber_grams: 8,
+      sugar_grams: 6,
+      sodium_mg: 20,
+    });
+
+    // Un-populated, the same row reads zeros rather than throwing — the
+    // stored snapshot defaults to 0 on every leaf.
+    const bare = await FoodLogGraphQL.findOne({ user_id: OWNER });
+    expect(bare.calculatedNutrition.calories).toBe(0);
+  });
+
+  test('both sides compute the virtual identically, and it is on the wire', () => {
+    const attrs = {
+      user_id: OWNER,
+      log_date: new Date('2026-09-05T00:00:00.000Z'),
+      meal_type: 'lunch',
+      food_item_id: new mongoose.Types.ObjectId(),
+      servings: 2.5,
+      nutrition: { calories_per_serving: 210, protein_grams: 21 },
+    };
+    const rest = new FoodLogRest(attrs).calculatedNutrition;
+    const gql = new FoodLogGraphQL(attrs).calculatedNutrition;
+    expect(rest).toEqual(gql);
+    expect(rest.calories).toBe(525);
+    // `toJSON: { virtuals: true }` on both sides, so it is in every response.
+    expect(new FoodLogGraphQL(attrs).toJSON().calculatedNutrition.calories).toBe(525);
+  });
+
+  test('the gateway refuses an unscoped list static, fitnessgeek’s does not', async () => {
+    for (const [name, args] of [
+      ['getLogsForDate', ['2026-09-05']],
+      ['getLogsForDateRange', ['2026-09-01', '2026-09-05']],
+      ['getRecentLogs', []],
+      ['getLogsByMealType', ['lunch', '2026-09-05']],
+    ]) {
+      await expect(FoodLogGraphQL[name](undefined, ...args)).rejects.toMatchObject({
+        code: 'UNAUTHORIZED',
+      });
+    }
+
+    const RestSide = FoodLogGraphQL.db.model(
+      'FoodLogGuardProbe',
+      FoodLogRest.schema,
+      FoodLogGraphQL.collection.name
+    );
+    await expect(RestSide.getLogsForDate(undefined, '2026-09-05')).resolves.toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DailySummary — the shared recompute, and the divergence that ate a field
+// ---------------------------------------------------------------------------
+
+describe('DailySummary.updateFromLogs — one recompute, two schemas', () => {
+  const { updateDailySummaryFromLogs, summarizeFoodLogs } = dailySummaryShared;
+
+  const DAY = '2026-09-05';
+  const START = new Date('2026-09-05T00:00:00.000Z');
+  const END = new Date('2026-09-05T23:59:59.999Z');
+
+  let SummaryRestSide;
+
+  beforeAll(async () => {
+    await DailySummaryGraphQL.db.asPromise();
+    // fitnessgeek's OWN schema, bound to this connection on the gateway's
+    // collection: the production topology, two schemas over one collection.
+    SummaryRestSide = DailySummaryGraphQL.db.model(
+      'DailySummaryRecomputeProbe',
+      DailySummaryRest.schema,
+      DailySummaryGraphQL.collection.name
+    );
+  }, 60000);
+
+  const seed = async () => {
+    const keto = await FoodItemGraphQL.create({
+      name: 'Recompute probe — high fibre',
+      nutrition: {
+        calories_per_serving: 120,
+        protein_grams: 6,
+        carbs_grams: 30,
+        fat_grams: 4,
+        fiber_grams: 12,
+        sugar_grams: 2,
+        sodium_mg: 90,
+      },
+      serving: { size: 100, unit: 'g' },
+      source: 'custom',
+      user_id: OWNER,
+    });
+    const plain = await FoodItemGraphQL.create({
+      name: 'Recompute probe — plain',
+      nutrition: {
+        calories_per_serving: 200,
+        protein_grams: 18,
+        carbs_grams: 5,
+        fat_grams: 14,
+        fiber_grams: 1,
+        sugar_grams: 1,
+        sodium_mg: 300,
+      },
+      serving: { size: 100, unit: 'g' },
+      source: 'custom',
+      user_id: OWNER,
+    });
+    await FoodLogGraphQL.create([
+      {
+        user_id: OWNER,
+        log_date: new Date('2026-09-05T08:00:00.000Z'),
+        meal_type: 'breakfast',
+        food_item_id: keto._id,
+        servings: 2,
+      },
+      {
+        user_id: OWNER,
+        log_date: new Date('2026-09-05T19:00:00.000Z'),
+        meal_type: 'dinner',
+        food_item_id: plain._id,
+        servings: 1.5,
+      },
+    ]);
+  };
+
+  const stripVolatile = (doc) => {
+    const { _id, __v, created_at, updated_at, ...rest } = doc;
+    return rest;
+  };
+
+  afterEach(async () => {
+    await Promise.all([
+      DailySummaryGraphQL.deleteMany({}),
+      FoodLogGraphQL.deleteMany({}),
+      FoodItemGraphQL.deleteMany({}),
+      UserSettingsGraphQL.deleteMany({}),
+    ]);
+  });
+
+  test('the gateway’s recompute persists every macro, net carbs included', async () => {
+    await seed();
+    await DailySummaryGraphQL.updateFromLogs(OWNER, DAY);
+
+    // Read the PERSISTED document, not the one updateFromLogs returned, so
+    // that mongoose strict-mode stripping is actually exercised. This is the
+    // exact assertion C1 would have failed.
+    const stored = await DailySummaryGraphQL.findOne({ user_id: OWNER }).lean();
+    expect(stored.totals).toEqual({
+      calories: 540,
+      protein_grams: 39,
+      carbs_grams: 67.5,
+      fat_grams: 29,
+      fiber_grams: 25.5,
+      // (30 − 12) × 2 = 36, plus (5 − 1) × 1.5 = 6.
+      net_carbs_grams: 42,
+      sugar_grams: 5.5,
+      sodium_mg: 630,
+    });
+    expect(stored.meals.breakfast.calories).toBe(240);
+    expect(stored.meals.dinner.calories).toBe(300);
+    expect(stored.meals.lunch.calories).toBe(0);
+    expect(stored.date).toEqual(START);
+  });
+
+  test('fitnessgeek’s schema persists byte-identical numbers on the same logs', async () => {
+    // The proof the pair exists for: the two writers agree. Same logs, same
+    // window, same shared helper — but the document is written through
+    // fitnessgeek's OWN schema object the second time. If either schema were
+    // missing a path, strict mode would drop it here and the two would differ.
+    await seed();
+
+    await DailySummaryGraphQL.updateFromLogs(OWNER, DAY);
+    const viaGateway = await DailySummaryGraphQL.findOne({ user_id: OWNER }).lean();
+
+    await DailySummaryGraphQL.deleteMany({ user_id: OWNER });
+
+    await updateDailySummaryFromLogs({
+      SummaryModel: SummaryRestSide,
+      FoodLogModel: FoodLogGraphQL,
+      UserSettingsModel: UserSettingsGraphQL,
+      userId: OWNER,
+      startDate: START,
+      endDate: END,
+    });
+    const viaRest = await SummaryRestSide.findOne({ user_id: OWNER }).lean();
+
+    expect(stripVolatile(viaRest)).toEqual(stripVolatile(viaGateway));
+    expect(viaRest.totals.net_carbs_grams).toBe(42);
+
+    // And both match the exported arithmetic run over the same logs.
+    const logs = await FoodLogGraphQL.find({ user_id: OWNER }).populate('food_item_id');
+    expect(viaRest.totals).toEqual(summarizeFoodLogs(logs).totals);
+  });
+
+  test('a second recompute does not erase what the first wrote', async () => {
+    // The gateway's `dailySummary` QUERY calls updateFromLogs, so a day is
+    // recomputed every time it is read. That read-triggers-write path is what
+    // turned a missing field into data loss rather than a stale value.
+    await seed();
+    await DailySummaryGraphQL.updateFromLogs(OWNER, DAY);
+    await DailySummaryGraphQL.updateFromLogs(OWNER, DAY);
+
+    const stored = await DailySummaryGraphQL.findOne({ user_id: OWNER }).lean();
+    expect(stored.totals.net_carbs_grams).toBe(42);
+    expect(await DailySummaryGraphQL.countDocuments({ user_id: OWNER })).toBe(1);
+  });
+
+  test('goals_met comes from UserSettings.nutrition_goal — and three of the four can never be met', async () => {
+    await seed();
+    await UserSettingsGraphQL.create({
+      user_id: OWNER,
+      nutrition_goal: { daily_calorie_target: 500, protein_grams: 30, carbs_grams: 200 },
+    });
+
+    await DailySummaryGraphQL.updateFromLogs(OWNER, DAY);
+    const stored = await DailySummaryGraphQL.findOne({ user_id: OWNER }).lean();
+
+    // 540 >= 500, so calories is met. The other three are NOT, and not
+    // because the day missed them: `UserSettings.nutrition_goal` declares
+    // `daily_calorie_target` and no `protein_grams` / `carbs_grams` /
+    // `fat_grams` at all, so strict mode dropped the two written just above
+    // and `evaluateDailyGoalsMet` reads `undefined` for all three. That makes
+    // `goals_met.protein`, `.carbs` and `.fat` permanently false in
+    // production, identically on both sides. Found by consolidating; shipped
+    // behaviour, deliberately unchanged, recorded as a follow-up in §12 of
+    // DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md.
+    expect(stored.goals_met).toEqual({
+      calories: true,
+      protein: false,
+      carbs: false,
+      fat: false,
+    });
+
+    const settings = await UserSettingsGraphQL.findOne({ user_id: OWNER }).lean();
+    expect(settings.nutrition_goal.daily_calorie_target).toBe(500);
+    expect(settings.nutrition_goal.protein_grams).toBeUndefined();
+    expect(settings.nutrition_goal.carbs_grams).toBeUndefined();
+
+    // The helper itself is fine — hand it a goal object that HAS the macro and
+    // it says so. The gap is in the settings schema, not in the arithmetic.
+    expect(
+      dailySummaryShared.evaluateDailyGoalsMet(stored.totals, {
+        daily_calorie_target: 500,
+        protein_grams: 30,
+      })
+    ).toEqual({ calories: true, protein: true, carbs: false, fat: false });
+  });
+
+  test('both wrappers delegate the recompute and neither restates the arithmetic', () => {
+    // The carve-out is only worth anything if both sides actually use it.
+    for (const M of [DailySummaryRest, DailySummaryGraphQL]) {
+      const src = String(M.schema.statics.updateFromLogs);
+      expect(src).toContain('updateDailySummaryFromLogs');
+      expect(src).not.toContain('net_carbs_grams');
+      expect(src).not.toContain('Math.max(');
+      // The date normalization stayed app-side: @geeksuite/utils is ESM-only
+      // and cannot be required from the CommonJS shared package.
+      expect(src).toContain('toUtcMidnight');
+    }
+    // The shared factory attaches no statics at all.
+    expect(
+      Object.keys(dailySummaryShared.createDailySummarySchema(mongoose).statics)
+    ).toEqual([]);
+    // The deliberate asymmetry is the guard, and nothing else.
+    const statics = (M) => Object.keys(M.schema.statics).sort();
+    expect(statics(DailySummaryRest)).toEqual(statics(DailySummaryGraphQL));
+    expect(statics(DailySummaryRest)).toEqual([
+      'getOrCreate',
+      'getSummaryRange',
+      'updateFromLogs',
+    ]);
+  });
+
+  test('the gateway refuses an unscoped recompute, fitnessgeek’s copy does not', async () => {
+    for (const [name, args] of [
+      ['getOrCreate', [DAY]],
+      ['updateFromLogs', [DAY]],
+      ['getSummaryRange', [DAY, DAY]],
+    ]) {
+      await expect(DailySummaryGraphQL[name](undefined, ...args)).rejects.toMatchObject({
+        code: 'UNAUTHORIZED',
+      });
+    }
+    await expect(SummaryRestSide.getSummaryRange(undefined, DAY, DAY)).resolves.toEqual([]);
   });
 });

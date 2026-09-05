@@ -19,6 +19,14 @@ fitnessgeek collection with more than one writer. Each module exports a
 wrapper that calls it, attaches its own statics, and binds the result to its
 own connection. **Add a field to the shared module, never to a wrapper.**
 
+**All eleven pairs are consolidated as of 2026-09-05.** `UserSettings` was
+**pair 0** — the incident that started this, done before the plan existed and
+therefore not numbered in it; `DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md` counts
+`Weight` as pair 1 and `DailySummary` as pair 10. Two further basegeek models
+(`AIFoodPromptCache`, `MedicationLog`) were orphans and were deleted rather
+than shared. Thirteen model pairs in, eleven shared and two gone: there is no
+fitnessgeek collection left with two hand-synced schemas.
+
 | Model | Shared module | Collection | Consolidated | Exports beyond the factory |
 |---|---|---|---|---|
 | `UserSettings` | `packages/schemas/fitnessgeek/userSettings.js` | `usersettings` | 2026-09-05 | `encryptGarminPassword`, `readGarminPassword`, `attachGarminPasswordEncryption` |
@@ -30,6 +38,8 @@ own connection. **Add a field to the shared module, never to a wrapper.**
 | `NutritionGoals` | `packages/schemas/fitnessgeek/nutritionGoals.js` | `nutritiongoals` | 2026-09-05 | `evaluateGoalsMet`, `computeGoalProgress`, `attachNutritionGoalsMethods` |
 | `Meal` | `packages/schemas/fitnessgeek/meal.js` | `meals` | 2026-09-05 | `MEAL_TYPES`, `sumMealNutrition`, `createMealItemSchema`, `attachMealTimestamps`, `attachMealMethods` |
 | `FoodItem` | `packages/schemas/fitnessgeek/foodItem.js` | `fooditems` | 2026-09-05 | `FOOD_SOURCES`, `findOrCreateFoodItem`, `foodItemDedupeFilters`, `newFoodItemAttrs`, `foodItemDefaults`, `foodItemBounds`, `attachFoodItemVirtuals`, `attachFoodItemMethods` |
+| `FoodLog` | `packages/schemas/fitnessgeek/foodLog.js` | `foodlogs` | 2026-09-05 | `MEAL_TYPES` (re-exported from `meal.js`), `scaleLogNutrition`, `foodLogBounds`, `attachFoodLogVirtuals` |
+| `DailySummary` | `packages/schemas/fitnessgeek/dailySummary.js` | `dailysummaries` | 2026-09-05 | `MEAL_TYPES` (re-exported), `updateDailySummaryFromLogs`, `summarizeFoodLogs`, `evaluateDailyGoalsMet`, `emptyDailyTotals`, `emptyMealBreakdown`, `mealBreakdownDefinition` |
 
 The wrappers, per model:
 
@@ -53,6 +63,8 @@ Statics and instance methods, per consolidated model:
 | `NutritionGoals` | `getActiveGoals`, `createGoals`, `updateGoals` on both; basegeek's all open with `requireUser` | `checkGoalsMet`, `getProgress` |
 | `Meal` | `getActiveMeals`, `getMealsByType`, `searchMeals` on both **and they disagree** — basegeek's throw on an unscoped call, fitnessgeek's return every user's meals; `findOwned` is basegeek-only | `getNutrition` |
 | `FoodItem` | `search` on both (byte-identical, still app-side); `findAccessible`, `findAccessibleMany` basegeek-only. `findOrCreate` on both, but each is a **one-line delegate** to the shared `findOrCreateFoodItem` | `isGlobal` |
+| `FoodLog` | `getLogsForDate`, `getLogsForDateRange`, `getRecentLogs`, `getLogsByMealType` on both; basegeek's all open with `requireUser`. They are also where `toUtcMidnight` is called, which is a second reason they cannot move | — (the `calculatedNutrition` **virtual** is shared) |
+| `DailySummary` | `getOrCreate`, `getSummaryRange` on both, basegeek's `requireUser`-guarded. `updateFromLogs` on both, but each is a **delegate** to the shared `updateDailySummaryFromLogs` — it keeps only the guard, the two model lookups and the date normalization | — |
 
 `recordLogin` was the first *instance method* to move into a shared module. It
 mutates four declared paths, so a divergence in it would corrupt a user's
@@ -81,18 +93,28 @@ must be built from the caller's own mongoose, exactly as the parent is) and a
 
 ### Two things that are *not* in the shared modules
 
-- **Statics — with one carve-out, taken on 2026-09-05.** They do not appear in
-  `schema.paths`, so they cannot cause the strict-mode data loss these modules
-  exist to prevent, and the two writers legitimately need different ones. The
-  exception is `FoodItem.findOrCreate`: its dedupe ladder is not an ownership
-  policy, it has one correct meaning for both writers, and a divergence would
-  fork the catalog silently rather than throw. So the ladder and the global-row
-  creation live in the shared module as `findOrCreateFoodItem(Model, foodData)`
-  and each app keeps a one-line delegating static. The shape is the same one
+- **Statics — with two carve-outs, both taken on 2026-09-05.** They do not
+  appear in `schema.paths`, so they cannot cause the strict-mode data loss
+  these modules exist to prevent, and the two writers legitimately need
+  different ones. The exceptions are `FoodItem.findOrCreate` and
+  `DailySummary.updateFromLogs`. Neither is an ownership policy, each has one
+  correct meaning for both writers, and a divergence in either fails silently
+  rather than throwing — `findOrCreate` forks the catalog, `updateFromLogs`
+  erases a macro from a stored day, which is exactly what happened to
+  `totals.net_carbs_grams` in September 2026. So the dedupe ladder and the
+  global-row creation live in the shared module as
+  `findOrCreateFoodItem(Model, foodData)`, the day's recompute lives there as
+  `updateDailySummaryFromLogs({SummaryModel, FoodLogModel, UserSettingsModel,
+  userId, startDate, endDate})`, and each app keeps a delegating static. The shape is the same one
   used for instance methods — move the logic, export the pure part by name —
   except that the model is a parameter instead of the document, and the pure
   part is a *query plan* (`foodItemDedupeFilters` returns the three rungs as
-  data) rather than arithmetic.
+  data) rather than arithmetic. `updateDailySummaryFromLogs` takes **three**
+  models and its pure parts are `summarizeFoodLogs` and
+  `evaluateDailyGoalsMet`. Note what it does *not* take: the date. Normalizing
+  it needs `toUtcMidnight` from `@geeksuite/utils`, which is ESM-only and
+  cannot be `require`d from this CommonJS package, so each app's static
+  normalizes and hands in an already-resolved `startDate` / `endDate`.
 
   Everything that expresses **who may see what** still stays app-side, including
   `FoodItem.search`, which is byte-identical on both sides and was still not
@@ -138,6 +160,31 @@ must be built from the caller's own mongoose, exactly as the parent is) and a
   reaches `syncIndexes` first builds an index the other's writes may violate.
   In this suite that happens by construction (every push to `main` rebuilds all
   eight images and Watchtower rolls the fleet) — but say so in the commit.
+- `DailySummary` carries the **second `unique` index** —
+  `{user_id: 1, date: 1}`, one summary row per user per day, which is what
+  makes `updateFromLogs`' upsert safe under concurrency. Same redeploy rule as
+  `FoodItem.barcode`.
+- `FoodLog` renames `createdAt` → `created_at` and leaves `updatedAt` camelCase
+  — the same asymmetry as `Medication`, on disk, moved verbatim.
+- **`foodlogs` and `meals` share one `MEAL_TYPES`.** It is the only
+  cross-collection constant in `packages/schemas/fitnessgeek/`, and it earned
+  that by a runtime coupling rather than a shared spelling: `logMeal` writes a
+  saved Meal's `meal_type` straight into a FoodLog row, and
+  `DailySummary.updateFromLogs` buckets those rows into `meals[log.meal_type]`
+  under a guard — so a value legal on one collection and not the other counts
+  in `totals` and vanishes from the per-meal breakdown. Contrast
+  `validation/schemas/settings.js`'s `startWeight` bounds, which look like a
+  copy of `WeightGoals`' and were deliberately *not* rewired: same field names,
+  different document, no coupling.
+- **`DailySummary.updateFromLogs` reads the current catalog row, not the log's
+  stored `nutrition` snapshot.** So editing a food restates every past day that
+  used it, and a day recomputed from un-populated logs is all zeros. Identical
+  on both sides, moved verbatim, now asserted.
+- **Three of `goals_met`'s four flags can never be true.**
+  `UserSettings.nutrition_goal` declares `daily_calorie_target` and no
+  `protein_grams` / `carbs_grams` / `fat_grams`, so `evaluateDailyGoalsMet`
+  reads `undefined` for three of its four inputs. Pre-existing on both sides,
+  found by writing the parity test, left alone. See §12 of the plan.
 - `FoodItem`'s text index (`{name: 'text', brand: 'text'}`) declares **no
   weights** on either side, so both fields rank equally. Both parity suites now
   include `weights` in the normalized index description, so adding one on a
