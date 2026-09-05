@@ -10,7 +10,6 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
 | R81 | Q45 + Q46: aiGeek REST permissions (usage ?userId=, ten admin-shaped routes) + call/parse-json failure envelopes | opus | basegeek aiRoutes/openaiProxy + gate tests + AIGEEK_USAGE | 09-05 16:40 |
-| R82 | Q47 (MyFoods reads flat serving fields + id) + three stale "backend is CJS" comments | sonnet | fitnessgeek frontend MyFoods/apiService, comment-only edits, plan §12 | 09-05 16:40 |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
 ## Queued (launch when files free / prerequisite lands)
