@@ -3,6 +3,7 @@
 	"private": true,
 	"packageManager": "pnpm@10.29.3",
 	"scripts": {
-		"check:syntax": "node tools/syntax-check.mjs"
+		"check:syntax": "node tools/syntax-check.mjs",
+		"check:boot": "node tools/boot-smoke.mjs"
 	}
 }

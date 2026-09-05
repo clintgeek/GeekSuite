@@ -165,7 +165,7 @@ Full design in `DOCS/CICD.md` — this is the as-shipped summary.
 
 | Workflow | Trigger | Does |
 |---|---|---|
-| `.github/workflows/ci.yml` | PR → `main`, push → `main` (both skip `**/*.md`, `DOCS/**`, `LICENSE` via `paths-ignore`) | `test-basegeek` (jest, mongodb-memory-server), `test-bookgeek` (`node --test`), `test-notegeek` (vitest), `test-bookgeek-web`, `test-flockgeek`, `test-storygeek`, `test-fitnessgeek-web` (frontend vitest suites, added 2026-09-05), `test-ui` (vitest, theme contrast), `test-utils`, `test-crypto-vault` (added 2026-09-05), `test-bujogeek` (vitest), `test-backends` matrix (bujogeek/fitnessgeek/flockgeek/storygeek/notegeek jest, `pnpm test`), `lint` (`pnpm -r lint`, errors gate/warnings don't), `syntax` (`node tools/syntax-check.mjs`, see below), `build-frontends` matrix (8 apps, `npm run build`) |
+| `.github/workflows/ci.yml` | PR → `main`, push → `main` (both skip `**/*.md`, `DOCS/**`, `LICENSE` via `paths-ignore`) | `test-basegeek` (jest, mongodb-memory-server), `test-bookgeek` (`node --test`), `test-notegeek` (vitest), `test-bookgeek-web`, `test-flockgeek`, `test-storygeek`, `test-fitnessgeek-web` (frontend vitest suites, added 2026-09-05), `test-ui` (vitest, theme contrast), `test-utils`, `test-crypto-vault` (added 2026-09-05), `test-api-client`, `test-auth`, `test-logger`, `test-user` (four shared-package jobs added 2026-09-05, BURN_REVIEW #20 — `@geeksuite/api-client`, `@geeksuite/auth`, `@geeksuite/logger`, `@geeksuite/user` shipped real `test` scripts CI never ran), `test-bujogeek` (vitest), `test-backends` matrix (bujogeek/fitnessgeek/flockgeek/storygeek/notegeek jest, `pnpm test`), `lint` (`pnpm -r lint`, errors gate/warnings don't), `syntax` (`node tools/syntax-check.mjs`, see below), `boot-smoke` (`node tools/boot-smoke.mjs`, see below, added 2026-09-05), `build-frontends` matrix (8 apps, `npm run build`) |
 | `.github/workflows/release.yml` | push → `main` (same `paths-ignore`), or `workflow_dispatch` with an optional single-app input | Matrix-builds and pushes every app with a root `Dockerfile` to `ghcr.io/clintgeek/<app>:{latest,sha-<short>,main}` |
 | `.github/workflows/mobile-harness.yml` | push → `main`, PR → `main` (`paths`-scoped to `apps/**`, `packages/ui/**`, `tools/mobile-harness/**`, the workflow file itself) | Builds each app, serves `dist`, walks it with `tools/mobile-harness` at iPhone 14 (dark + light), fails on any tap target < 44px, readable text < 12px, sideways scroll, or page error. **Enforcing since 2026-09-05 14:54** (first green run; §8) — no longer report-only. |
 
@@ -224,6 +224,49 @@ syntax silently passes if there is **no** `package.json` anywhere in its ancesto
 Node module-type-detection quirk) — irrelevant here since every real file's ancestor chain
 always terminates at the repo root `package.json`, but it means a from-scratch fixture used
 to test this gate needs its own `package.json` to behave like the real tree.
+
+### Boot-smoke gate (`boot-smoke` job, added 2026-09-05)
+
+`tools/boot-smoke.mjs` (`pnpm check:boot`) closes the other half of BURN_REVIEW #22: the
+syntax gate and `gatewaySchemaLoads` catch parse-level failures, but nothing caught an
+**import-time** failure (a missing export, a bad workspace path, a CJS/ESM interop error) or
+a service booting without a required env var. For each of the seven backends
+(`apps/{bujogeek,fitnessgeek,flockgeek,notegeek,storygeek}/backend`, `apps/bookgeek/api`,
+`apps/basegeek/packages/api`) it spawns `node --input-type=module -e "await
+import('<module>')"` with an obviously-fake `KEY_VAULT_SECRET` (64 hex chars,
+`'deadbeef'.repeat(8)`, satisfying crypto-vault's format check) and fake, never-listening
+Mongo URIs (`mongodb://127.0.0.1:1/...` for `DB_URI`/`MONGODB_URI`/`BASEGEEK_MONGODB_URI`/
+`AIGEEK_MONGODB_URI`/`MONGO_BASE_URI`) — no real database, no bound port, no docker. None of
+the seven backends has a `SKIP_LISTEN`-style guard today, so per the task that drove this none
+was added; instead each target is either the app's own `app.js` (bujogeek, fitnessgeek,
+storygeek — already split from `server.js` so it builds the Express app without connecting or
+listening) or a documented **fallback** for the four apps with no such split:
+
+| App | Target | Why |
+|---|---|---|
+| flockgeek | `routes/api.js` | No `app.js`; `server.js` builds+connects+listens inline with no guard. `routes/api.js` is the routes index pulling in all nine route modules. |
+| notegeek | `routes/auth.js` | No `app.js`; `server.js`'s `start()` builds the whole app, connects, and listens inline. `auth.js` is the only route module notegeek has split out — health check, `/api/me`, and the SPA fallback are inline in `server.js` and **not** covered. |
+| bookgeek | `routes/authRoutes.js`, `routes/importRoutes.js`, `deviceBasket.js` | `apps/bookgeek/api/src/server.js` is a ~2800-line monolith that connects and listens unconditionally (its own `test/csrfGuard.test.js` already documents this: *"server.js itself calls start() at import time ... so it cannot be imported here"*). These three routers are the only route logic bookgeek split out — the bulk of its routes (~2700 lines: books, profile, kindle, enrichment) live inline in `server.js` and are **not** covered. |
+| basegeek | `graphql/index.js` | `server.js` does a top-level `await mongoose.connect(...)` at module scope — no function to skip. `graphql/index.js` merges all nine gateway GraphQL modules (typeDefs+resolvers) and is basegeek's dominant surface, but its REST route modules (`routes/mongo.js`, `routes/auth.js`, `routes/aiRoutes.js`, `routes/openaiProxy.js`, etc.) have no aggregator and are **not** covered. |
+
+**Landmine found while building this**: importing `graphql/index.js` transitively pulls in
+`services/aiService.js`, whose module-level singleton (`export default new AIService()`) fires
+an *unawaited* `initializeService()` in its constructor — real background DB work kicked off
+as a side effect of importing the module, not of calling anything. Against a fake, always-
+refusing Mongo URI it's merely slow (mongoose's 10s operation-buffering timeout, twice,
+sequentially) rather than fatal; against a real-but-unreachable one it left the process hanging
+on an open handle indefinitely — the exact same "singleton service's open handle keeps the
+process alive forever" quirk `test-basegeek`'s own job comment already works around with
+jest's `--forceExit`. The script's fix is the same shape: `process.exit(0)` immediately after a
+successful import, so the check reflects only "did the import succeed," not whatever the
+singleton does afterward. A module that fails to import never reaches that line — Node's
+default top-level-await rejection handling prints the error and exits non-zero on its own.
+Not fixed here (app code, out of scope for this pass) — worth a queue entry if the singleton's
+fire-and-forget init and `config/database.js`'s missing `conn.on('error', ...)` handler (it
+crashed outright against this box's real local mongod on port 27017 before the fake env vars
+were pinned down) ever bite in production.
+
+Run: `pnpm check:boot` locally (~14s on a clean run) or `node tools/boot-smoke.mjs` directly.
 
 ---
 

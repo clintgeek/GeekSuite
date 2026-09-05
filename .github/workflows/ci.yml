@@ -199,6 +199,70 @@ jobs:
         working-directory: packages/crypto-vault
         run: npx vitest run
 
+  test-api-client:
+    name: shared api-client tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Run vitest
+        working-directory: packages/api-client
+        run: npx vitest run
+
+  test-auth:
+    name: shared auth tests (csrf headers)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Run node --test
+        working-directory: packages/auth
+        run: npm test
+
+  test-logger:
+    name: shared logger tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Run vitest
+        working-directory: packages/logger
+        run: npx vitest run
+
+  test-user:
+    name: shared user tests (csrf guard)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Run node --test
+        working-directory: packages/user
+        run: npm test
+
   test-bujogeek:
     name: bujogeek frontend tests
     runs-on: ubuntu-latest
@@ -289,6 +353,24 @@ jobs:
       # basegeek SyntaxError crash-loop on 2026-09-05 (fixed in 61d3109) —
       # see DOCS/RUNBOOK.md's "syntax gate" entry.
       - run: node tools/syntax-check.mjs
+
+  boot-smoke:
+    name: boot smoke (import-time + env)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Catches the other outage class the syntax gate can't: a module that
+      # parses fine but throws on import (missing export, bad workspace path,
+      # CJS/ESM interop) or a service that boots without a required env var.
+      # Fake KEY_VAULT_SECRET/Mongo URIs only — see tools/boot-smoke.mjs.
+      - run: node tools/boot-smoke.mjs
 
   build-frontends:
     name: frontend build smoke
