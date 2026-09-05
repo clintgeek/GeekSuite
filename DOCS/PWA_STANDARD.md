@@ -124,7 +124,7 @@ The offline page should:
 | fitnessgeek | VitePWA/Workbox | ✅ | ⚠️ static `manifest.json` fixed; inline `manifest` in `vite.config.js` still stale — that file was already dirty (busy), skipped | ✅ (new) — precached; `navigateFallback` stays `/index.html` (SPA routing), not repointed (see note) | ✅ |
 | notegeek | VitePWA/Workbox | ✅ | ✅ — `theme_color` now matches default (light) page; `apple-touch-icon` link added | ✅ (new) — precached, not wired as `navigateFallback` (see note) | ✅ |
 | flockgeek | Hand-rolled | ✅ | ✅ — `scope` added, `theme_color` now matches default (dark) page; `apple-touch-icon` link added | ✅ — now matches both palettes via `prefers-color-scheme` | ✅ |
-| storygeek | None | N/A | ✅ (new) — `manifest.json` + manifest/apple-touch-icon links created | ✅ (new) — file exists, per-mode; **no SW yet**, so nothing auto-serves it | ❌ (no SW) |
+| storygeek | Hand-rolled (new) | ✅ | ✅ (new) — `manifest.json` + manifest/apple-touch-icon links created | ✅ — hand-rolled SW added, per-mode `offline.html` now served via navigation fallback | ✅ (new) |
 | startgeek | Hand-rolled | ✅ | ✅ | ✅ — dark-only by design (app has one mode, no light palette exists) | ✅ |
 | basegeek | None | N/A | — (none exists; left untouched per scope) | — | ❌ |
 
@@ -156,9 +156,16 @@ needs `workbox-recipes`' `offlineFallback()` / a custom `setCatchHandler`, which
 - **bujogeek**: `apps/bujogeek/frontend/vite.config.js` was already modified — skipped,
   same rule. No corrections were needed there this pass regardless (`manifest: false`,
   external `manifest.json` only).
-- **storygeek**: has no service worker at all. `manifest.json` and `offline.html` now
-  exist and are theme-correct, but nothing serves the offline page without a SW. Adding
-  one (hand-rolled, matching the standard's Flavor B) is app-code-shaped work, deferred.
+- **storygeek**: hand-rolled `public/sw.js` added (Flavor B, matching bookgeek's
+  pattern) plus the registration snippet in `index.html`. Auth bypass rule (`/api/me`,
+  `/api/auth/*`, `/api/users/me`) is first and network-only, matched by pathname so it
+  also covers the app's cross-origin GraphQL calls to basegeek if ever proxied through
+  a matching path; all other `/api/*` is network-only; static assets are cache-first
+  with network fallback; navigation failures fall back to the precached `/offline.html`.
+  Verified via `pnpm build` (sw.js lands in `dist/`) + `vite preview` + Playwright:
+  SW reaches `activated`, an online `/api/me` fetch hits the network (401, not a cached
+  200) and is absent from the `storygeek-cache-v1` cache, and going offline and
+  navigating renders the offline page.
 - **bujogeek, notegeek, fitnessgeek**: `manifest.json` icons still combine
   `purpose: "any maskable"` on a single non-safe-zone SVG/PNG (no dedicated maskable
   icon exists). Left as-is — do not invent icons — but a real maskable icon (safe zone
