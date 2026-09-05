@@ -10,7 +10,6 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
 | R71 | consolidation pair 8: FoodItem (findOrCreate/search carve-out; barcode unique means both apps deploy together — they do) | opus | packages/schemas, both FoodItem models + parity suites | 09-05 15:38 |
-| R70 | TODO #22: zod on the bookgeek gateway mutations (closes the gateway side) | sonnet | basegeek api graphql/bookgeek, test, TODO docs | 09-05 15:28 |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
 ## Queued (launch when files free / prerequisite lands)
@@ -69,6 +68,8 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 
 - 09-05 15:12 — wave 6 (`d224d40`, 9 commits): R67, R68, comment fixes. Gates green; CI, Release and harness workflow green; Watchtower 15:23 (updated=7); all eight apps 200.
 
+- 09-05 15:45 — wave 7: R69, R70. Gates green.
+
 ## Landed during the burn
 
 (append as commits land: `sha — stream — one line`)
@@ -91,6 +92,7 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 - `d8521eb` — R27 — CSRF header in api-client authLink + startgeek clients
 - `1fda489` — R24 — bujogeek tag cloud + template journal cache; #25/#26 struck
 - `x` — R62 — DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md (found the net_carbs_grams live bug → R65)
+- `d5ecb22` — R70 — zod on the bookgeek gateway mutations (38 tests; api 1082) — gateway side of #22 complete
 - `e24de33` — R69 — NutritionGoals + Meal shared (fitnessgeek 203, api 1044); Medication enum copies folded; eight shared
 - `e23559c` — R68 — zod on notegeek (8) + flockgeek (16) gateway mutations; shared validateInput; off-enum writes closed (api 1003)
 - `1457a7d` — R67 — Medication, LoginStreak, WeightGoals shared (fitnessgeek 169, api 930); recordLogin moved; six shared models
