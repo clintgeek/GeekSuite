@@ -44,15 +44,19 @@ mode drops unknown paths from a `$set` silently, so drift between the two copies
 destroys data without an error anywhere. The full audit, the remaining work and
 the ordering are in `DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md`.
 
-**Nine of those models no longer declare a schema here.** `UserSettings`,
-`Weight`, `BloodPressure`, `Medication`, `LoginStreak`, `WeightGoals`,
-`NutritionGoals`, `Meal` and `FoodItem` build from `@geeksuite/schemas` — the
-file in this directory is a thin wrapper: a factory call, its own ownership
-statics, and the `fitnessConn.model(...)` binding. Only `FoodLog` and
-`DailySummary` still declare a schema literal here. The `requireUser` guards
-stayed here on purpose — on `LoginStreak.getOrCreateStreak`, the three
-`WeightGoals` statics, the three `NutritionGoals` statics, all four `Meal`
-statics and `FoodItem`'s `findAccessible` / `findAccessibleMany` — because this gateway fails closed on an unscoped query while
+**None of these models declares a schema here any more — the consolidation is
+complete as of 2026-09-05.** `UserSettings`, `Weight`, `BloodPressure`,
+`Medication`, `LoginStreak`, `WeightGoals`, `NutritionGoals`, `Meal`,
+`FoodItem`, `FoodLog` and `DailySummary` all build from `@geeksuite/schemas` —
+the file in this directory is a thin wrapper: a factory call, its own ownership
+statics, and the `fitnessConn.model(...)` binding. (The other two models this
+gateway used to declare, `AIFoodPromptCache` and `MedicationLog`, were orphans
+with no consumer here and were deleted; a test asserts they stay gone.) The
+`requireUser` guards stayed here on purpose — on
+`LoginStreak.getOrCreateStreak`, the three `WeightGoals` statics, the three
+`NutritionGoals` statics, all four `Meal` statics, `FoodItem`'s
+`findAccessible` / `findAccessibleMany`, all four `FoodLog` list statics and
+all three `DailySummary` statics — because this gateway fails closed on an unscoped query while
 fitnessgeek's callers are already past auth, and statics don't appear in
 `schema.paths` so the two writers are free to disagree. For `Meal` that
 disagreement is load-bearing rather than cosmetic: fitnessgeek's list statics
@@ -60,7 +64,8 @@ return **every user's meals** when called without a userId, and both apps' test
 suites assert that divergence as a decision. Do not unify them here; tightening
 fitnessgeek's copy is its own ticket.
 
-`FoodItem` is the one carve-out from that statics rule, taken on 2026-09-05.
+`FoodItem` and `DailySummary` are the two carve-outs from that statics rule,
+both taken on 2026-09-05.
 Its `findOrCreate` **dedupe ladder** (barcode → `(source, source_id)` →
 `(name, brand)`, otherwise a new global row) is not an ownership policy: it has
 one correct meaning for both writers, and a divergence would fork the food
@@ -75,14 +80,38 @@ byte-identical on both sides: it scopes on `{user_id: null}` while
 `foodCatalogFilter` above it also matches `{user_id: {$exists: false}}`, so
 there are two live definitions of a visible catalog row and promoting one would
 freeze the disagreement. `barcode` is the only `unique` index in
-`@geeksuite/schemas`; changing a `unique` flag there means both processes
-redeploy together.
+`@geeksuite/schemas` apart from `DailySummary`'s `{user_id, date}`; changing a
+`unique` flag there means both processes redeploy together.
+
+`DailySummary.updateFromLogs` is the other carve-out, and the one with a
+production incident behind it. It recomputes a day's whole `totals` /
+`meals` / `goals_met` triple from that day's food logs and writes it through a
+single `findOneAndUpdate` — so when this gateway's copy of the schema was
+missing `totals.net_carbs_grams` (C1, fixed in `0cecb4a`), merely *reading* a
+day through `dailySummary` erased the keto ring's number from the stored
+document. The recompute now lives in the shared module as
+`updateDailySummaryFromLogs({SummaryModel, FoodLogModel, UserSettingsModel,
+userId, startDate, endDate})`, with `summarizeFoodLogs` and
+`evaluateDailyGoalsMet` exported for assertions, and the static here keeps only
+three things: the `requireUser` guard, the two `fitnessConn.model(...)` lookups,
+and the date normalization. **The date normalization cannot move** —
+`toUtcMidnight` comes from `@geeksuite/utils`, which is ESM-only and cannot be
+`require`d from the CommonJS shared package — so the helper takes an
+already-normalized `startDate` / `endDate`. Do not add a CJS build to
+`@geeksuite/utils` for it, and do not hand-roll an eighth normalizer.
+
+`FoodLog`'s `meal_type` enum is `MEAL_TYPES` from the shared `meal.js` rather
+than a copy: `logMeal` writes a saved Meal's `meal_type` straight into a
+`foodlogs` row, and `updateFromLogs` buckets those rows by it under a guard, so
+a value legal on one collection and not the other would count in `totals` and
+vanish from the per-meal breakdown.
 
 Instance methods went the other way and live in the shared modules, so both
 sides run one implementation: `LoginStreak.recordLogin`,
 `NutritionGoals.checkGoalsMet` / `getProgress`, `Meal.getNutrition` and
 `FoodItem.isGlobal` — along with `Meal`'s embedded food-item sub-schema, its
-`pre('save')` `updated_at` stamp, and `FoodItem`'s `totalCalories` virtual. Do not add fields to the wrapper; add them to
+`pre('save')` `updated_at` stamp, and the `FoodItem.totalCalories` and
+`FoodLog.calculatedNutrition` virtuals. Do not add fields to the wrapper; add them to
 `packages/schemas/fitnessgeek/*` and, if they must cross GraphQL, to
 `typeDefs.js`. Tripwires in both apps' suites fail if a wrapper stops consuming
 the shared module. Import form here is default-import-plus-destructure — the
@@ -146,9 +175,35 @@ the machinery they are built from lives in
   module's own doc comment.
 - **bookgeek — mixed, the other way round.** `updateBook`'s `publishedDate`
   is a calendar day (no source — ISBN metadata, Open Library, a manual
-  entry — ever gives a time of day, so it normalizes through
-  `calendarDateField()`); `dateStarted`/`dateFinished` are real
-  reading-progress instants and keep whatever time-of-day they carry.
+  entry — ever gives a time of day, so it normalizes to UTC midnight);
+  `dateStarted`/`dateFinished` are real reading-progress instants and keep
+  whatever time-of-day they carry.
+
+**And dates have two floors, which is a second axis entirely.** A *scheduling*
+date — everything flockgeek and bujogeek write, plus bookgeek's
+`dateStarted`/`dateFinished` — is recent or near-future, and
+`calendarDateField()`/`instantField()` floor it at `MIN_DATE` (2000-01-01) to
+catch a typo or a unix-epoch zero. A *historical* date records a fact about
+the world and can be centuries old: `publishedDate` is the only one in the
+gateway today, and it uses `historicalDateField()`, whose floor is
+`MIN_HISTORICAL_DATE` (1000-01-01). The ceiling (10 years out) is the same for
+both. This is not cosmetic — the book edit dialog seeds `publishedDate` from
+the book and **resends it on every save**, so the scheduling floor made every
+pre-2000 book permanently uneditable: a rating change on *Dune* came back
+`BAD_USER_INPUT`. Both floors are options on the same primitive
+(`calendarDateField({ min })`), so a new field picks one deliberately. The
+question to ask is whether a value from 1965 would be a bug.
+
+**Nullable is a per-field decision, made against the GraphQL type.**
+`.nullable()` on an update field means "the client may send `null` to clear
+this", which is right for every field its type declares nullable and wrong for
+one it declares non-null. The gateway's update resolvers write `{ $set: input }`
+without `runValidators`, so an accepted `null` lands in the document and that
+row then errors out of every later query against the non-null field. Hence
+`updateBook`'s `title` is **optional but not nullable** — omit it to leave the
+title alone; there is deliberately no way to clear it, because `Book.title` is
+`String!`. Every other `String!`-backed input in bookgeek is a non-null GraphQL
+argument (GraphQL itself refuses the `null`) or a server-generated id.
 
 **One bound worth knowing:** a notegeek note's `content` has two ceilings.
 `text`/`markdown`/`code` stop at 100 000 characters; `mindmap`/`handwritten`

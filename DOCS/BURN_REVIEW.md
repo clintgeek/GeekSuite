@@ -20,26 +20,26 @@ regressions. Seven are genuinely new today and are marked **new**.
 |---|-----|------|------|--------|
 | 1 | **P0** | Any book published before 2000 can no longer be edited at all | `graphql/bookgeek/validation.js:132` | `d5ecb22` **new** |
 | 2 | **P0** | `/api/ai/parse-json` takes app identity and userId from the body, ungated | `routes/aiRoutes.js:676` | `92e7bc9` **new (miss)** |
-| 3 | **P0** | `CSRF_TOKEN=enforce` (Q18b) logs the suite out within the hour | `middleware/csrfToken.js:296` | `a3c4031` **new, latent** |
+| 3 | **P0** | `CSRF_TOKEN=enforce` (Q18b) logs the suite out within the hour (fixed) | `middleware/csrfToken.js:296` | `a3c4031` **new, latent** |
 | 4 | **P0** | flockgeek REST `create` lets the body overwrite `ownerId` | `eggProductionController.js:40` | pre-existing |
-| 5 | **P1** | A settings save through the gateway wipes the Garmin credential, both OAuth tokens, and any partial `nutrition_goal` | `graphql/fitnessgeek/models/UserSettings.js:46` | pre-existing, now live |
-| 6 | **P1** | REST `PUT /api/settings` has two `$set` keys; the Garmin one is discarded | `routes/settingsRoutes.js:112` | pre-existing |
+| 5 | **P1** | A settings save through the gateway wipes the Garmin credential, both OAuth tokens, and any partial `nutrition_goal` (fixed) | `graphql/fitnessgeek/models/UserSettings.js:46` | pre-existing, now live |
+| 6 | **P1** | REST `PUT /api/settings` has two `$set` keys; the Garmin one is discarded (fixed) | `routes/settingsRoutes.js:112` | pre-existing |
 | 7 | **P1** | `title: null` is accepted and poisons the row against `Book.title: String!` | `graphql/bookgeek/validation.js:84` | `d5ecb22` **new** |
 | 8 | **P1** | Task grouping moved to the UTC day for dates bujogeek stores as instants | `tasks/TaskList.jsx:52` | `1fc8623` **new** |
-| 9 | **P1** | REST settings accepts `household.household_id`, which the gateway explicitly refuses | `validation/schemas/settings.js:130` | `00ef0b7` **new (mirrored a hole)** |
+| 9 | **P1** | REST settings accepts `household.household_id`, which the gateway explicitly refuses (fixed) | `validation/schemas/settings.js:130` | `00ef0b7` **new (mirrored a hole)** |
 | 10 | **P1** | A `provider/model` pin silently reroutes to another provider's default model | `routes/openaiProxy.js:432` | `8879e94` |
 | 11 | **P1** | The proxy relays upstream provider error bodies verbatim | `routes/openaiProxy.js:723` | `8879e94` |
 | 12 | **P1** | `gatewaySchemaLoads` is weaker than the boot path it guards | `__tests__/gatewaySchemaLoads.test.js:11` | `61d3109` |
 | 13 | **P1** | `TZ=America/Chicago` is inert in every container — no image installs `tzdata` | `apps/*/Dockerfile` | pre-existing |
-| 14 | **P1** | The gateway guesses "today" from the server clock, and the client asks it to | `graphql/fitnessgeek/resolvers.js:453` | pre-existing, now live |
-| 15 | **P1** | `FitnessFood.serving_size`/`serving_unit` always null → editing a custom food rewrites its serving to 100 g | `graphql/fitnessgeek/resolvers.js:1138` | pre-existing |
+| 14 | **P1** | The gateway guesses "today" from the server clock, and the client asks it to (fixed) | `graphql/fitnessgeek/resolvers.js:453` | pre-existing, now live |
+| 15 | **P1** | `FitnessFood.serving_size`/`serving_unit` always null → editing a custom food rewrites its serving to 100 g (fixed, gateway half) | `graphql/fitnessgeek/resolvers.js:1138` | pre-existing |
 | 16 | **P1** | The household log view is dead twice over (routing shadow, then a variable-type mismatch) | `services/apiService.js:436`, `:222` | pre-existing |
-| 17 | **P1** | A request replayed after a token refresh carries the pre-rotation CSRF token | `packages/auth/src/authClient.js:441` | `a3c4031` **new** |
+| 17 | **P1** | A request replayed after a token refresh carries the pre-rotation CSRF token (fixed) | `packages/auth/src/authClient.js:441` | `a3c4031` **new** |
 | 18 | **P1** | flockgeek update handlers let a caller reassign a record's `ownerId` | `birdController.js:205` +7 | pre-existing |
-| 19 | **P1** | `updateFitnessFood` replaces `nutrition` and `serving` wholesale | `graphql/fitnessgeek/resolvers.js:883` | pre-existing, latent |
-| 20 | **P1** | Four shared packages ship suites CI never runs — three of them today's CSRF packages | `.github/workflows/ci.yml` | absent since inception |
+| 19 | **P1** | `updateFitnessFood` replaces `nutrition` and `serving` wholesale (fixed) | `graphql/fitnessgeek/resolvers.js:883` | pre-existing, latent |
+| 20 | **P1** | Four shared packages ship suites CI never runs — three of them today's CSRF packages (fixed) | `.github/workflows/ci.yml` | absent since inception |
 | 21 | **P1** | `main` has no required status checks; all 15 CI jobs are advisory | branch protection | never enabled |
-| 22 | **P1** | Nothing tests the two classes that caused today's outages | (see §22) | structural |
+| 22 | **P1** | Nothing tests the two classes that caused today's outages (fixed, import/boot half) | (see §22) | structural |
 
 Paths are relative to `apps/basegeek/packages/api/src/`, `apps/fitnessgeek/backend/src/`,
 `apps/fitnessgeek/frontend/src/`, `apps/bujogeek/frontend/src/` or `apps/flockgeek/backend/src/` as
@@ -60,7 +60,12 @@ real library. *Fix:* give `publishedDate` its own floor (a `min` option on `cale
 dedicated publication-date field with a 1400 floor). *Verified by executing the schema:* `1965-08-01`
 and `1999-12-31` reject; `2000-01-01` and `2024-03-05` pass.
 
-### 2. P0 — `/api/ai/parse-json` is an unguarded second front door
+**Fixed — see BURN_QUEUE.** `shared/validation.js` grew a `min` option and a `historicalDateField()`
+(1000-01-01 floor, same 10-years-out ceiling); `publishedDate` uses it, and every other gateway date
+— flockgeek's hatch/set/pairing/harvest days, bujogeek's due dates and habit logs — was checked and
+correctly keeps the 2000 scheduling floor.
+
+### 2. P0 — `/api/ai/parse-json` is an unguarded second front door (fixed — see BURN_QUEUE)
 
 `…/src/routes/aiRoutes.js:676` has no `requirePermission(req, res, 'ai:call')` and no `resolveCaller`;
 it passes `req.body.config` straight into `aiService.callAI`, which reads `appName`, `userId` and
@@ -71,7 +76,21 @@ it passes `req.body.config` straight into `aiService.callAI`, which reads `appNa
 another app's `AIAppConfig`, and bills that app and that user's quota. *Fix:* add the same
 `requirePermission` + `resolveCaller` pair. `92e7bc9` hardened five call sites and missed this one.
 
-### 3. P0 (latent) — flipping `CSRF_TOKEN=enforce` logs the suite out
+**Fixed.** `/parse-json` now runs the same three steps `/call` does, in the same order:
+`requirePermission(req, res, 'ai:call')`, `resolveCaller(req, req.body)`, and identity
+(`appName`/`feature`/`userId`) stamped onto the config **last**, so nothing in the body survives it;
+the `freeOnly` / `useAppConfig` switches are honoured as switches, choosing a mode and never an app.
+New `src/__tests__/aiRoutesGates.test.js` — 13 cases, every one sending a body that lies (a caller
+authenticated as one app claiming another, spending another user's quota), including one asserting
+that `/parse-json` and `/call` refuse an `ai:models`-only key with the same status and code. The rest
+of `aiRoutes.js` and `openaiProxy.js` was swept for the same miss: no other route reads app or user
+identity out of a body. Two adjacent gaps found and *not* fixed here, filed instead:
+`GET /api/ai/usage/:provider` reads `req.query.userId` (any credential can read any user's usage
+summary), and eleven admin-shaped routes — `POST /provider`, `/models/:provider/refresh`,
+`/reset-stats`, `/cache/clear`, `/summarization`, `/director/seed-*`, `/director/force-refresh` —
+mutate suite-wide AI state behind authentication with no permission check at all.
+
+### 3. P0 (latent) — flipping `CSRF_TOKEN=enforce` logs the suite out (fixed — see BURN_QUEUE)
 
 Six consumer backends proxy `/auth/refresh` and `/auth/logout` to basegeek by replaying the user's
 cookies **without** `X-CSRF-Token` — `apps/notegeek/backend/routes/auth.js:128`,
@@ -88,7 +107,19 @@ mint a fresh token is blocked too. *Fix:* forward `X-CSRF-Token` in all six prox
 `Cookie` forward on bookgeek's login/register — **before Q18b**. Nothing is broken today; `report` mode
 is doing exactly its job. This is the tripwire under the next queued step.
 
-### 4. P0 — flockgeek REST lets the body set the owner
+**Fixed.** All six proxies now build their upstream headers with one shared helper,
+`authProxyHeaders()` in `packages/user/src/server/authProxyHeaders.js` (every one of the six already
+depends on `@geeksuite/user`), which forwards `Cookie`, `Authorization` and `X-CSRF-Token` exactly as
+the browser sent them and deliberately will *not* mint a token out of the replayed cookie jar —
+doing so would give every proxied path a standing pass through the check the flip exists to turn on.
+bookgeek's `/login` and `/register` no longer replay the caller's cookies at all. Pinned by 14 unit
+tests on the helper plus a with-header/without-header pair per proxy path in each of the six
+backends, and by a new `csrfToken.test.js` block that runs an originless proxied refresh through
+basegeek's real `csrfGuard` + `csrfTokenGuard` under `enforce`: the pair is accepted, the header-less
+call is the 403 this finding predicted, and `csrfGuard`'s step-4 "no Origin, no Referer → pass" is
+what lets the server-to-server call reach the token check in the first place.
+
+### 4. P0 — flockgeek REST lets the body set the owner (fixed — see BURN_QUEUE)
 
 `/mnt/Media/Projects/GeekSuite/apps/flockgeek/backend/src/controllers/eggProductionController.js:40`
 and `birdController.js:51` are `Model.create({ ownerId, ...data })` with `data = { ...req.body }`
@@ -99,7 +130,20 @@ another account. *Fix:* spread `data` first and `ownerId` last, or `delete data.
 (Feb 2026), in scope because today's flockgeek zod work (`e23559c`) validated the **gateway** mutations
 only. Dies with Q22 if that lands as "delete".
 
-### 5. P1 — a settings save wipes the Garmin credential and any partial `nutrition_goal`
+**Fixed.** Added `src/utils/ownerFields.js`'s `withoutOwnerFields(body)` — strips `ownerId`,
+`owner_id`, `owner`, `userId`, `user_id` and `_id` — and routed both `createEggProduction` and
+`createBird` through it before merging `req.body` into the `Model.create(...)` call, closing this
+alongside #18 (same helper, same sweep). 12 new tests (2 create-spoofing per controller, 1
+update-reassignment per controller for groups/meat-runs, plus 6 unit tests on the helper itself);
+flockgeek's 57 baseline auth tests stay green (69 total now).
+
+### 5. P1 — a settings save wipes the Garmin credential and any partial `nutrition_goal` (fixed — see BURN_QUEUE)
+
+**Fixed:** `updateFitnessUserSettings` now flattens the input to dot paths before
+`UserSettings.updateSettings` (`flattenSettingsUpdate`, exported from the gateway resolvers), so a
+`$set` merges the sub-document instead of replacing it; arrays and the Mixed OAuth token blobs stay
+whole values, and the shared schema's encryption hook still fires on the dot-path shape. Pinned by
+`__tests__/fitnessgeekSettingsWrites.test.js`.
 
 `…/graphql/fitnessgeek/models/UserSettings.js:46` does `{ $set: updateData }` with nested objects
 intact — mongoose leaves them undotted, so MongoDB **replaces the whole sub-document**. Reached from
@@ -115,7 +159,12 @@ Today's `17e33bb` put a newly-encrypted secret behind this old hazard. *Goals:*
 `weekly_schedule` and the whole `keto` block. *Fix:* flatten to dot paths inside `updateSettings`, the
 way `services/garminConnectService.js:69` already does.
 
-### 6. P1 — REST `PUT /api/settings` builds an object with two `$set` keys
+### 6. P1 — REST `PUT /api/settings` builds an object with two `$set` keys (fixed — see BURN_QUEUE)
+
+**Fixed:** the route builds ONE `$set` through a local `flattenForSet()` — every sub-document dotted,
+not just `garmin` — and falls back to `$setOnInsert` when nothing writable survives the allow-list.
+Pinned by `__tests__/routes/settings.test.js` (“PUT /api/settings write shape”), including a Garmin
+password proven encrypted through the schema's update hook.
 
 `apps/fitnessgeek/backend/src/routes/settingsRoutes.js:112` composes
 `{ $set: <garmin dot-paths>, ...($setOnInsert), ...({ $set: <other fields> }) }`. The second `$set`
@@ -131,7 +180,13 @@ Clearing the title box sends `title: null` (`App.jsx:1691`), the write succeeds,
 errors out of every subsequent `books` query. *Fix:* drop `.nullable()`. The `$set` path predates
 today; the new validation layer explicitly permits null instead of catching it.
 
-### 8. P1 — bujogeek groups tasks by the UTC day, for dates it stores as instants
+**Fixed — see BURN_QUEUE.** `optionalTitleSchema` dropped `.nullable()`: `title` on update is
+optional but, when present, a non-empty string. Every `String!`-backed field in bookgeek's typeDefs
+was reviewed with it — `CreateBookInput.title`, `saveLibraryFilter`'s `name` and `addBookShelf`'s
+`label` are non-null GraphQL arguments whose zod schemas were already non-nullable; the shelf/filter
+`id`s are server-generated. `title` was the only hole.
+
+### 8. P1 — bujogeek groups tasks by the UTC day, for dates it stores as instants (fixed — see BURN_QUEUE)
 
 `/mnt/Media/Projects/GeekSuite/apps/bujogeek/frontend/src/components/tasks/TaskList.jsx:52` now returns
 `utcDateString(dateString)`, applied to `task.dueDate` and `task.createdAt` (`:63`). But bujogeek
@@ -143,7 +198,23 @@ stored as UTC midnight"* — is true for flockgeek and false for bujogeek.
 `getLocalDate` and correct the comment. The file was rewritten today by `1fc8623` — this is a burn
 regression, not an old bug.
 
-### 9. P1 — REST settings still accepts the household id the gateway refuses
+**Fixed.** `getLocalDate` now calls `localDateString` (import of `utcDateString` dropped) and the
+comment above it explains why dueDate/createdAt are instants, not calendar dates. Grepped the rest of
+bujogeek's frontend for `utcDateString` — this was the only call site, so no other spot needed
+touching or leaving alone. (`HabitsPage.jsx` builds its day keys with `localDateString`, not
+`utcDateString`, for `toggleHabitLog`'s calendar-date `date` arg — out of scope here since it isn't a
+UTC-accessor-on-an-instant bug and wasn't part of this finding; the gateway normalizes that arg through
+`calendarDateField` regardless of what the client sends, so flagging it as a separate item rather than
+asserting it's fine.) Two new tests in `__tests__/components/TaskList.test.jsx`, run under
+`TZ=America/Chicago`: a task due 23:30 local groups under that local day (not the next UTC day), and
+the `createdAt` fallback does the same; bujogeek's suite is 97 (was 95).
+
+### 9. P1 — REST settings still accepts the household id the gateway refuses (fixed — see BURN_QUEUE)
+
+**Fixed:** `household_id` is gone from the nested zod schema (an attempt is now a 400 naming it) and
+`household` is out of the route's `allowedFields`, so `PUT /` drops it exactly as the gateway does —
+membership and the share flags stay with `/household/create|join|leave` and `PUT /household`. Pinned
+by `__tests__/routes/settingsValidation.test.js` (“PUT /api/settings household hazard”).
 
 `apps/fitnessgeek/backend/src/validation/schemas/settings.js:130` declares `household.household_id`.
 `graphql/fitnessgeek/resolvers.js:828` strips `household` with a comment explaining that accepting it
@@ -153,7 +224,7 @@ and shared food-log reads. *Fix:* drop `household_id` and strip `household` from
 mirroring the gateway. Today's zod pass mirrored the hole rather than closing it. Reach is bounded —
 `/household/join` already admits anyone holding the 12-hex code.
 
-### 10. P1 — a provider pin silently reroutes to a different model
+### 10. P1 — a provider pin silently reroutes to a different model (fixed — see BURN_QUEUE)
 
 `routes/openaiProxy.js:432` skips the catalog 404 for any `provider/model` pin, and
 `services/aiService.js:1566,1595` swaps in each fallback provider's `DEFAULT_MODELS` entry. So
@@ -162,7 +233,17 @@ from a model the caller never named, and is billed for it. Unknown **non-pin** i
 the conformance audit's headline holds; the pin path is the gap. *Fix:* validate a pin against the
 catalog and disable cross-provider fallback on a pinned request.
 
-### 11. P1 — the proxy relays upstream provider error bodies verbatim
+**Fixed.** Both halves, in `openaiProxy.js`. A `<provider>/<model>` pin is checked against that
+provider's catalog before anything is spent — unknown model → the same 404 `model_not_found` a bare id
+gets since `8879e94`, naming the provider and the aliases. The check fails *open* on an empty catalog
+(`getModels` swallows its own DB errors, so "cannot enumerate" must not become "does not exist"). And
+a request that names a concrete model — pinned or a bare catalog id — is now sent with `provider` set
+to the model's owner and a new `noFallback` flag, which `aiService.callAI` honours by trying that
+provider and stopping: a pin whose provider is rate-limited fails as itself instead of being answered,
+and billed, as the next provider's default model. The three `basegeek-*` aliases keep every bit of
+their rotation, which is asserted. 4 new cases in `openaiCompat.test.js` (F-22).
+
+### 11. P1 — the proxy relays upstream provider error bodies verbatim (fixed — see BURN_QUEUE)
 
 `routes/openaiProxy.js:723` (and `:546`) put `error.message` into the response; those are built as
 `` `Anthropic API error (${status}): ${JSON.stringify(error.response.data)}` `` at
@@ -170,6 +251,19 @@ catalog and disable cross-provider fallback on a pinned request.
 name and its raw error body — org and project ids, quota and entitlement detail, and on a
 bad-credential case a vendor-redacted key fragment. *Fix:* log it, return an opaque string and a
 request id.
+
+**Fixed.** `openaiProxy.js` maps every upstream failure through one allowlist (`UPSTREAM_FAILURES`):
+seven entries, each a fixed message plus a `type`/`code` pair, chosen by the upstream status parsed
+out of the error string — nothing of the provider's reaches the caller, not even its name. Statuses
+follow OpenAI's: a provider rate limit is the caller's 429 (with `Retry-After`), a provider's
+rejection of the request shape is their 400, a bad provider key or a provider 500 is a 502, an
+exhausted rotation a 503, an unrecognised failure a bare 500. The provider's body is still written in
+full by the redacting logger, and the response message carries the request id that finds that log
+line. Applied at all three sites — the non-streaming catch, the pre-first-chunk streaming catch, and
+the terminal error frame. 5 new cases in `openaiCompat.test.js` (F-23), each asserting that a
+realistic leaky upstream body (org id, project id, key fragment, upstream request id) appears nowhere
+in the response. Not covered, and filed: `/api/ai/call` and `/api/ai/parse-json` relay the same
+strings on their own (non-OpenAI) envelope.
 
 ### 12. P1 — the tripwire is weaker than the boot path it guards
 
@@ -183,6 +277,13 @@ exactly the outage this tripwire was written to prevent.
 the boot path throws `…defined in resolvers, but not in schema`. *Fix:* make the tripwire
 `await new ApolloServer({ typeDefs, resolvers }).start()`. Today's schema passes the stricter build —
 verified — so this is a one-line hardening, not a fire.
+
+**Fixed — see BURN_QUEUE.** The tripwire now builds the real `new ApolloServer({ typeDefs, resolvers })`
+and `await`s `start()`/`stop()` (`@graphql-tools/schema` is only transitive here and does not resolve;
+`@apollo/server` is the boot path anyway), plus a negative test that a resolver field the schema does
+not declare makes it throw — proved: the old `buildASTSchema` built cleanly with that bogus map
+present, the new one throws `Query.thisFieldDoesNotExistInTypeDefs defined in resolvers, but not in
+schema`.
 
 ### 13. P1 — `TZ=America/Chicago` is inert in every container
 
@@ -198,7 +299,14 @@ shifts every server-clock date by six hours. *File facts verified by grep; the r
 inference — confirm with `docker run --rm -e TZ=America/Chicago node:20-alpine node -e
 "console.log(new Date().toString())"` (not run here: no docker).*
 
-### 14. P1 — the gateway guesses "today" from the server clock, and the client asks it to
+### 14. P1 — the gateway guesses "today" from the server clock, and the client asks it to (fixed — see BURN_QUEUE)
+
+**Fixed:** `dailySummary` and `refreshDailySummary` now go through `requireCalendarDate()` and throw
+rather than default; `services/apiService.js` sends `localDateString()` for `/summary/today`,
+`/summary`, a literal `/summary/today/refresh` and `/insights/daily-summary` with no date. Pinned by
+`__tests__/fitnessgeekFoodLogWrites.test.js` (“per-day reads require the caller’s date”). The
+remaining server-clock reads called out here — `routes/goalRoutes.js:165,174` and `resolvers.js:516`
+(the weekly plan's `todayIndex`) — are untouched and still open.
 
 `graphql/fitnessgeek/resolvers.js:453` (same shape at `:636`, `:790`, `:804`) does
 `format(new Date(),'yyyy-MM-dd')` — the *server's* day. It is genuinely reached:
@@ -211,7 +319,14 @@ calorie target and the Garmin day-fetch. *Fix:* send `localDateString()` from th
 (`fitnessGeekService.js:10 toApiDate` already does elsewhere) and make the no-date resolver branch an
 error rather than a guess.
 
-### 15. P1 — `FitnessFood.serving_size` / `serving_unit` are always null
+### 15. P1 — `FitnessFood.serving_size` / `serving_unit` are always null (fixed — see BURN_QUEUE)
+
+**Fixed (gateway half):** `FitnessFood` now has `serving_size` / `serving_unit` field resolvers over
+`serving.{size,unit}`, so the six live documents that select them get real values. Pinned by
+`__tests__/fitnessgeekFoodLogWrites.test.js` (“FitnessFood exposes the serving it actually stores”).
+**Still open:** `pages/MyFoods.jsx:80,95` reads `food.serving?.size || 100` and passes
+`editingFood._id` — it has to read `food.serving_size` and `food.id ?? food._id` before the 100 g
+rewrite and the `PUT /foods/undefined` actually stop.
 
 `graphql/fitnessgeek/typeDefs.js:236` declares them flat; the shared factory stores `serving.size` /
 `serving.unit`; `resolvers.js:1138` maps only `id`. Six live documents select them
@@ -221,7 +336,7 @@ rewrites its serving size to 100 g**. The same page passes `editingFood._id` (`:
 GraphQL row does not carry, so the save issues `PUT /foods/undefined` and CastErrors first. *Fix:* add
 `serving_size`/`serving_unit` field resolvers, and use `food.id ?? food._id`.
 
-### 16. P1 — the household log view is dead twice over
+### 16. P1 — the household log view is dead twice over (fixed — see BURN_QUEUE)
 
 `services/apiService.js:436` returns `GET_FOOD_LOGS` for anything starting `/logs/`, swallowing
 `/logs/household` before the intended branch at `:450`, so `HouseholdLogView.jsx:61` issues
@@ -231,14 +346,35 @@ error the moment the routing is fixed. *Fix:* move the `/logs/household…` bran
 change the variable to `$date: String!`. Pre-existing since `471cb79` (2026-03-22) — the feature has
 never worked. This was the **only** document error in 159 (see *Checked and clean*).
 
-### 17. P1 — a post-refresh replay carries the pre-rotation CSRF token
+**Fixed.** Both household branches (bare `/logs/household` → `GetFitnessHousehold`, and
+`/logs/household/:memberId/:date` → `GetHouseholdMemberLogs`) now come before the generic
+`base.startsWith('/logs/')` catch-all — the bare form was swallowed the same way and needed the same
+reordering, not just the `:memberId/:date` one. `GetHouseholdMemberLogs`'s `$date` is now `String!`,
+matching the gateway's typeDefs. The dead duplicate `/logs/household/` branch further down (already
+unreachable once the shadow was in place) and the never-matching `/logs/ household/` (space typo)
+branch were removed. 4 new tests in
+`src/services/__tests__/apiServiceHouseholdLogs.test.js` pin the operation name and variable shape for
+both household routes and confirm a plain `/logs/:date` still reaches `GetFoodLogs`; fitnessgeek
+frontend's suite is 31 (was 27).
+
+### 17. P1 — a post-refresh replay carries the pre-rotation CSRF token (fixed — see BURN_QUEUE)
 
 `packages/auth/src/authClient.js:441` sets the header only `if (!config.headers[name])`; the retries at
 `:486` and `:510` reuse the original headers, while `routes/auth.js:46` rotates `geek_csrf` on every
 refresh. Under `enforce`, the recovery retry 403s. *Fix:* always overwrite `X-CSRF-Token` in the
 request interceptor.
 
-### 18. P1 — flockgeek update handlers allow owner reassignment
+**Fixed.** The interceptor now calls `applyCsrfHeader(config)`, which clears any case-variant of the
+header already on the config and re-reads the cookie, so the replay at `:486`/`:510` — which re-enters
+this same interceptor via `axiosInstance(originalRequest)` — carries the post-rotation value, or
+nothing at all if the session no longer has a token. Six new tests in
+`packages/auth/src/__tests__/csrfHeaders.test.js` cover the replay, the case-variant, the
+logged-out replay, an AxiosHeaders-shaped bag and a POST→GET reuse; the old
+"does not clobber a header a call site set deliberately" test was inverted, since it encoded the bug.
+`packages/api-client`'s Apollo link was checked and already spreads `csrfHeaders()` *last*, so it has
+never had this problem; startgeek reads the cookie inline per call and makes no refresh call at all.
+
+### 18. P1 — flockgeek update handlers allow owner reassignment (fixed — see BURN_QUEUE)
 
 `birdController.js:205`, `eggProductionController.js:123`, `healthRecordController.js:110`,
 `locationController.js:91`, `hatchEventController.js:140`, `groupController.js:123`,
@@ -246,7 +382,23 @@ request interceptor.
 is owner-scoped, so this is self-transfer rather than theft. *Fix:* strip `ownerId`/`_id` before the
 spread. Pre-existing; dies with Q22.
 
-### 19. P1 (latent) — `updateFitnessFood` replaces `nutrition` and `serving` wholesale
+**Fixed.** All eight update handlers now build their update document from
+`withoutOwnerFields(req.body)` (see #4 — same helper, one sweep) instead of raw `req.body`; the
+owner-scoped `{ _id, ownerId }` filter was already correct and is unchanged, so a foreign record still
+404s. Regression tests added on `birdController`/`eggProductionController` (body `ownerId` on update is
+ignored, record stays with its original owner) and on `groupController`/`meatRunController` (same
+assertion, since those two didn't yet have dedicated route test files exercising update); the other
+four handlers (`healthRecordController`, `locationController`, `hatchEventController`,
+`pairingController`) share the identical helper and pattern but don't have route test scaffolding of
+their own yet — a follow-up, not a gap in the fix. flockgeek's 57 baseline auth tests plus these are
+69 total, all green.
+
+### 19. P1 (latent) — `updateFitnessFood` replaces `nutrition` and `serving` wholesale (fixed — see BURN_QUEUE)
+
+**Fixed:** the mutation writes `nutrition.<key>` for the keys the client actually sent and
+`serving.size` / `serving.unit` only when supplied, so a calories-only edit keeps the other six
+macros and a unit-only edit keeps `serving.size`. Pinned by
+`__tests__/fitnessgeekFoodLogWrites.test.js` (“updateFitnessFood is a partial patch”).
 
 `graphql/fitnessgeek/resolvers.js:883` builds both as nested literals. A partial `NutritionDataInput`
 loses the six sibling macros to schema defaults (`0`), and a `serving_unit`-only edit deletes
@@ -254,7 +406,7 @@ loses the six sibling macros to schema defaults (`0`), and a `serving_unit`-only
 `normalizeFoodInput` (`apiService.js:347`) always fills every key. *Fix:* dot the two sub-objects, and
 only for keys actually supplied.
 
-### 20. P1 — four shared packages ship suites CI never runs
+### 20. P1 — four shared packages ship suites CI never runs *(fixed — see BURN_QUEUE)*
 
 `ci.yml` has jobs for `@geeksuite/ui`, `utils` and `crypto-vault`, and none for `@geeksuite/auth`,
 `@geeksuite/user`, `@geeksuite/api-client` or `@geeksuite/logger` — all four of which have real `test`
@@ -263,6 +415,11 @@ the four are precisely the packages today's cross-cutting CSRF work touched (`a3
 the fourth is the brand-new logger (`61997ed`). A CSRF regression in `authClient` ships with a green
 CI. *Fix:* add four jobs mirroring `test-utils` (`ci.yml:168`).
 
+**Fixed:** added `test-api-client`, `test-auth`, `test-logger`, `test-user` to `ci.yml`, each
+mirroring `test-utils` (checkout, pnpm/node setup, frozen install, run the package's test
+command). All four ran green locally before landing: api-client 4/4, auth 17/17, logger 7/7,
+user 68/68 — no `continue-on-error` needed.
+
 ### 21. P1 — `main` has no required status checks
 
 `DOCS/CICD.md:102-107` says `test-*`, `lint` and `docker-build-changed` are required. Branch protection
@@ -270,7 +427,23 @@ returns 404 (not protected), `ci.yml` has zero `needs:` and no aggregation job, 
 advisory and a red suite cannot block a merge. *Fix:* enable required checks on `main`, or correct
 CICD.md. *Reported from a `gh api` query; Chef can confirm in the repo settings UI.*
 
-### 22. P1 (structural) — nothing tests the two classes that caused today's outages
+### 22. P1 (structural) — nothing tests the two classes that caused today's outages *(fixed — see BURN_QUEUE)*
+
+**Fixed (import/boot half):** added a `boot-smoke` CI job (`tools/boot-smoke.mjs`, `pnpm
+check:boot`) that `await import()`s the app-building module of each of the seven backends
+with a fake `KEY_VAULT_SECRET` and fake, never-listening Mongo URIs — this is the class the
+syntax gate and `gatewaySchemaLoads` can't see: a module that parses but fails at *import
+time* (a missing export, a bad workspace path, a CJS/ESM interop error), or a service that
+boots without a required env var. Three of the seven backends (bujogeek, fitnessgeek,
+storygeek) already have a dedicated `app.js` split from `server.js` for exactly this
+importability; the other four (flockgeek, notegeek, bookgeek, basegeek) have no such split and
+no `SKIP_LISTEN`-style guard, so each falls back to the deepest available substitute (routers,
+or basegeek's `graphql/index.js`) with its coverage gap documented in `DOCS/RUNBOOK.md` §5 and
+in the script itself — none of the four fallbacks reach their app's inline routes/REST surface
+in full. Ran clean locally (7/7). **Still open** — this task's scope did not touch these: the
+frontend-GraphQL-document-vs-gateway-schema CI job, the parity suites' blindness to a field
+missing from both sides, `QuickHarvestEntry.test.jsx`'s unfalsifiable mock, and the gateway
+boot tripwire itself (finding 12, a separate lane).
 
 - **No test validates a frontend GraphQL document against the gateway schema.** The fitnessgeek
   food-log suite's own header
