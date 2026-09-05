@@ -9,8 +9,8 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
+| R65 | pre-work from the consolidation plan: DailySummary net_carbs_grams (live bug since 79b1b57), toUtcDate → utils, Meal static | sonnet | basegeek api graphql/fitnessgeek models + tests | 09-05 14:22 |
 | R64 | TODO #22: zod validation on bookgeek's remaining REST api | sonnet | bookgeek api, TODO docs, lockfile | 09-05 14:15 |
-| R62 | plan: fitnessgeek 13-model consolidation (DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md, docs only) | opus | one new doc + SUITE_TODO line | 09-05 14:06 |
 | R61 | TODO #30 fitnessgeek: Drawer landmine, BarcodeScanner media query, phone-native date pickers | sonnet | fitnessgeek frontend (not services), TODO docs | 09-05 14:04 |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
@@ -62,7 +62,7 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 
 - 09-05 13:28 — Watchtower deployed the wave (updated=8). **Incident:** basegeek crash-looped — `graphql/bujogeek/typeDefs.js` (d53b008) had raw backticks inside the gql template; no suite imported `graphql/index.js`. fitnessgeek crash-looped on the missing vault key because Watchtower recreates with the old env — fixed with `docker compose up -d` in apps/fitnessgeek (13:30, health 200). Hotfix `61d3109` (typeDefs escaped + `gatewaySchemaLoads` tripwire) pushed 13:32, CI green, Watchtower restarted basegeek 13:40 — healthy, gateway apps 200 (outage ≈13:28–13:40); an accidental push of `3a7c84b` (logger config, R52) went 20s earlier because the scope check's `grep -c` exits 1 on a zero count and broke the `&&` chain — never chain `&&` after the count.
 
-- 09-05 14:05 — wave 3 (`8ce9296`, 34 commits): CI green; **Mobile harness workflow failed** on its first enforcing run — `pnpm --filter … ci` was pnpm's install alias, not the script (broken since R4, masked by continue-on-error). Fixed `40a8d3d`→amended (`run ci`), ships with wave 4. R50, R51, R53–R57, R59, R60, hotfix follow-ups, syntax gate, harness enforcing. Gate: frozen install, `pnpm -r lint`, syntax check all green before push.
+- 09-05 14:05 — wave 3 (`8ce9296`, 34 commits): CI green; **Mobile harness workflow failed** on its first enforcing run — `pnpm --filter … ci` was pnpm's install alias, not the script (broken since R4, masked by continue-on-error). Fixed `4ef412d` (`run ci`), ships with wave 4. Watchtower deployed wave 3 at 14:13 (updated=6); all eight apps 200. R50, R51, R53–R57, R59, R60, hotfix follow-ups, syntax gate, harness enforcing. Gate: frozen install, `pnpm -r lint`, syntax check all green before push.
 
 ## Landed during the burn
 
@@ -85,6 +85,7 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 - `363a820` — R4 — mobile harness in tools/ + CI (report-only); 698 probe findings
 - `d8521eb` — R27 — CSRF header in api-client authLink + startgeek clients
 - `1fda489` — R24 — bujogeek tag cloud + template journal cache; #25/#26 struck
+- `f0dd430` — R62 — DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md (found the net_carbs_grams live bug → R65)
 - `a80da35` — R63 — DOCS/STORYGEEK_GATEWAY_DECISION.md: no live caller of the gateway storygeek module; recommend delete (Chef: Q38)
 - `01d35d4` — R58 — bookgeek profile/filters/shelves/ai-status on the gateway; drifted Profile model fixed; localhost:1800 gone (step 3)
 - `b867175` — R57 — TODO #30 ×3: bujogeek template markdown, notegeek mind-map palette, flockgeek first-visit flicker; lockfile
