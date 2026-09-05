@@ -4,7 +4,7 @@ build
 .env
 .env.*
 .DS_Store
-*data*
+data/
 .claude/
 .sixth/
 dev-dist

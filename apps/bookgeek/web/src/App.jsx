@@ -1870,7 +1870,10 @@ export default function App() {
 
   async function handleUpdateShelf(book, newShelf) {
     if (!(book?.id || book?._id)) return;
-    if (!newShelf || newShelf === book.shelf) return;
+    // "" clears the shelf (the detail sheet's "No shelf" row); only a true
+    // no-op — same value as today — is skipped.
+    if (newShelf === undefined || newShelf === null) return;
+    if ((newShelf || "") === (book.shelf || "")) return;
 
     const bookId = (book.id || book._id);
     setShelfSavingId(bookId);
