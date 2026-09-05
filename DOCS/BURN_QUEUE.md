@@ -9,6 +9,7 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
+| R64 | TODO #22: zod validation on bookgeek's remaining REST api | sonnet | bookgeek api, TODO docs, lockfile | 09-05 14:15 |
 | R62 | plan: fitnessgeek 13-model consolidation (DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md, docs only) | opus | one new doc + SUITE_TODO line | 09-05 14:06 |
 | R61 | TODO #30 fitnessgeek: Drawer landmine, BarcodeScanner media query, phone-native date pickers | sonnet | fitnessgeek frontend (not services), TODO docs | 09-05 14:04 |
 
