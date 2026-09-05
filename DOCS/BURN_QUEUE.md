@@ -15,7 +15,6 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | R31 | probe burn-down: notegeek | sonnet | notegeek frontend | 09-05 |
 | R32 | probe burn-down: bujogeek | sonnet | bujogeek frontend | 09-05 |
 | R33 | probe burn-down: fitnessgeek | sonnet | fitnessgeek frontend | 09-05 |
-| R34 | probe burn-down: startgeek | sonnet | startgeek src | 09-05 |
 | R35 | Q17: fitnessgeek backend node 20 + ESM, consume @geeksuite/utils, drop 5 toUtcMidnight copies | opus | fitnessgeek backend, Dockerfile, lockfile | 09-05 12:35 |
 | R36 | Q20: callCohere case in callProvider + stale hardcoded model defaults (#31) | sonnet | basegeek api aiService/aiProviders/capabilities, AI_CATALOG | 09-05 12:35 |
 | R37 | TODO #20 step 1: @geeksuite/crypto-vault promoted, basegeek consumes; ci job | sonnet | packages/crypto-vault, basegeek api lib + package.json, lockfile, ci.yml | 09-05 12:35 |
@@ -34,6 +33,7 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | Q11 | basegeek `Databases.jsx`: wire into nav or delete | Chef's call | XS |
 | Q13 | verify COVERS_PATH now serves the old covers in the bookgeek UI (CONTEXT.md runtime line already fixed) | Chef eyeballs the UI | XS |
 | Q18b | After R27 deploys: a day of clean `CSRF token check (report-only)` logs, then `CSRF_TOKEN=enforce` in basegeek's env and a container restart | Chef's call after the log window | XS |
+| Q21 | harness: recognize ::before/::after hit-area expansion (startgeek .hit44/.dot) so the 52 startgeek false positives clear | after R29 lands | S |
 | Q20b | aiGeek: simulated streaming (F-21) and user-gated selection (F-14) documented, not fixed | design | S |
 | Q14 | storygeek CanonCard summary text through Narration too (agent left it as a separate render path) | Chef's call | XS |
 
@@ -84,6 +84,7 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 - `363a820` — R4 — mobile harness in tools/ + CI (report-only); 698 probe findings
 - `d8521eb` — R27 — CSRF header in api-client authLink + startgeek clients
 - `1fda489` — R24 — bujogeek tag cloud + template journal cache; #25/#26 struck
+- `6249ef4` — R34 — startgeek probe burn-down 218 → 52 (52 = ::before hit-area false positives)
 - `3265b1c` — R25 — zod on the ten bujogeek gateway mutations (37 tests; api 815)
 - `4856227` — R26 — 8 calendar-date off-by-one sites fixed (flockgeek ×7, fitnessgeek getTodayBP)
 - `8879e94` — R19 — OpenAI-compat: 22 findings closed (api 778); unknown model → 404
