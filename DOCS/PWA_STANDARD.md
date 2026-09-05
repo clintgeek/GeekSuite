@@ -121,7 +121,7 @@ The offline page should:
 |-----|---------|-----------|----------|--------------|-------------|
 | bookgeek | Hand-rolled | ✅ | ✅ | ✅ — now matches both light/dark palettes via `prefers-color-scheme` | ✅ |
 | bujogeek | VitePWA/Workbox | ✅ | ✅ — `scope` added, `theme_color` now matches default (light) page | ✅ (new) — precached, but **not** wired as `navigateFallback` (see note) | ✅ |
-| fitnessgeek | VitePWA/Workbox | ✅ | ⚠️ static `manifest.json` fixed; inline `manifest` in `vite.config.js` still stale — that file was already dirty (busy), skipped | ✅ (new) — precached; `navigateFallback` stays `/index.html` (SPA routing), not repointed (see note) | ✅ |
+| fitnessgeek | VitePWA/Workbox | ✅ | ✅ — inline `manifest` in `vite.config.js` replaced with `manifest: false`; `public/manifest.json` (linked in `index.html`) is now the single source, fixing the duplicate `<link rel="manifest">` in built `dist/index.html` | ✅ (new) — precached; `navigateFallback` stays `/index.html` (SPA routing), not repointed (see note) | ✅ |
 | notegeek | VitePWA/Workbox | ✅ | ✅ — `theme_color` now matches default (light) page; `apple-touch-icon` link added | ✅ (new) — precached, not wired as `navigateFallback` (see note) | ✅ |
 | flockgeek | Hand-rolled | ✅ | ✅ — `scope` added, `theme_color` now matches default (dark) page; `apple-touch-icon` link added | ✅ — now matches both palettes via `prefers-color-scheme` | ✅ |
 | storygeek | Hand-rolled (new) | ✅ | ✅ (new) — `manifest.json` + manifest/apple-touch-icon links created | ✅ — hand-rolled SW added, per-mode `offline.html` now served via navigation fallback | ✅ (new) |
@@ -146,16 +146,16 @@ needs `workbox-recipes`' `offlineFallback()` / a custom `setCatchHandler`, which
 
 ### Remaining work
 
-- **fitnessgeek**: `apps/fitnessgeek/frontend/vite.config.js` was already modified in the
-  working tree when this pass ran — skipped per the busy-file rule. Its inline VitePWA
-  `manifest.theme_color` (`#0D9488`) still disagrees with the corrected
-  `public/manifest.json` (`#FAFAF9`), and the built `dist/index.html` ships **two**
-  conflicting `<link rel="manifest">` tags (`/manifest.json` and the VitePWA-generated
-  `/manifest.webmanifest`) — pre-existing, not caused by this pass. Needs a follow-up
-  once that file is free.
-- **bujogeek**: `apps/bujogeek/frontend/vite.config.js` was already modified — skipped,
-  same rule. No corrections were needed there this pass regardless (`manifest: false`,
-  external `manifest.json` only).
+- **fitnessgeek**: fixed 2026-09-05. `apps/fitnessgeek/frontend/vite.config.js`'s inline
+  VitePWA `manifest` block (whose `theme_color` was `#0D9488`, disagreeing with the
+  corrected `public/manifest.json`'s `#FAFAF9`) is replaced with `manifest: false` —
+  `public/manifest.json` (already linked in `index.html`) is now the single source.
+  `registerType: 'autoUpdate'` and the workbox config are untouched. Verified via
+  `pnpm build`: built `dist/index.html` now ships exactly one `<link rel="manifest">`
+  (`/manifest.json`); no `manifest.webmanifest` is generated.
+- **bujogeek**: no change needed — already `manifest: false` with `public/manifest.json`
+  (`theme_color` `#FAF8F5`) as the sole source, matching the default (light) page
+  background. Verified via `pnpm build`: one manifest link in `dist/index.html`.
 - **storygeek**: hand-rolled `public/sw.js` added (Flavor B, matching bookgeek's
   pattern) plus the registration snippet in `index.html`. Auth bypass rule (`/api/me`,
   `/api/auth/*`, `/api/users/me`) is first and network-only, matched by pathname so it

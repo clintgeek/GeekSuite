@@ -12,30 +12,11 @@ export default defineConfig({
     VitePWA({
       injectRegister: false,
       registerType: 'autoUpdate',
-      manifest: {
-        name: 'FitnessGeek',
-        short_name: 'FitnessGeek',
-        description: 'Track your nutrition, fitness goals, and weight with FitnessGeek - powered by the GeekSuite ecosystem',
-        start_url: '/',
-        display: 'standalone',
-        background_color: '#FAFAF9',
-        theme_color: '#0D9488',
-        scope: '/',
-        icons: [
-          {
-            src: '/icons/icon-192x192.svg',
-            sizes: '192x192',
-            type: 'image/svg+xml',
-            purpose: 'any maskable'
-          },
-          {
-            src: '/icons/icon-512x512.svg',
-            sizes: '512x512',
-            type: 'image/svg+xml',
-            purpose: 'any maskable'
-          }
-        ]
-      },
+      // Single source of truth is public/manifest.json (linked in index.html).
+      // An inline manifest here would make VitePWA emit its own
+      // manifest.webmanifest + <link rel="manifest">, producing two
+      // conflicting manifest links in the built index.html.
+      manifest: false,
       workbox: {
         cleanupOutdatedCaches: true,
         navigateFallback: '/index.html',
