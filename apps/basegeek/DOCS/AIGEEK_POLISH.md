@@ -1,6 +1,6 @@
 # aiGeek Polish — OpenAI Compatibility + Tool Calling
 
-**Status:** Planning — work not yet started
+**Status:** Mostly landed (items 1, 2, 4, 5, 7, 8, 10; 3 and 6 partially) — see `OPENAI_COMPAT_AUDIT.md` (2026-09-05) for what the HTTP contract actually does and the 22 open findings
 **Branch target:** `feat/aigeek-polish` (off `main`, after parking CI/CD docs on `ci-cd`)
 **Driver:** Needed before geekPR (portfolio project) can use aiGeek as its LLM backend. Also upgrades aiGeek itself to be a more capable OpenAI-compatible proxy for the whole suite.
 

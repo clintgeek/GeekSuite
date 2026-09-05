@@ -11,7 +11,6 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 |---|--------|-------|-------|-------|
 | R1 | aiGeek: caller identity from API key, consumers on service keys, mint script | opus | basegeek api (not graphql/basegeek), storygeek+fitnessgeek backends | 09-05 am |
 | R2 | AIGeek UI: "Apps & keys" tab replaces detected routing; retire APIKeysPage | opus | basegeek ui, graphql/basegeek (additive) | 09-05 am |
-| R3 | OpenAI-compat conformance audit (read-only + test suite + report) | opus | new test + DOCS/OPENAI_COMPAT_AUDIT.md | 09-05 am |
 | R4 | M6 guardrails: mobile harness into `tools/mobile-harness`, CI workflow | opus | tools/, .github/workflows/mobile-harness.yml | 09-05 am |
 | R5 | TODO #17 shared date utilities → `packages/utils`; bujogeek/fitnessgeek/flockgeek consume | opus | packages/utils, 3 apps (date code only) | 09-05 am |
 | R6 | TODO #18 shared logger → `packages/logger`; all backends' logger modules | sonnet | packages/logger, each backend's logger + server line | 09-05 am |
@@ -33,7 +32,7 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | Q5 | Housekeeping (TODO #31): fitnessgeek dead files, stale dev compose, notegeek `formatRelativeTime` dedupe, notegeek dev-server optimizer fault | fitnessgeek + notegeek busy | S |
 | Q6 | bookgeek web unit tests (vitest + RTL for LibraryView/FilterSheet/BookCard/detail) | none — launch next slot | M |
 | Q7 | Sibling-subdomain CSRF double-submit token for basegeek (SUITE_TODO) | basegeek middleware/server busy (R1) | M |
-| Q8 | OpenAI-compat fixes from R3's findings | R3 report | ? |
+| Q8 | OpenAI-compat fixes: F-09 dropped params, F-16 unknown model → 404, F-04/F-02 tools on Groq + tool-loop roles, F-01 stop rewriting answers, F-03 cache key incl. history, F-07/F-15/F-19/F-20 | R1 owns openaiProxy/aiService — launch when R1 lands | M |
 | Q9 | storygeek: remove the `& > div` frame hack once `GeekAppFrame fill` lands (R10) | R10 + R8 | XS |
 | Q10 | Revoke the `LocalApps` key once the env grep and nginx sweep confirm no caller | background greps | XS |
 | Q11 | basegeek `Databases.jsx`: wire into nav or delete | Chef's call | XS |
@@ -68,3 +67,4 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 ## Landed during the burn
 
 (append as commits land: `sha — stream — one line`)
+- R3 — OpenAI-compat audit: `apps/basegeek/DOCS/OPENAI_COMPAT_AUDIT.md` + 72-test conformance suite (22 `it.failing` findings)
