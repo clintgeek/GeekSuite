@@ -18,6 +18,7 @@ import DailySummary from './models/DailySummary.js';
 import WeightGoals from './models/WeightGoals.js';
 import { isValidObjectId } from './ownership.js';
 import { toUtcMidnight, utcDateString, utcDayRange } from '@geeksuite/utils/dates';
+import { validateFitnessMealsArgs } from './validation.js';
 
 /** Escape every regex metacharacter so user input can only match literally. */
 const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -521,9 +522,24 @@ export const resolvers = {
       if (!isValidObjectId(id)) return null;
       return FoodLog.findOne({ _id: id, user_id: user.id }).populate('food_item_id');
     },
-    fitnessMeals: async (_, { mealType }, { user }) => {
+    fitnessMeals: async (_, { mealType, search }, { user }) => {
       if (!user) throw new Error('Unauthorized');
-      if (mealType) return Meal.getMealsByType(mealType, user.id);
+      const args = validateFitnessMealsArgs({ mealType, search });
+      // Same rule as `fitnessFoods` above: the search box's raw text reaches
+      // mongod as a regex, escaped so it can only ever match itself
+      // (BURN_REVIEW_2 #13 — `getMeals(mealType, search)`'s `search` used to
+      // be dropped by the frontend router before it ever reached here, so
+      // meal search silently returned every saved meal).
+      if (args.search) {
+        const query = {
+          user_id: user.id,
+          is_deleted: false,
+          name: new RegExp(escapeRegex(args.search), 'i'),
+        };
+        if (args.mealType) query.meal_type = args.mealType;
+        return Meal.find(query).populate('food_items.food_item_id').sort({ name: 1 });
+      }
+      if (args.mealType) return Meal.getMealsByType(args.mealType, user.id);
       return Meal.getActiveMeals(user.id);
     },
     fitnessMeal: async (_, { id }, { user }) => {

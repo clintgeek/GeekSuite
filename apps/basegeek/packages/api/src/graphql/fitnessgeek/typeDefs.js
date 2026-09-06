@@ -612,7 +612,7 @@ export const typeDefs = gql`
     fitnessFood(id: ID!): FitnessFood
     foodLogs(date: Date, startDate: Date, endDate: Date, mealType: String): [FoodLog]
     foodLog(id: ID!): FoodLog
-    fitnessMeals(mealType: String): [FitnessMeal]
+    fitnessMeals(mealType: String, search: String): [FitnessMeal]
     fitnessMeal(id: ID!): FitnessMeal
     fitnessMedications: [FitnessMedication]
     fitnessMedication(id: ID!): FitnessMedication

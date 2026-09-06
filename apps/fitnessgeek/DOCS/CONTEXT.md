@@ -12,6 +12,14 @@ generic one, and by retyping `GetHouseholdMemberLogs`'s `$date` from `Date!` to 
 gateway's typeDefs. See `DOCS/BURN_REVIEW.md` #16 and
 `frontend/src/services/__tests__/apiServiceHouseholdLogs.test.js`.
 
+**2026-09-05 (BURN_REVIEW_2 #13 fix):** meal search was a lie all the way down — `apiService.js`'s
+`base === '/meals'` branch returned `GetFitnessMeals` with no variables, dropping `?search=` before it
+left the browser, and the gateway's `fitnessMeals` declared no `search` argument to receive it either,
+so `UnifiedFoodSearch.jsx`, `FoodSearch.jsx` and `matcherService.js` all typed a query and got back
+every saved meal. Fixed on both ends: `fitnessMeals(mealType: String, search: String)` now escapes and
+matches `name` case-insensitively (same rule as `fitnessFoods`), and the router passes `search` (and
+`meal_type`) through as `GetFitnessMeals` variables.
+
 **2026-09-05 (Q67 fix):** `SaveMealDialog.jsx`'s fallback for a food-log row with no
 catalog id used to send `food_item_payload` inside `MealItemInput`, a field the gateway never
 declared (`food_item_id: ID!` / `servings: Float!` only) — reaching that branch would have failed
@@ -199,9 +207,9 @@ wrong and what is now true.*
   while `goalsService.getGoals()` expects `{nutrition, weight}`;
   `POST /goals` maps to `setNutritionGoals` whose input is the
   `nutritiongoals` shape, not `saveGoals`'s; `GET /meals/:id` sends an ObjectId
-  as `mealType`; `getMeals(mealType, search)` drops both params (matcherService
-  survives on its own local scoring); `bpService.getBPStats` answers the whole
-  log list.
+  as `mealType`; `bpService.getBPStats` answers the whole log list.
+  (`getMeals(mealType, search)` dropping both params used to be here too —
+  fixed, see BURN_REVIEW_2 #13 above.)
 - **InfluxDB reads are not user-scoped** — `influxService.getComprehensiveDaily(date)`
   takes no user id, and `checkInfluxEnabled` gates on the caller's own flag.
   Correct for a single-instance integration, flagged so the choice is explicit

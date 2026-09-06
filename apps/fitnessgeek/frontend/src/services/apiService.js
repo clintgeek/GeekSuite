@@ -85,7 +85,7 @@ const DELETE_FITNESS_FOOD = gql`
 `;
 
 const GET_MEALS = gql`
-  query GetFitnessMeals($mealType: String) { fitnessMeals(mealType: $mealType) { id name meal_type food_items { servings food_item_id { id name brand serving_size serving_unit nutrition { calories_per_serving protein_grams carbs_grams fat_grams fiber_grams sugar_grams sodium_mg } } } totalNutrition { calories_per_serving protein_grams carbs_grams fat_grams fiber_grams sugar_grams sodium_mg } } }
+  query GetFitnessMeals($mealType: String, $search: String) { fitnessMeals(mealType: $mealType, search: $search) { id name meal_type food_items { servings food_item_id { id name brand serving_size serving_unit nutrition { calories_per_serving protein_grams carbs_grams fat_grams fiber_grams sugar_grams sodium_mg } } } totalNutrition { calories_per_serving protein_grams carbs_grams fat_grams fiber_grams sugar_grams sodium_mg } } }
 `;
 
 const ADD_MEAL = gql`
@@ -478,7 +478,15 @@ function routeRequest(method, url, data) {
       return { query: GET_HOUSEHOLD_MEMBER_LOGS, variables: { memberId: parts[2], date: parts[3] || sp.get('date') } };
     }
     if (base.startsWith('/logs/')) return { query: GET_FOOD_LOGS, variables: { date: parts[1] } }; // /logs/YYYY-MM-DD
-    if (base === '/meals') return { query: GET_MEALS };
+    if (base === '/meals') {
+      // `getMeals(mealType, search)` sends both as query params, never as a
+      // path segment — the branch below is for `/meals/:mealType`. Both used
+      // to be dropped here (BURN_REVIEW_2 #13): meal search silently returned
+      // every saved meal, and every one of `UnifiedFoodSearch.jsx`,
+      // `FoodSearch.jsx` and `matcherService.js` hit this exact branch.
+      const sp = new URLSearchParams(url.split('?')[1]);
+      return { query: GET_MEALS, variables: { mealType: sp.get('meal_type'), search: sp.get('search') } };
+    }
     if (base.startsWith('/meals/')) return { query: GET_MEALS, variables: { mealType: parts[1] } };
     if (base === '/medications' || base === '/meds') return { query: GET_MEDICATIONS };
     if (base === '/bp' || base === '/blood-pressure') return { query: GET_BPS };
