@@ -102,7 +102,7 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 
 - 09-05 22:30 — wave 14 (`a0450d7`, 8 commits): R96 (bujogeek+notegeek going-over, fixes the red CI job), R101, R102, docs. Gates green; CI, Release and harness green 22:45; rolling out on the next Watchtower scan.
 
-- 09-05 23:10 — wave 15: R100 (gql-arg-audit + medication saves fixed at the gateway), Q66, STATUS. Gates green.
+- 09-05 22:47 — wave 15 (`2a46cd7`, 8 commits): R100 (gql-arg-audit + medication saves fixed at the gateway), Q66, STATUS. Gates green; CI, Release, harness green 23:02; Watchtower rolled waves 14 and 15 at 22:51 (2) and 22:58 (5); all eight apps 200 and healthy.
 
 - **Incident 23:20:** the R103 agent ran `git stash`/pop despite the hard rule (to diff lint baselines) while R104/R105 were writing; the one stash entry on the box turned out to be an old `WIP on dashgeek-redesign` from the parked April work, not tonight's — nothing was lost; Chef may `git stash drop` it. Rule restated in the preamble for future runs: baselines via `git show HEAD:<path>`, never stash.
 
