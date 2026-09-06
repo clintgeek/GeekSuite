@@ -11,6 +11,7 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
+| R106 | adversarial cross-stream review of tonight's going-over commits → DOCS/BURN_REVIEW_2.md (read-only) | opus | one new doc | 09-05 23:15 |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
 ## Queued (launch when files free / prerequisite lands)
@@ -104,7 +105,7 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 
 - **Incident 23:20:** the R103 agent ran `git stash`/pop despite the hard rule (to diff lint baselines) while R104/R105 were writing; the one stash entry on the box turned out to be an old `WIP on dashgeek-redesign` from the parked April work, not tonight's — nothing was lost; Chef may `git stash drop` it. Rule restated in the preamble for future runs: baselines via `git show HEAD:<path>`, never stash.
 
-- 09-05 23:35 — wave 16: R104, R105, R103, docs. Gates green. **All 105 streams landed; nothing running.**
+- 09-05 23:12 — wave 16 (`821a0bb`, 7 commits): R104, R105, R103, docs. Gates green. **All 105 streams landed.**
 
 ## Landed during the burn
 
