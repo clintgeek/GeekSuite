@@ -1,11 +1,15 @@
 # GeekSuite — Status
 
-*Updated 2026-09-06 00:10 CDT. Morning: three deploys (Pocket Pass M0–M5, AIGeek, Ask). Afternoon
-and evening: the 28-hour quota burn — seventeen waves (last `add7227`), 112 streams landed, all
-verified live; two adversarial cross-stream reviews (`DOCS/BURN_REVIEW.md`, `DOCS/BURN_REVIEW_2.md`)
-with every fixable finding fixed. The live board with every stream, incident and open decision is
-`DOCS/BURN_QUEUE.md`; the AI ideas are `DOCS/AI_IDEAS.md`. Nothing is running; what remains is
-Chef's decision list on the board.*
+*Updated 2026-09-06 15:00 CDT. Night 2 (Chef: "all 5 issues and all 5 AI ideas brought to life") is
+done: waves 18–19 (`c6776b9`, `71a4a08`) shipped the five AI features from `DOCS/AI_IDEAS.md` on one
+shared runner (`aiFeatureRunner.js`: app routing row, per-user daily cap, deterministic fallback,
+provenance; all default-off opt-ins, verified live on free routing), and closed the decision list:
+Q58 (leaked `datageek_user` dropped, init script env-driven), Q56, Q10, Q43 (23 required checks on
+the existing ruleset), Q42, Q69, Q22, Q38, Q62, Q48, Q68, Q52, Q55, Q65, Q70, Q49. Decisions are in
+`DOCS/NIGHT2_PLAN.md`; the board is `DOCS/BURN_QUEUE.md`. **Open:** Q18b — `CSRF_TOKEN=enforce`
+locked Chef out (a service-worker-cached console bundle predating the header) and is back to
+`report`; the console now self-heals, so the flip is retried after Chef hard-reloads his devices and
+the report log is clean.*
 
 ## Phase 2 — the going-over (evening of 2026-09-05)
 
