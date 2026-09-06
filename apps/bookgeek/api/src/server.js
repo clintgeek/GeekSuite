@@ -14,6 +14,17 @@ import { fileURLToPath } from "url";
 import { Book } from "./models/book.js";
 import { Profile } from "./models/profile.js";
 import { isAllowedCorsOrigin } from "./corsOrigins.js";
+import {
+  escapeRegex,
+  libraryRoot as libraryRootPath,
+  resolveInLibrary,
+  safePathSegment,
+} from "./libraryPaths.js";
+import {
+  OUTBOUND_TIMEOUT_MS,
+  fetchImageBuffer,
+  isAllowedCoverHost,
+} from "./coverFetch.js";
 import { logger } from "./utils/logger.js";
 import { ensureFormat, EnsureFormatError } from "./ebookFormats.js";
 import authRouter from "./routes/authRoutes.js";
@@ -34,6 +45,12 @@ import { downloadParamsSchema } from "./validation/schemas/kindle.js";
 dotenv.config();
 
 const app = express();
+// Behind the suite's nginx. Without this `req.ip` is the proxy's address for
+// every caller — which would collapse deviceBasket.js's per-IP secret-word
+// rate limit into one global bucket (one wrong guess locking out everyone) —
+// and `req.secure` is always false, so the Kindle PIN cookie would never get
+// its Secure attribute. One hop: nginx is the only proxy in front of us.
+app.set("trust proxy", 1);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const publicPath = path.join(__dirname, "../public");
@@ -361,11 +378,14 @@ app.get("/kindle", requireKindleAuth, async (req, res) => {
       andConds.push({ owned: false });
     }
     if (q) {
+      // Escaped: a raw search box straight into $regex is both a regex
+      // injection and a ReDoS lever (`(a+)+$` pins the Mongo thread).
+      const qRe = escapeRegex(q);
       andConds.push({
         $or: [
-          { title: { $regex: q, $options: "i" } },
-          { authors: { $regex: q, $options: "i" } },
-          { tags: { $regex: q, $options: "i" } },
+          { title: { $regex: qRe, $options: "i" } },
+          { authors: { $regex: qRe, $options: "i" } },
+          { tags: { $regex: qRe, $options: "i" } },
         ],
       });
     }
@@ -658,8 +678,16 @@ app.post("/kindle/books/:id/send", requireKindleAuth, async (req, res) => {
       );
     }
 
-    const libraryRoot = process.env.LIBRARY_PATH || "/data/library";
-    const fullPath = path.join(libraryRoot, epubFile.path);
+    const fullPath = resolveInLibrary(epubFile.path);
+    if (!fullPath) {
+      return res.redirect(
+        `/kindle/books/${ encodeURIComponent(
+          id
+        ) }?back=${ encodeURIComponent(back) }${ coverParam }&err=${ encodeURIComponent(
+          "Stored file path is outside the library"
+        ) }`
+      );
+    }
 
     const kindleEnabled =
       String(process.env.KINDLE_ENABLED || "").toLowerCase() === "true";
@@ -678,7 +706,7 @@ app.post("/kindle/books/:id/send", requireKindleAuth, async (req, res) => {
         ? `${ book.title } (BookGeek)`
         : "Book from BookGeek";
 
-    await sendMail({
+    const mailResult = await sendMail({
       to: kindleEmail,
       subject,
       text: "Kindle delivery from BookGeek.",
@@ -691,6 +719,16 @@ app.post("/kindle/books/:id/send", requireKindleAuth, async (req, res) => {
         },
       ],
     });
+
+    if (!mailResult?.sent) {
+      return res.redirect(
+        `/kindle/books/${ encodeURIComponent(
+          id
+        ) }?back=${ encodeURIComponent(back) }${ coverParam }&err=${ encodeURIComponent(
+          "Email delivery is not configured on the server"
+        ) }`
+      );
+    }
 
     return res.redirect(
       `/kindle/books/${ encodeURIComponent(
@@ -753,7 +791,7 @@ app.get("/api/books", authenticateToken, async (req, res) => {
     const andConds = [];
 
     if (author) {
-      andConds.push({ authors: { $regex: String(author), $options: "i" } });
+      andConds.push({ authors: { $regex: escapeRegex(String(author)), $options: "i" } });
     }
     if (tag) {
       andConds.push({ tags: String(tag) });
@@ -780,7 +818,7 @@ app.get("/api/books", authenticateToken, async (req, res) => {
     }
 
     if (q) {
-      const qStr = String(q);
+      const qStr = escapeRegex(String(q));
       andConds.push({
         $or: [
           { title: { $regex: qStr, $options: "i" } },
@@ -988,15 +1026,17 @@ app.post(
         return res.status(400).json({ error: "No file uploaded" });
       }
 
-      const libraryRoot = process.env.LIBRARY_PATH || "/data/library";
-
       const ext = path
         .extname(file.originalname || file.filename || "")
         .toLowerCase();
-      const safeExt = ext || ".jpg";
+      const safeExt = /^\.[a-z0-9]{1,8}$/.test(ext) ? ext : ".jpg";
       const filename = `${ String(book._id) }-upload-${ Date.now() }${ safeExt }`;
       const relPath = resolveCoverRelativePathForBook(book, filename);
-      const destPath = path.join(libraryRoot, relPath);
+      const destPath = resolveInLibrary(relPath);
+      if (!destPath) {
+        await fs.promises.unlink(file.path).catch(() => { });
+        return res.status(400).json({ error: "Cover path resolves outside the library" });
+      }
 
       await fs.promises.mkdir(path.dirname(destPath), { recursive: true });
       await moveFileSafe(file.path, destPath);
@@ -1030,10 +1070,11 @@ app.delete("/api/books/:id/cover", authenticateToken, validate({ params: bookIdP
       return res.status(404).json({ error: "Book not found" });
     }
 
-    const libraryRoot = process.env.LIBRARY_PATH || "/data/library";
     if (book.coverPath && typeof book.coverPath === "string") {
-      const fullPath = path.join(libraryRoot, book.coverPath);
-      await fs.promises.unlink(fullPath).catch(() => { });
+      const fullPath = resolveInLibrary(book.coverPath);
+      if (fullPath) {
+        await fs.promises.unlink(fullPath).catch(() => { });
+      }
     }
 
     book.coverPath = undefined;
@@ -1077,15 +1118,20 @@ app.post(
         return res.status(404).json({ error: "Book not found" });
       }
 
-      const libraryRoot = process.env.LIBRARY_PATH || "/data/library";
+      const libraryRoot = libraryRootPath();
 
       const ext = path.extname(file.originalname || "").toLowerCase();
       const baseName = path.basename(file.originalname || file.filename || "upload", ext) || "upload";
-      const safeBase = baseName.replace(/[^a-zA-Z0-9 _.-]/g, "_");
-      const finalName = safeBase + (ext || "");
+      const safeBase = safePathSegment(baseName, "upload");
+      const safeExt = /^\.[a-zA-Z0-9]{1,8}$/.test(ext) ? ext.toLowerCase() : "";
+      const finalName = safeBase + safeExt;
       const destDir = path.join(libraryRoot, "uploads", String(book._id));
       await fs.promises.mkdir(destDir, { recursive: true });
-      const destPath = path.join(destDir, finalName);
+      const destPath = resolveInLibrary(path.join("uploads", String(book._id), finalName));
+      if (!destPath) {
+        await fs.promises.unlink(file.path).catch(() => { });
+        return res.status(400).json({ error: "Upload path resolves outside the library" });
+      }
 
       await moveFileSafe(file.path, destPath);
 
@@ -1281,19 +1327,20 @@ app.delete("/api/books/:id", authenticateToken, async (req, res) => {
     let filesFailed = 0;
 
     if (deleteFiles) {
-      const libraryRoot = process.env.LIBRARY_PATH || "/data/library";
       const candidatePaths = [];
 
       if (Array.isArray(book.files)) {
         for (const f of book.files) {
           if (f && f.path) {
-            candidatePaths.push(path.join(libraryRoot, f.path));
+            const full = resolveInLibrary(f.path);
+            if (full) candidatePaths.push(full);
           }
         }
       }
 
       if (book.coverPath) {
-        candidatePaths.push(path.join(libraryRoot, book.coverPath));
+        const full = resolveInLibrary(book.coverPath);
+        if (full) candidatePaths.push(full);
       }
 
       for (const fullPath of candidatePaths) {
@@ -1439,8 +1486,6 @@ app.get("/api/books/:id/cover", authenticateTokenOrKindle, validate({ params: bo
       return res.status(404).json({ error: "Cover not found" });
     }
 
-    const libraryRoot = process.env.LIBRARY_PATH || "/data/library";
-
     // Prefer the stored coverPath if present
     const candidatePaths = [];
     if (book.coverPath) {
@@ -1473,7 +1518,8 @@ app.get("/api/books/:id/cover", authenticateTokenOrKindle, validate({ params: bo
     }
 
     for (const rel of candidatePaths) {
-      const full = path.join(libraryRoot, rel);
+      const full = resolveInLibrary(rel);
+      if (!full) continue;
       try {
         const stats = await fs.promises.stat(full);
         if (!stats.isFile()) continue;
@@ -1615,8 +1661,12 @@ app.post(
         return res.status(400).json({ error: "No EPUB format available" });
       }
 
-      const libraryRoot = process.env.LIBRARY_PATH || "/data/library";
-      const fullPath = path.join(libraryRoot, epubFile.path);
+      const fullPath = resolveInLibrary(epubFile.path);
+      if (!fullPath) {
+        return res
+          .status(500)
+          .json({ error: "Stored file path is outside the library" });
+      }
 
       const kindleEnabled =
         String(process.env.KINDLE_ENABLED || "").toLowerCase() === "true";
@@ -1642,18 +1692,37 @@ app.post(
             ],
           });
 
-          console.log("send-to-kindle smtp result", {
-            userId,
-            kindleEmail: profile.kindleEmail,
-            bookId: book._id?.toString?.(),
-            filePath: epubFile.path,
-            sent: result?.sent,
-          });
+          logger.info(
+            {
+              userId,
+              bookId: book._id?.toString?.(),
+              filePath: epubFile.path,
+              sent: result?.sent,
+              reason: result?.reason,
+            },
+            "send-to-kindle smtp result"
+          );
+
+          if (!result?.sent) {
+            // SMTP_* is unset, so sendMail no-opped. Reporting `success: true`
+            // here made the UI say "Sent to Kindle" for a mail that never left
+            // the box — the one failure mode a user cannot see for themselves.
+            return res.status(502).json({
+              success: false,
+              error: {
+                message:
+                  result?.reason === "smtp_not_configured"
+                    ? "Email delivery is not configured on the server (SMTP_*)."
+                    : "Kindle email was not sent.",
+                code: "KINDLE_SEND_FAILED",
+              },
+            });
+          }
 
           return res.json({
             success: true,
             data: {
-              sent: !!result?.sent,
+              sent: true,
               mode: "smtp",
               kindleEmail: profile.kindleEmail,
             },
@@ -1666,12 +1735,14 @@ app.post(
         }
       }
 
-      console.log("send-to-kindle stub", {
-        userId,
-        kindleEmail: profile.kindleEmail,
-        bookId: book._id?.toString?.(),
-        filePath: epubFile.path,
-      });
+      logger.info(
+        {
+          userId,
+          bookId: book._id?.toString?.(),
+          filePath: epubFile.path,
+        },
+        "send-to-kindle stub (KINDLE_ENABLED is not true)"
+      );
 
       res.json({
         success: true,
@@ -1835,25 +1906,30 @@ app.post("/api/books/:id/cover", authenticateToken, validate({ params: bookIdPar
       if (!coverUrl) {
         return res.status(400).json({ error: "coverUrl is required" });
       }
-      if (!/^https?:\/\//i.test(coverUrl)) {
-        return res.status(400).json({ error: "coverUrl must be http(s)" });
+      if (!isAllowedCoverHost(coverUrl)) {
+        return res
+          .status(400)
+          .json({ error: "coverUrl must be an https Google Books cover URL" });
       }
 
       try {
-        const resImg = await fetch(coverUrl);
-        if (!resImg.ok) {
+        const buffer = await fetchImageBuffer(coverUrl);
+        if (!buffer) {
           return res
             .status(502)
             .json({ error: "Failed to download cover image" });
         }
-        const arrayBuffer = await resImg.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
 
-        const libraryRoot = process.env.LIBRARY_PATH || "/data/library";
+        const libraryRoot = libraryRootPath();
 
         const filename = `${ String(book._id) }-gb-${ Date.now() }.jpg`;
         const relPath = resolveCoverRelativePathForBook(book, filename);
-        const destPath = path.join(libraryRoot, relPath);
+        const destPath = resolveInLibrary(relPath, libraryRoot);
+        if (!destPath) {
+          return res
+            .status(400)
+            .json({ error: "Cover path resolves outside the library" });
+        }
         await fs.promises.mkdir(path.dirname(destPath), { recursive: true });
         await fs.promises.writeFile(destPath, buffer);
         newCoverPath = path.relative(libraryRoot, destPath);
@@ -2172,11 +2248,19 @@ function shouldReplaceDescription(existingDesc, candidateDesc) {
 }
 
 async function fetchJson(url) {
-  const res = await fetch(url, {
-    headers: {
-      Accept: "application/json",
-    },
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), OUTBOUND_TIMEOUT_MS);
+  let res;
+  try {
+    res = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        Accept: "application/json",
+      },
+    });
+  } finally {
+    clearTimeout(timer);
+  }
   if (!res.ok) {
     if (res.status === 404) {
       return null;
@@ -2313,13 +2397,17 @@ function resolveCoverRelativePathForBook(book, filename) {
 
 async function downloadOpenLibraryCover(coverId, bookOrId) {
   if (!coverId || !bookOrId) return null;
-  const url = `https://covers.openlibrary.org/b/id/${ coverId }-L.jpg`;
-  const res = await fetch(url);
-  if (!res.ok) {
-    return null;
-  }
-  const arrayBuffer = await res.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
+  // Only the digits OpenLibrary actually issues — anything else is both a
+  // pointless upstream request and (before safePathSegment below) a way to
+  // steer the local filename.
+  const safeCoverId = String(coverId).trim();
+  if (!/^[0-9]{1,20}$/.test(safeCoverId)) return null;
+
+  const url = `https://covers.openlibrary.org/b/id/${ encodeURIComponent(
+    safeCoverId
+  ) }-L.jpg`;
+  const buffer = await fetchImageBuffer(url);
+  if (!buffer) return null;
 
   const libraryRoot = process.env.LIBRARY_PATH || "/data/library";
 
@@ -2332,11 +2420,17 @@ async function downloadOpenLibraryCover(coverId, bookOrId) {
     }
   }
 
-  const idForName =
-    (book && book._id && String(book._id)) || String(bookOrId);
-  const filename = `${ idForName }-ol-${ coverId }.jpg`;
+  const idForName = safePathSegment(
+    (book && book._id && String(book._id)) || String(bookOrId),
+    "book"
+  );
+  // `coverId` reaches here straight off POST /api/books/:id/cover's body, so
+  // it must not be able to steer the write: `../../..` in a filename walks
+  // out of the library root once path.join normalises it.
+  const filename = `${ idForName }-ol-${ safePathSegment(safeCoverId, "cover") }.jpg`;
   const relPath = resolveCoverRelativePathForBook(book, filename);
-  const destPath = path.join(libraryRoot, relPath);
+  const destPath = resolveInLibrary(relPath, libraryRoot);
+  if (!destPath) return null;
 
   await fs.promises.mkdir(path.dirname(destPath), { recursive: true });
   await fs.promises.writeFile(destPath, buffer);
@@ -2567,8 +2661,8 @@ async function tryCalibreEnrich(book, update, updatedFields, sourceParts) {
     if (!bestFile || !bestFile.path) {
       return;
     }
-    const libraryRoot = process.env.LIBRARY_PATH || "/data/library";
-    const fullPath = path.join(libraryRoot, bestFile.path);
+    const fullPath = resolveInLibrary(bestFile.path);
+    if (!fullPath) return;
     let stats;
     try {
       stats = await fs.promises.stat(fullPath);
@@ -2668,12 +2762,15 @@ async function tryCalibreEnrich(book, update, updatedFields, sourceParts) {
 }
 
 // --- Kindle connectivity test routes (Task 0.1 — throwaway, delete after Phase 0) ---
+// Gated behind the same PIN cookie as the rest of the /kindle surface: these
+// stream an actual library file, and until 2026-09-05 they did it for anyone
+// who could reach the host. Chef's call whether they should exist at all.
 const kindleTestHeaders = (res) => {
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("X-Robots-Tag", "noindex, nofollow");
 };
 
-app.get("/kindle-test", (req, res) => {
+app.get("/kindle-test", requireKindleAuth, (req, res) => {
   kindleTestHeaders(res);
   res.setHeader("Content-Type", "text/html");
   res.send(
@@ -2689,7 +2786,6 @@ app.get("/kindle-test", (req, res) => {
 async function kindleTestServeFormat(req, res, format) {
   kindleTestHeaders(res);
   try {
-    const libraryRoot = process.env.LIBRARY_PATH || "/data/library";
     const books = await Book.find({ "files.format": new RegExp(`^${format}$`, "i") }).lean();
     let best = null;
     let bestSize = Infinity;
@@ -2707,7 +2803,13 @@ async function kindleTestServeFormat(req, res, format) {
         `<html><body><p>No test ${format.toUpperCase()} available.</p></body></html>`
       );
     }
-    const fullPath = path.join(libraryRoot, best.file.path);
+    const fullPath = resolveInLibrary(best.file.path);
+    if (!fullPath) {
+      res.setHeader("Content-Type", "text/html");
+      return res.status(404).send(
+        `<html><body><p>No test ${format.toUpperCase()} available.</p></body></html>`
+      );
+    }
     const safeTitle = (best.book.title || "book").replace(/[^a-z0-9 ]/gi, "").trim().replace(/\s+/g, "_") || "book";
     const filename = `${safeTitle}.${format}`;
     return res.download(fullPath, filename);
@@ -2718,8 +2820,12 @@ async function kindleTestServeFormat(req, res, format) {
   }
 }
 
-app.get("/kindle-test/download", (req, res) => kindleTestServeFormat(req, res, "mobi"));
-app.get("/kindle-test/epub", (req, res) => kindleTestServeFormat(req, res, "epub"));
+app.get("/kindle-test/download", requireKindleAuth, (req, res) =>
+  kindleTestServeFormat(req, res, "mobi")
+);
+app.get("/kindle-test/epub", requireKindleAuth, (req, res) =>
+  kindleTestServeFormat(req, res, "epub")
+);
 // --- End Kindle connectivity test routes ---
 
 // Device basket routes — POST /api/device-baskets (auth) and public

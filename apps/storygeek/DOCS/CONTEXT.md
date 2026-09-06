@@ -134,3 +134,133 @@ forever. Fixed the same way: `BUILD_ID`/`PRECACHE_ASSETS` placeholders in
 `vite.config.js` from the built `assets/*.js`/`*.css` list; `CACHE_NAME` is
 now `storygeek-cache-${BUILD_ID}`. Dev (`vite dev`) still serves the source
 file untouched — no build step there. See DOCS/PWA_STANDARD.md §1a.
+
+---
+
+## Going-over 2026-09-05 — the full read of `backend/` and `frontend/`
+
+A senior-inheritance read of every route, controller, service, page and test in
+both halves. Counts: backend `npm test` 65 node + 82 jest → 86 node + 88 jest;
+frontend `npx vitest run` 43 → 61; frontend `npx eslint .` 3 warnings → 3;
+backend `npx eslint .` 3 → 3; `npm run build` green; mobile harness
+(`--app storygeek --enforce-a11y --viewports phone`) 18 scenes, 0/0/0.
+
+### Fixed — frontend
+
+- **P0 story creation was dead.** `StoryList`'s New Tale dialog posted
+  `{ userId, prompt, title, genre }`, but `startStorySchema` is `.strict()` and
+  has no `userId` — every submit 400'd with "Unrecognized key(s) in object:
+  'userId'" and the player saw only "Failed to start story". The owner comes
+  from the session (`requireAuth` in `storyController`), never from the body.
+  Broke with this file's own zod pass. **`StoryList.test.jsx` was asserting the
+  bug** (`expect.objectContaining({ userId: 'user-1' })` against a mocked
+  `api.post`, which cannot see an extra key) — it now pins the body exactly.
+- **P0 the `/create` page posted to a route that does not exist.**
+  `StoryCreation.jsx` — linked from the sidebar as "Begin a Tale" — called
+  `POST /api/stories`; `routes/stories.js` only ever defined `/start`. It then
+  read `response.data._id` from a route that returns `{ storyId }`. Both fixed;
+  the body names its fields one by one, because `...formData` also trips
+  `.strict()`.
+- **P1 the backend's error envelope never reached the player.** `api.js` was a
+  bare axios instance, so every caller showed a hardcoded string or
+  `err.message` — which for an axios rejection is only ever "Request failed
+  with status code 400". A response interceptor now lifts
+  `error.error.message` (plus its `details`) onto `err.message`, and the pages
+  show it. This is why both P0s above presented as mystery outages.
+- **P1 no client timeout anywhere.** axios defaults to `0` — wait forever — so
+  a socket that hung rather than errored left "The narrator contemplates…" and
+  a disabled composer on screen with no way out but a reload. 30s floor on the
+  instance, `LONG_REQUEST_TIMEOUT_MS` (180s) at the three genuinely long calls
+  (`/continue`, bookify, epub).
+- **P1 a failed turn left a phantom bubble and ate the player's words.** The
+  backend pushes the player event into the in-memory document and only
+  `save()`s at the end of the turn, after the AI call — so on a provider error
+  nothing is persisted and the bubble on screen vanishes on the next reload.
+  The turn is taken back, the text is handed back to the composer, and
+  `refreshStory()` runs so the mirror case (a client timeout on a turn the
+  server actually completed) reconciles instead of leaving the UI one turn
+  behind the record.
+- **P1 `/char` labelled every character "(inactive)".** The controller already
+  filters to the active cast and does not send `isActive`, so the falsy branch
+  always won.
+- **P1 `/info <place>` and `/timeout` dumped raw JSON at the player.** Neither
+  had a `case`, so `handleSpecialResponse`'s `default` printed
+  `Response: {"type":"location_info",...}` into the transcript. Both handled;
+  the `default` now says something a human wrote and logs the payload instead.
+- **P1 the EPUB button had no `disabled={exporting}`** (Bookify did), so it
+  could be double-clicked into two full export runs, or started on top of a
+  Bookify — both sharing one `exporting` flag.
+- **P2** Bookify showed the *previous* export's text under the new progress
+  bar with Copy/Share/Download live; switching `storyId` on a mounted
+  `StoryPlay` left the previous tale's title, transcript and panels on screen
+  (the `if (!story)` guard passes while `story` is stale); a `/back` checkpoint
+  restore that failed to reload was stored in `loadError` and never rendered,
+  so the player kept reading the pre-restore transcript; two object URLs were
+  revoked in the same task as the click (Firefox/Safari can cancel the
+  download); a persisted `{provider, modelId}` was never revalidated against
+  the live list, so a retired model left the Settings `<Select>` out of range;
+  the first-ever SW install fired `controllerchange` and reloaded a page the
+  visitor was already reading (`index.html`, shared verbatim with bookgeek —
+  both fixed); a stale comment in `StoryList.test.jsx` claimed the effect
+  "re-fires on its own re-renders", which the `user?.id` rule already fixed.
+
+### Fixed — backend
+
+- **P1 `GET /api/stories/test-ai` and `/test-debug` were unauthenticated.**
+  Both sat above `router.use(authenticateToken)`. `/test-ai` fires a real GM
+  call at basegeek and `/test-debug` builds a full turn context and fires
+  another — free AI spend on tap for an anonymous caller. `/test-debug` also
+  answered failures with a stack trace and ran against a hardcoded story id
+  (`6892311348766ff4a2c3c6c1`), belonging to whoever owns it. Now behind auth,
+  against the caller's own newest story, with no stack in the response.
+- **P1 a director failure was a total outage — there was no fallback path.**
+  `STORYGEEK_FREE_ONLY` defaults on, so `resolveGMModel()` consulted
+  `GET /api/ai/director/models` on **every turn**. That call needs the
+  `ai:director` permission on `AI_GEEK_API_KEY` (Q1's pending restart); if the
+  key lacks it — or basegeek is briefly down, or the request times out — the
+  rejection propagated out of `generateStoryResponse` as "Failed to generate
+  story response" and every turn of every story failed. `getFreeProviderModels`
+  now distinguishes `[]` (an answer — keep the last-resort walk) from `null`
+  (an outage — fall back to the pinned GM model, which is an operator choice
+  and is the free model in the deployed config), negative-caches the failure
+  for 60s so a broken director isn't re-dialled per turn, and prefers a stale
+  cached list over nothing. It deliberately does **not** fall back to the
+  caller's explicit pick: free-only exists to stop unintended spend, and with
+  the list unavailable there is no way to tell whether their pick is free.
+- **P1 `PUT /api/characters/story/:storyId/character/:characterName` destroyed
+  the character.** It merged with `{ ...story.characters[idx], ...req.body }`,
+  and a Mongoose subdocument's own enumerable properties are its internals
+  (`$__`, `_doc`, `__parentArray`) — the schema fields are prototype getters
+  over `_doc` — so the cast on assignment kept nothing but what the body
+  supplied. A partial PUT reset the character to schema defaults and then 500'd
+  on `name`/`description` being required. New `utils/mergeSubdocument.js`;
+  `charactersValidation.test.js`'s doubles are plain objects, which is exactly
+  why that suite stayed green through it, so the new test runs against the real
+  embedded `characterSchema`.
+- **P2** `getStorySummary` spread `undefined` (a 500) if a summary carried a
+  keyword category the fixed shape doesn't know, and its comparator returned
+  `NaN` for a detail with no `relevance`.
+
+### Left in place, with reasons
+
+- **`bookify` is unbounded work behind a synchronous request.** One AI call per
+  six events, sequentially, at up to 45s each — a long story is minutes of held
+  handler, and `POST .../epub` redoes the whole thing rather than reusing a
+  Bookify the player just ran. Bounding it means either truncating the book or
+  making it a job; both are design calls, not fixes. Reported.
+- **`src/graphql/` is entirely dead** — nothing imports `GET_STORIES`/
+  `GET_STORY`/the mutations, this backend has no GraphQL server (`app.js` 404s
+  `/graphql`), and `GET_STORY` describes a shape the REST model no longer has.
+  It still ships `@apollo/client` + `graphql` in the bundle. Deleting a module
+  and its provider is Chef's call (Q38-class); reported.
+- **`vite.config.js:105` defines `VITE_API_URL`, which nothing in `src/` reads**
+  (`api.js` hardcodes `/api`). Dead define that reads like configuration.
+- **Two concurrent `/continue` calls on one story last-write-wins the whole
+  document.** The composer guards double-submit and two tabs is not a real
+  usage pattern here; a proper fix is optimistic concurrency on `turnNumber`,
+  which is a design change.
+- **`api.js` sends no `Authorization` header**, so `userToken` is `undefined`
+  in every controller and per-player free-tier quota attribution
+  (`aiService.js`'s `userIdFromToken`) is always null. Cookie auth is clearly
+  the intended design; whether losing the attribution is intended is a
+  question, not a bug — reported.

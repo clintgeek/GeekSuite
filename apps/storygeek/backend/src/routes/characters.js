@@ -3,6 +3,7 @@ import Story from '../models/Story.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { requireStoryOwner } from '../middleware/storyOwner.js';
 import { validate } from '../validation/validate.js';
+import { mergeSubdocument } from '../utils/mergeSubdocument.js';
 import {
   storyIdParamsSchema,
   characterNameParamsSchema,
@@ -66,7 +67,12 @@ router.put('/story/:storyId/character/:characterName', validate({ params: charac
     if (!story) return res.status(404).json({ error: 'Story not found' });
     const idx = story.characters.findIndex(char => char.name.toLowerCase() === req.params.characterName.toLowerCase());
     if (idx === -1) return res.status(404).json({ error: 'Character not found' });
-    story.characters[idx] = { ...story.characters[idx], ...req.body };
+    // NOT `{ ...story.characters[idx], ...req.body }` — see
+    // utils/mergeSubdocument.js: spreading a Mongoose subdocument yields its
+    // internals, not its fields, so a partial PUT used to wipe the character
+    // down to schema defaults and then 500 on `name`/`description` being
+    // required.
+    story.characters[idx] = mergeSubdocument(story.characters[idx], req.body);
     await story.save();
     res.json(story.characters[idx]);
   } catch (error) {

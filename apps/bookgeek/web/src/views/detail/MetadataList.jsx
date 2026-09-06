@@ -8,7 +8,7 @@
 import React from "react";
 import { Box, Typography } from "@mui/material";
 import { GeekChip } from "@geeksuite/ui";
-import { formatBytes, formatDate } from "./bookFacts";
+import { formatBytes, formatCalendarDate, formatDate } from "./bookFacts";
 
 function DetailRow({ label, value }) {
   return (
@@ -42,7 +42,10 @@ export default function MetadataList({ book }) {
 
   const rows = [
     ["Publisher", book.publisher || null],
-    ["Published", formatDate(book.publishedDate)],
+    // A calendar day stored at UTC midnight, not an instant — read in UTC
+    // or it renders a day early west of UTC. `Added`/`Finished` below are
+    // genuine instants and stay local.
+    ["Published", formatCalendarDate(book.publishedDate)],
     ["ISBN", book.isbn || null],
     ["ISBN13", book.isbn13 || null],
     ["Language", book.language || null],

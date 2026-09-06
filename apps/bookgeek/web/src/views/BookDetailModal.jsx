@@ -103,6 +103,8 @@ export default function BookDetailModal({
   sendToKindleError,
   sendToKindleLoading,
   sendToKindleStatus,
+  shelfError,
+  downloadError,
   setCoverSearchQuery,
   setDeleteConfirmOpen,
   setDeleteError,
@@ -139,6 +141,18 @@ export default function BookDetailModal({
   useEffect(() => {
     if (enrichError) notify(enrichError, { tone: "error" });
   }, [enrichError, notify]);
+  // Same shape: a failed shelf move used to be a console.error and nothing
+  // the user could see. App.jsx clears it before each attempt, so a fresh
+  // value is always a real transition.
+  useEffect(() => {
+    if (shelfError) notify(shelfError, { tone: "error" });
+  }, [shelfError, notify]);
+  // A failed download (usually a failed EPUB→MOBI convert) used to be written
+  // into the library-load error, which LibraryView renders as a full-page
+  // "Could not load your library" over the whole grid.
+  useEffect(() => {
+    if (downloadError) notify(downloadError, { tone: "error" });
+  }, [downloadError, notify]);
 
   if (!selectedBook) return null;
 

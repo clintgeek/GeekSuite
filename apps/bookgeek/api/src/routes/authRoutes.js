@@ -174,8 +174,6 @@ router.post("/refresh", async (req, res) => {
 
     forwardSetCookieHeaders(res, response.headers);
 
-    const { token: newToken, refreshToken: newRefreshToken, user } = response.data;
-
     return res.status(response.status).json(response.data);
   } catch (error) {
     const status = error.response?.status;
@@ -225,6 +223,13 @@ router.get("/me", async (req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
+    const status = error.response?.status;
+    if (status === 401 || status === 403) {
+      return res.status(status).json({
+        success: false,
+        error: { message: "Authentication required" },
+      });
+    }
     return res.status(500).json({
       success: false,
       error: { message: "Failed to get user profile" },

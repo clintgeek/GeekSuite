@@ -15,7 +15,7 @@ import { GeekErrorState, GeekSheet, useToast } from '@geeksuite/ui';
 import CodexDialog from '../components/primitives/CodexDialog';
 import Narration from '../components/Narration';
 import useAISettingsStore from '../store/aiSettingsStore';
-import api from '../api';
+import api, { LONG_REQUEST_TIMEOUT_MS, messageFromBlobError } from '../api';
 import ScenePanel from '../components/panels/ScenePanel';
 import CharacterPanel from '../components/panels/CharacterPanel';
 import PartyPanel from '../components/panels/PartyPanel';
@@ -229,6 +229,18 @@ function StoryPlay() {
   // The real AuthProvider memoises its context value so the reference is
   // stable, which is why production never span — but the loop is one identity
   // change away, and it pinned vitest/jsdom solid (see DOCS/CONTEXT.md).
+  // Switching stories on a mounted StoryPlay (a hand-edited URL, a
+  // back/forward between two /play entries) used to leave the previous
+  // tale's title, transcript and panels on screen until the new fetch
+  // landed — the `if (!story)` guard below passes while `story` is stale.
+  useEffect(() => {
+    setStory(null);
+    setMessages([]);
+    setExportData(null);
+    setExportError('');
+    setLoadError('');
+  }, [storyId]);
+
   useEffect(() => {
     if (user?.id) loadStory();
   }, [storyId, user?.id]);
@@ -242,8 +254,13 @@ function StoryPlay() {
       setStory(storyData);
       setMessages(storyData.events.map(eventToMessage));
     } catch (err) {
-      setLoadError('Failed to load story');
+      setLoadError(err.message || 'Failed to load story');
       console.error('Error loading story:', err);
+      // A reload triggered mid-play (a /back checkpoint restore) renders no
+      // loadError — the `if (!story)` branch that shows it is long past — so
+      // the player would keep reading the pre-restore transcript as if the
+      // restore had done nothing. Say so where they are looking.
+      if (story) notify('Could not reload the story — refresh the page', { tone: 'error' });
     }
   };
 
@@ -261,9 +278,13 @@ function StoryPlay() {
 
   const handleBookify = async () => {
     if (!storyId) return;
-    setExporting(true); setExportError(''); setExportOpen(true);
+    // Clear the last export first: without this the dialog shows the previous
+    // story text under the new progress bar, with Copy/Share/Download live.
+    setExporting(true); setExportError(''); setExportData(null); setExportOpen(true);
     try {
-      const res = await api.post(`/export/stories/${storyId}/bookify`);
+      const res = await api.post(`/export/stories/${storyId}/bookify`, null, {
+        timeout: LONG_REQUEST_TIMEOUT_MS,
+      });
       if (!res.data.success) throw new Error(res.data.error?.message || 'Bookify failed');
       setExportData(res.data.data);
     } catch (e) { setExportError(e.message || 'Bookify failed'); }
@@ -276,7 +297,9 @@ function StoryPlay() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url; a.download = `${(exportData.title || 'story').replace(/[^a-z0-9\-_]+/gi, '_')}.txt`;
-    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    document.body.appendChild(a); a.click(); a.remove();
+    // Revoking in the same task can cancel the download in Firefox/Safari.
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   const handleCopyStory = async () => {
@@ -314,7 +337,9 @@ function StoryPlay() {
         ...(selectedProvider && selectedModelId
           ? { provider: selectedProvider, model: selectedModelId }
           : {})
-      });
+      // A turn legitimately chains two 45s GM calls plus a 45s extraction, so
+      // this one needs far more than the client default.
+      }, { timeout: LONG_REQUEST_TIMEOUT_MS });
       const data = response.data;
 
       if (data.type) { handleSpecialResponse(data); return; }
@@ -328,8 +353,22 @@ function StoryPlay() {
       // turn's changes (new NPCs, location, threads, facts, scene, …).
       refreshStory();
     } catch (err) {
-      notify('Failed to continue story', { tone: 'error' });
+      // The backend only persists the player's event alongside the AI's, at
+      // the end of the turn — so on a failure nothing was saved and the
+      // bubble on screen is a phantom that vanishes on the next reload. Take
+      // it back and hand the player their words instead of making them retype.
+      setMessages(prev => (
+        prev.length > 0 && prev[prev.length - 1].type === 'user'
+          ? prev.slice(0, -1)
+          : prev
+      ));
+      setUserInput((current) => (current ? current : input));
+      notify(err.message || 'Failed to continue story', { tone: 'error' });
       console.error('Error continuing story:', err);
+      // The mirror case: a client timeout on a turn the server actually
+      // completed. Re-reading the story reconciles the transcript instead of
+      // leaving the UI one turn behind the record.
+      refreshStory();
     } finally { setLoading(false); }
   };
 
@@ -342,7 +381,9 @@ function StoryPlay() {
         setMessages(prev => [...prev, { type: 'canon', canon: data, timestamp: new Date() }]);
         break;
       case 'character_list':
-        systemMsg(`Characters:\n${data.characters.map(c => `  ${c.name} — ${c.description}${c.isActive ? '' : ' (inactive)'}`).join('\n')}`);
+        // The controller already filters to the active cast and does not send
+        // `isActive`, so the old ternary labelled every single one "(inactive)".
+        systemMsg(`Characters:\n${data.characters.map(c => `  ${c.name} — ${c.description}`).join('\n')}`);
         break;
       case 'character_info':
         systemMsg(`${data.character.name}\n${data.character.description}\n${data.character.personality ? `Personality: ${data.character.personality}` : ''}`);
@@ -362,11 +403,20 @@ function StoryPlay() {
       case 'story_ended':
         systemMsg('The tale has reached its end.');
         break;
+      case 'location_info': {
+        const loc = data.location || {};
+        systemMsg([loc.name, loc.description, loc.atmosphere].filter(Boolean).join('\n'));
+        break;
+      }
+      case 'timeout':
       case 'error':
         systemMsg(data.message);
         break;
       default:
-        systemMsg(`Response: ${JSON.stringify(data)}`);
+        // Never dump a raw payload into the transcript: `/info <place>` and
+        // `/timeout` both used to land here and print their JSON at the player.
+        console.warn('Unhandled special response type:', data.type, data);
+        systemMsg('The narrator did not understand that.');
     }
   };
 
@@ -590,16 +640,28 @@ function StoryPlay() {
             <Button onClick={handleBookify} disabled={exporting} startIcon={<ExportIcon sx={{ fontSize: '16px !important' }} />}>
               {exporting ? '...' : 'Bookify'}
             </Button>
-            <Button onClick={async () => {
+            {/* `disabled={exporting}` was missing here but present on Bookify,
+                so EPUB could be double-clicked into two full export runs — and
+                started while a Bookify was still in flight, with both sharing
+                `exporting`. */}
+            <Button disabled={exporting} onClick={async () => {
               if (!storyId) return;
               setExporting(true);
               try {
-                const res = await api.post(`/export/stories/${storyId}/epub`, null, { responseType: 'blob' });
+                const res = await api.post(`/export/stories/${storyId}/epub`, null, {
+                  responseType: 'blob',
+                  timeout: LONG_REQUEST_TIMEOUT_MS,
+                });
                 const url = URL.createObjectURL(res.data);
                 const a = document.createElement('a');
                 a.href = url; a.download = `${(story.title || 'story').replace(/[^a-z0-9\-_]+/gi, '_')}.epub`;
-                document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-              } catch (e) { notify(e.message || 'EPUB export failed', { tone: 'error' }); }
+                document.body.appendChild(a); a.click(); a.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+              } catch (e) {
+                // A blob responseType means the error body is a Blob, so the
+                // shared interceptor can't read the envelope — unwrap it here.
+                notify(await messageFromBlobError(e, 'EPUB export failed'), { tone: 'error' });
+              }
               finally { setExporting(false); }
             }}>EPUB</Button>
           </ButtonGroup>

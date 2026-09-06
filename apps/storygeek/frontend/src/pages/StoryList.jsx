@@ -74,7 +74,7 @@ function StoryList() {
       const response = await api.get(`/stories/user/${user.id}`);
       setStories(response.data);
     } catch (err) {
-      setLoadError('Failed to load stories');
+      setLoadError(err.message || 'Failed to load stories');
       console.error('Error loading stories:', err);
     } finally {
       setLoading(false);
@@ -89,13 +89,16 @@ function StoryList() {
     if (!user || !user.id) { notify('Authentication required', { tone: 'error' }); return; }
     setCreatingStory(true);
     try {
+      // No `userId`: `startStorySchema` is `.strict()` and the controller
+      // takes the owner from the session (`requireAuth`), so sending it made
+      // every single create 400 with "Unrecognized key(s) ... 'userId'".
       const response = await api.post('/stories/start', {
-        userId: user.id, prompt: startForm.prompt,
+        prompt: startForm.prompt,
         title: startForm.title || 'Untitled Story', genre: startForm.genre,
       });
       navigate(`/play/${response.data.storyId}`);
     } catch (err) {
-      notify('Failed to start story', { tone: 'error' });
+      notify(err.message || 'Failed to start story', { tone: 'error' });
       console.error('Error starting story:', err);
     } finally {
       setCreatingStory(false);
@@ -110,7 +113,7 @@ function StoryList() {
       await loadStories();
       setStoryToDelete(null);
     } catch (err) {
-      notify('Failed to delete story', { tone: 'error' });
+      notify(err.message || 'Failed to delete story', { tone: 'error' });
     } finally {
       setDeletingStory(false);
     }

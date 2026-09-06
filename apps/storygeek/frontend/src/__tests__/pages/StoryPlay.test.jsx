@@ -1,13 +1,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import { ThemeProvider } from '@mui/material/styles';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { lightTheme } from '../testUtils';
 import api from '../../api';
 import StoryPlay from '../../pages/StoryPlay';
+import { GeekToastProvider } from '@geeksuite/ui';
 
+// The named exports matter: StoryPlay imports `LONG_REQUEST_TIMEOUT_MS` and
+// `messageFromBlobError` alongside the default, and a vitest ESM mock that
+// omits a named export the module under test imports fails at import time.
 vi.mock('../../api', () => ({
   default: { get: vi.fn(), post: vi.fn(), delete: vi.fn() },
+  LONG_REQUEST_TIMEOUT_MS: 180000,
+  messageFromBlobError: vi.fn(async (err, fallback) => err?.message || fallback),
 }));
 
 // One frozen user object, returned by reference. A mock that builds a fresh
@@ -64,9 +70,14 @@ function renderStoryPlay() {
   return render(
     <ThemeProvider theme={lightTheme}>
       <MemoryRouter initialEntries={['/play/story-1']}>
-        <Routes>
-          <Route path="/play/:storyId" element={<StoryPlay />} />
-        </Routes>
+        {/* The real toast provider: a failed turn now reports through
+            `useToast()`, and without a provider the fallback is a no-op —
+            a test could not tell a surfaced error from a swallowed one. */}
+        <GeekToastProvider>
+          <Routes>
+            <Route path="/play/:storyId" element={<StoryPlay />} />
+          </Routes>
+        </GeekToastProvider>
       </MemoryRouter>
     </ThemeProvider>
   );
@@ -104,9 +115,13 @@ describe('StoryPlay composer', () => {
     // state update, so assert directly rather than through waitFor.
     expect(input).toBeDisabled();
     expect(sendButton).toBeDisabled();
+    // The third argument is the per-call timeout: a turn chains two 45s GM
+    // calls plus extraction, so it needs far more than the client default —
+    // and the client default is no longer axios's "wait forever".
     expect(api.post).toHaveBeenCalledWith(
       '/stories/story-1/continue',
-      expect.objectContaining({ userInput: 'I step into the mist.' })
+      expect.objectContaining({ userInput: 'I step into the mist.' }),
+      { timeout: 180000 }
     );
 
     resolveContinue({ data: { aiResponse: 'The mist parts before you.' } });
@@ -183,7 +198,12 @@ describe('StoryPlay Bookify', () => {
     fireEvent.click(screen.getByRole('button', { name: /bookify/i }));
 
     expect(await screen.findByText('Once, at a foggy crossroads...')).toBeInTheDocument();
-    expect(api.post).toHaveBeenCalledWith('/export/stories/story-1/bookify');
+    // Bookify is one AI call per six events, so it carries the long timeout.
+    expect(api.post).toHaveBeenCalledWith(
+      '/export/stories/story-1/bookify',
+      null,
+      { timeout: 180000 }
+    );
 
     fireEvent.click(screen.getByRole('button', { name: /copy/i }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith('Once, at a foggy crossroads...'));
@@ -211,5 +231,89 @@ describe('StoryPlay Bookify', () => {
     await screen.findByText('text');
 
     expect(screen.queryByRole('button', { name: /^share$/i })).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Going-over 2026-09-05. A failed `/continue` used to leave a phantom player
+ * bubble in the transcript and throw the typed text away.
+ *
+ * The backend pushes the player event into the in-memory document and only
+ * `save()`s at the very end of the turn, after the AI call — so on a provider
+ * error nothing is persisted and the bubble the player is looking at vanishes
+ * on the next reload. The mirror case is worse: on a client timeout the
+ * server can complete and save while the UI says "Failed to continue story",
+ * after which the transcript is silently one turn behind the record and the
+ * player retypes into a duplicate turn.
+ */
+describe('StoryPlay — a failed turn', () => {
+  beforeEach(() => {
+    api.post.mockRejectedValue(
+      Object.assign(new Error('The narrator is unavailable right now.'), {
+        response: { status: 500 },
+      })
+    );
+  });
+
+  it('takes back the phantom player bubble', async () => {
+    renderStoryPlay();
+    const input = await screen.findByPlaceholderText('What do you do?');
+
+    fireEvent.change(input, { target: { value: 'I step into the mist' } });
+    fireEvent.submit(input.closest('form'));
+
+    await waitFor(() => expect(api.post).toHaveBeenCalled());
+    // Scoped to the transcript: the composer legitimately gets the text back
+    // (the next test), so an unscoped query would find it in the textarea.
+    await waitFor(() =>
+      expect(
+        within(screen.getByRole('log')).queryByText('I step into the mist')
+      ).not.toBeInTheDocument()
+    );
+  });
+
+  it('hands the player their words back instead of making them retype', async () => {
+    renderStoryPlay();
+    const input = await screen.findByPlaceholderText('What do you do?');
+
+    fireEvent.change(input, { target: { value: 'I step into the mist' } });
+    fireEvent.submit(input.closest('form'));
+
+    await waitFor(() => expect(input).toHaveValue('I step into the mist'));
+  });
+
+  it("shows the server's own message, not a generic failure", async () => {
+    renderStoryPlay();
+    const input = await screen.findByPlaceholderText('What do you do?');
+
+    fireEvent.change(input, { target: { value: 'I step into the mist' } });
+    fireEvent.submit(input.closest('form'));
+
+    expect(
+      await screen.findByText('The narrator is unavailable right now.')
+    ).toBeInTheDocument();
+  });
+
+  it('re-reads the story so a turn the server actually completed is not lost', async () => {
+    renderStoryPlay();
+    const input = await screen.findByPlaceholderText('What do you do?');
+    const loadsBefore = api.get.mock.calls.length;
+
+    fireEvent.change(input, { target: { value: 'I step into the mist' } });
+    fireEvent.submit(input.closest('form'));
+
+    await waitFor(() =>
+      expect(api.get.mock.calls.length).toBeGreaterThan(loadsBefore)
+    );
+  });
+
+  it('re-enables the composer rather than leaving it stuck', async () => {
+    renderStoryPlay();
+    const input = await screen.findByPlaceholderText('What do you do?');
+
+    fireEvent.change(input, { target: { value: 'I step into the mist' } });
+    fireEvent.submit(input.closest('form'));
+
+    await waitFor(() => expect(input).not.toBeDisabled());
   });
 });

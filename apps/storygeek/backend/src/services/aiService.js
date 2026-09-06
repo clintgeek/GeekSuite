@@ -80,6 +80,10 @@ class AIService {
 
     // Cache the free-model list briefly so each turn doesn't re-fetch it.
     this._freeListCache = { list: null, fetchedAt: 0 };
+    // Negative cache: when the director call fails (service key minted
+    // without `ai:director`, basegeek down, network blip) we must not retry
+    // it on every single turn. Short, so recovery is quick.
+    this._freeListFailedAt = 0;
   }
 
   getGMConfig() {
@@ -154,6 +158,20 @@ class AIService {
 
     // Free-only mode: verify choices against the free list, deterministically.
     const freeList = await this.getFreeProviderModels(userToken);
+
+    // `null` means "the free list is unavailable", not "nothing is free".
+    // Before this branch existed, a director call that 403'd or timed out
+    // propagated out of every turn as "Failed to generate story response" —
+    // one missing permission on the service key took the whole game down.
+    // The pinned GM model is an operator choice and is the free model in the
+    // deployed config, so it is the right thing to fall back to; an explicit
+    // user pick is NOT, because free-only exists to stop unintended spend
+    // and we can no longer tell whether their pick is free.
+    if (freeList === null) {
+      console.warn('Free-model list unavailable — falling back to the pinned GM model');
+      return { provider: this.gmProvider, model: this.gmModel };
+    }
+
     const isFree = ({ provider, model }) =>
       freeList.some(f => f.provider === provider && f.model === model);
 
@@ -421,13 +439,40 @@ Rewrite your response as one final narration that keeps the scene, tone, and det
     return response.data.data;
   }
 
+  /**
+   * The free-tier provider/model list from aiGeek's director.
+   *
+   * Returns an array on success (possibly empty — genuinely nothing free),
+   * or **null** when the list could not be fetched at all. The distinction
+   * matters: `[]` is an answer, `null` is an outage, and `resolveGMModel`
+   * treats them differently. This never throws — a director failure must not
+   * be able to end a turn.
+   */
   async getFreeProviderModels(userToken = null) {
     // 5-minute cache — the free list doesn't change turn to turn.
     const now = Date.now();
     if (this._freeListCache.list && now - this._freeListCache.fetchedAt < 300000) {
       return this._freeListCache.list;
     }
-    const data = await this.getDirectorModels(userToken);
+    // Don't re-attempt a known-failing director call on every turn.
+    if (this._freeListFailedAt && now - this._freeListFailedAt < 60000) {
+      return this._freeListCache.list || null;
+    }
+
+    let data;
+    try {
+      data = await this.getDirectorModels(userToken);
+    } catch (error) {
+      this._freeListFailedAt = now;
+      console.warn(
+        'Free-model list fetch failed (needs the ai:director permission on AI_GEEK_API_KEY):',
+        error.message
+      );
+      // A stale list still beats no list — the models it names were free
+      // five minutes ago and almost certainly still are.
+      return this._freeListCache.list || null;
+    }
+
     const result = [];
     const providers = data.providers || {};
     for (const [providerName, info] of Object.entries(providers)) {
@@ -436,6 +481,7 @@ Rewrite your response as one final narration that keeps the scene, tone, and det
         if (model.freeTier?.isFree) result.push({ provider: providerName, model: model.id });
       }
     }
+    this._freeListFailedAt = 0;
     this._freeListCache = { list: result, fetchedAt: now };
     return result;
   }

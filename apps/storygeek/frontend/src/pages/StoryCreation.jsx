@@ -56,12 +56,20 @@ function StoryCreation() {
     if (!user || !user.id) { setError('Authentication required'); return; }
     setLoading(true); setError('');
     try {
-      const response = await api.post('/stories', {
-        ...formData, userId: user.id,
+      // `POST /api/stories` does not exist — routes/stories.js only ever
+      // defined `/start`. This page 404'd on every submit, then read `_id`
+      // off a response shape (`{ storyId }`) that route never returned. And
+      // `...formData` plus `userId` both trip `startStorySchema`'s `.strict()`,
+      // so the fields have to be named one by one.
+      const response = await api.post('/stories/start', {
+        title: formData.title,
+        genre: formData.genre,
+        prompt: formData.prompt,
+        ...(formData.description ? { description: formData.description } : {}),
         ...(selectedProvider && selectedModelId ? { provider: selectedProvider, model: selectedModelId } : {})
       });
-      navigate(`/play/${response.data._id}`);
-    } catch (err) { setError(err.message); }
+      navigate(`/play/${response.data.storyId}`);
+    } catch (err) { setError(err.message || 'Failed to start story'); }
     finally { setLoading(false); }
   };
 

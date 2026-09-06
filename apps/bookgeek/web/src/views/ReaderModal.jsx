@@ -190,6 +190,13 @@ export default function ReaderModal({
       }, RELOCATE_POLL_MS);
       giveUpId = setTimeout(() => {
         if (!cancelled && !readerRenditionRef.current) {
+          // Giving up has to stop the poll too: without this the 250ms
+          // interval kept spinning for as long as an unopenable EPUB stayed
+          // on screen.
+          if (pollId) {
+            clearInterval(pollId);
+            pollId = null;
+          }
           setProgressAvailable(false);
         }
       }, RELOCATE_POLL_TIMEOUT_MS);

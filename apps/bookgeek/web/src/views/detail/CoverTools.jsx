@@ -9,6 +9,7 @@ import React from "react";
 import { Box, Button, CircularProgress, TextField, Typography } from "@mui/material";
 import { GeekSheet } from "@geeksuite/ui";
 import { alpha } from "@mui/material/styles";
+import { coverCandidateKey } from "./bookFacts";
 
 export default function CoverTools({
   open,
@@ -98,10 +99,11 @@ export default function CoverTools({
               }}
             >
               {candidates.map((candidate) => {
-                const key =
-                  typeof candidate.id === "string"
-                    ? candidate.id
-                    : `cover-${String(candidate.coverId ?? "")}`;
+                // Shared with App.jsx's `coverApplyLoadingId`: computing it
+                // twice meant a Google Books candidate keyed as the constant
+                // "cover-" here — a duplicate React key, and a spinner that
+                // never lit.
+                const key = coverCandidateKey(candidate);
                 const isApplying = coverApplyLoadingId === key;
                 return (
                   <Box

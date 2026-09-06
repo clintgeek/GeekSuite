@@ -206,4 +206,33 @@ describe('BookDetailModal', () => {
     await user.click(screen.getByRole('button', { name: 'Delete' }));
     expect(handleDeleteSelectedBook).toHaveBeenCalledTimes(1);
   });
+
+  /**
+   * Going-over 2026-09-05. Two failures used to be invisible:
+   *  - a failed shelf move was `console.error` and nothing else, so the sheet
+   *    closed, the shelf did not move, and the user was told nothing;
+   *  - a failed download wrote into the *library-load* error, which
+   *    LibraryView renders as a full-page "Could not load your library" that
+   *    replaces the whole grid.
+   * Both now arrive as toasts, following the `enrichError` pattern above.
+   */
+  it('toasts a failed shelf move instead of swallowing it', async () => {
+    renderWithProviders(
+      <BookDetailModal {...baseProps({ shelfError: 'Failed to update shelf' })} />
+    );
+    expect(await screen.findByText('Failed to update shelf')).toBeInTheDocument();
+  });
+
+  it('toasts a failed download instead of blanking the library', async () => {
+    renderWithProviders(
+      <BookDetailModal {...baseProps({ downloadError: 'Failed to convert file' })} />
+    );
+    expect(await screen.findByText('Failed to convert file')).toBeInTheDocument();
+  });
+
+  it('shows no toast when neither error is set', () => {
+    renderWithProviders(<BookDetailModal {...baseProps()} />);
+    expect(screen.queryByText('Failed to update shelf')).not.toBeInTheDocument();
+    expect(screen.queryByText('Failed to convert file')).not.toBeInTheDocument();
+  });
 });

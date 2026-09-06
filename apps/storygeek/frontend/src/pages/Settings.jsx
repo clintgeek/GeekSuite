@@ -36,7 +36,21 @@ function Settings() {
         mapped[prov] = (info.models || []).map(m => ({ id: m.id, name: m.name, isFree: !!m.freeTier?.isFree }));
       }
       setModelsByProvider(mapped);
-      if (!selectedProvider && enabledProviders.length > 0) {
+      // A persisted pick was only ever *defaulted*, never re-checked. When
+      // basegeek retires a model the stored id survives forever: the Model
+      // <Select> renders an out-of-range value (blank, plus a MUI warning)
+      // and every turn ships a provider/model that no longer exists. Drop it
+      // and let the defaulting below pick again on the next pass — which is
+      // why the existing one-extra-pass guard still terminates.
+      // Read through the store rather than the closure: `load` is only
+      // rebuilt when `selectedProvider` changes, so a closed-over
+      // `selectedModelId` goes stale the moment the user changes only the
+      // model. Adding it to the deps instead would re-run the whole load on
+      // every manual model pick.
+      const storedModelId = useAISettingsStore.getState().selectedModelId;
+      if (selectedProvider && !mapped[selectedProvider]?.some(m => m.id === storedModelId)) {
+        setSelection(null, null);
+      } else if (!selectedProvider && enabledProviders.length > 0) {
         // Default to the backend's pinned GM model — narrative consistency
         // beats whatever model happens to top the list.
         const gm = gmConfigRes?.data;

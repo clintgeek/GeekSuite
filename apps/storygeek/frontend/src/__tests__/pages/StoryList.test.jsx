@@ -27,6 +27,8 @@ vi.mock('@geeksuite/ui', async (importOriginal) => {
   };
 });
 
+const { GeekToastProvider } = await import('@geeksuite/ui');
+
 const storyFixtures = [
   {
     _id: 'story-1',
@@ -52,7 +54,13 @@ function renderStoryList() {
   return render(
     <ThemeProvider theme={lightTheme}>
       <MemoryRouter>
-        <StoryList />
+        {/* The real provider, not the no-op fallback: `handleStartStory` and
+            `handleDeleteStory` report failures through `useToast()`, so
+            without it a test cannot tell a surfaced error from a swallowed
+            one. Layout.jsx wraps the page the same way in the real app. */}
+        <GeekToastProvider>
+          <StoryList />
+        </GeekToastProvider>
       </MemoryRouter>
     </ThemeProvider>
   );
@@ -99,15 +107,43 @@ describe('StoryList', () => {
     expect(beginButton).toBeEnabled();
     await user.click(beginButton);
 
-    await waitFor(() =>
-      expect(api.post).toHaveBeenCalledWith(
-        '/stories/start',
-        expect.objectContaining({
-          userId: 'user-1',
-          prompt: 'A wanderer arrives at a crossroads.',
-        })
-      )
-    );
+    // Going-over 2026-09-05: this used to assert `userId: 'user-1'` was in the
+    // body — which is exactly what broke story creation. `startStorySchema` is
+    // `.strict()` and has no `userId`, so every submit 400'd with
+    // "Unrecognized key(s) in object: 'userId'" and the user saw only
+    // "Failed to start story". The owner comes from the session
+    // (`requireAuth` in storyController), never from the body. An
+    // `objectContaining` assertion could not see the extra key, so the shape
+    // is pinned exactly here.
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+    const [path, body] = api.post.mock.calls[0];
+    expect(path).toBe('/stories/start');
+    expect(body).toEqual({
+      prompt: 'A wanderer arrives at a crossroads.',
+      title: 'Untitled Story',
+      genre: 'Fantasy',
+    });
+    expect(Object.keys(body)).not.toContain('userId');
+  });
+
+  it('surfaces the server message rather than a generic failure', async () => {
+    const user = userEvent.setup();
+    const err = new Error("Validation failed — (root): Unrecognized key(s) in object: 'userId'");
+    api.post.mockRejectedValue(err);
+    renderStoryList();
+    await screen.findByText('The Fog-Bound Crossroads');
+
+    await user.click(screen.getByRole('button', { name: /new tale/i }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText(/story prompt/i), {
+      target: { value: 'A wanderer arrives at a crossroads.' },
+    });
+    await user.click(within(dialog).getByRole('button', { name: /begin/i }));
+
+    // api.js's response interceptor lifts the backend's envelope onto
+    // `err.message`; the page must show it instead of swallowing it, or a
+    // rejected create is a mystery to whoever hits it.
+    expect(await screen.findByText(/Unrecognized key/)).toBeInTheDocument();
   });
 
   it('keeps Begin disabled until a prompt is entered', async () => {
@@ -160,11 +196,11 @@ describe('StoryList', () => {
 
   it('shows GeekErrorState with a working retry when the load fails', async () => {
     const user = userEvent.setup();
-    // Persistent (not `-Once`): the test's `useAuth` mock returns a fresh
-    // `user` object every render, so StoryList's `[user]` effect re-fires on
-    // its own re-renders too — every one of those calls must fail the same
-    // way, or the retry assertion below would race a call this test didn't
-    // trigger itself.
+    // Persistent (not `-Once`): the retry below fires a second load, and any
+    // future refactor that adds another is covered too. (The comment here used
+    // to claim StoryList's effect "re-fires on its own re-renders" — it does
+    // not: it is keyed on `user?.id`, a string, per the repo's effects-depend-
+    // on-`user?.id` rule. The mock above also returns one frozen object.)
     api.get.mockRejectedValue(new Error('network down'));
     renderStoryList();
 

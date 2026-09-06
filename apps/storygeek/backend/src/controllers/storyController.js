@@ -387,15 +387,26 @@ class StoryController {
 
   async testEndpoint(req, res) {
     try {
-      const testStory = await Story.findById('6892311348766ff4a2c3c6c1');
+      const authenticatedUserId = requireAuth(req, res);
+      if (!authenticatedUserId) return;
+
+      // Was hardcoded to one long-dead story id; a missing document then blew
+      // up inside buildTurnContext and answered with a stack trace. Now it
+      // runs against the caller's own newest story, and says so when they
+      // have none instead of pretending the pipeline is broken.
+      const testStory = await Story.findOne({ userId: authenticatedUserId }).sort({ updatedAt: -1 });
+      if (!testStory) {
+        return res.status(404).json({ status: 'No story to test against', storyFound: false });
+      }
+
       const { prompt } = await contextService.buildTurnContext(testStory, 'test');
       const authHeader = req.headers['authorization'];
       const userToken = authHeader && authHeader.split(' ')[1];
       const aiResponse = await aiService.generateStoryResponse(testStory, 'test', null, userToken, {}, prompt);
-      res.json({ status: 'All tests passed', storyFound: !!testStory, contextLength: prompt.length, aiResponseLength: aiResponse.content.length });
+      res.json({ status: 'All tests passed', storyFound: true, contextLength: prompt.length, aiResponseLength: aiResponse.content.length });
     } catch (error) {
       console.error('Test endpoint error:', error);
-      res.status(500).json({ error: 'Test failed', message: error.message, stack: error.stack });
+      res.status(500).json({ error: 'Test failed', message: error.message });
     }
   }
 
@@ -465,17 +476,22 @@ class StoryController {
       const story = await Story.findById(req.params.storyId);
       if (!story) return res.status(404).json({ error: 'Story not found' });
       if (!isStoryOwner(story, authenticatedUserId)) return res.status(403).json({ error: 'Not authorized to view this story' });
-      const allSummaries = story.storySummaries.map(s => s.summary).join('\n\n');
+      const summaries = story.storySummaries || [];
+      const allSummaries = summaries.map(s => s.summary).filter(Boolean).join('\n\n');
       const allKeywords = { characters: [], locations: [], items: [], concepts: [], events: [] };
       const allImportantDetails = [];
-      for (const summary of story.storySummaries) {
-        for (const [category, keywords] of Object.entries(summary.keywords)) {
-          allKeywords[category] = [...new Set([...allKeywords[category], ...keywords])];
+      for (const summary of summaries) {
+        for (const [category, keywords] of Object.entries(summary.keywords || {})) {
+          if (!Array.isArray(keywords)) continue;
+          // A category the shape above doesn't know about used to spread
+          // `undefined` and throw the whole request into the 500 branch.
+          allKeywords[category] = [...new Set([...(allKeywords[category] || []), ...keywords])];
         }
-        allImportantDetails.push(...summary.importantDetails);
+        allImportantDetails.push(...(summary.importantDetails || []));
       }
       const relevanceOrder = { high: 3, medium: 2, low: 1 };
-      allImportantDetails.sort((a, b) => relevanceOrder[b.relevance] - relevanceOrder[a.relevance]);
+      const rank = (d) => relevanceOrder[d?.relevance] ?? 0;
+      allImportantDetails.sort((a, b) => rank(b) - rank(a));
       res.json({
         title: story.title, genre: story.genre,
         currentSituation: story.worldState.currentSituation,

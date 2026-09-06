@@ -28,6 +28,7 @@ import { isFabHidden } from "./components/navConfig";
 import Sidebar from "./components/Sidebar";
 import TopBar from "./components/TopBar";
 import { API_BASE } from "./utils/bookDisplay";
+import { coverCandidateKey } from "./views/detail/bookFacts";
 import LibraryView from "./views/LibraryView";
 import SettingsView from "./views/SettingsView";
 import BookDetailModal from "./views/BookDetailModal";
@@ -91,6 +92,18 @@ export default function App() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  // `loadingMore` is state, so the IntersectionObserver callback closes over
+  // whatever it was when the observer was built. A ref is read live, which is
+  // what stops two rapid intersections from both appending the same page
+  // (duplicate cards, duplicate React keys).
+  const loadingMoreRef = useRef(false);
+  // Failures that must NOT blank the library grid. `error` drives
+  // LibraryView's full-page GeekErrorState, so reusing it for a failed
+  // download or a failed "load more" replaced the user's whole shelf with
+  // "Could not load your library".
+  const [loadMoreError, setLoadMoreError] = useState(null);
+  const [downloadError, setDownloadError] = useState(null);
+  const [shelfError, setShelfError] = useState(null);
 
   const [profile, setProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(false);
@@ -174,6 +187,18 @@ export default function App() {
   const [addBookIsbn, setAddBookIsbn] = useState("");
   const [addBookShelf, setAddBookShelf] = useState("want-to-read");
   const [addBookFile, setAddBookFile] = useState(null);
+
+  // `addBookFile` was cleared only on a successful create, so a picked-then-
+  // cancelled file survived: reopening the dialog showed no file (the child's
+  // own `fileName` resets on mount) while App still held the old one, and the
+  // next Create silently attached an abandoned EPUB to a different book.
+  // Keyed on the dialog closing, so every close path — Cancel, backdrop,
+  // Escape — is covered.
+  useEffect(() => {
+    if (addBookOpen) return;
+    setAddBookFile(null);
+    setAddBookError(null);
+  }, [addBookOpen]);
 
   const [selectedBookIds, setSelectedBookIds] = useState([]);
   const [mergeSelectionError, setMergeSelectionError] = useState(null);
@@ -480,8 +505,11 @@ export default function App() {
       if (!append) {
         setLoading(true);
         setError(null);
+        setLoadMoreError(null);
       } else {
         setLoadingMore(true);
+        loadingMoreRef.current = true;
+        setLoadMoreError(null);
       }
 
       const pageToLoad =
@@ -538,15 +566,18 @@ export default function App() {
     } catch (err) {
       if (!append) {
         setError(err.message || "Failed to load data");
+        setHasMore(false);
       } else {
-        setError(err.message || "Failed to load more books");
+        // One transient append failure used to set `hasMore` false for the
+        // rest of the session, permanently killing infinite scroll.
+        setLoadMoreError(err.message || "Failed to load more books");
       }
-      setHasMore(false);
     } finally {
       if (!append) {
         setLoading(false);
       }
       setLoadingMore(false);
+      loadingMoreRef.current = false;
     }
   }
 
@@ -633,6 +664,7 @@ export default function App() {
 
     setConvertingFormat(format);
     setDownloadOpen(false);
+    setDownloadError(null);
 
     try {
       const res = await authFetch(
@@ -662,7 +694,7 @@ export default function App() {
       a.remove();
       setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
     } catch (err) {
-      setError(err.message || "Download failed");
+      setDownloadError(err.message || "Download failed");
     } finally {
       setConvertingFormat(null);
     }
@@ -1068,7 +1100,14 @@ export default function App() {
       });
       setProfile(data?.removeBookShelf?.profile || null);
       if (shelfFilter === shelfId) setShelfFilter("all");
-      if (defaultShelfPref === shelfId) setDefaultShelfPref("all");
+      if (defaultShelfPref === shelfId) {
+        setDefaultShelfPref("all");
+        // …and persist it. Resetting only the in-memory value left the
+        // deleted shelf id in stored preferences, so the next reload put the
+        // user back on a shelf that no longer exists — a permanently empty
+        // library with no explanation.
+        await updateAppPreferences({ defaultShelfFilter: "all" }).catch(() => {});
+      }
       await refreshShelfSummary();
     } catch (err) {
       setShelfEditError(err.message || "Failed to remove shelf");
@@ -1372,12 +1411,8 @@ export default function App() {
       return;
     }
 
-    const loadingId =
-      typeof candidate.id === "string"
-        ? candidate.id
-        : provider === "openlibrary"
-          ? `cover-${ String(body.coverId) }`
-          : `cover-${ String(body.coverUrl || "") }`;
+    // One helper, shared with CoverTools' grid keys — see bookFacts.js.
+    const loadingId = coverCandidateKey(candidate);
     setCoverApplyLoadingId(loadingId);
     setCoverSearchError(null);
 
@@ -1674,6 +1709,18 @@ export default function App() {
     setCoverUploadLoading(false);
     setCoverDeleteLoading(false);
     setShowCoverTools(false);
+    // These five are per-book too. Left standing, the sticky bar showed book
+    // A's "Sending to <kindle address>" over book B, MoreSheet's mount-time
+    // `useEffect [uploadMessage]` toasted A's "File attached to this book"
+    // when B opened, and a picked-but-unsent `uploadFile` from A would be
+    // attached to B by the next tap of "Attach file to this book".
+    setSendToKindleStatus(null);
+    setSendToKindleError(null);
+    setShelfError(null);
+    setDownloadError(null);
+    setUploadFile(null);
+    setUploadMessage(null);
+    setUploadError(null);
     cancelEditForSelectedBook();
   }
 
@@ -1687,8 +1734,19 @@ export default function App() {
     setEditSaving(true);
     setEditError(null);
 
+    // `optionalTitleSchema` is `.optional()` but deliberately NOT
+    // `.nullable()` (BURN_REVIEW #7), so a blank Title field used to send
+    // `title: null` and lose the whole save — including every unrelated edit
+    // in the same payload — behind an opaque "Invalid input".
+    const trimmedTitle = typeof editDraft.title === "string" ? editDraft.title.trim() : "";
+    if (!trimmedTitle) {
+      setEditSaving(false);
+      setEditError("Title is required.");
+      return;
+    }
+
     const payload = {
-      title: editDraft.title || null,
+      title: trimmedTitle,
       language: editDraft.language || null,
       publisher: editDraft.publisher || null,
       publishedDate: editDraft.publishedDate || null,
@@ -1855,6 +1913,7 @@ export default function App() {
 
     const bookId = (book.id || book._id);
     setShelfSavingId(bookId);
+    setShelfError(null);
 
     try {
       const apolloRes = await apolloClient.mutate({
@@ -1889,7 +1948,10 @@ export default function App() {
       // Reload first page with current filters so shelf-based views update
       await loadBooksPage(1, { append: false });
     } catch (err) {
+      // Was `console.error` and nothing else: with the gateway down the sheet
+      // closed, the shelf did not move, and the user was told nothing at all.
       console.error("Failed to update shelf", err);
+      setShelfError(err?.message || "Failed to update shelf");
     } finally {
       setShelfSavingId(null);
     }
@@ -1901,7 +1963,12 @@ export default function App() {
 
     const observer = new IntersectionObserver((entries) => {
       const [entry] = entries;
-      if (entry.isIntersecting && !loadingMore && hasMore) {
+      // `loadingMoreRef` and not `loadingMore`: the state read here is frozen
+      // at the render that built this observer, so two intersections in the
+      // same tick both saw `false` and both appended page N+1 — duplicate
+      // cards under duplicate keys.
+      if (entry.isIntersecting && !loadingMoreRef.current && hasMore) {
+        loadingMoreRef.current = true;
         loadBooksPage(page + 1, { append: true });
       }
     });
@@ -1982,8 +2049,16 @@ export default function App() {
       });
 
       const json = await res.json().catch(() => null);
-      if (!res.ok || !json) {
-        const message = json?.message || json?.error || `Failed to create basket (${res.status})`;
+      if (!res.ok || !json || json.success === false) {
+        // Two shapes reach here: the route's own `{ error: "<string>" }` and
+        // the zod middleware's `{ success:false, error:{ message, code,
+        // details } }`. Reading `json.error` alone rendered the second as
+        // "[object Object]" in the toast.
+        const message =
+          json?.error?.message ||
+          json?.message ||
+          (typeof json?.error === "string" ? json.error : null) ||
+          `Failed to create basket (${res.status})`;
         throw new Error(message);
       }
 
@@ -2135,6 +2210,7 @@ export default function App() {
             handleMergeSelectedBooks={handleMergeSelectedBooks}
             handleSaveCurrentFilter={handleSaveCurrentFilter}
             hasMore={hasMore}
+            loadMoreError={loadMoreError}
             loadMoreRef={loadMoreRef}
             loading={loading}
             loadingMore={loadingMore}
@@ -2271,6 +2347,8 @@ export default function App() {
           sendToKindleError={sendToKindleError}
           sendToKindleLoading={sendToKindleLoading}
           sendToKindleStatus={sendToKindleStatus}
+          shelfError={shelfError}
+          downloadError={downloadError}
           setCoverSearchQuery={setCoverSearchQuery}
           setDeleteConfirmOpen={setDeleteConfirmOpen}
           setDeleteError={setDeleteError}

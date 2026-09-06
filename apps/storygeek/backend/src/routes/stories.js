@@ -12,12 +12,24 @@ import {
 
 const router = express.Router();
 
-// Test AI endpoint (must come before :storyId route)
+// Everything below requires authentication — including the two diagnostic
+// routes. They used to sit ABOVE this line: `/test-ai` fired a real GM call
+// to basegeek and `/test-debug` ran a whole context build + AI turn, both for
+// any anonymous caller who could reach the host. Free AI spend on tap, and
+// `/test-debug` returned a stack trace on failure. They still work; they just
+// need a session now.
+router.use(authenticateToken);
+
+// Diagnostic: one live GM round trip. Must come before the :storyId route.
 router.get('/test-ai', async (req, res) => {
   try {
+    const authHeader = req.headers['authorization'];
+    const userToken = authHeader && authHeader.split(' ')[1];
     const testResponse = await aiService.generateStoryResponse(
       { title: 'Test', genre: 'Fantasy' },
-      'Hello, this is a test message.'
+      'Hello, this is a test message.',
+      null,
+      userToken
     );
     res.json({ status: 'AI Test Successful', response: testResponse.content });
   } catch (error) {
@@ -27,9 +39,6 @@ router.get('/test-ai', async (req, res) => {
 
 // Test story continuation debugging
 router.get('/test-debug', storyController.testEndpoint);
-
-// Protected routes - require authentication
-router.use(authenticateToken);
 
 router.post('/start', validate({ body: startStorySchema }), storyController.startStory);
 router.post('/:storyId/continue', validate({ params: storyIdParamsSchema, body: continueStorySchema }), storyController.continueStory);

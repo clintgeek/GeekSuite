@@ -23,7 +23,16 @@
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', function() {
           var refreshing = false;
+          // Captured BEFORE registering. sw.js calls skipWaiting() and
+          // clients.claim(), so a first-ever visit takes control of the page
+          // that installed it and fires controllerchange — which used to
+          // reload a page the visitor was already reading. Only an update
+          // (there was already a controller) is worth a reload. Read it here
+          // and not inside the handler: by the time controllerchange fires,
+          // `controller` is the new worker either way.
+          var hadController = !!navigator.serviceWorker.controller;
           navigator.serviceWorker.addEventListener('controllerchange', function() {
+            if (!hadController) return;
             if (refreshing) return;
             refreshing = true;
             window.location.reload();

@@ -395,3 +395,149 @@ forever. Fixed the same way: `BUILD_ID`/`PRECACHE_ASSETS` placeholders in
 `vite.config.js` from the built `assets/*.js`/`*.css` list; `CACHE_NAME` is
 now `bookgeek-cache-${BUILD_ID}`. Dev (`vite dev`) still serves the source
 file untouched — no build step there. See DOCS/PWA_STANDARD.md §1a.
+
+---
+
+## Going-over 2026-09-05 — the full read of `api/` and `web/`
+
+A senior-inheritance read of every route, view, component and test in both
+halves. Counts: api `npm test` 132 → 171 (169 pass, 2 skipped — see the
+better-sqlite3 note below); web `npx vitest run` 104 → 122; web `npx eslint
+src` 18 warnings → 18; `npm run build` green; mobile harness
+(`--app bookgeek --enforce-a11y --viewports phone`) 12 scenes, 0/0/0.
+
+### Fixed — API
+
+- **P0 `POST /api/import/calibre` was unauthenticated** and its first act is
+  `Book.deleteMany({ source: "calibre-import" })`. Anyone who could reach the
+  host could wipe every Calibre-imported book with one curl. Now behind
+  `authenticateToken`. (This is the route the "Left alone, deliberately"
+  section above described as one-time legacy — it was still mounted and still
+  destructive, so it is now gated rather than deleted. Whether to delete it is
+  Chef's call.)
+- **P0 `db.query(...)` is Bun:sqlite's API, not better-sqlite3's** — twelve
+  call sites in `routes/importRoutes.js`, all inside the per-book loop, so
+  `POST /api/import/calibre/rescan` threw `TypeError: db.query is not a
+  function` on the first row of any real library. The Calibre rescan button in
+  Settings had never worked on Node. All twelve are `db.prepare` now.
+- **P0 the rescan's success payload referenced an undeclared `failed`**
+  (`ReferenceError` under ESM strict mode → a 500 on every otherwise-successful
+  run) and omitted `rows` and `skippedNoFiles`, the two counters
+  `SettingsView.jsx:162` renders. It now returns exactly
+  `{ rows, attachedExisting, createdNew, skippedNoFiles }`.
+- **P1 path traversal on the cover write.** `POST /api/books/:id/cover`'s
+  `coverId` reached `downloadOpenLibraryCover()` and went straight into the
+  output filename, so `coverId: "../../../../tmp/x"` walked the write out of
+  `LIBRARY_PATH` once `path.join` normalised it — and `Book.coverPath` then
+  pointed outside the root for `GET .../cover` to serve back. New
+  `src/libraryPaths.js` (`resolveInLibrary` / `safePathSegment`) is now the
+  only way this app turns a stored or supplied relative path into an absolute
+  one; every file route in `server.js` goes through it, and `coverId` must be
+  digits.
+- **P1 SSRF + unbounded download on the same route.** The `googlebooks`
+  branch fetched an arbitrary `coverUrl` behind nothing but an `^https?://`
+  test — a lever into the Docker network (Mongo on 27018, Redis, the other
+  apps' internal ports) for any signed-in household member — with no timeout
+  and no size cap. New `src/coverFetch.js`: a host allow-list, a 15s deadline,
+  an 8MB ceiling. `fetchJson` got the same deadline.
+- **P1 `/kindle-test`, `/kindle-test/download`, `/kindle-test/epub` were
+  unauthenticated** and streamed a real library file to anyone. Now behind
+  `requireKindleAuth`, the same PIN the rest of `/kindle` uses. They are still
+  marked "throwaway, delete after Phase 0" — deleting them is Chef's call.
+- **P1 `app.set("trust proxy", 1)` was missing.** Behind the suite's nginx
+  `req.ip` was the proxy for every caller, which collapsed `deviceBasket.js`'s
+  per-IP secret-word rate limit into one global bucket (ten wrong guesses from
+  anyone locked out everyone), and `req.secure` was always false so the Kindle
+  PIN cookie never got its `Secure` attribute.
+- **P1 send-to-kindle claimed success when nothing was sent.** `SMTP_*` is not
+  in bookgeek's documented env set, so `sendMail` no-ops and returns
+  `{ sent: false, reason: 'smtp_not_configured' }` — and the route answered
+  `success: true`. Both the JSON route and the server-rendered `/kindle` page
+  now report the failure. **`SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`,
+  `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM_EMAIL` belong in the RUNBOOK's bookgeek
+  env list** (they are read by `services/emailService.js` and are missing from
+  it). The same route also `console.log`ged the user's Kindle address; it uses
+  the redacting `@geeksuite/logger` now.
+- **P1 `GET /api/auth/me` mapped every upstream failure to 500**, including a
+  401 — so an expired session got "something went wrong" instead of the
+  re-auth the client's 401 path exists for. 401/403 are forwarded.
+- **P1 regex injection / ReDoS.** `/api/books?q=&author=` and the `/kindle`
+  listing put the raw search string into a Mongo `$regex`. `(a+)+$` pins the
+  server. Escaped (`escapeRegex` in `libraryPaths.js`); `importRoutes.js`
+  already had the helper, which is what made the omission visible.
+- **P2** `better-sqlite3` now opens `metadata.db` with `fileMustExist: true`
+  instead of silently creating an empty database in `LIBRARY_PATH` and then
+  failing on "no such table"; the rescan's copy-pasted "Readarr addMe import
+  failed" error message says Calibre rescan; a dead destructure in
+  `/api/auth/refresh` is gone.
+
+### Fixed — web
+
+- **P0 `publishedDate` rendered a day early west of UTC.** It is a calendar
+  day stored at UTC midnight (`historicalDateField` → `toUtcMidnight`) and was
+  formatted with a local `toLocaleDateString()` / `getFullYear()`: *Dune*'s
+  `1965-01-01` showed as "12/31/1964" in Details and "1964" in the hero. New
+  `formatCalendarDate` in `views/detail/bookFacts.js` + `getUTCFullYear` in
+  `publishedYear`. `dateAdded`/`dateFinished` are genuine instants
+  (`instantField`) and correctly stay local — the split is the point.
+- **P1 per-book state leaked between books.** `closeBookModal` reset the
+  enrich trio but not `sendToKindleStatus`/`sendToKindleError`/`uploadFile`/
+  `uploadMessage`/`uploadError`, so opening book B showed book A's "Sending
+  to <address>", toasted A's "File attached to this book" from `MoreSheet`'s
+  mount-time effect, and would attach A's picked-but-unsent file to B.
+- **P1 a failed download blanked the library.** `handleDownload` wrote into
+  the library-load `error`, which `LibraryView` renders as a full-page
+  `GeekErrorState` over the whole grid. It has its own `downloadError` now
+  (toasted from the detail sheet). Same split for a failed "load more", which
+  additionally used to set `hasMore = false` permanently, killing infinite
+  scroll for the session on one transient failure.
+- **P1 a failed shelf move was `console.error` and nothing else** — the sheet
+  closed, the shelf did not move, the user was told nothing. New `shelfError`,
+  toasted like `enrichError`.
+- **P1 a cancelled "Add book" file was still attached to the next book.**
+  `addBookFile` was cleared only on a successful create while the dialog's own
+  `fileName` reset on mount, so the UI showed no file and App still held one.
+  Cleared by an effect keyed on the dialog closing, which covers Cancel,
+  backdrop and Escape.
+- **P2** blanking the Title field sent `title: null`, which the gateway's
+  deliberately-non-nullable `optionalTitleSchema` rejects — losing every other
+  edit in the same save behind "Invalid input"; the infinite-scroll
+  `IntersectionObserver` read `loadingMore` from a stale closure and could
+  append the same page twice (duplicate cards under duplicate React keys), now
+  a ref; `App.jsx` and `CoverTools` computed the cover-candidate key
+  differently (`coverCandidateKey`, one helper, in `bookFacts.js`);
+  `ReaderModal`'s 4s give-up left its 250ms poll running for the life of the
+  reader; the device-basket create rendered the zod envelope's `error` object
+  as `[object Object]`; deleting a custom shelf that was the saved default
+  reset it in memory but never persisted it, so the next reload landed on a
+  shelf that no longer exists; the first-ever SW install fired
+  `controllerchange` and reloaded a page the visitor was already reading
+  (`index.html`, shared verbatim with storygeek — both fixed).
+
+### Left in place, with reasons
+
+- **Four of the eight library sorts do nothing.** `components/librarySort.js`
+  offers `title, author, dateAdded, rating, dateFinished, pageCount,
+  publishedDate, owned`; the gateway's `books` resolver
+  (`apps/basegeek/packages/api/src/graphql/bookgeek/resolvers.js:233`) has
+  cases for only the first four and `default`s the rest to title — so "Page
+  count ↑" returns an alphabetical list while the toolbar pill says "Page
+  count ↑". bookgeek's own REST `/api/books` handles all eight; the two
+  drifted when the read moved to the gateway. The fix is four `case` arms in
+  basegeek, which is outside this tree. Trimming the frontend list instead
+  would delete working-looking features — reported, not done.
+- **`POST /api/import/calibre` and `/kindle-test*` are gated, not deleted.**
+  Both look like one-time/throwaway legacy; deleting a feature is Chef's call.
+- **`bookify`-adjacent notes from BURN_REVIEW (o), (p), (x)** re-verified as
+  still accurate and still deliberate — no change.
+- **The Calibre paths cannot be exercised on this box.** `better-sqlite3` is a
+  native addon and the workspace has no built binary for the local Node, so
+  `new Database()` throws here (the module still imports fine — the binding
+  resolves at call time, which is exactly why `db.query` survived a year with
+  green CI). `test/importRoutes.test.js` builds a real Calibre-shaped
+  `metadata.db` and walks the rescan for real; on a box that cannot load the
+  binding those two cases announce themselves as skipped. CI (node 20, where
+  `pnpm install` fetches the prebuild) runs them.
+- **`GET /api/books`, `POST /api/books`, `PATCH/DELETE /api/books/:id`,
+  `GET /api/shelves` are still live REST** with no zod schemas, duplicating
+  the gateway. Unchanged from the note above; still worth a deletion pass.

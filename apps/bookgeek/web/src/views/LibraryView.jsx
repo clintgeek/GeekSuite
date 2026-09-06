@@ -32,6 +32,7 @@ export default function LibraryView({
   handleMergeSelectedBooks,
   handleSaveCurrentFilter,
   hasMore,
+  loadMoreError,
   loadMoreRef,
   loading,
   loadingMore,
@@ -223,6 +224,13 @@ export default function LibraryView({
           <Box ref={loadMoreRef} sx={{ mt: 2, minHeight: 44 }}>
             {loadingMore ? (
               <Skeleton variant="rectangular" sx={{ height: 44, borderRadius: "8px" }} />
+            ) : loadMoreError ? (
+              // A failed *append* belongs here, next to the sentinel — not in
+              // the full-page GeekErrorState above, which would replace the
+              // shelf the user is already reading.
+              <Typography variant="caption" sx={{ color: "error.main" }} role="status">
+                {loadMoreError}
+              </Typography>
             ) : null}
           </Box>
         )}

@@ -31,16 +31,28 @@ const execFileAsync = promisify(execFile);
 // - Reads full metadata from Calibre's metadata.db in that root
 // - Scans for existing book files and covers without copying
 // - Creates Book documents with files, coverPath, and rich metadata
-router.post("/calibre", async (req, res) => {
+// Authenticated: this route's first act is
+// `Book.deleteMany({ source: "calibre-import" })`, so leaving it open let any
+// unauthenticated caller wipe every Calibre-imported book with one POST.
+router.post("/calibre", authenticateToken, async (req, res) => {
   try {
     const libraryRoot = process.env.LIBRARY_PATH || "/data/library";
     const dbPath = path.join(libraryRoot, "metadata.db");
     const limitParam = req.query.limit;
     const limit = Number(limitParam) > 0 ? Number(limitParam) : 1000;
 
+    let db;
+    try {
+      db = new Database(dbPath, { fileMustExist: true });
+    } catch {
+      return res.status(400).json({
+        success: false,
+        error: { message: `No Calibre metadata.db found at ${dbPath}` },
+      });
+    }
+
     // Reset any previous Calibre-imported books so this route can be safely re-run
     await Book.deleteMany({ source: "calibre-import" });
-    const db = new Database(dbPath);
 
     const baseQuery = db.prepare(`
       SELECT
@@ -161,7 +173,7 @@ function parseEbookMetaOutput(text) {
           : [];
 
       // Series (name from series table, index from books.series_index)
-      const seriesQuery = db.query(
+      const seriesQuery = db.prepare(
         `SELECT s.name AS name FROM books_series_link bsl JOIN series s ON bsl.series = s.id WHERE bsl.book = ? LIMIT 1;`
       );
       const seriesRow = seriesQuery.get(bookId);
@@ -174,7 +186,7 @@ function parseEbookMetaOutput(text) {
         : undefined;
 
       // Tags
-      const tagsQuery = db.query(
+      const tagsQuery = db.prepare(
         `SELECT t.name AS name FROM books_tags_link btl JOIN tags t ON btl.tag = t.id WHERE btl.book = ?;`
       );
       const tagRows = tagsQuery.all(bookId) || [];
@@ -183,28 +195,28 @@ function parseEbookMetaOutput(text) {
         .filter(Boolean);
 
       // Comments / description
-      const commentsQuery = db.query(
+      const commentsQuery = db.prepare(
         `SELECT text FROM comments WHERE book = ? LIMIT 1;`
       );
       const commentsRow = commentsQuery.get(bookId);
       const description = commentsRow?.text || undefined;
 
       // Publisher
-      const pubQuery = db.query(
+      const pubQuery = db.prepare(
         `SELECT p.name AS name FROM books_publishers_link bpl JOIN publishers p ON bpl.publisher = p.id WHERE bpl.book = ? LIMIT 1;`
       );
       const pubRow = pubQuery.get(bookId);
       const publisher = pubRow?.name || undefined;
 
       // Language (first language only)
-      const langQuery = db.query(
+      const langQuery = db.prepare(
         `SELECT l.lang_code AS code FROM books_languages_link bll JOIN languages l ON bll.lang_code = l.lang_code WHERE bll.book = ? LIMIT 1;`
       );
       const langRow = langQuery.get(bookId);
       const language = langRow?.code || undefined;
 
       // Identifiers
-      const idQuery = db.query(
+      const idQuery = db.prepare(
         `SELECT type, val FROM identifiers WHERE book = ?;`
       );
       const idRows = idQuery.all(bookId) || [];
@@ -234,7 +246,7 @@ function parseEbookMetaOutput(text) {
       }
 
       // Files (all formats) from Calibre's data table
-      const dataQuery = db.query(
+      const dataQuery = db.prepare(
         `SELECT format, name, uncompressed_size FROM data WHERE book = ?;`
       );
       const dataRows = dataQuery.all(bookId) || [];
@@ -409,7 +421,15 @@ router.post("/calibre/rescan", authenticateToken, validate({ query: calibreResca
     const limitParam = req.query.limit;
     const limit = Number(limitParam) > 0 ? Number(limitParam) : 1000;
 
-    const db = new Database(dbPath);
+    let db;
+    try {
+      db = new Database(dbPath, { fileMustExist: true });
+    } catch {
+      return res.status(400).json({
+        success: false,
+        error: { message: `No Calibre metadata.db found at ${dbPath}` },
+      });
+    }
 
     const baseQuery = db.prepare(`
       SELECT
@@ -460,7 +480,7 @@ router.post("/calibre/rescan", authenticateToken, validate({ query: calibreResca
           : [];
 
       // Tags
-      const tagsQuery = db.query(
+      const tagsQuery = db.prepare(
         `SELECT t.name AS name FROM books_tags_link btl JOIN tags t ON btl.tag = t.id WHERE btl.book = ?;`
       );
       const tagRows = tagsQuery.all(bookId) || [];
@@ -469,21 +489,21 @@ router.post("/calibre/rescan", authenticateToken, validate({ query: calibreResca
         .filter(Boolean);
 
       // Publisher
-      const pubQuery = db.query(
+      const pubQuery = db.prepare(
         `SELECT p.name AS name FROM books_publishers_link bpl JOIN publishers p ON bpl.publisher = p.id WHERE bpl.book = ? LIMIT 1;`
       );
       const pubRow = pubQuery.get(bookId);
       const publisher = pubRow?.name || undefined;
 
       // Language
-      const langQuery = db.query(
+      const langQuery = db.prepare(
         `SELECT l.lang_code AS code FROM books_languages_link bll JOIN languages l ON bll.lang_code = l.lang_code WHERE bll.book = ? LIMIT 1;`
       );
       const langRow = langQuery.get(bookId);
       const language = langRow?.code || undefined;
 
       // Identifiers
-      const idQuery = db.query(
+      const idQuery = db.prepare(
         `SELECT type, val FROM identifiers WHERE book = ?;`
       );
       const idRows = idQuery.all(bookId) || [];
@@ -513,7 +533,7 @@ router.post("/calibre/rescan", authenticateToken, validate({ query: calibreResca
       }
 
       // Files (all formats) from Calibre's data table
-      const dataQuery = db.query(
+      const dataQuery = db.prepare(
         `SELECT format, name, uncompressed_size FROM data WHERE book = ?;`
       );
       const dataRows = dataQuery.all(bookId) || [];
@@ -716,17 +736,18 @@ router.post("/calibre/rescan", authenticateToken, validate({ query: calibreResca
     return res.json({
       success: true,
       data: {
+        rows: rows.length,
         attachedExisting,
         createdNew,
-        failed,
+        skippedNoFiles,
       },
     });
   } catch (error) {
-    console.error("Readarr addMe import failed", error);
+    console.error("Calibre rescan failed", error);
     return res.status(500).json({
       success: false,
       error: {
-        message: "Readarr addMe import failed",
+        message: "Calibre rescan failed",
         details: error.message,
       },
     });
