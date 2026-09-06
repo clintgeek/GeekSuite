@@ -14,6 +14,13 @@
  *  3. **P0 — the rescan's success payload referenced an undeclared `failed`**
  *     (ReferenceError under ESM strict mode → 500) and omitted the `rows` and
  *     `skippedNoFiles` counters `SettingsView.jsx:162` renders.
+ *  4. **P1 (BURN_REVIEW_2 #8) — the walk was the unconfined ingestion point.**
+ *     It joined metadata.db's `path` and `data.name` onto the library root
+ *     with no containment check and stored the result as `Book.files[].path` /
+ *     `Book.coverPath` — which is how a traversal payload got into the DB for
+ *     every downstream file route to trust, including the unauthenticated
+ *     `/download-basket/:slug/item/:index`. Rows and files whose derived path
+ *     escapes are skipped, logged, and counted as `skippedUnsafePaths`.
  *
  * `server.js` can't be imported (Mongo connect + listen at import time, see
  * `csrfGuard.test.js`), but the router can, so it is mounted here the way
@@ -47,16 +54,21 @@ let basegeek;
 let server;
 let baseUrl;
 let libraryDir;
+/** A directory outside the library that one fixture row points into. */
+let escapeDir;
 let prevLibraryPath;
 let prevBasegeekUrl;
 /** Set by the Book.deleteMany stub so a test can prove it never ran. */
 let deleteManyCalls = [];
+/** Every other Mongo call the rescan makes, so a skipped row can prove it
+ *  reached neither `create` nor `updateOne`. */
+let mongoCalls = [];
 /** False when better-sqlite3's native binding won't load on this Node. */
 let sqliteUsable = true;
 
 const TOKEN = "test-token";
 
-function writeCalibreFixture(dir) {
+function writeCalibreFixture(dir, escapeRel) {
   const db = new Database(path.join(dir, "metadata.db"));
   db.exec(`
     CREATE TABLE books (id INTEGER PRIMARY KEY, title TEXT, isbn TEXT, pubdate TEXT, path TEXT, series_index REAL);
@@ -85,6 +97,18 @@ function writeCalibreFixture(dir) {
     -- A data row whose file is deliberately NOT on disk: the rescan then
     -- counts the book as skippedNoFiles and returns without a Mongo call.
     INSERT INTO data VALUES (1, 1, 'EPUB', 'Dune - Frank Herbert', 123456);
+
+    -- BURN_REVIEW_2 #8, payload 1: the row's own path walks out of the
+    -- library, at a directory that really does hold an ebook. Before the fix
+    -- the readdir below it ran outside LIBRARY_PATH and what it found was
+    -- written back into Mongo as a Book.files[].path.
+    INSERT INTO books VALUES (2, 'Escape', NULL, NULL, '${escapeRel}', 1.0);
+
+    -- Payload 2: the row is fine, the data.name is the traversal. Calibre
+    -- builds the filename from it, so <path>/../../../../etc/passwd.epub
+    -- landed in Book.files[].path.
+    INSERT INTO books VALUES (3, 'Traversal', NULL, NULL, 'Herbert, Frank/Dune (1)', 1.0);
+    INSERT INTO data VALUES (2, 3, 'EPUB', '../../../../etc/passwd', 1);
   `);
   db.close();
 }
@@ -94,8 +118,11 @@ before(async () => {
   prevBasegeekUrl = process.env.BASEGEEK_URL;
 
   libraryDir = fs.mkdtempSync(path.join(os.tmpdir(), "bookgeek-import-"));
+  // A sibling of the library root holding a file the escaping row would find.
+  escapeDir = fs.mkdtempSync(path.join(os.tmpdir(), "bookgeek-outside-"));
+  fs.writeFileSync(path.join(escapeDir, "pwn.epub"), "OUTSIDE THE LIBRARY");
   try {
-    writeCalibreFixture(libraryDir);
+    writeCalibreFixture(libraryDir, `../${path.basename(escapeDir)}`);
   } catch (err) {
     sqliteUsable = false;
     console.warn(
@@ -132,12 +159,29 @@ before(async () => {
     deleteManyCalls.push(filter);
     return { deletedCount: 0 };
   };
+  Book.findOne = () => ({
+    exec: async () => {
+      mongoCalls.push("findOne");
+      return null;
+    },
+  });
+  Book.updateOne = () => ({
+    exec: async () => {
+      mongoCalls.push("updateOne");
+      return { modifiedCount: 0 };
+    },
+  });
+  Book.create = async (doc) => {
+    mongoCalls.push(`create:${doc?.title}`);
+    return doc;
+  };
 });
 
 after(async () => {
   if (server) await new Promise((r) => server.close(r));
   if (basegeek) await new Promise((r) => basegeek.close(r));
   if (libraryDir) fs.rmSync(libraryDir, { recursive: true, force: true });
+  if (escapeDir) fs.rmSync(escapeDir, { recursive: true, force: true });
   if (prevLibraryPath === undefined) delete process.env.LIBRARY_PATH;
   else process.env.LIBRARY_PATH = prevLibraryPath;
   if (prevBasegeekUrl === undefined) delete process.env.BASEGEEK_URL;
@@ -180,6 +224,7 @@ describe("POST /api/import/calibre/rescan", () => {
       t.skip("better-sqlite3 binding unavailable on this Node");
       return;
     }
+    mongoCalls = [];
     const res = await fetch(`${baseUrl}/api/import/calibre/rescan`, {
       method: "POST",
       headers: { Authorization: `Bearer ${TOKEN}` },
@@ -191,11 +236,35 @@ describe("POST /api/import/calibre/rescan", () => {
     assert.equal(res.status, 200, JSON.stringify(json));
     assert.equal(json.success, true);
     assert.deepEqual(json.data, {
-      rows: 1,
+      rows: 3,
       attachedExisting: 0,
       createdNew: 0,
-      skippedNoFiles: 1,
+      // Dune (its file is not on disk) and Traversal (its one file escaped).
+      skippedNoFiles: 2,
+      // The Escape row, plus Traversal's escaping data.name.
+      skippedUnsafePaths: 2,
     });
+  });
+
+  test("the escaping rows never reach Mongo", async (t) => {
+    if (!sqliteUsable) {
+      t.skip("better-sqlite3 binding unavailable on this Node");
+      return;
+    }
+    mongoCalls = [];
+    const res = await fetch(`${baseUrl}/api/import/calibre/rescan`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${TOKEN}` },
+    });
+    assert.equal(res.status, 200);
+    assert.deepEqual(
+      mongoCalls,
+      [],
+      "a row whose path escapes LIBRARY_PATH must be skipped, not stored"
+    );
+    // Without the confinement the Escape row's folder scan finds this file
+    // and stores a path to it — the payload finding 7 then serves.
+    assert.ok(fs.existsSync(path.join(escapeDir, "pwn.epub")));
   });
 
   test("400s cleanly when there is no metadata.db instead of creating one", async (t) => {
@@ -241,5 +310,39 @@ describe("the Bun:sqlite API must not creep back", () => {
       "utf8"
     );
     assert.equal(src.includes("db.query("), false);
+  });
+});
+
+describe("the unconfined join must not creep back", () => {
+  // The two fixture-backed tests above are the behavioural proof and they
+  // only run where better-sqlite3's binding loads. This one runs everywhere:
+  // it pins the shape of the fix rather than its effect.
+  const src = fs.readFileSync(
+    new URL("../src/routes/importRoutes.js", import.meta.url),
+    "utf8"
+  );
+
+  test("no derived library path is built with a bare path.join", () => {
+    for (const forbidden of [
+      "path.join(libraryRoot, relPath)",
+      "path.join(libraryRoot, relCoverPath)",
+      "path.join(libraryRoot, calibreBookPath)",
+    ]) {
+      assert.equal(
+        src.includes(forbidden),
+        false,
+        `${forbidden} bypasses resolveInLibrary — see BURN_REVIEW_2 #8`
+      );
+    }
+  });
+
+  test("both walks confine what they derive, and count what they refuse", () => {
+    // Per walk: the row directory, the data-table file, the folder-scan file
+    // and the cover — four sites, two walks.
+    assert.ok(
+      (src.match(/resolveInLibrary\(/g) || []).length >= 8,
+      "every path-building site in both walks goes through the helper"
+    );
+    assert.ok(src.includes("skippedUnsafePaths"));
   });
 });

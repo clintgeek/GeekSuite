@@ -3,6 +3,12 @@ import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
 
+import {
+  libraryRoot,
+  resolveInLibrary,
+  resolveStoredInLibrary,
+} from "./libraryPaths.js";
+
 const CALIBRE_EBOOK_CONVERT_BIN =
   process.env.CALIBRE_EBOOK_CONVERT_BIN || "ebook-convert";
 
@@ -10,9 +16,17 @@ const execFileAsync = promisify(execFile);
 
 export const SUPPORTED_FORMATS = ["epub", "azw3", "mobi"];
 
-export function libraryRoot() {
-  return process.env.LIBRARY_PATH || "/data/library";
-}
+/**
+ * Re-exported so this module has one answer to "where is the library", not a
+ * second copy of the same default. Everything here that turns a stored or
+ * derived relative path into an absolute one goes through `libraryPaths.js`:
+ * the going-over's `resolveInLibrary` reached every path-building site in
+ * `server.js` and none of the two in this file, and this file is reachable
+ * from `GET /download-basket/:slug/item/:index`, which has no auth at all.
+ * A `Book.files[].path` of `../secret/private.epub` was enough to make
+ * `res.download` stream a file from outside `LIBRARY_PATH`.
+ */
+export { libraryRoot };
 
 /**
  * Convert an ebook file from one format to another using Calibre's
@@ -23,6 +37,16 @@ export function libraryRoot() {
 export async function convertEbookFile(inputPath, outputPath, coverPath = null) {
   if (!inputPath || !outputPath) {
     throw new Error("inputPath and outputPath are required");
+  }
+
+  // Belt to ensureFormat's braces: nothing gets spawned, written or embedded
+  // unless it is still inside the library, whoever called.
+  const root = libraryRoot();
+  if (!resolveInLibrary(inputPath, root)) {
+    throw new Error("inputPath resolves outside the library");
+  }
+  if (!resolveInLibrary(outputPath, root)) {
+    throw new Error("outputPath resolves outside the library");
   }
 
   await fs.promises.mkdir(path.dirname(outputPath), { recursive: true });
@@ -36,7 +60,7 @@ export async function convertEbookFile(inputPath, outputPath, coverPath = null) 
   }
 
   let cover = null;
-  if (coverPath) {
+  if (coverPath && resolveInLibrary(coverPath, root)) {
     try {
       const stats = await fs.promises.stat(coverPath);
       if (stats.isFile()) {
@@ -122,9 +146,18 @@ export async function ensureFormat(book, format, opts = {}) {
   const root = libraryRoot();
   const logTag = opts.logTag || "ensureFormat";
   const normalizeFormat = (f) => String(f.format || "").toLowerCase();
+  /**
+   * Resolve a path this book already carries. A stored path that lands
+   * outside the library is refused outright — never stat'd, never read —
+   * and the caller sees the same "no such file" it sees for a missing one.
+   */
+  const resolveStored = (relPath, what) =>
+    resolveStoredInLibrary(relPath, { root, what, logTag });
+
   const fileExistsOnDisk = async (relPath) => {
+    const fullPath = resolveStored(relPath, "Book.files[].path");
+    if (!fullPath) return null;
     try {
-      const fullPath = path.join(root, relPath);
       const stats = await fs.promises.stat(fullPath);
       return stats.isFile() ? fullPath : null;
     } catch (err) {
@@ -147,7 +180,7 @@ export async function ensureFormat(book, format, opts = {}) {
 
   const coverFullPath =
     book.coverPath && typeof book.coverPath === "string"
-      ? path.join(root, book.coverPath)
+      ? resolveStored(book.coverPath, "Book.coverPath")
       : null;
 
   let converted = false;
@@ -156,7 +189,12 @@ export async function ensureFormat(book, format, opts = {}) {
   // If the requested format is missing (or its on-disk file is gone),
   // generate it on demand from another available file.
   if (!fullPath) {
-    const sources = (book.files || []).filter((f) => f.path);
+    // Only files still inside the library are candidate sources; an escaping
+    // row is dropped here rather than being converted from (which would also
+    // have written the converted artifact next to it, outside the root).
+    const sources = (book.files || []).filter(
+      (f) => f.path && resolveStored(f.path, "Book.files[].path")
+    );
     if (sources.length === 0) {
       throw new EnsureFormatError("No source files available", 404);
     }
@@ -171,7 +209,15 @@ export async function ensureFormat(book, format, opts = {}) {
 
     const sourceDir = path.dirname(sourcePath);
     const sourceBase = path.basename(sourcePath, path.extname(sourcePath));
-    const outputPath = path.join(sourceDir, `${ sourceBase }.${ requestedFormat }`);
+    const outputPath = resolveInLibrary(
+      path.join(sourceDir, `${ sourceBase }.${ requestedFormat }`),
+      root
+    );
+    if (!outputPath) {
+      // Unreachable while sourcePath is confined; kept so the write side can
+      // never drift away from the read side again.
+      throw new EnsureFormatError("Source file not found", 404);
+    }
 
     try {
       await convertEbookFile(sourcePath, outputPath, coverFullPath);
@@ -191,9 +237,14 @@ export async function ensureFormat(book, format, opts = {}) {
     }
 
     // Save the new file entry if it is not already tracked.
+    const outputRel = path.relative(root, outputPath);
+    if (!resolveInLibrary(outputRel, root)) {
+      throw new EnsureFormatError("Converted file resolves outside the library", 500);
+    }
+
     const newEntry = {
       format: requestedFormat.toUpperCase(),
-      path: path.relative(root, outputPath),
+      path: outputRel,
       size: stats.size,
       addedAt: new Date(),
     };

@@ -23,6 +23,7 @@ import {
   escapeRegex,
   libraryRoot,
   resolveInLibrary,
+  resolveStoredInLibrary,
   safePathSegment,
 } from "../src/libraryPaths.js";
 
@@ -94,6 +95,66 @@ describe("resolveInLibrary", () => {
       if (prev === undefined) delete process.env.LIBRARY_PATH;
       else process.env.LIBRARY_PATH = prev;
     }
+  });
+});
+
+describe("resolveStoredInLibrary — the read-side guard (BURN_REVIEW_2 #8)", () => {
+  // The Calibre walk joined metadata.db's `path` / `data.name` onto the root
+  // with no confinement and wrote the result back as `Book.files[].path`, so
+  // the database can already be holding an escaping path that no future write
+  // fix removes. Reads have to refuse it on the way out too.
+  const quiet = (fn) => {
+    const prev = console.warn;
+    const lines = [];
+    console.warn = (...args) => lines.push(args);
+    try {
+      return { value: fn(), lines };
+    } finally {
+      console.warn = prev;
+    }
+  };
+
+  test("resolves a stored path that is still inside the library", () => {
+    const { value, lines } = quiet(() =>
+      resolveStoredInLibrary("Herbert, Frank/Dune (1)/dune.epub", { root: ROOT })
+    );
+    assert.equal(value, path.join(ROOT, "Herbert, Frank/Dune (1)/dune.epub"));
+    assert.equal(lines.length, 0, "an ordinary row must not log");
+  });
+
+  test("refuses a stored path the DB already holds that escapes the root", () => {
+    for (const stored of [
+      "../secret/private.epub",
+      "../../../../etc/passwd",
+      "/etc/shadow",
+      "Herbert, Frank/Dune (1)/../../../../etc/passwd.epub",
+    ]) {
+      const { value } = quiet(() => resolveStoredInLibrary(stored, { root: ROOT }));
+      assert.equal(value, null, `must refuse the stored path ${stored}`);
+    }
+  });
+
+  test("logs the refusal, because a bad row is evidence rather than traffic", () => {
+    const { value, lines } = quiet(() =>
+      resolveStoredInLibrary("../secret/private.epub", {
+        root: ROOT,
+        what: "Book.files[].path",
+        logTag: "ensureFormat",
+      })
+    );
+    assert.equal(value, null);
+    assert.equal(lines.length, 1);
+    assert.match(String(lines[0][0]), /refused a stored path outside the library/);
+    assert.equal(lines[0][1].what, "Book.files[].path");
+  });
+
+  test("refuses null/undefined/empty without throwing", () => {
+    const { value } = quiet(() => [
+      resolveStoredInLibrary(null, { root: ROOT }),
+      resolveStoredInLibrary(undefined, { root: ROOT }),
+      resolveStoredInLibrary("", { root: ROOT }),
+    ]);
+    assert.deepEqual(value, [null, null, null]);
   });
 });
 

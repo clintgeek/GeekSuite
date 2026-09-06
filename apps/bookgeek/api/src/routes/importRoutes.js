@@ -7,6 +7,7 @@ import { parse as parseCsv } from "csv-parse/sync";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { Book } from "../models/book.js";
+import { resolveInLibrary } from "../libraryPaths.js";
 import { authenticateToken } from "../middleware/auth.js";
 import { validate } from "../validation/validate.js";
 import { calibreRescanQuerySchema } from "../validation/schemas/importJobs.js";
@@ -159,6 +160,11 @@ function parseEbookMetaOutput(text) {
 }
 
     const docs = [];
+    // Rows and files whose derived path escaped LIBRARY_PATH. They are the
+    // ingestion point BURN_REVIEW_2 #8 named: whatever this walk stores as
+    // `Book.files[].path` / `Book.coverPath`, every downstream file route
+    // later trusts, including the unauthenticated basket download.
+    let skippedUnsafePaths = 0;
 
     for (const row of rows) {
       const bookId = row.id;
@@ -254,13 +260,36 @@ function parseEbookMetaOutput(text) {
       const files = [];
       const calibreBookPath = row.path; // relative path under the library root
 
+      // The row's own directory first: everything below is derived from it.
+      const bookDirFull = calibreBookPath
+        ? resolveInLibrary(calibreBookPath, libraryRoot)
+        : null;
+      if (!bookDirFull) {
+        // No path at all lands here too: every join below would have thrown
+        // on it and taken the whole walk down with a 500.
+        skippedUnsafePaths += 1;
+        console.warn("Calibre row skipped: path missing or outside the library", {
+          bookId,
+          calibreBookPath,
+        });
+        continue;
+      }
+
       for (const d of dataRows) {
         if (!d.format || !d.name) continue;
 
         const format = String(d.format).toLowerCase();
         const fileName = `${d.name}.${format}`;
         const relPath = path.join(calibreBookPath, fileName);
-        const fullPath = path.join(libraryRoot, relPath);
+        const fullPath = resolveInLibrary(relPath, libraryRoot);
+        if (!fullPath) {
+          skippedUnsafePaths += 1;
+          console.warn("Calibre file skipped: path escapes the library", {
+            bookId,
+            relPath,
+          });
+          continue;
+        }
 
         try {
           const stat = await fs.stat(fullPath);
@@ -285,7 +314,7 @@ function parseEbookMetaOutput(text) {
       // Fallback: if no files were found via the data table, scan the folder on disk
       if (files.length === 0 && calibreBookPath) {
         try {
-          const folderFull = path.join(libraryRoot, calibreBookPath);
+          const folderFull = bookDirFull;
           const entries = await fs.readdir(folderFull, { withFileTypes: true });
           const allowedExts = [
             "epub",
@@ -304,7 +333,15 @@ function parseEbookMetaOutput(text) {
             if (!allowedExts.includes(ext)) continue;
 
             const relPath = path.join(calibreBookPath, entry.name);
-            const fullPath = path.join(libraryRoot, relPath);
+            const fullPath = resolveInLibrary(relPath, libraryRoot);
+            if (!fullPath) {
+              skippedUnsafePaths += 1;
+              console.warn("Calibre folder-scan file skipped: path escapes the library", {
+                bookId,
+                relPath,
+              });
+              continue;
+            }
             try {
               const stat = await fs.stat(fullPath);
               if (!stat.isFile()) continue;
@@ -343,7 +380,15 @@ function parseEbookMetaOutput(text) {
 
       for (const name of coverCandidates) {
         const relCoverPath = path.join(calibreBookPath, name);
-        const fullCoverPath = path.join(libraryRoot, relCoverPath);
+        const fullCoverPath = resolveInLibrary(relCoverPath, libraryRoot);
+        if (!fullCoverPath) {
+          skippedUnsafePaths += 1;
+          console.warn("Calibre cover skipped: path escapes the library", {
+            bookId,
+            relCoverPath,
+          });
+          continue;
+        }
         try {
           const coverStat = await fs.stat(fullCoverPath);
           if (coverStat.isFile()) {
@@ -396,6 +441,7 @@ function parseEbookMetaOutput(text) {
     return res.json({
       success: true,
       imported: result.length,
+      skippedUnsafePaths,
     });
   } catch (error) {
     console.error("Calibre import failed", error);
@@ -459,6 +505,7 @@ router.post("/calibre/rescan", authenticateToken, validate({ query: calibreResca
           attachedExisting: 0,
           createdNew: 0,
           skippedNoFiles: 0,
+          skippedUnsafePaths: 0,
         },
       });
     }
@@ -466,6 +513,10 @@ router.post("/calibre/rescan", authenticateToken, validate({ query: calibreResca
     let attachedExisting = 0;
     let createdNew = 0;
     let skippedNoFiles = 0;
+    // See the import route's note: a metadata.db `path` or `data.name` of
+    // `../../../../etc` used to be joined unconfined and written straight
+    // back into Mongo.
+    let skippedUnsafePaths = 0;
 
     for (const row of rows) {
       const bookId = row.id;
@@ -541,13 +592,36 @@ router.post("/calibre/rescan", authenticateToken, validate({ query: calibreResca
       const files = [];
       const calibreBookPath = row.path; // relative path under the library root
 
+      // The row's own directory first: everything below is derived from it.
+      const bookDirFull = calibreBookPath
+        ? resolveInLibrary(calibreBookPath, libraryRoot)
+        : null;
+      if (!bookDirFull) {
+        // No path at all lands here too: every join below would have thrown
+        // on it and taken the whole walk down with a 500.
+        skippedUnsafePaths += 1;
+        console.warn("Calibre row skipped: path missing or outside the library", {
+          bookId,
+          calibreBookPath,
+        });
+        continue;
+      }
+
       for (const d of dataRows) {
         if (!d.format || !d.name) continue;
 
         const format = String(d.format).toLowerCase();
         const fileName = `${d.name}.${format}`;
         const relPath = path.join(calibreBookPath, fileName);
-        const fullPath = path.join(libraryRoot, relPath);
+        const fullPath = resolveInLibrary(relPath, libraryRoot);
+        if (!fullPath) {
+          skippedUnsafePaths += 1;
+          console.warn("Calibre file skipped: path escapes the library", {
+            bookId,
+            relPath,
+          });
+          continue;
+        }
 
         try {
           const stat = await fs.stat(fullPath);
@@ -571,7 +645,7 @@ router.post("/calibre/rescan", authenticateToken, validate({ query: calibreResca
       // Fallback: if no files were found via the data table, scan the folder on disk
       if (files.length === 0 && calibreBookPath) {
         try {
-          const folderFull = path.join(libraryRoot, calibreBookPath);
+          const folderFull = bookDirFull;
           const entries = await fs.readdir(folderFull, { withFileTypes: true });
           const allowedExts = [
             "epub",
@@ -590,7 +664,15 @@ router.post("/calibre/rescan", authenticateToken, validate({ query: calibreResca
             if (!allowedExts.includes(ext)) continue;
 
             const relPath = path.join(calibreBookPath, entry.name);
-            const fullPath = path.join(libraryRoot, relPath);
+            const fullPath = resolveInLibrary(relPath, libraryRoot);
+            if (!fullPath) {
+              skippedUnsafePaths += 1;
+              console.warn("Calibre folder-scan file skipped: path escapes the library", {
+                bookId,
+                relPath,
+              });
+              continue;
+            }
             try {
               const stat = await fs.stat(fullPath);
               if (!stat.isFile()) continue;
@@ -634,7 +716,15 @@ router.post("/calibre/rescan", authenticateToken, validate({ query: calibreResca
 
       for (const name of coverCandidates) {
         const relCoverPath = path.join(calibreBookPath, name);
-        const fullCoverPath = path.join(libraryRoot, relCoverPath);
+        const fullCoverPath = resolveInLibrary(relCoverPath, libraryRoot);
+        if (!fullCoverPath) {
+          skippedUnsafePaths += 1;
+          console.warn("Calibre cover skipped: path escapes the library", {
+            bookId,
+            relCoverPath,
+          });
+          continue;
+        }
         try {
           const coverStat = await fs.stat(fullCoverPath);
           if (coverStat.isFile()) {
@@ -740,6 +830,7 @@ router.post("/calibre/rescan", authenticateToken, validate({ query: calibreResca
         attachedExisting,
         createdNew,
         skippedNoFiles,
+        skippedUnsafePaths,
       },
     });
   } catch (error) {

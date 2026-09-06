@@ -547,3 +547,70 @@ src` 18 warnings → 18; `npm run build` green; mobile harness
 - **`GET /api/books`, `POST /api/books`, `PATCH/DELETE /api/books/:id`,
   `GET /api/shelves` are still live REST** with no zod schemas, duplicating
   the gateway. Unchanged from the note above; still worth a deletion pass.
+
+---
+
+## Three rules, from BURN_REVIEW_2 (2026-09-05, after the going-over)
+
+The going-over's hardening was right and did not reach the whole surface —
+the review's characteristic failure mode. Three findings in this app were that
+shape (#7 `ebookFormats.js`, #8 the Calibre walk, #9 the cover fetcher). The
+fixes are in; these are the rules that keep them fixed. API tests 172 → 199
+(196 pass, 3 skip locally — the fixture-backed Calibre tests, see the
+better-sqlite3 note above; they run on CI).
+
+**1. `libraryPaths.js` is the only way to turn a relative path into an
+absolute one — in every module, not just `server.js`.** The going-over routed
+each of `server.js`'s file routes through `resolveInLibrary` and left
+`ebookFormats.js` joining `path.join(root, relPath)` for the download source
+and `path.join(root, book.coverPath)` for the `--cover` it hands the
+`ebook-convert` spawn. `ebookFormats.js` is reachable from
+`GET /download-basket/:slug/item/:index`, which is secret-word gated and
+**otherwise unauthenticated**, so a `Book.files[].path` of
+`../secret/private.epub` made `res.download` stream a file from outside
+`LIBRARY_PATH`. Both joins, the converted output's path, and the relative path
+written back into `Book.files[]` now go through the helper.
+
+Paths that came *out of the database* use `resolveStoredInLibrary()` — same
+answer as `resolveInLibrary`, plus a log line, because a stored escape is a
+bad row rather than a bad request. Null is 404 (a read) or 400 (a write).
+Never "close enough": an escaping row is dropped from the source candidates
+rather than converted from, and `convertEbookFile()` refuses an input, output
+or cover outside the root whoever calls it.
+
+**2. Anything that ingests paths from outside confines them *before* it stores
+them, and counts what it refuses.** The Calibre walk in
+`routes/importRoutes.js` (both `POST /api/import/calibre` and
+`/calibre/rescan`) joined `metadata.db`'s `books.path` and `data.name` onto
+the library root unchecked and wrote the result into `Book.files[].path` /
+`Book.coverPath` — the ingestion point that gives rule 1 its payload. A row
+whose directory escapes is skipped whole; a file or cover whose derived path
+escapes is skipped individually; both are logged and counted. The rescan
+summary now carries a fifth counter, `skippedUnsafePaths`, alongside `rows`,
+`attachedExisting`, `createdNew` and `skippedNoFiles`, and the one-time import
+returns it too. **A non-zero `skippedUnsafePaths` means the Calibre library
+holds rows pointing outside `LIBRARY_PATH` — worth looking at, not routine.**
+
+**3. Outbound fetches follow redirects manually, re-validate every hop, and
+stop at three.** `coverFetch.js` checked the host allow-list once, on the URL
+the client supplied, and then let `redirect: "follow"` chase up to twenty hops
+unchecked — so an open redirector on an allowed host reached the Docker
+network the allow-list existed to close off, and the bytes on the far side
+were written into the library and served back by `GET /api/books/:id/cover`.
+Redirects are `manual` now; each `Location` is resolved, re-checked for scheme
+and host, and the chain is capped at `MAX_COVER_REDIRECTS = 3`. The list is
+exact hosts, not suffixes, and only the ones the callers actually produce:
+
+| Host | Who produces it |
+|---|---|
+| `covers.openlibrary.org` | `search-covers`' OpenLibrary candidates; `downloadOpenLibraryCover()` |
+| `books.google.com` | the Google Books `imageLinks.thumbnail` the `googlebooks` branch is handed |
+| `books.googleusercontent.com` | where a `books.google.com/books/content` request redirects to |
+
+Bare `google.com` and bare `googleusercontent.com` are **gone** — the first
+carries well-known open redirectors, the second serves arbitrary user-uploaded
+bytes, and both were matched as suffixes. There is no Goodreads image CDN on
+the list because nothing in this API fetches one: the Goodreads import is a
+CSV of metadata, and the only cover providers `POST /api/books/:id/cover`
+accepts are `openlibrary` and `googlebooks`. A new provider gets its host
+added here in the same commit.

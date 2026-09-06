@@ -36,6 +36,29 @@ export function resolveInLibrary(relPath, root = libraryRoot()) {
 }
 
 /**
+ * The read-side guard. `resolveInLibrary()` protects paths this process is
+ * about to *build*; this one protects paths it has already *stored* — a
+ * `Book.files[].path` or a `Book.coverPath` that a past write (the Calibre
+ * walk, before 2026-09-05, joined its rows unconfined) may have left pointing
+ * outside the root. Same answer, plus a log line, because a stored escape is
+ * evidence of a bad row rather than a bad request. Callers treat null as
+ * "no such file" and fail closed — never "close enough".
+ */
+export function resolveStoredInLibrary(
+  relPath,
+  { root = libraryRoot(), what = "stored path", logTag = "libraryPaths" } = {}
+) {
+  const full = resolveInLibrary(relPath, root);
+  if (!full) {
+    console.warn(`${logTag}: refused a stored path outside the library`, {
+      what,
+      relPath: String(relPath ?? ""),
+    });
+  }
+  return full;
+}
+
+/**
  * Reduce a caller-supplied value to something safe to use as a single path
  * segment: no separators, no leading dots, bounded length.
  */
@@ -55,4 +78,10 @@ export function escapeRegex(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-export default { libraryRoot, resolveInLibrary, safePathSegment, escapeRegex };
+export default {
+  libraryRoot,
+  resolveInLibrary,
+  resolveStoredInLibrary,
+  safePathSegment,
+  escapeRegex,
+};
