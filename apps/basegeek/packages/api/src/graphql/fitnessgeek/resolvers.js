@@ -18,7 +18,25 @@ import DailySummary from './models/DailySummary.js';
 import WeightGoals from './models/WeightGoals.js';
 import { isValidObjectId } from './ownership.js';
 import { toUtcMidnight, utcDateString, utcDayRange } from '@geeksuite/utils/dates';
-import { validateFitnessMealsArgs } from './validation.js';
+import { validateFitnessMealsArgs, validateParseFoodEntryArgs } from './validation.js';
+import { runAIFeature } from '../../services/aiFeatureRunner.js';
+import {
+  QUICK_ADD_SCHEMA,
+  QUICK_ADD_SYSTEM_PROMPT,
+  deterministicParse,
+  hourFromDateHint,
+  isValidProposal,
+  mealTypeForHour,
+  normalizeProposal,
+} from './quickAddParser.js';
+
+/**
+ * Daily ceiling for `parseFoodEntry`'s model call, per user. Food is logged
+ * several times a day and a quick-add is one call per sentence, so this is
+ * deliberately the loosest cap in the suite — a heavy logging day, not a
+ * budget for a script.
+ */
+const QUICK_ADD_MAX_CALLS_PER_DAY = 40;
 
 /** Escape every regex metacharacter so user input can only match literally. */
 const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -807,6 +825,102 @@ export const resolvers = {
     fitnessInsightsContext: async (_, { days = 7 }, { user }) => {
       if (!user) throw new Error('Unauthorized');
       return buildUserContext(user.id, { daysBack: days });
+    },
+
+    /**
+     * Natural-language quick-add (AI_IDEAS.md idea #2, stream R115).
+     *
+     * Read-only by construction. It answers a *proposal* — one search query
+     * per thing the person said they ate — and the frontend runs each query
+     * through the existing food search and logs the ticked rows through the
+     * ordinary `addFoodLog` mutation. Nothing here writes, and the model never
+     * names a food: it returns search terms, so a fragment with no catalog
+     * match shows "no match — search?" instead of an invented item.
+     *
+     * The deterministic split runs first and is also the fallback, so the
+     * query answers something useful when the cap is hit, when aiGeek is down
+     * or slow, or when the model returns something that will not validate.
+     *
+     * **The opt-in.** Two switches, and they are not the same switch:
+     *
+     *   - `ai.enabled` / `ai.features.natural_language_food_logging` on the
+     *     user's fitnessgeek settings is the server-side kill switch honoured
+     *     here — off means the deterministic split with
+     *     `provenance.reason = 'disabled'` and no model call at all.
+     *   - The *default-off opt-in* the AI rules ask for is client-side
+     *     (`fitnessgeek:quickAddNL` in the browser), because both server-side
+     *     flags default to **true** in `@geeksuite/schemas`, which this stream
+     *     does not own. Documented in `apps/fitnessgeek/DOCS/CONTEXT.md`;
+     *     flipping the schema default is the clean follow-up.
+     *
+     * Only the sentence and the hour leave the box — no history, no settings,
+     * nothing from another app.
+     */
+    parseFoodEntry: async (_, args, { user }) => {
+      if (!user) throw new Error('Unauthorized');
+      const { text, date } = validateParseFoodEntryArgs(args || {});
+
+      const hour = hourFromDateHint(date);
+      const defaultMealType = mealTypeForHour(hour);
+      const fallback = () => deterministicParse(text, { hour });
+
+      const settings = await UserSettings.findOne({ user_id: user.id })
+        .select('ai')
+        .lean()
+        .catch(() => null);
+      const modelAllowed =
+        settings?.ai?.enabled !== false &&
+        settings?.ai?.features?.natural_language_food_logging !== false;
+
+      let data;
+      let provenance;
+      if (!modelAllowed) {
+        data = fallback();
+        provenance = {
+          source: 'fallback',
+          reason: 'disabled',
+          model: null,
+          provider: null,
+          cached: false,
+          callsToday: 0,
+          cap: QUICK_ADD_MAX_CALLS_PER_DAY,
+        };
+      } else {
+        ({ data, provenance } = await runAIFeature({
+          app: 'fitnessgeek',
+          feature: 'quickadd',
+          userId: user.id,
+          system: QUICK_ADD_SYSTEM_PROMPT,
+          user: JSON.stringify({
+            sentence: text,
+            defaultMealType,
+            deterministicFragments: fallback().fragments,
+          }),
+          schema: QUICK_ADD_SCHEMA,
+          validate: isValidProposal,
+          fallback,
+          maxCallsPerDay: QUICK_ADD_MAX_CALLS_PER_DAY,
+        }));
+      }
+
+      const { fragments } = normalizeProposal(data, { mealType: defaultMealType });
+
+      // The one number this feature is judged on: proposals produced. The rows
+      // actually logged come through `addFoodLog` like any other row and are
+      // deliberately NOT tagged — see the CONTEXT note; fitnessgeek has no
+      // client telemetry, and the only free-form field on a food log
+      // (`notes`) is the user's own text.
+      logger.info(
+        {
+          metric: 'fitnessgeek.quickadd.proposal_logged',
+          fragments: fragments.length,
+          source: provenance?.source,
+          reason: provenance?.reason || null,
+        },
+        '[fitnessgeek] quick-add proposal'
+      );
+
+      return { fragments, provenance };
     },
 
     garminStatus: async (_, __, { user }) => {

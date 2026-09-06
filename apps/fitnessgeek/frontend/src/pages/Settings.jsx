@@ -18,6 +18,7 @@ import {
   Palette as ThemeIcon,
   Language as LanguageIcon,
   MonitorHeart as BPIcon,
+  AutoAwesome as SparkleIcon,
   Save as SaveIcon,
   RestartAlt as DiscardIcon,
 } from '@mui/icons-material';
@@ -27,6 +28,10 @@ import { settingsService } from '../services/settingsService.js';
 import logger from '../utils/logger.js';
 import { useThemeMode as useAppTheme } from '@geeksuite/user';
 import HouseholdSettings from '../components/Settings/HouseholdSettings';
+import {
+  isNaturalQuickAddEnabled,
+  setNaturalQuickAddEnabled,
+} from '../utils/quickAddPreference.js';
 import {
   Surface,
   DisplayHeading,
@@ -55,6 +60,11 @@ const Settings = () => {
   const [garminPassword, setGarminPassword] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // Natural-language quick-add is a per-browser opt-in, default OFF, and it
+  // saves the moment it is flipped — it never rides the Save bar below,
+  // because it is not part of the settings document. See
+  // `utils/quickAddPreference.js` for why it lives here and not on the server.
+  const [naturalQuickAdd, setNaturalQuickAdd] = useState(() => isNaturalQuickAddEnabled());
   const { notify } = useToast();
 
   useEffect(() => {
@@ -337,6 +347,46 @@ const Settings = () => {
             </Select>
           </FormControl>
         </Box>
+      </Surface>
+
+      {/* AI Assist */}
+      <Surface sx={{ mb: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1.25 }}>
+          <SparkleIcon sx={{ color: 'primary.main' }} />
+          <Typography
+            sx={{
+              fontFamily: "'DM Serif Display', serif",
+              fontSize: '1.375rem',
+              fontWeight: 400,
+              color: 'text.primary',
+              letterSpacing: '-0.01em',
+            }}
+          >
+            AI Assist
+          </Typography>
+        </Box>
+
+        <FormControlLabel
+          control={
+            <Switch
+              checked={naturalQuickAdd}
+              onChange={(e) => {
+                setNaturalQuickAdd(e.target.checked);
+                setNaturalQuickAddEnabled(e.target.checked);
+              }}
+              inputProps={{ 'aria-label': 'Natural-language quick-add' }}
+            />
+          }
+          label="Natural-language quick-add"
+          sx={{ display: 'flex', minHeight: 44 }}
+        />
+        <Typography sx={{ color: 'text.secondary', fontSize: '0.8125rem', mt: 0.5 }}>
+          Adds a &ldquo;Describe a meal&rdquo; button to the Food Log: type
+          &ldquo;two eggs, toast with butter, black coffee&rdquo; and check the proposal
+          before anything is logged. Only that sentence and the current hour leave the
+          box, and no food is ever logged without you ticking it. Saved on this device;
+          off by default.
+        </Typography>
       </Surface>
 
       {/* Garmin Integration */}

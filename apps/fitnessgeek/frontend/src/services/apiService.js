@@ -268,6 +268,19 @@ const GET_COACHING = gql` query GetCoaching { fitnessInsightsCoaching { type con
 const GET_AI_CONTEXT = gql` query GetAiContext($days: Int) { fitnessInsightsContext(days: $days) } `;
 const AI_CHAT = gql` mutation AiChat($message: String!, $history: [ChatMessageInput]) { fitnessInsightsChat(message: $message, history: $history) { type content generatedAt } } `;
 
+// Natural-language quick-add (AI_IDEAS.md idea #2, stream R115). A READ:
+// `parseFoodEntry` proposes search queries and never writes. Every row the
+// user ticks is then logged through ADD_FOOD_LOG below, exactly as a
+// hand-picked one is.
+const PARSE_FOOD_ENTRY = gql`
+  query ParseFoodEntry($text: String!, $date: String) {
+    parseFoodEntry(text: $text, date: $date) {
+      fragments { text query servings unit mealType }
+      provenance { source reason model provider cached callsToday cap }
+    }
+  }
+`;
+
 const GET_GARMIN_STATUS = gql`
   query GetGarminStatus { garminStatus { enabled hasCredentials hasTokens lastConnectedAt } }
 `;
@@ -530,6 +543,15 @@ function routeRequest(method, url, data) {
     if (base === '/insights/context') {
       const sp = new URLSearchParams(url.split('?')[1]);
       return { query: GET_AI_CONTEXT, variables: { days: parseInt(sp.get('days')) || 7 } };
+    }
+
+    // `text` and `date` ride as query params so this stays on the same
+    // REST-shaped router every other read uses. `date` is the caller's LOCAL
+    // wall clock (YYYY-MM-DDTHH:mm) — the gateway runs UTC and cannot infer
+    // the hour a meal type should be guessed from.
+    if (base === '/quick-add/parse') {
+      const sp = new URLSearchParams(url.split('?')[1]);
+      return { query: PARSE_FOOD_ENTRY, variables: { text: sp.get('text') || '', date: sp.get('date') || null } };
     }
 
     if (base === '/fitness/garmin/status') return { query: GET_GARMIN_STATUS };

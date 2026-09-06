@@ -109,6 +109,15 @@ const UnifiedFoodSearch = ({
   onBarcodeClick,
 
   // Customization
+  /**
+   * A query to seed the box with and run once, when the caller already knows
+   * what the user is looking for. The natural-language quick-add's "no match —
+   * search" is the caller that needs it: it hands over the fragment's own
+   * query rather than making the person retype what they just typed.
+   * Seeded once per distinct value, so a re-render never overwrites what they
+   * have since typed themselves.
+   */
+  initialQuery = '',
   placeholder = "Search foods or describe your meal (e.g., '2 tacos and a beer')...",
   maxResults = 25,
   className,
@@ -179,6 +188,17 @@ const UnifiedFoodSearch = ({
       setSkippedGroupKeys(new Set());
     }
   }, [searchQuery]);
+
+  // ─── Seed from a caller-supplied query (natural-language quick-add) ───
+  const seededQueryRef = useRef(null);
+  useEffect(() => {
+    const seed = String(initialQuery || '').trim();
+    if (!seed || seededQueryRef.current === seed) return;
+    seededQueryRef.current = seed;
+    setSearchQuery(seed);
+    if (seed.length >= 2) searchFoods(seed);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- searchFoods is re-created every render; the ref guard is what makes this run once per distinct seed, and adding it would defeat that.
+  }, [initialQuery]);
 
   // ─── Auto-stage best matches on composite arrival ───
   // Runs once per unique composite query. The user lands on the resolver
@@ -268,8 +288,12 @@ const UnifiedFoodSearch = ({
     }
   };
 
-  const searchFoods = async () => {
-    if (!searchQuery.trim()) {
+  const searchFoods = async (queryOverride) => {
+    // `queryOverride` exists for the seeded path: `setSearchQuery()` has not
+    // flushed yet when the seed effect wants to search, and reading state
+    // there would search the previous term.
+    const term = String(queryOverride ?? searchQuery).trim();
+    if (!term) {
       setSearchResults([]);
       return;
     }
@@ -279,7 +303,7 @@ const UnifiedFoodSearch = ({
     setHasAIResults(false);
 
     try {
-      const foods = await foodService.search(searchQuery, {
+      const foods = await foodService.search(term, {
         limit: maxResults,
         includeAI: true
       });
@@ -289,7 +313,7 @@ const UnifiedFoodSearch = ({
 
       let meals = [];
       try {
-        meals = await fitnessGeekService.getMeals(null, searchQuery);
+        meals = await fitnessGeekService.getMeals(null, term);
       } catch {
         // Meals search is optional
       }

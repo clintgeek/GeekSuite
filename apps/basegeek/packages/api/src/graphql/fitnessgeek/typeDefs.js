@@ -1,6 +1,8 @@
 import { gql } from 'graphql-tag';
 
 export const typeDefs = gql`
+
+
   type DashboardSettings {
     show_current_weight: Boolean
     show_blood_pressure: Boolean
@@ -602,6 +604,36 @@ export const typeDefs = gql`
     bodyBatteryChange: Int
   }
 
+  """
+  One thing the person said they ate, turned into a **search query** — never a
+  food. The frontend runs \`query\` through the existing food search and logs
+  the row the user ticks through the ordinary \`addFoodLog\` mutation, so a
+  fragment with no catalog match becomes "no match — search?" rather than an
+  invented item.
+  """
+  type ParsedFoodFragment {
+    """The piece of the person's own sentence this came from."""
+    text: String!
+    """What to search the food catalog for. Non-empty, at most 80 characters."""
+    query: String!
+    """How many of it. Greater than 0, at most 50."""
+    servings: Float!
+    """The measure word they used ('cup', 'slice'), or null. A UI hint; the nutrition math never reads it."""
+    unit: String
+    """breakfast | lunch | dinner | snack."""
+    mealType: String!
+  }
+
+  """
+  A quick-add proposal. Nothing here is written: every row the user keeps goes
+  through \`addFoodLog\` after an explicit action, exactly as a hand-entered one
+  would.
+  """
+  type ParsedFoodEntry {
+    fragments: [ParsedFoodFragment!]!
+    provenance: AIProvenance!
+  }
+
   type Query {
     fitnessUserSettings: FitnessUserSettings
     fitnessWeights: [FitnessWeight]
@@ -633,6 +665,15 @@ export const typeDefs = gql`
     fitnessInsightsTrendWatch(start: String, days: Int): FitnessInsight
     fitnessInsightsCoaching: FitnessInsight
     fitnessInsightsContext(days: Int): FitnessJSON
+
+    """
+    Natural-language quick-add. \`text\` is one "what I ate" sentence (at most
+    500 characters); \`date\` is the caller's LOCAL wall clock
+    (\`YYYY-MM-DDTHH:mm\`) and only its hour is read, to pick a meal type — this
+    process runs in UTC and cannot infer the caller's hour. Read-only: it
+    proposes, it never logs.
+    """
+    parseFoodEntry(text: String!, date: String): ParsedFoodEntry!
 
     garminStatus: GarminStatus
     garminDaily(date: String): GarminDaily

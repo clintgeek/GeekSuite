@@ -26,3 +26,28 @@ export const fitnessMealsArgsSchema = z.object({
 });
 
 export const validateFitnessMealsArgs = validateInput(fitnessMealsArgsSchema);
+
+/**
+ * `parseFoodEntry(text:, date:)` — natural-language quick-add (AI_IDEAS.md #2).
+ *
+ * `text` is the one thing in this module that reaches a *model*, so the bound
+ * is a cost control as much as an input check: 500 characters is a generous
+ * "what I ate" sentence and a cheap prompt. It is not a search string and
+ * never reaches mongod as a regex — the fragments it produces are search
+ * *queries* the frontend runs through the existing food search, which does its
+ * own escaping.
+ *
+ * `date` is the caller's local wall clock (`YYYY-MM-DDTHH:mm`) and only the
+ * hour is read from it, to pick a meal type — see `quickAddParser.js`'s hour
+ * bands for why the server cannot infer that itself. A bare `YYYY-MM-DD` is
+ * accepted and simply carries no hour. It is deliberately validated as a
+ * bounded string rather than a date: an unparseable value degrades to the
+ * documented UTC-hour fallback, and refusing the whole query over a clock hint
+ * would be a worse trade than guessing "snack".
+ */
+export const parseFoodEntryArgsSchema = z.object({
+  text: z.string().trim().min(1).max(500),
+  date: z.string().trim().max(40).nullable().optional(),
+});
+
+export const validateParseFoodEntryArgs = validateInput(parseFoodEntryArgsSchema);

@@ -942,3 +942,181 @@ synchronous-failure path instead.
 
 `pnpm build` and `pnpm lint` (55 warnings, unchanged baseline) both clean; `tools/mobile-harness`
 (`--app fitnessgeek --viewports phone`) stays at 0 violations across 20 scenes, both modes.
+
+---
+
+## Night 2 — 2026-09-06 (backend stream, Q62 half / Q39 / Q40 / Q41 / Q48 §12)
+
+Full record of decisions and code: `DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md` §12 (each follow-up
+marked done/reported). Summary here for this app's own context:
+
+- **Q62 (aiCoach deletion).** `routes/aiCoachRoutes.js` and `services/aiCoachService.js` deleted —
+  confirmed caller-less by grep, backend and frontend both, and the `/api/ai-coach` mount removed
+  from `app.js`. `services/aiRecoveryService.js` was **not** touched: `routes/influxRoutes.js` calls
+  it (`generateRecoveryContext`, `getRecoveryRecommendations`), so it has a live caller unrelated to
+  the coach router.
+- **Q62 (InfluxDB user-scoping).** Researched, not changed. Every query in `services/influxService.js`
+  (`SleepIntraday`, `SleepSummary`, `HeartRateIntraday`, `StressIntraday`, `BodyBatteryIntraday`,
+  `StepsIntraday`, `DailyStats`, `HRV_Intraday`, `BreathingRateIntraday`) filters only on `time` — no
+  measurement carries a user tag to filter on. There is no write path anywhere in this repo (grepped
+  `apps/fitnessgeek` and `apps/basegeek` for `writePoints`/`writeMeasurement`; the only Influx-writing
+  code found is a third-party MCP tool and a setup script, neither of which writes application data) —
+  the Garmin OAuth integration (`garminConnectService.js`) reads live from the Garmin Connect API
+  directly and never touches Influx. The data populating these measurements comes from a process
+  outside this repo's control (a single-account sync, per the box), so per-user filtering can't be
+  added without either (a) confirming that external writer tags points by user — out of scope, needs a
+  production `SHOW TAG KEYS` check Sage would have to run — or (b) breaking the dashboard for the one
+  account it already serves. Left exactly as `DOCS/CONTEXT.md`'s existing "InfluxDB reads are not
+  user-scoped" note already says; formalized here with the measurement list so the next person doesn't
+  have to re-derive it.
+- **Q39.** `packages/schemas/fitnessgeek/nutritionGoals.js`'s `computeGoalProgress` now treats
+  sugar/sodium as ceilings (compliance headroom, 100→0 as the limit is approached, clamped at 0 past
+  it) instead of floors — Night 2 policy decision, "pick ceiling." The three caller-less instance
+  methods (`NutritionGoals.checkGoalsMet`/`getProgress`, `Meal.getNutrition`) were left in place and
+  reported with a recommendation to delete — that decision touches parity assertions on both
+  `apps/fitnessgeek` and `apps/basegeek` sides, so it's Chef's call per Night 2 policy, not made here.
+- **Q40.** `FoodItem.barcode`'s unique index is now PARTIAL
+  (`partialFilterExpression: { is_deleted: false, barcode: { $type: 'string' } }`) instead of
+  `sparse`, so a soft-deleted row's barcode no longer blocks a re-add. Migration script:
+  `backend/scripts/fixBarcodeUniqueIndex.js` (idempotent, drops the stale index only — **not run
+  against production this pass; Sage runs it**, per the redeploy rule in the shared module's header).
+- **Q41.** One shared `foodCatalogVisibilityFilter(userId)` (in
+  `packages/schemas/fitnessgeek/foodItem.js`) replaces the two disagreeing copies (`FoodItem.search`'s
+  `{user_id: null}`-only match and basegeek's `foodCatalogFilter`'s wider match). `foodRoutes.js`'s
+  `POST /api/foods` now walks the shared `foodItemDedupeFilters` ladder instead of its own
+  non-sequential two-rung copy (name+brand rung was previously missing entirely); its ownership split
+  from `findOrCreateFoodItem` (user-owned vs. global creation) is unchanged and documented in place —
+  folding that in too would make every custom food typed here visible to every other user, a privacy
+  change, not a refactor.
+- **Q48 §12.** Went through all 14 follow-ups; fixed every one that needed no product decision
+  (#1, #3, #6, #13 above; #5 was already done). The three that do need one (#4 caller-less methods,
+  #7/#8 `goals_met` dead/backwards flags, #9 snapshot-vs-catalog recompute) are reported with a
+  recommendation, not decided. #2 (foodRoutes' third ladder) is half-done: the lookup logic is shared
+  now, the ownership question is still open. #10, #11, #12, #14 are unchanged — each is already
+  explicitly flagged in the source doc as "left alone deliberately" or "Chef's call," and this pass
+  respected that rather than reopening it.
+- **Out-of-scope touches, disclosed.** Three files under `apps/basegeek/packages/api` were edited
+  despite being outside this stream's stated scope, because the Q39/Q40/Q41 fixes above live in the
+  shared `packages/schemas` factory both apps consume, and leaving the gateway's own test suite red
+  would have violated this stream's own verification requirement (gateway parity tests green):
+  `apps/basegeek/packages/api/src/graphql/fitnessgeek/models/FoodItem.js` (search static reconciled,
+  same as the REST copy), `apps/basegeek/packages/api/src/graphql/fitnessgeek/ownership.js`
+  (`foodCatalogFilter` now delegates its filter shape to the shared helper, keeps its own
+  `requireUser` guard), and `apps/basegeek/packages/api/src/__tests__/fitnessgeekSchemaParity.test.js`
+  (three tests updated to assert the fixed/reconciled behaviour instead of the old bug/disagreement).
+  None of `typeDefs.js`, `resolvers.js` or `validation.js` — the three files explicitly off-limits
+  this pass — were touched.
+
+---
+
+## Night 2 — 2026-09-06 — natural-language quick-add
+
+*AI_IDEAS.md idea #2, stream R115. "Type what you ate" → a **proposal**, never
+a write. Nothing about the food-log write path changed: every row the person
+ticks goes through the same `addFoodLog` mutation a hand-picked food does.*
+
+### What landed
+
+**Gateway** (`apps/basegeek/packages/api/src/graphql/fitnessgeek/`)
+
+- `quickAddParser.js` (new) — the deterministic half. Splits on commas /
+  newlines / semicolons / " and ", reads a leading quantity (`2`, `1.5`,
+  `1/2`, `1 1/2`, `½`, `1½`, "half a", "a couple of", "a few", "dozen"), pulls
+  a measure word off a short unit list, strips the meal phrase, and caps the
+  result (≤ 12 fragments, query ≤ 80 chars, servings in (0, 50]). Also owns the
+  JSON schema, the system prompt, `isValidProposal()` and `normalizeProposal()`.
+- `resolvers.js` — `Query.parseFoodEntry(text, date)`. Deterministic pass
+  first; that same pass is the `fallback` handed to
+  `runAIFeature({ app: 'fitnessgeek', feature: 'quickadd', maxCallsPerDay: 40 })`,
+  so cap / down / slow / unparseable / invalid all answer with it.
+- `typeDefs.js` — `ParsedFoodFragment`, `ParsedFoodEntry`, and `AIProvenance`.
+- `validation.js` — `parseFoodEntryArgsSchema` (text ≤ 500 chars; `date` a
+  bounded string).
+- Tests: `src/__tests__/fitnessgeekQuickAddParser.test.js` (parser, no Mongo)
+  and `fitnessgeekQuickAddResolver.test.js` (resolver, aiService mocked) — 70
+  cases.
+
+**Frontend** (`apps/fitnessgeek/frontend/src/`)
+
+- `components/FoodLog/NaturalLanguageQuickAdd.jsx` (new) — a `GeekSheet`: one
+  "What did you eat?" field → `parseFoodEntry` → one catalog search per
+  fragment → a proposal card (tick box, best match with brand and source,
+  editable servings, per-row meal picker, "no match — Search “x”"), an
+  `AI-drafted` chip with the provenance line, and one "Log N items" button.
+- `utils/quickAddPreference.js`, `utils/quickAddProvenance.js` (new).
+- `services/quickAddService.js` (new) + `services/apiService.js` route
+  `GET /quick-add/parse` → the `ParseFoodEntry` document.
+- `pages/FoodLog.jsx` — a "Describe a meal" button in the quick-actions row
+  (only when opted in), the sheet, and `handleLogProposal()`.
+- `pages/Settings.jsx` — an "AI Assist" card with the opt-in switch.
+- `components/FoodSearch/UnifiedFoodSearch.jsx` and
+  `components/FoodLog/AddFoodDialog.jsx` — a new `initialQuery` prop, seeded
+  once per distinct value, so "no match — search" hands the fragment's query
+  straight to the ordinary search.
+- Tests: `components/__tests__/NaturalLanguageQuickAdd.test.jsx`,
+  `services/__tests__/quickAddRouting.test.js`,
+  `utils/__tests__/quickAddPreference.test.js` — 23 cases.
+
+### The decisions, and why
+
+- **The opt-in is client-side (`localStorage['fitnessgeek:quickAddNL']`,
+  default OFF), and that is a compromise, not a preference.** The obvious home
+  for it is `ai.features.natural_language_food_logging`, which this app already
+  persists and which names this exact feature — but it, and `ai.enabled` above
+  it, **default to `true`** in `@geeksuite/schemas`, and that module is shared
+  with the REST backend. Reusing it would have shipped the feature ON for every
+  existing user, which the AI rules forbid. So the two switches do different
+  jobs: the localStorage flag is the opt-in (UI hidden and no query issued when
+  off), and `ai.features.natural_language_food_logging` / `ai.enabled` is a
+  **server-side kill switch the resolver honours** — off means the
+  deterministic split, `provenance.reason = 'disabled'`, and no model call at
+  all. **Follow-up:** flip the schema default to `false` and move the opt-in
+  server-side. It needs a `packages/schemas` change plus a settings write path.
+- **`date` is the caller's local wall clock (`YYYY-MM-DDTHH:mm`), not a
+  calendar date.** The gateway runs UTC (BURN_REVIEW #13), so it cannot know
+  what hour it is where the user is, and the hour is what picks a meal type —
+  the same reasoning behind `requireCalendarDate()` one field over. A bare
+  `YYYY-MM-DD` (or nothing) falls back to this process's UTC hour, documented
+  and never taken by the frontend. Hour bands are the ones
+  `FoodLog.jsx`'s `mealTypeForNow` already uses: `<10` breakfast, `<15` lunch,
+  `<21` dinner, else snack.
+- **A meal word only counts as intent in a phrase ("eggs for breakfast"), as a
+  leading label ("lunch: soup") or as a bare trailing word.** Matching it
+  anywhere read "breakfast burrito" as a breakfast intent *and* stripped the
+  word out of the search query, turning a real food into "burrito".
+- **`AIProvenance` is declared inline in this module's `typeDefs.js`, not
+  imported from `services/aiFeatureRunner.js`.** `tools/gql-arg-audit.mjs`
+  imports every module's `typeDefs.js` standalone, specifically so that doing
+  so opens no database connection; importing the runner drags in `aiService` →
+  `@geeksuite/crypto-vault`, which throws without `KEY_VAULT_SECRET`. The SDL
+  text is byte-identical to the runner's `AI_PROVENANCE_SDL`, so
+  `mergeTypeDefs` folds the copies together.
+- **The daily cap is 40**, the loosest in the suite: food is logged several
+  times a day and a quick-add is one call per sentence.
+- **The metric is server-side only.** `parseFoodEntry` emits
+  `logger.info({ metric: 'fitnessgeek.quickadd.proposal_logged', fragments,
+  source, reason })` — one line per proposal produced. Rows actually logged are
+  **not** tagged: fitnessgeek has no client telemetry, and the only free-form
+  field on a food log (`notes`) is the user's own text, so stamping
+  `source: 'quickadd'` there would put a marker in something they wrote.
+  Proposals-per-week over rows-per-week has to come from the two logs together
+  if it is ever wanted.
+- **`Tooltip … describeChild`** on the "Describe a meal" button: MUI otherwise
+  puts the tooltip text in the button's `aria-label`, which *replaces* the
+  visible label (WCAG 2.5.3). The two sibling buttons (Copy Meal, Household)
+  still have that shape — pre-existing, not touched here.
+
+### Left undone
+
+- **No mobile-harness scene covers the sheet.** The harness lives in
+  `tools/mobile-harness/**`, outside this stream's file set, and the feature is
+  behind a default-off localStorage flag so the existing scenes cannot reach
+  it. The harness run is still 0/0/0 across 20 scenes with `--enforce-a11y`.
+  The new surface was axed separately (a throwaway script reusing the harness's
+  own `lib/` and fixtures, both phone schemes): **0 violations, no horizontal
+  scroll**. A permanent scene wants `ctx.addInitScript` to set
+  `fitnessgeek:quickAddNL`, a `ParseFoodEntry` fixture and a `/api/foods`
+  search fixture.
+- **The "best match" is the first search result.** `UnifiedFoodSearch`'s
+  composite resolver has a richer notion of a best candidate; wiring the
+  proposal card through it is a follow-up, not a bug.

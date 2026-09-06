@@ -38,6 +38,12 @@ const AddFoodDialog = ({
   onShowBarcodeScanner,
   mode = 'standard',
   netCarbLimit = 20,
+  /**
+   * Seed the Search tab with a query and run it once. Used by the
+   * natural-language quick-add's "no match — search" so the person does not
+   * retype a fragment they already typed once.
+   */
+  initialQuery = '',
 }) => {
   const theme = useTheme();
   const subtleSurface = alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.16 : 0.08);
@@ -299,6 +305,7 @@ const AddFoodDialog = ({
               <UnifiedFoodSearch
                 mode="dialog"
                 defaultMealType={mealType}
+                initialQuery={initialQuery}
                 showRecent={true}
                 showBarcode={false}
                 onCommitBatch={async (items) => {
