@@ -7,11 +7,10 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 ## Running
 
-**Standing order (Chef, 09-05 ~19:00):** quota is likely exhausted for ~2 h — if R89/R90/R92 stall, that is why. When they land: verify, commit, then **pause and wait for Chef**. No new launches, no push until he says so.
+**PAUSED (09-05 19:25) per Chef.** R89/R90/R91/R92 all landed and are committed. Nothing is running. **Unpushed: everything since wave 11 ()** — R89–R92 + docs; gates not yet run on this HEAD. Next step when Chef returns: run the gates (frozen install, syntax, boot-smoke, harness selftest, repo lint), push wave 12, monitor. No new launches until he says so.
 
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
-| R89 | Q51 rest: a11y burn-down for fitnessgeek (29), bookgeek (4), notegeek/basegeek/startgeek (2 each) → 0, then flip --enforce-a11y in the workflow | opus | five frontends, mobile-harness.yml, MOBILE_UI_PLAN | 09-05 18:40 |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
 ## Queued (launch when files free / prerequisite lands)
@@ -34,7 +33,6 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | Q44 | basegeek config/database.js getAIGeekConnection has no error handler (a bad URI crashes the process); appConnections.js sibling has one | XS | XS |
 | Q48 | consolidation plan §12: 14 open follow-ups (search vs foodCatalogFilter, third dedupe ladder, soft-deleted barcode, caller-less methods, goals_met dead flags, snapshot-vs-catalog recompute, …) — triage | Chef triage | M |
 | Q49 | ai:usage permission is claimed by no route and not in the default mint set — either gate the two /usage routes with it and add it to the defaults, or drop the enum value | XS | XS |
-| Q51 | a11y burn-down: R87 covers packages/ui + bujogeek/storygeek/flockgeek; **fitnessgeek (29) and basegeek console (2) remain** once R85/R83 free those trees; then flip --enforce-a11y at 0 | after R87 + R85/R83 | S |
 | Q52 | fitnessgeek: three chart libraries ship (Nivo, Recharts, chart.js) — consolidate on one (~270 kB async); BarcodeScanner loads ZXing from unpkg at runtime — vendor it or pin a hash | design / M | M |
 | Q55 | bujogeek: TaskEditor is always-mounted with open={bool}, keeping ~250 kB of @mui/x-date-pickers on /today — mount on open (loses the close transition) or lazy-load the pickers inside it | design, S | S |
 | Q20b | aiGeek: simulated streaming (F-21) and user-gated selection (F-14) documented, not fixed | design | S |
