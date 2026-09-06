@@ -12,7 +12,6 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
 | R110 | review2 #14 #15: five unfalsifiable tests made falsifiable; gatewayInputObjectParity generated for all 23 input-object root fields | sonnet | tests across gateway/storygeek/fitnessgeek/bujogeek fe | 09-05 23:45 |
-| R112 | review2 #3: basegeek validates its own session tokens locally instead of HTTP-calling itself through optionalUser (slow basegeek → anonymous → suite logout) | opus | packages/user server, basegeek server.js/middleware + tests | 09-05 23:45 |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
 ## Queued (launch when files free / prerequisite lands)
