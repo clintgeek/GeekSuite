@@ -25,10 +25,10 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | R122 | sonnet | fitnessgeek backend: Q62 half (aiCoach delete, influx), Q39, Q40, Q41, Q48 §12 | **landed** `7166e8b` (wave 18) |
 | R123 | sonnet | Q42 TZ lines (non-basegeek compose) + docs; Q70 tools/kill-orphans.mjs | **landed** `24a77ee` (wave 18) |
 | Sage | — | Q68 stash→branch `wip/dashgeek-redesign-2026-04` ✓; Q10 LocalApps deactivated ✓ (`73965db` script); Q18b `CSRF_TOKEN=enforce` in basegeek compose ✓ (`24a77ee`); Q56 storygeek DB_URI fixed + override dropped ✓ (`c6776b9`); Q58 leaked `datageek_user` dropped from Mongo, init script env-driven ✓ (`73965db`); Q43 ruleset — see Landed | **landed** wave 18 |
-| R124 | opus | Q52 fitnessgeek charts→one lib + ZXing pin/vendor; quick-add opt-in server-side (schema default → false) | running 09:35 |
-| R125 | sonnet | Q55 bujogeek TaskEditor lazy pickers | running 09:35 |
-| R126 | sonnet | harness scenes for the five AI surfaces | running 09:35 |
-| R127 | sonnet | notegeek gateway dead Folder type removal | running 09:35 |
+| R124 | opus | Q52 fitnessgeek charts→one lib + ZXing pin/vendor; quick-add opt-in server-side (schema default → false) | **landed** (wave 19) |
+| R125 | sonnet | Q55 bujogeek TaskEditor lazy pickers | **landed** (wave 19) |
+| R126 | sonnet | harness scenes for the five AI surfaces | **landed** (wave 19) |
+| R127 | sonnet | notegeek gateway dead Folder type removal | **landed** (wave 19) |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
 ## Queued (launch when files free / prerequisite lands)
@@ -88,6 +88,8 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 `startgeek.clintgeek.com` redirect. See `STATUS.md`.
 
 ## Waves
+- **Wave 19** (09-06 ~14:40 CDT): R124 Q52 charts→Nivo + ZXing SRI + quick-add opt-in server-side (`5e82aaf`), R125 Q55 lazy pickers (`7fbdce2`), R126 harness scenes for the AI surfaces (`d2f8d89`), R127 notegeek Folder type gone (`ceb4ae2`), what-next query fix + 44px tabs/stars (`9ed7f18`), runner envelope unwrap + true opt-in (`561d248`), compose empty-key fix (`ddd2b4f`), console CSRF self-heal (`3b18cd3`).
+  **Incident 14:05–14:20:** with `CSRF_TOKEN=enforce` Chef could not log in — his Firefox ran a console bundle cached by the console's service worker from before the client grew the header, so `POST /api/auth/login` was rejected `csrf_token_missing`. A fresh browser against the live page sends the header (probe: `scratchpad/login-probe.mjs`). Rolled back to `report` at 14:12 (compose, `--no-deps`). **Q18b stays open:** flip to enforce again once the report log shows no `missing_header` from real bundles (Chef hard-reloads basegeek console + startgeek on each device first); the console now retries once with the live cookie and reloads once per session, so a stale bundle heals itself on the next attempt.
 - **Wave 18** `c6776b9` (09-06 13:35 CDT): the five AI features (R114–R118) + aiFeatureRunner (R113), Q22/Q38/Q62/Q69/Q49/Q42/Q56/Q58/Q10/Q68 (R119–R123 + Sage). CI + Release green; Watchtower rolled 8/8 at 13:43; compose rolled (basegeek `--no-deps`, datastores untouched); fleet healthy; `CSRF_TOKEN=enforce` live 13:48 with 0 rejections in the first minutes. Post-deploy fix `ddd2b4f` (empty `environment:` keys) is local-only until wave 19. Q40: production `fooditems` never had a unique barcode index (only the compound non-unique `barcode_1_is_deleted_1`), so the E11000 was latent, not live — no migration run; the partial unique index is declared in the shared schema for wherever autoIndex builds it. notegeek `CURSOR-CONTEXT.md` is gitignored (placeholders only) and the classifier refused tracking it — Chef's call.
  pushed
 
