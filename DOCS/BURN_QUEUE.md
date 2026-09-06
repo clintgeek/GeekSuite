@@ -101,7 +101,7 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 
 - 09-05 22:13 — wave 13 (`e587b16`, 14 commits): deployed 22:23 (updated=8), all eight apps 200 and every container (healthy). **CI red on test-bujogeek**: two backend tests asserted the pre-R94 axios timeout behaviour; R96 updated them but landed after the push — fixed by wave 14. Wave 13 was: R93, R94, R95, R97, R98, R99 + storygeek override + healthcheck fix. Gates green.
 
-- 09-05 22:55 — wave 14: R96 (bujogeek+notegeek going-over, fixes the red CI job), R101, R102, docs. Gates green.
+- 09-05 22:30 — wave 14 (`a0450d7`, 8 commits): R96 (bujogeek+notegeek going-over, fixes the red CI job), R101, R102, docs. Gates green.
 
 ## Landed during the burn
 
