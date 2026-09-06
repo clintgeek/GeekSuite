@@ -55,6 +55,12 @@ test — looking for correctness and security rather than polish. Backend tests
   `$or` (it read it as a field name, so every `$or` filter matched nothing) or a
   `RegExp` condition. Any test written against the `?q=` search would have
   passed for the wrong reason. Both are implemented now.
+- **`controllers/authController.js`'s basegeek proxies had no axios timeout**
+  — axios defaults to `0`, so a *hung* basegeek parked the handler and the
+  browser until the socket died. Now bounded by `BASEGEEK_TIMEOUT_MS` (default
+  8000), the same knob `packages/user`'s `validateToken` uses; a timeout
+  carries no `.response` and now 502s explicitly rather than falling into each
+  handler's generic 500, and never a 401.
 
 ### Frontend — fixed
 

@@ -30,6 +30,10 @@ const basegeekServer = http.createServer((req, res) => {
   received[req.url] = req.headers;
   // Drain the body so the socket doesn't hang on keep-alive.
   req.resume();
+  // A cookie carrying this marker simulates a basegeek that accepted the
+  // connection and then never answers — the outbound-timeout test below uses
+  // it. Everything else gets the normal canned response.
+  if ((req.headers.cookie || '').includes('HANG_FOREVER')) return;
   res.writeHead(200, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({ success: true, token: 'new.jwt' }));
 });
@@ -111,5 +115,45 @@ describe('POST /api/auth/logout', () => {
     const headers = received['/api/auth/logout'];
     expect(headers).toBeDefined();
     expect(headers['x-csrf-token']).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Outbound timeout to basegeek
+// ---------------------------------------------------------------------------
+// Every proxy call in src/controllers/authController.js now carries `timeout:
+// upstreamTimeoutMs()` (BASEGEEK_TIMEOUT_MS, default 8000ms — mirrors
+// packages/user/src/server/tokenUtils.js). `env.basegeekUrl` is snapshotted at
+// import time (see the file banner above), so this reuses the one running
+// "basegeek" rather than standing up a second server: a HANG_FOREVER marker
+// in the cookie (forwarded verbatim, like the CSRF token above) tells that
+// same server to accept the connection and never answer, and real axios is
+// what enforces the timeout against that genuinely hung socket.
+describe('outbound timeout to basegeek', () => {
+  const ORIGINAL_TIMEOUT_ENV = process.env.BASEGEEK_TIMEOUT_MS;
+  const HANG_COOKIE = `geek_token=HANG_FOREVER; geek_refresh_token=r3fr3sh; geek_csrf=${ CSRF }`;
+
+  beforeEach(() => {
+    // Small enough that the test runs fast; the mechanism under test is the
+    // same one that uses the real 8000ms default in production.
+    process.env.BASEGEEK_TIMEOUT_MS = '50';
+  });
+
+  afterEach(() => {
+    if (ORIGINAL_TIMEOUT_ENV === undefined) delete process.env.BASEGEEK_TIMEOUT_MS;
+    else process.env.BASEGEEK_TIMEOUT_MS = ORIGINAL_TIMEOUT_ENV;
+  });
+
+  test('a hung basegeek on /refresh 502s within the configured timeout, not 401', async () => {
+    const start = Date.now();
+    const res = await request(buildApp())
+      .post('/api/auth/refresh')
+      .set('Cookie', [HANG_COOKIE])
+      .set('X-CSRF-Token', CSRF)
+      .send({});
+    const elapsed = Date.now() - start;
+
+    expect(res.status).toBe(502);
+    expect(elapsed).toBeLessThan(2000);
   });
 });

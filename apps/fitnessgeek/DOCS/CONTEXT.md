@@ -145,6 +145,11 @@ wrong and what is now true.*
   fixed; the proxy forwards the header as received and never synthesizes one,
   same rule as the auth proxies.
 - `PATCH /api/user/settings` no longer 500s on `healthBaselines: null`.
+- **`routes/authRoutes.js`'s basegeek proxies had no axios timeout** — axios
+  defaults to `0`, so a *hung* basegeek parked the handler and the browser
+  until the socket died. Now bounded by `BASEGEEK_TIMEOUT_MS` (default 8000),
+  the same knob `packages/user`'s `validateToken` uses; a timeout carries no
+  `.response` and lands in each handler's existing 502 branch, never a 401.
 
 ### Left in place, with reasons
 

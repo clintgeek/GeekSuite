@@ -393,3 +393,68 @@ describe('POST /api/auth/{refresh,logout} — CSRF token forwarding', () => {
     expect(config.headers.Cookie).toBe(PROXY_COOKIE);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Outbound timeout to basegeek
+// ---------------------------------------------------------------------------
+// Every proxy call in routes/authRoutes.js now carries `timeout:
+// upstreamTimeoutMs()` (BASEGEEK_TIMEOUT_MS, default 8000ms — see the note at
+// the top of that file, mirroring packages/user/src/server/tokenUtils.js).
+// Real axios enforces that timeout itself by rejecting with an ECONNABORTED
+// error once the clock runs out on a socket that never answered. Since axios
+// is mocked in this file, the mock below reproduces exactly that behavior — a
+// "basegeek" that accepts the call and never answers, settled only by the
+// timeout axios itself would apply — rather than asserting on the timeout
+// value being present, which the CSRF-forwarding tests above already do.
+describe('outbound timeout to basegeek', () => {
+  const ORIGINAL_TIMEOUT_ENV = process.env.BASEGEEK_TIMEOUT_MS;
+
+  beforeEach(() => {
+    axios.post.mockReset();
+    axios.get.mockReset();
+    // Small enough that the test runs fast; the mechanism under test is the
+    // same one that uses the real 8000ms default in production.
+    process.env.BASEGEEK_TIMEOUT_MS = '50';
+  });
+
+  afterEach(() => {
+    if (ORIGINAL_TIMEOUT_ENV === undefined) delete process.env.BASEGEEK_TIMEOUT_MS;
+    else process.env.BASEGEEK_TIMEOUT_MS = ORIGINAL_TIMEOUT_ENV;
+  });
+
+  function hang(config) {
+    return new Promise((_resolve, reject) => {
+      setTimeout(() => {
+        const err = new Error(`timeout of ${config.timeout}ms exceeded`);
+        err.code = 'ECONNABORTED';
+        reject(err);
+      }, config.timeout);
+    });
+  }
+
+  test('a hung basegeek on POST /api/auth/login 502s within the configured timeout, not 401', async () => {
+    axios.post.mockImplementationOnce((url, body, config) => hang(config));
+
+    const start = Date.now();
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({ identifier: 'alice', password: 'whatever' });
+    const elapsed = Date.now() - start;
+
+    expect(res.status).toBe(502);
+    expect(elapsed).toBeLessThan(1000);
+  });
+
+  test('a hung basegeek on GET /api/auth/me 502s within the configured timeout', async () => {
+    axios.get.mockImplementationOnce((url, config) => hang(config));
+
+    const start = Date.now();
+    const res = await request(app)
+      .get('/api/auth/me')
+      .set('Cookie', 'geek_token=whatever');
+    const elapsed = Date.now() - start;
+
+    expect(res.status).toBe(502);
+    expect(elapsed).toBeLessThan(1000);
+  });
+});

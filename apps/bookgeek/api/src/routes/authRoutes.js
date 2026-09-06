@@ -11,6 +11,23 @@ const BASEGEEK_URL = process.env.BASEGEEK_URL || "https://basegeek.clintgeek.com
 // replays the cookie without the header is a 403 — i.e. a suite-wide logout.
 // See packages/user/src/server/authProxyHeaders.js.
 
+// Every call below is a blocking hop to another host on the user's request
+// path, and axios's default timeout is `0` — wait forever. An unresponsive
+// basegeek (hung, not refusing) therefore parked the express handler, and the
+// browser, until the socket died of its own accord. A bounded wait turns that
+// into a 502 (the 401/429 branches below still get their real status; only
+// the "connection-level failure" fallthrough — no `error.response` at all —
+// changes shape, and a timeout error has no `.response` either).
+//
+// Same knob and same default as `packages/user/src/server/tokenUtils.js`, which
+// bounds the `/api/users/me` call on every authenticated request — one timeout
+// to tune for this backend's whole relationship with basegeek, not two.
+const DEFAULT_UPSTREAM_TIMEOUT_MS = 8000;
+const upstreamTimeoutMs = () => {
+  const raw = Number(process.env.BASEGEEK_TIMEOUT_MS);
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_UPSTREAM_TIMEOUT_MS;
+};
+
 function forwardSetCookieHeaders(res, upstreamHeaders) {
   const setCookie = upstreamHeaders?.["set-cookie"];
   if (!setCookie) return;
@@ -53,7 +70,8 @@ router.post("/login", async (req, res) => {
         identifier,
         password,
         app: app || "bookgeek",
-      }
+      },
+      { timeout: upstreamTimeoutMs() }
     );
 
     forwardSetCookieHeaders(res, response.headers);
@@ -75,7 +93,14 @@ router.post("/login", async (req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    const status = error.response?.status;
+    if (!error.response) {
+      return res.status(502).json({
+        success: false,
+        error: { message: `Unable to reach baseGeek at ${BASEGEEK_URL}` },
+      });
+    }
+
+    const status = error.response.status;
 
     if (status === 401) {
       return res.status(401).json({
@@ -109,7 +134,8 @@ router.post("/register", async (req, res) => {
         email,
         password,
         app: app || "bookgeek",
-      }
+      },
+      { timeout: upstreamTimeoutMs() }
     );
 
     forwardSetCookieHeaders(res, response.headers);
@@ -131,9 +157,16 @@ router.post("/register", async (req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    const status = error.response?.status;
+    if (!error.response) {
+      return res.status(502).json({
+        success: false,
+        error: { message: `Unable to reach baseGeek at ${BASEGEEK_URL}` },
+      });
+    }
+
+    const status = error.response.status;
     const message =
-      error.response?.data?.message || error.response?.data?.error?.message;
+      error.response.data?.message || error.response.data?.error?.message;
 
     if (status === 400) {
       return res.status(400).json({
@@ -169,6 +202,7 @@ router.post("/refresh", async (req, res) => {
         headers: authProxyHeaders(req, {
           extra: accessToken ? { Authorization: `Bearer ${accessToken}` } : null,
         }),
+        timeout: upstreamTimeoutMs(),
       }
     );
 
@@ -176,9 +210,16 @@ router.post("/refresh", async (req, res) => {
 
     return res.status(response.status).json(response.data);
   } catch (error) {
-    const status = error.response?.status;
+    if (!error.response) {
+      return res.status(502).json({
+        success: false,
+        error: { message: `Unable to reach baseGeek at ${BASEGEEK_URL}` },
+      });
+    }
+
+    const status = error.response.status;
     const message =
-      error.response?.data?.message || error.response?.data?.error?.message;
+      error.response.data?.message || error.response.data?.error?.message;
 
     if (status === 401) {
       return res.status(401).json({
@@ -211,6 +252,7 @@ router.get("/me", async (req, res) => {
         Authorization: `Bearer ${token}`,
         Cookie: req.headers.cookie || "",
       },
+      timeout: upstreamTimeoutMs(),
     });
 
     const user = response?.data?.data?.user || response?.data?.user || null;
@@ -223,7 +265,14 @@ router.get("/me", async (req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    const status = error.response?.status;
+    if (!error.response) {
+      return res.status(502).json({
+        success: false,
+        error: { message: `Unable to reach baseGeek at ${BASEGEEK_URL}` },
+      });
+    }
+
+    const status = error.response.status;
     if (status === 401 || status === 403) {
       return res.status(status).json({
         success: false,
@@ -248,6 +297,7 @@ router.post("/logout", (req, res) => {
           headers: authProxyHeaders(req, {
             extra: token ? { Authorization: `Bearer ${token}` } : null,
           }),
+          timeout: upstreamTimeoutMs(),
         }
       );
       forwardSetCookieHeaders(res, response.headers);

@@ -470,6 +470,12 @@ src` 18 warnings → 18; `npm run build` green; mobile harness
   failing on "no such table"; the rescan's copy-pasted "Readarr addMe import
   failed" error message says Calibre rescan; a dead destructure in
   `/api/auth/refresh` is gone.
+- **`routes/authRoutes.js`'s basegeek proxies had no axios timeout** — axios
+  defaults to `0`, so a *hung* basegeek parked the handler and the browser
+  until the socket died. Now bounded by `BASEGEEK_TIMEOUT_MS` (default 8000),
+  the same knob `packages/user`'s `validateToken` uses; a timeout carries no
+  `.response` and now 502s explicitly rather than falling into each handler's
+  generic 500, and never a 401.
 
 ### Fixed — web
 

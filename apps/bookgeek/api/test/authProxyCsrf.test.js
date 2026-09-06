@@ -20,7 +20,7 @@
  * pointed at the loopback before the dynamic import below.
  */
 
-import { after, beforeEach, describe, test } from "node:test";
+import { after, afterEach, beforeEach, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import express from "express";
@@ -35,6 +35,11 @@ let received = {};
 const basegeek = http.createServer((req, res) => {
   received[req.url] = req.headers;
   req.resume();
+  // A cookie carrying this marker simulates a basegeek that accepted the
+  // connection and then never answers — the outbound-timeout suite below
+  // uses it. BASEGEEK_URL is read at module-eval time (see the file banner),
+  // so this reuses the one running server rather than standing up a second.
+  if ((req.headers.cookie || "").includes("HANG_FOREVER")) return;
   res.writeHead(200, { "Content-Type": "application/json" });
   res.end(JSON.stringify({
     token: "new.jwt",
@@ -149,5 +154,42 @@ describe("credential exchanges send no session at all", () => {
     const headers = received["/api/auth/register"];
     assert.ok(headers, "basegeek was called");
     assert.equal(headers.cookie, undefined);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Outbound timeout to basegeek
+// ---------------------------------------------------------------------------
+// Every proxy call in src/routes/authRoutes.js now carries `timeout:
+// upstreamTimeoutMs()` (BASEGEEK_TIMEOUT_MS, default 8000ms — mirrors
+// packages/user/src/server/tokenUtils.js). The HANG_FOREVER marker cookie
+// (see the basegeek handler above) makes "basegeek" accept the connection and
+// never answer; real axios is what enforces the timeout against that
+// genuinely hung socket.
+describe("outbound timeout to basegeek", () => {
+  const ORIGINAL_TIMEOUT_ENV = process.env.BASEGEEK_TIMEOUT_MS;
+  const HANG_COOKIE = `geek_token=HANG_FOREVER; geek_refresh_token=r3fr3sh; geek_csrf=${CSRF}`;
+
+  beforeEach(() => {
+    // Small enough that the test runs fast; the mechanism under test is the
+    // same one that uses the real 8000ms default in production.
+    process.env.BASEGEEK_TIMEOUT_MS = "50";
+  });
+
+  afterEach(() => {
+    if (ORIGINAL_TIMEOUT_ENV === undefined) delete process.env.BASEGEEK_TIMEOUT_MS;
+    else process.env.BASEGEEK_TIMEOUT_MS = ORIGINAL_TIMEOUT_ENV;
+  });
+
+  test("a hung basegeek on /refresh 502s within the configured timeout, not 401", async () => {
+    const start = Date.now();
+    const status = await post("/api/auth/refresh", {
+      headers: { cookie: HANG_COOKIE, "x-csrf-token": CSRF },
+      body: { refreshToken: "r3fr3sh" },
+    });
+    const elapsed = Date.now() - start;
+
+    assert.equal(status, 502);
+    assert.ok(elapsed < 2000, `expected a quick 502, took ${elapsed}ms`);
   });
 });

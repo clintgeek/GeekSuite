@@ -240,6 +240,11 @@ backend `npx eslint .` 3 → 3; `npm run build` green; mobile harness
 - **P2** `getStorySummary` spread `undefined` (a 500) if a summary carried a
   keyword category the fixed shape doesn't know, and its comparator returned
   `NaN` for a detail with no `relevance`.
+- **`routes/auth.js`'s basegeek proxies had no axios timeout** — axios defaults
+  to `0`, so a *hung* basegeek parked the handler and the browser until the
+  socket died. Now bounded by `BASEGEEK_TIMEOUT_MS` (default 8000), the same
+  knob `packages/user`'s `validateToken` uses; a timeout carries no `.response`
+  and lands in each handler's existing 502 branch, never a 401.
 
 ### Left in place, with reasons
 
