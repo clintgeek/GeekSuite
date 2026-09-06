@@ -1,6 +1,9 @@
 import { gql } from 'graphql-tag';
 
 export const typeDefs = gql`
+  # definitions into one type. It is written out here rather than interpolated
+  # the runner would drag aiService and the crypto vault into a file whose whole
+
   type Book {
     id: ID!
     title: String!
@@ -73,6 +76,7 @@ export const typeDefs = gql`
   input UpdateBookInput {
     title: String
     authors: [String]
+    description: String
     shelf: String
     owned: Boolean
     rating: Float
@@ -165,6 +169,38 @@ export const typeDefs = gql`
     ownedFilter: String
   }
 
+  # ---------------------------------------------------------------------------
+  # The library assistant (AI idea #4). Both queries are drafts: nothing here
+  # writes, and every result carries the provenance the UI labels it with.
+  # See graphql/bookgeek/library.js.
+  # ---------------------------------------------------------------------------
+
+  """
+  One suggestion on the What-next shelf. "why" is a single sentence.
+
+  "book" is a deliberate superset of the drafted contract: the resolver already
+  holds the candidate document, so returning it here makes the shelf one round
+  trip instead of "bookId" plus five book(id:) lookups. "bookId" stays the
+  identity a client should key on.
+  """
+  type WhatNextPick {
+    bookId: ID!
+    book: Book
+    why: String
+  }
+
+  type WhatNextResult {
+    picks: [WhatNextPick!]!
+    provenance: AIProvenance!
+  }
+
+  """A proposed description and tag list for a book whose import came in without them. Never saved by the server."""
+  type BookMetadataDraft {
+    description: String
+    tags: [String!]!
+    provenance: AIProvenance!
+  }
+
   type Query {
     books(page: Int, limit: Int, sort: String, sortDir: String, author: String, tag: String, shelf: String, owned: String, q: String): BookPage!
     book(id: ID!): Book
@@ -172,6 +208,8 @@ export const typeDefs = gql`
     bookProfile: BookProfile
     libraryFilters: [BookSavedFilter!]!
     bookAiStatus: BookAiStatus!
+    whatNext(limit: Int = 5): WhatNextResult!
+    draftBookMetadata(bookId: ID!): BookMetadataDraft!
   }
 
   type Mutation {

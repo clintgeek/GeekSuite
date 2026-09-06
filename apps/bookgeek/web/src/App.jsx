@@ -12,6 +12,8 @@ import {
   GET_BOOK_PROFILE,
   GET_LIBRARY_FILTERS,
   GET_AI_STATUS,
+  GET_WHAT_NEXT,
+  DRAFT_BOOK_METADATA,
 } from "./graphql/queries.js";
 import {
   UPDATE_BOOK,
@@ -28,6 +30,7 @@ import { isFabHidden } from "./components/navConfig";
 import Sidebar from "./components/Sidebar";
 import TopBar from "./components/TopBar";
 import { API_BASE } from "./utils/bookDisplay";
+import { mergeTagList } from "./utils/libraryAssistant";
 import { coverCandidateKey } from "./views/detail/bookFacts";
 import LibraryView from "./views/LibraryView";
 import SettingsView from "./views/SettingsView";
@@ -225,6 +228,21 @@ export default function App() {
   const [prefSaveMessage, setPrefSaveMessage] = useState(null);
   const [defaultShelfPref, setDefaultShelfPref] = useState("all");
 
+  // ── The library assistant (DOCS/AI_IDEAS.md #4, stream R117) ──────────────
+  // One switch, off by default, persisted with the rest of bookgeek's app
+  // preferences. With it off nothing below ever runs: no query is sent, no
+  // shelf is rendered, no button appears in the edit dialog.
+  const [libraryAssistantPref, setLibraryAssistantPref] = useState(false);
+  const [libraryAssistantSaving, setLibraryAssistantSaving] = useState(false);
+  const [whatNextPicks, setWhatNextPicks] = useState([]);
+  const [whatNextProvenance, setWhatNextProvenance] = useState(null);
+  const [whatNextLoading, setWhatNextLoading] = useState(false);
+  const [whatNextError, setWhatNextError] = useState(null);
+  const [startingBookId, setStartingBookId] = useState(null);
+  const [metadataDraftLoading, setMetadataDraftLoading] = useState(false);
+  const [metadataDraftError, setMetadataDraftError] = useState(null);
+  const [metadataDraftProvenance, setMetadataDraftProvenance] = useState(null);
+
   // Library bulk-select ("Select books…" in the filter sheet). It drives
   // `basketBookIds` — the list the device basket posts — and hides the FAB.
   const [selectMode, setSelectMode] = useState(false);
@@ -251,6 +269,7 @@ export default function App() {
 
   const bootstrapRanRef = useRef(false);
   const defaultShelfAppliedRef = useRef(false);
+  const whatNextRequestedRef = useRef(false);
 
   useEffect(() => {
     registerReset(resetUser);
@@ -279,6 +298,9 @@ export default function App() {
           defaultShelfAppliedRef.current = true;
         }
       }
+      // Anything but an explicit `true` is off — an absent key, a stale
+      // string, a half-written preference document.
+      setLibraryAssistantPref(appPrefs?.libraryAssistant === true);
     }
   }, [appPrefsLoaded, appPrefs]);
 
@@ -301,6 +323,117 @@ export default function App() {
       setPrefSaveError(err?.message || "Failed to save preference.");
     } finally {
       setPrefSaveLoading(false);
+    }
+  }
+
+  async function handleToggleLibraryAssistant(next) {
+    if (!user) {
+      setPrefSaveError("Sign in to save preferences.");
+      return;
+    }
+    const value = Boolean(next);
+    setLibraryAssistantSaving(true);
+    clearPrefMessages();
+    // Optimistic: the switch is the whole feature's gate, and a stuck switch
+    // reads as a broken feature. A failed save puts it straight back.
+    setLibraryAssistantPref(value);
+    try {
+      await updateAppPreferences({ libraryAssistant: value });
+      setPrefSaveMessage(value ? "Library assistant on." : "Library assistant off.");
+      if (!value) {
+        setWhatNextPicks([]);
+        setWhatNextProvenance(null);
+        setWhatNextError(null);
+        whatNextRequestedRef.current = false;
+      }
+    } catch (err) {
+      setLibraryAssistantPref(!value);
+      setPrefSaveError(err?.message || "Failed to save preference.");
+    } finally {
+      setLibraryAssistantSaving(false);
+    }
+  }
+
+  /**
+   * The What-next shelf, fetched once per session per switch-on. It is a
+   * suggestion strip, not live data: refetching it on every filter change
+   * would spend the daily cap on a shelf nobody asked to change.
+   */
+  useEffect(() => {
+    if (!user || !libraryAssistantPref) return;
+    if (whatNextRequestedRef.current) return;
+    whatNextRequestedRef.current = true;
+
+    let cancelled = false;
+    setWhatNextLoading(true);
+    setWhatNextError(null);
+    apolloClient
+      .query({ query: GET_WHAT_NEXT, variables: { limit: 5 }, fetchPolicy: "no-cache" })
+      .then(({ data }) => {
+        if (cancelled) return;
+        const result = data?.whatNext;
+        setWhatNextPicks(Array.isArray(result?.picks) ? result.picks.filter((p) => p?.book) : []);
+        setWhatNextProvenance(result?.provenance || null);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        // A failed suggestion strip must never look like a failed library.
+        whatNextRequestedRef.current = false;
+        setWhatNextError(err?.message || "Could not load suggestions.");
+      })
+      .finally(() => {
+        if (!cancelled) setWhatNextLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user, libraryAssistantPref, apolloClient]);
+
+  /** "Start reading" on a suggestion: the ordinary shelf mutation, nothing else. */
+  async function handleStartReadingSuggestion(book) {
+    if (!book) return;
+    const bookId = book.id || book._id;
+    setStartingBookId(bookId);
+    try {
+      await handleUpdateShelf(book, "reading");
+      // It is on the Reading shelf now, so it is no longer a suggestion.
+      setWhatNextPicks((prev) => prev.filter((p) => p.bookId !== bookId));
+    } finally {
+      setStartingBookId(null);
+    }
+  }
+
+  /**
+   * Fill the edit dialog's Description and Tags from `draftBookMetadata`.
+   * Nothing is written here — the user reviews the draft and saves it through
+   * the same `updateBook` the form has always used.
+   */
+  async function handleDraftMetadataForSelectedBook() {
+    const bookId = selectedBook?.id || selectedBook?._id;
+    if (!bookId) return;
+    setMetadataDraftLoading(true);
+    setMetadataDraftError(null);
+    try {
+      const { data } = await apolloClient.query({
+        query: DRAFT_BOOK_METADATA,
+        variables: { bookId },
+        fetchPolicy: "no-cache",
+      });
+      const draft = data?.draftBookMetadata;
+      if (!draft) throw new Error("No draft came back.");
+      setEditDraft((prev) => ({
+        ...(prev || {}),
+        // A drafted description replaces a blank field, never a written one:
+        // the point is filling gaps an import left, not overwriting prose.
+        description: (prev?.description || "").trim() ? prev.description : (draft.description || ""),
+        tags: mergeTagList(prev?.tags, draft.tags),
+      }));
+      setMetadataDraftProvenance(draft.provenance || null);
+    } catch (err) {
+      setMetadataDraftError(err?.message || "Could not draft metadata.");
+    } finally {
+      setMetadataDraftLoading(false);
     }
   }
 
@@ -835,6 +968,11 @@ export default function App() {
       stopRefreshTimer();
       bootstrapRanRef.current = false;
       defaultShelfAppliedRef.current = false;
+      whatNextRequestedRef.current = false;
+      setLibraryAssistantPref(false);
+      setWhatNextPicks([]);
+      setWhatNextProvenance(null);
+      setWhatNextError(null);
     });
   }, []);
 
@@ -1658,8 +1796,11 @@ export default function App() {
   function beginEditForSelectedBook() {
     if (!selectedBook) return;
     setEditError(null);
+    setMetadataDraftError(null);
+    setMetadataDraftProvenance(null);
     setEditDraft({
       title: selectedBook.title || "",
+      description: selectedBook.description || "",
       authors: Array.isArray(selectedBook.authors)
         ? selectedBook.authors.join(", ")
         : "",
@@ -1689,6 +1830,10 @@ export default function App() {
     setEditSaving(false);
     setEditError(null);
     setEditDraft(null);
+    // The AI-drafted mark belongs to one dialog session, not to the book.
+    setMetadataDraftLoading(false);
+    setMetadataDraftError(null);
+    setMetadataDraftProvenance(null);
   }
 
   function closeBookModal() {
@@ -1747,6 +1892,7 @@ export default function App() {
 
     const payload = {
       title: trimmedTitle,
+      description: editDraft.description || null,
       language: editDraft.language || null,
       publisher: editDraft.publisher || null,
       publishedDate: editDraft.publishedDate || null,
@@ -2004,6 +2150,11 @@ export default function App() {
     setAiStatusError(null);
     bootstrapRanRef.current = false;
     defaultShelfAppliedRef.current = false;
+    whatNextRequestedRef.current = false;
+    setLibraryAssistantPref(false);
+    setWhatNextPicks([]);
+    setWhatNextProvenance(null);
+    setWhatNextError(null);
   }
 
   function toggleBasket(bookId, event) {
@@ -2199,6 +2350,13 @@ export default function App() {
           <LibraryView
             activeView={activeView}
             applySavedFilter={applySavedFilter}
+            whatNextEnabled={libraryAssistantPref}
+            whatNextPicks={whatNextPicks}
+            whatNextProvenance={whatNextProvenance}
+            whatNextLoading={whatNextLoading}
+            whatNextError={whatNextError}
+            onStartReading={handleStartReadingSuggestion}
+            startingBookId={startingBookId}
             authorFilter={authorFilter}
             basketBookIds={basketBookIds}
             basketError={basketError}
@@ -2257,6 +2415,9 @@ export default function App() {
               calibreRescanSummary={calibreRescanSummary}
               customShelves={customShelves}
               defaultShelfPref={defaultShelfPref}
+              libraryAssistantPref={libraryAssistantPref}
+              libraryAssistantSaving={libraryAssistantSaving}
+              handleToggleLibraryAssistant={handleToggleLibraryAssistant}
               deviceWordInput={deviceWordInput}
               goodreadsDedupeError={goodreadsDedupeError}
               goodreadsDedupeLoading={goodreadsDedupeLoading}
@@ -2301,6 +2462,11 @@ export default function App() {
       {selectedBook && (
         <BookDetailModal
           basketBookIds={basketBookIds}
+          metadataDraftEnabled={libraryAssistantPref}
+          metadataDraftLoading={metadataDraftLoading}
+          metadataDraftError={metadataDraftError}
+          metadataDraftProvenance={metadataDraftProvenance}
+          handleDraftMetadata={handleDraftMetadataForSelectedBook}
           beginEditForSelectedBook={beginEditForSelectedBook}
           cancelEditForSelectedBook={cancelEditForSelectedBook}
           closeBookModal={closeBookModal}

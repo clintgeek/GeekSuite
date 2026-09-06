@@ -17,6 +17,7 @@ import BookCard from "../components/BookCard";
 import FilterSheet from "../components/FilterSheet";
 import LibraryToolbar from "../components/LibraryToolbar";
 import ShelfStrip from "../components/ShelfStrip";
+import WhatNextShelf from "../components/WhatNextShelf";
 
 export default function LibraryView({
   activeView,
@@ -39,6 +40,7 @@ export default function LibraryView({
   mergeLoading,
   mergeSelectionError,
   onRetry,
+  onStartReading,
   saveFilterLoading,
   savedFilters,
   savedFiltersError,
@@ -61,10 +63,18 @@ export default function LibraryView({
   showMergeUi,
   sortBy,
   sortDir,
+  startingBookId = null,
   tagFilter,
   toggleBasket,
   toggleBookSelection,
   total,
+  // The library assistant (AI idea #4). Off by default: `whatNextEnabled` is
+  // the Settings switch, and App does not even send the query when it is off.
+  whatNextEnabled = false,
+  whatNextError = null,
+  whatNextLoading = false,
+  whatNextPicks,
+  whatNextProvenance,
 }) {
   const [filterOpen, setFilterOpen] = useState(false);
   const { notify } = useToast();
@@ -132,6 +142,26 @@ export default function LibraryView({
           setActiveView={setActiveView}
         />
       </Box>
+
+      {whatNextEnabled ? (
+        // Full-bleed like the shelf strip: the rail scrolls edge to edge
+        // inside the shell's page padding and supplies its own gutters.
+        <Box sx={{ mx: { xs: -2, md: -3 } }}>
+          <WhatNextShelf
+            picks={whatNextPicks}
+            provenance={whatNextProvenance}
+            loading={whatNextLoading}
+            error={whatNextError}
+            shelves={shelves}
+            onOpen={(b) => {
+              setSelectedBook(b);
+              setDownloadOpen(false);
+            }}
+            onStartReading={onStartReading}
+            startingBookId={startingBookId}
+          />
+        </Box>
+      ) : null}
 
       <LibraryToolbar
         total={total}

@@ -614,3 +614,117 @@ the list because nothing in this API fetches one: the Goodreads import is a
 CSV of metadata, and the only cover providers `POST /api/books/:id/cover`
 accepts are `openlibrary` and `googlebooks`. A new provider gets its host
 added here in the same commit.
+
+---
+
+## Night 2 — 2026-09-06: the library assistant (AI idea #4, stream R117)
+
+Two AI-assisted helpers, both drafts, both behind one switch. Everything below
+is opt-in, off by default, and nothing on either path writes to a book.
+
+### What was built
+
+- **Gateway `graphql/bookgeek/library.js`** (new) — `whatNext()` and
+  `draftBookMetadata()`, both through `services/aiFeatureRunner.js` as
+  `{ app: 'bookgeek', feature: 'library' }`: one routing row, one shared per-user
+  cap of **20 calls a day across both queries**, one provenance shape.
+- **`typeDefs.js`** — `WhatNextPick` / `WhatNextResult` / `BookMetadataDraft`,
+  the queries `whatNext(limit: Int = 5)` and `draftBookMetadata(bookId: ID!)`,
+  a local `type AIProvenance`, and **`description` on `UpdateBookInput`** (it
+  was missing: the edit dialog could not save a description at all before this).
+- **`validation.js`** — `whatNextArgsSchema`, `draftBookMetadataArgsSchema`,
+  `descriptionSchema` on the update input.
+- **`resolvers.js`** — the two `Query` resolvers; `requireUser` first, zod second,
+  same as the rest of the module.
+- **Web**: `components/WhatNextShelf.jsx`, `utils/libraryAssistant.js` (tag merge
+  + the provenance wording), the `GET_WHAT_NEXT` / `DRAFT_BOOK_METADATA`
+  documents, a **Library assistant** switch in Settings → AI, a "Draft
+  description & tags" button plus a real **Description** field in
+  `EditMetadataDialog`, and the App state/handlers behind all of it.
+- **Tests**: `bookgeekLibraryAI.test.js` (18, gateway), `WhatNextShelf.test.jsx`
+  (7), `libraryAssistant.test.js` (7), `EditMetadataDialog.test.jsx` (7), plus 3
+  in `SettingsView.test.jsx`.
+
+### The decisions, and why
+
+- **The candidate set is computed, never asked.** `candidateBooks()` is "in the
+  library (owned **or** on a non-empty shelf) AND not finished", newest-added
+  first, capped at 60. "Not finished" is bookgeek's own four signals — the same
+  ones `shelfMatch('unread')` excludes — so `abandoned`, `read`, `readCount > 0`
+  and a set `dateFinished` all drop out. **Abandoned counts as finished-with**: a
+  book you put down should not be handed back to you as a suggestion. The model
+  only ranks and explains, and `validatePicks()` refuses any id it was not
+  given — a hallucinated ObjectId settles on the fallback instead of reaching
+  the client.
+- **`WhatNextPick.book` is a deliberate superset of the drafted contract.** The
+  spec asked for `{ bookId, why }`. The resolver already holds the candidate
+  document, and `BookCard` needs a book — so the pick carries it, and the shelf
+  is one round trip instead of `bookId` plus five `book(id:)` lookups. `bookId`
+  is still the identity to key on.
+- **`ShelfStrip` is a chip nav, not a book rail**, so `WhatNextShelf` reuses its
+  *pattern* (scroll-snap, full-bleed, no scrollbar) and real `BookCard`s, rather
+  than the component itself.
+- **The opt-in lives where `defaultShelfFilter` already lives** —
+  `appPreferences.bookgeek.libraryAssistant`, via `useAppPreferences("bookgeek")`
+  → `PATCH /api/users/preferences/bookgeek`. It is checked **server-side too**:
+  `libraryAssistantEnabled()` reads it through basegeek's `lib/appPreferences.js`,
+  and with it off both queries still answer — with the deterministic fallback and
+  `provenance.reason = 'disabled'`, no model call. Anything but an explicit
+  `true` is off.
+- **The User model is imported lazily** inside `libraryAssistantEnabled()`.
+  `models/user.js` opens its own userGeek connection at import time, and the
+  bookgeek gateway module is loaded on every boot and by four test suites that
+  close only the bookgeek and aiGeek connections.
+- **General knowledge is forbidden in `whatNext` and required in
+  `draftBookMetadata`.** Ranking must come from Chef's own data or it is a book
+  blog; filling a gap a Calibre/Goodreads import left is by definition a question
+  about the world. The metadata prompt bounds it the way a library cares about:
+  back-cover level only, premise and setup, **no twist, no ending, no spoiler**,
+  and "return an empty description rather than inventing one".
+- **Tags stay the library's own.** The model gets the library's existing tag
+  names (top 200 by use) and may coin **at most 2** new ones, 8 total; a third
+  coined tag fails validation and the whole draft falls back. The fallback is
+  "tags this author's other books already carry", which is honest and often
+  right.
+- **A drafted description never overwrites prose.** If the Description field
+  already has text, the draft leaves it alone and only merges tags — the feature
+  fills gaps, it does not rewrite.
+- **The shelf is fetched once per session per switch-on**, not per filter change:
+  refetching on every shelf tap would spend the daily cap on a strip nobody asked
+  to change. "Start reading" goes through the ordinary `updateBook` shelf
+  mutation (`handleUpdateShelf(book, "reading")`) and then drops the card.
+- **Metrics** are server-side logger lines with a stable `metric` field:
+  `bookgeek.library.whatnext_shown` and `bookgeek.library.metadata_drafted`, each
+  carrying the provenance source so "how often did the model actually answer"
+  is answerable from the logs.
+
+### What leaves the box
+
+`whatNext`: per candidate — title, authors, tags, page count, shelf, date added;
+plus the last 20 finished titles with their ratings. `draftBookMetadata`: one
+book's title, authors, publisher and year, plus the library's tag *names*. Not
+sent, on either path: reviews, reading progress, file paths, covers, or anything
+from the per-user Profile (Kindle address, device word, saved filters).
+
+### Left undone, with reasons
+
+- **`UpdateBookInput.description` is new, so the REST twin never had it either.**
+  `apps/bookgeek/api/src/server.js`'s surviving `PATCH /api/books/:id` is a
+  different (and per `SUITE_TODO` probably dead) path; it was not touched.
+- **The mobile harness fixtures do not stub `GetWhatNext`.** They do not need
+  to — the switch is off in the harness session, so the query is never sent and
+  the shelf never renders. A future harness scene for the shelf means adding the
+  stub in `tools/mobile-harness/apps/bookgeek/fixtures.mjs`, which is outside
+  this stream's tree.
+- **The shelf is shown whatever the active filter is.** Hiding it when a shelf
+  or search is narrowed was considered and rejected as a rule that would be
+  invisible and surprising; the Settings switch is the documented way to hide it.
+
+### Verification
+
+Gateway `npm test` 1449 → 1641 passing (67 → 77 suites; the 18 new ones are
+`bookgeekLibraryAI.test.js`, the rest of the growth is other night-2 streams).
+`node tools/syntax-check.mjs` clean over 837 files; `node tools/gql-arg-audit.mjs`
+clean (182 documents, 179 operations). Web `npx vitest run` 121 → 145 passing,
+`npx eslint src` 18 → 18 warnings / 0 errors, `pnpm build` green, mobile harness
+`--app bookgeek --enforce-a11y --viewports phone` 12 scenes, **0/0/0**.

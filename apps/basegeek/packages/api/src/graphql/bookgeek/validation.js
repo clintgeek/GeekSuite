@@ -122,6 +122,8 @@ const externalIdSchema = z.string().trim().max(128).nullable().optional();
 const reviewSchema = z.string().trim().max(20_000).nullable().optional();
 const languageSchema = z.string().trim().max(100).nullable().optional();
 const publisherSchema = z.string().trim().max(500).nullable().optional();
+/** A back-cover blurb. `Book.description` is nullable, so clearing it is legal. */
+const descriptionSchema = z.string().trim().max(20_000).nullable().optional();
 // `models/book.js`: `rating: { min: 0, max: 5 }`, `readingProgress: { min: 0, max: 100 }`.
 const ratingSchema = z.number().min(0).max(5).nullable().optional();
 const readingProgressSchema = z.number().int().min(0).max(100).nullable().optional();
@@ -150,6 +152,7 @@ export const updateBookArgsSchema = z
       .object({
         title: optionalTitleSchema,
         authors: authorsSchema,
+        description: descriptionSchema,
         shelf: shelfSchema,
         owned: ownedSchema,
         rating: ratingSchema,
@@ -235,3 +238,18 @@ export const removeBookShelfArgsSchema = z
     id: z.string().max(256),
   })
   .strict();
+
+// ── The library assistant (AI idea #4) ──────────────────────────────────────
+//
+// Both are reads that call a model, so the ceilings here are cost bounds, not
+// data rules. `limit` is clamped rather than rejected in the resolver's own
+// `Math.min` too — a client asking for 500 picks gets 20, not an error — but a
+// non-integer or negative value is a caller bug and says so.
+
+export const whatNextArgsSchema = z
+  .object({
+    limit: z.number().int().min(1).max(20).nullable().optional(),
+  })
+  .strict();
+
+export const draftBookMetadataArgsSchema = z.object({ bookId: idString }).strict();

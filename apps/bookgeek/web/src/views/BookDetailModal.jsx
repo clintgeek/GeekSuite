@@ -86,6 +86,9 @@ export default function BookDetailModal({
   handleDeleteCoverForSelectedBook,
   handleDeleteSelectedBook,
   handleDownload,
+  // The library assistant's metadata draft (AI idea #4) — the button only
+  // appears when `metadataDraftEnabled` says the Settings switch is on.
+  handleDraftMetadata,
   handleEnrichSelectedBook,
   handleSaveEditForSelectedBook,
   handleSearchCoversForSelectedBook,
@@ -95,6 +98,10 @@ export default function BookDetailModal({
   handleUploadBookFile,
   handleUploadCoverForSelectedBook,
   handleUploadFileChange,
+  metadataDraftEnabled = false,
+  metadataDraftError = null,
+  metadataDraftLoading = false,
+  metadataDraftProvenance = null,
   progressDraft,
   progressError,
   progressSavingId,
@@ -418,6 +425,11 @@ export default function BookDetailModal({
         setEditDraft={setEditDraft}
         handleSaveEditForSelectedBook={handleSaveEditForSelectedBook}
         cancelEditForSelectedBook={cancelEditForSelectedBook}
+        metadataDraftEnabled={metadataDraftEnabled}
+        metadataDraftLoading={metadataDraftLoading}
+        metadataDraftError={metadataDraftError}
+        metadataDraftProvenance={metadataDraftProvenance}
+        handleDraftMetadata={handleDraftMetadata}
       />
 
       <GeekDialog

@@ -23,6 +23,8 @@ import ListItem from "@mui/material/ListItem";
 import MenuItem from "@mui/material/MenuItem";
 import Select from "@mui/material/Select";
 import Stack from "@mui/material/Stack";
+import Switch from "@mui/material/Switch";
+import FormControlLabel from "@mui/material/FormControlLabel";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
@@ -77,12 +79,15 @@ export default function SettingsView({
   handleCheckAiStatus,
   handleDeleteCustomShelf,
   handleGoodreadsDedupe,
+  handleToggleLibraryAssistant,
   handleGoodreadsFileChange,
   handleGoodreadsImport,
   handleLogout, // eslint-disable-line no-unused-vars -- top bar's account menu owns sign-out now
   handleSaveDefaultShelf,
   handleSaveProfile,
   kindleEmailInput,
+  libraryAssistantPref = false,
+  libraryAssistantSaving = false,
   newShelfLabel,
   prefSaveError,
   prefSaveLoading,
@@ -438,6 +443,35 @@ export default function SettingsView({
         {/* AI */}
         <Stack spacing={1.5}>
           <SectionLabel>AI</SectionLabel>
+
+          {/* The library assistant (DOCS/AI_IDEAS.md #4). Off by default and
+              per user: with it off the app never sends either AI query, and
+              the gateway answers with its deterministic fallback even if it
+              somehow did. */}
+          <FormControlLabel
+            control={
+              <Switch
+                checked={Boolean(libraryAssistantPref)}
+                disabled={libraryAssistantSaving}
+                onChange={(e) => handleToggleLibraryAssistant?.(e.target.checked)}
+                inputProps={{ "aria-describedby": "library-assistant-help" }}
+              />
+            }
+            label="Library assistant"
+            sx={{ minHeight: 44, ml: 0, mr: 0 }}
+          />
+          <Typography
+            id="library-assistant-help"
+            variant="body2"
+            sx={{ color: "text.secondary", mt: -1 }}
+          >
+            Adds a &ldquo;What next?&rdquo; shelf to the library and a
+            &ldquo;Draft description &amp; tags&rdquo; button to the edit dialog.
+            Both are drafts, marked AI-drafted, and nothing is saved until you
+            save it. Titles, authors, tags and your ratings are sent to the
+            suite&rsquo;s AI provider; reviews and reading progress are not.
+          </Typography>
+
           <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
             <SpinnerButton variant="outlined" loading={aiStatusLoading} onClick={handleCheckAiStatus}>
               Check

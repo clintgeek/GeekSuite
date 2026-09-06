@@ -120,3 +120,51 @@ export const GET_AI_STATUS = gql`
     }
   }
 `;
+
+// ---------------------------------------------------------------------------
+// The library assistant (DOCS/AI_IDEAS.md #4). Both are drafts: `whatNext`
+// ranks books the gateway itself picked out as unfinished, and
+// `draftBookMetadata` proposes fields the user edits and saves through the
+// ordinary `updateBook` mutation. Nothing here writes, and both carry the
+// provenance line the UI shows under the "AI-drafted" mark.
+//
+// Behind the "Library assistant" switch in Settings (default off). When it is
+// off the client does not send these at all — and the resolver would answer
+// with its deterministic fallback anyway.
+// ---------------------------------------------------------------------------
+
+const AI_PROVENANCE_FIELDS = `
+  source
+  reason
+  model
+  provider
+  cached
+  callsToday
+  cap
+`;
+
+export const GET_WHAT_NEXT = gql`
+  query GetWhatNext($limit: Int) {
+    whatNext(limit: $limit) {
+      picks {
+        bookId
+        why
+      }
+      provenance {
+        ${AI_PROVENANCE_FIELDS}
+      }
+    }
+  }
+`;
+
+export const DRAFT_BOOK_METADATA = gql`
+  query DraftBookMetadata($bookId: ID!) {
+    draftBookMetadata(bookId: $bookId) {
+      description
+      tags
+      provenance {
+        ${AI_PROVENANCE_FIELDS}
+      }
+    }
+  }
+`;

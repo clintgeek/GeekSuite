@@ -34,10 +34,13 @@ function baseProps(overrides = {}) {
     handleGoodreadsDedupe: vi.fn(),
     handleGoodreadsFileChange: vi.fn(),
     handleGoodreadsImport: vi.fn(),
+    handleToggleLibraryAssistant: vi.fn(),
     handleLogout: vi.fn(),
     handleSaveDefaultShelf: vi.fn(),
     handleSaveProfile: vi.fn((e) => e.preventDefault()),
     kindleEmailInput: 'chef@kindle.com',
+    libraryAssistantPref: false,
+    libraryAssistantSaving: false,
     newShelfLabel: '',
     prefSaveError: null,
     prefSaveLoading: false,
@@ -115,5 +118,31 @@ describe('SettingsView', () => {
     renderWithProviders(<SettingsView {...baseProps({ handleCheckAiStatus })} />);
     await userEv.click(screen.getByRole('button', { name: 'Check' }));
     expect(handleCheckAiStatus).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('SettingsView — the Library assistant switch', () => {
+  it('is off until it is switched on, and says what leaves the box', () => {
+    renderWithProviders(<SettingsView {...baseProps()} />);
+    const toggle = screen.getByRole('checkbox', { name: 'Library assistant' });
+    expect(toggle).not.toBeChecked();
+    expect(screen.getByText(/marked AI-drafted/)).toBeInTheDocument();
+    expect(screen.getByText(/reviews and reading progress are not/)).toBeInTheDocument();
+  });
+
+  it('reports the change straight to App, which persists it', async () => {
+    const handleToggleLibraryAssistant = vi.fn();
+    renderWithProviders(<SettingsView {...baseProps({ handleToggleLibraryAssistant })} />);
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Library assistant' }));
+    expect(handleToggleLibraryAssistant).toHaveBeenCalledWith(true);
+  });
+
+  it('reflects a stored "on", and cannot be flipped twice while saving', () => {
+    renderWithProviders(
+      <SettingsView {...baseProps({ libraryAssistantPref: true, libraryAssistantSaving: true })} />
+    );
+    const toggle = screen.getByRole('checkbox', { name: 'Library assistant' });
+    expect(toggle).toBeChecked();
+    expect(toggle).toBeDisabled();
   });
 });

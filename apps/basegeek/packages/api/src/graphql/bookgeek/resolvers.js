@@ -2,6 +2,7 @@ import { Book } from "./models/book.js";
 import { Profile } from "./models/profile.js";
 import AIConfig from "../../models/AIConfig.js";
 import mongoose from "mongoose";
+import * as library from "./library.js";
 import {
   validateInput,
   createBookArgsSchema,
@@ -12,6 +13,8 @@ import {
   deleteLibraryFilterArgsSchema,
   addBookShelfArgsSchema,
   removeBookShelfArgsSchema,
+  whatNextArgsSchema,
+  draftBookMetadataArgsSchema,
 } from "./validation.js";
 
 // Input validation runs AFTER `requireUser` in every mutation below: an
@@ -25,6 +28,8 @@ const validateSaveLibraryFilter = validateInput(saveLibraryFilterArgsSchema);
 const validateDeleteLibraryFilter = validateInput(deleteLibraryFilterArgsSchema);
 const validateAddBookShelf = validateInput(addBookShelfArgsSchema);
 const validateRemoveBookShelf = validateInput(removeBookShelfArgsSchema);
+const validateWhatNext = validateInput(whatNextArgsSchema);
+const validateDraftBookMetadata = validateInput(draftBookMetadataArgsSchema);
 
 // Built-in shelves. Users can also define custom shelves (ids prefixed
 // "custom-", stored on their bookgeek Profile); those are counted below by
@@ -347,6 +352,29 @@ export const resolvers = {
         model: "basegeek-rotation",
         providers: enabled,
       };
+    },
+    // ── The library assistant (AI idea #4) ──────────────────────────────
+    // Both are reads. `whatNext` computes the candidate set and lets the model
+    // only rank it; `draftBookMetadata` proposes fields the client shows as a
+    // draft and the user saves through `updateBook`. Neither writes. The
+    // opt-in switch lives on the caller's `appPreferences.bookgeek`, and when
+    // it is off both still answer — with the deterministic fallback.
+    whatNext: async (_, rawArgs, { user }) => {
+      const userId = requireUser(user);
+      const { limit } = validateWhatNext(rawArgs);
+      const picks = Math.min(library.MAX_PICKS, Math.max(1, limit ?? 5));
+      const enabled = await library.libraryAssistantEnabled(userId);
+      return await library.whatNext({ userId, limit: picks, enabled });
+    },
+    draftBookMetadata: async (_, rawArgs, { user }) => {
+      const userId = requireUser(user);
+      const { bookId } = validateDraftBookMetadata(rawArgs);
+      // Same "a malformed id is simply not found" rule the rest of the module
+      // follows — but the field is non-null, so it is an error, not a null.
+      const book = validObjectId(bookId) ? await Book.findById(bookId).lean() : null;
+      if (!book) throw userError("Book not found", "NOT_FOUND");
+      const enabled = await library.libraryAssistantEnabled(userId);
+      return await library.draftBookMetadata({ userId, book, enabled });
     },
   },
   Mutation: {

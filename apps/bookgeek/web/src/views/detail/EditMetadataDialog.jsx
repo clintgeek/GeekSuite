@@ -4,10 +4,18 @@
  * Every field `beginEditForSelectedBook` puts in `editDraft` has a control
  * here, all of them 16px `TextField`s (no iOS zoom). Save and Cancel call the
  * same App handlers; the ✕ cancels too, and is suppressed while saving.
+ *
+ * "Draft description & tags" (AI idea #4, behind the Library assistant switch)
+ * fills the Description and Tags fields from `draftBookMetadata` and marks them
+ * AI-drafted. It writes nothing: the draft lands in the form, the user edits
+ * it, and Save goes through the same `updateBook` mutation a hand-typed edit
+ * does.
  */
 import React from "react";
-import { Box, Button, Rating, TextField, Typography } from "@mui/material";
+import { Box, Button, Chip, Rating, TextField, Typography } from "@mui/material";
+import { AutoAwesome as SparkleIcon } from "@mui/icons-material";
 import { GeekDialog } from "@geeksuite/ui";
+import { metadataDraftProvenanceLine } from "../../utils/libraryAssistant";
 
 export default function EditMetadataDialog({
   open,
@@ -17,10 +25,19 @@ export default function EditMetadataDialog({
   setEditDraft,
   handleSaveEditForSelectedBook,
   cancelEditForSelectedBook,
+  // The library assistant. Absent (or `false`) means the button is not shown at
+  // all — the switch in Settings is the only way it appears.
+  metadataDraftEnabled = false,
+  metadataDraftLoading = false,
+  metadataDraftError = null,
+  metadataDraftProvenance = null,
+  handleDraftMetadata,
 }) {
   const draft = editDraft || {};
   const setField = (key) => (event) =>
     setEditDraft((prev) => ({ ...(prev || {}), [key]: event.target.value }));
+
+  const provenanceLine = metadataDraftProvenanceLine(metadataDraftProvenance);
 
   return (
     <GeekDialog
@@ -69,6 +86,48 @@ export default function EditMetadataDialog({
           <TextField label="ISBN" value={draft.isbn || ""} onChange={setField("isbn")} />
           <TextField label="ISBN13" value={draft.isbn13 || ""} onChange={setField("isbn13")} />
         </Box>
+
+        {metadataDraftEnabled ? (
+          <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1 }}>
+            <Button
+              variant="outlined"
+              startIcon={<SparkleIcon />}
+              onClick={handleDraftMetadata}
+              disabled={metadataDraftLoading || editSaving}
+              sx={{ minHeight: 44 }}
+            >
+              {metadataDraftLoading ? "Drafting…" : "Draft description & tags"}
+            </Button>
+            {metadataDraftProvenance ? (
+              <Chip
+                icon={<SparkleIcon />}
+                label="AI-drafted"
+                size="small"
+                variant="outlined"
+                sx={{ height: 22, "& .MuiChip-label": { fontSize: "0.75rem", px: 0.75 } }}
+              />
+            ) : null}
+            {provenanceLine ? (
+              <Typography variant="caption" sx={{ color: "text.muted", width: "100%" }}>
+                {provenanceLine}
+              </Typography>
+            ) : null}
+            {metadataDraftError ? (
+              <Typography role="status" variant="caption" sx={{ color: "error.main", width: "100%" }}>
+                {metadataDraftError}
+              </Typography>
+            ) : null}
+          </Box>
+        ) : null}
+
+        <TextField
+          label="Description"
+          value={draft.description || ""}
+          onChange={setField("description")}
+          fullWidth
+          multiline
+          minRows={3}
+        />
         <TextField
           label="Tags"
           helperText="Comma-separated"
