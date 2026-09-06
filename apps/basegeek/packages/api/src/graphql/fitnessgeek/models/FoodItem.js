@@ -25,7 +25,8 @@ import { requireUser, isValidObjectId, foodCatalogFilter } from '../ownership.js
 // --experimental-vm-modules.
 import foodItemSchemaModule from '@geeksuite/schemas/fitnessgeek/foodItem';
 
-const { createFoodItemSchema, findOrCreateFoodItem } = foodItemSchemaModule;
+const { createFoodItemSchema, findOrCreateFoodItem, foodCatalogVisibilityFilter } =
+  foodItemSchemaModule;
 
 const fitnessConn = getAppConnection('fitnessgeek');
 
@@ -75,23 +76,17 @@ foodItemSchema.statics.findOrCreate = async function findOrCreate(foodData, user
 
 // Static method to search foods.
 //
-// Stays app-side: it is an ownership-scoping read, and it does not agree with
-// `foodCatalogFilter` above — that one also matches rows with no `user_id` key
-// at all, this one does not. Byte-identical to fitnessgeek's copy today;
-// promoting it would freeze one of two live definitions of catalog visibility
-// into the shared contract, and a read static has no corruption failure mode
-// to buy for that price. Reconciling the two filters is its own ticket. No
-// live caller in this package today.
+// Stays app-side: it is an ownership-scoping read with no `requireUser`
+// guard (callable with `userId = null`). Its FILTER SHAPE now agrees with
+// `foodCatalogFilter` above (Q41, 2026-09-06) — both build on the shared
+// `foodCatalogVisibilityFilter`, so a legacy row with no `user_id` key at all
+// is visible through either path. No live caller in this package today.
 foodItemSchema.statics.search = async function(query, userId = null, limit = 25) {
   const filter = { is_deleted: false };
 
-  // Include global foods and user's custom foods
-  const userFilter = {
-    $or: [
-      { user_id: null }, // Global foods
-      { user_id: userId } // User's custom foods
-    ]
-  };
+  // Include global foods (however the "no owner" shape was stored) and the
+  // caller's own custom foods.
+  const userFilter = foodCatalogVisibilityFilter(userId);
 
   if (query) {
     // Simple regex search instead of text search

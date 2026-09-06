@@ -67,8 +67,8 @@
  * `evaluateGoalsMet` and `computeGoalProgress` are the method bodies with
  * `this` taken out: they take the goal document (or any object carrying the
  * same seven paths) as their first argument, so fitnessgeek's hermetic suite —
- * no Mongo, no Redis, no network — can assert the sugar/sodium inversion and
- * the 100 % clamp directly. Same reason `loginStreak.js` exports
+ * no Mongo, no Redis, no network — can assert the sugar/sodium ceiling
+ * behaviour and the 100 % clamp directly. Same reason `loginStreak.js` exports
  * `applyLoginToStreak` and `bloodPressure.js` exports `classifyBloodPressure`:
  * a behaviour assertion needs something to call.
  *
@@ -187,11 +187,13 @@ function evaluateGoalsMet(goals, actualTotals) {
 /**
  * Progress towards each goal, as a percentage clamped at 100.
  *
- * Note the asymmetry with `evaluateGoalsMet`: this one treats sugar and sodium
- * as targets like the rest (consumed ÷ goal), so a day *under* the sodium
- * limit reads as low progress rather than good compliance. That is what both
- * shipped copies do and it moved verbatim; it is a product question, not a
- * refactor.
+ * Q39 (2026-09-06): sugar and sodium are now ceilings here too, matching
+ * `evaluateGoalsMet` — they used to be treated as targets like the other five
+ * (consumed ÷ goal), so hitting the limit exactly read as "100% progress" and
+ * a day well under it read as "low progress," backwards for a number you are
+ * trying to stay *under*. For these two, "progress" is compliance headroom:
+ * 100 with nothing eaten, falling toward 0 as the limit is approached, and
+ * never negative once it's blown past. The five floor macros are unchanged.
  *
  * An unset (or zero) goal reads as `0`.
  *
@@ -206,8 +208,12 @@ function computeGoalProgress(goals, actualTotals) {
     carbs: goals.carbs_grams ? Math.min((actualTotals.carbs_grams / goals.carbs_grams) * 100, 100) : 0,
     fat: goals.fat_grams ? Math.min((actualTotals.fat_grams / goals.fat_grams) * 100, 100) : 0,
     fiber: goals.fiber_grams ? Math.min((actualTotals.fiber_grams / goals.fiber_grams) * 100, 100) : 0,
-    sugar: goals.sugar_grams ? Math.min((actualTotals.sugar_grams / goals.sugar_grams) * 100, 100) : 0,
-    sodium: goals.sodium_mg ? Math.min((actualTotals.sodium_mg / goals.sodium_mg) * 100, 100) : 0
+    sugar: goals.sugar_grams
+      ? Math.max(0, Math.min(100, 100 - (actualTotals.sugar_grams / goals.sugar_grams) * 100))
+      : 0,
+    sodium: goals.sodium_mg
+      ? Math.max(0, Math.min(100, 100 - (actualTotals.sodium_mg / goals.sodium_mg) * 100))
+      : 0
   };
 }
 

@@ -72,6 +72,7 @@ import {
   createFoodItemSchema,
   findOrCreateFoodItem,
   foodItemDedupeFilters,
+  foodCatalogVisibilityFilter,
   newFoodItemAttrs,
   foodItemDefaults,
   FOOD_SOURCES,
@@ -854,9 +855,18 @@ describe('the NutritionGoals goal arithmetic', () => {
     expect(computeGoalProgress({}, HIT).calories).toBe(0);
   });
 
-  test('progress treats sugar and sodium as floors even though checkGoalsMet does not', () => {
-    // Shipped asymmetry between the two methods, moved verbatim. Asserted so
-    // nobody "fixes" one of them without noticing the other.
+  test('progress treats sugar and sodium as ceilings, same as checkGoalsMet (Q39, fixed 2026-09-06)', () => {
+    // Used to disagree: progress read consumed/goal like the five floor
+    // macros, so hitting the limit exactly showed "100% progress" and eating
+    // nothing showed "0%" — backwards for a number you want to stay under.
+    // Now progress is compliance headroom: 100 with nothing eaten, falling to
+    // 0 right at the limit, never negative past it.
+    expect(computeGoalProgress(GOALS, { ...HIT, sugar_grams: 0, sodium_mg: 0 }).sugar).toBe(100);
+    expect(computeGoalProgress(GOALS, { ...HIT, sugar_grams: 0, sodium_mg: 0 }).sodium).toBe(100);
+    expect(computeGoalProgress(GOALS, HIT).sugar).toBe(0); // at the limit exactly
+    expect(computeGoalProgress(GOALS, HIT).sodium).toBe(0);
+    expect(computeGoalProgress(GOALS, { ...HIT, sugar_grams: 60, sodium_mg: 4600 }).sugar).toBe(0); // over the limit, clamped not negative
+    expect(computeGoalProgress(GOALS, { ...HIT, sugar_grams: 60, sodium_mg: 4600 }).sodium).toBe(0);
     const halfway = computeGoalProgress(GOALS, { ...HIT, sugar_grams: 15, sodium_mg: 1150 });
     expect(halfway.sugar).toBe(50);
     expect(halfway.sodium).toBe(50);
@@ -1110,15 +1120,40 @@ describe('the FoodItem dedupe ladder and catalog contract', () => {
     expect(src).not.toContain('source_id');
   });
 
-  test('search stayed here, and it is the thing the shared module refused', () => {
-    // An ownership-scoping read: global rows plus the caller's own. Left
-    // app-side deliberately — the gateway's `foodCatalogFilter` also matches a
-    // row with no `user_id` key at all, so the two sides do not actually agree
-    // about what a visible catalog row is. See the shared module's header.
+  test('search stayed app-side, but its filter shape is the shared one (Q41, fixed 2026-09-06)', () => {
+    // An ownership-scoping read: global rows plus the caller's own. The
+    // static itself stays app-side (no `requireUser` guard here, unlike
+    // basegeek's `findAccessible`), but it now builds its "who can see this"
+    // clause from `foodCatalogVisibilityFilter` instead of a hand-rolled
+    // `{user_id: null}` — reconciled with the gateway's `foodCatalogFilter`
+    // (`ownership.js`), which always matched a wider "no owner" shape.
     expect(typeof FoodItem.search).toBe('function');
-    expect(String(FoodItem.schema.statics.search)).toContain('user_id: null');
+    expect(String(FoodItem.schema.statics.search)).toContain('foodCatalogVisibilityFilter');
+    expect(String(FoodItem.schema.statics.search)).not.toContain('user_id: null');
     // And the shared factory attaches no statics whatsoever.
     expect(Object.keys(createFoodItemSchema(mongoose).statics)).toEqual([]);
+  });
+
+  test('foodCatalogVisibilityFilter is the union of the two old definitions', () => {
+    // Used to disagree: `search` matched only `{user_id: null}`;
+    // `foodCatalogFilter` (basegeek's ownership.js) also matched
+    // `{user_id: {$exists: false}}`. The shared filter matches both shapes of
+    // "no owner", plus the caller's own rows when a userId is given.
+    expect(foodCatalogVisibilityFilter('me')).toEqual({
+      $or: [
+        { user_id: 'me' },
+        { user_id: null },
+        { user_id: { $exists: false } },
+      ],
+    });
+    // No userId -> global-only, no "mine" clause (what `search`'s anonymous
+    // callers rely on — it carries no ownership guard of its own).
+    expect(foodCatalogVisibilityFilter(null)).toEqual({
+      $or: [{ user_id: null }, { user_id: { $exists: false } }],
+    });
+    expect(foodCatalogVisibilityFilter(undefined)).toEqual({
+      $or: [{ user_id: null }, { user_id: { $exists: false } }],
+    });
   });
 
   test('the source enum is the shared one and an unknown source is rejected', () => {
@@ -1132,22 +1167,30 @@ describe('the FoodItem dedupe ladder and catalog contract', () => {
     expect(err && err.errors.source).toBeTruthy();
   });
 
-  test('barcode is the only unique path, and it is sparse', () => {
-    // The first `unique` flag in packages/schemas/fitnessgeek. Unchanged by
-    // consolidation, so production needs no index rebuild — but if it ever
-    // moves, both processes have to be redeployed together.
+  test('barcode is the only unique path, and it is a PARTIAL index (Q40, fixed 2026-09-06)', () => {
+    // The first `unique` flag in packages/schemas/fitnessgeek. No path-level
+    // `unique`/`sparse` any more — the constraint is declared explicitly in
+    // createFoodItemSchema() as a schema-level index, filtered to live rows
+    // with a string barcode, so it no longer collides with a soft-deleted
+    // row's barcode (that used to E11000; the basegeek suite pins the fixed
+    // runtime behaviour against real Mongo). If this index ever moves again,
+    // both processes still have to redeploy together — see the shared
+    // module's header.
     const unique = Object.entries(FoodItem.schema.paths)
       .filter(([, p]) => p.options?.unique)
       .map(([k]) => k);
-    expect(unique).toEqual(['barcode']);
-    expect(FoodItem.schema.paths.barcode.options.sparse).toBe(true);
-    // And it is NOT filtered by is_deleted, which is why a soft-deleted row
-    // still owns its barcode while the ladder above refuses to return it —
-    // `findOrCreate` then collides on insert with E11000. Pre-existing on both
-    // sides; the basegeek suite asserts the runtime behaviour. See the shared
-    // module's header before "fixing" it: a partial index is a migration and a
-    // `unique` change, so both processes redeploy together.
-    expect(FoodItem.schema.paths.barcode.options.partialFilterExpression).toBeUndefined();
+    expect(unique).toEqual([]); // no more path-level unique flag
+
+    const barcodeIndex = FoodItem.schema
+      .indexes()
+      .find(([keys]) => Object.keys(keys).length === 1 && keys.barcode === 1);
+    expect(barcodeIndex).toBeTruthy();
+    const [, opts] = barcodeIndex;
+    expect(opts.unique).toBe(true);
+    expect(opts.partialFilterExpression).toEqual({
+      is_deleted: false,
+      barcode: { $type: 'string' }
+    });
   });
 
   test('the text index is on name and brand with no weights', () => {
@@ -1240,6 +1283,34 @@ describe('the FoodLog meal-type enum and nutrition arithmetic', () => {
 
     const meal = new Meal({ name: 'x', meal_type: 'brunch' });
     expect(meal.validateSync().errors.meal_type).toBeTruthy();
+  });
+
+  test('every nutrition.* leaf floors at 0 (§12 follow-up #13, fixed 2026-09-06)', () => {
+    // Used to accept a negative macro; FoodItem.nutrition.* and
+    // DailySummary.totals.* have always floored at 0, so this closed the one
+    // gap between the three nutrition-shaped leaves in the schema set.
+    const log = new FoodLog({
+      user_id: 'u1',
+      log_date: new Date('2026-09-05T00:00:00.000Z'),
+      meal_type: 'lunch',
+      food_item_id: new mongoose.Types.ObjectId(),
+      servings: 1,
+      nutrition: { calories_per_serving: -1, sodium_mg: -5 },
+    });
+    const errors = log.validateSync().errors;
+    expect(errors['nutrition.calories_per_serving']).toBeTruthy();
+    expect(errors['nutrition.sodium_mg']).toBeTruthy();
+
+    // Zero is still fine — only negative is rejected.
+    const zeroLog = new FoodLog({
+      user_id: 'u1',
+      log_date: new Date('2026-09-05T00:00:00.000Z'),
+      meal_type: 'lunch',
+      food_item_id: new mongoose.Types.ObjectId(),
+      servings: 1,
+      nutrition: { calories_per_serving: 0 },
+    });
+    expect(zeroLog.validateSync()).toBeUndefined();
   });
 
   test('the stored snapshot wins, and an un-populated food contributes zero', () => {

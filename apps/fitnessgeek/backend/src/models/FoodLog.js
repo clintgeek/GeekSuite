@@ -7,8 +7,9 @@ import { createFoodLogSchema } from '@geeksuite/schemas/fitnessgeek/foodLog';
 // @geeksuite/schemas so that this model and basegeek's GraphQL copy
 // (apps/basegeek/packages/api/src/graphql/fitnessgeek/models/FoodLog.js)
 // cannot drift. Both point at the `foodlogs` collection in the same database —
-// this side through routes/logRoutes.js, foodRoutes.js, aiCoachRoutes.js and
-// three services, the gateway through its `addFoodLog` / `updateFoodLog` /
+// this side through routes/logRoutes.js, foodRoutes.js and three services
+// (aiCoachRoutes.js was deleted 2026-09-06, caller-less), the gateway through
+// its `addFoodLog` / `updateFoodLog` /
 // `deleteFoodLog` / `logMeal` / `copyFitnessMeal` resolvers, which took the
 // writes over on 2026-09-05 — and mongoose strict mode silently drops paths
 // one side doesn't know about. See the shared module's header and

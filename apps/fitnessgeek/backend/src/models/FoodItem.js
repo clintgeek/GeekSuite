@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import {
   createFoodItemSchema,
   findOrCreateFoodItem,
+  foodCatalogVisibilityFilter,
 } from '@geeksuite/schemas/fitnessgeek/foodItem';
 
 // The field set, all six indexes (including `barcode`'s unique/sparse one and
@@ -48,23 +49,17 @@ foodItemSchema.statics.findOrCreate = async function findOrCreate(foodData, user
 
 // Static method to search foods.
 //
-// Stays app-side: it is an ownership-scoping read, and the two sides do not
-// actually agree about what a visible catalog row is — the gateway's
-// `foodCatalogFilter` also matches rows with no `user_id` key at all, which
-// this filter does not. Byte-identical to the gateway's copy today; promoting
-// it would freeze one of two live definitions of catalog visibility into the
-// shared contract, and a read static has no corruption failure mode to buy for
-// that price. Reconciling the two filters is its own ticket.
+// Stays app-side: it is an ownership-scoping read (no `requireUser` guard —
+// callable with `userId = null` for a global-only read). Its FILTER SHAPE is
+// shared now (Q41, 2026-09-06): `foodCatalogVisibilityFilter` is the one
+// definition of "a visible catalog row", reconciled with the gateway's
+// `foodCatalogFilter` (`ownership.js`) — see the shared module's header.
 foodItemSchema.statics.search = async function(query, userId = null, limit = 25) {
   const filter = { is_deleted: false };
 
-  // Include global foods and user's custom foods
-  const userFilter = {
-    $or: [
-      { user_id: null }, // Global foods
-      { user_id: userId } // User's custom foods
-    ]
-  };
+  // Include global foods (however the "no owner" shape was stored) and the
+  // caller's own custom foods.
+  const userFilter = foodCatalogVisibilityFilter(userId);
 
   if (query) {
     // Simple regex search instead of text search

@@ -6,6 +6,7 @@ import FoodLog from '../models/FoodLog.js';
 import UserSettings from '../models/UserSettings.js';
 import logger from '../config/logger.js';
 import unifiedFoodService from '../services/unifiedFoodService.js';
+import { foodItemDedupeFilters, foodCatalogVisibilityFilter } from '@geeksuite/schemas/fitnessgeek/foodItem';
 
 // Apply authentication to all routes
 router.use(authenticateToken);
@@ -234,13 +235,15 @@ router.get('/:id', async (req, res) => {
     const { id } = req.params;
     const userId = req.user.id;
 
+    // Q41 (2026-09-06): was its own inline copy of the visibility filter,
+    // matching only `{user_id: null}`; now the shared
+    // `foodCatalogVisibilityFilter` (also matches a legacy row with no
+    // `user_id` key at all — same shape the gateway's `foodCatalogFilter`
+    // always used).
     const food = await FoodItem.findOne({
       _id: id,
       is_deleted: false,
-      $or: [
-        { user_id: null }, // Global foods
-        { user_id: userId } // User's custom foods
-      ]
+      ...foodCatalogVisibilityFilter(userId)
     });
 
     if (!food) {
@@ -297,16 +300,31 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Check if food already exists
+    // Check if food already exists.
+    //
+    // Q41 (2026-09-06): this used to be its own two-rung, non-sequential
+    // ladder (`if (barcode) ... else if (source && source_id) ...`, no
+    // `(name, brand)` rung at all) — a THIRD, subtly different copy of the
+    // dedupe logic `findOrCreateFoodItem` already shares between this app and
+    // basegeek's gateway. It now walks the same shared rungs
+    // (`foodItemDedupeFilters`), in the same order, so a duplicate is caught
+    // exactly the same way here as everywhere else that writes this
+    // collection — including the previously-missing `(name, brand)` rung, and
+    // no longer skipping the `source`/`source_id` rung just because a
+    // (non-matching) barcode was also supplied.
+    //
+    // What still differs, deliberately: a row THIS route creates is
+    // user-owned (`user_id: userId`, below) — a private custom food — where
+    // `findOrCreateFoodItem`'s creation branch always mints a global row
+    // (`user_id: null`). Folding the CREATE step in as well would make every
+    // custom food typed here instantly visible to every other user through
+    // the catalog's global-row visibility rule, which is a privacy change,
+    // not a refactor — reported, not decided here. See
+    // DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md §12 follow-up #2.
     let existingFood = null;
-    if (barcode) {
-      existingFood = await FoodItem.findOne({ barcode, is_deleted: false });
-    } else if (source && source_id) {
-      existingFood = await FoodItem.findOne({
-        source,
-        source_id,
-        is_deleted: false
-      });
+    for (const rung of foodItemDedupeFilters({ barcode, source, source_id, name, brand })) {
+      existingFood = await FoodItem.findOne(rung.filter);
+      if (existingFood) break;
     }
 
     if (existingFood) {

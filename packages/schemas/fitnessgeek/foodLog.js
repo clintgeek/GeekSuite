@@ -113,11 +113,14 @@ const { MEAL_TYPES } = require('./meal.js');
  * sees each leaf directly and no separate sub-schema comparison is needed the
  * way `Meal.food_items` needs one.
  *
- * Note that every `nutrition.*` leaf carries `default: 0` and **no `min`** —
- * unlike `FoodItem.nutrition.*`, which floors each at 0, and unlike
- * `DailySummary.totals.*`, which does the same. A negative number written here
- * is accepted. That is shipped on both sides; changing it is a validation
- * decision with its own ticket.
+ * Every `nutrition.*` leaf carries `default: 0` and, as of §12 follow-up #13
+ * (2026-09-06), `min: 0` — matching `FoodItem.nutrition.*` and
+ * `DailySummary.totals.*`, which have always floored at 0. A negative number
+ * used to be accepted here; nothing in either app ever wrote one on purpose
+ * (the snapshot exists to preserve what a food actually contained at log
+ * time, and a negative macro is not a real food), so this closes the one gap
+ * between the three nutrition-shaped leaves in this schema set rather than
+ * changing what either writer intends to send.
  *
  * @param {import('mongoose')} mongoose - the caller's mongoose instance.
  * @returns {Object} a definition object suitable for `new mongoose.Schema(...)`
@@ -167,31 +170,38 @@ function foodLogDefinition(mongoose) {
     nutrition: {
       calories_per_serving: {
         type: Number,
-        default: 0
+        default: 0,
+        min: 0
       },
       protein_grams: {
         type: Number,
-        default: 0
+        default: 0,
+        min: 0
       },
       carbs_grams: {
         type: Number,
-        default: 0
+        default: 0,
+        min: 0
       },
       fat_grams: {
         type: Number,
-        default: 0
+        default: 0,
+        min: 0
       },
       fiber_grams: {
         type: Number,
-        default: 0
+        default: 0,
+        min: 0
       },
       sugar_grams: {
         type: Number,
-        default: 0
+        default: 0,
+        min: 0
       },
       sodium_mg: {
         type: Number,
-        default: 0
+        default: 0,
+        min: 0
       }
     }
   };

@@ -14,6 +14,9 @@
  */
 
 import mongoose from 'mongoose';
+import foodItemSchemaModule from '@geeksuite/schemas/fitnessgeek/foodItem';
+
+const { foodCatalogVisibilityFilter } = foodItemSchemaModule;
 
 /**
  * Refuse to build a query that is not scoped to a user. A resolver that
@@ -36,13 +39,14 @@ export function isValidObjectId(id) {
 /**
  * Read scope for the shared food catalog: global entries (no owner) plus the
  * caller's own custom foods. Another user's *private* food is not visible.
+ *
+ * The fail-closed `requireUser` guard stays here (ownership POLICY, app-side,
+ * same as every other static in this file); the filter SHAPE itself is now
+ * `foodCatalogVisibilityFilter` from `@geeksuite/schemas/fitnessgeek/foodItem`
+ * (Q41, 2026-09-06), reconciled with fitnessgeek's REST `search` static,
+ * which used to match a narrower "no owner" shape than this function did. See
+ * that module's header for the reconciliation.
  */
 export function foodCatalogFilter(userId) {
-  return {
-    $or: [
-      { user_id: requireUser(userId) },
-      { user_id: null },
-      { user_id: { $exists: false } },
-    ],
-  };
+  return foodCatalogVisibilityFilter(requireUser(userId));
 }

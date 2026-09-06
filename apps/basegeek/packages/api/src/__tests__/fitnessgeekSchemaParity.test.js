@@ -1171,16 +1171,16 @@ describe('ownership guards stayed app-side (statics policy)', () => {
     expect(String(FoodItemRest.schema.statics.findOrCreate)).not.toContain('findAccessible');
   });
 
-  test('search stayed app-side on both, and it disagrees with foodCatalogFilter', () => {
-    // Byte-identical copies, deliberately not promoted: `search` scopes on
-    // `{user_id: null}` while `foodCatalogFilter` also matches a row with no
-    // `user_id` key at all. Two live definitions of "visible"; promoting one
-    // into the shared contract would freeze the disagreement rather than
-    // resolve it. See the shared module's header.
+  test('search stayed app-side on both, and now agrees with foodCatalogFilter (Q41, fixed 2026-09-06)', () => {
+    // Byte-identical copies, still not promoted as statics — but both now
+    // build their "who can see this" clause from the shared
+    // `foodCatalogVisibilityFilter` instead of each hand-rolling
+    // `{user_id: null}`, which is narrower than `foodCatalogFilter` (below)
+    // always was. Two definitions of "visible" reconciled into one.
     expect(String(FoodItemGraphQL.schema.statics.search)).toBe(
       String(FoodItemRest.schema.statics.search)
     );
-    expect(String(FoodItemRest.schema.statics.search)).toContain('user_id: null');
+    expect(String(FoodItemRest.schema.statics.search)).toContain('foodCatalogVisibilityFilter');
     expect(String(FoodItemGraphQL.schema.statics.findAccessible)).toContain('foodCatalogFilter');
   });
 });
@@ -1511,26 +1511,28 @@ describe('FoodItem findOrCreate (the shared dedupe ladder)', () => {
     expect(await FoodItemGraphQL.countDocuments({})).toBe(2);
   });
 
-  test('but a soft-deleted row that holds a BARCODE makes findOrCreate throw', async () => {
-    // Pre-existing on both sides, found by consolidating rather than caused by
-    // it: the dedupe ladder skips `is_deleted: true`, but the unique index on
-    // `barcode` does NOT — it is unfiltered. So a soft-deleted row still owns
-    // its barcode, the ladder declines to return it, and the insert that
-    // follows collides. Both shipped copies behave exactly this way; asserted
-    // here so it is a known property rather than a surprise in an error log.
-    // Fixing it means either a partial unique index or clearing `barcode` on
-    // soft delete — a migration, not a line in a consolidation commit.
+  test('a soft-deleted row that holds a BARCODE no longer blocks a re-add (Q40, fixed 2026-09-06)', async () => {
+    // Used to throw E11000 here: the dedupe ladder skips `is_deleted: true`,
+    // but the old `unique: true, sparse: true` index on `barcode` enforced
+    // uniqueness across every row that had one, soft-deleted included, so a
+    // soft-deleted row's barcode collided with the fresh insert that follows
+    // the ladder finding nothing. The index is now a PARTIAL unique index
+    // (`partialFilterExpression: { is_deleted: false, barcode: { $type:
+    // 'string' } }`, packages/schemas/fitnessgeek/foodItem.js), so a
+    // soft-deleted row's barcode no longer participates in the constraint at
+    // all, and re-adding a previously-deleted product mints a new row.
     await FoodItemGraphQL.init();
     await FoodItemGraphQL.create(food({ barcode: '9999999999999', is_deleted: true }));
 
-    await expect(
-      FoodItemGraphQL.findOrCreate(food({ barcode: '9999999999999' }), OWNER)
-    ).rejects.toMatchObject({ code: 11000 });
+    const resolved = await FoodItemGraphQL.findOrCreate(food({ barcode: '9999999999999' }), OWNER);
+    expect(resolved.is_deleted).toBe(false);
+    expect(resolved.barcode).toBe('9999999999999');
+    expect(await FoodItemGraphQL.countDocuments({ barcode: '9999999999999' })).toBe(2);
 
-    // And REST's copy does the same thing, because it is the same ladder.
-    await expect(
-      FoodItemRestSide.findOrCreate(food({ barcode: '9999999999999' }))
-    ).rejects.toMatchObject({ code: 11000 });
+    // And REST's copy does the same thing, because it is the same ladder and
+    // the same shared index.
+    const viaRest = await FoodItemRestSide.findOrCreate(food({ barcode: '9999999999999' }));
+    expect(viaRest.is_deleted).toBe(false);
   });
 
   test('both writers dedupe against each other, which is the whole point', async () => {
@@ -1579,16 +1581,18 @@ describe('FoodItem findOrCreate (the shared dedupe ladder)', () => {
   });
 
   test('barcode really is unique in the database, not just in the schema', async () => {
-    // The one `unique` index in packages/schemas/fitnessgeek. It is unchanged
-    // by consolidation, so production needs no index rebuild — but the flag
-    // has to actually be doing something for that claim to mean anything.
+    // The one `unique` index in packages/schemas/fitnessgeek — a PARTIAL
+    // index as of Q40 (2026-09-06), not `sparse` (see the header and the
+    // soft-deleted-barcode test above) — but the flag has to actually be
+    // doing something for that claim to mean anything.
     await FoodItemGraphQL.init();
     await FoodItemGraphQL.create(food({ barcode: 'dup-check-1' }));
     await expect(
       FoodItemGraphQL.create(food({ barcode: 'dup-check-1', name: 'Second' }))
     ).rejects.toMatchObject({ code: 11000 });
 
-    // Sparse: two rows with no barcode at all are fine.
+    // The partial filter excludes rows with no barcode at all, same as
+    // `sparse` used to: two such rows are fine.
     await FoodItemGraphQL.create(food({ name: 'No barcode A' }));
     await FoodItemGraphQL.create(food({ name: 'No barcode B' }));
   });

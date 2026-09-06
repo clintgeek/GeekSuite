@@ -27,41 +27,51 @@
  *
  * THE `unique` INDEX — READ THIS BEFORE CHANGING A FLAG
  * ----------------------------------------------------
- * `barcode` carries `unique: true, sparse: true`. It is the only `unique` flag
- * anywhere in `packages/schemas/fitnessgeek/`, and it is the reason this pair
- * is the first with a deploy caveat:
+ * `barcode` carries a `unique` index. It is the only `unique` flag anywhere in
+ * `packages/schemas/fitnessgeek/`, and it is the reason this pair is the first
+ * with a deploy caveat:
  *
- *   - **Today, nothing to do.** The flag is identical to what both sides
- *     already declared, so `syncIndexes` on either process is a no-op against
- *     the index that already exists in production. Consolidating changes no
- *     index, so there is no index rebuild and no ordering constraint between
- *     the two deploys.
- *   - **If a `unique` (or `sparse`, or the text index) flag is ever CHANGED
- *     here, both processes must be redeployed together.** Whichever reaches
- *     `syncIndexes` first tries to build the new index; the other keeps
- *     writing under the old contract, and a build that the live data violates
- *     fails loudly and repeatedly. In this suite that happens by construction —
- *     every push to `main` rebuilds all eight images and Watchtower rolls the
- *     fleet — but it is a property of the pipeline, not of the code, so say so
- *     in the commit if you ever touch it.
+ *   - **As of Q40 (2026-09-06) it changed** from a path-level
+ *     `unique: true, sparse: true` to an explicit
+ *     `schema.index({ barcode: 1 }, { unique: true, partialFilterExpression:
+ *     { is_deleted: false, barcode: { $type: 'string' } } })` — see "KNOWN
+ *     QUIRK" below for why. This IS the kind of change the next bullet warns
+ *     about: both processes need the new index built, via
+ *     `apps/fitnessgeek/backend/scripts/fixBarcodeUniqueIndex.js` dropping the
+ *     stale one and each app's own `autoIndex` building the replacement on its
+ *     next boot — which happens together in this suite regardless, since
+ *     every push to `main` rebuilds and redeploys all eight images.
+ *   - **If a `unique` (or the partial filter, or the text index) flag is ever
+ *     CHANGED again, both processes must be redeployed together.** Whichever
+ *     reaches `createIndexes` first tries to build the new index; the other
+ *     keeps writing under the old contract, and a build that the live data
+ *     violates fails loudly and repeatedly. In this suite that happens by
+ *     construction — every push to `main` rebuilds all eight images and
+ *     Watchtower rolls the fleet — but it is a property of the pipeline, not
+ *     of the code, so say so in the commit if you ever touch it.
  *
  * The text index (`{ name: 'text', brand: 'text' }`) carries **no `weights`
  * option** on either side, so both fields weigh 1. Both tripwire suites
  * compare the normalized index list *including* `weights`, so adding a weight
  * on one side only is a test failure rather than a silent ranking change.
  *
- * KNOWN QUIRK — A SOFT-DELETED ROW STILL OWNS ITS BARCODE
- * ------------------------------------------------------
- * The `unique` index on `barcode` is **not** filtered by `is_deleted`, but
- * every rung of the dedupe ladder below is. So when a soft-deleted row holds a
- * barcode, `findOrCreate` declines to return it and then collides with it on
- * insert: the caller gets an `E11000`, not a row. This is pre-existing on both
- * sides — identical ladder, identical index — and it is asserted in
- * `fitnessgeekSchemaParity.test.js` so that it stays a known property instead
- * of an occasional mystery in an error log. Fixing it means either a partial
- * unique index (`partialFilterExpression: { is_deleted: false }`) or clearing
- * `barcode` on soft delete. Both are migrations with their own ticket, and
- * both would change a `unique` index — see the redeploy rule above.
+ * KNOWN QUIRK — A SOFT-DELETED ROW STILL OWNS ITS BARCODE — FIXED 2026-09-06 (Q40)
+ * ---------------------------------------------------------------------------------
+ * Used to be: the `unique` index on `barcode` was **not** filtered by
+ * `is_deleted`, but every rung of the dedupe ladder below is. So when a
+ * soft-deleted row held a barcode, `findOrCreate` declined to return it and
+ * then collided with it on insert: the caller got an `E11000`, not a row.
+ * Pre-existing on both sides — identical ladder, identical index.
+ *
+ * Fixed by making the index PARTIAL: `partialFilterExpression: { is_deleted:
+ * false, barcode: { $type: 'string' } }` (see `createFoodItemSchema` below), so
+ * a soft-deleted row's barcode no longer participates in the uniqueness
+ * constraint at all, and re-adding a previously-deleted product mints a fresh
+ * row instead of colliding. Production migration:
+ * `apps/fitnessgeek/backend/scripts/fixBarcodeUniqueIndex.js` (drops the old
+ * index; the next boot's `autoIndex` builds the new one — Sage runs it, not
+ * an agent). Both suites' parity tests were updated to assert the fixed
+ * behaviour rather than the old collision.
  *
  * WHAT MOVED, AND WHAT DIDN'T
  * ---------------------------
@@ -88,17 +98,24 @@
  *   | `findAccessible`    | absent      | `requireUser` + `foodCatalogFilter`|
  *   | `findAccessibleMany`| absent      | `requireUser` + `foodCatalogFilter`|
  *
- * `search` is identical on both sides today and §4 originally said to promote
- * it with `findOrCreate`. It was deliberately left app-side, because it is an
- * ownership-scoping read and the two sides do not in fact agree about what a
- * visible catalog row is: `search` matches `{ user_id: null }` while
- * `foodCatalogFilter` (which `findAccessible` uses, in the same file) also
- * matches `{ user_id: { $exists: false } }`. A legacy row with no `user_id`
- * key at all is therefore reachable through one and not the other. Promoting
- * `search` would freeze one of two live definitions of catalog visibility into
- * the shared contract; a read static has no corruption failure mode, so there
- * is nothing to buy for that price. Reconciling the two filters is its own
- * ticket.
+ * `search` is identical on both sides. §4 originally said to promote it with
+ * `findOrCreate`; that was deferred because `search` and basegeek's
+ * `foodCatalogFilter` (`ownership.js`, used by `findAccessible`) did not
+ * *agree* about what a visible catalog row is — `search` matched only
+ * `{ user_id: null }`, `foodCatalogFilter` also matched
+ * `{ user_id: { $exists: false } }`, and a legacy row with no `user_id` key
+ * at all was reachable through one and not the other.
+ *
+ * RECONCILED (Q41, 2026-09-06): `foodCatalogVisibilityFilter(userId)`, below,
+ * is now the one filter shape both definitions build on — the union of the
+ * two (a legacy no-key row is visible either way now, which only ever WIDENS
+ * what an already-authenticated caller can see, never narrows it). `search`
+ * on both sides calls it directly; `foodCatalogFilter` in `ownership.js`
+ * keeps its own `requireUser(userId)` fail-closed guard and delegates the
+ * filter shape to this function — the ownership *policy* (must a caller be
+ * authenticated at all) still stays app-side, only the *shape* of "which rows
+ * are visible" is shared, same split as `findOrCreateFoodItem`'s ladder vs.
+ * its callers' ownership checks.
  *
  * WHERE THE ACCESSIBILITY RE-CHECK LIVES
  * --------------------------------------
@@ -199,10 +216,10 @@ function foodItemDefinition(mongoose) {
       index: true
     },
     barcode: {
-      type: String,
-      unique: true,
-      sparse: true,
-      index: true
+      type: String
+      // No path-level unique/sparse/index — the uniqueness constraint is a
+      // PARTIAL index declared explicitly in createFoodItemSchema() below
+      // (Q40, 2026-09-06). See the header before touching this.
     },
     nutrition: {
       calories_per_serving: {
@@ -330,6 +347,33 @@ function foodItemDedupeFilters(foodData = {}) {
 }
 
 /**
+ * The read-scope for the shared food catalog: global rows (no owner) plus the
+ * caller's own custom foods. "No owner" covers both shapes a legacy row can
+ * take — `user_id: null` (set explicitly) and `user_id` absent entirely (never
+ * set) — which is the Q41 reconciliation (2026-09-06): `search` on both sides
+ * used to match only the first shape, `foodCatalogFilter` in basegeek's
+ * `ownership.js` matched both. This is the union, so nothing that was visible
+ * through either path stops being visible.
+ *
+ * This is a READ FILTER ONLY. Whether a caller must be authenticated at all
+ * (basegeek's `requireUser` fail-closed guard) is ownership *policy* and stays
+ * app-side — `foodCatalogFilter` calls `requireUser(userId)` itself before
+ * delegating the filter shape to this function. A falsy `userId` here simply
+ * omits the "mine" clause rather than throwing, which is what lets `search`
+ * (no ownership guard, callable with `userId = null`) keep working exactly as
+ * it always did for an anonymous/global-only read.
+ *
+ * @param {string|null|undefined} userId - the caller, or falsy for "no owner
+ *   clause" (global rows only).
+ * @returns {Object} a Mongo `$or` filter fragment.
+ */
+function foodCatalogVisibilityFilter(userId) {
+  const clauses = [{ user_id: null }, { user_id: { $exists: false } }];
+  if (userId) clauses.unshift({ user_id: userId });
+  return { $or: clauses };
+}
+
+/**
  * The attributes a brand-new catalog row is created with when no rung matched.
  *
  * Two things here are behaviour, not formatting, and both shipped on both
@@ -447,10 +491,11 @@ function attachFoodItemMethods(schema) {
  * Build a fresh `FoodItem` schema — indexes, virtual and instance method
  * included.
  *
- * Six indexes: four path-level (`name`, `brand`, `source`, `source_id`,
- * `user_id`, `is_deleted` all carry `index: true`, and `barcode` carries
- * `unique: true, sparse: true`), four compound, and one text index. See the
- * header before changing any flag on the unique one.
+ * Six path-level single-field indexes (`name`, `brand`, `source`, `source_id`,
+ * `user_id`, `is_deleted` all carry `index: true`), four compound, one text
+ * index, and `barcode`'s own PARTIAL unique index (Q40, 2026-09-06 — declared
+ * explicitly below, not as a path option). See the header before changing any
+ * flag on the unique one.
  *
  * Statics are deliberately NOT attached here. `findOrCreate` delegates to
  * `findOrCreateFoodItem` from each app's own model file; `search` and
@@ -469,6 +514,24 @@ function createFoodItemSchema(mongoose) {
   schema.index({ is_deleted: 1, user_id: 1 });
   schema.index({ barcode: 1, is_deleted: 1 });  // For barcode lookups in findOrCreate
 
+  // Q40 (2026-09-06): partial unique index, not `sparse`. A `sparse` unique
+  // index only excludes documents where the path doesn't exist — it still
+  // enforces uniqueness across every document that HAS a barcode, soft-deleted
+  // ones included, which is what let a soft-deleted row's barcode collide with
+  // a fresh insert (`findOrCreateFoodItem` filters `is_deleted: false` on every
+  // rung, so it never returns that row, and then `E11000`s trying to create a
+  // new one). Scoping the filter to live rows with a string barcode fixes it:
+  // a soft-deleted row's barcode no longer participates in the constraint at
+  // all, so re-adding a previously-deleted product mints a new row instead of
+  // colliding. Migration: apps/fitnessgeek/backend/scripts/fixBarcodeUniqueIndex.js
+  // (drops the old index; this line builds the new one on the next boot).
+  // This is still the pair's one `unique` flag — see the redeploy rule above
+  // before changing this line again.
+  schema.index(
+    { barcode: 1 },
+    { unique: true, partialFilterExpression: { is_deleted: false, barcode: { $type: 'string' } } }
+  );
+
   // Text search index
   schema.index({ name: 'text', brand: 'text' });
 
@@ -483,6 +546,7 @@ module.exports = {
   foodItemBounds,
   foodItemDefaults,
   foodItemDedupeFilters,
+  foodCatalogVisibilityFilter,
   newFoodItemAttrs,
   findOrCreateFoodItem,
   attachFoodItemVirtuals,

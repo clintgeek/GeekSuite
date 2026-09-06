@@ -7,8 +7,9 @@ import { createNutritionGoalsSchema } from '@geeksuite/schemas/fitnessgeek/nutri
 // (apps/basegeek/packages/api/src/graphql/fitnessgeek/models/NutritionGoals.js)
 // cannot drift. Both point at the `nutritiongoals` collection in the same
 // database — basegeek is the only writer, this side reads through
-// routes/aiCoachRoutes.js, services/foodReportService.js and
-// services/aiInsightsService.js — and mongoose strict mode silently drops
+// services/foodReportService.js and services/aiInsightsService.js
+// (routes/aiCoachRoutes.js was deleted 2026-09-06, caller-less) — and
+// mongoose strict mode silently drops
 // paths one side doesn't know about. See the shared module's header and
 // DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md.
 //
