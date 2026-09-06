@@ -1,9 +1,38 @@
 # GeekSuite — Status
 
-*Updated 2026-09-05 16:50 CDT. Morning: three deploys (Pocket Pass M0–M5, AIGeek, Ask). Afternoon:
-the 28-hour quota burn — eight more waves (last `7fd206b`), 80 streams landed, all verified live.
-The live board with every stream, incident and open decision is `DOCS/BURN_QUEUE.md`; the
-cross-stream review of the day's commits is `DOCS/BURN_REVIEW.md`.*
+*Updated 2026-09-05 23:05 CDT. Morning: three deploys (Pocket Pass M0–M5, AIGeek, Ask). Afternoon
+and evening: the 28-hour quota burn — fourteen waves (last `a0450d7`), 105 streams landed, all
+verified live. The live board with every stream, incident and open decision is
+`DOCS/BURN_QUEUE.md`; the cross-stream review is `DOCS/BURN_REVIEW.md`; the AI ideas are
+`DOCS/AI_IDEAS.md`.*
+
+## Phase 2 — the going-over (evening of 2026-09-05)
+
+Chef: "give the entire GeekSuite a good going over, fix what needs fixing." Seven reviewers read
+every tree whole with fix authority inside it; each fix carries a test. Roughly 600 tests were
+added. What they found had been live for weeks or months, not introduced today:
+
+- **Broken for users**: the medications page always empty; a barcode scan returning a random
+  food; every Add/Edit Medication rejected at the gateway; Calibre rescan never worked since the
+  Node move; story creation dead; hatch events impossible to log; editing a task from most bujogeek
+  pages un-filed it and un-recurred it; Back in notegeek created two notes; every save failure
+  invisible; storygeek's compose had no `env_file` at all.
+- **Security**: an unauthenticated route whose first act wiped the imported library; path traversal
+  and SSRF in bookgeek and basegeek; flockgeek's owner id taken from a request header; an open
+  redirect on the console's login; one-tap permanent user deletion; a datastore credential pair in
+  git-tracked public files; a provider key in URL query strings; auth headers and a login body in
+  error logs; `/register` unlimited; password changes leaving other sessions valid.
+- **Robustness**: uncaught datastore errors that could kill the API; no outbound timeouts on token
+  validation, OAuth or any auth proxy; a refresh timer that logged you out on any network blip;
+  compose healthchecks and log rotation everywhere.
+- **New gates**: `tools/gql-arg-audit.mjs` (frontend documents vs gateway schema, both directions)
+  and a payload-coercion test that found the medications bug; both in CI.
+
+**Decisions waiting on Chef** (board Q-items): **rotate the datageek datastore credential (Q58)**;
+repair the malformed storygeek DB connection line and drop the compose override (Q56); reload
+startgeek then flip CSRF enforce after 24h clean (Q18b); revoke LocalApps (Q10); branch protection
+(Q43); container TZ (Q42); the policy set in Q62 (API-key conversation ownership, key minting for
+any app name, several dead-but-mounted layers); Q22/Q38 deletions; Q48 triage.
 
 ## Read this first
 
