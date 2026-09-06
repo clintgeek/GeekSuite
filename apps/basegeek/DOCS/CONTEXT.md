@@ -30,6 +30,54 @@ v6, zustand (via `@geeksuite/user`). Routes render inside `Layout.jsx`
 
 ---
 
+## basegeek validates its own sessions in-process (2026-09-05)
+
+`server.js` mounts the gateway behind the shared session middleware:
+
+```javascript
+app.use('/graphql', optionalUser({ validateSession: localSessionValidator }));
+```
+
+The `validateSession` argument is the whole point. Without it, `optionalUser()` validates by calling
+`BASEGEEK_URL/api/users/me` over HTTP — the right thing in the six consumer backends, and
+pathological here, because inside basegeek that URL **is basegeek**. `BASEGEEK_URL` is set neither in
+`apps/basegeek/.env.production` nor in the running container, so the default
+`https://basegeek.clintgeek.com` applied: every gateway request went out through nginx and back in to
+ask this same process who the caller was, spending an inbound request slot to free one. That is a
+feedback loop, and once `validateToken` grew an 8 s timeout the saturated case stopped being *slow*
+and became a **suite-wide logout** — `optionalUser` swallowed the timeout, the request ran anonymous,
+the resolver threw `UNAUTHENTICATED`, and the shared Apollo error link called `logout()` in every open
+tab of every app. (`DOCS/BURN_REVIEW_2.md` §3.)
+
+**`localSessionValidator`** (`src/middleware/auth.js`) does in-process what the round trip did:
+
+1. **Reads the token cookie-first** (`readSessionToken`) — basegeek's own order, which the shared
+   header-first reader does not share. The two disagree only when a request carries both a cookie and
+   a Bearer header naming different sessions; the gateway now resolves the same session every REST
+   route would.
+2. **Verifies it with `verifyAccessToken`** — extracted from `authenticateToken`, which now calls it
+   too. One JWT parser in basegeek, not two: `JWT_SECRET` and the `VALID_APPS` app-claim check are
+   applied in exactly one place.
+3. **Applies the password-change rule.** A token whose `iat` predates `user.passwordChangedAt` is
+   refused, with the same whole-second truncation `authService.rotateRefreshToken` uses (a token
+   minted in the same second as the change is kept — that is the session that made it). A password
+   change ends every session, and the gateway is a session.
+4. **Returns the `GET /api/users/me` payload**, normalized the way the shared validator normalizes
+   it, with `id` stringified. Resolvers reading `context.user.id` cannot tell the two paths apart.
+
+**Failure kinds stay distinct.** A bad, forged, expired or superseded token throws `invalidSession()`
+and the request continues anonymously, exactly as before. A Mongo that will not answer throws
+`sessionUnavailable()`, which the middleware turns into `503` + `Retry-After: 5` +
+`code: AUTH_UNAVAILABLE` — never an anonymous request, because an anonymous request on this mount is
+how a transient blip became a logout. The suite-wide contract is in `DOCS/CONTEXT.md`, "Who validates
+a session".
+
+**Tests:** `src/__tests__/gatewayLocalSession.test.js` — 10 cases. The load-bearing ones are negative:
+`BASEGEEK_URL` points at a loopback server that records every request it receives, and it must record
+none, on the valid path *and* on every rejection path.
+
+---
+
 ## The fitnessgeek GraphQL gateway's Mongoose models (2026-09-05)
 
 Out of this file's usual scope — it covers the admin console — but there is no
@@ -210,8 +258,19 @@ argument (GraphQL itself refuses the `null`) or a server-generated id.
 get 5 000 000, because those store a serialized tldraw/mind-map snapshot in
 the same field and a modest sketch clears 100 000 without trying. The ceiling
 is picked from the note's own `type`; an `updateNote` that omits `type` gets
-the generous one, since the server cannot know the stored type without a read
-it does not otherwise need.
+the generous one *in the schema*, since the schema cannot know the stored
+type — and the resolver, which reads that type anyway in order to sanitize
+correctly, then re-applies the right ceiling. See "the order of the checks"
+below; the schema's ceiling is the outer bound, not the last word.
+
+**`type` is optional but never null.** `noteTypeSchema` is
+`z.enum(...).optional()` with no `.nullable()`, for two reasons at once:
+`Note.type` is `String!` and `notes` is `[Note!]!`, so one null-typed row nulls
+the entire list for that user; and `sanitize.js` decides from that same field
+whether a body is HTML, so a stored null made a later typeless update store
+markup **unsanitized**. Omit the field to leave the type alone. On `createNote`
+the fallback to `text` applies only when the argument is ABSENT — it is the
+mongoose default, not a coercion of null.
 
 **bookgeek is a special case: books and shelves are a deliberately SHARED
 household library.** `Book` carries no owner/userId field on purpose — see
@@ -248,6 +307,15 @@ is a separate, still-open question (`DOCS/TODO_ORDER.md` #22).
   already on the note (`a`→`b` on `[a, b]` gave `[b, b]`); now `$addToSet`s
   the new tag then `$pull`s the old one and returns whether any note actually
   changed — pinned in `notegeekOwnership.test.js`.
+  **A rename to the same name is now an explicit no-op returning `false`**
+  (BURN_REVIEW_2 #2). The schema trims both names and `TagContextMenu.jsx`
+  guards only the raw strings, so `"work"` → `"work "` reached the resolver as
+  a rename to itself: `$addToSet` did nothing and `$pull` then deleted the tag
+  from every note that had it. Equality is checked AFTER the schema's trim, so
+  case still matters — `work` → `Work` is a real rename. `false` rather than a
+  thrown error because the client's `onTagsRewritten` cache update runs on the
+  successful boolean and refetches the tag index, while a rejection would leave
+  the rename dialog open on an unhandled promise.
 - **notegeek** `updateFolder` took any `parentId` with no ancestry check, so a
   folder could become its own descendant and loop the tree view; it now walks
   the caller's folder set and rejects a self- or descendant-`parentId` with
@@ -281,9 +349,33 @@ optional on `updateNote` and every notegeek client sends it, but a hand-rolled
 `updateNote(id, content)` need not, and skipping sanitization in that case
 would leave the hole open. When `content` is present and `type` is not, the
 resolver reads the stored type first (`findOne({_id, userId}, {type: 1})`).
-This is the opposite call from the content-size ceilings a few sections up,
-which accept the imprecision rather than pay for a read: a too-generous
-ceiling is not a security boundary, and this is.
+
+**The order of the checks is load-bearing** (BURN_REVIEW_2 #4/#6). In
+`updateNote`, and in the same shape in `createNote`:
+
+1. **resolve the effective type** — the argument, else the stored type;
+2. **apply that type's ceiling to the INPUT** (`assertContentCeiling`);
+3. **sanitize** — only a `text` body is touched at all;
+4. **apply the ceiling again to the sanitizer's OUTPUT**.
+
+Step 2 is why step 3 is affordable. The schema has to hand a typeless update
+the 5 000 000 ceiling, so before this ordering one `updateNote(id, content)`
+with a 5 MB body on a `text` row handed 5 MB to jsdom + DOMPurify — both fully
+synchronous — for a **measured 16 365 ms** of blocked event loop on the gateway
+all eight apps share. The sanitizer now never sees more than 100 000
+characters; that body sanitizes in ~100-200 ms.
+
+Step 4 is not belt-and-braces: sanitizing can make a body **longer**.
+`hardenRel` adds `rel`/`target` to every anchor and DOMPurify escapes bare `&`,
+so a 100 000-character body of small anchors was stored at 187 486 characters —
+above the ceiling it had just passed — and every later save of that note was
+then rejected. The note became permanently unsaveable. What is stored is what
+must fit. Both rejections are the shared `BAD_USER_INPUT` shape, `path:
+'content'`, message naming the limit (the post-sanitize one adds "after
+sanitization"). Pinned in `notegeekContentCeilings.test.js`, including the
+negative — a 5 MB `handwritten` snapshot is a legitimate note and still passes
+untouched, typed or typeless — and a timing guard on the largest accepted
+`text` body.
 
 **The profile is a twin of the client's, on purpose.**
 `apps/notegeek/frontend/src/utils/sanitizeNoteHtml.js` carries the same
@@ -366,6 +458,43 @@ coercion error graphql-js raises before the resolver runs, even when the value
 is `[]`. The input type now declares it, and
 `gatewayInputObjectParity.test.js` coerces the real frontend payloads against
 the real merged schema so the next one fails in CI instead of in the app.
+
+**The parity test's contract (BURN_REVIEW_2 #15, 2026-09-05).** The suite's
+first version covered exactly one input type by hand, which is the same
+"someone has to remember" gap `gql-arg-audit` itself replaced — the merged
+gateway declares **23 root fields that take an input-object argument**, and 21
+of them had no fixture. The test is generated now, not hand-picked:
+
+- `inputObjectRootFields()` walks the merged `typeDefs` AST itself — every
+  `Query`/`Mutation` field, every argument, unwrapped through `NonNull`/`List`
+  — and lists every one whose argument type is a declared
+  `InputObjectTypeDefinition`. Nothing here is copied out of the schema by
+  hand, so a new input-object-taking field is caught the run it lands.
+- `FIXTURES` maps each field's key (`Root.field`) to a real payload copied
+  field-for-field from the frontend call site named in its comment — the
+  builder function, not the raw form state, when a builder normalizes the
+  shape first (`normalizeFoodInput`, `sanitizeSettingsInput`, …). Each fixture
+  is coerced with `coerceInputValue`-equivalent variable coercion
+  (`graphql({schema, source, variableValues})` against a schema built with
+  `buildASTSchema` — no resolvers, so any error is a schema/payload mismatch,
+  never a database or network call).
+- `NO_FRONTEND_CALLER` is the honest alternative to a fabricated fixture: a
+  field with no live caller (today, `setNutritionGoals` —
+  `goalsService.saveGoals()` exists but nothing calls it) is listed there
+  instead of skipped silently.
+- **The completeness test is the one that matters most.** It recomputes
+  `inputObjectRootFields()` and asserts the sorted union of `FIXTURES` and
+  `NO_FRONTEND_CALLER` keys equals it exactly — both directions. A new
+  input-object field with neither entry fails it; so does a stale entry for a
+  field that was renamed or removed. **Adding an input-object-taking root
+  field means adding a fixture or a `NO_FRONTEND_CALLER` line in the same
+  change** — the test will not let it merge silently either way.
+- A root field typed to return a non-null object or list (`Task!`,
+  `[CalendarEvent!]!`, …) needs a `rootValue` stub in its fixture (an empty
+  object or array) purely to clear graphql-js's non-null-execution floor —
+  see the comment on `coercionErrors()`. That is an execution artifact of
+  testing coercion against a resolver-less schema, not a coercion rule; it has
+  nothing to do with whether the payload itself is valid.
 
 ---
 

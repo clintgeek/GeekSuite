@@ -28,6 +28,24 @@ jest.unstable_mockModule('axios', () => {
   return { default: axios, ...axios };
 });
 
+/**
+ * gmailGetMessage reaches Mongo through oauthConnectionService's
+ * OAuthConnection.findOne before it ever touches axios. Stub the model
+ * itself — rather than the whole service, which the timeout tests below
+ * exercise for real — with a token doc fresh enough that getFreshAccessToken
+ * takes the cached-token branch and never calls refreshTokens either.
+ */
+const tokenDoc = {
+  getAccessToken: () => 'access-token',
+  getRefreshToken: () => 'refresh-token',
+  expiresAt: new Date(Date.now() + 3600_000),
+  accessTokenEncrypted: 'cipher',
+  lastError: null,
+};
+jest.unstable_mockModule('../models/OAuthConnection.js', () => ({
+  default: { findOne: async () => tokenDoc },
+}));
+
 const { getFreshAccessToken, __test__ } = await import('../services/oauthConnectionService.js');
 const { gmailGetMessage } = await import('../services/ambientService.js');
 
@@ -44,50 +62,47 @@ describe('a Gmail message id is one path segment, never a path', () => {
    * literal '/', so an id of `..%2F..%2Fsettings` walked out of `/messages/`
    * and reached other Gmail API paths — with the caller's own OAuth token
    * already attached by `providerRequest`.
+   *
+   * The previous version of this test never called `gmailGetMessage` at
+   * all — it rebuilt the URL inline and asserted on `encodeURIComponent`,
+   * and the axios mock's recorded `calls` went unread. These call the real
+   * function and read the URL axios actually received.
    */
-  const tokenStub = {
-    getAccessToken: () => 'access-token',
-    getRefreshToken: () => 'refresh-token',
-    expiresAt: new Date(Date.now() + 3600_000),
-    accessTokenEncrypted: 'cipher',
-    lastError: null,
-  };
-
   it('percent-encodes a traversal attempt instead of following it', async () => {
-    jest.unstable_mockModule('../models/OAuthConnection.js', () => ({}));
-    // Rather than stub the whole model layer, assert on the URL builder alone:
-    // reproduce exactly what the service does with the id it is given.
-    const GMAIL_BASE = 'https://gmail.googleapis.com/gmail/v1/users/me';
     const hostile = '../../../settings/forwarding';
-    const built = `${GMAIL_BASE}/messages/${encodeURIComponent(hostile)}`;
+    await gmailGetMessage('user-1', hostile);
 
-    // The traversal survives only as literal text inside one segment.
-    expect(built).toBe(
+    expect(calls).toHaveLength(1);
+    const sent = calls[0];
+    expect(sent.method).toBe('GET');
+    // The traversal survives only as literal text inside one path segment.
+    expect(sent.url).toBe(
       'https://gmail.googleapis.com/gmail/v1/users/me/messages/..%2F..%2F..%2Fsettings%2Fforwarding'
     );
-    // And node's URL parser agrees the path did not move.
-    expect(new URL(built).pathname).toBe(
+    expect(new URL(sent.url).pathname).toBe(
       '/gmail/v1/users/me/messages/..%2F..%2F..%2Fsettings%2Fforwarding'
     );
-    // Whereas unencoded it does, which is the bug: three `..` segments walk
-    // out of `/users/me/messages/` and land somewhere else entirely on the
-    // same host, with the caller's OAuth token attached.
-    const escaped = new URL(`${GMAIL_BASE}/messages/${hostile}`).pathname;
+    // Whereas unencoded it would walk out of /messages/ entirely — three
+    // `..` segments land somewhere else on the same host, with the caller's
+    // OAuth token attached. This is the bug the fix closes.
+    const escaped = new URL(
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${hostile}`
+    ).pathname;
     expect(escaped).toBe('/gmail/v1/settings/forwarding');
     expect(escaped).not.toContain('/messages/');
   });
 
-  it('leaves an ordinary Gmail id untouched', () => {
-    // Real ids are hex, so encoding must be a no-op for every real call.
-    expect(encodeURIComponent('18f3c2a9b7d4e1f0')).toBe('18f3c2a9b7d4e1f0');
+  it('leaves an ordinary Gmail id untouched', async () => {
+    await gmailGetMessage('user-1', '18f3c2a9b7d4e1f0');
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe(
+      'https://gmail.googleapis.com/gmail/v1/users/me/messages/18f3c2a9b7d4e1f0'
+    );
   });
 
-  it('is what the service actually calls', () => {
-    // Guard against the fix being reverted: the source must not interpolate
-    // the id bare.
-    const source = gmailGetMessage.toString();
-    expect(source).toContain('encodeURIComponent(id)');
-    expect(source).not.toMatch(/messages\/\$\{id\}/);
+  it('attaches the caller\'s own OAuth token as a Bearer header', async () => {
+    await gmailGetMessage('user-1', '18f3c2a9b7d4e1f0');
+    expect(calls[0].headers.Authorization).toBe('Bearer access-token');
   });
 });
 

@@ -28,7 +28,7 @@ was correct and did not reach a sibling; "pre-existing" = older, worth fixing, n
 |---|-----|------|------|--------|
 | 1 | **P0** | storygeek's compose `DB_URI` has no default — the next `up -d` from any other directory boots it empty | `apps/storygeek/docker-compose.yml:29` | `33953b6` **new** |
 | 2 | **P1** | Renaming a tag to itself-after-trim deletes it from every note | `graphql/notegeek/resolvers.js:248` | `6d53910` **new** |
-| 3 | **P1** | A *slow* basegeek now logs the whole suite out instead of waiting | `server.js:469` + `packages/api-client/src/index.js:100` | `016c7aa` **new** |
+| 3 | ~~**P1**~~ | ~~A *slow* basegeek now logs the whole suite out instead of waiting~~ **FIXED** | `server.js:469` + `packages/api-client/src/index.js:100` | `016c7aa` **new** |
 | 4 | **P1** | A typeless 5 MB update reaches the HTML sanitizer — 16 s of blocked event loop on the shared gateway | `graphql/notegeek/validation.js:118`, `resolvers.js:211` | `6d53910` **new** |
 | 5 | **P1** | `type: null` is accepted, nulls every `notes` query, and fails the sanitizer open | `graphql/notegeek/validation.js:74` | pre-existing, now security-bearing |
 | 6 | **P1** | Sanitizing can push a note past the 100 k ceiling it just passed — permanently unsaveable | `graphql/notegeek/resolvers.js:198,220` | `6d53910` **new** |
@@ -87,6 +87,42 @@ loop is self-reinforcing. *Fix:* point basegeek's own `BASEGEEK_URL` at `127.0.0
 `optionalUser` in-process), and make the gateway distinguish "no token" from "could not check the
 token". *Mechanism verified by reading and by the absent env var; the saturation loop is inference —
 there was no live traffic to observe.*
+
+> **FIXED 2026-09-05.** Both halves, and the second half for everyone rather than just basegeek.
+>
+> **In-process validation.** `attachUser()`/`optionalUser()` now take an injectable
+> `validateSession`; `server.js:469` passes `localSessionValidator`
+> (`middleware/auth.js`), which reads the token cookie-first — basegeek's own order, not the shared
+> header-first one — verifies it with `verifyAccessToken`, extracted from `authenticateToken` so
+> there is still exactly one JWT parser in basegeek, applies R93's `passwordChangedAt` rule with the
+> same whole-second tolerance `rotateRefreshToken` uses, and returns the `GET /api/users/me` payload
+> normalized the way the HTTP validator normalized it. No socket is opened. `BASEGEEK_URL` was left
+> alone: pointing it at loopback would have kept a network round trip for a question this process can
+> answer from memory, and would still have been one misconfigured env var away from the loop.
+> The six consumer backends keep the HTTP path unchanged.
+>
+> **"Could not check" is no longer "anonymous".** The anonymous fall-through at `attachUser.js:67`
+> was the actual mechanism — it is what put a user-less request in front of a resolver that then
+> threw `UNAUTHENTICATED`. `classifyValidationError()` now splits *invalid* (a flat 401/403 from
+> the validator) from *unavailable* (timeout, network, 5xx, a local DB that will not answer, and
+> anything else — it fails closed). Unavailable answers `503` + `Retry-After: 5` +
+> `code: AUTH_UNAVAILABLE` on **both** the required and the optional path; invalid keeps its old
+> 401/anonymous behaviour exactly. This replaces the old 502, so the three consumer suites that
+> asserted `502` need their expectation moved to `503` — listed in the handover.
+>
+> **The client half.** `packages/api-client/src/index.js` returns early on any `networkError` with
+> `statusCode >= 500`, so a 503 cannot reach `logout()`; the loose `message.includes('401')` check
+> below it can no longer be tripped by a 5xx body. `packages/auth`'s axios interceptor already gated
+> on 401/403 only and was left unchanged.
+>
+> **Tests:** `packages/user` 95 → 105 (injected validator makes no outbound call; unavailable → 503
+> with `Retry-After` on both paths; invalid → 401/anonymous; a real hung loopback server → 503).
+> `packages/api-client` 9 → 11 (a 503, and a 5xx whose message contains "401", must not log out).
+> basegeek api 1424 → 1434 (`gatewayLocalSession.test.js`: `/graphql` with a valid cookie is
+> authenticated with `BASEGEEK_URL` pointed at a loopback recorder that must record nothing; bad
+> cookie, forged secret, missing user, no token → anonymous, still no outbound call; a token
+> predating a password change → anonymous; the user store down → 503 + `Retry-After`).
+> `node tools/boot-smoke.mjs` and `node tools/syntax-check.mjs` both clean.
 
 **4. P1 — a typeless update hands 5 MB to the HTML sanitizer.** `graphql/notegeek/validation.js:54-59,118`
 gives an update that omits `type` the *snapshot* ceiling (5 000 000) rather than the text one;
@@ -171,7 +207,7 @@ healthchecks and did not extend to the datastores it had just recreated. *Scenar
 `restart: unless-stopped` does not react to unhealthy. *Fix:* add `mongosh --eval "db.adminCommand('ping')"`
 / `pg_isready` / `redis-cli ping` checks and move `depends_on` to `condition: service_healthy`.
 
-**13. P1 — the meal search parameter is a lie all the way down.**
+**13. P1 — the meal search parameter is a lie all the way down. FIXED 2026-09-05.**
 `apps/fitnessgeek/frontend/src/services/apiService.js:481` matches `base === '/meals'` and returns
 `{ query: GET_MEALS }` with **no variables**, so `getMeals(null, searchQuery)`'s `?search=` is dropped;
 the gateway has nowhere to put it either — `fitnessMeals(mealType: String)`
@@ -181,6 +217,13 @@ the gateway has nowhere to put it either — `fitnessMeals(mealType: String)`
 and none filters client-side. *Fix:* add `search` to the typeDef and resolver, or filter at the call
 sites. Invisible to tonight's `gql-arg-audit`, which checks the arguments a document *sends* and
 cannot see a parameter the document never declares.
+*Fixed:* `fitnessMeals(mealType: String, search: String)` — escaped and matched against `name`
+case-insensitively, same rule as `fitnessFoods(search:)`, bounded to 200 chars by
+`graphql/fitnessgeek/validation.js`. `apiService.js`'s `/meals` branch now reads `search` (and
+`meal_type`) off the query string into `GetFitnessMeals`'s `$search`/`$mealType`. Tests:
+`src/__tests__/fitnessgeekMealsSearch.test.js` (gateway — narrows, escapes `C++`/`Oreo (`, bounds,
+ownership) and `apps/fitnessgeek/frontend/src/services/__tests__/mealsSearchRouting.test.js` (frontend
+— operation name and `$search` reaching the variables). `gql-arg-audit` clean.
 
 **14. P1 — five tests added tonight stay green with tonight's fix reverted.** Each proven by reverting
 the fix in a scratch copy and re-running; nothing in the repo was touched.
@@ -208,6 +251,9 @@ are green pre-fix 19 hours out of 24 (pin with `vi.setSystemTime`), and
 box: under `TZ=UTC` the buggy local-time implementation satisfies every assertion and
 `test-bookgeek-web` sets no TZ on UTC runners (drive TZ from inside the test, as
 `bujogeek/.../dueDate.test.js:20`'s `withTZ` helper does).
+*Fixed 2026-09-06:* the five named tests now call the function, read the recorded axios call's
+`config.timeout`, spy `ical.fromURL`'s call count, and walk `selectionSet` — each proven red against
+its fix reverted and green restored; the two time-of-day and the TZ-only tests are unchanged.
 
 **15. P1 — the blind-spot cover is 2 of 23.** `tools/gql-arg-audit.mjs` cannot see fields inside an
 input object; `__tests__/gatewayInputObjectParity.test.js` exists to close that, and it is a
@@ -221,6 +267,8 @@ and **23 root fields taking an input-object argument**; 21 are uncovered — `ad
 but it enumerates nothing, so it grows only when someone remembers, which is the same property that
 let `suggested_indications` sit missing. *Fix:* enumerate the schema's input-object-taking fields and
 drive each from the frontend document that calls it, failing on any field with no payload.
+*Fixed 2026-09-06:* the test now enumerates all 23 from the schema itself and fails if any field has
+neither a fixture nor an explicit `NO_FRONTEND_CALLER` entry (one field, `setNutritionGoals`, has none).
 
 ---
 

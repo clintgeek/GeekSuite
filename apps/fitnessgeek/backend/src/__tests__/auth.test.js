@@ -111,10 +111,15 @@ describe('authenticateToken — token presence and validity (GET /api/me)', () =
     expect(res.status).toBe(401);
   });
 
-  test('basegeek unreachable (network error) surfaces as 502, not a false-positive 401/200', async () => {
+  test('basegeek unreachable (network error) surfaces as 503 + Retry-After (unavailable), not a false-positive 401/200', async () => {
     axios.get.mockRejectedValueOnce(new Error('connect ECONNREFUSED'));
     const res = await request(app).get('/api/me').set('Cookie', cookieHeader('valid-token-a'));
-    expect(res.status).toBe(502);
+    // Contract since 2026-09-05 (packages/user classifyValidationError): a
+    // validator that cannot be reached is "unavailable" (503), distinct from a
+    // bad token (401), so no client logs a user out over a blip.
+    expect(res.status).toBe(503);
+    expect(res.headers['retry-after']).toBeDefined();
+    expect(res.body.code).toBe('AUTH_UNAVAILABLE');
   });
 
   test('valid cookie token -> 200 with the caller identity', async () => {
@@ -404,8 +409,9 @@ describe('POST /api/auth/{refresh,logout} — CSRF token forwarding', () => {
 // error once the clock runs out on a socket that never answered. Since axios
 // is mocked in this file, the mock below reproduces exactly that behavior — a
 // "basegeek" that accepts the call and never answers, settled only by the
-// timeout axios itself would apply — rather than asserting on the timeout
-// value being present, which the CSRF-forwarding tests above already do.
+// timeout axios itself would apply. The CSRF-forwarding tests above assert
+// `config.headers`, not `config.timeout` — this block is where that value is
+// actually checked, against the recorded call rather than wall-clock.
 describe('outbound timeout to basegeek', () => {
   const ORIGINAL_TIMEOUT_ENV = process.env.BASEGEEK_TIMEOUT_MS;
 
@@ -435,26 +441,31 @@ describe('outbound timeout to basegeek', () => {
   test('a hung basegeek on POST /api/auth/login 502s within the configured timeout, not 401', async () => {
     axios.post.mockImplementationOnce((url, body, config) => hang(config));
 
-    const start = Date.now();
     const res = await request(app)
       .post('/api/auth/login')
       .send({ identifier: 'alice', password: 'whatever' });
-    const elapsed = Date.now() - start;
 
     expect(res.status).toBe(502);
-    expect(elapsed).toBeLessThan(1000);
+    // `hang()` settles off `config.timeout` — with `setTimeout(fn, undefined)`
+    // it resolves on the next tick no matter what BASEGEEK_TIMEOUT_MS is, so a
+    // bare 502 (or an elapsed-time bound) stays green even with `timeout:
+    // upstreamTimeoutMs()` stripped from the call. Read the value axios itself
+    // would have received instead.
+    expect(axios.post).toHaveBeenCalledTimes(1);
+    const [, , config] = axios.post.mock.calls[0];
+    expect(config.timeout).toBe(50);
   });
 
   test('a hung basegeek on GET /api/auth/me 502s within the configured timeout', async () => {
     axios.get.mockImplementationOnce((url, config) => hang(config));
 
-    const start = Date.now();
     const res = await request(app)
       .get('/api/auth/me')
       .set('Cookie', 'geek_token=whatever');
-    const elapsed = Date.now() - start;
 
     expect(res.status).toBe(502);
-    expect(elapsed).toBeLessThan(1000);
+    expect(axios.get).toHaveBeenCalledTimes(1);
+    const [, config] = axios.get.mock.calls[0];
+    expect(config.timeout).toBe(50);
   });
 });

@@ -206,13 +206,19 @@ describe('outbound timeout to basegeek', () => {
   test('a hung basegeek on POST /api/auth/refresh 502s within the configured timeout, not 401', async () => {
     mockAxiosPost.mockImplementationOnce((url, body, config) => hang(config));
 
-    const start = Date.now();
     const res = await request(buildApp())
       .post('/api/auth/refresh')
       .send({ refreshToken: 'a-jwt-shaped-string', app: 'storygeek' });
-    const elapsed = Date.now() - start;
 
     expect(res.status).toBe(502);
-    expect(elapsed).toBeLessThan(1000);
+    // The mechanism, not just the outcome: `hang()` settles off
+    // `config.timeout` — with `setTimeout(fn, undefined)` it resolves on the
+    // next tick regardless of BASEGEEK_TIMEOUT_MS, so a 502 alone (or an
+    // elapsed-time bound) stays green even with `timeout: upstreamTimeoutMs()`
+    // stripped from the call. Reading the value axios itself would have
+    // received is what actually pins it.
+    expect(mockAxiosPost).toHaveBeenCalledTimes(1);
+    const [, , config] = mockAxiosPost.mock.calls[0];
+    expect(config.timeout).toBe(50);
   });
 });

@@ -65,6 +65,42 @@ describe('task query selection sets', () => {
   );
 });
 
+/**
+ * Walks a document's actual response shape — the fields a server answer
+ * would carry — rather than its printed text. `print(doc).toContain(field)`
+ * is satisfied by a field's name showing up ANYWHERE in the document,
+ * including the operation's own `($content: String, ...)` variable
+ * definitions; both CREATE_TEMPLATE and UPDATE_TEMPLATE declare a variable
+ * for every field under test, so that assertion passed before Q59 ever
+ * touched the selection set. Fragment spreads (`...TemplateFields`) are
+ * resolved against the document's own FragmentDefinitions so a shape that
+ * lives in a shared fragment is still counted.
+ */
+function selectedFieldNames(doc) {
+  const fragmentsByName = new Map(
+    doc.definitions
+      .filter((def) => def.kind === 'FragmentDefinition')
+      .map((def) => [def.name.value, def])
+  );
+  const names = new Set();
+  const walk = (selectionSet) => {
+    if (!selectionSet) return;
+    for (const sel of selectionSet.selections) {
+      if (sel.kind === 'Field') {
+        names.add(sel.name.value);
+        walk(sel.selectionSet);
+      } else if (sel.kind === 'FragmentSpread') {
+        walk(fragmentsByName.get(sel.name.value)?.selectionSet);
+      } else if (sel.kind === 'InlineFragment') {
+        walk(sel.selectionSet);
+      }
+    }
+  };
+  const operation = doc.definitions.find((def) => def.kind === 'OperationDefinition');
+  walk(operation.selectionSet);
+  return names;
+}
+
 describe('template mutation payloads', () => {
   // TemplateContext splices these results straight into the list it renders.
   // Both used to return `{ id, name }`, so a newly created template had no
@@ -74,9 +110,9 @@ describe('template mutation payloads', () => {
     ['CREATE_TEMPLATE', CREATE_TEMPLATE],
     ['UPDATE_TEMPLATE', UPDATE_TEMPLATE],
   ])('%s returns the full card/apply shape', (_name, doc) => {
-    const text = print(doc);
+    const fields = selectedFieldNames(doc);
     for (const field of ['content', 'type', 'tags', 'description', 'isPublic']) {
-      expect(text).toContain(field);
+      expect([...fields], `${_name} selects: ${[...fields].join(', ')}`).toContain(field);
     }
   });
 });

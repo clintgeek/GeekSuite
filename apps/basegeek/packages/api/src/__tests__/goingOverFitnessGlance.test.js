@@ -9,7 +9,8 @@
  */
 
 import mongoose from 'mongoose';
-import { describe, it, expect, beforeAll, afterEach, afterAll } from '@jest/globals';
+import ical from 'node-ical';
+import { describe, it, expect, beforeAll, afterEach, afterAll, jest } from '@jest/globals';
 
 const { default: FoodItem } = await import('../graphql/fitnessgeek/models/FoodItem.js');
 const { default: FoodLog } = await import('../graphql/fitnessgeek/models/FoodLog.js');
@@ -211,15 +212,29 @@ describe('calendarEvents will not fetch anything a caller names', () => {
 
   it('caps the fan-out rather than fetching an unbounded list', async () => {
     // 500 sources at a 15s budget each is 2 hours of one request's outbound
-    // calls. All of these are blocked hosts, so the cap is what is under test,
-    // not the fetch.
-    const many = Array.from({ length: 500 }, (_, i) => ({ url: `http://127.0.0.1:${9000 + i}/c.ics` }));
-    const started = Date.now();
-    const events = await glanceResolvers.Query.calendarEvents(
-      null, { sources: many, from: null, to: null }, asCtx
-    );
-    expect(events).toEqual([]);
-    expect(Date.now() - started).toBeLessThan(10_000);
+    // calls. Blocked-host sources (as the sibling test above uses) never
+    // reach `ical.fromURL` at all — they fail the host check first — so
+    // measuring against those proves nothing about the cap, only about the
+    // host filter, and elapsed wall-clock time passes just as well with no
+    // cap at all (all 500 rejections are still fast). Use allowed hosts and
+    // spy the one call each source actually makes: the cap must stop the
+    // resolver from attempting more than MAX_CALENDAR_SOURCES fetches, no
+    // matter how many sources are supplied.
+    const many = Array.from({ length: 500 }, (_, i) => ({
+      url: `https://calendar-source-${i}.example.com/c.ics`,
+    }));
+    const fromURLSpy = jest
+      .spyOn(ical, 'fromURL')
+      .mockRejectedValue(new Error('stubbed for the fan-out cap test'));
+    try {
+      const events = await glanceResolvers.Query.calendarEvents(
+        null, { sources: many, from: null, to: null }, asCtx
+      );
+      expect(events).toEqual([]);
+      expect(fromURLSpy).toHaveBeenCalledTimes(20); // MAX_CALENDAR_SOURCES
+    } finally {
+      fromURLSpy.mockRestore();
+    }
   });
 
   it('refuses an anonymous caller before any of that', async () => {
