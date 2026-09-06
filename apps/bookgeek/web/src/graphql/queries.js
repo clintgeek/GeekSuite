@@ -149,6 +149,14 @@ export const GET_WHAT_NEXT = gql`
       picks {
         bookId
         why
+        book {
+          id
+          title
+          authors
+          shelf
+          owned
+          readingProgress
+        }
       }
       provenance {
         ${AI_PROVENANCE_FIELDS}

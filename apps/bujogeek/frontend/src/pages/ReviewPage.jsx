@@ -374,6 +374,9 @@ const ReviewPage = () => {
               sx={{
                 position: 'relative',
                 py: 1.25,
+                minHeight: 44, // 44px tap floor (harness scene 11-review-draft)
+                display: 'flex',
+                alignItems: 'center',
                 cursor: 'pointer',
                 transition: 'color 200ms ease',
                 '&:hover': {

@@ -150,7 +150,8 @@ export default function EditMetadataDialog({
                 rating: next == null ? "" : String(next),
               }))
             }
-            sx={{ fontSize: 32 }}
+            // 44px stars: each star is a tap target (harness scene 08-edit-metadata-draft)
+            sx={{ fontSize: 44 }}
           />
         </Box>
 
