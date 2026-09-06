@@ -309,6 +309,71 @@ users get responses, but log noise is misleading. Polish ticket — not a fire.
 
 ---
 
+## Time zones (Q42, Night 2 — 2026-09-06)
+
+Containers run **UTC**, full stop. The `TZ=America/Chicago` line in every consumer app's
+`docker-compose.yml` (bookgeek, fitnessgeek, notegeek, flockgeek, storygeek, bujogeek, startgeek)
+was removed — it was inert dead weight. None of these images carry `tzdata` (plain
+`node:20-alpine`/`-slim`), so `TZ` had no effect on any server-side `new Date()`, `Date.now()`, or
+log timestamp; it was misleading, not merely useless, because it looked like a config a reader
+could rely on.
+
+**The rule going forward**: the browser owns the local day. A server never guesses what "today"
+means for a user — it either receives a calendar-day string from the client or computes one in
+UTC and lets the client re-derive the local view. Calendar-day fields (a habit's date, a food
+log's day, a journal entry's day) are `YYYY-MM-DD` strings, not `Date` objects with an implied
+zone, produced via `@geeksuite/utils` (`packages/utils/src/dates.js`):
+
+- `utcDateString(value)` — canonical `YYYY-MM-DD` for storage/comparison, computed in UTC
+- `localDateString(value)` — the same shape, computed in the caller's local zone (browser-side)
+- `toUtcMidnight(value)` — parses a `YYYY-MM-DD` string to a `Date` at UTC midnight, for querying
+- `displayCalendarDate`, `startOfLocalDay`, `utcDayRange` — display/range helpers built on the same
+  contract
+
+**Never install `tzdata` and set a real `TZ`** without first re-auditing every server-side
+`new Date()` call site across the seven consumer backends: today those calls are UTC by the
+container's own emptiness (no zone data to consult), and every calendar-day computation upstream
+already assumes that. Giving the container a real zone would silently shift midnight for any call
+site that isn't already going through the `@geeksuite/utils` helpers above — the exact class of bug
+the stripped `TZ` line was pretending to prevent.
+
+`basegeek`'s compose file is out of this stream's scope (a different agent owns it this session);
+its own `TZ` handling, if any, is unaudited by this pass.
+
+---
+
+## Night 2 — 2026-09-06 (R123 — Q42 TZ, Q70 orphan cleanup)
+
+**Built/changed:**
+- Removed the `TZ: America/Chicago` line from the seven in-scope compose files: `apps/bookgeek`,
+  `apps/fitnessgeek`, `apps/notegeek`, `apps/flockgeek`, `apps/storygeek`, `apps/bujogeek`,
+  `apps/startgeek` — each a single-line, byte-identical-otherwise diff, YAML-validated with
+  `python3 -c "import yaml; yaml.safe_load(...)"` (no `docker compose config` available/allowed).
+- Added the "Time zones" section above.
+- Updated `DOCS/RUNBOOK.md`'s existing "TZ is inert, Chef's call" line to record that Q42 is done.
+- New `tools/kill-orphans.mjs` (Q70) — see `DOCS/RUNBOOK.md` §11 for usage; a line was added there
+  since `tools/README.md` doesn't exist yet.
+
+**Decisions made on Chef's behalf:**
+- `basegeek/docker-compose.yml` was left untouched — out of scope for this stream (another agent
+  owns it this session), so its `TZ` line (if any) is unaudited here.
+- No Dockerfile in scope sets `TZ` itself (grepped, zero hits) — nothing to change there.
+- `DEPLOY.md` has no `TZ` mention — nothing to fix there.
+- `kill-orphans.mjs`'s `serve` detection matches on the resolved executable's basename (`serve`) or
+  the `serve` npm package's known install paths, specifically to avoid false-positives on this
+  box's other same-named "serve" subcommands (`ollama serve`, `registry serve ...`) that are
+  unrelated dev tooling.
+
+**Left, with reasons:**
+- `--kill` was never invoked by this agent, per the hard rules — verified in list/dry-run mode only
+  (see the report for the observed output shape). Chef or Sage should run `--kill` when actually
+  clearing a stuck box.
+- No root ESLint config exists to cover `tools/**` (confirmed: no root `eslint.config.*`, no root
+  `.eslintrc*`; lint is per-workspace-package via `pnpm -r lint`), so no lint pass was run against
+  the new tool.
+
+---
+
 ## Reference Documentation
 
 - [`SSO_OVERVIEW.md`](SSO_OVERVIEW.md) — full SSO architecture, risks, and migration plan

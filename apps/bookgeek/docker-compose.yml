@@ -18,7 +18,6 @@ services:
       - .env.production
 
     environment:
-      TZ: America/Chicago
       NODE_ENV: production
       API_PORT: 1800
       LIBRARY_PATH: /data/library

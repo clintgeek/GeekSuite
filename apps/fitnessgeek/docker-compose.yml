@@ -24,7 +24,6 @@ services:
 
     # Compose-fixed values that don't vary per environment.
     environment:
-      TZ: America/Chicago
       NODE_ENV: production
       PORT: 3001
 

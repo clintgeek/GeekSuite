@@ -6,7 +6,6 @@ services:
     labels:
       com.centurylinklabs.watchtower.enable: "true"
     environment:
-      TZ: America/Chicago
     ports:
       - "3000:3000"
     healthcheck:

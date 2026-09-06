@@ -69,7 +69,7 @@ of each app's backend source. Names only — no values were read or printed.
   `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_URL`, `INFLUXDB_URL`, `INFLUXDB_ORG`,
   `INFLUXDB_BUCKET`, `INFLUXDB_TOKEN`, `INFLUXDB_SETUP_USERNAME`, `INFLUXDB_SETUP_PASSWORD`,
   `INFLUXDB_ADMIN_TOKEN`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`,
-  `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SPOTIFY_REDIRECT_URI`, `INTERNAL_JWT_SECRET`,
+  `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SPOTIFY_REDIRECT_URI`,
   `KEY_VAULT_SECRET` (shared with fitnessgeek, see below), `VAPID_PUBLIC_KEY`,
   `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `AI_CACHE_MAX_ENTRIES`, `AI_CACHE_TTL_MS`, `WEATHER_LAT`,
   `WEATHER_LON`, `SSO_COOKIE_DOMAIN`, `CSRF_GUARD` (`off|report`, all seven backends,
@@ -423,6 +423,30 @@ some of these may differ once the in-flight work lands).
 | An app crash-loops in production with a plain `SyntaxError` even though CI was green | A module no jest/vitest suite imports (e.g. a `typeDefs.js`) had a parse error — nothing ever loaded it to notice | Fixed by the `syntax` CI job / `pnpm check:syntax` (§5) added 2026-09-05 after exactly this happened to `apps/basegeek/packages/api/src/graphql/bujogeek/typeDefs.js` (`61d3109`) |
 | basegeek opens Mongo/Postgres/Redis/Influx connections before those containers are ready, on a full `up -d` | `apps/basegeek/docker-compose.yml`'s four datastore services had no `healthcheck:` and basegeek's `depends_on:` was short-form (waits for *started*, not *ready*) — BURN_REVIEW_2 #12 | Fixed 2026-09-05: mongodb (`mongosh --eval "db.adminCommand('ping').ok"`), postgres (`pg_isready -U $POSTGRES_USER`), redis (`redis-cli ping`), influxdb (`curl` against `/ping`) all got healthchecks with a 20s `start_period`; basegeek's `depends_on:` is now long-form with `condition: service_healthy` for all four, and its own healthcheck gained a 30s `start_period` to match its observed ~15-25s boot time. **Not yet applied** — needs a `docker compose up -d` from `apps/basegeek/` that recreates the whole datastore set; see `DEPLOY.md` "Applying the #10/#12 fix" for the exact command and expected blip. |
 | Datastore containers (`datageek_mongodb`/`datageek_postgres`) briefly carried all ~40 basegeek secrets via `env_file: .env.production` | BURN_REVIEW_2 #10 — a same-night fix for blank root creds on force-recreate over-corrected to the app's full env file | Fixed 2026-09-05: `apps/basegeek/.env` is now a symlink to `.env.production` (compose reads `${VAR}` substitution from `.env` automatically, no `env_file:` needed for that), and mongodb/postgres declare only their own vars explicitly (`MONGO_INITDB_ROOT_USERNAME/PASSWORD`, `POSTGRES_USER/PASSWORD/DB`). See `DEPLOY.md` "Datastore env convention" for the pattern and the keys-only verification command — never pipe `docker compose config`'s raw output anywhere, it prints resolved secret values. |
+| The box slows or OOMs mid-burn, and `ps` shows old `vite`/`vitest`/`serve`/`jest`/`playwright` processes with no live agent attached | A stopped or crashed agent's dev server, test worker, or headless browser never got torn down (multi-agent sessions on this box each spawn their own) | `node tools/kill-orphans.mjs` (list mode) to see what's there, then `node tools/kill-orphans.mjs --kill` to terminate it — see below |
+
+---
+
+## 11. Orphan process cleanup (Q70, Night 2 — 2026-09-06)
+
+`tools/kill-orphans.mjs` lists (default / `--dry-run`) or kills (`--kill`) dev-tooling processes
+left behind by a stopped agent: `vite` (dev + `preview`), `vitest` workers, `serve` instances,
+`playwright`/chromium headless shells, and `jest` workers. A process only qualifies if it's owned
+by the current user, matches one of those signatures, and is either orphaned (parent is PID 1, or
+the parent PID no longer exists) or older than `--older-than <minutes>` (default 30). It reads
+`/proc/*/cmdline` and `/proc/*/stat` directly — no `pgrep -f`/`pkill -f` — and kills by PID with
+`process.kill()`. It will never touch a process whose cmdline mentions `claude`, `docker`, or
+`watchtower`, or any PID that is an ancestor of the script itself (its own shell, tmux, sshd, etc.).
+
+```
+node tools/kill-orphans.mjs                  # list mode (default), read-only
+node tools/kill-orphans.mjs --older-than 15  # tighter age threshold, still read-only
+node tools/kill-orphans.mjs --kill           # actually terminate matches (SIGTERM, then SIGKILL after 2s)
+```
+
+**After a stopped-agent OOM scare**, run `node tools/kill-orphans.mjs` first to see what it found,
+then `node tools/kill-orphans.mjs --kill` once the list looks right. Prints a before/after table
+(pid, age, RSS, reason, category, truncated cmd) either way.
 
 ---
 
@@ -508,8 +532,11 @@ A dedicated pass over `apps/*/Dockerfile`, `apps/*/docker-compose.yml`, `apps/*/
 - Every Dockerfile runs its process as root (no `USER` instruction anywhere in the suite) —
   changing this touches bind-mounted volume permissions (bookgeek's library mount, the four
   datastore volumes) across all eight images at once; flagged for Chef rather than changed here.
-- `TZ=America/Chicago` is inert in every container (no `tzdata` in any `node:20-alpine`/`-slim`
-  image) — Q42, Chef's call, per `STATUS.md`.
+- ~~`TZ=America/Chicago` is inert in every container (no `tzdata` in any `node:20-alpine`/`-slim`
+  image) — Q42, Chef's call, per `STATUS.md`.~~ **Removed Night 2 (2026-09-06)** — the `TZ:` line
+  was stripped from all seven consumer compose files (bookgeek, fitnessgeek, notegeek, flockgeek,
+  storygeek, bujogeek, startgeek); basegeek's compose is out of this stream's scope. See
+  `DOCS/CONTEXT.md` "Time zones" for the rule that replaces it.
 - `bujogeek`'s compose sets `GATEWAY_URL=http://host.docker.internal:4100`, but nothing in the
   bujogeek backend reads `process.env.GATEWAY_URL` (grepped, zero hits) — dead config, and the
   port doesn't even match basegeek's real one (8987). Harmless since unread; not touched.
