@@ -13,6 +13,7 @@
 import mongoose from 'mongoose';
 
 const { default: Task } = await import('../graphql/bujogeek/models/Task.js');
+const { default: Collection } = await import('../graphql/bujogeek/models/Collection.js');
 const { default: taskService, recurrencePatternToRRule, formatDtstart } =
   await import('../graphql/bujogeek/services/taskService.js');
 const { resolvers } = await import('../graphql/bujogeek/resolvers.js');
@@ -43,6 +44,7 @@ beforeAll(async () => {
 
 afterEach(async () => {
   await Task.deleteMany({});
+  await Collection.deleteMany({});
 });
 
 afterAll(async () => {
@@ -144,6 +146,69 @@ describe('createTask — legacy recurrencePattern shim', () => {
     expect(virtual[0].content).toBe('standup');
     // The master itself is never returned as a real row.
     expect(tasks.some((t) => t.isSeriesMaster)).toBe(false);
+  });
+
+  test('a virtual occurrence carries the master\'s collectionId and every field TaskEditor reseeds', async () => {
+    const collection = await Collection.create({ name: 'Chores', createdBy: ALICE });
+
+    const master = await taskService.createTask({
+      content: 'water plants',
+      createdBy: ALICE,
+      originalDate: DUE,
+      dueDate: DUE,
+      recurrenceRule: 'DTSTART:20260315T090000Z\nRRULE:FREQ=DAILY',
+      collectionId: collection._id,
+      tags: ['home', 'garden'],
+      signifier: '!',
+      priority: 2,
+    });
+    expect(master.collectionId).not.toBeNull();
+
+    const tasks = await taskService.getTasksForDateRange({
+      userId: ALICE,
+      startDate: '2026-03-17',
+      endDate: '2026-03-17',
+      viewType: 'daily',
+    });
+
+    const occurrence = tasks.find((t) => t.isVirtual);
+    expect(occurrence).toBeDefined();
+    // The fields TaskEditor reseeds a form from — an occurrence missing any
+    // of these looks unfiled / loses recurrence / drops tags on edit.
+    expect(String(occurrence.collectionId)).toBe(String(collection._id));
+    expect(occurrence.recurrenceRule).toBe(master.recurrenceRule);
+    expect(occurrence.recurrencePattern).toBe(master.recurrencePattern);
+    expect(occurrence.tags).toEqual(['home', 'garden']);
+    expect(occurrence.signifier).toBe('!');
+    expect(occurrence.priority).toBe(2);
+  });
+
+  test('the daily/all carry-forward occurrence also carries collectionId and recurrencePattern', async () => {
+    const collection = await Collection.create({ name: 'Chores', createdBy: ALICE });
+    // Series ends well before the view window, so the only candidate is the
+    // "last occurrence before viewStart" carry-forward branch, not the
+    // in-range one.
+    const master = await taskService.createTask({
+      content: 'water plants',
+      createdBy: ALICE,
+      originalDate: DUE,
+      dueDate: DUE,
+      recurrenceRule: 'DTSTART:20260315T090000Z\nRRULE:FREQ=DAILY;UNTIL=20260316T090000Z',
+      collectionId: collection._id,
+    });
+
+    const tasks = await taskService.getTasksForDateRange({
+      userId: ALICE,
+      startDate: '2026-03-20',
+      endDate: '2026-03-20',
+      viewType: 'daily',
+    });
+
+    const carried = tasks.find((t) => t.isVirtual);
+    expect(carried).toBeDefined();
+    expect(carried.originalDueDate.getTime()).toBeLessThan(new Date('2026-03-20').getTime());
+    expect(String(carried.collectionId)).toBe(String(collection._id));
+    expect(carried.recurrencePattern).toBe(master.recurrencePattern);
   });
 });
 

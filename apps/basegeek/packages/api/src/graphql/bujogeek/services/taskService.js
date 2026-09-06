@@ -296,6 +296,8 @@ class TaskService {
               originalDueDate: date,
               seriesId: master._id,
               recurrenceRule: master.recurrenceRule,
+              recurrencePattern: master.recurrencePattern,
+              collectionId: master.collectionId,
               isVirtual: true,
               createdBy: master.createdBy
             });
@@ -325,6 +327,8 @@ class TaskService {
                   originalDueDate: pastDate,
                   seriesId: master._id,
                   recurrenceRule: master.recurrenceRule,
+                  recurrencePattern: master.recurrencePattern,
+                  collectionId: master.collectionId,
                   isVirtual: true,
                   createdBy: master.createdBy
                 });
