@@ -29,6 +29,8 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | R125 | sonnet | Q55 bujogeek TaskEditor lazy pickers | **landed** (wave 19) |
 | R126 | sonnet | harness scenes for the five AI surfaces | **landed** (wave 19) |
 | R127 | sonnet | notegeek gateway dead Folder type removal | **landed** (wave 19) |
+| R128 | sonnet | fitnessgeek nivo point props (pre-existing r=NaN) | **landed** `98a1742` (wave 21) |
+| R129 | sonnet | harness: Rating probe gap, fixture scoping, dead stub | **landed** (wave 21) |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
 ## Queued (launch when files free / prerequisite lands)
@@ -88,6 +90,7 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 `startgeek.clintgeek.com` redirect. See `STATUS.md`.
 
 ## Waves
+- **Wave 21** (09-06 ~15:10): R128 nivo points r=NaN + seriesColor typos (`98a1742`), R129 harness probe learns for-linked labels, bookgeek waiver gone, fitnessgeek fixture flag scoped to scene 11, dead GetFolders stub removed.
 - **Wave 20** (09-06 14:35): dependency prune (`4177c9d` — recharts/chart.js/react-chartjs-2/chartjs-adapter-date-fns from fitnessgeek, @apollo/client/graphql from storygeek; lockfile regenerated offline, frozen install + both builds verified), STATUS.md.
 - **Wave 19** `71a4a08` (09-06 14:20 CDT; CI/harness/Release green; Watchtower 7/7 at 14:27; fleet healthy, CSRF report): R124 Q52 charts→Nivo + ZXing SRI + quick-add opt-in server-side (`5e82aaf`), R125 Q55 lazy pickers (`7fbdce2`), R126 harness scenes for the AI surfaces (`d2f8d89`), R127 notegeek Folder type gone (`ceb4ae2`), what-next query fix + 44px tabs/stars (`9ed7f18`), runner envelope unwrap + true opt-in (`561d248`), compose empty-key fix (`ddd2b4f`), console CSRF self-heal (`3b18cd3`).
   **Incident 14:05–14:20:** with `CSRF_TOKEN=enforce` Chef could not log in — his Firefox ran a console bundle cached by the console's service worker from before the client grew the header, so `POST /api/auth/login` was rejected `csrf_token_missing`. A fresh browser against the live page sends the header (probe: `scratchpad/login-probe.mjs`). Rolled back to `report` at 14:12 (compose, `--no-deps`). **Q18b stays open:** flip to enforce again once the report log shows no `missing_header` from real bundles (Chef hard-reloads basegeek console + startgeek on each device first); the console now retries once with the live cookie and reloads once per session, so a stale bundle heals itself on the next attempt.

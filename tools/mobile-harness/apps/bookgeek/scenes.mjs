@@ -130,24 +130,11 @@ export const scenes = [
 
 // Known, ticketed violations. Each one should die when the app is fixed —
 // an empty list is the goal, not a permanent parking lot.
-export const waivers = [
-  {
-    // Real, first surfaced by this scene — no prior harness scene opened a
-    // dialog containing MUI's <Rating>, here in EditMetadataDialog.jsx. Each
-    // half-star radio input MUI renders (`precision={0.5}`, 0-5 stars = 10
-    // radios, plus one "clear rating" reset radio = 11) is a standard
-    // visually-hidden <input> paired with a visible star <label>/icon — the
-    // probe measures the input itself (1x1, clipped) rather than the icon it
-    // is paired with, the way it already special-cases a checkbox's <label>.
-    // Separately, the Rating's own `sx={{ fontSize: 32 }}` renders each star
-    // icon at 32px, itself under the 44px floor even measured correctly at
-    // the label. Neither is fixed here: a probe carve-out belongs in
-    // `lib/probe.mjs`, and the icon size is `apps/bookgeek/web/src/views/
-    // detail/EditMetadataDialog.jsx` — both outside this stream's
-    // fixtures/scenes/README scope. Reported, not fixed.
-    rule: 'tap-target',
-    scenes: ['08-edit-metadata-draft'],
-    match: /MuiRating-visuallyHidden/,
-    why: 'MUI <Rating> sr-only radio inputs measure 1x1 — a probe gap (the visible stars are 44px since night 2); teach the probe about visuallyHidden radios and drop this waiver.',
-  },
-];
+//
+// The MUI <Rating> waiver that used to live here (its sr-only radio inputs
+// measuring 1x1 in EditMetadataDialog.jsx) is gone: `lib/probe.mjs`'s
+// tap-target rule now falls back to a for-linked `<label for="id">` when an
+// interactive element has no ancestor label (Rating's <label> and <input>
+// are siblings, not nested — @mui/material/Rating/Rating.js), and the stars
+// themselves render at 44px since 9ed7f18. bookgeek is 0/0/0 without it.
+export const waivers = [];

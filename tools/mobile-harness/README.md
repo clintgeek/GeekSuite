@@ -61,9 +61,12 @@ suites:
 - **tap-target** — `fixtures/tap-target-pseudo.html`, the fixture's
   known-good and known-bad controls, in particular the `::before`/`::after`
   hit-area cases (`.hit44`-style transform-centred, `.dot`-style `inset`, an
-  unpositioned decorative pseudo, and one with `pointer-events: none`). Add a
-  case to the fixture and to the `CASES` list alongside any change to the
-  pseudo-box logic in `lib/probe.mjs`.
+  unpositioned decorative pseudo, and one with `pointer-events: none`), plus
+  the MUI `<Rating>` sr-only-radio cases: a `for`-linked (not nested) label at
+  44×44 (pass), the same pattern at 30×30 (fail), and a `for`-linked label
+  that paints zero width (pass — skipped, not a touch target; see "The
+  probe" below). Add a case to the fixture and to the `CASES` list alongside
+  any change to the pseudo-box or label-lookup logic in `lib/probe.mjs`.
 - **a11y** — `fixtures/a11y.html`, a deliberately dull page (black on white,
   16px, 44px controls, `lang` and `<title>` present) with exactly two planted
   violations: an `<img>` with no `alt` (`image-alt`) and a visible `<button>`
@@ -211,10 +214,21 @@ flag and for anyone calling `probePage`/`runApp` directly with
 `viewports: ALL_VIEWPORTS`.
 
 It measures the *hit area*, not the paint — a form control is measured at its
-`.MuiInputBase-root`, a slider at its rail, a checkbox at its `<label>`. It
-skips inline links inside prose, off-canvas drawers, `aria-hidden` subtrees,
-and elements that are focusable only because MUI cloned a `tabIndex` onto
-them.
+`.MuiInputBase-root`, a slider at its rail, a checkbox or radio at its
+`<label>` — an ancestor one (`<label><input/></label>`) or, when there is
+none, a `for`-linked one instead (MUI's `<Rating>` pairs each sr-only radio
+with a `<label for={id}>` *sibling*, never nested — `RatingLabel` and the
+`<input>` are siblings in a Fragment, `@mui/material/Rating/Rating.js`). If
+that label itself paints zero pixels in either axis — MUI's decimal-precision
+`<Rating>` (`precision < 1`) collapses every non-selected half-star label to
+`width: 0%; overflow: hidden`, and its "clear rating" label wraps only
+visually-hidden children — the control is skipped rather than flagged: there
+is no rendered area for a finger to find, so it is a keyboard/screen-reader-
+only affordance, not a touch target (the visible star at that position is a
+*different*, sibling element — the whole-value radio — measured on its own).
+It skips inline links inside prose, off-canvas drawers, `aria-hidden`
+subtrees, and elements that are focusable only because MUI cloned a
+`tabIndex` onto them.
 
 `tap-target` also unions in any absolutely positioned `::before`/`::after`
 hit-area pseudo — startgeek's `.hit44` (a centred invisible pseudo behind a
@@ -444,7 +458,7 @@ the **end** of its app's `scenes` array:
 | App | Scene | Opt-in | Stubs |
 |---|---|---|---|
 | bujogeek | `11-review-draft` | `appPreferences.bujogeek.aiReviewDraft` (server) | `GetReviewDraft` |
-| fitnessgeek | `11-quickadd-proposal` | `localStorage['fitnessgeek:quickAddNL']` (client) | `ParseFoodEntry`, `GET /api/foods` |
+| fitnessgeek | `11-quickadd-proposal` | `ai.features.natural_language_food_logging` (server; `localStorage['fitnessgeek:quickAddNL']` at ship time, corrected R129 — see below) | `ParseFoodEntry`, `GET /api/foods` |
 | notegeek | `05-suggestions` | `appPreferences.notegeek.suggestOnSave` (server) | `SuggestForNote` |
 | bookgeek | `07-what-next`, `08-edit-metadata-draft` | `appPreferences.bookgeek.libraryAssistant` (server) | `GetWhatNext`, `DraftBookMetadata` |
 | startgeek | `05-brief` | `localStorage['startgeek.settings'].brief` (client) | `GlanceBrief` |
@@ -480,7 +494,7 @@ startgeek's `05-brief` scene uses Playwright's `page.clock.setFixedTime(...)`
 four scenes' rendering is untouched and the brief's server-side 5 a.m. gate
 reads true regardless of when the harness actually runs.
 
-**A real bug, found and reported rather than fixed.** bookgeek's
+**A real bug, found here and fixed the same afternoon (`9ed7f18` — the query now selects `book { id title authors shelf owned readingProgress }`).** As found: bookgeek's
 `GET_WHAT_NEXT` query (`apps/bookgeek/web/src/graphql/queries.js`) selects
 only `{ bookId why }` on each pick — never `book { ... }` — even though the
 gateway's `WhatNextPick.book` field exists and is populated
@@ -493,3 +507,50 @@ shelf can never render in production, switch on or not. `fixtures.mjs`'s
 shipped query can ever receive — specifically so `WhatNextShelf` itself (and
 its a11y) could still be exercised here; this is not a fix and this tree does
 not own `apps/bookgeek/web/**`. See the harness run report for the same note.
+
+### R129 — the MUI `<Rating>` probe gap, and a fitnessgeek fixture-scoping bug
+
+Two follow-ups from the Night 2 pass above.
+
+**The probe gap.** `08-edit-metadata-draft`'s waiver (bookgeek's
+`EditMetadataDialog.jsx` `<Rating precision={0.5} sx={{ fontSize: 44 }}>`)
+was carrying a real probe blind spot, not just an unfixed app bug — the
+stars themselves have been 44px since `9ed7f18`. `lib/probe.mjs`'s tap-target
+rule now looks up a `for`-linked label (`document.querySelector('label[for="…"]')`,
+`CSS.escape`d) when `el.closest('label')` finds nothing, since MUI's
+`RatingLabel` and its sr-only radio are siblings in a `Fragment`, never
+nested — the existing ancestor-label special case (the one checkboxes
+already used) never matched them. That alone wasn't quite enough: with
+`precision < 1`, MUI's own decimal branch (`Rating.js` line ~482) collapses
+every half-star's label to `width: 0%; overflow: hidden` unless it is the
+exact current value, and its "clear rating" label wraps nothing but
+visually-hidden children — both paint zero pixels. A zero-area label means
+there is no rendered region for a finger to find (the *visible* star at that
+position is a different, sibling element — the whole-value radio — which
+now passes on its own), so the rule skips the control instead of flagging a
+hit area that was never painted. Three new `selftest.mjs` cases cover it
+(`for`-linked pass, `for`-linked too-small fail, `for`-linked zero-area
+skip). The `08-edit-metadata-draft` waiver in `apps/bookgeek/scenes.mjs` is
+gone; bookgeek runs 0/0/0 (16 scenes) without it.
+
+**The fixture-scoping bug.** `apps/fitnessgeek/fixtures.mjs` had
+`ai.features.natural_language_food_logging: true` in its context-wide
+`SETTINGS`, so every scene rendered the "Describe a meal" entry point
+(R115's opt-in went server-side in R124 — see
+`apps/fitnessgeek/frontend/src/utils/quickAddPreference.js` — so this is now
+the feature switch, not a decoration). Flipped the fixture default to
+`false` and moved the `true` into scene `11-quickadd-proposal`'s own
+page-scoped `GetFitnessUserSettings` stub, same pattern as bookgeek's
+`07-what-next`/`08-edit-metadata-draft`. Also dropped that scene's
+`page.addInitScript()` seed of the legacy `fitnessgeek:quickAddNL`
+localStorage key — R124 moved the opt-in server-side, so the key now only
+drives a one-time migration (`migrateLegacyQuickAddOptIn`), and seeding it
+just risked exercising that migration path instead of the feature itself.
+Confirmed via screenshot: scene `02-log` shows only Copy Meal/Household
+(no AI entry point); scene `11-quickadd-proposal` still renders and
+completes the full proposal flow. fitnessgeek runs 0/0/0 (22 scenes).
+
+Also dropped a dead `GetFolders: { folders: [] }` stub from
+`apps/notegeek/fixtures.mjs` — the gateway's `Folder` type, resolvers and
+model were removed in `ceb4ae2`, and no scene has queried it since. notegeek
+runs 0/0/0 (10 scenes).

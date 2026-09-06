@@ -220,9 +220,31 @@ const collect = async ({ isPhone, a11y = false, axeOptions = null }) => {
       // itself only chrome for this control.
       let w = r.width;
       let h = r.height;
-      const label = el.closest('label');
-      if (label && (el.tagName === 'INPUT' || el.getAttribute('role') === 'checkbox')) {
+      // A checkbox or radio's <label> is usually an ancestor
+      // (<label><input/></label>), but MUI's <Rating> pairs each sr-only
+      // radio with a `<label for={id}>` *sibling* instead — RatingLabel and
+      // the visually-hidden <input> are siblings in a Fragment
+      // (@mui/material/Rating/Rating.js), never nested. Fall back to the
+      // for-linked label when there is no ancestor one.
+      const forLabel = el.id ? document.querySelector(`label[for="${CSS.escape(el.id)}"]`) : null;
+      const label = el.closest('label') || forLabel;
+      if (label && (el.tagName === 'INPUT' || el.getAttribute('role') === 'checkbox' || el.getAttribute('role') === 'radio')) {
         const lr = label.getBoundingClientRect();
+        if (lr.width === 0 || lr.height === 0) {
+          // The label paints nothing at all — not "small", zero. MUI's
+          // decimal-precision <Rating> (precision < 1) collapses every
+          // half-star label to `width: 0%; overflow: hidden` unless it is
+          // the exact current value, and its "clear rating" label wraps only
+          // visually-hidden children; an empty inline label like that still
+          // gets a line-height strut in one axis (the other collapses to 0).
+          // Either way there is no rendered pixel for a finger to land on —
+          // these are keyboard/screen-reader-only affordances (the visible,
+          // tappable star at that position is a *different* element: the
+          // whole-value radio sharing the same spot, measured on its own).
+          // Not a touch target, so the 44px rule does not apply; skip rather
+          // than flag a hit area that was never there to begin with.
+          continue;
+        }
         w = Math.max(w, lr.width);
         h = Math.max(h, lr.height);
       }

@@ -73,7 +73,15 @@ export const SETTINGS = {
   ai: {
     __typename: 'AiSettings', enabled: true,
     features: {
-      __typename: 'AiFeatures', natural_language_food_logging: true, meal_suggestions: true,
+      // Off by default (R124 flipped the shared factory default to `false`;
+      // this feature is now the opt-in AND the kill switch — see
+      // `apps/fitnessgeek/frontend/src/utils/quickAddPreference.js`). Every
+      // scene shares this context-wide fixture, so leaving this `true` here
+      // made "Describe a meal" render on scenes that never opted in. Scene
+      // `11-quickadd-proposal` flips it on for itself with a page-scoped
+      // GraphQL stub, same pattern as bookgeek's `07-what-next`/
+      // `08-edit-metadata-draft` (README "Night 2").
+      __typename: 'AiFeatures', natural_language_food_logging: false, meal_suggestions: true,
       nutrition_analysis: true, goal_recommendations: true,
     },
   },

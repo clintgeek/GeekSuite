@@ -65,7 +65,6 @@ export const OPS = {
   RenameTag: { renameTag: true },
   DeleteTag: { deleteTag: true },
   SearchNotes: { searchNotes: [] },
-  GetFolders: { folders: [] },
 };
 
 export async function routes(ctx, { base, scheme, viewport } = {}) {

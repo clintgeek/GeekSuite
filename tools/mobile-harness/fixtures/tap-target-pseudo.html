@@ -67,6 +67,34 @@
     height: 44px;
     transform: translate(-50%, -50%);
   }
+
+  /* (f)/(g) MUI <Rating>'s pattern: a visually-hidden <input type="radio">
+     and its <label for="id"> are SIBLINGS, not nested
+     (@mui/material/Rating/Rating.js — RatingLabel + <input> in a Fragment).
+     `el.closest('label')` cannot find a for-linked label, so the probe has
+     to look one up by id. The visually-hidden technique (clip + 1px box,
+     not display:none) leaves the input's own rect at 1x1 but real. */
+  .visually-hidden-radio {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  #rating-star-label-pass { display: inline-block; width: 44px; height: 44px; }
+  #rating-star-label-fail { display: inline-block; width: 30px; height: 30px; }
+
+  /* (h) MUI <Rating> with precision < 1: every half-star's label collapses
+     to `width: 0%; overflow: hidden` unless it happens to be the exact
+     current value (Rating.js's decimal branch), and its own "clear rating"
+     label wraps nothing but visually-hidden children — both paint zero
+     pixels. Must PASS (skipped, not flagged): there is no rendered area for
+     a finger to find, so the 44px rule does not apply; it is a keyboard/
+     screen-reader-only affordance, and the visible star at that position is
+     a *different*, sibling element (the whole-value radio) measured on its
+     own. */
+  #rating-star-label-empty { display: inline-block; width: 0; height: 44px; overflow: hidden; }
 </style>
 </head>
 <body>
@@ -75,5 +103,14 @@
   <button id="pointer-events-none" aria-label="pointer-events-none">c</button>
   <button class="dot" aria-label="dot"></button>
   <button class="hit44" style="width:30px;height:30px" aria-label="hit44">e</button>
+
+  <label for="rating-star-input-pass" id="rating-star-label-pass"></label>
+  <input type="radio" class="visually-hidden-radio" id="rating-star-input-pass" aria-label="rating-star-for-label" />
+
+  <label for="rating-star-input-fail" id="rating-star-label-fail"></label>
+  <input type="radio" class="visually-hidden-radio" id="rating-star-input-fail" aria-label="rating-star-for-label-small" />
+
+  <label for="rating-star-input-empty" id="rating-star-label-empty"></label>
+  <input type="radio" class="visually-hidden-radio" id="rating-star-input-empty" aria-label="rating-star-for-label-empty" />
 </body>
 </html>

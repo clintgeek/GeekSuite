@@ -48,6 +48,21 @@ const CASES = [
     expect: 'pass',
     why: '.hit44: 30px visual, ::before centred via top/left:50%+translate(-50%,-50%), 44x44',
   },
+  {
+    label: 'rating-star-for-label',
+    expect: 'pass',
+    why: 'MUI <Rating> pattern: 1x1 visually-hidden radio, for-linked (sibling, not nested) <label> 44x44',
+  },
+  {
+    label: 'rating-star-for-label-small',
+    expect: 'fail',
+    why: 'same for-linked pattern, but the label itself is only 30x30 — union still fails',
+  },
+  {
+    label: 'rating-star-for-label-empty',
+    expect: 'pass',
+    why: 'for-linked label paints zero width (MUI Rating precision<1 collapses non-selected half-star labels) — no rendered area to tap, so skipped rather than flagged',
+  },
 ];
 
 const browser = await launch();

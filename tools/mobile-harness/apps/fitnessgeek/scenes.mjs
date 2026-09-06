@@ -3,12 +3,16 @@
 // needs a dialog open re-navigates and re-opens it rather than relying on a
 // previous scene's state.
 import { json, graphqlRoute } from '../../lib/net.mjs';
-import { OPS } from './fixtures.mjs';
+import { OPS, SETTINGS } from './fixtures.mjs';
 
-// The opt-in is client-only localStorage (`utils/quickAddPreference.js`),
-// default off, so no existing scene below renders "Describe a meal" — it is
-// seeded only inside the new scene's own page.addInitScript().
-const QUICK_ADD_NL_KEY = 'fitnessgeek:quickAddNL';
+// The opt-in is server-side now (`ai.features.natural_language_food_logging`
+// on the settings document, R124 — see
+// `apps/fitnessgeek/frontend/src/utils/quickAddPreference.js`), off by
+// default in fixtures.mjs's context-wide SETTINGS so no scene above this one
+// renders "Describe a meal". Scene 11 flips it on for itself only, via a
+// page-scoped GetFitnessUserSettings stub (page.route() beats ctx.route()
+// for a matching request — README "Night 2"), and must stay the LAST scene
+// in the file for the same reason.
 
 export const scenes = [
   { name: '01-home', goto: '/dashboard', wait: 1600 },
@@ -88,19 +92,21 @@ export const scenes = [
     teardown: (page, h) => h.esc(400),
   },
   {
-    // Natural-language quick-add (DOCS/AI_IDEAS.md #2, Night 2 R115). Both the
-    // localStorage opt-in and the two network stubs are page-scoped (not in
+    // Natural-language quick-add (DOCS/AI_IDEAS.md #2, Night 2 R115). The
+    // opt-in and the two extra network stubs are all page-scoped (not in
     // fixtures.mjs's context-wide routes()), so this must stay the LAST scene
-    // in the file — a page.addInitScript() applies to every navigation after
-    // the one that registers it.
+    // in the file — page.route() beats ctx.route() only for navigations
+    // registered after it.
     name: '11-quickadd-proposal',
     async setup(page, h) {
-      await page.addInitScript((key) => {
-        try { window.localStorage.setItem(key, 'true'); } catch { /* ignore */ }
-      }, QUICK_ADD_NL_KEY);
-
       await graphqlRoute(page, {
         ...OPS,
+        GetFitnessUserSettings: {
+          fitnessUserSettings: {
+            ...SETTINGS,
+            ai: { ...SETTINGS.ai, features: { ...SETTINGS.ai.features, natural_language_food_logging: true } },
+          },
+        },
         ParseFoodEntry: {
           parseFoodEntry: {
             __typename: 'ParsedFoodEntry',
