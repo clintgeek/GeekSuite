@@ -172,6 +172,50 @@ describe('errorLink CSRF heal', () => {
     expect(reloadCalls.length).toBe(0);
   });
 
+  it('does not log out on a 503 from the auth middleware', async () => {
+    // BURN_REVIEW_2 §3. When basegeek cannot check a session — its own Mongo
+    // is down, or a consumer's call to basegeek timed out — the middleware
+    // answers 503 + `Retry-After` instead of running the request anonymously
+    // into an UNAUTHENTICATED resolver error. A 503 says "ask again", not
+    // "you are logged out", and the link must treat it that way: a retryable
+    // blip that logs every tab out is worse than the blip.
+    const reloadCalls = setBrowserEnv();
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+    const link = errorLink('notegeek');
+    const unavailable = new Error('Response not successful: Received status code 503');
+    unavailable.name = 'ServerError';
+    unavailable.statusCode = 503;
+    unavailable.result = { message: 'Authentication service unavailable', code: 'AUTH_UNAVAILABLE' };
+    const forward = makeForward([{ error: unavailable }]);
+    const operation = makeOperation();
+
+    await expect(run(link, operation, forward)).rejects.toThrow();
+
+    // logout() posts to basegeek; no fetch means no logout, no broadcast to
+    // other tabs, and no login redirect.
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(operation.getContext().csrfHealRetried).toBeUndefined();
+    expect(reloadCalls.length).toBe(0);
+  });
+
+  it('does not log out on a 500/502 either — only a 401 is a verdict on the session', async () => {
+    // The message-substring checks in the 401 branch are loose ('401',
+    // 'Unauthorized'); a 5xx body that happened to contain either would
+    // otherwise be enough to throw a live user out.
+    for (const statusCode of [500, 502, 504]) {
+      setBrowserEnv();
+      globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+      const link = errorLink('notegeek');
+      const err = new Error('Response not successful: Received status code 401 from the upstream');
+      err.name = 'ServerError';
+      err.statusCode = statusCode;
+      const forward = makeForward([{ error: err }]);
+
+      await expect(run(link, makeOperation(), forward)).rejects.toThrow();
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+    }
+  });
+
   it('leaves the existing 401 → logout path untouched by the CSRF branch', async () => {
     const reloadCalls = setBrowserEnv();
     globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });

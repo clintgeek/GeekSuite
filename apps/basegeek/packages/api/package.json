@@ -11,6 +11,7 @@
     "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch"
   },
   "dependencies": {
+    "@geeksuite/user": "workspace:*",
     "@apollo/server": "^5.4.0",
     "@as-integrations/express4": "^1.1.2",
     "@geeksuite/crypto-vault": "workspace:*",

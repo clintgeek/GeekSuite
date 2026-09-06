@@ -165,14 +165,19 @@ describe.each(PROTECTED_ROUTES)('GET %s — invalid tokens', (route) => {
     expect(res.status).toBe(401);
   });
 
-  it('basegeek being unreachable fails closed (502), not open', async () => {
+  it('basegeek being unreachable answers 503 + Retry-After (unavailable), never anonymous or 401', async () => {
     mockAxios.get.mockRejectedValueOnce(networkError());
 
     const res = await request(app)
       .get(route)
       .set('Cookie', ['geek_token=some-token']);
 
-    expect(res.status).toBe(502);
+    // Contract since 2026-09-05 (packages/user tokenUtils.classifyValidationError):
+    // "cannot examine the token" is distinct from "token is bad" so no client
+    // treats a slow/absent basegeek as a logout.
+    expect(res.status).toBe(503);
+    expect(res.headers['retry-after']).toBeDefined();
+    expect(res.body.code).toBe('AUTH_UNAVAILABLE');
   });
 });
 

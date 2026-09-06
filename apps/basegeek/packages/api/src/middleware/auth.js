@@ -1,32 +1,153 @@
 import jwt from 'jsonwebtoken';
+import { normalizeSsoUser, invalidSession, sessionUnavailable } from '@geeksuite/user/server';
 import { VALID_APPS } from '../config/validApps.js';
 import { User } from '../models/user.js';
 
-export const authenticateToken = (req, res, next) => {
-  // Cookie-first, then Bearer header
+/**
+ * The token this request is presenting, cookie first.
+ *
+ * Cookie-first is basegeek's own order and predates the shared package's
+ * header-first `getTokenFromRequest()`. The two only disagree when a request
+ * carries *both* a cookie and a Bearer header naming different sessions, which
+ * a browser never does; the order is pinned here so every basegeek code path
+ * that reads a session — `authenticateToken` and `localSessionValidator` below
+ * — reads the same one.
+ */
+export function readSessionToken(req) {
   const cookieToken = req.cookies?.geek_token;
-  const authHeader = req.headers['authorization'];
+  const authHeader = req.headers?.['authorization'];
   const headerToken = authHeader && authHeader.split(' ')[1];
-  const token = cookieToken || headerToken;
+  return cookieToken || headerToken || null;
+}
+
+/**
+ * Verify an access token against this process's own `JWT_SECRET`.
+ *
+ * The single JWT parser in basegeek. `authenticateToken` (every REST route)
+ * and `localSessionValidator` (the GraphQL gateway) both come through here, so
+ * there is exactly one place that decides what a valid basegeek session is.
+ *
+ * @param {string} token
+ * @returns {{ok: true, decoded: object} | {ok: false, status: number, message: string}}
+ */
+export function verifyAccessToken(token) {
+  let decoded;
+  try {
+    decoded = jwt.verify(token, process.env.JWT_SECRET);
+  } catch {
+    return { ok: false, status: 403, message: 'Invalid or expired token' };
+  }
+
+  // Validate app claim if present (for backward compatibility)
+  if (decoded.app && !VALID_APPS.includes(decoded.app)) {
+    return { ok: false, status: 403, message: 'Invalid app token' };
+  }
+
+  return { ok: true, decoded };
+}
+
+export const authenticateToken = (req, res, next) => {
+  const token = readSessionToken(req);
 
   if (!token) {
     return res.status(401).json({ message: 'Authentication token required' });
   }
 
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    // Validate app claim if present (for backward compatibility)
-    if (decoded.app && !VALID_APPS.includes(decoded.app)) {
-      return res.status(403).json({ message: 'Invalid app token' });
-    }
-
-    req.user = decoded;
-    next();
-  } catch (error) {
-    return res.status(403).json({ message: 'Invalid or expired token' });
+  const result = verifyAccessToken(token);
+  if (!result.ok) {
+    return res.status(result.status).json({ message: result.message });
   }
+
+  req.user = result.decoded;
+  next();
 };
+
+/**
+ * localSessionValidator — how basegeek validates a session *for itself*.
+ *
+ * `server.js` mounts `/graphql` behind the shared `optionalUser()`, whose
+ * default validator asks `BASEGEEK_URL/api/users/me` over HTTP. Inside
+ * basegeek that URL resolves to basegeek: the gateway went out through nginx
+ * and back in to ask itself who the caller was, spending an inbound request
+ * slot on every inbound request. Under load that is a feedback loop, and once
+ * `validateToken` grew an 8 s timeout (2026-09-05) a *slow* basegeek stopped
+ * being slow and started being a suite-wide logout — `optionalUser` swallowed
+ * the timeout, the request ran anonymous, the resolver threw UNAUTHENTICATED,
+ * and the shared Apollo error link logged every open tab out.
+ * (BURN_REVIEW_2 §3.)
+ *
+ * basegeek holds `JWT_SECRET`. It never needed to ask anyone. This validator
+ * does in-process what the HTTP round trip did:
+ *
+ *   1. read the token cookie-first, basegeek's own order (`readSessionToken`);
+ *   2. verify it with `verifyAccessToken` — the same parser every REST route
+ *      uses, not a second one;
+ *   3. refuse a token minted before the user's last password change, the same
+ *      rule `rotateRefreshToken` applies to refresh tokens — a password change
+ *      ends every session, and the gateway is a session;
+ *   4. load the user and return the exact payload `GET /api/users/me` returns,
+ *      normalized the way the shared validator normalizes it, so resolvers
+ *      reading `context.user.id` cannot tell the two paths apart.
+ *
+ * Failure kinds are kept distinct on purpose: a bad token is `invalidSession`
+ * (the request continues anonymously under `optionalUser`), while a Mongo that
+ * will not answer is `sessionUnavailable` — a 503 with `Retry-After`, never an
+ * anonymous request that ends in a logout.
+ *
+ * @param {string} _token  what the shared header-first reader found; ignored
+ *                         in favour of basegeek's cookie-first order.
+ * @param {{req: import('express').Request}} ctx
+ * @returns {Promise<object>} the normalized SSO user
+ */
+export async function localSessionValidator(_token, ctx = {}) {
+  const req = ctx.req;
+  const token = readSessionToken(req);
+  if (!token) throw invalidSession('Authentication token required');
+
+  const result = verifyAccessToken(token);
+  if (!result.ok) throw invalidSession(result.message);
+
+  const { decoded } = result;
+
+  let user;
+  try {
+    user = await User.findById(decoded.id);
+  } catch (err) {
+    // The database is the thing that is down, not the session. Anything else
+    // here would report a live user as logged out.
+    throw sessionUnavailable('User store unavailable', { cause: err });
+  }
+
+  if (!user) throw invalidSession('User not found');
+
+  // A password change ends every session, not just the one that made it.
+  // `iat` is whole seconds, so the stamp is truncated the same way before
+  // comparing — a token minted in the same second as the change is kept, which
+  // is the session that made it. Same tolerance, same reasoning, as
+  // authService.rotateRefreshToken.
+  const changedAt = user.passwordChangedAt;
+  if (changedAt && typeof decoded.iat === 'number') {
+    if (Math.floor(changedAt.getTime() / 1000) > decoded.iat) {
+      throw invalidSession('Token predates a password change');
+    }
+  }
+
+  // The shape `GET /api/users/me` returns — see routes/user.js formatIdentity.
+  // `id` is stringified because the HTTP path went through JSON and resolvers
+  // compare `context.user.id` against stored string ids.
+  return normalizeSsoUser({
+    user: {
+      id: String(user._id),
+      username: user.username,
+      email: user.email,
+      createdAt: user.createdAt,
+      lastLogin: user.lastLogin,
+      role: user.role || 'user',
+      profile: user.profile,
+      preferences: user.preferences,
+    },
+  });
+}
 
 /**
  * requireRole — the role half of the admin gate, assuming req.user is set.

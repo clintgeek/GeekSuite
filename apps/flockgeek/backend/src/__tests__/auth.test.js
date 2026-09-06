@@ -193,19 +193,18 @@ describe('requireAuth — cookie / basegeek contract', () => {
     expect(basegeekRequestCount).toBe(1);
   });
 
-  // Finding: the code's actual contract for "basegeek unreachable" is 502
-  // ("Authentication service unavailable"), not 401 or 503 — see
-  // packages/user/src/server/attachUser.js: only a caught error with
-  // response.status 401/403 is normalized to 401; every other failure
-  // (including a network-level ECONNREFUSED, which has no `.response` at
-  // all) falls through to `res.status(502)`. Asserting the real behavior.
-  test('basegeek unreachable -> 502, not 401', async () => {
+  // Contract since 2026-09-05 (packages/user tokenUtils.classifyValidationError):
+  // "basegeek unreachable" is *unavailable*, answered 503 + Retry-After with
+  // code AUTH_UNAVAILABLE — distinct from an invalid token (401) so no client
+  // logs a user out because the validator could not be reached.
+  test('basegeek unreachable -> 503 + Retry-After, not 401', async () => {
     process.env.BASEGEEK_URL = 'http://127.0.0.1:1'; // nothing listens here
     const res = await request(buildWhoamiApp())
       .get('/whoami')
       .set('Cookie', `geek_token=${TOKEN_A}`);
 
-    expect(res.status).toBe(502);
+    expect(res.status).toBe(503);
+    expect(res.headers['retry-after']).toBeDefined();
     expect(res.body.message).toMatch(/unavailable/i);
   });
 

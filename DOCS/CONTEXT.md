@@ -188,6 +188,70 @@ const user = jwt.verify(token, process.env.JWT_SECRET);
 res.json({ user });
 ```
 
+### Who validates a session — and what an unanswerable check means
+
+**Two different answers, never collapsed into one.** A session check can come back "this token is
+bad" or "nobody could check the token". They look alike in a `catch` block and they are nothing
+alike to a user: the first means log out, the second means try again in a moment.
+
+**Who does the checking.** `attachUser()` / `optionalUser()` from `@geeksuite/user/server` guard
+every authenticated route in the suite. By default they validate over HTTP —
+`GET BASEGEEK_URL/api/users/me` with the caller's token, bounded by `BASEGEEK_TIMEOUT_MS`
+(default 8 s). That is correct for the **six consumer backends** — bookgeek, bujogeek,
+fitnessgeek, flockgeek, notegeek, storygeek — because basegeek is a different process and the only
+holder of `JWT_SECRET`.
+
+basegeek is the **seventh** caller and does *not* use the HTTP path. Its `/graphql` mount passes a
+`validateSession` function that verifies the JWT in-process:
+
+```javascript
+app.use('/graphql', optionalUser({ validateSession: localSessionValidator }));
+```
+
+Before this, `BASEGEEK_URL` inside basegeek resolved to basegeek, so the gateway went out through
+nginx and back in to ask *itself* who the caller was — spending an inbound request slot on every
+inbound request. Under load that is a feedback loop, and once the timeout landed it stopped being
+slow and became a suite-wide logout (see below). `localSessionValidator`
+(`apps/basegeek/packages/api/src/middleware/auth.js`) reads the token cookie-first, verifies it with
+`verifyAccessToken` — the same parser every basegeek REST route uses, not a second one — applies the
+password-change rule (a token minted before `user.passwordChangedAt` is dead, same as a refresh
+token), and returns the exact payload `GET /api/users/me` returns. Resolvers reading
+`context.user.id` cannot tell the two paths apart.
+
+**The 503 contract.** When validation is *unavailable* — a timeout, a refused connection, a DNS
+failure, a 5xx, a local database that will not answer, or any status that is not a flat 401/403 —
+every consumer answers:
+
+```
+HTTP/1.1 503 Service Unavailable
+Retry-After: 5
+
+{ "message": "Authentication service unavailable", "code": "AUTH_UNAVAILABLE", "retryAfter": 5 }
+```
+
+This holds on **both** paths. `optionalUser()` means *the user may be absent*, not *the check may be
+skipped*: an unavailable check 503s even there. It replaces the old 502, which the `required` path
+sent and the optional path did not send at all.
+
+**Why it matters.** `optionalUser()` used to swallow an unavailable check and run the request
+**anonymously**. On basegeek's gateway that anonymous request reached a resolver, which threw
+`UNAUTHENTICATED` for want of a user, which `packages/api-client`'s shared Apollo error link turns
+into `logout()` + a login redirect in every app built on `createApolloClient`. So a basegeek that
+was merely *slow* logged every open tab in the suite out. (`DOCS/BURN_REVIEW_2.md` §3.)
+
+**Client side.** A 503 must never reach a logout path:
+
+- `packages/api-client/src/index.js` — the Apollo error link returns early on any `networkError`
+  with `statusCode >= 500`. Only a 401, or a real `UNAUTHENTICATED` GraphQL error, logs out.
+- `packages/auth/src/authClient.js` — the axios response interceptor already gates on 401/403 only;
+  a 503 rejects normally, with no refresh attempt and no logout. Unchanged.
+
+**Writing a new validator.** Throw `invalidSession()` or `sessionUnavailable()` from
+`@geeksuite/user/server` to say which kind of failure you hit. Anything else is classified by
+`classifyValidationError()`, which fails **closed**: only an upstream 401/403 counts as "invalid",
+everything else is "unavailable". A 404 from a mistyped `BASEGEEK_URL` is not evidence that a user's
+token is bad.
+
 ---
 
 ## App Migration Status
@@ -268,7 +332,7 @@ app: everything below is either a bug fix or additive, and every consumer was gr
   parked every inbound request in every app until the socket died on its own. Now bounded at
   8s, `BASEGEEK_TIMEOUT_MS` overriding (a non-positive or unparseable value falls back to the
   default rather than restoring "forever"). A timeout carries no `error.response`, so it lands
-  in `attachUser()`'s existing 502 branch and is never mistaken for a 401.
+  in `attachUser()`'s existing 502 branch and is never mistaken for a 401. *(Superseded 2026-09-05: that branch now answers 503 + `Retry-After`, and the optional path reaches it too — see "Who validates a session" above.)*
 - **`packages/auth/src/authClient.js` — a transient refresh failure logged you out.**
   `startRefreshTimer`'s `catch` did not look at the error: a rejected `fetch` (wifi blinked,
   laptop just woke), a 502 while a container restarted, or a 200 whose body was an nginx error

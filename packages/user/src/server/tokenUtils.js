@@ -111,10 +111,96 @@ async function validateToken(token, baseGeekUrl, options = {}) {
   return normalizeSsoUser(response.data);
 }
 
+
+// ───────────────────────────────────────────────────────────────────────────
+// "Invalid token" vs "could not check the token"
+//
+// These are not the same answer and must never be collapsed into one.
+//
+//   invalid      – basegeek looked at the token and said no (401/403), or
+//                  answered with no user at all. The session really is dead;
+//                  logging the browser out is the correct, terminal response.
+//   unavailable  – nobody looked. A timeout, a refused connection, a 5xx, a
+//                  DNS failure, a local database that would not answer. The
+//                  session may be perfectly good; the *checker* is down.
+//
+// Before this split, `attachUser()` mapped every non-401 failure onto a 502
+// when `required`, and — far worse — onto an *anonymous request* when not.
+// The anonymous branch is how a merely-slow basegeek logged the whole suite
+// out: `optionalUser()` swallowed the timeout, the resolver then threw
+// UNAUTHENTICATED for want of a user, and the shared Apollo error link turns
+// UNAUTHENTICATED into `logout()` in every open tab (BURN_REVIEW_2 §3).
+//
+// So: unavailable is answered with a 503 + `Retry-After` at the middleware,
+// before GraphQL ever runs. A 503 is not a 401, so no client logs anyone out;
+// it is retryable, and it says the true thing.
+//
+// The classification fails *closed*: anything that is not a clear 401/403
+// counts as unavailable. A 404 (wrong BASEGEEK_URL), a 429, a proxy's 502 —
+// none of those are evidence that the user's token is bad, and treating them
+// as such is exactly the mistake this split exists to prevent.
+// ───────────────────────────────────────────────────────────────────────────
+
+const AUTH_INVALID = 'invalid';
+const AUTH_UNAVAILABLE = 'unavailable';
+
+/** Seconds to put in `Retry-After` on the 503. Short: this is a blip, not an outage plan. */
+const AUTH_RETRY_AFTER_SECONDS = 5;
+
+/**
+ * An error a session validator throws to say which of the two it is.
+ * Injected validators (see `attachUser`'s `validateSession`) use the two
+ * factories below rather than pretending to be axios.
+ */
+class AuthValidationError extends Error {
+  constructor(message, kind, options = {}) {
+    super(message, options);
+    this.name = 'AuthValidationError';
+    this.authFailure = kind;
+  }
+}
+
+/** The token was examined and rejected. → 401 / anonymous. */
+function invalidSession(message = 'Invalid or expired token', options = {}) {
+  return new AuthValidationError(message, AUTH_INVALID, options);
+}
+
+/** The token could not be examined at all. → 503 + Retry-After. */
+function sessionUnavailable(message = 'Authentication service unavailable', options = {}) {
+  return new AuthValidationError(message, AUTH_UNAVAILABLE, options);
+}
+
+/**
+ * Which kind of failure is this?
+ *
+ * @param {*} error
+ * @returns {'invalid'|'unavailable'}
+ */
+function classifyValidationError(error) {
+  if (error?.authFailure === AUTH_INVALID || error?.authFailure === AUTH_UNAVAILABLE) {
+    return error.authFailure;
+  }
+
+  const status = error?.response?.status;
+  if (status === 401 || status === 403) return AUTH_INVALID;
+
+  // No response at all (ECONNABORTED from the timeout, ECONNREFUSED, DNS,
+  // socket hangup), a 5xx, or any other status: nobody vouched for or against
+  // this token.
+  return AUTH_UNAVAILABLE;
+}
+
 module.exports = {
   getTokenFromRequest,
   normalizeSsoUser,
   validateToken,
   resolveTimeoutMs,
   DEFAULT_TIMEOUT_MS,
+  AuthValidationError,
+  invalidSession,
+  sessionUnavailable,
+  classifyValidationError,
+  AUTH_INVALID,
+  AUTH_UNAVAILABLE,
+  AUTH_RETRY_AFTER_SECONDS,
 };

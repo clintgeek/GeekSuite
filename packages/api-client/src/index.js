@@ -79,6 +79,22 @@ export const errorLink = (appName) => onError(({ graphQLErrors, networkError, op
         });
     }
 
+    // "The session is dead" and "nobody could check the session" are
+    // different answers, and only the first justifies throwing the user out.
+    //
+    // basegeek's auth middleware answers an unreachable validator with a 503 +
+    // `Retry-After` (code `AUTH_UNAVAILABLE`) rather than letting the request
+    // run anonymously into an UNAUTHENTICATED resolver error — the shape that
+    // logged every open tab in the suite out whenever basegeek got slow
+    // (BURN_REVIEW_2 §3). A 5xx must therefore stop here: it is a retryable
+    // failure of the infrastructure, not a verdict on this session. The
+    // substring checks below ('401', 'Unauthorized') are loose enough that a
+    // 5xx body could otherwise trip them, so the guard is explicit rather than
+    // implied by `statusCode !== 401`.
+    if (networkError && networkError.statusCode >= 500) {
+        return;
+    }
+
     let unauthenticated = false;
 
     if (graphQLErrors) {

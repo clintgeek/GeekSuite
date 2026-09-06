@@ -40,6 +40,7 @@ import { expressMiddleware } from '@as-integrations/express4';
 import { typeDefs, resolvers } from './graphql/index.js';
 import { csrfGuard, optionalUser } from '@geeksuite/user/server';
 import { csrfTokenGuard, ensureCsrfCookie } from './middleware/csrfToken.js';
+import { localSessionValidator } from './middleware/auth.js';
 
 
 const app = express();
@@ -465,8 +466,17 @@ app.get('/api/health/app/:appName', async (req, res) => {
 const apolloServer = new ApolloServer({ typeDefs, resolvers });
 await apolloServer.start();
 
-// Mount GraphQL BEFORE the SPA catch-all
-app.use('/graphql', optionalUser());
+// Mount GraphQL BEFORE the SPA catch-all.
+//
+// `optionalUser()` validates the session, but basegeek validates its own
+// sessions *in process*: the default validator calls `BASEGEEK_URL/api/users/me`
+// over HTTP, and inside basegeek that URL is basegeek. Every gateway request
+// then spent an inbound request slot asking itself who the caller was — a
+// feedback loop under load, and since `validateToken` grew an 8 s timeout, one
+// that ended in the whole suite logging out rather than a slow page
+// (BURN_REVIEW_2 §3). `localSessionValidator` verifies the JWT with this
+// process's own secret and loads the user from Mongo; no socket is opened.
+app.use('/graphql', optionalUser({ validateSession: localSessionValidator }));
 app.use('/graphql', (req, _res, next) => {
   if (req.method === 'POST' && req.body?.operationName) {
     req.log.info(`[GQL] ${req.body.operationName} | vars: ${JSON.stringify(Object.keys(req.body.variables || {}))}`);
