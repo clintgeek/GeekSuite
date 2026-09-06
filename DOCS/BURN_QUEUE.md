@@ -7,7 +7,7 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 ## Running
 
-**PAUSED (09-05 19:25) per Chef.** R89/R90/R91/R92 all landed and are committed. Nothing is running. **Unpushed: everything since wave 11 ()** — R89–R92 + docs; gates not yet run on this HEAD. Next step when Chef returns: run the gates (frozen install, syntax, boot-smoke, harness selftest, repo lint), push wave 12, monitor. No new launches until he says so.
+**PAUSED (09-05 19:25) per Chef.** R89/R90/R91/R92 all landed and are committed. Nothing is running. **Unpushed: everything since wave 11 (`8029305`)** — R89–R92 + docs; gates not yet run on this HEAD. Next step when Chef returns: run the gates (frozen install, syntax, boot-smoke, harness selftest, repo lint), push wave 12, monitor. No new launches until he says so.
 
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
