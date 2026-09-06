@@ -103,6 +103,22 @@ export function parseJson(raw) {
   }
 }
 
+/**
+ * Some free-tier providers (seen live: Cloudflare's llama 3.3) return the
+ * structured output wrapped under the schema's name — `{"Smoke":{"word":…}}`
+ * for a schema named `Smoke`. Unwrap that single-key envelope so feature
+ * validators see the object they asked for.
+ */
+export function unwrapSchemaEnvelope(data, schema) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return data;
+  const keys = Object.keys(data);
+  const name = schema?.name;
+  if (keys.length === 1 && name && keys[0] === name && data[name] && typeof data[name] === 'object') {
+    return data[name];
+  }
+  return data;
+}
+
 function provenance(source, extra = {}) {
   return {
     source,
@@ -206,7 +222,7 @@ export async function runAIFeature(opts) {
 
   let data = content;
   if (schema) {
-    data = parseJson(content);
+    data = unwrapSchemaEnvelope(parseJson(content), schema);
     if (data == null) {
       logger.warn({ app, feature }, '[aiFeature] unparseable model output; fallback');
       return settle('fallback', 'unparseable', meta);
@@ -243,4 +259,4 @@ export const AI_PROVENANCE_SDL = `
   }
 `;
 
-export default { runAIFeature, callsToday, parseJson, utcDay, AI_PROVENANCE_SDL };
+export default { runAIFeature, callsToday, parseJson, unwrapSchemaEnvelope, utcDay, AI_PROVENANCE_SDL };

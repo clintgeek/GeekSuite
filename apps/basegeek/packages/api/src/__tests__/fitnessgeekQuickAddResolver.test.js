@@ -49,10 +49,18 @@ beforeAll(async () => {
   await UserSettings.db.asPromise();
 }, 60000);
 
-beforeEach(() => {
+// R124: natural_language_food_logging is the opt-in (default false), so the
+// model path needs an explicit true on the settings document. Tests that
+// exercise the model start from an opted-in ALICE; the opt-out/absent cases
+// below create their own documents (or none).
+const optIn = (userId = ALICE) =>
+  UserSettings.create({ user_id: userId, ai: { enabled: true, features: { natural_language_food_logging: true } } });
+
+beforeEach(async () => {
   _resetCounters();
   callAI.mockReset();
   aiServiceMock.lastProviderInfo = null;
+  await optIn();
 });
 
 afterEach(async () => {
@@ -174,10 +182,11 @@ describe('parseFoodEntry — the model refines, the split falls back', () => {
 
 describe('parseFoodEntry — the opt-in is honoured server-side', () => {
   test('ai.features.natural_language_food_logging = false means no model call at all', async () => {
-    await UserSettings.create({
-      user_id: ALICE,
-      ai: { enabled: true, features: { natural_language_food_logging: false } },
-    });
+    await UserSettings.findOneAndUpdate(
+      { user_id: ALICE },
+      { ai: { enabled: true, features: { natural_language_food_logging: false } } },
+      { upsert: true }
+    );
 
     const result = await Q.parseFoodEntry(null, { text: 'two eggs', date: MORNING }, ctx(ALICE));
 
@@ -187,16 +196,20 @@ describe('parseFoodEntry — the opt-in is honoured server-side', () => {
   });
 
   test('ai.enabled = false does the same', async () => {
-    await UserSettings.create({ user_id: ALICE, ai: { enabled: false } });
+    await UserSettings.findOneAndUpdate({ user_id: ALICE }, { ai: { enabled: false } }, { upsert: true });
     const result = await Q.parseFoodEntry(null, { text: 'two eggs', date: MORNING }, ctx(ALICE));
     expect(callAI).not.toHaveBeenCalled();
     expect(result.provenance.reason).toBe('disabled');
   });
 
-  test('no settings document at all still works — and still asks the model', async () => {
+  test('no settings document at all still works — deterministic split, no model call (opt-in is explicit)', async () => {
+    await UserSettings.deleteMany({ user_id: ALICE });
     modelAnswers({ fragments: [{ text: 'two eggs', query: 'eggs', servings: 2, unit: null, mealType: 'breakfast' }] });
     const result = await Q.parseFoodEntry(null, { text: 'two eggs', date: MORNING }, ctx(ALICE));
-    expect(result.provenance.source).toBe('model');
+    expect(result.provenance.source).toBe('fallback');
+    expect(result.provenance.reason).toBe('disabled');
+    expect(callAI).not.toHaveBeenCalled();
+    expect(result.fragments.length).toBeGreaterThan(0);
     // Reading the switch must not CREATE a settings document — this is a query.
     expect(await UserSettings.countDocuments({ user_id: ALICE })).toBe(0);
   });

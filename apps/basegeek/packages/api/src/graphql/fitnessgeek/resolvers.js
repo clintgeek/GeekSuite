@@ -870,7 +870,8 @@ export const resolvers = {
         .catch(() => null);
       const modelAllowed =
         settings?.ai?.enabled !== false &&
-        settings?.ai?.features?.natural_language_food_logging !== false;
+        // R124: the flag is the opt-in (default false), not a kill switch — only an explicit true opens the model path.
+        settings?.ai?.features?.natural_language_food_logging === true;
 
       let data;
       let provenance;

@@ -1,5 +1,5 @@
 import { jest } from '@jest/globals';
-import { runAIFeature, callsToday, parseJson, _resetCounters } from '../services/aiFeatureRunner.js';
+import { runAIFeature, callsToday, parseJson, unwrapSchemaEnvelope, _resetCounters } from '../services/aiFeatureRunner.js';
 
 const SCHEMA = { name: 'T', description: 't', schema: { type: 'object', properties: { a: { type: 'number' } }, required: ['a'] } };
 
@@ -65,5 +65,14 @@ describe('runAIFeature', () => {
   test('parseJson tolerates prose around the object', () => {
     expect(parseJson('Sure! {"a":2} hope that helps')).toEqual({ a: 2 });
     expect(parseJson(null)).toBeNull();
+  });
+
+  test('a provider that wraps the JSON under the schema name is unwrapped (seen live on cloudflare)', async () => {
+    const ai = fakeAI(async () => '{"T": {"a": 3}}');
+    const r = await runAIFeature({ app: 'x', feature: 'y', system: 's', user: 'u', schema: SCHEMA, validate: (d) => d.a === 3, fallback: () => ({ a: 0 }), ai });
+    expect(r.data).toEqual({ a: 3 });
+    expect(r.provenance.source).toBe('model');
+    expect(unwrapSchemaEnvelope({ T: 1 }, SCHEMA)).toEqual({ T: 1 });
+    expect(unwrapSchemaEnvelope({ T: { a: 1 }, b: 2 }, SCHEMA)).toEqual({ T: { a: 1 }, b: 2 });
   });
 });
