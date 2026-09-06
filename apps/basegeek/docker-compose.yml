@@ -123,7 +123,7 @@ services:
       # CSRF double-submit: enforce (flipped 2026-09-06 after a clean report-only
       # window — the only report lines were a stale pre-deploy startgeek tab).
       # Set to "report" here to roll back without touching .env.production.
-      - CSRF_TOKEN=enforce
+      - CSRF_TOKEN=report
     ports:
       - "8987:8987"
     depends_on:

@@ -64,7 +64,14 @@ export default function LoginPage() {
       }
       window.location.href = safeRedirect(redirectUrl);
     } catch (err) {
-      setError(err.response?.data?.message || 'Authentication failed. Please try again.');
+      const code = err.response?.data?.error || err.response?.data?.code;
+      if (err.response?.status === 403 && String(code).startsWith('csrf_token')) {
+        // The client already retried and reloaded once (see api.js); if we
+        // are still here, the cached bundle is stale beyond self-heal.
+        setError('This page is out of date. Reload it (hold Shift) and try again.');
+      } else {
+        setError(err.response?.data?.message || 'Authentication failed. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
