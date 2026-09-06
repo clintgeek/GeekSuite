@@ -1,6 +1,33 @@
 import aiService from './aiService.js';
 import Story from '../models/Story.js';
 
+// Bookify is one sequential AI call per `chunkSize` events (up to ~45s each per
+// the going-over note in DOCS/CONTEXT.md), held synchronously on the request.
+// Two guardrails, not one, because a size cap alone doesn't bound wall-clock
+// time (a slow provider can blow the budget on a small story) and a time
+// budget alone would still let a request run the whole way into a huge story
+// before giving up: MAX_BOOKIFY_EVENTS rejects an oversized story up front
+// (413-shaped), BOOKIFY_TIME_BUDGET_MS aborts a run that is taking too long
+// regardless of size (504-shaped). Night 2 2026-09-06, Q62.
+export const MAX_BOOKIFY_EVENTS = 60;
+export const BOOKIFY_TIME_BUDGET_MS = 60000;
+
+export class BookifyTooLargeError extends Error {
+  constructor(count, max) {
+    super(`Story has ${count} events; bookify supports at most ${max} in one run. Trim the story before exporting.`);
+    this.name = 'BookifyTooLargeError';
+    this.code = 'BOOKIFY_TOO_LARGE';
+  }
+}
+
+export class BookifyTimeoutError extends Error {
+  constructor(budgetMs) {
+    super(`Bookify exceeded its ${Math.round(budgetMs / 1000)}s time budget before finishing.`);
+    this.name = 'BookifyTimeoutError';
+    this.code = 'BOOKIFY_TIMEOUT';
+  }
+}
+
 class BookService {
   preClean(text, title) {
     const lines = String(text).split('\n');
@@ -61,6 +88,17 @@ class BookService {
     if (!story) throw new Error('Story not found');
 
     const events = story.events || [];
+    if (events.length > MAX_BOOKIFY_EVENTS) {
+      throw new BookifyTooLargeError(events.length, MAX_BOOKIFY_EVENTS);
+    }
+
+    const startedAt = Date.now();
+    const checkBudget = () => {
+      if (Date.now() - startedAt > BOOKIFY_TIME_BUDGET_MS) {
+        throw new BookifyTimeoutError(BOOKIFY_TIME_BUDGET_MS);
+      }
+    };
+
     const chunkSize = 6;
     const scenes = [];
     for (let i = 0; i < events.length; i += chunkSize) scenes.push(events.slice(i, i + chunkSize));
@@ -71,6 +109,7 @@ class BookService {
 
     const rewrittenScenes = [];
     for (const scene of scenes) {
+      checkBudget();
       const rawScene = scene.map(e => e.description).join('\n\n');
       const cleanedScene = this.preClean(rawScene, story.title);
       const sceneText = this.toNeutralThirdPerson(cleanedScene);
@@ -88,6 +127,9 @@ class BookService {
     let stitched = rewrittenScenes.join('\n\n');
 
     try {
+      // Budget already spent on the scene passes — skip the optional polish
+      // rather than erroring; the caller already has a valid stitched draft.
+      checkBudget();
       const fixPrompt = `You are an editor fixing consistency in a chapter draft.\nTasks (STRICT, NO STORY CHANGES):\n1) Keep the same sequence of sentences/events; do not add, remove, or reorder events.\n2) Enforce a single consistent POV and tense; do not change who the scene follows.\n3) Ensure each character's name and pronouns stay exactly as used in the source (no gender/pronoun drift).\n4) Pronoun policy: Do NOT use singular "they/them/their" for a known individual; prefer gendered pronouns (he/him/his or she/her/hers) and proper names. Neutral plural only for groups or unknown persons.\n5) Pronoun cadence: avoid runs of pronouns; prefer using the protagonist's proper name at paragraph starts and after two pronoun-start sentences; optionally vary with clear noun phrases (no ambiguity).\n6) Remove any residual meta-game language (choices, commands, tooltips).\n7) Do not invent new lines, thoughts, or descriptions.\nReturn only the corrected chapter text.\n\nSOURCE DRAFT:\n---\n${stitched}\n---`;
       const rec2 = await aiService.recommendProviderModel('consistency fix 1500-2500 tokens', 'cost', {}, userToken);
       let fixed = await aiService.callBaseGeekAI(fixPrompt, {

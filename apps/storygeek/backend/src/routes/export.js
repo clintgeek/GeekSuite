@@ -15,6 +15,20 @@ router.use(authenticateToken);
 router.use('/stories/:storyId', validate({ params: storyIdParamsSchema }));
 router.use('/stories/:storyId', requireStoryOwner);
 
+// bookify() throws a typed, `.code`-carrying error for its two guardrails
+// (MAX_BOOKIFY_EVENTS, BOOKIFY_TIME_BUDGET_MS in bookService.js) — map those
+// to 413/504 so the client can tell "story too big" / "took too long" apart
+// from a generic failure; anything else stays a 500.
+const STATUS_BY_CODE = {
+  BOOKIFY_TOO_LARGE: 413,
+  BOOKIFY_TIMEOUT: 504,
+};
+
+function sendBookifyError(res, error) {
+  const status = STATUS_BY_CODE[error.code] || 500;
+  res.status(status).json({ success: false, error: { message: error.message, code: error.code } });
+}
+
 // POST /api/export/stories/:storyId/bookify
 router.post('/stories/:storyId/bookify', async (req, res) => {
   try {
@@ -24,7 +38,7 @@ router.post('/stories/:storyId/bookify', async (req, res) => {
     const result = await bookService.bookify(storyId, userToken);
     res.json({ success: true, data: result });
   } catch (error) {
-    res.status(500).json({ success: false, error: { message: error.message } });
+    sendBookifyError(res, error);
   }
 });
 
@@ -41,7 +55,7 @@ router.post('/stories/:storyId/epub', async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(epub);
   } catch (error) {
-    res.status(500).json({ success: false, error: { message: error.message } });
+    sendBookifyError(res, error);
   }
 });
 

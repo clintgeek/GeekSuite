@@ -134,3 +134,10 @@ migration, it's deleting 470 lines (298 module + 172 test) of accurate-but-point
 duplicates a schema storygeek's REST API already serves better. Revisit Option C only if a
 concrete second consumer (e.g., StartGeek's glance wanting a "recent stories" tile) actually
 shows up — until then there's no requester to build B or C for.
+
+**Decided 2026-09-06: deleted.** Night 2, Q38/R119 — `graphql/storygeek/` (typeDefs, resolvers,
+`models/Story.js`), its ownership test, and the two import/merge lines in `graphql/index.js` are
+gone from basegeek's gateway; the frontend's dead Apollo plumbing (`apolloClient.js`,
+`src/graphql/{queries,mutations}.js`, the `ApolloProvider` wrap in `App.jsx`) is gone too. See
+`apps/storygeek/DOCS/CONTEXT.md` "Night 2 — 2026-09-06" for the full rundown, including why the
+`@apollo/client`/`graphql` lines stayed in the frontend's `package.json`.

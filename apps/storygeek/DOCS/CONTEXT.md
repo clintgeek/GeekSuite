@@ -269,3 +269,57 @@ backend `npx eslint .` 3 → 3; `npm run build` green; mobile harness
   (`aiService.js`'s `userIdFromToken`) is always null. Cookie auth is clearly
   the intended design; whether losing the attribution is intended is a
   question, not a bug — reported.
+
+## Night 2 — 2026-09-06 (Q38 / R119 — gateway module deleted, bookify guardrails)
+
+Per `DOCS/STORYGEEK_GATEWAY_DECISION.md`'s recommendation (Option A — no live caller anywhere
+in the suite) and Night 2's Q38/Q62 policy set:
+
+- **Deleted** basegeek's gateway copy of storygeek —
+  `apps/basegeek/packages/api/src/graphql/storygeek/` (typeDefs, resolvers, `models/Story.js`,
+  298 lines) and its test (`__tests__/storygeekOwnership.test.js`, 172 lines) — plus the two
+  import/merge lines in `apps/basegeek/packages/api/src/graphql/index.js`. Nothing else in that
+  file was touched. Grepped the whole repo for `graphql/storygeek` first — the only two hits
+  were the merge site and the test, both now gone; `gatewaySchemaLoads.test.js` doesn't name any
+  per-app module by count or import, so it needed no change.
+- **Deleted** the frontend's dead Apollo plumbing (never fired — no component imported it):
+  `frontend/src/apolloClient.js`, `frontend/src/graphql/queries.js`,
+  `frontend/src/graphql/mutations.js`, and the `ApolloProvider` wrap in `App.jsx` (the app now
+  mounts `AuthProvider` directly instead of wrapping it in a provider with nothing under it).
+- **Left in place, decision made:** the `@apollo/client` and `graphql` dependency lines in
+  `frontend/package.json`. Removing them would desync `pnpm-lock.yaml`'s importer entry for
+  `apps/storygeek/frontend` (the lockfile still pins specifiers for both), and fixing that needs
+  `pnpm install --lockfile-only` — off-limits under tonight's no-`pnpm install` rule. They're
+  genuinely unused now (nothing under `src/` imports either), so a follow-up pass that runs
+  `pnpm install --lockfile-only` once (or full install) can drop them along with regenerating
+  the lockfile; until then they're harmless dead lines, not a broken build. `@geeksuite/api-client`
+  (also now unused — its only caller was the deleted `apolloClient.js`) was left alone too, same
+  reasoning, and because pulling a workspace dependency wasn't in this stream's scope.
+- **Bookify guardrails** (`backend/src/services/bookService.js`, Q62): the "left in place" item
+  above ("bookify is unbounded work behind a synchronous request") gets two independent bounds,
+  because a size cap alone doesn't bound wall-clock time and a time budget alone would still let
+  a request run the whole way into a huge story before giving up:
+  - `MAX_BOOKIFY_EVENTS = 60` — a story with more events than this is rejected before a single AI
+    call is made (`BookifyTooLargeError`, `.code = 'BOOKIFY_TOO_LARGE'`).
+  - `BOOKIFY_TIME_BUDGET_MS = 60000` — checked before starting each scene's AI call (and before
+    the optional consistency-fix pass, where a tripped budget is swallowed by that step's
+    existing best-effort `catch` rather than failing the whole run) and thrown as
+    `BookifyTimeoutError` (`.code = 'BOOKIFY_TIMEOUT'`) if already exceeded.
+  - `routes/export.js` maps `BOOKIFY_TOO_LARGE` → 413 and `BOOKIFY_TIMEOUT` → 504 (both bookify
+    and epub, since epub calls bookify internally); anything else still 500s as before.
+  - Both numbers are a judgment call, not measured off production data — 60 events is 10 scenes
+    at the documented chunk size of 6; 60s matches the ask. Chef's call if either should move.
+  - New test: `backend/src/__tests__/bookifyGuardrails.test.js` (node's `--test` runner, not
+    jest — `jest.config.js`'s `testMatch` only covers `controllers/**` and `routes/**`, and this
+    exercises the service directly). Uses `mock.timers.enable({ apis: ['Date'] })` to fake the
+    clock forward as a side effect of the mocked AI call, rather than waiting out a real 60s in
+    CI. 90 node tests now (was 86); jest untouched at 89.
+- Verification: backend `node --test src/__tests__/*.test.js` 90/90 green; backend jest 89/89
+  green; backend `npx eslint .` 3 warnings (unchanged); frontend `npx vitest run` 61/61 green
+  (unchanged count); frontend `npx eslint .` 3 warnings (unchanged); frontend `npx vite build`
+  green. Gateway-wide checks (`tools/syntax-check.mjs`, `tools/gql-arg-audit.mjs`, basegeek's
+  `gatewaySchemaLoads.test.js`) were blocked at verification time by an unrelated, in-flight
+  syntax error in `apps/basegeek/packages/api/src/graphql/bookgeek/typeDefs.js` (another Night 2
+  stream's uncommitted work, confirmed via `git diff --stat` — not touched by this stream); the
+  `index.js` edit here is a plain 3-line removal with nothing else nearby, and `syntax-check`
+  named only the bookgeek file as the failure, not this one.

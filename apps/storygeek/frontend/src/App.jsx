@@ -3,11 +3,9 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { Box, CircularProgress } from '@mui/material';
-import { ApolloProvider } from '@apollo/client';
 import { AuthProvider, useAuth } from '@geeksuite/auth';
 import { FocusModeProvider } from '@geeksuite/ui';
 import { ThemeProvider, useThemeMode } from '@geeksuite/user';
-import apolloClient from './apolloClient';
 import { createStoryTheme } from './theme/theme';
 
 import Layout from './components/Layout';
@@ -67,12 +65,10 @@ function AppShell() {
 
 export default function App() {
   return (
-    <ApolloProvider client={apolloClient}>
-      <AuthProvider appName="storygeek">
-        <ThemeProvider>
-          <AppShell />
-        </ThemeProvider>
-      </AuthProvider>
-    </ApolloProvider>
+    <AuthProvider appName="storygeek">
+      <ThemeProvider>
+        <AppShell />
+      </ThemeProvider>
+    </AuthProvider>
   );
 }
