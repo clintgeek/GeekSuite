@@ -95,7 +95,7 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 
 - 09-05 18:24 — wave 11 (`8029305`, 9 commits): R85 (+fallback guard), R87, R88. Gates green; workflows green; Watchtower 18:33 (updated=8); all eight apps 200; dead asset paths now 404 live on startgeek and fitnessgeek.
 
-- 09-05 21:06 — wave 12 (`1b1b175`, 15 commits): R89 (a11y 0, enforcing), R90, R91, R92, docs. Gates green.
+- 09-05 21:06 — wave 12 (`1b1b175`, 15 commits): R89 (a11y 0, enforcing), R90, R91, R92, docs. Gates green; CI, Release and the harness (first run with --enforce-a11y) green; Watchtower 21:13 (updated=7, +1 at 21:15); all eight apps 200.
 
 ## Landed during the burn
 
