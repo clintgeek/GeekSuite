@@ -5,7 +5,6 @@ services:
     restart: unless-stopped
     labels:
       com.centurylinklabs.watchtower.enable: "true"
-    environment:
     ports:
       - "3000:3000"
     healthcheck:
