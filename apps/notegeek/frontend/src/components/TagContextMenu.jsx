@@ -20,8 +20,12 @@ function TagContextMenu({ anchorEl, open, onClose, tag }) {
     const { renameTag, deleteTag } = useTagStore();
 
     const handleRename = async () => {
-        if (newTagName && newTagName !== tag) {
-            await renameTag(tag, newTagName);
+        // The gateway trims and treats a trim-equal rename as a no-op (returns
+        // false); compare the trimmed name here too so the local tag store never
+        // applies a rename the server did not perform.
+        const nextTagName = newTagName.trim();
+        if (nextTagName && nextTagName !== tag) {
+            await renameTag(tag, nextTagName);
         }
         setRenameDialogOpen(false);
         onClose();
