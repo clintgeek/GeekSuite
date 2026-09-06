@@ -107,7 +107,7 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 
 - 09-05 23:12 — wave 16 (`821a0bb`, 7 commits): R104, R105, R103, docs. Gates green; CI, Release, harness green 23:27; Watchtower 23:23 (updated=7); all eight apps 200 and healthy. **All 105 streams landed and deployed.**
 
-- 09-06 00:30 — wave 17: R107, R108, R109 (applied), R110, R111, R112, tag-rename guard, docs. Gates green. **All 112 streams landed; nothing running.** Review 2's #2–#15 fixed; #1 = Q56, #11 = Q69 (Chef).
+- 09-06 00:07 — wave 17 (`add7227`, 17 commits): R107, R108, R109 (applied), R110, R111, R112, tag-rename guard, docs. Gates green. **All 112 streams landed; nothing running.** Review 2's #2–#15 fixed; #1 = Q56, #11 = Q69 (Chef).
 
 ## Landed during the burn
 
