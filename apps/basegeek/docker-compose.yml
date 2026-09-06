@@ -5,20 +5,29 @@ services:
     ports:
       - "27018:27017"
     # MONGO_INITDB_ROOT_USERNAME/PASSWORD used to be plain ${VAR} substitutions
-    # with no env_file — compose reads those only from its own .env next to
-    # this file, which does not exist here, so a force-recreate of this
-    # service would have booted Mongo with blank root creds. .env.production
-    # already declares both names; load it here too so a recreate is safe.
-    env_file:
-      - .env.production
+    # with no .env next to this file, so a force-recreate of this service
+    # would have booted Mongo with blank root creds. BURN_REVIEW_2 #10: a
+    # brief env_file: .env.production fix handed this container all ~40
+    # basegeek secrets instead of the two it needs. Least-privilege fix: a
+    # `.env` symlink to .env.production (see DEPLOY.md "Datastore env
+    # convention") makes ${VAR} substitution below resolve without env_file,
+    # so only the names listed here ever reach this container.
     environment:
       - TZ=America/Chicago
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
     volumes:
       - ./data/mongodb:/data/db
       - ./mongodb-init.js:/docker-entrypoint-initdb.d/mongodb-init.js
     networks:
       - datageek_network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     logging:
       driver: json-file
       options:
@@ -42,6 +51,12 @@ services:
     networks:
       - datageek_network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "-o", "/dev/null", "http://localhost:8086/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     logging:
       driver: json-file
       options:
@@ -60,6 +75,12 @@ services:
     networks:
       - datageek_network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     logging:
       driver: json-file
       options:
@@ -71,16 +92,23 @@ services:
     container_name: datageek_postgres
     ports:
       - "55432:5432"
-    # Same env_file fix as mongodb above — see that comment.
-    env_file:
-      - .env.production
+    # Same least-privilege fix as mongodb above — see that comment.
     environment:
       - TZ=America/Chicago
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
     networks:
       - datageek_network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     logging:
       driver: json-file
       options:
@@ -101,10 +129,14 @@ services:
     ports:
       - "8987:8987"
     depends_on:
-      - mongodb
-      - redis
-      - postgres
-      - influxdb
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      influxdb:
+        condition: service_healthy
     networks:
       - datageek_network
     restart: unless-stopped
@@ -113,6 +145,9 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      # basegeek's own log shows ~15-25s to "listening" on this box; give it
+      # room before the first failed probe counts against retries (BURN_REVIEW_2 #12).
+      start_period: 30s
     logging:
       driver: json-file
       options:
