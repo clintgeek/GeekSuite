@@ -1,12 +1,93 @@
 import express from 'express';
-import { authenticateToken } from '../middleware/auth.js';
+import { authenticateToken, lookupRole } from '../middleware/auth.js';
 import APIKey from '../models/APIKey.js';
+import { VALID_APPS } from '../config/validApps.js';
+import { normalizeAppId } from '../services/callerIdentity.js';
 import logger from '../lib/logger.js';
 
 const router = express.Router();
 
 // Apply JWT authentication to all routes (API key management requires user login)
 router.use(authenticateToken);
+
+/**
+ * The permission set a key is minted with when the caller names none. One list,
+ * three copies — models/APIKey.js's schema default and scripts/mint-api-key.js
+ * are the other two — because neither of those can import this router.
+ */
+export const DEFAULT_PERMISSIONS = ['ai:call', 'ai:models', 'ai:providers', 'ai:usage'];
+
+/**
+ * assertMintAuthority — who may mint or rotate a key for an app.
+ *
+ * Q62. Until 2026-09-06 any logged-in user could `POST /api/api-keys` with any
+ * `appName` they liked and receive a working `bg_` credential for it. That is
+ * the whole aiGeek trust model in one request: `services/callerIdentity.js`
+ * routes and bills a call by the *key's* app, precisely so a body field cannot
+ * choose whose AIAppConfig row answers and whose quota pays — and the mint
+ * route handed out the field that decides it. A caller could mint
+ * `appName: 'storygeek'`, route through storygeek's provider row, and spend
+ * storygeek's free-tier allowance, from an ordinary user account.
+ *
+ * The rule now:
+ *
+ *   admin                      → may mint for any app, including one not yet
+ *                                in VALID_APPS (that is how a new app gets its
+ *                                first key).
+ *   app is in VALID_APPS and
+ *   the caller already holds an
+ *   active key for it          → may mint another, and rotate the ones they
+ *                                hold. This is what "owns the app" can mean
+ *                                against the data that exists: there is no
+ *                                owner field on models/App.js, and inventing
+ *                                one would be a schema and a migration for a
+ *                                registry nothing else reads that way.
+ *   anyone else                → 403 admin_required.
+ *
+ * The consequence worth stating plainly: an app's *first* key is an admin act.
+ * That is the point — it is the moment the app name stops being a string
+ * anyone can type and starts being a credential.
+ *
+ * @param {import('express').Request} req
+ * @param {import('express').Response} res
+ * @param {string} appName  the app the key is for (raw; normalized here)
+ * @returns {Promise<boolean>} true when the response has been sent
+ */
+async function assertMintAuthority(req, res, appName) {
+  const userId = req.user?.id;
+  const app = normalizeAppId(appName);
+
+  let role = null;
+  try {
+    role = await lookupRole(userId);
+  } catch (err) {
+    req.log.error({ err }, 'Mint authority role lookup failed');
+    res.status(500).json({
+      success: false,
+      error: { message: 'Failed to check permissions', code: 'ROLE_CHECK_ERROR' }
+    });
+    return true;
+  }
+
+  if (role === 'admin') return false;
+
+  if (app && VALID_APPS.includes(app)) {
+    const holdsKeyForApp = await APIKey.exists({
+      appName: app,
+      createdBy: userId,
+      isActive: true
+    });
+    if (holdsKeyForApp) return false;
+  }
+
+  req.log.warn({ app }, 'Refused to mint an API key for an app the caller does not hold');
+  res.status(403).json({
+    error: 'admin_required',
+    message: 'admin role required to mint a key for an app you do not already hold',
+    code: 'ADMIN_REQUIRED'
+  });
+  return true;
+}
 
 // GET /api/api-keys - List all API keys for the authenticated user
 router.get('/', async (req, res) => {
@@ -58,7 +139,7 @@ router.post('/', async (req, res) => {
       name,
       appName,
       description,
-      permissions = ['ai:call', 'ai:models', 'ai:providers'],
+      permissions = DEFAULT_PERMISSIONS,
       rateLimit = {},
       expiresAt
     } = req.body;
@@ -84,6 +165,11 @@ router.post('/', async (req, res) => {
         }
       });
     }
+
+    // Who may mint for this app — see assertMintAuthority above. Placed after
+    // the shape checks so a malformed request still gets its 400, and before
+    // the key is generated so an unauthorized one is never created at all.
+    if (await assertMintAuthority(req, res, appName)) return;
 
     // Generate API key
     const { apiKey, keyPrefix, keyHash } = APIKey.generateAPIKey();
@@ -345,6 +431,12 @@ router.post('/:keyId/regenerate', async (req, res) => {
         }
       });
     }
+
+    // The `createdBy: userId` in the query above already proves the caller
+    // holds this key, so the only question left is the app: a key minted for
+    // an app that is not in VALID_APPS — one that predates the mint gate, or
+    // an admin's deliberate exception — stays an admin's to rotate.
+    if (await assertMintAuthority(req, res, apiKeyDoc.appName)) return;
 
     // Generate new API key
     const { apiKey, keyPrefix, keyHash } = APIKey.generateAPIKey();

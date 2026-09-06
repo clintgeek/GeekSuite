@@ -150,18 +150,36 @@ export async function localSessionValidator(_token, ctx = {}) {
 }
 
 /**
+ * lookupRole — the role on a userGeek document, or null when there is no such
+ * user. One indexed-field projection.
+ *
+ * Role is read from the document on every request rather than carried in the
+ * JWT: tokens are long-lived, so a promotion or demotion must take effect
+ * without forcing a re-login.
+ *
+ * Callers must not hand this an API-key caller's id. `apikey_<uuid>` is not an
+ * ObjectId, so `findById` throws a CastError — which is why `requireAdminUser`
+ * in routes/aiRoutes.js turns a key away before it reaches the role check
+ * rather than after.
+ *
+ * @param {*} userId
+ * @returns {Promise<string|null>}
+ */
+export async function lookupRole(userId) {
+  const user = await User.findById(userId).select('role').lean();
+  return user ? (user.role || 'user') : null;
+}
+
+/**
  * requireRole — the role half of the admin gate, assuming req.user is set.
  *
- * Role is read from the userGeek document on every request rather than carried
- * in the JWT: tokens are long-lived, so a promotion or demotion must take
- * effect without forcing a re-login. The lookup is one indexed-field
- * projection. On success req.user.role is populated for downstream handlers.
+ * On success req.user.role is populated for downstream handlers.
  */
 export const requireRole = (role) => async (req, res, next) => {
   try {
-    const user = await User.findById(req.user?.id).select('role').lean();
+    const found = await lookupRole(req.user?.id);
 
-    if (!user || (user.role || 'user') !== role) {
+    if (found !== role) {
       return res.status(403).json({
         error: `${ role }_required`,
         message: `${ role } role required`,
@@ -169,7 +187,7 @@ export const requireRole = (role) => async (req, res, next) => {
       });
     }
 
-    req.user.role = user.role || 'user';
+    req.user.role = found;
     next();
   } catch (err) {
     req.log?.error({ err }, 'Role check failed');

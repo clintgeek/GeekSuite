@@ -42,7 +42,13 @@ const apiKeySchema = new mongoose.Schema({
   },
   permissions: {
     type: [String],
-    default: ['ai:call', 'ai:models', 'ai:providers'],
+    // The default mint set. `ai:usage` joined it on 2026-09-06 (Q49) in the
+    // same change that put a gate on the two /api/ai/usage routes — the enum
+    // value had existed since the model did, claimed by no route and granted
+    // by no default, which is a permission that reads as meaningful on the
+    // key-creation screen and does nothing. Gate and default ship together or
+    // the gate locks out every key that already exists.
+    default: ['ai:call', 'ai:models', 'ai:providers', 'ai:usage'],
     validate: {
       validator: function(permissions) {
         const validPermissions = [

@@ -1,8 +1,13 @@
 import express from 'express';
-import { requireRole } from '../middleware/auth.js';
+import { requireRole, lookupRole } from '../middleware/auth.js';
 import { PROVIDER_IDS, keyHintFor } from '../config/aiProviders.js';
 import { authenticateJWTOrAPIKey, requirePermission } from '../middleware/apiKeyAuth.js';
-import { resolveCaller, declaresAppRouting, logCaller } from '../services/callerIdentity.js';
+import {
+  resolveCaller,
+  resolveConversationOwner,
+  declaresAppRouting,
+  logCaller,
+} from '../services/callerIdentity.js';
 import { resolveFailure } from '../services/aiFailureEnvelope.js';
 import logger from '../lib/logger.js';
 import aiService from '../services/aiService.js';
@@ -198,6 +203,63 @@ router.get('/capabilities', async (req, res) => {
 // ============================================================================
 
 /**
+ * conversationOwner — the id every conversation route on this router scopes by.
+ *
+ * Q62 (2026-09-06). Before this, the five routes below disagreed with each
+ * other: `POST /conversation/message` filed under `resolveCaller().userId`,
+ * which for an API-key caller prefers a `userId` the *body* named, while the
+ * four read/state routes used `req.user.id`, which is the credential. A key
+ * caller that named a user therefore wrote conversations it could never read
+ * back, and — had the read routes ever been "fixed" to agree with the write
+ * route instead — any `ai:call` key could have read any user's stored
+ * messages by naming them. A body field is not a credential.
+ *
+ * All five now come through here, and ownership is the credential's:
+ * `apikey_<keyId>` for a key, the user id for a JWT. See
+ * services/callerIdentity.js for why `apikey_<keyId>` and not the key's owner,
+ * and why this is deliberately *not* the same question as which user the call
+ * is billed to (that stays `resolveCaller().userId`, and the two ids differ on
+ * purpose in `/conversation/message` below).
+ *
+ * The one exception is an admin JWT, which may name a user in the body — the
+ * operator escape hatch for repair and seeding. The userGeek role lookup it
+ * needs costs a query, so it is only made when a body actually disagrees with
+ * the credential; the routes that carry no body never pay for it and never
+ * have an exception to apply.
+ *
+ * @param {import('express').Request} req
+ * @returns {Promise<{ownerId: string|null, source: string, claimed: string|null,
+ *                    honoured: boolean}>}
+ */
+async function conversationOwner(req) {
+  const body = req.body || {};
+  const claimed = body.userId ?? body.config?.userId ?? body.user;
+  const self = req.user?.id == null ? null : String(req.user.id);
+  let isAdmin = false;
+
+  if (claimed != null && req.user?.type !== 'api_key' && String(claimed) !== self) {
+    try {
+      isAdmin = (await lookupRole(self)) === 'admin';
+    } catch (err) {
+      // A malformed id or an unreachable userGeek is not an admin. Fail closed
+      // to the credential's own id rather than 500 a conversation call.
+      req.log?.warn({ err }, '[ai] conversation owner role lookup failed');
+    }
+  }
+
+  const owner = resolveConversationOwner(req, body, { isAdmin });
+
+  if (owner.claimed && owner.claimed !== owner.ownerId) {
+    req.log?.debug(
+      { source: owner.source, honoured: owner.honoured },
+      '[ai] body userId ignored — conversation ownership comes from the credential'
+    );
+  }
+
+  return owner;
+}
+
+/**
  * POST /api/ai/conversation/message
  * Add message(s) to a conversation and get AI response
  * 
@@ -229,7 +291,21 @@ router.post('/conversation/message', async (req, res) => {
     const caller = resolveCaller(req, req.body);
     logCaller(req, caller, '[ai] /conversation/message caller');
     const appName = caller.appId;
-    const userId = caller.userId || req.user.id;
+
+    // Two ids, and they are allowed to differ. `owner.ownerId` is who the
+    // stored conversation belongs to — the credential, never the body (Q62).
+    // `caller.userId` is who the provider call is *billed* to, which for a
+    // service key may legitimately be a person the body named, or every call
+    // from storygeek would share one free-tier quota bucket. Ownership is not
+    // accounting; see conversationOwner() above.
+    const owner = await conversationOwner(req);
+    const userId = owner.ownerId;
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: { message: 'Unable to identify the caller', code: 'UNIDENTIFIED_CALLER' }
+      });
+    }
 
     // Validate input
     if (!conversationId) {
@@ -264,7 +340,7 @@ router.post('/conversation/message', async (req, res) => {
     const routingOptions = {
       conversationId,
       taskTypeHint: metadata?.taskTypeHint,
-      userId,
+      userId: caller.userId || userId,
       appName,
       feature: caller.feature,
       freeOnly: freeOnly || provider === 'free',
@@ -432,7 +508,7 @@ router.get('/conversation/:conversationId', async (req, res) => {
     if (permissionError) return;
 
     const { conversationId } = req.params;
-    const userId = req.user.id;
+    const userId = (await conversationOwner(req)).ownerId;
 
     const stats = await conversationService.getConversationStats(conversationId, userId);
     
@@ -462,7 +538,7 @@ router.get('/conversations', async (req, res) => {
     const permissionError = requirePermission(req, res, 'ai:stats');
     if (permissionError) return;
 
-    const userId = req.user.id;
+    const userId = (await conversationOwner(req)).ownerId;
     const limit = parseInt(req.query.limit) || 50;
 
     const conversations = await conversationService.listConversations(userId, { limit });
@@ -491,7 +567,7 @@ router.delete('/conversation/:conversationId', async (req, res) => {
     if (permissionError) return;
 
     const { conversationId } = req.params;
-    const userId = req.user.id;
+    const userId = (await conversationOwner(req)).ownerId;
 
     const result = await conversationService.deleteConversation(conversationId, userId);
     
@@ -515,7 +591,7 @@ router.post('/conversation/:conversationId/archive', async (req, res) => {
     if (permissionError) return;
 
     const { conversationId } = req.params;
-    const userId = req.user.id;
+    const userId = (await conversationOwner(req)).ownerId;
 
     const result = await conversationService.archiveConversation(conversationId, userId);
     
@@ -1278,8 +1354,24 @@ router.post('/director/force-refresh', requireAdminUser, async (req, res) => {
 });
 
 // GET /api/ai/usage/:provider/:modelId - Get usage status for a specific model
+//
+// Q49: gated on `ai:usage`, which until 2026-09-06 was an enum value no route
+// claimed and no mint granted — a permission that means nothing is worse than
+// no permission at all, because it reads on the key-creation screen as though
+// it were doing something. Gating it and adding it to the default mint set are
+// one change: gating alone would have locked every existing key out of a route
+// it could reach yesterday, and adding alone would have granted a word.
+//
+// Nothing in the suite calls either /usage route over HTTP — the AIGeek
+// console reads usage through the in-process GraphQL `aiUsage` query — so the
+// two keys minted before today (storygeek, fitnessgeek) losing a route they
+// never called is the whole blast radius. Regenerating a key does not change
+// its permissions; an existing key that wants this needs it added.
 router.get('/usage/:provider/:modelId', async (req, res) => {
   try {
+    const permissionError = requirePermission(req, res, 'ai:usage');
+    if (permissionError) return;
+
     const { provider, modelId } = req.params;
     const userId = req.user.id;
 
@@ -1328,12 +1420,14 @@ router.get('/usage/:provider/:modelId', async (req, res) => {
 // silent no-op into a broken page for a caller who was never entitled to the
 // answer anyway.
 //
-// The route keeps its lack of an `ai:usage` permission check, which is a
-// separate question from whose data it returns: `ai:usage` is not in the
-// default mint set, so adding it here would be a breaking change to a
-// permission nothing has yet been granted. Filed, not fixed.
+// Q49 (2026-09-06) closed the follow-up this comment used to file: the route
+// is gated on `ai:usage`, and `ai:usage` is now in the default mint set. See
+// the sibling route above for why those two halves had to ship together.
 router.get('/usage/:provider', async (req, res) => {
   try {
+    const permissionError = requirePermission(req, res, 'ai:usage');
+    if (permissionError) return;
+
     const { provider } = req.params;
     const userId = req.user.id;
 

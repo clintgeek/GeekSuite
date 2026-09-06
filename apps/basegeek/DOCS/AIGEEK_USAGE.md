@@ -261,7 +261,7 @@ that. Two rules make the table readable:
 | `GET /director/models`, `/director/free-models` | `ai:director` | unchanged |
 | `POST /director/recommend` | **`ai:director`** | nothing |
 | `POST /director/analyze-cost` | **`ai:director`** | nothing |
-| `GET /usage/:provider`, `/usage/:provider/:modelId` | authentication; **answers only for the caller** | `?userId=` was honoured on the summary |
+| `GET /usage/:provider`, `/usage/:provider/:modelId` | **`ai:usage`**; answers only for the caller | no permission at all; `?userId=` was honoured on the summary |
 | `GET`/`POST /config`, `POST /test` | admin (a person) | unchanged |
 | `POST /provider` | **admin** | nothing |
 | `POST /models/:provider/refresh` | **admin** | nothing |
@@ -270,11 +270,22 @@ that. Two rules make the table readable:
 | `POST /summarization` | **admin** | nothing |
 | `POST /director/seed-pricing`, `/director/seed-free-tier`, `/director/force-refresh` | **admin** | nothing |
 
-`ai:providers`, `ai:models` and `ai:call` are in the default set every mint path
-grants, so a key minted with the defaults keeps everything it had. `ai:director`
-is **not** — a backend that asks the steward anything needs it named explicitly,
-which is why the StoryGeek example above passes `--permissions
-ai:call,ai:director`.
+`ai:providers`, `ai:models`, `ai:call` and — since 2026-09-06 — `ai:usage` are
+in the default set every mint path grants, so a key minted with the defaults
+keeps everything it had. `ai:director` is **not** — a backend that asks the
+steward anything needs it named explicitly, which is why the StoryGeek example
+above passes `--permissions ai:call,ai:director`.
+
+**`ai:usage` (Q49, 2026-09-06).** It existed in the enum from the day the model
+did, claimed by no route and granted by no default: a word on the key-creation
+screen that did nothing. Gating the two `/usage` routes with it and adding it to
+the default mint set are one change and had to ship together — gating alone
+locks out every key that already exists, adding alone grants a word. The two
+keys minted before that day (storygeek, fitnessgeek) do **not** have it and will
+now get 403 from `/usage/*`; neither has ever called those routes, and nothing
+in the suite does — the AIGeek console reads usage through the in-process
+GraphQL `aiUsage` query. Regenerating a key does not change its permissions; an
+existing key that needs `ai:usage` must have it added.
 
 The bolded rows had no check at all: any credential of any app, and any
 logged-in user of any of the eight apps under SSO, could set the suite's current

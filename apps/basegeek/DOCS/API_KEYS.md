@@ -22,13 +22,20 @@ The API key system provides:
 - Organize by application name
 
 ### Permissions System
-Available permissions:
-- `ai:call` - Make AI API calls
-- `ai:models` - Access model information
-- `ai:providers` - Access provider information
+Available permissions (**bold** = in the default mint set):
+- **`ai:call`** - Make AI API calls
+- **`ai:models`** - Access model information
+- **`ai:providers`** - Access provider information
 - `ai:stats` - View AI usage statistics
 - `ai:director` - Access AI Director features
-- `ai:usage` - View usage analytics
+- **`ai:usage`** - Read `GET /api/ai/usage/*` (joined the default set 2026-09-06, Q49 —
+  see `DOCS/AIGEEK_USAGE.md`; keys minted before then do not have it)
+
+The default set lives in three places that must agree — the schema default in
+`src/models/APIKey.js`, `DEFAULT_PERMISSIONS` in `src/routes/apiKeys.js`, and
+`DEFAULT_PERMISSIONS` in `scripts/mint-api-key.js` — because neither the model
+nor the script can import the router. A test asserts the route and the model
+agree.
 
 ### Rate Limiting
 Configurable limits per API key:
@@ -104,12 +111,49 @@ All AI endpoints support API key authentication:
 These endpoints require user login (JWT):
 
 - `GET /api/api-keys` - List your API keys
-- `POST /api/api-keys` - Create new API key
+- `POST /api/api-keys` - Create new API key — **admin, or an app you already hold** (see below)
 - `GET /api/api-keys/:keyId` - Get API key details
 - `PUT /api/api-keys/:keyId` - Update API key
 - `DELETE /api/api-keys/:keyId` - Delete API key
-- `POST /api/api-keys/:keyId/regenerate` - Regenerate API key
+- `POST /api/api-keys/:keyId/regenerate` - Regenerate API key — **same rule as minting**
 - `GET /api/api-keys/apps/list` - List apps with API keys
+
+### Who may mint a key (Q62, 2026-09-06)
+
+Until this date, any logged-in suite user could `POST /api/api-keys` with any
+`appName` they liked and receive a working `bg_` credential for it. That single
+field is the whole aiGeek trust model: `src/services/callerIdentity.js`
+deliberately routes and bills a call by the **key's** app rather than by
+anything the body says, precisely so a caller cannot choose whose
+`AIAppConfig` row answers it and whose free-tier allowance pays for it. The
+mint route was handing out the field that decides it.
+
+The rule now:
+
+| Caller | May mint / rotate |
+|---|---|
+| `role: admin` | any app, including one not yet in `VALID_APPS` |
+| anyone else | an app in `VALID_APPS` that they **already hold an active key for** |
+| anyone else, any other app | `403 { error: 'admin_required' }` |
+
+"Already hold an active key for" is what *owning an app* can mean against the
+data that exists — `models/App.js` has no owner field, and inventing one would
+be a schema plus a migration for a registry nothing else reads that way.
+
+The consequence worth stating plainly: **an app's first key is an admin act.**
+That is the point. It is the moment the app name stops being a string anyone
+can type and becomes a credential. Rotation stays with whoever holds the key,
+because the `createdBy` scope on the lookup already proves they hold it — the
+only extra question `regenerate` asks is whether the app is in `VALID_APPS`, so
+a key minted for an unregistered app before this gate existed stays an admin's
+to rotate.
+
+The host-side `scripts/mint-api-key.js` bypasses all of this by design: it
+talks to Mongo directly, and shell access to the box plus the ability to read
+`apps/basegeek/.env.production` is a strictly stronger credential than any
+admin session.
+
+Tests: `src/__tests__/apiKeyMintAuthority.test.js`.
 
 ## Code Examples
 

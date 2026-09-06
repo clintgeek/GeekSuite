@@ -225,8 +225,10 @@ export async function runAIFeature(opts) {
 }
 
 /**
- * GraphQL shape shared by every feature's typeDefs. Modules add
- * `type AIProvenance` once via `graphql/shared/aiProvenance.js`.
+ * The GraphQL shape, for reference. The live declaration is `type AIProvenance`
+ * in `graphql/shared/typeDefs.js`; do NOT import this constant from a
+ * typeDefs file — this module pulls in aiService and crypto-vault, and
+ * tools/gql-arg-audit.mjs imports every typeDefs standalone with no env.
  */
 export const AI_PROVENANCE_SDL = `
   """Where an AI-assisted result came from. \`source: "fallback"\` means no model was consulted."""

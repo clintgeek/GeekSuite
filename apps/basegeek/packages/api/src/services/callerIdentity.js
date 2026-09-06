@@ -196,6 +196,76 @@ export function resolveCaller(req, body = undefined) {
 }
 
 /**
+ * resolveConversationOwner — whose conversation store a request may touch.
+ *
+ * Distinct from `resolveCaller` above, and deliberately so. `resolveCaller`
+ * answers "who pays for this call": for a key caller it lets the body name a
+ * user, because a service key has no session and without that every call from
+ * storygeek would share one free-tier quota bucket. That is an *accounting*
+ * decision about a number in `AIUsage`.
+ *
+ * Ownership is not accounting. A `userId` in a request body is not a
+ * credential, and `Conversation` is a store of message content — the body
+ * naming its own owner meant an `ai:call` key could write into, and (had the
+ * read routes agreed with the write route) read out of, any user's
+ * conversation by naming them. They did not agree, which is the tell: the
+ * write path filed under `caller.userId` (body-first) while every read path
+ * used `req.user.id` (credential). A key caller that named a user wrote
+ * conversations it could never read back.
+ *
+ * So (Q62, 2026-09-06) ownership comes from the credential, in one function
+ * both halves call:
+ *
+ *   API key → `apikey_<keyId>`. Not the key's *owner* (the human who minted
+ *             it): a key is the app's identity, several apps may be minted by
+ *             the same admin, and pooling their conversations under that admin
+ *             would merge them. `apikey_<keyId>` is also exactly what
+ *             `apiKeyAuth` already puts in `req.user.id`, so it is what the
+ *             read routes have always used — no migration, nothing to
+ *             backfill.
+ *   JWT     → the token's user id.
+ *   admin   → and only an admin: a body `userId` is honoured. The operator
+ *             escape hatch for repair and seeding. Everyone else's body
+ *             `userId` is ignored, logged at debug when it disagrees rather
+ *             than refused, because refusing would break the two key callers
+ *             that legitimately send it for *usage* attribution.
+ *
+ * Pure, like everything else here: the caller decides whether `isAdmin` is
+ * true (it costs a userGeek lookup) and passes it in.
+ *
+ * @param {import('express').Request} req
+ * @param {object} [body]
+ * @param {{isAdmin?: boolean}} [opts]
+ * @returns {{ownerId: string|null, source: 'api_key'|'jwt'|'admin_jwt'|'unattributed',
+ *            claimed: string|null, honoured: boolean}}
+ */
+export function resolveConversationOwner(req, body = undefined, { isAdmin = false } = {}) {
+  const payload = body === undefined ? (req?.body || {}) : (body || {});
+  const claimed = normalizeUserId(
+    payload.userId ?? payload.config?.userId ?? payload.user
+  );
+  const user = req?.user;
+
+  if (user?.type === 'api_key') {
+    const keyId = req?.apiKey?.id;
+    const ownerId = keyId
+      ? `apikey_${keyId}`
+      : normalizeUserId(user.id == null ? null : String(user.id));
+    return { ownerId, source: 'api_key', claimed, honoured: false };
+  }
+
+  const self = normalizeUserId(user?.id == null ? null : String(user.id));
+  if (self) {
+    if (isAdmin && claimed && claimed !== self) {
+      return { ownerId: claimed, source: 'admin_jwt', claimed, honoured: true };
+    }
+    return { ownerId: self, source: 'jwt', claimed, honoured: false };
+  }
+
+  return { ownerId: null, source: UNATTRIBUTED, claimed, honoured: false };
+}
+
+/**
  * An in-process caller naming itself. Used by askService and anything else
  * that reaches aiService directly rather than over HTTP — there is no
  * credential to read, and no body to distrust.
@@ -238,6 +308,7 @@ export default {
   resolveFeature,
   declaresAppRouting,
   resolveCaller,
+  resolveConversationOwner,
   internalCaller,
   logCaller,
 };

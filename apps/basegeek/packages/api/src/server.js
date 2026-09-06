@@ -24,7 +24,6 @@ import aiRoutes from './routes/aiRoutes.js';
 import openaiProxyRoutes from './routes/openaiProxy.js';
 import apiKeyRoutes from './routes/apiKeys.js';
 import appsRoutes from './routes/apps.js';
-import oauthConnectionsRoutes from './routes/oauthConnections.js';
 import ambientRoutes from './routes/ambient.js';
 import { connectAIGeekDB, getAIGeekConnection } from './config/database.js';
 import { userGeekConn } from './models/user.js';
@@ -217,7 +216,21 @@ app.use('/api/ai', aiRoutes);
 app.use('/openai/v1', openaiProxyRoutes);
 app.use('/api/api-keys', apiKeyRoutes);
 app.use('/api/apps', appsRoutes);
-app.use('/api/connections', oauthConnectionsRoutes);
+// `/api/connections` was mounted here until 2026-09-06 (Q69). The router
+// exposed the OAuth connect flow (authorize / callback / disconnect / list)
+// plus a `POST /internal/token` gated on `INTERNAL_JWT_SECRET` — a variable
+// set in no env file and no compose file, so that endpoint answered 500 to
+// every request it ever received. Nothing in the suite called any of the five:
+// the dashgeek ambient screen it was built for never shipped a client, and
+// `grep -r 'api/connections'` across the monorepo found only this line.
+//
+// `services/oauthConnectionService.js` and `models/OAuthConnection.js` STAY —
+// `services/ambientService.js` and `services/oauthRefreshJobService.js` both
+// import them, so the tokens keep refreshing and `/api/ambient` keeps reading
+// them. What is gone is the only way to *establish* a connection over HTTP: if
+// the ambient screen is revived, this router comes back from git history
+// (`git log --diff-filter=D -- apps/basegeek/packages/api/src/routes/oauthConnections.js`)
+// minus the internal-token endpoint.
 app.use('/api/ambient', ambientRoutes);
 // Infrastructure browsers — admin only. Each router applies `requireAdmin`
 // itself (a `router.use` at the top of the file) so the gate travels with the

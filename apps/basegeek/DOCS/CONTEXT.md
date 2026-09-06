@@ -962,3 +962,150 @@ on the boot path.
 - StartGeek should pass `today` to `glanceDraft`
   (`localDateString(new Date())`), the way it already passes `date` to
   `glanceToday`.
+
+---
+
+## Night 2 — 2026-09-06
+
+Stream R121: the basegeek half of **Q62**, plus **Q49** and **Q69**. Four
+policy changes and one finding that turned out to be a non-finding here.
+
+### Conversation ownership comes from the credential (Q62)
+
+`src/services/callerIdentity.js` gained `resolveConversationOwner()`;
+`src/routes/aiRoutes.js` gained `conversationOwner()`, and all five
+`/api/ai/conversation*` routes now scope by it.
+
+The bug was a disagreement between two halves of one router.
+`POST /conversation/message` filed the row under `resolveCaller().userId`,
+which for an API-key caller prefers a `userId` the **body** named; the four
+read/state routes scoped by `req.user.id`, which is the credential. So a key
+caller that named a user wrote conversations it could never read back — and the
+obvious "fix", making the reads agree with the write, would have handed every
+`ai:call` key the ability to read any user's stored messages by naming them. A
+body field is not a credential.
+
+Ownership is now the credential's, in one place both halves call:
+
+| Caller | Owns as |
+|---|---|
+| API key | `apikey_<keyId>` |
+| JWT | the token's user id |
+| **admin** JWT | a body `userId`, if it passes one — the operator escape hatch |
+
+Everyone else's body `userId` is **ignored and logged at debug** when it
+disagrees, not refused: refusing would break the two key callers that
+legitimately send it for *usage* attribution.
+
+**No migration.** `apikey_<keyId>` is exactly what `middleware/apiKeyAuth.js`
+has always put in `req.user.id`, so it is what the read routes have always
+used. And there is nothing to migrate anyway: **no key caller uses the
+conversation API at all.** storygeek (`services/aiService.js`) and fitnessgeek
+(`fitnessGoalService.js`, `aiCoachService.js`) both call the stateless
+`POST /api/ai/call`; a repo-wide grep for `/api/ai/conversation` finds only
+basegeek's own routes and its tests.
+
+**Two ids, on purpose.** In `/conversation/message`, `owner.ownerId` is who the
+row belongs to and `caller.userId` is who the provider call is billed to, and
+they may differ. That is not sloppiness: `callerIdentity.js` lets a service
+key's body name the person so free-tier quota stays per-person instead of
+pooling every storygeek call into one bucket. Ownership is not accounting.
+Collapsing the two would have silently merged every user's quota.
+
+Not `apikey_<owner>` — a key is the *app's* identity, several apps may be
+minted by the same admin, and keying on the minter would pool their
+conversations together.
+
+Tests: `src/__tests__/conversationOwnership.test.js` (14 cases). Five of them
+fail against the old write path, which is the point — every case sends a body
+that lies about who the caller is.
+
+### Minting a key is no longer something any user can do (Q62)
+
+`src/routes/apiKeys.js` `POST /` and `POST /:keyId/regenerate` now go through
+`assertMintAuthority()`: **admin, or an app in `VALID_APPS` that the caller
+already holds an active key for.** Anything else is
+`403 { error: 'admin_required' }`, and the key document is never created.
+
+Until this, any logged-in suite user could mint `appName: 'storygeek'` and
+*be* storygeek as far as routing and billing were concerned — which is the
+entire thing `callerIdentity.js` exists to prevent. "Already holds an active
+key for it" is what *owning an app* can mean against the data that exists:
+`models/App.js` has no owner field, and inventing one would be a schema plus a
+migration for a registry nothing else reads that way.
+
+Consequence, stated because someone will later read it as a bug: **an app's
+first key is an admin act.** That is the moment the app name stops being a
+string anyone can type. Rotation stays with the holder (the `createdBy` scope
+on the lookup already proves it); the only extra question `regenerate` asks is
+whether the app is in `VALID_APPS`, so a key minted for an unregistered app
+before the gate stays an admin's to rotate. `scripts/mint-api-key.js`
+deliberately bypasses all of it — shell access plus `.env.production` is a
+stronger credential than any admin session — and its header now says so.
+
+Tests: `src/__tests__/apiKeyMintAuthority.test.js` (11 cases).
+
+### `ai:usage` means something now (Q49)
+
+Both `GET /api/ai/usage/:provider` and `/usage/:provider/:modelId` are gated on
+`ai:usage`, and `ai:usage` joined the default mint set. Gate and default had to
+ship together: gating alone locks out every key that already exists, adding
+alone grants a word. The permission had been in the enum since the model was
+written, claimed by no route and granted by no default — visible on the
+key-creation screen, doing nothing.
+
+The default set now lives in three files that must agree —
+`models/APIKey.js`'s schema default, `DEFAULT_PERMISSIONS` in
+`routes/apiKeys.js`, `DEFAULT_PERMISSIONS` in `scripts/mint-api-key.js` —
+because neither the model nor the script can import the router. A test asserts
+the route and the model agree.
+
+Blast radius: the two keys minted before today (storygeek, fitnessgeek) lose a
+route neither has ever called. Nothing in the suite calls `/usage/*` over HTTP;
+the AIGeek console reads usage through the in-process GraphQL `aiUsage` query.
+Regenerating a key does not change its permissions.
+
+### `/api/connections` deleted (Q69)
+
+`src/routes/oauthConnections.js` and its mount and import in `server.js` are
+gone; a comment stands where the mount was. The router exposed the OAuth
+connect flow (authorize / callback / disconnect / list) plus a
+`POST /internal/token` gated on `INTERNAL_JWT_SECRET` — a variable set in no
+env file and no compose file, so that endpoint answered 500 to every request it
+ever received. Nothing in the suite called any of the five: the dashgeek
+ambient screen it was built for never shipped a client, and a monorepo-wide
+grep for `api/connections` found only the mount line.
+
+**`services/oauthConnectionService.js` and `models/OAuthConnection.js` stay** —
+`services/ambientService.js` and `services/oauthRefreshJobService.js` both
+import them, so tokens keep refreshing and `/api/ambient` keeps reading them.
+`__tests__/oauthConnectionService.test.js` stays with them.
+
+What is gone is the only HTTP way to *establish* a connection. If the ambient
+screen is revived, the router comes back from git history
+(`git show <sha>:apps/basegeek/packages/api/src/routes/oauthConnections.js`)
+minus the internal-token endpoint. A test asserts it is gone and that the
+service and model are not.
+
+### InfluxDB reads — the filter does not belong here (Q62)
+
+`routes/influx.js` carries the full note. Short version: basegeek's Influx
+router has one route, `/status`, it is admin-gated, and it answers bucket-wide
+infrastructure questions (reachable? how many measurements? points in the last
+hour?) for the DataGeekPage panel. Those counts are bucket-wide by definition —
+scoping them to the admin who asked would make the panel lie about the thing it
+exists to watch.
+
+The user-scoped Influx reads are fitnessgeek's, in another tree and against
+another database: basegeek talks Influx **v2** to bucket `datageek_metrics`,
+`apps/fitnessgeek/backend/src/services/influxService.js` talks Influx **v1** to
+database `geekdata`. And **nothing in this monorepo writes to Influx at all** —
+no `writePoints`/`getWriteApi` anywhere under `apps/` or `packages/`; the Garmin
+sync that fills `geekdata` runs outside the repo. So the write side cannot be
+read to find out whether points carry a user tag, and the nine measurements
+fitnessgeek reads (`SleepIntraday`, `SleepSummary`, `HeartRateIntraday`,
+`StressIntraday`, `BodyBatteryIntraday`, `StepsIntraday`, `DailyStats`,
+`HRV_Intraday`, `BreathingRateIntraday`) are queried with a time range and
+nothing else. A filter added blind returns zero rows and blanks the dashboard.
+The TODO in `routes/influx.js` says what to run against the live bucket to
+settle it; that needs the box, so it is Chef's, not an agent's.

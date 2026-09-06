@@ -29,7 +29,7 @@ export const emptyKeyDraft = (appName = '') => ({
   name: '',
   appName,
   description: '',
-  permissions: ['ai:call', 'ai:models', 'ai:providers'],
+  permissions: ['ai:call', 'ai:models', 'ai:providers', 'ai:usage'],
   rateLimit: { requestsPerMinute: 60, requestsPerHour: 1000, requestsPerDay: 10000 },
   expiresAt: '',
   isActive: true,
