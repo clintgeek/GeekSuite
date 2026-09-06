@@ -158,6 +158,19 @@ function savedFiltersOf(profile) {
   return Array.isArray(profile?.savedFilters) ? profile.savedFilters : [];
 }
 
+/**
+ * A client search term, safe to hand to mongod as a regex.
+ *
+ * Escaped so every metacharacter means itself, and bounded so an enormous
+ * needle cannot be used to make the engine work hard on every document.
+ */
+const SEARCH_TERM_MAX = 200;
+function searchRegex(value) {
+  return String(value)
+    .slice(0, SEARCH_TERM_MAX)
+    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 export const resolvers = {
   Book: {
     id: (parent) => parent._id?.toString(),
@@ -184,12 +197,18 @@ export const resolvers = {
   },
   Query: {
     books: async (_, { page = 1, limit = 50, sort = "title", sortDir = "asc", author, tag, shelf, owned, q }, { user }) => {
+      // `books` is the one query with no zod layer, and `q`/`author` reach
+      // mongod as regex source. Unescaped, ordinary titles broke the whole
+      // library page — `Dune (Deluxe` is "Unterminated group", `C++` is
+      // "Nothing to repeat" — and a crafted `(a+)+$` was a ReDoS evaluated
+      // per document. notegeek escapes the same way at
+      // graphql/notegeek/resolvers.js:33.
       requireUser(user);
       const pageNum = Math.max(1, page);
       const limitNum = Math.max(1, Math.min(100, limit));
 
       const andConds = [];
-      if (author) andConds.push({ authors: { $regex: author, $options: "i" } });
+      if (author) andConds.push({ authors: { $regex: searchRegex(author), $options: "i" } });
       if (tag) andConds.push({ tags: tag });
       if (shelf) andConds.push(shelfMatch(shelf));
 
@@ -197,11 +216,12 @@ export const resolvers = {
       else if (owned === "false") andConds.push({ owned: false });
 
       if (q) {
+        const needle = searchRegex(q);
         andConds.push({
           $or: [
-            { title: { $regex: q, $options: "i" } },
-            { authors: { $regex: q, $options: "i" } },
-            { tags: { $regex: q, $options: "i" } },
+            { title: { $regex: needle, $options: "i" } },
+            { authors: { $regex: needle, $options: "i" } },
+            { tags: { $regex: needle, $options: "i" } },
           ],
         });
       }

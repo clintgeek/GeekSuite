@@ -51,7 +51,7 @@ app.set('trust proxy', 1);
 // Connect to MongoDB
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/datageek?authSource=admin';
 try {
-  await mongoose.connect(MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+  await mongoose.connect(MONGODB_URI)
   logger.info('MongoDB connected')
 } catch (err) {
   logger.error({ err }, 'MongoDB connection error')
@@ -168,7 +168,23 @@ app.use(cors({
   preflightContinue: false,
   optionsSuccessStatus: 204
 }));
-// Increase body size limit for large AI conversation histories
+// Body parsing.
+//
+// The AI surfaces get their own, much tighter cap, mounted FIRST so it wins
+// (express.json is a no-op once req.body is set). Both routers apply their
+// credential gate *inside* the router, so until this existed an entirely
+// unauthenticated POST to https://basegeek.clintgeek.com/openai/v1/... had its
+// full 50 MB body buffered and JSON-parsed into heap before anything looked at
+// `Authorization` — and then run through tiktoken and an md5 of the whole
+// conversation on the event loop. 8 MB is still far past any provider's
+// context window; AI_BODY_LIMIT is the escape hatch if a real caller needs
+// more.
+const aiBodyParser = express.json({ limit: process.env.AI_BODY_LIMIT || '8mb' });
+app.use('/openai/v1', aiBodyParser);
+app.use('/api/ai', aiBodyParser);
+
+// Everything else — /graphql carries notegeek's 5 000 000-char mindmap
+// snapshots, which is what the large limit is actually for.
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(cookieParser());
@@ -313,31 +329,50 @@ app.get('/api/health/infra', async (req, res) => {
   const results = {};
 
   // MongoDB
+  //
+  // The client is closed in a `finally`: before, a `serverStatus` that threw
+  // skipped `close()` and leaked a connection pool on every failing probe of a
+  // route anyone can call unauthenticated.
+  let mongoProbeClient = null;
   try {
     const { MongoClient } = await import('mongodb');
     const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/datageek?authSource=admin';
     const start = Date.now();
-    const client = await MongoClient.connect(uri, { serverSelectionTimeoutMS: 2000 });
-    const serverStatus = await client.db().admin().command({ serverStatus: 1 });
-    await client.close();
+    mongoProbeClient = await MongoClient.connect(uri, { serverSelectionTimeoutMS: 2000 });
+    const serverStatus = await mongoProbeClient.db().admin().command({ serverStatus: 1 });
     results.mongo = { online: true, latency: Date.now() - start, version: serverStatus.version };
   } catch (err) {
     results.mongo = { online: false, latency: null };
+  } finally {
+    if (mongoProbeClient) await mongoProbeClient.close().catch(() => {});
   }
 
   // Redis
+  //
+  // `.on('error')` is not optional: node-redis is an EventEmitter, and an
+  // 'error' event with no listener is *thrown* by Node. Without it, a Redis
+  // that is down turned this public, unauthenticated endpoint into an uncaught
+  // exception — i.e. anyone could restart the API by calling it while Redis
+  // was unreachable. `quit()` likewise moves into a `finally` so a failing
+  // INFO cannot leak the socket.
+  let redisProbeClient = null;
   try {
     const { createClient } = await import('redis');
     const redisUrl = process.env.REDIS_URL || 'redis://192.168.1.17:6380';
-    const client = createClient({ url: redisUrl, socket: { connectTimeout: 3000 } });
+    redisProbeClient = createClient({
+      url: redisUrl,
+      socket: { connectTimeout: 3000, reconnectStrategy: false },
+    });
+    redisProbeClient.on('error', (err) => logger.debug({ err }, '[health/infra] redis probe error'));
     const start = Date.now();
-    await client.connect();
-    const info = await client.info('server');
-    await client.quit();
+    await redisProbeClient.connect();
+    const info = await redisProbeClient.info('server');
     const versionMatch = info.match(/redis_version:(.+)/);
     results.redis = { online: true, latency: Date.now() - start, version: versionMatch?.[1]?.trim() || null };
   } catch (err) {
     results.redis = { online: false, latency: null };
+  } finally {
+    if (redisProbeClient?.isOpen) await redisProbeClient.quit().catch(() => {});
   }
 
   // InfluxDB
@@ -485,8 +520,15 @@ app.get('*', (req, res) => {
 });
 
 // Error handling middleware
+//
+// `req.log` only exists downstream of the pino-http middleware above, and the
+// CSRF guards and cors() are mounted *before* it — so an error raised by any
+// of those (cors() rejects a disallowed Origin with `callback(new Error(...))`)
+// used to make this handler itself throw, and the rejection was reported by
+// express's default finalhandler instead of here. Fall back to the module
+// logger so every error is logged exactly once, from one place.
 app.use((err, req, res, next) => {
-  req.log.error({ err }, '500 handler');
+  (req.log || logger).error({ err }, '500 handler');
   res.status(500).json({
     message: 'Internal Server Error',
     requestId: req.id

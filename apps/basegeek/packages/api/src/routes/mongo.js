@@ -25,7 +25,12 @@ const router = express.Router();
 router.use(requireAdmin);
 
 // MongoDB connection details from environment variables
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://datageek_user:DataGeek_User_2024@192.168.1.17:27018/datageek?authSource=admin';
+// No credentialed fallback. This file is git-tracked and published, and the
+// previous default embedded a real-looking datageek username and password —
+// a secret in source is a secret no longer. Production always sets
+// MONGODB_URI; the localhost default matches server.js and fails closed
+// (auth error) rather than quietly reaching a real instance.
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/datageek?authSource=admin';
 const DB_NAME = process.env.MONGODB_DB_NAME || 'datageek';
 
 router.get('/status', async (req, res) => {

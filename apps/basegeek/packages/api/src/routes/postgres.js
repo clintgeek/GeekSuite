@@ -26,7 +26,6 @@ router.get('/status', async (req, res) => {
     const sizeResult = await client.query('SELECT pg_database_size(current_database()) as size');
     // Get connection count
     const connResult = await client.query('SELECT count(*) FROM pg_stat_activity');
-    await client.end();
     res.json({
       status: 'connected',
       version: versionResult.rows[0].version,
@@ -35,8 +34,15 @@ router.get('/status', async (req, res) => {
       connectionCount: connResult.rows[0].count
     });
   } catch (error) {
-    if (client) await client.end();
+    req.log.error({ err: error }, 'Postgres status error');
     res.status(500).json({ status: 'error', message: error.message });
+  } finally {
+    // `end()` used to live in the catch block and be awaited bare: a client
+    // that failed to connect can reject on end(), which escaped as an
+    // unhandled rejection and left the request without a response. Closing
+    // once, in a `finally`, with the rejection swallowed, fixes both the leak
+    // on the happy path's early-return and the hang on the failure path.
+    await client.end().catch(() => {});
   }
 });
 

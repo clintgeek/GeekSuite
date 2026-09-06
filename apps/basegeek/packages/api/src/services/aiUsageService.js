@@ -23,14 +23,17 @@ class AIUsageService {
       const currentDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const currentHour = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours());
 
-      // Get or create usage record
-      let usage = await AIUsage.findOne({
-        provider,
-        modelId,
-        userId,
-        date: currentDay
-      });
-
+      // Get-or-create, atomically.
+      //
+      // This used to be `findOne` → `new AIUsage(...)` → `save()`. `AIUsage`
+      // has a unique `{provider, modelId, userId, date}` index, so the first
+      // two concurrent calls of a day both found nothing, both constructed a
+      // row, and the loser hit E11000 — swallowed by the catch below into
+      // `{success:false}`, which `aiService.js` awaits and never inspects.
+      // The result was a lost usage record and a free-tier ceiling that could
+      // be sailed past. An upsert cannot lose that race.
+      const existing = await AIUsage.findOne({ provider, modelId, userId, date: currentDay });
+      let usage = existing;
       if (!usage) {
         // Get free tier limits for this model
         const freeTier = await AIFreeTier.findOne({ provider, modelId });
@@ -43,13 +46,11 @@ class AIUsageService {
           audioSecondsPerDay: 0
         };
 
-        usage = new AIUsage({
-          provider,
-          modelId,
-          userId,
-          date: currentDay,
-          freeLimits
-        });
+        usage = await AIUsage.findOneAndUpdate(
+          { provider, modelId, userId, date: currentDay },
+          { $setOnInsert: { provider, modelId, userId, date: currentDay, freeLimits } },
+          { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
       }
 
       // Reset counters if time period has changed

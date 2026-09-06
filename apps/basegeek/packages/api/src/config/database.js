@@ -12,10 +12,17 @@ let _aiGeekConnection = null;
 export const getAIGeekConnection = () => {
   if (_aiGeekConnection) return _aiGeekConnection;
   logger.info('🔗 Creating aiGeek connection');
-  _aiGeekConnection = mongoose.createConnection(AIGEEK_MONGODB_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  });
+  _aiGeekConnection = mongoose.createConnection(AIGEEK_MONGODB_URI);
+
+  // A mongoose Connection is an EventEmitter, and an 'error' event with no
+  // listener is thrown by Node rather than logged — so a post-boot aiGeek
+  // outage (auth failure, socket reset, replica-set election) took the whole
+  // API process down with an uncaught exception. Every other connection in
+  // this package (models/user.js, graphql/shared/appConnections.js) already
+  // carries these two handlers; this one was the odd one out.
+  _aiGeekConnection.on('error', (err) => logger.error({ err }, '[aiGeek] MongoDB connection error'));
+  _aiGeekConnection.on('connected', () => logger.info('[aiGeek] MongoDB connected'));
+
   return _aiGeekConnection;
 };
 

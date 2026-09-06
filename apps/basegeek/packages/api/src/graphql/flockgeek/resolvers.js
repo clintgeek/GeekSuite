@@ -304,8 +304,19 @@ export const resolvers = {
     recordHatchEvent: async (_, rawArgs, context) => {
       const ownerId = requireUser(context);
       const args = validateRecordHatchEvent(rawArgs);
-      const { HatchEvent } = await getModels();
-      return new HatchEvent({ ...args, ownerId }).save();
+      const { HatchEvent, Pairing } = await getModels();
+      // Same shape as createMeatRun: a reference is checked against the
+      // caller's own rows before it is written. `assertOwned` reads undefined
+      // / null / '' as "no reference at all"; the same three must not reach
+      // the ObjectId cast either, so an absent pairing is dropped rather than
+      // written as an empty string.
+      await assertOwned(Pairing, args.pairingId, ownerId, 'Pairing');
+      const { pairingId, ...rest } = args;
+      return new HatchEvent({
+        ...rest,
+        ...(pairingId ? { pairingId } : {}),
+        ownerId
+      }).save();
     },
     updateHatchEvent: async (_, rawArgs, context) => {
       const ownerId = requireUser(context);

@@ -410,7 +410,8 @@ router.post('/chat/completions', async (req, res) => {
       stream = false,
       stream_options: streamOptions,
       top_p: topP,
-      user: bodyUserId,
+      // `user` is deliberately NOT destructured here — resolveCaller reads it
+      // from the body itself, through normalizeUserId's 64-character cap.
       // Pass-through params for providers that support them
       stop,
       presence_penalty: presencePenalty,
@@ -431,7 +432,12 @@ router.post('/chat/completions', async (req, res) => {
 
     const caller = resolveCaller(req, req.body || {});
     logCaller(req, caller, '[OpenAI Proxy] caller');
-    const userId = caller.userId ?? bodyUserId;
+    // `resolveCaller` ALREADY reads the body's `user` — through
+    // `normalizeUserId`, which caps it at 64 characters precisely because the
+    // value lands in `AIUsage.userId` and is what the free-tier quota groups
+    // on. Falling back to the raw `bodyUserId` re-admitted exactly the values
+    // that cap had just rejected. The credential's answer is the answer.
+    const userId = caller.userId;
 
     if (tools !== undefined && !Array.isArray(tools)) {
       return openAIError(res, 400, 'tools must be an array when provided.', 'invalid_request_error', 'invalid_tools', 'tools');

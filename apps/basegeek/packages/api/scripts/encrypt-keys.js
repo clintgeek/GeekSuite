@@ -91,10 +91,7 @@ async function run() {
   // Connect
   let conn;
   try {
-    conn = await mongoose.createConnection(AIGEEK_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    }).asPromise();
+    conn = await mongoose.createConnection(AIGEEK_URI).asPromise();
     logger.info('Connected to MongoDB');
   } catch (err) {
     logger.fatal({ err }, 'Failed to connect to MongoDB — aborting');

@@ -68,6 +68,14 @@ const colorSchema = z.string().trim().max(32).nullable().optional();
 
 /** A count of birds, eggs or days. Never negative, never a fraction. */
 const countSchema = (max = 100_000) => z.number().int().min(0).max(max).nullable().optional();
+
+/**
+ * A count for a field the GraphQL type declares NON-null (`Int!`).
+ * Omit it to leave it alone; there is deliberately no way to clear it — a
+ * `null` written here would fail every later query on the non-null check.
+ * See shared/validation.js's note on optional-vs-nullable.
+ */
+const nonNullableCountSchema = (max = 100_000) => z.number().int().min(0).max(max).optional();
 const requiredCount = (max = 100_000) => z.number().int().min(0).max(max);
 /** Grams. A chicken is ~2 000g; the ceiling is an abuse guard, not a limit. */
 const gramsSchema = z.number().min(0).max(1_000_000).nullable().optional();
@@ -133,7 +141,8 @@ export const updateFlockGroupArgsSchema = z
     name: nameSchema().optional(),
     purpose: optionalName(100),
     type: optionalName(100),
-    startDate: calendarDateField({ required: false }),
+    // FlockGroup.startDate is `Date!` — optional on update, never nullable.
+    startDate: calendarDateField({ required: false, nullable: false }),
     endDate: calendarDateField({ required: false }),
     description: descriptionSchema,
     notes: notesSchema,
@@ -184,8 +193,9 @@ export const recordEggProductionArgsSchema = z
 export const updateEggProductionArgsSchema = z
   .object({
     id: idString,
-    date: calendarDateField({ required: false }),
-    eggsCount: countSchema(),
+    // EggProduction.date is `Date!` and .eggsCount is `Int!`.
+    date: calendarDateField({ required: false, nullable: false }),
+    eggsCount: nonNullableCountSchema(),
     daysObserved: countSchema(10_000),
     locationId: refIdString,
     notes: notesSchema,
@@ -224,6 +234,11 @@ export const recordHatchEventArgsSchema = z
     setDate: calendarDateField({ required: true }),
     hatchDate: calendarDateField({ required: false }),
     eggsSet: requiredCount(),
+    // Optional: eggs set from a mixed flock have no pairing to name, and the
+    // Add dialog has never offered one. Ownership-checked in the resolver when
+    // it IS supplied. `refIdString` accepts '' as "no reference at all", the
+    // convention every other optional flockgeek reference uses.
+    pairingId: refIdString,
     notes: notesSchema,
   })
   .strict();
@@ -231,7 +246,8 @@ export const recordHatchEventArgsSchema = z
 export const updateHatchEventArgsSchema = z
   .object({
     id: idString,
-    setDate: calendarDateField({ required: false }),
+    // HatchEvent.setDate is `Date!`; hatchDate is nullable and stays so.
+    setDate: calendarDateField({ required: false, nullable: false }),
     hatchDate: calendarDateField({ required: false }),
     eggsSet: countSchema(),
     eggsFertile: countSchema(),

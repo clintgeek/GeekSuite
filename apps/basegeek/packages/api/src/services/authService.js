@@ -145,6 +145,24 @@ export const rotateRefreshToken = async (oldRefreshToken, app = null) => {
     throw new Error('User not found');
   }
 
+  // A password change ends every session, not just the one that made it.
+  //
+  // Refresh tokens live 30 days and are only ever revoked by family (logout,
+  // or reuse detection). Nothing tied them to the credential they were minted
+  // against, so `POST /auth/reset-password` left every other live session —
+  // including an attacker's, which is exactly who a password change is aimed
+  // at — refreshing happily for another month. `iat` is in whole seconds, so
+  // the stamp is truncated the same way before comparing: a token minted in
+  // the same second as the change is kept (that is the session that made it).
+  const changedAt = user.passwordChangedAt;
+  if (changedAt && typeof decoded.iat === 'number') {
+    if (Math.floor(changedAt.getTime() / 1000) > decoded.iat) {
+      logger.warn({ userId: String(user._id), family }, 'Refresh token predates a password change — revoking family');
+      await refreshTokenStore.revokeFamily(family, FAMILY_REVOKE_TTL_SECONDS);
+      return { reuse: true, family, reason: 'password_changed' };
+    }
+  }
+
   // Issue new token pair (same family)
   const token = generateToken(user, app);
   const refreshToken = await generateRefreshToken(user, app, family);
@@ -195,11 +213,28 @@ export const login = async (identifier, password, app) => {
       throw new Error('Invalid app');
     }
 
-    // Find user by email or username
+    // A non-string identifier (`{"identifier": {"$ne": null}}`) used to reach
+    // `.toLowerCase()` and throw a TypeError, which the route reported as a
+    // 500 — a type oracle, and a different answer from a wrong password.
+    // Treat anything that is not a usable string as a failed login.
+    if (typeof identifier !== 'string' || !identifier.trim()) {
+      throw new Error('Invalid credentials');
+    }
+    const trimmedIdentifier = identifier.trim();
+    const loweredIdentifier = trimmedIdentifier.toLowerCase();
+
+    // Find user by email or username.
+    //
+    // `email` is declared `lowercase: true`, so the lowered form is the stored
+    // form. `username` is NOT — it is only trimmed — so a user registered as
+    // "Chef" could never log in by username at all, because the only username
+    // clause searched for "chef". The exact-case clause is what fixes that;
+    // the lowered clause stays so existing all-lowercase logins are unchanged.
     const user = await User.findOne({
       $or: [
-        { email: identifier.toLowerCase() },
-        { username: identifier.toLowerCase() }
+        { email: loweredIdentifier },
+        { username: loweredIdentifier },
+        { username: trimmedIdentifier }
       ]
     }).select('+passwordHash');
 

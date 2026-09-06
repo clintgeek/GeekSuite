@@ -76,6 +76,17 @@ const noteTypeSchema = z.enum(NOTE_TYPES).nullable().optional();
 const titleSchema = z.string().trim().max(500).nullable().optional();
 const tagSchema = z.string().trim().min(1).max(100);
 const tagsSchema = z.array(z.string().trim().max(100)).max(50).nullable().optional();
+
+/**
+ * Tags on UPDATE. `Note.tags` is `[String!]!`, so an explicit `null` may not
+ * be written: the update resolver does `{ $set: args }` with no
+ * `runValidators`, so the null lands in the document and every later
+ * `notes` / `note` / `searchNotes` that touches that row then fails the
+ * non-null check. Omit the field to leave tags alone; send `[]` to clear them.
+ * Same rule as bookgeek's `title` (BURN_REVIEW #7). `createNote`'s `tags`
+ * argument IS nullable in the schema, so create keeps `tagsSchema`.
+ */
+const updateTagsSchema = z.array(z.string().trim().max(100)).max(50).optional();
 const folderNameSchema = z.string().trim().min(1).max(200);
 const iconSchema = z.string().trim().max(64).nullable().optional();
 const colorSchema = z.string().trim().max(32).nullable().optional();
@@ -98,9 +109,10 @@ export const updateNoteArgsSchema = z
     title: titleSchema,
     // No minimum on update: the editor allows a titled note whose body has
     // been emptied, and blanking `content` is how that is saved today.
-    content: z.string().max(SNAPSHOT_CONTENT_MAX).nullable().optional(),
+    // `Note.content` is `String!` — same rule as tags above.
+    content: z.string().max(SNAPSHOT_CONTENT_MAX).optional(),
     type: noteTypeSchema,
-    tags: tagsSchema,
+    tags: updateTagsSchema,
   })
   .strict()
   .superRefine(checkContentCeiling({ unknownTypeIsSnapshot: true }));

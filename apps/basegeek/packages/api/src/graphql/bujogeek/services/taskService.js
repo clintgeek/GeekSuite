@@ -373,11 +373,28 @@ class TaskService {
     });
   }
 
+  /**
+   * Persist a day's manual task order.
+   *
+   * The list the client sends is the list it RENDERED, and a rendered day
+   * contains virtual occurrences of recurring masters — ids of the form
+   * `virtual_<masterId>_<epochMs>` (see `expandOccurrences`). `TaskOrder`
+   * declares `orderedTaskIds` as `[ObjectId]`, and one bad element fails the
+   * WHOLE array cast, so dragging any row on a day that held a recurring task
+   * threw `Cast to [ObjectId] failed` — and the ordinary tasks' order was lost
+   * along with it. They are dropped here rather than rejected: the read side
+   * matches stored ids against the day's real tasks and could never match a
+   * virtual one anyway, so keeping them would buy nothing even if the cast
+   * allowed it.
+   */
   async saveDailyOrder({ userId, dateKey, orderedTaskIds }) {
     this.requireUser(userId);
+    const persistable = (Array.isArray(orderedTaskIds) ? orderedTaskIds : [])
+      .map((id) => String(id))
+      .filter((id) => mongoose.isValidObjectId(id));
     return TaskOrder.findOneAndUpdate(
       { userId, dateKey },
-      { orderedTaskIds, updatedAt: new Date() },
+      { orderedTaskIds: persistable, updatedAt: new Date() },
       { new: true, upsert: true }
     );
   }

@@ -77,6 +77,21 @@ const authLimiter = rateLimit({
     skip: () => process.env.NODE_ENV === 'test',
 });
 
+// Registration is public, unauthenticated and creates a durable row in the
+// shared userGeek collection. Login has been rate-limited since it shipped;
+// register was not, so anything that could reach it could fill the suite's one
+// user collection at line speed. Looser than the login cap on purpose — a real
+// person mistyping a password retries far more often than they sign up.
+const registerLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 10,
+    message: {
+        message: 'Too many registration attempts, please try again later',
+        code: 'REGISTER_RATE_LIMIT'
+    },
+    skip: () => process.env.NODE_ENV === 'test',
+});
+
 // @desc    Login user
 // @route   POST /api/auth/login
 // @access  Public
@@ -233,9 +248,26 @@ router.get('/profile', authenticateToken, async (req, res) => {
 // @desc    Register new user
 // @route   POST /api/auth/register
 // @access  Public
-router.post('/register', async (req, res) => {
+router.post('/register', registerLimiter, async (req, res) => {
     try {
         const { username, email, password, app } = req.body;
+
+        // An `app` that is present but not one of ours mints a token whose
+        // `app` claim `authenticateToken` refuses (403 "Invalid app token") —
+        // i.e. registration "succeeded" and handed back a session that every
+        // route rejects. Reject it here instead, with the same 400 /login
+        // gives. An *absent* app is still allowed: several consumer proxies
+        // and notegeek's frontend omit it, and a token with no app claim is
+        // valid by design (see middleware/auth.js).
+        if (app !== undefined && app !== null && app !== '') {
+            if (typeof app !== 'string' || !VALID_APPS.includes(app.toLowerCase())) {
+                req.log.warn({ app }, 'Register with invalid app');
+                return res.status(400).json({
+                    message: 'Invalid app',
+                    code: 'REGISTER_ERROR'
+                });
+            }
+        }
 
         // Check if user already exists
         const existingUser = await User.findOne({
@@ -314,13 +346,26 @@ router.post('/reset-password', authenticateToken, async (req, res) => {
             });
         }
 
-        // Update password
+        // Update password. The model's hashing hook stamps `passwordChangedAt`,
+        // and refresh-token rotation refuses any token minted before that
+        // instant — so this ends every OTHER live session (see
+        // services/authService.js rotateRefreshToken).
         user.passwordHash = newPassword;
         await user.save();
 
+        // ...and re-issues this one, so the person who just changed their own
+        // password is not logged out by their own action. Without this the
+        // caller's own refresh token also predates the stamp and they would be
+        // bounced to the login screen on its next rotation.
+        const token = authService.generateToken(user, req.user.app || null);
+        const refreshToken = await authService.generateRefreshToken(user, req.user.app || null);
+        setSSOCookies(res, token, refreshToken);
+
         res.json({
             message: 'Password updated successfully',
-            code: 'PASSWORD_UPDATED'
+            code: 'PASSWORD_UPDATED',
+            token,
+            refreshToken
         });
     } catch (error) {
         req.log.error({ err: error }, 'Password reset error');

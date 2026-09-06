@@ -225,7 +225,12 @@ export const resolvers = {
 
     aiUsage: async (_, { provider }, { user }) => {
       requireAuth(user);
-      const usageSummary = await aiUsageService.getProviderUsageSummary(provider, 'session');
+      // The second parameter is a userId, not a period label
+      // (services/aiUsageService.js:202 queries `{ provider, userId, date }`).
+      // Passing the literal 'session' asked for a user by that name, so this
+      // field could only ever return zeros — the same class Q45 fixed on the
+      // REST sibling, which now takes its user id from the credential too.
+      const usageSummary = await aiUsageService.getProviderUsageSummary(provider, String(user.id));
       if (!usageSummary.success) throw new GraphQLError(usageSummary.error || 'Failed to get usage summary');
       return usageSummary.summary;
     },

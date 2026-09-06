@@ -262,7 +262,7 @@ export async function gmailListMessages(userId) {
       try {
         const mres = await providerRequest(userId, 'google', {
           method: 'GET',
-          url: `${GMAIL_BASE}/messages/${id}`,
+          url: `${GMAIL_BASE}/messages/${encodeURIComponent(id)}`,
           params: {
             format: 'metadata',
             metadataHeaders: ['From', 'Subject', 'Date'],
@@ -331,9 +331,14 @@ export function extractMessageBodies(payload) {
 }
 
 export async function gmailGetMessage(userId, id) {
+  // `id` is a raw route param (routes/ambient.js `GET /gmail/messages/:id`).
+  // Interpolated unencoded it was a path-traversal primitive: express decodes
+  // %2F into a literal '/', so an id of `..%2F..%2Fsettings` walked out of
+  // /messages/ and reached other Gmail API paths with the caller's own OAuth
+  // token attached. encodeURIComponent keeps the id a single path segment.
   const res = await providerRequest(userId, 'google', {
     method: 'GET',
-    url: `${GMAIL_BASE}/messages/${id}`,
+    url: `${GMAIL_BASE}/messages/${encodeURIComponent(id)}`,
     params: { format: 'full' },
   });
   if (res.status < 200 || res.status >= 300) {

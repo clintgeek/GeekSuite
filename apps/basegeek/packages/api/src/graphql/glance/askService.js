@@ -505,8 +505,34 @@ export async function answerFrom(query, context, { glanceToday, results } = {}) 
 
 // ── Capture drafting ────────────────────────────────────────────────────────
 
-/** Today, as the model needs to see it: the date and the weekday name. */
-export function serverToday(now = new Date()) {
+/**
+ * Today, as the model needs to see it: the date and the weekday name.
+ *
+ * `clientToday` is the caller's own calendar day (`YYYY-MM-DD`), and it wins
+ * when supplied. Without it this falls back to the server's clock, which is
+ * UTC in every container (no image installs tzdata — BURN_REVIEW #13). That
+ * fallback is wrong for five hours a day west of UTC: the prompt says "Today
+ * is <iso> (<weekday>)" and carries the rule "if they name today's weekday
+ * they mean next week's", so at 19:30 Central on a Friday the server called it
+ * Saturday and "remind me tomorrow" drafted Sunday. `glanceDraft` had no date
+ * argument at all, so unlike the fitnessgeek case the client could not correct
+ * it; now it can.
+ *
+ * @param {string} [clientToday] calendar day from the client, `YYYY-MM-DD`
+ * @param {Date}   [now] injectable clock for the fallback (tests)
+ */
+export function serverToday(clientToday = null, now = new Date()) {
+  if (typeof clientToday === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(clientToday.trim())) {
+    const [y, m, d] = clientToday.trim().split('-').map(Number);
+    // Noon UTC, so the weekday can never slip a day off a midnight boundary.
+    const at = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+    if (!Number.isNaN(at.getTime())) {
+      return {
+        iso: clientToday.trim(),
+        weekday: at.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' }),
+      };
+    }
+  }
   return {
     iso: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`,
     weekday: now.toLocaleDateString('en-US', { weekday: 'long' }),
@@ -632,17 +658,19 @@ function degradedDraft(kind, provider = null, model = null) {
  * the person presses Enter to run the mutation they would have run anyway.
  * Always resolves: `degraded: true` means "carry on as if AI were off".
  */
-export async function draftFrom(input, kind, context) {
+export async function draftFrom(input, kind, context, { today: clientToday = null } = {}) {
   const text = String(input ?? '').trim();
   const wanted = String(kind ?? '').trim().toLowerCase();
 
   if (!DRAFT_KINDS.has(wanted)) {
+    // The ternary that used to sit here was dead — this branch is only
+    // reached when `wanted` is NOT a known kind, so it always chose 'task'.
     logger.warn({ kind }, 'glanceDraft: unknown kind; degrading');
-    return degradedDraft(DRAFT_KINDS.has(wanted) ? wanted : 'task');
+    return degradedDraft('task');
   }
   if (!text) return degradedDraft(wanted);
 
-  const today = serverToday();
+  const today = serverToday(clientToday);
   const isTask = wanted === 'task';
 
   try {
@@ -681,6 +709,7 @@ export async function draftFrom(input, kind, context) {
 
 export default {
   planQuery,
+  serverToday,
   answerFrom,
   draftFrom,
   degradedIntent,

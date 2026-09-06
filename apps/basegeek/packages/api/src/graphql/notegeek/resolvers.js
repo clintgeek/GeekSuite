@@ -22,6 +22,8 @@ const validateCreateFolder = validateInput(createFolderArgsSchema);
 const validateUpdateFolder = validateInput(updateFolderArgsSchema);
 const validateDeleteFolder = validateInput(deleteFolderArgsSchema);
 
+/** How many search hits one `searchNotes` call may return. */
+const SEARCH_RESULT_LIMIT = 100;
 export const resolvers = {
   Query: {
     notes: async (_, { tag, prefix, type, limit, sort }, context) => {
@@ -32,11 +34,18 @@ export const resolvers = {
 
       const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-      if (tag) {
-        filter.tags = { $in: [tag] };
-      }
-      if (prefix) {
-        filter.tags = { $regex: `^${ escapeRegex(prefix) }` };
+      // `tag` and `prefix` are separate arguments and a client may send both.
+      // Two plain assignments meant the second silently REPLACED the first, so
+      // `notes(tag: "flock", prefix: "chores/")` quietly dropped the tag half
+      // and returned the wrong list. Both narrow now, which is what a caller
+      // asking for both means.
+      const tagConds = [];
+      if (tag) tagConds.push({ $in: [tag] });
+      if (prefix) tagConds.push({ $regex: `^${ escapeRegex(prefix) }` });
+      if (tagConds.length === 1) {
+        filter.tags = tagConds[0];
+      } else if (tagConds.length > 1) {
+        filter.$and = tagConds.map((cond) => ({ tags: cond }));
       }
       if (type) {
         filter.type = type;
@@ -86,10 +95,17 @@ export const resolvers = {
       if (!userId) throw new Error('Unauthorized');
       if (!q || q.trim().length === 0) throw new Error('Search query cannot be empty');
 
+      // Bounded. This had no limit at all while projecting every matching
+      // row's full `content` — a field whose ceiling is 5 000 000 characters
+      // for the mindmap/handwritten snapshot types — in order to build a
+      // 200-character snippet it then discards for exactly those types. The
+      // cap is on results rather than on the projection because an
+      // aggregation-expression projection alongside `$meta: 'textScore'`
+      // needs a server version this deployment does not assert.
       const notes = await Note.find(
         { userId, $text: { $search: q.trim() } },
         { score: { $meta: 'textScore' }, title: 1, type: 1, tags: 1, isLocked: 1, isEncrypted: 1, createdAt: 1, updatedAt: 1, content: 1 }
-      ).sort({ score: { $meta: 'textScore' } }).lean();
+      ).sort({ score: { $meta: 'textScore' } }).limit(SEARCH_RESULT_LIMIT).lean();
 
       return notes.map(note => {
         let snippet = '';

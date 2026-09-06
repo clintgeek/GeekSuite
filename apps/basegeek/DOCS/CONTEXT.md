@@ -295,6 +295,83 @@ by, so the control ends up nameless however visible its label looks. Every new
 
 ---
 
+## Going-over 2026-09-05 — `packages/ui` (the admin console)
+
+A read of the whole console — every page, component, hook, the api/apollo
+clients and the routing. vitest 94 → 103, lint unchanged at 7 warnings, build
+clean, harness 26 scenes 0/0/0 with `--enforce-a11y`.
+
+### Fixed
+
+- **`safeRedirect` had two open-redirect escapes.** The relative-path branch was
+  a literal `startsWith('/') && !startsWith('//')`, and a browser does not read
+  a URL that literally. A backslash is a slash in every special scheme, so
+  `/\evil.example.com` parses as `//evil.example.com`; and ASCII tab/LF/CR are
+  *deleted* from a URL wherever they appear, so `/%09/evil.example.com` decodes
+  to `/<TAB>/evil.example.com` and collapses to the same thing. Both passed the
+  old check, and both left the origin on the one path in this app that follows a
+  `?redirect=` from an untrusted link — LoginPage and RegisterPage. The check now
+  normalizes (strip tab/LF/CR, backslash → slash) before deciding, and the
+  absolute branch parses the normalized value too, which also closes
+  `https://clintgeek.com<TAB>@evil.example.com`. The value handed back is still
+  the original; the browser applies the same normalization anyway.
+  `utils/safeRedirect.js`, `__tests__/utils/safeRedirect.test.js` (12 → 19).
+- **Deleting a user had no confirmation.** The trash icon on `UserGeekPage`
+  called `DELETE /users/:id` straight from its `onClick`. That is the most
+  destructive action in this console — it removes a suite user's `userGeek`
+  record across every app, with no undo on the server — and it was the *only*
+  destructive action without a dialog, while resetting AI stats, restoring
+  defaults and revoking an API key all sit behind a `ConsoleDialog`. It now
+  goes through the same dialog, naming the user and saying it cannot be undone.
+  `pages/UserGeekPage.jsx`, `__tests__/pages/UserGeekPage.test.jsx` (7 → 10).
+- **The Account card's Locale row was always blank** — it read
+  `prefsForm.locale`, and `locale` lives on the *profile*, not on preferences,
+  so `prefsForm` never has one. Found and left by the test pass that landed
+  earlier the same day ("one known quirk the tests caught rather than fixed");
+  fixed here. The Theme row on the same card now reads `themeValue` — the mode
+  actually in effect — rather than the un-hydrated `prefsForm.theme`.
+  `pages/AccountPage.jsx`, `__tests__/pages/AccountPage.test.jsx` (12 → 14).
+
+### Checked and clean
+
+- **API keys are never re-displayed.** The plaintext exists only in
+  `createAPIKey`'s response, is held in `newKeyPlaintext` for exactly one
+  dialog, and is cleared by `keys/mintedDismissed`. `KeyTable` shows
+  `keyPrefix…` and copies the prefix, never a key. `NewKeyDialog` says so on the
+  page. Revoke is confirmed (`revokingKey` → dialog), reports its failure as a
+  toast and leaves the dialog open, and `keys/revokeClose` resets the spinner —
+  no stuck-disabled button on either path.
+- **Every other admin action's confirm.** Reset stats, reset config and restore
+  defaults each go through `confirm/set` and a dialog; routing deletes and app
+  config edits go through `AppConfigDialog`/`ConfirmDialogs`. There is no undo
+  anywhere in this console — the confirmations are the undo, which is why the
+  `UserGeekPage` gap above mattered.
+- **The health proxy fallback.** `BaseGeekHome` seeds `apps` from the hardcoded
+  `fallbackApps` list, keeps it when `/apps` fails, and marks every app offline
+  on a `/health/app/<name>` failure rather than dropping the tile. Both are
+  covered by `BaseGeekHome.test.jsx`.
+- `api.js`'s CSRF interceptor reads the cookie fresh per request and skips safe
+  methods; `AuthContext`'s cross-tab logout ignores its own broadcast and closes
+  the channel on unmount; `RequireAdmin` is chrome over a server gate and says so.
+
+### Left in place, with reasons
+
+- **`pages/Databases.jsx` is an orphan (Q11).** No route in `App.jsx`, no
+  import anywhere in `src/` — the mobile harness reports `/databases route not
+  present` on every run. Its Mongo browser is a real feature that `DataGeekPage`
+  does not duplicate, so whether it is dead code or an unrouted feature is
+  Chef's call, not a reviewer's. **Reported only.**
+- **`AuthContext`'s provider `value` is rebuilt on every render**, so every
+  consumer re-renders on any auth state change. There are five consumers and
+  the state changes about twice per session; memoizing it is a change with no
+  observable payoff, so it stays.
+- **`saveProfile` posts `{...identityForm, ...profileForm}`** — username and
+  email go to `updateProfile` along with the profile fields. Whether that is the
+  intended contract is a question about `@geeksuite/user` and basegeek's own
+  `/api/users/profile`, both outside this package.
+
+---
+
 ## Tests (added 2026-09-05)
 
 The admin console (`apps/basegeek/packages/ui`) had no test suite before this
@@ -342,3 +419,283 @@ a product fix.
 
 Verify: `npx vitest run` green, `pnpm build && pnpm lint` clean (7 pre-existing
 warnings, none new), `node tools/syntax-check.mjs` from the repo root.
+
+---
+
+## Going-over 2026-09-05 — `packages/api` (the gateway and aiGeek)
+
+A senior read of the whole of `apps/basegeek/packages/api` — every route,
+resolver, service, model, script and test — against the classes
+`DOCS/BURN_REVIEW.md` names. Nothing in this section duplicates a BURN_REVIEW
+finding; where one is referenced it is because this pass extends it into a
+place it had not reached.
+
+Suite: **53 → 60 files, 1250 → 1338 tests, green before and after**. The seven
+new files are `src/__tests__/goingOver{Gateway,AiGeek,Auth,Infra,Outbound,
+FitnessGlance,Misc}.test.js`. This package has no `build` or `lint` script; the
+verifications are the suite, `node tools/syntax-check.mjs` from the repo root
+(839 files, clean) and a real `new ApolloServer({typeDefs, resolvers}).start()`
+on the boot path.
+
+### Fixed — the process can die
+
+- **The aiGeek connection had no `error` listener** (Q44, `config/database.js`).
+  A mongoose `Connection` is an EventEmitter, and an `error` event with no
+  listener is *thrown* by Node — so any post-boot aiGeek fault (auth failure,
+  socket reset, replica-set election) took the whole API down with an uncaught
+  exception. `models/user.js` and `graphql/shared/appConnections.js` both
+  already carried the two handlers; this connection was the odd one out.
+- **`GET /api/health/infra` could be used to restart the API** (`server.js`).
+  It is public and unauthenticated, and it built a node-redis client with no
+  `.on('error')` — same mechanism as above, reachable by anyone, any time Redis
+  was down. Its Mongo and Redis clients also skipped `close()`/`quit()`
+  whenever the probe itself threw, leaking a pool per failing call. Both now
+  close in a `finally`, with the rejection swallowed.
+- **`GET /api/redis/status` and `/api/postgres/status`** had the same missing
+  listener and, worse, `await client.quit()` / `await client.end()` sitting
+  *inside* the catch — a rejecting close escaped as an unhandled rejection and
+  the request got no response at all. Admin-gated, so the blast radius was
+  smaller; the mechanism was identical.
+- **The 500 handler threw inside itself** (`server.js`). It called
+  `req.log.error(...)`, but `req.log` is attached by pino-http, which is
+  mounted *after* `csrfGuard`, `csrfTokenGuard` and `cors()` — and `cors()`
+  rejects a disallowed Origin with `callback(new Error(...))`. Falls back to
+  the module logger now, so every error is logged once, from one place.
+
+### Fixed — correctness a user would hit
+
+- **`recordHatchEvent` could never succeed.** `HatchEvent.pairingId` was
+  `required: true`; the mutation has never accepted a pairingId, in typeDefs or
+  validation, and the Add dialog has no pairing selector. Every create failed
+  the required-path validator. The field is now optional (eggs set from a mixed
+  flock have no pairing to name) and the mutation takes an **optional**
+  `pairingId`, ownership-checked when present, in the shape `createMeatRun`
+  already uses. flockgeek's own REST copy still says `required: true` —
+  reported for that tree.
+- **`POST /api/ai/conversation/message` non-streaming always 500'd.** Its
+  `usage` block read two `const`s declared inside the *streaming* branch. Every
+  non-streaming call made the provider call, saved the assistant turn, then
+  threw a `ReferenceError` — billed, conversation mutated, answer discarded.
+- **Reordering a day with a recurring task lost the whole order.** The rendered
+  day contains `virtual_<masterId>_<epochMs>` ids and the drag handlers post the
+  list verbatim; `TaskOrder.orderedTaskIds` is `[ObjectId]`, and one bad element
+  fails the *whole* array cast. `saveDailyOrder` drops the virtual ids — the
+  read side could never match them anyway.
+- **Regex metacharacters broke three search boxes and were a ReDoS in all
+  three.** bookgeek's `books(q:/author:)`, fitnessgeek's `fitnessFoods(search:)`
+  and basegeek's `/api/notes?prefix=` all handed raw client text to a regex.
+  `Dune (Deluxe`, `C++`, `Oreo (` and `50%+` threw out of mongod and rendered an
+  error page; `(a+)+$` pinned a CPU per document. All escaped now (bookgeek's is
+  also length-bounded); notegeek's gateway resolver had been doing it correctly
+  all along and is the model.
+- **`GET /api/notes/tags` was unreachable** — declared below `GET /:id`, so
+  express matched the `:id` route first and answered 404 "Note not found".
+- **`notes(tag:, prefix:)` silently dropped the `tag` half** — two plain
+  assignments to `filter.tags`, the second overwriting the first.
+- **A username with a capital letter could not log in.** `email` is declared
+  `lowercase: true` so its stored form is the lowered one; `username` is only
+  *trimmed*, and login searched `{username: identifier.toLowerCase()}` for it.
+  An exact-case clause was added alongside; a non-string identifier is now a 401
+  rather than a 500 out of `.toLowerCase()`.
+- **The AI-insight window lost its oldest day, every time.**
+  `buildUserContext` ran from `subDays(new Date(), n)` to `new Date()` — both
+  carrying a time of day — against `log_date`, `Weight.log_date` and
+  `BloodPressure.log_date`, all stored at UTC midnight. So
+  `fitnessInsightsMorningBrief`, prompted *"based on yesterday's data"* with
+  `daysBack: 1`, never matched yesterday's `00:00Z` row and at 07:00 handed the
+  coach an empty day. Whole UTC days now, inclusive at both ends. (The
+  server-clock half of this is BURN_REVIEW #14 and stays open.)
+- **`fitnessInsightsDailySummary` ignored the date it was asked about** —
+  `targetDate` reached the prompt string but never the context builder, so
+  scrolling back to Tuesday returned the last day's food captioned as Tuesday's.
+- **`aiUsage` could only ever return zeros** —
+  `getProviderUsageSummary(provider, userId)` was passed the literal `'session'`
+  in the userId slot. Same class Q45 fixed on the REST sibling.
+- **A `conversationId` was globally unique.** The schema declared field-level
+  `unique: true` *and* a compound `{conversationId, userId}` unique; the
+  stricter one won, so a caller-chosen id that is not globally unique ("main", a
+  per-app constant) worked for the first user and E11000'd for everyone after —
+  even though `findOrCreate`'s `findOne` is correctly scoped by userId.
+- **`priority: "cost"` did not order by cost.** Two bugs, both in
+  `AIGEEK_USAGE.md` now: unpriced models sorted first (string concatenation and
+  a `NaN` comparator), and the Groq/Together price rows were per-1K figures in a
+  per-1M table. See that document; `analyze-cost` numbers for those two
+  providers are 1000× larger than they were, which is the correction.
+- **The model catalog re-fetched from every vendor on every director call.**
+  The 24h guard measured the oldest row's `createdAt`, which `refreshModels`
+  never writes (it upserts `lastChecked`) — so two days after seeding it was
+  permanently true and every `/director/*` call fanned out a live vendor
+  `models` request per enabled provider, spending quota on a read.
+- **A disabled provider was still advertised.** `GET /api/ai/providers` filtered
+  on key length alone while `/api/ai/capabilities` filtered the same map on
+  `.enabled`.
+- **An Anthropic response whose first block is not text threw.** Two of the
+  three branches used `.find(b => b.type === 'text')`; the third indexed
+  `content[0].text` blind, so a `max_tokens`-truncated turn was a `TypeError`
+  rethrown raw — the rotation recorded Anthropic as failed and answered from
+  another provider for a response that had already arrived.
+- **The free-tier usage row raced itself.** `findOne` → `new AIUsage(...)` →
+  `save()` against a unique index: the first two concurrent calls of a day both
+  built a row and the loser got E11000, swallowed into a `{success:false}`
+  nothing inspected. Get-or-create is an upsert now, and `aiService` logs a
+  warning when the write does fail. *(The read-modify-write undercount under
+  concurrency is separate and still open — see "Left in place".)*
+
+### Fixed — security
+
+- **A credentialed connection string sat in a git-tracked, published file.**
+  `routes/mongo.js`'s fallback `MONGODB_URI` embedded a real-looking datageek
+  username and password. Replaced with the credential-free localhost default
+  `server.js` already uses. `apps/basegeek/mongodb-init.js` carries the same
+  pair and is outside this tree — **reported, and the credential should be
+  treated as disclosed and rotated regardless of what happens to that file.**
+- **A Gmail message id was a path, not a segment.** `routes/ambient.js` mounts
+  `GET /gmail/messages/:id` and the service interpolated the raw param into the
+  URL; express decodes `%2F` to a literal `/`, so `..%2F..%2F..%2Fsettings` walked
+  out of `/messages/` and reached other Gmail API paths with the caller's own
+  OAuth token attached. `encodeURIComponent` on both call sites.
+- **`calendarEvents` fetched any URL a caller named.** No scheme check, no host
+  check, no cap on how many — an authenticated user could make basegeek GET
+  `http://169.254.169.254/…` or two hundred slow hosts back to back, 15s each,
+  sequentially. Loopback, link-local, the unspecified address and every
+  non-http(s) scheme are refused; the source list is capped at 20. **RFC1918 is
+  still allowed on purpose** — a self-hosted ICS feed on the LAN is a real
+  calendar. That is a deliberate line, not an oversight.
+- **The OAuth token endpoints had no timeout.** `disconnect()`'s revoke call had
+  a 5s cap; the token exchange and the refresh had none, so a hung
+  Google/Spotify endpoint held an `/api/connections` request open forever — and
+  wedged `oauthRefreshJobService`, which awaits these serially for every
+  connection due for refresh.
+- **50 MB bodies were parsed before any credential check.** `express.json({limit:
+  '50mb'})` was app-wide and both AI routers gate *inside* the router, so an
+  unauthenticated POST to `/openai/v1/chat/completions` was fully buffered and
+  parsed into heap, then run through tiktoken and an md5 of the whole
+  conversation. `/openai/v1` and `/api/ai` get an 8 MB parser mounted in front
+  (`AI_BODY_LIMIT` overrides); `/graphql` keeps 50 MB, which is what notegeek's
+  5 000 000-character mindmap snapshots actually need.
+- **Provider errors leaked the provider's words on two more routes.**
+  `/call-smart` relayed them at HTTP **200**, and `/conversation/message` in its
+  500 body and its SSE error frame. Both go through
+  `services/aiFailureEnvelope.js` now — the status changes are documented in
+  `AIGEEK_USAGE.md`.
+- **The Gemini API key was in the URL query string.** `@geeksuite/logger`'s
+  `err` serializer drops `err.config.headers` and `err.request` but deliberately
+  keeps `err.config.url`, so Gemini was the one provider credential still
+  reaching the logs in the clear on any failure. It travels as `x-goog-api-key`
+  now. (The wider claim that Bearer tokens leak is **false** — that serializer
+  already handles them; only the URL was exposed.)
+- **Boot logged 20 characters of every provider key**, and `POST /api/ai/test`
+  logged 12. `config/aiProviders.js`'s `keyHintFor` already defines the only
+  fragment of a credential that may leave the process; both sites use it.
+- **`POST /api/auth/register` was public and unrate-limited** while `/login` has
+  been capped since it shipped, and it did not validate `app` — so registering
+  with a typo'd app returned 201 and a session `authenticateToken` then refused
+  on every route (403 "Invalid app token"). 10/hour, and an app that is present
+  but not ours is a 400. An **absent** app is still fine: several consumer
+  proxies and notegeek's frontend omit it.
+- **Changing a password did not end any other session.** Refresh tokens live 30
+  days and were only ever revoked by family (logout, reuse detection); nothing
+  tied one to the credential it was minted against. `User.passwordChangedAt` is
+  stamped by the hashing hook, and `rotateRefreshToken` refuses any token whose
+  `iat` predates it — truncated to whole seconds, which is a JWT `iat`'s
+  resolution, so the session that made the change is not caught by its own
+  stamp. `/auth/reset-password` also re-issues the calling session, so the
+  person who changed their own password is not logged out by their own action.
+  The 1h access token still runs out its clock; that is inherent to a stateless
+  JWT and is the bound on the window.
+- **`null` could be written into four GraphQL non-null fields.** BURN_REVIEW #7
+  fixed this class in bookgeek and did not sweep it into flockgeek
+  (`FlockGroup.startDate`, `EggProduction.date`/`.eggsCount`,
+  `HatchEvent.setDate`) or notegeek (`Note.content`, `Note.tags`). The update
+  resolvers `$set` without `runValidators`, so an accepted null lands in the
+  document and every later query on that collection fails the non-null check for
+  the whole list. `calendarDateField`/`instantField` grew a `nullable` option —
+  defaulting to `!required`, i.e. today's behaviour — passed explicitly as
+  `false` for any field whose GraphQL type ends in `!`. **`createNote`'s `tags`
+  argument IS nullable by declaration and stays so**; a test pins that, because
+  over-correcting there would be a new 400.
+- **`/openai/v1`'s `user` field re-admitted an over-long id.**
+  `const userId = caller.userId ?? bodyUserId` fell back to the raw body value in
+  exactly the case `normalizeUserId`'s 64-character cap had just rejected it —
+  and that value lands in `AIUsage.userId`, which the quota groups on.
+
+### Fixed — hygiene that changes behaviour
+
+- `glanceDraft` takes an optional `today: String`. It told the model what day it
+  was from the server clock, which is UTC in every container (no image installs
+  tzdata — BURN_REVIEW #13), alongside the prompt rule *"if they name today's
+  weekday they mean next week's"* — so from 19:00 Central it drafted against
+  tomorrow, and the mutation had no argument with which to correct it. **Additive
+  and optional**: a client that omits it gets exactly the previous behaviour.
+  StartGeek already sends a local `date` to `glanceToday` and should send this
+  too — reported for that tree.
+- `garminActivities` inside `glanceToday`'s `Promise.all` has a 2s cap. It logs
+  in and fetches with no timeout anywhere, `.catch()` covers a rejection but not
+  a hang, and that `Promise.all` is what StartGeek's whole front page waits on.
+- `searchNotes` is capped at 100 hits. It had no limit at all while projecting
+  every matching row's full `content` — 5 000 000 characters for the snapshot
+  types — to build a 200-character snippet it then discards for exactly those
+  types.
+- A duplicate username or email on `PATCH`/`PUT /api/users/profile` is a **409**
+  naming the field, not a 500 carrying the raw driver message (index name and
+  colliding value included).
+- `useNewUrlParser` / `useUnifiedTopology` removed from all five connection
+  sites. No-ops since driver v4, removed in the next major, and a deprecation
+  warning on every boot and every test run.
+- The dead ternary in `draftFrom`'s unknown-kind branch (it could only ever
+  choose `'task'`).
+
+### Left in place, with reasons
+
+- **Ownership of a conversation still comes from the body for an API-key
+  caller.** `aiRoutes.js:232` reads `caller.userId || req.user.id` and uses it as
+  the lookup key for `getConversation`/`getMessagesForAPI`, so a backend key
+  naming a victim's id plus a guessed `conversationId` loads that history into
+  the prompt. The delete/archive siblings correctly use `req.user.id`. **Not
+  fixed**: for a key-authenticated backend `req.user.id` is `apikey_<keyId>`, so
+  switching the lookup key would orphan every conversation storygeek and geekPR
+  have already stored. It needs a migration decision, which is Chef's.
+- **Any authenticated user can mint an API key for any app.**
+  `POST /api/api-keys` takes `appName` as a free string (`/^[a-zA-Z0-9_-]+$/`
+  only), and `callerIdentity` treats a key's `appName` as the credential's
+  answer to "which app is calling". Combined with the deliberate trust that lets
+  a key name a user, a non-admin can mint a `storygeek` key and spend another
+  user's quota. **Not fixed**: `API_KEYS.md` documents the free-form app name,
+  and live keys exist for `codegeek`/`geekpr`, which are not in `VALID_APPS` —
+  restricting it is a policy call, not a bug fix.
+- **`AIUsage`'s counter update is still a read-modify-write**, so concurrent
+  calls can undercount even though the row can no longer fail to exist. A
+  correct fix is a single `findOneAndUpdate` with `$inc` plus a pipeline update
+  for the minute/hour/day rollovers — a real rewrite of a path with tests, and
+  disproportionate to this pass on a single-operator suite.
+- **`routes/noteGeek.js` (`/api/notes`) and `models/Database.js` are dead.** The
+  first declares its own `Note` model on the **default** connection, so it writes
+  into `datageek.notes` where nothing reads them; notegeek's own notes moved to
+  the gateway. The second has zero importers anywhere in the repo and declares a
+  plaintext `password` field. `src/wasm-backend-init.js` is dead too (its only
+  import is commented out). Deleting a feature is a Q22/Q38-class decision —
+  **reported**. Its live bugs were fixed in the meantime rather than left armed.
+- **`graphql/notegeek/models/Folder.js`** is the only gateway model on the
+  default connection, so folders land in `datageek` rather than `noteGeek`.
+  Nothing reads it. Same call as above.
+- **BURN_REVIEW #14** (the gateway guessing "today" from the server clock) and
+  **#13** (`TZ` inert without tzdata) are the root of the remaining date
+  softness here and are already tracked.
+- **Q49** (no route claims `ai:usage`) and **Q38** (storygeek module deletion)
+  left as instructed.
+- `lastProviderInfo` is a process-global read across an `await` in
+  `openaiProxy.js`, so two concurrent proxy calls can cross-attribute provider,
+  model, `finish_reason` and `tool_calls`. The fix is to return that info from
+  `callAI` rather than stash it on the singleton — a signature change through
+  every adapter, worth doing deliberately rather than at the end of a sweep.
+
+### Reported for other trees
+
+- `apps/flockgeek/backend/src/models/HatchEvent.js` still declares
+  `pairingId: { required: true }`. It is a *validator*, not a schema path, so it
+  cannot silently drop data — but the two writers now disagree.
+- `apps/basegeek/mongodb-init.js` carries the same datageek credential pair that
+  was just removed from `routes/mongo.js`.
+- StartGeek should pass `today` to `glanceDraft`
+  (`localDateString(new Date())`), the way it already passes `date` to
+  `glanceToday`.

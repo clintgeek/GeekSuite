@@ -165,7 +165,7 @@ export const typeDefs = gql`
     glanceToday(date: String): GlanceToday!
     glanceSearch(query: String!, limit: Int = 12): [GlanceSearchResult!]!
     glanceAsk(query: String!, limit: Int = 12): GlanceAsk!
-    glanceDraft(input: String!, kind: String!): GlanceDraft!
+    glanceDraft(input: String!, kind: String!, today: String): GlanceDraft!
     calendarEvents(sources: [CalendarSourceInput!]!, from: Date, to: Date): [CalendarEvent!]!
   }
 `;

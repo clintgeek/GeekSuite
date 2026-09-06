@@ -14,6 +14,25 @@ const router = express.Router();
 // ────────────────────────────────────────────
 // Helper: format user identity for responses
 // ────────────────────────────────────────────
+/**
+ * Turn a mongo duplicate-key error on the users collection into the 409 the
+ * caller can act on. `username` and `email` are both `unique`, so a profile
+ * PATCH that collides with another account used to surface as a 500 carrying
+ * the raw driver message (index name and the colliding value included) —
+ * wrong status, and more of the schema than a client needs.
+ * @returns {boolean} true when the error was handled and a response sent
+ */
+function handleDuplicateKey(res, err) {
+    if (err?.code !== 11000) return false;
+    const field = Object.keys(err.keyPattern || err.keyValue || {})[0] || 'field';
+    res.status(409).json({
+        message: `That ${ field } is already taken`,
+        code: 'DUPLICATE_IDENTITY',
+        field,
+    });
+    return true;
+}
+
 function formatIdentity(user) {
     return {
         id: user._id,
@@ -126,6 +145,7 @@ router.patch('/profile', authenticateToken, async (req, res) => {
             profile: user.profile,
         });
     } catch (err) {
+        if (handleDuplicateKey(res, err)) return;
         req.log.error({ err }, 'Update profile error');
         res.status(500).json({ message: err.message, code: 'UPDATE_PROFILE_ERROR' });
     }
@@ -157,6 +177,7 @@ router.put('/profile', authenticateToken, async (req, res) => {
             }
         });
     } catch (err) {
+        if (handleDuplicateKey(res, err)) return;
         res.status(500).json({ message: err.message, code: 'UPDATE_PROFILE_ERROR' });
     }
 });
@@ -318,6 +339,7 @@ router.post('/', requireAdmin, async (req, res) => {
             preferences: user.preferences,
         });
     } catch (err) {
+        if (handleDuplicateKey(res, err)) return;
         req.log.error({ err }, 'Create user error');
         res.status(500).json({ message: err.message, code: 'CREATE_USER_ERROR' });
     }

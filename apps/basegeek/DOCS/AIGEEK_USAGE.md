@@ -126,6 +126,36 @@ have code reading `error.details` off a `/parse-json` failure, or matching on
 the old `AI_CALL_ERROR` / `AI_JSON_ERROR` codes, it needs the codes above
 instead. Nothing in the suite did.
 
+**Two more routes joined the vocabulary on 2026-09-05, and both change a
+status code.** `POST /call-smart` and `POST /conversation/message` were the
+sites Q46 did not reach:
+
+- **`/call-smart` used to answer HTTP 200** on a provider failure.
+  `callAISmart` reports one as a resolved `{success: false, error}` rather
+  than a throw, and the route relayed that object verbatim — so the caller was
+  told the request had succeeded, and handed
+  `All providers in <family> family failed: <Provider> API error (429): <raw
+  vendor body>` to read. It now returns the status the table above gives, with
+  the same allowlisted words. **A client that treated 200 as success and only
+  then looked at `body.success` still works; one that never looked will now see
+  a 4xx/5xx it did not before.** A `dryRun` response is untouched.
+- **`/conversation/message` non-streaming could not succeed at all.** Its
+  `usage` block read two `const`s declared inside the *streaming* branch, so
+  every non-streaming call ran the provider call, saved the assistant turn,
+  and then threw a `ReferenceError` — billed, conversation mutated, answer
+  discarded, 500 returned. It answers 200 with a real `usage` block now. Its
+  failure path (body and SSE error frame alike) also stopped relaying the
+  provider's words.
+
+**Two other statuses moved, for the same reason.** `upstreamStatusOf` reads the
+status out of the literal prefix `API error (<status>)`, and two adapters did
+not use it: Together said `Together AI error (` and Cloudflare said
+`daily neuron limit exceeded (402)`. Every Together failure — including a bad
+model pin, which this document promises is a `404 model_not_found` — was
+classified `internal` and answered `500 internal_error`. Both adapters now use
+the shared prefix, so Together and Groq classify identically for the same
+status.
+
 ## Who is calling
 
 Two decisions turn on the answer: which `AIAppConfig` row routes the call — so,
@@ -512,6 +542,30 @@ epub pipeline reads that shape.
 best, as it always was. `score` is capability fit, and only breaks ties inside
 that ordering. It is what tells you two equally free models are not
 interchangeable.
+
+**`priority: "cost"` actually orders by cost now (2026-09-05).** Two things
+were wrong under it, and both moved numbers you may have written down:
+
+- *Unpriced models sorted first, as if free.* `collectModelInformation` sets
+  `pricing` to the **string** `'Unknown'` for any model with no `AIPricing` row
+  — most of the catalog. `('Unknown' || 0)` is `'Unknown'`, so the
+  cheapest-model reduce was concatenating (`'UnknownUnknown'`) and comparing
+  strings, and the final sort's `costA - costB` was `NaN`. The ordering was
+  arbitrary. An unpriced model now sorts **last**; `describeModel` still
+  reports its price as null, as it always did.
+- *Groq and Together were priced 1000× too cheap.* `AIPricing` is dollars per
+  **1,000,000** tokens — `TOKENS_PER_PRICE_UNIT`, and what the Anthropic and
+  Gemini rows have always held — but the Groq and Together seed rows were the
+  vendor prices divided by 1000. So `POST /api/ai/director/analyze-cost`
+  under-reported both providers by three orders of magnitude, and cost-priority
+  ranking treated them as effectively free against correctly-priced Gemini
+  models. The rows are corrected; `gemini-1.5-flash`'s input price went with
+  them (it was `0.00035` against an output of `1.05`, a 3000× ratio inside one
+  row, which is the tell). **`analyze-cost` figures for groq and together are
+  now 1000× larger than they were** — that is the correction, not a regression.
+  `meta-llama/Llama-3.3-70B-Instruct-Turbo-Free` is priced at zero, as its name
+  says. `aiPricingUnits.test.js` now asserts the seed data, not only the
+  arithmetic that consumes it.
 
 ### How a task description is read
 

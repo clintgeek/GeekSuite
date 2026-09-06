@@ -17,7 +17,10 @@ import LoginStreak from './models/LoginStreak.js';
 import DailySummary from './models/DailySummary.js';
 import WeightGoals from './models/WeightGoals.js';
 import { isValidObjectId } from './ownership.js';
-import { toUtcMidnight } from '@geeksuite/utils/dates';
+import { toUtcMidnight, utcDateString, utcDayRange } from '@geeksuite/utils/dates';
+
+/** Escape every regex metacharacter so user input can only match literally. */
+const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
  * Validate every food_item_id a client hands us before it is persisted onto a
@@ -382,12 +385,27 @@ const getBPContext = async (userId, startDate, endDate) => {
   };
 };
 
+/**
+ * Gather the AI-insight context for a window of days ending on `options.date`
+ * (a calendar day; defaults to the server's today — see BURN_REVIEW #14, which
+ * tracks the server-clock half of this).
+ *
+ * The window is built from WHOLE UTC DAYS. It used to be
+ * `new Date()` back to `subDays(new Date(), daysBack)`, which carries a time
+ * of day — and every row this reads (`log_date`, `Weight.log_date`,
+ * `BloodPressure.log_date`) is a calendar date stored at UTC midnight. So the
+ * oldest day in the window sat *below* the floor and was silently dropped:
+ * `fitnessInsightsMorningBrief` asks for `daysBack: 1` and is prompted
+ * "based on yesterday's data", but yesterday's 00:00Z rows never matched, and
+ * at 07:00 the coach was handed an empty day.
+ */
 const buildUserContext = async (userId, options = {}) => {
   const daysBack = options.daysBack || 7;
-  const endDate = new Date();
-  const startDate = subDays(endDate, daysBack);
+  const anchor = options.date ? toUtcMidnight(options.date) : toUtcMidnight(new Date());
+  const startDate = toUtcMidnight(subDays(anchor, daysBack));
+  const { end: endDate } = utcDayRange(anchor);
   const context = {
-    dateRange: { start: format(startDate, 'yyyy-MM-dd'), end: format(endDate, 'yyyy-MM-dd'), days: daysBack },
+    dateRange: { start: utcDateString(startDate), end: utcDateString(endDate), days: daysBack },
     generatedAt: new Date().toISOString()
   };
   const [nutrition, weight, bloodPressure, goals] = await Promise.allSettled([
@@ -474,7 +492,12 @@ export const resolvers = {
         $or: [{ user_id: user.id }, { user_id: null }, { user_id: { $exists: false } }],
         is_deleted: false,
       };
-      if (search) query.name = new RegExp(search, 'i');
+      // The search box's raw text reaches mongod as a regex. Unescaped, a
+      // perfectly ordinary food name broke the search — `Oreo (` threw
+      // "Unterminated group" out of the resolver, and `c++` / `50%+` / `*`
+      // the same way — and a crafted `(a+)+$` was a ReDoS evaluated per
+      // document. Escaped, the value can only ever mean itself.
+      if (search) query.name = new RegExp(escapeRegex(search), 'i');
       return FoodItem.find(query).sort({ name: 1 }).limit(100);
     },
     fitnessFood: async (_, { id }, { user }) => {
@@ -722,7 +745,10 @@ export const resolvers = {
     fitnessInsightsDailySummary: async (_, { date }, { user }) => {
       if (!user) throw new Error('Unauthorized');
       const targetDate = date || format(new Date(), 'yyyy-MM-dd');
-      const context = await buildUserContext(user.id, { daysBack: 1 });
+      // `targetDate` used to be interpolated into the prompt but never reach
+      // the context builder, so scrolling back to Tuesday returned the last
+      // day's food captioned as Tuesday's summary.
+      const context = await buildUserContext(user.id, { daysBack: 1, date: targetDate });
       const prompt = `Generate a daily health summary for ${ targetDate }:\n${ JSON.stringify(context, null, 2) }\nFormat with 2-3 key insights, under 150 words.`;
       const response = await aiService.chat(prompt);
       return { type: 'daily_summary', content: response, generatedAt: new Date(), context: { date: targetDate } };

@@ -270,6 +270,15 @@ router.post('/conversation/message', async (req, res) => {
       freeOnly: freeOnly || provider === 'free',
     };
 
+    // Declared out here, not inside the `if (stream)` block. They used to be
+    // block-scoped to the streaming branch while the NON-streaming branch below
+    // read them for its `usage` object — so every non-streaming call threw
+    // `ReferenceError: promptTokens is not defined` after the provider call had
+    // already been paid for and the assistant turn already saved, and answered
+    // 500 with the completion thrown away.
+    let promptTokens = 0;
+    let completionTokens = 0;
+
     if (stream) {
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
@@ -284,8 +293,8 @@ router.post('/conversation/message', async (req, res) => {
 
         const result = formatResponse(smartResult.content);
 
-        const promptTokens = countMessageTokens(allMessages);
-        const completionTokens = countTextTokens(result);
+        promptTokens = countMessageTokens(allMessages);
+        completionTokens = countTextTokens(result);
         
         // Save assistant response to conversation (save the formatted version)
         await conversationService.addMessages(
@@ -343,8 +352,20 @@ router.post('/conversation/message', async (req, res) => {
         res.write('data: [DONE]\n\n');
         res.end();
       } catch (streamError) {
-        req.log.error({ err: streamError }, '[Phase3] Streaming error');
-        res.write(`data: ${JSON.stringify({ error: { message: streamError.message }})}\n\n`);
+        // Q46's allowlist, extended to this route: `streamError.message` is
+        // built in aiService as `<Provider> API error (<status>): <raw body>`
+        // (or `All providers in <family> family failed: <same>`), so writing it
+        // into the frame handed the caller the vendor's name, org/project ids
+        // and quota detail. The provider's words go to the redacting logger;
+        // the caller gets the same allowlisted envelope /call streams.
+        const failure = resolveFailure(
+          req, res, streamError,
+          { stage: 'conversation_stream', conversationId },
+          '[Phase3] streaming upstream failure'
+        );
+        res.write(`data: ${JSON.stringify({
+          error: { message: failure.message, type: failure.type, code: failure.code }
+        })}\n\n`);
         res.end();
       }
     } else {
@@ -356,6 +377,9 @@ router.post('/conversation/message', async (req, res) => {
       }
 
       const result = formatResponse(smartResult.content);
+
+      promptTokens = countMessageTokens(allMessages);
+      completionTokens = countTextTokens(result);
       
       // Save assistant response (save the formatted version)
       await conversationService.addMessages(
@@ -387,12 +411,13 @@ router.post('/conversation/message', async (req, res) => {
       });
     }
   } catch (error) {
-    req.log.error({ err: error }, '[Phase3] Error');
+    // Same envelope as /call and /parse-json. This catch used to answer with a
+    // bare `error.message`, which on the provider-failure path is the raw
+    // upstream body Q46 removed from the other three routes.
     if (!res.headersSent) {
-      res.status(500).json({
-        success: false,
-        error: { message: error.message, code: 'CONVERSATION_ERROR' }
-      });
+      failUpstream(req, res, error, { stage: 'conversation_message', conversationId: req.body?.conversationId ?? null });
+    } else {
+      req.log.error({ err: error }, '[Phase3] Error after headers sent');
     }
   }
 });
@@ -1514,8 +1539,10 @@ router.post('/test', requireAdminUser, async (req, res) => {
       });
     }
 
-    const maskedKey = providerConfig.apiKey.substring(0, 8) + '...' + providerConfig.apiKey.substring(providerConfig.apiKey.length - 4);
-    req.log.info({ provider, maskedKey }, '[AI Test] API key found, making test call');
+    // config/aiProviders.js's keyHintFor is the one definition of how much of
+    // a provider credential may leave this process. A leading 8 characters is
+    // the provider prefix plus real key material.
+    req.log.info({ provider, keyHint: keyHintFor(providerConfig.apiKey) }, '[AI Test] API key found, making test call');
 
     // Test the provider with a simple prompt
     const testPrompt = 'Hello, this is a test message. Please respond with "OK" if you receive this.';
@@ -1605,17 +1632,24 @@ router.post('/call-smart', async (req, res) => {
       feature: caller.feature
     });
 
+    // `callAISmart` reports a provider failure as a RESOLVED
+    // `{success:false, error}` rather than a throw, and that string is
+    // `All providers in <family> family failed: <Provider> API error (429):
+    // <raw vendor body>`. Relaying it verbatim — at HTTP 200 — handed any
+    // `ai:call` key holder exactly what Q46 removed from /call, /parse-json
+    // and the proxy, and told them the request had succeeded. Same envelope,
+    // same allowlist, an honest status.
+    if (!result?.success && !dryRun) {
+      return failUpstream(req, res, new Error(result?.error || 'Smart routing failed'), {
+        stage: 'call_smart',
+        conversationId: conversationId ?? null
+      });
+    }
+
     res.json(result);
 
   } catch (error) {
-    req.log.error({ err: error }, '[API] Smart routing error');
-    res.status(500).json({
-      success: false,
-      error: {
-        message: error.message || 'Smart routing failed',
-        code: 'SMART_ROUTING_ERROR'
-      }
-    });
+    failUpstream(req, res, error, { stage: 'call_smart', conversationId: req.body?.conversationId ?? null });
   }
 });
 

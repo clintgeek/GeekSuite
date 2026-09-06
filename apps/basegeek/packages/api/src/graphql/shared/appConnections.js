@@ -28,10 +28,7 @@ export function getAppConnection(appName) {
   const actualDbName = dbMap[appName] || appName;
 
   const uri = `${ MONGO_BASE }/${ actualDbName }?${ AUTH_SOURCE }`;
-  const conn = mongoose.createConnection(uri, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  });
+  const conn = mongoose.createConnection(uri);
 
   conn.on('error', (err) => logger.error({ err }, `[${ actualDbName }] MongoDB connection error`));
   conn.on('connected', () => logger.info(`[${ actualDbName }] MongoDB connected`));

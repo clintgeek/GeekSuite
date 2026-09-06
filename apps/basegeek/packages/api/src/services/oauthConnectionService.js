@@ -80,6 +80,13 @@ const PROVIDERS = {
   },
 };
 
+// Hard cap on the two outbound calls to a provider's token endpoint. Without
+// it a hung Google/Spotify endpoint held an /api/connections request open
+// indefinitely, and — worse — wedged the oauthRefreshJobService tick, which
+// awaits these serially for every connection due for refresh. `disconnect()`'s
+// revoke call already had a 5s cap; these two did not.
+const TOKEN_ENDPOINT_TIMEOUT_MS = 10_000;
+
 export function getProviderConfig(provider) {
   const cfg = PROVIDERS[provider];
   if (!cfg) {
@@ -215,6 +222,7 @@ async function exchangeCodeForTokens(provider, code) {
       'Content-Type': 'application/x-www-form-urlencoded',
       Accept: 'application/json',
     },
+    timeout: TOKEN_ENDPOINT_TIMEOUT_MS,
     validateStatus: () => true,
   });
 
@@ -244,6 +252,7 @@ async function refreshTokens(provider, refreshToken) {
       'Content-Type': 'application/x-www-form-urlencoded',
       Accept: 'application/json',
     },
+    timeout: TOKEN_ENDPOINT_TIMEOUT_MS,
     validateStatus: () => true,
   });
 
@@ -493,4 +502,5 @@ export async function disconnect(userId, provider) {
 export const __test__ = {
   PROVIDERS,
   EXPIRY_BUFFER_MS,
+  TOKEN_ENDPOINT_TIMEOUT_MS,
 };

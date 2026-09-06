@@ -75,10 +75,15 @@ const summarySchema = new mongoose.Schema({
 
 const conversationSchema = new mongoose.Schema({
   // Unique conversation ID (generated client-side or server-side)
+  // NOT globally unique. The compound `{conversationId, userId}` index below
+  // is the real constraint, and this field-level `unique: true` was the
+  // stricter of the two — so a caller-chosen id that is not globally unique
+  // ("main", a per-app constant) worked for the first user and then E11000'd
+  // on `conversationId_1` for everyone else, even though `findOrCreate`'s
+  // `findOne` is correctly scoped by userId and found nothing to reuse.
   conversationId: {
     type: String,
     required: true,
-    unique: true,
     index: true
   },
   // User who owns this conversation

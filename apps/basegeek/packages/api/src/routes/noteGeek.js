@@ -23,6 +23,11 @@ const noteSchema = new mongoose.Schema({
 
 const Note = mongoose.model('Note', noteSchema);
 
+/** Escape every regex metacharacter so user input can only match literally. */
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 // Get all notes for a user
 router.get('/', async (req, res) => {
   try {
@@ -34,11 +39,49 @@ router.get('/', async (req, res) => {
     }
 
     if (prefix) {
-      filter.tags = { $regex: `^${prefix}` };
+      // The prefix is raw query input. Interpolated into a regex unescaped it
+      // was both a filter bypass (`.*` matches every tag) and a ReDoS on an
+      // authenticated endpoint (`(a+)+$` pins a CPU). Escape every regex
+      // metacharacter so the value can only ever mean itself.
+      filter.tags = { $regex: `^${escapeRegex(prefix)}` };
     }
 
     const notes = await Note.find(filter).sort({ updatedAt: -1 });
     res.json(notes);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Get tag hierarchy
+//
+// MUST stay above `GET /:id`: express matches in declaration order, so while
+// this sat at the bottom of the file `/api/notes/tags` was swallowed by the
+// `:id` route and answered 404 "Note not found" (or 500 on the CastError).
+router.get('/tags', async (req, res) => {
+  try {
+    const notes = await Note.find({ userId: req.user.id }, 'tags');
+    const hierarchy = {};
+
+    // Build tag hierarchy from all notes
+    notes.forEach(note => {
+      note.tags.forEach(tag => {
+        const parts = tag.split('/');
+        let current = hierarchy;
+
+        parts.forEach((part, index) => {
+          if (!current[part]) {
+            current[part] = index === parts.length - 1 ? { count: 0 } : {};
+          }
+          if (index === parts.length - 1) {
+            current[part].count = (current[part].count || 0) + 1;
+          }
+          current = current[part];
+        });
+      });
+    });
+
+    res.json(hierarchy);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -173,36 +216,6 @@ router.delete('/:id', async (req, res) => {
 
     await Note.deleteOne({ _id: req.params.id, userId: req.user.id });
     res.json({ message: 'Note deleted successfully' });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Get tag hierarchy
-router.get('/tags', async (req, res) => {
-  try {
-    const notes = await Note.find({ userId: req.user.id }, 'tags');
-    const hierarchy = {};
-
-    // Build tag hierarchy from all notes
-    notes.forEach(note => {
-      note.tags.forEach(tag => {
-        const parts = tag.split('/');
-        let current = hierarchy;
-
-        parts.forEach((part, index) => {
-          if (!current[part]) {
-            current[part] = index === parts.length - 1 ? { count: 0 } : {};
-          }
-          if (index === parts.length - 1) {
-            current[part].count = (current[part].count || 0) + 1;
-          }
-          current = current[part];
-        });
-      });
-    });
-
-    res.json(hierarchy);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

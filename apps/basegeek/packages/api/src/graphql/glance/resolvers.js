@@ -77,7 +77,54 @@ function icalText(value) {
 }
 
 // Fetch and parse a single ICS feed, returning VEVENT components only.
+/** How many calendar sources one `calendarEvents` call may fan out to. */
+const MAX_CALENDAR_SOURCES = 20;
+
+/**
+ * Hosts a calendar URL may never name.
+ *
+ * `calendarEvents` takes its URLs straight from the client, and basegeek then
+ * fetches each one server-side — a textbook SSRF hop. RFC1918 / LAN addresses
+ * stay ALLOWED on purpose: this suite runs on a home LAN and a self-hosted ICS
+ * feed on 192.168.x is a legitimate calendar. What is refused is the set that
+ * is never a calendar and always a probe: loopback, link-local (which is where
+ * every cloud metadata service lives), the unspecified address, and anything
+ * that is not plain http(s) — `file:`, `gopher:` and friends.
+ */
+const BLOCKED_HOST_PATTERNS = [
+  /^localhost$/i,
+  /\.localhost$/i,
+  /^127\./,
+  /^0\.0\.0\.0$/,
+  /^169\.254\./,          // link-local, incl. 169.254.169.254
+  /^\[?::1\]?$/,
+  /^\[?fe80:/i,            // IPv6 link-local
+];
+
+/**
+ * @param {string} raw
+ * @returns {URL} the parsed URL
+ * @throws {Error} when the URL is not a fetchable public-ish http(s) target
+ */
+function assertFetchableCalendarUrl(raw) {
+  let parsed;
+  try {
+    parsed = new URL(String(raw));
+  } catch {
+    throw new Error('calendar url is not a valid URL');
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error(`calendar url scheme ${ parsed.protocol } is not allowed`);
+  }
+  const host = parsed.hostname;
+  if (BLOCKED_HOST_PATTERNS.some((re) => re.test(host))) {
+    throw new Error('calendar url host is not allowed');
+  }
+  return parsed;
+}
+
 async function fetchIcsEvents(url, timeoutMs = 15000) {
+  assertFetchableCalendarUrl(url);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -86,6 +133,22 @@ async function fetchIcsEvents(url, timeoutMs = 15000) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Race a promise against a timer, degrading to `fallback` rather than throwing.
+ *
+ * `.catch()` handles a rejection; it does nothing about a call that simply
+ * never comes back, and a slow dependency inside a `Promise.all` holds up
+ * everything the caller is waiting on.
+ */
+function withTimeout(promise, ms, fallback) {
+  let timer;
+  const guard = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(fallback), ms);
+    if (typeof timer?.unref === 'function') timer.unref();
+  });
+  return Promise.race([promise, guard]).finally(() => clearTimeout(timer));
 }
 
 // ── Resolvers ───────────────────────────────────────────────────────────────
@@ -258,7 +321,14 @@ export async function fetchGlanceToday(context, date) {
       fitnessResolvers.Query.dailySummary(null, { date: targetDate }, context),
       fitnessResolvers.Query.loginStreak(null, {}, context),
       fitnessResolvers.Query.foodLogs(null, { date: targetDate }, context),
-      fitnessResolvers.Query.garminActivities(null, { limit: 1 }, context).catch(() => []),
+      // Garmin logs in and fetches over the network with no timeout of its
+      // own, and this Promise.all is what StartGeek's whole front page waits
+      // on. `.catch` covers a rejection, not a hang — hence the hard cap.
+      withTimeout(
+        fitnessResolvers.Query.garminActivities(null, { limit: 1 }, context).catch(() => []),
+        2000,
+        []
+      ),
     ]);
 
     const mealsLogged = Array.isArray(logs) ? logs.length : 0;
@@ -589,9 +659,13 @@ export const resolvers = {
      * `createNote` take and hands them back. Nothing is written here — the
      * client previews the draft and the person runs the mutation themselves.
      */
-    glanceDraft: async (_, { input, kind }, context) => {
+    glanceDraft: async (_, { input, kind, today }, context) => {
       getUserId(context);
-      return draftFrom(input, kind, context);
+      // `today` is the client's own calendar day. Additive and optional: an
+      // older client that omits it gets exactly the previous behaviour (the
+      // server clock, which is UTC in the container). StartGeek already sends
+      // a local `date` to `glanceToday`; this is the same fix for drafting.
+      return draftFrom(input, kind, context, { today });
     },
 
     calendarEvents: async (_, { sources, from, to }, context) => {
@@ -603,7 +677,18 @@ export const resolvers = {
 
       const allEvents = [];
 
-      for (const source of sources) {
+      // Cap the fan-out: `sources` is client-supplied and was unbounded, so a
+      // single call could ask basegeek to make an arbitrary number of outbound
+      // fetches, each with its own 15s budget, one after another.
+      const boundedSources = (sources || []).slice(0, MAX_CALENDAR_SOURCES);
+      if ((sources || []).length > MAX_CALENDAR_SOURCES) {
+        logger.warn(
+          { requested: sources.length, cap: MAX_CALENDAR_SOURCES },
+          'calendarEvents: source list truncated'
+        );
+      }
+
+      for (const source of boundedSources) {
         if (!source?.url) continue;
         try {
           const events = await fetchIcsEvents(source.url);

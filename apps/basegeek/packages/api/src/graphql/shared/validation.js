@@ -74,9 +74,25 @@ export const idString = z.string().trim().min(1).max(256);
  * An instant: a `Date`, an ISO string, or epoch millis. Parsed and
  * range-checked; the time-of-day (if any) is preserved exactly.
  */
-export function instantField({ required = false, min = MIN_DATE } = {}) {
+/**
+ * Optional is not the same thing as nullable, and the difference decides
+ * whether a row can be poisoned.
+ *
+ * `required: false` means "the client may omit this". `nullable: true` means
+ * "the client may send `null` to CLEAR it" — which is right for a field its
+ * GraphQL type declares nullable and wrong for one it declares non-null. The
+ * update resolvers write `{ $set: input }` with no `runValidators`, so an
+ * accepted `null` lands in the document and that row then fails the non-null
+ * check on every later query — BURN_REVIEW #7's exact shape, which was fixed
+ * in bookgeek and not swept into flockgeek or notegeek.
+ *
+ * `nullable` therefore defaults to `!required` (the behaviour every existing
+ * caller already gets) and is passed explicitly as `false` for any field whose
+ * GraphQL type ends in `!`.
+ */
+export function instantField({ required = false, nullable = !required, min = MIN_DATE } = {}) {
   const base = z.union([z.date(), z.string().trim().min(1), z.number()]);
-  const optional = required ? base : base.nullable().optional();
+  const optional = required ? base : (nullable ? base.nullable().optional() : base.optional());
   return optional.transform((val, ctx) => {
     if (val === null || val === undefined) return val;
     const d = val instanceof Date ? val : new Date(val);
@@ -97,9 +113,9 @@ export function instantField({ required = false, min = MIN_DATE } = {}) {
  * `@geeksuite/utils`'s `toUtcMidnight`, so a client that sends a full instant
  * for a day-granularity field stores the same day everybody else stores.
  */
-export function calendarDateField({ required = true, min = MIN_DATE } = {}) {
+export function calendarDateField({ required = true, nullable = !required, min = MIN_DATE } = {}) {
   const base = z.union([z.date(), z.string().trim().min(1), z.number()]);
-  const optional = required ? base : base.nullable().optional();
+  const optional = required ? base : (nullable ? base.nullable().optional() : base.optional());
   return optional.transform((val, ctx) => {
     if (val === null || val === undefined) return val;
     const normalized = toUtcMidnight(val);

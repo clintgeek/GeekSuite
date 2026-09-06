@@ -6,10 +6,9 @@ import logger from '../lib/logger.js';
 const userGeekUri = process.env.USERGEEK_MONGODB_URI || 'mongodb://localhost:27017/userGeek?authSource=admin';
 
 // Create connection with error handling
-const userGeekConn = mongoose.createConnection(userGeekUri, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true
-});
+// useNewUrlParser / useUnifiedTopology were dropped here: they have been
+// no-ops since driver v4 and now print a deprecation warning on every boot.
+const userGeekConn = mongoose.createConnection(userGeekUri);
 
 // Log connection status
 userGeekConn.on('error', (err) => {
@@ -71,6 +70,14 @@ const userSchema = new mongoose.Schema({
         type: Date,
         default: null
     },
+    // Stamped by the password-hashing hook below. Refresh-token rotation
+    // refuses any token minted before this instant, so changing a password
+    // ends every other live session instead of leaving 30-day refresh tokens
+    // valid. See services/authService.js rotateRefreshToken().
+    passwordChangedAt: {
+        type: Date,
+        default: null
+    },
 
     // ── Authorization ──
     // Deliberately NOT part of the JWT payload: the auth middleware reads it
@@ -122,6 +129,12 @@ userSchema.pre('save', async function(next) {
     try {
         const salt = await bcrypt.genSalt(10);
         this.passwordHash = await bcrypt.hash(this.passwordHash, salt);
+        // One stamp, in the same hook that owns the hash, so no write path can
+        // change a password without recording when. Set on creation too — the
+        // comparison in rotateRefreshToken() truncates to whole seconds, which
+        // is the resolution of a JWT `iat`, so a token minted in the same
+        // second as the save is not caught by its own stamp.
+        this.passwordChangedAt = new Date();
         next();
     } catch (error) {
         logger.error({ err: error }, 'Password hashing error');

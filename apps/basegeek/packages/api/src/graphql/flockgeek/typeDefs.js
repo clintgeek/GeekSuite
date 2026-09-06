@@ -259,7 +259,7 @@ export const typeDefs = gql`
     updateEggProduction(id: ID!, date: Date, eggsCount: Int, daysObserved: Int, locationId: ID, notes: String): EggProduction!
     createPairing(name: String!, roosterIds: [ID], henIds: [ID], pairingDate: Date, active: Boolean, notes: String): Pairing!
     updatePairing(id: ID!, name: String, roosterIds: [ID], henIds: [ID], pairingDate: Date, active: Boolean, notes: String): Pairing!
-    recordHatchEvent(setDate: Date!, hatchDate: Date, eggsSet: Int!, notes: String): HatchEvent!
+    recordHatchEvent(setDate: Date!, hatchDate: Date, eggsSet: Int!, pairingId: ID, notes: String): HatchEvent!
     updateHatchEvent(id: ID!, setDate: Date, hatchDate: Date, eggsSet: Int, eggsFertile: Int, chicksHatched: Int, pullets: Int, cockerels: Int, notes: String): HatchEvent!
     createMeatRun(pairingId: ID!, hatchEventId: ID, name: String, startDate: Date!, startCount: Int!, notes: String): MeatRun!
     updateMeatRun(id: ID!, harvestDate: Date, harvestCount: Int, mortalityCount: Int, avgWeightGrams: Float, status: String, notes: String): MeatRun!

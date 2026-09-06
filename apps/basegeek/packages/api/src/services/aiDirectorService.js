@@ -33,6 +33,30 @@ const QUALITY_ORDER = { 'state-of-the-art': 0, excellent: 1, good: 2, basic: 3 }
 const QUALITY_POINTS = { 'state-of-the-art': 100, excellent: 85, good: 70, basic: 50 };
 
 class AIDirectorService {
+  /**
+   * A pricing figure as a number, for ordering purposes.
+   *
+   * `collectModelInformation` sets `pricing` to `{input:'Unknown',
+   * output:'Unknown'}` for any model with no AIPricing row — which is most of
+   * the catalog. `('Unknown' || 0)` evaluates to the string `'Unknown'`, so the
+   * cheapest-model reduce was concatenating (`'UnknownUnknown'`) and comparing
+   * strings, and the sort's `costA - costB` was `NaN` — i.e. the default
+   * `priority: 'cost'` ordering was arbitrary, and that is exactly the call
+   * StoryGeek's epub pipeline makes before reading `recommendations[0]`.
+   * An unpriced model now sorts LAST, not free.
+   */
+  static numericPrice(value) {
+    return typeof value === 'number' && Number.isFinite(value) ? value : Infinity;
+  }
+
+  /** Input + output price of one model, for cost ordering. */
+  static totalPriceOf(model) {
+    const input = AIDirectorService.numericPrice(model?.pricing?.input);
+    const output = AIDirectorService.numericPrice(model?.pricing?.output);
+    if (input === Infinity || output === Infinity) return Infinity;
+    return input + output;
+  }
+
   constructor() {
     this.providerPricing = {
       anthropic: {
@@ -44,37 +68,46 @@ class AIDirectorService {
         'claude-3-5-haiku-20241022': { input: 0.8, output: 4 },
         'claude-3-haiku-20240307': { input: 0.25, output: 1.25 }
       },
+      // Every price below is DOLLARS PER 1,000,000 TOKENS — the unit
+      // TOKENS_PER_PRICE_UNIT and AIPricing.priceUnit both declare. The groq
+      // and together blocks used to be the vendor prices divided by 1000
+      // (per-1K figures in a per-1M table), so `/director/analyze-cost`
+      // under-reported them 1000x and `recommendProvider(priority:'cost')`
+      // ranked them as effectively free against correctly-priced Gemini
+      // models. The tell needed no price list: gemini-1.5-flash was
+      // `{input: 0.00035, output: 1.05}` — a 3000x input/output ratio inside
+      // one row.
       groq: {
-        'llama-3.1-8b-instant': { input: 0.00027, output: 0.00027 },
-        'llama-3.1-70b-versatile': { input: 0.0007, output: 0.0007 },
-        'llama-3.1-405b-reasoning': { input: 0.002, output: 0.002 },
-        'mixtral-8x7b-instant': { input: 0.00027, output: 0.00027 },
-        'gemma-2-9b-it': { input: 0.00027, output: 0.00027 },
-        'llama-3.3-70b-versatile': { input: 0.0007, output: 0.0007 },
-        'llama3-8b-8192': { input: 0.00027, output: 0.00027 },
-        'llama3-70b-8192': { input: 0.0007, output: 0.0007 },
-        'gemma2-9b-it': { input: 0.00027, output: 0.00027 },
-        'compound-beta': { input: 0.00027, output: 0.00027 },
-        'compound-beta-mini': { input: 0.00027, output: 0.00027 },
-        'meta-llama/llama-4-scout-17b-16e-instruct': { input: 0.0007, output: 0.0007 },
-        'meta-llama/llama-4-maverick-17b-128e-instruct': { input: 0.0007, output: 0.0007 },
-        'meta-llama/llama-guard-4-12b': { input: 0.0007, output: 0.0007 },
-        'meta-llama/llama-prompt-guard-2-22m': { input: 0.00027, output: 0.00027 },
-        'meta-llama/llama-prompt-guard-2-86m': { input: 0.00027, output: 0.00027 },
-        'qwen/qwen3-32b': { input: 0.0007, output: 0.0007 },
-        'moonshotai/kimi-k2-instruct': { input: 0.0007, output: 0.0007 },
-        'openai/gpt-oss-20b': { input: 0.0007, output: 0.0007 },
-        'openai/gpt-oss-120b': { input: 0.002, output: 0.002 },
-        'allam-2-7b': { input: 0.00027, output: 0.00027 },
-        'deepseek-r1-distill-llama-70b': { input: 0.0007, output: 0.0007 },
-        'whisper-large-v3': { input: 0.00027, output: 0.00027 },
-        'whisper-large-v3-turbo': { input: 0.00027, output: 0.00027 },
-        'distil-whisper-large-v3-en': { input: 0.00027, output: 0.00027 },
-        'playai-tts': { input: 0.00027, output: 0.00027 },
-        'playai-tts-arabic': { input: 0.00027, output: 0.00027 }
+        'llama-3.1-8b-instant': { input: 0.27, output: 0.27 },
+        'llama-3.1-70b-versatile': { input: 0.7, output: 0.7 },
+        'llama-3.1-405b-reasoning': { input: 2, output: 2 },
+        'mixtral-8x7b-instant': { input: 0.27, output: 0.27 },
+        'gemma-2-9b-it': { input: 0.27, output: 0.27 },
+        'llama-3.3-70b-versatile': { input: 0.7, output: 0.7 },
+        'llama3-8b-8192': { input: 0.27, output: 0.27 },
+        'llama3-70b-8192': { input: 0.7, output: 0.7 },
+        'gemma2-9b-it': { input: 0.27, output: 0.27 },
+        'compound-beta': { input: 0.27, output: 0.27 },
+        'compound-beta-mini': { input: 0.27, output: 0.27 },
+        'meta-llama/llama-4-scout-17b-16e-instruct': { input: 0.7, output: 0.7 },
+        'meta-llama/llama-4-maverick-17b-128e-instruct': { input: 0.7, output: 0.7 },
+        'meta-llama/llama-guard-4-12b': { input: 0.7, output: 0.7 },
+        'meta-llama/llama-prompt-guard-2-22m': { input: 0.27, output: 0.27 },
+        'meta-llama/llama-prompt-guard-2-86m': { input: 0.27, output: 0.27 },
+        'qwen/qwen3-32b': { input: 0.7, output: 0.7 },
+        'moonshotai/kimi-k2-instruct': { input: 0.7, output: 0.7 },
+        'openai/gpt-oss-20b': { input: 0.7, output: 0.7 },
+        'openai/gpt-oss-120b': { input: 2, output: 2 },
+        'allam-2-7b': { input: 0.27, output: 0.27 },
+        'deepseek-r1-distill-llama-70b': { input: 0.7, output: 0.7 },
+        'whisper-large-v3': { input: 0.27, output: 0.27 },
+        'whisper-large-v3-turbo': { input: 0.27, output: 0.27 },
+        'distil-whisper-large-v3-en': { input: 0.27, output: 0.27 },
+        'playai-tts': { input: 0.27, output: 0.27 },
+        'playai-tts-arabic': { input: 0.27, output: 0.27 }
       },
       gemini: {
-        'gemini-1.5-flash': { input: 0.00035, output: 1.05 },
+        'gemini-1.5-flash': { input: 0.35, output: 1.05 },
         'gemini-1.5-pro': { input: 3.5, output: 10.5 },
         'gemini-pro': { input: 0.5, output: 1.5 },
         'gemini-2.0-flash': { input: 0.1, output: 0.4 },
@@ -86,10 +119,10 @@ class AIDirectorService {
         'gemini-flash-lite-latest': { input: 0.1, output: 0.4 }
       },
       together: {
-        'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free': { input: 0.0002, output: 0.0002 },
-        'meta-llama/Llama-3.1-8B-Instruct': { input: 0.0002, output: 0.0002 },
-        'togethercomputer/llama-3.1-8b-instruct': { input: 0.0002, output: 0.0002 },
-        'deepseek-ai/DeepSeek-R1-Distill-Llama-70B-free': { input: 0.0, output: 0.0 }
+        'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free': { input: 0, output: 0 },
+        'meta-llama/Llama-3.1-8B-Instruct': { input: 0.2, output: 0.2 },
+        'togethercomputer/llama-3.1-8b-instruct': { input: 0.2, output: 0.2 },
+        'deepseek-ai/DeepSeek-R1-Distill-Llama-70B-free': { input: 0, output: 0 }
       },
       cohere: {
         'command-r-plus-08-2024': { input: 2.5, output: 10.0 }
@@ -264,36 +297,36 @@ class AIDirectorService {
         { provider: 'anthropic', modelId: 'claude-3-haiku-20240307', inputPrice: 0.25, outputPrice: 1.25 },
 
         // Groq models
-        { provider: 'groq', modelId: 'llama-3.1-8b-instant', inputPrice: 0.00027, outputPrice: 0.00027 },
-        { provider: 'groq', modelId: 'llama-3.1-70b-versatile', inputPrice: 0.0007, outputPrice: 0.0007 },
-        { provider: 'groq', modelId: 'llama-3.1-405b-reasoning', inputPrice: 0.002, outputPrice: 0.002 },
-        { provider: 'groq', modelId: 'mixtral-8x7b-instant', inputPrice: 0.00027, outputPrice: 0.00027 },
-        { provider: 'groq', modelId: 'gemma-2-9b-it', inputPrice: 0.00027, outputPrice: 0.00027 },
-        { provider: 'groq', modelId: 'llama-3.3-70b-versatile', inputPrice: 0.0007, outputPrice: 0.0007 },
-        { provider: 'groq', modelId: 'llama3-8b-8192', inputPrice: 0.00027, outputPrice: 0.00027 },
-        { provider: 'groq', modelId: 'llama3-70b-8192', inputPrice: 0.0007, outputPrice: 0.0007 },
-        { provider: 'groq', modelId: 'gemma2-9b-it', inputPrice: 0.00027, outputPrice: 0.00027 },
-        { provider: 'groq', modelId: 'compound-beta', inputPrice: 0.00027, outputPrice: 0.00027 },
-        { provider: 'groq', modelId: 'compound-beta-mini', inputPrice: 0.00027, outputPrice: 0.00027 },
-        { provider: 'groq', modelId: 'meta-llama/llama-4-scout-17b-16e-instruct', inputPrice: 0.0007, outputPrice: 0.0007 },
-        { provider: 'groq', modelId: 'meta-llama/llama-4-maverick-17b-128e-instruct', inputPrice: 0.0007, outputPrice: 0.0007 },
-        { provider: 'groq', modelId: 'meta-llama/llama-guard-4-12b', inputPrice: 0.0007, outputPrice: 0.0007 },
-        { provider: 'groq', modelId: 'meta-llama/llama-prompt-guard-2-22m', inputPrice: 0.00027, outputPrice: 0.00027 },
-        { provider: 'groq', modelId: 'meta-llama/llama-prompt-guard-2-86m', inputPrice: 0.00027, outputPrice: 0.00027 },
-        { provider: 'groq', modelId: 'qwen/qwen3-32b', inputPrice: 0.0007, outputPrice: 0.0007 },
-        { provider: 'groq', modelId: 'moonshotai/kimi-k2-instruct', inputPrice: 0.0007, outputPrice: 0.0007 },
-        { provider: 'groq', modelId: 'openai/gpt-oss-20b', inputPrice: 0.0007, outputPrice: 0.0007 },
-        { provider: 'groq', modelId: 'openai/gpt-oss-120b', inputPrice: 0.002, outputPrice: 0.002 },
-        { provider: 'groq', modelId: 'allam-2-7b', inputPrice: 0.00027, outputPrice: 0.00027 },
-        { provider: 'groq', modelId: 'deepseek-r1-distill-llama-70b', inputPrice: 0.0007, outputPrice: 0.0007 },
-        { provider: 'groq', modelId: 'whisper-large-v3', inputPrice: 0.00027, outputPrice: 0.00027 },
-        { provider: 'groq', modelId: 'whisper-large-v3-turbo', inputPrice: 0.00027, outputPrice: 0.00027 },
-        { provider: 'groq', modelId: 'distil-whisper-large-v3-en', inputPrice: 0.00027, outputPrice: 0.00027 },
-        { provider: 'groq', modelId: 'playai-tts', inputPrice: 0.00027, outputPrice: 0.00027 },
-        { provider: 'groq', modelId: 'playai-tts-arabic', inputPrice: 0.00027, outputPrice: 0.00027 },
+        { provider: 'groq', modelId: 'llama-3.1-8b-instant', inputPrice: 0.27, outputPrice: 0.27 },
+        { provider: 'groq', modelId: 'llama-3.1-70b-versatile', inputPrice: 0.7, outputPrice: 0.7 },
+        { provider: 'groq', modelId: 'llama-3.1-405b-reasoning', inputPrice: 2, outputPrice: 2 },
+        { provider: 'groq', modelId: 'mixtral-8x7b-instant', inputPrice: 0.27, outputPrice: 0.27 },
+        { provider: 'groq', modelId: 'gemma-2-9b-it', inputPrice: 0.27, outputPrice: 0.27 },
+        { provider: 'groq', modelId: 'llama-3.3-70b-versatile', inputPrice: 0.7, outputPrice: 0.7 },
+        { provider: 'groq', modelId: 'llama3-8b-8192', inputPrice: 0.27, outputPrice: 0.27 },
+        { provider: 'groq', modelId: 'llama3-70b-8192', inputPrice: 0.7, outputPrice: 0.7 },
+        { provider: 'groq', modelId: 'gemma2-9b-it', inputPrice: 0.27, outputPrice: 0.27 },
+        { provider: 'groq', modelId: 'compound-beta', inputPrice: 0.27, outputPrice: 0.27 },
+        { provider: 'groq', modelId: 'compound-beta-mini', inputPrice: 0.27, outputPrice: 0.27 },
+        { provider: 'groq', modelId: 'meta-llama/llama-4-scout-17b-16e-instruct', inputPrice: 0.7, outputPrice: 0.7 },
+        { provider: 'groq', modelId: 'meta-llama/llama-4-maverick-17b-128e-instruct', inputPrice: 0.7, outputPrice: 0.7 },
+        { provider: 'groq', modelId: 'meta-llama/llama-guard-4-12b', inputPrice: 0.7, outputPrice: 0.7 },
+        { provider: 'groq', modelId: 'meta-llama/llama-prompt-guard-2-22m', inputPrice: 0.27, outputPrice: 0.27 },
+        { provider: 'groq', modelId: 'meta-llama/llama-prompt-guard-2-86m', inputPrice: 0.27, outputPrice: 0.27 },
+        { provider: 'groq', modelId: 'qwen/qwen3-32b', inputPrice: 0.7, outputPrice: 0.7 },
+        { provider: 'groq', modelId: 'moonshotai/kimi-k2-instruct', inputPrice: 0.7, outputPrice: 0.7 },
+        { provider: 'groq', modelId: 'openai/gpt-oss-20b', inputPrice: 0.7, outputPrice: 0.7 },
+        { provider: 'groq', modelId: 'openai/gpt-oss-120b', inputPrice: 2, outputPrice: 2 },
+        { provider: 'groq', modelId: 'allam-2-7b', inputPrice: 0.27, outputPrice: 0.27 },
+        { provider: 'groq', modelId: 'deepseek-r1-distill-llama-70b', inputPrice: 0.7, outputPrice: 0.7 },
+        { provider: 'groq', modelId: 'whisper-large-v3', inputPrice: 0.27, outputPrice: 0.27 },
+        { provider: 'groq', modelId: 'whisper-large-v3-turbo', inputPrice: 0.27, outputPrice: 0.27 },
+        { provider: 'groq', modelId: 'distil-whisper-large-v3-en', inputPrice: 0.27, outputPrice: 0.27 },
+        { provider: 'groq', modelId: 'playai-tts', inputPrice: 0.27, outputPrice: 0.27 },
+        { provider: 'groq', modelId: 'playai-tts-arabic', inputPrice: 0.27, outputPrice: 0.27 },
 
         // Gemini models
-        { provider: 'gemini', modelId: 'gemini-1.5-flash', inputPrice: 0.00035, outputPrice: 1.05 },
+        { provider: 'gemini', modelId: 'gemini-1.5-flash', inputPrice: 0.35, outputPrice: 1.05 },
         { provider: 'gemini', modelId: 'gemini-1.5-pro', inputPrice: 3.5, outputPrice: 10.5 },
         { provider: 'gemini', modelId: 'gemini-pro', inputPrice: 0.5, outputPrice: 1.5 },
         { provider: 'gemini', modelId: 'gemini-2.0-flash', inputPrice: 0.1, outputPrice: 0.4 },
@@ -307,9 +340,9 @@ class AIDirectorService {
         { provider: 'gemini', modelId: 'gemini-flash-lite-latest', inputPrice: 0.1, outputPrice: 0.4 },
 
         // Together.ai models
-        { provider: 'together', modelId: 'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free', inputPrice: 0.0002, outputPrice: 0.0002 },
-        { provider: 'together', modelId: 'meta-llama/Llama-3.1-8B-Instruct', inputPrice: 0.0002, outputPrice: 0.0002 },
-        { provider: 'together', modelId: 'togethercomputer/llama-3.1-8b-instruct', inputPrice: 0.0002, outputPrice: 0.0002 }
+        { provider: 'together', modelId: 'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free', inputPrice: 0, outputPrice: 0 },
+        { provider: 'together', modelId: 'meta-llama/Llama-3.1-8B-Instruct', inputPrice: 0.2, outputPrice: 0.2 },
+        { provider: 'together', modelId: 'togethercomputer/llama-3.1-8b-instruct', inputPrice: 0.2, outputPrice: 0.2 }
       ];
 
       for (const pricing of initialPricing) {
@@ -372,14 +405,28 @@ class AIDirectorService {
         return true; // No models, definitely need to refresh
       }
 
-      // Check the last refresh time (we'll use the oldest model's timestamp as a proxy)
-      const oldestModel = await AIModel.findOne({ provider }).sort({ createdAt: 1 });
-      if (!oldestModel) {
+      // When did the catalog last CONFIRM this provider's models?
+      //
+      // This used to read the oldest row's `createdAt`, which `refreshModels`
+      // never touches — it upserts `lastChecked`. So two days after seeding the
+      // 24h guard was permanently true, and every `/director/models`,
+      // `/director/free-models`, `/director/recommend` and
+      // `/director/analyze-cost` (plus their GraphQL twins and StoryGeek's
+      // epub pipeline) fanned out a live vendor `models` call per enabled
+      // provider — spending provider quota on a read. `lastChecked` is the
+      // field the refresh actually writes, so the guard now measures the thing
+      // it was always meant to.
+      const freshestModel = await AIModel.findOne({ provider })
+        .sort({ lastChecked: -1 })
+        .select('lastChecked createdAt');
+      if (!freshestModel) {
         return true; // No models found, need to refresh
       }
 
       // Refresh if it's been more than 24 hours
-      const hoursSinceLastRefresh = (Date.now() - oldestModel.createdAt.getTime()) / (1000 * 60 * 60);
+      const lastRefreshAt = freshestModel.lastChecked || freshestModel.createdAt;
+      if (!lastRefreshAt) return true;
+      const hoursSinceLastRefresh = (Date.now() - lastRefreshAt.getTime()) / (1000 * 60 * 60);
       const shouldRefresh = hoursSinceLastRefresh > 24;
 
       logger.info(`${provider} last refresh: ${hoursSinceLastRefresh.toFixed(1)} hours ago, should refresh: ${shouldRefresh}`);
@@ -956,8 +1003,8 @@ class AIDirectorService {
         // Get the best model for this provider based on priority and requirements
         const bestModel = suitableModels.reduce((best, current) => {
           if (effectivePriority === 'cost') {
-            const costA = (current.pricing.input || 0) + (current.pricing.output || 0);
-            const costB = (best.pricing.input || 0) + (best.pricing.output || 0);
+            const costA = AIDirectorService.totalPriceOf(current);
+            const costB = AIDirectorService.totalPriceOf(best);
             return costA < costB ? current : best;
           } else if (effectivePriority === 'speed') {
             const speedA = SPEED_ORDER[current.capabilities?.performance?.speed || 'medium'];
@@ -988,9 +1035,11 @@ class AIDirectorService {
       // actually answer the task.
       recommendations.sort((a, b) => {
         if (effectivePriority === 'cost') {
-          const costA = (a.model.pricing.input || 0) + (a.model.pricing.output || 0);
-          const costB = (b.model.pricing.input || 0) + (b.model.pricing.output || 0);
-          if (costA !== costB) return costA - costB;
+          const costA = AIDirectorService.totalPriceOf(a.model);
+          const costB = AIDirectorService.totalPriceOf(b.model);
+          // Infinity - Infinity is NaN, which makes a comparator return
+          // "equal" for every unpriced pair rather than shuffling them.
+          if (costA !== costB) return costA === Infinity ? 1 : costB === Infinity ? -1 : costA - costB;
         } else if (effectivePriority === 'speed') {
           const speedA = SPEED_ORDER[a.model.capabilities?.performance?.speed || 'medium'];
           const speedB = SPEED_ORDER[b.model.capabilities?.performance?.speed || 'medium'];

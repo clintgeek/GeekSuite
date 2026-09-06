@@ -5,7 +5,7 @@
 import axios from 'axios';
 import logger from '../lib/logger.js';
 import AIConfig from '../models/AIConfig.js';
-import { DEFAULT_MODELS, FALLBACK_ORDER, ROTATION_MODEL_OVERRIDES } from '../config/aiProviders.js';
+import { DEFAULT_MODELS, FALLBACK_ORDER, ROTATION_MODEL_OVERRIDES, keyHintFor } from '../config/aiProviders.js';
 import AIModel from '../models/AIModel.js';
 import AIPricing from '../models/AIPricing.js';
 import aiUsageService from './aiUsageService.js';
@@ -463,7 +463,10 @@ class AIService {
         case 'groq':
           if (this.providers.groq.apiKey) {
             const response = await axios.get('https://api.groq.com/openai/v1/models', {
-              headers: { 'Authorization': `Bearer ${this.providers.groq.apiKey}` }
+              headers: { 'Authorization': `Bearer ${this.providers.groq.apiKey}` },
+              // The one models fetch that had no cap; Together, Gemini and the
+              // rest all pass 10s, and axios's own default is "wait forever".
+              timeout: 10000
             });
             models = response.data.data || [];
           }
@@ -564,9 +567,17 @@ class AIService {
           if (this.providers.gemini.apiKey) {
             try {
               logger.info('Fetching Gemini models via API...');
+              // The key goes in a header, not `?key=`. @geeksuite/logger's err
+              // serializer keeps `err.config.url` (it is the one thing that
+              // says which call failed) and drops `err.config.headers`, so a
+              // key in the query string was the one provider credential that
+              // still reached the logs in the clear on any failure.
               const response = await axios.get(
-                `https://generativelanguage.googleapis.com/v1beta/models?key=${this.providers.gemini.apiKey}`,
-                { timeout: 10000 }
+                'https://generativelanguage.googleapis.com/v1beta/models',
+                {
+                  headers: { 'x-goog-api-key': this.providers.gemini.apiKey },
+                  timeout: 10000
+                }
               );
               const geminiModels = response.data?.models || [];
               // Filter to models that support generateContent (chat/text models)
@@ -1204,8 +1215,10 @@ class AIService {
     for (const [provider, config] of Object.entries(this.providers)) {
       const apiKey = config.apiKey;
       if (apiKey && apiKey.length > 10) {
-        const maskedKey = `${apiKey.substring(0, 12)}...${apiKey.substring(apiKey.length - 8)}`;
-        logger.info(`${provider.toUpperCase()} API = ${maskedKey} ✅`);
+        // 12 leading + 8 trailing characters is most of a short provider key.
+        // config/aiProviders.js already defines the only fragment of a
+        // credential that may leave the process, and a log file is "leaving".
+        logger.info(`${provider.toUpperCase()} API = ${keyHintFor(apiKey)} ✅`);
       } else {
         logger.info(`${provider.toUpperCase()} API = Not configured ❌`);
       }
@@ -1747,11 +1760,21 @@ class AIService {
         await this.updateStats(currentProvider, result.inputTokens || 0, result.outputTokens || 0, providerModel, appId, featureId);
 
         const trackingUserId = userId || 'session';
-        await aiUsageService.trackUsage(currentProvider, providerModel, trackingUserId, {
+        // trackUsage RESOLVES with `{success:false, error}` rather than
+        // throwing, so awaiting it without looking at the result meant a
+        // failed quota write was completely silent — and the free-tier
+        // ceiling this feeds is what stops the rotation overspending.
+        const usageResult = await aiUsageService.trackUsage(currentProvider, providerModel, trackingUserId, {
           inputTokens: result.inputTokens || 0,
           outputTokens: result.outputTokens || 0,
           requests: 1
         });
+        if (usageResult && usageResult.success === false) {
+          logger.warn(
+            { provider: currentProvider, model: providerModel, err: usageResult.error },
+            '[AIService] free-tier usage was not recorded — quota accounting is behind for this model'
+          );
+        }
 
         if (autoRotate) {
           this.rotationManager.recordUsage(currentProvider, { requests: 1, tokens: totalTokens });
@@ -2045,7 +2068,10 @@ class AIService {
 
         // Handle 402 (out of neurons)
         if (error.response.status === 402) {
-          throw new Error(`Cloudflare daily neuron limit exceeded (402): ${JSON.stringify(error.response.data)}`);
+          // Same prefix rule as every other adapter, so the 402 is classified
+          // rather than flattened to a 500 — the words after it never reach
+          // the caller, only the status does.
+          throw new Error(`Cloudflare API error (402): daily neuron limit exceeded ${JSON.stringify(error.response.data)}`);
         }
 
         throw new Error(`Cloudflare API error (${error.response.status}): ${JSON.stringify(error.response.data)}`);
@@ -2433,7 +2459,13 @@ class AIService {
         const text = (response.data.content || []).find(b => b.type === 'text')?.text ?? '';
         result = '{' + text;
       } else {
-        result = response.data.content[0].text;
+        // Same shape as the two branches above. Blind `content[0].text` threw
+        // a TypeError whenever Anthropic's first block was not text (a
+        // max_tokens-truncated turn can start with a thinking or tool block,
+        // and `content` can be empty), and that TypeError was rethrown raw —
+        // so the rotation recorded Anthropic as failed and answered from a
+        // different provider for a response that had already arrived.
+        result = (response.data.content || []).find(b => b.type === 'text')?.text ?? '';
       }
 
       if (stopReason === 'max_tokens') finishReason = 'length';
@@ -2618,9 +2650,11 @@ class AIService {
         };
       }
 
-      const response = await axios.post(`${this.providers.gemini.baseURL}/models/${model}:generateContent?key=${this.providers.gemini.apiKey}`, body, {
+      // Key in a header, never the query string — see refreshModels('gemini').
+      const response = await axios.post(`${this.providers.gemini.baseURL}/models/${model}:generateContent`, body, {
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'x-goog-api-key': this.providers.gemini.apiKey
         },
         timeout: 60000
       });
@@ -2705,7 +2739,13 @@ class AIService {
       logger.error({ err: error }, 'Together AI API error');
       if (error.response) {
         logger.error({ status: error.response.status, data: error.response.data }, 'Together AI response error details');
-        throw new Error(`Together AI error (${error.response.status}): ${JSON.stringify(error.response.data)}`);
+        // "Together AI API error", not "Together AI error": aiFailureEnvelope's
+        // upstreamStatusOf() reads the status out of the literal prefix
+        // `API error (<status>)`, and this was the one adapter that did not
+        // use it — so every Together failure, whatever its real status, was
+        // classified `internal` and answered 500 `internal_error` where a bad
+        // model pin is documented to be 404 `model_not_found`.
+        throw new Error(`Together AI API error (${error.response.status}): ${JSON.stringify(error.response.data)}`);
       }
       throw error;
     }
@@ -3197,7 +3237,13 @@ class AIService {
    */
   getAvailableProviders() {
     return Object.keys(this.providers).filter(provider =>
-      this.providers[provider].apiKey && this.providers[provider].apiKey.length > 10
+      this.providers[provider].apiKey &&
+      this.providers[provider].apiKey.length > 10 &&
+      // `GET /api/ai/providers` used to filter on key length alone, while
+      // `GET /api/ai/capabilities` filtered the same map on `.enabled` — so a
+      // provider an admin had switched off still appeared in StoryGeek's
+      // settings picker, and picking it failed at call time.
+      this.providers[provider].enabled !== false
     );
   }
 }
