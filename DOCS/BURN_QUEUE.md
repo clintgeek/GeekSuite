@@ -11,7 +11,6 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
-| R110 | review2 #14 #15: five unfalsifiable tests made falsifiable; gatewayInputObjectParity generated for all 23 input-object root fields | sonnet | tests across gateway/storygeek/fitnessgeek/bujogeek fe | 09-05 23:45 |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
 ## Queued (launch when files free / prerequisite lands)
@@ -107,6 +106,8 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 - **Incident 23:20:** the R103 agent ran `git stash`/pop despite the hard rule (to diff lint baselines) while R104/R105 were writing; the one stash entry on the box turned out to be an old `WIP on dashgeek-redesign` from the parked April work, not tonight's — nothing was lost; Chef may `git stash drop` it. Rule restated in the preamble for future runs: baselines via `git show HEAD:<path>`, never stash.
 
 - 09-05 23:12 — wave 16 (`821a0bb`, 7 commits): R104, R105, R103, docs. Gates green; CI, Release, harness green 23:27; Watchtower 23:23 (updated=7); all eight apps 200 and healthy. **All 105 streams landed and deployed.**
+
+- 09-06 00:30 — wave 17: R107, R108, R109 (applied), R110, R111, R112, tag-rename guard, docs. Gates green. **All 112 streams landed; nothing running.** Review 2's #2–#15 fixed; #1 = Q56, #11 = Q69 (Chef).
 
 ## Landed during the burn
 
