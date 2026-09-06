@@ -15,6 +15,7 @@ export const GET_BIRDS = gql`
       cross
       origin
       foundationStock
+      pairingId
       locationId
       temperamentScore
       statusDate

@@ -7,9 +7,10 @@ import { gql } from '@apollo/client';
 // Species, Strain, Cross, Origin, Foundation Stock, Temperament, Status Date,
 // Status Reason — closed the dialog and changed nothing.
 //
-// The forms' Sire and Dam inputs are still not here: `models/Bird.js` tracks
-// lineage through `pairingId`, has no sire/dam field, and `Bird` exposes
-// none — those two inputs have nowhere to go and are reported, not wired.
+// The forms used to render Sire and Dam inputs too (Q67): `models/Bird.js`
+// tracks lineage through `pairingId`, has no sire/dam field, and `Bird`
+// exposes none — those two inputs had nowhere to go on the wire, so they
+// were removed from BirdsPage rather than wired here.
 export const CREATE_BIRD = gql`
   mutation CreateBird($tagId: String!, $name: String, $species: String, $breed: String, $strain: String, $cross: Boolean, $sex: String, $hatchDate: Date, $origin: String, $foundationStock: Boolean, $locationId: ID, $temperamentScore: Int, $status: String, $statusDate: Date, $statusReason: String, $notes: String) {
     createBird(tagId: $tagId, name: $name, species: $species, breed: $breed, strain: $strain, cross: $cross, sex: $sex, hatchDate: $hatchDate, origin: $origin, foundationStock: $foundationStock, locationId: $locationId, temperamentScore: $temperamentScore, status: $status, statusDate: $statusDate, statusReason: $statusReason, notes: $notes) {

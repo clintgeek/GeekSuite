@@ -134,14 +134,12 @@ tree now.
 
 ### Left in place, with reasons
 
-- **Sire and Dam are still not wired, and should not be.** Both are rendered
-  inputs on the edit form, but `models/Bird.js` tracks lineage through
-  `pairingId` ("all roosters/hens in the pairing are considered potential
-  parents") — there is no sire or dam field on the model and none on the `Bird`
-  GraphQL type. Wiring them means inventing a second lineage model; the honest
-  fix is to remove the two inputs, which is a UI decision, not a bug fix.
-  **Reported, not fixed** — and the mutation documents deliberately do not
-  mention them, which `birdMutationFields.test.jsx` asserts.
+- ~~Sire and Dam are still not wired, and should not be.~~ **Fixed 2026-09-05
+  (Q67).** The two inputs are removed from `BirdsPage.jsx`; the Lineage
+  section now reads `bird.pairingId` (added to `GET_BIRDS`) and shows that
+  pairing's name plus its `roosterIds`/`henIds` (resolved to tag IDs) as
+  possible sires/dams — the pairing's rosters, not a single parent, are the
+  source of truth for lineage here.
 - **Q22 — the REST CRUD layer itself.** Still mounted, still caller-less, still
   Chef's call. Everything above hardens it rather than removing it, on the
   principle that a reachable route is a live route.

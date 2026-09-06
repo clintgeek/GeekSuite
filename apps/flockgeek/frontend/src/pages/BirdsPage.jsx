@@ -13,7 +13,7 @@ import ResponsiveTable from "../components/primitives/ResponsiveTable";
 import LedgerDialog from "../components/primitives/LedgerDialog";
 import { useToast } from "@geeksuite/ui";
 import { displayCalendarDate, utcDateString } from "@geeksuite/utils";
-import { GET_BIRDS, GET_LOCATIONS, GET_FLOCK_GROUPS, GET_GROUP_MEMBERSHIPS } from "../graphql/queries";
+import { GET_BIRDS, GET_LOCATIONS, GET_FLOCK_GROUPS, GET_GROUP_MEMBERSHIPS, GET_PAIRINGS } from "../graphql/queries";
 import { CREATE_BIRD, UPDATE_BIRD, DELETE_ENTITY } from "../graphql/mutations";
 
 const statusOptions = ["active", "meat run", "retired"];
@@ -46,7 +46,7 @@ const getAgeText = (dateValue) => {
 const emptyEditForm = {
   tagId: "", name: "", sex: "", breed: "", hatchDate: "", status: "",
   species: "", strain: "", cross: "false", origin: "", foundationStock: "false",
-  sireId: "", damId: "", locationId: "", temperamentScore: "",
+  locationId: "", temperamentScore: "",
   statusDate: "", statusReason: "", notes: ""
 };
 
@@ -64,8 +64,6 @@ const buildEditFormData = (bird) => {
     cross: bird.cross ? "true" : "false",
     origin: bird.origin || "",
     foundationStock: bird.foundationStock ? "true" : "false",
-    sireId: bird.sireId || "",
-    damId: bird.damId || "",
     locationId: bird.locationId || "",
     temperamentScore: bird.temperamentScore ?? "",
     statusDate: bird.statusDate ? utcDateString(bird.statusDate) : "",
@@ -77,7 +75,7 @@ const buildEditFormData = (bird) => {
 const defaultAddForm = {
   tagId: "", name: "", sex: "", breed: "", hatchDate: "", status: "active",
   species: "chicken", strain: "", cross: false, origin: "unknown",
-  foundationStock: false, sireId: "", damId: "", locationId: "",
+  foundationStock: false, locationId: "",
   temperamentScore: "", statusDate: "", statusReason: "", notes: ""
 };
 
@@ -102,11 +100,13 @@ const BirdsPage = () => {
   const { data: locData } = useQuery(GET_LOCATIONS);
   const { data: groupsData } = useQuery(GET_FLOCK_GROUPS);
   const { data: membershipsData } = useQuery(GET_GROUP_MEMBERSHIPS, { variables: { activeOnly: true } });
+  const { data: pairingsData } = useQuery(GET_PAIRINGS);
 
   const allBirds = birdsData?.birds || [];
   const locations = locData?.flockLocations || [];
   const allGroups = groupsData?.flockGroups || [];
   const allMemberships = membershipsData?.groupMemberships || [];
+  const allPairings = pairingsData?.pairings || [];
 
   const refetchList = ['GetBirds'];
 
@@ -130,6 +130,16 @@ const BirdsPage = () => {
   const allBreeds = useMemo(() => [...new Set(allBirds.map(b => b.breed).filter(Boolean))].sort(), [allBirds]);
 
   const groupsById = useMemo(() => Object.fromEntries(allGroups.map(g => [g.id, g])), [allGroups]);
+  // Not memoized, unlike the maps above: wrapping these in useMemo(fn, [allPairings])
+  // / useMemo(fn, [allBirds]) would be two more react-hooks/exhaustive-deps
+  // warnings of the same pre-existing class this file already carries for
+  // `allBirds`/`allGroups`/`allMemberships` (all three read as
+  // `data?.field || []`, a fresh array each render) — not worth adding to.
+  // Both maps are small (this app's whole point is a home flock) and built
+  // from an already-fetched query result, so a plain per-render rebuild costs
+  // nothing worth memoizing.
+  const pairingsById = Object.fromEntries(allPairings.map(p => [p.id, p]));
+  const birdsById = Object.fromEntries(allBirds.map(b => [b.id, b]));
 
   const membershipsByBird = useMemo(() => {
     const map = {};
@@ -198,8 +208,10 @@ const BirdsPage = () => {
    * is not a valid value on the gateway, so blanks are omitted rather than
    * sent as empty strings.
    *
-   * Sire and Dam are still not sent: `Bird` has no such field — lineage lives
-   * on the pairing. See the note on CREATE_BIRD.
+   * There used to be Sire/Dam inputs here too (Q67): `Bird` has no such
+   * field — lineage lives on the pairing, via `pairingId` — so they mapped to
+   * no mutation argument and were removed rather than wired. See the
+   * Lineage section below and the note on CREATE_BIRD.
    */
   const handleSaveEdit = () => {
     updateBird({ variables: {
@@ -447,28 +459,38 @@ const BirdsPage = () => {
 
       <Box>
         <Typography variant="h6" sx={{ mb: 1 }}>Lineage</Typography>
-        <Grid container spacing={2}>
-          <Grid item xs={12} sm={6}>
-            {editing ? (
-              <TextField fullWidth label="Sire ID" value={editFormData.sireId} onChange={(e) => setEF('sireId', e.target.value)} />
-            ) : (
-              <>
-                <Typography variant="subtitle2" color="text.secondary">Sire</Typography>
-                <Typography variant="body1">{bird.sireId || '-'}</Typography>
-              </>
-            )}
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            {editing ? (
-              <TextField fullWidth label="Dam ID" value={editFormData.damId} onChange={(e) => setEF('damId', e.target.value)} />
-            ) : (
-              <>
-                <Typography variant="subtitle2" color="text.secondary">Dam</Typography>
-                <Typography variant="body1">{bird.damId || '-'}</Typography>
-              </>
-            )}
-          </Grid>
-        </Grid>
+        {/*
+          Read-only in both edit and view mode: pairingId is not a
+          createBird/updateBird argument (the gateway's comment: "a Pairing's
+          roosterIds/henIds are the source of truth for membership — a second
+          write path would let the two disagree"), and there is no sire/dam
+          field on Bird to edit. A pairing names candidate parents, not a
+          specific one, so this lists the pairing's roosters/hens rather than
+          a single Sire/Dam (Q67).
+        */}
+        {(() => {
+          const pairing = bird.pairingId ? pairingsById[bird.pairingId] : null;
+          if (!pairing) {
+            return <Typography variant="body2" color="text.secondary">No pairing recorded</Typography>;
+          }
+          const tagsFor = (ids) => (ids || []).map(id => birdsById[id]?.tagId || id).join(', ') || '-';
+          return (
+            <Grid container spacing={2}>
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" color="text.secondary">Pairing</Typography>
+                <Typography variant="body1">{pairing.name}</Typography>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Typography variant="subtitle2" color="text.secondary">Possible Sires</Typography>
+                <Typography variant="body1">{tagsFor(pairing.roosterIds)}</Typography>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Typography variant="subtitle2" color="text.secondary">Possible Dams</Typography>
+                <Typography variant="body1">{tagsFor(pairing.henIds)}</Typography>
+              </Grid>
+            </Grid>
+          );
+        })()}
       </Box>
 
       <Box>

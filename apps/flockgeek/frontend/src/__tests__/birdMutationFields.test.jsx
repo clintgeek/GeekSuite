@@ -39,11 +39,13 @@ const passedArguments = (doc) => {
  * Every key BirdsPage's edit form writes through `setEF(...)`, minus the two
  * that have nowhere to go.
  *
- * `sireId` and `damId` are rendered inputs with no home on the server:
- * `models/Bird.js` tracks lineage through `pairingId` ("all roosters/hens in
- * the pairing are considered potential parents") and neither the model nor the
- * `Bird` GraphQL type has a sire or dam field. They are reported, not wired —
- * wiring them would mean inventing a second lineage model.
+ * `sireId` and `damId` used to be rendered inputs on BirdsPage's edit form,
+ * with no home on the server: `models/Bird.js` tracks lineage through
+ * `pairingId` ("all roosters/hens in the pairing are considered potential
+ * parents") and neither the model nor the `Bird` GraphQL type has a sire or
+ * dam field. Wiring them would have meant inventing a second lineage model,
+ * so the inputs were removed instead (Q67) — this suite keeps asserting the
+ * mutation documents never grow them back.
  */
 const EDIT_FORM_FIELDS = [
   'breed',

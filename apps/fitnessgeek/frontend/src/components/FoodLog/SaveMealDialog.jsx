@@ -22,48 +22,43 @@ const SaveMealDialog = ({
 }) => {
   const [mealName, setMealName] = useState('');
 
+  // `log.food_item_id` is the gateway's populated FoodLog row — a flat
+  // FitnessFood object with `id`, never `_id`. Without the `.id` read, a
+  // logged item fell through to "no id".
+  //
+  // There used to be a fallback here that sent `food_item_payload` inside
+  // `MealItemInput` for that case. The gateway's `MealItemInput` (see
+  // `apps/basegeek/packages/api/src/graphql/fitnessgeek/typeDefs.js`) only
+  // ever declared `food_item_id: ID!` / `servings: Float!` — no such field
+  // exists to receive it, so graphql-js would reject the whole
+  // `createFitnessMeal`/`updateFitnessMeal` call the moment that branch was
+  // reached, losing every other item in the meal along with it. Today's
+  // `addFoodLog` always resolves a real `food_item_id` via findOrCreate, so a
+  // log row with no id should not exist — but if one ever does (stale data,
+  // a soft-deleted catalog row), skip it and say so rather than sending a
+  // field the gateway has no home for.
+  const resolveFoodId = (log) => {
+    const food = log.food_item || log.food_item_id || {};
+    const rawId = log.food_item_id || food._id;
+    return typeof rawId === 'object' ? (rawId?.id ?? rawId?._id) : rawId;
+  };
+
+  const unresolvedCount = logs.filter(log => !resolveFoodId(log)).length;
+
   const handleSave = () => {
     if (mealName.trim() && logs.length > 0) {
+      const food_items = logs
+        .map(log => {
+          const foodId = resolveFoodId(log);
+          if (!foodId) return null;
+          return { food_item_id: foodId, servings: log.servings || 1 };
+        })
+        .filter(Boolean);
+      if (food_items.length === 0) return;
       const mealData = {
         name: mealName.trim(),
         meal_type: mealType,
-        food_items: logs.map(log => {
-          const food = log.food_item || log.food_item_id || {};
-          const rawId = log.food_item_id || food._id;
-          // `log.food_item_id` is the gateway's populated FoodLog row — a
-          // flat FitnessFood object with `id`, never `_id`. Without the
-          // `.id` read every logged item fell through to the "no id"
-          // fallback below and re-created the food instead of referencing it.
-          const foodId = typeof rawId === 'object' ? (rawId?.id ?? rawId?._id) : rawId;
-          const servings = log.servings || 1;
-          if (foodId) {
-            return { food_item_id: foodId, servings };
-          }
-          // Fallback payload to allow creating a custom food when no id exists
-          return {
-            servings,
-            food_item_payload: {
-              name: food.name,
-              brand: food.brand,
-              barcode: food.barcode,
-              source: food.source || 'custom',
-              source_id: food.source_id,
-              nutrition: {
-                calories_per_serving: food.nutrition?.calories_per_serving || 0,
-                protein_grams: food.nutrition?.protein_grams || 0,
-                carbs_grams: food.nutrition?.carbs_grams || 0,
-                fat_grams: food.nutrition?.fat_grams || 0,
-                fiber_grams: food.nutrition?.fiber_grams || 0,
-                sugar_grams: food.nutrition?.sugar_grams || 0,
-                sodium_mg: food.nutrition?.sodium_mg || 0
-              },
-              serving: {
-                size: food.serving?.size || food.serving_size || 100,
-                unit: food.serving?.unit || food.serving_unit || 'g'
-              }
-            }
-          };
-        })
+        food_items
       };
       onSave(mealData);
     }
@@ -116,7 +111,7 @@ const SaveMealDialog = ({
         <Button
           onClick={handleSave}
           variant="contained"
-          disabled={!mealName.trim() || loading}
+          disabled={!mealName.trim() || loading || unresolvedCount === logs.length}
         >
           {loading ? 'Saving...' : 'Save Meal'}
         </Button>
@@ -141,6 +136,13 @@ const SaveMealDialog = ({
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
             This meal contains {logs.length} item{logs.length !== 1 ? 's' : ''}:
           </Typography>
+
+          {unresolvedCount > 0 && (
+            <Typography variant="body2" color="warning.main" sx={{ mb: 1 }}>
+              {unresolvedCount} item{unresolvedCount !== 1 ? 's' : ''} could not be saved to the
+              meal — no catalog entry
+            </Typography>
+          )}
 
           <Box sx={{ mb: 2 }}>
             {logs.map((log, index) => {

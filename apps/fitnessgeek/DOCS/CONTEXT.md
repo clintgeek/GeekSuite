@@ -12,6 +12,13 @@ generic one, and by retyping `GetHouseholdMemberLogs`'s `$date` from `Date!` to 
 gateway's typeDefs. See `DOCS/BURN_REVIEW.md` #16 and
 `frontend/src/services/__tests__/apiServiceHouseholdLogs.test.js`.
 
+**2026-09-05 (Q67 fix):** `SaveMealDialog.jsx`'s fallback for a food-log row with no
+catalog id used to send `food_item_payload` inside `MealItemInput`, a field the gateway never
+declared (`food_item_id: ID!` / `servings: Float!` only) — reaching that branch would have failed
+the whole save. Since `addFoodLog` always resolves a real `food_item_id` today, the dialog now
+skips any such row and shows "N item(s) could not be saved to the meal — no catalog entry" instead
+of sending the field. See `frontend/src/components/__tests__/SaveMealDialog.test.jsx`.
+
 ---
 
 ## Going-over 2026-09-05 — the full-tree read
