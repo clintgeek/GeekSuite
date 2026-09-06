@@ -159,6 +159,22 @@ function AccountMenu({ account, themeRow }) {
     fn?.(event);
   };
 
+  const identity = name || secondary ? (
+    <Box component="li" role="presentation" sx={{ px: 2, py: 1 }}>
+      {name ? (
+        <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
+          {name}
+        </Typography>
+      ) : null}
+      {secondary ? (
+        <Typography variant="caption" noWrap sx={{ display: 'block', color: 'text.secondary' }}>
+          {secondary}
+        </Typography>
+      ) : null}
+      <Divider sx={{ mt: 1, mx: -2 }} />
+    </Box>
+  ) : null;
+
   return (
     <>
       <Tooltip title={name || label}>
@@ -201,6 +217,15 @@ function AccountMenu({ account, themeRow }) {
         disablePortal={typeof document === 'undefined'}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+        // The identity block rides in the list's `subheader` slot, not in
+        // `children`. MUI's `MenuList` walks its children and clones
+        // `tabIndex: 0` onto the first one that is not `disabled` — which made
+        // a plain `<Box>` header a focusable `div` inside `role="menu"`, and
+        // that is an `aria-required-children` violation (critical): a menu may
+        // only own menuitems. `subheader` renders inside the `<ul>` ahead of
+        // the children and is never walked, so the first *item* takes the
+        // roving tab stop and the header stays what it is — a label.
+        MenuListProps={{ subheader: identity }}
         slotProps={{
           paper: {
             sx: {
@@ -213,21 +238,6 @@ function AccountMenu({ account, themeRow }) {
           },
         }}
       >
-        {name || secondary ? (
-          <Box sx={{ px: 2, py: 1 }}>
-            {name ? (
-              <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
-                {name}
-              </Typography>
-            ) : null}
-            {secondary ? (
-              <Typography variant="caption" noWrap sx={{ display: 'block', color: 'text.secondary' }}>
-                {secondary}
-              </Typography>
-            ) : null}
-          </Box>
-        ) : null}
-        {name || secondary ? <Divider /> : null}
         {themeRow ? (
           <MenuItem
             data-geek-topbar-menu="theme"

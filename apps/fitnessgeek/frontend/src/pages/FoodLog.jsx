@@ -570,6 +570,7 @@ const FoodLog = () => {
             <LinearProgress
               variant="determinate"
               value={barPct}
+              aria-label={`Net carbs: ${totalNetCarbs}g of ${netCarbLimit}g`}
               sx={{
                 height: 8,
                 borderRadius: 4,

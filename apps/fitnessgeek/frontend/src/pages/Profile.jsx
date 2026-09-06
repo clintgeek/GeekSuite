@@ -9,6 +9,7 @@ import {
   Grid,
   List,
   ListItem,
+  ListItemButton,
   ListItemIcon,
   ListItemText,
 } from '@mui/material';
@@ -279,37 +280,41 @@ const Profile = () => {
                   }
                 />
               </ListItem>
-              <ListItem
-                component="button"
-                onClick={handleLogout}
-                sx={{
-                  px: 2.5,
-                  py: 1.5,
-                  width: '100%',
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                  border: 'none',
-                  bgcolor: 'transparent',
-                  '&:hover': {
-                    bgcolor: (theme) => (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)'),
-                  },
-                }}
-              >
-                <ListItemIcon sx={{ minWidth: 36 }}>
-                  <LogoutIcon fontSize="small" color="error" />
-                </ListItemIcon>
-                <ListItemText
-                  primary={
-                    <Typography sx={{ fontWeight: 600, fontSize: '0.9375rem', color: 'error.main' }}>
-                      Sign out
-                    </Typography>
-                  }
-                  secondary={
-                    <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>
-                      End this session
-                    </Typography>
-                  }
-                />
+              {/* The row is a <li>, the control inside it is the <button>: a bare
+                  <button> as a direct child of <ul> is an axe `list` violation. */}
+              <ListItem disablePadding>
+                <ListItemButton
+                  component="button"
+                  onClick={handleLogout}
+                  sx={{
+                    px: 2.5,
+                    py: 1.5,
+                    width: '100%',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    border: 'none',
+                    bgcolor: 'transparent',
+                    '&:hover': {
+                      bgcolor: (theme) => (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)'),
+                    },
+                  }}
+                >
+                  <ListItemIcon sx={{ minWidth: 36 }}>
+                    <LogoutIcon fontSize="small" color="error" />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={
+                      <Typography sx={{ fontWeight: 600, fontSize: '0.9375rem', color: 'error.main' }}>
+                        Sign out
+                      </Typography>
+                    }
+                    secondary={
+                      <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>
+                        End this session
+                      </Typography>
+                    }
+                  />
+                </ListItemButton>
               </ListItem>
             </List>
           </Surface>

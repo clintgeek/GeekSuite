@@ -281,6 +281,20 @@ just landed) — themed tooltips and brand-ink derivation live there.
 
 ---
 
+## a11y pass (2026-09-05, TODO_ORDER Q51)
+
+The mobile harness' axe run had basegeek at **2 findings — 0 now**, both
+`aria-input-field-name` on `/account`: the six `Select`s in
+`packages/ui/src/pages/AccountPage.jsx` (Timezone, Locale, Theme, Date format,
+Time format, Start of week) had an `InputLabel` with no `id` and a `Select`
+with no `labelId`. MUI does not wire those together on its own — a
+`FormControl` without an explicit `id` gives the label no id to be referenced
+by, so the control ends up nameless however visible its label looks. Every new
+`Select` in this app gets `<InputLabel id="x-label">` +
+`<Select labelId="x-label">`.
+
+---
+
 ## Tests (added 2026-09-05)
 
 The admin console (`apps/basegeek/packages/ui`) had no test suite before this

@@ -135,6 +135,14 @@ const RichTextEditor = ({ content = '', setContent = () => {}, isLoading = false
       }),
     ],
     content: content,
+    // ProseMirror puts role="textbox" on its contenteditable div; without a
+    // name that is an `aria-input-field-name` violation, and a screen reader
+    // lands in an unnamed edit field.
+    editorProps: {
+      attributes: {
+        'aria-label': 'Note body',
+      },
+    },
     onBlur: ({ editor }) => {
       const html = editor.getHTML();
       if (html !== lastSavedContent.current) {

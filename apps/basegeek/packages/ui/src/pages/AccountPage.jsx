@@ -323,14 +323,14 @@ export default function AccountPage() {
                 placeholder="A short bio"
               />
               <FormControl size="small" fullWidth>
-                <InputLabel>Timezone</InputLabel>
-                <Select value={profileForm.timezone} onChange={handleProfileChange('timezone')} label="Timezone">
+                <InputLabel id="account-timezone-label">Timezone</InputLabel>
+                <Select labelId="account-timezone-label" value={profileForm.timezone} onChange={handleProfileChange('timezone')} label="Timezone">
                   {TIMEZONE_OPTIONS.map(tz => <MenuItem key={tz} value={tz}>{tz}</MenuItem>)}
                 </Select>
               </FormControl>
               <FormControl size="small" fullWidth>
-                <InputLabel>Locale</InputLabel>
-                <Select value={profileForm.locale} onChange={handleProfileChange('locale')} label="Locale">
+                <InputLabel id="account-locale-label">Locale</InputLabel>
+                <Select labelId="account-locale-label" value={profileForm.locale} onChange={handleProfileChange('locale')} label="Locale">
                   {LOCALE_OPTIONS.map(opt => <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>)}
                 </Select>
               </FormControl>
@@ -353,31 +353,31 @@ export default function AccountPage() {
           >
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' }, gap: 2 }}>
               <FormControl size="small" fullWidth>
-                <InputLabel>Theme</InputLabel>
-                <Select value={themeValue} onChange={handleThemeChange} label="Theme">
+                <InputLabel id="account-theme-label">Theme</InputLabel>
+                <Select labelId="account-theme-label" value={themeValue} onChange={handleThemeChange} label="Theme">
                   <MenuItem value="dark">Dark</MenuItem>
                   <MenuItem value="light">Light</MenuItem>
                   <MenuItem value="system">System</MenuItem>
                 </Select>
               </FormControl>
               <FormControl size="small" fullWidth>
-                <InputLabel>Date format</InputLabel>
-                <Select value={prefsForm.dateFormat} onChange={handlePrefsChange('dateFormat')} label="Date format">
+                <InputLabel id="account-date-format-label">Date format</InputLabel>
+                <Select labelId="account-date-format-label" value={prefsForm.dateFormat} onChange={handlePrefsChange('dateFormat')} label="Date format">
                   <MenuItem value="US">MM/DD/YYYY</MenuItem>
                   <MenuItem value="EU">DD/MM/YYYY</MenuItem>
                   <MenuItem value="ISO">YYYY-MM-DD</MenuItem>
                 </Select>
               </FormControl>
               <FormControl size="small" fullWidth>
-                <InputLabel>Time format</InputLabel>
-                <Select value={prefsForm.timeFormat} onChange={handlePrefsChange('timeFormat')} label="Time format">
+                <InputLabel id="account-time-format-label">Time format</InputLabel>
+                <Select labelId="account-time-format-label" value={prefsForm.timeFormat} onChange={handlePrefsChange('timeFormat')} label="Time format">
                   <MenuItem value="12h">12-hour</MenuItem>
                   <MenuItem value="24h">24-hour</MenuItem>
                 </Select>
               </FormControl>
               <FormControl size="small" fullWidth>
-                <InputLabel>Start of week</InputLabel>
-                <Select value={prefsForm.startOfWeek} onChange={handlePrefsChange('startOfWeek')} label="Start of week">
+                <InputLabel id="account-start-of-week-label">Start of week</InputLabel>
+                <Select labelId="account-start-of-week-label" value={prefsForm.startOfWeek} onChange={handlePrefsChange('startOfWeek')} label="Start of week">
                   <MenuItem value="sunday">Sunday</MenuItem>
                   <MenuItem value="monday">Monday</MenuItem>
                 </Select>

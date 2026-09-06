@@ -78,6 +78,7 @@ const NetCarbMeter = ({ consumed = 0, limitG = 20, sx }) => {
       <LinearProgress
         variant="determinate"
         value={clampedPct}
+        aria-label={`Net carbs: ${Math.round(consumed)}g of ${limitG}g`}
         sx={{
           height: 10,
           borderRadius: 5,

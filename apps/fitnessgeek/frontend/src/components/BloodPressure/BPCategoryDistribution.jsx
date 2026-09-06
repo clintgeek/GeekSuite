@@ -82,9 +82,17 @@ const BPCategoryDistribution = ({ bpLogs = [] }) => {
           Category Distribution
         </Typography>
 
-        <Box sx={{ height: 280 }}>
+        {/* @nivo/pie forwards `role` to its <svg> but not `ariaLabel` (the line
+            charts forward both), so the name lives on the wrapper and the svg
+            steps out of the accessibility tree. */}
+        <Box
+          role="img"
+          aria-label="Share of readings in each blood pressure category"
+          sx={{ height: 280 }}
+        >
           <ResponsivePie
             data={chartData}
+            role="presentation"
             margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
             innerRadius={0.6}
             padAngle={2}

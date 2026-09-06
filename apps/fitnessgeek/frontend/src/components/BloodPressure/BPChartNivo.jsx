@@ -180,6 +180,8 @@ const BPChartNivo = ({ data, unit = 'mmHg' }) => {
         <ResponsiveLine
           data={chartData}
           theme={chartTheme}
+          role="img"
+          ariaLabel="Systolic and diastolic blood pressure over time"
           margin={{ top: 12, right: 16, bottom: 40, left: 36 }}
           xScale={{ type: 'point' }}
           yScale={{ type: 'linear', min: 60, max: 180, stacked: false }}

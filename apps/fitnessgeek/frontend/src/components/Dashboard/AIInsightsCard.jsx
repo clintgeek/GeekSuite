@@ -222,11 +222,18 @@ const AIInsightsCard = () => {
               size="small"
               onClick={() => loadInsight(activeTab)}
               disabled={loading || activeTab === 'chat'}
+              aria-label={`Refresh ${tabs.find((t) => t.id === activeTab)?.label || 'insight'}`}
               sx={{ p: 0.5 }}
             >
               <RefreshIcon sx={{ fontSize: 16 }} />
             </IconButton>
-            <IconButton size="small" onClick={() => setExpanded(!expanded)} sx={{ p: 0.5 }}>
+            <IconButton
+              size="small"
+              onClick={() => setExpanded(!expanded)}
+              aria-label={expanded ? 'Collapse AI insights' : 'Expand AI insights'}
+              aria-expanded={expanded}
+              sx={{ p: 0.5 }}
+            >
               {expanded ? <CollapseIcon sx={{ fontSize: 16 }} /> : <ExpandIcon sx={{ fontSize: 16 }} />}
             </IconButton>
           </Box>
@@ -348,6 +355,7 @@ const AIInsightsCard = () => {
                     onClick={handleSendChat}
                     disabled={!chatMessage.trim() || chatLoading}
                     size="small"
+                    aria-label="Send question to the AI coach"
                     sx={{ p: 0.75 }}
                   >
                     <SendIcon sx={{ fontSize: 18, color: chatMessage.trim() ? accentColor : theme.palette.text.disabled }} />

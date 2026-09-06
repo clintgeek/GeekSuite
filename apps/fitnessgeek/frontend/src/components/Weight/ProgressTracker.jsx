@@ -186,6 +186,7 @@ const ProgressTracker = ({
           <LinearProgress
             variant="determinate"
             value={progress}
+            aria-label={`Progress to goal: ${progress.toFixed(1)}%`}
             sx={{ height: 8, borderRadius: 4 }}
           />
         </Box>

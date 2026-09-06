@@ -82,45 +82,61 @@ const QuickAddPanel = ({
 
   return (
     <Box sx={{ mb: 2 }}>
-      {/* Collapse Header */}
-      <Button
-        fullWidth
-        onClick={() => setExpanded(!expanded)}
+      {/* Collapse header. The meal picker used to live *inside* this Button,
+          which made the whole header one control with focusable descendants —
+          axe `nested-interactive`, and a keyboard user could not reach the
+          toggles. The row is the container now; the disclosure and the picker
+          are siblings. */}
+      <Box
         sx={{
-          justifyContent: 'space-between',
-          py: 1.5,
-          px: 2,
           backgroundColor: theme.palette.background.paper,
           border: `1px solid ${theme.palette.divider}`,
           borderRadius: 2,
-          textTransform: 'none',
-          '&:hover': {
-            backgroundColor: 'action.hover'
-          }
+          overflow: 'hidden'
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-          <StarIcon sx={{ color: '#f59e0b', fontSize: 20 }} />
-          <Typography variant="body1" sx={{ fontWeight: 600, color: theme.palette.text.primary }}>
-            Quick Add
-          </Typography>
-          <Chip
-            label="Favorites & Recent"
-            size="small"
-            sx={{
-              height: 24,
-              fontSize: '0.75rem',
-              backgroundColor: 'rgba(13, 148, 136, 0.1)',
-              color: 'primary.main'
-            }}
-          />
+        <Button
+          fullWidth
+          onClick={() => setExpanded(!expanded)}
+          aria-expanded={expanded}
+          sx={{
+            justifyContent: 'space-between',
+            py: 1.5,
+            px: 2,
+            borderRadius: 0,
+            textTransform: 'none',
+            '&:hover': {
+              backgroundColor: 'action.hover'
+            }
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+            <StarIcon sx={{ color: '#f59e0b', fontSize: 20 }} />
+            <Typography variant="body1" sx={{ fontWeight: 600, color: theme.palette.text.primary }}>
+              Quick Add
+            </Typography>
+            <Chip
+              label="Favorites & Recent"
+              size="small"
+              sx={{
+                height: 24,
+                fontSize: '0.75rem',
+                backgroundColor: 'rgba(13, 148, 136, 0.1)',
+                color: 'primary.main'
+              }}
+            />
+          </Box>
+          {expanded ? <CollapseIcon /> : <ExpandIcon />}
+        </Button>
+        <Box sx={{ px: 2, pb: 1.5, display: 'flex' }}>
           <ToggleButtonGroup
             size="small"
             value={selectedMealType}
             exclusive
+            aria-label="Meal to quick-add into"
             onChange={(_, next) => next && onMealTypeChange?.(next)}
             sx={{
-              ml: { xs: 0, sm: 1 },
+              flexWrap: 'wrap',
               '& .MuiToggleButton-root': {
                 textTransform: 'capitalize',
                 fontSize: '0.75rem',
@@ -131,14 +147,13 @@ const QuickAddPanel = ({
             }}
           >
             {mealTypes.map((meal) => (
-              <ToggleButton key={meal} value={meal}>
+              <ToggleButton key={meal} value={meal} aria-label={`Quick-add into ${meal}`}>
                 {meal}
               </ToggleButton>
             ))}
           </ToggleButtonGroup>
         </Box>
-        {expanded ? <CollapseIcon /> : <ExpandIcon />}
-      </Button>
+      </Box>
 
       {/* Expanded Content */}
       <Collapse in={expanded}>

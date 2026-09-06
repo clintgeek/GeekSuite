@@ -204,3 +204,9 @@ Fix it when someone is already in `StoryPlay.jsx` with the design in front of
 them: either give the dice tones the `readableOn` treatment against the
 gradient's darkest stop, or flatten the message paper so the rule can see it.
 Do not expect the harness to tell you when it is done — measure by hand.
+
+**Still true after the gate flipped (2026-09-05).** The harness' `a11y`
+category is enforcing now and reports 0 across all eight apps; this item is one
+of the things that zero does *not* cover. Green there means "axe found
+nothing", not "there is nothing to find" — a gradient ground is a blind spot,
+and so is anything the scenes never open.

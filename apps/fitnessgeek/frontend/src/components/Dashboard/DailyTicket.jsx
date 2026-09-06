@@ -299,6 +299,7 @@ const DailyTicket = ({
           <LinearProgress
             variant="determinate"
             value={percentage}
+            aria-label={`Calories: ${consumedRounded.toLocaleString()} of ${goalRounded.toLocaleString()} kcal`}
             sx={{
               height: 8,
               borderRadius: 4,

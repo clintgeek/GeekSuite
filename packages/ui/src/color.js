@@ -60,31 +60,42 @@ const readableCache = new Map();
  * steps until it clears `min`. Direction comes from the surface, not the mode,
  * because a light chip on a dark page is a real thing.
  *
+ * A tinted surface is the same problem one layer down. `alpha(ink, 0.12)` on a
+ * chip is not a color either — it is a color *and the paper under it*, and on
+ * dark paper it composites to something entirely different than on light. Pass
+ * that paper as `under` and the surface is flattened before anything is
+ * measured against it; the 2026-09-05 pass found fitnessgeek's source chips at
+ * 2.56:1 in dark and 4.14:1 in light from one `alpha()` background.
+ *
  * @param {string} color   the ink. `rgba()` is flattened over `surface` first.
- * @param {string} surface the background it sits on. Must be opaque; pass the
- *                         real painted color, not a translucent overlay.
- * @param {{min?: number}} [options] `min` defaults to 4.5 (WCAG AA, normal
- *                         text). Pass 3 for large text or a graphical object.
+ * @param {string} surface the background it sits on. A translucent surface
+ *                         needs `under`; without one it is composited over
+ *                         white, which is a guess and usually a wrong one.
+ * @param {{min?: number, under?: string}} [options] `min` defaults to 4.5
+ *                         (WCAG AA, normal text) — pass 3 for large text or a
+ *                         graphical object. `under` is the opaque color beneath
+ *                         `surface`, normally `background.paper`; it defaults
+ *                         to white and is ignored when `surface` is opaque.
  * @returns {string} the original color when it already clears `min`, otherwise
  *                   the first step that does; black or white if nothing does.
  */
-export function readableOn(color, surface, { min = 4.5 } = {}) {
+export function readableOn(color, surface, { min = 4.5, under = '#FFFFFF' } = {}) {
   if (!color || !surface) return color;
 
-  const key = `${color}|${surface}|${min}`;
+  const key = `${color}|${surface}|${min}|${under}`;
   const cached = readableCache.get(key);
   if (cached !== undefined) return cached;
 
-  const result = computeReadable(color, surface, min);
+  const result = computeReadable(color, surface, min, under);
   readableCache.set(key, result);
   return result;
 }
 
-function computeReadable(color, surface, min) {
+function computeReadable(color, surface, min, under) {
   let ground;
   let ink;
   try {
-    ground = flattenOver(surface, '#FFFFFF');
+    ground = flattenOver(surface, under);
     ink = flattenOver(color, ground);
   } catch {
     // An unparseable color (a CSS variable, `currentColor`) is not something

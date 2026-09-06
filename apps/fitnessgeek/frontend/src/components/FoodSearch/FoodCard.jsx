@@ -16,6 +16,7 @@ import {
   Warning as WarningIcon
 } from '@mui/icons-material';
 import { useTheme, alpha } from '@mui/material/styles';
+import { readableOn } from '@geeksuite/ui';
 import { netCarbs as calcNetCarbs } from '../../utils/ketoMath';
 
 const getSourceName = (source) => {
@@ -76,6 +77,7 @@ const FoodCard = ({
   const baseBg = theme.palette.background.paper;
   const selectedBg = alpha(primary, theme.palette.mode === 'dark' ? 0.25 : 0.08);
   const isDark = theme.palette.mode === 'dark';
+  const sourceChipBg = alpha(theme.palette.text.secondary, 0.12);
   const stagedBg = alpha(primary, isDark ? 0.22 : 0.09);
   const stagedBorder = primary;
 
@@ -412,8 +414,10 @@ const FoodCard = ({
               size="small"
               sx={{
                 borderRadius: '999px',
-                backgroundColor: alpha(theme.palette.text.secondary, 0.12),
-                color: getSourceColor(food.source),
+                backgroundColor: sourceChipBg,
+                // The chip ground is a tint, not the paper: stone-on-tint read
+                // 2.56:1 in dark and 4.14:1 in light before this.
+                color: readableOn(getSourceColor(food.source), sourceChipBg, { under: baseBg }),
                 fontWeight: 600,
                 fontSize: '0.6875rem',
                 height: 20,

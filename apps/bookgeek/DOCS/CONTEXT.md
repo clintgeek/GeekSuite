@@ -311,6 +311,22 @@ Calibre import ran.
 
 ---
 
+## a11y pass (2026-09-05, TODO_ORDER Q51)
+
+The mobile harness' axe run had bookgeek at **4 findings — 0 now**, and
+**both fixes were in `packages/ui`, not in this app**: the drawer's shelf list
+and the avatar menu are `GeekSidebar` and `GeekTopBar`. `GeekSidebar` now
+wraps every row's `ListItemButton` in a `<ListItem disablePadding>` (a bare
+`ListItemButton` renders `div[role=button]` — or an `<a>` for a router link —
+straight into the `<ul>`, which is an axe `list` violation), and
+`GeekTopBar`'s account identity block moved into the menu list's `subheader`
+slot, because MUI's `MenuList` clones `tabIndex: 0` onto the first non-disabled
+child and a focusable `div` inside `role="menu"` is `aria-required-children`
+(critical). Nothing in `apps/bookgeek/web/src` changed. If a future finding
+points at the drawer or the avatar menu, look upstream first.
+
+---
+
 ## Feedback primitives (2026-09-05, TODO_ORDER #15 fan-out)
 
 `GeekToastProvider` is mounted in `App.jsx`, inside `GeekShell` and outside
@@ -368,3 +384,14 @@ No local `EmptyState`/`ErrorState`/toast component existed to delete. No
 lightColors` is base-palette construction, a different thing from the
 domain-color pattern `toneForMode` replaces — and no local `MuiTooltip`
 override either, so TODO_ORDER #19 has nothing to convert here.
+
+## Service worker — SW reinstalls on deploy (2026-09-05, Q54)
+
+`web/public/sw.js` had the same landmine as flockgeek (115fb03): a constant
+`CACHE_NAME` and a static three-URL precache, so a new deploy never
+reinstalled the SW and the `"/"` cached on a user's first visit was served
+forever. Fixed the same way: `BUILD_ID`/`PRECACHE_ASSETS` placeholders in
+`public/sw.js`, stamped into `dist/sw.js` by `swPrecache()` in
+`vite.config.js` from the built `assets/*.js`/`*.css` list; `CACHE_NAME` is
+now `bookgeek-cache-${BUILD_ID}`. Dev (`vite dev`) still serves the source
+file untouched — no build step there. See DOCS/PWA_STANDARD.md §1a.

@@ -50,6 +50,7 @@ import Box from '@mui/material/Box';
 import ButtonBase from '@mui/material/ButtonBase';
 import Drawer from '@mui/material/Drawer';
 import List from '@mui/material/List';
+import ListItem from '@mui/material/ListItem';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
@@ -401,43 +402,47 @@ export const GeekSidebar = forwardRef(function GeekSidebar(
 
         <List disablePadding>
           {settings ? (
-            <ListItemButton
-              data-geek-nav-footer="settings"
-              {...(settings.to ? { component: RouterLink, to: settings.to } : {})}
-              selected={settingsSelected}
-              aria-current={settingsSelected ? 'page' : undefined}
-              onClick={(event) => {
-                settings.onClick?.(event);
-                closeNav();
-              }}
-              sx={rowSx}
-            >
-              <ListItemIcon sx={{ minWidth: 32, color: 'inherit' }}>
-                <SettingsGlyph />
-              </ListItemIcon>
-              <ListItemText
-                primary={settingsLabel}
-                primaryTypographyProps={{ noWrap: true, variant: 'body2' }}
-              />
-            </ListItemButton>
+            <ListItem disablePadding>
+              <ListItemButton
+                data-geek-nav-footer="settings"
+                {...(settings.to ? { component: RouterLink, to: settings.to } : {})}
+                selected={settingsSelected}
+                aria-current={settingsSelected ? 'page' : undefined}
+                onClick={(event) => {
+                  settings.onClick?.(event);
+                  closeNav();
+                }}
+                sx={rowSx}
+              >
+                <ListItemIcon sx={{ minWidth: 32, color: 'inherit' }}>
+                  <SettingsGlyph />
+                </ListItemIcon>
+                <ListItemText
+                  primary={settingsLabel}
+                  primaryTypographyProps={{ noWrap: true, variant: 'body2' }}
+                />
+              </ListItemButton>
+            </ListItem>
           ) : null}
           {onSignOut ? (
-            <ListItemButton
-              data-geek-nav-footer="signout"
-              onClick={(event) => {
-                closeNav();
-                onSignOut(event);
-              }}
-              sx={rowSx}
-            >
-              <ListItemIcon sx={{ minWidth: 32, color: 'inherit' }}>
-                <SignOutGlyph />
-              </ListItemIcon>
-              <ListItemText
-                primary={signOutLabel}
-                primaryTypographyProps={{ noWrap: true, variant: 'body2' }}
-              />
-            </ListItemButton>
+            <ListItem disablePadding>
+              <ListItemButton
+                data-geek-nav-footer="signout"
+                onClick={(event) => {
+                  closeNav();
+                  onSignOut(event);
+                }}
+                sx={rowSx}
+              >
+                <ListItemIcon sx={{ minWidth: 32, color: 'inherit' }}>
+                  <SignOutGlyph />
+                </ListItemIcon>
+                <ListItemText
+                  primary={signOutLabel}
+                  primaryTypographyProps={{ noWrap: true, variant: 'body2' }}
+                />
+              </ListItemButton>
+            </ListItem>
           ) : null}
         </List>
       </Box>
@@ -502,28 +507,33 @@ export const GeekSidebar = forwardRef(function GeekSidebar(
                 {section.label}
               </Typography>
             ) : null}
+            {/* Every row is a <li> that *contains* the control. A bare
+                ListItemButton renders a div[role=button] (or an <a>) straight
+                into the <ul>, which is an axe `list` violation — the fix is
+                the markup, never a role bolted onto the list. */}
             <List disablePadding sx={{ px: 1 }}>
               {(section.items ?? []).map((item) => (
-                <ListItemButton
-                  key={item.id}
-                  data-geek-nav-item={item.id}
-                  selected={item.id === activeId}
-                  disabled={item.disabled}
-                  aria-current={item.id === activeId ? 'page' : undefined}
-                  onClick={handleNavigate(item)}
-                  sx={rowSx}
-                  {...linkPropsFor(item)}
-                >
-                  {item.icon ? (
-                    <ListItemIcon sx={{ minWidth: 32, color: 'inherit' }}>{item.icon}</ListItemIcon>
-                  ) : null}
-                  <ListItemText
-                    primary={item.label}
-                    secondary={item.description}
-                    primaryTypographyProps={{ noWrap: true, variant: 'body2' }}
-                  />
-                  <Badge value={item.badge} badgeProps={item.badgeProps} />
-                </ListItemButton>
+                <ListItem key={item.id} disablePadding>
+                  <ListItemButton
+                    data-geek-nav-item={item.id}
+                    selected={item.id === activeId}
+                    disabled={item.disabled}
+                    aria-current={item.id === activeId ? 'page' : undefined}
+                    onClick={handleNavigate(item)}
+                    sx={rowSx}
+                    {...linkPropsFor(item)}
+                  >
+                    {item.icon ? (
+                      <ListItemIcon sx={{ minWidth: 32, color: 'inherit' }}>{item.icon}</ListItemIcon>
+                    ) : null}
+                    <ListItemText
+                      primary={item.label}
+                      secondary={item.description}
+                      primaryTypographyProps={{ noWrap: true, variant: 'body2' }}
+                    />
+                    <Badge value={item.badge} badgeProps={item.badgeProps} />
+                  </ListItemButton>
+                </ListItem>
               ))}
             </List>
           </Box>

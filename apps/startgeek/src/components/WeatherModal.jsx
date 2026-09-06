@@ -30,7 +30,15 @@ const Week = ({ days }) => {
   const pos = (t) => (1 - (t - min) / (max - min)) * 100
 
   return (
-    <div className="flex sm:grid sm:grid-cols-7 gap-2 overflow-x-auto snap-x snap-mandatory pb-1 -mx-1 px-1 sm:mx-0 sm:px-0 sm:overflow-visible">
+    // The strip scrolls sideways on a phone and none of its content is
+    // focusable, so it needs its own keyboard route in and a name to arrive at
+    // (WCAG 2.1.1, axe `scrollable-region-focusable`).
+    <div
+      tabIndex={0}
+      role="group"
+      aria-label="Seven-day forecast"
+      className="flex sm:grid sm:grid-cols-7 gap-2 overflow-x-auto snap-x snap-mandatory pb-1 -mx-1 px-1 sm:mx-0 sm:px-0 sm:overflow-visible focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent rounded-lg"
+    >
       {days.map((d, i) => {
         const top = pos(d.highTemp)
         const height = pos(d.lowTemp) - top

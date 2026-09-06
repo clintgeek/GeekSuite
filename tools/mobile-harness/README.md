@@ -4,8 +4,8 @@ The phone-width screenshot harness and mobile-grammar probe for the suite.
 It exists so the rules in [`DOCS/MOBILE_UI_PLAN.md`](../../DOCS/MOBILE_UI_PLAN.md)
 §6 — 44px targets, a 12px text floor, no sideways scroll — cannot quietly
 rot the next time somebody ships a dense table on a Friday. It also runs
-axe-core (WCAG 2 A + AA) on every scene as a fourth, **report-only**
-category; see [the a11y pass](#the-a11y-pass-axe-core) below.
+axe-core (WCAG 2 A + AA) on every scene as a fourth category, **enforcing in
+CI since 2026-09-05**; see [the a11y pass](#the-a11y-pass-axe-core) below.
 
 It is the scratch harness from the M1–M5 passes, cleaned up and made a repo
 citizen: one lib, one fixture set per app, one entry point, one CI job.
@@ -31,7 +31,8 @@ node tools/mobile-harness/shoot.mjs --app basegeek --serve --viewports all
 pnpm --filter @geeksuite/mobile-harness run ci
 node tools/mobile-harness/ci.mjs --app bookgeek --app flockgeek   # a subset
 
-# Make the axe-core findings count toward the exit code (default: they don't)
+# Make the axe-core findings count toward the exit code. CI passes this; the
+# tool's own default is still report-only, so pass it when you want the gate.
 node tools/mobile-harness/ci.mjs --enforce-a11y
 
 # Skip the axe pass entirely (faster; useful when iterating on the grammar rules)
@@ -180,15 +181,16 @@ two-line clamps and long-title truncation this harness is meant to catch.
 
 ## The probe
 
-Four categories. The first three are the gate, measured in the live page
-(computed styles, not source); the fourth is axe-core and is report-only:
+Four categories, all four a gate. The first three are measured in the live page
+(computed styles, not source) and always count; the fourth is axe-core, which
+counts when `--enforce-a11y` is passed — CI passes it:
 
 | category | assertion | viewport | gate |
 |------|-----------|----------|------|
 | `tap-target` | every visible interactive element is ≥ 44×44 | phone only | enforcing |
 | `text-floor` | no visible readable string below 12px | all | enforcing |
 | `h-scroll` | `document.scrollingElement.scrollWidth === clientWidth` | all | enforcing |
-| `a11y` | no axe-core violation at `wcag2a` / `wcag2aa` | all | report-only |
+| `a11y` | no axe-core violation at `wcag2a` / `wcag2aa` | all | enforcing in CI (`--enforce-a11y`) |
 
 Plus: any uncaught page error fails the run.
 
@@ -334,50 +336,49 @@ Three deliberate choices:
   — which is right for contrast, where the two schemes genuinely are two
   different bugs.
 
-`--enforce-a11y` makes these count toward the exit code. It is **off in CI**
-(`.github/workflows/mobile-harness.yml`), so the three grammar rules are the
-gate and a11y is a burn-down list. The flip criterion, per
-[`MOBILE_UI_PLAN.md`](../../DOCS/MOBILE_UI_PLAN.md) §2, is **0 open across all
-eight apps** — waived findings do not count as open.
-### Burn-down (2026-09-05)
+`--enforce-a11y` makes these count toward the exit code, and **CI passes it**
+(`.github/workflows/mobile-harness.yml`, flipped 2026-09-05) — a11y is a gate
+now, like the other three. The flip criterion per
+[`MOBILE_UI_PLAN.md`](../../DOCS/MOBILE_UI_PLAN.md) §2 was 0 open across all
+eight apps, and the full run reached it the same day it was set. The tool's own
+default is unchanged: `shoot.mjs`/`ci.mjs` still report a11y without failing
+unless you ask, so an exploratory local run is not a wall. **Add the flag when
+you are checking your work** — a scene you break locally will otherwise only
+speak up in CI.
+### Burn-down (2026-09-05) — closed
 
 **Baseline, the run that started this** — 140 scenes, 8 apps, iPhone 14 dark +
 light: 0 grammar violations, 0 page errors, **112 a11y findings**. Per app:
 fitnessgeek 29, bujogeek 28, storygeek 28, flockgeek 16, bookgeek 5,
 basegeek 2, notegeek 2, startgeek 2.
 
-**After the first burn (Q51)** — same 140 scenes: 0 grammar violations, 0 page
-errors, **39 a11y findings**. Three apps are at zero and the two rules that
-were two thirds of the list are gone from every app that was worked.
+**After the first burn (Q51)** — 0 grammar violations, 0 page errors,
+**39 a11y findings**. bujogeek, storygeek and flockgeek at zero.
 
-| app | before | after | |
-|---|--:|--:|---|
-| bujogeek | 28 | **0** | contrast, checkbox names, `Select` labels, `role="img"` |
-| storygeek | 28 | **0** | gold overlines, icon-button names, transcript keyboard route |
-| flockgeek | 16 | **0** | `Select` labels, form labels, accordion nesting |
-| bookgeek | 5 | **4** | the one contrast finding fell out of the suite theme fix |
-| fitnessgeek | 29 | 29 | not touched — another pass owned this app that night |
-| basegeek | 2 | 2 | not touched — same |
-| notegeek | 2 | 2 | not touched |
-| startgeek | 2 | 2 | not touched |
-| **total** | **112** | **39** | |
+**After the second burn (Q51, second half)** — 138 scenes walked (basegeek's
+two `/databases` scenes skip cleanly; the route is orphaned), 8 apps, both
+schemes: **0 grammar violations, 0 page errors, 0 a11y findings, 0 waived.**
+`.github/workflows/mobile-harness.yml` now passes `--enforce-a11y`, so the
+category is a gate. **The waiver list is empty in every app** — 112 findings
+came and went and not one of them was a false positive.
 
-What is left, by rule:
+| app | baseline | first burn | second burn | |
+|---|--:|--:|--:|---|
+| fitnessgeek | 29 | 29 | **0** | progress-bar names, 24 delete buttons named after their row, list markup, chart names, three tinted-surface contrasts |
+| bujogeek | 28 | **0** | 0 | contrast, checkbox names, `Select` labels, `role="img"` |
+| storygeek | 28 | **0** | 0 | gold overlines, icon-button names, transcript keyboard route |
+| flockgeek | 16 | **0** | 0 | `Select` labels, form labels, accordion nesting |
+| bookgeek | 5 | 4 | **0** | both fixes upstream in `packages/ui` — sidebar rows, account menu |
+| basegeek | 2 | 2 | **0** | six `AccountPage` `Select`s wired `InputLabel id` ↔ `labelId` |
+| notegeek | 2 | 2 | **0** | the TipTap surface named through `editorProps.attributes` |
+| startgeek | 2 | 2 | **0** | the forecast strip is a focusable, named scroll region |
+| **total** | **112** | **39** | **0** | |
 
-| rule | impact | findings | nodes | where it lives |
-|---|---|--:|--:|---|
-| [`button-name`](https://dequeuniversity.com/rules/axe/4.13/button-name) | critical | 6 | 56 | fitnessgeek 6 |
-| [`aria-input-field-name`](https://dequeuniversity.com/rules/axe/4.13/aria-input-field-name) | serious | 6 | 18 | fitnessgeek 2, notegeek 2, basegeek 2 |
-| [`aria-progressbar-name`](https://dequeuniversity.com/rules/axe/4.13/aria-progressbar-name) | serious | 6 | 14 | fitnessgeek 6 |
-| [`list`](https://dequeuniversity.com/rules/axe/4.13/list) | serious | 6 | 8 | fitnessgeek 4, bookgeek 2 |
-| [`color-contrast`](https://dequeuniversity.com/rules/axe/4.13/color-contrast) | serious | 5 | 9 | fitnessgeek 5 |
-| [`svg-img-alt`](https://dequeuniversity.com/rules/axe/4.13/svg-img-alt) | serious | 4 | 6 | fitnessgeek 4 |
-| [`aria-required-children`](https://dequeuniversity.com/rules/axe/4.13/aria-required-children) | critical | 2 | 2 | bookgeek 2 |
-| [`nested-interactive`](https://dequeuniversity.com/rules/axe/4.13/nested-interactive) | serious | 2 | 2 | fitnessgeek 2 |
-| [`scrollable-region-focusable`](https://dequeuniversity.com/rules/axe/4.13/scrollable-region-focusable) | serious | 2 | 2 | startgeek 2 |
-
-**The waiver list is still empty.** Nothing in the 73 findings that went away
-needed one, and nothing in the 39 that remain looks like a false positive.
+The rules that made up the list, worst first, and where they came from:
+`color-contrast` (45 — every one a call site, never a token),
+`button-name` (24), `aria-input-field-name` (24), `list` (6),
+`aria-progressbar-name` (6), `svg-img-alt` (4), `aria-required-children` (2),
+`nested-interactive` (2), `scrollable-region-focusable` (2).
 
 ### What the burn taught, for the next app
 
@@ -402,6 +403,32 @@ needed one, and nothing in the 39 that remain looks like a false positive.
    nameless FAB fails at the call site instead of in a nightly run.
 3. **`button-name` and `aria-input-field-name` are mechanical but not
    thoughtless.** A name has to say *which* thing the control acts on —
-   bujogeek's task toggle is `Mark "Call the roofer" done`, not `Toggle` — and a
-   MUI `Select` wants a real `InputLabel` + `labelId`, not an `aria-label`
-   bolted on, wherever the form has room for a visible label.
+   bujogeek's task toggle is `Mark "Call the roofer" done`, not `Toggle`;
+   fitnessgeek's weight-log delete is `Delete the 218.7 lbs entry from Sep 3`,
+   because 24 buttons called "Delete" on one screen is not a name. A MUI
+   `Select` wants a real `InputLabel` + `labelId`, not an `aria-label` bolted
+   on, wherever the form has room for a visible label.
+4. **Two more shared fixes closed a whole app.** bookgeek's four findings were
+   both in `packages/ui`: `GeekSidebar` wraps each row's `ListItemButton` in a
+   `<ListItem disablePadding>` (a bare one renders `div[role=button]` — or an
+   `<a>` — straight into the `<ul>`), and `GeekTopBar`'s account identity moved
+   into the menu list's `subheader` slot, because MUI's `MenuList` clones
+   `tabIndex: 0` onto its first non-disabled child and a focusable `div` inside
+   `role="menu"` is `aria-required-children`. Check upstream before editing an
+   app: the chrome is shared.
+5. **`list` is about markup, and MUI's escape hatches do not all work.**
+   `<Divider component="li">` still fails — MUI adds `role="separator"` the
+   moment `component` is not `hr`, and axe reads the role. Paint the rule as a
+   `borderBottom` on the row instead. A `<ListItem component="button">` is a
+   `<button>` child of a `<ul>`; use `<ListItem><ListItemButton>`.
+6. **Chart libraries disagree about how to be named.** `@nivo/line` forwards
+   both `role` and `ariaLabel` to its `<svg>`; **`@nivo/pie` forwards only
+   `role`**, so name the wrapper (`role="img"` + `aria-label`) and pass the
+   chart `role="presentation"`. Recharts renders a `<title>` element
+   unconditionally, so a chart with no `title` prop has an *empty* accessible
+   name — always pass `title` (and `desc`).
+7. **`readableOn` learned `under`.** A translucent *surface* is not a colour
+   either: `alpha(text.secondary, 0.12)` on a chip composites to `#383433` over
+   dark paper and `#EFEEED` over white, and the same ink fails differently on
+   each (2.56:1 and 4.14:1). Pass the paper as `under` — without it the surface
+   is composited over white, which is a guess.

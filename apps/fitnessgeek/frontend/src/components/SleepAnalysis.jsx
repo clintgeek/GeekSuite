@@ -107,6 +107,7 @@ function ProgressMetric({ label, value, max = 100, color = 'primary', showPercen
         variant="determinate"
         value={percentage}
         color={color}
+        aria-label={`${label}: ${Math.round(percentage)}%`}
         sx={{ height: 8, borderRadius: 1 }}
       />
     </Box>

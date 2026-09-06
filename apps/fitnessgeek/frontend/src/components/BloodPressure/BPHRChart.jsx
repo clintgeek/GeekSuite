@@ -63,7 +63,12 @@ const BPHRChart = ({ data = [], title = 'Heart Rate (Today)' }) => {
         </Typography>
         <Box sx={{ height: 250 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={points} margin={{ top: 10, right: 20, left: 0, bottom: 30 }}>
+            <LineChart
+              data={points}
+              title={title}
+              desc={`${points.length} heart-rate readings, in beats per minute`}
+              margin={{ top: 10, right: 20, left: 0, bottom: 30 }}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} />
               <XAxis
                 dataKey="time"

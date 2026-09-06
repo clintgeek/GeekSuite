@@ -9,8 +9,7 @@ import {
   ListItemText,
   ListItemSecondaryAction,
   IconButton,
-  Chip,
-  Divider
+  Chip
 } from '@mui/material';
 import {
   Delete as DeleteIcon,
@@ -90,7 +89,14 @@ const WeightLogList = ({ logs, onDelete, unit = 'lbs' }) => {
 
                 return (
                   <React.Fragment key={log.id}>
-                    <ListItem sx={{ py: 1.5 }}>
+                    <ListItem
+                      sx={{
+                        py: 1.5,
+                        ...(index < sortedLogs.length - 1 && {
+                          borderBottom: (t) => `1px solid ${t.palette.divider}`,
+                        }),
+                      }}
+                    >
                       <ListItemText
                         primary={
                           <Box sx={{ display: 'flex', alignItems: 'center' }}>
@@ -125,12 +131,12 @@ const WeightLogList = ({ logs, onDelete, unit = 'lbs' }) => {
                           onClick={() => onDelete(log.id)}
                           color="error"
                           size="small"
+                          aria-label={`Delete the ${parseFloat(log.weight_value).toFixed(1)} ${unit} entry from ${formatDate(log.log_date)}`}
                         >
                           <DeleteIcon />
                         </IconButton>
                       </ListItemSecondaryAction>
                     </ListItem>
-                    {index < sortedLogs.length - 1 && <Divider />}
                   </React.Fragment>
                 );
               })}

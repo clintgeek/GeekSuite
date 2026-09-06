@@ -359,6 +359,57 @@ services/**` were not touched — see "Frontend — where the writes go" below.
 
 ---
 
+## Frontend — a11y pass (2026-09-05, TODO_ORDER Q51)
+
+The mobile harness' axe run had fitnessgeek at **29 findings — 0 now**, and it
+was the app that kept the suite gate report-only. Nothing needed a waiver.
+What it took, and what to keep doing:
+
+- **Every `LinearProgress` carries an `aria-label` that names what it measures
+  and reads the number** (`Net carbs: 42g of 50g`), not "progress". Twelve of
+  them, across `Dashboard/DailyTicket`, `Dashboard/NetCarbMeter`,
+  `Dashboard/MetricCard`, `FoodLog/CalorieSummary` (both modes),
+  `FoodLog/NutritionSummary`, `pages/FoodLog`, `Weight/WeightProgress`,
+  `Weight/ProgressTracker`, `RecoveryCoach`, `SleepAnalysis` and
+  `pages/Reports`. A bare MUI progress bar has no accessible name at all.
+- **Icon buttons are named after the row they act on.**
+  `WeightLogList`'s delete is `Delete the 218.7 lbs entry from Sep 3`, not
+  "Delete" — 24 identical "Delete"s on one screen is not a name.
+  `DashboardHeader`'s three quick actions, `AIInsightsCard`'s refresh /
+  expand / send and `DateNavigator`'s day arrows got the same treatment.
+- **`<Divider>` inside a `<List>` is an axe `list` violation** and
+  `component="li"` does *not* fix it (axe reads the `role="separator"` MUI
+  then adds). `WeightLogList` paints the rule as a `borderBottom` on the
+  `ListItem` instead. Same rule on `pages/Profile`: the Sign-out row was a
+  `<ListItem component="button">`, i.e. a bare `<button>` child of a `<ul>` —
+  it is now `<ListItem disablePadding><ListItemButton …>`.
+- **Charts need a name on the element that carries `role="img"`.**
+  `@nivo/line` forwards both `role` and `ariaLabel` to its `<svg>`
+  (`WeightTimeline`, `BPChartNivo`); **`@nivo/pie` forwards only `role`**, so
+  `BPCategoryDistribution` names the wrapping `Box` (`role="img"` +
+  `aria-label`) and passes the pie `role="presentation"`. Recharts renders a
+  `<title>` element unconditionally, so a recharts chart with no `title` prop
+  has an *empty* title — `BPHRChart` passes `title` and `desc`.
+- **The three contrast failures were tinted surfaces, not tokens.**
+  `FoodCard`'s source chip painted `getSourceColor()` on
+  `alpha(text.secondary, 0.12)` — 2.56:1 in dark, 4.14:1 in light;
+  `CopyMealDialog`'s summary and `BPInsights`' trend panel painted
+  `text.secondary` on `action.hover` and on a 6% domain tint — 4.4:1 and
+  4.39:1. All three now go through
+  `readableOn(ink, tint, { under: background.paper })`. **Pass `under`**: a
+  translucent surface is a colour *and the paper beneath it*, and it
+  composites differently per mode.
+- **`QuickAddPanel`'s header was a `<Button>` wrapping a `ToggleButtonGroup`**
+  (`nested-interactive`, and the meal toggles were unreachable by keyboard).
+  The row is a plain container now; the disclosure button and the picker are
+  siblings. `CopyMealDialog`'s three `Select`s are wired
+  `InputLabel id` ↔ `labelId` — MUI does not do that for you.
+
+Re-check with
+`node tools/mobile-harness/shoot.mjs --app fitnessgeek --serve --enforce-a11y --viewports phone`.
+
+---
+
 ## Frontend — where the writes go (2026-09-05)
 
 Two clients, one rule: **domain data goes to basegeek's `/graphql`; only what

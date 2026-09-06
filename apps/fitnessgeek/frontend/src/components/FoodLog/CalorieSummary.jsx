@@ -76,6 +76,7 @@ const CalorieSummary = ({
             <LinearProgress
               variant="determinate"
               value={carbProgress}
+              aria-label={`Net carbs: ${Math.round(netCarbsConsumed * 10) / 10}g of ${netCarbLimit}g`}
               sx={{
                 height: 4,
                 borderRadius: 2,
@@ -142,6 +143,7 @@ const CalorieSummary = ({
         <LinearProgress
           variant="determinate"
           value={progress}
+          aria-label={`Calories: ${Math.round(calories)} of ${effectiveGoal} cal`}
           sx={{
             height: 4,
             borderRadius: 2,

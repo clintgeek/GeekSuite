@@ -98,9 +98,9 @@ Rules, not screens. Every app inherits these; identity stays in `sx`.
 | Tables | Below `md` a table renders as a card or definition list. App-owned layout, shared rule. | per app |
 | Keyboard | Composer/inputs pinned to the bottom use `dvh` + `interactive-widget=resizes-content`; autofocus only on explicit user intent. | per app |
 | Motion | Sheets slide 180ms on the standard curve; route fades unchanged; both honor `prefers-reduced-motion`. | `geekMotion` |
-| Accessibility | No axe-core violation at WCAG 2 A or AA, colour contrast included. **Report-only** until the count reaches 0 — 112 at baseline, **39 after the first burn (2026-09-05)**; see below. | harness (`a11y` category) |
+| Accessibility | No axe-core violation at WCAG 2 A or AA, colour contrast included. **Enforcing since 2026-09-05** — 112 at baseline, 39 after the first burn, **0 after the second**; see below. | harness (`a11y` category) |
 
-### The `a11y` rule is report-only (added 2026-09-05)
+### The `a11y` rule is a gate (added report-only 2026-09-05, enforcing the same day)
 
 The mobile harness runs [axe-core](https://github.com/dequelabs/axe-core) on every scene it
 walks, restricted to the `wcag2a` and `wcag2aa` tags — the standard, not the best-practice
@@ -109,10 +109,11 @@ contrast ratchet, so a disagreement between axe and the ratchet is a finding wor
 noise worth muting.
 
 Findings are reported under a fourth probe category, `a11y`, alongside `tap-target`,
-`text-floor` and `h-scroll`. Unlike those three it **does not fail the build**. It is a
-burn-down list: one row per axe rule id, with the apps it fires in and how many findings each
-contributed, printed by the harness and written to `out/<label>/SUMMARY.md` (uploaded as a CI
-artifact).
+`text-floor` and `h-scroll`. It began as a burn-down list that did not fail the build; since
+2026-09-05 the CI workflow passes `--enforce-a11y` and it fails the build like the other three.
+The report shape is unchanged — one row per axe rule id, with the apps it fires in and how many
+findings each contributed, printed by the harness and written to `out/<label>/SUMMARY.md`
+(uploaded as a CI artifact).
 
 **Baseline, 2026-09-05:** a full local run — 140 scenes, eight apps, iPhone 14 dark and light —
 reported **0 grammar violations, 0 page errors and 112 a11y findings**. Two thirds of that is
@@ -146,14 +147,27 @@ Three things came out of it that outlive the numbers:
   `MuiFormLabel` is painted with the accent run through `readableOn`. `GeekFab`
   now throws in development without a `label`.
 
-**The flip criterion: 0 open a11y findings across all eight apps.** When a full
-`pnpm --filter @geeksuite/mobile-harness run ci` reports `a11y: 0`, add `--enforce-a11y` to the
-run step in `.github/workflows/mobile-harness.yml` and the category becomes a gate like the
-other three. Waived findings do not count as open, so a rule that is genuinely a false positive
-for this suite can be parked with a reason (`{ rule, selector, why }` in the app's
-`scenes.mjs`) rather than blocking the flip forever — but a waiver is a ratchet, not a parking
-lot, and every one of them should die when the app is fixed. See
-`tools/mobile-harness/README.md` for the flag, the waiver shape and the current top rules.
+**After the second burn, 2026-09-05 (TODO_ORDER Q51, second half):** the same full run —
+138 scenes walked (basegeek's `/databases` scenes skip cleanly in both schemes; the route is
+orphaned), eight apps, both schemes — reports **0 grammar violations, 0 page errors and 0 a11y
+findings**, and `.github/workflows/mobile-harness.yml` now passes `--enforce-a11y`. fitnessgeek
+(29 → 0), bookgeek (4 → 0), notegeek, basegeek and startgeek (2 → 0 each) closed the list.
+**The waiver list is still empty, in every app** — 112 findings, none of them a false positive.
+
+Two more `packages/ui` fixes did the whole of bookgeek's share without touching bookgeek:
+`GeekSidebar` wraps each row's `ListItemButton` in a `<ListItem disablePadding>` (a bare one
+renders `div[role=button]` into the `<ul>` — an axe `list` violation), and `GeekTopBar`'s
+account identity moved into the menu list's `subheader` slot, because MUI's `MenuList` clones
+`tabIndex: 0` onto its first non-disabled child and a focusable `div` inside `role="menu"` is
+`aria-required-children`. `readableOn` gained an `under` option: a translucent *surface* is a
+colour and the paper beneath it, and it composites differently per mode — the same chip tint
+read 2.56:1 in dark and 4.14:1 in light off one `alpha()` background.
+
+**Keeping it at zero.** The gate is the ratchet now; a waiver is the escape hatch and it is
+meant to stay shut. A rule that is genuinely a false positive for this suite can be parked with
+a reason (`{ rule, selector, why }` in the app's `scenes.mjs`), but every waiver should die when
+the app is fixed, and none exist today. See `tools/mobile-harness/README.md` for the flag, the
+waiver shape and the rules that cost the most to fix.
 
 ### New primitives (litmus test: every app would use it, it encodes a rule, no domain)
 

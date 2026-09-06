@@ -52,6 +52,7 @@ const DateNavigator = ({
       }}>
         <IconButton
           onClick={onPreviousDay}
+          aria-label="Previous day"
           sx={{
             color: theme.palette.primary.main,
             p: { xs: 0.5, sm: 1 },
@@ -80,6 +81,7 @@ const DateNavigator = ({
 
         <IconButton
           onClick={onNextDay}
+          aria-label="Next day"
           sx={{
             color: theme.palette.primary.main,
             p: { xs: 0.5, sm: 1 },

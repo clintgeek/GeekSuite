@@ -17,6 +17,7 @@ import {
   ArrowForward as ArrowIcon,
   People as PeopleIcon
 } from '@mui/icons-material';
+import { readableOn } from '@geeksuite/ui';
 import { fitnessGeekService } from '../../services/fitnessGeekService';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
 import DateField from '../primitives/DateField.jsx';
@@ -213,8 +214,9 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
         <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
           <DateField value={fromDate} onChange={setFromDate} sx={{ minWidth: 150 }} />
           <FormControl size="small" sx={{ minWidth: 130 }}>
-            <InputLabel>Meal</InputLabel>
+            <InputLabel id="copy-meal-from-label">Meal</InputLabel>
             <Select
+              labelId="copy-meal-from-label"
               value={fromMealType}
               onChange={(e) => setFromMealType(e.target.value)}
               label="Meal"
@@ -231,8 +233,9 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
           {/* Household member selector */}
           {householdMembers.length > 0 && (
             <FormControl size="small" sx={{ minWidth: 150 }}>
-              <InputLabel>From</InputLabel>
+              <InputLabel id="copy-meal-from-user-label">From</InputLabel>
               <Select
+                labelId="copy-meal-from-user-label"
                 value={fromUserId}
                 onChange={(e) => setFromUserId(e.target.value)}
                 label="From"
@@ -261,8 +264,9 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
         <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
           <DateField value={toDate} onChange={setToDate} sx={{ minWidth: 150 }} />
           <FormControl size="small" sx={{ minWidth: 130 }}>
-            <InputLabel>Meal</InputLabel>
+            <InputLabel id="copy-meal-to-label">Meal</InputLabel>
             <Select
+              labelId="copy-meal-to-label"
               value={toMealType}
               onChange={(e) => setToMealType(e.target.value)}
               label="Meal"
@@ -286,7 +290,16 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
           border: '1px solid',
           borderColor: 'divider'
         }}>
-          <Typography variant="body2" color="text.secondary">
+          {/* action.hover is a tint over the dialog paper, not the paper: the
+              summary read 4.4:1 as text.secondary before it was measured. */}
+          <Typography
+            variant="body2"
+            sx={(theme) => ({
+              color: readableOn(theme.palette.text.secondary, theme.palette.action.hover, {
+                under: theme.palette.background.paper,
+              }),
+            })}
+          >
             Will copy: <strong>{formatMealType(fromMealType)}</strong> from{' '}
             <strong>{fromDate}</strong>
             {fromUserId && householdMembers.find(m => m.user_id === fromUserId) && (

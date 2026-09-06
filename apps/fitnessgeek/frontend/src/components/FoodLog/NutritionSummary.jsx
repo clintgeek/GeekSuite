@@ -230,6 +230,7 @@ const NutritionSummary = ({
                   <LinearProgress
                     variant="determinate"
                     value={item.progress}
+                    aria-label={`${item.label}: ${Math.round(item.value)}${item.unit} of ${item.goal} ${item.isRDA ? 'RDA' : 'goal'}`}
                     sx={{
                       height: 4,
                       borderRadius: 2,

@@ -68,6 +68,7 @@ function ReadinessGauge({ score }) {
               variant="determinate"
               value={score}
               color={color}
+              aria-label={`Readiness score: ${score} out of 100`}
               sx={{ height: 10, borderRadius: 1 }}
             />
           </Box>

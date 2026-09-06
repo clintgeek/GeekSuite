@@ -131,6 +131,19 @@ src/
     graphql.js, queries.js, basegeek.js, engines.js, commandMode.js, parseTaskInput.js
 ```
 
+## a11y pass (2026-09-05, TODO_ORDER Q51)
+
+The mobile harness' axe run had startgeek at **2 findings — 0 now**, both
+`scrollable-region-focusable` on the seven-day forecast strip in
+`src/components/WeatherModal.jsx`. The strip scrolls sideways on a phone and
+holds nothing focusable, so a keyboard user could not reach the days off
+screen. It now takes `tabIndex={0}` with `role="group"` and
+`aria-label="Seven-day forecast"` plus a `focus-visible` outline. Any future
+`overflow-x-auto` row here needs the same three things — a tab stop, a name,
+and a visible focus ring.
+
+---
+
 ## Deferred
 
 - Flock module. Data is still returned by the resolver; the frontend query
@@ -145,3 +158,14 @@ src/
 ## Hostname
 
 StartGeek is served at `start.clintgeek.com` (nginx: `/mnt/Media/Docker/nginx/config/sites-available/clintgeek.com_start.conf`, proxied to `192.168.1.17:3000`). Since 2026-09-05 the conventional name `startgeek.clintgeek.com` 301-redirects there, so the suite switcher, old bundles and bookmarks all land. The switcher's roster in `packages/ui/src/navigation/GeekAppSwitcher.jsx` carries the explicit `url` for this app.
+
+## Service worker — SW reinstalls on deploy (2026-09-05, Q54)
+
+`public/sw.js` had the same landmine as flockgeek (115fb03): a constant
+`CACHE_NAME` and a static three-URL precache, so a new deploy never
+reinstalled the SW and the `"/"` cached on a user's first visit was served
+forever. Fixed the same way: `BUILD_ID`/`PRECACHE_ASSETS` placeholders in
+`public/sw.js`, stamped into `dist/sw.js` by `swPrecache()` in
+`vite.config.js` from the built `assets/*.js`/`*.css` list; `CACHE_NAME` is
+now `startgeek-cache-${BUILD_ID}`. Dev (`vite dev`) still serves the source
+file untouched — no build step there. See DOCS/PWA_STANDARD.md §1a.

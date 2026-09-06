@@ -339,7 +339,12 @@ const Reports = () => {
                         {detail.daysWithin} days on target
                       </Typography>
                     </Box>
-                    <LinearProgress variant="determinate" value={detail.percentage} sx={{ borderRadius: 999 }} />
+                    <LinearProgress
+                      variant="determinate"
+                      value={detail.percentage}
+                      aria-label={`${metricLabels[metric] || metric} compliance: ${Math.round(detail.percentage)}%`}
+                      sx={{ borderRadius: 999 }}
+                    />
                   </Box>
                 )) : (
                   <Typography variant="body2" color="text.secondary">

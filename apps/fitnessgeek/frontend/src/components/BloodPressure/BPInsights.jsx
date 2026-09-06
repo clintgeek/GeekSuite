@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Box, Typography, Card, CardContent, Chip } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
-import { toneForMode } from '@geeksuite/ui';
+import { readableOn, toneForMode } from '@geeksuite/ui';
 import {
   Favorite as HeartIcon,
   TrendingUp as TrendingUpIcon,
@@ -155,6 +155,8 @@ const BPInsights = ({ bpLogs = [] }) => {
     return theme.palette.primary.main;
   };
 
+  const trendTint = `${getTrendColor()}${isDark ? '20' : '10'}`;
+
   const CategoryIcon = insights.currentCategory.icon;
 
   return (
@@ -254,12 +256,14 @@ const BPInsights = ({ bpLogs = [] }) => {
           <Box sx={{
             p: 2,
             borderRadius: '12px',
-            backgroundColor: `${getTrendColor()}${isDark ? '20' : '10'}`,
+            backgroundColor: trendTint,
             border: `1px solid ${getTrendColor()}30`
           }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
               {getTrendIcon()}
-              <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 600 }}>
+              {/* The tint is a surface, so the label is measured against it —
+                  text.secondary read 4.39:1 on the light trend panel. */}
+              <Typography variant="caption" sx={{ color: readableOn(theme.palette.text.secondary, trendTint, { under: theme.palette.background.paper }), fontWeight: 600 }}>
                 30-Day Trend
               </Typography>
             </Box>

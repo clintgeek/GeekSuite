@@ -76,6 +76,7 @@ const DashboardHeader = ({
           }}>
             <IconButton
               onClick={() => handleQuickAction('food')}
+              aria-label="Log food"
               sx={{
                 bgcolor: `${theme.palette.success.main}15`,
                 color: theme.palette.success.main,
@@ -90,6 +91,7 @@ const DashboardHeader = ({
             </IconButton>
             <IconButton
               onClick={() => handleQuickAction('weight')}
+              aria-label="Log weight"
               sx={{
                 bgcolor: `${theme.palette.info.main}15`,
                 color: theme.palette.info.main,
@@ -104,6 +106,7 @@ const DashboardHeader = ({
             </IconButton>
             <IconButton
               onClick={() => handleQuickAction('bp')}
+              aria-label="Log blood pressure"
               sx={{
                 bgcolor: `${theme.palette.error.main}15`,
                 color: theme.palette.error.main,

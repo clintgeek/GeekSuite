@@ -261,6 +261,7 @@ const WeightProgress = ({
           <LinearProgress
             variant="determinate"
             value={insights.progressPercent}
+            aria-label={`Progress to goal weight: ${(insights.progressPercent || 0).toFixed(1)}% complete`}
             sx={{
               height: 12,
               borderRadius: '999px',

@@ -16,7 +16,9 @@
  *   - `toneForMode` lifts in dark and deepens in light, and honors a `0`.
  *   - `readableOn` measures instead: it walks an ink away from its surface
  *     until the pair clears a WCAG floor, and leaves it alone when it already
- *     does. This is the helper the 2026-09-05 a11y burn-down leans on.
+ *     does. This is the helper the 2026-09-05 a11y burn-down leans on, and
+ *     `under` is what lets it read a *tinted* surface — an `alpha()` chip
+ *     ground composites differently on dark paper than on light.
  */
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -255,9 +257,47 @@ describe('readableOn', () => {
     expect(getContrastRatio(readableOn(raw, '#221F1B'), '#221F1B')).toBeGreaterThanOrEqual(4.5);
   });
 
+  it('flattens a translucent *surface* over `under` before measuring', () => {
+    // fitnessgeek's food-source chip: alpha(text.secondary, 0.12) as the chip
+    // ground, stone #78716C as the label. Over stone-800 paper the chip paints
+    // #383433 and the pair is 2.56:1; over white it paints #EFEEED and reads
+    // 4.14:1. Same two arguments, two different bugs — only `under` tells them
+    // apart, and neither ground is the one `under` defaults to.
+    const ink = '#78716C';
+    // The tint is `alpha(text.secondary, 0.12)`, and text.secondary is itself
+    // mode-dependent — so the two schemes differ in both layers.
+    const darkTint = 'rgba(168,162,158,0.12)';
+    const darkGround = '#383433';   // that tint over stone-800 paper
+    const lightTint = 'rgba(120,113,108,0.12)';
+    const lightGround = '#EFEEED';  // that tint over white paper
+
+    const onDark = readableOn(ink, darkTint, { under: '#292524' });
+    expect(getContrastRatio(onDark, darkGround)).toBeGreaterThanOrEqual(4.5);
+    expect(getLuminance(onDark)).toBeGreaterThan(getLuminance(ink));
+
+    const onLight = readableOn(ink, lightTint, { under: '#FFFFFF' });
+    expect(getContrastRatio(onLight, lightGround)).toBeGreaterThanOrEqual(4.5);
+    expect(getLuminance(onLight)).toBeLessThan(getLuminance(ink));
+
+    // And the point of the option: hand the dark chip's tint the wrong paper
+    // and the walk turns around — same ink, same surface, opposite answer.
+    const misread = readableOn(ink, darkTint, { under: '#FFFFFF' });
+    expect(getLuminance(misread)).toBeLessThan(getLuminance(ink));
+    expect(getLuminance(onDark)).toBeGreaterThan(getLuminance(misread));
+  });
+
+  it('defaults `under` to white, and ignores it for an opaque surface', () => {
+    const tint = 'rgba(0,0,0,0.04)';
+    expect(readableOn('#78716C', tint)).toBe(readableOn('#78716C', tint, { under: '#FFFFFF' }));
+    // An opaque surface is already the painted color; `under` cannot change it.
+    expect(readableOn('#78716C', '#F5F5F5', { under: '#1C1917' }))
+      .toBe(readableOn('#78716C', '#F5F5F5'));
+  });
+
   it('passes through what it cannot parse or measure', () => {
     expect(readableOn(undefined, '#FFFFFF')).toBe(undefined);
     expect(readableOn('#FFFFFF', undefined)).toBe('#FFFFFF');
     expect(readableOn('currentColor', '#FFFFFF')).toBe('currentColor');
+    expect(readableOn('#78716C', 'rgba(0,0,0,0.04)', { under: 'currentColor' })).toBe('#78716C');
   });
 });

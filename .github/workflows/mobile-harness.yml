@@ -6,12 +6,12 @@ name: Mobile harness
 # sideways scroll, or any page error. The screenshots are uploaded so a
 # reviewer can look at the phone without owning one.
 #
-# It also runs an axe-core pass (WCAG 2 A + AA) on every scene. That category
-# is **report-only**: findings are printed and written to
-# tools/mobile-harness/out/ci/SUMMARY.md (uploaded with the screenshots) but
-# do not fail the job. Flip it to enforcing by adding --enforce-a11y to the
-# run step below, once the burn-down reaches 0 open across all apps
-# (DOCS/MOBILE_UI_PLAN.md §2).
+# It also runs an axe-core pass (WCAG 2 A + AA) on every scene, and since
+# 2026-09-05 that category is **enforcing** too: the run step passes
+# --enforce-a11y, so any WCAG 2 A/AA violation fails the job. Findings are
+# still printed and written to tools/mobile-harness/out/ci/SUMMARY.md
+# (uploaded with the screenshots). The burn-down that earned the flip went
+# 112 -> 39 -> 0 with no waivers (DOCS/MOBILE_UI_PLAN.md §2).
 on:
   push:
     branches: [main]
@@ -64,10 +64,11 @@ jobs:
         working-directory: tools/mobile-harness
 
       - name: Build, serve and probe every app
-        # The three grammar rules are enforcing (they have been green since
-        # 2026-09-05 14:54). The axe-core a11y category is report-only: add
-        # `-- --enforce-a11y` here to make it count toward the exit code.
-        run: pnpm --filter @geeksuite/mobile-harness run ci
+        # All four categories are enforcing. The three grammar rules have been
+        # green since 2026-09-05 14:54; the axe-core a11y category joined them
+        # later the same day at 0 findings across all eight apps. Drop
+        # `-- --enforce-a11y` only to deliberately un-gate a11y, and say why.
+        run: pnpm --filter @geeksuite/mobile-harness run ci -- --enforce-a11y
 
       - name: Upload screenshots and SUMMARY.md
         if: always()

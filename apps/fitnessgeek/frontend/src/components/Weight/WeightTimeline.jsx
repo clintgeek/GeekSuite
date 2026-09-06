@@ -220,6 +220,8 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
         <ResponsiveLine
           data={chartData}
           theme={chartTheme}
+          role="img"
+          ariaLabel={`Weight over time, in ${unit}${goal && goal.enabled ? ', against the goal line' : ''}`}
           margin={{ top: 12, right: 16, bottom: 44, left: 40 }}
           xScale={{ type: 'time', format: '%Y-%m-%d', useUTC: false, precision: 'day' }}
           xFormat="time:%Y-%m-%d"

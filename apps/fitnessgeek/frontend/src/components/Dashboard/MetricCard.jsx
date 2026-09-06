@@ -120,6 +120,7 @@ const MetricCard = ({
               <LinearProgress
                 variant="determinate"
                 value={progress}
+                aria-label={`${title} — ${progressLabel}: ${typeof progressValue === 'number' ? progressValue : Math.round(progress)}%`}
                 sx={{
                   height: 6,
                   borderRadius: 3,
