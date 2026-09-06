@@ -11,6 +11,9 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
+| R103 | Q67: remove flockgeek Sire/Dam inputs (no model field); fitnessgeek SaveMealDialog skips rows without a food id instead of sending an undeclared field | sonnet | flockgeek + fitnessgeek frontends | 09-05 23:00 |
+| R104 | Q63: sanitize stored note HTML — DOMPurify on render (notegeek) and on save (gateway notegeek module); round-trip stable | opus | notegeek frontend, gateway notegeek createNote/updateNote, lockfile | 09-05 23:00 |
+| R105 | Q64: virtual recurring occurrences carry collectionId + reseed fields; renameTag $addToSet; updateFolder cycle check | sonnet | gateway bujogeek services, notegeek tag/folder resolvers | 09-05 23:00 |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
 ## Queued (launch when files free / prerequisite lands)
@@ -19,11 +22,8 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 |---|------|-------------|------|
 | **Q58** | **ROTATE:** the datageek Mongo root credential pair was in git-tracked, GitHub-public files (removed from `routes/mongo.js` in R93; **still in `apps/basegeek/mongodb-init.js`**) and in plaintext in the gitignored `apps/notegeek/CURSOR-CONTEXT.md` (scrubbed by pattern 22:40; one reviewer's transcript on this box read it). Treat as disclosed: rotate the datastore user, update `.env.production`, strip it from mongodb-init.js | **Chef, soon** | S |
 | Q62 | basegeek policy (Chef): conversation ownership for API-key callers comes from the body (needs a migration to fix); any authenticated user can mint a key for any app name; storygeek's dead `src/graphql` ships @apollo/client; bookify is unbounded synchronous AI work; fitnessgeek `aiCoachRoutes` caller-less and unguarded; InfluxDB reads not user-scoped; flockgeek write-side foreign refs (createBird pairingId/locationId etc.) | Chef triage | M |
-| Q63 | notegeek NoteViewer renders stored note HTML via dangerouslySetInnerHTML, unsanitized on both sides — add DOMPurify (a dependency) on render and/or sanitize on save in the gateway | S (dep decision) | S |
-| Q64 | gateway (after R100): virtual recurring occurrences omit collectionId; renameTag can duplicate a tag already on the note ($addToSet); updateFolder accepts any parentId (no cycle check) | S | S |
 | Q65 | notegeek: the folder feature is dead code calling deleted REST routes; bujogeek TemplateApplier is mounted but unreachable (so the styled TemplatePreview never renders — CONTEXT's Bundle note is wrong about it) | Q22-class / XS | S |
 | Q66 | flockgeek `frontend/src/main.jsx` SW registration has the first-install spurious reload (the hadController guard from e5e0dee) | XS — after R100 (it owns flockgeek frontend src) | XS |
-| Q67 | flockgeek BirdsPage Sire/Dam inputs map to no model field (lineage is pairingId) — delete the inputs; fitnessgeek SaveMealDialog's food_item_payload fallback fails if ever reached — remove or support | XS | XS |
 | Q56 | **Chef:** `apps/storygeek/.env.production` line `DB_URI=MONGODB_URI=mongodb://…` is malformed — delete the stray `MONGODB_URI=` prefix (the classifier would not let Sage edit the production env file), then remove the `DB_URI: ${DB_URI}` override block from `apps/storygeek/docker-compose.yml` and `docker compose up -d` | Chef (env edit) | XS |
 | Q6 | bookgeek web unit tests (vitest + RTL for LibraryView/FilterSheet/BookCard/detail) | none — launch next slot | M |
 | Q10 | Revoke the `LocalApps` key — env grep: no .env under Projects carries it; nginx: zero hits on /openai/v1 or /api/ai/ in the retained log window; key lastUsed 2025-11-03 | ready — Chef's confirm, then revoke via the Apps & keys tab | XS |
