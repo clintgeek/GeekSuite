@@ -92,7 +92,11 @@ describe('UserGeekPage', () => {
     await waitFor(() => expect(api.get).toHaveBeenCalledTimes(2));
   });
 
-  it('deletes a user and refreshes the list without an error state', async () => {
+  // Going-over 2026-09-05 — deleting a user is the most destructive action in
+  // this console and was the only one with no confirmation: the trash icon
+  // called DELETE /users/:id straight from its onClick, and there is no undo
+  // on the server. These now go through the dialog.
+  it('the trash icon asks before it deletes — one tap deletes nothing', async () => {
     api.get.mockResolvedValue({ data: { users: USERS } });
     api.delete.mockResolvedValue({});
     renderWithProviders(<UserGeekPage />);
@@ -100,6 +104,35 @@ describe('UserGeekPage', () => {
 
     const user = userEvent.setup();
     await user.click(screen.getAllByLabelText('delete')[0]);
+
+    expect(await screen.findByText('Delete chef?')).toBeInTheDocument();
+    expect(api.delete).not.toHaveBeenCalled();
+  });
+
+  it('cancelling the confirmation leaves the user alone', async () => {
+    api.get.mockResolvedValue({ data: { users: USERS } });
+    api.delete.mockResolvedValue({});
+    renderWithProviders(<UserGeekPage />);
+    await waitFor(() => expect(screen.getByText('chef')).toBeInTheDocument());
+
+    const user = userEvent.setup();
+    await user.click(screen.getAllByLabelText('delete')[0]);
+    await user.click(await screen.findByRole('button', { name: 'Cancel' }));
+
+    expect(api.delete).not.toHaveBeenCalled();
+    expect(screen.getByText('chef')).toBeInTheDocument();
+  });
+
+  it('confirming deletes that user and refreshes the list without an error state', async () => {
+    api.get.mockResolvedValue({ data: { users: USERS } });
+    api.delete.mockResolvedValue({});
+    renderWithProviders(<UserGeekPage />);
+    await waitFor(() => expect(screen.getByText('chef')).toBeInTheDocument());
+
+    const user = userEvent.setup();
+    await user.click(screen.getAllByLabelText('delete')[0]);
+    await user.click(await screen.findByRole('button', { name: 'Delete user' }));
+
     await waitFor(() => expect(api.delete).toHaveBeenCalledWith('/users/u1'));
     expect(screen.queryByText("Couldn't load users")).not.toBeInTheDocument();
   });
@@ -112,6 +145,8 @@ describe('UserGeekPage', () => {
 
     const user = userEvent.setup();
     await user.click(screen.getAllByLabelText('delete')[0]);
+    await user.click(await screen.findByRole('button', { name: 'Delete user' }));
+
     await waitFor(() => expect(api.delete).toHaveBeenCalled());
     // The list stays exactly as it was — no error state replaced it.
     expect(screen.getByText('chef')).toBeInTheDocument();

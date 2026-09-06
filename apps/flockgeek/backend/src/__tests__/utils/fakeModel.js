@@ -14,6 +14,12 @@
 import { jest } from '@jest/globals';
 
 function matchesCondition(value, cond) {
+  // A RegExp condition is what a `?q=` search compiles to. Matching it for
+  // real is the point: a controller that built its pattern from unescaped user
+  // input would otherwise look identical here to one that escaped it.
+  if (cond instanceof RegExp) {
+    return value !== undefined && value !== null && cond.test(String(value));
+  }
   if (cond && typeof cond === 'object' && !Array.isArray(cond)) {
     return Object.entries(cond).every(([op, opValue]) => {
       switch (op) {
@@ -32,7 +38,16 @@ function matchesCondition(value, cond) {
 }
 
 function matchesFilter(doc, filter = {}) {
-  return Object.entries(filter).every(([key, cond]) => matchesCondition(doc[key], cond));
+  return Object.entries(filter).every(([key, cond]) => {
+    // Top-level logical operators address the document, not a field. Without
+    // these, `{ $or: [...] }` was read as "the field named `$or`", which no
+    // document has — so every `$or` filter matched nothing and any test built
+    // on one passed for the wrong reason.
+    if (key === '$or') return cond.some((sub) => matchesFilter(doc, sub));
+    if (key === '$and') return cond.every((sub) => matchesFilter(doc, sub));
+    if (key === '$nor') return !cond.some((sub) => matchesFilter(doc, sub));
+    return matchesCondition(doc[key], cond);
+  });
 }
 
 // A thenable that also supports the chainable Mongoose query methods used by

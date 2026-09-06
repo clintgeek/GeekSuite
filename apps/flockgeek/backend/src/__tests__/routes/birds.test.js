@@ -223,3 +223,79 @@ describe('POST /api/birds (createBird)', () => {
     expect(stored.ownerId).toBe(OWNER);
   });
 });
+
+// Going-over 2026-09-05 — the free-text search used to build its filter with
+// `new RegExp(q, "i")` on the raw query value. A bird named "Hen (Big)" could
+// not be searched for at all (`SyntaxError: Unterminated group` → 500), a `.`
+// silently matched more than the user typed, and `(a+)+$` is catastrophic
+// backtracking aimed at the API process.
+describe('GET /api/birds (listBirds) — the ?q= search', () => {
+  test('regex metacharacters are matched literally, not compiled', async () => {
+    fakeBird._reset([
+      seedBird({ _id: 'bird-paren', tagId: 'T-100', name: 'Hen (Big)' }),
+      seedBird({ _id: 'bird-plain', tagId: 'T-101', name: 'Hen Big' }),
+    ]);
+
+    const res = await request(buildApp())
+      .get('/api/birds')
+      .query({ q: 'Hen (Big)' })
+      .set('x-test-owner', OWNER);
+
+    expect(res.status).toBe(200);
+    const names = res.body.data.birds.map((b) => b.name);
+    expect(names).toContain('Hen (Big)');
+    expect(names).not.toContain('Hen Big');
+  });
+
+  test('a wildcard-shaped query does not match everything', async () => {
+    fakeBird._reset([
+      seedBird({ _id: 'bird-1', tagId: 'T-200', name: 'Clucky' }),
+      seedBird({ _id: 'bird-2', tagId: 'T-201', name: 'Pecky' }),
+    ]);
+
+    const res = await request(buildApp())
+      .get('/api/birds')
+      .query({ q: '.*' })
+      .set('x-test-owner', OWNER);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.birds).toHaveLength(0);
+  });
+
+  test('a catastrophic-backtracking pattern is just a string to search for', async () => {
+    fakeBird._reset([seedBird({ _id: 'bird-1', tagId: 'T-300', name: 'Clucky' })]);
+
+    const res = await request(buildApp())
+      .get('/api/birds')
+      .query({ q: '(a+)+$' })
+      .set('x-test-owner', OWNER);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.birds).toHaveLength(0);
+  });
+});
+
+// Going-over 2026-09-05 — `parseInt` straight off the query string meant
+// `?page=abc` produced `.skip(NaN)` (a driver error, i.e. a 500 on a
+// malformed URL) and `?limit=1000000` asked Mongo for the whole collection.
+describe('GET /api/birds (listBirds) — pagination bounds', () => {
+  test('a garbage page is the first page, not a 500', async () => {
+    const res = await request(buildApp())
+      .get('/api/birds')
+      .query({ page: 'abc' })
+      .set('x-test-owner', OWNER);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.pagination.page).toBe(1);
+  });
+
+  test('an enormous limit is clamped in the echoed pagination', async () => {
+    const res = await request(buildApp())
+      .get('/api/birds')
+      .query({ limit: '1000000' })
+      .set('x-test-owner', OWNER);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.pagination.limit).toBeLessThanOrEqual(200);
+  });
+});

@@ -1,5 +1,6 @@
 import Location from "../models/Location.js";
 import { withoutOwnerFields } from "../utils/ownerFields.js";
+import { readPagination } from "../utils/pagination.js";
 
 export const createLocation = async (req, res, next) => {
   try {
@@ -30,19 +31,19 @@ export const createLocation = async (req, res, next) => {
 export const listLocations = async (req, res, next) => {
   try {
     const { ownerId } = req;
-    const { type, isActive, page = 1, limit = 20, sortBy = "name", sortOrder = "asc" } = req.query;
+    const { type, isActive, sortBy = "name", sortOrder = "asc" } = req.query;
 
     const filter = { ownerId, deletedAt: { $exists: false } };
     if (type) filter.type = type;
     if (isActive !== undefined) filter.isActive = isActive === "true";
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const { page, limit, skip } = readPagination(req.query);
     const sortOptions = {};
     sortOptions[sortBy] = sortOrder === "desc" ? -1 : 1;
 
     const items = await Location.find(filter)
       .skip(skip)
-      .limit(parseInt(limit))
+      .limit(limit)
       .sort(sortOptions);
 
     const total = await Location.countDocuments(filter);
@@ -50,7 +51,7 @@ export const listLocations = async (req, res, next) => {
     res.json({
       data: {
         locations: items,
-        pagination: { total, page: parseInt(page), limit: parseInt(limit) }
+        pagination: { total, page, limit }
       }
     });
   } catch (err) {

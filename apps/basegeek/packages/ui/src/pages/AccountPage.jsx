@@ -276,8 +276,12 @@ export default function AccountPage() {
               {identity?.lastLogin && (
                 <DetailRow label="Last login" value={new Date(identity.lastLogin).toLocaleDateString()} />
               )}
-              <DetailRow label="Theme" value={prefsForm.theme} />
-              <DetailRow label="Locale" value={prefsForm.locale} />
+              <DetailRow label="Theme" value={themeValue} />
+              {/* `locale` lives on the profile, not on preferences — this row
+                  read `prefsForm.locale`, which is never populated, so it
+                  rendered blank for every user since the card shipped.
+                  Going-over 2026-09-05. */}
+              <DetailRow label="Locale" value={profileForm.locale} />
             </Box>
           </Box>
         </Box>

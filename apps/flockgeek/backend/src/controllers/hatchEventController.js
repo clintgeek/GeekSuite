@@ -6,11 +6,19 @@ import Pairing from "../models/Pairing.js";
 import MeatRun from "../models/MeatRun.js";
 import { utcDateString } from "@geeksuite/utils";
 import { withoutOwnerFields } from "../utils/ownerFields.js";
+import { readPagination } from "../utils/pagination.js";
 
 /**
  * Get the next available tag ID starting from 2000
  * Finds the highest tagId >= 2000 and returns the next one
  */
+/**
+ * The most chicks one `register-chicks` call may create. A hatch is a physical
+ * event; this is a generous ceiling on a real clutch, and a hard one on the
+ * number of documents a single request can insert.
+ */
+export const MAX_CHICKS_PER_REGISTRATION = 500;
+
 const getNextTempTagId = async (ownerId, count = 1) => {
   const TEMP_ID_START = 2000;
 
@@ -48,8 +56,16 @@ export const createHatchEvent = async (req, res, next) => {
       });
     }
 
-    // Verify the pairing exists
-    const pairing = await Pairing.findById(pairingId);
+    // Verify the pairing exists AND belongs to this caller. `findById` alone
+    // accepted another owner's pairing id: the hatch event was still filed
+    // under the caller, but `registerChicks` later reads `pairing.name` off it
+    // and stamps it into the brood/meat-run name, so a foreign pairing's name
+    // leaked into this account. Going-over 2026-09-05.
+    const pairing = await Pairing.findOne({
+      _id: pairingId,
+      ownerId,
+      deletedAt: { $exists: false }
+    });
     if (!pairing) {
       return res.status(400).json({
         error: { code: "BAD_REQUEST", message: "Pairing not found" }
@@ -79,19 +95,19 @@ export const createHatchEvent = async (req, res, next) => {
 export const listHatchEvents = async (req, res, next) => {
   try {
     const { ownerId } = req;
-    const { pairingId, page = 1, limit = 20, sortBy = "setDate", sortOrder = "desc" } = req.query;
+    const { pairingId, sortBy = "setDate", sortOrder = "desc" } = req.query;
 
     const filter = { ownerId, deletedAt: { $exists: false } };
     if (pairingId) filter.pairingId = pairingId;
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const { page, limit, skip } = readPagination(req.query);
     const sort = {};
     sort[sortBy] = sortOrder === "desc" ? -1 : 1;
 
     const items = await HatchEvent.find(filter)
       .populate("pairingId", "name")
       .skip(skip)
-      .limit(parseInt(limit))
+      .limit(limit)
       .sort(sort);
 
     const total = await HatchEvent.countDocuments(filter);
@@ -99,7 +115,7 @@ export const listHatchEvents = async (req, res, next) => {
     res.json({
       data: {
         hatchEvents: items,
-        pagination: { total, page: parseInt(page), limit: parseInt(limit) }
+        pagination: { total, page, limit }
       }
     });
   } catch (err) {
@@ -197,9 +213,17 @@ export const registerChicks = async (req, res, next) => {
     const { id } = req.params;
     const { count, broodName, meatRunName } = req.body;
 
-    if (!count || count < 1) {
+    // `count` drives a per-chick insert loop below. Before this it was taken
+    // raw: a fractional value produced fewer temp tag ids than birds (the
+    // surplus birds got `tagId: undefined` and failed mid-loop, leaving a
+    // half-built brood), and a large one turned one request into an unbounded
+    // write. Going-over 2026-09-05.
+    if (!Number.isInteger(count) || count < 1 || count > MAX_CHICKS_PER_REGISTRATION) {
       return res.status(400).json({
-        error: { code: "BAD_REQUEST", message: "count required (number of chicks)" }
+        error: {
+          code: "BAD_REQUEST",
+          message: `count required: a whole number of chicks between 1 and ${MAX_CHICKS_PER_REGISTRATION}`
+        }
       });
     }
 
@@ -222,8 +246,14 @@ export const registerChicks = async (req, res, next) => {
       });
     }
 
-    // Get the pairing for naming
-    const pairing = await Pairing.findById(hatchEvent.pairingId);
+    // Get the pairing for naming — owner-scoped, so a hatch event that still
+    // references a foreign pairing (created before the create-side check
+    // below) cannot pull that pairing's name into this account.
+    const pairing = await Pairing.findOne({
+      _id: hatchEvent.pairingId,
+      ownerId,
+      deletedAt: { $exists: false }
+    });
     if (!pairing) {
       return res.status(400).json({
         error: { code: "BAD_REQUEST", message: "Associated pairing not found" }

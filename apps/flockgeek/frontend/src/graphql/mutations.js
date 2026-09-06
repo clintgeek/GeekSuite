@@ -56,9 +56,12 @@ export const UPDATE_PAIRING = gql`
   }
 `;
 
+// `hatchDate` is on the gateway's `recordHatchEvent` and was simply never
+// declared here, so the Add dialog's Hatch Date field went nowhere.
+// Going-over 2026-09-05.
 export const RECORD_HATCH_EVENT = gql`
-  mutation RecordHatchEvent($setDate: Date!, $eggsSet: Int!, $notes: String) {
-    recordHatchEvent(setDate: $setDate, eggsSet: $eggsSet, notes: $notes) {
+  mutation RecordHatchEvent($setDate: Date!, $hatchDate: Date, $eggsSet: Int!, $notes: String) {
+    recordHatchEvent(setDate: $setDate, hatchDate: $hatchDate, eggsSet: $eggsSet, notes: $notes) {
       id
     }
   }

@@ -2,6 +2,132 @@
 
 _Last updated: 2026-09-05_
 
+## Going-over 2026-09-05
+
+A read of the whole app — every route, controller, model, page, component and
+test — looking for correctness and security rather than polish. Backend tests
+76 → 111, frontend 37 → 48, lint unchanged at 24 warnings, harness 28 scenes
+0/0/0 with `--enforce-a11y`.
+
+### Backend — fixed
+
+- **`requireOwner` took ownership from the request.** The chain was
+  `userOwner || headerOwner || req.body?.ownerId || req.query?.ownerId`, so a
+  session whose user object carried none of `id`/`_id`/`userId`/`ownerId` fell
+  back to an `X-Owner-Id` header, then the body, then the query string — and
+  `req.ownerId` is the value *every* owner-scoped filter in this backend is
+  built around, reads included. This is BURN_REVIEW #4/#18's hole one layer
+  earlier and wider than the controllers. Ownership now comes only from the
+  session; a session with no usable id is a 401.
+  `middleware/authMiddleware.js`, `__tests__/middleware/requireOwner.test.js`.
+- **Cross-owner reference reads.** `createHatchEvent`, `registerChicks`,
+  `getLineageBlacklist` and `canBreedWith` looked their pairing (and a
+  membership's group) up with `Model.findById(...)`, no owner filter. Not
+  theft — the owning record is always scoped — but the *payload* leaked:
+  `registerChicks` stamps `pairing.name` into the brood group's and meat run's
+  name, and `getLineageBlacklist` returns the pairing's `roosterIds`/`henIds`
+  as `blacklistedBirdIds`. Naming a foreign pairing id was enough. All four are
+  owner-scoped `findOne` now.
+  `controllers/hatchEventController.js`, `controllers/birdController.js`,
+  `__tests__/routes/hatchEvents.test.js`, `__tests__/routes/birdLineage.test.js`.
+- **`registerChicks` took `count` raw.** A fractional value produced fewer temp
+  tag ids than birds — the surplus were created with `tagId: undefined`, the
+  loop failed part way, and a half-built brood was left behind — and a large one
+  turned one HTTP request into an unbounded insert loop. Now a whole number,
+  1..`MAX_CHICKS_PER_REGISTRATION` (500).
+- **`?q=` compiled straight into a RegExp.** `new RegExp(q, "i")` on the raw
+  query value: a bird named `Hen (Big)` could not be searched for at all (a 500
+  on an ordinary search), a `.` matched more than the user typed, and `(a+)+$`
+  is catastrophic backtracking pointed at the API process. Escaped now.
+  `controllers/birdController.js`, `__tests__/routes/birds.test.js`.
+- **Pagination was unbounded and NaN-prone.** Every list handler did
+  `parseInt(req.query.page)` / `parseInt(req.query.limit)`: `?page=abc` gave
+  `.skip(NaN)` (a driver error, i.e. a 500 on a malformed URL) and
+  `?limit=1000000` asked Mongo for the whole collection. One helper,
+  `utils/pagination.js`'s `readPagination`, now makes both decisions for all
+  eight list handlers plus `getBreedingCandidates`. Max page size 200.
+  `__tests__/utils/pagination.test.js`.
+- **`getBirdGroups` 500'd on a stale membership.** A membership whose group row
+  is gone populates to `null`, and `.toObject()` on that took the whole list
+  down. Skipped instead.
+- Dropped the unused `crypto` import from `server.js`.
+- **Test-harness honesty:** `__tests__/utils/fakeModel.js` did not understand
+  `$or` (it read it as a field name, so every `$or` filter matched nothing) or a
+  `RegExp` condition. Any test written against the `?q=` search would have
+  passed for the wrong reason. Both are implemented now.
+
+### Frontend — fixed
+
+- **The "Hatched" chip flipped a day early.** `isHatched` compared a
+  UTC-midnight calendar day to `new Date()`, so a clutch due tomorrow read as
+  hatched from 6pm tonight in US Central. Compares calendar day to calendar day
+  now. `pages/HatchLogPage.jsx`.
+- **The hatch log's End Date filter dropped its own day.** It compared the
+  gateway's serialized ISO instant (`2026-09-05T00:00:00.000Z`) to the
+  `YYYY-MM-DD` an `<input type="date">` produces; the ISO string always sorts
+  *after* the bare day it names, so the last day of any range vanished.
+  (`EggLogPage` already read the day first — this is the copy that did not.)
+- **The Groups Active/Ended chip had the same instant comparison**, shifting the
+  whole window a day west of UTC: a group starting tomorrow read Active from
+  6pm tonight, one ending today read ended since 6pm yesterday. Now inclusive
+  at both ends, day against day. `pages/GroupsPage.jsx`.
+- **"Add hatch event" silently discarded five fields.** The dialog collects
+  Hatch Date, Fertile Eggs, Chicks Hatched, Pullets and Cockerels and sent
+  `setDate`/`eggsSet`/`notes`; the dialog then closed as if it had saved.
+  `hatchDate` was simply an undeclared variable on `RECORD_HATCH_EVENT` (GraphQL
+  drops an undeclared variable in silence), and the four counts have no argument
+  on the gateway's `recordHatchEvent` at all — so the create is now followed by
+  an `updateHatchEvent` carrying whatever was filled in.
+- **Home's rolling window was frozen at page load.** `useHomeData` computed
+  `todayStr`/`rollingStartStr` at *module* scope, and HomePage is the eager
+  index route — a tab left open overnight (a coop tablet, a wall dashboard) kept
+  asking for yesterday's 14-day window, so the morning's harvest never appeared
+  and the average lagged a day. Computed per render; the strings are stable
+  within a day so Apollo does not refetch.
+- **The activity feed rendered calendar days as elapsed times.** A harvest
+  `date` and a hatch `setDate` are UTC-midnight days; subtracting one from
+  `now` measures the distance to UTC midnight ("19h ago" for something logged
+  this afternoon, and a day out west of UTC). Rows now carry `calendarDay` and
+  render the day itself; a bird's `createdAt` still reads "20m ago".
+  `hooks/useHomeData.js`, `components/home/RecentActivity.jsx`.
+- **`QuickHarvestEntry` sent `source: "manual"` into the void.**
+  `RECORD_EGG_PRODUCTION` declares no `$source` and the gateway's
+  `recordEggProduction` takes no `source` argument, so the key was dropped
+  silently and the field has never been set on a single record. Removed — and
+  `QuickHarvestEntry.test.jsx` was asserting it, which is how a test agreed with
+  a payload the server never saw.
+
+New tests: `__tests__/calendarDay.test.jsx` (8), `__tests__/homeActivity.test.jsx`
+(3). Each was checked against the pre-fix code and fails there.
+
+### Left in place, with reasons
+
+- **The BirdsPage edit form discards twelve fields** — Breed, Hatch Date,
+  Species, Strain, Cross, Origin, Foundation Stock, Sire, Dam, Temperament,
+  Status Date, Status Reason are all editable inputs, and `handleSaveEdit` sends
+  only `tagId`/`name`/`sex`/`status`/`notes`/`locationId`. It cannot send more:
+  the gateway's `updateBird` declares exactly those arguments
+  (`apps/basegeek/packages/api/src/graphql/flockgeek/typeDefs.js:252`). Fixing
+  it means widening the gateway mutation and its resolver, which is outside this
+  tree. **P1, reported, not fixed.** Editing a bird's breed today closes the
+  dialog and changes nothing.
+- **Q22 — the REST CRUD layer itself.** Still mounted, still caller-less, still
+  Chef's call. Everything above hardens it rather than removing it, on the
+  principle that a reachable route is a live route.
+- **`registerChicks` is not atomic.** A failure part-way through leaves the
+  brood group and the birds created so far. Bounding `count` removes the input
+  that made this likely; a transaction is a bigger change than this pass.
+- **`routes/groupMemberships.js` returns `error.message` verbatim on a 500**,
+  unlike the central error handler which hides it in production, and uses a
+  different error envelope from every controller. Cosmetic-adjacent, and the
+  route has no caller; folded into Q22.
+- **`groupMemberships` POST does not verify that `groupId`/`birdId` are the
+  caller's**, and neither do `createBird` (`pairingId`/`locationId`),
+  `createEggProduction` or `createHealthRecord`. Same class as the reads fixed
+  above, on the write side. Reported rather than fixed: it needs a shared
+  `assertOwnedRef` helper across six controllers, which is a larger change than
+  the read-side leaks it would close, and Q22 may delete the whole layer.
+
 ## Bundle (2026-09-05)
 
 **Before:** one chunk. No `manualChunks` at all, every route a static import in

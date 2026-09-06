@@ -99,9 +99,17 @@ describe('QuickHarvestEntry', () => {
       expect.objectContaining({
         eggsCount: 4,
         daysObserved: 1,
-        source: 'manual',
       })
     );
     expect(typeof variables.date).toBe('string');
+
+    // Going-over 2026-09-05: this used to assert `source: 'manual'`, which
+    // made the test agree with a payload the server never saw.
+    // `RECORD_EGG_PRODUCTION` declares no `$source` variable and the gateway's
+    // `recordEggProduction` takes no `source` argument, so GraphQL dropped the
+    // key in silence and the field was never set on a single record. The
+    // component no longer sends it; a mutation carrying a variable its own
+    // document does not declare is the bug, not the contract.
+    expect(variables).not.toHaveProperty('source');
   }, 10000);
 });

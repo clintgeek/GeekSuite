@@ -1,6 +1,7 @@
 import EggProduction from "../models/EggProduction.js";
 import Bird from "../models/Bird.js";
 import { withoutOwnerFields } from "../utils/ownerFields.js";
+import { readPagination } from "../utils/pagination.js";
 
 // Clean up empty string values for enum fields
 const cleanEnumFields = (data) => {
@@ -48,7 +49,7 @@ export const createEggProduction = async (req, res, next) => {
 export const listEggProduction = async (req, res, next) => {
   try {
     const { ownerId } = req;
-    const { birdId, groupId, locationId, startDate, endDate, page = 1, limit = 20, sortBy = "date", sortOrder = "desc" } = req.query;
+    const { birdId, groupId, locationId, startDate, endDate, sortBy = "date", sortOrder = "desc" } = req.query;
 
     const filter = { ownerId, deletedAt: { $exists: false } };
     if (birdId) filter.birdId = birdId;
@@ -62,7 +63,7 @@ export const listEggProduction = async (req, res, next) => {
       if (endDate) filter.date.$lte = new Date(endDate);
     }
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const { page, limit, skip } = readPagination(req.query);
     const sort = {};
     sort[sortBy] = sortOrder === "desc" ? -1 : 1;
 
@@ -71,7 +72,7 @@ export const listEggProduction = async (req, res, next) => {
       .populate("groupId", "name")
       .populate("locationId", "name")
       .skip(skip)
-      .limit(parseInt(limit))
+      .limit(limit)
       .sort(sort);
 
     const total = await EggProduction.countDocuments(filter);
@@ -79,7 +80,7 @@ export const listEggProduction = async (req, res, next) => {
     res.json({
       data: {
         eggProduction: items,
-        pagination: { total, page: parseInt(page), limit: parseInt(limit) }
+        pagination: { total, page, limit }
       }
     });
   } catch (err) {

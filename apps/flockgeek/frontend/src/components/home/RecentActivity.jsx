@@ -5,6 +5,7 @@ import EggIcon from "@mui/icons-material/EggOutlined";
 import HatchIcon from "@mui/icons-material/TrackChangesOutlined";
 import BirdIcon from "@mui/icons-material/PetsOutlined";
 import { GeekEmptyState } from "@geeksuite/ui";
+import { displayCalendarDate } from "@geeksuite/utils";
 
 const meta = {
   egg:   { icon: <EggIcon sx={{ fontSize: 16 }} />,   color: "#e8a735" },
@@ -21,12 +22,21 @@ const rowFade = {
   show: { opacity: 1, x: 0, transition: { duration: 0.35, ease: "easeOut" } }
 };
 
-const formatTime = (dateStr) => {
-  if (!dateStr) return "";
+/**
+ * Going-over 2026-09-05 — this list mixes two kinds of date, and used to
+ * render both as an elapsed time.
+ *
+ * A bird's `createdAt` is a real instant, so "20m ago" is exactly right. An
+ * egg harvest's `date` and a hatch's `setDate` are *calendar days*, stored at
+ * UTC midnight: subtracting one from `now` measured the distance to midnight
+ * UTC, which for a harvest logged this afternoon in US Central reads "19h ago"
+ * — a made-up precision on a value that never had a time of day, and off by a
+ * day west of UTC. Calendar-day rows now show the day itself.
+ */
+const formatInstant = (dateStr) => {
   const d = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now - d;
-  const diffMin = Math.floor(diffMs / 60000);
+  if (Number.isNaN(d.getTime())) return "";
+  const diffMin = Math.floor((new Date() - d) / 60000);
   if (diffMin < 1) return "just now";
   if (diffMin < 60) return `${diffMin}m ago`;
   const diffHr = Math.floor(diffMin / 60);
@@ -34,6 +44,12 @@ const formatTime = (dateStr) => {
   const diffDay = Math.floor(diffHr / 24);
   if (diffDay < 7) return `${diffDay}d ago`;
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+};
+
+const formatTime = (dateStr, calendarDay = false) => {
+  if (!dateStr) return "";
+  if (calendarDay) return displayCalendarDate(dateStr, "en-US", { month: "short", day: "numeric" });
+  return formatInstant(dateStr);
 };
 
 const RecentActivity = ({ items = [] }) => {
@@ -92,7 +108,7 @@ const RecentActivity = ({ items = [] }) => {
                 {it.text}
               </Typography>
               <Typography variant="caption" sx={{ color: "text.muted", flexShrink: 0, textTransform: "none", letterSpacing: 0 }}>
-                {formatTime(it.occurredAt)}
+                {formatTime(it.occurredAt, it.calendarDay)}
               </Typography>
             </Box>
           </motion.li>

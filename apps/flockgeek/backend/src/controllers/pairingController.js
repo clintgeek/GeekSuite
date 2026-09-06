@@ -1,5 +1,6 @@
 import Pairing from "../models/Pairing.js";
 import { withoutOwnerFields } from "../utils/ownerFields.js";
+import { readPagination } from "../utils/pagination.js";
 
 export const createPairing = async (req, res, next) => {
   try {
@@ -32,13 +33,13 @@ export const createPairing = async (req, res, next) => {
 export const listPairings = async (req, res, next) => {
   try {
     const { ownerId } = req;
-    const { active, season, page = 1, limit = 20, sortBy = "createdAt", sortOrder = "desc" } = req.query;
+    const { active, season, sortBy = "createdAt", sortOrder = "desc" } = req.query;
 
     const filter = { ownerId, deletedAt: { $exists: false } };
     if (active !== undefined) filter.active = active === "true";
     if (season) filter.season = season;
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const { page, limit, skip } = readPagination(req.query);
     const sortOptions = {};
     sortOptions[sortBy] = sortOrder === "desc" ? -1 : 1;
 
@@ -46,7 +47,7 @@ export const listPairings = async (req, res, next) => {
       .populate("roosterIds", "name tagId")
       .populate("henIds", "name tagId")
       .skip(skip)
-      .limit(parseInt(limit))
+      .limit(limit)
       .sort(sortOptions);
 
     const total = await Pairing.countDocuments(filter);
@@ -54,7 +55,7 @@ export const listPairings = async (req, res, next) => {
     res.json({
       data: {
         pairings: items,
-        pagination: { total, page: parseInt(page), limit: parseInt(limit) }
+        pagination: { total, page, limit }
       }
     });
   } catch (err) {

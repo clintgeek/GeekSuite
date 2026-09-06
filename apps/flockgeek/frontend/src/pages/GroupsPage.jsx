@@ -21,12 +21,19 @@ const purposeOptions = ["layer_flock", "breeder_flock", "meat_flock", "brooder",
 const getPurposeLabel = (purpose) => purpose ? purpose.replace(/_/g, " ") : "";
 const getPurposeColor = (purpose) => ({ layer_flock: "primary", breeder_flock: "info", meat_flock: "warning", brooder: "success" }[purpose] ?? "default");
 
+// `startDate`/`endDate` are calendar days stored at UTC midnight, not instants.
+// Comparing them to `new Date()` shifted the whole window by a day for anyone
+// west of UTC: a group starting tomorrow read as Active from 6pm tonight
+// (US Central), and a group ending today read as ended since 6pm yesterday.
+// Compare the stored days against the reader's own day, inclusive at both
+// ends — a group is active on its start day and on its end day.
+// Going-over 2026-09-05.
 const isActive = (group) => {
-  const now = new Date();
-  const start = group.startDate ? new Date(group.startDate) : null;
-  const end = group.endDate ? new Date(group.endDate) : null;
-  if (!start || start > now) return false;
-  if (end && end < now) return false;
+  const today = localDateString(new Date());
+  const start = group.startDate ? utcDateString(group.startDate) : "";
+  const end = group.endDate ? utcDateString(group.endDate) : "";
+  if (!start || start > today) return false;
+  if (end && end < today) return false;
   return true;
 };
 

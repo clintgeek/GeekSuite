@@ -1,5 +1,6 @@
 import HealthRecord from "../models/HealthRecord.js";
 import { withoutOwnerFields } from "../utils/ownerFields.js";
+import { readPagination } from "../utils/pagination.js";
 
 /**
  * POST /api/health-records
@@ -43,17 +44,17 @@ export const createHealthRecord = async (req, res, next) => {
 export const listHealthRecords = async (req, res, next) => {
   try {
     const { ownerId } = req;
-    const { birdId, type, page = 1, limit = 20 } = req.query;
+    const { birdId, type } = req.query;
 
     const filter = { ownerId, deletedAt: { $exists: false } };
     if (birdId) filter.birdId = birdId;
     if (type) filter.type = type;
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const { page, limit, skip } = readPagination(req.query);
     const items = await HealthRecord.find(filter)
       .populate("birdId", "name tagId")
       .skip(skip)
-      .limit(parseInt(limit))
+      .limit(limit)
       .sort({ eventDate: -1 });
 
     const total = await HealthRecord.countDocuments(filter);
@@ -61,7 +62,7 @@ export const listHealthRecords = async (req, res, next) => {
     res.json({
       data: {
         healthRecords: items,
-        pagination: { total, page: parseInt(page), limit: parseInt(limit) }
+        pagination: { total, page, limit }
       }
     });
   } catch (err) {

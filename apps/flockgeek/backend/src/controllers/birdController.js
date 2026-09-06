@@ -4,6 +4,18 @@ import GroupMembership from "../models/GroupMembership.js";
 import Group from "../models/Group.js";
 import { logger } from "../utils/logger.js";
 import { withoutOwnerFields } from "../utils/ownerFields.js";
+import { readPagination } from "../utils/pagination.js";
+
+/**
+ * Escape a user-supplied string so it matches literally inside a RegExp.
+ *
+ * `listBirds`'s `?q=` used to go straight into `new RegExp(q, "i")`. A name
+ * containing `(` or `[` threw (a 500 on an ordinary search), a `.` or `*`
+ * quietly matched more than the user typed, and a crafted value like `(a+)+$`
+ * is a catastrophic-backtracking denial of service against the API process.
+ * Going-over 2026-09-05.
+ */
+const escapeRegExp = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const normalizeNullableRefs = (data) => {
   if (!data || typeof data !== "object") return;
@@ -63,7 +75,7 @@ export const createBird = async (req, res, next) => {
 export const listBirds = async (req, res, next) => {
   try {
     const { ownerId } = req;
-    const { status, sex, breed, locationId, q, page = 1, limit = 20, sortBy = "createdAt", sortOrder = "desc" } = req.query;
+    const { status, sex, breed, locationId, q, sortBy = "createdAt", sortOrder = "desc" } = req.query;
 
     const filter = { ownerId, deletedAt: { $exists: false } };
 
@@ -72,13 +84,14 @@ export const listBirds = async (req, res, next) => {
     if (breed) filter.breed = breed;
     if (locationId) filter.locationId = locationId;
     if (q) {
+      const needle = new RegExp(escapeRegExp(q), "i");
       filter.$or = [
-        { name: new RegExp(q, "i") },
-        { tagId: new RegExp(q, "i") }
+        { name: needle },
+        { tagId: needle }
       ];
     }
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const { page, limit, skip } = readPagination(req.query);
 
     let items;
     if (sortBy === "tagId") {
@@ -100,7 +113,7 @@ export const listBirds = async (req, res, next) => {
         },
         { $sort: { tagIdNumeric: sortDirection } },
         { $skip: skip },
-        { $limit: parseInt(limit) },
+        { $limit: limit },
         {
           $lookup: {
             from: "locations",
@@ -126,14 +139,14 @@ export const listBirds = async (req, res, next) => {
       items = await Bird.find(filter)
         .populate("locationId", "name")
         .skip(skip)
-        .limit(parseInt(limit))
+        .limit(limit)
         .sort(sortOptions);
     }
 
     const total = await Bird.countDocuments(filter);
 
     res.json({
-      data: { birds: items, pagination: { total, page: parseInt(page), limit: parseInt(limit) } }
+      data: { birds: items, pagination: { total, page, limit } }
     });
   } catch (err) {
     next(err);
@@ -264,7 +277,10 @@ export const deleteBird = async (req, res, next) => {
 export const getBreedingCandidates = async (req, res, next) => {
   try {
     const { ownerId } = req;
-    const { line, limit = 10, breed } = req.query;
+    const { line, breed } = req.query;
+    // Its own default (10), but the same clamp as every other list: a
+    // non-numeric `?limit=` used to `.slice(0, NaN)` and return nothing.
+    const { limit } = readPagination({ limit: req.query.limit ?? 10 });
 
     if (!line || !["egg", "meat"].includes(line)) {
       return res.status(400).json({
@@ -302,10 +318,10 @@ export const getBreedingCandidates = async (req, res, next) => {
       roosterCandidates = roosters
         .filter(r => r.temperamentScore != null)
         .sort((a, b) => b.temperamentScore - a.temperamentScore)
-        .slice(0, parseInt(limit));
+        .slice(0, limit);
 
       // Hens: return all active hens (frontend will join with estimates)
-      henCandidates = hens.slice(0, parseInt(limit));
+      henCandidates = hens.slice(0, limit);
 
     } else {
       // Meat line: prioritize weight and health
@@ -326,12 +342,12 @@ export const getBreedingCandidates = async (req, res, next) => {
       roosterCandidates = roosters
         .filter(r => r.weightGrams != null)
         .sort(sortByWeightAndHealth)
-        .slice(0, parseInt(limit));
+        .slice(0, limit);
 
       henCandidates = hens
         .filter(h => h.weightGrams != null)
         .sort(sortByWeightAndHealth)
-        .slice(0, parseInt(limit));
+        .slice(0, limit);
     }
 
     res.json({
@@ -414,8 +430,10 @@ export const getLineageBlacklist = async (req, res, next) => {
       });
     }
 
-    // 1. Get the pairing this bird came from
-    const pairing = await Pairing.findById(bird.pairingId);
+    // 1. Get the pairing this bird came from. Owner-scoped: `findById` would
+    // read another owner's pairing (and return its rooster/hen ids) for a bird
+    // whose `pairingId` points across accounts. Going-over 2026-09-05.
+    const pairing = await Pairing.findOne({ _id: bird.pairingId, ownerId });
     if (pairing) {
       // All roosters in the pairing are potential sires
       for (const roosterId of pairing.roosterIds || []) {
@@ -448,7 +466,7 @@ export const getLineageBlacklist = async (req, res, next) => {
     });
 
     for (const membership of memberships) {
-      const group = await Group.findById(membership.groupId);
+      const group = await Group.findOne({ _id: membership.groupId, ownerId });
       // Only blacklist brood-mates if the group is linked to a pairing (it's a brood)
       if (group && group.pairingId) {
         const broodMates = await GroupMembership.find({
@@ -535,7 +553,7 @@ export const canBreedWith = async (req, res, next) => {
     }
 
     // Check if bird2 is a parent (in bird1's origin pairing)
-    const pairing1 = await Pairing.findById(bird1.pairingId);
+    const pairing1 = await Pairing.findOne({ _id: bird1.pairingId, ownerId });
     if (pairing1) {
       const parentIds = [
         ...(pairing1.roosterIds || []).map(id => id.toString()),
@@ -549,7 +567,7 @@ export const canBreedWith = async (req, res, next) => {
     }
 
     // Check if bird1 is a parent (in bird2's origin pairing)
-    const pairing2 = await Pairing.findById(bird2.pairingId);
+    const pairing2 = await Pairing.findOne({ _id: bird2.pairingId, ownerId });
     if (pairing2) {
       const parentIds = [
         ...(pairing2.roosterIds || []).map(id => id.toString()),

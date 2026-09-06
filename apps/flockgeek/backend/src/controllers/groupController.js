@@ -3,6 +3,7 @@ import GroupMembership from "../models/GroupMembership.js";
 import { logger } from "../utils/logger.js";
 import { utcMidnightToday } from "@geeksuite/utils";
 import { withoutOwnerFields } from "../utils/ownerFields.js";
+import { readPagination } from "../utils/pagination.js";
 
 /**
  * POST /api/groups
@@ -47,18 +48,18 @@ export const createGroup = async (req, res, next) => {
 export const listGroups = async (req, res, next) => {
   try {
     const { ownerId } = req;
-    const { purpose, page = 1, limit = 20, sortBy = "createdAt", sortOrder = "desc" } = req.query;
+    const { purpose, sortBy = "createdAt", sortOrder = "desc" } = req.query;
 
     const filter = { ownerId, deletedAt: { $exists: false } };
     if (purpose) filter.purpose = purpose;
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const { page, limit, skip } = readPagination(req.query);
     const sortOptions = {};
     sortOptions[sortBy] = sortOrder === "desc" ? -1 : 1;
 
     const items = await Group.find(filter)
       .skip(skip)
-      .limit(parseInt(limit))
+      .limit(limit)
       .sort(sortOptions);
 
     const total = await Group.countDocuments(filter);
@@ -66,7 +67,7 @@ export const listGroups = async (req, res, next) => {
     res.json({
       data: {
         groups: items,
-        pagination: { total, page: parseInt(page), limit: parseInt(limit) }
+        pagination: { total, page, limit }
       }
     });
   } catch (err) {
@@ -155,14 +156,19 @@ export const getBirdGroups = async (req, res, next) => {
     .populate('groupId', 'name purpose type')
     .sort({ joinedAt: -1 });
 
-    const groups = memberships.map(membership => ({
-      ...membership.groupId.toObject(),
-      membership: {
-        joinedAt: membership.joinedAt,
-        role: membership.role,
-        notes: membership.notes
-      }
-    }));
+    // A membership whose group row is gone populates to `null`; calling
+    // `.toObject()` on that turned a stale reference into a 500 for the whole
+    // list. Skip it instead. Going-over 2026-09-05.
+    const groups = memberships
+      .filter(membership => membership.groupId)
+      .map(membership => ({
+        ...membership.groupId.toObject(),
+        membership: {
+          joinedAt: membership.joinedAt,
+          role: membership.role,
+          notes: membership.notes
+        }
+      }));
 
     res.json({ data: { groups } });
   } catch (err) {

@@ -16,6 +16,13 @@ export default function UserGeekPage() {
   // see, so those become toasts instead (TODO_ORDER #15).
   const [loadError, setLoadError] = useState(null);
   const [deleting, setDeleting] = useState(null);
+  // Going-over 2026-09-05: the trash icon used to call DELETE /users/:id
+  // straight from its onClick. One mis-tap permanently removed a suite user's
+  // `userGeek` record — the most destructive action in this console, and the
+  // only one with no confirmation, while resetting AI stats and revoking an
+  // API key both sit behind a ConsoleDialog. There is no undo on the server,
+  // so the dialog is the undo.
+  const [confirmDelete, setConfirmDelete] = useState(null);
   const [openCreate, setOpenCreate] = useState(false);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ username: '', email: '', password: '' });
@@ -37,11 +44,14 @@ export default function UserGeekPage() {
     fetchUsers();
   }, []);
 
-  const handleDelete = async (id) => {
-    setDeleting(id);
+  const handleDelete = async () => {
+    const target = confirmDelete;
+    if (!target) return;
+    setDeleting(target.id);
     try {
-      await api.delete(`/users/${id}`);
-      fetchUsers();
+      await api.delete(`/users/${target.id}`);
+      setConfirmDelete(null);
+      await fetchUsers();
     } catch (err) {
       notify(err.response?.data?.message || 'Error deleting user', { tone: 'error' });
     } finally {
@@ -125,7 +135,7 @@ export default function UserGeekPage() {
                     <IconButton
                       edge="end"
                       aria-label="delete"
-                      onClick={() => handleDelete(user.id)}
+                      onClick={() => setConfirmDelete(user)}
                       disabled={deleting === user.id}
                       size="small"
                       sx={{ color: 'text.secondary', '&:hover': { color: 'error.main' } }}
@@ -156,6 +166,35 @@ export default function UserGeekPage() {
           )}
         </Box>
       )}
+
+      <ConsoleDialog
+        open={!!confirmDelete}
+        onClose={() => setConfirmDelete(null)}
+        eyebrow="User"
+        title={`Delete ${confirmDelete?.username ?? 'user'}?`}
+        primaryAction={
+          <Button
+            onClick={handleDelete}
+            color="error"
+            variant="contained"
+            size="small"
+            disabled={!!deleting}
+          >
+            {deleting ? <CircularProgress size={18} /> : 'Delete user'}
+          </Button>
+        }
+        secondaryAction={
+          <Button onClick={() => setConfirmDelete(null)} disabled={!!deleting} size="small">
+            Cancel
+          </Button>
+        }
+      >
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+          This removes {confirmDelete?.username}
+          {confirmDelete?.email ? ` (${confirmDelete.email})` : ''} from userGeek across every
+          GeekSuite app. It cannot be undone.
+        </Typography>
+      </ConsoleDialog>
 
       <ConsoleDialog
         open={openCreate}

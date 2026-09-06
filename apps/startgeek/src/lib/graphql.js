@@ -1,9 +1,14 @@
 import { shouldHealCsrf, triggerCsrfReloadOnce } from './csrfHeal.js'
+import { UnauthorizedError } from './errors.js'
 
 const URL =
   import.meta.env.VITE_GRAPHQL_API_URL || 'https://basegeek.clintgeek.com/graphql'
 
-export class UnauthorizedError extends Error {}
+// Re-exported so every existing `import { UnauthorizedError } from '../lib/graphql'`
+// keeps working — and keeps working against the *same* class, which is what
+// `instanceof` depends on. It is declared in `errors.js` because this module
+// reads `import.meta.env` and so cannot be imported outside Vite.
+export { UnauthorizedError }
 
 // Double-submit CSRF token for basegeek (see DOCS/CONTEXT.md "CSRF: the
 // double-submit token"). startgeek is standalone (no @geeksuite/auth import),

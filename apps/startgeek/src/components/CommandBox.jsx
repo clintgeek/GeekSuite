@@ -3,6 +3,7 @@ import { useSession } from '../hooks/useSession'
 import { useGlance } from '../hooks/useGlance'
 import { useSettings } from '../hooks/useSettings'
 import { gql, UnauthorizedError } from '../lib/graphql'
+import { failureMessage, isAuthFailure } from '../lib/commandFailure'
 import { ENGINES } from '../lib/engines'
 import { detectMode } from '../lib/commandMode'
 import parseTaskInput from '../lib/parseTaskInput'
@@ -253,6 +254,9 @@ const CommandBox = ({ onOpenSettings }) => {
         setResults(list)
         setSelectedIndex(list.length ? 0 : -1)
       } catch (err) {
+        // Deliberately quiet: this fires on every keystroke, and a toast per
+        // character would be worse than the empty dropdown. Pressing Enter
+        // runs the same query through `handleEnter`, which does report.
         if (err instanceof UnauthorizedError) {
           markOut()
         } else {
@@ -317,6 +321,31 @@ const CommandBox = ({ onOpenSettings }) => {
   )
 
   /** Captured. Clear the box, say so once, and let the modules catch up. */
+  /**
+   * Going-over 2026-09-05 — the capture and search paths used to swallow every
+   * error that wasn't an `UnauthorizedError`:
+   *
+   *     } catch (err) {
+   *       if (err instanceof UnauthorizedError) markOut()
+   *     }
+   *
+   * A gateway 500, a validation rejection, a dropped connection, a CSRF 403
+   * that the heal could not fix — all of them ended with the box unchanged and
+   * nothing said. The person pressed Enter to file a task and, as far as the
+   * page was concerned, nothing happened at all. The line stays in the box,
+   * which is the right thing to do with it; this says why.
+   */
+  const reportFailure = useCallback(
+    (err, fallback) => {
+      if (isAuthFailure(err)) {
+        markOut()
+        return
+      }
+      setToast(failureMessage(err, fallback))
+    },
+    [markOut]
+  )
+
   const captureDone = useCallback(
     (message) => {
       setDraft(null)
@@ -360,9 +389,7 @@ const CommandBox = ({ onOpenSettings }) => {
             captureDone('Task added')
           }
         } catch (err) {
-          if (err instanceof UnauthorizedError) {
-            markOut()
-          }
+          reportFailure(err, draft.kind === 'note' ? "Couldn't save the note" : "Couldn't add the task")
         }
         return
       }
@@ -405,9 +432,7 @@ const CommandBox = ({ onOpenSettings }) => {
           captureDone('Task added')
         }
       } catch (err) {
-        if (err instanceof UnauthorizedError) {
-          markOut()
-        }
+        reportFailure(err, mode === 'note' ? "Couldn't save the note" : "Couldn't add the task")
       }
       return
     }
@@ -448,12 +473,9 @@ const CommandBox = ({ onOpenSettings }) => {
           setResults(list)
           setSelectedIndex(list.length ? 0 : -1)
         } catch (fallbackErr) {
-          if (fallbackErr instanceof UnauthorizedError) {
-            markOut()
-          } else {
-            setResults([])
-            setSelectedIndex(-1)
-          }
+          setResults([])
+          setSelectedIndex(-1)
+          reportFailure(fallbackErr, "Couldn't reach the suite")
         }
       } finally {
         setAskLoading(false)
@@ -489,9 +511,7 @@ const CommandBox = ({ onOpenSettings }) => {
           openUrl(list[0].url)
         }
       } catch (err) {
-        if (err instanceof UnauthorizedError) {
-          markOut()
-        }
+        reportFailure(err, "Couldn't search the suite")
       } finally {
         setSearchLoading(false)
       }
@@ -507,6 +527,7 @@ const CommandBox = ({ onOpenSettings }) => {
     handleCreateNote,
     createTaskFromFields,
     captureDone,
+    reportFailure,
     ask,
     askEnabled,
     draft,

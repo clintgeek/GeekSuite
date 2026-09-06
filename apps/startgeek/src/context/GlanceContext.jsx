@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { GlanceContext } from './glanceContextValue'
 import { useSession } from '../hooks/useSession'
 import { gql, UnauthorizedError } from '../lib/graphql'
@@ -86,7 +86,13 @@ export const GlanceProvider = ({ children }) => {
     }
   }, [status, load])
 
-  const value = { data, loading, error, refetch }
+  // Memoized: every consumer of this context (ModuleGrid, TaskRow, CommandBox)
+  // re-rendered on every GlanceProvider render otherwise, including the ones
+  // caused by the 60s poll setting `loading` twice.
+  const value = useMemo(
+    () => ({ data, loading, error, refetch }),
+    [data, loading, error, refetch]
+  )
 
   return (
     <GlanceContext.Provider value={value}>

@@ -53,10 +53,12 @@ temperature, 400/500 for content, Geist Mono for labels, counts, and streaks.
 
 ## Settings
 
-`SettingsContext` persists `{ backdrop, clock, modules }` to
+`SettingsContext` persists `{ backdrop, clock, modules, ask, calendars }` to
 `localStorage['startgeek.settings']`. No backend. The sheet opens from the rail
 control or the `,` key. Block list, defaults, and allowed values live in
-`src/config/modules.js` (`weather`, `today` = Tasks, `fitness`, `reading`).
+`src/config/modules.js` (`weather`, `today` = Tasks, `calendar`, `fitness`,
+`reading`). `ask` is the `??` opt-in, off by default; `calendars` is a list of
+`{ url, color }` ICS feeds, empty by default.
 A block with no data stays hidden even when on. Logged out, only `weather`
 and the backdrop/clock controls show.
 
@@ -111,6 +113,9 @@ src/
     WeatherModal.jsx      — Today's details + 7-day range bars; focus-trapped
     CommandBox.jsx        — Quick capture / search box
     HelpButton.jsx, HelpModal.jsx, SearchResults.jsx, Toast.jsx
+    AnswerCard.jsx        — The `??` answer, above the result list
+    CalendarModule.jsx    — ICS agenda feed, grouped by day, paged on scroll
+    DraftPreview.jsx      — The model's draft as an offer: Create or Edit, nothing saved yet
     Module.jsx            — Panel wrapper: label, count, link, foot, span
     ModuleGrid.jsx        — Tasks (overdue / today / upcoming, scrolls) beside stacked Fitness + Reading
     TaskRow.jsx           — Task line with dot, tags, event time, overdue pill
@@ -125,10 +130,16 @@ src/
     GlanceContext.jsx     — glanceToday data (tasks incl. upcoming, reading, fitness)
   hooks/
     useSettings.js, useTime.js, useWeather.js, useSession.js, useGlance.js
+    useCalendarEvents.js  — ICS fetch + localStorage cache + visibility-gated poll
   services/
     weatherService.js     — Open-Meteo / ipapi client
   lib/
-    graphql.js, queries.js, basegeek.js, engines.js, commandMode.js, parseTaskInput.js
+    graphql.js            — Gateway client (CSRF header + heal), UnauthorizedError re-export
+    errors.js             — UnauthorizedError (apart from graphql.js so node --test can import it)
+    commandFailure.js     — isAuthFailure / failureMessage: what a failed capture says
+    csrfHeal.js           — shouldHealCsrf / triggerCsrfReloadOnce (+ .test.js)
+    captureDraft.js       — When a `>`/`<` line is worth a model call, and the draft round trip
+    queries.js, basegeek.js, engines.js, commandMode.js, parseTaskInput.js
 ```
 
 ## a11y pass (2026-09-05, TODO_ORDER Q51)
@@ -141,6 +152,121 @@ screen. It now takes `tabIndex={0}` with `role="group"` and
 `aria-label="Seven-day forecast"` plus a `focus-visible` outline. Any future
 `overflow-x-auto` row here needs the same three things — a tab stop, a name,
 and a visible focus ring.
+
+## Going-over 2026-09-05
+
+A read of the whole app — every component, context, hook, lib module, the
+service worker and the container config. Lint stays at 0 warnings
+(`--max-warnings 0`), harness 8 scenes 0/0/0 with `--enforce-a11y`, tests
+8 → 14.
+
+### Fixed
+
+- **The command box swallowed every failure that was not an expired session.**
+  Each capture and search path ended with
+  `catch (err) { if (err instanceof UnauthorizedError) markOut() }`, so a
+  gateway 500, a rejected mutation, a dropped connection or a CSRF 403 the heal
+  could not fix produced *nothing*: the text stayed in the box and the page said
+  not a word. Pressing Enter on a task that failed to file was
+  indistinguishable from one that filed. There is now one `reportFailure`
+  helper behind the existing `Toast`, used by the draft-confirm, deterministic
+  capture, suite-search-on-Enter and ask-fallback paths. The debounced
+  type-ahead search stays deliberately quiet — a toast per keystroke would be
+  worse than an empty dropdown, and Enter runs the same query through the path
+  that does report. `src/components/CommandBox.jsx`.
+- **`signOut` did nothing when basegeek was unreachable.** `await logout()`
+  then `window.location.reload()` — a network failure rejected out of `logout()`
+  and the reload never ran, so the Sign out button was inert and the rejection
+  surfaced as an unhandled promise. The reload is in a `finally` now.
+  `src/context/SessionContext.jsx`.
+- **`GlanceContext` handed every consumer a fresh object on every render** —
+  `const value = { data, loading, error, refetch }`. Memoized; ModuleGrid,
+  TaskRow and CommandBox no longer re-render on each of the 60s poll's two
+  `loading` transitions.
+- **The `serve` npm script still carried `-s`.** The Dockerfile dropped it on
+  purpose, with a long comment: `-s` rewrites *every* not-found request to
+  `index.html`, including a deleted hashed asset path, which is the SPA-fallback
+  cache-poisoning landmine. `npm run serve` is what a local verification run
+  uses, so it was reproducing exactly the behaviour the container avoids.
+  Dropped there too. **Confirmed while checking it: startgeek has no client-side
+  router at all** — no `react-router` dependency, no `Route`, `src/App.jsx` is
+  the whole page — so there is no client route that could 404 without `-s`.
+- **`UnauthorizedError` moved to `src/lib/errors.js`**, with `graphql.js`
+  re-exporting it so every existing import keeps working against the same class
+  (identity is what `instanceof` depends on). The reason is testability:
+  `graphql.js` reads `import.meta.env`, which only exists under Vite, so plain
+  `node --test` cannot import it. Same seam `csrfHeal.js` already uses.
+- **New: `src/lib/commandFailure.js`** — `isAuthFailure` / `failureMessage`, the
+  pure half of the fix above, with `commandFailure.test.js` (6 cases) on
+  `node --test`.
+- **`npm test` now exists**: `node --test src/lib/*.test.js`. The two suites
+  were only runnable by naming the files by hand, and `node --test src/lib/`
+  fails because it tries to execute `graphql.js` as a test.
+
+### Checked and clean
+
+- `lib/graphql.js`'s error paths: a 401 throws `UnauthorizedError`, which every
+  caller turns into `markOut()` — a signed-out console, not a redirect. **There
+  is no redirect loop**: nothing navigates on a 401; `loginUrl()` is only
+  reached by a deliberate click on the session button.
+- The glance modules' null-guards hold with the gateway down. `ModuleGrid`
+  gates on `data?.tasks`, `data?.reading?.length > 0` and an explicit
+  `data?.fitness != null` plus a field check, so `FitnessModule` and
+  `ReadingModule` are never rendered without their object. `GlanceContext`
+  leaves `data` at its last good value and sets `error`, and the whole row
+  hides rather than half-rendering.
+- The Ask opt-in gate is closed on both sides: `handleEnter` returns early on
+  `!askEnabled` before any model call, and `shouldDraft()` refuses the draft
+  path for the same reason, so `??` and the `>`/`<` fallback both need the
+  setting. With it off the `??` dropdown shows the hint and an Open settings
+  button.
+- The wallpaper sampling's failure path is sound — the probe is a second,
+  independent `<img>` with `crossOrigin="anonymous"`, so a CORS refusal fires
+  its `onerror` (or `getImageData` throws and is caught) and falls back to
+  `--scrim-alpha: 1`, never touching the visible wallpaper.
+- `sw.js`: auth endpoints network-only first, `/api/*` and `/graphql`
+  network-only next, everything else stale-while-revalidate behind the
+  `text/html` guard that refuses to store an SPA-fallback body under an asset
+  URL; `install` uses per-URL `cache.add().catch()`; navigation falls back to
+  `/offline.html`. Cross-origin responses (`type !== 'basic'`) are never cached,
+  so bookgeek covers and picsum wallpapers cannot poison it.
+
+### Left in place, with reasons
+
+- **`TaskRow`'s dot swallows a failed toggle** the same way the command box
+  used to. Not fixed here because `TaskRow` has no toast in reach — the toast
+  lives inside `CommandBox` — and the visible result is at least honest: the dot
+  does not move, because `refetch()` only runs on success. Making it speak means
+  lifting `Toast` to a provider, which is a larger change than this pass.
+- **`BackgroundManager`'s retry timers are not cleared on unmount.** Both the
+  load timeout and the `RETRY_DELAY` retry are guarded by a `cancelled` flag and
+  a `settled` flag, so nothing sets state after unmount; what is left is a
+  dangling timer and at most one wasted image request. Not worth the churn.
+- **`GlanceContext.todayIso()` uses the offset-subtraction trick**
+  (`new Date(t - getTimezoneOffset()*60000).toISOString()`). `@geeksuite/utils`
+  has `localDateString`, which reads the local calendar fields directly and is
+  the suite's preferred form — but startgeek is a standalone npm app with no
+  workspace dependencies by design (`TODO_ORDER.md` #5), and the trick is
+  *correct*, not merely lucky: the offset is sampled at `t`, so it survives DST.
+  Left alone rather than opening a dependency question over a working function.
+- **No component test runner.** `SessionContext`, `GlanceContext` and
+  `CommandBox`'s own wiring have no pinning test — only the pure modules those
+  fixes were factored into do. Adding vitest + jsdom here is a real dependency
+  decision (this app is deliberately dependency-light and outside the pnpm
+  workspace), so it is **reported, not taken**. It is the single biggest gap in
+  this app's verification.
+
+### Docs drift found
+
+The File Map below was missing six files that exist:
+`components/CalendarModule.jsx`, `components/AnswerCard.jsx`,
+`components/DraftPreview.jsx`, `hooks/useCalendarEvents.js`,
+`lib/captureDraft.js` and `lib/csrfHeal.js` — plus the two added today
+(`lib/errors.js`, `lib/commandFailure.js`). The Settings section also omitted
+`ask` and `calendars`, both of which `SettingsContext` persists. Both corrected
+below.
+
+---
 
 ---
 

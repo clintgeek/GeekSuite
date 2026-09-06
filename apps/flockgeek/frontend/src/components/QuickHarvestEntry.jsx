@@ -90,10 +90,15 @@ const QuickHarvestEntry = ({ onSuccess, locations = [], variant = "panel" }) => 
   const handleSubmit = async () => {
     if (eggCount === 0) { notify("Enter at least 1 egg", { tone: 'error' }); return; }
     const payload = {
+      // `source: "manual"` used to be here. `RECORD_EGG_PRODUCTION` declares no
+      // `$source` variable and the gateway's `recordEggProduction` takes no
+      // `source` argument, so GraphQL discarded it in silence — the field was
+      // never set on a single record. Dropped rather than left as a lie; if
+      // the provenance is wanted, the argument has to exist on the gateway
+      // first. Going-over 2026-09-05.
       date: localDateString(new Date()),
       eggsCount: eggCount,
       daysObserved: days,
-      source: "manual",
       ...(locationId ? { locationId } : {}),
       ...(notes.trim() ? { notes: notes.trim() } : {}),
     };

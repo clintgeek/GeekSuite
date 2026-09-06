@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useQuery, useMutation } from '@apollo/client';
-import { displayCalendarDate, utcDateString } from "@geeksuite/utils";
+import { displayCalendarDate, localDateString, utcDateString } from "@geeksuite/utils";
 import { Container, Button, Box, TextField, Chip } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -31,7 +31,6 @@ const HatchLogPage = () => {
 
   const [recordHatchEvent] = useMutation(RECORD_HATCH_EVENT, {
     refetchQueries: refetchList, awaitRefetchQueries: true,
-    onCompleted: () => { setAddDialogOpen(false); setAddFormData({ setDate: "", hatchDate: "", eggsSet: "", eggsFertile: "", chicksHatched: "", pullets: "", cockerels: "", notes: "" }); },
     onError: (err) => notify(err.message, { tone: 'error' }),
   });
 
@@ -48,9 +47,17 @@ const HatchLogPage = () => {
 
   const allEvents = data?.hatchEvents || [];
 
+  // Going-over 2026-09-05: these compared the gateway's serialized `setDate`
+  // — a full ISO instant, `2026-09-05T00:00:00.000Z` — against the `YYYY-MM-DD`
+  // an `<input type="date">` produces. Lexicographically the ISO string is
+  // always *greater* than the bare day it names, so `End Date = 2026-09-05`
+  // dropped every event set on the 5th: the last day of a range was always
+  // missing. Read the stored calendar day first, then compare day to day.
+  // (EggLogPage already did this via `.substring(0, 10)`.)
   const filtered = useMemo(() => allEvents.filter(e => {
-    if (filters.startDate && e.setDate < filters.startDate) return false;
-    if (filters.endDate && e.setDate > filters.endDate) return false;
+    const day = utcDateString(e.setDate);
+    if (filters.startDate && day < filters.startDate) return false;
+    if (filters.endDate && day > filters.endDate) return false;
     return true;
   }), [allEvents, filters]);
 
@@ -96,17 +103,61 @@ const HatchLogPage = () => {
     }});
   };
 
-  const handleSaveAdd = () => {
+  /**
+   * Going-over 2026-09-05 — the Add dialog used to lie.
+   *
+   * It collects Hatch Date, Fertile Eggs, Chicks Hatched, Pullets and
+   * Cockerels, and sent `setDate` / `eggsSet` / `notes`. Everything else the
+   * user typed was dropped on the floor and the dialog closed as if it had
+   * saved. `hatchDate` was simply an undeclared variable (fixed in
+   * `mutations.js`); the four counts have no argument on the gateway's
+   * `recordHatchEvent` at all, but `updateHatchEvent` takes every one of
+   * them — so the create is followed by an update carrying whatever was
+   * filled in, rather than the numbers vanishing.
+   */
+  const handleSaveAdd = async () => {
     if (!addFormData.setDate || !addFormData.eggsSet) { notify("Set date and eggs set are required", { tone: 'error' }); return; }
-    recordHatchEvent({ variables: {
-      setDate: addFormData.setDate,
-      hatchDate: addFormData.hatchDate || undefined,
-      eggsSet: parseInt(addFormData.eggsSet),
-      notes: addFormData.notes || undefined,
-    }});
+
+    const asCount = (value) => (value === "" || value == null ? undefined : parseInt(value));
+    const postHatch = {
+      eggsFertile: asCount(addFormData.eggsFertile),
+      chicksHatched: asCount(addFormData.chicksHatched),
+      pullets: asCount(addFormData.pullets),
+      cockerels: asCount(addFormData.cockerels),
+    };
+    const hasPostHatch = Object.values(postHatch).some((v) => v !== undefined);
+
+    try {
+      const result = await recordHatchEvent({ variables: {
+        setDate: addFormData.setDate,
+        hatchDate: addFormData.hatchDate || undefined,
+        eggsSet: parseInt(addFormData.eggsSet),
+        notes: addFormData.notes || undefined,
+      }});
+
+      const id = result?.data?.recordHatchEvent?.id;
+      if (!id) return; // the create failed; its own onError already said so
+
+      if (hasPostHatch) {
+        await updateHatchEvent({ variables: { id, ...postHatch } });
+      }
+
+      setAddDialogOpen(false);
+      setAddFormData({ setDate: "", hatchDate: "", eggsSet: "", eggsFertile: "", chicksHatched: "", pullets: "", cockerels: "", notes: "" });
+    } catch (err) {
+      // Both mutations carry an `onError`, so Apollo resolves rather than
+      // rejects — this is the belt for anything that isn't a GraphQL error.
+      notify(err.message || "Couldn't save the hatch event", { tone: 'error' });
+    }
   };
 
-  const isHatched = (event) => event.hatchDate && new Date(event.hatchDate) <= new Date();
+  // `hatchDate` is a calendar day stored at UTC midnight, not an instant.
+  // Comparing it to `new Date()` flipped the chip to "Hatched" the moment UTC
+  // midnight of that day passed — 6pm the *previous* evening in US Central —
+  // so a clutch due tomorrow read as already hatched tonight. Compare the
+  // stored day against the reader's own day instead. Going-over 2026-09-05.
+  const isHatched = (event) =>
+    !!event.hatchDate && utcDateString(event.hatchDate) <= localDateString(new Date());
   const hatchSuccessRate = (event) => !event.eggsSet ? 0 : Math.round((event.chicksHatched / event.eggsSet) * 100);
   const asDate = (value) => displayCalendarDate(value) || "-";
 

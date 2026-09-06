@@ -1,23 +1,24 @@
 import MeatRun from "../models/MeatRun.js";
 import { withoutOwnerFields } from "../utils/ownerFields.js";
+import { readPagination } from "../utils/pagination.js";
 
 export const listMeatRuns = async (req, res, next) => {
   try {
     const { ownerId } = req;
-    const { pairingId, status, page = 1, limit = 20, sortBy = "startDate", sortOrder = "desc" } = req.query;
+    const { pairingId, status, sortBy = "startDate", sortOrder = "desc" } = req.query;
 
     const filter = { ownerId, deletedAt: { $exists: false } };
     if (pairingId) filter.pairingId = pairingId;
     if (status) filter.status = status;
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const { page, limit, skip } = readPagination(req.query);
     const sort = {};
     sort[sortBy] = sortOrder === "desc" ? -1 : 1;
 
     const items = await MeatRun.find(filter)
       .populate("pairingId", "name")
       .skip(skip)
-      .limit(parseInt(limit))
+      .limit(limit)
       .sort(sort);
 
     const total = await MeatRun.countDocuments(filter);
@@ -25,7 +26,7 @@ export const listMeatRuns = async (req, res, next) => {
     res.json({
       data: {
         meatRuns: items,
-        pagination: { total, page: parseInt(page), limit: parseInt(limit) }
+        pagination: { total, page, limit }
       }
     });
   } catch (err) {

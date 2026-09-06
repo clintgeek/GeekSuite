@@ -62,6 +62,31 @@ describe('AccountPage', () => {
     expect(screen.getByDisplayValue('Builds fires.')).toBeInTheDocument();
   });
 
+  // Going-over 2026-09-05 — this row read `prefsForm.locale`, and `locale`
+  // lives on the *profile*, not on preferences. `prefsForm` is never given one,
+  // so the Locale line on the avatar card has rendered blank for every user
+  // since it shipped. (The tests added on 2026-09-05 caught it and left it;
+  // this pass fixed it.)
+  it('the avatar card fills in the Locale row from the profile', () => {
+    useUser.mockReturnValue(baseUserStore());
+    const { container } = renderWithProviders(<AccountPage />);
+
+    const rows = [...container.querySelectorAll('p')].map((el) => el.textContent);
+    const localeIndex = rows.indexOf('Locale');
+    expect(localeIndex).toBeGreaterThan(-1);
+    expect(rows[localeIndex + 1]).toBe('en-US');
+  });
+
+  it('the avatar card shows the theme actually in effect', () => {
+    useUser.mockReturnValue(baseUserStore());
+    const { container } = renderWithProviders(<AccountPage />);
+
+    const rows = [...container.querySelectorAll('p')].map((el) => el.textContent);
+    const themeIndex = rows.indexOf('Theme');
+    expect(themeIndex).toBeGreaterThan(-1);
+    expect(rows[themeIndex + 1]).toBe('dark');
+  });
+
   it('shows the "No app-specific preferences yet" empty state when appPreferences is empty', () => {
     useUser.mockReturnValue(baseUserStore());
     renderWithProviders(<AccountPage />);
