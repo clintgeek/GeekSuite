@@ -107,7 +107,9 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 
 - 09-05 23:12 — wave 16 (`821a0bb`, 7 commits): R104, R105, R103, docs. Gates green; CI, Release, harness green 23:27; Watchtower 23:23 (updated=7); all eight apps 200 and healthy. **All 105 streams landed and deployed.**
 
-- 09-06 00:07 — wave 17 (`add7227`, 17 commits): R107, R108, R109 (applied), R110, R111, R112, tag-rename guard, docs. Gates green. **All 112 streams landed; nothing running.** Review 2's #2–#15 fixed; #1 = Q56, #11 = Q69 (Chef).
+- 09-06 00:07 — wave 17 (`add7227`, 17 commits): CI + Release green; Watchtower rolled it ~00:18 (containers recreated); harness run in progress at 00:20. R107, R108, R109 (applied), R110, R111, R112, tag-rename guard, docs. Gates green. **All 112 streams landed; nothing running.** Review 2's #2–#15 fixed; #1 = Q56, #11 = Q69 (Chef).
+
+- **Incident 00:15:** the box ran low on memory and the OOM killer took the wave-17 monitor. Cause: a 2.6 GB vitest worker orphaned since ~13:40 plus four `vite preview` servers left behind when their agents were stopped mid-harness. All killed by PID; 14 GB available after. See Q70.
 
 ## Landed during the burn
 
