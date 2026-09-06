@@ -203,13 +203,19 @@ const BPChartNivo = ({ data, unit = 'mmHg' }) => {
           gridYValues={[80, 100, 120, 140, 160]}
           pointColor={{ theme: 'background' }}
           pointBorderWidth={2}
-          pointBorderColor={{ from: 'serieColor' }}
+          pointBorderColor={{ from: 'seriesColor' }}
           enableArea={false}
           useMesh
           enableSlices={false}
           colors={(serie) => serie.color}
-          lineWidth={(serie) => (isReferenceLine(serie.id) ? 1.5 : 2.5)}
-          pointSize={(serie) => (isReferenceLine(serie.id) ? 0 : isMobile ? 5 : 7)}
+          // @nivo/line 0.99 types lineWidth/pointSize as a plain number (handed
+          // straight to `strokeWidth`/`r = size / 2`), not a per-series function —
+          // a function here rendered `<circle r="NaN">` and never drew a point.
+          // lineWidth is otherwise inert: the 'lines' layer isn't in the `layers`
+          // list below, the two custom path layers draw the real strokes. Point
+          // size/visibility now comes from the custom points layer below, which
+          // can vary by series the way the old function tried to.
+          lineWidth={2.5}
           enablePointLabel={false}
           curve="monotoneX"
           crosshairType="cross"
@@ -361,7 +367,27 @@ const BPChartNivo = ({ data, unit = 'mmHg' }) => {
                     />
                   );
                 }),
-            'points',
+            // Points layer, drawn by hand: pointSize can't vary per series in
+            // this @nivo/line version (it's one number for the whole chart),
+            // so reference-band points are simply never drawn and Systolic/
+            // Diastolic points use the old mobile-aware radius directly.
+            // point.color / point.borderColor are still computed correctly by
+            // the pointColor/pointBorderColor props above regardless of
+            // whether 'points' is in this layers list.
+            ({ points }) =>
+              points
+                .filter(({ seriesId }) => !isReferenceLine(seriesId))
+                .map((point) => (
+                  <circle
+                    key={point.id}
+                    cx={point.x}
+                    cy={point.y}
+                    r={(isMobile ? 5 : 7) / 2}
+                    fill={point.color}
+                    stroke={point.borderColor}
+                    strokeWidth={2}
+                  />
+                )),
             'mesh',
           ]}
         />

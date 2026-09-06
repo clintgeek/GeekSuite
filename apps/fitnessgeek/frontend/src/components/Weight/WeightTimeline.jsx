@@ -240,14 +240,26 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
             format: (v) => `${Math.round(v)}`,
           }}
           colors={(line) => line.color}
-          pointSize={(line) => (line.id === 'Actual' ? 6 : 0)}
           pointColor={theme.palette.background.paper}
           pointBorderWidth={2}
-          pointBorderColor={(line) => line.color}
+          // @nivo/line 0.99 types pointBorderColor as an InheritedColorConfig:
+          // a custom function is called with the POINT datum, not the series —
+          // by the time it runs, point.color already equals the pointColor
+          // above (same value for every series), so `(line) => line.color` was
+          // really returning that shared fill color, not each series' own
+          // color. `{ from: 'seriesColor' }` reads the per-point seriesColor
+          // field nivo sets from the originating series, which is what this
+          // wanted all along (a colored ring around a background-color hole).
+          pointBorderColor={{ from: 'seriesColor' }}
           enablePointLabel={false}
           useMesh
           curve="monotoneX"
-          lineWidth={(line) => (line.id === 'Goal' ? 2 : 2.5)}
+          // lineWidth is a plain number in this version, not a per-series
+          // function (it's applied once to every line in the 'lines' layer
+          // below) — a function rendered as a literal string in `strokeWidth`.
+          // Picking the larger of the old two values (2 vs 2.5) is the closest
+          // static equivalent; the Goal line is 0.5px heavier than before.
+          lineWidth={2.5}
           enableArea={false}
           enableSlices="x"
           enableGridX={false}
@@ -294,7 +306,7 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
                         width: 8,
                         height: 8,
                         borderRadius: '50%',
-                        backgroundColor: point.serieColor,
+                        backgroundColor: point.seriesColor,
                       }}
                     />
                     <Typography
@@ -304,7 +316,7 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
                         fontWeight: 600,
                       }}
                     >
-                      {point.serieId}
+                      {point.seriesId}
                     </Typography>
                   </Box>
                   <Typography
@@ -347,7 +359,27 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
                 return null;
               }),
             'lines',
-            'points',
+            // Points layer, drawn by hand: pointSize can't vary per series in
+            // this @nivo/line version (it's one number for the whole chart),
+            // so only the 'Actual' series gets a dot — Goal/Projection stay
+            // bare lines, same as the old `(line) => (id === 'Actual' ? 6 : 0)`
+            // intended. point.color / point.borderColor are still computed
+            // correctly by the pointColor/pointBorderColor props above
+            // regardless of whether 'points' is in this layers list.
+            ({ points }) =>
+              points
+                .filter(({ seriesId }) => seriesId === 'Actual')
+                .map((point) => (
+                  <circle
+                    key={point.id}
+                    cx={point.x}
+                    cy={point.y}
+                    r={3}
+                    fill={point.color}
+                    stroke={point.borderColor}
+                    strokeWidth={2}
+                  />
+                )),
             'slices',
             'mesh',
           ]}

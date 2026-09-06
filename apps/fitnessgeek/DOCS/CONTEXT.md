@@ -1300,3 +1300,77 @@ page errors. Not committed; it is thirty lines of route stubs plus assertions.
   path as `false`, so a real user is safe — but a caller with NO settings document at
   all still reads as enabled. Now that the flag is the opt-in rather than a kill
   switch, that asymmetry should be tightened. Gateway file, out of scope.
+
+---
+
+## Night 2 — 2026-09-06 — R128: the R124 points-never-render nivo bug, fixed
+
+Picked up R124's left-behind finding: `BPChartNivo.jsx` and `WeightTimeline.jsx` passed
+`pointSize` / `lineWidth` to `@nivo/line`'s `ResponsiveLine` as **per-series functions**. Checked
+the installed version's own types (`@nivo/line@0.99.0`'s `dist/types/types.d.ts`): both are typed
+as a plain `number` — `pointSize` goes straight to `DotsItem` as `r = size / 2`, `lineWidth` goes
+straight to the `<path>`'s `strokeWidth` — so a function produced `<circle r="NaN">` (BP) and a
+literal function reference where a stroke width belongs (Weight), and Chrome dropped both. Also
+found, tracing exactly how nivo threads these props: `pointBorderColor` is genuinely
+function-capable (`InheritedColorConfig`), but nivo calls it with the **point** datum, not the
+series — `WeightTimeline`'s `(line) => line.color` was really reading `point.color` (already
+stamped to the shared static `pointColor` by the time the border function runs), so every
+series' "ring" came back the same flat background-paper color as its own fill. And `BPChartNivo`'s
+`pointBorderColor={{ from: 'serieColor' }}` was a typo — the real per-point field `@nivo/line`
+sets is `seriesColor` (plural), confirmed against `Point.seriesColor: string` in the type defs and
+against the one place in the bundle that actually builds these objects — so that lookup always
+returned `undefined` and the border was invisible regardless of the NaN bug. Same typo, same
+fix, in `WeightTimeline`'s `sliceTooltip`: `point.serieColor` / `point.serieId` → `seriesColor` /
+`seriesId`, which is why the tooltip's legend swatch and series label were always blank.
+
+**The fix, not a workaround.** `pointSize` can't vary per series in this nivo version — it's one
+number for the whole 'points' layer (confirmed by reading how the bundled `Points` component
+applies it: a single value taken once, not resolved per point). Neither can `lineWidth` for the
+`'lines'` layer. Rather than pick one static size and lose the "reference bands get no dots" /
+"only the Actual series gets a dot" distinction the original functions were reaching for, both
+components now draw their points with a **custom layer** — the same pattern the files already use
+for their dashed reference/goal lines (a function in the `layers` array reading `points`/`series`
+from nivo's own computed context and rendering raw `<circle>`/`<path>` elements). `'points'` is
+removed from `layers`; the custom layer filters by `seriesId` and renders exact-radius circles
+using `point.color`/`point.borderColor` — which are still computed correctly from the (now fixed)
+`pointColor`/`pointBorderColor` props regardless of whether the built-in `'points'` layer consumes
+them. `lineWidth` turned out to be dead in `BPChartNivo` already (`'lines'` was never in its
+`layers` list — the two custom path layers draw the real strokes), so it's now just a
+type-correct static `2.5`. In `WeightTimeline`, `'lines'` **is** active and shared across all
+three series, so per the brief's own suggested compromise the static value is the max of the two
+originals (2.5, was 2/2.5) — the Goal line is 0.5px heavier than before, the only visual delta
+from this whole fix that wasn't a pure bug repair.
+
+**Decisions made on Chef's behalf:**
+- Custom points layer over "split into two `ResponsiveLine`s": trivial for neither file (both
+  layer arrays intermix reference/goal lines with the real series against one shared scale), and
+  the custom-layer pattern was already established in both files for the same reason.
+- Fixed the `serieColor`/`serieId` typos (BPChartNivo's `pointBorderColor`, WeightTimeline's
+  `sliceTooltip`) even though the brief named only the function-vs-number defect — leaving them
+  would have made pointBorderColor's fix invisible (a NaN-free but colorless/borderless dot is
+  still not "rendering" in any useful sense) and the tooltip fix is one file, two words, zero risk.
+
+**Verification:** `pnpm test` 140 passed / 19 files (R124 baseline was 129/17; the two new files —
+`BloodPressure/__tests__/BPChartNivo.test.jsx`, `Weight/__tests__/WeightTimeline.test.jsx`, 3 tests
+each — account for +6/+2; the remaining +5/+0 predate this stream, from other Night 2 work already
+landed in this tree). Each new test mocks `@nivo/line`'s `ResponsiveLine` to capture props (asserts
+`lineWidth` is a finite number, `pointSize` is never a function, `pointBorderColor` is
+`{ from: 'seriesColor' }`, `colors` legitimately stays a function) and separately invokes the
+custom points-layer function with a synthetic point set to prove it renders finite, positive `r`
+only for the real series (Systolic/Diastolic; Actual) and none for the reference bands / Goal /
+Projection — jsdom can't paint the real chart (nivo measures its 0×0 container there), so this
+is the direct substitute the brief called for. `pnpm lint` 49 warnings, same count as R124 left,
+none new. `pnpm build` clean, bundle sizes unchanged within noise (PWA precache 2523.50 KiB vs
+R124's 2523.29 KiB). `node tools/syntax-check.mjs` clean over 847 files. Mobile harness
+(`--app fitnessgeek --serve --enforce-a11y --viewports phone`): 22 scenes, 0/0/0, unchanged.
+
+Also driven in a real browser (Playwright via the mobile harness's own `lib/`, throwaway script,
+not committed): `/blood-pressure` painted 8 circles at `r="2.5"` (phone viewport, so the old
+`isMobile ? 5 : 7` branch), `/weight` painted 24 circles at `r="3"` for the Actual series — no
+`r="NaN"`, no console errors on either page.
+
+**Left, with reasons:**
+- None of this touches `BPCategoryDistribution.jsx`'s pie chart, `@nivo/pie` types were not
+  audited — out of scope (the brief named BPChartNivo/WeightTimeline specifically, and the pie
+  points R124 saw on `/blood-pressure`'s circle count are unrelated, incidental circles from that
+  component, not this bug).
