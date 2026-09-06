@@ -31,8 +31,14 @@ ReactDOM.createRoot(document.getElementById("root")).render(
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     let refreshing = false;
+    // A first install also fires controllerchange (the new worker claims the
+    // page that registered it); only an update — there was already a
+    // controller — is worth a reload. Read it before register(): by the time
+    // the event fires, controller is already the new worker.
+    const hadController = !!navigator.serviceWorker.controller;
 
     navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (!hadController) return;
       if (refreshing) return;
       refreshing = true;
       window.location.reload();
