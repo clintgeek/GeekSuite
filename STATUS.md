@@ -1,10 +1,11 @@
 # GeekSuite — Status
 
-*Updated 2026-09-05 23:05 CDT. Morning: three deploys (Pocket Pass M0–M5, AIGeek, Ask). Afternoon
-and evening: the 28-hour quota burn — fourteen waves (last `a0450d7`), 105 streams landed, all
-verified live. The live board with every stream, incident and open decision is
-`DOCS/BURN_QUEUE.md`; the cross-stream review is `DOCS/BURN_REVIEW.md`; the AI ideas are
-`DOCS/AI_IDEAS.md`.*
+*Updated 2026-09-06 00:10 CDT. Morning: three deploys (Pocket Pass M0–M5, AIGeek, Ask). Afternoon
+and evening: the 28-hour quota burn — seventeen waves (last `add7227`), 112 streams landed, all
+verified live; two adversarial cross-stream reviews (`DOCS/BURN_REVIEW.md`, `DOCS/BURN_REVIEW_2.md`)
+with every fixable finding fixed. The live board with every stream, incident and open decision is
+`DOCS/BURN_QUEUE.md`; the AI ideas are `DOCS/AI_IDEAS.md`. Nothing is running; what remains is
+Chef's decision list on the board.*
 
 ## Phase 2 — the going-over (evening of 2026-09-05)
 
