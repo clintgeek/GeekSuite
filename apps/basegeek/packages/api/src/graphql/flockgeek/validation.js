@@ -94,29 +94,51 @@ const meatRunStatusSchema = z.enum(['growing', 'harvested', 'cancelled']).nullab
 
 // ── Birds ────────────────────────────────────────────────────────────────────
 
+/**
+ * One bird field list, shared by create and update — see the comment on
+ * `Mutation.createBird` in `typeDefs.js`. The two schemas drifted apart once
+ * (update declared 6 of the 16 fields the edit form collects) and this is the
+ * shape that stops it happening again: add a field here and both mutations
+ * get it, or the GraphQL argument list and the schema disagree and
+ * `gatewaySchemaLoads` / the round-trip test says so.
+ *
+ * `temperamentScore` is `models/Bird.js`'s "1-10 scale, higher =
+ * calmer/friendlier" — bounded to that range rather than left an open Int,
+ * for the same reason the enums are bounded: `findOneAndUpdate` runs with
+ * `runValidators` off, so the model's own comment is the only thing that ever
+ * enforced it, and a comment enforces nothing.
+ */
+const birdFields = {
+  name: optionalName(),
+  species: optionalName(100),
+  breed: optionalName(100),
+  strain: optionalName(100),
+  cross: z.boolean().nullable().optional(),
+  sex: sexSchema,
+  // A calendar day — see the module doc. Every bird date is.
+  hatchDate: calendarDateField({ required: false }),
+  origin: originSchema,
+  foundationStock: z.boolean().nullable().optional(),
+  locationId: refIdString,
+  temperamentScore: z.number().int().min(1).max(10).nullable().optional(),
+  status: birdStatusSchema,
+  statusDate: calendarDateField({ required: false }),
+  statusReason: optionalName(500),
+  notes: notesSchema,
+};
+
 export const createBirdArgsSchema = z
   .object({
-    name: optionalName(),
+    ...birdFields,
     tagId: nameSchema(100),
-    species: optionalName(100),
-    breed: optionalName(100),
-    sex: sexSchema,
-    status: birdStatusSchema,
-    notes: notesSchema,
-    hatchDate: calendarDateField({ required: false }),
-    origin: originSchema,
   })
   .strict();
 
 export const updateBirdArgsSchema = z
   .object({
     id: idString,
-    name: optionalName(),
+    ...birdFields,
     tagId: nameSchema(100).optional(),
-    status: birdStatusSchema,
-    notes: notesSchema,
-    locationId: refIdString,
-    sex: sexSchema,
   })
   .strict();
 

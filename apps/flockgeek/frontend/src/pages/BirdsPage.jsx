@@ -176,15 +176,50 @@ const BirdsPage = () => {
 
   const handleCancelEdit = () => { setExpandedBirdId(null); setEditingBird(null); setEditDialogOpen(false); setEditFormData(emptyEditForm); };
 
+  /**
+   * The edit form's fields are `<Select>` strings, so "true"/"false" and a
+   * numeric score arrive as text and have to be cast before they go on the
+   * wire — `cross: "false"` against a `Boolean` argument is a type error, and
+   * `|| undefined` would swallow a legitimate `false` or `0`.
+   */
+  const asBool = (value) => value === true || value === "true";
+  const asScore = (value) =>
+    value === "" || value === null || value === undefined ? undefined : Number(value);
+
+  /**
+   * Every field the form collects goes on the wire. Ten of these used to be
+   * dropped before they left the browser — `updateBird` declared arguments for
+   * only tagId/name/sex/status/notes/locationId, so Breed, Hatch Date,
+   * Species, Strain, Cross, Origin, Foundation Stock, Temperament, Status Date
+   * and Status Reason were editable inputs that saved nothing.
+   *
+   * `|| undefined` on the text and date fields keeps the pre-existing
+   * "blank means leave it alone" contract: a cleared enum such as `status: ""`
+   * is not a valid value on the gateway, so blanks are omitted rather than
+   * sent as empty strings.
+   *
+   * Sire and Dam are still not sent: `Bird` has no such field — lineage lives
+   * on the pairing. See the note on CREATE_BIRD.
+   */
   const handleSaveEdit = () => {
     updateBird({ variables: {
       id: editingBird.id,
       tagId: editFormData.tagId || undefined,
       name: editFormData.name || undefined,
+      species: editFormData.species || undefined,
+      breed: editFormData.breed || undefined,
+      strain: editFormData.strain || undefined,
+      cross: asBool(editFormData.cross),
       sex: editFormData.sex || undefined,
-      status: editFormData.status || undefined,
-      notes: editFormData.notes || undefined,
+      hatchDate: editFormData.hatchDate || undefined,
+      origin: editFormData.origin || undefined,
+      foundationStock: asBool(editFormData.foundationStock),
       locationId: editFormData.locationId || undefined,
+      temperamentScore: asScore(editFormData.temperamentScore),
+      status: editFormData.status || undefined,
+      statusDate: editFormData.statusDate || undefined,
+      statusReason: editFormData.statusReason || undefined,
+      notes: editFormData.notes || undefined,
     }});
   };
 
@@ -209,6 +244,11 @@ const BirdsPage = () => {
       tagId: addFormData.tagId,
       name: addFormData.name || undefined,
       sex: addFormData.sex,
+      // Species and Strain are rendered inputs in the Add dialog and were
+      // never sent — Species had an argument all along and this call site
+      // omitted it; Strain had no argument until 2026-09-05.
+      species: addFormData.species || undefined,
+      strain: addFormData.strain || undefined,
       breed: addFormData.breed || undefined,
       status: addFormData.status || undefined,
       notes: addFormData.notes || undefined,

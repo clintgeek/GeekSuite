@@ -390,6 +390,29 @@ jobs:
       # see DOCS/RUNBOOK.md's "syntax gate" entry.
       - run: node tools/syntax-check.mjs
 
+  gql-audit:
+    name: gql argument audit (frontend vs gateway)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # The drift GraphQL itself will not report: a key in a `variables`
+      # object the document declares no `$var` for, or a `$var` declared and
+      # never passed, is dropped in SILENCE — the request succeeds and the
+      # field is never written. flockgeek shipped `source` to
+      # `recordEggProduction` for the life of the feature that way, and a unit
+      # test asserted it, because both sides of a frontend test are the
+      # client. Cross-checks every gql document under apps/*/frontend/src and
+      # friends against the gateway's own typeDefs, both directions.
+      # See DOCS/RUNBOOK.md's "gql argument audit" entry.
+      - run: node tools/gql-arg-audit.mjs
+
   boot-smoke:
     name: boot smoke (import-time + env)
     runs-on: ubuntu-latest

@@ -400,6 +400,16 @@ export const typeDefs = gql`
     dose_unit: String
     sig: String
     times_of_day: [String]
+    # Readable on FitnessMedication and present on the model
+    # (packages/schemas/fitnessgeek/medication.js) but missing here, which
+    # broke Add and Edit Medication outright rather than silently:
+    # Medications.jsx's buildPayload() sends suggested_indications on EVERY
+    # save, and an unrecognized field on an input-object VARIABLE is a
+    # coercion error - graphql-js refuses the whole operation before the
+    # resolver runs, even when the value is []. The RxNorm-derived
+    # suggestions are cached on the record so the edit form can re-offer
+    # them, so the field is declared rather than stripped client-side.
+    suggested_indications: [String]
     user_indications: [String]
     supply_start_date: Date
     days_supply: Int

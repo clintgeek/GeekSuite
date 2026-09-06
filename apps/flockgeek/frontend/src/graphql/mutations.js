@@ -1,8 +1,18 @@
 import { gql } from '@apollo/client';
 
+// Both documents declare every field BirdsPage's forms collect, and the
+// gateway's createBird/updateBird declare the same list (see the comment on
+// `Mutation.createBird` in the gateway's flockgeek typeDefs). Until 2026-09-05
+// UPDATE_BIRD declared 7 of them, so ten editable inputs — Breed, Hatch Date,
+// Species, Strain, Cross, Origin, Foundation Stock, Temperament, Status Date,
+// Status Reason — closed the dialog and changed nothing.
+//
+// The forms' Sire and Dam inputs are still not here: `models/Bird.js` tracks
+// lineage through `pairingId`, has no sire/dam field, and `Bird` exposes
+// none — those two inputs have nowhere to go and are reported, not wired.
 export const CREATE_BIRD = gql`
-  mutation CreateBird($tagId: String!, $name: String, $sex: String, $breed: String, $status: String, $notes: String, $hatchDate: Date, $origin: String) {
-    createBird(tagId: $tagId, name: $name, sex: $sex, breed: $breed, status: $status, notes: $notes, hatchDate: $hatchDate, origin: $origin) {
+  mutation CreateBird($tagId: String!, $name: String, $species: String, $breed: String, $strain: String, $cross: Boolean, $sex: String, $hatchDate: Date, $origin: String, $foundationStock: Boolean, $locationId: ID, $temperamentScore: Int, $status: String, $statusDate: Date, $statusReason: String, $notes: String) {
+    createBird(tagId: $tagId, name: $name, species: $species, breed: $breed, strain: $strain, cross: $cross, sex: $sex, hatchDate: $hatchDate, origin: $origin, foundationStock: $foundationStock, locationId: $locationId, temperamentScore: $temperamentScore, status: $status, statusDate: $statusDate, statusReason: $statusReason, notes: $notes) {
       id
       tagId
     }
@@ -10,8 +20,8 @@ export const CREATE_BIRD = gql`
 `;
 
 export const UPDATE_BIRD = gql`
-  mutation UpdateBird($id: ID!, $tagId: String, $name: String, $sex: String, $status: String, $notes: String, $locationId: ID) {
-    updateBird(id: $id, tagId: $tagId, name: $name, sex: $sex, status: $status, notes: $notes, locationId: $locationId) {
+  mutation UpdateBird($id: ID!, $tagId: String, $name: String, $species: String, $breed: String, $strain: String, $cross: Boolean, $sex: String, $hatchDate: Date, $origin: String, $foundationStock: Boolean, $locationId: ID, $temperamentScore: Int, $status: String, $statusDate: Date, $statusReason: String, $notes: String) {
+    updateBird(id: $id, tagId: $tagId, name: $name, species: $species, breed: $breed, strain: $strain, cross: $cross, sex: $sex, hatchDate: $hatchDate, origin: $origin, foundationStock: $foundationStock, locationId: $locationId, temperamentScore: $temperamentScore, status: $status, statusDate: $statusDate, statusReason: $statusReason, notes: $notes) {
       id
       tagId
     }

@@ -249,8 +249,21 @@ export const typeDefs = gql`
   }
 
   type Mutation {
-    createBird(name: String, tagId: String!, species: String, breed: String, sex: String, status: String, notes: String, hatchDate: Date, origin: String): Bird!
-    updateBird(id: ID!, name: String, tagId: String, status: String, notes: String, locationId: ID, sex: String): Bird!
+    # createBird and updateBird take the SAME bird field list, deliberately —
+    # only id and the requiredness of tagId differ. They drifted apart
+    # once already: updateBird declared 6 of the 16 fields BirdsPage's edit
+    # form collects, so editing a bird's breed closed the dialog and changed
+    # nothing (GraphQL rejects an undeclared argument, so the frontend never
+    # even sent them — the loss was upstream of the wire). A field that is
+    # readable on Bird and settable at create is settable at update; add a
+    # new one to both lines or to neither.
+    #
+    # Not here, on purpose: pairingId (a Pairing's roosterIds/henIds are the
+    # source of truth for membership — a second write path would let the two
+    # disagree) and weightGrams/weightDate/healthScore (readable on
+    # Bird, but no form collects them and no mutation has ever written one).
+    createBird(name: String, tagId: String!, species: String, breed: String, strain: String, cross: Boolean, sex: String, hatchDate: Date, origin: String, foundationStock: Boolean, locationId: ID, temperamentScore: Int, status: String, statusDate: Date, statusReason: String, notes: String): Bird!
+    updateBird(id: ID!, name: String, tagId: String, species: String, breed: String, strain: String, cross: Boolean, sex: String, hatchDate: Date, origin: String, foundationStock: Boolean, locationId: ID, temperamentScore: Int, status: String, statusDate: Date, statusReason: String, notes: String): Bird!
     createFlockGroup(name: String!, purpose: String, type: String, startDate: Date!, endDate: Date, description: String, notes: String): FlockGroup!
     updateFlockGroup(id: ID!, name: String, purpose: String, type: String, startDate: Date, endDate: Date, description: String, notes: String): FlockGroup!
     createFlockLocation(name: String!, type: String!, capacity: Int, description: String, notes: String): FlockLocation!

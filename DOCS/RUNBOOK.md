@@ -170,7 +170,7 @@ Full design in `DOCS/CICD.md` — this is the as-shipped summary.
 
 | Workflow | Trigger | Does |
 |---|---|---|
-| `.github/workflows/ci.yml` | PR → `main`, push → `main` (both skip `**/*.md`, `DOCS/**`, `LICENSE` via `paths-ignore`) | `test-basegeek` (jest, mongodb-memory-server), `test-bookgeek` (`node --test`), `test-notegeek` (vitest), `test-bookgeek-web`, `test-flockgeek`, `test-storygeek`, `test-fitnessgeek-web` (frontend vitest suites, added 2026-09-05), `test-basegeek-ui` (basegeek's admin console — `apps/basegeek/packages/ui` — first test suite that app has had, added 2026-09-05), `test-ui` (vitest, theme contrast), `test-utils`, `test-crypto-vault` (added 2026-09-05), `test-api-client`, `test-auth`, `test-logger`, `test-user` (four shared-package jobs added 2026-09-05, BURN_REVIEW #20 — `@geeksuite/api-client`, `@geeksuite/auth`, `@geeksuite/logger`, `@geeksuite/user` shipped real `test` scripts CI never ran), `test-bujogeek` (vitest), `test-startgeek` (`npm ci` + `npm test` — standalone app, own lockfile, no pnpm workspace install — 14 `node --test` cases over `src/lib/*.test.js`, added 2026-09-05), `test-backends` matrix (bujogeek/fitnessgeek/flockgeek/storygeek/notegeek jest, `pnpm test`), `lint` (`pnpm -r lint`, errors gate/warnings don't), `syntax` (`node tools/syntax-check.mjs`, see below), `boot-smoke` (`node tools/boot-smoke.mjs`, see below, added 2026-09-05), `build-frontends` matrix (8 apps, `npm run build`) |
+| `.github/workflows/ci.yml` | PR → `main`, push → `main` (both skip `**/*.md`, `DOCS/**`, `LICENSE` via `paths-ignore`) | `test-basegeek` (jest, mongodb-memory-server), `test-bookgeek` (`node --test`), `test-notegeek` (vitest), `test-bookgeek-web`, `test-flockgeek`, `test-storygeek`, `test-fitnessgeek-web` (frontend vitest suites, added 2026-09-05), `test-basegeek-ui` (basegeek's admin console — `apps/basegeek/packages/ui` — first test suite that app has had, added 2026-09-05), `test-ui` (vitest, theme contrast), `test-utils`, `test-crypto-vault` (added 2026-09-05), `test-api-client`, `test-auth`, `test-logger`, `test-user` (four shared-package jobs added 2026-09-05, BURN_REVIEW #20 — `@geeksuite/api-client`, `@geeksuite/auth`, `@geeksuite/logger`, `@geeksuite/user` shipped real `test` scripts CI never ran), `test-bujogeek` (vitest), `test-startgeek` (`npm ci` + `npm test` — standalone app, own lockfile, no pnpm workspace install — 14 `node --test` cases over `src/lib/*.test.js`, added 2026-09-05), `test-backends` matrix (bujogeek/fitnessgeek/flockgeek/storygeek/notegeek jest, `pnpm test`), `lint` (`pnpm -r lint`, errors gate/warnings don't), `syntax` (`node tools/syntax-check.mjs`, see below), `gql-audit` (`node tools/gql-arg-audit.mjs`, see below, added 2026-09-05), `boot-smoke` (`node tools/boot-smoke.mjs`, see below, added 2026-09-05), `build-frontends` matrix (8 apps, `npm run build`) |
 | `.github/workflows/release.yml` | push → `main` (same `paths-ignore`), or `workflow_dispatch` with an optional single-app input | Matrix-builds and pushes every app with a root `Dockerfile` to `ghcr.io/clintgeek/<app>:{latest,sha-<short>,main}` |
 | `.github/workflows/mobile-harness.yml` | push → `main`, PR → `main` (`paths`-scoped to `apps/**`, `packages/ui/**`, `tools/mobile-harness/**`, the workflow file itself) | Builds each app, serves `dist`, walks it with `tools/mobile-harness` at iPhone 14 (dark + light), fails on any tap target < 44px, readable text < 12px, sideways scroll, or page error. **Enforcing since 2026-09-05 14:54** (first green run; §8) — no longer report-only. |
 
@@ -229,6 +229,50 @@ syntax silently passes if there is **no** `package.json` anywhere in its ancesto
 Node module-type-detection quirk) — irrelevant here since every real file's ancestor chain
 always terminates at the repo root `package.json`, but it means a from-scratch fixture used
 to test this gate needs its own `package.json` to behave like the real tree.
+
+### GraphQL argument audit (`gql-audit` job, added 2026-09-05)
+
+`tools/gql-arg-audit.mjs` (`pnpm check:gql`) catches the drift GraphQL itself will not report.
+GraphQL rejects an undeclared *argument* loudly, but a key in a `variables` object that the
+document never declared as a `$var` is **dropped in silence** — the request succeeds, the
+dialog closes, the field is never written. flockgeek's `QuickHarvestEntry` sent
+`source: "manual"` to `recordEggProduction` for the life of the feature and not one record
+ever carried it; the Add Hatch Event dialog lost `hatchDate` the same way, and its unit test
+*asserted* the payload — a frontend test cannot catch this class, because both sides of a
+frontend test are the client.
+
+It imports every `apps/basegeek/packages/api/src/graphql/*/typeDefs.js` (they import nothing
+but `graphql-tag`, so no Mongo connection is opened), scans the `gql` template literals out of
+every document under the seven frontend trees, and reports four things, all failures:
+
+| Rule | Means |
+|---|---|
+| `undeclared-variable` | a `$var` used in the body with no variable definition |
+| `unused-variable` | a variable definition never passed to a field — whatever the caller sets is discarded |
+| `unknown-argument` | an argument, or a root field, the gateway schema does not declare |
+| `undeclared-callsite-key` | a key in a `{ variables: { … } }` object the bound document declares no `$var` for — the silent one |
+
+`--missing` adds an advisory list of schema arguments a document never passes (usually a
+legitimately-unused optional, so it never fails); `--json` emits the findings machine-readably.
+
+It knows the three call shapes the suite uses — Apollo hooks (`useMutation`), the client
+directly (`apolloClient.mutate({ mutation, variables })`), and startgeek's hand-rolled
+`gql(DOC, vars)` — and skips a `variables: someName` it cannot read the keys of rather than
+guessing.
+
+**The rule it enforces: a frontend field with no mutation argument is a bug.** Either the
+gateway grows the argument or the input comes out of the form.
+
+**What it does not check: the interior of an input object.** `input: SomeInput!` is one
+argument, and the fields inside it are invisible to a static pass — especially when the
+frontend passes `variables: { input: data }`, a name whose keys are built elsewhere. That gap
+hid a live outage: fitnessgeek's Medications page sent `suggested_indications` inside
+`FitnessMedicationInput`, which declared no such field, and *every* Add and Edit Medication
+failed — not silently, since an unrecognized field on an input-object variable is a coercion
+error graphql-js raises before the resolver runs, even when the value is `[]`. That class is
+covered by `gatewayInputObjectParity.test.js` instead, which coerces the real payloads against
+the real merged schema. A clean audit run means the root argument lists agree; it does not
+mean an input object's fields do.
 
 ### Boot-smoke gate (`boot-smoke` job, added 2026-09-05)
 

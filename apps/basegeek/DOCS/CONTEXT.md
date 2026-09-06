@@ -235,6 +235,59 @@ is a separate, still-open question (`DOCS/TODO_ORDER.md` #22).
 
 ---
 
+## Frontend/gateway argument parity (Q59, 2026-09-05)
+
+**The rule: a frontend field with no mutation argument is a bug, not a
+preference.** Either the gateway grows the argument or the input comes out of
+the form. An editable input that saves nothing is worse than a missing
+feature — the user believes the value was stored.
+
+Validation (above) guards the values that arrive. This guards the ones that
+never do, and GraphQL is only half-loud about them:
+
+- An **undeclared argument** is a validation error. Loud, fails fast.
+- A **key in the `variables` object the document never declared as a `$var`**
+  is dropped without a word. The request succeeds and the field is never
+  written. flockgeek's `QuickHarvestEntry` shipped `source: "manual"` to
+  `recordEggProduction` for the life of the feature; not one record carried
+  it. The Add Hatch Event dialog lost `hatchDate` the same way.
+- A **`$var` declared and never passed** to the field is the same bug in a
+  different place.
+- A **field the form collects that the mutation has no argument for at all**
+  is where Q59 lived: `updateBird` declared 6 of the 16 fields BirdsPage's edit
+  form collects, so Breed, Hatch Date, Species, Strain, Cross, Origin,
+  Foundation Stock, Temperament, Status Date and Status Reason were editable
+  inputs that changed nothing. Widened 2026-09-05; `createBird` and
+  `updateBird` now take the **same field list**, differing only by `id` and by
+  whether `tagId` is required, and `flockgeekBirdFieldParity.test.js` fails if
+  they drift again or if a GraphQL argument and its zod key stop matching.
+
+None of this is catchable from a frontend test: both sides of a frontend test
+are the client, which is exactly how `QuickHarvestEntry.test.jsx` came to
+assert a `source` key the server had never once received.
+
+**The tool: `tools/gql-arg-audit.mjs` (`pnpm check:gql`, CI job `gql-audit`).**
+It imports every `src/graphql/*/typeDefs.js` — they import nothing but
+`graphql-tag`, so no Mongo connection is opened and no merged schema is built —
+scans the `gql` literals out of every document in the seven frontend trees, and
+fails on `undeclared-variable`, `unused-variable`, `unknown-argument` and
+`undeclared-callsite-key`. `DOCS/RUNBOOK.md` has the rule table and the flags.
+
+**Its blind spot, and where that is covered instead.** The tool compares root
+field *arguments*; `input: SomeInput!` is one argument and the fields inside it
+are invisible — doubly so when the frontend sends `variables: { input: data }`,
+a name whose keys are built in another module. That gap hid a live outage:
+fitnessgeek's Medications page sent `suggested_indications` inside
+`FitnessMedicationInput`, which declared no such field though the output type
+and the model both had it, and **every Add and Edit Medication failed** — not
+silently, because an unrecognized field on an input-object *variable* is a
+coercion error graphql-js raises before the resolver runs, even when the value
+is `[]`. The input type now declares it, and
+`gatewayInputObjectParity.test.js` coerces the real frontend payloads against
+the real merged schema so the next one fails in CI instead of in the app.
+
+---
+
 ## UI unification — shared feedback primitives (TODO_ORDER #15, 2026-09-05)
 
 `GeekEmptyState` / `GeekErrorState` / `GeekToastProvider` / `useToast` (from

@@ -254,7 +254,11 @@ export const resolvers = {
       // session as the only source of ownership.
       const { ownerId: _payloadOwnerId, ...ownArgs } = rawArgs;
       const args = validateCreateBird(ownArgs);
-      const { Bird } = await getModels();
+      const { Bird, Location } = await getModels();
+      // `locationId` is new on createBird (it was already on updateBird) and
+      // gets the same ownership check, so a bird cannot be created into
+      // somebody else's coop.
+      await assertOwned(Location, args.locationId, ownerId, 'Location');
       return new Bird({ ...args, ownerId }).save();
     },
     updateBird: async (_, rawArgs, context) => {

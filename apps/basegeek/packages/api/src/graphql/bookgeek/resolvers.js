@@ -244,6 +244,32 @@ export const resolvers = {
           sortObj["dateAdded"] = dir;
           sortObj["title"] = 1;
           break;
+        // The four arms below are the ones `components/librarySort.js` has
+        // always offered and this resolver used to `default:` to title — so
+        // "Page count ↑" returned an alphabetical list under a toolbar pill
+        // that said "Page count ↑". Field names, direction and the
+        // title tiebreaker are copied verbatim from bookgeek's own REST
+        // `/api/books` (`apps/bookgeek/api/src/server.js`), which handled all
+        // eight all along; the two drifted when the read moved to the gateway.
+        // Null placement is mongo's default (nulls/missing sort first
+        // ascending, last descending) in both, deliberately — matching REST
+        // matters more than a nicer ordering that only one of them has.
+        case "datefinished":
+          sortObj["dateFinished"] = dir;
+          sortObj["title"] = 1;
+          break;
+        case "pagecount":
+          sortObj["pageCount"] = dir;
+          sortObj["title"] = 1;
+          break;
+        case "publisheddate":
+          sortObj["publishedDate"] = dir;
+          sortObj["title"] = 1;
+          break;
+        case "owned":
+          sortObj["owned"] = dir;
+          sortObj["title"] = 1;
+          break;
         case "title":
         default:
           sortObj["title"] = dir;

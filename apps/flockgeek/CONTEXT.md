@@ -103,20 +103,45 @@ test — looking for correctness and security rather than polish. Backend tests
   `QuickHarvestEntry.test.jsx` was asserting it, which is how a test agreed with
   a payload the server never saw.
 
+- **The BirdsPage edit form discarded twelve fields — FIXED 2026-09-05 (Q59).**
+  Breed, Hatch Date, Species, Strain, Cross, Origin, Foundation Stock,
+  Temperament, Status Date and Status Reason are editable inputs that
+  `handleSaveEdit` never sent, because the gateway's `updateBird` declared only
+  `tagId`/`name`/`sex`/`status`/`notes`/`locationId`. Editing a bird's breed
+  closed the dialog and changed nothing.
+
+  The gateway mutation is widened: `createBird` and `updateBird` now take the
+  **same bird field list**, differing only by `id` and by whether `tagId` is
+  required, so the edit form round-trips every field it collects. The zod
+  schema is built from one shared `birdFields` object for the same reason, and
+  `temperamentScore` is now bounded to the 1-10 scale `models/Bird.js` only ever
+  described in a comment. `createBird` also gained `locationId` — with the
+  ownership check `updateBird` already had — and the Add dialog's Species and
+  Strain inputs, which it rendered and never sent.
+
+  Guarded on both sides: `flockgeekBirdFieldParity.test.js` in the gateway
+  drives the real resolver against real Mongo and asserts the GraphQL argument
+  list and the zod keys match; `__tests__/birdMutationFields.test.jsx` here
+  holds `CREATE_BIRD`/`UPDATE_BIRD` to the form's field list. Suite-wide,
+  `tools/gql-arg-audit.mjs` (`pnpm check:gql`, CI job `gql-audit`) now fails on
+  this whole class — see `apps/basegeek/DOCS/CONTEXT.md`, "Frontend/gateway
+  argument parity".
+
 New tests: `__tests__/calendarDay.test.jsx` (8), `__tests__/homeActivity.test.jsx`
-(3). Each was checked against the pre-fix code and fails there.
+(3). Each was checked against the pre-fix code and fails there. Q59 added
+`__tests__/birdMutationFields.test.jsx` (7) on 2026-09-05 — 55 tests in this
+tree now.
 
 ### Left in place, with reasons
 
-- **The BirdsPage edit form discards twelve fields** — Breed, Hatch Date,
-  Species, Strain, Cross, Origin, Foundation Stock, Sire, Dam, Temperament,
-  Status Date, Status Reason are all editable inputs, and `handleSaveEdit` sends
-  only `tagId`/`name`/`sex`/`status`/`notes`/`locationId`. It cannot send more:
-  the gateway's `updateBird` declares exactly those arguments
-  (`apps/basegeek/packages/api/src/graphql/flockgeek/typeDefs.js:252`). Fixing
-  it means widening the gateway mutation and its resolver, which is outside this
-  tree. **P1, reported, not fixed.** Editing a bird's breed today closes the
-  dialog and changes nothing.
+- **Sire and Dam are still not wired, and should not be.** Both are rendered
+  inputs on the edit form, but `models/Bird.js` tracks lineage through
+  `pairingId` ("all roosters/hens in the pairing are considered potential
+  parents") — there is no sire or dam field on the model and none on the `Bird`
+  GraphQL type. Wiring them means inventing a second lineage model; the honest
+  fix is to remove the two inputs, which is a UI decision, not a bug fix.
+  **Reported, not fixed** — and the mutation documents deliberately do not
+  mention them, which `birdMutationFields.test.jsx` asserts.
 - **Q22 — the REST CRUD layer itself.** Still mounted, still caller-less, still
   Chef's call. Everything above hardens it rather than removing it, on the
   principle that a reachable route is a live route.
