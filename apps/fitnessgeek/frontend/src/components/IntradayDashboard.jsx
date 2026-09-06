@@ -20,37 +20,28 @@ import {
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon
 } from '@mui/icons-material';
-import { Line } from 'react-chartjs-2';
+import { ResponsiveLine } from '@nivo/line';
+import { buildChartTheme } from './primitives/chartTheme.js';
 import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip as ChartTooltip,
-  Legend,
-  Filler
-} from 'chart.js';
-
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  ChartTooltip,
-  Legend,
-  Filler
-);
+  toTimeSeries,
+  formatClockTime,
+  normalizeIntraday,
+  EMPTY_INTRADAY,
+} from './intradaySeries.js';
 
 /**
  * Sparkline chart component
+ *
+ * Q52a: ported from chart.js/react-chartjs-2 to @nivo/line, the one chart
+ * library this app now ships. Same shape — a filled, smoothed 2px line with
+ * no axes and a hover readout of "HH:MM / value".
  */
 function SparklineChart({ data, color, height = 60, showGradient = true }) {
   const theme = useTheme();
+  const chartTheme = React.useMemo(() => buildChartTheme(theme), [theme]);
+  const series = React.useMemo(() => toTimeSeries(data, 'value', color), [data, color]);
 
-  if (!data || data.length === 0) {
+  if (series.length === 0) {
     return (
       <Box sx={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Typography variant="caption" color="text.secondary">No data</Typography>
@@ -58,52 +49,47 @@ function SparklineChart({ data, color, height = 60, showGradient = true }) {
     );
   }
 
-  const chartData = {
-    labels: data.map(d => d.time),
-    datasets: [{
-      data: data.map(d => d.value),
-      borderColor: color,
-      backgroundColor: showGradient ? `${color}33` : 'transparent',
-      borderWidth: 2,
-      pointRadius: 0,
-      pointHoverRadius: 4,
-      fill: showGradient,
-      tension: 0.4
-    }]
-  };
-
-  const options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        enabled: true,
-        mode: 'index',
-        intersect: false,
-        callbacks: {
-          title: (context) => {
-            const date = new Date(context[0].label);
-            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-          },
-          label: (context) => `${context.parsed.y}`
-        }
-      }
-    },
-    scales: {
-      x: { display: false },
-      y: { display: false }
-    },
-    interaction: {
-      mode: 'nearest',
-      axis: 'x',
-      intersect: false
-    }
-  };
-
   return (
     <Box sx={{ height }}>
-      <Line data={chartData} options={options} />
+      <ResponsiveLine
+        data={series}
+        theme={chartTheme}
+        role="img"
+        ariaLabel={`Trend sparkline, ${series[0].data.length} readings`}
+        margin={{ top: 4, right: 2, bottom: 4, left: 2 }}
+        xScale={{ type: 'time', format: 'native', useUTC: false }}
+        yScale={{ type: 'linear', min: 'auto', max: 'auto' }}
+        axisTop={null}
+        axisRight={null}
+        axisBottom={null}
+        axisLeft={null}
+        enableGridX={false}
+        enableGridY={false}
+        colors={(line) => line.color}
+        curve="monotoneX"
+        lineWidth={2}
+        enablePoints={false}
+        enableArea={showGradient}
+        areaOpacity={0.2}
+        useMesh
+        tooltip={({ point }) => (
+          <Box sx={{
+            backgroundColor: theme.palette.background.paper,
+            border: `1px solid ${theme.palette.divider}`,
+            borderRadius: '8px',
+            px: 1.25,
+            py: 0.75,
+            boxShadow: theme.shadows[3],
+          }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+              {formatClockTime(point.data.x)}
+            </Typography>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+              {point.data.y}
+            </Typography>
+          </Box>
+        )}
+      />
     </Box>
   );
 }
@@ -192,8 +178,10 @@ function MetricCardWithChart({
  */
 function DetailedChart({ data, label, color, yAxisLabel, height = 200 }) {
   const theme = useTheme();
+  const chartTheme = React.useMemo(() => buildChartTheme(theme), [theme]);
+  const series = React.useMemo(() => toTimeSeries(data, label, color), [data, label, color]);
 
-  if (!data || data.length === 0) {
+  if (series.length === 0) {
     return (
       <Box sx={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Typography variant="body2" color="text.secondary">No data available</Typography>
@@ -201,71 +189,58 @@ function DetailedChart({ data, label, color, yAxisLabel, height = 200 }) {
     );
   }
 
-  const chartData = {
-    labels: data.map(d => d.time),
-    datasets: [{
-      label,
-      data: data.map(d => d.value),
-      borderColor: color,
-      backgroundColor: `${color}22`,
-      borderWidth: 2,
-      pointRadius: 1,
-      pointHoverRadius: 5,
-      fill: true,
-      tension: 0.4
-    }]
-  };
-
-  const options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        mode: 'index',
-        intersect: false,
-        callbacks: {
-          title: (context) => {
-            const date = new Date(context[0].label);
-            return date.toLocaleString([], {
-              month: 'short',
-              day: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit'
-            });
-          },
-          label: (context) => `${label}: ${context.parsed.y} ${yAxisLabel}`
-        }
-      }
-    },
-    scales: {
-      x: {
-        type: 'time',
-        time: {
-          unit: 'hour',
-          displayFormats: {
-            hour: 'HH:mm'
-          }
-        },
-        grid: {
-          display: false
-        }
-      },
-      y: {
-        beginAtZero: false,
-        grid: {
-          color: theme.palette.divider
-        },
-        ticks: {
-          callback: (value) => `${value} ${yAxisLabel}`
-        }
-      }
-    }
-  };
-
   return (
     <Box sx={{ height }}>
-      <Line data={chartData} options={options} />
+      <ResponsiveLine
+        data={series}
+        theme={chartTheme}
+        role="img"
+        ariaLabel={`${label} through the day${yAxisLabel ? `, in ${yAxisLabel}` : ''}`}
+        margin={{ top: 12, right: 16, bottom: 40, left: 56 }}
+        xScale={{ type: 'time', format: 'native', useUTC: false }}
+        yScale={{ type: 'linear', min: 'auto', max: 'auto' }}
+        axisBottom={{
+          format: '%H:%M',
+          tickSize: 0,
+          tickPadding: 10,
+          tickValues: 5,
+        }}
+        axisLeft={{
+          tickSize: 0,
+          tickPadding: 8,
+          tickValues: 5,
+          format: (v) => (yAxisLabel ? `${v} ${yAxisLabel}` : `${v}`),
+        }}
+        enableGridX={false}
+        colors={(line) => line.color}
+        curve="monotoneX"
+        lineWidth={2}
+        pointSize={3}
+        pointColor={theme.palette.background.paper}
+        pointBorderWidth={1}
+        pointBorderColor={{ from: 'serieColor' }}
+        enableArea
+        areaOpacity={0.13}
+        useMesh
+        enableSlices="x"
+        sliceTooltip={({ slice }) => (
+          <Box sx={{
+            backgroundColor: theme.palette.background.paper,
+            border: `1px solid ${theme.palette.divider}`,
+            borderRadius: '8px',
+            px: 1.5,
+            py: 1,
+            boxShadow: theme.shadows[3],
+          }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+              {formatClockTime(slice.points[0].data.x, { withDate: true })}
+            </Typography>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+              {label}: {slice.points[0].data.y}{yAxisLabel ? ` ${yAxisLabel}` : ''}
+            </Typography>
+          </Box>
+        )}
+      />
     </Box>
   );
 }
@@ -299,33 +274,16 @@ export default function IntradayDashboard({
         // Backend returns { available: false, reason, message } when InfluxDB is
         // unavailable or has no data for this date — treat as empty, not an error.
         if (!response || response.available === false) {
-          setData({ heartRate: [], stress: [], bodyBattery: [], breathing: [] });
+          setData(EMPTY_INTRADAY);
         } else {
-          // Transform data for charts
-          const transformedData = {
-            heartRate: (response.heartRate || []).map(point => ({
-              time: point.time,
-              value: point.HeartRate
-            })),
-            stress: (response.stress || []).map(point => ({
-              time: point.time,
-              value: point.stressLevel
-            })),
-            bodyBattery: (response.bodyBattery || []).map(point => ({
-              time: point.time,
-              value: point.BodyBatteryLevel
-            })),
-            breathing: (response.breathing || []).map(point => ({
-              time: point.time,
-              value: point.BreathingRate
-            }))
-          };
-          setData(transformedData);
+          // The measurement-column → `value` rename now lives in
+          // `intradaySeries.js`, shared with MealImpactVisualization.
+          setData(normalizeIntraday(response));
         }
       } catch (err) {
         // Defensive: backend should no longer 500, but handle it quietly.
         console.warn('Intraday health data unavailable:', err.message);
-        setData({ heartRate: [], stress: [], bodyBattery: [], breathing: [] });
+        setData(EMPTY_INTRADAY);
       } finally {
         setLoading(false);
       }

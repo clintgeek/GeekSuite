@@ -459,7 +459,7 @@ declares the path — identical on both sides as of 2026-09-05.
 | `ai.enabled` | Boolean | default `true` | ✅ | ✅ |
 | `ai.features.goal_recommendations` | Boolean | default `true` | ✅ | ✅ |
 | `ai.features.meal_suggestions` | Boolean | default `true` | ✅ | ✅ |
-| `ai.features.natural_language_food_logging` | Boolean | default `true` | ✅ | ✅ |
+| `ai.features.natural_language_food_logging` | Boolean | default `false` (opt-in, R124) | ✅ | ✅ |
 | `ai.features.nutrition_analysis` | Boolean | default `true` | ✅ | ✅ |
 | `created_at` | Date | — | ✅ | ✅ |
 | `dashboard.card_order` | Array | default `["current_weight","blood_pressure","calories_today","login_streak","nutrition_today","garmin_summary","quick_actions","weight_goal","nutrition_goal"]` | ✅ | ✅ |

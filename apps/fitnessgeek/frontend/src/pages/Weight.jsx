@@ -3,12 +3,14 @@ import { Box, Typography, CircularProgress } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@geeksuite/ui';
 import { useWeight } from '../hooks/useWeight.js';
-// Imported by file, not through `../components/Weight`. The barrel also
-// re-exports the legacy WeightChart/WeightChartNivo/WeightSparkline* set, and
-// nothing in this workspace declares `sideEffects: false` — so rollup keeps
+// Imported by file, not through `../components/Weight`. The barrel used to
+// re-export the legacy WeightChart/WeightChartNivo/WeightSparkline* set, and
+// nothing in this workspace declares `sideEffects: false` — so rollup kept
 // those modules' top-level side effects even after shaking their bindings, and
 // @nivo/line came back into this page's chunk as a bare side-effect import,
-// undoing the lazy boundary below.
+// undoing the lazy boundary below. Q52a deleted those five modules, but the
+// by-file imports stay: the hazard is the barrel, not those particular files,
+// and it comes back the moment anything chart-shaped is re-exported there.
 import WeightProgress from '../components/Weight/WeightProgress.jsx';
 import QuickAddWeight from '../components/Weight/QuickAddWeight.jsx';
 import WeightLogList from '../components/Weight/WeightLogList.jsx';

@@ -1120,3 +1120,183 @@ ticks goes through the same `addFoodLog` mutation a hand-picked food does.*
 - **The "best match" is the first search result.** `UnifiedFoodSearch`'s
   composite resolver has a richer notion of a best candidate; wiring the
   proposal card through it is a follow-up, not a bug.
+
+---
+
+## Night 2 — 2026-09-06 — R124: one chart library, a pinned ZXing, and the quick-add opt-in server-side
+
+### Q52a — three chart libraries became one (@nivo/line + @nivo/pie)
+
+**The inventory.** Eleven chart components, three libraries: Nivo carried five
+(`BPCategoryDistribution` pie, `BPChartNivo`, `WeightTimeline`, `WeightChartNivo`,
+`WeightSparklineNivo`), Recharts four (`BPHRChart`, `BPChart`, `WeightChart`,
+`WeightSparkline`), chart.js two (`IntradayDashboard`, `MealImpactVisualization`).
+Live components only: Nivo 3, chart.js 2, Recharts 1.
+
+**Nivo won, and the bundle agreed.** The rule was "the library already carrying the
+most charts", which is Nivo either way you count. The measurement backed it: this
+app's `recharts` vendor chunk was 275.58 kB raw against `nivo`'s 163.98 kB (Recharts
+3 bundles its own d3 copies through `victory-vendor`), so standardising on Recharts
+would have kept the *larger* survivor.
+
+- **Ported.** `BPHRChart` (Recharts → `@nivo/line`), `IntradayDashboard`'s
+  `SparklineChart` and `DetailedChart`, and `MealImpactVisualization`'s chart
+  (chart.js/react-chartjs-2 → `@nivo/line`). Same series, same theme colours, same
+  axes and tooltip content; all four use the existing `primitives/chartTheme.js`,
+  imported by file rather than through the `primitives` barrel so the chart chunks
+  stay lean.
+- **Deleted, because they were dead.** `BPChart.jsx`, `WeightChart.jsx`,
+  `WeightSparkline.jsx`, `WeightChartNivo.jsx`, `WeightSparklineNivo.jsx` and their
+  barrel exports. Nothing in the tree imported either barrel; `Weight.jsx`'s own
+  header already documented the re-export as an active hazard (no package here sets
+  `sideEffects: false`, so rollup kept their top-level side effects). The two Nivo
+  twins went with them — keeping a `WeightChartNivo` with no `WeightChart` is worse
+  than dead code.
+- **New:** `components/intradaySeries.js` — `toDate` / `toTimeSeries` /
+  `formatClockTime` / `normalizeIntraday`, shared by the two Garmin panels.
+- **Dependency lines left in `package.json` for Sage to prune with the lockfile:**
+  `recharts`, `chart.js`, `react-chartjs-2`, `chartjs-adapter-date-fns`. No install
+  was run. `vite.config.js` was NOT touched: its `recharts` / `chartjs` VENDOR_GROUPS
+  entries are now inert (they match nothing) and the file's comments explain why the
+  grouping is delicate.
+
+**Bundle, before → after** (raw / gzip, `pnpm build`):
+
+| chunk | before | after |
+|---|---|---|
+| `recharts` | 275.58 / 79.80 kB | **gone** |
+| `chartjs` | 167.26 / 58.56 kB | **gone** |
+| `nivo` | 163.98 / 53.51 kB | 163.98 / 53.51 kB |
+| `d3` | 121.99 / 40.05 kB | 109.27 / 35.75 kB |
+| `date-fns` | 50.49 / 11.82 kB | 23.65 / 6.98 kB |
+| `BPHRChart` | 2.03 / 1.08 kB | 2.85 / 1.41 kB |
+| `IntradayDashboard` | 6.63 / 2.45 kB | 7.33 / 2.66 kB |
+| `MealImpactVisualization` | 7.27 / 2.96 kB | 8.39 / 3.42 kB |
+| PWA precache total | 2992.73 KiB | **2523.29 KiB** |
+
+Per route, chart vendors only: `/blood-pressure` 587.88 → 299.58 kB raw (it used to
+load Nivo *and* Recharts); `/weight` 312.30 → 299.58; `/health` 217.75 → 299.58 —
+the one route that pays, because chart.js was the smallest of the three and is now
+sharing the suite-wide library instead of owning its own. Nothing chart-shaped is in
+`dist/index.html`'s modulepreload list, before or after.
+
+**Two chart.js bugs the port fixed by deleting the cause.** Both detailed panels
+declared `scales.x.type: 'time'`, and neither module ever registered chart.js's
+`TimeScale` — so `IntradayDashboard`'s "Show Detailed Charts" and the whole Meal
+Impact chart threw `"time" is not a registered scale` on render. `MealImpact`
+additionally described its meal markers as `plugins.annotation` entries for
+`chartjs-plugin-annotation`, which is not a dependency of this app: the dashed
+"you ate here" rules its own help text tells you to look for had never once been
+drawn. They render now, as native nivo `markers`.
+
+**And one payload bug found while porting.** `GET /api/influx/intraday/:from/:to`
+returns raw InfluxQL rows keyed by the measurement column (`HeartRate`,
+`stressLevel`, `BodyBatteryLevel`, `BreathingRate`).  `IntradayDashboard` always
+renamed them to `value`; `MealImpactVisualization` read `.value` off the raw rows,
+so its chart had no y values *and* `calculateMealImpact` averaged NaN — every meal
+card has always said "minimal physiological impact". One shared `normalizeIntraday()`
+now, so the two panels cannot disagree about the payload again.
+`MealImpactVisualization` also read `intradayData.heartRate` without a null guard,
+which was a TypeError for anyone with meals logged and no sensor feed.
+
+### Q52b — ZXing is pinned and integrity-checked
+
+`@zxing/library` is not installed anywhere in this workspace (checked
+`node_modules/@zxing` from the frontend and from the repo root, plus the pnpm store),
+and adding a dependency was off the table, so it stays a CDN script — with the two
+things that make a remote script survivable closed off. `utils/zxingLoader.js` (new)
+owns the exact-version URL (`@zxing/library@0.19.1`), an SRI `sha384-` digest and
+`crossOrigin="anonymous"` (without which the browser does not check the digest at
+all), memoises the in-flight load so re-opening the scanner cannot append a second
+tag, and clears the memo on failure so a flaky network retries. A blocked hash
+surfaces as an ordinary load error, which `BarcodeScanner` already handles by
+dropping the user into manual entry. The hash was computed from the file and
+cross-checked against jsDelivr serving byte-identical content, so it pins the
+canonical npm artifact rather than one mirror's copy.
+
+**The real fix is still vendoring** — add `@zxing/library` and
+`await import('@zxing/library')`, which makes it an ordinary lazy chunk, precached by
+the service worker and offline-capable, with no third-party host in the trust
+boundary. The loader's header says exactly what to change. Until then, bumping the
+version REQUIRES recomputing the digest in the same commit; `utils/__tests__/zxingLoader.test.js`
+pins the literal so a bump without a recompute fails the suite instead of silently
+killing the scanner.
+
+### The quick-add opt-in moved server-side
+
+R115's compromise (`localStorage['fitnessgeek:quickAddNL']`) is gone.
+
+- **`packages/schemas/fitnessgeek/userSettings.js`:**
+  `ai.features.natural_language_food_logging` now defaults to **`false`** — the only
+  one of the four AI feature flags that does, and commented as such so nobody
+  "makes it consistent". That was the single objection R115 recorded; with the
+  default off, the field that already names this feature can be both the opt-in and
+  the kill switch the resolver honours. `frontend/src/services/settingsService.js`'s
+  `getDefaultAISettings()` matches.
+- **`utils/quickAddPreference.js`** is now a pure reader plus a migration:
+  `isNaturalQuickAddEnabled(settings)` (strictly `=== true`, and `ai.enabled === false`
+  vetoes it, same as the resolver), and `migrateLegacyQuickAddOptIn({ settings,
+  saveAISettings })` — moves an R115 `'true'` onto the document once through
+  `PUT /settings/ai`, then drops the key. It only ever migrates ON; a legacy `'false'`
+  is indistinguishable from "never touched it" now and is simply discarded. The key
+  survives a failed write so the next load retries; `ai.enabled === false` means the
+  key is dropped *without* being honoured, since migrating under a wholesale "no AI"
+  would quietly re-enable something the user switched off.
+- **`pages/Settings.jsx`:** the AI Assist switch reads the loaded document and writes
+  a single field through the existing `settingsService.updateAISettings()` →
+  `PUT /settings/ai` → `UPDATE_USER_SETTINGS { input: { ai } }` path. It saves on flip
+  rather than riding the Save bar (which posts the whole document), is optimistic and
+  **reverts on failure** — a switch that says ON while the server says OFF would show
+  a Food Log entry point the resolver then refuses to serve — and mirrors the new
+  value into both `settings` and `baseline` so an unrelated Save or Discard cannot
+  undo it.
+- **`pages/FoodLog.jsx`:** reads the flag off the settings request it already makes
+  for keto mode (one request, not two), starting `false` so the entry point cannot
+  flash on before the answer is known.
+- Both call sites run the migration, which is idempotent and self-clearing.
+
+### Verification
+
+Frontend `pnpm test` 129 passed / 17 files (was 92 / 14 — +37 in
+`utils/__tests__/zxingLoader.test.js`, `components/__tests__/intradaySeries.test.js`,
+`pages/__tests__/SettingsAIAssist.test.jsx`, and the rewritten
+`utils/__tests__/quickAddPreference.test.js`). `pnpm lint` 49 warnings, down from 54,
+none new (the five that went are in the deleted files). `pnpm build` clean.
+`node tools/syntax-check.mjs` OK. `tools/mobile-harness --app fitnessgeek --serve
+--enforce-a11y --viewports phone`: 22 scenes, 0 violations / 0 a11y / 0 page errors.
+Both parity suites re-run for the schema default flip: backend `npm test` 335/335,
+gateway `pnpm test -- fitnessgeek` 325/325.
+
+The charts themselves cannot be verified in jsdom (nivo measures its container, which
+is 0×0 there), so they were driven in a real browser with a throwaway script reusing
+the harness's own `lib/` and fixtures: BPHRChart draws its `#0D9488` 2px line with
+its `aria-label` intact, the intraday sparklines and detailed charts draw with clock
+ticks, and the meal-impact chart draws with seven dashed meal markers — all with zero
+page errors. Not committed; it is thirty lines of route stubs plus assertions.
+
+### Left undone, and one thing found
+
+- **`nivo` prop misuse on two PRE-EXISTING charts, not fixed.**
+  `BPChartNivo.jsx:212` passes `pointSize={(serie) => …}` and `WeightTimeline.jsx`
+  passes `pointSize` / `lineWidth` / `pointBorderColor` as functions. In @nivo/line
+  0.99 `pointSize` is a plain number handed to `DotsItem` as `r = size / 2`, so a
+  function yields `<circle r="NaN">` — the browser console logs
+  `<circle> attribute r: Expected length, "NaN"` on every `/blood-pressure` load and
+  those charts' points never render. Confirmed pre-existing (it reproduces with
+  `BPHRChart` absent from the page) and left alone: it is a visual change unrelated to
+  the library consolidation. `colors={(line) => line.color}` IS function-capable and
+  is fine.
+- **`DOCS/USER_SETTINGS_SCHEMA.md:462`** still documents
+  `ai.features.natural_language_food_logging` as "default `true`". Outside this
+  stream's stated file set; one word.
+- **`tools/mobile-harness/apps/fitnessgeek/`** — `scenes.mjs`'s
+  `page.addInitScript()` seeding of `fitnessgeek:quickAddNL` is now vestigial (it
+  exercises the migration rather than the opt-in), and `fixtures.mjs` sets
+  `natural_language_food_logging: true`, so EVERY fitnessgeek scene now renders the
+  "Describe a meal" button, not just scene 11. Still 0/0/0. Outside this stream's
+  file set.
+- **`parseFoodEntry`'s gate is `!== false`, not `=== true`** (gateway
+  `resolvers.js:873`). With the schema default flipped, Mongoose hydrates a missing
+  path as `false`, so a real user is safe — but a caller with NO settings document at
+  all still reads as enabled. Now that the flag is the opt-in rather than a kill
+  switch, that asymmetry should be tightened. Gateway file, out of scope.

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { apiService } from '../services/apiService';
 import { influxService } from '../services/influxService';
 import {
@@ -22,32 +22,41 @@ import {
   Psychology as StressIcon,
   BatteryChargingFull as BatteryIcon
 } from '@mui/icons-material';
-import { Line } from 'react-chartjs-2';
-import 'chartjs-adapter-date-fns';
+import { ResponsiveLine } from '@nivo/line';
+import { buildChartTheme } from './primitives/chartTheme.js';
+import {
+  toTimeSeries,
+  toDate,
+  formatClockTime,
+  normalizeIntraday,
+} from './intradaySeries.js';
 
 /**
- * Meal marker component for the chart
+ * Meal markers — the dashed vertical rules that say "you ate here".
+ *
+ * Q52a: this used to build chart.js `annotation` descriptors, for a plugin
+ * that is not a dependency of this app and was never registered, so the
+ * markers this component's own help text tells you to look for have never
+ * once been drawn. @nivo/line takes markers natively, so they render now.
+ *
+ * A marker outside the intraday series' own time range is dropped rather than
+ * clamped: nivo would otherwise pin it to the edge of the plot, which reads
+ * as "you ate at 00:00" instead of "there is no sensor data around that meal".
  */
-function createMealMarkers(meals, color) {
-  return meals.map(meal => ({
-    type: 'line',
-    xMin: meal.time,
-    xMax: meal.time,
-    borderColor: color,
-    borderWidth: 2,
-    borderDash: [5, 5],
-    label: {
-      display: true,
-      content: `${meal.name} (${meal.calories}cal)`,
-      position: 'start',
-      backgroundColor: color,
-      color: '#fff',
-      padding: 4,
-      font: {
-        size: 10
-      }
-    }
-  }));
+function buildMealMarkers(meals, color, domain) {
+  if (!domain) return [];
+  return meals
+    .map((meal) => ({ ...meal, at: toDate(meal.time) }))
+    .filter((meal) => meal.at && meal.at >= domain.min && meal.at <= domain.max)
+    .map((meal) => ({
+      axis: 'x',
+      value: meal.at,
+      lineStyle: { stroke: color, strokeWidth: 2, strokeDasharray: '5 5', opacity: 0.8 },
+      legend: `${meal.name} (${meal.calories}cal)`,
+      legendPosition: 'top-left',
+      legendOrientation: 'vertical',
+      textStyle: { fill: color, fontSize: 10, fontWeight: 600 },
+    }));
 }
 
 /**
@@ -223,6 +232,7 @@ function MealImpactCard({ meal, hrImpact, stressImpact, batteryImpact }) {
  */
 export default function MealImpactVisualization({ date }) {
   const theme = useTheme();
+  const chartTheme = useMemo(() => buildChartTheme(theme), [theme]);
   const [selectedMetric, setSelectedMetric] = useState('heartRate');
   const [loading, setLoading] = useState(true);
   const [intradayData, setIntradayData] = useState(null);
@@ -246,7 +256,11 @@ export default function MealImpactVisualization({ date }) {
         // Backend returns { available: false, reason, message } when InfluxDB is
         // unavailable or has no data — treat as no intraday data, not an error.
         if (intradayResponse && intradayResponse.available !== false) {
-          setIntradayData(intradayResponse);
+          // Normalise the measurement column names to `value`. Reading `.value`
+          // off the raw InfluxQL rows — which is what this did — meant the
+          // chart had no y values and every meal's pre/post averages were NaN,
+          // so every card said "minimal physiological impact".
+          setIntradayData(normalizeIntraday(intradayResponse));
         }
         // (if available===false we leave intradayData null — chart just won't render)
 
@@ -317,19 +331,22 @@ export default function MealImpactVisualization({ date }) {
   const getChartData = () => {
     let data, color, label;
 
+    // `intradayData` stays null when InfluxDB is unavailable or has nothing
+    // for this date, and the meals-only path above does not return early —
+    // reading `.heartRate` off it was a TypeError that took the whole tab out.
     switch (selectedMetric) {
       case 'heartRate':
-        data = intradayData.heartRate;
+        data = intradayData?.heartRate;
         color = theme.palette.error.main;
         label = 'Heart Rate (bpm)';
         break;
       case 'stress':
-        data = intradayData.stress;
+        data = intradayData?.stress;
         color = theme.palette.warning.main;
         label = 'Stress Level';
         break;
       case 'bodyBattery':
-        data = intradayData.bodyBattery;
+        data = intradayData?.bodyBattery;
         color = theme.palette.success.main;
         label = 'Body Battery';
         break;
@@ -342,66 +359,20 @@ export default function MealImpactVisualization({ date }) {
 
   const { data: chartData, color, label } = getChartData();
 
-  const chartDataset = {
-    labels: chartData.map(d => d.time),
-    datasets: [{
-      label,
-      data: chartData.map(d => ({ x: d.time, y: d.value })),
-      borderColor: color,
-      backgroundColor: `${color}22`,
-      borderWidth: 2,
-      pointRadius: 0,
-      pointHoverRadius: 4,
-      fill: true,
-      tension: 0.4
-    }]
-  };
+  const series = toTimeSeries(chartData, label, color);
+  const domain = series.length
+    ? { min: series[0].data[0].x, max: series[0].data[series[0].data.length - 1].x }
+    : null;
 
-  const mealMarkers = createMealMarkers(
+  const mealMarkers = buildMealMarkers(
     meals.map(m => ({
       time: m.time,
       name: m.name,
       calories: m.calories
     })),
-    theme.palette.primary.main
+    theme.palette.primary.main,
+    domain
   );
-
-  const chartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { display: false },
-      annotation: {
-        annotations: mealMarkers
-      },
-      tooltip: {
-        mode: 'index',
-        intersect: false
-      }
-    },
-    scales: {
-      x: {
-        type: 'time',
-        time: {
-          unit: 'hour',
-          displayFormats: {
-            hour: 'HH:mm'
-          }
-        },
-        title: {
-          display: true,
-          text: 'Time'
-        }
-      },
-      y: {
-        beginAtZero: false,
-        title: {
-          display: true,
-          text: label
-        }
-      }
-    }
-  };
 
   return (
     <Box>
@@ -432,11 +403,73 @@ export default function MealImpactVisualization({ date }) {
             </Stack>
 
             <Box sx={{ height: 300 }}>
-              <Line
-                key={`meal-chart-${selectedMetric}-${date}`}
-                data={chartDataset}
-                options={chartOptions}
-              />
+              {series.length === 0 ? (
+                <Box sx={{
+                  height: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                  <Typography variant="body2" color="text.secondary">
+                    No sensor data for this day — meal impact needs the Garmin/InfluxDB feed.
+                  </Typography>
+                </Box>
+              ) : (
+                <ResponsiveLine
+                  key={`meal-chart-${selectedMetric}-${date}`}
+                  data={series}
+                  theme={chartTheme}
+                  role="img"
+                  ariaLabel={`${label} through the day, with a marker for each logged meal`}
+                  margin={{ top: 16, right: 20, bottom: 52, left: 56 }}
+                  xScale={{ type: 'time', format: 'native', useUTC: false }}
+                  yScale={{ type: 'linear', min: 'auto', max: 'auto' }}
+                  axisBottom={{
+                    format: '%H:%M',
+                    tickSize: 0,
+                    tickPadding: 10,
+                    tickValues: 5,
+                    legend: 'Time',
+                    legendOffset: 40,
+                    legendPosition: 'middle',
+                  }}
+                  axisLeft={{
+                    tickSize: 0,
+                    tickPadding: 8,
+                    tickValues: 5,
+                    legend: label,
+                    legendOffset: -48,
+                    legendPosition: 'middle',
+                  }}
+                  enableGridX={false}
+                  colors={(line) => line.color}
+                  curve="monotoneX"
+                  lineWidth={2}
+                  enablePoints={false}
+                  enableArea
+                  areaOpacity={0.13}
+                  markers={mealMarkers}
+                  useMesh
+                  enableSlices="x"
+                  sliceTooltip={({ slice }) => (
+                    <Box sx={{
+                      backgroundColor: theme.palette.background.paper,
+                      border: `1px solid ${theme.palette.divider}`,
+                      borderRadius: '8px',
+                      px: 1.5,
+                      py: 1,
+                      boxShadow: theme.shadows[3],
+                    }}>
+                      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+                        {formatClockTime(slice.points[0].data.x)}
+                      </Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        {label}: {slice.points[0].data.y}
+                      </Typography>
+                    </Box>
+                  )}
+                />
+              )}
             </Box>
 
             <Alert severity="info" icon={<MealIcon />}>

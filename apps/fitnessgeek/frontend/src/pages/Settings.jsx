@@ -30,7 +30,7 @@ import { useThemeMode as useAppTheme } from '@geeksuite/user';
 import HouseholdSettings from '../components/Settings/HouseholdSettings';
 import {
   isNaturalQuickAddEnabled,
-  setNaturalQuickAddEnabled,
+  migrateLegacyQuickAddOptIn,
 } from '../utils/quickAddPreference.js';
 import {
   Surface,
@@ -60,11 +60,14 @@ const Settings = () => {
   const [garminPassword, setGarminPassword] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  // Natural-language quick-add is a per-browser opt-in, default OFF, and it
-  // saves the moment it is flipped — it never rides the Save bar below,
-  // because it is not part of the settings document. See
-  // `utils/quickAddPreference.js` for why it lives here and not on the server.
-  const [naturalQuickAdd, setNaturalQuickAdd] = useState(() => isNaturalQuickAddEnabled());
+  // Natural-language quick-add — `ai.features.natural_language_food_logging`
+  // on the settings document, default OFF. It saves the moment it is flipped
+  // rather than riding the Save bar below: the Save bar rebuilds the whole
+  // settings payload from `settings`, and this switch is a single-field write
+  // through `PUT /settings/ai`, which is also the path the R115 → R124
+  // migration uses. See `utils/quickAddPreference.js`.
+  const [naturalQuickAdd, setNaturalQuickAdd] = useState(false);
+  const [savingQuickAdd, setSavingQuickAdd] = useState(false);
   const { notify } = useToast();
 
   useEffect(() => {
@@ -91,6 +94,16 @@ const Settings = () => {
       setGarminPassword('');
       setSettings(normalized);
       setBaseline(JSON.parse(JSON.stringify(normalized)));
+
+      // One-shot move of an R115 per-browser opt-in onto the document, then
+      // the local flag goes away. A failure here leaves the flag in place for
+      // the next load; it must never take the Settings page down with it.
+      setNaturalQuickAdd(
+        await migrateLegacyQuickAddOptIn({
+          settings: loaded,
+          saveAISettings: settingsService.updateAISettings,
+        }).catch(() => isNaturalQuickAddEnabled(loaded))
+      );
     } catch (err) {
       console.error('Error loading settings:', err);
       notify('Failed to load settings — showing defaults', { tone: 'error' });
@@ -131,6 +144,46 @@ const Settings = () => {
       ...prev,
       units: { ...prev.units, [type]: value },
     }));
+  };
+
+  // Optimistic, and it reverts on failure: a switch that says ON while the
+  // server says OFF would show the Food Log entry point for a feature the
+  // resolver then refuses to run.
+  const handleNaturalQuickAddChange = async (checked) => {
+    const previous = naturalQuickAdd;
+    setNaturalQuickAdd(checked);
+    setSavingQuickAdd(true);
+    try {
+      await settingsService.updateAISettings({
+        features: { natural_language_food_logging: checked },
+      });
+      // Mirror it into both snapshots. `ai` is not part of `isDirty`, but the
+      // Save bar posts the WHOLE `settings` object and Discard restores from
+      // `baseline` — leaving either stale would let an unrelated save quietly
+      // undo the switch that was just persisted.
+      const applyFlag = (prev) => (prev ? {
+        ...prev,
+        ai: {
+          ...(prev.ai || {}),
+          features: {
+            ...(prev.ai?.features || {}),
+            natural_language_food_logging: checked,
+          },
+        },
+      } : prev);
+      setSettings(applyFlag);
+      setBaseline(applyFlag);
+      notify(
+        checked ? 'Natural-language quick-add on' : 'Natural-language quick-add off',
+        { tone: 'success' }
+      );
+    } catch (err) {
+      logger.error('Failed to save the natural-language quick-add setting', err);
+      setNaturalQuickAdd(previous);
+      notify('Could not save that setting', { tone: 'error' });
+    } finally {
+      setSavingQuickAdd(false);
+    }
   };
 
   const handleThemeChange = (newTheme) => {
@@ -370,10 +423,8 @@ const Settings = () => {
           control={
             <Switch
               checked={naturalQuickAdd}
-              onChange={(e) => {
-                setNaturalQuickAdd(e.target.checked);
-                setNaturalQuickAddEnabled(e.target.checked);
-              }}
+              disabled={savingQuickAdd}
+              onChange={(e) => handleNaturalQuickAddChange(e.target.checked)}
               inputProps={{ 'aria-label': 'Natural-language quick-add' }}
             />
           }
@@ -384,8 +435,8 @@ const Settings = () => {
           Adds a &ldquo;Describe a meal&rdquo; button to the Food Log: type
           &ldquo;two eggs, toast with butter, black coffee&rdquo; and check the proposal
           before anything is logged. Only that sentence and the current hour leave the
-          box, and no food is ever logged without you ticking it. Saved on this device;
-          off by default.
+          box, and no food is ever logged without you ticking it. Saved to your
+          account; off by default.
         </Typography>
       </Surface>
 

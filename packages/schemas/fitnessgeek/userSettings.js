@@ -269,9 +269,22 @@ function userSettingsDefinition(mongoose) {
         default: true
       },
       features: {
+        // OFF by default, and deliberately the only one of the four that is.
+        //
+        // This flag is the opt-in for the natural-language quick-add
+        // (DOCS/AI_IDEAS.md idea #2): the app's Settings toggle writes it, the
+        // Food Log renders the "Describe a meal" entry point only when it is
+        // true, and the gateway's `parseFoodEntry` resolver refuses to call a
+        // model unless it is true. The suite's AI rules require every AI
+        // feature to be off until somebody turns it on, so a `true` default
+        // here would ship the feature enabled for every existing user — which
+        // is why R115 had to park the opt-in in localStorage instead of using
+        // this field. Flipping the default is what let the opt-in move back
+        // to the server, where a person's choice follows them between
+        // browsers. Do not "make it consistent" with its three siblings.
         natural_language_food_logging: {
           type: Boolean,
-          default: true
+          default: false
         },
         meal_suggestions: {
           type: Boolean,

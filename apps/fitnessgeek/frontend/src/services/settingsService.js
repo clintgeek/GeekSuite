@@ -138,11 +138,17 @@ export const settingsService = {
     ]
   }),
 
-  // Get default AI settings
+  // Get default AI settings.
+  //
+  // `natural_language_food_logging` is false here and false in the shared
+  // `@geeksuite/schemas` factory that mints the document server-side — it is
+  // the opt-in for natural-language quick-add, and the suite's AI rules say an
+  // AI feature is off until somebody turns it on. The other three flags are
+  // unchanged; do not "make it consistent".
   getDefaultAISettings: () => ({
     enabled: true,
     features: {
-      natural_language_food_logging: true,
+      natural_language_food_logging: false,
       meal_suggestions: true,
       nutrition_analysis: true,
       goal_recommendations: true

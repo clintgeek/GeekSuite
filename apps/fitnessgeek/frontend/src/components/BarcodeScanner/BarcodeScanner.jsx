@@ -24,6 +24,7 @@ import {
 } from '@mui/icons-material';
 import { fitnessGeekService } from '../../services/fitnessGeekService';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
+import { loadZXing } from '../../utils/zxingLoader.js';
 import './BarcodeScanner.css';
 
 const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
@@ -219,12 +220,9 @@ const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
       }
 
       if (!useNativeDetector) {
-        // Load ZXing library as fallback
-        if (!window.ZXing) {
-          await loadZXingLibrary();
-        }
-
-        const { BrowserMultiFormatReader, BarcodeFormat } = window.ZXing;
+        // Load ZXing library as fallback. Pinned to an exact version and
+        // integrity-checked — see `utils/zxingLoader.js`.
+        const { BrowserMultiFormatReader, BarcodeFormat } = await loadZXing();
 
         // Configure hints for better barcode detection
         const hints = new Map();
@@ -333,22 +331,6 @@ const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const loadZXingLibrary = () => {
-    return new Promise((resolve, reject) => {
-      if (window.ZXing) {
-        resolve();
-        return;
-      }
-
-      const script = document.createElement('script');
-      script.src = 'https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js';
-      script.async = true;
-      script.onload = resolve;
-      script.onerror = reject;
-      document.head.appendChild(script);
-    });
   };
 
   const stopScanner = () => {

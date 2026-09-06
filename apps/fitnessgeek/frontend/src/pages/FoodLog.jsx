@@ -38,7 +38,10 @@ import { goalsService } from '../services/goalsService.js';
 import { useGeekPrimaryAction } from '@geeksuite/ui';
 import { Surface, SectionLabel, DisplayHeading, StatNumber } from '../components/primitives';
 import { netCarbs as calcNetCarbs, ketoStatus } from '../utils/ketoMath.js';
-import { isNaturalQuickAddEnabled } from '../utils/quickAddPreference.js';
+import {
+  isNaturalQuickAddEnabled,
+  migrateLegacyQuickAddOptIn,
+} from '../utils/quickAddPreference.js';
 
 /**
  * The meal a log at this hour most likely belongs to. The FAB opens the food
@@ -66,11 +69,14 @@ const FoodLog = () => {
   const [savingMeal, setSavingMeal] = useState(false);
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
 
-  // Natural-language quick-add (AI_IDEAS.md idea #2). Opt-in, default OFF —
-  // see `utils/quickAddPreference.js` for why the switch is client-side. Read
-  // once per mount: the Settings toggle is on another route, so a change
-  // arrives with the remount that navigating back here already causes.
-  const [naturalQuickAddOn] = useState(() => isNaturalQuickAddEnabled());
+  // Natural-language quick-add (AI_IDEAS.md idea #2). Opt-in, default OFF, and
+  // the switch is `ai.features.natural_language_food_logging` on the settings
+  // document — see `utils/quickAddPreference.js`. Read once per mount from the
+  // settings load below: the Settings toggle is on another route, so a change
+  // arrives with the remount that navigating back here already causes. It
+  // starts false so the entry point can never flash on before the answer is
+  // known.
+  const [naturalQuickAddOn, setNaturalQuickAddOn] = useState(false);
   const [showNaturalQuickAdd, setShowNaturalQuickAdd] = useState(false);
   const [searchPrefill, setSearchPrefill] = useState('');
 
@@ -176,15 +182,28 @@ const FoodLog = () => {
     }
   };
 
-  // Load keto mode settings (Task D2)
+  // Load keto mode settings (Task D2) and the AI opt-in off the same document
+  // — one request, not two, since both live on `usersettings`.
   useEffect(() => {
-    settingsService.getSettings().then(resp => {
+    let cancelled = false;
+    settingsService.getSettings().then(async resp => {
       const data = resp?.data || resp?.data?.data || resp;
+      if (cancelled) return;
       const ng = data?.nutrition_goal || null;
       setMode(ng?.mode || 'standard');
       setNetCarbLimit(ng?.keto?.net_carb_limit_g ?? 20);
       setTrackNetCarbs(ng?.keto?.track_net_carbs ?? true);
+
+      // One-shot migration of an R115 per-browser opt-in. It resolves to the
+      // server answer when there is nothing to move, so this is also just
+      // "read the flag".
+      const on = await migrateLegacyQuickAddOptIn({
+        settings: data,
+        saveAISettings: settingsService.updateAISettings,
+      }).catch(() => isNaturalQuickAddEnabled(data));
+      if (!cancelled) setNaturalQuickAddOn(on);
     }).catch(() => {});
+    return () => { cancelled = true; };
   }, []);
 
   // Load derived macros to show base(+add)

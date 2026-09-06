@@ -27,11 +27,13 @@ import InfluxDBSettings from '../components/InfluxDBSettings';
 import { SectionLabel, DisplayHeading, DateField, SuspenseSurface } from '../components/primitives';
 
 // The four analytics panels are lazy. Two of them (Intraday, Meal Impact) pull
-// chart.js + its date-fns adapter — 380 kB raw — which used to sit in this
-// route's chunk, so it was downloaded even by users who have never enabled the
-// InfluxDB integration and only ever see the "integration required" screen
-// above. InfluxDBSettings stays eager: it renders on that screen, and it costs
-// nothing (no chart library).
+// the chart library, which used to sit in this route's chunk, so it was
+// downloaded even by users who have never enabled the InfluxDB integration and
+// only ever see the "integration required" screen above. InfluxDBSettings
+// stays eager: it renders on that screen, and it costs nothing (no chart
+// library). Q52a swapped chart.js for @nivo/line here — one library for the
+// whole app — so these two panels now share the `nivo` + `d3` vendor chunks
+// with /weight and /blood-pressure instead of pulling a third one of their own.
 const IntradayDashboard = lazy(() => import('../components/IntradayDashboard'));
 const SleepAnalysis = lazy(() => import('../components/SleepAnalysis'));
 const MealImpactVisualization = lazy(() => import('../components/MealImpactVisualization'));
