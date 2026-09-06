@@ -7,12 +7,25 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 ## Running
 
-**Phase 3 — night 2 (Chef, 09-06 00:25):** all five decision items and all five AI ideas, decisions on Chef's behalf recorded in `DOCS/NIGHT2_PLAN.md`. Two quota slots left; aim to finish in the first.
+**Phase 3 — night 2 (Chef, 09-06 08:15):** all five decision items and all five AI ideas, decisions on Chef's behalf recorded in `DOCS/NIGHT2_PLAN.md`. Two quota slots left; aim to finish in the first.
 
 **Phase 2 — the going-over (Chef, 09-05 evening):** "make sure everything is merged and pushed, then give the entire geeksuite a good going over, fix what needs fixing — you have my authority for auto fixes. Then invent 5 responsible AI uses (document, don't implement)." Seven reviewers, one per disjoint tree, fix inside their scope and report cross-cutting findings; Sage commits per stream.
 
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
+| R113 | Sage | aiFeatureRunner + AIProvenance (the shared AI door) | **landed** `a7f432d` |
+| R114 | opus | AI-1 bujogeek weekly review draft (gateway bujogeek + bujogeek frontend) | running 08:22 |
+| R115 | opus | AI-2 fitnessgeek NL quick-add (gateway fitnessgeek typeDefs/resolvers + frontend) | running 08:22 |
+| R116 | opus | AI-3 notegeek tag/link suggestions + Q65 folder dead code (gateway notegeek + frontend) | running 08:22 |
+| R117 | opus | AI-4 bookgeek what-next + metadata drafts (gateway bookgeek + web) | running 08:22 |
+| R118 | opus | AI-5 startgeek morning brief (gateway glance + startgeek) | running 08:22 |
+| R119 | sonnet | Q38 delete storygeek gateway module + frontend Apollo plumbing; Q62 bookify cap | running 08:22 |
+| R120 | sonnet | Q22 delete flockgeek REST layer | running 08:22 |
+| R121 | opus | Q62 basegeek half (conversation ownership, mint admin, influx filter), Q49, Q69 | running 08:22 |
+| R122 | sonnet | fitnessgeek backend: Q62 half (aiCoach delete, influx), Q39, Q40, Q41, Q48 §12 | running 08:22 |
+| R123 | sonnet | Q42 TZ lines (non-basegeek compose) + docs; Q70 tools/kill-orphans.mjs | running 08:22 |
+| Sage | — | Q43 branch protection, Q68 stash→branch, Q10 revoke LocalApps, Q18b enforce flip + Q42 basegeek compose, Q56/Q58 scripts + Chef commands | running |
+| wave 2 (after AI frontends land) | — | Q52 fitnessgeek charts consolidation + ZXing vendoring; Q55 bujogeek TaskEditor mount-on-open | queued |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
 ## Queued (launch when files free / prerequisite lands)
