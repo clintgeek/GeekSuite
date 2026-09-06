@@ -14,8 +14,12 @@ import { Book } from '../bookgeek/models/book.js';
 import Bird from '../flockgeek/models/Bird.js';
 import EggProduction from '../flockgeek/models/EggProduction.js';
 
+import { z } from 'zod';
+
 import { resolvers as fitnessResolvers } from '../fitnessgeek/resolvers.js';
+import { validateInput } from '../shared/validation.js';
 import { planQuery, answerFrom, draftFrom } from './askService.js';
+import { buildBrief } from './briefService.js';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -32,6 +36,18 @@ function endOfDay(dateStr) {
   const [y, m, d] = (dateStr || defaultDateString()).split('-').map(Number);
   return new Date(Date.UTC(y, m - 1, d, 23, 59, 59, 999));
 }
+
+/**
+ * `glanceBrief`'s two arguments, both of which come from the caller's own
+ * clock rather than the container's (which is UTC — see BURN_REVIEW #13).
+ * `localHour` is what the server-side time-of-day gate reads, so it is bounded
+ * here rather than trusted: an out-of-range hour is a bad request, not a brief.
+ */
+const briefArgs = z.object({
+  date: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'must be a calendar date (YYYY-MM-DD)'),
+  localHour: z.number().int().min(0).max(23),
+});
+const validateBriefArgs = validateInput(briefArgs);
 
 function getUserId(context) {
   const userId = context?.user?.id || context?.user?._id;
@@ -650,6 +666,30 @@ export const resolvers = {
       }
 
       return { intent, answer, citations, results, provider, model };
+    },
+
+    /**
+     * StartGeek's morning brief (AI_IDEAS.md #5).
+     *
+     * Read-only and display-only: it re-reads the same snapshot `glanceToday`
+     * returns, trims it to counts and titles, and hands back three sentences.
+     * Nothing is written, nothing is actionable, and `brief: null` — before
+     * 5 a.m. local, or with no snapshot — means "render nothing", not "error".
+     *
+     * The opt-in switch for this feature lives in StartGeek's own
+     * localStorage settings (`startgeek.settings.brief`), which the server
+     * cannot see; the client is what decides whether to call at all. What the
+     * server owns unconditionally is the hour gate and the daily cap.
+     */
+    glanceBrief: async (_, args, context) => {
+      const userId = getUserId(context);
+      const { date, localHour } = validateBriefArgs(args);
+      return buildBrief({
+        userId,
+        date,
+        localHour,
+        loadGlance: () => fetchGlanceToday(context, date),
+      });
     },
 
     /**

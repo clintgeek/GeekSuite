@@ -18,6 +18,9 @@ export const DEFAULT_SETTINGS = {
   clock: '12',
   // `??` in the command box asks aiGeek. Opt-in, off until Chef says so.
   ask: false,
+  // The morning brief in the hero: three sentences, once a day, after 5am.
+  // Same opt-in discipline as `ask` — off until asked for.
+  brief: false,
   modules: Object.fromEntries(MODULES.map((m) => [m.id, true])),
   calendars: [],
 }

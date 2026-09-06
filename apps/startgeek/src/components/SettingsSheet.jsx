@@ -36,7 +36,7 @@ const Seg = ({ value, options, onChange, ariaLabel }) => (
 // Opened from the rail control or the `,` key. Focus is trapped while open.
 const SettingsSheet = ({ open, onClose }) => {
   const panelRef = useRef(null)
-  const { settings, setBackdrop, setClock, toggleModule, toggleAsk, setCalendars, reset } = useSettings()
+  const { settings, setBackdrop, setClock, toggleModule, toggleAsk, toggleBrief, setCalendars, reset } = useSettings()
   const { status } = useSession()
   const signedIn = status === 'in'
 
@@ -188,6 +188,37 @@ const SettingsSheet = ({ open, onClose }) => {
                   <span className="font-mono"> &lt; </span> line, aiGeek proposes the
                   task or note and you confirm it. The parser is still tried first,
                   and nothing is saved until you press Enter.
+                </p>
+              </Group>
+            )}
+
+            {signedIn && (
+              <Group title="Morning brief">
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={!!settings.brief}
+                  onClick={toggleBrief}
+                  className="flex items-center gap-3 w-full min-h-[44px] py-2.5 text-left"
+                >
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-ink">Morning brief</span>
+                    <span className="block text-xs text-ink-3">
+                      Three sentences in the hero, once a day after 5am
+                    </span>
+                  </span>
+                  <span className="switch" aria-hidden="true" />
+                </button>
+                <p className="text-[12.5px] leading-relaxed text-ink-3 mt-2.5">
+                  The brief reads back the day the modules below already show — what is
+                  due, a habit streak, the book you are on — as three short sentences.
+                  It sends aiGeek the counts and titles only: no note bodies, no health
+                  numbers. If aiGeek is quiet you get the same facts, worded by the
+                  console instead, and the line under the brief always says which.
+                </p>
+                <p className="text-[12.5px] leading-relaxed text-ink-3 mt-2">
+                  There is nothing to tap in it. Dismiss it and it stays gone until
+                  tomorrow, in this browser.
                 </p>
               </Group>
             )}

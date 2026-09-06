@@ -21,6 +21,7 @@ const load = () => {
       clock: CLOCKS.includes(saved.clock) ? saved.clock : DEFAULT_SETTINGS.clock,
       modules: { ...DEFAULT_SETTINGS.modules, ...(saved.modules || {}) },
       ask: typeof saved.ask === 'boolean' ? saved.ask : DEFAULT_SETTINGS.ask,
+      brief: typeof saved.brief === 'boolean' ? saved.brief : DEFAULT_SETTINGS.brief,
       calendars,
     }
   } catch {
@@ -60,6 +61,10 @@ export const SettingsProvider = ({ children }) => {
     setSettings((s) => ({ ...s, ask: !s.ask }))
   }, [])
 
+  const toggleBrief = useCallback(() => {
+    setSettings((s) => ({ ...s, brief: !s.brief }))
+  }, [])
+
   const setCalendars = useCallback((updater) => {
     setSettings((s) => ({
       ...s,
@@ -70,8 +75,8 @@ export const SettingsProvider = ({ children }) => {
   const reset = useCallback(() => setSettings(clone(DEFAULT_SETTINGS)), [])
 
   const value = useMemo(
-    () => ({ settings, setBackdrop, setClock, toggleModule, toggleAsk, setCalendars, reset }),
-    [settings, setBackdrop, setClock, toggleModule, toggleAsk, setCalendars, reset]
+    () => ({ settings, setBackdrop, setClock, toggleModule, toggleAsk, toggleBrief, setCalendars, reset }),
+    [settings, setBackdrop, setClock, toggleModule, toggleAsk, toggleBrief, setCalendars, reset]
   )
 
   return (

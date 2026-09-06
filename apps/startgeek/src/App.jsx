@@ -8,6 +8,7 @@ import BackgroundManager from './components/BackgroundManager'
 import DateTime from './components/DateTime'
 import WeatherBlock from './components/WeatherBlock'
 import WeatherModal from './components/WeatherModal'
+import BriefCard from './components/BriefCard'
 import CommandBox from './components/CommandBox'
 import ModuleGrid from './components/ModuleGrid'
 import AppDock from './components/AppDock'
@@ -84,6 +85,11 @@ function Console() {
           </div>
           {showWeather && <WeatherBlock onOpen={() => setWeatherOpen(true)} />}
         </section>
+
+        {/* The morning brief closes the hero: the same day the modules below
+            show, read once. Renders nothing unless opted in, after 5am local,
+            and not yet dismissed today. */}
+        <BriefCard />
 
         <CommandBox onOpenSettings={() => setSettingsOpen(true)} />
 

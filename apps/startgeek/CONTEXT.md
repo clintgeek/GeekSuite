@@ -53,11 +53,12 @@ temperature, 400/500 for content, Geist Mono for labels, counts, and streaks.
 
 ## Settings
 
-`SettingsContext` persists `{ backdrop, clock, modules, ask, calendars }` to
+`SettingsContext` persists `{ backdrop, clock, modules, ask, brief, calendars }` to
 `localStorage['startgeek.settings']`. No backend. The sheet opens from the rail
 control or the `,` key. Block list, defaults, and allowed values live in
 `src/config/modules.js` (`weather`, `today` = Tasks, `calendar`, `fitness`,
-`reading`). `ask` is the `??` opt-in, off by default; `calendars` is a list of
+`reading`). `ask` is the `??` opt-in, off by default; `brief` is the morning-brief opt-in,
+also off by default; `calendars` is a list of
 `{ url, color }` ICS feeds, empty by default.
 A block with no data stays hidden even when on. Logged out, only `weather`
 and the backdrop/clock controls show.
@@ -111,6 +112,7 @@ src/
     DateTime.jsx          — Clock (12h/24h from settings)
     WeatherBlock.jsx      — Today's weather panel in the hero; click opens the modal
     WeatherModal.jsx      — Today's details + 7-day range bars; focus-trapped
+    BriefCard.jsx         — The morning brief, closing the hero. Display-only, dismissible
     CommandBox.jsx        — Quick capture / search box
     HelpButton.jsx, HelpModal.jsx, SearchResults.jsx, Toast.jsx
     AnswerCard.jsx        — The `??` answer, above the result list
@@ -131,6 +133,7 @@ src/
   hooks/
     useSettings.js, useTime.js, useWeather.js, useSession.js, useGlance.js
     useCalendarEvents.js  — ICS fetch + localStorage cache + visibility-gated poll
+    useMorningBrief.js    — The brief's single fetch: no poll, no refetch, silent on failure
   services/
     weatherService.js     — Open-Meteo / ipapi client
   lib/
@@ -139,6 +142,7 @@ src/
     commandFailure.js     — isAuthFailure / failureMessage: what a failed capture says
     csrfHeal.js           — shouldHealCsrf / triggerCsrfReloadOnce (+ .test.js)
     captureDraft.js       — When a `>`/`<` line is worth a model call, and the draft round trip
+    morningBrief.js       — The brief's three gates + provenance line (+ .test.js)
     queries.js, basegeek.js, engines.js, commandMode.js, parseTaskInput.js
 ```
 
@@ -269,6 +273,94 @@ below.
 ---
 
 ---
+
+## Night 2 — 2026-09-06 — the morning brief (stream R118, AI_IDEAS.md #5)
+
+Three short sentences in the hero, once a day after 5 a.m., dismissible, with
+nothing to tap in them. Built across two trees: `glanceBrief` on basegeek's
+gateway and a `BriefCard` here.
+
+### Built
+
+**Gateway** (`apps/basegeek/packages/api/src/graphql/glance/`)
+
+- `briefService.js` (new) — `briefFacts()` trims a `glanceToday` snapshot to
+  counts, task titles, habit streaks, the current book and today's egg count;
+  `deterministicBrief()` writes those out as sentences with no model at all;
+  `buildBrief()` runs the whole thing through
+  `runAIFeature({ app: 'startgeek', feature: 'brief' })` in free-text mode.
+- `typeDefs.js` — `glanceBrief(date: String!, localHour: Int!): GlanceBrief!`
+  returning `{ date, brief, facts, provenance }`, plus the shared
+  `type AIProvenance`.
+- `resolvers.js` — the resolver, with zod validation of both arguments.
+- Tests: `src/__tests__/glanceBrief.test.js` (24) and
+  `glanceBriefResolver.test.js` (10).
+
+**Console** (this app)
+
+- `src/lib/morningBrief.js` + `.test.js` (14 cases) — the pure gates:
+  `shouldRequestBrief`, `localDayIso`, the dismissal memory, `provenanceLine`.
+- `src/hooks/useMorningBrief.js` — one fetch, no poll, silent on every failure.
+- `src/components/BriefCard.jsx` — the card, on the same dark glass as the
+  modules.
+- `src/App.jsx` — renders it between the hero and the command box.
+- `src/config/modules.js`, `src/context/SettingsContext.jsx`,
+  `src/components/SettingsSheet.jsx` — the `brief` opt-in, off by default,
+  in the same sheet as the `??` Ask switch.
+- `src/lib/queries.js` — `GLANCE_BRIEF`.
+
+### Decisions taken on Chef's behalf
+
+- **The opt-in is client-only, and that is a fact about this app, not a
+  shortcut.** StartGeek's settings are a localStorage blob with no backend, so
+  the gateway cannot read the switch. With it off, the query is simply never
+  called. What the server does own on its own authority is the 5 a.m. gate and
+  a cap of 3 model calls per user per UTC day.
+- **The hour gate is enforced on both sides.** The containers run UTC (Q42), so
+  the browser is the only thing on the wire that knows the local hour — it is
+  sent as `localHour` and bounded (0-23) rather than trusted. Before 5 the
+  resolver returns `brief: null` without loading the snapshot at all.
+- **The once-a-day cache is a `Map` in `briefService.js`, keyed
+  `userId:YYYY-MM-DD`.** The glance module has no cache to borrow —
+  `fetchGlanceToday` re-reads Mongo every call — so the brief brought its own.
+  Process-local: a redeploy costs one extra brief, which is the right failure
+  direction for a cost ceiling.
+- **Only a model answer is cached.** A fallback brief is returned and thrown
+  away, so an aiGeek that was down at 05:58 does not lock the deterministic
+  line in for the day; the next console load tries again. That is what the
+  3/day cap is for, and it is why the cap is 3 rather than 1.
+- **No weather sentence.** AI_IDEAS #5 lists weather, but `glanceToday` does
+  not carry it — StartGeek reads Open-Meteo directly from the browser. Fetching
+  a forecast server-side would put a new outbound dependency in front of the
+  console's first paint, for a fact the weather block shows two inches away.
+- **Only the "shown" half of the metric is counted.** The resolver logs
+  `{ metric: 'startgeek.brief.shown' }` when it produces a brief (once a day
+  per user, because of the cache). "Dismissed within five seconds" is a client
+  event and this app has **no telemetry of any kind** — no analytics, no event
+  endpoint, no logger that leaves the browser. Adding one for a single counter
+  was not worth a new outbound path from the start page, so the number Chef
+  gets is "days a brief was produced", and dismissal rate is not measured.
+- **A tab left open across 5 a.m. does not sprout a brief.** The gates are read
+  on mount, not on a clock tick. Opening the start page in the morning is what
+  the feature is for.
+
+### Verification
+
+startgeek tests 14 → 28 (`node --test src/lib/*.test.js`), lint 0 warnings /
+0 errors before and after (`--max-warnings 0`), `npm run build` clean.
+Gateway: 34 new tests, all five glance suites green (95 tests). Harness
+`--app startgeek --enforce-a11y --viewports phone`: 8 scenes, **0/0/0**.
+
+The committed harness fixtures seed no `brief` key (so the switch is off) and
+stub no `GlanceBrief` op, which means the shipped scenes never render the card
+— an unstubbed op answers `{ data: {} }` and the console stays exactly as it
+was, which is itself the "silently absent" path working. The card was probed
+separately at both phone schemes with the opt-in forced on and the op stubbed:
+card renders, axe and tap-target findings 0, page errors 0, dismiss removes it,
+and it stays gone across a reload. **A `05-brief` scene in
+`tools/mobile-harness/apps/startgeek/` would make that permanent** — left
+undone because that tree is outside this stream's file scope.
+
 
 ## Deferred
 
