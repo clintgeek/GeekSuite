@@ -671,3 +671,98 @@ into the prompt, and a test asserts a task's `note` and `tags` never appear in i
 - **`ReviewNoteDialog` is reachable only from the draft card**, so a user who
   never opts in cannot write a review by hand. Giving the Weekly Review tab its
   own "Write it down" button is a two-line change and a product call.
+
+## Night 2 — 2026-09-06 — R125: TaskEditor's picker chunk was still eager (Q55)
+
+Q55 in the Bundle section above (2026-09-05) had already measured the cost and
+deliberately left it: `TaskEditor` is always-mounted with `open={bool}`, and
+`@mui/x-date-pickers`' `DateTimePicker` (plus the `useMobilePicker` tail
+behind it) was imported at its module top, so the picker chunk shipped with
+every route that renders the dialog — not just `/today`. Unmounting the
+dialog on close was rejected then, and stays rejected now: it resets form
+state and kills MUI's close transition. What changed is narrower — lazy-load
+the picker itself, not the dialog.
+
+**What changed**
+
+- New `components/tasks/TaskDueDateField.jsx` — just the `DateTimePicker`
+  that used to sit inline in `TaskEditor`'s "Details" section, same props,
+  same 44px-floor `slotProps` override. `TaskEditor.jsx` now does
+  `lazy(() => import('./TaskDueDateField'))` and wraps the one call site in
+  `<Suspense>` with a plain MUI `Skeleton` (44px, matches the field) as
+  fallback — reached for over the app's own warm-parchment `SkeletonBar`
+  purely because `Skeleton` is already inside `@mui/material`, which this
+  file pulls in eagerly regardless, so it's free; the app's shimmer skeleton
+  stays the multi-row, multi-second `SkeletonLoader` it always was, not a
+  44px one-chunk-fetch placeholder.
+- **Same shape, found while measuring, fixed alongside it:**
+  `components/tasks/TaskList.jsx` (the `/search` route's list, and the only
+  consumer of `TaskEditor` outside the four `/today`-family pages) carried its
+  *own* always-mounted (`open={migrationDialogOpen}`) "migrate to a future
+  date" `Dialog`, with its own top-level `DateTimePicker` import — the exact
+  same bug, independent of `TaskEditor`'s. New `components/tasks/
+  MigrationDateField.jsx` (identical extraction), `lazy()`'d once and reused
+  at both of `TaskList`'s two near-identical render branches (flat list,
+  grouped-by-date). Left its redundant per-file `LocalizationProvider` alone —
+  harmless, out of scope for a bundle fix.
+- New test: `__tests__/components/TaskEditor.test.jsx` — mocks
+  `TaskDueDateField` and asserts the mock module body never runs while
+  `open={false}` (a settled microtask later), then asserts it runs exactly
+  once after a rerender with `open`. This is the code-path proof the
+  build-size numbers below can't give by themselves: `BujoDialog`/`GeekDialog`
+  don't mount their body while closed (`keepMounted` unset), so `React.lazy`'s
+  factory is provably never invoked pre-open — the win is real, not an
+  artifact of chunking.
+
+**Habit editor, collection editor, `ReviewNoteDialog` — checked, left alone.**
+All three are plain `TextField`/`Select`/`Button` forms over `BujoDialog` (the
+habit and collection editors live inline in `HabitsPage.jsx` /
+`CollectionsPage.jsx`, both already behind their own route-level
+`React.lazy`); none imports `x-date-pickers`, `react-markdown`, or anything
+else with a heavy tail. No change needed.
+
+**Measured** (`pnpm build`, `frontend/dist`, KiB, gzip via `zlib.gzipSync` —
+same throwaway-script methodology as the Bundle section above; entry +
+modulepreload list from `dist/index.html` is byte-identical before/after,
+confirming the picker was never part of first load, only route cost):
+
+| route | extra, before | extra, after | Δ |
+|---|---|---|---|
+| `/today` | 315.8 kB (gz 102.2) | 111.7 kB (gz 41.4) | **−204.1 kB (gz −60.8)** |
+| `/tags` | 286.7 kB (gz 91.0) | 82.6 kB (gz 30.2) | −204.1 kB (gz −60.8) |
+| `/collections/:id` | 307.6 kB (gz 99.9) | 103.6 kB (gz 39.1) | −204.0 kB (gz −60.8) |
+| `/search` | 274.6 kB (gz 87.8) | 70.9 kB (gz 27.2) | −203.7 kB (gz −60.6) |
+
+`TaskEditor`'s own chunk: 92.31 kB (gz 28.71) → 44.73 kB (gz 15.72) — the rest
+of the always-mounted-dialog form logic (`Select`/`Autocomplete`/subtasks/
+recurrence), unaffected, stays where it was. Entry chunk: 462.17 kB
+(gz 142.89) → 462.23 kB (gz 142.94), i.e. unchanged within noise —
+`TaskEditor` was never part of it, so there was nothing here to move.
+
+New lazy chunks, fetched once (shared across both call sites, cached
+thereafter) on whichever picker-bearing dialog opens first:
+
+| chunk | size |
+|---|---|
+| `DateTimePicker-*.js` | 50.97 kB (gz 15.15) |
+| `useMobilePicker-*.js` | 161.43 kB (gz 49.35) |
+| `TaskDueDateField-*.js` | 0.57 kB (gz 0.34) |
+| `MigrationDateField-*.js` | 0.47 kB (gz 0.32) |
+
+**Tests**: 156 → **158** (the 2 new cases above), all green. **Lint**: 44 → 44
+warnings, 0 errors — no new ones from either changed file or the two new ones.
+**Harness**: `--app bujogeek --enforce-a11y --viewports phone` — scene
+`04-task-editor` (the one that actually opens `TaskEditor`) is clean, 0
+violations. The run as a whole is **not** 0/0/0 right now (28 violations, all
+on scene `11-review-draft`, both themes) — but that scene and its violations
+come from an in-flight, uncommitted change to `tools/mobile-harness/apps/
+bujogeek/{scenes,fixtures}.mjs` by another stream sharing this box tonight
+(`git status` shows it modified, outside this stream's scope — `tools/
+mobile-harness/**` is not touched here). Zero violations trace to any scene
+this stream's files can affect. `node tools/syntax-check.mjs`: clean, 846
+files.
+
+**Left alone, with reasons**: `TaskList.jsx`'s nested `LocalizationProvider`
+(redundant with `App.jsx`'s app-wide one, harmless, not a bundle cost); the
+habit/collection editors and `ReviewNoteDialog` (checked, genuinely light,
+see above).

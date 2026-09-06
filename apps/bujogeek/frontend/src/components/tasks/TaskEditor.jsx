@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import {
   TextField,
   Button,
@@ -10,9 +10,9 @@ import {
   Chip,
   Autocomplete,
   Typography,
+  Skeleton,
   useTheme,
 } from '@mui/material';
-import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { StickyNote } from 'lucide-react';
 import { useMutation } from '@apollo/client';
 import { useTaskContext } from '../../context/TaskContext.jsx';
@@ -26,6 +26,27 @@ import SubtaskSection from './SubtaskSection';
 import { orderedSubtasks, subtaskId } from '../../utils/subtasks';
 import { buildRecurrenceRule, frequencyFromRecurrenceRule } from '../../utils/parseTaskInput';
 import { useToast } from '@geeksuite/ui';
+
+/**
+ * `@mui/x-date-pickers`' `DateTimePicker` (and the `useMobilePicker`/
+ * `AdapterDateFns`-adjacent tail behind it, ~150+ kB — see `DOCS/CONTEXT.md`
+ * § Frontend — Bundle) is the single biggest thing this always-mounted
+ * (`open={bool}`) dialog was pulling onto every route that renders it (Q55).
+ * `TaskDueDateField` isolates the picker import so it becomes a real dynamic
+ * `import()`, fetched only when `BujoDialog` actually renders this subtree —
+ * i.e. the dialog's first open, not the page's first paint (`GeekDialog`
+ * doesn't mount its body while closed). Unmounting `TaskEditor` itself on
+ * close was rejected because it would reset form state and kill MUI's close
+ * transition; this gets the same byte win without that behaviour change.
+ *
+ * The fallback below is a plain MUI `Skeleton` rather than the app's warm-
+ * parchment `SkeletonBar` (`components/shared/SkeletonLoader.jsx`) —
+ * `Skeleton` ships inside `@mui/material`, which this file already pulls in
+ * eagerly, so it costs nothing extra to reach for here, and it's on screen for
+ * one chunk fetch on the dialog's first open, not a loading surface a user
+ * sits with.
+ */
+const TaskDueDateField = lazy(() => import('./TaskDueDateField'));
 
 const SIGNIFIER_OPTIONS = [
   { value: '*', label: 'Task', mono: '*' },
@@ -447,29 +468,23 @@ const TaskEditor = ({ open, onClose, task = null }) => {
               </FormControl>
             </Box>
 
-            {/* Due date */}
+            {/* Due date — the picker chunk itself is lazy, see TaskDueDateField */}
             <Box sx={{ mb: 2 }}>
-              <DateTimePicker
-                label="Due date & time"
-                value={formData.dueDate}
-                onChange={(newDate) => setFormData({ ...formData, dueDate: newDate })}
-                slotProps={{
-                  textField: {
-                    fullWidth: true,
-                    size: 'small',
-                    // The pickers field isn't a plain MuiTextField, so the
-                    // suite-wide 44px floor (packages/ui theme, scoped to
-                    // `.MuiTextField-root .MuiOutlinedInput-root`) never
-                    // reaches it — apply the floor locally instead
-                    // (MOBILE_UI_PLAN.md §2).
-                    sx: {
-                      minHeight: { xs: 44, md: 'auto' },
-                      '& .MuiPickersInputBase-root': { minHeight: { xs: 44, md: 'auto' } },
-                      '& .MuiPickersOutlinedInput-root': { minHeight: { xs: 44, md: 'auto' } },
-                    },
-                  },
-                }}
-              />
+              <Suspense
+                fallback={
+                  <Skeleton
+                    variant="rounded"
+                    width="100%"
+                    height={44}
+                    sx={{ borderRadius: 1 }}
+                  />
+                }
+              >
+                <TaskDueDateField
+                  value={formData.dueDate}
+                  onChange={(newDate) => setFormData({ ...formData, dueDate: newDate })}
+                />
+              </Suspense>
             </Box>
 
             {/* Tags — pick from existing or type new (Enter/comma) */}

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, lazy, Suspense } from 'react';
 import { localDateString, startOfLocalDay } from '@geeksuite/utils';
 import { dueDayKey, dueDayStart, hasDueTime } from '../../utils/dueDate';
 import {
@@ -14,20 +14,26 @@ import {
   DialogContent,
   DialogActions,
   Button,
+  Skeleton,
 } from '@mui/material';
 import {
   Delete as DeleteIcon,
   Check as CheckIcon,
   ArrowForward as ArrowForwardIcon
 } from '@mui/icons-material';
-import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { useTaskContext, compareTasks } from '../../context/TaskContext';
 import { format } from 'date-fns';
 import TaskEditor from '../tasks/TaskEditor';
 import EmptyState from '../shared/EmptyState';
 import { filterTasks } from '../../utils/filterTasks';
+
+// `@mui/x-date-pickers` (see `MigrationDateField`) only ever backs this one
+// always-mounted (`open={migrationDialogOpen}`) dialog — `React.lazy`'d the
+// same way `TaskEditor`'s due-date field was (Q55).
+const MigrationDateField = lazy(() => import('./MigrationDateField'));
+const migrationFieldFallback = (
+  <Skeleton variant="rounded" width="100%" height={56} sx={{ mt: 2, borderRadius: 1 }} />
+);
 
 // The gateway returns `id`; `_id` is only ever present on a locally-built
 // object. This list read `t._id` for its ordering key, which was `undefined`
@@ -436,19 +442,12 @@ const TaskList = ({ tasks = [], viewType = 'daily' }) => {
         <Dialog open={migrationDialogOpen} onClose={() => setMigrationDialogOpen(false)}>
           <DialogTitle>Select Date</DialogTitle>
           <DialogContent>
-            <LocalizationProvider dateAdapter={AdapterDateFns}>
-              <DateTimePicker
-                label="Date and Time"
+            <Suspense fallback={migrationFieldFallback}>
+              <MigrationDateField
                 value={futureDate}
                 onChange={(newDate) => setFutureDate(newDate)}
-                slotProps={{
-                  textField: {
-                    fullWidth: true,
-                    margin: 'normal'
-                  }
-                }}
               />
-            </LocalizationProvider>
+            </Suspense>
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setMigrationDialogOpen(false)}>Cancel</Button>
@@ -541,19 +540,12 @@ const TaskList = ({ tasks = [], viewType = 'daily' }) => {
         <Dialog open={migrationDialogOpen} onClose={() => setMigrationDialogOpen(false)}>
           <DialogTitle>Select Date</DialogTitle>
           <DialogContent>
-            <LocalizationProvider dateAdapter={AdapterDateFns}>
-              <DateTimePicker
-                label="Date and Time"
+            <Suspense fallback={migrationFieldFallback}>
+              <MigrationDateField
                 value={futureDate}
                 onChange={(newDate) => setFutureDate(newDate)}
-                slotProps={{
-                  textField: {
-                    fullWidth: true,
-                    margin: 'normal'
-                  }
-                }}
               />
-            </LocalizationProvider>
+            </Suspense>
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setMigrationDialogOpen(false)}>Cancel</Button>
