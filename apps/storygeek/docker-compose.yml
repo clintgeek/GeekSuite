@@ -20,12 +20,6 @@ services:
     environment:
       NODE_ENV: production
       PORT: 9977
-      # TEMPORARY (2026-09-05): .env.production's DB_URI line is malformed
-      # (`DB_URI=MONGODB_URI=mongodb://…`, a pasted concatenation) and the app
-      # crash-loops on it. Until Chef fixes that line, DB_URI is substituted
-      # here from the local .env, which is what the old compose did. Remove this
-      # override once .env.production's DB_URI starts with mongodb://.
-      DB_URI: ${DB_URI}
       STORYGEEK_FREE_ONLY: ${STORYGEEK_FREE_ONLY:-true}
       # Pinned Game Master model — narrative consistency beats model rotation.
       # gemini-flash-latest is the id the deployed aiGeek free-tier catalog
