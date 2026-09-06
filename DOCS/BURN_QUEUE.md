@@ -14,18 +14,21 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
 | R113 | Sage | aiFeatureRunner + AIProvenance (the shared AI door) | **landed** `a7f432d` |
-| R114 | opus | AI-1 bujogeek weekly review draft (gateway bujogeek + bujogeek frontend) | running 08:22 |
-| R115 | opus | AI-2 fitnessgeek NL quick-add (gateway fitnessgeek typeDefs/resolvers + frontend) | running 08:22 |
-| R116 | opus | AI-3 notegeek tag/link suggestions + Q65 folder dead code (gateway notegeek + frontend) | running 08:22 |
-| R117 | opus | AI-4 bookgeek what-next + metadata drafts (gateway bookgeek + web) | running 08:22 |
-| R118 | opus | AI-5 startgeek morning brief (gateway glance + startgeek) | running 08:22 |
-| R119 | sonnet | Q38 delete storygeek gateway module + frontend Apollo plumbing; Q62 bookify cap | running 08:22 |
-| R120 | sonnet | Q22 delete flockgeek REST layer | running 08:22 |
-| R121 | opus | Q62 basegeek half (conversation ownership, mint admin, influx filter), Q49, Q69 | running 08:22 |
-| R122 | sonnet | fitnessgeek backend: Q62 half (aiCoach delete, influx), Q39, Q40, Q41, Q48 §12 | running 08:22 |
-| R123 | sonnet | Q42 TZ lines (non-basegeek compose) + docs; Q70 tools/kill-orphans.mjs | running 08:22 |
-| Sage | — | Q43 branch protection, Q68 stash→branch, Q10 revoke LocalApps, Q18b enforce flip + Q42 basegeek compose, Q56/Q58 scripts + Chef commands | running |
-| wave 2 (after AI frontends land) | — | Q52 fitnessgeek charts consolidation + ZXing vendoring; Q55 bujogeek TaskEditor mount-on-open | queued |
+| R114 | opus | AI-1 bujogeek weekly review draft (gateway bujogeek + bujogeek frontend) | **landed** `c913396` (wave 18) |
+| R115 | opus | AI-2 fitnessgeek NL quick-add (gateway fitnessgeek typeDefs/resolvers + frontend) | **landed** `ec6174c` (wave 18) |
+| R116 | opus | AI-3 notegeek tag/link suggestions + Q65 folder dead code (gateway notegeek + frontend) | **landed** `b25a000` (wave 18) |
+| R117 | opus | AI-4 bookgeek what-next + metadata drafts (gateway bookgeek + web) | **landed** `3ace9ab` (wave 18) |
+| R118 | opus | AI-5 startgeek morning brief (gateway glance + startgeek) | **landed** `e34ac19` (wave 18) |
+| R119 | sonnet | Q38 delete storygeek gateway module + frontend Apollo plumbing; Q62 bookify cap | **landed** `1401dda` (wave 18) |
+| R120 | sonnet | Q22 delete flockgeek REST layer | **landed** `4e8051e` (wave 18) |
+| R121 | opus | Q62 basegeek half (conversation ownership, mint admin, influx filter), Q49, Q69 | **landed** `b8a8ab4` (wave 18) |
+| R122 | sonnet | fitnessgeek backend: Q62 half (aiCoach delete, influx), Q39, Q40, Q41, Q48 §12 | **landed** `7166e8b` (wave 18) |
+| R123 | sonnet | Q42 TZ lines (non-basegeek compose) + docs; Q70 tools/kill-orphans.mjs | **landed** `24a77ee` (wave 18) |
+| Sage | — | Q68 stash→branch `wip/dashgeek-redesign-2026-04` ✓; Q10 LocalApps deactivated ✓ (`73965db` script); Q18b `CSRF_TOKEN=enforce` in basegeek compose ✓ (`24a77ee`); Q56 storygeek DB_URI fixed + override dropped ✓ (`c6776b9`); Q58 leaked `datageek_user` dropped from Mongo, init script env-driven ✓ (`73965db`); Q43 ruleset — see Landed | **landed** wave 18 |
+| R124 | opus | Q52 fitnessgeek charts→one lib + ZXing pin/vendor; quick-add opt-in server-side (schema default → false) | running 09:35 |
+| R125 | sonnet | Q55 bujogeek TaskEditor lazy pickers | running 09:35 |
+| R126 | sonnet | harness scenes for the five AI surfaces | running 09:35 |
+| R127 | sonnet | notegeek gateway dead Folder type removal | running 09:35 |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
 ## Queued (launch when files free / prerequisite lands)
