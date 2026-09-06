@@ -11,7 +11,6 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
-| R102 | outbound timeouts on the four auth proxies still without one (fitnessgeek, storygeek, flockgeek, bookgeek), BASEGEEK_TIMEOUT_MS convention | sonnet | four backends' auth route files + tests | 09-05 22:45 |
 | R100 | Q59 + Q60: gateway updateBird widened; gql-arg-audit tool + CI job (undeclared variables / uncollected fields, both directions, all modules); bookgeek four sort arms | opus | gateway graphql/**, frontends' mutation docs (not bujogeek/notegeek), tools/, ci.yml | 09-05 22:15 |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
