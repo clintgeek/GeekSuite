@@ -7,6 +7,8 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 ## Running
 
+**Phase 3 — night 2 (Chef, 09-06 00:25):** all five decision items and all five AI ideas, decisions on Chef's behalf recorded in `DOCS/NIGHT2_PLAN.md`. Two quota slots left; aim to finish in the first.
+
 **Phase 2 — the going-over (Chef, 09-05 evening):** "make sure everything is merged and pushed, then give the entire geeksuite a good going over, fix what needs fixing — you have my authority for auto fixes. Then invent 5 responsible AI uses (document, don't implement)." Seven reviewers, one per disjoint tree, fix inside their scope and report cross-cutting findings; Sage commits per stream.
 
 | # | Stream | Model | Files | Since |
