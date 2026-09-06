@@ -11,6 +11,13 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
+| R93 | going-over: basegeek api (gateway, routes, services, aiGeek) — fix in scope | opus | apps/basegeek/packages/api | 09-05 21:10 |
+| R94 | going-over: packages/* (ui, auth, api-client, user, utils, logger, schemas, crypto-vault) | opus | packages/** | 09-05 21:10 |
+| R95 | going-over: fitnessgeek backend + frontend | opus | apps/fitnessgeek | 09-05 21:10 |
+| R96 | going-over: bujogeek + notegeek | opus | apps/bujogeek, apps/notegeek | 09-05 21:10 |
+| R97 | going-over: bookgeek + storygeek | opus | apps/bookgeek, apps/storygeek | 09-05 21:10 |
+| R98 | going-over: flockgeek + startgeek + basegeek console | opus | apps/flockgeek, apps/startgeek, apps/basegeek/packages/ui | 09-05 21:10 |
+| R99 | going-over: infra, CI, tools, root docs (Dockerfiles, compose, workflows, env.example, RUNBOOK…) | sonnet | Dockerfiles, compose, .github, tools, root DOCS | 09-05 21:10 |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
 ## Queued (launch when files free / prerequisite lands)
@@ -88,7 +95,7 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 
 - 09-05 18:24 — wave 11 (`8029305`, 9 commits): R85 (+fallback guard), R87, R88. Gates green; workflows green; Watchtower 18:33 (updated=8); all eight apps 200; dead asset paths now 404 live on startgeek and fitnessgeek.
 
-- 09-05 19:40 — wave 12: R89 (a11y 0, enforcing), R90, R91, R92, docs. Gates green.
+- 09-05 21:06 — wave 12 (`1b1b175`, 15 commits): R89 (a11y 0, enforcing), R90, R91, R92, docs. Gates green.
 
 ## Landed during the burn
 
