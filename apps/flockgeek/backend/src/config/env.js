@@ -9,6 +9,5 @@ export const env = {
   jwtSecret: process.env.JWT_SECRET || "change-me",
   mongodbUri: process.env.MONGODB_URI || "mongodb://localhost:27017/flockgeek",
   basegeekUrl: process.env.BASEGEEK_URL || "https://basegeek.clintgeek.com",
-  appName: process.env.APP_NAME || "flockgeek",
-  seedOwnerId: process.env.SEED_OWNER_ID || "demo-owner"
+  appName: process.env.APP_NAME || "flockgeek"
 };

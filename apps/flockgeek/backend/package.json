@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
-    "seed": "node --env-file=.env src/scripts/seed.js",
     "migrate-owner": "node --env-file=.env src/scripts/migrateOwnerId.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   },

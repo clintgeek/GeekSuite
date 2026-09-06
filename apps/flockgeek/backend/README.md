@@ -1,24 +1,30 @@
 # FlockGeek API
 
-Minimal Express server for FlockGeek. It exposes a health endpoint and a starter auth flow that can be replaced with a persistent data layer.
+Thin Express backend for FlockGeek. All flock/bird/egg/health data lives on basegeek's
+GraphQL gateway (`apps/basegeek/packages/api/src/graphql/flockgeek/`) — this backend no
+longer has any CRUD surface of its own. See `apps/flockgeek/CONTEXT.md` for the full
+account (why, and what was here before Night 2 2026-09-06 / Q22 deleted it).
 
 ## Scripts
 
 ```bash
 npm install
-npm run dev   # Runs nodemon with live reload
-npm start     # Production-style launch
+npm run dev            # Runs nodemon with live reload
+npm start               # Production-style launch
+npm run migrate-owner   # Raw-collection ownerId reassignment tool (run with no args for usage)
+npm test                # Jest (native ESM)
 ```
 
 ## Routes
 
 - `GET /api/health` — healthcheck for monitoring and smoke tests
-- `POST /api/auth/register` — creates a mock user record and returns a JWT
-- `POST /api/auth/login` — validates credentials against the mock store
-- `GET /api/auth/me` — returns the decoded JWT payload, requires Authorization header
+- `GET /api/me` — cookie-first session check (`@geeksuite/user`'s `attachUser()` + `meHandler()`)
+- `POST /api/auth/refresh` — server-to-server proxy: replays the browser's cookies to
+  basegeek's `/api/auth/refresh`
+- `POST /api/auth/logout` — same pattern, `/api/auth/logout`
+- Static file serving + SPA fallback for the built frontend (`public/`)
 
-## Next steps
-
-1. Replace the in-memory `mockUsers` Map in `src/controllers/authController.js` with database logic.
-2. Wire secure cookie handling or session storage if preferred over bearer tokens.
-3. Layer additional domain routes under `src/routes/` following the versioned `/api` namespace.
+`POST /api/auth/{login,register}` and this router's own `/api/auth/me` do not exist here —
+the frontend never called them. Login/register redirect the browser straight to basegeek's
+hosted pages (`@geeksuite/auth`'s `loginRedirect()`); the session check goes through
+`GET /api/me` above.

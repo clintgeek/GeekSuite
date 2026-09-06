@@ -140,22 +140,20 @@ tree now.
   pairing's name plus its `roosterIds`/`henIds` (resolved to tag IDs) as
   possible sires/dams — the pairing's rosters, not a single parent, are the
   source of truth for lineage here.
-- **Q22 — the REST CRUD layer itself.** Still mounted, still caller-less, still
-  Chef's call. Everything above hardens it rather than removing it, on the
-  principle that a reachable route is a live route.
-- **`registerChicks` is not atomic.** A failure part-way through leaves the
-  brood group and the birds created so far. Bounding `count` removes the input
-  that made this likely; a transaction is a bigger change than this pass.
-- **`routes/groupMemberships.js` returns `error.message` verbatim on a 500**,
-  unlike the central error handler which hides it in production, and uses a
-  different error envelope from every controller. Cosmetic-adjacent, and the
-  route has no caller; folded into Q22.
-- **`groupMemberships` POST does not verify that `groupId`/`birdId` are the
-  caller's**, and neither do `createBird` (`pairingId`/`locationId`),
-  `createEggProduction` or `createHealthRecord`. Same class as the reads fixed
-  above, on the write side. Reported rather than fixed: it needs a shared
-  `assertOwnedRef` helper across six controllers, which is a larger change than
-  the read-side leaks it would close, and Q22 may delete the whole layer.
+- ~~**Q22 — the REST CRUD layer itself.** Still mounted, still caller-less,
+  still Chef's call.~~ **Deleted 2026-09-06 (Night 2).** See the "Night 2 —
+  2026-09-06" section below — everything this section and the two bullets
+  below it hardened is gone, not hardened.
+- ~~**`registerChicks` is not atomic.**~~ Moot — `registerChicks` and the whole
+  hatch-events controller are deleted with the rest of the REST layer.
+- ~~**`routes/groupMemberships.js` returns `error.message` verbatim on a
+  500**~~ Moot — the route is deleted.
+- ~~**`groupMemberships` POST does not verify that `groupId`/`birdId` are the
+  caller's**, and neither do `createBird`/`createEggProduction`/
+  `createHealthRecord` (write-side foreign-ref check, Q62's flockgeek item).~~
+  **Moot as of the Q22 deletion** — there is no write-side left to check.
+  BURN_QUEUE's Q62 policy line ("flockgeek write-side foreign refs") is closed
+  by deletion, not by adding `assertOwnedRef`.
 
 ## Bundle (2026-09-05)
 
@@ -398,38 +396,120 @@ Working notes for Sage (AI) and Chef while evolving FlockGeek. This file is a li
 - Modernize the Home/Dashboard experience in the FlockGeek frontend.
 - Align look/feel and core metrics with BabelGeek and photoGeek dashboards.
 
-## Backend reality check (2026-09-05)
+## Backend reality check — superseded 2026-09-06, see "Night 2" below
 
 `DOCS/SUITE_TODO.md`'s GraphQL consolidation audit describes flockgeek's own
-backend as "auth-only, only `/api/health` ping." **That's wrong about the
-backend** (it's correct about the frontend — every page reads/writes through
-Apollo → basegeek's gateway; `DashboardPage.jsx` is the only place that hits
-the local backend, and only for `/api/health`). The local Express backend
-(`backend/src/`) still has a full, live, mounted REST CRUD API — `routes/api.js`
-wires up `/birds`, `/groups`, `/group-memberships`, `/health-records`,
-`/egg-production`, `/pairings`, `/locations`, `/hatch-events`, `/meat-runs`,
-each backed by a real controller doing real Mongoose queries against
-`backend/src/models/*`. Nothing in this repo (frontend, startgeek, basegeek)
-calls any of those routes anymore, but they are reachable in the running
-server and their controllers still import the models. This is a bigger
-finding than "dead models" — it's a whole parallel REST layer that predates
-the GraphQL migration and was apparently never torn down. Deciding whether
-to unmount/delete it is a follow-up call, not done as part of the 2026-09-05
-dead-code pass (that pass only touched the models nothing imports at all).
-
-**Deleted 2026-09-05** (proven orphaned — zero non-test importers anywhere,
-including the `models/index.js` barrel's own consumers):
-`backend/src/models/BirdNote.js`, `BirdTrait.js`, `Event.js`,
-`LineageCache.js`. `models/index.js` no longer re-exports them.
-
-**Left in place** (imported by the live REST controllers above, so not
-dead by the "does anything import it" test): `Bird.js`, `EggProduction.js`,
-`Group.js`, `GroupMembership.js`, `HatchEvent.js`, `HealthRecord.js`,
-`Location.js`, `MeatRun.js`, `Pairing.js`.
+backend as "auth-only, only `/api/health` ping." As of 2026-09-06 **that is
+now correct about the backend too** — the parallel REST CRUD layer this
+section used to describe (`/birds`, `/groups`, `/group-memberships`,
+`/health-records`, `/egg-production`, `/pairings`, `/locations`,
+`/hatch-events`, `/meat-runs`, nine Mongoose models) is deleted; see "Night 2
+— 2026-09-06" for the proof it was dead and what replaced it. The frontend's
+relationship to the backend is unchanged: every page reads/writes through
+Apollo → basegeek's gateway, and `DashboardPage.jsx` is the only place that
+hits the local backend, and only for `/api/health`.
 
 There is no local `User` model — auth (`controllers/authController.js`)
-proxies login/register/me to basegeek over axios; nothing in this backend
-needs its own Mongoose user record.
+proxies `/api/auth/{refresh,logout}` to basegeek over axios; nothing in this
+backend needs its own Mongoose user record.
+
+## Night 2 — 2026-09-06 (Q22: delete flockgeek's caller-less REST layer)
+
+**Decision taken in `DOCS/NIGHT2_PLAN.md`** (issue 5, Q22): delete the REST
+CRUD layer, keep the auth proxy + health + static serving. This is that
+deletion.
+
+**Proof of no caller**, before deleting: grepped `apps/flockgeek/frontend`,
+`apps/startgeek`, every `packages/*`, and `apps/basegeek/packages/api` for the
+nine route prefixes the backend mounted (`/birds`, `/groups`,
+`/group-memberships`, `/health-records`, `/egg-production`, `/pairings`,
+`/locations`, `/hatch-events`, `/meat-runs`) — zero hits outside this
+backend's own routes/controllers/tests and the unrelated `apps/flockgeek/archive/`
+snapshot (a pre-monorepo copy of the app, out of scope, untouched). The
+frontend's entire data surface is Apollo → basegeek's gateway; the only local
+backend call left in the frontend is `DashboardPage.jsx`'s `fetch('/api/health')`.
+Also traced `@geeksuite/auth`'s `authClient.js`: `getMe()` calls `${apiBase}/me`
+(the top-level `GET /api/me`), `doTokenRefresh()`/`logout()` call
+`${apiBase}/auth/{refresh,logout}`, and login/register never call the local
+backend at all — `loginRedirect()` sends the browser straight to basegeek's
+hosted pages. That means the old `POST /api/auth/{login,register}` and this
+app's own `GET /api/auth/me` (a duplicate of the top-level `/api/me`) were
+*also* caller-less, not just the CRUD layer — deleted along with it.
+
+**Deleted:**
+- `routes/{birds,groups,groupMemberships,healthRecords,eggProduction,pairings,locations,hatchEvents,meatRuns}.js`
+- `controllers/{bird,eggProduction,group,hatchEvent,healthRecord,location,meatRun,pairing}Controller.js`
+- `models/{Bird,EggProduction,Group,GroupMembership,HatchEvent,HealthRecord,Location,MeatRun,Pairing}.js`
+  and the `models/index.js` barrel — no importer survives the routes/controllers above
+- `middleware/authMiddleware.js`'s `requireOwner` — its only callers were the
+  now-deleted routes; `requireAuth` (used by `GET /api/me`) is untouched
+- `utils/ownerFields.js`, `utils/pagination.js` — each had exactly one class of
+  caller (the deleted controllers/routes) and no test outside their own
+  `__tests__/utils/*.test.js`, deleted with them
+- `scripts/seed.js` (and its `npm run seed` entry) — seeded demo data for the
+  deleted models via the deleted REST layer's `X-Owner-Id` convention; nothing
+  else imported it. Kept `scripts/migrate-owner`: it reassigns `ownerId` on raw
+  Mongo collections by name, not through Mongoose models, so it works the same
+  regardless of which layer (REST, gone; GraphQL, still live) wrote the data
+  — a legitimate standalone maintenance tool, not part of the deleted surface
+- `controllers/authController.js`'s `register`/`login`/`me` exports (and the
+  `getTokenFromRequest()` helper only `me` used) — see "no caller" above.
+  `refresh`/`logout` (the real server-to-server proxies) are unchanged
+- `routes/auth.js`'s `/register`, `/login`, `/me` mounts — same reason.
+  `/refresh` and `/logout` are unchanged
+- Their tests: `__tests__/middleware/requireOwner.test.js`,
+  `__tests__/routes/{birdLineage,birds,eggProduction,groups,hatchEvents,meatRuns}.test.js`,
+  `__tests__/utils/{fakeModel,ownerFields,pagination}.test.js`
+- `config/env.js`'s `seedOwnerId` (only `scripts/seed.js` read it)
+
+**Kept, exactly what the frontend/SSO contract use** (per `DOCS/CONTEXT.md`
+"Server-to-server: the six auth proxies" and "Standard pattern (every app)"):
+`GET /api/health`, `GET /api/me` (`requireAuth` + `@geeksuite/user`'s
+`meHandler()`), `POST /api/auth/refresh`, `POST /api/auth/logout`, static
+`express.static` + the SPA-fallback catch-all (Q53's extname-404 guard,
+unchanged), and `server.js`'s `csrfGuard()`/`cors()` mounts (unchanged — they
+guard the surviving mutating routes same as before). No cron or background
+job existed to preserve; `package.json` had none.
+
+**`src/__tests__/auth.test.js` rewritten, not just trimmed.** The
+`requireAuth — cookie / basegeek contract` describe block survives verbatim
+(it never touched the deleted routes). The old file's "protected data routes"
+and "cross-user data isolation" blocks tested the deleted birds/egg-production
+routes directly and are gone with them. Its "CSRF origin guard" block also
+exercised the guard through `/api/birds` — since that was the only app-level
+proof `server.js`'s `csrfGuard()` mount actually blocks a real mutation here
+(flockgeek is the one backend in the suite where `cors()` gets a plain-array
+origin list, which silently drops the CORS header instead of rejecting — see
+`DOCS/CONTEXT.md` "the six auth proxies" and the guard comment in
+`server.js`), losing it would leave that landmine covered only by
+`packages/user`'s guard-internals unit tests. Replaced it with the same
+origin-guard proof against `POST /api/auth/logout` (the one surviving mutating
+route) instead of `/api/birds`.
+
+**Q62's "flockgeek write-side foreign refs" item is moot.** BURN_QUEUE's Q62
+policy line flagged that `createBird`/`createEggProduction`/`createHealthRecord`
+and `groupMemberships` POST didn't verify `pairingId`/`locationId`/`groupId`/
+`birdId` belonged to the caller before this pass landed. That write surface no
+longer exists — deletion closes the gap `assertOwnedRef` would have. See the
+"Left in place, with reasons" section above, now struck through.
+
+**Left alone:** `apps/flockgeek/docker-compose.yml` and both Dockerfiles
+(root `apps/flockgeek/Dockerfile`, used by CI/release, and
+`apps/flockgeek/backend/Dockerfile`, an unused local-dev leftover) — neither
+names a specific deleted path; both just `COPY` the whole `backend/` (or
+`apps/flockgeek/backend`) directory and run `node src/server.js` / `npm start`.
+No compose/Dockerfile edit needed.
+
+**Verified:** `apps/flockgeek/backend` jest suite green — 3 suites, 15 tests
+(down from 12 suites / 109 tests measured against the pre-deletion tree;
+CONTEXT.md's earlier "111" backend-test figure from 2026-09-05 counted a
+couple of test cases this grep-based recount doesn't catch, e.g. `test.each`
+rows — immaterial to the before/after shape here). `node tools/syntax-check.mjs`
+and `node tools/boot-smoke.mjs` from the repo root both still resolve
+`routes/api.js` as flockgeek's boot-smoke target cleanly (boot-smoke's own
+`flockgeek OK` line). No backend lint config exists for this app (only
+`apps/flockgeek/frontend` has one) and the frontend was not touched, so lint
+counts are unaffected by this stream.
 
 ## Conventions / notes
 
