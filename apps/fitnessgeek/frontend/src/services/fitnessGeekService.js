@@ -26,13 +26,20 @@ export const fitnessGeekService = {
     }
   },
 
-  // Get food by barcode
+  // Get food by barcode — REST, deliberately.
+  //
+  // The gateway's `fitnessFoods(search: String)` has no barcode argument, so
+  // routing this through apiService dropped the barcode entirely and answered
+  // with the unfiltered catalog: BarcodeScanner then took `[0]` and logged an
+  // arbitrary food for every scan. `GET /api/foods?barcode=` is the real lookup
+  // (unifiedFoodService.getByBarcode — local catalog, then OpenFoodFacts), and
+  // barcode is on the REST side of the split by design. See
+  // apps/fitnessgeek/DOCS/CONTEXT.md "Frontend — where the writes go".
   getFoodByBarcode: async (barcode) => {
     try {
-      const response = await apiService.get('/foods', {
-        params: { barcode }
-      });
-      return response.data[0] || null;
+      const response = await restApi.get('/foods', { params: { barcode } });
+      const data = response.data?.data ?? response.data;
+      return (Array.isArray(data) ? data[0] : data) || null;
     } catch (error) {
       logger.error('Error getting food by barcode:', error);
       throw error;

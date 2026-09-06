@@ -1,4 +1,5 @@
 import { fitnessGeekService } from './fitnessGeekService.js';
+import { restClient as restApi } from './restClient.js';
 
 const buildQuery = (params = {}) => {
   const query = new URLSearchParams();
@@ -18,12 +19,19 @@ export const reportsService = {
     return response?.data ?? response;
   },
 
+  // CSV export is REST-only: it returns a text/csv body, and the GraphQL
+  // router has no mapping for /food-reports/export — sending it through
+  // fitnessGeekService.get threw "Rest proxy gap" on every click, which the
+  // Reports page reported as "Failed to export report".
   async export(options = {}) {
     const query = new URLSearchParams({ format: 'csv' });
     if (options.start) query.append('start', options.start);
     if (options.days) query.append('days', options.days);
-    const url = `/food-reports/export?${query.toString()}`;
-    return fitnessGeekService.get(url, { responseType: 'blob' });
+    const response = await restApi.get(
+      `/food-reports/export?${query.toString()}`,
+      { responseType: 'blob' }
+    );
+    return response.data;
   }
 };
 

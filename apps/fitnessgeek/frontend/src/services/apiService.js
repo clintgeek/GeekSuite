@@ -100,16 +100,21 @@ const DELETE_MEAL = gql`
   mutation DeleteFitnessMeal($id: ID!) { deleteFitnessMeal(id: $id) }
 `;
 
+// One field list for the query and both mutations. The two mutations used to
+// select `{ id }` alone, so Medications.jsx spliced a bare `{ id }` stub into
+// its list after every add/edit and the row rendered blank until a reload.
+const MEDICATION_FIELDS = 'id display_name is_supplement med_type rxcui ingredient_name brand_name form route strength dose_value dose_unit sig times_of_day suggested_indications user_indications supply_start_date days_supply notes';
+
 const GET_MEDICATIONS = gql`
-  query GetFitnessMedications { fitnessMedications { id display_name is_supplement med_type rxcui ingredient_name brand_name form route strength dose_value dose_unit sig times_of_day suggested_indications user_indications supply_start_date days_supply notes } }
+  query GetFitnessMedications { fitnessMedications { ${MEDICATION_FIELDS} } }
 `;
 
 const ADD_MEDICATION = gql`
-  mutation AddFitnessMedication($input: FitnessMedicationInput!) { addFitnessMedication(input: $input) { id } }
+  mutation AddFitnessMedication($input: FitnessMedicationInput!) { addFitnessMedication(input: $input) { ${MEDICATION_FIELDS} } }
 `;
 
 const UPDATE_MEDICATION = gql`
-  mutation UpdateFitnessMedication($id: ID!, $input: FitnessMedicationInput!) { updateFitnessMedication(id: $id, input: $input) { id } }
+  mutation UpdateFitnessMedication($id: ID!, $input: FitnessMedicationInput!) { updateFitnessMedication(id: $id, input: $input) { ${MEDICATION_FIELDS} } }
 `;
 
 const DELETE_MEDICATION = gql`
@@ -607,7 +612,15 @@ function routeRequest(method, url, data) {
     // /user/settings is an alias for /settings (PATCH and PUT both hit this)
     if (base === '/user/settings') return { mutation: UPDATE_USER_SETTINGS, variables: { input: sanitizeSettingsInput(data) } };
     if (base === '/settings/household') return { mutation: UPDATE_HOUSEHOLD_SETTINGS, variables: { input: data } };
-    if (parts[0] === 'settings') return { mutation: UPDATE_USER_SETTINGS, variables: { input: sanitizeSettingsInput(data) } }; // /settings/dashboard etc
+    // The sub-document routes take the sub-document ITSELF as their body
+    // (`PUT /settings/dashboard` gets `{show_current_weight, card_order, …}`),
+    // so they have to be nested back under their key before they can be a
+    // `FitnessUserSettingsInput`. Sending the bare sub-document was a GraphQL
+    // input-coercion error — "Field \"show_current_weight\" is not defined by
+    // type FitnessUserSettingsInput" — i.e. the save could never succeed.
+    if (base === '/settings/dashboard') return { mutation: UPDATE_USER_SETTINGS, variables: { input: { dashboard: sanitizeSettingsInput(data) } } };
+    if (base === '/settings/ai') return { mutation: UPDATE_USER_SETTINGS, variables: { input: { ai: sanitizeSettingsInput(data) } } };
+    if (parts[0] === 'settings') return { mutation: UPDATE_USER_SETTINGS, variables: { input: sanitizeSettingsInput(data) } };
     if (parts[0] === 'weight') return { mutation: UPDATE_WEIGHT, variables: { id, input: data } };
     // /foods/:id updates a library FoodItem (not a log entry) — partial
     // patch, see normalizeFoodUpdateInput.

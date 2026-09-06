@@ -61,5 +61,17 @@ const updateMedicationSchema = z.object({
   display_name: z.string().trim().min(1).max(200).optional(),
 }).strict();
 
-export { createMedicationSchema, updateMedicationSchema };
-export default { createMedicationSchema, updateMedicationSchema };
+// POST /:id/logs — a dose entry. This route used to take its whole body raw:
+// a non-date `date` reached mongoose as an Invalid Date and a bogus
+// `time_of_day` reached its enum, both surfacing as a 500 rather than a 400.
+const createMedicationLogSchema = z.object({
+  date: logDateSchema,
+  time_of_day: z.enum(MED_TIME_OF_DAY),
+  taken: z.boolean().optional(),
+  dose_value: z.coerce.number().min(0).max(100000).nullable().optional(),
+  dose_unit: nullableString(50),
+  notes: z.string().max(300).optional(),
+}).strict();
+
+export { createMedicationSchema, updateMedicationSchema, createMedicationLogSchema };
+export default { createMedicationSchema, updateMedicationSchema, createMedicationLogSchema };

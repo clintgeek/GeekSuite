@@ -8,7 +8,7 @@ import MedicationIcon from '@mui/icons-material/Medication';
 import LocalPharmacyIcon from '@mui/icons-material/LocalPharmacy';
 import WarningIcon from '@mui/icons-material/Warning';
 import medsService from '../services/medsService.js';
-import { localDateString } from '@geeksuite/utils';
+import { localDateString, toUtcMidnight, utcDateString } from '@geeksuite/utils';
 import { Surface, SectionLabel, DisplayHeading, EmptyState } from '../components/primitives';
 
 const TIME_OPTIONS = ['morning', 'afternoon', 'evening', 'bedtime'];
@@ -66,15 +66,26 @@ export default function Medications() {
     }, 0);
   };
 
+  // `supply_start_date` is a CALENDAR date stored at UTC midnight; "today" is
+  // the reader's calendar day. Differencing the stored instant against a raw
+  // `new Date()` counted the hours since UTC midnight, so "days left" ticked
+  // down at 19:00 Central rather than at the user's midnight. Compare whole
+  // calendar days by normalising both sides to UTC midnight first.
+  const elapsedCalendarDays = (startValue) => {
+    const start = toUtcMidnight(startValue);
+    if (Number.isNaN(start.getTime())) return null;
+    const today = toUtcMidnight(localDateString());
+    return Math.max(0, Math.round((today - start) / (1000 * 60 * 60 * 24)));
+  };
+
   const computeRemainingAndRunout = (m) => {
-    const start = m.supply_start_date ? new Date(m.supply_start_date) : null;
     const days = m.days_supply || null;
-    if (!start || !days) return { remaining: null, runout: null };
-    const today = new Date();
-    const elapsed = Math.max(0, Math.floor((today - start) / (1000*60*60*24)));
+    if (!m.supply_start_date || !days) return { remaining: null, runout: null };
+    const elapsed = elapsedCalendarDays(m.supply_start_date);
+    if (elapsed == null) return { remaining: null, runout: null };
     const remaining = Math.max(0, days - elapsed);
-    const runout = new Date(start.getTime() + days * 24*60*60*1000);
-    return { remaining, runout: runout.toISOString().slice(0,10) };
+    const runout = new Date(toUtcMidnight(m.supply_start_date).getTime() + days * 24 * 60 * 60 * 1000);
+    return { remaining, runout: utcDateString(runout) };
   };
 
   const buildExportText = () => {
@@ -262,7 +273,10 @@ export default function Medications() {
   };
 
   useEffect(() => {
-    medsService.list().then(r => setMyMeds(r.data || [])).catch(() => {});
+    // medsService already unwraps the transport envelope — `list()` resolves to
+    // the medication array itself, not `{ data: [...] }`. Reading `.data` off it
+    // here (as this page used to) silently produced an empty list on every load.
+    medsService.list().then(r => setMyMeds(Array.isArray(r) ? r : [])).catch(() => {});
   }, []);
 
   const handleSearch = async () => {
@@ -270,7 +284,8 @@ export default function Medications() {
     setSearching(true);
     try {
       const r = await medsService.search(q);
-      setResults(r.data || []);
+      // Same rule: `search()` resolves to the candidate array.
+      setResults(Array.isArray(r) ? r : []);
     } finally {
       setSearching(false);
     }
@@ -281,9 +296,9 @@ export default function Medications() {
     setDisplayName(c?.name || '');
     try {
       const d = await medsService.getDetails(c.rxcui);
-      setDetails(d.data || { strengths: [], suggested: [] });
-      const suggested = d?.data?.suggested || [];
-      setUserTags(suggested);
+      // `getDetails()` resolves to { ingredient, strengths, atcClasses, epcClasses, suggested }.
+      setDetails(d || { strengths: [], suggested: [] });
+      setUserTags(d?.suggested || []);
     } catch (_) {
       setDetails({ strengths: [], suggested: [] });
     }
@@ -308,12 +323,14 @@ export default function Medications() {
 
   const saveMedication = async () => {
     const payload = buildPayload();
-    const r = await medsService.save(payload);
+    // `save()` resolves to the saved medication itself, not `{ data: med }`.
     // Gateway shape: `id`, not `_id` — `fitnessMedications`/`addFitnessMedication`
     // never carry `_id`, so this dedupe always matched `undefined === undefined`
     // and dropped every existing medication from the list on each add.
-    const savedId = r.data.id ?? r.data._id;
-    setMyMeds((prev) => [r.data, ...prev.filter(m => (m.id ?? m._id) !== savedId)]);
+    const saved = await medsService.save(payload);
+    if (!saved) return;
+    const savedId = saved.id ?? saved._id;
+    setMyMeds((prev) => [saved, ...prev.filter(m => (m.id ?? m._id) !== savedId)]);
     setSelected(null);
     setEditingMed(null);
   };
@@ -322,8 +339,9 @@ export default function Medications() {
     if (!editingMed) return;
     const payload = buildPayload();
     const editingId = editingMed.id ?? editingMed._id;
-    const r = await medsService.update(editingId, payload);
-    setMyMeds(prev => prev.map(m => ((m.id ?? m._id) === editingId ? r.data : m)));
+    const saved = await medsService.update(editingId, payload);
+    if (!saved) return;
+    setMyMeds(prev => prev.map(m => ((m.id ?? m._id) === editingId ? saved : m)));
     setSelected(null);
     setEditingMed(null);
   };
@@ -349,9 +367,7 @@ export default function Medications() {
     setMedType(m.med_type || 'rx');
     // Prefill current days supply as remaining (days_supply - elapsed)
     if (m.supply_start_date && m.days_supply) {
-      const start = new Date(m.supply_start_date);
-      const today = new Date();
-      const elapsed = Math.max(0, Math.floor((today - start) / (1000*60*60*24)));
+      const elapsed = elapsedCalendarDays(m.supply_start_date) ?? 0;
       const remaining = Math.max(0, Number(m.days_supply) - elapsed);
       setCurrentDaysSupply(String(remaining));
     } else {
@@ -361,8 +377,8 @@ export default function Medications() {
     if (m.rxcui) {
       try {
         const d = await medsService.getDetails(m.rxcui);
-        setDetails(d.data || { strengths: [], suggested: [] });
-        const found = (d?.data?.strengths || []).find(s => s.name === m.strength);
+        setDetails(d || { strengths: [], suggested: [] });
+        const found = (d?.strengths || []).find(s => s.name === m.strength);
         if (found) setSelectedStrength(found);
       } catch (_) {
         setDetails({ strengths: [], suggested: [] });

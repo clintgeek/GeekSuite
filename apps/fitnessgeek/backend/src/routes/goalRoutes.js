@@ -3,6 +3,8 @@ const router = express.Router();
 import { authenticateToken } from '../middleware/auth.js';
 import UserSettings from '../models/UserSettings.js';
 import * as garmin from '../services/garminConnectService.js';
+import { utcDateString } from '@geeksuite/utils';
+import { reqLogger } from '../utils/reqLogger.js';
 
 // Get user goals
 router.get('/', authenticateToken, async (req, res) => {
@@ -25,11 +27,17 @@ router.get('/', authenticateToken, async (req, res) => {
           fat: ng.fat_grams || 0
         }
       },
+      // `UserSettings.weight_goal` declares startWeight / targetWeight /
+      // startDate / goalDate — camelCase, and the two dates are plain
+      // `YYYY-MM-DD` STRINGS. This route read (and POST / wrote) the snake_case
+      // spellings, which are not schema paths at all: mongoose strict mode
+      // dropped every write, and every read came back undefined. See
+      // packages/schemas/fitnessgeek/userSettings.js.
       weight: wg ? {
-        startWeight: wg.start_weight,
-        targetWeight: wg.target_weight,
-        startDate: wg.start_date ? wg.start_date.toISOString().split('T')[0] : null,
-        goalDate: wg.goal_date ? wg.goal_date.toISOString().split('T')[0] : null,
+        startWeight: wg.startWeight ?? null,
+        targetWeight: wg.targetWeight ?? null,
+        startDate: utcDateString(wg.startDate) || null,
+        goalDate: utcDateString(wg.goalDate) || null,
         is_active: wg.is_active
       } : null
     };
@@ -39,7 +47,7 @@ router.get('/', authenticateToken, async (req, res) => {
       data: goals
     });
   } catch (error) {
-    req.log.error({ err: error }, 'Error fetching goals');
+    reqLogger(req).error({ err: error }, 'Error fetching goals');
     res.status(500).json({
       success: false,
       error: {
@@ -72,29 +80,45 @@ router.post('/', authenticateToken, async (req, res) => {
 
     const settings = await UserSettings.getOrCreate(userIdObjectId);
 
-    // Save nutrition goals if provided
+    // Save nutrition goals if provided.
+    //
+    // `updateSettings` writes dot paths now, so this only has to name the keys
+    // it actually means to change — spreading the existing sub-document is both
+    // unnecessary and wrong (`{...mongooseSubdoc}` copies `$__`/`_doc`, not the
+    // fields). Only keys the caller supplied are sent; the rest of
+    // `nutrition_goal` is left alone.
+    //
+    // NOTE: `protein_grams` / `carbs_grams` / `fat_grams` are deliberately NOT
+    // written. `UserSettings.nutrition_goal` declares no such paths — it carries
+    // `daily_calorie_target` plus the `*_g_per_lb_goal` ratios — so mongoose
+    // strict mode dropped them silently, and `goals_met.{protein,carbs,fat}` has
+    // been permanently false as a result. Deciding what a macro goal on this
+    // document IS (gram target, ratio, or a read of the `nutritiongoals`
+    // collection) is follow-up #8 in DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md §12.
     if (nutrition && nutrition.goals) {
       const ng = {
-        ...settings.nutrition_goal,
         enabled: nutrition.trackMacros ?? settings.nutrition_goal?.enabled ?? true,
-        daily_calorie_target: nutrition.goals.calories ?? settings.nutrition_goal?.daily_calorie_target,
-        protein_grams: nutrition.goals.protein ?? settings.nutrition_goal?.protein_grams,
-        carbs_grams: nutrition.goals.carbs ?? settings.nutrition_goal?.carbs_grams,
-        fat_grams: nutrition.goals.fat ?? settings.nutrition_goal?.fat_grams,
+        ...(nutrition.goals.calories !== undefined ? { daily_calorie_target: nutrition.goals.calories } : {}),
         ...(nutrition.mode !== undefined && { mode: nutrition.mode }),
         ...(nutrition.keto !== undefined && { keto: nutrition.keto })
       };
       await UserSettings.updateSettings(userIdObjectId, { nutrition_goal: ng });
     }
 
-    // Save weight goals if provided
+    // Save weight goals if provided. Schema spelling: camelCase keys, and the
+    // two dates are `YYYY-MM-DD` strings, not Dates.
     if (weight) {
       const wg = {
         enabled: !!weight.startWeight && !!weight.targetWeight,
-        start_weight: weight.startWeight ?? settings.weight_goal?.start_weight,
-        target_weight: weight.targetWeight ?? settings.weight_goal?.target_weight,
-        start_date: weight.startDate ? new Date(weight.startDate) : (settings.weight_goal?.start_date || new Date()),
-        goal_date: weight.goalDate ? new Date(weight.goalDate) : (settings.weight_goal?.goal_date || null),
+        ...(weight.startWeight !== undefined ? { startWeight: weight.startWeight } : {}),
+        ...(weight.targetWeight !== undefined ? { targetWeight: weight.targetWeight } : {}),
+        startDate: weight.startDate
+          ? utcDateString(weight.startDate)
+          // Fallback only: the caller sent no start date and none is stored.
+          // This is the SERVER's UTC day (see BURN_REVIEW #13 — no container
+          // installs tzdata), which is why the client normally sends one.
+          : (settings.weight_goal?.startDate || utcDateString(new Date())),
+        ...(weight.goalDate !== undefined ? { goalDate: utcDateString(weight.goalDate) } : {}),
         is_active: !!(weight.startWeight && weight.targetWeight)
       };
       await UserSettings.updateSettings(userIdObjectId, { weight_goal: wg });
@@ -102,7 +126,7 @@ router.post('/', authenticateToken, async (req, res) => {
 
     res.json({ success: true, message: 'Goals saved successfully' });
   } catch (error) {
-    req.log.error({ err: error }, 'Error saving goals');
+    reqLogger(req).error({ err: error }, 'Error saving goals');
     res.status(500).json({
       success: false,
       error: {
@@ -219,7 +243,7 @@ router.get('/nutrition/macros', authenticateToken, async (req, res) => {
       }
     });
   } catch (error) {
-    req.log.error({ err: error }, 'Error deriving nutrition macros');
+    reqLogger(req).error({ err: error }, 'Error deriving nutrition macros');
     res.status(500).json({ success: false, error: { message: 'Failed to derive macros' } });
   }
 });

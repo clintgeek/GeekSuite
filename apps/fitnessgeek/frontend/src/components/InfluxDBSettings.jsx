@@ -91,11 +91,13 @@ export default function InfluxDBSettings({ onSettingsChange }) {
     setConnectionStatus(null);
 
     try {
+      // GET /api/influx/status answers { userEnabled, serverConnected, error }.
+      // This used to read `response.connected`, which the route has never sent,
+      // so a working InfluxDB still reported "Connection Failed".
       const response = await influxService.getStatus();
       setConnectionStatus({
-        success: response.connected,
-        database: response.database,
-        measurements: response.measurementCount
+        success: !!response?.serverConnected,
+        error: response?.error || undefined
       });
     } catch (err) {
       console.error('Error testing connection:', err);
@@ -239,14 +241,12 @@ export default function InfluxDBSettings({ onSettingsChange }) {
                       {connectionStatus.success ? (
                         <>
                           <AlertTitle>Connection Successful</AlertTitle>
-                          Connected to database: <strong>{connectionStatus.database}</strong>
-                          <br />
-                          Found {connectionStatus.measurements} measurements
+                          FitnessGeek can reach your InfluxDB instance.
                         </>
                       ) : (
                         <>
                           <AlertTitle>Connection Failed</AlertTitle>
-                          {connectionStatus.error}
+                          {connectionStatus.error || 'InfluxDB did not answer.'}
                         </>
                       )}
                     </Alert>

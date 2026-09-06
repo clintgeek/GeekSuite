@@ -13,6 +13,7 @@ import {
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { toneForMode } from '@geeksuite/ui';
+import { displayCalendarDate, localDateString, utcDateString } from '@geeksuite/utils';
 import {
   Delete as DeleteIcon,
   MonitorHeart as BPIcon
@@ -31,22 +32,18 @@ const BPLogList = ({ logs, onDelete, unit = "mmHg" }) => {
     return { status: 'Crisis', color: '#dc2626' };
   };
 
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+  // `log_date` is a CALENDAR date stored at UTC midnight, not an instant.
+  // Rendering it with a plain `toLocaleDateString` showed the previous day for
+  // every reader west of UTC, and the "time" that used to sit beside it was
+  // always 7:00 PM — UTC midnight in Central, not a time anybody logged.
+  // `displayCalendarDate` forces `timeZone: 'UTC'`; the time is gone.
+  const formatDate = (dateString) =>
+    displayCalendarDate(dateString, 'en-US', {
       weekday: 'short',
       month: 'short',
       day: 'numeric',
       year: 'numeric'
     });
-  };
-
-  const formatTime = (dateString) => {
-    return new Date(dateString).toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    });
-  };
 
   if (logs.length === 0) {
     return (
@@ -92,7 +89,10 @@ const BPLogList = ({ logs, onDelete, unit = "mmHg" }) => {
         <List sx={{ p: 0, m: 0, width: '100%' }}>
           {sortedLogs.map((log) => {
             const bpStatus = getBPStatus(log.systolic, log.diastolic);
-            const isToday = new Date(log.log_date).toDateString() === new Date().toDateString();
+            // Compare the stored calendar day against the reader's calendar day —
+            // `new Date(utcMidnight).toDateString()` is yesterday west of UTC, so
+            // today's reading never read as today.
+            const isToday = utcDateString(log.log_date) === localDateString();
 
             return (
               <ListItem
@@ -155,7 +155,7 @@ const BPLogList = ({ logs, onDelete, unit = "mmHg" }) => {
                     )}
                     <Typography variant="body2" color="text.secondary">
                       {formatDate(log.log_date)}
-                      {isToday && ` • ${formatTime(log.log_date)}`}
+                      {isToday && ' • Today'}
                     </Typography>
                   </Box>
                 </Box>
@@ -204,7 +204,7 @@ const BPLogList = ({ logs, onDelete, unit = "mmHg" }) => {
                     </Typography>
                     {isToday && (
                       <Typography variant="body2" color="text.secondary">
-                        • {formatTime(log.log_date)}
+                        • Today
                       </Typography>
                     )}
                   </Box>

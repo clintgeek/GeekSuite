@@ -2,6 +2,7 @@ import express from 'express';
 const router = express.Router();
 import { authenticateToken } from '../middleware/auth.js';
 import LoginStreak from '../models/LoginStreak.js';
+import { reqLogger } from '../utils/reqLogger.js';
 
 // Get user's login streak
 router.get('/login', authenticateToken, async (req, res) => {
@@ -19,7 +20,7 @@ router.get('/login', authenticateToken, async (req, res) => {
       }
     });
   } catch (error) {
-    req.log.error({ err: error }, 'Error getting login streak');
+    reqLogger(req).error({ err: error }, 'Error getting login streak');
     res.status(500).json({
       success: false,
       error: {
@@ -47,7 +48,7 @@ router.post('/login', authenticateToken, async (req, res) => {
       }
     });
   } catch (error) {
-    req.log.error({ err: error }, 'Error recording login');
+    reqLogger(req).error({ err: error }, 'Error recording login');
     res.status(500).json({
       success: false,
       error: {

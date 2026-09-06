@@ -57,77 +57,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/logs/:id - Get single food log
-router.get('/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const userId = req.user.id;
-
-    const log = await FoodLog.findOne({
-      _id: id,
-      user_id: userId
-    }).populate('food_item_id');
-
-    if (!log) {
-      return res.status(404).json({
-        success: false,
-        error: {
-          message: 'Food log not found',
-          code: 'LOG_NOT_FOUND'
-        }
-      });
-    }
-
-    logger.info('Food log retrieved', { userId, logId: id });
-
-    res.json({
-      success: true,
-      data: log
-    });
-
-  } catch (error) {
-    logger.error('Error getting food log:', error);
-    res.status(500).json({
-      success: false,
-      error: {
-        message: 'Failed to retrieve food log',
-        code: 'LOG_RETRIEVAL_ERROR'
-      }
-    });
-  }
-});
-
-// GET /api/logs/date/:date - Get logs for specific date (alternative endpoint)
-router.get('/date/:date', async (req, res) => {
-  try {
-    const { date } = req.params;
-    const userId = req.user.id;
-
-    const logs = await FoodLog.getLogsForDate(userId, date);
-
-    logger.info('Food logs retrieved for date', {
-      userId,
-      date,
-      count: logs.length
-    });
-
-    res.json({
-      success: true,
-      data: logs
-    });
-
-  } catch (error) {
-    logger.error('Error getting food logs for date:', error);
-    res.status(500).json({
-      success: false,
-      error: {
-        message: 'Failed to retrieve food logs',
-        code: 'LOG_RETRIEVAL_ERROR'
-      }
-    });
-  }
-});
-
 // GET /api/logs/household - Get household members and their sharing status
 router.get('/household', async (req, res) => {
   try {
@@ -258,6 +187,83 @@ router.get('/household/:memberId/:date', async (req, res) => {
   }
 });
 
+// The two household routes MUST stay above `GET /:id`. `/logs/household` is a
+// single path segment, so express matched it against `/:id` first and issued
+// `FoodLog.findOne({ _id: 'household' })` — a CastError, answered as a 500.
+// Same shadowing class as the frontend router bug in BURN_REVIEW #16, one
+// layer down. `/logs/household/:memberId/:date` was never shadowed (three
+// segments), but the pair belongs together.
+// GET /api/logs/:id - Get single food log
+router.get('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    const log = await FoodLog.findOne({
+      _id: id,
+      user_id: userId
+    }).populate('food_item_id');
+
+    if (!log) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          message: 'Food log not found',
+          code: 'LOG_NOT_FOUND'
+        }
+      });
+    }
+
+    logger.info('Food log retrieved', { userId, logId: id });
+
+    res.json({
+      success: true,
+      data: log
+    });
+
+  } catch (error) {
+    logger.error('Error getting food log:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        message: 'Failed to retrieve food log',
+        code: 'LOG_RETRIEVAL_ERROR'
+      }
+    });
+  }
+});
+
+// GET /api/logs/date/:date - Get logs for specific date (alternative endpoint)
+router.get('/date/:date', async (req, res) => {
+  try {
+    const { date } = req.params;
+    const userId = req.user.id;
+
+    const logs = await FoodLog.getLogsForDate(userId, date);
+
+    logger.info('Food logs retrieved for date', {
+      userId,
+      date,
+      count: logs.length
+    });
+
+    res.json({
+      success: true,
+      data: logs
+    });
+
+  } catch (error) {
+    logger.error('Error getting food logs for date:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        message: 'Failed to retrieve food logs',
+        code: 'LOG_RETRIEVAL_ERROR'
+      }
+    });
+  }
+});
+
 // POST /api/logs/copy - Copy meal(s) from one date/meal to another
 // Supports copying from own logs or household member's logs
 router.post('/copy', async (req, res) => {
@@ -346,6 +352,11 @@ router.post('/copy', async (req, res) => {
     const targetDate = toUtcMidnight(to_date);
 
     for (const sourceLog of sourceLogs) {
+      // A log whose catalog row was hard-deleted populates to null. Reading
+      // `._id` off it threw mid-loop, so one orphaned log turned the whole
+      // copy into a 500 and left the already-created rows behind. Skip it.
+      if (!sourceLog.food_item_id) continue;
+
       // Determine target meal type
       const targetMealType = to_meal_type || sourceLog.meal_type;
 
@@ -361,6 +372,16 @@ router.post('/copy', async (req, res) => {
 
       const savedLog = await newLog.save();
       newLogs.push(savedLog);
+    }
+
+    if (newLogs.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          message: 'No food logs found for the source date/meal',
+          code: 'NO_LOGS_FOUND'
+        }
+      });
     }
 
     // Update daily summary for destination date

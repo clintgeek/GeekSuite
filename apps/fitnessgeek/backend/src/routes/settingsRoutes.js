@@ -5,7 +5,10 @@ import { authenticateToken } from '../middleware/auth.js';
 import UserSettings from '../models/UserSettings.js';
 import logger from '../config/logger.js';
 import { validate } from '../validation/validate.js';
-import { settingsUpdateSchema, aiUpdateSchema, dashboardUpdateSchema, householdUpdateSchema } from '../validation/schemas/settings.js';
+import { settingsUpdateSchema, aiUpdateSchema, dashboardUpdateSchema, householdUpdateSchema, householdCreateSchema, householdJoinSchema } from '../validation/schemas/settings.js';
+// One implementation of the dot-path rule for this backend — see the module
+// header. `UserSettings.updateSettings` consumes the same helper.
+import { flattenForSet } from '../utils/flattenSettingsUpdate.js';
 
 /**
  * Strip the Garmin password out of anything headed for the client.
@@ -25,53 +28,6 @@ import { settingsUpdateSchema, aiUpdateSchema, dashboardUpdateSchema, householdU
  * the frontend's Settings page rebuilds `garmin` from `enabled` + `username`
  * only, so nothing on the client reads the removed field.
  */
-/**
- * Sub-document paths whose value is one opaque blob (`Schema.Types.Mixed`) and
- * must be written whole rather than merged key by key: Garmin's own OAuth
- * token objects. A per-key merge would leave a previous token's fields beside
- * the new one's.
- */
-const OPAQUE_PATHS = new Set(['garmin.oauth1_token', 'garmin.oauth2_token']);
-
-const isPlainObject = (value) =>
-  value !== null &&
-  typeof value === 'object' &&
-  !Array.isArray(value) &&
-  !(value instanceof Date) &&
-  (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
-
-/**
- * Flatten a nested settings patch into MongoDB dot paths so `$set` MERGES the
- * sub-document instead of replacing it.
- *
- * Arrays (`dashboard.card_order`, `nutrition_goal.weekly_schedule`), Dates,
- * scalars and the Mixed paths above are leaves. `undefined` and empty objects
- * are dropped — `$set: {nutrition_goal: {}}` would reset the sub-document to
- * its schema defaults, which is precisely what this exists to prevent.
- *
- * Twin of `flattenSettingsUpdate` in basegeek's fitnessgeek resolvers; both
- * writers hit the same collection, so they have to agree. The shared home for
- * this is `@geeksuite/schemas/fitnessgeek/userSettings` — see
- * apps/fitnessgeek/DOCS/USER_SETTINGS_SCHEMA.md.
- *
- * `garmin.password` is still encrypted on the way out: the shared schema's
- * `pre(findOneAndUpdate)` hook rewrites it in the dot-path form as well as the
- * nested one (`encryptGarminPasswordIn`), which
- * `__tests__/security/garminPasswordEncryption.test.js` pins.
- */
-function flattenForSet(input, prefix = '', out = {}) {
-  for (const [key, value] of Object.entries(input || {})) {
-    if (value === undefined) continue;
-    const path = prefix ? `${prefix}.${key}` : key;
-    if (isPlainObject(value) && !OPAQUE_PATHS.has(path)) {
-      if (Object.keys(value).length) flattenForSet(value, path, out);
-      continue;
-    }
-    out[path] = value;
-  }
-  return out;
-}
-
 function sanitizeSettings(doc) {
   const sanitized = typeof doc?.toObject === 'function' ? doc.toObject() : { ...doc };
   if (sanitized.garmin) {
@@ -354,7 +310,7 @@ router.get('/household', async (req, res) => {
 });
 
 // POST /api/settings/household/create - Create a new household
-router.post('/household/create', async (req, res) => {
+router.post('/household/create', validate({ body: householdCreateSchema }), async (req, res) => {
   try {
     const userId = req.user.id;
     const { display_name } = req.body;
@@ -408,7 +364,7 @@ router.post('/household/create', async (req, res) => {
 });
 
 // POST /api/settings/household/join - Join an existing household
-router.post('/household/join', async (req, res) => {
+router.post('/household/join', validate({ body: householdJoinSchema }), async (req, res) => {
   try {
     const userId = req.user.id;
     const { household_id, display_name } = req.body;

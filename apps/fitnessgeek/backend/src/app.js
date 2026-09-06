@@ -11,7 +11,6 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import axios from 'axios';
 import dotenv from 'dotenv';
-import crypto from 'crypto';
 import { createHttpLogger } from '@geeksuite/logger';
 import path from 'path';
 import { fileURLToPath } from 'node:url';
@@ -123,7 +122,11 @@ app.use(cors({
     'Authorization',
     'X-Requested-With',
     'Accept',
-    'Origin'
+    'Origin',
+    // @geeksuite/auth's request interceptor adds this to every non-GET call
+    // this app's axios instance makes; without it on the allow-list a
+    // cross-origin preflight for a REST mutation fails outright.
+    'X-CSRF-Token'
   ]
 }));
 
@@ -196,9 +199,16 @@ app.use('/api/influx', influxRoutes);
 const BASEGEEK_URL = (process.env.BASEGEEK_URL || 'https://basegeek.clintgeek.com').replace(/\/$/, '');
 app.all('/graphql', async (req, res) => {
   try {
+    // Forward the double-submit CSRF header as received. Production routes
+    // /graphql straight to basegeek through nginx, so this proxy is the dev
+    // path only — but dropping the header here means a dev session 403s the
+    // moment CSRF_TOKEN flips to enforce, for no reason. Same rule as the
+    // auth proxies: forward what the browser sent, never synthesize a token
+    // from the replayed cookie. (BURN_REVIEW P2 (n).)
     const headers = { 'content-type': 'application/json' };
     if (req.headers.authorization) headers.authorization = req.headers.authorization;
     if (req.headers.cookie) headers.cookie = req.headers.cookie;
+    if (req.headers['x-csrf-token']) headers['x-csrf-token'] = req.headers['x-csrf-token'];
 
     const response = await axios({
       method: req.method,
@@ -248,9 +258,17 @@ app.use('*', (req, res) => {
   });
 });
 
-// Error handling middleware
+// Error handling middleware.
+//
+// `req.log` is attached by createHttpLogger a few middlewares down, so it is
+// NOT present for anything thrown ahead of it — `express.json()`'s SyntaxError
+// on a malformed body (a 400 any client can produce) and cors()'s
+// disallowed-origin Error both land here with `req.log` undefined. Calling
+// `req.log.error` then threw inside the error handler itself, which express
+// answers with its own HTML 500: no log line, and the JSON error shape every
+// client expects replaced by markup.
 app.use((error, req, res, next) => {
-  req.log.error({ err: error }, 'Unhandled error');
+  (req.log || logger).error({ err: error }, 'Unhandled error');
   res.status(error.statusCode || 500).json({
     success: false,
     error: {

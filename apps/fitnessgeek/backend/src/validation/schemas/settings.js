@@ -165,9 +165,27 @@ const settingsUpdateSchema = z.preprocess(stripMongoMeta, z.object({
   household: householdNestedSchema.optional(),
 }).strict());
 
+// ---- POST /api/settings/household/{create,join} -------------------------
+// These two took their bodies completely raw. `household_id.toUpperCase()` on
+// a non-string threw a TypeError the catch answered as a 500, and a non-string
+// `display_name` reached mongoose and came back as a 500 too. Both are 400s.
+const householdCreateSchema = z.object({
+  display_name: z.string().trim().max(100).optional(),
+}).strict();
+
+const householdJoinSchema = z.object({
+  // Deliberately just "a non-empty string, bounded". The bug being fixed is
+  // that a NON-string reached `household_id.toUpperCase()` and threw, which the
+  // route's catch answered as a 500; pinning the shape to the 12-hex code
+  // `/household/create` mints would additionally lock out any code minted
+  // before that format, and that is a product decision, not a bug fix.
+  household_id: z.string().trim().min(1, 'household_id is required').max(64),
+  display_name: z.string().trim().max(100).optional(),
+}).strict();
+
 const aiUpdateSchema = z.preprocess(stripMongoMeta, aiSchema);
 const dashboardUpdateSchema = z.preprocess(stripMongoMeta, dashboardSchema);
 const householdUpdateSchema = z.preprocess(stripMongoMeta, householdPutSchema);
 
-export { settingsUpdateSchema, aiUpdateSchema, dashboardUpdateSchema, householdUpdateSchema };
-export default { settingsUpdateSchema, aiUpdateSchema, dashboardUpdateSchema, householdUpdateSchema };
+export { settingsUpdateSchema, aiUpdateSchema, dashboardUpdateSchema, householdUpdateSchema, householdCreateSchema, householdJoinSchema };
+export default { settingsUpdateSchema, aiUpdateSchema, dashboardUpdateSchema, householdUpdateSchema, householdCreateSchema, householdJoinSchema };

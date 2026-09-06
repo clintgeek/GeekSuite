@@ -14,6 +14,196 @@ gateway's typeDefs. See `DOCS/BURN_REVIEW.md` #16 and
 
 ---
 
+## Going-over 2026-09-05 — the full-tree read
+
+*A senior-inheriting-it read of every route, resolver, service, component, test
+and config in `apps/fitnessgeek/**`, after the burn. What follows is what was
+wrong and what is now true.*
+
+### Fixed — frontend
+
+- **The Medications page was empty, and had been since `cf3254c`.**
+  `medsService` unwraps the transport envelope (`unwrap()` — `list()`,
+  `search()` and `getDetails()` resolve to the payload, not `{data: payload}`),
+  but `pages/Medications.jsx` still read `.data` off every one of those results.
+  So `setMyMeds(r.data || [])` was always `[]`, search never showed a
+  candidate, strengths and suggested indications never loaded, and
+  `saveMedication`'s `r.data.id` was a TypeError. The page now reads the
+  unwrapped values. Pinned by `src/pages/__tests__/Medications.test.jsx`.
+- **`addFitnessMedication` / `updateFitnessMedication` selected only `{ id }`,**
+  so an add or edit spliced a bare `{id}` stub into the list and the row
+  rendered blank until a reload. Both now select the same field list
+  `GET_MEDICATIONS` does (`MEDICATION_FIELDS` in `apiService.js` — one list, not
+  three copies).
+- **Every barcode scan returned an arbitrary food.**
+  `fitnessGeekService.getFoodByBarcode` went through the GraphQL router;
+  `fitnessFoods(search: String)` has no barcode argument, so the barcode was
+  dropped, the query answered with the unfiltered catalog, and BarcodeScanner
+  took `[0]`. It goes to `GET /api/foods?barcode=` now — REST, which is where
+  barcode belongs per "Frontend — where the writes go" below.
+- **The Garmin heart-rate chart on `/blood-pressure` was permanently empty.**
+  `pages/BloodPressure.jsx` fetched it with `fitnessGeekService.get(...)`, i.e.
+  the GraphQL router, which has no mapping for
+  `/fitness/garmin/heart-rate/:date` — every call threw "Rest proxy gap" into a
+  `logger.warn`. It calls `getGarminHeartRate()` (REST) now.
+- **"Export CSV" on `/reports` always failed.** `reportsService.export` went
+  through the GraphQL router too; `/food-reports/export` has no mapping and
+  returns `text/csv` anyway. It goes to `restClient` with
+  `responseType: 'blob'`.
+- **`PUT /settings/dashboard` and `/settings/ai` could never succeed.** Those
+  routes take the SUB-DOCUMENT as their body, and the router handed it to the
+  gateway as the whole `FitnessUserSettingsInput` — a GraphQL input-coercion
+  error (`Field "show_current_weight" is not defined by type …`). The router
+  nests them under `dashboard` / `ai` now. Latent today: nothing imports
+  `hooks/useSettings.js`, so `SettingsContext`'s dashboard writer has no caller.
+- **Blood-pressure dates rendered a day early west of UTC, with a fake time.**
+  `log_date` is a calendar date at UTC midnight; `BPLogList` rendered it with a
+  plain `toLocaleDateString` and printed `toLocaleTimeString` beside it — always
+  7:00 PM, UTC midnight in Central. Now `displayCalendarDate`, and the time is
+  gone (a "Today" marker replaces it, computed
+  `utcDateString(log_date) === localDateString()`). `BPReport` had the same
+  class one level up: it derived the ISO week from `getDay()`/`setDate()` —
+  local accessors on a UTC-midnight value — so a Sunday reading was bucketed
+  into the week before. UTC end to end now, and the reporting period prints as
+  `YYYY-MM-DD` instead of a raw ISO instant. (BURN_REVIEW P2 (c).)
+- **Medication "days left" ticked down at 19:00 Central.**
+  `computeRemainingAndRunout` differenced a UTC-midnight `supply_start_date`
+  against a raw local `new Date()`. Both sides are normalised to UTC midnight
+  now, so it counts whole calendar days. (BURN_REVIEW P2 (f).)
+- **"Test Connection" always said Connection Failed.** `InfluxDBSettings` read
+  `response.connected`; `GET /api/influx/status` answers
+  `{ userEnabled, serverConnected, error }` and never sent `connected`,
+  `database` or `measurementCount`. It reads `serverConnected` now and the
+  success branch no longer prints `undefined`.
+- **One AI hiccup blanked the whole Reports page.** `Promise.all` over two
+  report reads and two AI reads meant a provider failure rejected the batch.
+  `Promise.allSettled`; the page errors only if BOTH report halves fail.
+
+### Fixed — backend
+
+- **`GET /api/logs/household` was shadowed by `GET /api/logs/:id`** — one path
+  segment, so express matched `/:id` first and issued
+  `FoodLog.findOne({_id: 'household'})`, a CastError answered as a 500. Both
+  household routes now sit above `/:id`. Same shadowing class as BURN_REVIEW
+  #16, one layer down.
+- **`POST /api/meds/:id/logs` never checked the medication was the caller's.**
+  It stamped the caller's `user_id` on the row but took `medication_id`
+  straight from the URL, and `GET /logs/by-date` populates that reference — so a
+  log written against a stranger's medication id handed back that stranger's
+  whole medication document. The route 404s on a medication that is not yours,
+  and the body now has a zod schema (a bad `date` or `time_of_day` is a 400, not
+  a 500 from mongoose).
+- **The app-level error handler threw inside itself.** `req.log` is attached by
+  `createHttpLogger`, which is mounted AFTER `express.json()` and `cors()` — so
+  a malformed JSON body (a 400 any client can produce) reached the handler with
+  `req.log` undefined, and `req.log.error(...)` threw. Express then answered
+  with its own HTML 500: no log line, and the `{success, error, timestamp}`
+  envelope replaced by markup. It falls back to the process logger now.
+  `src/utils/reqLogger.js` does the same for the eight route handlers that call
+  `req.log` inside their own `catch` — a catch that throws sends no response at
+  all, so the request hangs rather than answering the 500 it meant to.
+- **`UserSettings.updateSettings` replaced sub-documents.** It was the one
+  writer of `usersettings` still `$set`-ing whole nested objects (see "Settings
+  writes are PARTIAL" below — the other two were fixed in BURN_REVIEW #5/#6).
+  `updateSettings(id, {ai: {enabled: false}})` deleted `ai.features`; a partial
+  `nutrition_goal` deleted bmr, tdee, weekly_schedule and keto. The dot-path
+  rule now lives in `src/utils/flattenSettingsUpdate.js` and both this static
+  and `PUT /api/settings` consume it. Callers: `PUT /settings/ai`,
+  `PUT /settings/dashboard`, `POST /goals`.
+- **`POST /api/goals` discarded every weight goal it was given.**
+  `UserSettings.weight_goal` declares `startWeight` / `targetWeight` /
+  `startDate` / `goalDate` — camelCase, and the two dates are `YYYY-MM-DD`
+  STRINGS. The route wrote `start_weight` / `target_weight` / `start_date` /
+  `goal_date` as Dates: not schema paths, so mongoose strict mode dropped all
+  four, and `GET /api/goals` read them back as `undefined`. It also spread the
+  existing mongoose sub-document (`{...subdoc}` copies `$__`/`_doc`, not the
+  fields). Both fixed. Reachable only by direct API call today — the frontend
+  routes `/goals` to the gateway.
+- **`PUT /api/user/profile` answered 400 to every save.** It destructured
+  `{username, email, age, height, gender}` off `req.body`, but its only caller
+  (`services/userService.js`) sends `{profile: {firstName, lastName, age,
+  height, gender}}` — basegeek's own shape. Every field read `undefined` and the
+  route replied `NO_VALID_FIELDS`, so the Profile page's Save and
+  AIGoalPlanner's profile step never worked. Both shapes are accepted now, and
+  `firstName`/`lastName` are relayed instead of dropped.
+- **`GET /api/meds/search` answered a different SHAPE when RxNav failed** — the
+  detail route's `{ingredient, strengths, …}` object where the success path
+  returns an array, so a caller that mapped over it got a TypeError. It answers
+  `[]` and logs the upstream error.
+- **`POST /api/logs/copy` 500'd on one orphaned log.** A source log whose
+  catalog row was hard-deleted populates to `null`; reading `._id` off it threw
+  mid-loop and left the rows already created behind. Orphans are skipped, and a
+  source day of nothing but orphans is the same 404 an empty day gets.
+- **`POST /settings/household/create|join` took their bodies raw** — a
+  non-string `household_id` threw at `.toUpperCase()` and came back as a 500.
+  Both are zod-validated now. `household_id` is deliberately just "a non-empty
+  bounded string", not the 12-hex shape `/create` mints: tightening that would
+  lock out any older code, which is a product decision, not a bug fix.
+- **The dev `/graphql` proxy stripped `X-CSRF-Token`** (BURN_REVIEW P2 (n)) and
+  this backend's CORS `allowedHeaders` did not list it, so a cross-origin
+  preflight for any REST mutation `@geeksuite/auth` decorates would fail. Both
+  fixed; the proxy forwards the header as received and never synthesizes one,
+  same rule as the auth proxies.
+- `PATCH /api/user/settings` no longer 500s on `healthBaselines: null`.
+
+### Left in place, with reasons
+
+- **`goals_met.protein` / `.carbs` / `.fat` can never be true.**
+  `evaluateDailyGoalsMet` reads `goals.protein_grams` / `carbs_grams` /
+  `fat_grams` off `UserSettings.nutrition_goal`, which declares none of them.
+  `POST /api/goals` used to *write* those three keys, which mongoose dropped in
+  silence; that write is now gone rather than "fixed", because deciding what a
+  macro goal on this document IS — a gram target, a ratio
+  (`protein_g_per_lb_goal` already exists), or a read of the `nutritiongoals`
+  collection — is a schema-shape decision. `DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md`
+  §12 follow-up #8.
+- **`DailySummary.updateFromLogs` ignores `FoodLog.nutrition`** and recomputes
+  from the CURRENT catalog row, so editing a food restates every past day that
+  used it, and a day recomputed from un-populated logs is all zeros. Two
+  features of the same data disagreeing about which number is true; picking one
+  is §12 follow-up #9, not a bug fix.
+- **`FoodLog.nutrition.*` has no `min`** where `FoodItem.nutrition.*` and
+  `DailySummary.totals.*` both floor at 0 — a schema-shape change on a shared
+  module both apps consume. §12 follow-up #13.
+- **`BarcodeScanner` loads ZXing from unpkg at scan time** (`<script
+  src="https://unpkg.com/@zxing/library@0.19.1/…">`). A runtime CDN dependency
+  on the food-logging path, and the one third-party origin the service worker's
+  `cacheWillUpdate` guard exists to cover. Vendoring it is a dependency
+  decision (TODO_ORDER Q52) — reported, not taken.
+- **`routes/aiCoachRoutes.js` is caller-less and would 500 on real data.**
+  Nothing in the frontend calls `/api/ai-coach/*`; all four handlers read
+  `log.food_item_id.nutrition.*` with no guard, so one log whose food was
+  deleted throws, and `/meal-suggestions` picks its day off the server clock
+  (`new Date()` + `setUTCHours(0,…)`, i.e. UTC's today). Left whole rather than
+  half-fixed: whether this router lives at all is a Q22-class call.
+- **`GET /api/summary/today` and `goalRoutes`' `todayIndex` still guess the day
+  from the server clock.** Both are REST-only and caller-less (the frontend
+  sends `localDateString()` through the gateway), and both were already recorded
+  as open under "Per-day reads take the browser's date" below. `summaryRoutes`'
+  comment claiming `format(new Date(), …)` is "local today, not the UTC
+  instant" is wrong — every container runs UTC (BURN_REVIEW #13).
+- **Caller-less router entries that would misbehave if revived**, all reported
+  rather than changed: `apiService`'s `GET /goals` answers `derivedMacros`
+  while `goalsService.getGoals()` expects `{nutrition, weight}`;
+  `POST /goals` maps to `setNutritionGoals` whose input is the
+  `nutritiongoals` shape, not `saveGoals`'s; `GET /meals/:id` sends an ObjectId
+  as `mealType`; `getMeals(mealType, search)` drops both params (matcherService
+  survives on its own local scoring); `bpService.getBPStats` answers the whole
+  log list.
+- **InfluxDB reads are not user-scoped** — `influxService.getComprehensiveDaily(date)`
+  takes no user id, and `checkInfluxEnabled` gates on the caller's own flag.
+  Correct for a single-instance integration, flagged so the choice is explicit
+  (same shape as bookgeek's owner-less `Book`).
+
+### Docs corrected here
+
+- The Commands section said "12 suites / 104 tests"; the backend suite is
+  **18 suites / 321 tests** as of this pass (278 before it).
+- The frontend suite is **61** (37 before it); `pnpm lint` is **54** warnings,
+  unchanged.
+
+---
+
 ## Runtime
 
 | | |
@@ -301,10 +491,11 @@ pnpm install                                   # links workspace:* deps
 # backend (dev)
 cd apps/fitnessgeek/backend && npm run dev     # nodemon, port 3001
 
-# backend tests — 12 suites / 104 tests, hermetic (no Mongo, no Redis, no network)
+# backend tests — 18 suites / 321 tests, hermetic (no Mongo, no Redis, no network)
 cd apps/fitnessgeek/backend && npm test
 
-# frontend tests — vitest + RTL, jsdom. Config is vitest.config.js, NOT vite.config.js
+# frontend tests — 9 files / 61 tests. vitest + RTL, jsdom.
+# Config is vitest.config.js, NOT vite.config.js
 cd apps/fitnessgeek/frontend && pnpm test
 
 # build the production image exactly as CI does (repo root as context)

@@ -21,7 +21,7 @@ import {
 import BPChartNivo from './BPChartNivo.jsx';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
 import { categorizeBP } from '../../utils/bpUtils.js';
-import { localDateString } from '@geeksuite/utils';
+import { displayCalendarDate, localDateString, toUtcMidnight, utcDateString } from '@geeksuite/utils';
 import { ThemeProvider } from '@mui/material/styles';
 import { createAppTheme } from '../../theme/theme';
 
@@ -44,22 +44,26 @@ const BPReport = ({ bpLogs, onClose }) => {
     const weekMap = new Map();
 
     sortedLogs.forEach(log => {
-      const date = new Date(log.log_date);
-      const weekStart = new Date(date);
-      weekStart.setDate(date.getDate() - date.getDay());
-      weekStart.setHours(0, 0, 0, 0);
+      // `log_date` is a calendar date at UTC midnight. Reading its weekday with
+      // the LOCAL accessors (`getDay`/`getDate`/`setHours`) gave the previous
+      // day's weekday for every reader west of UTC, so a Sunday reading was
+      // bucketed into the week before. Stay in UTC end to end.
+      const date = toUtcMidnight(log.log_date);
+      const weekStart = new Date(date.getTime());
+      weekStart.setUTCDate(date.getUTCDate() - date.getUTCDay());
 
-      const weekKey = weekStart.toISOString().split('T')[0];
+      const weekKey = utcDateString(weekStart);
 
       if (!weekMap.has(weekKey)) {
+        const weekEnd = new Date(weekStart.getTime());
+        weekEnd.setUTCDate(weekStart.getUTCDate() + 6);
         weekMap.set(weekKey, {
           weekStart,
-          weekEnd: new Date(weekStart),
+          weekEnd,
           readings: [],
           systolicRange: { min: Infinity, max: -Infinity },
           diastolicRange: { min: Infinity, max: -Infinity }
         });
-        weekMap.get(weekKey).weekEnd.setDate(weekStart.getDate() + 6);
       }
 
       const week = weekMap.get(weekKey);
@@ -98,15 +102,19 @@ const BPReport = ({ bpLogs, onClose }) => {
       weeklyData,
       categoryCounts,
       dateRange: {
-        start: sortedLogs[0].log_date,
-        end: sortedLogs[sortedLogs.length - 1].log_date
+        // Plain YYYY-MM-DD read in UTC — these are printed verbatim in the
+        // report header and the markdown export, where a raw ISO instant
+        // ("2026-09-05T00:00:00.000Z") was both ugly and a day out.
+        start: utcDateString(sortedLogs[0].log_date),
+        end: utcDateString(sortedLogs[sortedLogs.length - 1].log_date)
       }
     };
   }, [bpLogs]);
 
+  // Both boundaries are UTC-midnight calendar dates — render them as such.
   const formatWeekRange = (start, end) => {
-    const startStr = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    const endStr = end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const startStr = displayCalendarDate(start, 'en-US', { month: 'short', day: 'numeric' });
+    const endStr = displayCalendarDate(end, 'en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     return `${startStr} - ${endStr}`;
   };
 

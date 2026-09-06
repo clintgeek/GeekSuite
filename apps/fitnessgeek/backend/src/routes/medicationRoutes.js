@@ -7,11 +7,13 @@ import rx from '../services/rxService.js';
 import { suggestIndications } from '../services/indicationMap.js';
 import logger from '../config/logger.js';
 import { validate } from '../validation/validate.js';
-import { createMedicationSchema, updateMedicationSchema } from '../validation/schemas/medication.js';
+import { createMedicationSchema, updateMedicationSchema, createMedicationLogSchema } from '../validation/schemas/medication.js';
 // The `med_type` enum, from the shared schema — the same array the model and
 // the zod validator above enforce. The two defaulting ternaries below used to
 // restate it inline.
 import { MED_TYPES } from '@geeksuite/schemas/fitnessgeek/medication';
+import { toUtcMidnight, utcDayRange } from '@geeksuite/utils';
+import { reqLogger } from '../utils/reqLogger.js';
 
 // Search medications (RxNav approximate search)
 router.get('/search', authenticateToken, async (req, res) => {
@@ -50,13 +52,12 @@ router.get('/search', authenticateToken, async (req, res) => {
     }
     res.json({ success: true, data: results });
   } catch (error) {
-    try {
-      // Fallback: if related lookups failed, still respond with empty structure
-      return res.json({ success: true, data: { ingredient: null, strengths: [], atcClasses: [], epcClasses: [], suggested: [] } });
-    } catch (e) {
-      // As a final guard, avoid 500s
-      res.json({ success: true, data: { ingredient: null, strengths: [], atcClasses: [], epcClasses: [], suggested: [] } });
-    }
+    // RxNav being down should not 500 the page, but the fallback has to be the
+    // SAME shape as the success path. It used to answer with the *detail*
+    // route's object (`{ ingredient, strengths, … }`), so a caller that mapped
+    // over the result got a TypeError instead of an empty list.
+    reqLogger(req).error({ err: error }, '[GET /meds/search] RxNav lookup failed');
+    return res.json({ success: true, data: [] });
   }
 });
 
@@ -173,7 +174,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
     }
     res.json({ success: true, data: med });
   } catch (error) {
-    req.log.error({ err: error }, '[GET /meds/:id] Error');
+    reqLogger(req).error({ err: error }, '[GET /meds/:id] Error');
     res.status(500).json({ success: false, error: { message: error.message } });
   }
 });
@@ -217,25 +218,32 @@ router.put('/:id', authenticateToken, validate({ body: updateMedicationSchema })
     const saved = await med.save();
     res.json({ success: true, data: saved });
   } catch (error) {
-    req.log.error({ err: error }, '[PUT /meds/:id] Error');
+    reqLogger(req).error({ err: error }, '[PUT /meds/:id] Error');
     res.status(500).json({ success: false, error: { message: error.message, stack: error.stack } });
   }
 });
 
 // Log a taken dose (or mark missed)
-router.post('/:id/logs', authenticateToken, async (req, res) => {
+router.post('/:id/logs', authenticateToken, validate({ body: createMedicationLogSchema }), async (req, res) => {
   try {
     const userId = req.user?.id;
     const medId = req.params.id;
     const { date, time_of_day, taken = true, dose_value = null, dose_unit = null, notes = '' } = req.body || {};
-    if (!date || !time_of_day) {
-      return res.status(400).json({ success: false, error: { message: 'date and time_of_day required' } });
+
+    // The medication has to be THIS user's. `GET /logs/by-date` populates
+    // `medication_id`, so a log written against a stranger's medication id
+    // handed that stranger's whole medication document (name, rxcui, sig,
+    // notes) back to whoever wrote the log. The row's own `user_id` was never
+    // the problem; the reference was.
+    const med = await Medication.findOne({ _id: medId, user_id: userId }).select('_id');
+    if (!med) {
+      return res.status(404).json({ success: false, error: { message: 'Medication not found' } });
     }
-    const d = new Date(date);
+
     const log = await MedicationLog.create({
       user_id: userId,
-      medication_id: medId,
-      log_date: d,
+      medication_id: med._id,
+      log_date: toUtcMidnight(date),
       time_of_day,
       taken: !!taken,
       dose_value,
@@ -244,6 +252,7 @@ router.post('/:id/logs', authenticateToken, async (req, res) => {
     });
     res.json({ success: true, data: log });
   } catch (error) {
+    reqLogger(req).error({ err: error }, '[POST /meds/:id/logs] Error');
     res.status(500).json({ success: false, error: { message: error.message } });
   }
 });
@@ -254,10 +263,10 @@ router.get('/logs/by-date', authenticateToken, async (req, res) => {
     const userId = req.user?.id;
     const date = req.query.date;
     if (!date) return res.status(400).json({ success: false, error: { message: 'date required' } });
-    const start = new Date(date);
-    start.setUTCHours(0,0,0,0);
-    const end = new Date(date);
-    end.setUTCHours(23,59,59,999);
+    // A bare `new Date('2026-09-05')` is already UTC midnight, but a full ISO
+    // instant is not — `toUtcMidnight` folds both onto the calendar day the
+    // logs were written under (see @geeksuite/utils).
+    const { start, end } = utcDayRange(date);
     const logs = await MedicationLog.find({ user_id: userId, log_date: { $gte: start, $lte: end } })
       .populate('medication_id')
       .sort({ created_at: -1 });
@@ -267,7 +276,6 @@ router.get('/logs/by-date', authenticateToken, async (req, res) => {
   }
 });
 
-export default router;
 // Delete a medication and any associated logs
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
@@ -285,4 +293,4 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   }
 });
 
-
+export default router;

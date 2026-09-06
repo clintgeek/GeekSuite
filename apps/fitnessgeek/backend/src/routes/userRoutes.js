@@ -83,18 +83,38 @@ router.get('/profile', async (req, res) => {
  * PUT /api/users/profile
  * Update user profile information
  */
+// Profile fields this route relays to basegeek. `firstName`/`lastName` are on
+// the list because the Profile page has always sent them and this route used to
+// drop them on the floor.
+const PROFILE_FIELDS = ['firstName', 'lastName', 'age', 'height', 'gender'];
+
 router.put('/profile', async (req, res) => {
   try {
     const userId = req.user.id;
-    const { username, email, age, height, gender } = req.body;
+    const body = req.body || {};
 
-    // Validate input
-    const updates = {};
-    if (username !== undefined) updates.username = username;
-    if (email !== undefined) updates.email = email;
-    if (age !== undefined) updates.age = age;
-    if (height !== undefined) updates.height = height;
-    if (gender !== undefined) updates.gender = gender;
+    // Accept BOTH shapes. The frontend (`userService.updateProfile`) sends
+    // `{ profile: { firstName, lastName, age, height, gender } }`, which is the
+    // shape basegeek itself takes; this route only ever destructured the flat
+    // spelling, so every save from the Profile page and from AIGoalPlanner's
+    // "save profile" step came back 400 NO_VALID_FIELDS.
+    const nested = (body.profile && typeof body.profile === 'object') ? body.profile : {};
+    const readField = (key) => (body[key] !== undefined ? body[key] : nested[key]);
+
+    const username = readField('username');
+    const email = readField('email');
+
+    const profile = {};
+    for (const key of PROFILE_FIELDS) {
+      const value = readField(key);
+      if (value !== undefined) profile[key] = value;
+    }
+
+    const updates = {
+      ...(username !== undefined ? { username } : {}),
+      ...(email !== undefined ? { email } : {}),
+      ...profile
+    };
 
     if (Object.keys(updates).length === 0) {
       return res.status(400).json({
@@ -105,11 +125,6 @@ router.put('/profile', async (req, res) => {
         }
       });
     }
-
-    const profile = {};
-    if (age !== undefined) profile.age = age;
-    if (height !== undefined) profile.height = height;
-    if (gender !== undefined) profile.gender = gender;
 
     const payload = {
       ...(username !== undefined ? { username } : {}),
@@ -144,6 +159,8 @@ router.put('/profile', async (req, res) => {
       data: {
         username: user.username,
         email: user.email,
+        firstName: user.profile?.firstName,
+        lastName: user.profile?.lastName,
         age: user.profile?.age,
         height: user.profile?.height,
         gender: user.profile?.gender
@@ -237,7 +254,10 @@ router.patch('/settings', async (req, res) => {
       logger.info('InfluxDB integration toggled', { userId, influxEnabled });
     }
 
-    if (healthBaselines !== undefined) {
+    if (healthBaselines !== undefined && healthBaselines !== null) {
+      if (typeof healthBaselines !== 'object' || Array.isArray(healthBaselines)) {
+        return res.status(400).json({ error: 'healthBaselines must be an object' });
+      }
       settings.healthBaselines = {
         weeklyHRV: healthBaselines.weeklyHRV,
         restingHR: healthBaselines.restingHR,

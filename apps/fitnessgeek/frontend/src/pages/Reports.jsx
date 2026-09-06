@@ -62,16 +62,29 @@ const Reports = () => {
     setError(null);
     try {
       const days = parseInt(range, 10);
-      const [overviewData, trendsData, weeklyReport, trendSummary] = await Promise.all([
+      // allSettled, not all: the two AI panels go out to a model provider and
+      // the two report panels do not. With Promise.all a single AI failure
+      // rejected the whole batch, so a provider hiccup blanked the food report
+      // the user actually came for and replaced the page with an error.
+      const [overviewData, trendsData, weeklyReport, trendSummary] = await Promise.allSettled([
         reportsService.getOverview({ days }),
         reportsService.getTrends({ days }),
         insightsService.getWeeklyReport({ days }),
         insightsService.getTrendWatch({ days: Math.max(days, 21) })
       ]);
-      setOverview(overviewData?.data || overviewData);
-      setTrends(trendsData?.data || trendsData);
-      setWeeklyCoach(weeklyReport?.data || weeklyReport);
-      setTrendWatch(trendSummary?.data || trendSummary);
+
+      const value = (result) => (result.status === 'fulfilled' ? (result.value?.data ?? result.value) : null);
+
+      setOverview(value(overviewData));
+      setTrends(value(trendsData));
+      setWeeklyCoach(value(weeklyReport));
+      setTrendWatch(value(trendSummary));
+
+      // Only the report halves are load-bearing for this page; the AI panels
+      // render their own empty state.
+      if (overviewData.status === 'rejected' && trendsData.status === 'rejected') {
+        setError(overviewData.reason?.message || 'Unable to load reports');
+      }
     } catch (err) {
       console.error(err);
       setError(err.message || 'Unable to load reports');

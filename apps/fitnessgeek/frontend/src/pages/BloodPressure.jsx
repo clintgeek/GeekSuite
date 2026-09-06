@@ -162,9 +162,12 @@ const BloodPressure = () => {
   const loadHRSeries = async (date) => {
     try {
       const ymd = (date || localDateString());
-      const resp = await fitnessGeekService.get(`/fitness/garmin/heart-rate/${ymd}`);
-      const data = resp.data || resp?.data?.data || resp;
-      if (data && data.series) setHrSeries(data.series);
+      // `getGarminHeartRate` goes to this app's REST backend. Calling
+      // `fitnessGeekService.get(...)` here sent the path through the GraphQL
+      // router instead, which has no mapping for /fitness/garmin/heart-rate —
+      // so every call threw "Rest proxy gap" and the chart was always empty.
+      const data = await fitnessGeekService.getGarminHeartRate(ymd);
+      if (data && Array.isArray(data.series)) setHrSeries(data.series);
     } catch (e) {
       logger.warn('Failed to load HR series');
     }
