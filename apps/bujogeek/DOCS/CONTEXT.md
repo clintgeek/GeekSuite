@@ -538,3 +538,136 @@ fields and `utils/dueDate.js` cost under a kilobyte).
   them by hand in `taskService.js` and omits it), so editing one still posts
   `collectionId: null`. Harmless today because a virtual has no filing to lose,
   but it is a gateway-side gap, not a client one.
+
+---
+
+## Night 2 — 2026-09-06 — the AI weekly review draft (stream R114)
+
+`DOCS/AI_IDEAS.md` idea #1, built against the `aiFeatureRunner` contract that
+landed at `a7f432d`. What is new, one line each:
+
+**Gateway (`apps/basegeek/packages/api/src/graphql/bujogeek/`)**
+
+- `services/reviewService.js` — gathers the week's deterministic facts and
+  drafts from them. `gatherFacts`, `buildFallbackDraft`, `reconcileDraft`,
+  `factsForModel`, `reviewDraft`.
+- `typeDefs.js` — `reviewDraft(weekStart: String!): ReviewDraftResult!` plus
+  `ReviewFacts` / `ReviewCounts` / `ReviewHabitFact` / `ReviewTaskFact` /
+  `ReviewBlockedFact` / `ReviewCarryForward` / `ReviewDraft` / `AIProvenance`;
+  `aiDrafted: Boolean` on `JournalEntry` and on both journal mutations.
+- `resolvers.js` — the `reviewDraft` query; it reads the opt-in itself.
+- `validation.js` — `reviewDraftArgsSchema` (`calendarDateField` + a Monday check).
+- `models/JournalEntry.js` — `aiDrafted: Boolean` (default false).
+- `src/__tests__/bujogeekReviewDraft.test.js` — 20 cases.
+
+**Frontend (`apps/bujogeek/frontend/src/`)**
+
+- `components/review/ReviewDraftCard.jsx` — the card, behind the opt-in, on the
+  Weekly Review tab only.
+- `components/review/ReviewNoteDialog.jsx` — the written review editor (new; see
+  the decisions below).
+- `utils/reviewWeek.js`, `utils/provenanceLine.js`, `hooks/useBujoPreferences.js`.
+- `pages/ReviewPage.jsx` — wires the card, the editor, "Use as review" and
+  "Add as task"; `pages/SettingsPage.jsx` — an **Assistance** section with the
+  toggle; `graphql/queries.js` — `GET_REVIEW_DRAFT`; `graphql/mutations.js` —
+  `aiDrafted` on `CREATE_JOURNAL_ENTRY`.
+- Tests: `__tests__/components/ReviewDraftCard.test.jsx` (13),
+  `__tests__/components/ReviewNoteDialog.test.jsx` (3),
+  `__tests__/utils/reviewWeek.test.js` (4).
+
+### The decisions, and why
+
+**There was no "review document", so the weekly `JournalEntry` became one.**
+BuJoGeek's `/review` has always been a *triage* ritual — keep / tomorrow /
+backlog / cancel — with a "Weekly Review" mode that had nowhere to write the
+review down. The only written-review shape in the schema is `JournalEntry`
+(`type: 'weekly'`), whose three mutations have been wired since inception with
+**no call site in the app** (the going-over of 2026-09-05 recorded exactly
+that). `ReviewNoteDialog` is that call site: a plain title + body form saving
+through the existing `createJournalEntry`. The AI card seeds it and nothing
+more — a review typed by hand here is the same row minus the mark.
+
+**The provenance mark is a new field, not a repurposed one.** `JournalEntry`
+has no free boolean and its `metadata` sub-document is mood/energy/location/
+weather — not a flag bag, and not exposed through GraphQL at all. Rather than
+overload it or smuggle the mark in as a tag (which would pollute the tag
+browser), `aiDrafted: Boolean` was added to the model and to both journal
+mutations. *Parity note:* unlike fitnessgeek's `UserSettings` there is no
+second declaration of this schema anywhere — bujogeek's REST layer went in
+`3af40cc` — so adding a field is this model plus `typeDefs.js`, with no
+allow-list to keep in step and no tripwire needed.
+
+**The opt-in lives in the store the suite already has.** BuJoGeek persists no
+settings of its own: theme is the suite-global `preferences` bag and reminders
+are a browser permission. The right home was `@geeksuite/user`'s per-app bag —
+`User.appPreferences.bujogeek`, `PATCH /api/users/preferences/bujogeek`, already
+bootstrapped by `AppBootstrapper` — reached through the new
+`useBujoPreferences()`. It is free-form (`Map` of `Mixed`), so `aiReviewDraft`
+needed no schema change. **The resolver reads the same preference**, so a client
+bug cannot spend a model call: opted out, `reviewDraft` still answers, with the
+deterministic draft and `provenance.reason: "opted_out"`.
+
+**The week is Monday-to-Sunday and the gateway insists on it.** `weekStart` is
+a `calendarDateField` that must be a Monday; anything else is `BAD_USER_INPUT`
+before a row is read. The client sends `localDateString(startOfWeek(now, {
+weekStartsOn: 1 }))` — the *local* Monday. `toISOString()` would be the previous
+Sunday anywhere west of UTC and the gateway would (correctly) reject it: the
+same class of bug as `DOCS/BURN_REVIEW.md` #8.
+
+**Facts are computed; the model only words them.** Counts come from one indexed
+`$or` query over the week (`dueDate` / `completedAt` / `cancelledAt` /
+`blockedAt` / `originalDate`), streaks from the existing `habitService`.
+`carriedForward` is "was on the week's plate and is still open" —
+`migratedFrom`/`migratedTo` are legacy fields nothing maintains, so they are not
+used. Recurring series count as their **materialised rows** (master + overrides),
+never their virtual expansions, which have no row to count.
+
+**An invented task is dropped, not fatal.** `reconcileDraft` keeps only
+`carryForward` titles that appear in the facts, snapping each back to the
+canonical title (so "Add as task" creates the task the user recognises, not the
+model's paraphrase), de-duplicates, and caps at three. Structural nonsense
+(empty summary, missing arrays) goes through `runAIFeature`'s `validate` and
+settles on the fallback instead.
+
+**"Add as task" files into today's log.** BuJoGeek has no inbox and no default
+collection — an entry with no `collectionId` and today's date *is* the daily
+log. So the carry-forward becomes an ordinary `createTask` due today, through
+the same mutation and the same cache updates as a hand-typed one. The button
+disables once used, so a double-tap cannot create two.
+
+**The metric.** The resolver writes `{ metric: 'bujogeek.review.draft_shown' }`
+with the source, reason, model and how many carry-forwards were dropped, every
+time a draft is produced. The *used* half is the `aiDrafted: true` flag on the
+saved `JournalEntry` — a durable row, not a log line, which is the number
+AI_IDEAS asks for ("drafts saved as reviews per month"). No extra mutation was
+added for it.
+
+**Cap 10/day**, per user per feature, enforced by the runner. Over it, the same
+deterministic draft with `reason: "cap"`.
+
+### What leaves the box
+
+Task titles (`content`), the collection name each belongs to, habit names with
+their streaks, and the week's counts. **Not** notes, tags, task bodies, or
+anything from another app. `factsForModel()` is the only projection serialised
+into the prompt, and a test asserts a task's `note` and `tags` never appear in it.
+
+### Left undone, with reasons
+
+- **No mobile-harness scene covers the card.** `tools/mobile-harness/apps/bujogeek/scenes.mjs`
+  has no `/review` or `/settings` scene, and the tree is outside this stream's
+  scope. The harness is 20 scenes 0/0/0 with `--enforce-a11y`, unchanged. The
+  phone rules are held instead by two vitest cases on the card — every control
+  ≥ 44px, no text under 12px — plus a wrap assertion on the row that could
+  otherwise scroll sideways. **A `/review` scene with the preference seeded on
+  is the right follow-up** and belongs to whoever owns the harness fixtures.
+- **The draft always describes the *current* week.** A review written on Monday
+  for the week just gone would want `weekStart - 7`; there is no week picker.
+  One `weekStart` variable away, but it is a product decision about what the
+  Weekly Review tab means.
+- **`GET_JOURNAL_ENTRIES` still has no call site.** The weekly reviews saved
+  here are readable only through the gateway. A "past reviews" list is the
+  obvious next thing and is not this stream's.
+- **`ReviewNoteDialog` is reachable only from the draft card**, so a user who
+  never opts in cannot write a review by hand. Giving the Weekly Review tab its
+  own "Write it down" button is a two-line change and a product call.

@@ -5,7 +5,14 @@
  * footer and the top bar account menu; BuJoGeek had neither a route nor a
  * page. This is the smallest honest version: read-only account details, the
  * suite theme preference, the reminders toggle (a per-browser global
- * preference, so it belongs here too, not just in the sidebar), and sign out.
+ * preference, so it belongs here too, not just in the sidebar), the AI review
+ * draft opt-in, and sign out.
+ *
+ * Three different stores are on this page and they are not interchangeable:
+ * theme is the suite-wide `preferences` bag, reminders are a browser
+ * permission plus a push subscription, and Assistance is bujogeek's own
+ * per-app preference (`useBujoPreferences` → `User.appPreferences.bujogeek`).
+ * An app-specific setting the gateway also reads belongs in the last one.
  */
 import {
   Avatar,
@@ -13,17 +20,20 @@ import {
   Button,
   Divider,
   FormControl,
+  FormControlLabel,
   InputLabel,
   MenuItem,
   Paper,
   Select,
   Stack,
+  Switch,
   Typography,
 } from '@mui/material';
 import { LogOut, Bell, BellOff } from 'lucide-react';
 import { useThemeMode } from '@geeksuite/user';
 import { useAuth } from '../context/AuthContext';
 import usePushReminders from '../hooks/usePushReminders';
+import useBujoPreferences from '../hooks/useBujoPreferences';
 import { displayNameFrom, initialsFrom, secondaryFrom } from '../utils/userDisplay';
 
 const themeOptions = [
@@ -79,6 +89,46 @@ const RemindersRow = () => {
         {on ? 'Turn off' : 'Turn on'}
       </Button>
     </Stack>
+  );
+};
+
+/**
+ * The one AI opt-in bujogeek has. Default OFF, and off is enforced on the
+ * gateway too — the `reviewDraft` resolver reads this same preference, so a
+ * client that forgot to check it still cannot spend a model call.
+ */
+const AiReviewDraftRow = () => {
+  const { aiReviewDraft, setAiReviewDraft, loading } = useBujoPreferences();
+
+  return (
+    <>
+      <FormControlLabel
+        control={
+          <Switch
+            checked={aiReviewDraft}
+            disabled={loading}
+            onChange={(event) => setAiReviewDraft(event.target.checked)}
+            inputProps={{ 'aria-describedby': 'bujo-ai-review-draft-help' }}
+          />
+        }
+        label="AI review draft"
+        sx={{ ml: 0, minHeight: 44, '& .MuiFormControlLabel-label': { fontWeight: 600 } }}
+      />
+      <Typography
+        id="bujo-ai-review-draft-help"
+        variant="body2"
+        color="text.secondary"
+        sx={{ mt: 0.5 }}
+      >
+        On the Weekly Review, offer to write up the week from your own counts, streaks and open
+        tasks. It never saves anything — you edit and save the review yourself, and it is marked
+        AI-drafted. Off by default; with it off you still get a plain summary built without a model.
+      </Typography>
+      <Typography variant="caption" sx={{ display: 'block', mt: 1.5, color: 'text.muted' }}>
+        Task titles, collection names, habit names and the week&rsquo;s counts are sent. Notes,
+        tags and task bodies are not.
+      </Typography>
+    </>
   );
 };
 
@@ -140,6 +190,11 @@ const SettingsPage = () => {
       <Paper variant="outlined" sx={{ p: 3, mb: 3 }}>
         <SectionHeading>Reminders</SectionHeading>
         <RemindersRow />
+      </Paper>
+
+      <Paper variant="outlined" sx={{ p: 3, mb: 3 }}>
+        <SectionHeading>Assistance</SectionHeading>
+        <AiReviewDraftRow />
       </Paper>
 
       <Paper variant="outlined" sx={{ p: 3 }}>

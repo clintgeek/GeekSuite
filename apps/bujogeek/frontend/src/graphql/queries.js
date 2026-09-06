@@ -500,3 +500,65 @@ export const GET_PUSH_VAPID_KEY = gql`
     pushVapidKey
   }
 `;
+
+/**
+ * The weekly review draft (DOCS/AI_IDEAS.md #1).
+ *
+ * Deliberately a `useLazyQuery` in the UI, never a page-load query: the draft
+ * is a button ("Draft my review"), so nothing is spent unless the user asks
+ * for it. The facts come back whether or not a model was involved — the
+ * provenance line is what tells the two apart.
+ */
+export const GET_REVIEW_DRAFT = gql`
+  query GetReviewDraft($weekStart: String!) {
+    reviewDraft(weekStart: $weekStart) {
+      facts {
+        weekStart
+        weekEnd
+        counts {
+          completed
+          carriedForward
+          blocked
+          cancelled
+          created
+        }
+        habits {
+          name
+          streak
+          daysDone
+          daysScheduled
+        }
+        overdue {
+          title
+          collection
+          dueDate
+          daysOverdue
+        }
+        blocked {
+          title
+          collection
+          reason
+          blockedSince
+        }
+      }
+      draft {
+        summary
+        wins
+        carryForward {
+          title
+          reason
+        }
+        suggestedFocus
+      }
+      provenance {
+        source
+        reason
+        model
+        provider
+        cached
+        callsToday
+        cap
+      }
+    }
+  }
+`;

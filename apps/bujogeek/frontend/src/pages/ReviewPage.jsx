@@ -1,15 +1,23 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Box, Typography, useTheme } from '@mui/material';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useLazyQuery, useMutation } from '@apollo/client';
+import { useToast } from '@geeksuite/ui';
 import { useTaskContext } from '../context/TaskContext';
 import ReviewCard from '../components/review/ReviewCard';
 import ReviewProgress from '../components/review/ReviewProgress';
 import ReviewComplete from '../components/review/ReviewComplete';
+import ReviewDraftCard from '../components/review/ReviewDraftCard';
+import ReviewNoteDialog from '../components/review/ReviewNoteDialog';
 import SkeletonLoader from '../components/shared/SkeletonLoader';
 import useKeyboardNav from '../hooks/useKeyboardNav';
 import useGlobalShortcuts from '../hooks/useGlobalShortcuts';
+import useBujoPreferences from '../hooks/useBujoPreferences';
+import { GET_REVIEW_DRAFT } from '../graphql/queries';
+import { CREATE_JOURNAL_ENTRY } from '../graphql/mutations';
 import { getTaskAge } from '../utils/taskAging';
 import { normalizeTasks } from '../utils/normalizeTasks';
+import { currentWeekStart, weekLabel as formatWeekLabel, weekStartKey } from '../utils/reviewWeek';
 import { colors } from '../theme/colors';
 import { addDays } from 'date-fns';
 import { localDateString } from '@geeksuite/utils';
@@ -32,6 +40,7 @@ const ReviewPage = () => {
     updateTask,
     updateTaskStatus,
     deleteTask,
+    createTask,
     LoadingState,
   } = useTaskContext();
 
@@ -199,6 +208,67 @@ const ReviewPage = () => {
 
   useGlobalShortcuts();
 
+  // ─── The AI weekly review draft (DOCS/AI_IDEAS.md #1) ──────────────
+  // Opt-in, off by default, and gated on BOTH ends: the card is not rendered
+  // without the preference, and the gateway will not consult a model without
+  // it either. Weekly mode only — an end-of-day pass is not a week.
+  const { notify } = useToast();
+  const { aiReviewDraft } = useBujoPreferences();
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [noteSeed, setNoteSeed] = useState({ title: '', content: '', aiDrafted: false });
+
+  const weekStart = useMemo(() => currentWeekStart(), []);
+  const weekKey = useMemo(() => weekStartKey(weekStart), [weekStart]);
+  const weekLabel = useMemo(() => formatWeekLabel(weekStart), [weekStart]);
+  const showDraftCard = mode === 'weekly' && aiReviewDraft;
+
+  const [runDraft, draftState] = useLazyQuery(GET_REVIEW_DRAFT, {
+    // "Draft again" has to mean again. The draft is a snapshot of a moving
+    // week, and a cached one would quietly answer a different question.
+    fetchPolicy: 'network-only',
+  });
+  const [saveReviewNote, { loading: savingNote }] = useMutation(CREATE_JOURNAL_ENTRY);
+
+  const handleDraft = useCallback(() => {
+    runDraft({ variables: { weekStart: weekKey } });
+  }, [runDraft, weekKey]);
+
+  /**
+   * "Use as review" seeds the ordinary editor and stops. What goes in is the
+   * summary plus the suggested focus — the two parts that are prose. Wins and
+   * carry-forwards stay on the card, where each has its own action.
+   */
+  const handleUseAsReview = useCallback((draft) => {
+    const body = [draft?.summary, draft?.suggestedFocus].filter(Boolean).join('\n\n');
+    setNoteSeed({
+      title: `Weekly review — ${weekLabel}`,
+      content: body,
+      aiDrafted: draftState.data?.reviewDraft?.provenance?.source === 'model',
+    });
+    setNoteOpen(true);
+  }, [weekLabel, draftState.data]);
+
+  const handleSaveNote = useCallback(async ({ title, content, aiDrafted }) => {
+    try {
+      await saveReviewNote({
+        variables: { title, content, type: 'weekly', date: weekKey, aiDrafted },
+      });
+      setNoteOpen(false);
+      notify('Review saved', { tone: 'success' });
+    } catch (err) {
+      notify(err?.message || 'Could not save the review', { tone: 'error' });
+    }
+  }, [saveReviewNote, weekKey, notify]);
+
+  const handleAddCarryForward = useCallback(async (title) => {
+    // bujogeek has no inbox or default collection — an entry with no
+    // collection and today's date IS the daily log. That is where a
+    // carry-forward belongs, and it goes through the ordinary createTask.
+    await createTask({ content: title, dueDate: localDateString(new Date()) });
+    notify(`Added \u201c${title}\u201d to today`, { tone: 'success' });
+  }, [createTask, notify]);
+
+
   const captionInk = theme.palette.text.muted;
   const mutedInk = theme.palette.text.secondary;
   const primaryInk = theme.palette.text.primary;
@@ -348,6 +418,30 @@ const ReviewPage = () => {
           );
         })}
       </Box>
+
+      {showDraftCard && (
+        <ReviewDraftCard
+          weekLabel={weekLabel}
+          loading={draftState.loading}
+          error={draftState.error?.message || null}
+          result={draftState.data?.reviewDraft || null}
+          onDraft={handleDraft}
+          onUseAsReview={handleUseAsReview}
+          onAddTask={handleAddCarryForward}
+        />
+      )}
+
+      {showDraftCard && (
+        <ReviewNoteDialog
+          open={noteOpen}
+          onClose={() => setNoteOpen(false)}
+          onSave={handleSaveNote}
+          initialTitle={noteSeed.title}
+          initialContent={noteSeed.content}
+          aiDrafted={noteSeed.aiDrafted}
+          saving={savingNote}
+        />
+      )}
 
       {/* Progress */}
       {totalToReview > 0 && !allReviewed && (

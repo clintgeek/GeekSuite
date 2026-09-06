@@ -1,6 +1,13 @@
 import { gql } from 'graphql-tag';
 
+/**
+ * `AIProvenance` (the shape `services/aiFeatureRunner.js` returns) is declared
+ * once in `graphql/shared/typeDefs.js`. Never import the runner from a typeDefs
+ * file: it pulls in aiService → crypto-vault, and `tools/gql-arg-audit.mjs`
+ * imports every module's typeDefs standalone with no env.
+ */
 export const typeDefs = gql`
+
   type Task {
     id: ID!
     content: String!
@@ -107,6 +114,13 @@ export const typeDefs = gql`
     tags: [String]
     status: String
     preview: String
+    """
+    True when this entry started life as an AI draft the writer accepted.
+    Set by the client when it saves a \`reviewDraft\` summary; false (the
+    default) for everything written by hand. It is a provenance mark, not a
+    feature flag — nothing reads it to decide behaviour.
+    """
+    aiDrafted: Boolean
     createdAt: Date
     updatedAt: Date
   }
@@ -179,6 +193,90 @@ export const typeDefs = gql`
     collectionId: ID
   }
 
+  """
+  The deterministic half of a weekly review: every number and every title here
+  was computed from the caller's own rows, never by a model. The draft is
+  written *from* these facts, so a reader can check the prose against them.
+  """
+  type ReviewFacts {
+    "The Monday, yyyy-MM-dd."
+    weekStart: String!
+    "The Sunday, yyyy-MM-dd."
+    weekEnd: String!
+    counts: ReviewCounts!
+    "Unarchived habits with their streak as of the week's last day."
+    habits: [ReviewHabitFact!]!
+    "Still-open tasks due on or before the week's end, oldest first."
+    overdue: [ReviewTaskFact!]!
+    "Currently parked tasks, most recently parked first."
+    blocked: [ReviewBlockedFact!]!
+  }
+
+  type ReviewCounts {
+    "Tasks completed during the week."
+    completed: Int!
+    "Tasks that were on the week's plate and are still open."
+    carriedForward: Int!
+    "Tasks parked during the week."
+    blocked: Int!
+    "Tasks cancelled during the week."
+    cancelled: Int!
+    "Tasks created during the week."
+    created: Int!
+  }
+
+  type ReviewHabitFact {
+    name: String!
+    "Consecutive scheduled days done, counting back from the week's last day."
+    streak: Int!
+    "Days logged inside the week."
+    daysDone: Int!
+    "Days the habit was scheduled for inside the week."
+    daysScheduled: Int!
+  }
+
+  type ReviewTaskFact {
+    title: String!
+    "The collection it is filed in, or null for an entry in the daily log."
+    collection: String
+    dueDate: String
+    "Days between its due date and the week's last day; never negative."
+    daysOverdue: Int
+  }
+
+  type ReviewBlockedFact {
+    title: String!
+    collection: String
+    reason: String
+    blockedSince: String
+  }
+
+  """
+  One thing worth carrying into next week. \`title\` is always a title that
+  appears in \`ReviewFacts\` — a model-invented one is dropped before this type
+  is built, rather than failing the whole draft.
+  """
+  type ReviewCarryForward {
+    title: String!
+    reason: String!
+  }
+
+  "The prose half. Never saved by itself — see \`createJournalEntry(aiDrafted:)\`."
+  type ReviewDraft {
+    "3-5 sentences, past tense."
+    summary: String!
+    wins: [String!]!
+    "At most three."
+    carryForward: [ReviewCarryForward!]!
+    suggestedFocus: String!
+  }
+
+  type ReviewDraftResult {
+    facts: ReviewFacts!
+    draft: ReviewDraft!
+    provenance: AIProvenance!
+  }
+
   type Query {
     tasks(status: String, tags: [String]): [Task!]!
     task(id: ID!): Task
@@ -211,6 +309,21 @@ export const typeDefs = gql`
     pushVapidKey: String
     "Every push subscription (device) the caller has registered."
     pushSubscriptions: [PushSubscription!]!
+    """
+    A drafted weekly review for the week beginning \`weekStart\` — which must be
+    a Monday (yyyy-MM-dd); the window is Monday through Sunday.
+
+    Returns three things: the deterministic \`facts\`, a \`draft\` worded from
+    them, and the \`provenance\` that says which produced the draft. Reads only
+    — nothing is written. The user saves the summary through
+    \`createJournalEntry\`, which is where \`aiDrafted\` gets stamped.
+
+    The model is consulted only when the caller has opted in
+    (\`appPreferences.bujogeek.aiReviewDraft\`); without it the query still
+    answers, with a deterministic summary and \`provenance.reason: "opted_out"\`.
+    Ten model calls per user per day; over the cap it degrades the same way.
+    """
+    reviewDraft(weekStart: String!): ReviewDraftResult!
   }
 
   type Mutation {
@@ -273,8 +386,8 @@ export const typeDefs = gql`
     \`date\` is a calendar date (yyyy-MM-dd); the toggle is idempotent per day.
     """
     toggleHabitLog(habitId: ID!, date: String!): ToggleHabitLogResult!
-    createJournalEntry(title: String!, content: String!, type: String, date: Date, tags: [String], status: String): JournalEntry!
-    updateJournalEntry(id: ID!, title: String, content: String, type: String, date: Date, tags: [String], status: String): JournalEntry!
+    createJournalEntry(title: String!, content: String!, type: String, date: Date, tags: [String], status: String, aiDrafted: Boolean): JournalEntry!
+    updateJournalEntry(id: ID!, title: String, content: String, type: String, date: Date, tags: [String], status: String, aiDrafted: Boolean): JournalEntry!
     deleteJournalEntry(id: ID!): DeleteResponse!
     createJournalFromTemplate(templateId: ID!, date: Date): JournalEntry!
     updateBujoPreferences(theme: String!): JSON!

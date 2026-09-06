@@ -329,8 +329,8 @@ export const SAVE_DAILY_TASK_ORDER = gql`
 `;
 
 export const CREATE_JOURNAL_ENTRY = gql`
-  mutation CreateJournalEntry($title: String!, $content: String!, $type: String, $date: Date, $tags: [String], $status: String) {
-    createJournalEntry(title: $title, content: $content, type: $type, date: $date, tags: $tags, status: $status) {
+  mutation CreateJournalEntry($title: String!, $content: String!, $type: String, $date: Date, $tags: [String], $status: String, $aiDrafted: Boolean) {
+    createJournalEntry(title: $title, content: $content, type: $type, date: $date, tags: $tags, status: $status, aiDrafted: $aiDrafted) {
       id
       title
       content
@@ -339,6 +339,7 @@ export const CREATE_JOURNAL_ENTRY = gql`
       tags
       status
       preview
+      aiDrafted
       createdAt
       updatedAt
     }

@@ -5,6 +5,7 @@ import taskService from './services/taskService.js';
 import collectionService from './services/collectionService.js';
 import habitService from './services/habitService.js';
 import reminderService from './services/reminderService.js';
+import reviewService from './services/reviewService.js';
 import {
   validateInput,
   createTaskSchema,
@@ -17,6 +18,7 @@ import {
   createCollectionArgsSchema,
   updateCollectionArgsSchema,
   createJournalFromTemplateArgsSchema,
+  reviewDraftArgsSchema,
 } from './validation.js';
 
 const validateCreateTask = validateInput(createTaskSchema);
@@ -29,6 +31,7 @@ const validateToggleHabitLog = validateInput(toggleHabitLogArgsSchema);
 const validateCreateCollection = validateInput(createCollectionArgsSchema);
 const validateUpdateCollection = validateInput(updateCollectionArgsSchema);
 const validateCreateJournalFromTemplate = validateInput(createJournalFromTemplateArgsSchema);
+const validateReviewDraft = validateInput(reviewDraftArgsSchema);
 
 /**
  * The service layer throws transport-agnostic errors tagged with a `code`;
@@ -160,6 +163,32 @@ export const resolvers = {
       const userId = context.user?.id;
       if (!userId) return [];
       return reminderService.listSubscriptions(userId);
+    },
+    /**
+     * The weekly review draft (AI_IDEAS.md #1).
+     *
+     * Read-only by construction: it gathers facts, words them, and returns.
+     * The opt-in lives server-side (`appPreferences.bujogeek.aiReviewDraft`),
+     * so a client that forgets to check it still cannot cause a model call —
+     * this resolver reads the preference itself and hands the service the
+     * answer. Opted out, the query answers with the deterministic draft
+     * rather than an error: the facts are worth having either way.
+     */
+    reviewDraft: async (_, rawArgs, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const { weekStart } = validateReviewDraft(rawArgs);
+
+      const { User } = await import('../../models/user.js');
+      const { getAppPreferences } = await import('../../lib/appPreferences.js');
+      const user = await User.findById(userId).select('appPreferences');
+      const optedIn = Boolean(user && getAppPreferences(user, 'bujogeek').aiReviewDraft);
+
+      try {
+        return await reviewService.reviewDraft({ userId, weekStart, optedIn });
+      } catch (err) {
+        return rethrowUserError(err);
+      }
     },
   },
 

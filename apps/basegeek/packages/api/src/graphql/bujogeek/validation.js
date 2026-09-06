@@ -184,3 +184,21 @@ export const createJournalFromTemplateArgsSchema = z
     date: instantField(),
   })
   .strict();
+
+/**
+ * `reviewDraft(weekStart:)` — the weekly review draft (AI_IDEAS.md #1).
+ *
+ * `weekStart` is a genuinely time-free value (which week, not which moment), so
+ * it takes `calendarDateField` and lands on UTC midnight. It must also be a
+ * **Monday**: the whole fact set is a Monday-to-Sunday window, and letting a
+ * caller pass a Wednesday would silently produce a week nobody was looking at.
+ * Rejecting it is cheaper than a review of the wrong seven days.
+ */
+export const reviewDraftArgsSchema = z
+  .object({
+    weekStart: calendarDateField({ required: true }).refine(
+      (d) => d instanceof Date && d.getUTCDay() === 1,
+      { message: 'must be a Monday — the review week runs Monday to Sunday' }
+    ),
+  })
+  .strict();
