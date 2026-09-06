@@ -12,9 +12,11 @@ import {
   createFolderArgsSchema,
   updateFolderArgsSchema,
   deleteFolderArgsSchema,
+  suggestForNoteArgsSchema,
   assertContentCeiling,
 } from './validation.js';
 import { sanitizeNoteArgs } from './sanitize.js';
+import { suggestForNote } from './suggest.js';
 
 const validateCreateNote = validateInput(createNoteArgsSchema);
 const validateUpdateNote = validateInput(updateNoteArgsSchema);
@@ -24,6 +26,7 @@ const validateDeleteTag = validateInput(deleteTagArgsSchema);
 const validateCreateFolder = validateInput(createFolderArgsSchema);
 const validateUpdateFolder = validateInput(updateFolderArgsSchema);
 const validateDeleteFolder = validateInput(deleteFolderArgsSchema);
+const validateSuggestForNote = validateInput(suggestForNoteArgsSchema);
 
 /** How many search hits one `searchNotes` call may return. */
 const SEARCH_RESULT_LIMIT = 100;
@@ -169,6 +172,38 @@ export const resolvers = {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
       return await Folder.find({ userId }).sort({ createdAt: -1 });
+    },
+
+    /**
+     * Tag and related-note suggestions for the note being written — AI_IDEAS
+     * #3. See `suggest.js` for the ranking, the opt-in and what (if anything)
+     * leaves the box.
+     *
+     * Anonymous callers get an empty answer rather than an error: GraphQL sits
+     * behind `optionalUser()`, and a suggestion strip is not worth a thrown
+     * error on a session that has merely expired mid-edit. It is a read that
+     * writes nothing, so there is no ownership decision to get wrong — the
+     * corpora are built from `userId` and nothing else.
+     */
+    suggestForNote: async (_, rawArgs, context) => {
+      const userId = context.user?.id;
+      const { noteId, title, excerpt, tags } = validateSuggestForNote(rawArgs);
+      if (!userId) {
+        return {
+          tags: [],
+          related: [],
+          provenance: {
+            source: 'fallback',
+            reason: 'unauthenticated',
+            model: null,
+            provider: null,
+            cached: false,
+            callsToday: 0,
+            cap: null,
+          },
+        };
+      }
+      return await suggestForNote({ userId, noteId: noteId ?? null, title, excerpt, tags });
     },
   },
 

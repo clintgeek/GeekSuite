@@ -36,20 +36,6 @@ export const GET_TAGS = gql`
     }
 `;
 
-export const GET_FOLDERS = gql`
-    query GetFolders {
-        folders {
-            id
-            name
-            parentId
-            icon
-            color
-            createdAt
-            updatedAt
-        }
-    }
-`;
-
 export const SEARCH_NOTES = gql`
     query SearchNotes($q: String!) {
         searchNotes(q: $q) {
@@ -64,6 +50,35 @@ export const SEARCH_NOTES = gql`
             score
             snippet
             message
+        }
+    }
+`;
+
+// "You already have a note about this" — DOCS/AI_IDEAS.md #3. A read that
+// writes nothing: the tag chips go through `updateNote` like any other tag
+// edit, and the link chips through the ordinary body edit.
+export const SUGGEST_FOR_NOTE = gql`
+    query SuggestForNote($noteId: ID, $title: String!, $excerpt: String!, $tags: [String!]!) {
+        suggestForNote(noteId: $noteId, title: $title, excerpt: $excerpt, tags: $tags) {
+            tags {
+                tag
+                score
+            }
+            related {
+                id
+                title
+                score
+                why
+            }
+            provenance {
+                source
+                reason
+                model
+                provider
+                cached
+                callsToday
+                cap
+            }
         }
     }
 `;

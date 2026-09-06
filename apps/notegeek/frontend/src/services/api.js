@@ -2,8 +2,8 @@ import axios from 'axios';
 import { setupAxiosInterceptors } from '@geeksuite/auth';
 
 import { apolloClient } from '../apolloClient';
-import { GET_FOLDERS, SEARCH_NOTES, GET_NOTES, GET_NOTE_BY_ID, GET_TAGS } from '../graphql/queries';
-import { CREATE_FOLDER, UPDATE_FOLDER, DELETE_FOLDER, RENAME_TAG, DELETE_TAG, CREATE_NOTE, UPDATE_NOTE, DELETE_NOTE } from '../graphql/mutations';
+import { SEARCH_NOTES, GET_NOTES, GET_NOTE_BY_ID, GET_TAGS } from '../graphql/queries';
+import { RENAME_TAG, DELETE_TAG, CREATE_NOTE, UPDATE_NOTE, DELETE_NOTE } from '../graphql/mutations';
 // Every mutation owns the cache consequences of its own write — see
 // graphql/cacheUpdates.js for what each of these owes and why.
 import { onNoteCreated, onNoteUpdated, onNoteDeleted, onTagsRewritten } from '../graphql/cacheUpdates';
@@ -77,23 +77,13 @@ export const getTagsApi = async () => {
     return { data: data.noteTags };
 };
 
-// Folders
-export const createFolderApi = async (folderData) => {
-    const { data } = await apolloClient.mutate({ mutation: CREATE_FOLDER, variables: folderData });
-    return { data: data.createFolder };
-};
-export const getFoldersApi = async () => {
-    const { data } = await apolloClient.query({ query: GET_FOLDERS, fetchPolicy: 'network-only' });
-    return { data: data.folders };
-};
-export const updateFolderApi = async (folderId, folderData) => {
-    const { data } = await apolloClient.mutate({ mutation: UPDATE_FOLDER, variables: { id: folderId, ...folderData } });
-    return { data: data.updateFolder };
-};
-export const deleteFolderApi = async (folderId, cascade = false) => {
-    const { data } = await apolloClient.mutate({ mutation: DELETE_FOLDER, variables: { id: folderId, deleteNotes: cascade } });
-    return { data: data.deleteFolder };
-};
+// Folders — deleted 2026-09-06 (Q65). NoteGeek never shipped a folder UI:
+// nothing rendered a folder, nothing created one, and `store/folderStore.js`
+// was still calling REST routes (`GET/POST /folders`) that were removed when
+// the app moved to the gateway. Notes are organised by TAGS, which is the
+// convention the sidebar, the search and the tag index all implement. The
+// gateway's `Folder` type and its four resolvers still exist — removing those
+// is a basegeek change and is reported, not done here.
 
 // Search
 export const searchNotesApi = async (query) => {

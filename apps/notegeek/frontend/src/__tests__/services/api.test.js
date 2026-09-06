@@ -47,10 +47,6 @@ import apiClient, {
     updateNoteApi,
     deleteNoteApi,
     getTagsApi,
-    createFolderApi,
-    getFoldersApi,
-    updateFolderApi,
-    deleteFolderApi,
     searchNotesApi,
     renameTagApi,
     deleteTagApi,
@@ -59,16 +55,12 @@ import {
     GET_NOTES,
     GET_NOTE_BY_ID,
     GET_TAGS,
-    GET_FOLDERS,
     SEARCH_NOTES,
 } from '../../graphql/queries';
 import {
     CREATE_NOTE,
     UPDATE_NOTE,
     DELETE_NOTE,
-    CREATE_FOLDER,
-    UPDATE_FOLDER,
-    DELETE_FOLDER,
     RENAME_TAG,
     DELETE_TAG,
 } from '../../graphql/mutations';
@@ -181,7 +173,7 @@ describe('API Service', () => {
     });
 
     // =========================================================================
-    // Tags and Folders endpoints (GraphQL)
+    // Tag endpoints (GraphQL)
     // =========================================================================
     it('getTagsApi calls apollo query with GET_TAGS', async () => {
         mockApollo.query.mockResolvedValueOnce({ data: { noteTags: [] } });
@@ -189,51 +181,6 @@ describe('API Service', () => {
         expect(mockApollo.query).toHaveBeenCalledWith({
             query: GET_TAGS,
             fetchPolicy: 'network-only',
-        });
-    });
-
-    it('createFolderApi calls apollo mutate with CREATE_FOLDER', async () => {
-        const folder = { name: 'Work' };
-        mockApollo.mutate.mockResolvedValueOnce({ data: { createFolder: { id: '1' } } });
-        await createFolderApi(folder);
-        expect(mockApollo.mutate).toHaveBeenCalledWith({
-            mutation: CREATE_FOLDER,
-            variables: folder,
-        });
-    });
-
-    it('getFoldersApi calls apollo query with GET_FOLDERS', async () => {
-        mockApollo.query.mockResolvedValueOnce({ data: { folders: [] } });
-        await getFoldersApi();
-        expect(mockApollo.query).toHaveBeenCalledWith({
-            query: GET_FOLDERS,
-            fetchPolicy: 'network-only',
-        });
-    });
-
-    it('updateFolderApi calls apollo mutate with UPDATE_FOLDER', async () => {
-        const folder = { name: 'New Name' };
-        mockApollo.mutate.mockResolvedValueOnce({ data: { updateFolder: { id: '123' } } });
-        await updateFolderApi('123', folder);
-        expect(mockApollo.mutate).toHaveBeenCalledWith({
-            mutation: UPDATE_FOLDER,
-            variables: { id: '123', name: 'New Name' },
-        });
-    });
-
-    it('deleteFolderApi calls apollo mutate with DELETE_FOLDER and cascade param', async () => {
-        mockApollo.mutate.mockResolvedValueOnce({ data: { deleteFolder: true } });
-        await deleteFolderApi('123', true);
-        expect(mockApollo.mutate).toHaveBeenCalledWith({
-            mutation: DELETE_FOLDER,
-            variables: { id: '123', deleteNotes: true },
-        });
-
-        mockApollo.mutate.mockResolvedValueOnce({ data: { deleteFolder: true } });
-        await deleteFolderApi('456', false);
-        expect(mockApollo.mutate).toHaveBeenCalledWith({
-            mutation: DELETE_FOLDER,
-            variables: { id: '456', deleteNotes: false },
         });
     });
 

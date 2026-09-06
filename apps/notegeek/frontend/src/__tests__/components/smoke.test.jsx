@@ -88,17 +88,6 @@ vi.mock('../../store/tagStore', () => {
     return { default: useStore };
 });
 
-vi.mock('../../store/folderStore', () => {
-    const store = {
-        folders: [],
-        fetchFolders: vi.fn(),
-    };
-    const useStore = vi.fn((selector) => (selector ? selector(store) : store));
-    useStore.getState = () => store;
-    useStore.setState = (newState) => Object.assign(store, typeof newState === 'function' ? newState(store) : newState);
-    return { default: useStore };
-});
-
 // Mock window.matchMedia for Mantine
 Object.defineProperty(window, 'matchMedia', {
     writable: true,

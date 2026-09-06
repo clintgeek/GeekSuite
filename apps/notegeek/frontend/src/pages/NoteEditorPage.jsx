@@ -13,10 +13,12 @@ import { useQuery, useMutation } from '@apollo/client';
 import { GET_NOTE_BY_ID } from '../graphql/queries';
 import { CREATE_NOTE, UPDATE_NOTE } from '../graphql/mutations';
 import { useToast } from '@geeksuite/ui';
-import { NoteShell, NoteMetaBar, NoteActions, NoteTypeRouter, NOTE_TYPES } from '../components/notes';
+import { useAppPreferences } from '@geeksuite/user';
+import { NoteShell, NoteMetaBar, NoteActions, NoteTypeRouter, NOTE_TYPES, SuggestionStrip } from '../components/notes';
 import DeleteNoteDialog from '../components/DeleteNoteDialog';
 import { onNoteCreated, onNoteUpdated } from '../graphql/cacheUpdates';
 import { overSizeMessage, saveErrorMessage } from '../utils/saveGuards';
+import { containsNoteLink, insertLink, noteLinkMarkup, supportsLinkInsertion } from '../utils/noteLinks';
 import { noteTypeColor, layout } from '../theme/tokens';
 
 // Type card configuration. Colors come from theme.palette.noteTypes so light
@@ -123,8 +125,25 @@ function NoteEditorPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [savedNoteId, setSavedNoteId] = useState(() => (id && id !== 'new' && id !== 'undefined' ? id : null));
   const [dirty, setDirty] = useState(false);
+  // Bumped after every successful save; SuggestionStrip watches it and asks
+  // the gateway for a fresh set. A counter rather than a boolean so two saves
+  // in a row are two requests.
+  const [saveToken, setSaveToken] = useState(0);
 
   const { notify } = useToast();
+
+  // "Suggest tags & links" — off by default, and stored where notegeek's other
+  // preferences live (the gateway reads the same flag before it consults a
+  // model, so switching it off is not merely a client-side courtesy).
+  const { preferences: appPrefs } = useAppPreferences('notegeek');
+  const suggestEnabled = appPrefs?.suggestOnSave === true;
+
+  // Where the caret was in the body's textarea the last time it moved. Markdown
+  // and code notes are plain textareas, so a related-note link can land where
+  // the writer is actually typing; the rich-text editor is a ProseMirror
+  // document with no meaningful offset into its HTML, so its links go on the
+  // end (see utils/noteLinks.js).
+  const caretRef = useRef(null);
 
   // Track which note this form has been initialized from. Keyed by identity,
   // not by object: the init effect below used to depend on `noteToEdit`, whose
@@ -304,6 +323,7 @@ function NoteEditorPage() {
           setTitle(savedNote.title);
         }
         setSaveStatus('Saved');
+        setSaveToken((n) => n + 1);
         // Only clean if the form still holds exactly what we wrote.
         if (contentRef.current === noteData.content && titleRef.current === title) {
           setDirty(false);
@@ -338,6 +358,41 @@ function NoteEditorPage() {
     setContent(newContent);
     setDirty(true);
   }, []);
+
+  /**
+   * Remember the caret whenever it moves inside the body. React's synthetic
+   * events bubble out of the editor's own textarea, so this needs no change to
+   * any of the five editors — and an editor that has no textarea simply never
+   * fires it, which is exactly the "append instead" case.
+   */
+  const rememberCaret = useCallback((event) => {
+    const el = event.target;
+    if (el && typeof el.selectionStart === 'number' && (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT')) {
+      caretRef.current = el.selectionStart;
+    }
+  }, []);
+
+  /** A tag chip: the tag joins the note's tags, and the ordinary save writes it. */
+  const handleApplySuggestedTag = useCallback((tag) => {
+    setTags((current) =>
+      current.some((t) => t.toLowerCase() === String(tag).toLowerCase()) ? current : [...current, tag]
+    );
+    setDirty(true);
+  }, []);
+
+  /** A related-note chip: a link to that note, in this note's own markup. */
+  const handleInsertNoteLink = useCallback((related) => {
+    if (!supportsLinkInsertion(noteType)) return;
+    setContent((current) =>
+      containsNoteLink(current, related.id)
+        ? current
+        : insertLink(current, noteLinkMarkup(noteType, related), {
+          caret: caretRef.current,
+          noteType,
+        })
+    );
+    setDirty(true);
+  }, [noteType]);
 
   // ── Refs for flush-on-unmount and keyboard shortcut ───────────────────
   // These always point to the latest values so stale closures don't bite.
@@ -563,6 +618,22 @@ function NoteEditorPage() {
             onTagsChange={(v) => { setTags(v); setDirty(true); }}
             readOnly={!isEditMode && isMindMap}
             dirty={dirty}
+            // Mounted only when the writer has switched suggestions on: the
+            // strip owns a lazy query, and a feature that is off should cost
+            // the editor nothing at all, not even a hook.
+            belowMeta={suggestEnabled ? (
+              <SuggestionStrip
+                enabled
+                noteId={savedNoteId}
+                title={title}
+                content={content}
+                noteType={noteType}
+                tags={tags}
+                saveToken={saveToken}
+                onApplyTag={handleApplySuggestedTag}
+                onInsertLink={handleInsertNoteLink}
+              />
+            ) : null}
             actions={
               <NoteActions
                 onSave={handleSave}
@@ -595,13 +666,25 @@ function NoteEditorPage() {
         }
         disableContentScroll={isHandwritten}
       >
-        <NoteTypeRouter
-          type={noteType}
-          content={content}
-          onChange={handleContentChange}
-          readOnly={!isEditMode && isMindMap}
-          isLoading={isLoadingSelected}
-        />
+        {/* `display: contents` — this wrapper exists only to catch the caret
+            events bubbling out of whichever editor is mounted. It must not
+            become a layout box: NoteShell's content zone sizes the editors
+            directly, and an extra flex box in between resized the sketch and
+            mind-map canvases. */}
+        <Box
+          onSelect={rememberCaret}
+          onKeyUp={rememberCaret}
+          onClick={rememberCaret}
+          sx={{ display: 'contents' }}
+        >
+          <NoteTypeRouter
+            type={noteType}
+            content={content}
+            onChange={handleContentChange}
+            readOnly={!isEditMode && isMindMap}
+            isLoading={isLoadingSelected}
+          />
+        </Box>
       </NoteShell>
 
       <DeleteNoteDialog

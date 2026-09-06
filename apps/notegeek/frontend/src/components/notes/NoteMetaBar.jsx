@@ -20,6 +20,11 @@ const TYPE_CONFIG = {
  * Layout:
  *   Row 1: [title input (full width)]
  *   Row 2: [type pill]  [tag chips flowing right]  [desktop actions]
+ *   Row 3: [`belowMeta` slot — the suggestion strip, when there is one]
+ *
+ * Row 3 is a slot rather than a component because the strip needs the editor
+ * page's state (the body, the save token, the tag setter) and the meta bar has
+ * no business knowing about any of it.
  */
 function NoteMetaBar({
   title,
@@ -30,6 +35,7 @@ function NoteMetaBar({
   readOnly = false,
   dirty = false,
   actions,
+  belowMeta = null,
 }) {
   const theme = useTheme();
   const typeConfig = TYPE_CONFIG[noteType] || TYPE_CONFIG.text;
@@ -170,6 +176,9 @@ function NoteMetaBar({
           </Box>
         )}
       </Stack>
+
+      {/* ── Row 3: whatever the page wants under the title ─────────── */}
+      {belowMeta}
     </Box>
   );
 }

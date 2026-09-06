@@ -22,6 +22,7 @@ import LogoutIcon from '@mui/icons-material/LogoutOutlined';
 import InfoIcon from '@mui/icons-material/InfoOutlined';
 import AccountIcon from '@mui/icons-material/PersonOutlined';
 import FontSizeIcon from '@mui/icons-material/TextFields';
+import SuggestIcon from '@mui/icons-material/AutoAwesomeOutlined';
 import { useAppPreferences, useUser } from '@geeksuite/user';
 import useAuthStore from '../store/authStore';
 import { useThemeMode } from '../theme/ThemeModeProvider';
@@ -99,11 +100,19 @@ function Settings() {
     const { reset } = useUser();
     const { preferences: appPrefs, updateAppPreferences } = useAppPreferences('notegeek');
     const editorFontSize = appPrefs?.editorFontSize ?? 14;
+    // Off unless the user has said yes — DOCS/AI_IDEAS.md's first rule. The
+    // gateway reads the same flag before it consults a model, so this switch
+    // is the real gate and not just a hidden UI.
+    const suggestOnSave = appPrefs?.suggestOnSave === true;
     const theme = useTheme();
     const isDark = mode === 'dark';
 
     const handleFontSizeChange = async (_event, newValue) => {
         await updateAppPreferences({ editorFontSize: newValue });
+    };
+
+    const handleSuggestToggle = async (event) => {
+        await updateAppPreferences({ suggestOnSave: event.target.checked });
     };
 
     const handleLogout = async () => {
@@ -176,6 +185,34 @@ function Settings() {
                             step={1}
                             valueLabelDisplay="auto"
                             sx={{ width: 120 }}
+                        />
+                    }
+                    divider={false}
+                />
+            </SettingsSection>
+
+            {/* Suggestions */}
+            <SettingsSection title="Suggestions">
+                <SettingsRow
+                    icon={<SuggestIcon sx={{ fontSize: 20, color: 'text.secondary' }} />}
+                    primary="Suggest tags & links"
+                    secondary={suggestOnSave
+                        ? 'On — after a save, tags you already use and notes that look related'
+                        : 'Off — nothing is suggested and no note leaves this machine'}
+                    action={
+                        <Switch
+                            edge="end"
+                            checked={suggestOnSave}
+                            onChange={handleSuggestToggle}
+                            inputProps={{ 'aria-label': 'Suggest tags and links' }}
+                            sx={{
+                                '& .MuiSwitch-switchBase.Mui-checked': {
+                                    color: 'primary.main',
+                                },
+                                '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                                    backgroundColor: 'primary.main',
+                                },
+                            }}
                         />
                     }
                     divider={false}

@@ -213,3 +213,31 @@ export const deleteFolderArgsSchema = z
     deleteNotes: z.boolean().nullable().optional(),
   })
   .strict();
+
+/**
+ * `suggestForNote` — the only READ in this module with a validated argument
+ * list, and the only one whose ceiling is enforced by TRUNCATION.
+ *
+ * The excerpt is whatever the editor happens to be holding when the note is
+ * saved. Rejecting an over-long one would turn a helpful strip into an error
+ * toast on exactly the notes it is most useful for (long ones), so the schema
+ * takes the first `EXCERPT_MAX` characters and says nothing. Same for the
+ * title, whose 500-character ceiling `createNote` already enforces on the
+ * write path — a suggestion request is not the place to relitigate it.
+ *
+ * `noteId` is nullable: the strip appears on an unsaved note too, and there is
+ * nothing to exclude from the related-note candidates in that case.
+ */
+/** The excerpt ceiling, enforced by truncation. `suggest.js` reads it from here. */
+export const EXCERPT_MAX = 500;
+/** The title ceiling — the same 500 `createNote` enforces on the write path. */
+export const TITLE_MAX = 500;
+
+export const suggestForNoteArgsSchema = z
+  .object({
+    noteId: idString.nullable().optional(),
+    title: z.string().transform((s) => s.slice(0, TITLE_MAX)),
+    excerpt: z.string().transform((s) => s.slice(0, EXCERPT_MAX)),
+    tags: z.array(z.string().trim().max(100)).max(50),
+  })
+  .strict();

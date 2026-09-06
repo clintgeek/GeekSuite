@@ -39,12 +39,36 @@ export const typeDefs = gql`
     updatedAt: Date!
   }
 
+  """A tag the user already has, scored against the note being written."""
+  type SuggestedTag {
+    tag: String!
+    score: Float!
+  }
+
+  """One of the user's own notes, scored against the note being written."""
+  type RelatedNote {
+    id: ID!
+    title: String!
+    score: Float!
+    """At most a few words on what the two notes share — only ever set when a model was consulted."""
+    why: String
+  }
+
+  type NoteSuggestions {
+    tags: [SuggestedTag!]!
+    related: [RelatedNote!]!
+    provenance: AIProvenance!
+  }
+
+  # module carrying the same text merges to one type — but the moment anyone
+
   type Query {
     notes(tag: String, prefix: String, type: String, limit: Int, sort: String): [Note!]!
     note(id: ID!): Note
     noteTags: [String!]!
     searchNotes(q: String!): [SearchSnippet!]!
     folders: [Folder!]!
+    suggestForNote(noteId: ID, title: String!, excerpt: String!, tags: [String!]!): NoteSuggestions!
   }
 
   type Mutation {
