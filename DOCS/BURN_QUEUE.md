@@ -13,7 +13,6 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 |---|--------|-------|-------|-------|
 | R107 | review2 #2 #4 #5 #6: notegeek gateway — renameTag trim-equal wipes the tag; typeless update sanitizes 5 MB (16 s); type:null accepted; length checked before sanitize | opus | gateway notegeek resolvers/validation/sanitize + tests | 09-05 23:45 |
 | R108 | review2 #7 #8 #9: bookgeek api — ebookFormats and the Calibre walk bypass resolveInLibrary; coverFetch follows redirects past the allow-list | opus | bookgeek api ebookFormats, importRoutes, coverFetch + tests | 09-05 23:45 |
-| R109 | review2 #10 #12: basegeek compose — datastore containers receive every secret via env_file; no datastore healthchecks / depends_on conditions | sonnet | apps/basegeek/docker-compose.yml, DEPLOY/RUNBOOK | 09-05 23:45 |
 | R110 | review2 #14 #15: five unfalsifiable tests made falsifiable; gatewayInputObjectParity generated for all 23 input-object root fields | sonnet | tests across gateway/storygeek/fitnessgeek/bujogeek fe | 09-05 23:45 |
 | R111 | review2 #13: fitnessMeals gains a search argument; apiService passes ?search= | sonnet | gateway fitnessgeek typeDefs/resolvers, fitnessgeek apiService + tests | 09-05 23:45 |
 | R112 | review2 #3: basegeek validates its own session tokens locally instead of HTTP-calling itself through optionalUser (slow basegeek → anonymous → suite logout) | opus | packages/user server, basegeek server.js/middleware + tests | 09-05 23:45 |
