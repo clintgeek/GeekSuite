@@ -12,6 +12,7 @@ import {
   createFolderArgsSchema,
   updateFolderArgsSchema,
   deleteFolderArgsSchema,
+  assertContentCeiling,
 } from './validation.js';
 import { sanitizeNoteArgs } from './sanitize.js';
 
@@ -188,7 +189,14 @@ export const resolvers = {
       // sanitizer over either would corrupt it). A create that omits `type`
       // gets `text` here because that is `Note.type`'s schema default — the
       // row really will be a rich-text note, so it must be sanitized like one.
-      const note = new Note({ ...sanitizeNoteArgs(args, args.type ?? 'text'), userId });
+      const effectiveType = args.type ?? 'text';
+      const cleaned = sanitizeNoteArgs(args, effectiveType);
+      // Sanitizing can make a body LONGER (see `assertContentCeiling`), so the
+      // string that is actually stored is measured, not the one that arrived.
+      // Otherwise a note is created above the ceiling and can never be saved
+      // again.
+      assertContentCeiling(cleaned.content, effectiveType, { sanitized: true });
+      const note = new Note({ ...cleaned, userId });
       return await note.save();
     },
 
@@ -199,25 +207,43 @@ export const resolvers = {
       if (!id || id === 'undefined' || !mongoose.isValidObjectId(id)) {
         throw new Error(`Invalid Note ID format: ${ id }`);
       }
-      // Sanitize the body against the type the row will actually have.
-      // `type` is optional on update — every notegeek client sends it, but a
-      // hand-rolled `updateNote(id, content)` would not, and skipping
-      // sanitization in that case would leave the hole open. When it is
-      // missing AND there is a body to clean, the stored type is read first;
-      // that is one projected, `_id`-keyed find, on a path no real client
-      // takes. (Contrast the size ceilings in `validation.js`, which accept
-      // the imprecision rather than pay for a read — a too-generous ceiling
-      // is not a security boundary, and this is.)
+      // The order of the next four steps is the fix for BURN_REVIEW_2 #4/#6,
+      // and it is the whole point of this block:
+      //
+      //   1. resolve the EFFECTIVE type,
+      //   2. apply that type's ceiling to the INPUT,
+      //   3. sanitize (only `text` bodies are touched at all),
+      //   4. apply the ceiling again to the OUTPUT.
+      //
+      // Step 1 exists because `type` is optional on update — every notegeek
+      // client sends it, but a hand-rolled `updateNote(id, content)` would
+      // not, and skipping sanitization in that case would leave the stored-XSS
+      // hole open. When it is missing AND there is a body to clean, the stored
+      // type is read: one projected, `_id`-keyed find, on a path no real
+      // client takes.
+      //
+      // Step 2 is what keeps that read from being a liability. `validation.js`
+      // has to give a typeless update the 5 000 000 snapshot ceiling, so
+      // before this ordering a single `updateNote(id, content)` with a 5 MB
+      // body on a `text` row handed 5 MB to jsdom + DOMPurify — 16 365 ms of
+      // synchronous, gateway-wide event-loop block, for all eight apps.
+      // Now the sanitizer never sees more than 100 000 characters.
       let effectiveType = args.type;
-      if (typeof args.content === 'string' && (effectiveType === undefined || effectiveType === null)) {
+      if (typeof args.content === 'string' && effectiveType === undefined) {
         const stored = await Note.findOne({ _id: id, userId }, { type: 1 }).lean();
         effectiveType = stored?.type;
+      }
+      let payload = args;
+      if (typeof args.content === 'string') {
+        assertContentCeiling(args.content, effectiveType);
+        payload = sanitizeNoteArgs(args, effectiveType);
+        assertContentCeiling(payload.content, effectiveType, { sanitized: true });
       }
       // `args` is schema-validated by GraphQL and carries no userId field, so
       // ownership cannot be reassigned through the update payload.
       const note = await Note.findOneAndUpdate(
         { _id: id, userId },
-        sanitizeNoteArgs(args, effectiveType),
+        payload,
         { new: true }
       );
       if (!note) throw new Error('Note not found or you do not have permission to edit it');
@@ -240,6 +266,17 @@ export const resolvers = {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
       const { oldTag, newTag } = validateRenameTag(rawArgs);
+      // Renaming a tag to itself is a no-op, and it has to be an EXPLICIT one.
+      // Both names are trimmed by the schema, so the dialog's own guard
+      // (`TagContextMenu.jsx`, which compares the raw strings) lets
+      // `"work" -> "work "` through: `$addToSet` then does nothing and `$pull`
+      // deletes the tag from every note that had it (BURN_REVIEW_2 #2).
+      // `false` — "nothing changed" — rather than a thrown error, because the
+      // client's cache update (`onTagsRewritten`) runs on the successful
+      // boolean and refetches the tag index, while a rejection would leave the
+      // rename dialog open on an unhandled promise. Case still matters:
+      // `work -> Work` is a real rename.
+      if (oldTag === newTag) return false;
       // A positional `$set: { 'tags.$': newTag }` renames in place, so a note
       // that already carries `newTag` ends up with it twice — `[a, b]` renamed
       // a -> b becomes `[b, b]`. $addToSet the new tag first (a no-op if it's

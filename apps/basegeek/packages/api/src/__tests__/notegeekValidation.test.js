@@ -97,6 +97,22 @@ describe('createNote', () => {
     expect(err.extensions.details[0].path).toBe('type');
   });
 
+  /**
+   * BURN_REVIEW_2 #5. `Note.type` is `String!` and `notes: [Note!]!`, so one
+   * null-typed row nulls the entire list for that user; and `sanitize.js`
+   * decides from this field whether a body is HTML, so a stored null made a
+   * later typeless update store markup unsanitized. Optional, never null.
+   */
+  test('rejects an explicit type: null — optional is not nullable', () => {
+    const err = expectBadInput(() => validate({ content: 'x', type: null }));
+    expect(err.extensions.details[0].path).toBe('type');
+  });
+
+  test('omitting type entirely is still fine — createNote falls back to the model default', () => {
+    expect(validate({ content: 'x' })).toEqual({ content: 'x' });
+    expect(validate({ content: 'x' }).type).toBeUndefined();
+  });
+
   test('rejects empty content — Note.content is required in the model', () => {
     expectBadInput(() => validate({ content: '' }));
   });
@@ -154,6 +170,12 @@ describe('updateNote', () => {
 
   test('allows content to be blanked — the editor saves a titled note with an empty body', () => {
     expect(validate({ id: ID, title: 'Just a title', content: '' }).content).toBe('');
+  });
+
+  test('rejects an explicit type: null, and accepts an update that omits type', () => {
+    const err = expectBadInput(() => validate({ id: ID, content: 'x', type: null }));
+    expect(err.extensions.details[0].path).toBe('type');
+    expect(validate({ id: ID, content: 'x' })).toEqual({ id: ID, content: 'x' });
   });
 
   test('rejects an unknown key and a missing id', () => {

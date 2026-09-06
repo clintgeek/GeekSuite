@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { GraphQLError } from 'graphql';
 import { idString, validateInput } from '../shared/validation.js';
 
 export { validateInput };
@@ -37,8 +38,11 @@ export { validateInput };
  * flat cap would either reject real sketches or be no cap at all for prose, so
  * the ceiling is chosen from the note's own `type`. `updateNote` may omit
  * `type` (nothing in the frontend does, but the argument is optional), and the
- * server cannot know the stored type without a read it does not otherwise
- * need, so an update without a type gets the generous ceiling.
+ * schema cannot know the stored type, so an update without a type gets the
+ * generous ceiling HERE. The resolver DOES read the stored type — it has to,
+ * in order to sanitize correctly — and re-applies the right ceiling with
+ * `assertContentCeiling()` before anything reaches the sanitizer, and again on
+ * the sanitizer's output. See that function for why both.
  *
  * `content` is deliberately NOT trimmed: it is a document body, and trailing
  * whitespace in a markdown file or a JSON snapshot is the caller's business.
@@ -51,7 +55,7 @@ const SNAPSHOT_TYPES = new Set(['mindmap', 'handwritten']);
 const DOC_CONTENT_MAX = 100_000;
 const SNAPSHOT_CONTENT_MAX = 5_000_000;
 
-const contentMaxFor = (type, { unknownTypeIsSnapshot = false } = {}) => {
+export const contentMaxFor = (type, { unknownTypeIsSnapshot = false } = {}) => {
   if (type === undefined || type === null) {
     return unknownTypeIsSnapshot ? SNAPSHOT_CONTENT_MAX : DOC_CONTENT_MAX;
   }
@@ -71,7 +75,63 @@ const checkContentCeiling = (opts) => (args, ctx) => {
   }
 };
 
-const noteTypeSchema = z.enum(NOTE_TYPES).nullable().optional();
+/**
+ * The same ceiling, enforced where the schema could not: in the resolver,
+ * once the note's EFFECTIVE type is known.
+ *
+ * Two callers, one rule.
+ *
+ *  - **Before sanitizing.** `updateNoteArgsSchema` has to accept the snapshot
+ *    ceiling for an update that omits `type`, because the schema cannot read
+ *    the row. The resolver can, and a 5 MB body on a `text` row must be
+ *    rejected *before* it reaches jsdom + DOMPurify — 5 MB measured at
+ *    16 365 ms of fully synchronous, gateway-wide event-loop block
+ *    (BURN_REVIEW_2 #4).
+ *  - **After sanitizing.** The sanitizer can make a body LONGER: `hardenRel`
+ *    adds `rel`/`target` to every anchor and DOMPurify escapes bare `&`. A
+ *    100 000-character body of small anchors was stored at 187 486 characters,
+ *    past the ceiling it had just passed, and every later save of that note
+ *    was then rejected — permanently unsaveable (BURN_REVIEW_2 #6). What is
+ *    stored is what must fit.
+ *
+ * An unknown type keeps the generous ceiling: it means the row was not found
+ * (the update is about to fail with "Note not found" anyway) and tightening
+ * here would answer the wrong error.
+ *
+ * Same rejection shape as `validateInput`, so a client sees one error contract.
+ */
+export function assertContentCeiling(content, type, { sanitized = false } = {}) {
+  if (typeof content !== 'string') return content;
+  const max = contentMaxFor(type, { unknownTypeIsSnapshot: true });
+  if (content.length <= max) return content;
+  throw new GraphQLError('Invalid input', {
+    extensions: {
+      code: 'BAD_USER_INPUT',
+      http: { status: 400 },
+      details: [
+        {
+          path: 'content',
+          message: sanitized
+            ? `String must contain at most ${max} character(s) after sanitization`
+            : `String must contain at most ${max} character(s)`,
+        },
+      ],
+    },
+  });
+}
+
+/**
+ * `type` is OPTIONAL but never NULL.
+ *
+ * `Note.type` is `String!` in `typeDefs.js` and `notes: [Note!]!`, so one row
+ * with a null type nulls the whole list for that user — the same non-null
+ * poisoning the `tags` note below describes. Worse, `sanitize.js` chooses
+ * whether to sanitize from this field: `HTML_NOTE_TYPES.has(null)` is false,
+ * so a stored null made a later typeless update store HTML **unsanitized**
+ * (BURN_REVIEW_2 #5). Omit the field to leave the type alone; `createNote`
+ * falls back to `text`, which is the mongoose default, when it is absent.
+ */
+const noteTypeSchema = z.enum(NOTE_TYPES).optional();
 // `''` is a real value here: QuickCaptureHome saves a capture with no title.
 const titleSchema = z.string().trim().max(500).nullable().optional();
 const tagSchema = z.string().trim().min(1).max(100);

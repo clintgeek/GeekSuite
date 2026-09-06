@@ -149,6 +149,39 @@ describe('note writes are owner-scoped', () => {
     expect((await Note.findById(note._id)).tags).toEqual(['renamed']);
   });
 
+  /**
+   * BURN_REVIEW_2 #2. `renameTagArgsSchema` trims both names; the rename
+   * dialog (`TagContextMenu.jsx`) compares the RAW strings, so a prefilled
+   * name with a trailing space reached the resolver as a rename of `work` to
+   * `work`. `$addToSet` was then a no-op and `$pull` deleted the tag from
+   * every note that had it — and the sidebar re-added it, so it rendered as a
+   * live tag with zero notes.
+   */
+  test('renaming a tag to itself-after-trim is a no-op, not a deletion', async () => {
+    const note = await makeNote({ tags: ['work', 'keep'] });
+
+    const result = await Mutation.renameTag(null, { oldTag: 'work', newTag: 'work ' }, ctx(ALICE));
+
+    expect(result).toBe(false);
+    expect((await Note.findById(note._id)).tags).toEqual(['work', 'keep']);
+  });
+
+  test('an identical rename is a no-op too', async () => {
+    const note = await makeNote({ tags: ['work'] });
+
+    expect(await Mutation.renameTag(null, { oldTag: 'work', newTag: 'work' }, ctx(ALICE))).toBe(false);
+    expect((await Note.findById(note._id)).tags).toEqual(['work']);
+  });
+
+  test('a case-only rename is a real rename and still happens', async () => {
+    const note = await makeNote({ tags: ['work'] });
+
+    const result = await Mutation.renameTag(null, { oldTag: 'work', newTag: 'Work' }, ctx(ALICE));
+
+    expect(result).toBe(true);
+    expect((await Note.findById(note._id)).tags).toEqual(['Work']);
+  });
+
   test('renaming a tag nobody has reports false and touches nothing', async () => {
     await makeNote({ tags: ['unrelated'] });
 
