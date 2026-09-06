@@ -1,6 +1,15 @@
-// FitnessGeek — the M1/M2 pilot surfaces (MOBILE_UI_PLAN.md). Scenes are
-// independent: any scene that needs a dialog open re-navigates and re-opens
-// it rather than relying on a previous scene's state.
+// FitnessGeek — the M1/M2 pilot surfaces (MOBILE_UI_PLAN.md), plus the Night 2
+// AI quick-add scene (R115/R126). Scenes are independent: any scene that
+// needs a dialog open re-navigates and re-opens it rather than relying on a
+// previous scene's state.
+import { json, graphqlRoute } from '../../lib/net.mjs';
+import { OPS } from './fixtures.mjs';
+
+// The opt-in is client-only localStorage (`utils/quickAddPreference.js`),
+// default off, so no existing scene below renders "Describe a meal" — it is
+// seeded only inside the new scene's own page.addInitScript().
+const QUICK_ADD_NL_KEY = 'fitnessgeek:quickAddNL';
+
 export const scenes = [
   { name: '01-home', goto: '/dashboard', wait: 1600 },
   { name: '02-log', goto: '/food-log', wait: 1600 },
@@ -75,6 +84,68 @@ export const scenes = [
       if (!(await edit.count())) return false;
       await edit.click();
       await h.settle(800);
+    },
+    teardown: (page, h) => h.esc(400),
+  },
+  {
+    // Natural-language quick-add (DOCS/AI_IDEAS.md #2, Night 2 R115). Both the
+    // localStorage opt-in and the two network stubs are page-scoped (not in
+    // fixtures.mjs's context-wide routes()), so this must stay the LAST scene
+    // in the file — a page.addInitScript() applies to every navigation after
+    // the one that registers it.
+    name: '11-quickadd-proposal',
+    async setup(page, h) {
+      await page.addInitScript((key) => {
+        try { window.localStorage.setItem(key, 'true'); } catch { /* ignore */ }
+      }, QUICK_ADD_NL_KEY);
+
+      await graphqlRoute(page, {
+        ...OPS,
+        ParseFoodEntry: {
+          parseFoodEntry: {
+            __typename: 'ParsedFoodEntry',
+            fragments: [
+              { __typename: 'ParsedFoodFragment', text: 'two eggs', query: 'eggs', servings: 2, unit: null, mealType: 'breakfast' },
+              { __typename: 'ParsedFoodFragment', text: 'toast with butter', query: 'toast', servings: 1, unit: null, mealType: 'breakfast' },
+              { __typename: 'ParsedFoodFragment', text: 'kombucha', query: 'kombucha', servings: 1, unit: null, mealType: 'breakfast' },
+            ],
+            provenance: { __typename: 'AIProvenance', source: 'model', reason: null, model: 'llama-3.1-8b-instant', provider: 'groq', cached: false, callsToday: 1, cap: 40 },
+          },
+        },
+      });
+
+      // foodService.search() calls fitnessgeek's own REST `/api/foods` directly
+      // (restClient, not the apiService→GraphQL rewrite) — "eggs" and "toast"
+      // match the catalog, "kombucha" comes back empty, i.e. "no match".
+      await page.route('**/api/foods*', (r) => {
+        const search = new URL(r.request().url()).searchParams.get('search') || '';
+        const q = search.toLowerCase();
+        let data = [];
+        if (q.includes('egg')) {
+          data = [{ id: 'f-egg', name: 'Two Large Eggs, fried', brand: null, source: 'usda' }];
+        } else if (q.includes('toast')) {
+          data = [{ id: 'f-toast', name: 'Sourdough Toast with Butter', brand: 'Boudin', source: 'custom' }];
+        }
+        return json(r, { success: true, data });
+      });
+
+      await page.goto(h.base + '/food-log', { waitUntil: 'networkidle' });
+      await h.settle(1600);
+
+      const describeBtn = page.getByRole('button', { name: /^describe a meal$/i }).first();
+      if (!(await describeBtn.count())) return h.log('no "Describe a meal" button') ?? false;
+      await describeBtn.click();
+      await h.settle(600);
+
+      const textField = page.getByTestId('quick-add-text');
+      if (!(await textField.count())) return false;
+      await textField.fill('two eggs, toast with butter, kombucha');
+      await h.settle(200);
+
+      const readBtn = page.getByRole('button', { name: /^read it$/i }).first();
+      if (!(await readBtn.count())) return false;
+      await readBtn.click();
+      await h.settle(1200);
     },
     teardown: (page, h) => h.esc(400),
   },

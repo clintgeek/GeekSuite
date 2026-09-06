@@ -432,3 +432,64 @@ The rules that made up the list, worst first, and where they came from:
    dark paper and `#EFEEED` over white, and the same ink fails differently on
    each (2.56:1 and 4.14:1). Pass the paper as `under` — without it the surface
    is composited over white, which is a guess.
+
+---
+
+## Night 2 (2026-09-06) — the five AI surfaces, and a page-scoped fixture pattern
+
+Five features shipped behind their own opt-in, off by default (`DOCS/AI_IDEAS.md`,
+stream R126). Each got exactly one new scene (bookgeek got two), appended to
+the **end** of its app's `scenes` array:
+
+| App | Scene | Opt-in | Stubs |
+|---|---|---|---|
+| bujogeek | `11-review-draft` | `appPreferences.bujogeek.aiReviewDraft` (server) | `GetReviewDraft` |
+| fitnessgeek | `11-quickadd-proposal` | `localStorage['fitnessgeek:quickAddNL']` (client) | `ParseFoodEntry`, `GET /api/foods` |
+| notegeek | `05-suggestions` | `appPreferences.notegeek.suggestOnSave` (server) | `SuggestForNote` |
+| bookgeek | `07-what-next`, `08-edit-metadata-draft` | `appPreferences.bookgeek.libraryAssistant` (server) | `GetWhatNext`, `DraftBookMetadata` |
+| startgeek | `05-brief` | `localStorage['startgeek.settings'].brief` (client) | `GlanceBrief` |
+
+**Why these are wired differently from every scene above them.** Every other
+scene's data comes from `fixtures.mjs`'s `routes(ctx, …)`, which runs once per
+browser **context** and so applies uniformly to every scene that context
+walks. That is exactly wrong for an opt-in feature: several of these apps
+already have an existing scene that visits the same route the new feature
+lives on (bookgeek's Library `/`, notegeek's `/notes/n1/edit`), and turning
+the preference on at the context level would make the feature render — real
+or stubbed — in scenes that were never designed or verified with it on.
+
+The fix used throughout: register the preference and the extra query stub
+inside the new scene's own `setup(page, h)`, on `page.route()`/
+`page.addInitScript()` rather than `ctx.route()`/`ctx.addInitScript()`.
+Playwright gives page-level handlers priority over context-level ones for a
+matching request, and a page-level init script only ever runs on a
+navigation registered *after* it — so a scene can safely flip a switch that
+would otherwise be global, at the cost of one rule: **the scene doing this
+must own its navigation** (skip the top-level `goto` and call `page.goto()`
+itself, after registering the overrides) **and must stay the last scene in
+the file**, since neither an init script nor an added route can be
+un-registered once a later scene's navigation would otherwise need the
+original, unmodified fixture. bookgeek's two new scenes are the one
+exception that proves the rule: each re-registers its own complete route set
+fresh (the newest matching `page.route()` registration wins), so neither
+depends on the other's state — but they are still both at the tail.
+
+The clock needs the same treatment when a feature gates on the time of day.
+startgeek's `05-brief` scene uses Playwright's `page.clock.setFixedTime(...)`
+(pinned `playwright` version 1.58.2) rather than context-wide, so the other
+four scenes' rendering is untouched and the brief's server-side 5 a.m. gate
+reads true regardless of when the harness actually runs.
+
+**A real bug, found and reported rather than fixed.** bookgeek's
+`GET_WHAT_NEXT` query (`apps/bookgeek/web/src/graphql/queries.js`) selects
+only `{ bookId why }` on each pick — never `book { ... }` — even though the
+gateway's `WhatNextPick.book` field exists and is populated
+(`apps/basegeek/packages/api/src/graphql/bookgeek/typeDefs.js:186-190`,
+and `apps/bookgeek/DOCS/CONTEXT.md`'s Night 2 section documents `book` as a
+deliberate part of the contract). `App.jsx`'s `.filter((p) => p?.book)`
+(~line 375) then discards every pick against a real server response, so the
+shelf can never render in production, switch on or not. `fixtures.mjs`'s
+`WHAT_NEXT_PICKS` attaches `book` to each pick anyway — broader than what the
+shipped query can ever receive — specifically so `WhatNextShelf` itself (and
+its a11y) could still be exercised here; this is not a fix and this tree does
+not own `apps/bookgeek/web/**`. See the harness run report for the same note.

@@ -35,6 +35,26 @@ export const NOTES = [
 
 export const TAGS = ['work', 'planning', 'recipes', 'product', 'meta', 'dev'];
 
+// Tag & link suggestions (DOCS/AI_IDEAS.md #3, Night 2 R116). Opt-in —
+// `appPreferences.notegeek.suggestOnSave` — so no existing scene renders the
+// strip; used only by scenes.mjs's page-scoped '05-suggestions' scene.
+export const NOTE_SUGGESTIONS = {
+  __typename: 'NoteSuggestions',
+  tags: [
+    { __typename: 'SuggestedTag', tag: 'work', score: 0.82 },
+    { __typename: 'SuggestedTag', tag: 'planning', score: 0.71 },
+    { __typename: 'SuggestedTag', tag: 'meta', score: 0.44 },
+  ],
+  related: [
+    { __typename: 'RelatedNote', id: 'n5', title: 'Standup snippets', score: 0.63, why: 'shares the "work" tag' },
+    { __typename: 'RelatedNote', id: 'n2', title: 'Recipe: brown butter chocolate chip cookies', score: 0.31, why: 'similar title terms' },
+  ],
+  provenance: {
+    __typename: 'AIProvenance',
+    source: 'model', reason: null, model: 'llama-3.1-8b-instant', provider: 'groq', cached: false, callsToday: 2, cap: 30,
+  },
+};
+
 export const OPS = {
   GetNotes: { notes: NOTES },
   GetNoteById: { note: NOTE_N1 },

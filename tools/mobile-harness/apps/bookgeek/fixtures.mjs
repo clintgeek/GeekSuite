@@ -76,34 +76,69 @@ function coverSvg(book) {
     `</div></foreignObject></svg>`;
 }
 
+// The library assistant (DOCS/AI_IDEAS.md #4, Night 2 R117). Opt-in —
+// `appPreferences.bookgeek.libraryAssistant` — so neither existing scene
+// (which all visit `/`) requests either of these; used only by scenes.mjs's
+// page-scoped '07-what-next' and '08-edit-metadata-draft' scenes.
+//
+// The real `GetWhatNext` query (`web/src/graphql/queries.js`) selects only
+// `{ bookId why }` on each pick, never `book { ... }` — even though the
+// gateway's `WhatNextPick.book` field exists and the resolver populates it
+// (`apps/basegeek/packages/api/src/graphql/bookgeek/typeDefs.js:186-190`).
+// `App.jsx`'s `.filter((p) => p?.book)` (~line 375) then discards every pick
+// in production, so the shelf can never render there. That is a real bug,
+// reported rather than fixed (out of this stream's `tools/mobile-harness/**`
+// scope) — see the harness run report. This fixture attaches `book` anyway,
+// deliberately broader than what the shipped query can ever receive, purely
+// so `WhatNextShelf` itself (its render and its a11y) can be exercised.
+export const WHAT_NEXT_PICKS = [
+  { bookId: 'b4', why: 'You finished the last three history books you started.', book: BOOKS.find((b) => b.id === 'b4') },
+  { bookId: 'b7', why: 'On your unread shelf the longest, and homesteading is a tag you keep returning to.', book: BOOKS.find((b) => b.id === 'b7') },
+  { bookId: 'b5', why: 'Already on the reader — a five-star average from books you rated this high.', book: BOOKS.find((b) => b.id === 'b5') },
+  { bookId: 'b3', why: 'Philip K. Dick is your most-reread author.', book: BOOKS.find((b) => b.id === 'b3') },
+  { bookId: 'b6', why: 'A short read that matches the satire tag on your recent five-star ratings.', book: BOOKS.find((b) => b.id === 'b6') },
+].map((p) => ({ __typename: 'WhatNextPick', ...p, book: { __typename: 'Book', ...p.book } }));
+
+export const DRAFT_BOOK_METADATA = {
+  __typename: 'BookMetadataDraft',
+  description: 'A near-future thriller about a virus that leaves the rare "locked in" fully aware but unable to move — drafted from title, author and publisher alone.',
+  tags: ['sci-fi', 'near-future'],
+  provenance: {
+    __typename: 'AIProvenance',
+    source: 'model', reason: null, model: 'llama-3.1-8b-instant', provider: 'groq', cached: false, callsToday: 1, cap: 20,
+  },
+};
+
+export const OPS = {
+  GetShelves: { shelves: SHELVES },
+  // Profile data moved off bookgeek's REST onto the gateway 2026-09-05
+  // (SUITE_TODO consolidation item 3); these used to be `**/api/profile/*`
+  // and `**/api/ai/status` route stubs above.
+  GetBookProfile: { bookProfile: PROFILE },
+  GetLibraryFilters: { libraryFilters: PROFILE.savedFilters },
+  GetBookAiStatus: {
+    bookAiStatus: {
+      enabled: true,
+      apiKeyConfigured: true,
+      baseGeekUrl: 'https://basegeek.clintgeek.com',
+      model: 'basegeek-rotation',
+      providers: 3,
+    },
+  },
+  GetBooks: (v) => {
+    let items = BOOKS;
+    if (v.shelf) items = items.filter((b) => b.shelf === v.shelf);
+    if (v.q) items = items.filter((b) => (b.title + b.authors.join()).toLowerCase().includes(String(v.q).toLowerCase()));
+    if (v.tag) items = items.filter((b) => b.tags.includes(v.tag));
+    return { books: { items, total: v.shelf || v.q || v.tag ? items.length : 223, page: 1, pageSize: 50 } };
+  },
+};
+
 export async function routes(ctx) {
   await sessionRoutes(ctx);
   await ctx.route(/\/api\/books\/([^/]+)\/cover/, (r) => {
     const id = /\/api\/books\/([^/]+)\/cover/.exec(r.request().url())[1];
     return svg(r, coverSvg(BOOKS.find((b) => b.id === id) || BOOKS[0]));
   });
-  await graphqlRoute(ctx, {
-    GetShelves: { shelves: SHELVES },
-    // Profile data moved off bookgeek's REST onto the gateway 2026-09-05
-    // (SUITE_TODO consolidation item 3); these used to be `**/api/profile/*`
-    // and `**/api/ai/status` route stubs above.
-    GetBookProfile: { bookProfile: PROFILE },
-    GetLibraryFilters: { libraryFilters: PROFILE.savedFilters },
-    GetBookAiStatus: {
-      bookAiStatus: {
-        enabled: true,
-        apiKeyConfigured: true,
-        baseGeekUrl: 'https://basegeek.clintgeek.com',
-        model: 'basegeek-rotation',
-        providers: 3,
-      },
-    },
-    GetBooks: (v) => {
-      let items = BOOKS;
-      if (v.shelf) items = items.filter((b) => b.shelf === v.shelf);
-      if (v.q) items = items.filter((b) => (b.title + b.authors.join()).toLowerCase().includes(String(v.q).toLowerCase()));
-      if (v.tag) items = items.filter((b) => b.tags.includes(v.tag));
-      return { books: { items, total: v.shelf || v.q || v.tag ? items.length : 223, page: 1, pageSize: 50 } };
-    },
-  });
+  await graphqlRoute(ctx, OPS);
 }

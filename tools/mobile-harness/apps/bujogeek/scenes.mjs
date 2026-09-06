@@ -1,4 +1,8 @@
-// BuJoGeek — the M2 surfaces (MOBILE_UI_PLAN.md §4 bujogeek).
+// BuJoGeek — the M2 surfaces (MOBILE_UI_PLAN.md §4 bujogeek), plus the Night 2
+// AI review-draft scene (R114/R126).
+import { json, graphqlRoute } from '../../lib/net.mjs';
+import { OPS, REVIEW_DRAFT } from './fixtures.mjs';
+
 export const scenes = [
   { name: '01-today', goto: '/today', wait: 1500 },
   {
@@ -93,6 +97,42 @@ export const scenes = [
     },
     teardown: (page, h) => h.esc(),
   },
+  {
+    // The AI weekly review draft (DOCS/AI_IDEAS.md #1, Night 2 R114). The
+    // opt-in (`appPreferences.bujogeek.aiReviewDraft`) and `reviewDraft` are
+    // stubbed at the PAGE level (not in fixtures.mjs's context-wide routes())
+    // so the other ten scenes above, which never visit /review or /settings,
+    // are unaffected — this must stay the LAST scene in the file, since a
+    // page-level route/init-script persists for any navigation after it.
+    name: '11-review-draft',
+    async setup(page, h) {
+      await page.route('**/api/users/bootstrap', (r) => json(r, {
+        identity: { username: 'chef', email: 'chef@example.com' },
+        profile: { displayName: 'Chef Crocker' },
+        preferences: {},
+        appPreferences: { bujogeek: { aiReviewDraft: true } },
+      }));
+      // GetAllTasks empty: weekly mode's own task list (ReviewCard rows, a
+      // pre-existing tap-target/text-floor bug unrelated to this feature —
+      // see the harness run report) never renders, so this scene shows only
+      // the AI card and ReviewPage's own tab bar.
+      await graphqlRoute(page, { ...OPS, GetAllTasks: { allTasks: [] }, GetReviewDraft: { reviewDraft: REVIEW_DRAFT } });
+
+      await page.goto(h.base + '/review', { waitUntil: 'networkidle' });
+      await h.settle(1200);
+
+      const weeklyTab = page.getByRole('tab', { name: /^weekly review$/i });
+      if (!(await weeklyTab.count())) return h.log('no "Weekly Review" tab') ?? false;
+      await weeklyTab.click();
+      await h.settle(500);
+
+      const draftBtn = page.getByRole('button', { name: /^draft my review$/i }).first();
+      if (!(await draftBtn.count())) return h.log('no "Draft my review" button') ?? false;
+      await draftBtn.click();
+      await h.settle(900);
+    },
+  },
 ];
 
-export const waivers = [];
+export const waivers = [
+];

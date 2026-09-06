@@ -130,6 +130,46 @@ export const TEMPLATES = [
   { __typename: 'Template', id: 'tpl1', name: 'Morning standup', description: 'The three questions.', type: 'daily', content: 'Yesterday: {{yesterday}}\nToday: {{today}}\nBlockers', isDefault: false, isPublic: false, tags: ['work'], variables: [], createdAt: at(-30, 9), updatedAt: at(-30, 9), createdBy: 'u1' },
 ];
 
+// The AI weekly review draft (DOCS/AI_IDEAS.md #1, Night 2 R114). Opt-in —
+// `appPreferences.bujogeek.aiReviewDraft` — so no existing scene renders it;
+// used only by scenes.mjs's page-scoped '11-review-draft' scene, which seeds
+// the preference and this response through its own `page.route()` overrides
+// rather than the context-wide `routes()` below, so the other ten scenes
+// (none of which visit /review) are untouched.
+export const REVIEW_DRAFT = {
+  __typename: 'ReviewDraftResult',
+  facts: {
+    __typename: 'ReviewFacts',
+    weekStart: dayKey(-4),
+    weekEnd: dayKey(2),
+    counts: { __typename: 'ReviewCounts', completed: 11, carriedForward: 3, blocked: 1, cancelled: 1, created: 14 },
+    habits: [
+      { __typename: 'ReviewHabitFact', name: 'Morning pages', streak: 6, daysDone: 5, daysScheduled: 5 },
+      { __typename: 'ReviewHabitFact', name: 'Walk the dog', streak: 21, daysDone: 7, daysScheduled: 7 },
+    ],
+    overdue: [
+      { __typename: 'ReviewTaskFact', title: 'Call the roofer back about the north valley', collection: null, dueDate: at(-4, 9), daysOverdue: 4 },
+    ],
+    blocked: [
+      { __typename: 'ReviewBlockedFact', title: 'File the permit amendment', collection: 'House — spring list', reason: 'waiting on the surveyor’s letter', blockedSince: at(-6, 10) },
+    ],
+  },
+  draft: {
+    __typename: 'ReviewDraft',
+    summary: 'You closed out eleven tasks this week and kept both habits alive. The quarterly numbers went out on time, and the house paperwork is the one thread still hanging.',
+    wins: ['Sent the quarterly numbers to Dana', 'Kept the morning pages streak alive'],
+    carryForward: [
+      { __typename: 'ReviewCarryForward', title: 'Call the roofer back about the north valley', reason: 'four days overdue' },
+      { __typename: 'ReviewCarryForward', title: 'File the permit amendment', reason: 'still blocked on the surveyor’s letter' },
+    ],
+    suggestedFocus: 'Close the loop on the house paperwork before it piles up again.',
+  },
+  provenance: {
+    __typename: 'AIProvenance',
+    source: 'model', reason: null, model: 'llama-3.1-8b-instant', provider: 'groq', cached: false, callsToday: 1, cap: 10,
+  },
+};
+
 export const OPS = {
   GetDailyTasks: { dailyTasks: DAILY },
   GetWeeklyTasks: { weeklyTasks: MONTHLY },

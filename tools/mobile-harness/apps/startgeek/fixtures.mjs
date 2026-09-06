@@ -59,7 +59,9 @@ const SETTINGS = {
   calendars: [],
 };
 
-const OPS = {
+// Exported so scenes.mjs's page-scoped '05-brief' scene can merge in
+// `GlanceBrief` without duplicating the rest of the console's stubs.
+export const OPS = {
   GlanceToday: { glanceToday: TODAY },
   GlanceSearch: { glanceSearch: [] },
   CalendarEvents: { calendarEvents: [] },
