@@ -1,7 +1,5 @@
 import mongoose from 'mongoose';
-import { GraphQLError } from 'graphql';
 import Note from './models/Note.js';
-import Folder from './models/Folder.js';
 import {
   validateInput,
   createNoteArgsSchema,
@@ -9,9 +7,6 @@ import {
   deleteNoteArgsSchema,
   renameTagArgsSchema,
   deleteTagArgsSchema,
-  createFolderArgsSchema,
-  updateFolderArgsSchema,
-  deleteFolderArgsSchema,
   suggestForNoteArgsSchema,
   assertContentCeiling,
 } from './validation.js';
@@ -23,45 +18,10 @@ const validateUpdateNote = validateInput(updateNoteArgsSchema);
 const validateDeleteNote = validateInput(deleteNoteArgsSchema);
 const validateRenameTag = validateInput(renameTagArgsSchema);
 const validateDeleteTag = validateInput(deleteTagArgsSchema);
-const validateCreateFolder = validateInput(createFolderArgsSchema);
-const validateUpdateFolder = validateInput(updateFolderArgsSchema);
-const validateDeleteFolder = validateInput(deleteFolderArgsSchema);
 const validateSuggestForNote = validateInput(suggestForNoteArgsSchema);
 
 /** How many search hits one `searchNotes` call may return. */
 const SEARCH_RESULT_LIMIT = 100;
-
-/**
- * `updateFolder` had no ancestry check at all, so a folder could be given
- * itself, or one of its own descendants, as its `parentId` — a cycle that
- * never terminates when the tree view (or anything else) walks parent links.
- * Walk the caller's whole folder set (cheap: one query, no recursion in the
- * database) and reject a move into `folderId` itself or anything under it.
- */
-async function isFolderOrDescendant(folderId, candidateId, userId) {
-  const folderKey = String(folderId);
-  const candidateKey = String(candidateId);
-  if (folderKey === candidateKey) return true;
-
-  const folders = await Folder.find({ userId }, '_id parentId').lean();
-  const childrenByParent = new Map();
-  for (const f of folders) {
-    const parentKey = f.parentId ? String(f.parentId) : null;
-    if (!childrenByParent.has(parentKey)) childrenByParent.set(parentKey, []);
-    childrenByParent.get(parentKey).push(String(f._id));
-  }
-
-  const stack = [...(childrenByParent.get(folderKey) || [])];
-  const visited = new Set();
-  while (stack.length) {
-    const current = stack.pop();
-    if (current === candidateKey) return true;
-    if (visited.has(current)) continue;
-    visited.add(current);
-    stack.push(...(childrenByParent.get(current) || []));
-  }
-  return false;
-}
 
 export const resolvers = {
   Query: {
@@ -166,12 +126,6 @@ export const resolvers = {
           message: note.isLocked ? 'Note is locked. Content not available.' : null,
         };
       });
-    },
-
-    folders: async (_, __, context) => {
-      const userId = context.user?.id;
-      if (!userId) throw new Error('Unauthorized');
-      return await Folder.find({ userId }).sort({ createdAt: -1 });
     },
 
     /**
@@ -335,64 +289,9 @@ export const resolvers = {
       );
       return true;
     },
-
-    createFolder: async (_, rawArgs, context) => {
-      const userId = context.user?.id;
-      if (!userId) throw new Error('Unauthorized');
-      // Same rule as createNote: a payload `userId` is dropped, not trusted.
-      const { userId: _payloadUserId, ...ownArgs } = rawArgs;
-      const args = validateCreateFolder(ownArgs);
-      const folder = new Folder({ ...args, userId });
-      return await folder.save();
-    },
-
-    updateFolder: async (_, rawArgs, context) => {
-      const userId = context.user?.id;
-      if (!userId) throw new Error('Unauthorized');
-      const { id, ...args } = validateUpdateFolder(rawArgs);
-      if (!id || !mongoose.isValidObjectId(id)) throw new Error('Invalid Folder ID');
-      // `null` clears the parent (move to root) and is always safe. A real
-      // id must not be `id` itself or one of its own descendants — either
-      // makes the folder its own ancestor, a cycle the tree view loops on.
-      if ('parentId' in args && args.parentId && (await isFolderOrDescendant(id, args.parentId, userId))) {
-        throw new GraphQLError('A folder cannot be moved into itself or one of its own subfolders', {
-          extensions: {
-            code: 'BAD_USER_INPUT',
-            http: { status: 400 },
-            details: [{ path: 'parentId', message: 'A folder cannot be moved into itself or one of its own subfolders' }],
-          },
-        });
-      }
-      const folder = await Folder.findOneAndUpdate(
-        { _id: id, userId },
-        args,
-        { new: true }
-      );
-      if (!folder) throw new Error('Folder not found or unauthorized');
-      return folder;
-    },
-
-    deleteFolder: async (_, rawArgs, context) => {
-      const userId = context.user?.id;
-      if (!userId) throw new Error('Unauthorized');
-      const { id, deleteNotes } = validateDeleteFolder(rawArgs);
-      if (!id || !mongoose.isValidObjectId(id)) throw new Error('Invalid Folder ID');
-
-      const folder = await Folder.findOneAndDelete({ _id: id, userId });
-      if (!folder) throw new Error('Folder not found or unauthorized');
-
-      // If deleteNotes is true, we should delete all notes in this folder.
-      // Wait, Note model doesn't have folderId right now in its schema!
-      // Let's just return true for now since folders might be implemented as tags or might be updated.
-      return true;
-    },
   },
 
   Note: {
     id: (note) => note._id.toString(),
-  },
-  
-  Folder: {
-    id: (folder) => folder._id.toString(),
   },
 };

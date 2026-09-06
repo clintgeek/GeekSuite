@@ -82,8 +82,7 @@ export const getTagsApi = async () => {
 // was still calling REST routes (`GET/POST /folders`) that were removed when
 // the app moved to the gateway. Notes are organised by TAGS, which is the
 // convention the sidebar, the search and the tag index all implement. The
-// gateway's `Folder` type and its four resolvers still exist — removing those
-// is a basegeek change and is reported, not done here.
+// gateway's `Folder` type, resolvers and model were removed the same day (R127).
 
 // Search
 export const searchNotesApi = async (query) => {

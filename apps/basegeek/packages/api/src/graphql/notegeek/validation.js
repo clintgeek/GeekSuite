@@ -14,19 +14,18 @@ export { validateInput };
  * ## No dates here — on purpose
  *
  * NoteGeek's only timestamps are `createdAt`/`updatedAt`, and both are
- * mongoose-managed (`{ timestamps: true }` on `models/Note.js` and
- * `models/Folder.js`). No mutation takes a date argument, so there is nothing
- * to normalize and nothing a client can backdate. Were one ever added it would
- * be an INSTANT — "when this note was written" is a moment, not a calendar
- * day — and would use `instantField()` from `../shared/validation.js`, not
- * `calendarDateField()`.
+ * mongoose-managed (`{ timestamps: true }` on `models/Note.js`). No mutation
+ * takes a date argument, so there is nothing to normalize and nothing a
+ * client can backdate. Were one ever added it would be an INSTANT — "when
+ * this note was written" is a moment, not a calendar day — and would use
+ * `instantField()` from `../shared/validation.js`, not `calendarDateField()`.
  *
  * ## ids stay strings
  *
  * See `../shared/validation.js`. The resolvers do their own
  * `mongoose.isValidObjectId` check and `notegeekOwnership.test.js` asserts the
- * exact "Note not found" / "Folder not found" messages that follow from it, so
- * an id is bounded here as a string and left to the resolver to interpret.
+ * exact "Note not found" message that follows from it, so an id is bounded
+ * here as a string and left to the resolver to interpret.
  *
  * ## Why `content` has two ceilings
  *
@@ -147,9 +146,6 @@ const tagsSchema = z.array(z.string().trim().max(100)).max(50).nullable().option
  * argument IS nullable in the schema, so create keeps `tagsSchema`.
  */
 const updateTagsSchema = z.array(z.string().trim().max(100)).max(50).optional();
-const folderNameSchema = z.string().trim().min(1).max(200);
-const iconSchema = z.string().trim().max(64).nullable().optional();
-const colorSchema = z.string().trim().max(32).nullable().optional();
 
 export const createNoteArgsSchema = z
   .object({
@@ -187,32 +183,6 @@ export const renameTagArgsSchema = z
   .strict();
 
 export const deleteTagArgsSchema = z.object({ tag: tagSchema }).strict();
-
-export const createFolderArgsSchema = z
-  .object({
-    name: folderNameSchema,
-    parentId: idString.nullable().optional(),
-    icon: iconSchema,
-    color: colorSchema,
-  })
-  .strict();
-
-export const updateFolderArgsSchema = z
-  .object({
-    id: idString,
-    name: folderNameSchema.optional(),
-    parentId: idString.nullable().optional(),
-    icon: iconSchema,
-    color: colorSchema,
-  })
-  .strict();
-
-export const deleteFolderArgsSchema = z
-  .object({
-    id: idString,
-    deleteNotes: z.boolean().nullable().optional(),
-  })
-  .strict();
 
 /**
  * `suggestForNote` — the only READ in this module with a validated argument

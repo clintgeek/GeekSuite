@@ -28,17 +28,6 @@ export const typeDefs = gql`
     message: String
   }
 
-  type Folder {
-    id: ID!
-    name: String!
-    userId: ID!
-    parentId: ID
-    icon: String
-    color: String
-    createdAt: Date!
-    updatedAt: Date!
-  }
-
   """A tag the user already has, scored against the note being written."""
   type SuggestedTag {
     tag: String!
@@ -67,7 +56,6 @@ export const typeDefs = gql`
     note(id: ID!): Note
     noteTags: [String!]!
     searchNotes(q: String!): [SearchSnippet!]!
-    folders: [Folder!]!
     suggestForNote(noteId: ID, title: String!, excerpt: String!, tags: [String!]!): NoteSuggestions!
   }
 
@@ -77,8 +65,5 @@ export const typeDefs = gql`
     deleteNote(id: ID!): Boolean!
     renameTag(oldTag: String!, newTag: String!): Boolean!
     deleteTag(tag: String!): Boolean!
-    createFolder(name: String!, parentId: ID, icon: String, color: String): Folder!
-    updateFolder(id: ID!, name: String, parentId: ID, icon: String, color: String): Folder!
-    deleteFolder(id: ID!, deleteNotes: Boolean): Boolean!
   }
 `;

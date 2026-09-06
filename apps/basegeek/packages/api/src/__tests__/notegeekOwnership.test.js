@@ -1,16 +1,15 @@
 /**
  * notegeekOwnership.test.js
  *
- * NoteGeek is strictly personal data: every Note and Folder carries `userId`.
- * GraphQL sits behind `optionalUser()`, so anonymous callers reach these
- * resolvers — reads must degrade to empty/Unauthorized rather than to an
- * unscoped query, and no id may be used to reach another user's note.
+ * NoteGeek is strictly personal data: every Note carries `userId`. GraphQL
+ * sits behind `optionalUser()`, so anonymous callers reach these resolvers —
+ * reads must degrade to empty/Unauthorized rather than to an unscoped query,
+ * and no id may be used to reach another user's note.
  */
 
 import mongoose from 'mongoose';
 
 const { default: Note } = await import('../graphql/notegeek/models/Note.js');
-const { default: Folder } = await import('../graphql/notegeek/models/Folder.js');
 const { resolvers } = await import('../graphql/notegeek/resolvers.js');
 
 const ALICE = new mongoose.Types.ObjectId();
@@ -24,7 +23,6 @@ const makeNote = (overrides = {}) =>
 
 beforeAll(async () => {
   await Note.db.asPromise();
-  // Folder is registered on the default mongoose connection.
   if (mongoose.connection.readyState === 0) {
     await mongoose.connect(process.env.MONGODB_URI);
   }
@@ -33,7 +31,6 @@ beforeAll(async () => {
 
 afterEach(async () => {
   await Note.deleteMany({});
-  await Folder.deleteMany({});
 });
 
 afterAll(async () => {
@@ -62,8 +59,6 @@ describe('note reads are owner-scoped', () => {
     expect(await Query.noteTags(null, {}, ctx(ALICE))).toEqual(['private']);
     expect(await Query.noteTags(null, {}, ctx(BOB))).toEqual([]);
     expect(await Query.noteTags(null, {}, ctx(null))).toEqual([]);
-
-    await expect(Query.folders(null, {}, ctx(null))).rejects.toThrow('Unauthorized');
   });
 
   test('searchNotes only ever matches the caller’s own notes', async () => {
@@ -73,12 +68,6 @@ describe('note reads are owner-scoped', () => {
     await expect(Query.searchNotes(null, { q: 'pineapple' }, ctx(null))).rejects.toThrow(
       'Unauthorized'
     );
-  });
-
-  test('folders are per-user', async () => {
-    await Folder.create({ name: 'Alice folder', userId: ALICE });
-    expect(await Query.folders(null, {}, ctx(ALICE))).toHaveLength(1);
-    expect(await Query.folders(null, {}, ctx(BOB))).toHaveLength(0);
   });
 });
 
@@ -100,7 +89,6 @@ describe('note writes are owner-scoped', () => {
 
   test('mutations reject anonymous callers before touching the database', async () => {
     const note = await makeNote();
-    const folder = await Folder.create({ name: 'Alice folder', userId: ALICE });
 
     const calls = [
       () => Mutation.createNote(null, { content: 'x' }, ctx(null)),
@@ -108,15 +96,11 @@ describe('note writes are owner-scoped', () => {
       () => Mutation.deleteNote(null, { id: String(note._id) }, ctx(null)),
       () => Mutation.renameTag(null, { oldTag: 'private', newTag: 'public' }, ctx(null)),
       () => Mutation.deleteTag(null, { tag: 'private' }, ctx(null)),
-      () => Mutation.createFolder(null, { name: 'x' }, ctx(null)),
-      () => Mutation.updateFolder(null, { id: String(folder._id), name: 'x' }, ctx(null)),
-      () => Mutation.deleteFolder(null, { id: String(folder._id) }, ctx(null)),
     ];
     for (const call of calls) await expect(call()).rejects.toThrow('Unauthorized');
 
     expect(await Note.countDocuments({})).toBe(1);
     expect((await Note.findById(note._id)).tags).toEqual(['private']);
-    expect(await Folder.countDocuments({})).toBe(1);
   });
 
   test('tag rewrites stay inside the caller’s own notes', async () => {
@@ -190,77 +174,8 @@ describe('note writes are owner-scoped', () => {
     expect(result).toBe(false);
   });
 
-  test('folders cannot be updated or deleted across users', async () => {
-    const folder = await Folder.create({ name: 'Alice folder', userId: ALICE });
-    await expect(
-      Mutation.updateFolder(null, { id: String(folder._id), name: 'pwned' }, ctx(BOB))
-    ).rejects.toThrow('Folder not found');
-    await expect(
-      Mutation.deleteFolder(null, { id: String(folder._id) }, ctx(BOB))
-    ).rejects.toThrow('Folder not found');
-    expect((await Folder.findById(folder._id)).name).toBe('Alice folder');
-  });
-
   test('created notes are stamped with the session user', async () => {
     const note = await Mutation.createNote(null, { content: 'mine', userId: String(BOB) }, ctx(ALICE));
     expect(String(note.userId)).toBe(String(ALICE));
-  });
-});
-
-describe('updateFolder rejects a parentId that would create a cycle', () => {
-  test('a folder cannot become its own parent', async () => {
-    const folder = await Folder.create({ name: 'Self', userId: ALICE });
-
-    await expect(
-      Mutation.updateFolder(null, { id: String(folder._id), parentId: String(folder._id) }, ctx(ALICE))
-    ).rejects.toThrow('cannot be moved into itself');
-
-    expect((await Folder.findById(folder._id)).parentId).toBeNull();
-  });
-
-  test('a folder cannot be reparented under its own direct child', async () => {
-    const parent = await Folder.create({ name: 'Parent', userId: ALICE });
-    const child = await Folder.create({ name: 'Child', userId: ALICE, parentId: parent._id });
-
-    await expect(
-      Mutation.updateFolder(null, { id: String(parent._id), parentId: String(child._id) }, ctx(ALICE))
-    ).rejects.toThrow('cannot be moved into itself');
-
-    expect((await Folder.findById(parent._id)).parentId).toBeNull();
-  });
-
-  test('a folder cannot be reparented under a grandchild', async () => {
-    const grandparent = await Folder.create({ name: 'Grandparent', userId: ALICE });
-    const parent = await Folder.create({ name: 'Parent', userId: ALICE, parentId: grandparent._id });
-    const child = await Folder.create({ name: 'Child', userId: ALICE, parentId: parent._id });
-
-    await expect(
-      Mutation.updateFolder(
-        null,
-        { id: String(grandparent._id), parentId: String(child._id) },
-        ctx(ALICE)
-      )
-    ).rejects.toThrow('cannot be moved into itself');
-
-    expect((await Folder.findById(grandparent._id)).parentId).toBeNull();
-  });
-
-  test('a valid move to an unrelated folder (or back to root) still succeeds', async () => {
-    const a = await Folder.create({ name: 'A', userId: ALICE });
-    const b = await Folder.create({ name: 'B', userId: ALICE });
-
-    const moved = await Mutation.updateFolder(
-      null,
-      { id: String(b._id), parentId: String(a._id) },
-      ctx(ALICE)
-    );
-    expect(String(moved.parentId)).toBe(String(a._id));
-
-    const rooted = await Mutation.updateFolder(
-      null,
-      { id: String(b._id), parentId: null },
-      ctx(ALICE)
-    );
-    expect(rooted.parentId).toBeNull();
   });
 });

@@ -1,7 +1,7 @@
 /**
  * notegeekValidation.test.js
  *
- * Covers the zod input-validation gate in front of notegeek's eight gateway
+ * Covers the zod input-validation gate in front of notegeek's five gateway
  * mutations (`DOCS/TODO_ORDER.md` #22 — the same layer bujogeek got in
  * `3265b1c`):
  *   1. Every mutation family accepts its normal input and rejects unknown
@@ -31,9 +31,6 @@ import {
   deleteNoteArgsSchema,
   renameTagArgsSchema,
   deleteTagArgsSchema,
-  createFolderArgsSchema,
-  updateFolderArgsSchema,
-  deleteFolderArgsSchema,
 } from '../graphql/notegeek/validation.js';
 
 /** Assert a call throws the shared gateway validation error shape. */
@@ -220,43 +217,5 @@ describe('renameTag / deleteTag', () => {
 
   test('tags are trimmed', () => {
     expect(remove({ tag: '  work  ' }).tag).toBe('work');
-  });
-});
-
-describe('createFolder / updateFolder / deleteFolder', () => {
-  const create = validateInput(createFolderArgsSchema);
-  const update = validateInput(updateFolderArgsSchema);
-  const remove = validateInput(deleteFolderArgsSchema);
-
-  test('accept normal input', () => {
-    expect(create({ name: 'Recipes', parentId: ID, icon: 'folder', color: '#7C8194' })).toEqual({
-      name: 'Recipes',
-      parentId: ID,
-      icon: 'folder',
-      color: '#7C8194',
-    });
-    expect(update({ id: ID, name: 'Renamed', parentId: null })).toEqual({
-      id: ID,
-      name: 'Renamed',
-      parentId: null,
-    });
-    expect(remove({ id: ID, deleteNotes: true })).toEqual({ id: ID, deleteNotes: true });
-  });
-
-  test('reject an empty or over-long name', () => {
-    expectBadInput(() => create({ name: '' }));
-    expectBadInput(() => create({ name: 'a'.repeat(201) }));
-    expectBadInput(() => update({ id: ID, name: '' }));
-  });
-
-  test('reject an over-long icon or colour', () => {
-    expectBadInput(() => create({ name: 'x', icon: 'i'.repeat(65) }));
-    expectBadInput(() => create({ name: 'x', color: '#'.repeat(33) }));
-  });
-
-  test('reject unknown keys', () => {
-    expectBadInput(() => create({ name: 'x', userId: ID }));
-    expectBadInput(() => update({ id: ID, ownerId: ID }));
-    expectBadInput(() => remove({ id: ID, cascade: true }));
   });
 });
