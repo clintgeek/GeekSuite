@@ -48,6 +48,53 @@ Precaching is what makes a deploy survivable: the old client keeps serving the
 old chunks from its own precache instead of re-fetching URLs the server no
 longer has.
 
+**The SW must reinstall on every deploy (suite rule, Q54, 2026-09-05).**
+A hand-rolled `public/sw.js` (Flavor B) has no build step, so its precache
+manifest and cache name were originally hand-written constants. A constant
+`CACHE_NAME` means `install` never fires again after the first visit —
+`activate`'s cleanup never runs, the precache list never updates, and the
+`"/"` a user's browser cached on day one is served forever, even after a
+route goes from eager to lazy and needs the new SW to survive the deploy.
+Found in flockgeek (115fb03) chasing the code-splitting bug above; the same
+constant-name / static-list shape was then checked for and fixed suite-wide
+(Q54).
+
+The fix is a small `swPrecache()` Vite plugin (`closeBundle`, `apply:
+'build'`) that stamps two placeholders at the top of `dist/sw.js` after
+every production build — never `public/sw.js`, so `vite dev` keeps serving
+the unstamped source:
+
+```js
+const BUILD_ID = "dev";          // → sha1 of the sorted hashed-asset list, first 8 hex chars
+const PRECACHE_ASSETS = [];      // → every built assets/*.js and assets/*.css, as URLs
+const CACHE_NAME = `<app>-cache-${BUILD_ID}`;
+```
+
+`install` adds each URL individually (`cache.add(url).catch(() => undefined)`
+per URL, not `addAll`, so one missing asset can't fail the whole install and
+leave the app with no service worker at all). `activate`'s existing
+`keys.filter((key) => key !== CACHE_NAME)` cleanup needs no change — once
+`CACHE_NAME` is build-derived it already deletes every prior version of the
+app's own cache. The plugin hard-errors (`this.error(...)`) if either
+placeholder is missing after the string replace, so a rename in
+`public/sw.js` fails the build instead of silently shipping an unstamped SW.
+
+VitePWA/Workbox apps (Flavor A) get this for free: `generateSW`'s manifest is
+already content-hash-revisioned per entry, and `cleanupOutdatedCaches` +
+`clientsClaim`/`skipWaiting` already reinstall and evict on every deploy —
+there is nothing to stamp.
+
+| App | Flavor | Status |
+|-----|--------|--------|
+| flockgeek | B (hand-rolled) | ✅ done 2026-09-05 (115fb03) — found chasing the code-splitting bug |
+| storygeek | B (hand-rolled) | ✅ done 2026-09-05 (Q54) |
+| bookgeek | B (hand-rolled) | ✅ done 2026-09-05 (Q54) |
+| startgeek | B (hand-rolled) | ✅ done 2026-09-05 (Q54) — built with npm/Vite standalone, same plugin shape in its own `vite.config.js` |
+| notegeek | A (VitePWA/Workbox) | ✅ already fine — `generateSW`'s revisioned manifest + `cleanupOutdatedCaches` reinstall on every deploy natively; no hand-rolled SW exists to fix |
+| fitnessgeek | A (VitePWA/Workbox) | ✅ already fine — same as notegeek, via the plugin |
+| bujogeek | A (VitePWA/Workbox) | ⏳ pending R90 — another agent owns `apps/bujogeek/frontend/vite.config.js` as of 2026-09-05; likely already fine like notegeek/fitnessgeek (same flavor) but not yet re-verified under R90 |
+| basegeek | none | n/a — ships no service worker |
+
 **A StaleWhileRevalidate rule for JS/CSS/fonts must refuse `text/html`.**
 Precaching does not cover everything — hashed font files (`.woff`/`.woff2` are
 not in the default `globPatterns`) and any cross-origin script fall through to
@@ -118,6 +165,16 @@ a service worker — not a per-app judgment call.
    `apps/flockgeek/frontend/public/sw.js`, `apps/storygeek/frontend/public/sw.js`,
    `apps/startgeek/public/sw.js` (all added 2026-09-05).
 
+**Per-app code-splitting status.** First load = the entry script plus every
+`modulepreload` `dist/index.html` lists, plus the HTML itself; measure it with
+`zlib.gzipSync`, not by eyeballing the build log (the log prints every chunk,
+including the async ones nobody downloads on the first visit).
+
+| App | Routes lazy | Vendor chunks (all eager) | First load raw / gzip | Largest chunk | New hashed chunks after a deploy |
+|-----|-------------|---------------------------|------------------------|---------------|-----------------------------------|
+| flockgeek | ✅ 2026-09-05 — 8 of 10 (`HomePage` + `LoginPage` stay eager, see `apps/flockgeek/CONTEXT.md` "Bundle") | react-vendor / mui / apollo / motion; no async vendor group (no chart, date or export library in the app) | 1011 kB / 312 kB (was 1072 kB / 326 kB, one 1060 kB chunk) | 313 kB `mui` (was 1060 kB) | ✅ precached — hand-rolled `public/sw.js` has no build step, so `swPrecache()` in its `vite.config.js` stamps the hashed `.js`/`.css` list + a content-hash `BUILD_ID` into `dist/sw.js` (the flavour-B equivalent of `generateSW`'s `globPatterns`) |
+| bujogeek | ✅ 2026-09-05 — all 12 pages, including `LoginPage`/`RegisterPage`; fallback is the app's own `SkeletonLoader` parchment shimmer, not a spinner (see `apps/bujogeek/DOCS/CONTEXT.md` "Bundle") | react-vendor / apollo / motion / date-fns eager, `markdown` (react-markdown + the whole remark/micromark tail) async behind the lazy TemplatePreview; **deliberately no `mui` group** — measured three ways in `apps/bujogeek/frontend/vite.config.js`, and here a group costs 77 kB of first load rather than saving it (fitnessgeek's is load-bearing only because of its chart vendors) | 1010 kB / 310 kB (was 1606 kB / 480 kB, one single 1605 kB chunk — no `manualChunks`, no route splitting at all) | 449 kB entry `index` (was 1605 kB); nothing over 500 kB, build no longer warns | ✅ precached — `generateSW`'s default `globPatterns`; verified after the split: 44 hashed `.js`/`.css` on disk, all 44 in the SW's 47-entry manifest (+ `index.html`, `offline.html`, `favicon.svg`). Precache-only, no runtime asset rule, so there is no cache for a `text/html` response to poison; an unknown hashed chunk falls straight through to the network, where the backend's extname-404 guard answers 404 |
+
 ### 2. Two SW Flavors in the Suite
 
 #### A. VitePWA + Workbox (preferred for new apps)
@@ -140,7 +197,7 @@ Required first rule:
 
 #### B. Hand-rolled `public/sw.js`
 
-Used by: BabelGeek, FlockGeek, TemplateGeek
+Used by: FlockGeek, StoryGeek, BookGeek, StartGeek
 
 Required pattern at the top of the fetch handler:
 ```js
@@ -208,7 +265,8 @@ The offline page should:
 ## Current Status (per app)
 
 *Updated 2026-09-05 — offline-pages-per-mode + theme-color/manifest audit (TODO_ORDER #30);
-SPA-fallback / SW-poisoning guard added suite-wide (Q53, see §1a and "Remaining work" below).*
+SPA-fallback / SW-poisoning guard added suite-wide (Q53, see §1a and "Remaining work" below);
+SW-reinstalls-on-deploy fixed suite-wide across the hand-rolled Flavor-B apps (Q54, see §1a).*
 
 | App | SW Type | Auth Safe | SPA Fallback Guard | SW Asset-Cache Guard | Manifest | Offline Page | Installable |
 |-----|---------|-----------|---------------------|-----------------------|----------|--------------|-------------|

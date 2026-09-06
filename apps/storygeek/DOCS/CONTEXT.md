@@ -123,3 +123,14 @@ frozen auth object from the mock factory. Production was never affected — `Aut
 `useMemo`s its context value — but the loop was one identity change away. Rule of thumb for
 this repo: **effects depend on `user?.id`, never on `user`**, and an auth mock must return the
 same reference every call.
+
+## Service worker — SW reinstalls on deploy (2026-09-05, Q54)
+
+`public/sw.js` had the same landmine as flockgeek (115fb03): a constant
+`CACHE_NAME` and a static three-URL precache, so a new deploy never
+reinstalled the SW and the `"/"` cached on a user's first visit was served
+forever. Fixed the same way: `BUILD_ID`/`PRECACHE_ASSETS` placeholders in
+`public/sw.js`, stamped into `dist/sw.js` by `swPrecache()` in
+`vite.config.js` from the built `assets/*.js`/`*.css` list; `CACHE_NAME` is
+now `storygeek-cache-${BUILD_ID}`. Dev (`vite dev`) still serves the source
+file untouched — no build step there. See DOCS/PWA_STANDARD.md §1a.
