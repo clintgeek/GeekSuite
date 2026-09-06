@@ -246,4 +246,114 @@ users get responses, but log noise is misleading. Polish ticket — not a fire.
 
 ---
 
-*Last reviewed: April 2026*
+## Going-over 2026-09-05 — `packages/**` (the shared packages)
+
+A read of every file in `packages/{ui,auth,api-client,user,utils,logger,schemas,crypto-vault,eslint-config}`.
+These packages are consumed by every app, so the bar for changing one is higher than for an
+app: everything below is either a bug fix or additive, and every consumer was grepped.
+
+### Fixed
+
+- **`packages/user/src/server/tokenUtils.js` — `validateToken()` had no timeout.** axios
+  defaults `timeout: 0` (wait forever), and this call runs on *every* authenticated request in
+  the six consumer backends (`attachUser()`, no cache). A basegeek that is hung rather than down
+  parked every inbound request in every app until the socket died on its own. Now bounded at
+  8s, `BASEGEEK_TIMEOUT_MS` overriding (a non-positive or unparseable value falls back to the
+  default rather than restoring "forever"). A timeout carries no `error.response`, so it lands
+  in `attachUser()`'s existing 502 branch and is never mistaken for a 401.
+- **`packages/auth/src/authClient.js` — a transient refresh failure logged you out.**
+  `startRefreshTimer`'s `catch` did not look at the error: a rejected `fetch` (wifi blinked,
+  laptop just woke), a 502 while a container restarted, or a 200 whose body was an nginx error
+  page all stopped the timer *and* fired `onFailure` — which `AuthProvider` wires to "clear the
+  user and run the app's logout callback". The comment above it said the opposite. Only a real
+  401/403 is terminal now; everything else warns and retries on the next 50-minute tick.
+- **`packages/logger` — an axios rejection logged as `{ err }` wrote the caller's credentials
+  in the clear.** An axios error hangs `config`, `request` and `response` off itself as own
+  enumerable properties, and pino's standard `err` serializer copies those verbatim. Measured
+  on a real 401: one `logger.error({ err })` wrote 9.5 KB and repeated the
+  `Authorization: Bearer …` three times (`config.headers`, `request._header`,
+  `request._redirectable._options.headers`), the replayed `Cookie` twice, the upstream
+  `set-cookie` twice and the outbound request body — a password, on the login/register proxies
+  — twice. Every backend logs failures this way (`req.log.error({ err }, 'Unhandled error')` is
+  fitnessgeek's global handler). A redaction path list cannot win that game, because
+  `err.request` is a live `ClientRequest` whose internals are node's to rename, so
+  `createLogger` now installs a `serializers.err` that **drops** the transport objects and keeps
+  `{ method, url, timeout }` / `{ status, statusText, data }`. Same line, 1.4 KB, no secret.
+  `serializeError` is exported for a consumer building its own pino. Non-axios errors and a
+  non-object `err` (`{ err: err.message }`) are untouched.
+- **`packages/utils/src/dates.js` — `toUtcMidnight(null)` was 1 January 1970.** `new Date(null)`
+  is the epoch (`null` coerces to `0`) while `new Date(undefined)` is Invalid Date, and that
+  asymmetry passed straight through, so a calendar date the caller never supplied reached Mongo
+  as a perfectly storable 1970 row instead of a cast error somebody would see. `null` and `''`
+  now yield Invalid Date in `toUtcMidnight` and `startOfLocalDay`, matching what
+  `utcDateString` / `displayCalendarDate` / `localDateString` have always done. An explicit
+  `0` still means the epoch. `utcDayRange` inherits the guard.
+- **`packages/user/src/server/createUserModel.js` — two conflicting specs per index.**
+  `userId` and `email` both declare `unique: true, sparse: true` on the path *and* had a bare
+  `schema.index({ … })` beside it: same default name, different options, which MongoDB refuses
+  with `IndexOptionsConflict` on an event nothing listens for. Nothing consumes this factory
+  yet — which is why the trap was worth removing before something does.
+- **`packages/ui/src/surfaces/GeekDialog.jsx` — `dialogProps.PaperProps` was silently dropped.**
+  `dialogProps` is the slot every app primitive forwards its `...rest` into (PremiumDialog,
+  BujoDialog, LedgerDialog, CodexDialog), and this assigned `PaperProps` rather than merging it,
+  unlike `GeekSheet`, which has always merged. Latent — no app passes it today. Ladder is now
+  full-screen defaults → `dialogProps` → the primitive's own `sx`.
+- **`packages/schemas/fitnessgeek/weight.js` — exports `weightBounds`** (BURN_REVIEW note (r)).
+  `medication` and `bloodPressure` export theirs and their zod validators import them; `weight`
+  was the one member of the set whose ceiling was hand-copied. Definition values are unchanged
+  byte for byte — both parity tripwires stay green. **Follow-up for the fitnessgeek tree:**
+  `apps/fitnessgeek/backend/src/validation/schemas/weight.js:11` can now import it instead of
+  writing `.max(1000)`. Its positive *floor* is deliberate and documented; only the ceiling and
+  the notes length should come from here.
+- **Doc drift**: `getTokenFromRequest`'s docstring claimed "cookie-first, then Authorization
+  header". Six backends have shipped header-first since inception. The comment now says what the
+  code does, and a test pins the order.
+- Dead code removed: `getStoredRefreshToken` in `authClient.js` (never read — refresh is
+  cookie-first on purpose, and replaying a rotated localStorage token is what trips basegeek's
+  reuse revocation), the unused `apiBase` in `startRefreshTimer`, three unused React imports in
+  `useUserStore.js`.
+
+### Left in place, with reasons
+
+- **The shared Apollo link does not refresh on a 401 — it logs you out.** `packages/auth`'s
+  axios interceptor refreshes and replays; `packages/api-client`'s `errorLink` treats a 401
+  `networkError` (or an `UNAUTHENTICATED` GraphQL error) as terminal and calls `logout()` +
+  `loginRedirect()` immediately. Normally invisible, because `startRefreshTimer` rotates the
+  cookie every 50 minutes — but a tab that was backgrounded or a laptop that slept past the 1h
+  `geek_token` TTL gets a hard logout on its next query where a refresh would have worked.
+  The machinery to fix it exists in that file (the CSRF heal already retries by hand-building an
+  `Observable` around `forward(operation)`), but it needs `doTokenRefresh` exported from
+  `@geeksuite/auth` and it changes session behaviour for all eight apps at once. **Chef's call.**
+- **`packages/schemas/fitnessgeek/nutritionGoals.js` — sugar/sodium are a ceiling in
+  `evaluateGoalsMet` and a floor in `computeGoalProgress`**, so hitting your sodium limit exactly
+  reads as 100% "progress". Q39, confirmed by the burn review; the file says in as many words
+  that it moved verbatim and is a product question. Both methods still have zero non-test
+  callers.
+- **`packages/ui/src/color.js`'s `readableCache` is an unbounded `Map`** keyed on
+  `color|surface|min|under`. Called from inside `sx`, so it grows with distinct tuples rather
+  than with renders; every consumer today feeds it from a fixed palette. A cap is cheap if that
+  ever stops being true.
+- **`useUserStore`'s `useUser()` can tear**: it seeds `useState` from the module store at first
+  render and only subscribes in an effect, so a store change landing in that window is missed
+  until the next notify. Live in bujogeek and notegeek; not observed, and the fix is a
+  `useSyncExternalStore` rewrite of a module every app's bootstrap touches.
+- **`createUserModel` has no consumers at all.** Left (now trap-free) rather than deleted —
+  deleting a shared factory is a Chef call, not a going-over call.
+- **`getTokenFromRequest`'s header-first order** itself: a stale bearer beating a fresh cookie
+  costs one 401 and the client's own refresh, and changing the order changes auth resolution in
+  six backends at once. Documented instead.
+
+### Verification
+
+608 → 644 tests, all green (ui 414→417, auth 35→43, api-client 9, user 82→95, utils 36→42,
+logger 7→13, crypto-vault 25). Lint 18 → 12 warnings, 0 errors, none new.
+`node tools/syntax-check.mjs` clean over 811 files; `node tools/boot-smoke.mjs` clean over all
+seven backends. No package has a build step — they are source-only, bundled by each app's Vite,
+so `pnpm build` does not apply here. The mobile harness was **not** run: the only frontend change
+is the `GeekDialog` merge, which is provably inert for every current caller (no app passes
+`PaperProps` through `dialogProps` — all app `PaperProps` uses are on raw MUI `Dialog`/`Popover`),
+and the box was at load 9 with six other reviewers on it.
+
+---
+
+*Last reviewed: April 2026 (SSO architecture); `packages/**` going-over 2026-09-05*

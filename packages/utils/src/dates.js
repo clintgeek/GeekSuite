@@ -48,6 +48,24 @@ const YMD = /^\d{4}-\d{2}-\d{2}$/;
 const pad = (n) => String(n).padStart(2, '0');
 
 /**
+ * `null` and `''` mean "no date", not "the epoch".
+ *
+ * `new Date(null)` is `1970-01-01T00:00:00.000Z` — a JavaScript wart, since
+ * `null` coerces to `0` — while `new Date(undefined)` is Invalid Date. That
+ * asymmetry used to leak straight through `toUtcMidnight` and
+ * `startOfLocalDay`, so a missing calendar date arrived at Mongo as a
+ * perfectly valid 1 January 1970 rather than as a cast error somebody would
+ * see. `utcDateString`, `displayCalendarDate` and `localDateString` have
+ * always guarded `null`/`''` and returned `''`; these two now agree with
+ * them, and return Invalid Date — the same answer they already gave for
+ * `undefined` and for `'nope'`.
+ */
+const MISSING = (value) => value === null || value === '';
+
+/** The Invalid Date these functions hand back for missing input. */
+const invalidDate = () => new Date(NaN);
+
+/**
  * Normalize a calendar date to UTC midnight — the suite's storage form.
  *
  * A bare `YYYY-MM-DD` is read as the calendar day it names, never re-parsed
@@ -59,10 +77,15 @@ const pad = (n) => String(n).padStart(2, '0');
  * you want an instant's **local** day instead, take `localDateString()` first
  * and pass that string in.
  *
+ * Missing input (`null`, `''`, `undefined`) and unparseable input both yield
+ * an Invalid Date, which propagates rather than quietly becoming 1970 — see
+ * the `MISSING` note above.
+ *
  * @param {string|Date|number} value
  * @returns {Date} the same calendar day at `00:00:00.000Z`
  */
 export function toUtcMidnight(value) {
+  if (MISSING(value)) return invalidDate();
   if (typeof value === 'string' && YMD.test(value)) {
     const [y, m, d] = value.split('-').map(Number);
     return new Date(Date.UTC(y, m - 1, d));
@@ -180,10 +203,14 @@ export function localDateString(value = new Date()) {
  * (Lord Howe, some of Brazil historically), `setHours(0,0,0,0)` lands on the
  * first existing instant of that day, which is the useful answer.
  *
+ * As with `toUtcMidnight`, a `null` or `''` value is *missing*, not the
+ * epoch, and yields an Invalid Date. Omit the argument entirely to get today.
+ *
  * @param {string|Date|number} [value=new Date()]
  * @returns {Date}
  */
 export function startOfLocalDay(value = new Date()) {
+  if (MISSING(value)) return invalidDate();
   const d = value instanceof Date ? new Date(value.getTime()) : new Date(value);
   if (Number.isNaN(d.getTime())) return d;
   d.setHours(0, 0, 0, 0);

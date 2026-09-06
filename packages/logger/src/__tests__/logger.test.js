@@ -7,6 +7,7 @@ import {
   createLogger,
   DEFAULT_QUIET_PATHS,
   REDACT_PATHS,
+  serializeError,
 } from '../index.js';
 
 /** Collects newline-delimited JSON log lines written to a fake destination. */
@@ -158,5 +159,115 @@ describe('createHttpLogger health-check quieting', () => {
 
   it('DEFAULT_QUIET_PATHS covers /api/health and /health', () => {
     expect(DEFAULT_QUIET_PATHS).toEqual(['/api/health', '/health']);
+  });
+});
+
+describe('createLogger err serializer — axios rejections', () => {
+  /**
+   * A stand-in with the same *own enumerable* properties a real axios error
+   * carries, because those are precisely what pino's standard `err`
+   * serializer copies verbatim. Measured against a real axios 401 on
+   * 2026-09-05: one `logger.error({ err })` wrote 9.5 KB and repeated the
+   * bearer token three times (`config.headers`, `request._header`,
+   * `request._redirectable._options.headers`), the cookie twice and the
+   * outbound body twice. The nesting below mirrors those exact paths.
+   */
+  function axiosLikeError() {
+    const err = new Error('Request failed with status code 401');
+    err.name = 'AxiosError';
+    err.isAxiosError = true;
+    err.code = 'ERR_BAD_REQUEST';
+    err.status = 401;
+    const config = {
+      method: 'post',
+      url: 'https://basegeek.clintgeek.com/api/auth/login',
+      timeout: 8000,
+      headers: {
+        Authorization: 'Bearer SUPERSECRETJWT',
+        Cookie: 'geek_token=COOKIEVALUE',
+        'X-CSRF-Token': 'CSRFVALUE',
+      },
+      data: '{"password":"hunter2"}',
+    };
+    err.config = config;
+    err.request = {
+      _header: 'POST /api/auth/login HTTP/1.1\r\nAuthorization: Bearer SUPERSECRETJWT\r\n',
+      _redirectable: { _options: { headers: { Authorization: 'Bearer SUPERSECRETJWT' } } },
+      res: { rawHeaders: ['set-cookie', 'geek_token=UPSTREAMCOOKIE'] },
+    };
+    err.response = {
+      status: 401,
+      statusText: 'Unauthorized',
+      data: { message: 'Invalid credentials' },
+      headers: { 'set-cookie': ['geek_token=UPSTREAMCOOKIE'] },
+      config,
+      request: err.request,
+    };
+    return err;
+  }
+
+  function logError(err) {
+    const { stream, lines } = makeCollector();
+    const logger = createLogger({ pretty: false, destination: stream });
+    logger.error({ err }, 'call failed');
+    return { entry: lines[0], raw: JSON.stringify(lines[0]) };
+  }
+
+  it('writes no bearer token, cookie, CSRF token or request body anywhere in the line', () => {
+    const { raw } = logError(axiosLikeError());
+
+    expect(raw).not.toContain('SUPERSECRETJWT');
+    expect(raw).not.toContain('COOKIEVALUE');
+    expect(raw).not.toContain('CSRFVALUE');
+    expect(raw).not.toContain('hunter2');
+    expect(raw).not.toContain('UPSTREAMCOOKIE');
+  });
+
+  it('drops the ClientRequest tree entirely', () => {
+    const { entry } = logError(axiosLikeError());
+    expect(entry.err.request).toBeUndefined();
+  });
+
+  it('keeps which call it was, what status came back, and what the far end said', () => {
+    const { entry } = logError(axiosLikeError());
+
+    expect(entry.err.message).toBe('Request failed with status code 401');
+    expect(entry.err.code).toBe('ERR_BAD_REQUEST');
+    expect(entry.err.stack).toBeTruthy();
+    expect(entry.err.config).toEqual({
+      method: 'post',
+      url: 'https://basegeek.clintgeek.com/api/auth/login',
+      timeout: 8000,
+    });
+    expect(entry.err.response).toEqual({
+      status: 401,
+      statusText: 'Unauthorized',
+      data: { message: 'Invalid credentials' },
+    });
+  });
+
+  it('leaves a plain Error untouched', () => {
+    const { entry } = logError(new Error('mongo went away'));
+    expect(entry.err.type).toBe('Error');
+    expect(entry.err.message).toBe('mongo went away');
+    expect(entry.err.stack).toBeTruthy();
+    expect(entry.err.config).toBeUndefined();
+  });
+
+  it('passes a non-object err straight through — several call sites log err.message', () => {
+    const { stream, lines } = makeCollector();
+    const logger = createLogger({ pretty: false, destination: stream });
+    logger.warn({ err: 'Redis connection failed' }, 'cache off');
+    expect(lines[0].err).toBe('Redis connection failed');
+  });
+
+  it('serializeError is exported so a consumer building its own pino can reuse it', () => {
+    const out = serializeError(axiosLikeError());
+    expect(out.request).toBeUndefined();
+    expect(out.config.headers).toBeUndefined();
+    expect(out.config.data).toBeUndefined();
+    expect(out.response.headers).toBeUndefined();
+    expect(serializeError('a string')).toBe('a string');
+    expect(serializeError(null)).toBe(null);
   });
 });

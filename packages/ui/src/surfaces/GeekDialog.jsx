@@ -150,13 +150,23 @@ export const GeekDialog = forwardRef(function GeekDialog(
       fullWidth={full ? false : fullWidth}
       keepMounted={keepMounted}
       disablePortal={typeof document === 'undefined'}
-      transitionDuration={prefersReducedMotion ? 0 : undefined}
+      transitionDuration={prefersReducedMotion ? 0 : dialogProps?.transitionDuration}
       aria-labelledby={titleId}
       data-geek-dialog="root"
       data-geek-dialog-mode={full ? 'full' : 'window'}
+      // Merged, not replaced. `dialogProps` is the pass-through slot every app
+      // primitive forwards its own `...rest` into (PremiumDialog, BujoDialog,
+      // LedgerDialog, CodexDialog), so a caller reaching MUI's `PaperProps`
+      // through it used to have the whole object silently dropped by the
+      // assignment below. `GeekSheet` has always merged; this now matches it.
+      // Specificity ladder, least to most: full-screen defaults, then whatever
+      // came through `dialogProps`, then this primitive's own `sx` prop —
+      // which is the dedicated paper slot, so it stays the last word.
       PaperProps={{
+        ...dialogProps?.PaperProps,
         sx: {
           ...(full ? { borderRadius: 0, backgroundImage: 'none' } : {}),
+          ...dialogProps?.PaperProps?.sx,
           ...sx,
         },
       }}

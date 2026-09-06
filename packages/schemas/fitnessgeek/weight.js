@@ -47,6 +47,31 @@
  */
 
 /**
+ * The numeric bounds, in one place, shared by the schema and by fitnessgeek's
+ * zod request validator. Frozen so a consumer cannot mutate the contract.
+ *
+ * WHY THESE ARE EXPORTED
+ * ----------------------
+ * `apps/fitnessgeek/backend/src/validation/schemas/weight.js` is a zod layer
+ * in front of the REST controller. Its header says *"Mirrors the shared schema
+ * packages/schemas/fitnessgeek/weight.js (`min: 0, max: 1000`)"* and then
+ * writes `.max(1000)` by hand — a hand-synced copy of the same number in a
+ * different language, which is the drift mode consolidation exists to end.
+ * `medication.js` and `bloodPressure.js` both export their bounds and are
+ * imported by their validators; `weight` was the one member of the set that
+ * could still drift (BURN_REVIEW 2026-09-05, note (r)).
+ *
+ * The zod layer keeps a *positive* floor rather than `min: 0` — deliberately,
+ * and documented at that call site — so only the ceiling and the notes length
+ * are shared. `weightBounds.weight_value.min` is the schema's floor and is
+ * exported for completeness, not as an instruction to the validator.
+ */
+const weightBounds = Object.freeze({
+  weight_value: Object.freeze({ min: 0, max: 1000 }),
+  notes: Object.freeze({ maxlength: 500 }),
+});
+
+/**
  * The field definitions, as a plain object literal.
  *
  * @param {import('mongoose')} mongoose - the caller's mongoose instance.
@@ -67,8 +92,8 @@ function weightDefinition(mongoose) {
     weight_value: {
       type: Number,
       required: true,
-      min: 0,
-      max: 1000
+      min: weightBounds.weight_value.min,
+      max: weightBounds.weight_value.max
     },
     log_date: {
       type: Date,
@@ -77,7 +102,7 @@ function weightDefinition(mongoose) {
     },
     notes: {
       type: String,
-      maxlength: 500,
+      maxlength: weightBounds.notes.maxlength,
       default: ''
     },
     created_at: {
@@ -129,6 +154,7 @@ function createWeightSchema(mongoose) {
 }
 
 module.exports = {
+  weightBounds,
   weightDefinition,
   weightOptions,
   createWeightSchema,

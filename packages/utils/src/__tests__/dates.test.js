@@ -359,3 +359,56 @@ describe('startOfLocalDay', () => {
     });
   });
 });
+
+/**
+ * `null` is not the epoch.
+ *
+ * `new Date(null)` is `1970-01-01T00:00:00.000Z`, because `null` coerces to
+ * `0`, while `new Date(undefined)` is Invalid Date. That asymmetry used to
+ * pass straight through `toUtcMidnight` and `startOfLocalDay`, so a calendar
+ * date the caller never supplied reached Mongo as a perfectly storable
+ * 1 January 1970 instead of as a cast error somebody would notice. The other
+ * five helpers have always guarded `null`/`''`; these two now agree.
+ */
+describe('missing input is missing, not 1970', () => {
+  it('toUtcMidnight(null) is an Invalid Date, not the epoch', () => {
+    const d = toUtcMidnight(null);
+    expect(Number.isNaN(d.getTime())).toBe(true);
+    expect(d.toISOString.bind(d)).toThrow(); // and cannot be stringified into a row
+  });
+
+  it('toUtcMidnight(undefined) and toUtcMidnight("") agree with it', () => {
+    expect(Number.isNaN(toUtcMidnight(undefined).getTime())).toBe(true);
+    expect(Number.isNaN(toUtcMidnight('').getTime())).toBe(true);
+  });
+
+  it('toUtcMidnight still accepts a real epoch timestamp of 0', () => {
+    // The guard is on `null`/`''` only — an explicit `0` is a caller saying
+    // "the epoch", and that is a legitimate, if odd, instant.
+    expect(toUtcMidnight(0).toISOString()).toBe('1970-01-01T00:00:00.000Z');
+    expect(toUtcMidnight(new Date(0)).toISOString()).toBe('1970-01-01T00:00:00.000Z');
+  });
+
+  it('utcDayRange inherits the guard, so a missing date is not a query for the epoch day', () => {
+    const { start, end } = utcDayRange(null);
+    expect(Number.isNaN(start.getTime())).toBe(true);
+    expect(Number.isNaN(end.getTime())).toBe(true);
+  });
+
+  it('startOfLocalDay(null) is an Invalid Date, but no argument still means today', () => {
+    withTZ('America/Chicago', () => {
+      expect(Number.isNaN(startOfLocalDay(null).getTime())).toBe(true);
+      expect(Number.isNaN(startOfLocalDay('').getTime())).toBe(true);
+
+      const today = startOfLocalDay();
+      expect(Number.isNaN(today.getTime())).toBe(false);
+      expect(today.getHours()).toBe(0);
+    });
+  });
+
+  it('the string helpers are unchanged — they answer "" for the same input', () => {
+    expect(utcDateString(null)).toBe('');
+    expect(localDateString(null)).toBe('');
+    expect(displayCalendarDate(null)).toBe('');
+  });
+});

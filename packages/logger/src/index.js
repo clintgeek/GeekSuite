@@ -42,6 +42,86 @@ const REDACT_PATHS = [
   'req.body.apiKey',
 ];
 
+/* ---------------------------------------------------------------------------
+ * The err serializer — why this package needs one
+ * -------------------------------------------------------------------------*/
+
+/**
+ * Every backend logs failures as `logger.error({ err }, '…')`, and a large
+ * share of those failures are axios rejections: `attachUser()` validating a
+ * token against basegeek, the six `/auth/{refresh,logout}` proxies, the food
+ * APIs, `baseGeekAIService`. An axios error is not a tidy `Error` — it hangs
+ * `config`, `request` and `response` off itself as **own enumerable
+ * properties**, and pino's standard `err` serializer copies own enumerable
+ * properties verbatim.
+ *
+ * Measured, on a real axios 401 (2026-09-05): one `logger.error({ err })` call
+ * wrote 9.5 KB containing the caller's `Authorization: Bearer …` in three
+ * separate places (`err.config.headers`, `err.request._header`,
+ * `err.request._redirectable._options.headers`), the replayed `Cookie` header
+ * in two, the upstream `set-cookie` in two, and the outbound request body —
+ * which on the login/register proxies is the user's password — in two more.
+ *
+ * A redaction path list cannot win that game: `err.request` is a live
+ * `ClientRequest`, and its internals are node's to rename. So the serializer
+ * drops the transport objects instead of trying to censor them, and keeps the
+ * three things a reader of the log actually wants: which call, what status,
+ * what the far end said.
+ *
+ * Non-axios errors are unaffected — no `config`/`request`/`response`, nothing
+ * to strip — and a non-object `err` (several call sites log `{ err:
+ * err.message }`) passes straight through.
+ */
+
+/** Fields of an axios `config` that are safe and worth keeping. */
+const SAFE_CONFIG_KEYS = ['method', 'url', 'baseURL', 'timeout'];
+
+function summarizeConfig(config) {
+  if (!config || typeof config !== 'object') return undefined;
+  const out = {};
+  for (const key of SAFE_CONFIG_KEYS) {
+    if (config[key] !== undefined) out[key] = config[key];
+  }
+  // Deliberately absent: `headers` (Authorization / Cookie / X-API-Key) and
+  // `data` (the outbound body — a password on the login proxies, a
+  // client_secret on the OAuth exchanges).
+  return out;
+}
+
+function summarizeResponse(response) {
+  if (!response || typeof response !== 'object') return undefined;
+  const out = {};
+  if (response.status !== undefined) out.status = response.status;
+  if (response.statusText !== undefined) out.statusText = response.statusText;
+  // The *error body* is the useful half and carries no credential of ours;
+  // `response.headers` (set-cookie), `response.config` (a second copy of the
+  // request headers) and `response.request` (the ClientRequest again) do, and
+  // are dropped.
+  if (response.data !== undefined) out.data = response.data;
+  return out;
+}
+
+/**
+ * pino `err` serializer: the standard one, with axios's transport objects
+ * replaced by safe summaries. Exported so a consumer that builds its own pino
+ * instance can reuse it.
+ */
+function serializeError(err) {
+  if (!err || typeof err !== 'object') return err;
+
+  const base = pino.stdSerializers.err(err);
+  if (!base || typeof base !== 'object') return base;
+
+  // `request` is a whole ClientRequest tree: raw request line and headers in
+  // `_header`, another copy in `_redirectable._options.headers`, the response
+  // in `res.rawHeaders`. Nothing in it is worth a log line.
+  if ('request' in base) delete base.request;
+  if ('config' in base) base.config = summarizeConfig(base.config);
+  if ('response' in base) base.response = summarizeResponse(base.response);
+
+  return base;
+}
+
 /** Paths that log at all only on error, to keep uptime probes out of the noise. */
 const DEFAULT_QUIET_PATHS = ['/api/health', '/health'];
 
@@ -70,6 +150,10 @@ function createLogger({ name, level, pretty, destination } = {}) {
     ...(name ? { name } : {}),
     level: level || process.env.LOG_LEVEL || (isDev ? 'debug' : 'info'),
     redact: { paths: REDACT_PATHS, censor: '[Redacted]' },
+    // See serializeError(): an axios rejection logged as `{ err }` otherwise
+    // writes the caller's bearer token, the replayed cookie and the outbound
+    // request body into the log, three times each.
+    serializers: { err: serializeError },
     ...(usePretty && {
       transport: {
         target: 'pino-pretty',
@@ -182,6 +266,7 @@ module.exports = {
   createLogger,
   createHttpLogger,
   installShutdownHooks,
+  serializeError,
   REDACT_PATHS,
   DEFAULT_QUIET_PATHS,
 };

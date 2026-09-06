@@ -310,3 +310,42 @@ describe('GeekDialog — node title in full mode', () => {
     expect(markup).toContain(`aria-labelledby="${titleId}"`);
   });
 });
+
+/**
+ * `dialogProps` is the pass-through slot every app primitive forwards its own
+ * `...rest` into — fitnessgeek's PremiumDialog, bujogeek's BujoDialog,
+ * flockgeek's LedgerDialog, storygeek's CodexDialog all do `dialogProps={rest}`.
+ * GeekDialog used to *assign* `PaperProps`, so anything a caller reached MUI
+ * with through that slot was silently discarded (GeekSheet has always merged).
+ * No app hits it today; the next one to try would have found nothing happened.
+ */
+describe('GeekDialog — dialogProps.PaperProps survives the merge', () => {
+  it('keeps a non-sx PaperProps key the caller passed through', () => {
+    const markup = renderDialog({
+      mode: 'window',
+      dialogProps: { PaperProps: { 'data-test-paper': 'kept' } },
+    });
+    expect(markup).toContain('data-test-paper="kept"');
+  });
+
+  it('keeps the caller PaperProps sx alongside the primitive own paper sx', () => {
+    const markup = renderDialog({
+      mode: 'window',
+      sx: { minHeight: '480px' },
+      dialogProps: { PaperProps: { 'data-test-paper': 'kept', sx: { outlineStyle: 'dotted' } } },
+    });
+    const styles = stylesFor(markup, 'data-test-paper="kept"');
+    expect(styles).toContain('outline-style:dotted');
+    expect(styles).toContain('min-height:480px');
+  });
+
+  it('full mode still wins on the rules it owns unless sx overrides them', () => {
+    const markup = renderDialog({
+      mode: 'full',
+      dialogProps: { PaperProps: { 'data-test-paper': 'kept' } },
+    });
+    const styles = stylesFor(markup, 'data-test-paper="kept"');
+    expect(styles).toContain('border-radius:0');
+    expect(styles).toContain('background-image:none');
+  });
+});

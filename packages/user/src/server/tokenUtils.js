@@ -6,7 +6,16 @@ const SSO_COOKIE = 'geek_token';
 const DEFAULT_BASEGEEK_URL = 'https://basegeek.clintgeek.com';
 
 /**
- * Extract auth token from request (cookie-first, then Authorization header).
+ * Extract the auth token from a request.
+ *
+ * **Header first, then cookie** — the docstring here used to claim the
+ * opposite, which is worth stating plainly because the SSO design elsewhere
+ * (`DOCS/CONTEXT.md`, `/api/users/me`) is described as "cookie-first". A
+ * caller that presents an explicit `Authorization: Bearer` has said which
+ * identity it means, so that wins; the cookie is the fallback for a plain
+ * browser call. A stale bearer beating a fresh cookie costs one 401 and the
+ * client's own refresh, which is why the order has never been worth changing
+ * across six backends — but it is the order, and this comment now says so.
  */
 function getTokenFromRequest(req, cookieName = SSO_COOKIE) {
   const authHeader = req.headers?.authorization;
@@ -59,16 +68,53 @@ function normalizeSsoUser(responseData) {
 }
 
 /**
- * Validate a token against BaseGeek and return the normalized SSO user.
+ * How long to wait on basegeek before giving up, in milliseconds.
+ *
+ * This call sits in front of *every authenticated request* in the six consumer
+ * backends (`attachUser()` runs it per request, with no cache), and axios's
+ * default timeout is `0` — wait forever. A basegeek that is hung rather than
+ * down therefore parks every inbound request in every app until the socket
+ * dies of its own accord, which on Linux is minutes, and the app runs out of
+ * handlers long before that. A bounded wait turns "the suite stops answering"
+ * into `attachUser()`'s existing 502 branch (`ECONNABORTED` carries no
+ * `error.response`, so it is not mistaken for a 401).
+ *
+ * 8s is comfortably above a healthy `/api/users/me` (single-digit ms in the
+ * container network) and below any sane upstream proxy read timeout.
+ * `BASEGEEK_TIMEOUT_MS` overrides it; a non-positive or unparseable value
+ * falls back to the default rather than restoring "wait forever".
  */
-async function validateToken(token, baseGeekUrl) {
+const DEFAULT_TIMEOUT_MS = 8000;
+
+function resolveTimeoutMs(env = process.env) {
+  const raw = Number(env.BASEGEEK_TIMEOUT_MS);
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_TIMEOUT_MS;
+}
+
+/**
+ * Validate a token against BaseGeek and return the normalized SSO user.
+ *
+ * @param {string} token
+ * @param {string} [baseGeekUrl]
+ * @param {object} [options]
+ * @param {number} [options.timeoutMs] override the request timeout (tests).
+ */
+async function validateToken(token, baseGeekUrl, options = {}) {
   const url = (baseGeekUrl || process.env.BASEGEEK_URL || DEFAULT_BASEGEEK_URL).replace(/\/$/, '');
+  const timeout = options.timeoutMs ?? resolveTimeoutMs();
 
   const response = await axios.get(`${url}/api/users/me`, {
     headers: { Authorization: `Bearer ${token}` },
+    timeout,
   });
 
   return normalizeSsoUser(response.data);
 }
 
-module.exports = { getTokenFromRequest, normalizeSsoUser, validateToken };
+module.exports = {
+  getTokenFromRequest,
+  normalizeSsoUser,
+  validateToken,
+  resolveTimeoutMs,
+  DEFAULT_TIMEOUT_MS,
+};

@@ -217,10 +217,12 @@ function getStoredToken() {
   return localStorage.getItem(GEEK_TOKEN_KEY);
 }
 
-function getStoredRefreshToken() {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem(GEEK_REFRESH_TOKEN_KEY);
-}
+// There is deliberately no `getStoredRefreshToken()`. The stored copy is
+// written by saveTokens() and cleared by clearTokens(), but it is never
+// *read*: refresh is cookie-first (see doTokenRefresh), and replaying a
+// localStorage refresh token that another app or tab has already rotated is
+// exactly what trips basegeek's rotation-reuse revocation. The getter existed,
+// unused, and read like an invitation.
 
 function saveTokens(token, refreshToken) {
   if (typeof window === 'undefined') return;
@@ -496,17 +498,43 @@ export function onLogout(callback) {
 }
 
 /**
+ * True only for the failures that mean "this session is over".
+ *
+ * `doTokenRefresh()` stamps `error.status` with 401 or 403 on exactly those
+ * two responses and throws a plain `Error` for everything else — a rejected
+ * `fetch` (the wifi blinked, the laptop just woke), a 502 from nginx while the
+ * container restarts, a 200 whose body is an HTML error page and blows up
+ * `res.json()`.
+ */
+function isSessionExpiredError(error) {
+  return error?.status === 401 || error?.status === 403;
+}
+
+/**
  * Start a periodic cookie-refresh timer. Calls `onFailure` when the session
  * has expired (401/403).
+ *
+ * A transient failure is NOT an expiry. `AuthProvider` wires `onFailure` to
+ * "clear the user and run the app's logout callback", so treating every
+ * rejection as terminal — which is what this did, despite a comment saying it
+ * did not — logged the user out of an app they were still signed into because
+ * one background refresh 50 minutes in caught a dropped connection or a
+ * restarting backend. The timer keeps running in that case and tries again on
+ * the next tick; only a real 401/403 stops it and reports.
  */
 export function startRefreshTimer(onFailure) {
   stopRefreshTimer();
-  const apiBase = getApiBase();
   async function autoRefresh() {
     try {
       await doTokenRefresh();
-    } catch {
-      // transient failure — keep trying, or if 401/403, stop timer
+    } catch (error) {
+      if (!isSessionExpiredError(error)) {
+        // Transient — leave the interval running and try again next tick.
+        // Nothing here clears tokens: doTokenRefresh() only does that on the
+        // 401/403 branch, and a network blip must not look like a logout.
+        console.warn('[geeksuite/auth] background token refresh failed; will retry', error);
+        return;
+      }
       stopRefreshTimer();
       if (onFailure) onFailure();
     }

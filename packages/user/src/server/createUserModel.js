@@ -49,8 +49,14 @@ function createUserModel(modelName, extensionFields = {}, options = {}) {
     ...schemaOptions,
   });
 
-  schema.index({ userId: 1 });
-  schema.index({ email: 1 });
+  // No `schema.index({ userId: 1 })` / `schema.index({ email: 1 })` here.
+  // Both paths already declare `unique: true, sparse: true` above, which is
+  // itself an index declaration, and a second bare `schema.index()` on the
+  // same key produces a *second* spec with the same default name (`userId_1`)
+  // and different options. Mongoose warns ("Duplicate schema index"), and
+  // MongoDB refuses the second `createIndex` with `IndexOptionsConflict` —
+  // an error mongoose raises on the model's `index` event, which nothing
+  // listens for, so it lands as a silent boot-time failure.
 
   if (configureSchema) {
     configureSchema(schema);
