@@ -87,7 +87,9 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask step 5; nginx
 `startgeek.clintgeek.com` redirect. See `STATUS.md`.
 
-## Waves pushed
+## Waves
+- **Wave 18** `c6776b9` (09-06 13:35 CDT): the five AI features (R114–R118) + aiFeatureRunner (R113), Q22/Q38/Q62/Q69/Q49/Q42/Q56/Q58/Q10/Q68 (R119–R123 + Sage). CI + Release green; Watchtower rolled 8/8 at 13:43; compose rolled (basegeek `--no-deps`, datastores untouched); fleet healthy; `CSRF_TOKEN=enforce` live 13:48 with 0 rejections in the first minutes. Post-deploy fix `ddd2b4f` (empty `environment:` keys) is local-only until wave 19. Q40: production `fooditems` never had a unique barcode index (only the compound non-unique `barcode_1_is_deleted_1`), so the E11000 was latent, not live — no migration run; the partial unique index is declared in the shared schema for wherever autoIndex builds it. notegeek `CURSOR-CONTEXT.md` is gitignored (placeholders only) and the classifier refused tracking it — Chef's call.
+ pushed
 
 - 09-05 13:19 — `446e5c0` (86 commits: R19–R49). Release: success (images published 13:24, Watchtower rolling). CI: **eslint job failed** — `packages/logger` had a lint script and no flat config (R6 had never been through CI). Fixed in `e183fdd`; goes with the next wave.
 
