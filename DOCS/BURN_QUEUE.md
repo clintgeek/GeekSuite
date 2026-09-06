@@ -11,6 +11,8 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
+| R100 | Q59 + Q60: gateway updateBird widened; gql-arg-audit tool + CI job (undeclared variables / uncollected fields, both directions, all modules); bookgeek four sort arms | opus | gateway graphql/**, frontends' mutation docs (not bujogeek/notegeek), tools/, ci.yml | 09-05 22:15 |
+| R101 | Q61: RUNBOOK SMTP env names; startgeek test job in CI; SW registration snippet fix in the other index.html files | sonnet | RUNBOOK, PWA_STANDARD, ci.yml, four index.html | 09-05 22:15 |
 | R96 | going-over: bujogeek + notegeek | opus | apps/bujogeek, apps/notegeek | 09-05 21:10 |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
@@ -19,9 +21,6 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | # | Item | Why waiting | Size |
 |---|------|-------------|------|
 | **Q58** | **ROTATE:** a datageek Mongo credential pair is hardcoded in git-tracked, GitHub-public files — removed from `routes/mongo.js` (R93) but still in `apps/basegeek/mongodb-init.js` (the container init script). Treat as disclosed: rotate the datastore user, update `.env.production`, then strip it from mongodb-init.js | **Chef, soon** | S |
-| Q59 | gateway `updateBird` accepts none of the 12 fields flockgeek's edit form collects (breed, hatch date, species…) — silent data loss on every edit; widen typeDefs+resolver; then sweep every module for frontend fields with no mutation argument, and for variables sent that no document declares (flockgeek sent `source` to recordEggProduction) | S — next slot | S |
-| Q60 | gateway bookgeek `books` sort: 4 of 8 sort options fall through to title (datefinished, pagecount, publisheddate, owned) — four case arms in `graphql/bookgeek/resolvers.js` | XS | XS |
-| Q61 | RUNBOOK bookgeek env list lacks SMTP_HOST/PORT/SECURE/USER/PASS/FROM_EMAIL (emailService reads them; send-to-kindle now reports unconfigured); CI does not run startgeek's new `npm test`; `index.html` SW-registration snippet's first-install spurious reload (fixed in bookgeek+storygeek) likely in the other apps | XS ×3 | XS |
 | Q62 | basegeek policy (Chef): conversation ownership for API-key callers comes from the body (needs a migration to fix); any authenticated user can mint a key for any app name; storygeek's dead `src/graphql` ships @apollo/client; bookify is unbounded synchronous AI work; fitnessgeek `aiCoachRoutes` caller-less and unguarded; InfluxDB reads not user-scoped; flockgeek write-side foreign refs (createBird pairingId/locationId etc.) | Chef triage | M |
 | Q56 | **Chef:** `apps/storygeek/.env.production` line `DB_URI=MONGODB_URI=mongodb://…` is malformed — delete the stray `MONGODB_URI=` prefix (the classifier would not let Sage edit the production env file), then remove the `DB_URI: ${DB_URI}` override block from `apps/storygeek/docker-compose.yml` and `docker compose up -d` | Chef (env edit) | XS |
 | Q6 | bookgeek web unit tests (vitest + RTL for LibraryView/FilterSheet/BookCard/detail) | none — launch next slot | M |
@@ -98,7 +97,7 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 
 - **Incident 21:50–21:55:** storygeek crash-looped for ~5 min after its first env_file-only recreate (malformed DB_URI in .env.production, see Q56); restored with an explicit compose override. Cause of the aborted fleet roll: a zsh variable named `path` clobbers PATH — never use it.
 
-- 09-05 22:40 — wave 13: R93, R94, R95, R97, R98, R99 + storygeek override + healthcheck fix. Gates green.
+- 09-05 22:13 — wave 13 (`e587b16`, 14 commits): R93, R94, R95, R97, R98, R99 + storygeek override + healthcheck fix. Gates green.
 
 ## Landed during the burn
 
