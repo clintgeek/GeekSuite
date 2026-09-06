@@ -17,14 +17,14 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | R96 | going-over: bujogeek + notegeek | opus | apps/bujogeek, apps/notegeek | 09-05 21:10 |
 | R97 | going-over: bookgeek + storygeek | opus | apps/bookgeek, apps/storygeek | 09-05 21:10 |
 | R98 | going-over: flockgeek + startgeek + basegeek console | opus | apps/flockgeek, apps/startgeek, apps/basegeek/packages/ui | 09-05 21:10 |
-| R99 | going-over: infra, CI, tools, root docs (Dockerfiles, compose, workflows, env.example, RUNBOOK…) | sonnet | Dockerfiles, compose, .github, tools, root DOCS | 09-05 21:10 |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
 ## Queued (launch when files free / prerequisite lands)
 
 | # | Item | Why waiting | Size |
 |---|------|-------------|------|
-| Q1 | Service keys: storygeek minted 13:41 into `apps/storygeek/.env.production` (ai:call, ai:director) — **restart pending Chef's OK** (`docker compose up -d` in apps/storygeek; storygeek keeps working on the legacy appName path until then). fitnessgeek's existing key (bg_4ff4136b, appName FitnessGeek, ai:call) normalizes to `fitnessgeek` — kept, nothing to do. | Chef: OK the storygeek restart | XS |
+| Q56 | **Chef:** `apps/storygeek/.env.production` line `DB_URI=MONGODB_URI=mongodb://…` is malformed — delete the stray `MONGODB_URI=` prefix (the classifier would not let Sage edit the production env file), then remove the `DB_URI: ${DB_URI}` override block from `apps/storygeek/docker-compose.yml` and `docker compose up -d` | Chef (env edit) | XS |
+| Q57 | basegeek compose: mongodb/postgres services now declare env_file (fd2c6cc) — applying it recreates the datastore containers (brief suite-wide DB restart); Sage applied only the `basegeek` service tonight. Run `docker compose up -d` in apps/basegeek when a restart is acceptable | Chef: pick a moment | XS |
 | Q6 | bookgeek web unit tests (vitest + RTL for LibraryView/FilterSheet/BookCard/detail) | none — launch next slot | M |
 | Q10 | Revoke the `LocalApps` key — env grep: no .env under Projects carries it; nginx: zero hits on /openai/v1 or /api/ai/ in the retained log window; key lastUsed 2025-11-03 | ready — Chef's confirm, then revoke via the Apps & keys tab | XS |
 | Q11 | basegeek `Databases.jsx`: wire into nav or delete | Chef's call | XS |
@@ -96,6 +96,8 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 - 09-05 18:24 — wave 11 (`8029305`, 9 commits): R85 (+fallback guard), R87, R88. Gates green; workflows green; Watchtower 18:33 (updated=8); all eight apps 200; dead asset paths now 404 live on startgeek and fitnessgeek.
 
 - 09-05 21:06 — wave 12 (`1b1b175`, 15 commits): R89 (a11y 0, enforcing), R90, R91, R92, docs. Gates green; CI, Release and the harness (first run with --enforce-a11y) green; Watchtower 21:13 (updated=7, +1 at 21:15); all eight apps 200.
+
+- **Incident 21:50–21:55:** storygeek crash-looped for ~5 min after its first env_file-only recreate (malformed DB_URI in .env.production, see Q56); restored with an explicit compose override. Cause of the aborted fleet roll: a zsh variable named `path` clobbers PATH — never use it.
 
 ## Landed during the burn
 
