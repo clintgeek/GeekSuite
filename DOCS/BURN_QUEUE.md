@@ -7,7 +7,7 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 
 ## Running
 
-**PAUSED (09-05 19:25) per Chef.** R89/R90/R91/R92 all landed and are committed. Nothing is running. **Unpushed: everything since wave 11 (`8029305`)** — R89–R92 + docs; gates not yet run on this HEAD. Next step when Chef returns: run the gates (frozen install, syntax, boot-smoke, harness selftest, repo lint), push wave 12, monitor. No new launches until he says so.
+**Phase 2 — the going-over (Chef, 09-05 evening):** "make sure everything is merged and pushed, then give the entire geeksuite a good going over, fix what needs fixing — you have my authority for auto fixes. Then invent 5 responsible AI uses (document, don't implement)." Seven reviewers, one per disjoint tree, fix inside their scope and report cross-cutting findings; Sage commits per stream.
 
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
@@ -87,6 +87,8 @@ M3–M5 mobile passes; registry self-seed + `/api/health`; AIGeek phase D; Ask s
 - 09-05 17:39 — wave 10 (`97ca1a4`, 11 commits): R83, R84 (a11y report-only), R86 (CSRF heal), docs. Gates green; CI, Release, harness green; Watchtower 17:49 (updated=8); all eight apps 200.
 
 - 09-05 18:24 — wave 11 (`8029305`, 9 commits): R85 (+fallback guard), R87, R88. Gates green; workflows green; Watchtower 18:33 (updated=8); all eight apps 200; dead asset paths now 404 live on startgeek and fitnessgeek.
+
+- 09-05 19:40 — wave 12: R89 (a11y 0, enforcing), R90, R91, R92, docs. Gates green.
 
 ## Landed during the burn
 
