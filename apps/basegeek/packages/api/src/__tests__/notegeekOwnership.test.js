@@ -131,6 +131,32 @@ describe('note writes are owner-scoped', () => {
     expect((await Note.findById(bob._id)).tags).toEqual(['private']);
   });
 
+  test('renaming a tag onto one a note already has dedupes instead of duplicating', async () => {
+    const note = await makeNote({ tags: ['a', 'b'] });
+
+    const result = await Mutation.renameTag(null, { oldTag: 'a', newTag: 'b' }, ctx(ALICE));
+
+    expect(result).toBe(true);
+    expect((await Note.findById(note._id)).tags).toEqual(['b']);
+  });
+
+  test('a plain rename with no collision still works and reports true', async () => {
+    const note = await makeNote({ tags: ['a'] });
+
+    const result = await Mutation.renameTag(null, { oldTag: 'a', newTag: 'renamed' }, ctx(ALICE));
+
+    expect(result).toBe(true);
+    expect((await Note.findById(note._id)).tags).toEqual(['renamed']);
+  });
+
+  test('renaming a tag nobody has reports false and touches nothing', async () => {
+    await makeNote({ tags: ['unrelated'] });
+
+    const result = await Mutation.renameTag(null, { oldTag: 'ghost', newTag: 'x' }, ctx(ALICE));
+
+    expect(result).toBe(false);
+  });
+
   test('folders cannot be updated or deleted across users', async () => {
     const folder = await Folder.create({ name: 'Alice folder', userId: ALICE });
     await expect(
@@ -145,5 +171,63 @@ describe('note writes are owner-scoped', () => {
   test('created notes are stamped with the session user', async () => {
     const note = await Mutation.createNote(null, { content: 'mine', userId: String(BOB) }, ctx(ALICE));
     expect(String(note.userId)).toBe(String(ALICE));
+  });
+});
+
+describe('updateFolder rejects a parentId that would create a cycle', () => {
+  test('a folder cannot become its own parent', async () => {
+    const folder = await Folder.create({ name: 'Self', userId: ALICE });
+
+    await expect(
+      Mutation.updateFolder(null, { id: String(folder._id), parentId: String(folder._id) }, ctx(ALICE))
+    ).rejects.toThrow('cannot be moved into itself');
+
+    expect((await Folder.findById(folder._id)).parentId).toBeNull();
+  });
+
+  test('a folder cannot be reparented under its own direct child', async () => {
+    const parent = await Folder.create({ name: 'Parent', userId: ALICE });
+    const child = await Folder.create({ name: 'Child', userId: ALICE, parentId: parent._id });
+
+    await expect(
+      Mutation.updateFolder(null, { id: String(parent._id), parentId: String(child._id) }, ctx(ALICE))
+    ).rejects.toThrow('cannot be moved into itself');
+
+    expect((await Folder.findById(parent._id)).parentId).toBeNull();
+  });
+
+  test('a folder cannot be reparented under a grandchild', async () => {
+    const grandparent = await Folder.create({ name: 'Grandparent', userId: ALICE });
+    const parent = await Folder.create({ name: 'Parent', userId: ALICE, parentId: grandparent._id });
+    const child = await Folder.create({ name: 'Child', userId: ALICE, parentId: parent._id });
+
+    await expect(
+      Mutation.updateFolder(
+        null,
+        { id: String(grandparent._id), parentId: String(child._id) },
+        ctx(ALICE)
+      )
+    ).rejects.toThrow('cannot be moved into itself');
+
+    expect((await Folder.findById(grandparent._id)).parentId).toBeNull();
+  });
+
+  test('a valid move to an unrelated folder (or back to root) still succeeds', async () => {
+    const a = await Folder.create({ name: 'A', userId: ALICE });
+    const b = await Folder.create({ name: 'B', userId: ALICE });
+
+    const moved = await Mutation.updateFolder(
+      null,
+      { id: String(b._id), parentId: String(a._id) },
+      ctx(ALICE)
+    );
+    expect(String(moved.parentId)).toBe(String(a._id));
+
+    const rooted = await Mutation.updateFolder(
+      null,
+      { id: String(b._id), parentId: null },
+      ctx(ALICE)
+    );
+    expect(rooted.parentId).toBeNull();
   });
 });

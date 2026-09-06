@@ -163,6 +163,14 @@ injected markup that cannot script, a hostile page on a `*.clintgeek.com` host a
 lets through, a stale allow-list entry, a future mount where the Origin guard is bypassed. The
 Origin guard stays in front of it as defense in depth.
 
+**Stored HTML is sanitized on both sides (Q63, 2026-09-05).** The one place in the suite that
+renders stored content as markup is notegeek's `NoteViewer` (a `type: 'text'` note is TipTap HTML),
+and it now passes through `frontend/src/utils/sanitizeNoteHtml.js` while the gateway sanitizes the
+same string on save (`graphql/notegeek/sanitize.js`) — one DOMPurify allow-list profile, duplicated
+line-for-line in both files because they live in different workspaces. That matters here rather than
+in notegeek alone: script on any `*.clintgeek.com` origin can read the domain-wide SSO cookie and
+the double-submit CSRF token, which is the one attack the paragraph above says a token cannot stop.
+
 **Code**: `apps/basegeek/packages/api/src/middleware/csrfToken.js` (guard + issuance),
 mounted in `server.js` immediately after `csrfGuard()`; `X-CSRF-Token` is on basegeek's CORS
 `allowedHeaders` list, without which the cross-origin preflight would fail.

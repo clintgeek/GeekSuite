@@ -235,6 +235,87 @@ is a separate, still-open question (`DOCS/TODO_ORDER.md` #22).
 
 ---
 
+## Gateway fixes (Q64, 2026-09-05)
+
+- **bujogeek** `taskService`'s two virtual-occurrence builders (in-range and
+  the daily/all carry-forward) omitted `collectionId` and `recurrencePattern`
+  on every synthetic row, so a recurring task filed into a collection read as
+  unfiled from Today/Plan/Review; both now copy every field `TaskEditor`
+  reseeds (`collectionId`, `recurrenceRule`, `recurrencePattern`, `tags`,
+  `signifier`, `priority`) straight off the master — pinned in
+  `bujogeekRecurrenceUnification.test.js`.
+- **notegeek** `renameTag`'s positional `$set: 'tags.$'` duplicated a tag
+  already on the note (`a`→`b` on `[a, b]` gave `[b, b]`); now `$addToSet`s
+  the new tag then `$pull`s the old one and returns whether any note actually
+  changed — pinned in `notegeekOwnership.test.js`.
+- **notegeek** `updateFolder` took any `parentId` with no ancestry check, so a
+  folder could become its own descendant and loop the tree view; it now walks
+  the caller's folder set and rejects a self- or descendant-`parentId` with
+  `BAD_USER_INPUT` — pinned in `notegeekOwnership.test.js` (self, child,
+  grandchild, and a valid move/re-root).
+
+---
+
+## notegeek: HTML note bodies are sanitized on save (Q63, 2026-09-05)
+
+`createNote`/`updateNote` run the body through
+`graphql/notegeek/sanitize.js` before it is stored. Three things are worth
+knowing before touching that path:
+
+**Only `type: 'text'` is sanitized, and that is not a shortcut.** The five
+note types do not all hold the same thing: `text` is TipTap HTML (`getHTML()`),
+`markdown` is markdown source, `code` is `JSON.stringify({language, code})`,
+and `mindmap`/`handwritten` are serialized ReactFlow / tldraw snapshots.
+Running an HTML sanitizer over a JSON snapshot would entity-escape its quotes
+and angle brackets and corrupt the document, so every non-`text` body is
+stored byte-for-byte as before. `sanitizeNoteContent(content, type)` is a
+pass-through for an unknown type too — a new note type is opted in
+deliberately, never by accident.
+
+**A create with no `type` counts as `text`.** `Note.type`'s schema default is
+`'text'`, so a body that arrives without a type really does become a
+rich-text note and has to be cleaned like one.
+
+**An update that omits `type` costs one extra read — deliberately.** `type` is
+optional on `updateNote` and every notegeek client sends it, but a hand-rolled
+`updateNote(id, content)` need not, and skipping sanitization in that case
+would leave the hole open. When `content` is present and `type` is not, the
+resolver reads the stored type first (`findOne({_id, userId}, {type: 1})`).
+This is the opposite call from the content-size ceilings a few sections up,
+which accept the imprecision rather than pay for a read: a too-generous
+ceiling is not a security boundary, and this is.
+
+**The profile is a twin of the client's, on purpose.**
+`apps/notegeek/frontend/src/utils/sanitizeNoteHtml.js` carries the same
+`ALLOWED_TAGS` / `ALLOWED_ATTR` / `FORBID_TAGS` / `FORBID_ATTR` and the same
+link/image hooks. **Change one, change the other** — they are duplicated
+rather than shared because they live in different pnpm workspaces with no
+common runtime package. `notegeekSanitize.test.js` pins what keeps them
+honest: `sanitize(sanitize(x)) === sanitize(x)`, and a real TipTap document
+comes back byte-for-byte (including its `rel="noopener noreferrer nofollow"`,
+which the hook augments rather than rewrites — otherwise every save would
+rewrite the note and the editor's dirty-tracking would never settle).
+
+**Two new dependencies, and why not `isomorphic-dompurify`.** `dompurify`
+(pinned `3.4.14`, the same version the notegeek client pins, which is what
+makes the two profiles provably identical) and `jsdom` (pinned `26.1.0`).
+`isomorphic-dompurify` is those two with a wrapper, but every release new
+enough to carry a current DOMPurify declares `engines.node >= 22` and this
+service runs on `node:20-alpine`. The jsdom pin is likewise forced, by the
+test runner rather than the image: jsdom 27.4+ pulls
+`html-encoding-sniffer@6` and 27.0–27.3 pull `cssstyle@5`, both of which reach
+an ESM-only package through a CJS `require` — Node handles that from 22.12,
+`jest@29`'s module registry does not, and the suite dies at import before a
+test runs. 26.1.0 is the last line whose transitive tree is CJS all the way
+down. Revisit when this package moves off jest@29. The frontends keep their
+own `jsdom@28` devDependency; vitest loads ESM natively.
+
+**Cost at runtime.** The jsdom window and the DOMPurify instance are built on
+first use, not at boot, and then reused for the life of the process — most
+gateway requests never touch a rich-text note.
+
+---
+
 ## Frontend/gateway argument parity (Q59, 2026-09-05)
 
 **The rule: a frontend field with no mutation argument is a bug, not a

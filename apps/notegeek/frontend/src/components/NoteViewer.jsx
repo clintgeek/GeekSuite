@@ -22,6 +22,7 @@ import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import DeleteNoteDialog from './DeleteNoteDialog';
 import { border, glow, noteTypeColor, surfaces } from '../theme/tokens';
 import { decodeCodeNote } from '../utils/previewText';
+import { sanitizeNoteHtml } from '../utils/sanitizeNoteHtml';
 
 // Note type configuration — type color comes from theme.palette.noteTypes
 const NOTE_TYPE_CONFIG = {
@@ -385,9 +386,17 @@ function NoteViewer() {
                             {noteToView.type === 'markdown' ? (
                                 <ReactMarkdown>{noteToView.content || ''}</ReactMarkdown>
                             ) : noteToView.type === 'text' ? (
+                                // Stored TipTap HTML. It is rendered as
+                                // markup, so it is sanitized here — the one
+                                // `dangerouslySetInnerHTML` in the app, behind
+                                // the one profile (utils/sanitizeNoteHtml.js).
+                                // The gateway sanitizes the same string on
+                                // save; this is the layer that has to hold,
+                                // because rows written before that existed are
+                                // still in the database.
                                 <div
                                     className="rich-text-viewer"
-                                    dangerouslySetInnerHTML={{ __html: noteToView.content || '' }}
+                                    dangerouslySetInnerHTML={{ __html: sanitizeNoteHtml(noteToView.content) }}
                                 />
                             ) : noteToView.type === 'code' ? (
                                 // The stored value is CodeEditor's
