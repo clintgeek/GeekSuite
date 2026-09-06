@@ -12,7 +12,6 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
 | R92 | Q54: SW reinstall-on-deploy (stamped BUILD_ID + hashed manifest) for storygeek, bookgeek, notegeek, startgeek | sonnet | four public/sw.js + vite.config.js, PWA_STANDARD, context files | 09-05 19:00 |
-| R90 | bujogeek frontend code-splitting per the fitnessgeek recipe | opus | bujogeek frontend, CONTEXT, PWA_STANDARD row | 09-05 18:45 |
 | R89 | Q51 rest: a11y burn-down for fitnessgeek (29), bookgeek (4), notegeek/basegeek/startgeek (2 each) → 0, then flip --enforce-a11y in the workflow | opus | five frontends, mobile-harness.yml, MOBILE_UI_PLAN | 09-05 18:40 |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
@@ -39,6 +38,7 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | Q51 | a11y burn-down: R87 covers packages/ui + bujogeek/storygeek/flockgeek; **fitnessgeek (29) and basegeek console (2) remain** once R85/R83 free those trees; then flip --enforce-a11y at 0 | after R87 + R85/R83 | S |
 | Q52 | fitnessgeek: three chart libraries ship (Nivo, Recharts, chart.js) — consolidate on one (~270 kB async); BarcodeScanner loads ZXing from unpkg at runtime — vendor it or pin a hash | design / M | M |
 | Q54 | SW reinstall sweep: R92 covers four apps; bujogeek after R90 lands | after R90 | XS |
+| Q55 | bujogeek: TaskEditor is always-mounted with open={bool}, keeping ~250 kB of @mui/x-date-pickers on /today — mount on open (loses the close transition) or lazy-load the pickers inside it | design, S | S |
 | Q20b | aiGeek: simulated streaming (F-21) and user-gated selection (F-14) documented, not fixed | design | S |
 | Q14 | storygeek CanonCard summary text through Narration too (agent left it as a separate render path) | Chef's call | XS |
 
