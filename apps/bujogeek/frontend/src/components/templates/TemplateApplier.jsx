@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import {
   Box,
   Button,
@@ -11,7 +11,24 @@ import {
   CircularProgress
 } from '@mui/material';
 import { useTemplates } from '../../context/TemplateContext';
-import TemplatePreview from './TemplatePreview';
+/**
+ * The markdown preview is the app's only react-markdown consumer, and
+ * react-markdown drags the whole unified/remark/micromark/mdast/hast tail with
+ * it (153 kB raw / 46 kB gzipped, the `markdown` chunk in vite.config.js). Nothing in the
+ * templates route needs any of it until a template is actually opened for
+ * apply — this component renders `null` until then — so it loads on that click
+ * instead of with the route. `TemplatePreview` itself stays a plain synchronous
+ * component; the boundary is here, at its only call site.
+ */
+const TemplatePreview = lazy(() => import('./TemplatePreview'));
+
+// The same centred spinner this dialog already shows while `applyTemplate` is
+// in flight, so a chunk fetch and a network fetch look identical to the user.
+const PreviewSpinner = () => (
+  <Box display="flex" justifyContent="center" p={4}>
+    <CircularProgress />
+  </Box>
+);
 
 const TemplateApplier = ({ onTemplateApplied }) => {
   const { applyTemplate } = useTemplates();
@@ -95,11 +112,11 @@ const TemplateApplier = ({ onTemplateApplied }) => {
             Preview
           </Typography>
           {loading ? (
-            <Box display="flex" justifyContent="center" p={4}>
-              <CircularProgress />
-            </Box>
+            <PreviewSpinner />
           ) : (
-            <TemplatePreview content={previewContent} />
+            <Suspense fallback={<PreviewSpinner />}>
+              <TemplatePreview content={previewContent} />
+            </Suspense>
           )}
         </Box>
       </DialogContent>
