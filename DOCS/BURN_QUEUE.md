@@ -12,7 +12,6 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | # | Stream | Model | Files | Since |
 |---|--------|-------|-------|-------|
 | R93 | going-over: basegeek api (gateway, routes, services, aiGeek) — fix in scope | opus | apps/basegeek/packages/api | 09-05 21:10 |
-| R94 | going-over: packages/* (ui, auth, api-client, user, utils, logger, schemas, crypto-vault) | opus | packages/** | 09-05 21:10 |
 | R95 | going-over: fitnessgeek backend + frontend | opus | apps/fitnessgeek | 09-05 21:10 |
 | R96 | going-over: bujogeek + notegeek | opus | apps/bujogeek, apps/notegeek | 09-05 21:10 |
 | R97 | going-over: bookgeek + storygeek | opus | apps/bookgeek, apps/storygeek | 09-05 21:10 |
@@ -24,7 +23,6 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | # | Item | Why waiting | Size |
 |---|------|-------------|------|
 | Q56 | **Chef:** `apps/storygeek/.env.production` line `DB_URI=MONGODB_URI=mongodb://…` is malformed — delete the stray `MONGODB_URI=` prefix (the classifier would not let Sage edit the production env file), then remove the `DB_URI: ${DB_URI}` override block from `apps/storygeek/docker-compose.yml` and `docker compose up -d` | Chef (env edit) | XS |
-| Q57 | basegeek compose: mongodb/postgres services now declare env_file (fd2c6cc) — applying it recreates the datastore containers (brief suite-wide DB restart); Sage applied only the `basegeek` service tonight. Run `docker compose up -d` in apps/basegeek when a restart is acceptable | Chef: pick a moment | XS |
 | Q6 | bookgeek web unit tests (vitest + RTL for LibraryView/FilterSheet/BookCard/detail) | none — launch next slot | M |
 | Q10 | Revoke the `LocalApps` key — env grep: no .env under Projects carries it; nginx: zero hits on /openai/v1 or /api/ai/ in the retained log window; key lastUsed 2025-11-03 | ready — Chef's confirm, then revoke via the Apps & keys tab | XS |
 | Q11 | basegeek `Databases.jsx`: wire into nav or delete | Chef's call | XS |
