@@ -5,14 +5,22 @@ services:
     restart: unless-stopped
     labels:
       com.centurylinklabs.watchtower.enable: "true"
+    # All runtime secrets (DB_URI, JWT_SECRET, JWT_REFRESH_SECRET, BASEGEEK_URL,
+    # AI_GEEK_API_KEY, Mongo root creds) are loaded from .env.production by
+    # env_file. This directive was missing entirely until 2026-09-05 — every
+    # other app's compose file has it — so this container never received
+    # .env.production at all; it ran on whatever docker compose's own `.env`
+    # file (a separate, stale, uncommitted file next to this one) happened to
+    # interpolate into the literal ${VAR} substitutions below, and anything not
+    # named as a substitution (AI_GEEK_API_KEY, CORS_ORIGINS) never reached the
+    # container regardless of restarts — see STATUS.md Q1 ("restart storygeek
+    # to pick up its service key"), which this closes.
+    env_file:
+      - .env.production
     environment:
       TZ: America/Chicago
       NODE_ENV: production
       PORT: 9977
-      DB_URI: ${DB_URI}
-      JWT_SECRET: ${JWT_SECRET}
-      BASEGEEK_URL: ${BASEGEEK_URL:-https://basegeek.clintgeek.com}
-      BASEGEEK_JWT_TOKEN: ${BASEGEEK_JWT_TOKEN}
       STORYGEEK_FREE_ONLY: ${STORYGEEK_FREE_ONLY:-true}
       # Pinned Game Master model — narrative consistency beats model rotation.
       # gemini-flash-latest is the id the deployed aiGeek free-tier catalog
@@ -32,6 +40,11 @@ services:
       timeout: 3s
       start_period: 10s
       retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 networks:
   datageek_network:

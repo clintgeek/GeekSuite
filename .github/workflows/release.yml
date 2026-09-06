@@ -31,6 +31,7 @@ jobs:
   matrix:
     name: resolve app matrix
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       apps: ${{ steps.set.outputs.apps }}
     steps:
@@ -49,6 +50,7 @@ jobs:
     name: publish ${{ matrix.app }}
     needs: matrix
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:

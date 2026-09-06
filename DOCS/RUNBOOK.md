@@ -85,7 +85,10 @@ of each app's backend source. Names only — no values were read or printed.
 - **bujogeek**: `DB_URI`, `JWT_SECRET`, `BASEGEEK_URL`/`BASE_GEEK_URL`, `GATEWAY_URL`, `PORT`,
   `APP_NAME`, `CORS_ORIGINS`, `LOG_LEVEL`, `NODE_ENV` — VAPID keys are **not** local; they live
   in basegeek's env (`DOCS/REMINDERS.md`)
-- **fitnessgeek**: `MONGODB_URI`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, `BASEGEEK_URL`/`BASE_GEEK_URL`,
+- **fitnessgeek**: `MONGODB_URI`, `JWT_SECRET` (verified locally; `JWT_REFRESH_SECRET` is
+  **not** read anywhere in this backend, despite appearing in its `.env.production` —
+  DEPLOY.md "Shared secrets across apps" already documents it as basegeek-only, this list
+  was just out of step with that), `BASEGEEK_URL`/`BASE_GEEK_URL`,
   `REDIS_URL`, `KEY_VAULT_SECRET` (basegeek's value, copied by line — encrypts the Garmin
   password, added 2026-09-05, see `DEPLOY.md` "Shared secrets across apps"), `AI_GEEK_API_KEY`,
   `USDA_API_KEY`, `NUTRITIONIX_APP_ID`, `NUTRITIONIX_API_KEY`,
@@ -372,6 +375,101 @@ some of these may differ once the in-flight work lands).
 | notegeek dev server rendered nothing | esbuild dependency-optimizer fault (`styled_default is not a function`); production build was unaffected | **Fixed 2026-09-05** (`70eb36e`) — `vite.config.js` pins `@mui/material/styles` and emotion into `optimizeDeps.include`, so the optimizer stops re-splitting MUI's lazy init across passes |
 | basegeek `packages/api` test suite fails wholesale with `Cannot find module '@geeksuite/logger'` | A new workspace package (`packages/logger`) was added but the workspace hasn't been re-linked yet | `pnpm install` at the repo root — this specific occurrence was fixed 2026-09-05 (`61997ed`); the general shape (add a workspace package, forget to reinstall) recurs any time one lands |
 | An app crash-loops in production with a plain `SyntaxError` even though CI was green | A module no jest/vitest suite imports (e.g. a `typeDefs.js`) had a parse error — nothing ever loaded it to notice | Fixed by the `syntax` CI job / `pnpm check:syntax` (§5) added 2026-09-05 after exactly this happened to `apps/basegeek/packages/api/src/graphql/bujogeek/typeDefs.js` (`61d3109`) |
+
+---
+
+## Going-over 2026-09-05 (infra tree: Dockerfiles, compose, CI, tools/**, root config)
+
+A dedicated pass over `apps/*/Dockerfile`, `apps/*/docker-compose.yml`, `apps/*/env.example`,
+`.github/workflows/*.yml`, `tools/**`, root `package.json`/`pnpm-workspace.yaml`/`.gitignore`,
+`DEPLOY.md` and this doc set. Fixed:
+
+- **storygeek's compose had no `env_file:` at all** — every other app's compose loads
+  `.env.production`; this one never did, so `AI_GEEK_API_KEY` and `CORS_ORIGINS` could never
+  reach the container regardless of restarts (this is why Q1 — "restart storygeek to pick up
+  its service key" — was stuck) and `DB_URI`/`JWT_SECRET`/`BASEGEEK_URL` were being sourced from
+  docker compose's own `.env` (a separate, stale file) instead. Added `env_file:` and dropped the
+  now-redundant `${VAR}` substitutions for the vars it supplies.
+- **fitnessgeek's compose had the same class of landmine**: `env_file: .env.production` *and* a
+  duplicate `environment:` block re-declaring the same secrets as `${VAR}` — which docker compose
+  resolves from its own `.env` (not `.env.production`) and which always wins over `env_file` for
+  the same key. The local `.env` had no `NUTRITIONIX_APP_ID`/`NUTRITIONIX_API_KEY` at all (moot —
+  nothing in the backend reads either name; the Nutritionix provider was never wired in, per
+  `SUITE_TODO.md`), but the same pattern applied to `MONGODB_URI`, `JWT_SECRET`, `BASEGEEK_URL`,
+  `REDIS_URL`, `AI_GEEK_API_KEY`, `USDA_API_KEY`, `OPENFOODFACTS_API_URL` and every `INFLUXDB_*`
+  var — all silently sourced from a stale local file instead of the current `.env.production` on
+  every recreate. Removed the duplicate substitutions; `bujogeek`/`notegeek`'s compose files
+  already carry a comment warning against exactly this, this one just didn't follow it.
+- **basegeek's `mongodb`/`postgres` services had no `env_file` either**, using bare
+  `${MONGO_INITDB_ROOT_USERNAME}` etc. substitutions with no local `.env` present at all — a
+  force-recreate of either service would have booted with blank root credentials. `build.sh`'s
+  normal deploy path only ever recreates the named app service (never the shared datastores), so
+  this was latent, not live — but a real gap. Added `env_file: .env.production` to both (it
+  already declares the right names); `influxdb`/`redis` don't substitute any var here so were
+  left alone.
+- **Three containers showed no `(healthy)` in `docker ps`**: basegeek, fitnessgeek, flockgeek had
+  no compose `healthcheck:` even though all three serve `/api/health` (confirmed by reading each
+  app's route table, not just the doc). Added the same `wget --spider` healthcheck pattern
+  bujogeek/notegeek/bookgeek already use (all run on `node:20-alpine`, which ships busybox
+  `wget` — no image change needed).
+- **No compose file in the suite set log rotation** — unbounded `json-file` logs on a box that
+  also runs a dozen other services. Added `logging: {driver: json-file, options: {max-size: 10m,
+  max-file: 3}}` to every service in every app's compose file, including basegeek's four
+  datastore containers.
+- **`apps/basegeek/Dockerfile`'s build stage ran plain `pnpm install`** (no `--frozen-lockfile`)
+  — the only Dockerfile in the suite without it; every other app's build stage and every CI job
+  pins the lockfile. Added `--frozen-lockfile`.
+- **`.gitignore`'s `.env.*` line matched `.env.example`** (`apps/basegeek/.env.example`,
+  `apps/startgeek/.env.example`) — both are currently tracked (grandfathered in before the
+  pattern existed) so `git status`/`check-ignore` looked clean, but a fresh `git add` on either
+  path, or a new app's `.env.example`, would be silently skipped without `-f`. Same shape as the
+  `*data*`/`MetadataList.jsx` landmine already documented above. Added `!.env.example`.
+- **`apps/basegeek/.env.example` named the wrong Redis var** (`REDIS_URI`; the code reads
+  `REDIS_URL`) and was missing `JWT_EXPIRES_IN`, `REFRESH_TOKEN_EXPIRES_IN`, `MONGODB_DB_NAME`,
+  `MONGO_BASE_URI`, `KEY_VAULT_SECRET` (required, no default — the most important gap),
+  `SSO_COOKIE_DOMAIN`, `CSRF_GUARD`, `CSRF_TOKEN`, `BASEGEEK_URL`, `LOG_LEVEL`, all of which the
+  code reads. Corrected the name and filled in the gaps with placeholder values.
+- **`apps/fitnessgeek/env.example` named the wrong Mongo var** (`DB_URI`; the code reads
+  `MONGODB_URI`) and was missing most of what the backend actually reads (`KEY_VAULT_SECRET`,
+  `AI_GEEK_API_KEY`, `CALORIENINJAS_API_KEY`, `FATSECRET_CLIENT_*`, `CORS_ORIGINS`,
+  `LOCAL_AUTH_COOKIE_DOMAIN`, `MAX_SANITY_RESULTS`, `USER_PREFERENCE_LIMIT`, `INFLUXDB_PROTOCOL`,
+  `APP_NAME`, `PORT`, `LOG_LEVEL`) while carrying three vars nothing reads (`DB_URI`,
+  `VITE_API_URL`, `VITE_BASEGEEK_URL` — the frontend never reads `import.meta.env.VITE_*`
+  anywhere; confirmed by grep) and two dead ones (`NUTRITIONIX_APP_ID`/`API_KEY`). Rewrote it to
+  match reality.
+- **`.github/workflows/release.yml` had no `timeout-minutes` on either job** — every job in
+  `ci.yml` and `mobile-harness.yml` has one; a stuck `docker buildx` would otherwise run to
+  GitHub's 360-minute default. Added 5 min (matrix) / 30 min (build-and-publish).
+- **`tools/mobile-harness/lib/serve.mjs`'s `startPreview()` orphaned the child process on its own
+  60s startup timeout** — the timeout handler only called `reject()`, never killed the detached
+  `vite preview` child, and since the promise rejects before returning a `stop()` handle, the
+  caller (`ci.mjs`/`shoot.mjs`) has nothing to clean up with even though both wrap the run in
+  `try/finally`. A build that's merely slow to print its URL (not a real hang) would leak a
+  process holding an ephemeral port on every such run. Extracted the group-kill logic already in
+  `stop()` into a shared `killGroup()` helper and call it from the timeout path before rejecting.
+- **`DOCS/CICD.md`'s illustrative Watchtower `docker-compose.yml` snippet was stale** — still
+  showed `containrrr/watchtower` and a bridge network; the real, current config
+  (`docker/watchtower/docker-compose.yml`, tracked in this repo) is `nickfedor/watchtower` on
+  `network_mode: host`, for the reasons this doc's own §5 already explains. Added a pointer so the
+  snippet isn't copy-pasted as-is.
+- **This doc's own fitnessgeek env-var list included `JWT_REFRESH_SECRET`**, which nothing in
+  that backend reads (verified by grep) and which `DEPLOY.md`'s own "Shared secrets across apps"
+  table already calls basegeek-only. Corrected.
+
+**Left in place, reported:**
+- Every Dockerfile runs its process as root (no `USER` instruction anywhere in the suite) —
+  changing this touches bind-mounted volume permissions (bookgeek's library mount, the four
+  datastore volumes) across all eight images at once; flagged for Chef rather than changed here.
+- `TZ=America/Chicago` is inert in every container (no `tzdata` in any `node:20-alpine`/`-slim`
+  image) — Q42, Chef's call, per `STATUS.md`.
+- `bujogeek`'s compose sets `GATEWAY_URL=http://host.docker.internal:4100`, but nothing in the
+  bujogeek backend reads `process.env.GATEWAY_URL` (grepped, zero hits) — dead config, and the
+  port doesn't even match basegeek's real one (8987). Harmless since unread; not touched.
+- `main` has no required status checks (BURN_REVIEW #21) — a GitHub repo setting, not a file in
+  this tree.
+- `apps/fitnessgeek/backend/env.example` (nested, one level below this pass's `apps/*/env.example`
+  scope) has the same drift as the top-level file did (`DB_HOST`/`DB_USER`/`DB_PASSWORD` instead
+  of `MONGODB_URI`) — not touched, flagged for whoever owns that tree.
 
 ---
 

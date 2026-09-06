@@ -174,8 +174,16 @@ Jobs:
 Watchtower is a small daemon (one docker container) that polls
 configured images and restarts containers when a newer digest lands.
 
+> **As shipped, this snippet is stale — see `docker/watchtower/docker-compose.yml`
+> in this repo for the real, current config.** Two things changed from the
+> original plan below: the image is `nickfedor/watchtower` (the `containrrr/`
+> upstream is stale and negotiates an API version the current Docker daemon
+> rejects), and the container runs `network_mode: host` (this box had
+> exhausted its Docker bridge subnet pools — `DOCS/DOCKER_CLEANUP.md`) instead
+> of a bridge network. `RUNBOOK.md` §5 has the as-run summary.
+
 ```yaml
-# /mnt/Media/Docker/watchtower/docker-compose.yml (new)
+# /mnt/Media/Docker/watchtower/docker-compose.yml (original plan — superseded, see note above)
 services:
   watchtower:
     image: containrrr/watchtower

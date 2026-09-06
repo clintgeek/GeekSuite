@@ -13,7 +13,7 @@ COPY apps/basegeek ./apps/basegeek
 
 # Install ALL workspace deps (resolves workspace:* links)
 RUN npm install -g pnpm@10
-RUN pnpm install
+RUN pnpm install --frozen-lockfile
 
 # Build the frontend (UI)
 WORKDIR /app/apps/basegeek/packages/ui

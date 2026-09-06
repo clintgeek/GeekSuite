@@ -10,36 +10,38 @@ services:
     networks:
       - datageek_network
 
+    # All runtime env (MONGODB_URI, JWT_SECRET, JWT_REFRESH_SECRET, BASEGEEK_URL,
+    # REDIS_URL, AI_GEEK_API_KEY, the food-provider keys, INFLUXDB_*, KEY_VAULT_SECRET,
+    # etc.) is loaded from .env.production by env_file.
+    # Don't list those vars here as ${VAR} substitutions — that pulls from docker
+    # compose's own .env file (a different lookup path, resolved at compose-parse
+    # time, not container-boot time) and silently wins over env_file for the same
+    # key. Found 2026-09-05: this file did exactly that, and the stale local .env
+    # had no NUTRITIONIX_APP_ID/NUTRITIONIX_API_KEY at all, so those two were being
+    # blanked out in every deployed container regardless of .env.production's value.
     env_file:
       - .env.production
 
+    # Compose-fixed values that don't vary per environment.
     environment:
       TZ: America/Chicago
       NODE_ENV: production
       PORT: 3001
 
-      MONGODB_URI: ${MONGODB_URI}
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
-      BASEGEEK_URL: ${BASEGEEK_URL}
-      REDIS_URL: ${REDIS_URL}
-      AI_GEEK_API_KEY: ${AI_GEEK_API_KEY}
-
-      USDA_API_KEY: ${USDA_API_KEY}
-      NUTRITIONIX_APP_ID: ${NUTRITIONIX_APP_ID}
-      NUTRITIONIX_API_KEY: ${NUTRITIONIX_API_KEY}
-      OPENFOODFACTS_API_URL: ${OPENFOODFACTS_API_URL}
-
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-
-      INFLUXDB_HOST: ${INFLUXDB_HOST}
-      INFLUXDB_PORT: ${INFLUXDB_PORT}
-      INFLUXDB_USERNAME: ${INFLUXDB_USERNAME}
-      INFLUXDB_PASSWORD: ${INFLUXDB_PASSWORD}
-      INFLUXDB_DATABASE: ${INFLUXDB_DATABASE}
-
     ports:
       - "4080:3001"
+
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 networks:
   datageek_network:

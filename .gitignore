@@ -3,6 +3,11 @@ dist
 build
 .env
 .env.*
+# .env.* above is meant to keep real secrets (.env, .env.local,
+# .env.production) out of git, not the checked-in template. Un-ignore it
+# explicitly — same class of landmine as the old `*data*` glob eating
+# MetadataList.jsx (DEPLOY.md, DOCS/RUNBOOK.md "known failure modes").
+!.env.example
 .DS_Store
 data/
 .claude/

@@ -40,6 +40,17 @@ const freePort = () =>
     });
   });
 
+// Kill the whole process group `spawn(..., { detached: true })` started, not
+// just the leader — vite preview forks internally and a lone `child.kill()`
+// can leave those behind holding the port.
+function killGroup(child, sig) {
+  try {
+    process.kill(-child.pid, sig);
+  } catch {
+    try { child.kill(sig); } catch { /* already gone */ }
+  }
+}
+
 export async function startPreview(name, { timeoutMs = 60000 } = {}) {
   const app = appSpec(name);
   const port = await freePort();
@@ -60,7 +71,14 @@ export async function startPreview(name, { timeoutMs = 60000 } = {}) {
   });
   let log = '';
   const url = await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`vite preview for ${name} did not start in ${timeoutMs}ms:\n${log}`)), timeoutMs);
+    // If vite never prints a matching URL in time, the child is still running
+    // (detached, its own process group) — reject() alone would leave it
+    // orphaned forever, since the caller never gets a handle to stop() a
+    // startPreview() call that threw. Kill it here before rejecting.
+    const timer = setTimeout(() => {
+      killGroup(child, 'SIGKILL');
+      reject(new Error(`vite preview for ${name} did not start in ${timeoutMs}ms:\n${log}`));
+    }, timeoutMs);
     const onData = (buf) => {
       log += buf.toString();
       // Vite bolds the port in colour mode (`http://127.0.0.1:` + ESC[1m41711ESC[22m/), which
@@ -95,18 +113,11 @@ export async function startPreview(name, { timeoutMs = 60000 } = {}) {
     },
     async stop() {
       stopping = true;
-      const signal = (sig) => {
-        try {
-          process.kill(-child.pid, sig); // the group, not just the leader
-        } catch {
-          try { child.kill(sig); } catch { /* already gone */ }
-        }
-      };
       child.stdout?.destroy();
       child.stderr?.destroy();
-      signal('SIGTERM');
+      killGroup(child, 'SIGTERM');
       await new Promise((r) => setTimeout(r, 300));
-      signal('SIGKILL');
+      killGroup(child, 'SIGKILL');
     },
   };
 }
