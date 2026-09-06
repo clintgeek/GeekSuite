@@ -12,6 +12,8 @@ import {
 const useNoteStore = create((set, get) => {
     // Track debounce timer for selectedNote updates
     let selectedNoteTimer = null;
+    // Monotonic id for search requests — only the newest one may write.
+    let searchSeq = 0;
 
     return {
         notes: [],         // List of notes (metadata mainly)
@@ -181,12 +183,23 @@ const useNoteStore = create((set, get) => {
             }
         },
 
+        /**
+         * Search, with the newest request winning.
+         *
+         * Two overlapping `network-only` searches resolve in whatever order
+         * the network gives them, and this used to write both — so results for
+         * "ab" could land on top of results for "abc" and stay there. The
+         * sequence number makes a stale response a no-op.
+         */
         searchNotes: async (query) => {
+            const seq = ++searchSeq;
             set({ isSearching: true, searchError: null });
             try {
                 const response = await searchNotesApi(query);
+                if (seq !== searchSeq) return;
                 set({ searchResults: response.data, isSearching: false });
             } catch (error) {
+                if (seq !== searchSeq) return;
                 set({
                     searchError: error.message || 'Failed to search notes',
                     isSearching: false
@@ -195,7 +208,10 @@ const useNoteStore = create((set, get) => {
         },
 
         clearSearchResults: () => {
-            set({ searchResults: [], searchError: null });
+            // Bump the sequence so a search still in flight cannot land after
+            // the user has cleared the box.
+            searchSeq += 1;
+            set({ searchResults: [], searchError: null, isSearching: false });
         }
     };
 });

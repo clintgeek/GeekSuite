@@ -616,51 +616,20 @@ const TaskProvider = ({ children }) => {
 
       const updatedTask = response.data?.updateTask;
 
-      setTasks(prevTasks => {
-        // Handle array format (daily view)
-        if (Array.isArray(prevTasks)) {
-          return sortTasks(
-            prevTasks.map(task => (task.id || task._id) === taskId ? updatedTask : task)
-          );
-        }
-
-        // Handle object format (all/other views)
-        const oldDateKey = Object.keys(prevTasks).find(date =>
-          prevTasks[date].some(task => (task.id || task._id) === taskId)
-        );
-
-        const newDateKey = updatedTask.dueDate ?
-          (() => {
-            const d = new Date(updatedTask.dueDate);
-            const y = d.getUTCFullYear();
-            const m = String(d.getUTCMonth() + 1).padStart(2, '0');
-            const day = String(d.getUTCDate()).padStart(2, '0');
-            return `${ y }-${ m }-${ day }`;
-          })() :
-          'no-date';
-
-        const newTasks = { ...prevTasks };
-
-        // Remove from old date if it exists
-        if (oldDateKey) {
-          newTasks[oldDateKey] = sortTasks(
-            newTasks[oldDateKey].filter(task => (task.id || task._id) !== taskId)
-          );
-
-          // Clean up empty dates
-          if (newTasks[oldDateKey].length === 0) {
-            delete newTasks[oldDateKey];
-          }
-        }
-
-        // Add to new date
-        newTasks[newDateKey] = sortTasks([
-          ...(newTasks[newDateKey] || []),
-          updatedTask
-        ]);
-
-        return newTasks;
-      });
+      // `mapTasksState` patches the task wherever it is — top-level row or one
+      // of a parent's steps — and re-sorts, in whichever shape this state is
+      // holding. What it replaces was an array branch that only looked at
+      // top-level rows (so editing a step from its parent's expander left the
+      // old text on screen) and an object branch that keyed the task by the
+      // *UTC* day of an instant `dueDate`, filing a 9pm-Central task under
+      // tomorrow — the same class BURN_REVIEW #8 fixed one file over.
+      // Merging rather than replacing also keeps fields the mutation does not
+      // select (subtaskCount, originalDueDate) instead of dropping them.
+      if (updatedTask) {
+        setTasks(prev => mapTasksState(prev, task => (
+          sameTask(task, taskId) ? { ...task, ...updatedTask } : task
+        )));
+      }
 
       setLoading(LoadingState.IDLE);
       return updatedTask;
@@ -832,23 +801,20 @@ const TaskProvider = ({ children }) => {
 
       const migratedTask = response.data?.migrateTaskToFuture;
 
-      setTasks(prev => {
-        const newTasks = {};
-        Object.entries(prev).forEach(([date, tasks]) => {
-          const filteredTasks = tasks.filter(task => (task.id || task._id) !== taskId);
-          if (filteredTasks.length > 0) {
-            newTasks[date] = filteredTasks;
-          }
-        });
-
-        const newDate = format(new Date(targetDate), 'yyyy-MM-dd');
-        if (!newTasks[newDate]) {
-          newTasks[newDate] = [];
-        }
-        newTasks[newDate].push(migratedTask);
-
-        return newTasks;
-      });
+      // Merge the authoritative object in place, exactly like updateTaskStatus
+      // does. This used to rebuild an object-keyed-by-date structure with
+      // `Object.entries(prev)` — a shape nothing has produced since the log
+      // views moved to plain arrays, so `tasks.filter` was called on a task
+      // object and threw `tasks.filter is not a function` INSIDE the try. The
+      // mutation had already succeeded; the user got "Failed to migrate task"
+      // and a list that never moved. (Had it not thrown, it would have left
+      // `tasks` as an object, which every consumer of this array then has to
+      // defend against.)
+      if (migratedTask) {
+        setTasks(prev => mapTasksState(prev, task => (
+          sameTask(task, taskId) ? { ...task, ...migratedTask } : task
+        )));
+      }
 
       return migratedTask;
     } catch (error) {

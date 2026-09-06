@@ -30,6 +30,15 @@ const PreviewSpinner = () => (
   </Box>
 );
 
+// NOTE (2026-09-05 going-over): this component is mounted by TemplatesPage but
+// is unreachable — nothing ever calls `handleOpen`, so `selectedTemplate` stays
+// null and it always renders null. TemplateList's "Apply Template" button opens
+// `TemplateApply` instead. Left in place (deleting a feature is Chef's call),
+// but its id accessor is corrected: templates come back keyed by `id`, and
+// `selectedTemplate._id` would have sent `templateId: undefined` into a
+// non-null `ID!` argument the moment anyone wired the open handler up.
+const applierTemplateId = (template) => template?.id ?? template?._id;
+
 const TemplateApplier = ({ onTemplateApplied }) => {
   const { applyTemplate } = useTemplates();
   const [selectedTemplate, setSelectedTemplate] = useState(null);
@@ -63,7 +72,7 @@ const TemplateApplier = ({ onTemplateApplied }) => {
 
     try {
       setLoading(true);
-      const result = await applyTemplate(selectedTemplate._id, vars);
+      const result = await applyTemplate(applierTemplateId(selectedTemplate), vars);
       setPreviewContent(result.content);
     } catch (error) {
       console.error('Error updating preview:', error);
@@ -75,7 +84,7 @@ const TemplateApplier = ({ onTemplateApplied }) => {
   const handleApply = async () => {
     try {
       setLoading(true);
-      const result = await applyTemplate(selectedTemplate._id, variables);
+      const result = await applyTemplate(applierTemplateId(selectedTemplate), variables);
       onTemplateApplied(result);
       handleClose();
     } catch (error) {

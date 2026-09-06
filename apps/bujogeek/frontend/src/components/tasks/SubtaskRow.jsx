@@ -14,6 +14,7 @@ import { format, differenceInCalendarDays } from 'date-fns';
 import { GeekSheet } from '@geeksuite/ui';
 import TaskCheckbox from './TaskCheckbox';
 import { colors } from '../../theme/colors';
+import { dueDayStart } from '../../utils/dueDate';
 import { domainInk } from '../../theme/inks';
 
 /**
@@ -53,10 +54,13 @@ const SubtaskRow = ({
   // The tick colour is the one aging cue a step keeps: green when it is on
   // time, amber once its own due date has passed. Anything more would compete
   // with the parent's border.
+  // `dueDayStart` (utils/dueDate.js) resolves the dual-natured `dueDate` to
+  // the local midnight of the day it actually means, which is what
+  // `differenceInCalendarDays` — a local-calendar helper — needs. Passing the
+  // raw value marked every date-only step amber a day early.
   const tickColor = useMemo(() => {
-    if (!subtask.dueDate) return colors.aging.fresh;
-    const due = new Date(subtask.dueDate);
-    if (Number.isNaN(due.getTime())) return colors.aging.fresh;
+    const due = dueDayStart(subtask.dueDate);
+    if (!due) return colors.aging.fresh;
     return differenceInCalendarDays(due, new Date()) < 0
       ? colors.aging.warning
       : colors.aging.fresh;
@@ -66,9 +70,9 @@ const SubtaskRow = ({
   const dueInk = domainInk(tickColor, theme);
 
   const dueLabel = useMemo(() => {
-    if (!subtask.dueDate || isSunk) return null;
-    const due = new Date(subtask.dueDate);
-    if (Number.isNaN(due.getTime())) return null;
+    if (isSunk) return null;
+    const due = dueDayStart(subtask.dueDate);
+    if (!due) return null;
     const diff = differenceInCalendarDays(due, new Date());
     if (diff === 0) return 'today';
     if (diff === 1) return 'tomorrow';

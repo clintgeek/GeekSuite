@@ -20,6 +20,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useTaskContext } from '../../context/TaskContext';
 import { normalizeTasks } from '../../utils/normalizeTasks';
+import { dueDayKey, dueDayStart, hasDueTime } from '../../utils/dueDate';
 import { colors } from '../../theme/colors';
 import { domainInk } from '../../theme/inks';
 import { getTaskAge, getAgingColor } from '../../utils/taskAging';
@@ -115,7 +116,13 @@ const MonthlyCalendar = () => {
     const arr = normalizeTasks(tasks);
     arr.forEach((task) => {
       if (!task.dueDate) return;
-      const key = format(new Date(task.dueDate), 'yyyy-MM-dd');
+      // `dueDayKey`/`dueDayStart` (utils/dueDate.js) resolve the dual-natured
+      // `dueDate`: UTC midnight is date-only, anything else carries a time.
+      // `format(new Date(dueDate), 'yyyy-MM-dd')` reads local fields, so every
+      // date-only task was marked on the PREVIOUS cell of the grid west of UTC.
+      const key = dueDayKey(task.dueDate);
+      if (!key) return;
+      const dueDay = dueDayStart(task.dueDate);
       if (!marks[key]) marks[key] = [];
       if (!byDay[key]) byDay[key] = [];
       const { level } = getTaskAge(task);
@@ -125,7 +132,7 @@ const MonthlyCalendar = () => {
       byDay[key].push({ task, color, done: isDone });
 
       // Only count tasks whose dueDate falls inside the visible month
-      if (isSameMonth(new Date(task.dueDate), currentMonth)) {
+      if (isSameMonth(dueDay, currentMonth)) {
         stats.total += 1;
         if (isDone) stats.done += 1;
         if (!isDone && (level === 'overdue' || level === 'stale')) stats.overdue += 1;
@@ -449,8 +456,11 @@ const MonthlyCalendar = () => {
             ) : (
               <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                 {agenda.map(({ task, color, done }) => {
+                  // "Carries a time" is the gateway's own UTC-midnight test
+                  // (utils/dueDate.js); `getHours()` printed a phantom 7:00 PM
+                  // beside every date-only entry for a reader west of UTC.
                   const due = new Date(task.dueDate);
-                  const timed = !isNaN(due.getTime()) && !(due.getHours() === 0 && due.getMinutes() === 0);
+                  const timed = hasDueTime(task.dueDate);
                   // Cancelled sinks with completed: struck, muted, out of the way.
                   const sunk = done || task.status === 'cancelled';
                   return (

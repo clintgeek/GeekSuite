@@ -21,6 +21,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import DeleteNoteDialog from './DeleteNoteDialog';
 import { border, glow, noteTypeColor, surfaces } from '../theme/tokens';
+import { decodeCodeNote } from '../utils/previewText';
 
 // Note type configuration — type color comes from theme.palette.noteTypes
 const NOTE_TYPE_CONFIG = {
@@ -389,8 +390,12 @@ function NoteViewer() {
                                     dangerouslySetInnerHTML={{ __html: noteToView.content || '' }}
                                 />
                             ) : noteToView.type === 'code' ? (
+                                // The stored value is CodeEditor's
+                                // `{ language, code }` envelope; printing it
+                                // raw showed the reader the JSON rather than
+                                // their code. See utils/previewText.js.
                                 <pre>
-                                    <code>{noteToView.content || ''}</code>
+                                    <code>{decodeCodeNote(noteToView.content || '').code}</code>
                                 </pre>
                             ) : (
                                 <Typography

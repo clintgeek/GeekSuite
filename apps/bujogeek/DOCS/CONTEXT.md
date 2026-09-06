@@ -416,3 +416,125 @@ worth rewriting rather than keeping, it is fifteen lines.
 | VAPID keys | Live in **basegeek** env — see `DOCS/REMINDERS.md` |
 
 Dev: backend on `5001`, frontend on `5173` (Vite).
+
+---
+
+## Going-over 2026-09-05 (frontend + thin backend)
+
+A read of the whole tree — every route, component, hook, context, graphql
+document, config and test — against the burn's priorities. What follows is
+what changed and what was deliberately left. Suite: vitest 103 → **136**,
+backend jest 39 → **39**; lint 45 → **44** warnings, 0 errors; harness 20
+scenes 0/0/0 with `--enforce-a11y`; `pnpm build` clean, entry chunk
+450.1 kB gz 139.2 (the Bundle table above still holds — the added query
+fields and `utils/dueDate.js` cost under a kilobyte).
+
+### Fixed
+
+- **The log queries did not select `collectionId` / `recurrenceRule` /
+  `seriesId` / `isSeriesMaster`, so editing a task from Today, Review, Plan,
+  Search or Tags silently filed it out of its collection and demoted its
+  recurring series to a plain task.** `TaskEditor` seeds its form from the task
+  object and always resends both; a task fetched without them seeded
+  `collectionId: ''` / `recurrenceFreq: 'none'` and posted `null` for each, and
+  `taskService.updateTask` obeyed. Changing a priority destroyed the filing.
+  Same omission hid the recurrence glyph (`TaskRow.jsx:540`) and stopped
+  `deleteTask` asking "this occurrence or the series?" for a real (non-virtual)
+  master. `GET_COLLECTION` and `GET_BLOCKED_TASKS` always selected all four,
+  which is why it read as a rendering gap rather than data loss. Fixed at the
+  queries, plus a guard in `buildPayload` that refuses to send a field the
+  editor could not have loaded. Pinned by
+  `__tests__/graphql/taskSelections.test.js`.
+- **`dueDate` is dual-natured and the whole frontend read it as one thing.**
+  The gateway is explicit (`graphql/bujogeek/validation.js`): UTC midnight means
+  date-only, anything else carries a due time — the same test
+  `reminderService.hasDueTime` runs. The client used local accessors
+  everywhere, which is right for the timed half and exactly one day early for
+  the date-only half west of UTC. Review's Keep / Tomorrow / Move-to-date and
+  `migrateTaskToFuture` all produce date-only values, so a task filed for today
+  came back wearing an amber "yesterday" badge, sat in Tags' *Overdue* group,
+  marked the previous cell of the month grid, and showed a phantom "7:00 PM".
+  New `utils/dueDate.js` (`hasDueTime` / `dueDayKey` / `dueDayStart`) mirrors
+  the server's rule; applied in `TaskRow`, `SubtaskRow`, `TaskList` (grouping
+  *and* the scheduled-at line), `TagsPage`, `MonthlyCalendar`, `WeeklySpread`,
+  `TodayPage`'s Upcoming window and `exportTasks`. BURN_REVIEW #8's fix is
+  preserved — a 9pm-local task still groups under its local day; both
+  directions are now asserted. 12 cases in `__tests__/utils/dueDate.test.js`,
+  3 more in `__tests__/components/TaskList.test.jsx`.
+- **`TaskContext.migrateTask` threw on every call.** It rebuilt an
+  object-keyed-by-date structure with `Object.entries(prev)`, a shape nothing
+  has produced since the log views moved to arrays — so `tasks.filter` ran on a
+  task object and threw *inside* the try, after the mutation had succeeded. The
+  user saw "Failed to migrate task" and a list that never moved. Now merges in
+  place like `updateTaskStatus`. `__tests__/context/TaskContext.test.jsx`.
+- **`TaskContext.updateTask` missed steps and mis-keyed dates.** Its array
+  branch only looked at top-level rows, so editing a step from its parent's
+  expander left the old text on screen; its object branch keyed a task by the
+  *UTC* day of an instant `dueDate`. Both replaced by `mapTasksState`, which
+  also stops the merge dropping fields the mutation does not select.
+- **`/search`'s "Schedule Task" arrow always failed.** It called
+  `migrateTask(id, futureDate)` with a `futureDate` nothing ever set, i.e.
+  `format(null)` → "Invalid time value". The migration dialog beside it was
+  fully wired and unreachable; the arrow now opens it.
+- **Templates: three separate breaks.** `TemplateContext` spliced its list on
+  `t._id`, which is `undefined` on a GraphQL result — so a deleted template
+  stayed on screen and an edited one showed no change. `CREATE_TEMPLATE` /
+  `UPDATE_TEMPLATE` returned only `{ id, name }`, so a newly created template
+  entered the list with no `content` and "Apply Template" on it created **zero
+  tasks**. And `search` / `tags` were passed to `apolloClient.query` as
+  variables `templates(type:, isDefault:)` never declares, so the "Search
+  templates…" box refetched the identical list on every keystroke and filtered
+  nothing. Fixed with a shared `TEMPLATE_FIELDS` fragment, an id accessor, and
+  client-side search/tag filtering with the refetch keyed on `type` alone.
+  `__tests__/context/TemplateContext.test.jsx`.
+- **`TaskList` ordered by `t._id`**, which is always `undefined` (the gateway
+  returns `id`) — in the daily branch that collapses every row onto one Map
+  entry. Only `/search` renders this component today, so it was latent.
+- `ADD_SUBTASK` now selects `collectionId`, so `onSubtaskAdded` can evict the
+  parent collection's tallies (clause 3 of the cache rule).
+- **Backend:** the four `/api/auth/*` proxies had no axios timeout — axios
+  defaults to `0`, so a *hung* basegeek parked the handler and the browser
+  until the socket died. Now bounded by `BASEGEEK_TIMEOUT_MS` (default 8000),
+  the same knob `packages/user`'s `validateToken` uses; a timeout carries no
+  `.response` and lands in each handler's existing 502 branch. `server.js`'s
+  `shutdown` also dereferenced `server` before `listen()` had assigned it, so a
+  SIGTERM during `connectDB` was a TypeError instead of a clean exit.
+- One flaky test: `accessibleNames.test.jsx`'s editor cases mount the whole MUI
+  dialog and exceeded vitest's 5s default on a loaded build box. Given an
+  explicit 20s budget so a slow machine reads as slow.
+
+### Left in place, with reasons
+
+- **`TaskEditor` is always-mounted with `open={bool}` (Q55).** Unmounting it on
+  close is the single biggest remaining bundle win (≈250 kB of `/today`'s
+  314 kB route cost is `TaskEditor` + `useMobilePicker`) but it resets the
+  dialog's internal state and kills MUI's close transition. Behaviour change —
+  Chef's call, as the Bundle section already records.
+- **`TemplateApplier` is mounted by `TemplatesPage` and is unreachable**:
+  nothing calls its `handleOpen`, so `selectedTemplate` stays null and it always
+  renders null. `TemplateList`'s "Apply Template" opens `TemplateApply` instead.
+  Two consequences worth knowing: the styled markdown `TemplatePreview` (and its
+  7 tests) never renders in the running app, and the `markdown` chunk the Bundle
+  section describes as "loads on the click" is in practice never fetched —
+  `TemplateApply` shows a plain-text preview. Its `selectedTemplate._id` bug is
+  corrected so wiring it up later is safe, but deleting or wiring the component
+  is a feature decision, not a fix.
+- **`TaskContext` still holds the dual array/object state shape.** After this
+  pass nothing produces the object form, but `normalizeTasks`, `findTaskInState`
+  and `mapTasksState` still defend against it. Collapsing to one shape is a
+  clean follow-up; doing it mid-review would have been an unpinned refactor.
+- **The `view === 'all'` debounce effect in `TaskContext` is dead** —
+  `window.location.pathname.split('/')[2]` is never `'all'` for any route this
+  app has. It costs one timer per filter keystroke and nothing else. Left as
+  hygiene rather than mixed into behaviour fixes.
+- **`hooks/useTemplate.js` has no importers**, and `GET_TASKS`,
+  `GET_JOURNAL_ENTRY(-IES)` and the three journal-entry mutations have no
+  non-test call sites. Reported, not deleted.
+- **`getTaskAge` reads `originalDate` first**, so a task created three days ago
+  and deliberately re-dated to today still lands in "Carried forward". That is
+  arguably the bullet-journal semantic, so it stayed — but it is a decision,
+  not an accident.
+- **Virtual recurring occurrences carry no `collectionId`** (the gateway builds
+  them by hand in `taskService.js` and omits it), so editing one still posts
+  `collectionId: null`. Harmless today because a virtual has no filing to lose,
+  but it is a gateway-side gap, not a client one.

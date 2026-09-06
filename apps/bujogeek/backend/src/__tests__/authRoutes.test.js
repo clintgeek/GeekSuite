@@ -49,7 +49,10 @@ describe('POST /api/auth/login', () => {
 
     expect(mockAxios.post).toHaveBeenCalledWith(
       'https://basegeek.test/api/auth/login',
-      { identifier: 'alice', password: 'correct-horse', app: 'bujogeek' }
+      { identifier: 'alice', password: 'correct-horse', app: 'bujogeek' },
+      // Bounded, so a hung basegeek 502s instead of parking the handler
+      // forever — see the timeout note in routes/authRoutes.js.
+      { timeout: 8000 }
     );
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -94,7 +97,8 @@ describe('POST /api/auth/register', () => {
 
     expect(mockAxios.post).toHaveBeenCalledWith(
       'https://basegeek.test/api/auth/register',
-      { email: 'new@example.com', password: 'x', app: 'bujogeek' }
+      { email: 'new@example.com', password: 'x', app: 'bujogeek' },
+      { timeout: 8000 }
     );
   });
 });
@@ -121,7 +125,7 @@ describe('POST /api/auth/logout', () => {
     expect(mockAxios.post).toHaveBeenCalledWith(
       'https://basegeek.test/api/auth/logout',
       {},
-      { headers: { Cookie: 'geek_token=user-a-token' } }
+      { headers: { Cookie: 'geek_token=user-a-token' }, timeout: 8000 }
     );
   });
 });

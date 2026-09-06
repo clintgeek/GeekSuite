@@ -28,14 +28,16 @@ function SearchResults() {
     const [searchParams, setSearchParams] = useSearchParams();
     const query = searchParams.get('q') || '';
     const [searchTerm, setSearchTerm] = useState(query);
-    const { searchNotes, searchResults, isSearching, searchError } = useNoteStore();
+    const { searchNotes, searchResults, isSearching, searchError, clearSearchResults } = useNoteStore();
     const inputRef = useRef(null);
 
+    // Debounce the box into the URL. The `if (searchTerm)` guard that used to
+    // wrap this meant an EMPTIED box never wrote `q=''`: `query` kept its old
+    // value, the search effect below never re-ran, and the page went on showing
+    // results for a term the user had just backspaced away.
     useEffect(() => {
         const timeoutId = setTimeout(() => {
-            if (searchTerm) {
-                setSearchParams({ q: searchTerm });
-            }
+            setSearchParams(searchTerm ? { q: searchTerm } : {}, { replace: true });
         }, 300);
         return () => clearTimeout(timeoutId);
     }, [searchTerm, setSearchParams]);
@@ -43,12 +45,15 @@ function SearchResults() {
     useEffect(() => {
         if (query) {
             searchNotes(query);
+        } else {
+            clearSearchResults();
         }
-    }, [query, searchNotes]);
+    }, [query, searchNotes, clearSearchResults]);
 
     const handleClear = () => {
         setSearchTerm('');
-        setSearchParams({ q: '' });
+        setSearchParams({}, { replace: true });
+        clearSearchResults();
         inputRef.current?.focus();
     };
 
@@ -104,7 +109,10 @@ function SearchResults() {
                 <GeekErrorState
                     compact
                     error={searchError}
-                    onRetry={() => searchNotes(query)}
+                    // Guarded: the resolver throws on an empty `q`, and this
+                    // button was reachable with `query === ''` right after a
+                    // clear — retrying straight into another error.
+                    onRetry={query ? () => searchNotes(query) : undefined}
                 />
             ) : searchResults.length > 0 ? (
                 <Box>

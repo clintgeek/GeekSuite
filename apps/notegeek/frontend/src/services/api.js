@@ -4,6 +4,9 @@ import { setupAxiosInterceptors } from '@geeksuite/auth';
 import { apolloClient } from '../apolloClient';
 import { GET_FOLDERS, SEARCH_NOTES, GET_NOTES, GET_NOTE_BY_ID, GET_TAGS } from '../graphql/queries';
 import { CREATE_FOLDER, UPDATE_FOLDER, DELETE_FOLDER, RENAME_TAG, DELETE_TAG, CREATE_NOTE, UPDATE_NOTE, DELETE_NOTE } from '../graphql/mutations';
+// Every mutation owns the cache consequences of its own write — see
+// graphql/cacheUpdates.js for what each of these owes and why.
+import { onNoteCreated, onNoteUpdated, onNoteDeleted, onTagsRewritten } from '../graphql/cacheUpdates';
 
 // Define the base URL for the API
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
@@ -41,15 +44,30 @@ export const getNoteByIdApi = async (id) => {
     return { data: data.note };
 };
 export const createNoteApi = async (noteData) => {
-    const { data } = await apolloClient.mutate({ mutation: CREATE_NOTE, variables: noteData });
+    const { data } = await apolloClient.mutate({
+        mutation: CREATE_NOTE,
+        variables: noteData,
+        update: onNoteCreated,
+    });
     return { data: data.createNote };
 };
 export const updateNoteApi = async (id, noteData) => {
-    const { data } = await apolloClient.mutate({ mutation: UPDATE_NOTE, variables: { id, ...noteData } });
+    const { data } = await apolloClient.mutate({
+        mutation: UPDATE_NOTE,
+        variables: { id, ...noteData },
+        update: onNoteUpdated,
+    });
     return { data: data.updateNote };
 };
 export const deleteNoteApi = async (id) => {
-    const { data } = await apolloClient.mutate({ mutation: DELETE_NOTE, variables: { id } });
+    const { data } = await apolloClient.mutate({
+        mutation: DELETE_NOTE,
+        variables: { id },
+        // `deleteNote` returns a bare Boolean, so the id has to be closed over
+        // here. Without the evict the row survived in every cached `notes(...)`
+        // list and `/notes` rendered a ghost linking to a 404.
+        update: onNoteDeleted(id),
+    });
     return { data: data.deleteNote };
 };
 
@@ -91,7 +109,11 @@ export const searchNotesApi = async (query) => {
 // Tag Management
 export const renameTagApi = async (oldTag, newTag) => {
     try {
-        const { data } = await apolloClient.mutate({ mutation: RENAME_TAG, variables: { oldTag, newTag } });
+        const { data } = await apolloClient.mutate({
+            mutation: RENAME_TAG,
+            variables: { oldTag, newTag },
+            update: onTagsRewritten,
+        });
         return { data: data.renameTag };
     } catch (error) {
         console.error('API Rename Tag Error:', error);
@@ -101,7 +123,11 @@ export const renameTagApi = async (oldTag, newTag) => {
 
 export const deleteTagApi = async (tag) => {
     try {
-        const { data } = await apolloClient.mutate({ mutation: DELETE_TAG, variables: { tag } });
+        const { data } = await apolloClient.mutate({
+            mutation: DELETE_TAG,
+            variables: { tag },
+            update: onTagsRewritten,
+        });
         return { data: data.deleteTag };
     } catch (error) {
         console.error('Delete tag failed:', error.message);

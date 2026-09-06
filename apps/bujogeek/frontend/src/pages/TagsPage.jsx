@@ -14,6 +14,7 @@ import { Search, Hash, ChevronDown, ChevronRight } from 'lucide-react';
 import { isToday, isPast } from 'date-fns';
 import { apolloClient } from '../apolloClient';
 import { GET_TASK_TAGS, GET_TASKS_BY_TAG } from '../graphql/queries';
+import { dueDayStart } from '../utils/dueDate';
 import TaskRow from '../components/tasks/TaskRow';
 import TaskEditor from '../components/tasks/TaskEditor';
 import SkeletonLoader from '../components/shared/SkeletonLoader';
@@ -124,7 +125,15 @@ const TagsPage = () => {
       } else if (!task.dueDate) {
         groups.noDate.tasks.push(task);
       } else {
-        const due = new Date(task.dueDate);
+        // `dueDayStart` (utils/dueDate.js) is the local midnight of the day
+        // this due date actually means. `isToday`/`isPast` read local calendar
+        // fields, so the raw value put every date-only task — everything Review
+        // or a migration dated — in the Overdue group on the day it was due.
+        const due = dueDayStart(task.dueDate);
+        if (!due) {
+          groups.noDate.tasks.push(task);
+          return;
+        }
         if (isToday(due)) {
           groups.today.tasks.push(task);
         } else if (isPast(due)) {

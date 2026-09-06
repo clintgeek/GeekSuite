@@ -54,8 +54,11 @@ describe('Auth Routes (Inline Handlers)', () => {
                 .get('/api/auth/me')
                 .set('Cookie', ['geek_token=abc123token']);
 
+            // Bounded, so a hung basegeek 502s instead of parking the
+            // handler forever — see the timeout note in routes/auth.js.
             expect(mockAxios.get).toHaveBeenCalledWith('https://mock.basegeek.com/api/users/me', {
                 headers: { Authorization: 'Bearer abc123token' },
+                timeout: 8000,
             });
             expect(res.status).toBe(200);
             expect(res.body).toEqual({ user: 'test' });
@@ -70,6 +73,7 @@ describe('Auth Routes (Inline Handlers)', () => {
 
             expect(mockAxios.get).toHaveBeenCalledWith('https://mock.basegeek.com/api/users/me', {
                 headers: { Authorization: 'Bearer def456token' },
+                timeout: 8000,
             });
             expect(res.status).toBe(200);
             expect(res.body).toEqual({ user: 'test2' });
@@ -127,7 +131,7 @@ describe('Auth Routes (Inline Handlers)', () => {
             expect(mockAxios.post).toHaveBeenCalledWith(
                 'https://mock.basegeek.com/api/auth/logout',
                 {},
-                { headers: { Cookie: 'geek_token=valid' } }
+                { headers: { Cookie: 'geek_token=valid' }, timeout: 8000 }
             );
             expect(res.status).toBe(200);
             expect(res.body).toEqual({ msg: 'logged out' });
@@ -166,7 +170,7 @@ describe('Auth Routes (Inline Handlers)', () => {
             expect(mockAxios.post).toHaveBeenCalledWith(
                 'https://mock.basegeek.com/api/auth/refresh',
                 { app: 'notegeek' },
-                { headers: { Cookie: 'geek_refresh_token=some_refresh_value' } }
+                { headers: { Cookie: 'geek_refresh_token=some_refresh_value' }, timeout: 8000 }
             );
             expect(res.status).toBe(200);
             expect(res.headers['set-cookie']).toEqual(['geek_token=new_token; HttpOnly']);

@@ -70,6 +70,35 @@ describe('RichTextEditor', () => {
         });
     });
 
+    /**
+     * Regression, 2026-09-05 going-over.
+     *
+     * This editor used to report changes ONLY in `onBlur`, which made it the
+     * odd one out (MarkdownEditor and CodeEditor both call `setContent` per
+     * keystroke) and had two consequences on the page above it: the 2s autosave
+     * never armed while the caret was in the body, because nothing had set
+     * `dirty`; and Cmd/Ctrl+S — which does not blur — persisted the PRE-EDIT
+     * html. Writing a rich-text note and hitting save was a no-op.
+     */
+    it('reports a change as it is typed, not only on blur', async () => {
+        const { container } = render(
+            <RichTextEditor content="<p>Initial content</p>" setContent={mockSetContent} />,
+            { wrapper: AllProviders }
+        );
+        await waitFor(() => expect(screen.getByText('Initial content')).toBeInTheDocument());
+
+        const surface = container.querySelector('.ProseMirror');
+        // Typing through ProseMirror's own input path fires `onUpdate`.
+        fireEvent.input(surface, {
+            target: { innerHTML: '<p>Initial content, edited</p>' },
+        });
+
+        await waitFor(() => expect(mockSetContent).toHaveBeenCalled());
+        expect(mockSetContent.mock.calls.at(-1)[0]).toContain('edited');
+        // And no blur was needed to get there.
+        expect(document.activeElement).not.toBe(null);
+    });
+
     it('disables editing when isLoading', async () => {
         const { container } = render(<RichTextEditor content="Text" isLoading={true} setContent={mockSetContent} />, { wrapper: AllProviders });
 

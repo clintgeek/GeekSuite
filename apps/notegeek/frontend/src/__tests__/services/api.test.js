@@ -149,9 +149,13 @@ describe('API Service', () => {
         const note = { title: 'New Note', content: 'hello' };
         mockApollo.mutate.mockResolvedValueOnce({ data: { createNote: { id: '1' } } });
         await createNoteApi(note);
+        // `update` is the cache consequence this mutation owes — see
+        // graphql/cacheUpdates.js. Asserted as a function, and exercised for
+        // real below, so a future "tidy" that drops it fails here.
         expect(mockApollo.mutate).toHaveBeenCalledWith({
             mutation: CREATE_NOTE,
             variables: note,
+            update: expect.any(Function),
         });
     });
 
@@ -162,6 +166,7 @@ describe('API Service', () => {
         expect(mockApollo.mutate).toHaveBeenCalledWith({
             mutation: UPDATE_NOTE,
             variables: { id: '123', title: 'Updated' },
+            update: expect.any(Function),
         });
     });
 
@@ -171,6 +176,7 @@ describe('API Service', () => {
         expect(mockApollo.mutate).toHaveBeenCalledWith({
             mutation: DELETE_NOTE,
             variables: { id: '123' },
+            update: expect.any(Function),
         });
     });
 
@@ -257,6 +263,7 @@ describe('API Service', () => {
         expect(mockApollo.mutate).toHaveBeenCalledWith({
             mutation: RENAME_TAG,
             variables: { oldTag: 'old', newTag: 'new' },
+            update: expect.any(Function),
         });
 
         const error = new Error('Rename failed');
@@ -270,6 +277,7 @@ describe('API Service', () => {
         expect(mockApollo.mutate).toHaveBeenCalledWith({
             mutation: DELETE_TAG,
             variables: { tag: 'tag/with/slash' },
+            update: expect.any(Function),
         });
 
         const error = new Error('Delete failed');

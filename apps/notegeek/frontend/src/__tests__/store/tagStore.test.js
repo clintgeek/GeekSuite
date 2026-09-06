@@ -92,7 +92,17 @@ describe('useTagStore', () => {
     // renameTag
     // =========================================================================
     describe('renameTag', () => {
-        it('should rename tag and its children', async () => {
+        /**
+         * Rewritten in the 2026-09-05 going-over. This used to assert that the
+         * store renames the whole `parent/...` subtree — which the SERVER does
+         * not do: the resolver is
+         * `Note.updateMany({ userId, tags: oldTag }, { $set: { 'tags.$': newTag } })`,
+         * an exact match. The old expectation meant the sidebar showed
+         * `newparent/child` while the database still said `parent/child`, and
+         * the children snapped back on the next fetch. Renaming a subtree is a
+         * server-side decision; the client must not pretend it was made.
+         */
+        it('renames only the exact tag, matching what the resolver does', async () => {
             useTagStore.setState({ tags: ['parent', 'parent/child', 'other'] });
             renameTagApi.mockResolvedValueOnce({});
 
@@ -100,7 +110,16 @@ describe('useTagStore', () => {
 
             const state = useTagStore.getState();
             expect(state.isLoading).toBe(false);
-            expect(state.tags).toEqual(['newparent', 'newparent/child', 'other']);
+            expect(state.tags).toEqual(['newparent', 'other', 'parent/child']);
+        });
+
+        it('collapses a rename onto an existing tag instead of listing it twice', async () => {
+            useTagStore.setState({ tags: ['home', 'house'] });
+            renameTagApi.mockResolvedValueOnce({});
+
+            await useTagStore.getState().renameTag('house', 'home');
+
+            expect(useTagStore.getState().tags).toEqual(['home']);
         });
 
         it('should set error on API failure', async () => {
@@ -118,7 +137,10 @@ describe('useTagStore', () => {
     // deleteTag
     // =========================================================================
     describe('deleteTag', () => {
-        it('should remove tag and its children', async () => {
+        // Same correction as renameTag above: the resolver is
+        // `$pull: { tags: tag }`, which leaves `del/child` in place. Pruning
+        // the subtree locally made deleted children reappear on refetch.
+        it('removes only the exact tag, matching what the resolver does', async () => {
             useTagStore.setState({ tags: ['del', 'del/child', 'keep', 'deleted'] });
             deleteTagApi.mockResolvedValueOnce({});
 
@@ -126,11 +148,7 @@ describe('useTagStore', () => {
 
             const state = useTagStore.getState();
             expect(state.isLoading).toBe(false);
-            // Notice "deleted" does not start with "del/", so it shouldn't be removed
-            // Wait, let's check the store logic:
-            // updateTags = tags.filter(t => t !== tag && !t.startsWith(tag + '/'))
-            // "deleted" starts with "del", but not "del/".
-            expect(state.tags).toEqual(['keep', 'deleted']);
+            expect(state.tags).toEqual(['del/child', 'keep', 'deleted']);
         });
 
         it('should set error on API failure', async () => {

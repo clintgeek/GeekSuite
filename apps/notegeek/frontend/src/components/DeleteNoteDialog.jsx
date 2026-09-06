@@ -4,21 +4,36 @@ import { useNavigate } from 'react-router-dom';
 import { GeekDialog } from '@geeksuite/ui';
 import useNoteStore from '../store/noteStore';
 
-function DeleteNoteDialog({ open, onClose, noteId, noteTitle, isUnsavedNote }) {
+/**
+ * `onDiscarded` — "this note is gone, stand down" — is fired on BOTH exit paths
+ * and navigates nowhere; the dialog owns navigation.
+ *
+ * It exists because the editor flushes an unsaved draft on unmount. Without it,
+ * discarding a new note saved the very draft being discarded, and deleting a
+ * saved one fired an `updateNote` against a row that had just been deleted.
+ *
+ * It is deliberately NOT `onClose`. The two used to be one handler, so the
+ * dialog's *Cancel* button navigated away from an unsaved note — cancelling
+ * the confirm dialog was itself a way to leave the page.
+ */
+function DeleteNoteDialog({ open, onClose, onDiscarded, noteId, noteTitle, isUnsavedNote }) {
   const navigate = useNavigate();
   const deleteNote = useNoteStore(state => state.deleteNote);
 
   const handleDelete = async () => {
     try {
-      // For unsaved notes, just close the dialog and let the onClose handler navigate
+      // An unsaved note has nothing to delete — stand the flush down and leave.
       if (isUnsavedNote) {
+        if (onDiscarded) onDiscarded();
         onClose();
+        navigate('/notes');
         return;
       }
 
       // For saved notes, attempt to delete from the database
       const success = await deleteNote(noteId);
       if (success) {
+        if (onDiscarded) onDiscarded();
         onClose();
         navigate('/');
       }

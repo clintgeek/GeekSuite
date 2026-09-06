@@ -43,6 +43,16 @@ function MindMapEditorInner({ content, setContent, readOnly }) {
     const nextIdRef = useRef(1);
     const initialized = useRef(false);
     const lastContentRef = useRef(content);
+    // The first serialization after (re)initializing is the BASELINE, not an
+    // edit. Two things used to be reported as user changes and autosaved:
+    //   - a brand-new map, where `initializeEmptyMap()` produces a default
+    //     "Main Idea" node — so visiting /notes/new?type=mindmap and walking
+    //     away created an Untitled Note nobody asked for;
+    //   - an existing map opened in VIEW mode, where ReactFlow stamps measured
+    //     `width`/`height`/`positionAbsolute` onto every node, so the
+    //     re-serialization differs from what is stored and the note was saved
+    //     although it had only been looked at.
+    const baselinePendingRef = useRef(true);
 
     // Initialize or update from content
     useEffect(() => {
@@ -87,6 +97,7 @@ function MindMapEditorInner({ content, setContent, readOnly }) {
                     initializeEmptyMap();
                 }
                 initialized.current = true;
+                baselinePendingRef.current = true;
             } catch (e) {
                 console.error('MindMapEditor - Failed to parse:', e);
                 initializeEmptyMap();
@@ -97,6 +108,9 @@ function MindMapEditorInner({ content, setContent, readOnly }) {
     // Update content when nodes/edges change
     useEffect(() => {
         if (!initialized.current) return;
+        // Viewing is not editing. Without this, opening a saved map read-only
+        // marked the note dirty and the page autosaved it two seconds later.
+        if (readOnly) return;
 
         const timer = setTimeout(() => {
             try {
@@ -113,15 +127,20 @@ function MindMapEditorInner({ content, setContent, readOnly }) {
 
                 // Only update if content has actually changed
                 if (newContent !== lastContentRef.current) {
-                    setContent(newContent);
                     lastContentRef.current = newContent;
+                    // Adopt the first settle silently — see baselinePendingRef.
+                    if (baselinePendingRef.current) {
+                        baselinePendingRef.current = false;
+                        return;
+                    }
+                    setContent(newContent);
                 }
             } catch (err) {
                 console.error("MindMapEditor - Error serializing:", err);
             }
         }, 100);
         return () => clearTimeout(timer);
-    }, [nodes, edges, setContent]);
+    }, [nodes, edges, readOnly, setContent]);
 
     const initializeEmptyMap = () => {
         const rootNode = {

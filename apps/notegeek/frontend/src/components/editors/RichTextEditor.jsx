@@ -143,6 +143,25 @@ const RichTextEditor = ({ content = '', setContent = () => {}, isLoading = false
         'aria-label': 'Note body',
       },
     },
+    // Report on every keystroke, not only on blur.
+    //
+    // This editor used to report ONLY in `onBlur`, which made it the odd one
+    // out — MarkdownEditor and CodeEditor both call `setContent` per keystroke
+    // — and had two consequences on the page above it: the 2s autosave never
+    // armed while the caret was in the body (nothing had set `dirty`), and
+    // Cmd/Ctrl+S, which does not blur, persisted the PRE-EDIT html. Writing a
+    // rich-text note and hitting save was a no-op.
+    //
+    // `lastSavedContent` is updated first, so the sync effect below sees no
+    // difference when the new value comes back down as a prop and never calls
+    // `setContent()` on the editor — which is what would move the caret.
+    onUpdate: ({ editor }) => {
+      const html = editor.getHTML();
+      if (html !== lastSavedContent.current) {
+        lastSavedContent.current = html;
+        setContent(html);
+      }
+    },
     onBlur: ({ editor }) => {
       const html = editor.getHTML();
       if (html !== lastSavedContent.current) {

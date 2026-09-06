@@ -10,10 +10,13 @@ import MindMapIcon from '@mui/icons-material/AccountTree';
 import HandwrittenIcon from '@mui/icons-material/Draw';
 import BackIcon from '@mui/icons-material/ArrowBack';
 import { useQuery, useMutation } from '@apollo/client';
-import { GET_NOTE_BY_ID, GET_NOTES } from '../graphql/queries';
+import { GET_NOTE_BY_ID } from '../graphql/queries';
 import { CREATE_NOTE, UPDATE_NOTE } from '../graphql/mutations';
+import { useToast } from '@geeksuite/ui';
 import { NoteShell, NoteMetaBar, NoteActions, NoteTypeRouter, NOTE_TYPES } from '../components/notes';
 import DeleteNoteDialog from '../components/DeleteNoteDialog';
+import { onNoteCreated, onNoteUpdated } from '../graphql/cacheUpdates';
+import { overSizeMessage, saveErrorMessage } from '../utils/saveGuards';
 import { noteTypeColor, layout } from '../theme/tokens';
 
 // Type card configuration. Colors come from theme.palette.noteTypes so light
@@ -102,10 +105,13 @@ function NoteEditorPage() {
   const noteToEdit = data?.note;
   const selectedError = queryError?.message;
 
-  const [createNoteMutation] = useMutation(CREATE_NOTE, {
-    refetchQueries: [{ query: GET_NOTES }]
-  });
-  const [updateNoteMutation] = useMutation(UPDATE_NOTE);
+  // `refetchQueries: [{ query: GET_NOTES }]` used to sit here with NO
+  // variables. `NoteList` watches `notes(tag:…, prefix:…, type:…, limit: 200)`,
+  // so that entry matched neither the observable nor the cache field key — it
+  // was a wasted round trip that updated nothing. The cache rule
+  // (graphql/cacheUpdates.js) is what actually makes the new note appear.
+  const [createNoteMutation] = useMutation(CREATE_NOTE, { update: onNoteCreated });
+  const [updateNoteMutation] = useMutation(UPDATE_NOTE, { update: onNoteUpdated });
 
   // Form state
   const [title, setTitle] = useState('');
@@ -118,8 +124,33 @@ function NoteEditorPage() {
   const [savedNoteId, setSavedNoteId] = useState(() => (id && id !== 'new' && id !== 'undefined' ? id : null));
   const [dirty, setDirty] = useState(false);
 
-  // Track initialization
-  const initialized = useRef(false);
+  const { notify } = useToast();
+
+  // Track which note this form has been initialized from. Keyed by identity,
+  // not by object: the init effect below used to depend on `noteToEdit`, whose
+  // reference changes every time `UPDATE_NOTE` writes a new `updatedAt` into
+  // the normalized cache — so every successful save re-ran it and reset the
+  // form to the server's copy, discarding anything typed during the round trip.
+  const initializedFor = useRef(null);
+
+  // The saved note's id as a REF, not just state. A save that lands after the
+  // component has unmounted (the flush below) cannot read fresh state, and if
+  // it reads a stale `null` it takes the create branch and makes a second note.
+  const savedNoteIdRef = useRef(
+    id && id !== 'new' && id !== 'undefined' ? id : null
+  );
+
+  // A save is in flight. Nothing guarded this before: the Back button fired a
+  // save and then navigated, and the unmount flush — reading a `dirty` that the
+  // in-flight save had not cleared yet — fired a SECOND one. On a new note both
+  // took the create branch and one click produced two notes.
+  const savingRef = useRef(false);
+  // A save was requested while one was in flight; run once more when it lands,
+  // so the newer content is not silently dropped.
+  const saveAgainRef = useRef(false);
+  // The user discarded this note. Suppresses the unmount flush, which would
+  // otherwise dutifully save the draft they just threw away.
+  const discardedRef = useRef(false);
   const isMindMap = noteType === NOTE_TYPES.MINDMAP;
   const isHandwritten = noteType === NOTE_TYPES.HANDWRITTEN;
 
@@ -150,12 +181,21 @@ function NoteEditorPage() {
     setSavedNoteId(null);
   }, []);
 
-  // Initialize form from note data or URL
+  // Initialize form from note data or URL.
+  //
+  // Guarded by identity (`initializedFor`), not by the `noteToEdit` object.
+  // `UPDATE_NOTE` writes a fresh `updatedAt` into the normalized cache on every
+  // save, which gives `data.note` a new reference, which re-ran this effect and
+  // called `setContent(server copy)` — discarding whatever the user typed while
+  // the save was in flight. The form is seeded once per note and then belongs
+  // to the user until they navigate somewhere else.
   useEffect(() => {
-    initialized.current = false;
+    const identity = isNewNote ? `new:${ location.search }` : id;
+    if (initializedFor.current === identity) return;
 
     if (isNewNote) {
       resetForm();
+      savedNoteIdRef.current = null;
       const typeFromQuery = getTypeFromQuery();
       if (typeFromQuery) {
         setNoteType(typeFromQuery);
@@ -163,7 +203,7 @@ function NoteEditorPage() {
       } else {
         setHasPickedType(false);
       }
-      initialized.current = true;
+      initializedFor.current = identity;
       return;
     }
 
@@ -171,6 +211,7 @@ function NoteEditorPage() {
       setTitle(noteToEdit.title || '');
       setContent(noteToEdit.content || '');
       setTags(noteToEdit.tags || []);
+      savedNoteIdRef.current = id;
 
       if (noteToEdit.type && Object.values(NOTE_TYPES).includes(noteToEdit.type)) {
         setNoteType(noteToEdit.type);
@@ -181,27 +222,46 @@ function NoteEditorPage() {
         setNoteType(NOTE_TYPES.TEXT);
       }
 
-      initialized.current = true;
+      setDirty(false);
+      initializedFor.current = identity;
     }
-
-    return () => {
-      initialized.current = false;
-      if (isNewNote) {
-        resetForm();
-      }
-    };
-  }, [id, noteToEdit, isNewNote, resetForm, getTypeFromQuery]);
+  }, [id, noteToEdit, isNewNote, location.search, resetForm, getTypeFromQuery]);
 
   // Handle save — allow if either title or content has text
   const handleSave = async () => {
+    if (discardedRef.current) return;
+
     if (!content.trim() && !title.trim()) {
       setSaveStatus('Error: Add a title or some content first');
       setTimeout(() => setSaveStatus(''), 2000);
       return;
     }
 
-    setSaveStatus('Saving...');
+    // One save at a time. A second request while one is in flight is recorded
+    // and replayed when the first lands, so nothing newer is dropped — and,
+    // critically, a new note cannot be created twice by two concurrent calls
+    // that both read `savedNoteId === null`.
+    if (savingRef.current) {
+      saveAgainRef.current = true;
+      return;
+    }
 
+    // The gateway rejects an over-long body with a flat "Invalid input" that
+    // used to be swallowed entirely (see utils/saveGuards.js). Say it here,
+    // once, in the user's terms — and do not burn a round trip discovering it.
+    const tooBig = overSizeMessage(content, noteType);
+    if (tooBig) {
+      setSaveStatus('');
+      notify(tooBig, { tone: 'error' });
+      return;
+    }
+
+    setSaveStatus('Saving...');
+    savingRef.current = true;
+
+    // What this save is actually writing. `dirty` is cleared only if the form
+    // still holds it when the mutation lands — otherwise the user typed during
+    // the round trip and there is genuinely more to save.
     const noteData = {
       title: title.trim() || 'Untitled Note',
       content,
@@ -211,7 +271,13 @@ function NoteEditorPage() {
 
     try {
       let savedNote;
-      const currentId = savedNoteId && savedNoteId !== 'undefined' ? savedNoteId : null;
+      // The REF, not the state: a flush that runs after unmount cannot see a
+      // `setSavedNoteId` from the save before it, and a stale `null` here is
+      // how one Back click used to produce two notes.
+      const currentId =
+        savedNoteIdRef.current && savedNoteIdRef.current !== 'undefined'
+          ? savedNoteIdRef.current
+          : null;
 
       if (currentId) {
         const { data } = await updateNoteMutation({ variables: { id: currentId, ...noteData } });
@@ -219,10 +285,17 @@ function NoteEditorPage() {
       } else {
         const { data } = await createNoteMutation({ variables: noteData });
         savedNote = data?.createNote;
-        if (savedNote?.id || savedNote?._id) {
-          const newId = savedNote.id || savedNote._id;
+        const newId = savedNote?.id || savedNote?._id;
+        if (newId) {
+          // Set the ref FIRST and synchronously, so any queued replay updates
+          // the note instead of creating another one.
+          savedNoteIdRef.current = newId;
           setSavedNoteId(newId);
-          navigate(`/notes/${ newId }`, { replace: true });
+          // Deliberately NO navigate() here. It used to send the browser to
+          // `/notes/<id>`, which App.jsx routes to NotePage — the read-only
+          // VIEWER. Two seconds into typing a new note, autosave threw the
+          // writer out of the editor and into a page they could not type in.
+          // The note is saved; the URL catches up when they navigate.
         }
       }
 
@@ -231,17 +304,32 @@ function NoteEditorPage() {
           setTitle(savedNote.title);
         }
         setSaveStatus('Saved');
-        setDirty(false);
+        // Only clean if the form still holds exactly what we wrote.
+        if (contentRef.current === noteData.content && titleRef.current === title) {
+          setDirty(false);
+        }
         setTimeout(() => setSaveStatus(''), 2000);
 
         if (isMindMap && !isNewNote) {
           setIsEditMode(false);
         }
       } else {
-        setSaveStatus('Failed to save');
+        setSaveStatus('');
+        notify('Failed to save — the server returned nothing.', { tone: 'error' });
       }
     } catch (error) {
-      setSaveStatus('Error: ' + (error.message || 'Failed to save'));
+      // `saveStatus` only ever reached NoteActions, which compares it against
+      // the single string 'Saved'. Every error message this used to set was
+      // rendered nowhere at all: a note that could not be saved looked exactly
+      // like one that had been.
+      setSaveStatus('');
+      notify(saveErrorMessage(error), { tone: 'error' });
+    } finally {
+      savingRef.current = false;
+      if (saveAgainRef.current) {
+        saveAgainRef.current = false;
+        handleSaveRef.current();
+      }
     }
   };
 
@@ -257,6 +345,12 @@ function NoteEditorPage() {
   handleSaveRef.current = handleSave;
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
+  // What the form holds RIGHT NOW, for the "did the user type while the save
+  // was in flight?" check inside handleSave.
+  const contentRef = useRef(content);
+  contentRef.current = content;
+  const titleRef = useRef(title);
+  titleRef.current = title;
 
   // Debounced autosave — fires 2s after the last edit while dirty.
   // Resets on every content/title/tag change, giving a true debounce.
@@ -282,9 +376,14 @@ function NoteEditorPage() {
 
   // Flush on unmount — if there are unsaved changes when the user navigates
   // away (via in-app navigation, not tab close), fire the save.
+  //
+  // `handleSave`'s in-flight guard is what makes this safe next to
+  // `handleBack`: the two fire in the same tick (save, then navigate, then
+  // unmount), and before the guard existed the second one saw a `dirty` the
+  // first had not cleared yet and created a duplicate note.
   useEffect(() => {
     return () => {
-      if (dirtyRef.current) {
+      if (dirtyRef.current && !discardedRef.current) {
         handleSaveRef.current();
       }
     };
@@ -297,6 +396,18 @@ function NoteEditorPage() {
     }
     navigate(-1);
   }, [navigate]);
+
+  /**
+   * The note is gone — discarded as a draft, or deleted from the database.
+   * Stand the unmount flush down: without this it saved the draft the writer
+   * had just discarded, or fired `updateNote` at a row that no longer exists.
+   * Navigation is the dialog's; this only changes what this page will do on
+   * its way out.
+   */
+  const handleDiscarded = useCallback(() => {
+    discardedRef.current = true;
+    setDirty(false);
+  }, []);
 
   // beforeunload guard — prevents accidental data loss on tab-close / hard-reload
   useEffect(() => {
@@ -495,15 +606,18 @@ function NoteEditorPage() {
 
       <DeleteNoteDialog
         open={isDeleteDialogOpen}
-        onClose={() => {
-          setIsDeleteDialogOpen(false);
-          if (!savedNoteId || isNewNote) {
-            navigate('/notes');
-          }
-        }}
+        // Cancel means cancel. This used to navigate to /notes whenever the
+        // note was unsaved — so backing out of the confirm dialog left the
+        // page, and the unmount flush then saved the draft anyway.
+        onClose={() => setIsDeleteDialogOpen(false)}
+        onDiscarded={handleDiscarded}
         noteId={savedNoteId}
         noteTitle={title}
-        isUnsavedNote={!savedNoteId || isNewNote}
+        // `savedNoteId` alone: once autosave has created the note it is a real,
+        // deletable row, even though the URL is still /notes/new and
+        // `isNewNote` is still true. Keying on `isNewNote` too offered
+        // "Discard" for a note that was already on disk.
+        isUnsavedNote={!savedNoteId}
       />
     </Box>
   );

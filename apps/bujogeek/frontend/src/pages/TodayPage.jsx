@@ -22,6 +22,7 @@ import { CREATE_NOTE } from '../graphql/notegeekMutations';
 import { GET_MONTHLY_TASKS, GET_BLOCKED_TASKS } from '../graphql/queries';
 import { getTaskAge } from '../utils/taskAging';
 import { splitNested, allSubtasksComplete } from '../utils/subtasks';
+import { dueDayStart } from '../utils/dueDate';
 import { useToast } from '@geeksuite/ui';
 
 const TodayPage = () => {
@@ -336,7 +337,14 @@ const TodayPage = () => {
         if (task.status === 'blocked') return false;
         if (!task.dueDate) return false;
         if (dailyIds.has(String(task.id || task._id))) return false;
-        return isWithinInterval(startOfDay(new Date(task.dueDate)), {
+        // `dueDayStart` (utils/dueDate.js) is the local midnight of the day
+        // this due date means — date-only values are read in UTC, timed ones
+        // locally. `startOfDay(new Date(dueDate))` read both locally, so a
+        // date-only task due tomorrow landed on TODAY's midnight, one day
+        // short of `windowStart`, and never appeared under Upcoming at all.
+        const dueDay = dueDayStart(task.dueDate);
+        if (!dueDay) return false;
+        return isWithinInterval(dueDay, {
           start: windowStart,
           end: windowEnd,
         });

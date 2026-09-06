@@ -204,7 +204,10 @@ describe.each(PROTECTED_ROUTES)('GET %s — valid token', (route) => {
 
     expect(mockAxios.get).toHaveBeenCalledWith(
       'https://basegeek.test/api/users/me',
-      { headers: { Authorization: 'Bearer a-valid-token' } }
+      // `@geeksuite/user`'s validateToken bounds this call — it runs in front
+      // of every authenticated request, so an unbounded one parks the whole
+      // backend on a hung basegeek. `packages/user/src/server/tokenUtils.js`.
+      { headers: { Authorization: 'Bearer a-valid-token' }, timeout: 8000 }
     );
   });
 

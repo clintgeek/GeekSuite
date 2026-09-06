@@ -203,16 +203,31 @@ const TaskEditor = ({ open, onClose, task = null }) => {
   /**
    * Translate the UI-only frequency picker into the RRULE the API stores.
    * `recurrenceFreq` itself is never sent.
+   *
+   * Two fields are only sent when the editor could actually have LOADED them.
+   * Both are seeded from the task object, and both are destructive when they
+   * are wrong: `collectionId: null` files the entry out of its collection and
+   * `recurrenceRule: null` demotes a series to a plain task
+   * (`graphql/bujogeek/services/taskService.js` updateTask). A query that
+   * forgets to select one of them would otherwise make every unrelated edit —
+   * a priority, a tag — quietly destroy it. `graphql/queries.js` selects both
+   * on every task query today; this is the guard that keeps a future selection
+   * change from being a silent data loss instead of a missing chip.
    */
   const buildPayload = () => {
     const { recurrenceFreq, collectionId, ...rest } = formData;
-    return {
-      ...rest,
-      recurrenceRule: buildRecurrenceRule(recurrenceFreq, formData.dueDate),
+    const payload = { ...rest };
+
+    if (!isEditing || 'recurrenceRule' in task) {
+      payload.recurrenceRule = buildRecurrenceRule(recurrenceFreq, formData.dueDate);
+    }
+    if (!isEditing || 'collectionId' in task) {
       // '' is the "Not in a collection" option — send it as an explicit null so
       // the task is filed out of whatever collection it was in.
-      collectionId: collectionId || null,
-    };
+      payload.collectionId = collectionId || null;
+    }
+
+    return payload;
   };
 
   const performSubmit = async (editScope) => {

@@ -1,4 +1,35 @@
 /**
+ * Unwrap a code note's stored envelope.
+ *
+ * `CodeEditor` stores `JSON.stringify({ language, code })`. Everything that
+ * displays a note outside that editor was rendering the envelope verbatim —
+ * `NoteViewer` printed `{"language":"javascript","code":"..."}` inside a
+ * `<pre>`, and the list preview showed the same string's first line. The
+ * legacy format is a bare code string, which is why this falls back rather
+ * than throwing.
+ *
+ * @param {string} content
+ * @returns {{ language: string|null, code: string }}
+ */
+export function decodeCodeNote(content = '') {
+  if (typeof content !== 'string' || !content.trimStart().startsWith('{')) {
+    return { language: null, code: content || '' };
+  }
+  try {
+    const parsed = JSON.parse(content);
+    if (parsed && typeof parsed === 'object' && typeof parsed.code === 'string') {
+      return {
+        language: typeof parsed.language === 'string' ? parsed.language : null,
+        code: parsed.code,
+      };
+    }
+  } catch {
+    // Not the envelope — a note whose body genuinely starts with `{`.
+  }
+  return { language: null, code: content };
+}
+
+/**
  * previewText — strip formatting from note content for list previews.
  *
  * @param {string} content  Raw note content.
@@ -10,9 +41,11 @@ export function previewText(content = '', type = 'text', maxLen = 180) {
   if (!content) return '';
   if (typeof content === 'string' && content.startsWith('data:image/')) return '';
 
-  // Code notes: first non-blank line or first maxLen chars, no stripping.
+  // Code notes: first non-blank line of the CODE, not of the JSON envelope
+  // CodeEditor stores it in. No stripping beyond that.
   if (type === 'code') {
-    const firstLine = content.split(/\r?\n/).find((l) => l.trim().length > 0) || '';
+    const { code } = decodeCodeNote(content);
+    const firstLine = code.split(/\r?\n/).find((l) => l.trim().length > 0) || '';
     return firstLine.slice(0, maxLen);
   }
 

@@ -1,5 +1,5 @@
 import { gql } from '@apollo/client';
-import { TASK_FAMILY } from './queries';
+import { TASK_FAMILY, TEMPLATE_FIELDS } from './queries';
 
 
 
@@ -20,22 +20,26 @@ export const CREATE_JOURNAL_FROM_TEMPLATE = gql`
     }
 `;
 
+// Both select the full card/apply shape (TEMPLATE_FIELDS). They used to return
+// `{ id, name }`, which TemplateContext then spliced into its list — so a newly
+// created template had no `content` and applying it created nothing, and an
+// edited one lost its body until the next page load.
 export const CREATE_TEMPLATE = gql`
     mutation CreateTemplate($name: String!, $description: String, $type: String, $content: String!, $isDefault: Boolean, $isPublic: Boolean, $tags: [String]) {
         createTemplate(name: $name, description: $description, type: $type, content: $content, isDefault: $isDefault, isPublic: $isPublic, tags: $tags) {
-            id
-            name
+            ...TemplateFields
         }
     }
+    ${TEMPLATE_FIELDS}
 `;
 
 export const UPDATE_TEMPLATE = gql`
     mutation UpdateTemplate($id: ID!, $name: String, $description: String, $type: String, $content: String, $isDefault: Boolean, $isPublic: Boolean, $tags: [String]) {
         updateTemplate(id: $id, name: $name, description: $description, type: $type, content: $content, isDefault: $isDefault, isPublic: $isPublic, tags: $tags) {
-            id
-            name
+            ...TemplateFields
         }
     }
+    ${TEMPLATE_FIELDS}
 `;
 
 export const DELETE_TEMPLATE = gql`
@@ -285,6 +289,7 @@ export const ADD_SUBTASK = gql`
       dueDate
       originalDate
       taskType
+      collectionId
       completedAt
       cancelledAt
       createdAt

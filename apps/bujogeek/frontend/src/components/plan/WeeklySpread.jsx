@@ -16,6 +16,7 @@ import { useTaskContext } from '../../context/TaskContext';
 import TaskRow from '../tasks/TaskRow';
 import SkeletonLoader from '../shared/SkeletonLoader';
 import { normalizeTasks } from '../../utils/normalizeTasks';
+import { dueDayKey } from '../../utils/dueDate';
 import { colors } from '../../theme/colors';
 import { domainInk } from '../../theme/inks';
 import { getTaskAge } from '../../utils/taskAging';
@@ -72,7 +73,10 @@ const WeeklySpread = () => {
     const arr = normalizeTasks(tasks);
     arr.forEach((task) => {
       if (!task.dueDate) return;
-      const taskDate = format(new Date(task.dueDate), 'yyyy-MM-dd');
+      // `dueDayKey` (utils/dueDate.js) reads a date-only dueDate in UTC and a
+      // timed one locally, matching the gateway. `format(new Date(...))` read
+      // both locally, dropping every date-only task onto the previous column.
+      const taskDate = dueDayKey(task.dueDate);
       if (grouped[taskDate]) {
         grouped[taskDate].push(task);
         stats.total += 1;

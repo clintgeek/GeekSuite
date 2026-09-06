@@ -53,6 +53,11 @@ vi.mock('../../store/noteStore', () => {
         clearSelectedNote: vi.fn(),
         searchResults: [],
         isSearching: false,
+        // SearchResults now clears results when the query is emptied — without
+        // this the box kept showing matches for a term the user had already
+        // backspaced away (2026-09-05 going-over).
+        searchNotes: vi.fn(),
+        clearSearchResults: vi.fn(),
     };
     const useStore = vi.fn((selector) => (selector ? selector(store) : store));
     useStore.getState = () => store;

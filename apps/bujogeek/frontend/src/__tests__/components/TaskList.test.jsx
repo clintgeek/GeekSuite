@@ -110,3 +110,78 @@ describe('TaskList grouping (non-daily views)', () => {
     });
   });
 });
+
+/**
+ * The other half of the same field, added in the 2026-09-05 going-over.
+ *
+ * `dueDate` is date-only when it is UTC midnight and an instant otherwise —
+ * the gateway's own test (`reminderService.hasDueTime`), now mirrored on the
+ * client in `utils/dueDate.js`. Reading BOTH halves locally, which is what the
+ * #8 fix left behind, filed every date-only task under the previous day west
+ * of UTC — and Review's Keep / Tomorrow / Move-to-date all produce exactly
+ * that shape, because they send a bare `yyyy-MM-dd`.
+ */
+describe('TaskList grouping — date-only due dates', () => {
+  it('groups a UTC-midnight (date-only) due date under the day it names', () => {
+    withTZ('America/Chicago', () => {
+      // UTC midnight on Feb 26 is 6pm on Feb 25 in Chicago. Read locally, this
+      // task lands a day early — the day it is due, it reads as yesterday.
+      const task = {
+        id: 't3',
+        content: 'Ring the dentist',
+        signifier: '*',
+        status: 'pending',
+        priority: null,
+        dueDate: '2026-02-26T00:00:00.000Z',
+        createdAt: '2026-02-20T12:00:00.000Z',
+      };
+
+      renderList([task], 'search');
+
+      expect(screen.getByText('Thursday, February 26, 2026')).toBeInTheDocument();
+      expect(screen.queryByText('Wednesday, February 25, 2026')).not.toBeInTheDocument();
+    });
+  });
+
+  it('prints no time of day for a date-only due date', () => {
+    withTZ('America/Chicago', () => {
+      const task = {
+        id: 't4',
+        content: 'Ring the dentist',
+        signifier: '*',
+        status: 'pending',
+        priority: null,
+        dueDate: '2026-02-26T00:00:00.000Z',
+        createdAt: '2026-02-20T12:00:00.000Z',
+      };
+
+      renderList([task], 'search');
+
+      // `getHours()` on a UTC-midnight value is 18 in Chicago, which used to
+      // print "Scheduled: Wednesday, February 25, 2026, 6:00 PM".
+      expect(
+        screen.getByText('Scheduled: Thursday, February 26, 2026')
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('still prints the time for a due date that carries one', () => {
+    withTZ('America/Chicago', () => {
+      const task = {
+        id: 't5',
+        content: 'Standup',
+        signifier: '*',
+        status: 'pending',
+        priority: null,
+        dueDate: '2026-02-26T15:00:00.000Z', // 9:00 AM Chicago
+        createdAt: '2026-02-20T12:00:00.000Z',
+      };
+
+      renderList([task], 'search');
+
+      expect(
+        screen.getByText('Scheduled: Thursday, February 26, 2026, 9:00 AM')
+      ).toBeInTheDocument();
+    });
+  });
+});

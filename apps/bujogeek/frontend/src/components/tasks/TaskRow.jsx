@@ -32,6 +32,7 @@ import TaskCheckbox from './TaskCheckbox';
 import SubtaskRow from './SubtaskRow';
 import { getTaskAge, getAgingColor, getAgingLabel } from '../../utils/taskAging';
 import { subtaskProgress, orderedSubtasks, parentCaption } from '../../utils/subtasks';
+import { dueDayStart, hasDueTime } from '../../utils/dueDate';
 import { GeekSheet } from '@geeksuite/ui';
 import { colors } from '../../theme/colors';
 import { chipInk, domainInk } from '../../theme/inks';
@@ -134,8 +135,14 @@ const TaskRow = ({
 
   const getDueBadge = () => {
     if (!task.dueDate) return null;
-    const due = new Date(task.dueDate);
-    if (isNaN(due.getTime())) return null;
+    // `dueDate` is date-only when it is UTC midnight and an instant otherwise
+    // (utils/dueDate.js). `differenceInCalendarDays` reads LOCAL calendar
+    // fields, so handing it the raw value read every date-only task as one day
+    // early: a task filed for today by Review came back wearing an amber
+    // "yesterday" badge for every user west of UTC.
+    const due = dueDayStart(task.dueDate);
+    if (!due) return null;
+    const timed    = hasDueTime(task.dueDate);
     const now      = new Date();
     const diffDays = differenceInCalendarDays(due, now);
 
@@ -148,9 +155,7 @@ const TaskRow = ({
       label      = 'yesterday';
       badgeColor = domainInk(colors.aging.warning, theme);
     } else if (diffDays === 0) {
-      const hours = due.getHours();
-      const mins  = due.getMinutes();
-      label      = (hours === 0 && mins === 0) ? 'today' : format(due, 'h:mm a');
+      label      = timed ? format(new Date(task.dueDate), 'h:mm a') : 'today';
       badgeColor = domainInk(colors.aging.fresh, theme);
     } else if (diffDays === 1) {
       label      = 'tomorrow';

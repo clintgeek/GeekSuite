@@ -44,14 +44,25 @@ const shutdown = (signal) => {
   }, 15_000);
   forceTimer.unref();
 
-  server.close(async () => {
+  // A signal can arrive before `listen()` — the container is stopped while
+  // connectDB is still waiting on Mongo, say. `server` is undefined then, and
+  // dereferencing it turned a clean SIGTERM into a TypeError and a non-zero
+  // exit.
+  const closed = async () => {
     try {
       await mongoose.disconnect();
     } catch (err) {
       logger.error({ err }, 'Error disconnecting mongoose');
     }
     process.exit(0);
-  });
+  };
+
+  if (!server) {
+    closed();
+    return;
+  }
+
+  server.close(closed);
 };
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));

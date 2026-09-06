@@ -1,5 +1,6 @@
 import { format } from 'date-fns';
 import { localDateString } from '@geeksuite/utils';
+import { dueDayKey } from './dueDate';
 
 // Priority is 1=High, 2=Medium, 3=Low, null/undefined=None (sorts last) —
 // matches the app-wide convention documented in context/TaskContext.jsx.
@@ -62,7 +63,10 @@ function formatTaskLine(task) {
 export function tasksToMarkdown(tasks) {
   const groups = new Map();
   (tasks || []).forEach((task) => {
-    const key = task.dueDate ? localDateString(task.dueDate) : null;
+    // `dueDayKey` (./dueDate.js) reads a date-only dueDate in UTC and a timed
+    // one locally, the way the gateway does. `localDateString` on both put
+    // every date-only entry under the previous day's heading west of UTC.
+    const key = task.dueDate ? (dueDayKey(task.dueDate) || null) : null;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(task);
   });

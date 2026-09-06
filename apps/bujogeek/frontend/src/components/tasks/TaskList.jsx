@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { localDateString, startOfLocalDay } from '@geeksuite/utils';
+import { dueDayKey, dueDayStart, hasDueTime } from '../../utils/dueDate';
 import {
   List,
   ListItem,
@@ -28,6 +29,12 @@ import TaskEditor from '../tasks/TaskEditor';
 import EmptyState from '../shared/EmptyState';
 import { filterTasks } from '../../utils/filterTasks';
 
+// The gateway returns `id`; `_id` is only ever present on a locally-built
+// object. This list read `t._id` for its ordering key, which was `undefined`
+// for every row — in the daily branch that collapsed the whole list onto one
+// Map entry.
+const taskKey = (task) => task?.id ?? task?._id;
+
 const TaskList = ({ tasks = [], viewType = 'daily' }) => {
   const { updateTaskStatus, deleteTask, migrateTask, updateTask, filters, saveDailyOrder, currentDate } = useTaskContext();
   const [selectedTask, setSelectedTask] = useState(null);
@@ -44,16 +51,20 @@ const TaskList = ({ tasks = [], viewType = 'daily' }) => {
   // never duplicated).
   const filteredTasks = filterTasks(taskArray, filters);
 
-  // Group key for dueDate/createdAt. Both are stored as instants — a task's
-  // dueDate can carry a real reminder time (see
-  // graphql/bujogeek/validation.js and packages/utils/src/dates.js) — so they
-  // are grouped by the *local* day the user experiences them on, not the UTC
-  // day. An unparseable one falls back to today rather than dropping the
-  // task out of the list.
+  // Group key for `createdAt` — a plain instant, so the local day the user
+  // experiences it on. An unparseable one falls back to today rather than
+  // dropping the task out of the list.
   const getLocalDate = (dateString) => {
     if (!dateString) return null;
     return localDateString(dateString) || localDateString(new Date());
   };
+
+  // Group key for `dueDate`, which is NOT a plain instant: UTC midnight means
+  // date-only and anything else carries a due time (see utils/dueDate.js and
+  // graphql/bujogeek/validation.js). `dueDayKey` picks the right accessor for
+  // each; treating both halves as instants put every date-only task under the
+  // previous day's heading west of UTC.
+  const getDueDate = (value) => dueDayKey(value) || localDateString(new Date());
 
   // Group tasks by date (for non-daily views: weekly, search, etc.) — due
   // date if present, otherwise creation date. Undated/invalid dates fall
@@ -62,7 +73,7 @@ const TaskList = ({ tasks = [], viewType = 'daily' }) => {
     return tasks.reduce((acc, task) => {
       try {
         // Use due date if it exists, otherwise creation date
-        let dateToUse = task.dueDate ? getLocalDate(task.dueDate) : getLocalDate(task.createdAt);
+        let dateToUse = task.dueDate ? getDueDate(task.dueDate) : getLocalDate(task.createdAt);
 
         // Fallback to today if needed
         if (!dateToUse) {
@@ -97,14 +108,14 @@ const TaskList = ({ tasks = [], viewType = 'daily' }) => {
 
   useEffect(() => {
     // Reset local order when source tasks change
-    setLocalOrder(baselineTasks.map(t => t._id));
-  }, [baselineTasks.map(t => t._id).join('|')]);
+    setLocalOrder(baselineTasks.map(taskKey));
+  }, [baselineTasks.map(taskKey).join('|')]);
 
   const displayTasks = useMemo(() => {
     if (viewType !== 'daily' || !localOrder.length) return baselineTasks;
-    const idToTask = new Map(baselineTasks.map(t => [String(t._id), t]));
+    const idToTask = new Map(baselineTasks.map(t => [String(taskKey(t)), t]));
     const inOrder = localOrder.filter(id => idToTask.has(String(id))).map(id => idToTask.get(String(id)));
-    const remaining = baselineTasks.filter(t => !localOrder.includes(t._id));
+    const remaining = baselineTasks.filter(t => !localOrder.includes(taskKey(t)));
     return [...inOrder, ...remaining];
   }, [viewType, localOrder, baselineTasks]);
 
@@ -134,8 +145,8 @@ const TaskList = ({ tasks = [], viewType = 'daily' }) => {
     if (!draggedId || draggedId === dropTargetId) return;
 
     const current = [...baselineTasks];
-    const fromIndex = current.findIndex(t => t._id === draggedId);
-    const toIndex = current.findIndex(t => t._id === dropTargetId);
+    const fromIndex = current.findIndex(t => taskKey(t) === draggedId);
+    const toIndex = current.findIndex(t => taskKey(t) === dropTargetId);
     if (fromIndex === -1 || toIndex === -1) return;
 
     const updated = [...current];
@@ -145,8 +156,8 @@ const TaskList = ({ tasks = [], viewType = 'daily' }) => {
     // Persist order for daily only
     try {
       const dateKey = localDateString(currentDate || new Date());
-      setLocalOrder(updated.map(t => t._id));
-      await saveDailyOrder(dateKey, updated.map(t => t._id));
+      setLocalOrder(updated.map(taskKey));
+      await saveDailyOrder(dateKey, updated.map(taskKey));
     } catch (err) {
       console.error('Failed to save order', err);
     }
@@ -177,15 +188,19 @@ const TaskList = ({ tasks = [], viewType = 'daily' }) => {
   };
 
   const renderTask = (task) => {
-    // Helper to format due date/time
+    // Helper to format due date/time. "Has a time" is the gateway's own test
+    // (UTC midnight = date-only, utils/dueDate.js), not `getHours()` — reading
+    // a date-only value with local accessors printed both the wrong weekday
+    // and a bogus 7:00 PM for every user west of UTC.
     const formatDueDate = (dueDate) => {
       if (!dueDate) return null;
-      const dateObj = new Date(dueDate);
-      // Show time if not midnight, otherwise just date
-      if (dateObj.getHours() !== 0 || dateObj.getMinutes() !== 0) {
+      const day = dueDayStart(dueDate);
+      if (!day) return null;
+      if (hasDueTime(dueDate)) {
+        const dateObj = new Date(dueDate);
         return `Scheduled: ${format(dateObj, 'EEEE, MMMM d, yyyy, h:mm a')}`;
       }
-      return `Scheduled: ${format(dateObj, 'EEEE, MMMM d, yyyy')}`;
+      return `Scheduled: ${format(day, 'EEEE, MMMM d, yyyy')}`;
     };
 
     // Priority color
@@ -356,7 +371,15 @@ const TaskList = ({ tasks = [], viewType = 'daily' }) => {
               edge="end"
               onClick={(e) => {
                 e.stopPropagation();
-                handleMigrateToFuture((task.id || task._id), futureDate);
+                // Open the picker. This used to call migrateTask directly with
+                // `futureDate`, which nothing had ever set — so every click was
+                // `migrateTaskToFuture(id, null)`, i.e. an "Invalid time value"
+                // throw and a "Failed to migrate task" snackbar. The dialog
+                // below was already wired to do this properly and was simply
+                // unreachable.
+                setSelectedTask(taskKey(task));
+                setFutureDate(null);
+                setMigrationDialogOpen(true);
               }}
               sx={{ mr: 1 }}
               title="Schedule Task"

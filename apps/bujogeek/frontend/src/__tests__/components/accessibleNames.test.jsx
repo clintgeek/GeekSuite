@@ -123,11 +123,17 @@ function renderEditor() {
 }
 
 describe('TaskEditor selects — accessible names', () => {
+  // The assertion is synchronous; the time goes into mounting the editor's MUI
+  // tree (dialog + four Selects + the date picker), which on a loaded build box
+  // has been measured past vitest's 5s default. Raised so a slow machine reads
+  // as slow rather than as a regression — this flaked in the 2026-09-05
+  // going-over while six other reviewers were building on the same four cores.
   it.each([['Type'], ['Priority'], ['Collection']])(
     'gives the %s combobox its visible label as its name',
     (name) => {
       renderEditor();
       expect(screen.getByRole('combobox', { name })).toBeInTheDocument();
-    }
+    },
+    20000
   );
 });

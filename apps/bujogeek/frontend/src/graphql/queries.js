@@ -43,6 +43,39 @@ export const TASK_FAMILY = gql`
 
 
 
+/**
+ * TEMPLATE_FIELDS — everything a template card and the Apply dialog read.
+ *
+ * Shared with `createTemplate` / `updateTemplate` in `mutations.js` on
+ * purpose: `TemplateContext` splices a mutation result straight into its
+ * `templates` array, and those two mutations used to select only `{ id, name }`.
+ * A freshly created template therefore entered the list with no `content`, and
+ * "Apply Template" on it produced zero tasks — `TemplateApply` splits
+ * `template.content` into lines and `undefined` has none.
+ */
+export const TEMPLATE_FIELDS = gql`
+  fragment TemplateFields on Template {
+    id
+    name
+    description
+    type
+    content
+    isDefault
+    isPublic
+    tags
+    variables {
+      name
+      type
+      defaultValue
+      required
+    }
+    createdAt
+    updatedAt
+    lastUsed
+    preview
+  }
+`;
+
 export const GET_JOURNAL_ENTRY = gql`
     query GetJournalEntry($id: ID!) {
         journalEntry(id: $id) {
@@ -113,6 +146,26 @@ export const GET_TEMPLATE = gql`
 
 
 
+/**
+ * The log views' selection set.
+ *
+ * `collectionId`, `recurrenceRule`, `seriesId` and `isSeriesMaster` are not
+ * decoration — they are load-bearing, and leaving them out is a data-loss bug
+ * rather than a missing chip. `TaskEditor` seeds its form from whatever the
+ * task object carries and **always resends** the collection and the recurrence
+ * frequency; a task fetched without them seeds `collectionId: ''` and
+ * `recurrenceFreq: 'none'`, so saving an unrelated field (a priority, a tag)
+ * posts `collectionId: null` + `recurrenceRule: null` and the gateway
+ * dutifully files the entry out of its collection and demotes the series to a
+ * plain task (`services/taskService.js` updateTask). The same four fields
+ * decide whether `TaskRow` draws the recurrence glyph and whether
+ * `TaskContext.deleteTask` asks "this occurrence or the whole series?".
+ *
+ * `GET_COLLECTION` and `GET_BLOCKED_TASKS` always selected them; the five log
+ * queries did not, which is why the bug only showed up when the edit started
+ * from Today / Review / Plan / Search / Tags. If a field is added to
+ * `UpdateTaskInput`, add it here too.
+ */
 export const GET_TASKS = gql`
   query GetTasks($status: String, $tags: [String]) {
     tasks(status: $status, tags: $tags) {
@@ -131,6 +184,12 @@ export const GET_TASKS = gql`
       blockedReason
       blockedAt
       taskType
+      collectionId
+      recurrenceRule
+      seriesId
+      isSeriesMaster
+      completedAt
+      cancelledAt
       createdAt
       updatedAt
       ...TaskFamily
@@ -157,6 +216,12 @@ export const GET_ALL_TASKS = gql`
       blockedReason
       blockedAt
       taskType
+      collectionId
+      recurrenceRule
+      seriesId
+      isSeriesMaster
+      completedAt
+      cancelledAt
       createdAt
       updatedAt
       ...TaskFamily
@@ -183,6 +248,12 @@ export const GET_DAILY_TASKS = gql`
       blockedReason
       blockedAt
       taskType
+      collectionId
+      recurrenceRule
+      seriesId
+      isSeriesMaster
+      completedAt
+      cancelledAt
       createdAt
       updatedAt
       ...TaskFamily
@@ -209,6 +280,12 @@ export const GET_WEEKLY_TASKS = gql`
       blockedReason
       blockedAt
       taskType
+      collectionId
+      recurrenceRule
+      seriesId
+      isSeriesMaster
+      completedAt
+      cancelledAt
       createdAt
       updatedAt
       ...TaskFamily
@@ -235,6 +312,12 @@ export const GET_MONTHLY_TASKS = gql`
       blockedReason
       blockedAt
       taskType
+      collectionId
+      recurrenceRule
+      seriesId
+      isSeriesMaster
+      completedAt
+      cancelledAt
       createdAt
       updatedAt
       ...TaskFamily
@@ -375,7 +458,12 @@ export const GET_TASKS_BY_TAG = gql`
             blockedReason
             blockedAt
             taskType
+            collectionId
+            recurrenceRule
+            seriesId
+            isSeriesMaster
             completedAt
+            cancelledAt
             createdAt
             updatedAt
             ...TaskFamily
