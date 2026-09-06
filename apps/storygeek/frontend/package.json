@@ -17,8 +17,6 @@
     "@geeksuite/auth": "workspace:*",
     "@geeksuite/ui": "workspace:*",
     "@geeksuite/user": "workspace:*",
-    "@apollo/client": "^3.9.5",
-    "graphql": "^16.8.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.8.1",
