@@ -1,8 +1,10 @@
 /**
  * oauthRefreshJobService.js
  *
- * Background daemon that keeps household OAuth tokens warm. Modelled on
- * aiHealthJobService.js: a class with start()/stop(), setInterval-driven.
+ * Background daemon that keeps household OAuth tokens warm. A class with
+ * start()/stop(), setInterval-driven. (It was modelled on
+ * aiHealthJobService.js, deleted 2026-09-07 with the second AI routing
+ * stack — this is now the only job of that shape.)
  *
  * Each tick:
  *   - find every OAuthConnection where expiresAt < now + 10 minutes AND

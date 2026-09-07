@@ -92,16 +92,37 @@ function isProviderPin(modelId) {
  * what the catalog lists is exactly what chat/completions accepts.
  */
 async function findModelOwner(modelId) {
-  for (const provider of Object.keys(aiService.providers)) {
-    try {
-      const models = await aiService.getModels(provider);
-      if (Array.isArray(models) && models.some(m => m.id === modelId)) return provider;
-    } catch {
-      // A provider that cannot answer right now is not a reason to fail the
-      // lookup — keep asking the rest.
-    }
+  // This walked every provider in the roster calling `aiService.getModels`,
+  // which is one `AIModel.find({ provider, isActive: true }).sort()` each — ten
+  // round-trips and ten sorted result sets to answer "who owns this id", on the
+  // hot path of every bare-model chat/completions request. One query does it:
+  // AIModel's unique compound index is `{ provider: 1, modelId: 1 }`, and an
+  // `$in` on the leading field with an equality on the second is a point
+  // lookup per provider inside the index rather than ten collection reads.
+  //
+  // The `$in` is not decoration. Restricting to `aiService.providers` is what
+  // the old loop did by construction, and it is load-bearing: retired
+  // providers leave orphaned AIModel rows behind (`anthropic` as of 2026-09-07,
+  // `llm7` and `onemin` before it — findOneAndUpdate does not run enum
+  // validators, so the rows outlive the roster). A bare `{ modelId }` query
+  // would happily name `anthropic` as the owner of `claude-3-5-sonnet` and
+  // hand callAI a provider it can no longer call.
+  //
+  // Swallowing the failure is deliberate and unchanged — `getModels` swallowed
+  // its own, and a database blip must not turn every bare model id into a 404
+  // for a catalog that never got to answer.
+  try {
+    const row = await AIModel.findOne({
+      provider: { $in: Object.keys(aiService.providers) },
+      modelId,
+      isActive: true,
+    })
+      .select('provider')
+      .lean();
+    return row?.provider ?? null;
+  } catch {
+    return null;
   }
-  return null;
 }
 
 /**
@@ -127,8 +148,8 @@ async function providerCatalog(provider) {
  * the provider's.
  *
  * FINDING F-23: `error.message` went straight into the response, and those are
- * built as `` `Anthropic API error (${status}): ${JSON.stringify(...)}` `` at
- * services/aiService.js:2440 and ten sibling sites, so an `ai:call` key holder
+ * built as `` `Gemini API error (${status}): ${JSON.stringify(...)}` `` in every
+ * call*() adapter in aiService, so an `ai:call` key holder
  * read the vendor's raw error body. The allowlist that replaced it now lives in
  * services/aiFailureEnvelope.js, because `/api/ai/call` and `/api/ai/parse-json`
  * need exactly the same vocabulary and a second copy of it is how one of the
@@ -474,9 +495,9 @@ router.post('/chat/completions', async (req, res) => {
     // a question the caller did not ask.
     //
     // FINDING F-22: the check above exempted the pinned `<provider>/<model>`
-    // form entirely, and a pin is not self-validating — `anthropic/gpt-4o-mini`
-    // named a real provider and a model it has never served. callAI split the
-    // pin, watched anthropic reject the id, and walked its fallback list, where
+    // form entirely, and a pin is not self-validating — `gemini/gpt-4o-mini`
+    // names a real provider and a model it has never served. callAI split the
+    // pin, watched the provider reject the id, and walked its fallback list, where
     // every other provider is called with *its own* default model. The caller
     // got a 200, a completion from a model it never named, and the bill.
     //
@@ -515,7 +536,7 @@ router.post('/chat/completions', async (req, res) => {
             `OpenAI-compatible endpoint, not OpenAI — it serves its own catalog. ` +
             `Use one of the routing aliases (${VIRTUAL_ALIASES.join(', ')}), ` +
             `pin a backend with '<provider>/<model>' (e.g. ` +
-            `'anthropic/claude-3-5-sonnet-20241022'), or name a model from ` +
+            `'gemini/gemini-2.5-flash'), or name a model from ` +
             `GET /openai/v1/models.`,
             'invalid_request_error',
             'model_not_found',
@@ -756,8 +777,8 @@ router.post('/chat/completions', async (req, res) => {
     const completionTokens = countTextTokens(formatted);
 
     // Surface OpenAI-style tool_calls when the provider returned them.
-    // Anthropic/Gemini emit tool_use/functionCall blocks; the call*() methods
-    // normalize them onto lastProviderInfo.toolCalls.
+    // Gemini emits functionCall parts and Groq OpenAI-shaped tool_calls; the
+    // call*() methods normalize both onto lastProviderInfo.toolCalls.
     const assistantMessage = { role: 'assistant', content: formatted };
     let finishReason = 'stop';
     if (Array.isArray(providerInfo.toolCalls) && providerInfo.toolCalls.length > 0) {

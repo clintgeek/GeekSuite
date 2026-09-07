@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 import { getAIGeekConnection } from '../config/database.js';
 import { normalizeAppId } from '../services/callerIdentity.js';
 
-const PROVIDERS = ['anthropic', 'groq', 'gemini', 'together', 'cohere', 'openrouter', 'cerebras', 'cloudflare', 'ollama', 'llmgateway'];
+const PROVIDERS = ['groq', 'gemini', 'together', 'cohere', 'openrouter', 'cerebras', 'cloudflare', 'ollama', 'llmgateway'];
 
 const aiAppConfigSchema = new mongoose.Schema({
   appName: {

@@ -112,6 +112,12 @@ describe('POST /api/ai/conversation/message — the non-streaming branch works a
     expect(res.body.usage.completion_tokens).toBeGreaterThan(0);
   });
 
+  /**
+   * `POST /call-smart` carried the same bug and was pinned by two cases here;
+   * the route went with the second routing stack (2026-09-07). This route is
+   * the surviving reader of callAISmart's resolved `{success:false, error}`,
+   * so the Q46 rule is pinned here.
+   */
   it('never returns the provider\'s own words on a failure', async () => {
     // This is the string aiService builds. Relayed verbatim it hands an
     // ai:call key holder the vendor's name, org/project ids and quota detail —
@@ -137,41 +143,6 @@ describe('POST /api/ai/conversation/message — the non-streaming branch works a
 });
 
 // ───────────────────────────────────────────────────────────────────────────
-describe('POST /api/ai/call-smart — a provider failure is not a 200', () => {
-  /**
-   * `callAISmart` reports a provider failure as a RESOLVED `{success:false,
-   * error}` rather than a throw, and `res.json(result)` relayed it verbatim at
-   * HTTP 200 — telling the caller the request had succeeded while handing them
-   * the vendor's raw error body.
-   */
-  it('maps the upstream status and drops the upstream words', async () => {
-    nextSmartFailure =
-      'All providers in llama family failed: Together AI API error (404): {"error":"model not-a-model does not exist"}';
-
-    const token = await userToken();
-    const res = await request(app)
-      .post('/api/ai/call-smart')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ messages: [{ role: 'user', content: 'hi' }] });
-
-    expect(res.status).toBe(404);
-    expect(res.body.success).toBe(false);
-    expect(res.body.error.code).toBe('model_not_found');
-    expect(JSON.stringify(res.body)).not.toMatch(/not-a-model|Together|does not exist/);
-  });
-
-  it('still returns 200 for a successful call', async () => {
-    const token = await userToken();
-    const res = await request(app)
-      .post('/api/ai/call-smart')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ messages: [{ role: 'user', content: 'hi' }] });
-    expect(res.status).toBe(200);
-    expect(res.body.success).toBe(true);
-  });
-});
-
-// ───────────────────────────────────────────────────────────────────────────
 describe('every provider adapter says "API error (<status>)"', () => {
   /**
    * `upstreamStatusOf` reads the status out of the literal prefix
@@ -183,7 +154,7 @@ describe('every provider adapter says "API error (<status>)"', () => {
     expect(upstreamStatusOf(new Error('Groq API error (429): {}'))).toBe(429);
     expect(upstreamStatusOf(new Error('Together AI API error (404): {}'))).toBe(404);
     expect(upstreamStatusOf(new Error('Cloudflare API error (402): daily neuron limit exceeded {}'))).toBe(402);
-    expect(upstreamStatusOf(new Error('Anthropic API error (401): {}'))).toBe(401);
+    expect(upstreamStatusOf(new Error('Gemini API error (401): {}'))).toBe(401);
   });
 
   it('classifies Together and Groq identically for the same status', () => {

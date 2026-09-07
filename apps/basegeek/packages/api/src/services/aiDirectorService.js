@@ -7,8 +7,8 @@ import logger from '../lib/logger.js';
 
 /**
  * Pricing in the AIPricing collection is stored per *million* tokens — the
- * unit every provider quotes and the unit the seed data uses (anthropic opus
- * at 15/75, gemini-2.5-pro at 1.25/10). Cost math divides by this, never by
+ * unit every provider quotes and the unit the seed data uses (gemini-2.5-pro at
+ * 1.25/10, groq llama-3.3-70b at 0.7/0.7). Cost math divides by this, never by
  * 1000; getting it wrong overstated every estimate by 1000x.
  */
 export const TOKENS_PER_PRICE_UNIT = 1_000_000;
@@ -59,15 +59,6 @@ class AIDirectorService {
 
   constructor() {
     this.providerPricing = {
-      anthropic: {
-        'claude-opus-4-1-20250805': { input: 15, output: 75 },
-        'claude-opus-4-20250514': { input: 15, output: 75 },
-        'claude-sonnet-4-20250514': { input: 3, output: 15 },
-        'claude-3-7-sonnet-20250219': { input: 3, output: 15 },
-        'claude-3-5-sonnet-20241022': { input: 3, output: 15 },
-        'claude-3-5-haiku-20241022': { input: 0.8, output: 4 },
-        'claude-3-haiku-20240307': { input: 0.25, output: 1.25 }
-      },
       // Every price below is DOLLARS PER 1,000,000 TOKENS — the unit
       // TOKENS_PER_PRICE_UNIT and AIPricing.priceUnit both declare. The groq
       // and together blocks used to be the vendor prices divided by 1000
@@ -165,8 +156,9 @@ class AIDirectorService {
       logger.info('Starting AI Director collectModelInformation...');
       // config/aiProviders.js is the one roster; this list is the subset the
       // director prices and scores. `llm7` was in it until 2026-09-05, three
-      // months after the provider was retired from every other surface.
-      const providers = ['anthropic', 'groq', 'gemini', 'together', 'cohere', 'openrouter', 'cerebras', 'cloudflare', 'ollama', 'llmgateway'];
+      // months after the provider was retired from every other surface;
+      // `anthropic` came out 2026-09-07 with the provider itself.
+      const providers = ['groq', 'gemini', 'together', 'cohere', 'openrouter', 'cerebras', 'cloudflare', 'ollama', 'llmgateway'];
       const modelInfo = {};
 
       for (const provider of providers) {
@@ -287,15 +279,6 @@ class AIDirectorService {
   async seedInitialPricing() {
     try {
       const initialPricing = [
-        // Anthropic models
-        { provider: 'anthropic', modelId: 'claude-opus-4-1-20250805', inputPrice: 15, outputPrice: 75 },
-        { provider: 'anthropic', modelId: 'claude-opus-4-20250514', inputPrice: 15, outputPrice: 75 },
-        { provider: 'anthropic', modelId: 'claude-sonnet-4-20250514', inputPrice: 3, outputPrice: 15 },
-        { provider: 'anthropic', modelId: 'claude-3-7-sonnet-20250219', inputPrice: 3, outputPrice: 15 },
-        { provider: 'anthropic', modelId: 'claude-3-5-sonnet-20241022', inputPrice: 3, outputPrice: 15 },
-        { provider: 'anthropic', modelId: 'claude-3-5-haiku-20241022', inputPrice: 0.8, outputPrice: 4 },
-        { provider: 'anthropic', modelId: 'claude-3-haiku-20240307', inputPrice: 0.25, outputPrice: 1.25 },
-
         // Groq models
         { provider: 'groq', modelId: 'llama-3.1-8b-instant', inputPrice: 0.27, outputPrice: 0.27 },
         { provider: 'groq', modelId: 'llama-3.1-70b-versatile', inputPrice: 0.7, outputPrice: 0.7 },
@@ -758,9 +741,6 @@ class AIDirectorService {
           freeLimits: {},
           notes: 'Free tier - lite alias'
         },
-
-        // Anthropic - No free tier available
-        // Note: Anthropic doesn't offer free tiers, so we don't include them in free tier tracking
 
         // Together.ai Free Tier Models
         // UPDATED: Conservative estimates based on "Free" designation

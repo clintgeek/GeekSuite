@@ -118,10 +118,12 @@ export const RECOMMEND_AI_MODEL = gql`
  * `withKeyDrafts` drops anything the server sends that is not named here.
  *
  * `llm7` and `onemin` were removed 2026-09-04: neither had an implementation
- * in aiService, so a key saved for either went nowhere.
+ * in aiService, so a key saved for either went nowhere. `anthropic` was removed
+ * 2026-09-07: the account is out of credit and the provider is gone for good,
+ * adapter and all.
  */
 export const CONFIG_PROVIDERS = [
-  'anthropic', 'groq', 'gemini', 'together', 'cohere', 'openrouter',
+  'groq', 'gemini', 'together', 'cohere', 'openrouter',
   'cerebras', 'cloudflare', 'ollama', 'llmgateway',
 ];
 

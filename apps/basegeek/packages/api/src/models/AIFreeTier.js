@@ -30,7 +30,7 @@ const aiFreeTierSchema = new mongoose.Schema({
   provider: {
     type: String,
     required: true,
-    enum: ['anthropic', 'groq', 'gemini', 'together', 'cohere', 'openrouter', 'cerebras', 'cloudflare', 'ollama', 'llmgateway']
+    enum: ['groq', 'gemini', 'together', 'cohere', 'openrouter', 'cerebras', 'cloudflare', 'ollama', 'llmgateway']
   },
   modelId: {
     type: String,

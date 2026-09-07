@@ -796,7 +796,10 @@ on the boot path.
   three branches used `.find(b => b.type === 'text')`; the third indexed
   `content[0].text` blind, so a `max_tokens`-truncated turn was a `TypeError`
   rethrown raw — the rotation recorded Anthropic as failed and answered from
-  another provider for a response that had already arrived.
+  another provider for a response that had already arrived. *(The Anthropic
+  provider and `callClaude` were removed 2026-09-07 — out of credit. The lesson
+  outlived the adapter: read a provider's response by block type, never by
+  index. See DOCS/AI_CATALOG.md.)*
 - **The free-tier usage row raced itself.** `findOne` → `new AIUsage(...)` →
   `save()` against a unique index: the first two concurrent calls of a day both
   built a row and the loser got E11000, swallowed into a `{success:false}`
@@ -840,7 +843,10 @@ on the boot path.
   `/call-smart` relayed them at HTTP **200**, and `/conversation/message` in its
   500 body and its SSE error frame. Both go through
   `services/aiFailureEnvelope.js` now — the status changes are documented in
-  `AIGEEK_USAGE.md`.
+  `AIGEEK_USAGE.md`. (2026-09-07: `/call-smart` itself is gone, deleted with the
+  second routing stack; `/conversation/message` is the surviving reader of that
+  resolved `{success:false}` shape and the test that pins the rule moved onto
+  it.)
 - **The Gemini API key was in the URL query string.** `@geeksuite/logger`'s
   `err` serializer drops `err.config.headers` and `err.request` but deliberately
   keeps `err.config.url`, so Gemini was the one provider credential still

@@ -34,9 +34,6 @@ COPY --from=build /app/apps/basegeek/packages/api/node_modules ./apps/basegeek/p
 # Copy shared packages (runtime dependency for workspace:* links)
 COPY --from=build /app/packages ./packages
 
-# Copy families.json
-COPY apps/basegeek/families.json ./apps/basegeek/families.json
-
 # Copy built UI to the expected location
 WORKDIR /app/apps/basegeek/packages/api
 COPY --from=build /app/apps/basegeek/packages/ui/dist ./../ui/dist

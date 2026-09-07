@@ -12,6 +12,14 @@ it works — base URL and API key are the only changes.
 > [`DOCS/OPENAI_COMPAT_AUDIT.md`](../../DOCS/OPENAI_COMPAT_AUDIT.md); they were
 > closed on 2026-09-05. Run it with `pnpm test -- openaiCompat`.
 
+> **Anthropic removed 2026-09-07 (out of credit).** The provider is gone from
+> the roster, its adapter (`callClaude`) is deleted, and `anthropic/<model>` is
+> no longer a pin — `isProviderPin` reads the live roster, so it is a bare id
+> and a **404 `model_not_found`**. Where a line below still describes the
+> Anthropic translation, read it as history. **Gemini** is now the only adapter
+> with native `json_schema` *and* native tools; **Groq** forwards tools only.
+> See [`DOCS/AI_CATALOG.md`](../../DOCS/AI_CATALOG.md#removed-2026-09-07-anthropic-phase-0).
+
 ## Endpoint
 
 ```
@@ -48,7 +56,7 @@ persisted in `packages/api/logs/rotation-state.json`.
 | `basegeek-rotation` (or no `model` at all) | Free-tier rotation, quota-aware |
 | `basegeek-free` | Free tier only, never a paid provider |
 | `basegeek-app` | Route by the calling app's `AIAppConfig` row |
-| `<provider>/<model>` | Pin exactly, no rotation — e.g. `anthropic/claude-3-5-sonnet-20241022` |
+| `<provider>/<model>` | Pin exactly, no rotation — e.g. `gemini/gemini-2.5-flash` |
 | any id in `GET /openai/v1/models` | Routed to the provider that owns it |
 | anything else | **404 `model_not_found`** |
 
@@ -89,9 +97,9 @@ The proxy will:
 | `temperature`, `max_tokens` | honoured everywhere |
 | `max_completion_tokens` | honoured, as the alias for `max_tokens` the spec now prefers; wins if both are sent |
 | `top_p` | honoured everywhere (`generationConfig.topP` on Gemini) |
-| `stop` (string or array) | honoured everywhere except Cloudflare Workers AI, which has no such field (`stop_sequences` on Anthropic, `generationConfig.stopSequences` on Gemini) |
-| `seed` | honoured on the OpenAI-shaped providers and Ollama; Anthropic and Gemini have no equivalent |
-| `presence_penalty`, `frequency_penalty` | honoured on the OpenAI-shaped providers, Ollama and Cloudflare; Anthropic and Gemini have no equivalent |
+| `stop` (string or array) | honoured everywhere except Cloudflare Workers AI, which has no such field (`generationConfig.stopSequences` on Gemini, `stop_sequences` on Cohere) |
+| `seed` | honoured on the OpenAI-shaped providers and Ollama; Gemini has no equivalent |
+| `presence_penalty`, `frequency_penalty` | honoured on the OpenAI-shaped providers, Ollama and Cloudflare; Gemini has no equivalent |
 | `n` | only `n=1`; anything else is a 400 |
 | `user` | accepted and used for per-user usage attribution |
 | `logit_bias`, `logprobs`, `top_logprobs`, `store`, `metadata`, `service_tier`, `parallel_tool_calls` | accepted and ignored — never a 500 |
@@ -147,9 +155,10 @@ Both the OpenAI-style `response_format: {type: "json_object"}` and
 `response_format: {type: "json_schema", json_schema: {...}}` parameters work
 transparently across every provider in the rotation:
 
-- **Anthropic**: translated to tool-use forced-choice (for schemas) or
-  system prompt + assistant prefill (for `json_object`).
 - **Gemini**: maps to `generationConfig.responseMimeType` + `responseSchema`.
+  (Anthropic had the other native translation — tool-use forced-choice for
+  schemas, system prompt + assistant prefill for `json_object` — until
+  2026-09-07.)
 - **Everything else (Groq, Cerebras, Together, OpenRouter, Cloudflare,
   Ollama, LLM Gateway)**: prompt-injection fallback — the system message is
   wrapped with an instruction to emit schema-conformant JSON, and the response
@@ -186,8 +195,8 @@ calling. Other providers are capability-skipped by the rotation (no fallback —
 tool-call responses require a machine-parseable `tool_calls` structure, not
 coerced text).
 
-Native today: **Anthropic** (all Claude models), **Gemini**, **Groq** (the
-models listed in `TOOL_CALLING_CORRECTIONS`). That list is now the same list as
+Native today: **Gemini**, **Groq** (the models listed in
+`TOOL_CALLING_CORRECTIONS`). Anthropic was the third until 2026-09-07. That list is now the same list as
 the providers whose adapter actually puts `tools` on the wire
 (`TOOL_FORWARDING_PROVIDERS` in `aiModelCapabilitiesService.js`) — a provider
 cannot be advertised as tool-capable unless its `call*()` forwards the
@@ -254,9 +263,6 @@ three native providers:
 ]
 ```
 
-- **Anthropic** — the assistant turn becomes `tool_use` content blocks and the
-  tool turn becomes a user turn holding `{type:"tool_result", tool_use_id}`.
-  Consecutive tool results merge into one user turn, as the Messages API wants.
 - **Gemini** — `functionCall` parts on a `model` turn, `functionResponse` parts
   on a `user` turn. Gemini keys a response by function *name* rather than by an
   id, so `tool_call_id` is resolved back to a name from the assistant turn that
@@ -272,12 +278,12 @@ provider (e.g., per-PR consistency in a code-review bot).
 
 ```json
 {
-  "model": "anthropic/claude-3-5-sonnet-20241022",
+  "model": "gemini/gemini-2.5-flash",
   "messages": [{"role": "user", "content": "..."}]
 }
 ```
 
-Known provider prefixes: `anthropic`, `groq`, `gemini`, `together`, `cohere`,
+Known provider prefixes: `groq`, `gemini`, `together`, `cohere`,
 `openrouter`, `cerebras`, `cloudflare`, `ollama`, `llmgateway`. Model IDs that
 naturally contain `/` (e.g. `meta-llama/Llama-3.3-70B-Instruct-Turbo-Free`) are
 left untouched because their prefix isn't a provider name.

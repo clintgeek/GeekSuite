@@ -29,8 +29,12 @@ class FitnessGoalService {
         prompt,
         config: {
           ...config
-          // Provider/model/fallback controlled server-side via AIAppConfig
-          // Default: anthropic for reasoning, configurable in baseGeek admin UI
+          // Provider/model/fallback are controlled server-side by this app's
+          // AIAppConfig routing row. Nothing here names a provider: both
+          // callers below passed `provider: 'anthropic'` until 2026-09-07,
+          // which was a hard pin on the one paid provider in the roster — and
+          // once its credit ran out, every meal plan and nutrition goal failed
+          // on every call. Removed with the provider; the row decides now.
         },
         feature: 'mealPlan'
       };
@@ -78,8 +82,7 @@ class FitnessGoalService {
     const prompt = this.buildNutritionGoalPrompt(userInput, userProfile);
     const response = await this.callAI(prompt, {
       maxTokens: 3000,
-      temperature: 0.6,
-      provider: 'anthropic'
+      temperature: 0.6
     }, userToken, userId);
     return this.parseNutritionGoalResponse(response);
   }
@@ -96,8 +99,7 @@ class FitnessGoalService {
     const prompt = this.buildMealPlanPrompt(goal, userProfile);
     const response = await this.callAI(prompt, {
       maxTokens: 4000,
-      temperature: 0.6,
-      provider: 'anthropic'
+      temperature: 0.6
     }, userToken, userId);
     return this.parseMealPlanResponse(response);
   }
@@ -390,8 +392,11 @@ Keep it practical and achievable.`;
       enabled: true,
       baseGeekUrl: this.baseGeekUrl,
       jwtSecretConfigured: !!this.jwtSecret,
-      preferredProvider: 'anthropic', // Claude 3.5 Sonnet
-      fallbackProvider: 'groq' // Groq Llama 3.1
+      // Nothing here picks a provider any more — aiGeek's routing row for this
+      // app does. These two fields read `anthropic` / `groq` until 2026-09-07,
+      // and nobody in this repo consumes them (fitnessGoalService.getStatus has
+      // no caller; the /ai/status route reads baseGeekAIService's).
+      routing: 'server-side (aiGeek AIAppConfig row for app fitnessgeek)'
     };
   }
 }

@@ -77,15 +77,23 @@ const GROQ_FREE = {
   }
 };
 
-/** Paid, and priced at zero nowhere — the model freeOnly must drop. */
-const ANTHROPIC_PAID = {
-  id: 'claude-sonnet-5',
-  name: 'Claude Sonnet 5',
-  pricing: { input: 3, output: 15 },
+/**
+ * Paid, and priced at zero nowhere — the model freeOnly must drop.
+ *
+ * This was `claude-sonnet-5` on the `anthropic` provider until 2026-09-07, when
+ * that provider was retired. Cohere is the paid row left in the roster
+ * (command-r-plus at $2.50/MTok in), so it takes the part. Nothing about the
+ * cases changes: what is under test is that a non-free model is dropped when
+ * freeOnly is set and kept when it is not.
+ */
+const COHERE_PAID = {
+  id: 'command-r-plus-08-2024',
+  name: 'Command R+ (08-2024)',
+  pricing: { input: 2.5, output: 10 },
   freeTier: { isFree: false, limits: {}, notes: '' },
   capabilities: {
-    contextWindow: 200000,
-    supportsVision: true,
+    contextWindow: 128000,
+    supportsVision: false,
     supportsFunctionCalling: true,
     supportsJSONOutput: true,
     tasks: { codeGeneration: true },
@@ -118,7 +126,7 @@ const catalog = () => ({
   success: true,
   data: {
     providers: {
-      anthropic: { hasApiKey: true, isEnabled: true, totalModels: 1, models: [ANTHROPIC_PAID] },
+      cohere: { hasApiKey: true, isEnabled: true, totalModels: 1, models: [COHERE_PAID] },
       groq: { hasApiKey: true, isEnabled: true, totalModels: 1, models: [GROQ_FREE] },
       together: {
         hasApiKey: true, isEnabled: true, totalModels: 2,
@@ -205,7 +213,7 @@ describe('recommendProvider — freeOnly', () => {
 
     const providers = result.data.recommendations.map(r => r.provider).sort();
     expect(providers).toEqual(['groq', 'together']);
-    expect(providers).not.toContain('anthropic');
+    expect(providers).not.toContain('cohere');
     expect(result.data.recommendations.every(r => r.isFree)).toBe(true);
   });
 
@@ -215,7 +223,7 @@ describe('recommendProvider — freeOnly', () => {
     const result = await aiDirectorService.recommendProvider('summarize a note', { freeOnly: false });
 
     expect(result.data.recommendations.map(r => r.provider).sort())
-      .toEqual(['anthropic', 'groq', 'together']);
+      .toEqual(['cohere', 'groq', 'together']);
   });
 
   it('drops a paid model even when the catalog knows no capabilities for it', async () => {
@@ -271,7 +279,7 @@ describe('recommendProvider — the positional call StoryGeek makes', () => {
     expect(result.data.priority).toBe('quality');
     expect(result.data.freeOnly).toBe(false);
     // Paid providers are still candidates without freeOnly — the old default.
-    expect(result.data.recommendations.map(r => r.provider)).toContain('anthropic');
+    expect(result.data.recommendations.map(r => r.provider)).toContain('cohere');
   });
 
   it('still returns { provider, model: { id } } — what StoryGeek reads back', async () => {
@@ -331,7 +339,7 @@ describe('listFreeModels — shape', () => {
     const ids = result.data.models.map(m => m.modelId);
     expect(ids).toContain(GROQ_FREE.id);
     expect(ids).toContain(TOGETHER_FREE_SPARSE.id);
-    expect(ids).not.toContain(ANTHROPIC_PAID.id);
+    expect(ids).not.toContain(COHERE_PAID.id);
     expect(ids).not.toContain(TOGETHER_UNKNOWN_PAID.id);
     expect(ids).not.toContain('unreachable-nokey');
     expect(ids).not.toContain('unreachable-disabled');
@@ -501,7 +509,7 @@ describe('GraphQL — the steward is authenticated, not admin', () => {
     );
 
     expect(result.freeOnly).toBe(false);
-    expect(result.recommendations.map(r => r.provider)).toContain('anthropic');
+    expect(result.recommendations.map(r => r.provider)).toContain('cohere');
   });
 
   it('aiRecommendModel refuses an empty task', async () => {
@@ -526,7 +534,7 @@ describe('REST — /api/ai/director/free-models', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.data.models.map(m => m.modelId)).toContain(GROQ_FREE.id);
-    expect(res.body.data.models.map(m => m.modelId)).not.toContain(ANTHROPIC_PAID.id);
+    expect(res.body.data.models.map(m => m.modelId)).not.toContain(COHERE_PAID.id);
     expect(res.body.data.count).toBe(res.body.data.models.length);
   });
 
@@ -553,7 +561,7 @@ describe('REST — /api/ai/director/recommend keeps its body shape', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data.freeOnly).toBe(true);
-    expect(res.body.data.recommendations.map(r => r.provider)).not.toContain('anthropic');
+    expect(res.body.data.recommendations.map(r => r.provider)).not.toContain('cohere');
   });
 
   it('behaves exactly as before without it — the StoryGeek body', async () => {
@@ -569,7 +577,7 @@ describe('REST — /api/ai/director/recommend keeps its body shape', () => {
     // What StoryGeek destructures: rec.provider and rec.model.id.
     expect(top.provider).toBeTruthy();
     expect(top.model.id).toBeTruthy();
-    expect(res.body.data.recommendations.map(r => r.provider)).toContain('anthropic');
+    expect(res.body.data.recommendations.map(r => r.provider)).toContain('cohere');
   });
 
   it('still 400s with no task', async () => {

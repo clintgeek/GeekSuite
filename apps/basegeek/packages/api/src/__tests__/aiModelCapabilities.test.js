@@ -15,9 +15,14 @@ import caps from '../services/aiModelCapabilitiesService.js';
 
 describe('aiModelCapabilitiesService — canonical capability flags', () => {
   describe('supportsJSONSchema', () => {
-    it('is true for any Anthropic model (wildcard allowlist)', () => {
-      expect(caps.supportsJSONSchema('anthropic', 'claude-3-5-sonnet-20241022')).toBe(true);
-      expect(caps.supportsJSONSchema('anthropic', 'claude-opus-4-1-20250805')).toBe(true);
+    // `anthropic:*` was the other wildcard in this allowlist until 2026-09-07,
+    // when the provider was retired (out of credit, gone for good) along with
+    // callClaude's native json_schema translation. Nothing is left to forward
+    // a response_format to, so the honest answer is false — and this case is
+    // the tripwire that keeps a copy-pasted allowlist from claiming otherwise.
+    it('is false for the retired anthropic provider', () => {
+      expect(caps.supportsJSONSchema('anthropic', 'claude-3-5-sonnet-20241022')).toBe(false);
+      expect(caps.supportsJSONSchema('anthropic', 'claude-opus-4-1-20250805')).toBe(false);
     });
 
     it('is true for any Gemini model (wildcard allowlist)', () => {
@@ -35,25 +40,31 @@ describe('aiModelCapabilitiesService — canonical capability flags', () => {
     });
 
     it('falls back via inferCapabilities for unknown models (still wildcard-aware)', () => {
-      // An unknown Anthropic model hits inferCapabilities but the
-      // wildcard 'anthropic:*' still reports schema support.
-      expect(caps.supportsJSONSchema('anthropic', 'claude-future-20991231')).toBe(true);
+      // An unknown Gemini model hits inferCapabilities but the
+      // wildcard 'gemini:*' still reports schema support.
+      expect(caps.supportsJSONSchema('gemini', 'gemini-future-20991231')).toBe(true);
       expect(caps.supportsJSONSchema('groq', 'some-unknown-model')).toBe(false);
     });
   });
 
   describe('supportsJSONMode', () => {
-    it('mirrors JSONSchema allowlist (anthropic + gemini only for now)', () => {
-      expect(caps.supportsJSONMode('anthropic', 'claude-3-5-sonnet-20241022')).toBe(true);
+    it('mirrors JSONSchema allowlist (gemini only, since anthropic left)', () => {
       expect(caps.supportsJSONMode('gemini', 'gemini-1.5-flash')).toBe(true);
       expect(caps.supportsJSONMode('groq', 'llama-3.3-70b-versatile')).toBe(false);
+      expect(caps.supportsJSONMode('anthropic', 'claude-3-5-sonnet-20241022')).toBe(false);
     });
   });
 
   describe('supportsTools', () => {
-    it('is true for all Anthropic models (native tool use)', () => {
-      expect(caps.supportsTools('anthropic', 'claude-3-5-sonnet-20241022')).toBe(true);
-      expect(caps.supportsTools('anthropic', 'claude-3-5-haiku-20241022')).toBe(true);
+    // `anthropic` was the first entry in TOOL_FORWARDING_PROVIDERS: callClaude
+    // forwarded tools, honoured all four tool_choice forms, and read tool_use
+    // blocks back. It went with the provider on 2026-09-07. A provider marked
+    // tool-capable with no adapter behind it does not fail loudly — it gets
+    // *selected* and the tools are dropped silently (FINDING F-04) — so this
+    // case now asserts the absence.
+    it('is false for the retired anthropic provider (no adapter left)', () => {
+      expect(caps.supportsTools('anthropic', 'claude-3-5-sonnet-20241022')).toBe(false);
+      expect(caps.supportsTools('anthropic', 'claude-3-5-haiku-20241022')).toBe(false);
     });
 
     it('is true for Gemini flagship models (native function calling)', () => {
@@ -78,7 +89,7 @@ describe('aiModelCapabilitiesService — canonical capability flags', () => {
 
   describe('getCapabilities', () => {
     it('returns populated canonical flags on known entries', () => {
-      const c = caps.getCapabilities('anthropic', 'claude-3-5-sonnet-20241022');
+      const c = caps.getCapabilities('gemini', 'gemini-1.5-flash');
       expect(c).toMatchObject({
         supportsToolCalling: true,
         supportsJSONMode: true,

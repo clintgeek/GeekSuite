@@ -569,17 +569,12 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
   logger.info(`User API available at http://localhost:${ PORT }/api/users/`);
   logger.info(`NoteGeek API available at http://localhost:${ PORT }/api/notes/`);
 
-  // Phase 2A: Start provider health background job
-  try {
-    // The service exports autoStart/getInstance — `startHealthJob` never
-    // existed, so this job has silently failed to start since the monorepo
-    // import (the catch below only logged it).
-    const { autoStart } = await import('./services/aiHealthJobService.js');
-    autoStart();
-    logger.info('✅ Phase 2A health monitoring started');
-  } catch (error) {
-    logger.error({ err: error }, '⚠️ Phase 2A health job failed to start');
-  }
+  // The Phase 2A provider-health job used to start here. It went with the
+  // second routing stack (2026-09-07): a 60 s interval that mutated a LOCAL
+  // COPY of the cooldown map, so it logged "✓ Cleared cooldown" forever
+  // without clearing anything, and it was still health-checking `llm7` and
+  // `onemin`, both deleted in September. Free-tier health now lives on the
+  // request path, in `AIFreeTier.health`.
 
   // Phase 3: Initialize conversation service
   try {

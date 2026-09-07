@@ -88,7 +88,7 @@ const requireAdminUser = (req, res, next) => {
  *
  * Q46: `/call` put `error.message` into the body (and into its streaming error
  * frame) and `/parse-json` put it into `error.details`. Those strings are built
- * as `` `Anthropic API error (${status}): ${JSON.stringify(error.response.data)}` ``
+ * as `` `Gemini API error (${status}): ${JSON.stringify(error.response.data)}` ``
  * in aiService, so an `ai:call` key holder read the vendor's name and its raw
  * error body — org and project ids, quota detail, a redacted key fragment. The
  * proxy stopped doing that in `267c4e3`; these three sites were filed and are
@@ -384,7 +384,11 @@ router.post('/conversation/message', async (req, res) => {
 
         const timestamp = Math.floor(Date.now() / 1000);
         const id = `chatcmpl-${Date.now()}`;
-        const usedModel = smartResult.routing?.provider || aiService.currentProvider;
+        // `routing.provider` is a provider id; this field is a model id.
+        // callAISmart now reports both, so prefer the model.
+        const usedModel = smartResult.routing?.model
+          || smartResult.routing?.provider
+          || aiService.currentProvider;
 
         // Stream response
         const chunkSize = 50;
@@ -471,7 +475,10 @@ router.post('/conversation/message', async (req, res) => {
         id: `chatcmpl-${Date.now()}`,
         object: 'chat.completion',
         created: Math.floor(Date.now() / 1000),
-        model: smartResult.routing?.provider || aiService.currentProvider,
+        // A model id, not a provider id — see the streaming branch above.
+        model: smartResult.routing?.model
+          || smartResult.routing?.provider
+          || aiService.currentProvider,
         choices: [{
           index: 0,
           message: { role: 'assistant', content: result },
@@ -697,7 +704,14 @@ router.post('/call', async (req, res) => {
 
         const timestamp = Math.floor(Date.now() / 1000);
         const id = `chatcmpl-${Date.now()}`;
-        const model = config.model || aiService.currentProvider;
+        // `model` used to fall back to `aiService.currentProvider` — a
+        // PROVIDER id in a field OpenAI clients read as a model id, on every
+        // rotation call that named no model. `lastProviderInfo` is stamped by
+        // callAI with the provider and model that actually answered (cache
+        // hits included), so the fallback is now the real model; the provider
+        // id stays only as the last resort when even that is missing.
+        const answered = aiService.lastProviderInfo || {};
+        const model = config.model || answered.model || aiService.currentProvider;
 
         // Stream the response in chunks (simulate streaming for better UX)
         const chunkSize = 50; // characters per chunk
@@ -754,7 +768,10 @@ router.post('/call', async (req, res) => {
     } else {
       // Non-streaming response (OpenAI-compatible format)
       const result = await aiService.callAI(prompt, config);
-      const model = config.model || aiService.currentProvider;
+      // Same fix as the streaming branch above: the model that answered, not
+      // the default provider's id wearing the `model` field.
+      const answered = aiService.lastProviderInfo || {};
+      const model = config.model || answered.model || aiService.currentProvider;
 
       req.log.debug({ resultLength: result?.length }, 'Sending non-streaming response');
 
@@ -776,7 +793,12 @@ router.post('/call', async (req, res) => {
         // Additive, outside the OpenAI shape: rotation callers pass no
         // provider and had no way to learn which one actually answered. The
         // AIGeek playground reads it; OpenAI clients ignore unknown fields.
-        provider: aiService.currentProvider,
+        //
+        // It reported `currentProvider` — the DEFAULT — which is the one thing
+        // the caller could already work out, and which is wrong for every call
+        // the rotation, the free-tier walk or the app-config row sent
+        // somewhere else. `lastProviderInfo.provider` is what answered.
+        provider: answered.provider || aiService.currentProvider,
         choices: [
           {
             index: 0,
@@ -869,7 +891,9 @@ router.post('/parse-json', async (req, res) => {
       data: {
         response: parsedResult,
         rawResponse: response,
-        provider: aiService.currentProvider
+        // The provider that answered, not the process default — the same bug
+        // /call carried, fixed the same way.
+        provider: aiService.lastProviderInfo?.provider || aiService.currentProvider
       }
     });
 
@@ -1313,7 +1337,7 @@ router.post('/director/seed-free-tier', requireAdminUser, async (req, res) => {
 // POST /api/ai/director/force-refresh - Force refresh all providers
 router.post('/director/force-refresh', requireAdminUser, async (req, res) => {
   try {
-    const providers = ['anthropic', 'groq', 'gemini', 'together'];
+    const providers = ['gemini', 'groq', 'together'];
     const results = {};
 
     for (const provider of providers) {
@@ -1463,8 +1487,9 @@ router.get('/usage/:provider', async (req, res) => {
 // POST /api/ai/reset-stats - Reset AI statistics
 //
 // Q45, admin: `resetSessionStats()` is process-wide. One caller clearing the
-// counters blinds `/stats`, `/provider-health` and the AIGeek console for
-// everyone at once.
+// counters blinds `/stats` and the AIGeek console for everyone at once.
+// (`/provider-health` was the third blinded reader; it went with the second
+// routing stack, 2026-09-07.)
 router.post('/reset-stats', requireAdminUser, async (req, res) => {
   try {
     aiService.resetSessionStats();
@@ -1678,146 +1703,6 @@ router.post('/test', requireAdminUser, async (req, res) => {
         message: 'Failed to test API key',
         code: 'API_KEY_TEST_ERROR',
         details: error.message
-      }
-    });
-  }
-});
-
-// ============================================================================
-// Phase 2A: Smart Routing Endpoints
-// ============================================================================
-
-/**
- * POST /api/ai/call-smart
- * Smart AI call with Phase 2A family-based routing
- */
-router.post('/call-smart', async (req, res) => {
-  req.log.info('--- /api/ai/call-smart invoked (Phase 2A) ---');
-
-  try {
-    // Check permission for API key users
-    const permissionError = requirePermission(req, res, 'ai:call');
-    if (permissionError) return;
-
-    const caller = resolveCaller(req, req.body);
-    logCaller(req, caller, '[ai] /call-smart caller');
-
-    const { messages, conversationId, taskTypeHint, dryRun } = req.body;
-    const userId = caller.userId || req.user.id;
-
-    if (!messages || !Array.isArray(messages) || messages.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: {
-          message: 'Messages array is required',
-          code: 'MISSING_MESSAGES'
-        }
-      });
-    }
-
-    // Call smart routing
-    const result = await aiService.callAISmart(messages, {
-      conversationId: conversationId || `user-${userId}-${Date.now()}`,
-      taskTypeHint,
-      dryRun,
-      userId,
-      // Credential, not body — see services/callerIdentity.js.
-      appName: caller.appId,
-      feature: caller.feature
-    });
-
-    // `callAISmart` reports a provider failure as a RESOLVED
-    // `{success:false, error}` rather than a throw, and that string is
-    // `All providers in <family> family failed: <Provider> API error (429):
-    // <raw vendor body>`. Relaying it verbatim — at HTTP 200 — handed any
-    // `ai:call` key holder exactly what Q46 removed from /call, /parse-json
-    // and the proxy, and told them the request had succeeded. Same envelope,
-    // same allowlist, an honest status.
-    if (!result?.success && !dryRun) {
-      return failUpstream(req, res, new Error(result?.error || 'Smart routing failed'), {
-        stage: 'call_smart',
-        conversationId: conversationId ?? null
-      });
-    }
-
-    res.json(result);
-
-  } catch (error) {
-    failUpstream(req, res, error, { stage: 'call_smart', conversationId: req.body?.conversationId ?? null });
-  }
-});
-
-/**
- * GET /api/ai/families
- * Get available model families and task routing configuration
- */
-router.get('/families', async (req, res) => {
-  try {
-    // Check permission for API key users
-    const permissionError = requirePermission(req, res, 'ai:stats');
-    if (permissionError) return;
-
-    const ModelFamilyRouter = (await import('../services/aiRouterService.js')).default;
-    const familyRouter = new ModelFamilyRouter();
-    const stats = await familyRouter.getRoutingStats();
-
-    res.json({
-      success: true,
-      families: stats.families,
-      taskRouting: stats.taskRouting,
-      config: stats.config
-    });
-
-  } catch (error) {
-    req.log.error({ err: error }, '[API] Families error');
-    res.status(500).json({
-      success: false,
-      error: {
-        message: error.message || 'Failed to get families',
-        code: 'FAMILIES_ERROR'
-      }
-    });
-  }
-});
-
-/**
- * GET /api/ai/provider-health
- * Get provider health status and scores
- */
-router.get('/provider-health', async (req, res) => {
-  try {
-    // Check permission for API key users
-    const permissionError = requirePermission(req, res, 'ai:stats');
-    if (permissionError) return;
-
-    const LoadBalancer = (await import('../services/aiBalancerService.js')).default;
-    const loadBalancer = new LoadBalancer();
-    const scores = await loadBalancer.getAllProviderScores();
-
-    // Get availability for each provider
-    const healthStatus = {};
-    for (const provider of Object.keys(scores)) {
-      const isAvailable = await loadBalancer.isProviderAvailable(provider);
-      healthStatus[provider] = {
-        ...scores[provider],
-        available: isAvailable,
-        status: isAvailable ? 'healthy' : 'on-cooldown'
-      };
-    }
-
-    res.json({
-      success: true,
-      providers: healthStatus,
-      timestamp: Date.now()
-    });
-
-  } catch (error) {
-    req.log.error({ err: error }, '[API] Provider health error');
-    res.status(500).json({
-      success: false,
-      error: {
-        message: error.message || 'Failed to get provider health',
-        code: 'PROVIDER_HEALTH_ERROR'
       }
     });
   }

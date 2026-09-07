@@ -314,32 +314,6 @@ describe('POST /api/ai/call', () => {
   });
 });
 
-describe('POST /api/ai/call-smart', () => {
-  it('attributes to the credential rather than body.appName', async () => {
-    const { apiKey } = await makeApiKey({ appName: 'storygeek' });
-
-    const originalSmart = aiService.callAISmart;
-    let smartOptions = null;
-    aiService.callAISmart = async (messages, options) => {
-      smartOptions = options;
-      return { success: true, content: 'ok' };
-    };
-
-    try {
-      const res = await request(app)
-        .post('/api/ai/call-smart')
-        .set('Authorization', `Bearer ${apiKey}`)
-        .send({ messages: [{ role: 'user', content: 'hi' }], appName: 'notegeek:draft' });
-
-      expect(res.status).toBe(200);
-      expect(smartOptions.appName).toBe('storygeek');
-      expect(smartOptions.feature).toBe('draft');
-    } finally {
-      aiService.callAISmart = originalSmart;
-    }
-  });
-});
-
 describe('POST /api/ai/test', () => {
   it('reports the admin\'s own app, not the one the body asks for', async () => {
     const { token } = await makeUserWithToken({ appClaim: 'basegeek', role: 'admin' });

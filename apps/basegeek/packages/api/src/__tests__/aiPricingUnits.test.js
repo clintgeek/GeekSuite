@@ -2,7 +2,10 @@
  * aiPricingUnits.test.js — the unit the AIPricing collection is denominated in.
  *
  * Pricing is stored per *million* tokens. Every provider quotes that way and
- * the seed data follows: anthropic opus at 15/75, gemini-2.5-pro at 1.25/10.
+ * the seed data follows: cohere command-r-plus at 2.5, gemini-2.5-pro at
+ * 1.25/10. (`anthropic` opus at 15/75 was the loudest row in the table until
+ * the provider was retired on 2026-09-07; the headline case below keeps 15 as
+ * a synthetic price because the arithmetic is the point, not the vendor.)
  * `getCostAnalysis` used to divide token counts by 1000 against those numbers,
  * which overstated every estimate by exactly 1000x, and the AIPricing schema
  * advertised `per_1k_tokens` while holding per-1M values.
@@ -56,13 +59,13 @@ describe('getCostAnalysis — the same unit end to end', () => {
       success: true,
       data: {
         providers: {
-          anthropic: {
+          cohere: {
             hasApiKey: true,
             isEnabled: true,
             totalModels: 1,
             models: [{
-              id: 'claude-test',
-              name: 'Claude Test',
+              id: 'command-test',
+              name: 'Command Test',
               pricing: { input: 15, output: 15 },
               freeTier: { isFree: false, limits: {}, notes: '' },
             }],
@@ -74,7 +77,7 @@ describe('getCostAnalysis — the same unit end to end', () => {
     const result = await aiDirectorService.getCostAnalysis('', 1_000_000);
 
     expect(result.success).toBe(true);
-    const [model] = result.data.analysis.anthropic.models;
+    const [model] = result.data.analysis.cohere.models;
     expect(model.outputTokens).toBe(1_000_000);
     expect(model.estimatedCost).toBe(15);
   });
@@ -107,7 +110,7 @@ describe('getCostAnalysis — the same unit end to end', () => {
 
 describe('AIPricing schema', () => {
   it('documents the stored unit as per-1M tokens', () => {
-    const doc = new AIPricing({ provider: 'anthropic', modelId: 'x', inputPrice: 15, outputPrice: 75 });
+    const doc = new AIPricing({ provider: 'cohere', modelId: 'x', inputPrice: 15, outputPrice: 75 });
     expect(doc.priceUnit).toBe('per_1m_tokens');
   });
 });
@@ -158,12 +161,18 @@ describe('the seeded price table is denominated per 1M tokens', () => {
     expect(lopsided).toEqual([]);
   });
 
-  it('keeps groq and together in the same order of magnitude as anthropic', () => {
-    const cheapestAnthropic = Math.min(...Object.values(table.anthropic).map((p) => p.input));
+  // The reference row was `anthropic`'s cheapest (claude-3-haiku at 0.25) until
+  // the provider came out on 2026-09-07. Cohere is now the priciest thing left
+  // in the table, which makes it the same test: a block converted the wrong way
+  // (per-1K figures left in a per-1M table) puts groq at 0.00027 and fails here.
+  it('keeps groq and together in the same order of magnitude as cohere', () => {
+    const cheapestPaid = Math.min(...Object.values(table.cohere).map((p) => p.input));
     const groqPrices = Object.values(table.groq).map((p) => p.input).filter((p) => p > 0);
-    // Groq is cheaper than Anthropic — but by a single order of magnitude, not
-    // by four.
-    expect(Math.min(...groqPrices)).toBeGreaterThan(cheapestAnthropic / 100);
+    const togetherPrices = Object.values(table.together).map((p) => p.input).filter((p) => p > 0);
+    // Groq and Together are cheaper than Cohere — but by a single order of
+    // magnitude, not by four.
+    expect(Math.min(...groqPrices)).toBeGreaterThan(cheapestPaid / 100);
+    expect(Math.min(...togetherPrices)).toBeGreaterThan(cheapestPaid / 100);
   });
 
   it('keeps a model whose own name says Free priced at zero', () => {

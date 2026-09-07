@@ -4,8 +4,8 @@
  *
  * FINDING F-23 (openaiProxy) / Q46 (aiRoutes): `error.message` went straight
  * into the response, and those messages are built as
- * `` `Anthropic API error (${status}): ${JSON.stringify(error.response.data)}` ``
- * at services/aiService.js:2440 and ten sibling sites. So any `ai:call` key
+ * `` `Gemini API error (${status}): ${JSON.stringify(error.response.data)}` ``
+ * in every call*() adapter in aiService. So any `ai:call` key
  * holder learned which vendor sits behind the rotation and read its raw error
  * body — org and project ids, quota and entitlement detail, and on a
  * bad-credential case a vendor-redacted key fragment. None of that is the

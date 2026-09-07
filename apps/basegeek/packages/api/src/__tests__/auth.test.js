@@ -338,7 +338,7 @@ describe('AIConfig encrypted-key round-trip', () => {
 
     const plain = 'sk-test-abc123';
     const doc = new AIConfig({
-      provider: 'anthropic',
+      provider: 'gemini',
       apiKey: 'placeholder', // will be overwritten by setKey
     });
     doc.setKey(plain);

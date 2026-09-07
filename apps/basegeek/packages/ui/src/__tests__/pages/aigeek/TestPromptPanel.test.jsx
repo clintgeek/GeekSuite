@@ -10,7 +10,7 @@ vi.mock('../../../api', () => ({
 }));
 
 const CONFIG = {
-  anthropic: { hasKey: true, enabled: true, keyHint: '...ab12' },
+  cerebras: { hasKey: true, enabled: true, keyHint: '...ab12' },
   groq: { hasKey: true, enabled: false, keyHint: '...cd34' }, // enabled=false: not reachable
   gemini: { hasKey: false, enabled: true, keyHint: '' }, // no key: not reachable
 };
@@ -25,11 +25,11 @@ describe('TestPromptPanel', () => {
     expect(screen.getByText('Enabled providers holding a key')).toBeInTheDocument();
     const select = screen.getByLabelText('Provider');
     const options = Array.from(select.querySelectorAll('option')).map(o => o.value);
-    expect(options).toEqual(['', 'anthropic']);
+    expect(options).toEqual(['', 'cerebras']);
   });
 
   it('shows the "no provider reachable" hint when nothing qualifies', () => {
-    renderWithProviders(<TestPromptPanel config={{ anthropic: { hasKey: false, enabled: false } }} />);
+    renderWithProviders(<TestPromptPanel config={{ cerebras: { hasKey: false, enabled: false } }} />);
     expect(screen.getByText('No provider is enabled with a key yet')).toBeInTheDocument();
   });
 
@@ -49,7 +49,7 @@ describe('TestPromptPanel', () => {
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'Running…' })).toBeDisabled());
 
-    resolveCall({ data: { choices: [{ message: { content: 'Apple, banana, cherry' } }], provider: 'anthropic', model: 'claude', usage: { total_tokens: 12 } } });
+    resolveCall({ data: { choices: [{ message: { content: 'Apple, banana, cherry' } }], provider: 'cerebras', model: 'qwen-3-235b', usage: { total_tokens: 12 } } });
     await waitFor(() => expect(screen.getByRole('button', { name: 'Run' })).not.toBeDisabled());
   });
 
@@ -68,8 +68,8 @@ describe('TestPromptPanel', () => {
     api.post.mockResolvedValue({
       data: {
         choices: [{ message: { content: 'Apple, banana, cherry' } }],
-        provider: 'anthropic',
-        model: 'claude-3-5-sonnet',
+        provider: 'cerebras',
+        model: 'qwen-3-235b-a22b-instruct-2507',
         usage: { total_tokens: 12, prompt_tokens: 4, completion_tokens: 8 },
       },
     });
@@ -80,10 +80,10 @@ describe('TestPromptPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
 
     await waitFor(() => expect(screen.getByText('Apple, banana, cherry')).toBeInTheDocument());
-    // 'anthropic' also appears as an <option> in the Provider select, so scope
+    // 'cerebras' also appears as an <option> in the Provider select, so scope
     // to the Fact's <p> value.
-    expect(screen.getByText('anthropic', { selector: 'p' })).toBeInTheDocument();
-    expect(screen.getByText('claude-3-5-sonnet')).toBeInTheDocument();
+    expect(screen.getByText('cerebras', { selector: 'p' })).toBeInTheDocument();
+    expect(screen.getByText('qwen-3-235b-a22b-instruct-2507')).toBeInTheDocument();
     expect(screen.getByText('12')).toBeInTheDocument();
   });
 

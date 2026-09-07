@@ -84,7 +84,7 @@ Single `users` collection in MongoDB. All apps reference the same records. `GET 
 Apollo Server 4 mounted at `/graphql`. Provides a unified query API across all GeekSuite data. Schema and resolvers live in `packages/api/src/graphql/`.
 
 **AI proxy**
-Multi-provider routing (Cerebras → Groq → Together → OpenRouter → Gemini → Cohere → Anthropic) with per-provider rate limits, conversation state (MongoDB TTL store), and auto-summarization. Accessible via JWT or `bg_` API keys. See `DOCS/AI_CATALOG.md` for the full provider/model list and `DOCS/API_KEYS.md` for key management.
+Multi-provider routing (Groq → Cerebras → Together → OpenRouter → Cloudflare → Ollama Cloud → LLM Gateway; Gemini and Cohere off-rotation by explicit pin) with per-provider rate limits, conversation state (MongoDB TTL store), and auto-summarization. Accessible via JWT or `bg_` API keys. See `DOCS/AI_CATALOG.md` for the full provider/model list and `DOCS/API_KEYS.md` for key management.
 
 ---
 

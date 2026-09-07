@@ -8,6 +8,13 @@ worked example per use case.
 **Auth:** `Authorization: Bearer bg_<64-hex>` (permission: `ai:call`)
 **Full API reference:** [packages/api/README_OPENAI_PROXY.md](../packages/api/README_OPENAI_PROXY.md)
 
+> **Anthropic removed 2026-09-07 (out of credit).** The provider, its adapter
+> (`callClaude`), its pricing and capability rows and its schema enum values are
+> gone — see [AI_CATALOG.md](./AI_CATALOG.md#removed-2026-09-07-anthropic-phase-0).
+> Any `anthropic/<model>` pin is now a **404 `model_not_found`**, not a pin.
+> **Gemini** is the provider with native `json_schema` *and* native tools;
+> **Groq** forwards tools only. Examples below use those.
+
 ## Three routing modes
 
 ### 1. Rotation (default — "keep me coding for free")
@@ -30,8 +37,8 @@ await openai.chat.completions.create({
 
 ### 2. Free-only
 
-Identical to rotation but skips paid providers (Anthropic, Gemini when
-not free-tier'd). Used by fitnessgeek and other suite apps for
+Identical to rotation but skips paid rows (Gemini when not free-tier'd, and
+Cohere; Anthropic was the paid provider here until 2026-09-07). Used by fitnessgeek and other suite apps for
 background inference where any free model will do.
 
 ```js
@@ -81,16 +88,16 @@ retries).
 
 ```js
 await openai.chat.completions.create({
-  model: 'anthropic/claude-3-5-sonnet-20241022',
+  model: 'gemini/gemini-2.5-flash',
   messages: [...]
 });
 ```
 
-Known provider prefixes: `anthropic`, `groq`, `gemini`, `together`,
+Known provider prefixes: `groq`, `gemini`, `together`,
 `cohere`, `openrouter`, `cerebras`, `cloudflare`, `ollama`, `llmgateway`.
 
 **A pin is a promise, and since 2026-09-05 it is kept.** The model half is
-checked against that provider's catalog: `anthropic/gpt-4o-mini` names a real
+checked against that provider's catalog: `gemini/gpt-4o-mini` names a real
 provider and a model it has never served, and is a **404 `model_not_found`**
 rather than a 200 from somewhere else. A pinned request also does **not** fall
 back — if the pinned provider is down, rate-limited or out of quota, you get
@@ -160,6 +167,13 @@ instead. Nothing in the suite did.
 **Two more routes joined the vocabulary on 2026-09-05, and both change a
 status code.** `POST /call-smart` and `POST /conversation/message` were the
 sites Q46 did not reach:
+
+> **2026-09-07: `POST /call-smart` is gone.** It went with the second routing
+> stack (`aiRouterService`, `aiBalancerService`, `aiTaskDetector`,
+> `aiHealthJobService`, `families.json`), along with `GET /families` and
+> `GET /provider-health`. Use `POST /call`. The Q46 rule below still governs
+> `/conversation/message`, which reads the same resolved
+> `{success: false, error}` shape.
 
 - **`/call-smart` used to answer HTTP 200** on a provider failure.
   `callAISmart` reports one as a resolved `{success: false, error}` rather
@@ -231,9 +245,10 @@ own `user` field for the same purpose.
 Usage groups the same way: one row per app, with `features` nested inside it,
 so "what does fitnessgeek cost" has one answer instead of three.
 
-This holds on **every** route that spends: `/api/ai/call`, `/api/ai/call-smart`,
+This holds on **every** route that spends: `/api/ai/call`,
 `/api/ai/conversation/message`, `/api/ai/parse-json`, `/api/ai/test` and the
-OpenAI proxy. `/api/ai/parse-json` was the one that got away in the first pass —
+OpenAI proxy. (`/api/ai/call-smart` was on this list until 2026-09-07, when the
+route was deleted.) `/api/ai/parse-json` was the one that got away in the first pass —
 it had neither the `ai:call` check nor the resolver until 2026-09-05, so a key
 minted with only `ai:models` could call it and name any app and any user. If you
 have a key that has been reaching `/parse-json` without `ai:call`, it stops
@@ -283,10 +298,9 @@ that. Two rules make the table readable:
 | Route | Asks for | Before 2026-09-05 |
 |---|---|---|
 | `POST /call` | `ai:call` + caller identity | unchanged |
-| `POST /call-smart` | `ai:call` + caller identity | unchanged |
 | `POST /parse-json` | `ai:call` + caller identity | unchanged (gated `267c4e3`) |
 | `POST /conversation/message`, `/conversation/:id/archive`, `DELETE /conversation/:id`, `POST /context/reset/:id` | `ai:call` | unchanged |
-| `GET /stats`, `/capabilities`, `/families`, `/provider-health`, `/conversations`, `/conversation/:id` | `ai:stats` | unchanged |
+| `GET /stats`, `/capabilities`, `/conversations`, `/conversation/:id` | `ai:stats` | unchanged |
 | `GET /providers` | **`ai:providers`** | nothing |
 | `GET /models/:provider` | **`ai:models`** | nothing |
 | `GET /director/models`, `/director/free-models` | `ai:director` | unchanged |
@@ -351,7 +365,9 @@ rows; renaming one is an admin decision.
 
 `response_format: {type: "json_object" | "json_schema"}` works everywhere:
 
-- Anthropic / Gemini: native translation (tool-use forcing / responseSchema).
+- Gemini: native translation (`responseMimeType` + `responseSchema`). Anthropic
+  had the other native translation (tool-use forcing / assistant prefill) until
+  2026-09-07.
 - All other providers: prompt-injection fallback + JSON extraction on the
   response. Lower reliability than native but no provider is skipped.
 
@@ -388,7 +404,7 @@ client = instructor.from_openai(openai.OpenAI(
     api_key="bg_..."
 ))
 person = client.chat.completions.create(
-    model="anthropic/claude-3-5-sonnet-20241022",
+    model="gemini/gemini-2.5-flash",
     messages=[{"role": "user", "content": "Alice is 30."}],
     response_model=Person
 )
@@ -400,7 +416,8 @@ person = client.chat.completions.create(
 are skipped by the rotation (no fallback — tool-call contract demands
 machine-parseable structure).
 
-Supported today: **Anthropic** (all models), **Gemini**, **Groq**
+Supported today: **Gemini**, **Groq** (Anthropic was the third until
+2026-09-07)
 (llama-3.3-70b-versatile, llama-3.1-70b-versatile, llama-4-*, gpt-oss-*, and
 the others in `TOOL_CALLING_CORRECTIONS`).
 
@@ -413,7 +430,7 @@ that state until 2026-09-05, on twelve models, and this doc said so.
 
 ```js
 await openai.chat.completions.create({
-  model: 'anthropic/claude-3-5-sonnet-20241022',
+  model: 'gemini/gemini-2.5-flash',
   messages: [{ role: 'user', content: "What's the weather in Paris?" }],
   tools: [{
     type: 'function',
@@ -448,7 +465,7 @@ messages: [
 ]
 ```
 
-aiGeek translates both turns into each provider's idiom: Anthropic `tool_use` /
+aiGeek translates both turns into each provider's idiom: Gemini `functionCall` /
 `tool_result` blocks, Gemini `functionCall` / `functionResponse` parts (keyed by
 name, which aiGeek resolves from the `tool_call_id`), and Groq verbatim. Before
 2026-09-05 both turns were flattened to plain text, so the first tool call
@@ -478,7 +495,7 @@ every SSE client works; you just do not get the words any sooner.
 |---|---|---|
 | High-volume coding assist | `basegeek-rotation` | Free providers, auto-failover |
 | Background/batch jobs | `basegeek-free` | Guaranteed no-cost |
-| geekPR PR reviews | `anthropic/claude-3-5-sonnet-20241022` | Consistency across retries |
+| geekPR PR reviews | `gemini/gemini-2.5-flash` | Consistency across retries (was `anthropic/claude-3-5-sonnet-20241022` until 2026-09-07) |
 | Tool calling required | Rotation OR explicit pin | Rotation skips incapable providers |
 | Strict JSON schema output | Rotation (prefers native first) | Fallback keeps non-native providers useful |
 
@@ -596,7 +613,7 @@ were wrong under it, and both moved numbers you may have written down:
   arbitrary. An unpriced model now sorts **last**; `describeModel` still
   reports its price as null, as it always did.
 - *Groq and Together were priced 1000× too cheap.* `AIPricing` is dollars per
-  **1,000,000** tokens — `TOKENS_PER_PRICE_UNIT`, and what the Anthropic and
+  **1,000,000** tokens — `TOKENS_PER_PRICE_UNIT`, and what the Cohere and
   Gemini rows have always held — but the Groq and Together seed rows were the
   vendor prices divided by 1000. So `POST /api/ai/director/analyze-cost`
   under-reported both providers by three orders of magnitude, and cost-priority

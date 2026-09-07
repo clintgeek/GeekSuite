@@ -21,10 +21,6 @@
  * `ChatCompletionStreamOptions`, `Error`, `ListModelsResponse`) are components
  * of that document.
  *
- * The Anthropic Messages API section is cited against
- *   https://platform.claude.com/docs/en/api/messages  (retrieved 2026-09-05;
- *   docs.anthropic.com/en/api/messages 301-redirects there)
- *
  * ## How this file is wired
  *
  * The `openai` npm SDK is not installed anywhere in this repo and this suite is
@@ -39,7 +35,7 @@
  *   2. **Service level** — real `aiService.callAI`, `callProvider` stubbed.
  *      Tests what actually survives the trip from the HTTP body to a provider.
  *   3. **Provider level** — a real local HTTP server standing in for Groq /
- *      Anthropic, so the provider request body can be inspected verbatim. No
+ *      Gemini, so the provider request body can be inspected verbatim. No
  *      test in this file touches the network.
  *
  * ## Reading the failures
@@ -590,7 +586,7 @@ describe('tools and tool_choice', () => {
     });
 
     const res = await chat({
-      model: 'anthropic/claude-3-5-sonnet-20241022',
+      model: 'gemini/gemini-2.5-flash',
       messages: [{ role: 'user', content: "what's the weather in Paris?" }],
       tools: [WEATHER_TOOL],
       tool_choice: 'auto',
@@ -617,7 +613,7 @@ describe('tools and tool_choice', () => {
       finishReason: 'tool_calls',
     });
     const res = await chat({
-      model: 'anthropic/claude-3-5-sonnet-20241022',
+      model: 'gemini/gemini-2.5-flash',
       messages: [{ role: 'user', content: 'weather?' }],
       tools: [WEATHER_TOOL],
       tool_choice: { type: 'function', function: { name: 'get_weather' } },
@@ -631,7 +627,7 @@ describe('tools and tool_choice', () => {
   it('accepts a follow-up turn with role:"tool" and tool_call_id', async () => {
     const calls = stubCallAI(() => 'It is 18C in Paris.');
     const res = await chat({
-      model: 'anthropic/claude-3-5-sonnet-20241022',
+      model: 'gemini/gemini-2.5-flash',
       messages: [
         { role: 'user', content: "what's the weather in Paris?" },
         {
@@ -660,7 +656,7 @@ describe('tools and tool_choice', () => {
       finishReason: 'tool_calls',
     });
     const res = await chat({
-      model: 'anthropic/claude-3-5-sonnet-20241022',
+      model: 'gemini/gemini-2.5-flash',
       stream: true,
       messages: [{ role: 'user', content: 'weather?' }],
       tools: [WEATHER_TOOL],
@@ -672,9 +668,10 @@ describe('tools and tool_choice', () => {
 
   it('rotation skips a tool-incapable provider instead of failing the request', async () => {
     // cerebras is not in TOOL_CALLING_CORRECTIONS and its call method takes no
-    // tools; anthropic is natively capable.
+    // tools; groq forwards them verbatim. (This was `anthropic` until
+    // 2026-09-07, when that provider and callClaude were removed.)
     expect(aiModelCapabilitiesService.supportsTools('cerebras', 'llama3.1-8b')).toBe(false);
-    expect(aiModelCapabilitiesService.supportsTools('anthropic', 'claude-3-5-sonnet-20241022')).toBe(true);
+    expect(aiModelCapabilitiesService.supportsTools('groq', 'llama-3.3-70b-versatile')).toBe(true);
 
     const tried = [];
     patch(aiService, 'callProvider', async (provider) => {
@@ -686,9 +683,9 @@ describe('tools and tool_choice', () => {
     patch(aiService, 'providers', {
       ...aiService.providers,
       cerebras: { ...aiService.providers.cerebras, apiKey: 'test', enabled: true, model: 'llama3.1-8b' },
-      anthropic: { ...aiService.providers.anthropic, apiKey: 'test', enabled: true, model: 'claude-3-5-sonnet-20241022' },
+      groq: { ...aiService.providers.groq, apiKey: 'test', enabled: true, model: 'llama-3.3-70b-versatile' },
     });
-    patch(aiService, 'fallbackOrder', ['cerebras', 'anthropic']);
+    patch(aiService, 'fallbackOrder', ['cerebras', 'groq']);
     aiService.initialized = true;
 
     const out = await aiService.callAI('weather?', {
@@ -698,63 +695,80 @@ describe('tools and tool_choice', () => {
     });
 
     expect(tried).not.toContain('cerebras'); // skipped on capability, not tried and failed
-    expect(tried).toContain('anthropic');
+    expect(tried).toContain('groq');
     expect(out).toBe('');
   });
 
-  it('callClaude translates OpenAI tools and every tool_choice form to Anthropic', async () => {
-    const srv = await captureServer(() => ({
-      content: [{ type: 'text', text: 'ok' }],
-      stop_reason: 'end_turn',
-      usage: { input_tokens: 5, output_tokens: 2 },
-    }));
+  // Until 2026-09-07 this pair of cases exercised `callClaude` — the Anthropic
+  // adapter was the reference implementation for both translations. The
+  // provider is gone (out of credit, for good) and so is the adapter, so the
+  // cases now run against `callGemini`, which is the bespoke adapter left that
+  // forwards tools natively. That is not a downgrade in coverage: Gemini's
+  // translation had none of its own, and `geminiContentsFrom` carries the same
+  // F-02 finding as the deleted `anthropicMessagesFrom` did.
+  const GEMINI_OK = () => ({
+    candidates: [{ content: { parts: [{ text: 'ok' }] }, finishReason: 'STOP' }],
+    usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 2 },
+  });
+
+  it('callGemini translates OpenAI tools and every tool_choice form to Gemini', async () => {
+    const srv = await captureServer(GEMINI_OK);
     patch(aiService, 'providers', {
       ...aiService.providers,
-      anthropic: { ...aiService.providers.anthropic, apiKey: 'test', baseURL: srv.url, model: 'claude-3-5-sonnet-20241022' },
+      gemini: { ...aiService.providers.gemini, apiKey: 'test', baseURL: srv.url, model: 'gemini-2.5-flash' },
     });
     try {
       const base = { messages: [{ role: 'user', content: 'weather?' }], tools: [WEATHER_TOOL] };
-      await aiService.callProvider('anthropic', 'weather?', { ...base, toolChoice: 'auto' });
-      await aiService.callProvider('anthropic', 'weather?', { ...base, toolChoice: 'required' });
-      await aiService.callProvider('anthropic', 'weather?', { ...base, toolChoice: { type: 'function', function: { name: 'get_weather' } } });
-      await aiService.callProvider('anthropic', 'weather?', { ...base, toolChoice: 'none' });
+      await aiService.callProvider('gemini', 'weather?', { ...base, toolChoice: 'auto' });
+      await aiService.callProvider('gemini', 'weather?', { ...base, toolChoice: 'required' });
+      await aiService.callProvider('gemini', 'weather?', { ...base, toolChoice: { type: 'function', function: { name: 'get_weather' } } });
+      await aiService.callProvider('gemini', 'weather?', { ...base, toolChoice: 'none' });
 
       const [auto, required, pinned, none] = srv.captured.map((c) => c.body);
-      // Anthropic tool shape: {name, description, input_schema}
-      expect(auto.tools[0]).toEqual({
-        name: 'get_weather',
-        description: 'Get current weather for a city',
-        input_schema: WEATHER_TOOL.function.parameters,
+      // Gemini tool shape: tools:[{functionDeclarations:[{name, description, parameters}]}]
+      expect(auto.tools).toEqual([{
+        functionDeclarations: [{
+          name: 'get_weather',
+          description: 'Get current weather for a city',
+          parameters: WEATHER_TOOL.function.parameters,
+        }],
+      }]);
+      // and tool_choice → toolConfig.functionCallingConfig.mode. Unlike
+      // Anthropic's `tool_choice`, "none" is a mode rather than the absence of
+      // the tools array, so the declarations still go on the wire.
+      expect(auto.toolConfig.functionCallingConfig).toEqual({ mode: 'AUTO' });
+      expect(required.toolConfig.functionCallingConfig).toEqual({ mode: 'ANY' });
+      expect(pinned.toolConfig.functionCallingConfig).toEqual({
+        mode: 'ANY',
+        allowedFunctionNames: ['get_weather'],
       });
-      expect(auto.tool_choice).toEqual({ type: 'auto' });
-      expect(required.tool_choice).toEqual({ type: 'any' });
-      expect(pinned.tool_choice).toEqual({ type: 'tool', name: 'get_weather' });
-      expect(none.tools).toBeUndefined();
-      expect(none.tool_choice).toBeUndefined();
+      expect(none.toolConfig.functionCallingConfig).toEqual({ mode: 'NONE' });
     } finally {
       await srv.close();
     }
   });
 
-  // FINDING F-02 — CLOSED. The second half of the tool loop. callClaude mapped
-  // every non-system turn to `{role: m.role === 'assistant' ? 'assistant' :
-  // 'user', content: m.content ?? ''}` — so the assistant turn's `tool_calls`
-  // were dropped, and the `role:"tool"` result became a `user` turn with no
-  // `tool_use_id`. Anthropic then saw a tool_use it had never been given a
-  // result for (and an empty assistant turn), so the turn after any tool call
-  // was broken. aiService.anthropicMessagesFrom now translates both halves.
-  it('F-02: callClaude round-trips an assistant tool_calls turn and its tool result', async () => {
+  // FINDING F-02 — CLOSED. The second half of the tool loop. Both message
+  // translators mapped every non-system turn to `{role: m.role ===
+  // 'assistant' ? 'assistant' : 'user', content: m.content ?? ''}` — so the
+  // assistant turn's `tool_calls` were dropped, and the `role:"tool"` result
+  // became a plain `user` turn with its `tool_call_id` thrown away. The
+  // provider then saw a call it had never been given a result for (and an
+  // empty assistant turn), so the turn after any tool call was broken.
+  // `geminiContentsFrom` translates both halves — and because Gemini keys a
+  // function response by *name* and issues no call ids at all, the id→name map
+  // it builds while walking the assistant turns is the load-bearing part.
+  it('F-02: callGemini round-trips an assistant tool_calls turn and its tool result', async () => {
     const srv = await captureServer(() => ({
-      content: [{ type: 'text', text: 'It is 18C.' }],
-      stop_reason: 'end_turn',
-      usage: { input_tokens: 5, output_tokens: 2 },
+      candidates: [{ content: { parts: [{ text: 'It is 18C.' }] }, finishReason: 'STOP' }],
+      usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 2 },
     }));
     patch(aiService, 'providers', {
       ...aiService.providers,
-      anthropic: { ...aiService.providers.anthropic, apiKey: 'test', baseURL: srv.url, model: 'claude-3-5-sonnet-20241022' },
+      gemini: { ...aiService.providers.gemini, apiKey: 'test', baseURL: srv.url, model: 'gemini-2.5-flash' },
     });
     try {
-      await aiService.callProvider('anthropic', 'weather?', {
+      await aiService.callProvider('gemini', 'weather?', {
         tools: [WEATHER_TOOL],
         messages: [
           { role: 'user', content: "what's the weather in Paris?" },
@@ -768,14 +782,17 @@ describe('tools and tool_choice', () => {
       });
 
       const body = srv.captured[0].body;
-      const assistantTurn = body.messages.find((m) => m.role === 'assistant');
-      const blocks = Array.isArray(assistantTurn?.content) ? assistantTurn.content : [];
-      expect(blocks.some((b) => b.type === 'tool_use' && b.id === 'call_1')).toBe(true);
+      const modelTurn = body.contents.find((m) => m.role === 'model');
+      expect(modelTurn.parts.some((part) => part.functionCall?.name === 'get_weather')).toBe(true);
+      expect(modelTurn.parts.find((part) => part.functionCall).functionCall.args)
+        .toEqual({ location: 'Paris' });
 
-      const resultBlocks = body.messages
-        .flatMap((m) => (Array.isArray(m.content) ? m.content : []))
-        .filter((b) => b.type === 'tool_result');
-      expect(resultBlocks[0].tool_use_id).toBe('call_1');
+      const responses = body.contents
+        .flatMap((m) => (Array.isArray(m.parts) ? m.parts : []))
+        .filter((part) => part.functionResponse);
+      // Resolved from tool_call_id 'call_1' through the id→name map.
+      expect(responses[0].functionResponse.name).toBe('get_weather');
+      expect(responses[0].functionResponse.response).toEqual({ tempC: 18 });
     } finally {
       await srv.close();
     }
@@ -851,7 +868,7 @@ describe('response_format', () => {
     },
   );
 
-  it('reaches a natively capable provider unchanged (gemini/anthropic)', async () => {
+  it('reaches a natively capable provider unchanged (gemini)', async () => {
     expect(aiModelCapabilitiesService.supportsJSONSchema('gemini', 'gemini-1.5-flash-latest')).toBe(true);
     const seen = [];
     patch(aiService, 'callProvider', async (provider, prompt, config) => {
@@ -1139,7 +1156,7 @@ describe('error envelope', () => {
   // than on a shape.
   const LEAKY_UPSTREAM_BODY = JSON.stringify({
     error: {
-      message: 'Your credit balance is too low. Organization org-8fa21 (project proj_x91) has 0 remaining. API key sk-ant-...tR4q is valid.',
+      message: 'Your quota is exhausted. Organization org-8fa21 (project proj_x91) has 0 remaining. API key AIzaSy...tR4q is valid.',
       type: 'invalid_request_error',
       request_id: 'req_011CQ7upstream',
     },
@@ -1147,14 +1164,14 @@ describe('error envelope', () => {
 
   function expectNoLeak(body) {
     const serialized = JSON.stringify(body);
-    for (const secret of ['org-8fa21', 'proj_x91', 'sk-ant', 'tR4q', 'req_011CQ7upstream', 'credit balance']) {
+    for (const secret of ['org-8fa21', 'proj_x91', 'AIzaSy', 'tR4q', 'req_011CQ7upstream', 'quota is exhausted']) {
       expect(serialized).not.toContain(secret);
     }
   }
 
   it('F-23: an upstream 401 is a 5xx in the proxy\'s own words, with nothing of the provider\'s in it', async () => {
     patch(aiService, 'callAI', async () => {
-      throw new Error(`Anthropic API error (401): ${LEAKY_UPSTREAM_BODY}`);
+      throw new Error(`Gemini API error (401): ${LEAKY_UPSTREAM_BODY}`);
     });
     const res = await chat({ model: 'basegeek-rotation', messages: [{ role: 'user', content: 'hi' }] });
 
@@ -1165,7 +1182,7 @@ describe('error envelope', () => {
     expectNoLeak(res.body);
     // Not even which vendor answered — that is what x_geeksuite is for, on
     // the success path, where it is the caller's own request being described.
-    expect(JSON.stringify(res.body)).not.toMatch(/anthropic/i);
+    expect(JSON.stringify(res.body)).not.toMatch(/gemini/i);
   });
 
   it('F-23: an upstream 429 keeps the status OpenAI would use, and adds Retry-After', async () => {
@@ -1215,7 +1232,7 @@ describe('error envelope', () => {
 
   it('F-23: a streamed request that fails before the first chunk gets the same envelope', async () => {
     patch(aiService, 'callAI', async () => {
-      throw new Error(`Anthropic API error (429): ${LEAKY_UPSTREAM_BODY}`);
+      throw new Error(`Cerebras API error (429): ${LEAKY_UPSTREAM_BODY}`);
     });
     const res = await chat({
       model: 'basegeek-rotation',
@@ -1305,12 +1322,12 @@ describe('GET /v1/models', () => {
   function stubModels() {
     patch(aiService, 'providers', {
       groq: { apiKey: 'test', enabled: true, model: 'llama-3.3-70b-versatile' },
-      anthropic: { apiKey: 'test', enabled: true, model: 'claude-3-5-sonnet-20241022' },
+      gemini: { apiKey: 'test', enabled: true, model: 'gemini-2.5-flash' },
     });
     patch(aiService, 'getModels', async (provider) => (
       provider === 'groq'
         ? [{ id: 'llama-3.3-70b-versatile' }]
-        : [{ id: 'claude-3-5-sonnet-20241022' }]
+        : [{ id: 'gemini-2.5-flash' }]
     ));
   }
 
@@ -1471,34 +1488,37 @@ describe('routing aliases', () => {
     patch(aiUsageService, 'trackUsage', async () => {});
     patch(aiService, 'providers', {
       ...aiService.providers,
-      anthropic: { ...aiService.providers.anthropic, apiKey: 'test', enabled: true, model: 'claude-3-5-sonnet-20241022' },
+      gemini: { ...aiService.providers.gemini, apiKey: 'test', enabled: true, model: 'gemini-2.5-flash' },
     });
     aiService.initialized = true;
     aiService.clearCache();
 
     const res = await chat({
-      model: 'anthropic/claude-3-5-sonnet-20241022',
+      model: 'gemini/gemini-2.5-flash',
       messages: [{ role: 'user', content: 'hi' }],
     });
     expect(res.status).toBe(200);
-    expect(seen[0]).toEqual({ provider: 'anthropic', model: 'claude-3-5-sonnet-20241022' });
+    expect(seen[0]).toEqual({ provider: 'gemini', model: 'gemini-2.5-flash' });
   });
 
   // ── FINDING F-22 — CLOSED. F-16 taught the proxy to 404 an unknown model id,
   // but exempted the `<provider>/<model>` form: a pin was assumed to be
-  // self-validating, and it is not. `anthropic/gpt-4o-mini` names a real
-  // provider and a model it has never served — callAI split the pin, watched
-  // anthropic reject the id, and walked its fallback list, where every other
+  // self-validating, and it is not. `gemini/gpt-4o-mini` names a real provider
+  // and a model it has never served — callAI split the pin, watched the
+  // provider reject the id, and walked its fallback list, where every other
   // provider is called with *its own* default model. The caller got a 200, a
   // completion from a model it never named, and the bill for it. Same outcome
-  // for a valid pin whose provider was merely rate-limited.
+  // for a valid pin whose provider was merely rate-limited. (The pin in these
+  // cases was `anthropic/claude-*` until 2026-09-07, when that provider was
+  // retired; `isProviderPin` reads the live roster, so a pin naming a retired
+  // provider is not a pin at all any more — it is a bare id, and a 404.)
   //
   // A named model is a promise now: checked against that provider's catalog,
   // and answered by that provider or not at all.
   function stubCatalog() {
     patch(aiService, 'getModels', async (provider) => (
-      provider === 'anthropic'
-        ? [{ id: 'claude-3-5-sonnet-20241022' }, { id: 'claude-3-5-haiku-20241022' }]
+      provider === 'gemini'
+        ? [{ id: 'gemini-2.5-flash' }, { id: 'gemini-2.5-flash-lite' }]
         : provider === 'groq'
         ? [{ id: 'llama-3.3-70b-versatile' }]
         : []
@@ -1510,7 +1530,7 @@ describe('routing aliases', () => {
     const calls = stubCallAI();
 
     const res = await chat({
-      model: 'anthropic/gpt-4o-mini',
+      model: 'gemini/gpt-4o-mini',
       messages: [{ role: 'user', content: 'hi' }],
     });
 
@@ -1519,7 +1539,7 @@ describe('routing aliases', () => {
     expect(res.body.error.type).toBe('invalid_request_error');
     expect(res.body.error.param).toBe('model');
     // The message has to teach the caller what to send instead.
-    expect(res.body.error.message).toContain('anthropic');
+    expect(res.body.error.message).toContain('gemini');
     expect(res.body.error.message).toContain('basegeek-rotation');
     // And nothing was spent finding out.
     expect(calls).toHaveLength(0);
@@ -1530,12 +1550,12 @@ describe('routing aliases', () => {
     const calls = stubCallAI();
 
     const res = await chat({
-      model: 'anthropic/claude-3-5-haiku-20241022',
+      model: 'gemini/gemini-2.5-flash-lite',
       messages: [{ role: 'user', content: 'hi' }],
     });
 
     expect(res.status).toBe(200);
-    expect(calls[0].config.model).toBe('anthropic/claude-3-5-haiku-20241022');
+    expect(calls[0].config.model).toBe('gemini/gemini-2.5-flash-lite');
   });
 
   it('F-22: the basegeek-* aliases keep every bit of their rotation', async () => {
@@ -1555,8 +1575,8 @@ describe('routing aliases', () => {
     const tried = [];
     patch(aiService, 'callProvider', async (provider) => {
       tried.push(provider);
-      if (provider === 'anthropic') {
-        throw new Error('Anthropic API error (429): {"error":{"message":"rate_limit"}}');
+      if (provider === 'gemini') {
+        throw new Error('Gemini API error (429): {"error":{"message":"rate_limit"}}');
       }
       return { content: 'an answer nobody asked for', inputTokens: 1, outputTokens: 1 };
     });
@@ -1564,19 +1584,19 @@ describe('routing aliases', () => {
     patch(aiUsageService, 'trackUsage', async () => {});
     patch(aiService, 'providers', {
       ...aiService.providers,
-      anthropic: { ...aiService.providers.anthropic, apiKey: 'test', enabled: true, model: 'claude-3-5-sonnet-20241022' },
+      gemini: { ...aiService.providers.gemini, apiKey: 'test', enabled: true, model: 'gemini-2.5-flash' },
       groq: { ...aiService.providers.groq, apiKey: 'test', enabled: true, model: 'llama-3.3-70b-versatile' },
     });
     aiService.initialized = true;
     aiService.clearCache();
 
     const res = await chat({
-      model: 'anthropic/claude-3-5-sonnet-20241022',
+      model: 'gemini/gemini-2.5-flash',
       messages: [{ role: 'user', content: 'hi' }],
     });
 
     // The pinned provider was the only one asked...
-    expect(tried).toEqual(['anthropic']);
+    expect(tried).toEqual(['gemini']);
     // ...so the caller learns its request failed, rather than being handed
     // groq's llama at 200 under the model name it pinned.
     expect(res.status).toBe(429);
@@ -1611,36 +1631,16 @@ describe('routing aliases', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 11. The other widely used standard: Anthropic Messages
-//     https://platform.claude.com/docs/en/api/messages (retrieved 2026-09-05)
-//     POST /v1/messages, headers x-api-key + anthropic-version, body
-//     {model, messages, max_tokens, system, ...}, response
-//     {id, type:"message", role:"assistant", content:[block], stop_reason,
-//     usage:{input_tokens, output_tokens}}.
+// 11. Section removed 2026-09-07 — "the other widely used standard: Anthropic
+//     Messages". Two cases asked whether baseGeek should also speak
+//     POST /v1/messages: one asserted the route does not exist, the other that
+//     `callClaude` gave us most of an adapter already, so a Messages surface
+//     would be a translation layer rather than new provider work. The premise
+//     went with the provider — there is no Anthropic credential, no adapter,
+//     and no reason to serve a second vendor's dialect of a contract this file
+//     already tests at /openai/v1. Recorded in DOCS/AI_CATALOG.md; the audit
+//     item lives on in DOCS/OPENAI_COMPAT_AUDIT.md as history.
 // ─────────────────────────────────────────────────────────────────────────────
-
-describe('Anthropic Messages API shape', () => {
-  it('is not offered at /openai/v1/messages — no route claims it', async () => {
-    const res = await request(app)
-      .post('/openai/v1/messages')
-      .set('x-api-key', KEY)
-      .set('anthropic-version', '2023-06-01')
-      .send({ model: 'claude-3-5-sonnet-20241022', max_tokens: 64, messages: [{ role: 'user', content: 'hi' }] });
-    // Express falls through to its default 404 — there is no handler at all.
-    expect(res.status).toBe(404);
-  });
-
-  // The pieces an adapter would need already exist, which is the audit's point:
-  // callClaude already speaks Anthropic natively, so a /v1/messages surface is
-  // a translation layer, not new provider work.
-  it('the internal model already carries everything a Messages adapter needs', () => {
-    expect(typeof aiService.callClaude).toBe('function');
-    expect(typeof aiService.callAI).toBe('function');
-    // toolCalls + finishReason are normalized onto lastProviderInfo, which is
-    // what a stop_reason / content-block translation would read.
-    expect(aiService).toHaveProperty('lastProviderInfo');
-  });
-});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 12. The legacy second endpoint

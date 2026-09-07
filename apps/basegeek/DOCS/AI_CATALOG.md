@@ -1,7 +1,7 @@
 # AI Provider & Model Catalog
-**Last Updated:** 2026-09-05
-**Total Providers:** 10
-**Total Models:** 43
+**Last Updated:** 2026-09-07
+**Total Providers:** 9
+**Total Models:** 35
 
 <!-- API keys are stored in the database via BaseGeek UI - never commit real keys here -->
 <!-- Configure provider keys at: BaseGeek UI → AI Geek → Configuration -->
@@ -39,12 +39,12 @@ Tried in this order when a caller asks for `basegeek-rotation` or
 
 ### Off-rotation (explicit pin only)
 
-Never auto-selected. Anthropic is paid; Cohere and Gemini are quota-metered
-and reserved for callers that name them.
+Never auto-selected. Cohere and Gemini are quota-metered and reserved for
+callers that name them. Anthropic was the third row here — the roster's one
+paid provider — until it was removed on 2026-09-07 (see below).
 
 | Provider | id | Default model |
 |----------|----|---------------|
-| Anthropic | `anthropic` | `claude-sonnet-5` |
 | Google Gemini | `gemini` | `gemini-2.5-flash` |
 | Cohere | `cohere` | `command-r-plus-08-2024` |
 
@@ -83,6 +83,107 @@ one line:
 - `rateLimitService.js` still defines `llm7` and `onemin` limits (~L27, ~L33)
   that nothing consults.
 
+### Removed 2026-09-07: Anthropic (Phase 0)
+
+**`anthropic` is out of the roster, and this time the provider worked.** The
+account ran out of credit and is not being refilled, so a provider that answered
+correctly became one that 400s on every call. Chef's decision, recorded in
+`DOCS/AIGEEK_ELEVATION_PLAN.md` (D3): it comes out the way `llm7` and `onemin`
+did, not disabled-and-parked.
+
+What went, in one pass:
+
+- the roster row in `config/aiProviders.js` (so `PROVIDER_IDS`, `DEFAULT_MODELS`
+  and the rotation lose it by derivation);
+- `aiService.js`: the `providers.anthropic` entry and its blended `0.006`
+  per-1K rate, the `refreshModels` and `seedInitialModels` branches, the
+  `callProvider` case, `callClaude` (~165 lines) and `anthropicMessagesFrom`
+  (~75 lines). `aiService.rateLimits` never had an anthropic bucket to remove;
+- `aiModelCapabilitiesService.js`: the seven-model `knownCapabilities` block,
+  and `anthropic:*` out of `JSON_SCHEMA_SUPPORTED` and `JSON_MODE_SUPPORTED`
+  and `anthropic` out of `TOOL_FORWARDING_PROVIDERS` — **Gemini is now the only
+  adapter with both native tools and native `json_schema`**, and Groq the only
+  other one that forwards tools;
+- `aiDirectorService.js`: the `providerPricing` block, the seven
+  `seedInitialPricing` rows, and the id out of `collectModelInformation`'s
+  provider list;
+- the provider enum in all six models — `AIModel`, `AIFreeTier`, `AIPricing`,
+  `AIConfig`, `AIUsage`, `AIAppConfig`;
+- `CONFIG_PROVIDERS` in the admin UI's `useAIGeek.js`, so the Configuration tab
+  no longer offers a key field for it;
+- the OpenRouter seed row `anthropic/claude-3.5-sonnet` — an OpenRouter
+  passthrough rather than the provider itself, but a hand-typed paid row for a
+  model three generations stale that nothing pinned;
+- `openaiProxy.js`'s 404 message no longer teaches callers to pin
+  `anthropic/claude-3-5-sonnet-20241022`; it names `gemini/gemini-2.5-flash`.
+
+**Existing Mongo rows carrying `provider: 'anthropic'` are orphaned data, not
+broken data** — same as `llm7` and `onemin`: the enums are enforced on
+validation, and the catalog writes through `findOneAndUpdate`, which does not
+run validators. They read back fine, nothing routes to them, and no new one can
+be created. `openaiProxy.findModelOwner` was also rewritten in this pass and now
+constrains its lookup to `aiService.providers`, precisely so an orphaned
+`anthropic` row cannot be named as the owner of a bare `claude-*` model id.
+
+**Consumer unpinned in the same change.** `apps/fitnessgeek/backend/src/services/fitnessGoalService.js`
+passed `provider: 'anthropic'` on both `createNutritionGoals` and
+`generateMealPlan`. That was a hard pin on the paid provider, and it is why meal
+planning had been failing on every call. The field is gone; both routes now go
+through fitnessgeek's `AIAppConfig` row, and `feature: 'mealPlan'` is unchanged.
+
+**The knowledge, kept.** `callClaude` was good work and it is in git history.
+The incident notes it carried are worth more than the code:
+
+- **F-02** — the second half of the tool loop. A one-line message map dropped an
+  assistant turn's `tool_calls` and threw away a `role:"tool"` result's
+  `tool_call_id`, so the provider saw a tool call it had never been given a
+  result for. `anthropicMessagesFrom` fixed it; `geminiContentsFrom` carries the
+  same finding, and `openaiCompat.test.js`'s F-02 case now runs against Gemini
+  (where the id→name map is the load-bearing part, because Gemini issues no call
+  ids at all).
+- **F-09** — the five OpenAI sampling params (`top_p`, `stop`, `seed`,
+  `presence_penalty`, `frequency_penalty`) travelled one function call and died
+  at HTTP 200. `callClaude` was where the "drop what the vendor does not have,
+  never forward it to become a 400" rule was written down. `stopSequencesFrom`
+  survives; Gemini and Cohere still use it.
+- **F-22** — a `<provider>/<model>` pin is not self-validating.
+  `anthropic/gpt-4o-mini` named a real provider and a model it never served, and
+  the caller got a 200 from somebody else's default model. Note the second-order
+  effect of this removal: `isProviderPin` reads the live roster, so
+  `anthropic/anything` is no longer a pin at all — it is a bare id, and a 404.
+- **F-23** — `error.message` went straight into the caller's response, and those
+  messages are `` `<Vendor> API error (status): <body>` ``. Anthropic's body was
+  the worst of them (org id, project id, request id, a redacted key fragment),
+  which is why every fixture used it. The fixtures now use Gemini's; the
+  allowlist in `aiFailureEnvelope.js` is unchanged and vendor-agnostic.
+- **F-04** — a provider marked tool-capable with no adapter behind it does not
+  fail loudly: it gets *selected*, and the tools are dropped silently. Which is
+  why `TOOL_FORWARDING_PROVIDERS` had to lose `anthropic` the same day the
+  adapter went.
+
+**Also removed in this pass, unrelated to the provider:**
+`aiModelCapabilitiesService.getModelsForTask`. Zero callers, and it could not
+have had a working one — the query ended in
+`.populate('pricing').populate('freeTier')` and `AIModel` declares neither path,
+so mongoose 8 throws `StrictPopulateError`. The ranking idea (free first, then
+price / speed / quality) lives on in `aiDirectorService.recommendProvider`.
+
+**Two test cases were deleted rather than repointed**, both in
+`openaiCompat.test.js` section 11 ("the other widely used standard: Anthropic
+Messages"): one asserted that `POST /openai/v1/messages` does not exist, the
+other that `typeof aiService.callClaude === 'function'` meant a Messages surface
+would be a translation layer rather than new provider work. Both premises left
+with the provider. Everything else that used `anthropic` as a fixture was
+repointed — to `gemini` where the test needed native `json_schema` plus tools,
+`groq` where it needed tools only, and `cohere` where it needed a paid model.
+
+`src/__tests__/aiDeadProviders.test.js` is the tripwire, extended in this pass:
+`callClaude`, `anthropicMessagesFrom`, a `providers.anthropic` entry, a
+rate-limit bucket, a capability or pricing block, a roster row, a schema enum
+value, or a `claude-*` default model all fail there now. Comments naming the
+provider are allowed on purpose — that is how the removal stays explained — so
+the source assertions strip comment lines first.
+
 ### A retired provider and a retired model are not the same problem (R130, 2026-09-06)
 
 Everything above is about **providers** leaving the roster: `llm7` and `onemin`
@@ -117,20 +218,11 @@ per-provider model lists below as "what was true when someone wrote it down";
 
 ---
 
-## Anthropic (7 models)
-*API:* `https://api.anthropic.com/v1`
-*Type:* Paid tier
-*Default Model:* `claude-sonnet-5`
+## ~~Anthropic (7 models)~~ — retired 2026-09-07
 
-| Model ID | Model Name | Status |
-|----------|------------|--------|
-| `claude-opus-4-1-20250805` | Claude Opus 4.1 | Paid |
-| `claude-opus-4-20250514` | Claude Opus 4 | Paid |
-| `claude-sonnet-4-20250514` | Claude Sonnet 4 | Paid |
-| `claude-3-7-sonnet-20250219` | Claude Sonnet 3.7 | Paid |
-| `claude-3-5-sonnet-20241022` | Claude Sonnet 3.5 | Paid |
-| `claude-3-5-haiku-20241022` | Claude Haiku 3.5 | Paid |
-| `claude-3-haiku-20240307` | Claude Haiku 3 | Paid |
+Out of credit, out of the roster, adapter deleted. The seven `claude-*` ids it
+served are gone from `seedInitialModels` and from the pricing seed; rows still in
+Mongo are orphaned data. See **Removed 2026-09-07: Anthropic (Phase 0)** above.
 
 ---
 
@@ -208,7 +300,7 @@ way any other unrecognized id does (`model_not_found`).
 | `meta-llama/llama-3.1-8b-instruct:free` | Llama 3.1 8B (Free) | ✅ Free |
 | `nousresearch/hermes-3-llama-3.1-405b:free` | Hermes 3 Llama 405B (Free - may be limited) | ✅ Free |
 | `google/gemini-flash-1.5` | Gemini Flash 1.5 | Paid |
-| `anthropic/claude-3.5-sonnet` | Claude 3.5 Sonnet | Paid |
+| ~~`anthropic/claude-3.5-sonnet`~~ | Claude 3.5 Sonnet | removed 2026-09-07 |
 | `openai/gpt-4o` | GPT-4o | Paid |
 
 ---
@@ -313,12 +405,12 @@ way any other unrecognized id does (`model_not_found`).
 ## Summary Statistics
 
 ### Models by Provider
-- **Anthropic:** 7 models (paid)
+- ~~**Anthropic:** 7 models~~ — retired 2026-09-07
 - **Groq:** 4 models (free)
 - **Gemini:** 5 models (mixed)
 - **Together:** 3 models (free)
 - **Cohere:** 4 models (paid)
-- **OpenRouter:** 7 models (mixed)
+- **OpenRouter:** 6 models (mixed) — the `anthropic/claude-3.5-sonnet` row went 2026-09-07
 - **Cerebras:** 3 models (free)
 - **Cloudflare:** 2 models (free)
 - **Ollama Cloud:** 7 models (free)
@@ -328,9 +420,12 @@ way any other unrecognized id does (`model_not_found`).
 
 ### Free vs Paid
 - **Free Models:** 28 models
-- **Paid Models:** 22 models (Anthropic: 7, Cohere: 4, OpenRouter: 2, 1min.ai: 9)
-- **Free Providers:** 7 providers with free tiers (of the 10 in the roster)
-- **Paid-Only Providers:** 1 provider (Anthropic)
+- **Paid Models:** 14 models (Cohere: 4, OpenRouter: 1, 1min.ai: 9 — the last
+  two retired with their providers)
+- **Free Providers:** 7 providers with free tiers (of the 9 in the roster)
+- **Paid-Only Providers:** none. Anthropic was the last one; it left 2026-09-07,
+  so every row in the roster is now a free tier (Cohere and OpenRouter carry a
+  few paid ids, but neither is a paid-only provider)
 
 ### Rate Limits (Free Tiers)
 - **Cerebras:** 120,000 TPM, 30 RPM
@@ -386,16 +481,10 @@ Most providers use OpenAI-compatible format:
 }
 ```
 
-**Anthropic Claude:**
-```json
-{
-  "model": "model-name",
-  "messages": [{"role": "user", "content": "prompt"}],
-  "max_tokens": 1000,
-  "temperature": 0.7
-}
-```
-*Headers:* `x-api-key`, `anthropic-version: 2023-06-01`
+~~**Anthropic Claude:**~~ retired 2026-09-07 — `POST /v1/messages` with
+`x-api-key` and `anthropic-version: 2023-06-01`, a top-level `system` string and
+`content` blocks out. The adapter that spoke it (`callClaude`) is in git
+history.
 
 **Google Gemini:**
 ```json

@@ -19,14 +19,24 @@
  * the dead call methods and the permissive model enums are noted in
  * DOCS/AI_CATALOG.md as follow-up.
  *
+ * **Removed 2026-09-07: `anthropic`.** The account is out of credit and is not
+ * being refilled — the provider is gone for good, not resting. It was the one
+ * paid row in the table, reachable only by an explicit pin, and the only pin in
+ * the suite was fitnessgeek's meal plan, which had been failing on every call.
+ * The whole adapter went with it (`callClaude`, `anthropicMessagesFrom`, the
+ * capability and pricing blocks, the schema enums); `aiDeadProviders.test.js` is
+ * the tripwire that keeps it out. The tool and content-block translation was
+ * good work and lives in git history — see DOCS/AI_CATALOG.md for the incident
+ * notes it carried (F-02, F-09, F-22, F-23).
+ *
  * **`defaultModel` is the id used when the database has no override.** Do not
  * invent ids here — every one below is either live in this repo's seed data or
  * verified against the provider's current catalog.
  *
  * `rotationPosition` orders the free-tier rotation. Providers with no position
- * are never auto-selected: anthropic is paid (deliberate last resort, reached
- * only by an explicit pin), cohere and gemini are quota-metered and reserved
- * for callers that name them.
+ * are never auto-selected: cohere and gemini are quota-metered and reserved for
+ * callers that name them. Every row in the table is now free-tier — the one
+ * paid provider, anthropic, came out on 2026-09-07.
  */
 
 /** @typedef {{
@@ -40,15 +50,6 @@
 
 /** @type {AIProvider[]} */
 export const AI_PROVIDERS = [
-  {
-    id: 'anthropic',
-    label: 'Anthropic',
-    needsAccountId: false,
-    // Current Sonnet. Was claude-3-5-sonnet-20241022, three generations stale.
-    defaultModel: 'claude-sonnet-5',
-    inRotation: false,
-    rotationPosition: null,
-  },
   {
     id: 'groq',
     label: 'Groq',

@@ -1,5 +1,15 @@
 # aiGeek OpenAI-Compatibility Audit
 
+> **Anthropic removed 2026-09-07 (out of credit).** This audit is a snapshot of
+> 2026-09-05 and is left as written. Read every Anthropic row below as history:
+> the provider, `callClaude` and `anthropicMessagesFrom` are deleted, the test
+> cases that named them were repointed to Gemini (or, for the two that only
+> tested the Anthropic adapter, removed), and the closing section "Should aiGeek
+> also offer the Anthropic Messages shape?" is answered by events: no. The
+> findings themselves — F-02, F-04, F-09, F-22, F-23 — are all still live and
+> still closed; they were never about one vendor. See
+> [AI_CATALOG.md](./AI_CATALOG.md#removed-2026-09-07-anthropic-phase-0).
+
 **Date:** 2026-09-05
 **Scope:** `POST /openai/v1/chat/completions`, `GET /openai/v1/models[/{id}]`
 (`packages/api/src/routes/openaiProxy.js`, mounted at `server.js:169`), the

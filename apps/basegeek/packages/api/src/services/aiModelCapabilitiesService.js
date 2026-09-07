@@ -18,12 +18,14 @@ import logger from '../lib/logger.js';
 // produce JSON when asked" signal used elsewhere (aiDirectorService model
 // selection); these are the stricter "we forward response_format correctly"
 // signals.
+//
+// `anthropic:*` was the other member of both sets until 2026-09-07, when the
+// provider was retired (out of credit, gone for good). `gemini` is the one
+// bespoke adapter left that forwards both response_format shapes natively.
 const JSON_SCHEMA_SUPPORTED = new Set([
-  'anthropic:*',
   'gemini:*'
 ]);
 const JSON_MODE_SUPPORTED = new Set([
-  'anthropic:*',
   'gemini:*'
 ]);
 
@@ -45,10 +47,14 @@ const JSON_MODE_SUPPORTED = new Set([
 // prompt-injection fallback the way structured output does: a tool_calls
 // response shape can only come from native provider support.
 const TOOL_FORWARDING_PROVIDERS = new Set([
-  'anthropic',  // callClaude — tools + all four tool_choice forms + tool_use readback
   'gemini',     // callGemini — functionDeclarations + toolConfig + functionCall readback
   'groq'        // callGroq   — OpenAI-shaped tools/tool_choice, verbatim
 ]);
+// `anthropic` was the first entry here (callClaude forwarded tools and all four
+// tool_choice forms and read tool_use blocks back); removed 2026-09-07 with the
+// provider. Gemini is now the only adapter with both native tool forwarding and
+// native json_schema.
+
 
 function forwardsTools(provider) {
   return TOOL_FORWARDING_PROVIDERS.has(provider);
@@ -90,183 +96,6 @@ class AIModelCapabilitiesService {
   constructor() {
     // Known model capabilities based on provider documentation and AI knowledge
     this.knownCapabilities = {
-      'anthropic': {
-        'claude-3-5-sonnet-20241022': {
-          maxTokens: 200000,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: true,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 200000,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: true,
-            reasoning: true,
-            analysis: true,
-            summarization: true,
-            translation: true,
-            questionAnswering: true,
-            creativeWriting: true,
-            structuredOutput: true
-          },
-          performance: {
-            speed: 'fast',
-            quality: 'excellent',
-            reasoning: 'excellent'
-          }
-        },
-        'claude-3-5-haiku-20241022': {
-          maxTokens: 200000,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: true,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 200000,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: true,
-            reasoning: true,
-            analysis: true,
-            summarization: true,
-            translation: true,
-            questionAnswering: true,
-            creativeWriting: true,
-            structuredOutput: true
-          },
-          performance: {
-            speed: 'ultra-fast',
-            quality: 'good',
-            reasoning: 'good'
-          }
-        },
-        'claude-opus-4-1-20250805': {
-          maxTokens: 200000,
-          supportsVision: true,
-          supportsAudio: false,
-          supportsFunctionCalling: true,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 200000,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: true,
-            reasoning: true,
-            analysis: true,
-            summarization: true,
-            translation: true,
-            questionAnswering: true,
-            creativeWriting: true,
-            structuredOutput: true
-          },
-          performance: {
-            speed: 'slow',
-            quality: 'state-of-the-art',
-            reasoning: 'state-of-the-art'
-          }
-        },
-        'claude-opus-4-20250514': {
-          maxTokens: 200000,
-          supportsVision: true,
-          supportsAudio: false,
-          supportsFunctionCalling: true,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 200000,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: true,
-            reasoning: true,
-            analysis: true,
-            summarization: true,
-            translation: true,
-            questionAnswering: true,
-            creativeWriting: true,
-            structuredOutput: true
-          },
-          performance: {
-            speed: 'slow',
-            quality: 'state-of-the-art',
-            reasoning: 'state-of-the-art'
-          }
-        },
-        'claude-sonnet-4-20250514': {
-          maxTokens: 200000,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: true,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 200000,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: true,
-            reasoning: true,
-            analysis: true,
-            summarization: true,
-            translation: true,
-            questionAnswering: true,
-            creativeWriting: true,
-            structuredOutput: true
-          },
-          performance: {
-            speed: 'medium',
-            quality: 'excellent',
-            reasoning: 'excellent'
-          }
-        },
-        'claude-3-7-sonnet-20250219': {
-          maxTokens: 200000,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: true,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 200000,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: true,
-            reasoning: true,
-            analysis: true,
-            summarization: true,
-            translation: true,
-            questionAnswering: true,
-            creativeWriting: true,
-            structuredOutput: true
-          },
-          performance: {
-            speed: 'medium',
-            quality: 'excellent',
-            reasoning: 'excellent'
-          }
-        },
-        'claude-3-haiku-20240307': {
-          maxTokens: 200000,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: true,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 200000,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: true,
-            reasoning: true,
-            analysis: true,
-            summarization: true,
-            translation: true,
-            questionAnswering: true,
-            creativeWriting: true,
-            structuredOutput: true
-          },
-          performance: {
-            speed: 'ultra-fast',
-            quality: 'good',
-            reasoning: 'good'
-          }
-        }
-      },
       'groq': {
         'llama-3.1-8b-instant': {
           maxTokens: 8192,
@@ -1480,8 +1309,9 @@ class AIModelCapabilitiesService {
       capabilities.performance.speed = 'ultra-fast';
     }
 
-    // Function calling inference (mainly for Claude models)
-    if (modelLower.includes('claude') || modelLower.includes('gemini')) {
+    // Function calling inference. `claude` was the other id fragment matched
+    // here until 2026-09-07, when the anthropic provider was retired.
+    if (modelLower.includes('gemini')) {
       capabilities.supportsFunctionCalling = true;
       capabilities.supportsToolCalling = true;
       capabilities.supportsJSONSchema = true;
@@ -1509,70 +1339,16 @@ class AIModelCapabilitiesService {
     return capabilities;
   }
 
-  async getModelsForTask(task, requirements = {}) {
-    try {
-      const {
-        needsVision = false,
-        needsAudio = false,
-        needsFunctionCalling = false,
-        needsJSONOutput = false,
-        needsReasoning = false,
-        needsCodeGeneration = false,
-        maxTokens = 4096,
-        priority = 'cost' // 'cost', 'speed', 'quality'
-      } = requirements;
-
-      // Build query based on requirements
-      const query = {
-        isActive: true,
-        'capabilities.maxTokens': { $gte: maxTokens }
-      };
-
-      if (needsVision) query['capabilities.supportsVision'] = true;
-      if (needsAudio) query['capabilities.supportsAudio'] = true;
-      if (needsFunctionCalling) query['capabilities.supportsFunctionCalling'] = true;
-      if (needsJSONOutput) query['capabilities.supportsJSONOutput'] = true;
-      if (needsReasoning) query['capabilities.performance.reasoning'] = { $in: ['good', 'excellent', 'state-of-the-art'] };
-      if (needsCodeGeneration) query['capabilities.tasks.codeGeneration'] = true;
-
-      const models = await AIModel.find(query).populate('pricing').populate('freeTier');
-
-      // Sort based on priority
-      const sortedModels = models.sort((a, b) => {
-        if (priority === 'cost') {
-          // Prioritize free models, then by cost
-          const aIsFree = a.freeTier?.isFree || false;
-          const bIsFree = b.freeTier?.isFree || false;
-          if (aIsFree && !bIsFree) return -1;
-          if (!aIsFree && bIsFree) return 1;
-          return (a.pricing?.input || 999) - (b.pricing?.input || 999);
-        } else if (priority === 'speed') {
-          const speedOrder = { 'ultra-fast': 0, 'fast': 1, 'medium': 2, 'slow': 3 };
-          return speedOrder[a.capabilities?.performance?.speed || 'medium'] - speedOrder[b.capabilities?.performance?.speed || 'medium'];
-        } else if (priority === 'quality') {
-          const qualityOrder = { 'state-of-the-art': 0, 'excellent': 1, 'good': 2, 'basic': 3 };
-          return qualityOrder[a.capabilities?.performance?.quality || 'good'] - qualityOrder[b.capabilities?.performance?.quality || 'good'];
-        }
-        return 0;
-      });
-
-      return {
-        success: true,
-        models: sortedModels,
-        total: sortedModels.length
-      };
-    } catch (error) {
-      logger.error({ err: error }, 'Failed to get models for task');
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  }
+  // `getModelsForTask(task, requirements)` lived here until 2026-09-07. It had
+  // zero callers in the tree — and could not have had a working one: its query
+  // ended in `.populate('pricing').populate('freeTier')`, and AIModel declares
+  // neither path, so mongoose 8 throws StrictPopulateError on every call. The
+  // ranking idea (free first, then price, or speed, or quality) survives in
+  // aiDirectorService.recommendProvider, which is the version that runs.
 
   async updateAllModelCapabilities() {
     try {
-      const providers = ['anthropic', 'groq', 'gemini', 'together'];
+      const providers = ['groq', 'gemini', 'together'];
       let updatedCount = 0;
 
       for (const provider of providers) {

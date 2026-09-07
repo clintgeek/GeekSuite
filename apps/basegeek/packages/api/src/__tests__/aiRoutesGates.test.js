@@ -587,10 +587,13 @@ describe('the admin-shaped AI routes take the admin gate', () => {
 // filed the other two front doors: `/api/ai/call` put `error.message` into its
 // body and into its streaming error frame, `/api/ai/parse-json` put it into
 // `error.details`. Those strings are built as
-// `` `Anthropic API error (401): ${JSON.stringify(error.response.data)}` `` in
-// aiService, so what a caller actually received was the vendor's name, its org
-// and project ids, its request id and, on a bad-credential case, a redacted
-// fragment of baseGeek's key. Both now render the shared allowlist in
+// `` `Gemini API error (401): ${JSON.stringify(error.response.data)}` `` in
+// aiService, so what a caller actually received was the vendor's name, its
+// service and reason codes, its request id and, on a bad-credential case, a
+// fragment of baseGeek's key. (The fixture below was Anthropic's error body
+// until 2026-09-07, when that provider was retired; every adapter builds the
+// same string, so the case is unchanged in substance.) Both now render the
+// shared allowlist in
 // services/aiFailureEnvelope.js — the same one the proxy renders — into
 // baseGeek's `{ success: false, error: {...} }` shape.
 //
@@ -600,21 +603,26 @@ describe('the admin-shaped AI routes take the admin gate', () => {
 
 /** What aiService actually throws, with everything a vendor puts in one. */
 const LEAKY_UPSTREAM = (status = 401) => new Error(
-  `Anthropic API error (${status}): ` + JSON.stringify({
-    type: 'error',
+  `Gemini API error (${status}): ` + JSON.stringify({
     error: {
-      type: 'authentication_error',
-      message: 'invalid x-api-key: sk-ant-api03-AbCdEfGh...WxYz',
+      code: status,
+      message: 'API key not valid: AIzaSyLeakyKeyFragment...WxYz',
+      status: 'INVALID_ARGUMENT',
+      details: [{
+        '@type': 'type.googleapis.com/google.rpc.ErrorInfo',
+        reason: 'API_KEY_INVALID',
+        domain: 'generativelanguage.googleapis.com',
+        metadata: { project: 'proj_01HQZX9K2M' },
+      }],
     },
-    organization: 'org_01HQZX9K2M',
-    project: 'proj_01HQZX9K2M',
     request_id: 'req_011CQxLeakyUpstream',
   })
 );
 
 const LEAKED_STRINGS = [
-  'Anthropic', 'anthropic', 'sk-ant-', 'org_01HQZX9K2M', 'proj_01HQZX9K2M',
-  'req_011CQxLeakyUpstream', 'authentication_error', 'invalid x-api-key',
+  'Gemini', 'gemini', 'AIzaSy', 'API_KEY_INVALID', 'proj_01HQZX9K2M',
+  'generativelanguage', 'req_011CQxLeakyUpstream', 'INVALID_ARGUMENT',
+  'API key not valid',
 ];
 
 function expectNothingLeaked(text) {
@@ -631,7 +639,7 @@ describe('POST /api/ai/call — an upstream failure in aiGeek\'s own words', () 
     const res = await request(app)
       .post('/api/ai/call')
       .set('Authorization', `Bearer ${apiKey}`)
-      .send({ prompt: 'hi', config: { provider: 'anthropic' } });
+      .send({ prompt: 'hi', config: { provider: 'gemini' } });
 
     // A bad provider credential is baseGeek's problem, so it is a 5xx.
     expect(res.status).toBe(502);
@@ -651,7 +659,7 @@ describe('POST /api/ai/call — an upstream failure in aiGeek\'s own words', () 
       .post('/api/ai/call')
       .set('Authorization', `Bearer ${apiKey}`)
       .set('X-Request-Id', 'gate-probe-call-1')
-      .send({ prompt: 'hi', config: { provider: 'anthropic' } });
+      .send({ prompt: 'hi', config: { provider: 'gemini' } });
 
     expect(res.body.error.message).toContain('(request id: gate-probe-call-1)');
     expect(res.headers['x-request-id']).toBe('gate-probe-call-1');
@@ -664,7 +672,7 @@ describe('POST /api/ai/call — an upstream failure in aiGeek\'s own words', () 
     const res = await request(app)
       .post('/api/ai/call')
       .set('Authorization', `Bearer ${apiKey}`)
-      .send({ prompt: 'hi', config: { provider: 'anthropic' } });
+      .send({ prompt: 'hi', config: { provider: 'gemini' } });
 
     expect(res.status).toBe(429);
     expect(res.body.error.code).toBe('rate_limit_exceeded');
@@ -674,7 +682,7 @@ describe('POST /api/ai/call — an upstream failure in aiGeek\'s own words', () 
 
   it('an exhausted rotation is a 503 that does not name what it tried', async () => {
     const apiKey = await makeApiKey({ appName: 'storygeek' });
-    nextFailure = new Error('All AI providers failed: anthropic, groq, gemini');
+    nextFailure = new Error('All AI providers failed: cerebras, groq, gemini');
 
     const res = await request(app)
       .post('/api/ai/call')
@@ -694,7 +702,7 @@ describe('POST /api/ai/call — an upstream failure in aiGeek\'s own words', () 
     const res = await request(app)
       .post('/api/ai/call')
       .set('Authorization', `Bearer ${apiKey}`)
-      .send({ prompt: 'hi', stream: true, config: { provider: 'anthropic' } });
+      .send({ prompt: 'hi', stream: true, config: { provider: 'gemini' } });
 
     // Headers were already out, so the failure arrives as a frame, not a status.
     const frame = res.text.split('\n').find(line => line.startsWith('data: ') && line.includes('error'));
@@ -715,7 +723,7 @@ describe('POST /api/ai/parse-json — the same envelope, on the same words', () 
     const res = await request(app)
       .post('/api/ai/parse-json')
       .set('Authorization', `Bearer ${apiKey}`)
-      .send({ prompt: 'hi', config: { provider: 'anthropic' } });
+      .send({ prompt: 'hi', config: { provider: 'gemini' } });
 
     expect(res.status).toBe(502);
     expect(res.body.error.code).toBe('upstream_error');

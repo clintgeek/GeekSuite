@@ -8,7 +8,7 @@ describe('freeCandidates — what each provider counts as free', () => {
   test('openrouter: zero-priced text models only', () => {
     const raw = { data: [
       { id: 'meta-llama/llama-3.3-70b-instruct:free', pricing: { prompt: '0', completion: '0' } },
-      { id: 'anthropic/claude-3.5-sonnet', pricing: { prompt: '0.000003', completion: '0.000015' } },
+      { id: 'openai/gpt-4o', pricing: { prompt: '0.000003', completion: '0.000015' } },
       { id: 'some/image-model:free', pricing: { prompt: '0', completion: '0' }, architecture: { output_modalities: ['image'] } },
     ] };
     expect(freeCandidates('openrouter', raw)).toEqual(['meta-llama/llama-3.3-70b-instruct:free']);

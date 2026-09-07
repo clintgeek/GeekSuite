@@ -4,6 +4,13 @@
 **Branch target:** `feat/aigeek-polish` (off `main`, after parking CI/CD docs on `ci-cd`)
 **Driver:** Needed before geekPR (portfolio project) can use aiGeek as its LLM backend. Also upgrades aiGeek itself to be a more capable OpenAI-compatible proxy for the whole suite.
 
+> **Anthropic removed 2026-09-07 (out of credit).** Everything below that names
+> Anthropic — the per-user key field, the `anthropic/claude-*` pin examples, the
+> native `response_format` and tool-calling pair — is the record of what was
+> built, not what is live. `callClaude` is deleted; Gemini is the adapter with
+> native `json_schema` and tools, Groq with tools only. See
+> [AI_CATALOG.md](./AI_CATALOG.md#removed-2026-09-07-anthropic-phase-0).
+
 ## The short version
 
 aiGeek is the AI subsystem inside basegeek. It already does a clever thing: round-robins free-tier providers (Groq, Cerebras, Together, OpenRouter, Cloudflare, Ollama Cloud, LLM Gateway) with per-provider quota tracking and cooling, so GeekSuite apps get "keep me coding" inference for free. It exposes an OpenAI-compatible endpoint at `POST /openai/v1/chat/completions`.

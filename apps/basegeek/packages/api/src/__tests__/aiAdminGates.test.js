@@ -89,11 +89,11 @@ async function makeApiKey() {
 const auth = (req, token) => req.set('Authorization', `Bearer ${token}`);
 
 /** A stored, encrypted provider key — what the mask has to hide. */
-const SECRET_KEY = 'sk-ant-supersecret-value-abcd';
+const SECRET_KEY = 'sk-gem-supersecret-value-abcd';
 
-async function storeAnthropicKey({ enabled = true } = {}) {
+async function storeGeminiKey({ enabled = true } = {}) {
   await AIConfig.findOneAndUpdate(
-    { provider: 'anthropic' },
+    { provider: 'gemini' },
     { apiKey: encrypt(SECRET_KEY), enabled },
     { upsert: true, new: true }
   );
@@ -121,7 +121,7 @@ afterAll(async () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe('REST — provider config is admin-only', () => {
   it('GET /api/ai/config: 401 anonymous, 403 for a plain user, 200 for an admin', async () => {
-    await storeAnthropicKey();
+    await storeGeminiKey();
 
     const anon = await request(app).get('/api/ai/config');
     expect(anon.status).toBe(401);
@@ -131,12 +131,12 @@ describe('REST — provider config is admin-only', () => {
     expect(denied.status).toBe(403);
     expect(denied.body.error).toBe('admin_required');
     // The gate must run before the handler: nothing about the key leaks.
-    expect(JSON.stringify(denied.body)).not.toContain('anthropic');
+    expect(JSON.stringify(denied.body)).not.toContain('gemini');
 
     const admin = await makeUserWithToken({ role: 'admin' });
     const allowed = await auth(request(app).get('/api/ai/config'), admin.token);
     expect(allowed.status).toBe(200);
-    expect(allowed.body.anthropic).toBeDefined();
+    expect(allowed.body.gemini).toBeDefined();
   });
 
   it('an API key is refused even with ai:stats — keys belong to apps, not admins', async () => {
@@ -157,22 +157,22 @@ describe('REST — provider config is admin-only', () => {
   });
 
   it('POST /api/ai/config: a plain user cannot rewrite a provider key', async () => {
-    await storeAnthropicKey();
-    const before = await AIConfig.findOne({ provider: 'anthropic' });
+    await storeGeminiKey();
+    const before = await AIConfig.findOne({ provider: 'gemini' });
 
     const plain = await makeUserWithToken();
     const denied = await auth(request(app).post('/api/ai/config'), plain.token)
-      .send({ anthropic: { apiKey: 'sk-ant-attacker', enabled: true } });
+      .send({ gemini: { apiKey: 'sk-gem-attacker', enabled: true } });
     expect(denied.status).toBe(403);
     expect(denied.body.error).toBe('admin_required');
 
-    const after = await AIConfig.findOne({ provider: 'anthropic' });
+    const after = await AIConfig.findOne({ provider: 'gemini' });
     expect(after.apiKey).toBe(before.apiKey);
     expect(after.getDecryptedKey()).toBe(SECRET_KEY);
   });
 
   it('a promotion opens the config on the next request with the same token', async () => {
-    await storeAnthropicKey();
+    await storeGeminiKey();
     const { user, token } = await makeUserWithToken();
 
     expect((await auth(request(app).get('/api/ai/config'), token)).status).toBe(403);
@@ -186,13 +186,13 @@ describe('REST — provider config is admin-only', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe('REST — the config response is masked', () => {
   it('returns { hasKey, keyHint, enabled } and never the credential', async () => {
-    await storeAnthropicKey({ enabled: true });
+    await storeGeminiKey({ enabled: true });
     const admin = await makeUserWithToken({ role: 'admin' });
 
     const res = await auth(request(app).get('/api/ai/config'), admin.token);
     expect(res.status).toBe(200);
 
-    expect(res.body.anthropic).toEqual({
+    expect(res.body.gemini).toEqual({
       hasKey: true,
       keyHint: '…abcd',
       enabled: true,
@@ -220,16 +220,16 @@ describe('REST — the config response is masked', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe('REST — saving without a key keeps the stored one', () => {
   it('a blank key preserves the credential and still writes enabled', async () => {
-    await storeAnthropicKey({ enabled: true });
-    const stored = (await AIConfig.findOne({ provider: 'anthropic' })).apiKey;
+    await storeGeminiKey({ enabled: true });
+    const stored = (await AIConfig.findOne({ provider: 'gemini' })).apiKey;
     const admin = await makeUserWithToken({ role: 'admin' });
 
     // Exactly what the page now sends for an untouched key field.
     const res = await auth(request(app).post('/api/ai/config'), admin.token)
-      .send({ anthropic: { enabled: false } });
+      .send({ gemini: { enabled: false } });
     expect(res.status).toBe(200);
 
-    const after = await AIConfig.findOne({ provider: 'anthropic' });
+    const after = await AIConfig.findOne({ provider: 'gemini' });
     expect(after.apiKey).toBe(stored);
     expect(after.getDecryptedKey()).toBe(SECRET_KEY);
     // The toggle landed — the old shape dropped it whenever no key came along.
@@ -237,16 +237,16 @@ describe('REST — saving without a key keeps the stored one', () => {
   });
 
   it('a supplied key replaces the stored one, encrypted', async () => {
-    await storeAnthropicKey();
+    await storeGeminiKey();
     const admin = await makeUserWithToken({ role: 'admin' });
 
     const res = await auth(request(app).post('/api/ai/config'), admin.token)
-      .send({ anthropic: { apiKey: 'sk-ant-rotated-wxyz', enabled: true } });
+      .send({ gemini: { apiKey: 'sk-gem-rotated-wxyz', enabled: true } });
     expect(res.status).toBe(200);
 
-    const after = await AIConfig.findOne({ provider: 'anthropic' });
-    expect(after.getDecryptedKey()).toBe('sk-ant-rotated-wxyz');
-    expect(after.apiKey).not.toContain('sk-ant-rotated-wxyz');
+    const after = await AIConfig.findOne({ provider: 'gemini' });
+    expect(after.getDecryptedKey()).toBe('sk-gem-rotated-wxyz');
+    expect(after.apiKey).not.toContain('sk-gem-rotated-wxyz');
   });
 
   it('never creates a keyless document for a provider that has none', async () => {
@@ -264,7 +264,7 @@ describe('GraphQL — the same rule, the same shape', () => {
   const ctxFor = (user) => user;
 
   it('aiConfig throws ADMIN_REQUIRED for a plain user', async () => {
-    await storeAnthropicKey();
+    await storeGeminiKey();
     const { user } = await makeUserWithToken();
 
     await expect(resolvers.Query.aiConfig(null, null, { user: ctxFor({ id: user._id.toString() }) }))
@@ -286,14 +286,14 @@ describe('GraphQL — the same rule, the same shape', () => {
   });
 
   it('aiConfig returns the same mask for an admin', async () => {
-    await storeAnthropicKey({ enabled: true });
+    await storeGeminiKey({ enabled: true });
     const { user } = await makeUserWithToken({ role: 'admin' });
 
     const config = await resolvers.Query.aiConfig(null, null, {
       user: { id: user._id.toString() },
     });
 
-    expect(config.anthropic).toEqual({ hasKey: true, keyHint: '…abcd', enabled: true });
+    expect(config.gemini).toEqual({ hasKey: true, keyHint: '…abcd', enabled: true });
     expect(JSON.stringify(config)).not.toContain(SECRET_KEY);
   });
 
@@ -309,15 +309,15 @@ describe('GraphQL — the same rule, the same shape', () => {
 
     const calls = [
       () => resolvers.Mutation.saveAIConfig(null, { config: {} }, ctx),
-      () => resolvers.Mutation.testAIProvider(null, { provider: 'anthropic' }, ctx),
+      () => resolvers.Mutation.testAIProvider(null, { provider: 'gemini' }, ctx),
       () => resolvers.Mutation.resetAIStats(null, null, ctx),
       () => resolvers.Mutation.seedDirectorPricing(null, null, ctx),
       () => resolvers.Mutation.seedDirectorFreeTier(null, null, ctx),
-      () => resolvers.Mutation.syncProviderModels(null, { provider: 'anthropic' }, ctx),
-      () => resolvers.Mutation.updateModelPricing(null, { provider: 'anthropic', modelId: 'm', inputPrice: 1, outputPrice: 1 }, ctx),
-      () => resolvers.Mutation.deleteModelPricing(null, { provider: 'anthropic', modelId: 'm' }, ctx),
-      () => resolvers.Mutation.updateModelFreeTier(null, { provider: 'anthropic', modelId: 'm', isFree: true }, ctx),
-      () => resolvers.Mutation.deleteModelFreeTier(null, { provider: 'anthropic', modelId: 'm' }, ctx),
+      () => resolvers.Mutation.syncProviderModels(null, { provider: 'gemini' }, ctx),
+      () => resolvers.Mutation.updateModelPricing(null, { provider: 'gemini', modelId: 'm', inputPrice: 1, outputPrice: 1 }, ctx),
+      () => resolvers.Mutation.deleteModelPricing(null, { provider: 'gemini', modelId: 'm' }, ctx),
+      () => resolvers.Mutation.updateModelFreeTier(null, { provider: 'gemini', modelId: 'm', isFree: true }, ctx),
+      () => resolvers.Mutation.deleteModelFreeTier(null, { provider: 'gemini', modelId: 'm' }, ctx),
       () => resolvers.Mutation.resetAllFreeTiers(null, null, ctx),
       () => resolvers.Mutation.bulkUpdateFreeTiers(null, { updates: [] }, ctx),
       () => resolvers.Mutation.saveAIAppConfig(null, { appName: 'x', config: {} }, ctx),
@@ -332,17 +332,17 @@ describe('GraphQL — the same rule, the same shape', () => {
   });
 
   it('saveAIConfig keeps the stored key when none is supplied', async () => {
-    await storeAnthropicKey({ enabled: true });
-    const stored = (await AIConfig.findOne({ provider: 'anthropic' })).apiKey;
+    await storeGeminiKey({ enabled: true });
+    const stored = (await AIConfig.findOne({ provider: 'gemini' })).apiKey;
     const { user } = await makeUserWithToken({ role: 'admin' });
 
     await resolvers.Mutation.saveAIConfig(
       null,
-      { config: { anthropic: { enabled: false } } },
+      { config: { gemini: { enabled: false } } },
       { user: { id: user._id.toString() } }
     );
 
-    const after = await AIConfig.findOne({ provider: 'anthropic' });
+    const after = await AIConfig.findOne({ provider: 'gemini' });
     expect(after.apiKey).toBe(stored);
     expect(after.enabled).toBe(false);
   });

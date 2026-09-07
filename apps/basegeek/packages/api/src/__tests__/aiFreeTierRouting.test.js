@@ -299,18 +299,21 @@ describe('a cooling row is not a candidate', () => {
 
 describe('a free-tier caller is never answered by a paid default model', () => {
   it('fails as itself when every free candidate has failed', async () => {
-    enable('groq', 'cerebras', 'anthropic');
+    enable('groq', 'cerebras', 'together');
     await seedRows([
       { provider: 'groq', modelId: 'dead-a' },
       { provider: 'cerebras', modelId: 'dead-b' },
     ]);
 
-    // anthropic has a key and sits in the fallback order, so the OLD code would
-    // have called it with its own (paid) default model and returned an answer.
+    // together has a key and sits in the fallback order but no free row, so the
+    // OLD code would have called it with its own default model and returned an
+    // answer. Until 2026-09-07 this stand-in was `anthropic`, whose default
+    // model was genuinely paid — hence "billed to Chef". The mechanism under
+    // test is the same: a provider with no free row is not consulted at all.
     const calls = fakeProviderLayer({
       'groq/dead-a': providerError('Groq', 404, {}),
       'cerebras/dead-b': providerError('Cerebras', 401, {}),
-      [`anthropic/${aiService.providers.anthropic.model}`]: 'billed to Chef',
+      [`together/${aiService.providers.together.model}`]: 'off the free path',
     });
 
     await expect(aiService.callAI('hello', { freeOnly: true, appName: 'startgeek' })).rejects.toThrow();
@@ -318,11 +321,11 @@ describe('a free-tier caller is never answered by a paid default model', () => {
   });
 
   it('fails as itself when there is no free row at all', async () => {
-    enable('anthropic');
+    enable('together');
     await seedRows([]);
 
     const calls = fakeProviderLayer({
-      [`anthropic/${aiService.providers.anthropic.model}`]: 'billed to Chef',
+      [`together/${aiService.providers.together.model}`]: 'off the free path',
     });
 
     await expect(aiService.callAI('hello', { freeOnly: true, appName: 'startgeek' }))
@@ -347,7 +350,7 @@ describe('a free-tier caller is never answered by a paid default model', () => {
   });
 
   it('routes an app whose AIAppConfig row says tier: free down the same path', async () => {
-    enable('groq', 'cerebras', 'anthropic');
+    enable('groq', 'cerebras', 'together');
     await AIAppConfig.create({ appName: 'startgeek', tier: 'free' });
     await seedRows([
       { provider: 'groq', modelId: 'dead-a' },
@@ -357,7 +360,7 @@ describe('a free-tier caller is never answered by a paid default model', () => {
     const calls = fakeProviderLayer({
       'groq/dead-a': providerError('Groq', 404, { error: { code: 'model_not_found' } }),
       'cerebras/alive': 'ok',
-      [`anthropic/${aiService.providers.anthropic.model}`]: 'billed to Chef',
+      [`together/${aiService.providers.together.model}`]: 'off the free path',
     });
 
     // This is the exact production shape: StartGeek Ask, useAppConfig, tier free.
@@ -433,11 +436,11 @@ describe('a success clears the row', () => {
 
 describe('non-free callers walk exactly the list they always did', () => {
   it('still tries the requested provider then the fallback order, each on its own default model', async () => {
-    enable('groq', 'cerebras', 'anthropic');
+    enable('groq', 'cerebras', 'together');
     await seedRows([{ provider: 'groq', modelId: 'a-free-row' }]);
 
     const order = [aiService.currentProvider, ...aiService.fallbackOrder.filter(p => p !== aiService.currentProvider)];
-    const firstTwo = order.filter(p => ['groq', 'cerebras', 'anthropic'].includes(p));
+    const firstTwo = order.filter(p => ['groq', 'cerebras', 'together'].includes(p));
 
     const answers = {};
     for (const provider of firstTwo) {

@@ -118,8 +118,8 @@ function openAISamplingFields({ topP, stop, seed, presencePenalty, frequencyPena
 }
 
 /**
- * OpenAI's `stop` (string | string[] | null) as the array form Anthropic
- * (`stop_sequences`) and Gemini (`generationConfig.stopSequences`) want.
+ * OpenAI's `stop` (string | string[] | null) as the array form Gemini
+ * (`generationConfig.stopSequences`) and Cohere (`stop_sequences`) want.
  * Returns null when there is nothing worth sending.
  */
 function stopSequencesFrom(stop) {
@@ -133,54 +133,8 @@ function stopSequencesFrom(stop) {
 
 // Cloud-based summarization using existing free AI providers
 
-/**
- * Prompt Strategy Modifiers
- * These are prepended to system prompts based on model family behavior.
- * Helps normalize responses across different model personalities.
- */
-const PROMPT_STRATEGIES = {
-  'tool-decisive': `
-
-CRITICAL INSTRUCTION: You are interfacing with a tool-based system. When you have sufficient information to proceed:
-- Execute the appropriate tool call IMMEDIATELY
-- Do NOT ask unnecessary follow-up questions
-- Do NOT explain what you're about to do before doing it
-- Be action-oriented and decisive
-- Only use ask_followup_question when critical information is genuinely missing
-
-If the user says "read THE_STEPS.md" or similar, just read it. Don't ask permission.
-If the user provides a task with clear steps, start executing. Don't ask if you should proceed.
-Your responses should be: brief explanation + tool call, not lengthy discussions about what you might do.`,
-
-  'reasoning-focused': `
-
-INSTRUCTION: You excel at reasoning and problem-solving. Take time to think through complex problems step-by-step.
-Break down difficult tasks into logical components and explain your reasoning process.
-Use tools when needed, but prioritize deep analysis over quick actions.`,
-
-  'analytical': `
-
-INSTRUCTION: Focus on thorough analysis and well-structured responses.
-Consider edge cases, provide detailed explanations, and maintain high accuracy.
-Ask clarifying questions when ambiguity could lead to incorrect assumptions.`,
-
-  'concise': `
-
-INSTRUCTION: Provide fast, concise responses. Minimize explanations unless explicitly requested.
-Execute tool calls efficiently. Optimize for speed and brevity.`,
-
-  'balanced': `
-
-INSTRUCTION: Balance thoughtful analysis with efficient execution.
-Ask clarifying questions when needed, but don't over-engineer simple tasks.
-Provide clear explanations while remaining concise.`
-};
-
 class AIService {
   constructor() {
-    // Load model families configuration
-    this.families = this.loadFamilies();
-    
     // Smart context management - using cloud-based summarization
     this.summarizer = null; // Not used (cloud-based)
     this.summarizationEnabled = true; // Re-enabled with cloud approach
@@ -230,27 +184,16 @@ class AIService {
     // `costPer1kTokens` below is dollars per 1,000 tokens — a different unit
     // from the AIPricing collection, which stores dollars per 1,000,000 (see
     // aiDirectorService's costForTokens). Both are correct as written: the
-    // values here match their per-1M equivalents divided by 1000 (anthropic
-    // 0.005 = $5/MTok, cohere 0.0025 = $2.50/MTok), and updateStats() divides
-    // token counts by 1000 to match. Do not "fix" one to look like the other.
+    // values here match their per-1M equivalents divided by 1000 (cohere
+    // 0.0025 = $2.50/MTok), and updateStats() divides token counts by 1000 to
+    // match. Do not "fix" one to look like the other.
     // These are single blended rates per provider, not per-model input/output
     // prices — the AIPricing table is the accurate source for those.
+    //
+    // Every rate below is now either free or cohere's 0.0025: the one genuinely
+    // paid row, `anthropic` at a blended 0.006, was removed 2026-09-07 with the
+    // provider (out of credit, gone for good).
     this.providers = {
-      anthropic: {
-        name: 'Claude Sonnet 5',
-        apiKey: '',
-        baseURL: 'https://api.anthropic.com/v1',
-        model: DEFAULT_MODELS.anthropic,
-        // 2026-09-05: repriced for claude-sonnet-5, which is $2/MTok in and
-        // $10/MTok out — i.e. 0.002 and 0.010 per 1K; the flat average is
-        // 0.006. This table is a single blended per-provider rate, not a
-        // per-model in/out price (AIPricing holds those, per 1M). Was 0.003 —
-        // the $3/MTok input price of claude-3-5-sonnet, three generations stale.
-        costPer1kTokens: 0.006,
-        maxTokens: 4000,
-        temperature: 0.7,
-        enabled: false
-      },
       groq: {
         name: 'Groq Llama 3.3 70B',
         apiKey: '',
@@ -537,49 +480,6 @@ class AIService {
           }
           break;
 
-        case 'anthropic':
-          if (this.providers.anthropic.apiKey) {
-            try {
-              logger.info('Fetching Anthropic models via API...');
-              const response = await axios.get('https://api.anthropic.com/v1/models', {
-                headers: {
-                  'x-api-key': this.providers.anthropic.apiKey,
-                  'anthropic-version': '2023-06-01'
-                },
-                timeout: 10000
-              });
-              const anthropicModels = response.data?.data || [];
-              models = anthropicModels.map(m => ({
-                id: m.id,
-                name: m.display_name || m.id
-              }));
-              logger.info(`Fetched ${models.length} Anthropic models from API`);
-            } catch (apiError) {
-              logger.info({ err: apiError }, 'Anthropic models API failed, using hardcoded fallback');
-              models = [
-                { id: 'claude-opus-4-1-20250805', name: 'Claude Opus 4.1' },
-                { id: 'claude-opus-4-20250514', name: 'Claude Opus 4' },
-                { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4' },
-                { id: 'claude-3-7-sonnet-20250219', name: 'Claude Sonnet 3.7' },
-                { id: 'claude-3-5-sonnet-20241022', name: 'Claude Sonnet 3.5' },
-                { id: 'claude-3-5-haiku-20241022', name: 'Claude Haiku 3.5' },
-                { id: 'claude-3-haiku-20240307', name: 'Claude Haiku 3' }
-              ];
-            }
-          } else {
-            // No API key — use hardcoded fallback
-            models = [
-              { id: 'claude-opus-4-1-20250805', name: 'Claude Opus 4.1' },
-              { id: 'claude-opus-4-20250514', name: 'Claude Opus 4' },
-              { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4' },
-              { id: 'claude-3-7-sonnet-20250219', name: 'Claude Sonnet 3.7' },
-              { id: 'claude-3-5-sonnet-20241022', name: 'Claude Sonnet 3.5' },
-              { id: 'claude-3-5-haiku-20241022', name: 'Claude Haiku 3.5' },
-              { id: 'claude-3-haiku-20240307', name: 'Claude Haiku 3' }
-            ];
-          }
-          break;
-
         case 'gemini':
           if (this.providers.gemini.apiKey) {
             try {
@@ -678,15 +578,6 @@ class AIService {
     async seedInitialModels() {
     try {
       const initialModels = {
-        anthropic: [
-          { id: 'claude-opus-4-1-20250805', name: 'Claude Opus 4.1' },
-          { id: 'claude-opus-4-20250514', name: 'Claude Opus 4' },
-          { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4' },
-          { id: 'claude-3-7-sonnet-20250219', name: 'Claude Sonnet 3.7' },
-          { id: 'claude-3-5-sonnet-20241022', name: 'Claude Sonnet 3.5' },
-          { id: 'claude-3-5-haiku-20241022', name: 'Claude Haiku 3.5' },
-          { id: 'claude-3-haiku-20240307', name: 'Claude Haiku 3' }
-        ],
         groq: [
           { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B Versatile (Free)' },
           { id: 'llama-3.1-70b-versatile', name: 'Llama 3.1 70B Versatile (Free)' },
@@ -718,7 +609,11 @@ class AIService {
           { id: 'meta-llama/llama-3.1-8b-instruct:free', name: 'Llama 3.1 8B (Free)' },
           { id: 'nousresearch/hermes-3-llama-3.1-405b:free', name: 'Hermes 3 Llama 405B (Free - may be limited)' },
           { id: 'google/gemini-flash-1.5', name: 'Gemini Flash 1.5' },
-          { id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet' },
+          // `anthropic/claude-3.5-sonnet` sat here until 2026-09-07. It was an
+          // OpenRouter passthrough, not the retired anthropic provider — but it
+          // was a paid row for a model three generations stale, seeded by hand,
+          // and nothing in the suite pinned it. Phase 1 replaces this whole
+          // table with OpenRouter's own listing.
           { id: 'openai/gpt-4o', name: 'GPT-4o' }
         ],
         cerebras: [
@@ -1241,47 +1136,6 @@ class AIService {
       }
     }
     logger.info('================================');
-  }
-
-  /**
-   * Load model families configuration
-   */
-  loadFamilies() {
-    try {
-      const familiesPath = path.resolve(__dirname, '../../../../families.json');
-      logger.debug(`[AIService] Loading families from: ${familiesPath}`);
-      const familiesConfig = JSON.parse(fs.readFileSync(familiesPath, 'utf-8'));
-      logger.debug(`[AIService] Loaded ${Object.keys(familiesConfig.families || {}).length} families`);
-
-      // Debug: Log which family cerebras belongs to
-      for (const [familyName, familyConfig] of Object.entries(familiesConfig.families || {})) {
-        if (familyConfig.providers && familyConfig.providers.includes('cerebras')) {
-          logger.debug(`[AIService] cerebras found in family: ${familyName} (strategy: ${familyConfig.promptStrategy})`);
-        }
-      }
-
-      return familiesConfig.families || {};
-    } catch (error) {
-      logger.warn({ err: error }, '[AIService] Could not load families.json, using default behavior');
-      return {};
-    }
-  }
-
-  /**
-   * Get prompt strategy for a provider based on its family
-   * @param {string} provider - Provider name (e.g., 'cerebras', 'together')
-   * @returns {string} - Prompt strategy modifier text
-   */
-  getPromptStrategy(provider) {
-    // Find which family this provider belongs to
-    for (const [familyName, familyConfig] of Object.entries(this.families)) {
-      if (familyConfig.providers && familyConfig.providers.includes(provider)) {
-        const strategy = familyConfig.promptStrategy || 'balanced';
-        return PROMPT_STRATEGIES[strategy] || '';
-      }
-    }
-    // Default to balanced if provider not found in any family
-    return PROMPT_STRATEGIES['balanced'] || '';
   }
 
   /**
@@ -2102,145 +1956,60 @@ class AIService {
   }
 
   /**
-   * Smart AI call using Phase 2A routing
+   * callAISmart — a thin shim over `callAI`, kept for its callers.
+   *
+   * It used to be the front of a SECOND routing stack: aiRouterService
+   * (families.json + task detection) picked a family, aiBalancerService
+   * scored providers out of Redis, aiHealthJobService swept cooldowns every
+   * 60 s. All of it went in Phase 0 (2026-09-07). Nothing scheduled the
+   * router, the health job mutated a *local copy* of the cooldown map so it
+   * logged "✓ Cleared cooldown" forever without clearing anything, and it was
+   * still ranking `llm7` and `onemin`, both deleted in September. `callAI` —
+   * with its rotation, free-tier health rows and cross-provider fallback — is
+   * the one router.
+   *
+   * The `{success, content, routing}` shape survives because
+   * `/api/ai/conversation/message` reads it on both its branches, and because
+   * a provider failure here is a resolved `{success:false}` that the route
+   * turns into the allowlisted envelope (Q46). `routing` now reports what
+   * actually answered, out of `lastProviderInfo`, instead of the family the
+   * old router had predicted.
+   *
    * @param {array} messages - Conversation messages
-   * @param {object} options - Routing options
-   * @param {string} options.conversationId - Conversation ID for context
-   * @param {string} options.taskTypeHint - Optional task type hint
-   * @param {boolean} options.dryRun - Dry-run mode (default: from config)
+   * @param {object} options - Call options
    * @param {string} options.userId - User ID for usage tracking
    * @param {string} options.appName - App name for usage tracking
-   * @returns {Promise<object>} - AI response with routing metadata
+   * @param {string} options.feature - Feature id for usage tracking
+   * @param {boolean} options.freeOnly - Restrict to the free-tier rotation
+   * @returns {Promise<object>} - `{success, content, routing}` or `{success:false, error}`
    */
   async callAISmart(messages, options = {}) {
-    // If freeOnly requested, skip smart routing and go straight to free-tier selection
-    if (options.freeOnly) {
-      const prompt = messages[messages.length - 1]?.content || '';
-      const startTime = Date.now();
-      try {
-        const response = await this.callAI(prompt, {
-          freeOnly: true,
-          messages,
-          userId: options.userId,
-          appName: options.appName || 'free-tier',
-          feature: options.feature || null
-        });
-        return {
-          success: true,
-          content: response,
-          routing: { taskType: 'free-tier', provider: 'free-selection', latency: Date.now() - startTime }
-        };
-      } catch (error) {
-        return { success: false, error: error.message };
-      }
-    }
-
-    const ModelFamilyRouter = (await import('./aiRouterService.js')).default;
-    const LoadBalancer = (await import('./aiBalancerService.js')).default;
-
-    const router = new ModelFamilyRouter();
-    const loadBalancer = new LoadBalancer();
-
-    // Extract prompt from messages
     const prompt = messages[messages.length - 1]?.content || '';
-
-    // Route to optimal provider
-    const routingDecision = await router.routeTask({
-      conversationId: options.conversationId || `conv-${Date.now()}`,
-      prompt,
-      taskTypeHint: options.taskTypeHint,
-      dryRun: options.dryRun
-    });
-
-    // If dry-run, return routing decision only
-    if (routingDecision.dryRun) {
-      return {
-        success: true,
-        dryRun: true,
-        routing: routingDecision,
-        content: '[DRY-RUN] No API call executed'
-      };
-    }
-
-    // Execute actual AI call using selected provider
-    const provider = routingDecision.selectedProvider;
     const startTime = Date.now();
+    const freeOnly = !!options.freeOnly;
 
     try {
-      // Call the provider using existing callAI method
       const response = await this.callAI(prompt, {
-        provider,
+        freeOnly,
         messages,
         userId: options.userId,
-        appName: options.appName || 'smart-routing',
+        appName: options.appName || (freeOnly ? 'free-tier' : 'unknown'),
         feature: options.feature || null
       });
 
-      // Track latency and update provider score
-      const latency = Date.now() - startTime;
-      await loadBalancer.trackProviderLatency(provider, latency);
-
-      // Return response with routing metadata
+      const info = this.lastProviderInfo || {};
       return {
         success: true,
         content: response,
         routing: {
-          family: routingDecision.family,
-          taskType: routingDecision.taskType,
-          provider: routingDecision.selectedProvider,
-          latency,
-          score: routingDecision.providerScore
+          provider: info.provider || this.currentProvider,
+          model: info.model || null,
+          cached: !!info.cached,
+          latency: Date.now() - startTime
         }
       };
-
     } catch (error) {
-      // Mark provider unavailable on failure
-      await loadBalancer.markProviderUnavailable(provider);
-
-      // Log error with routing context
-      logger.error({ err: error, provider, family: routingDecision.family, taskType: routingDecision.taskType }, '[Smart Routing] Provider failed');
-
-      // Try fallback within the same family
-      const family = routingDecision.family;
-      logger.info(`[Smart Routing] Trying next provider in ${family} family...`);
-
-      try {
-        const fallbackProvider = await loadBalancer.getNextProvider(family);
-        const fallbackResponse = await this.callAI(prompt, {
-          provider: fallbackProvider,
-          messages,
-          userId: options.userId,
-          appName: options.appName || 'smart-routing',
-          feature: options.feature || null
-        });
-
-        const fallbackLatency = Date.now() - startTime;
-        await loadBalancer.trackProviderLatency(fallbackProvider, fallbackLatency);
-
-        return {
-          success: true,
-          content: fallbackResponse,
-          routing: {
-            family,
-            taskType: routingDecision.taskType,
-            provider: fallbackProvider,
-            fallbackFrom: provider,
-            latency: fallbackLatency
-          }
-        };
-
-      } catch (fallbackError) {
-        // All providers in family failed, return error
-        return {
-          success: false,
-          error: `All providers in ${family} family failed: ${fallbackError.message}`,
-          routing: {
-            family,
-            taskType: routingDecision.taskType,
-            attemptedProviders: [provider, 'fallback']
-          }
-        };
-      }
+      return { success: false, error: error.message };
     }
   }
 
@@ -2278,8 +2047,6 @@ class AIService {
     };
 
     switch (provider) {
-      case 'anthropic':
-        return await this.callClaude(prompt, callConfig);
       case 'groq':
         return await this.callGroq(prompt, callConfig);
       case 'gemini':
@@ -2480,86 +2247,19 @@ class AIService {
   }
 
   /**
-   * The OpenAI conversation as Anthropic content blocks.
+   * The OpenAI conversation as Gemini `contents[]`.
    *
-   * FINDING F-02 — the second half of the tool loop. This used to be one line:
+   * FINDING F-02 — the second half of the tool loop. Both message translators
+   * (this one and the Anthropic content-block translator that lived above it
+   * until 2026-09-07) used to be one line:
    *
    *   messages.map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user',
    *                        content: m.content ?? '' }))
    *
-   * which is correct for plain chat and destroys a tool loop. An assistant
-   * turn carrying `tool_calls` became an assistant turn with empty content
-   * (which Anthropic rejects outright), and the `role:"tool"` result became a
-   * `user` turn with its `tool_call_id` thrown away — so Anthropic saw a
-   * tool_use it had never been given a result for. The first tool call worked;
-   * the turn that feeds the result back did not. Every agent framework runs
-   * exactly that loop.
-   *
-   * The translation:
-   *   assistant + tool_calls[] → content blocks: the text (if any), then one
-   *     {type:"tool_use", id, name, input} per call, `input` parsed back out
-   *     of OpenAI's JSON-string `arguments`.
-   *   role:"tool"              → a user turn holding
-   *     {type:"tool_result", tool_use_id, content}. Consecutive tool results
-   *     merge into one user turn, because Anthropic wants the results for a
-   *     parallel tool_use batch in a single message.
-   *   everything else          → unchanged.
-   *
-   * System turns are the caller's job to strip (Anthropic takes `system` at
-   * the top level); they are skipped here.
-   */
-  anthropicMessagesFrom(messages) {
-    const out = [];
-
-    for (const m of messages) {
-      if (!m || m.role === 'system') continue;
-
-      if (m.role === 'tool') {
-        const block = {
-          type: 'tool_result',
-          tool_use_id: m.tool_call_id,
-          content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content ?? '')
-        };
-        const prev = out[out.length - 1];
-        if (prev && prev.role === 'user' && Array.isArray(prev.content)) {
-          prev.content.push(block);
-        } else {
-          out.push({ role: 'user', content: [block] });
-        }
-        continue;
-      }
-
-      if (m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.length > 0) {
-        const blocks = [];
-        const text = typeof m.content === 'string' ? m.content : '';
-        if (text) blocks.push({ type: 'text', text });
-        for (const tc of m.tool_calls) {
-          let input = {};
-          try {
-            const raw = tc?.function?.arguments;
-            input = typeof raw === 'string' ? (raw ? JSON.parse(raw) : {}) : (raw ?? {});
-          } catch {
-            // A model that emitted unparseable arguments is a provider problem,
-            // not a reason to drop the block and desynchronize the loop.
-            input = {};
-          }
-          blocks.push({ type: 'tool_use', id: tc?.id, name: tc?.function?.name, input });
-        }
-        out.push({ role: 'assistant', content: blocks });
-        continue;
-      }
-
-      out.push({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content ?? '' });
-    }
-
-    return out;
-  }
-
-  /**
-   * The OpenAI conversation as Gemini `contents[]`.
-   *
-   * Same finding as anthropicMessagesFrom (F-02), same collapse: every
-   * non-assistant role became `user` and every tool detail was dropped.
+   * which is correct for plain chat and destroys a tool loop: every
+   * non-assistant role became `user` and every tool detail was dropped. The
+   * first tool call worked; the turn that feeds the result back did not. Every
+   * agent framework runs exactly that loop.
    *
    *   assistant + tool_calls[] → {role:"model", parts:[{functionCall:{name,args}}]}
    *   role:"tool"              → {role:"user", parts:[{functionResponse:{name,response}}]}
@@ -2629,173 +2329,6 @@ class AIService {
     }
 
     return out;
-  }
-
-  /**
-   * Call Claude API
-   */
-  async callClaude(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = DEFAULT_MODELS.anthropic, messages = null, responseFormat = null, tools = null, toolChoice = null } = config;
-
-    // Anthropic takes `system` as a top-level field, not a message role.
-    // Extract system turns from the messages array and collapse them into a
-    // single `system` string; pass the remaining user/assistant turns as messages.
-    let systemText = '';
-    let chatMessages;
-    if (messages && Array.isArray(messages) && messages.length > 0) {
-      const systemMsgs = messages.filter(m => m.role === 'system');
-      systemText = systemMsgs.map(m => m.content ?? '').filter(Boolean).join('\n\n');
-      chatMessages = this.anthropicMessagesFrom(messages);
-      if (chatMessages.length === 0) {
-        chatMessages = [{ role: 'user', content: prompt }];
-      }
-    } else {
-      chatMessages = [{ role: 'user', content: prompt }];
-    }
-
-    try {
-      const body = {
-        model: model,
-        max_tokens: maxTokens,
-        temperature: temperature,
-        messages: chatMessages
-      };
-      if (systemText) body.system = systemText;
-
-      // Sampling controls the Messages API actually has (F-09). Anthropic
-      // offers top_p and stop_sequences; it has no seed and no presence/
-      // frequency penalties, so those two are dropped here rather than sent
-      // upstream to become a 400.
-      if (config.topP != null) body.top_p = config.topP;
-      const anthStop = stopSequencesFrom(config.stop);
-      if (anthStop) body.stop_sequences = anthStop;
-
-      // Translate OpenAI-style response_format into Anthropic's idioms.
-      // Anthropic has no native response_format field, so:
-      //   - json_object: append a "reply with valid JSON only" instruction
-      //     and prefill the assistant turn with '{' to anchor the output.
-      //   - json_schema: synthesize a tool with the schema and force it via
-      //     tool_choice; the response arrives as a tool_use block whose input
-      //     IS the schema-conformant object.
-      let forcedSchemaToolName = null;
-      if (responseFormat?.type === 'json_object') {
-        body.system = (body.system ? body.system + '\n\n' : '') +
-          'Respond with a single valid JSON object and nothing else. Do not wrap in markdown fences.';
-        body.messages = [...chatMessages, { role: 'assistant', content: '{' }];
-      } else if (responseFormat?.type === 'json_schema' && responseFormat.json_schema?.schema) {
-        forcedSchemaToolName = responseFormat.json_schema.name || 'structured_output';
-        body.tools = [{
-          name: forcedSchemaToolName,
-          description: responseFormat.json_schema.description || 'Return the user-requested structured output.',
-          input_schema: responseFormat.json_schema.schema
-        }];
-        body.tool_choice = { type: 'tool', name: forcedSchemaToolName };
-      }
-
-      // Translate OpenAI-style tools/tool_choice into Anthropic format.
-      // OpenAI: { function: { name, description, parameters } }
-      // Anthropic: { name, description, input_schema }
-      if (tools && Array.isArray(tools) && tools.length > 0) {
-        const anthTools = tools.map(t => {
-          const fn = t.function || t;
-          return {
-            name: fn.name,
-            description: fn.description || '',
-            input_schema: fn.parameters || { type: 'object', properties: {} }
-          };
-        });
-        body.tools = body.tools ? [...body.tools, ...anthTools] : anthTools;
-
-        if (!forcedSchemaToolName) {
-          // json_schema already set tool_choice; don't overwrite.
-          if (!toolChoice || toolChoice === 'auto') {
-            body.tool_choice = { type: 'auto' };
-          } else if (toolChoice === 'required') {
-            body.tool_choice = { type: 'any' };
-          } else if (toolChoice === 'none') {
-            delete body.tools;
-            delete body.tool_choice;
-          } else if (toolChoice?.type === 'function' && toolChoice.function?.name) {
-            body.tool_choice = { type: 'tool', name: toolChoice.function.name };
-          }
-        }
-      }
-
-      const response = await axios.post(`${this.providers.anthropic.baseURL}/messages`, body, {
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': this.providers.anthropic.apiKey,
-          'anthropic-version': '2023-06-01'  // Compatible with current Claude models
-        },
-        timeout: 60000
-      });
-
-      let result;
-      let toolCalls = null;
-      let finishReason = 'stop';
-      const stopReason = response.data.stop_reason;
-
-      if (forcedSchemaToolName) {
-        const toolUse = (response.data.content || []).find(b => b.type === 'tool_use' && b.name === forcedSchemaToolName);
-        if (!toolUse) {
-          throw new Error('Anthropic response missing expected tool_use block for forced schema');
-        }
-        result = JSON.stringify(toolUse.input);
-      } else if (tools && Array.isArray(tools) && tools.length > 0 && stopReason === 'tool_use') {
-        // Caller-provided tools: surface tool_use blocks as OpenAI tool_calls.
-        let useBlocks = (response.data.content || []).filter(b => b.type === 'tool_use');
-
-        // Defensive single-call collapse: when the caller pinned a specific
-        // function via tool_choice (the Instructor pattern, and anything
-        // using OpenAI's `tool_choice: {type: "function", function: {...}}`),
-        // the OpenAI contract expects exactly one entry in tool_calls.
-        // Claude *should* respect disable_parallel_tool_use, but if it ever
-        // returns extras we keep the first matching block (or the first
-        // block if none match) instead of letting multiple leak out.
-        const forcedName = toolChoice?.function?.name;
-        if (forcedName && useBlocks.length > 1) {
-          const match = useBlocks.find(b => b.name === forcedName) || useBlocks[0];
-          useBlocks = [match];
-        }
-
-        toolCalls = useBlocks.map(b => ({
-          id: b.id,
-          type: 'function',
-          function: { name: b.name, arguments: JSON.stringify(b.input) }
-        }));
-        result = (response.data.content || []).find(b => b.type === 'text')?.text ?? '';
-        finishReason = 'tool_calls';
-      } else if (responseFormat?.type === 'json_object') {
-        // Assistant prefill '{' is NOT echoed in response.content — re-attach it.
-        const text = (response.data.content || []).find(b => b.type === 'text')?.text ?? '';
-        result = '{' + text;
-      } else {
-        // Same shape as the two branches above. Blind `content[0].text` threw
-        // a TypeError whenever Anthropic's first block was not text (a
-        // max_tokens-truncated turn can start with a thinking or tool block,
-        // and `content` can be empty), and that TypeError was rethrown raw —
-        // so the rotation recorded Anthropic as failed and answered from a
-        // different provider for a response that had already arrived.
-        result = (response.data.content || []).find(b => b.type === 'text')?.text ?? '';
-      }
-
-      if (stopReason === 'max_tokens') finishReason = 'length';
-
-      return {
-        content: result,
-        inputTokens: response.data.usage?.input_tokens || 0,
-        outputTokens: response.data.usage?.output_tokens || 0,
-        toolCalls,
-        finishReason
-      };
-    } catch (error) {
-      logger.error({ err: error }, 'Claude API error');
-      if (error.response) {
-        logger.error({ status: error.response.status, data: error.response.data }, 'Claude response error details');
-        throw new Error(`Anthropic API error (${error.response.status}): ${JSON.stringify(error.response.data)}`);
-      }
-      throw error;
-    }
   }
 
   /**
@@ -3194,38 +2727,20 @@ class AIService {
     const { maxTokens = 1000, temperature = 0.7, model = DEFAULT_MODELS.cerebras, messages = null } = config;
 
     // Use provided messages array or convert prompt to messages
-    let requestMessages = messages || [
+    const requestMessages = messages || [
       {
         role: 'user',
         content: prompt
       }
     ];
 
-    // Inject prompt strategy based on family configuration
-    const promptStrategy = this.getPromptStrategy('cerebras');
-    if (promptStrategy) {
-      logger.debug(`[Cerebras] Applying prompt strategy: ${promptStrategy.substring(0, 50)}...`);
-      // Prepend strategy to the first system message, or create one
-      const systemIndex = requestMessages.findIndex(m => m.role === 'system');
-      if (systemIndex >= 0) {
-        logger.debug(`[Cerebras] Appending strategy to existing system message (index ${systemIndex})`);
-        requestMessages[systemIndex].content += promptStrategy;
-      } else {
-        logger.debug(`[Cerebras] Creating new system message with strategy`);
-        // Add as first message
-        requestMessages = [
-          { role: 'system', content: `System instructions:${promptStrategy}` },
-          ...requestMessages
-        ];
-      }
-      // Log the final system message for verification
-      const finalSystemMsg = requestMessages.find(m => m.role === 'system');
-      if (finalSystemMsg) {
-        logger.debug(`[Cerebras] Final system message length: ${finalSystemMsg.content.length} chars`);
-      }
-    } else {
-      logger.debug(`[Cerebras] No prompt strategy found for cerebras provider`);
-    }
+    // Until 2026-09-07 this adapter appended a "tool-decisive" preamble to the
+    // system turn (via families.json -> PROMPT_STRATEGIES): a codeGeek-era
+    // instruction block about executing tool calls and reading THE_STEPS.md
+    // without asking. No suite feature is a coding agent; on an Ask parse or a
+    // food-log extraction it was pure noise, and because it mutated the
+    // caller's array in place it also leaked into whichever provider answered
+    // next after a Cerebras failure. Removed outright rather than folded.
 
     try {
       const response = await axios.post(`${this.providers.cerebras.baseURL}/chat/completions`, {
