@@ -188,13 +188,23 @@ describe('no provider credential leaves this process in a URL', () => {
 
 // ───────────────────────────────────────────────────────────────────────────
 describe('every outbound models fetch is capped', () => {
-  it('gives the Groq models call a timeout like its siblings', async () => {
+  // Phase 1 (2026-09-07): every vendor listing moved out of aiService into
+  // aiCatalogDiscovery.listModels, behind one `get` helper. The rule survives
+  // in its new home: that helper must pass a timeout, and nothing in the
+  // module may call axios.get around it.
+  it('routes every vendor listing through one axios.get that carries a timeout', async () => {
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync(new URL('../services/aiCatalogDiscovery.js', import.meta.url), 'utf8');
+    const gets = src.match(/axios\.get\(/g) || [];
+    expect(gets.length).toBe(1);
+    const helper = src.slice(src.indexOf('axios.get('), src.indexOf('axios.get(') + 120);
+    expect(helper).toMatch(/timeout:\s*(\d+|LIST_TIMEOUT_MS)/);
+    expect(src).toMatch(/const LIST_TIMEOUT_MS = \d+/);
+  });
+
+  it('leaves no vendor models listing in aiService itself', async () => {
     const { readFileSync } = await import('node:fs');
     const src = readFileSync(new URL('../services/aiService.js', import.meta.url), 'utf8');
-    const groqFetch = src.slice(
-      src.indexOf("axios.get('https://api.groq.com/openai/v1/models'"),
-      src.indexOf("axios.get('https://api.groq.com/openai/v1/models'") + 320
-    );
-    expect(groqFetch).toMatch(/timeout:\s*\d+/);
+    expect(src).not.toMatch(/axios\.get\('https:\/\/[^']*\/models/);
   });
 });

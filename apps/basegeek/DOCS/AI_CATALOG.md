@@ -3,6 +3,13 @@
 **Total Providers:** 9
 **Total Models:** 35
 
+> **2026-09-07 — the model tables in this file are history, not the catalog.**
+> The catalog is written by the catalog job now; nothing seeds it from a
+> literal. Read the aiGeek page or the `AIModel` / `AIPricing` / `AIFreeTier`
+> collections for what is true, and
+> [AIGEEK_CATALOG_JOB.md](./AIGEEK_CATALOG_JOB.md) for how they get that way.
+> See **The catalog feeds itself (Phase 1, 2026-09-07)** below.
+
 <!-- API keys are stored in the database via BaseGeek UI - never commit real keys here -->
 <!-- Configure provider keys at: BaseGeek UI → AI Geek → Configuration -->
 
@@ -215,6 +222,68 @@ failure cools the row rather than the provider. See
 **This file is a snapshot, and snapshots of a free tier go stale.** Treat the
 per-provider model lists below as "what was true when someone wrote it down";
 `health.lastSuccessAt` on the row is what is true now.
+
+### The catalog feeds itself (Phase 1, 2026-09-07)
+
+The paragraph above — *"this file is a snapshot, and snapshots of a free tier go
+stale"* — was the whole problem, and it was not only true of this file. About
+3,100 lines of the AI subsystem were hand-typed claims about vendors:
+`aiService.seedInitialModels`, `aiModelCapabilitiesService.knownCapabilities`
+(~1,210 lines of per-model context windows, speed tiers and capability flags),
+`aiDirectorService.providerPricing` + `seedInitialPricing` (~45 prices),
+`aiDirectorService.seedFreeTierInformation` (~30 quota rows), `aiService.rateLimits`
+and `rotationManager.PROVIDER_LIMITS`. Three of those quota tables disagreed with
+each other. The only thing keeping any of it honest was Chef running
+`discover-free-models.js` by hand.
+
+Phase 1 of [../../../DOCS/AIGEEK_ELEVATION_PLAN.md](../../../DOCS/AIGEEK_ELEVATION_PLAN.md)
+replaced the lot with observation on a schedule. **The catalog job**
+([AIGEEK_CATALOG_JOB.md](./AIGEEK_CATALOG_JOB.md)) is the design of record:
+hourly tick, discovery every 24 h, re-probe every 6 h, one `AICatalogRun`
+document per run. It reads each provider's own `/models` listing, probes every
+free candidate under our own account through the same adapter a real call takes,
+and learns quotas from the `x-ratelimit-*` headers on real calls.
+
+**Gone from the code, and with them the reason to maintain this file by hand:**
+
+| Deleted 2026-09-07 | Was |
+|---|---|
+| `aiModelCapabilitiesService.knownCapabilities` | ~1,210 lines of per-model capability claims for nine vendors |
+| `TOOL_CALLING_CORRECTIONS` | twelve groq ids patching that table's stale `supportsFunctionCalling: false` |
+| `aiDirectorService.providerPricing`, `seedInitialPricing`, `updatePricingForNewModels` | ~45 hand-typed per-1M prices |
+| `aiDirectorService.seedFreeTierInformation` | ~30 hand-typed free-tier quota rows |
+| `POST /api/ai/director/seed-pricing`, `POST /api/ai/director/seed-free-tier` | the admin routes that wrote those tables over the catalog |
+| GraphQL `seedDirectorPricing`, `seedDirectorFreeTier` | the same, over the gateway |
+| aiGeek → Catalog → **Restore defaults** | the button that fired both |
+
+**What replaced each of them:**
+
+- *Capabilities* — `AIModel.capabilities`, written by the job from OpenRouter's
+  `supported_parameters` or from the probe. `inferCapabilities(modelId)` is the
+  fallback for a listing that says nothing, and the three adapter-fact
+  constants that remain in `aiModelCapabilitiesService`
+  (`TOOL_FORWARDING_PROVIDERS`, `JSON_SCHEMA_SUPPORTED`, `JSON_MODE_SUPPORTED`)
+  describe *our adapters*, not models: they say which parameters aiService can
+  actually put on the wire, and a pair joins one the day the adapter beside it
+  learns the parameter.
+- *Prices* — `AIPricing`, written from the listing (OpenRouter quotes per token;
+  the job multiplies by 1e6 for the per-1M unit this collection is denominated
+  in). `updateModelPricing` / `updateModelFreeTier` remain as the per-row manual
+  override for the rare exception.
+- *Quotas* — `AIFreeTier.freeLimits`, learned from response headers. Read at use
+  and never snapshotted: `aiUsageService` used to freeze a copy onto the day's
+  first `AIUsage` row, which then went stale for the rest of the day.
+  `checkIfModelAvailable`'s per-provider "critical limits" switch (which named
+  three of nine providers) is now one rule for everyone — unavailable when
+  today's requests reach `requestsPerDay` or this minute's reach
+  `requestsPerMinute`, where a zero means "not known", never "none allowed".
+- *Which models exist* — the job's discovery pass. `aiDirectorService.collectModelInformation`
+  became a plain read of `AIModel` + `AIPricing` + `AIFreeTier`; it used to call
+  every keyed vendor's listing endpoint on any director read older than 24 h,
+  spending provider quota to answer a question Mongo already knew. A vendor call
+  now happens only when an admin path asks: `POST /api/ai/models/:provider/refresh`,
+  `POST /api/ai/director/force-refresh`, GraphQL `syncProviderModels`, or
+  `collectModelInformation({ refresh: true })`.
 
 ---
 

@@ -116,69 +116,27 @@ describe('AIPricing schema', () => {
 });
 
 /**
- * Going-over 2026-09-05 — the seed data itself, not just `costForTokens`.
+ * Going-over 2026-09-05, retired 2026-09-07 — the seed table's own units.
  *
- * The unit test above pinned the arithmetic and asserted nothing about the
- * numbers fed to it, so the groq and together blocks sat in the table as the
- * vendor prices divided by 1000 — per-1K figures in a per-1M table — for as
- * long as they had existed. The effect: `/director/analyze-cost` under-reported
- * both providers by 1000x, and `recommendProvider(priority: 'cost')` ranked
- * them as effectively free against correctly-priced Gemini models.
+ * Five cases used to read `aiDirectorService.providerPricing` directly and
+ * assert two things that are true of a per-1M table whatever a vendor charges:
+ * no paid model costs a fraction of a cent per million tokens, and no single
+ * row has an input/output ratio no real price list has ever had. They existed
+ * because the groq and together blocks HAD been typed as per-1K figures in a
+ * per-1M table — `/director/analyze-cost` under-reported both by 1000x and
+ * `recommendProvider(priority: 'cost')` ranked them as effectively free
+ * against correctly-priced Gemini models. The tell was gemini-1.5-flash at
+ * `{input: 0.00035, output: 1.05}`: a 3000x ratio inside one row.
  *
- * These cases need no external price list. They assert the two things that are
- * true of a per-1M table whatever the vendor charges: no paid model costs a
- * fraction of a cent per million tokens, and no single row has an
- * input/output ratio that no real price list has ever had.
+ * The table is gone (Phase 1, DOCS/AIGEEK_ELEVATION_PLAN.md) and with it the
+ * only thing those cases could read. Nobody types a price now: the catalog job
+ * writes AIPricing from OpenRouter's listing, where `pricing` is per token and
+ * the conversion to per-1M is one multiplication by 1e6 in one place. That
+ * multiplication is where this discipline now lives, and the job's own tests
+ * are where it belongs — asserting the unit of rows a test itself just seeded
+ * proves nothing. `costForTokens` above still pins the arithmetic that reads
+ * them, and the AIPricing schema case still pins the declared unit.
  */
-describe('the seeded price table is denominated per 1M tokens', () => {
-  const table = aiDirectorService.providerPricing;
-
-  const rows = Object.entries(table).flatMap(([provider, models]) =>
-    Object.entries(models).map(([modelId, price]) => ({ provider, modelId, ...price }))
-  );
-
-  it('has rows for every provider it prices', () => {
-    expect(rows.length).toBeGreaterThan(40);
-  });
-
-  it('prices no paid model below $0.01 per million tokens', () => {
-    // A per-1K value in this table reads as 0.0002-0.002; the cheapest real
-    // per-1M price in the whole set is Gemini 2.0 Flash Lite at 0.075.
-    const suspicious = rows.filter(
-      (r) => (r.input > 0 && r.input < 0.01) || (r.output > 0 && r.output < 0.01)
-    );
-    expect(suspicious).toEqual([]);
-  });
-
-  it('has no row whose input and output differ by more than 100x', () => {
-    // gemini-1.5-flash was `{input: 0.00035, output: 1.05}` — a 3000x ratio
-    // inside one row, which is the tell that only one half was converted.
-    const lopsided = rows.filter((r) => {
-      if (!r.input || !r.output) return false;
-      const ratio = Math.max(r.input, r.output) / Math.min(r.input, r.output);
-      return ratio > 100;
-    });
-    expect(lopsided).toEqual([]);
-  });
-
-  // The reference row was `anthropic`'s cheapest (claude-3-haiku at 0.25) until
-  // the provider came out on 2026-09-07. Cohere is now the priciest thing left
-  // in the table, which makes it the same test: a block converted the wrong way
-  // (per-1K figures left in a per-1M table) puts groq at 0.00027 and fails here.
-  it('keeps groq and together in the same order of magnitude as cohere', () => {
-    const cheapestPaid = Math.min(...Object.values(table.cohere).map((p) => p.input));
-    const groqPrices = Object.values(table.groq).map((p) => p.input).filter((p) => p > 0);
-    const togetherPrices = Object.values(table.together).map((p) => p.input).filter((p) => p > 0);
-    // Groq and Together are cheaper than Cohere — but by a single order of
-    // magnitude, not by four.
-    expect(Math.min(...groqPrices)).toBeGreaterThan(cheapestPaid / 100);
-    expect(Math.min(...togetherPrices)).toBeGreaterThan(cheapestPaid / 100);
-  });
-
-  it('keeps a model whose own name says Free priced at zero', () => {
-    expect(table.together['meta-llama/Llama-3.3-70B-Instruct-Turbo-Free']).toEqual({ input: 0, output: 0 });
-  });
-});
 
 /**
  * Going-over 2026-09-05 — ordering when a model has no AIPricing row.

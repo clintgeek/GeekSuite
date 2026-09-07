@@ -37,8 +37,6 @@ import {
   SAVE_AI_CONFIG,
   TEST_AI_PROVIDER,
   RESET_AI_STATS,
-  SEED_DIRECTOR_PRICING,
-  SEED_DIRECTOR_FREE_TIER,
   SYNC_PROVIDER_MODELS,
   UPDATE_MODEL_PRICING,
   UPDATE_MODEL_FREE_TIER,
@@ -200,7 +198,6 @@ const initialState = {
   editingFreeTier: null,
 
   showResetConfirm: false,
-  showRestoreDefaultsConfirm: false,
   showResetStatsConfirm: false,
 
   appConfigs: [],
@@ -703,21 +700,12 @@ export function useAIGeek(notify) {
     }
   }, [notify, loadDirectorData]);
 
-  const restoreHardcodedDefaults = useCallback(async () => {
-    dispatch({ type: 'bulk/start' });
-    try {
-      await apolloClient.mutate({ mutation: SEED_DIRECTOR_PRICING });
-      await apolloClient.mutate({ mutation: SEED_DIRECTOR_FREE_TIER });
-      notify('Hardcoded defaults restored. Your manual selections have been overwritten.', { tone: 'warning' });
-      dispatch({ type: 'confirm/set', which: 'showRestoreDefaultsConfirm', open: false });
-      dispatch({ type: 'freeTier/clearAll' });
-      await loadDirectorData();
-    } catch (err) {
-      notify(`Failed to restore defaults: ${err.message}`, { tone: 'error' });
-    } finally {
-      dispatch({ type: 'bulk/end' });
-    }
-  }, [notify, loadDirectorData]);
+  // `restoreHardcodedDefaults` was here until 2026-09-07: it fired
+  // seedDirectorPricing + seedDirectorFreeTier, which wrote ~45 hand-typed
+  // prices and ~30 hand-typed quota rows over the catalog. Both mutations were
+  // deleted with the tables (Phase 1, DOCS/AIGEEK_ELEVATION_PLAN.md) — the
+  // catalog job discovers and probes instead, so there are no defaults to
+  // restore. Per-row overrides are still the pricing / free-tier dialogs.
 
   // ── App routing ──────────────────────────────────────────────────────────
 
@@ -1137,7 +1125,6 @@ export function useAIGeek(notify) {
     saveFreeTier,
     saveAllFreeTiers,
     resetAllFreeTiers,
-    restoreHardcodedDefaults,
     // app routing
     saveAppConfig,
     deleteAppConfig,

@@ -560,21 +560,76 @@ A dedicated pass over `apps/*/Dockerfile`, `apps/*/docker-compose.yml`, `apps/*/
 - `DOCS/BURN_QUEUE.md` — if the tree is dirty and you don't know why, this is the live
   multi-stream work log explaining it, plus how to safely resume or commit each stream.
 
-## 12. aiGeek free-tier audit (monthly, or when Ask says "did not answer in time")
+## 12. aiGeek catalog (the job runs itself; these are the manual override)
 
-The free tiers move under us. From the box:
+**There is no monthly ritual any more.** `apps/basegeek/packages/api/src/services/aiCatalogJob.js`
+runs in the basegeek process, started after `listen` in `server.js`, first tick 60 s after boot and
+hourly after that:
+
+| what | when | what it does |
+|---|---|---|
+| discovery | last one older than 24 h | per provider with a key: list models → free candidates → probe each → write `AIModel` / `AIFreeTier` / `AIPricing`; retire models the provider stopped listing; prune rows for providers off the roster |
+| re-probe | last one older than 6 h | every free row of a configured provider gets one probe; alive rows revived, dead cooled 30 d |
+
+Every run writes one `AICatalogRun` document (`kind`, `startedAt`, `finishedAt`, per-provider counts,
+`pruned`, `error`) — **even a run that failed halfway**, so "no document" means "the job did not run",
+which is the thing you actually want to be able to tell.
+
+### Is it working?
+
+```
+docker logs basegeek --since 24h | grep CatalogJob
+docker exec basegeek sh -c 'cd /app/apps/basegeek/packages/api && node -e "
+  process.env.AIGEEK_MONGODB_URI ||= process.env.MONGODB_URI;
+  const { default: R } = await import(\"./src/models/AICatalogRun.js\");
+  console.log(await R.find({}).sort({ startedAt: -1 }).limit(2).lean());
+  process.exit(0);"'
+```
+
+A healthy discovery run logs `[CatalogJob] discovery complete` with per-provider counts. A provider
+with a key and `alive: 0` is the one thing worth looking at.
+
+### The manual override
+
+Same functions, same writes — the scripts and the job share
+`src/services/aiCatalogDiscovery.js`, so they cannot produce different catalogs. Run these when a
+vendor has just changed its lineup and you do not want to wait for the tick:
 
 ```
 docker exec basegeek sh -c 'cd /app/apps/basegeek/packages/api && node scripts/discover-free-models.js'          # report
 docker exec basegeek sh -c 'cd /app/apps/basegeek/packages/api && node scripts/discover-free-models.js --sync'   # write the catalog
-docker exec basegeek sh -c 'cd /app/apps/basegeek/packages/api && node scripts/probe-free-tier.js'               # re-probe existing rows only
+docker exec basegeek sh -c 'cd /app/apps/basegeek/packages/api && node scripts/probe-free-tier.js --mark --revive'  # re-probe existing rows only
 ```
 
-Discovery asks each configured provider for its current model list, keeps the free-tier candidates
-(per-provider rules in the script header), drops non-general models (LoRA/tiny/code/translate/vision),
-probes each live (8-token budget; empty text counts as dead), and `--sync` upserts alive rows as
-`isFree` and cools dead ones 30 days. Selection at runtime also cools a row on its first hard
-failure, so a stale catalog costs one bad call per model, not one per user per day.
+Flags unchanged: `--provider a,b`, `--timeout ms`, `--all` (ignore the deny overrides), and for the
+probe `--mark` / `--revive` / `--detail`. Neither script ever deletes a row: a cooled row stays
+visible in the aiGeek UI and explains itself in `health.lastFailureCode`.
+
+### What the probe asks, and what it decides
+
+One structured extraction per candidate (a made-up vet appointment — never user data), 48-token
+budget, 8 s, sequential per provider. Empty text at HTTP 200 is **dead** (that was the gpt-oss blind
+spot). Parseable JSON with the right fields records `fitness: 'structured'`, prose records `'basic'`,
+and selection prefers structured within a provider. Nothing is excluded for being small — it is
+ranked. The old 30-term `NOT_GENERAL` name regex is gone; the only hand-typed list left is
+`src/config/aiCatalogOverrides.js` (six patterns, under 30 lines).
+
+### Quotas and cost are observed, not typed
+
+Every real call's `x-ratelimit-*` headers are written back into the row (`AIFreeTier.freeLimits` for
+the ceilings, `.observed` for what is left, debounced to one write per row per minute), and a 429
+cools the provider for exactly its own `retry-after`. Every call books one `AISpend` row per UTC day
+/ provider / app / feature — OpenRouter's own `usage.cost` where it reported one, `AIPricing`
+per-1M × tokens otherwise, 0 for free rows. **Do not add a quota or a price to a file.** If a number
+looks wrong, the fix is a probe or a header, not a table; the three tables that disagreed about
+Groq's TPM are why this section exists.
+
+### Rollback
+
+`AI_CATALOG_JOB=off` in `apps/basegeek/.env.production`, then
+`docker compose up -d --no-deps basegeek`. The job stops; the two scripts above still work; the rows
+it wrote are ordinary rows. `AI_CATALOG_DISCOVERY_HOURS` and `AI_CATALOG_PROBE_HOURS` retune it
+without switching it off.
 
 ## 13. Rotating the datastore credential (procedure; Q58 closed 2026-09-07)
 

@@ -23,8 +23,55 @@ const aiModelSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
+  /**
+   * What this model is *for*, when it is for something in particular. Written
+   * only by `aiCatalogDiscovery`: the three cheapest OpenRouter paid rows that
+   * report `structured_outputs` are tagged `paid-fallback`, which is the set
+   * Phase 2's governed paid walk may reach for once every free row is
+   * exhausted. Nothing else is ever tagged, and Phase 1 spends nothing here.
+   */
+  role: {
+    type: String,
+    enum: ['paid-fallback'],
+    default: null
+  },
+  /**
+   * Context window and output ceiling as the *provider's listing* reports them
+   * (OpenRouter's `context_length` and `top_provider.max_completion_tokens`).
+   * `capabilities.contextWindow` below is the older, hand-seeded field; these
+   * two are observed, and where both exist these win.
+   */
+  contextTokens: {
+    type: Number,
+    default: 0
+  },
+  maxOutputTokens: {
+    type: Number,
+    default: 0
+  },
   // Model capabilities
   capabilities: {
+    /**
+     * Where the rest of this block came from, or `null` when nobody observed
+     * it and every field below is a schema default.
+     *
+     * This field exists because the defaults *lie by omission*: an AIModel row
+     * written by a plain upsert reads back as a complete capabilities object
+     * claiming `maxTokens: 4096` and no JSON support, indistinguishable from a
+     * row somebody actually measured. `aiModelCapabilitiesService.looksObserved()`
+     * is the guard that tells them apart, and this is what it reads.
+     *
+     *   `openrouter-listing` — from `supported_parameters` in OpenRouter's own
+     *                          `/models` response. Machine-readable, exact.
+     *   `probe`              — from the catalog probe: the model answered, and
+     *                          `tasks.structuredOutput` says whether it did so
+     *                          in parseable JSON.
+     */
+    source: {
+      type: String,
+      enum: ['openrouter-listing', 'probe'],
+      default: null
+    },
     maxTokens: {
       type: Number,
       default: 4096

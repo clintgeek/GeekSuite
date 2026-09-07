@@ -289,7 +289,6 @@ export default function CatalogTab({
   onLimit,
   onSaveAll,
   onResetAll,
-  onRestoreDefaults,
   onEditPricing,
   onEditFreeTier,
 }) {
@@ -312,7 +311,7 @@ export default function CatalogTab({
               <Chip label={`${dirtyCount} unsaved`} color="warning" size="small" />
             )}
           </Box>
-          {/* Four buttons do not fit 390px on one line — wrap, don't clip. */}
+          {/* These do not fit 390px on one line — wrap, don't clip. */}
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
             <Button
               variant="outlined"
@@ -331,15 +330,6 @@ export default function CatalogTab({
               sx={{ minHeight: 44 }}
             >
               Reset all free tiers
-            </Button>
-            <Button
-              variant="outlined"
-              color="warning"
-              onClick={onRestoreDefaults}
-              disabled={savingBulk || directorLoading}
-              sx={{ minHeight: 44 }}
-            >
-              Restore defaults
             </Button>
             <Button
               variant="contained"

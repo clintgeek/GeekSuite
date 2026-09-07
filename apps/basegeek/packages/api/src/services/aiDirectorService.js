@@ -3,6 +3,7 @@ import AIModel from '../models/AIModel.js';
 import AIPricing from '../models/AIPricing.js';
 import AIFreeTier from '../models/AIFreeTier.js';
 import aiModelCapabilitiesService from './aiModelCapabilitiesService.js';
+import { PROVIDER_IDS } from '../config/aiProviders.js';
 import logger from '../lib/logger.js';
 
 /**
@@ -57,88 +58,31 @@ class AIDirectorService {
     return input + output;
   }
 
-  constructor() {
-    this.providerPricing = {
-      // Every price below is DOLLARS PER 1,000,000 TOKENS — the unit
-      // TOKENS_PER_PRICE_UNIT and AIPricing.priceUnit both declare. The groq
-      // and together blocks used to be the vendor prices divided by 1000
-      // (per-1K figures in a per-1M table), so `/director/analyze-cost`
-      // under-reported them 1000x and `recommendProvider(priority:'cost')`
-      // ranked them as effectively free against correctly-priced Gemini
-      // models. The tell needed no price list: gemini-1.5-flash was
-      // `{input: 0.00035, output: 1.05}` — a 3000x input/output ratio inside
-      // one row.
-      groq: {
-        'llama-3.1-8b-instant': { input: 0.27, output: 0.27 },
-        'llama-3.1-70b-versatile': { input: 0.7, output: 0.7 },
-        'llama-3.1-405b-reasoning': { input: 2, output: 2 },
-        'mixtral-8x7b-instant': { input: 0.27, output: 0.27 },
-        'gemma-2-9b-it': { input: 0.27, output: 0.27 },
-        'llama-3.3-70b-versatile': { input: 0.7, output: 0.7 },
-        'llama3-8b-8192': { input: 0.27, output: 0.27 },
-        'llama3-70b-8192': { input: 0.7, output: 0.7 },
-        'gemma2-9b-it': { input: 0.27, output: 0.27 },
-        'compound-beta': { input: 0.27, output: 0.27 },
-        'compound-beta-mini': { input: 0.27, output: 0.27 },
-        'meta-llama/llama-4-scout-17b-16e-instruct': { input: 0.7, output: 0.7 },
-        'meta-llama/llama-4-maverick-17b-128e-instruct': { input: 0.7, output: 0.7 },
-        'meta-llama/llama-guard-4-12b': { input: 0.7, output: 0.7 },
-        'meta-llama/llama-prompt-guard-2-22m': { input: 0.27, output: 0.27 },
-        'meta-llama/llama-prompt-guard-2-86m': { input: 0.27, output: 0.27 },
-        'qwen/qwen3-32b': { input: 0.7, output: 0.7 },
-        'moonshotai/kimi-k2-instruct': { input: 0.7, output: 0.7 },
-        'openai/gpt-oss-20b': { input: 0.7, output: 0.7 },
-        'openai/gpt-oss-120b': { input: 2, output: 2 },
-        'allam-2-7b': { input: 0.27, output: 0.27 },
-        'deepseek-r1-distill-llama-70b': { input: 0.7, output: 0.7 },
-        'whisper-large-v3': { input: 0.27, output: 0.27 },
-        'whisper-large-v3-turbo': { input: 0.27, output: 0.27 },
-        'distil-whisper-large-v3-en': { input: 0.27, output: 0.27 },
-        'playai-tts': { input: 0.27, output: 0.27 },
-        'playai-tts-arabic': { input: 0.27, output: 0.27 }
-      },
-      gemini: {
-        'gemini-1.5-flash': { input: 0.35, output: 1.05 },
-        'gemini-1.5-pro': { input: 3.5, output: 10.5 },
-        'gemini-pro': { input: 0.5, output: 1.5 },
-        'gemini-2.0-flash': { input: 0.1, output: 0.4 },
-        'gemini-2.0-flash-lite': { input: 0.075, output: 0.3 },
-        'gemini-2.5-flash': { input: 0.3, output: 2.5 },
-        'gemini-2.5-flash-lite': { input: 0.1, output: 0.4 },
-        'gemini-2.5-pro': { input: 1.25, output: 10 },
-        'gemini-flash-latest': { input: 0.3, output: 2.5 },
-        'gemini-flash-lite-latest': { input: 0.1, output: 0.4 }
-      },
-      together: {
-        'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free': { input: 0, output: 0 },
-        'meta-llama/Llama-3.1-8B-Instruct': { input: 0.2, output: 0.2 },
-        'togethercomputer/llama-3.1-8b-instruct': { input: 0.2, output: 0.2 },
-        'deepseek-ai/DeepSeek-R1-Distill-Llama-70B-free': { input: 0, output: 0 }
-      },
-      cohere: {
-        'command-r-plus-08-2024': { input: 2.5, output: 10.0 }
-      },
-      openrouter: {
-        'qwen/qwen3-235b-a22b:free': { input: 0.0, output: 0.0 }
-      },
-      cerebras: {
-        'qwen-3-235b-a22b-instruct-2507': { input: 0.0, output: 0.0 }
-      },
-      cloudflare: {
-        '@cf/openai/gpt-oss-120b': { input: 0.0, output: 0.0 }
-      },
-      ollama: {
-        'qwen3-coder:480b-cloud': { input: 0.0, output: 0.0 }
-      },
-      llmgateway: {
-        'llama-4-maverick-free': { input: 0.0, output: 0.0 }
-      }
-    };
-  }
-
-  async collectModelInformation() {
+  /**
+   * collectModelInformation — the catalog as the database has it.
+   *
+   * Until 2026-09-07 this method fanned out a live `models` call to every
+   * enabled vendor whose catalog was more than 24 h old, on every director
+   * read: `/director/models`, `/director/free-models`, `/director/recommend`,
+   * `/director/analyze-cost`, their GraphQL twins and StoryGeek's epub
+   * pipeline all spent provider quota to answer a question Mongo already knew.
+   * It also ran one `updateModelCapabilities` upsert per model per call, and
+   * seeded prices out of a hand-typed table, mid-read.
+   *
+   * Phase 1 makes it a read: `AIModel` (active) + `AIPricing` + `AIFreeTier`,
+   * three indexed queries per provider and nothing written. The catalog job
+   * (DOCS/AIGEEK_CATALOG_JOB.md) is what keeps those rows current now.
+   *
+   * `{ refresh: true }` is the one door back to the old behaviour — a vendor
+   * listing call for each keyed, enabled provider whose rows are stale. Only
+   * an admin path may pass it; the ordinary reads never do.
+   */
+  async collectModelInformation(options = {}) {
+    const refresh = options?.refresh === true;
     try {
-      // Wait for aiService to finish loading configs from DB
+      // aiService owns the provider keys, and hasApiKey/isEnabled below are
+      // read off it — so a director read that lands during boot has to wait for
+      // them or it reports a catalog nobody can reach.
       if (!aiService.initialized) {
         logger.info('AI Director waiting for aiService to initialize...');
         let attempts = 0;
@@ -153,91 +97,64 @@ class AIDirectorService {
         }
       }
 
-      logger.info('Starting AI Director collectModelInformation...');
-      // config/aiProviders.js is the one roster; this list is the subset the
-      // director prices and scores. `llm7` was in it until 2026-09-05, three
-      // months after the provider was retired from every other surface;
-      // `anthropic` came out 2026-09-07 with the provider itself.
-      const providers = ['groq', 'gemini', 'together', 'cohere', 'openrouter', 'cerebras', 'cloudflare', 'ollama', 'llmgateway'];
+      // config/aiProviders.js is the one roster. This used to be a copy of it
+      // typed out here, which is how `llm7` stayed in the walk for three months
+      // after the provider was retired everywhere else.
       const modelInfo = {};
 
-      for (const provider of providers) {
-        logger.info(`Processing provider: ${provider}`);
-
-        // Check if provider has API key and is enabled
+      for (const provider of PROVIDER_IDS) {
         const hasApiKey = !!aiService.providers[provider]?.apiKey;
         const isEnabled = aiService.providers[provider]?.enabled === true;
 
-        logger.info(`${provider} - hasApiKey: ${hasApiKey}, isEnabled: ${isEnabled}`);
-
-        // Only refresh from API if we have no models in database or if it's been more than 24 hours
-        const existingModels = await aiService.getModels(provider);
-        const shouldRefresh = existingModels.length === 0 || await this.shouldRefreshProvider(provider);
-
-        if (hasApiKey && isEnabled && shouldRefresh) {
+        if (refresh && hasApiKey && isEnabled) {
           try {
-            logger.info(`Refreshing models for ${provider} from API...`);
-            await aiService.refreshModels(provider);
+            if (await this.shouldRefreshProvider(provider)) {
+              logger.info(`Refreshing models for ${provider} from API...`);
+              await aiService.refreshModels(provider);
+            }
           } catch (error) {
-            logger.info({ err: error }, `Failed to refresh ${provider} models`);
+            logger.warn({ err: error }, `Failed to refresh ${provider} models`);
           }
-        } else {
-          logger.info(`Using cached models for ${provider} (${existingModels.length} models found)`);
         }
 
-        // Get models from database (now potentially updated)
-        const models = await aiService.getModels(provider);
-        logger.info(`${provider} - found ${models.length} models`);
-
-        // Get pricing from database
-        const pricingData = await AIPricing.find({
-          provider,
-          isActive: true
-        });
-        logger.info(`${provider} - found ${pricingData.length} pricing records`);
+        const [modelRows, pricingRows, freeTierRows] = await Promise.all([
+          AIModel.find({ provider, isActive: true }).sort({ name: 1 }).lean(),
+          AIPricing.find({ provider, isActive: true }).lean(),
+          AIFreeTier.find({ provider }).lean()
+        ]);
 
         const pricingMap = {};
-        pricingData.forEach(pricing => {
+        for (const pricing of pricingRows) {
           pricingMap[pricing.modelId] = {
             input: pricing.inputPrice,
             output: pricing.outputPrice
           };
-        });
-
-        // Update pricing for any new models that don't have pricing
-        await this.updatePricingForNewModels();
-
-        // Update capabilities for all models
-        for (const model of models) {
-          await aiModelCapabilitiesService.updateModelCapabilities(provider, model.id);
         }
 
-        // Get free tier information
-        const freeTierData = await AIFreeTier.find({ provider });
-        logger.info(`${provider} - found ${freeTierData.length} free tier records`);
-
         const freeTierMap = {};
-        freeTierData.forEach(freeTier => {
+        for (const freeTier of freeTierRows) {
           freeTierMap[freeTier.modelId] = {
             isFree: freeTier.isFree,
             limits: freeTier.freeLimits,
             notes: freeTier.notes
           };
-        });
+        }
 
         modelInfo[provider] = {
-          models: models.map(model => {
-            logger.debug(`Processing model: ${model.id} (${typeof model.id})`);
-            const capabilities = model.capabilities || aiModelCapabilitiesService.inferCapabilities(model.id);
-            return {
-              id: model.id,
-              name: model.name,
-              pricing: pricingMap[model.id] || { input: 'Unknown', output: 'Unknown' },
-              freeTier: freeTierMap[model.id] || { isFree: false, limits: {}, notes: '' },
-              capabilities
-            };
-          }),
-          totalModels: models.length,
+          models: modelRows.map(row => ({
+            id: row.modelId,
+            name: row.name,
+            // 'Unknown' rather than 0 for a model with no AIPricing row: a
+            // missing price is not a free one, and numericPrice sorts it last.
+            pricing: pricingMap[row.modelId] || { input: 'Unknown', output: 'Unknown' },
+            freeTier: freeTierMap[row.modelId] || { isFree: false, limits: {}, notes: '' },
+            // What the row was observed to do, with our adapter facts layered
+            // on; inference fills in for a row the job has not reached yet.
+            capabilities: aiModelCapabilitiesService.getCapabilities(
+              provider, row.modelId, row.capabilities
+            )
+          })),
+          totalModels: modelRows.length,
           hasApiKey,
           isEnabled
         };
@@ -248,7 +165,7 @@ class AIDirectorService {
         data: {
           providers: modelInfo,
           summary: {
-            totalProviders: providers.length,
+            totalProviders: PROVIDER_IDS.length,
             totalModels: Object.values(modelInfo).reduce((sum, provider) => sum + provider.totalModels, 0),
             providersWithKeys: Object.values(modelInfo).filter(p => p.hasApiKey).length,
             enabledProviders: Object.values(modelInfo).filter(p => p.isEnabled).length
@@ -256,12 +173,7 @@ class AIDirectorService {
         }
       };
 
-      logger.info({
-        success: result.success,
-        dataKeys: Object.keys(result.data),
-        providersCount: Object.keys(result.data.providers).length,
-        summary: result.data.summary
-      }, 'AI Director result structure');
+      logger.debug({ refresh, summary: result.data.summary }, 'AI Director catalog read');
 
       return result;
     } catch (error) {
@@ -273,110 +185,6 @@ class AIDirectorService {
           details: error.message
         }
       };
-    }
-  }
-
-  async seedInitialPricing() {
-    try {
-      const initialPricing = [
-        // Groq models
-        { provider: 'groq', modelId: 'llama-3.1-8b-instant', inputPrice: 0.27, outputPrice: 0.27 },
-        { provider: 'groq', modelId: 'llama-3.1-70b-versatile', inputPrice: 0.7, outputPrice: 0.7 },
-        { provider: 'groq', modelId: 'llama-3.1-405b-reasoning', inputPrice: 2, outputPrice: 2 },
-        { provider: 'groq', modelId: 'mixtral-8x7b-instant', inputPrice: 0.27, outputPrice: 0.27 },
-        { provider: 'groq', modelId: 'gemma-2-9b-it', inputPrice: 0.27, outputPrice: 0.27 },
-        { provider: 'groq', modelId: 'llama-3.3-70b-versatile', inputPrice: 0.7, outputPrice: 0.7 },
-        { provider: 'groq', modelId: 'llama3-8b-8192', inputPrice: 0.27, outputPrice: 0.27 },
-        { provider: 'groq', modelId: 'llama3-70b-8192', inputPrice: 0.7, outputPrice: 0.7 },
-        { provider: 'groq', modelId: 'gemma2-9b-it', inputPrice: 0.27, outputPrice: 0.27 },
-        { provider: 'groq', modelId: 'compound-beta', inputPrice: 0.27, outputPrice: 0.27 },
-        { provider: 'groq', modelId: 'compound-beta-mini', inputPrice: 0.27, outputPrice: 0.27 },
-        { provider: 'groq', modelId: 'meta-llama/llama-4-scout-17b-16e-instruct', inputPrice: 0.7, outputPrice: 0.7 },
-        { provider: 'groq', modelId: 'meta-llama/llama-4-maverick-17b-128e-instruct', inputPrice: 0.7, outputPrice: 0.7 },
-        { provider: 'groq', modelId: 'meta-llama/llama-guard-4-12b', inputPrice: 0.7, outputPrice: 0.7 },
-        { provider: 'groq', modelId: 'meta-llama/llama-prompt-guard-2-22m', inputPrice: 0.27, outputPrice: 0.27 },
-        { provider: 'groq', modelId: 'meta-llama/llama-prompt-guard-2-86m', inputPrice: 0.27, outputPrice: 0.27 },
-        { provider: 'groq', modelId: 'qwen/qwen3-32b', inputPrice: 0.7, outputPrice: 0.7 },
-        { provider: 'groq', modelId: 'moonshotai/kimi-k2-instruct', inputPrice: 0.7, outputPrice: 0.7 },
-        { provider: 'groq', modelId: 'openai/gpt-oss-20b', inputPrice: 0.7, outputPrice: 0.7 },
-        { provider: 'groq', modelId: 'openai/gpt-oss-120b', inputPrice: 2, outputPrice: 2 },
-        { provider: 'groq', modelId: 'allam-2-7b', inputPrice: 0.27, outputPrice: 0.27 },
-        { provider: 'groq', modelId: 'deepseek-r1-distill-llama-70b', inputPrice: 0.7, outputPrice: 0.7 },
-        { provider: 'groq', modelId: 'whisper-large-v3', inputPrice: 0.27, outputPrice: 0.27 },
-        { provider: 'groq', modelId: 'whisper-large-v3-turbo', inputPrice: 0.27, outputPrice: 0.27 },
-        { provider: 'groq', modelId: 'distil-whisper-large-v3-en', inputPrice: 0.27, outputPrice: 0.27 },
-        { provider: 'groq', modelId: 'playai-tts', inputPrice: 0.27, outputPrice: 0.27 },
-        { provider: 'groq', modelId: 'playai-tts-arabic', inputPrice: 0.27, outputPrice: 0.27 },
-
-        // Gemini models
-        { provider: 'gemini', modelId: 'gemini-1.5-flash', inputPrice: 0.35, outputPrice: 1.05 },
-        { provider: 'gemini', modelId: 'gemini-1.5-pro', inputPrice: 3.5, outputPrice: 10.5 },
-        { provider: 'gemini', modelId: 'gemini-pro', inputPrice: 0.5, outputPrice: 1.5 },
-        { provider: 'gemini', modelId: 'gemini-2.0-flash', inputPrice: 0.1, outputPrice: 0.4 },
-        { provider: 'gemini', modelId: 'gemini-2.0-flash-lite', inputPrice: 0.075, outputPrice: 0.3 },
-        { provider: 'gemini', modelId: 'gemini-2.5-flash', inputPrice: 0.3, outputPrice: 2.5 },
-        { provider: 'gemini', modelId: 'gemini-2.5-flash-lite', inputPrice: 0.1, outputPrice: 0.4 },
-        { provider: 'gemini', modelId: 'gemini-2.5-pro', inputPrice: 1.25, outputPrice: 10 },
-        // Stability aliases — priced as current GA flash so cost-based routing
-        // and StoryGeek's pinned GM don't show 'Unknown'.
-        { provider: 'gemini', modelId: 'gemini-flash-latest', inputPrice: 0.3, outputPrice: 2.5 },
-        { provider: 'gemini', modelId: 'gemini-flash-lite-latest', inputPrice: 0.1, outputPrice: 0.4 },
-
-        // Together.ai models
-        { provider: 'together', modelId: 'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free', inputPrice: 0, outputPrice: 0 },
-        { provider: 'together', modelId: 'meta-llama/Llama-3.1-8B-Instruct', inputPrice: 0.2, outputPrice: 0.2 },
-        { provider: 'together', modelId: 'togethercomputer/llama-3.1-8b-instruct', inputPrice: 0.2, outputPrice: 0.2 }
-      ];
-
-      for (const pricing of initialPricing) {
-        await AIPricing.findOneAndUpdate(
-          { provider: pricing.provider, modelId: pricing.modelId },
-          {
-            inputPrice: pricing.inputPrice,
-            outputPrice: pricing.outputPrice,
-            lastUpdated: new Date(),
-            isActive: true
-          },
-          { upsert: true, new: true }
-        );
-      }
-
-      logger.info('Initial AI pricing seeded successfully');
-    } catch (error) {
-      logger.error({ err: error }, 'Failed to seed initial pricing');
-    }
-  }
-
-    async updatePricingForNewModels() {
-    try {
-      // Get all models from database
-      const allModels = await AIModel.find({ isActive: true });
-
-      for (const model of allModels) {
-        // Check if pricing exists for this model
-        const existingPricing = await AIPricing.findOne({
-          provider: model.provider,
-          modelId: model.modelId
-        });
-
-        if (!existingPricing) {
-          // Try to find pricing in our hardcoded data
-          const hardcodedPricing = this.providerPricing[model.provider]?.[model.modelId];
-
-          if (hardcodedPricing) {
-            await AIPricing.create({
-              provider: model.provider,
-              modelId: model.modelId,
-              inputPrice: hardcodedPricing.input,
-              outputPrice: hardcodedPricing.output,
-              isActive: true
-            });
-            logger.info(`Added pricing for ${model.provider}/${model.modelId}`);
-          }
-        }
-      }
-    } catch (error) {
-      logger.error({ err: error }, 'Failed to update pricing for new models');
     }
   }
 
@@ -417,412 +225,6 @@ class AIDirectorService {
     } catch (error) {
       logger.error({ err: error }, `Error checking refresh status for ${provider}`);
       return true; // Default to refreshing if there's an error
-    }
-  }
-
-  async seedFreeTierInformation() {
-    try {
-      logger.info('Seeding free tier information...');
-      const freeTierData = [
-        // Groq Free Tier - ALL models are free
-        // UPDATED: Real-world testing shows ~30 req/min throttle (not 50)
-        // Based on https://console.groq.com/docs/rate-limits + actual usage
-        {
-          provider: 'groq',
-          modelId: 'allam-2-7b',
-          isFree: true,
-          freeLimits: {
-            requestsPerMinute: 30,  // Conservative: real limit triggers here
-            requestsPerDay: 14400,
-            tokensPerMinute: 18000,
-            tokensPerDay: 5184000
-          },
-          notes: 'Free tier - Groq throttles aggressively at ~30 req/min'
-        },
-        {
-          provider: 'groq',
-          modelId: 'compound-beta',
-          isFree: true,
-          freeLimits: {
-            requestsPerMinute: 30,
-            requestsPerDay: 14400,
-            tokensPerMinute: 18000,
-            tokensPerDay: 5184000
-          },
-          notes: 'Free tier - Groq throttles aggressively at ~30 req/min'
-        },
-        {
-          provider: 'groq',
-          modelId: 'compound-beta-mini',
-          isFree: true,
-          freeLimits: {
-            requestsPerMinute: 30,
-            requestsPerDay: 14400,
-            tokensPerMinute: 18000,
-            tokensPerDay: 5184000
-          },
-          notes: 'Free tier - Groq throttles aggressively at ~30 req/min'
-        },
-        {
-          provider: 'groq',
-          modelId: 'deepseek-r1-distill-llama-70b',
-          isFree: true,
-          freeLimits: {
-            requestsPerMinute: 30,
-            requestsPerDay: 14400,
-            tokensPerMinute: 18000,
-            tokensPerDay: 5184000
-          },
-          notes: 'Free tier - Groq throttles aggressively at ~30 req/min'
-        },
-        {
-          provider: 'groq',
-          modelId: 'distil-whisper-large-v3-en',
-          isFree: true,
-          freeLimits: {
-            requestsPerMinute: 30,
-            requestsPerDay: 14400,
-            tokensPerMinute: 18000,
-            tokensPerDay: 5184000,
-            audioSecondsPerHour: 7200,
-            audioSecondsPerDay: 28800
-          },
-          notes: 'Free tier - Audio transcription'
-        },
-        {
-          provider: 'groq',
-          modelId: 'gemma2-9b-it',
-          isFree: true,
-          freeLimits: {
-            requestsPerMinute: 30,
-            requestsPerDay: 14400,
-            tokensPerMinute: 18000,
-            tokensPerDay: 5184000
-          },
-          notes: 'Free tier - Groq throttles aggressively at ~30 req/min'
-        },
-        {
-          provider: 'groq',
-          modelId: 'llama-3.1-8b-instant',
-          isFree: true,
-          freeLimits: {
-            requestsPerMinute: 30,
-            requestsPerDay: 14400,
-            tokensPerMinute: 18000,
-            tokensPerDay: 5184000
-          },
-          notes: 'Free tier - Fast 8B model'
-        },
-        {
-          provider: 'groq',
-          modelId: 'llama-3.3-70b-versatile',
-          isFree: true,
-          freeLimits: {
-            requestsPerMinute: 30,
-            requestsPerDay: 14400,
-            tokensPerMinute: 18000,
-            tokensPerDay: 5184000
-          },
-          notes: 'Free tier - PRIMARY recommended model for CodeGeek'
-        },
-        {
-          provider: 'groq',
-          modelId: 'llama3-70b-8192',
-          isFree: true,
-          freeLimits: {
-            requestsPerMinute: 30,
-            requestsPerDay: 14400,
-            tokensPerMinute: 18000,
-            tokensPerDay: 5184000
-          },
-          notes: 'Free tier - Older 70B model'
-        },
-        {
-          provider: 'groq',
-          modelId: 'llama3-8b-8192',
-          isFree: true,
-          freeLimits: {
-            requestsPerMinute: 30,
-            requestsPerDay: 14400,
-            tokensPerMinute: 18000,
-            tokensPerDay: 5184000
-          },
-          notes: 'Free tier - Older 8B model'
-        },
-        {
-          provider: 'groq',
-          modelId: 'meta-llama/llama-4-maverick-17b-128e-instruct',
-          isFree: true,
-          freeLimits: {
-            requestsPerMinute: 30,
-            requestsPerDay: 14400,
-            tokensPerMinute: 18000,
-            tokensPerDay: 5184000
-          },
-          notes: 'Free tier - New Llama 4 (128E MOE)'
-        },
-        {
-          provider: 'groq',
-          modelId: 'meta-llama/llama-4-scout-17b-16e-instruct',
-          isFree: true,
-          freeLimits: {
-            requestsPerMinute: 30,
-            requestsPerDay: 14400,
-            tokensPerMinute: 18000,
-            tokensPerDay: 5184000
-          },
-          notes: 'Free tier - New Llama 4 (16E MOE)'
-        },
-        {
-          provider: 'groq',
-          modelId: 'meta-llama/llama-guard-4-12b',
-          isFree: true,
-          freeLimits: {
-            requestsPerMinute: 30,
-            requestsPerDay: 14400,
-            tokensPerMinute: 18000,
-            tokensPerDay: 5184000
-          },
-          notes: 'Free tier - Content moderation model'
-        },
-        {
-          provider: 'groq',
-          modelId: 'meta-llama/llama-prompt-guard-2-22m',
-          isFree: true,
-          freeLimits: {
-            requestsPerMinute: 30,
-            requestsPerDay: 14400,
-            tokensPerMinute: 18000,
-            tokensPerDay: 5184000
-          },
-          notes: 'Free tier - Prompt injection detection'
-        },
-        {
-          provider: 'groq',
-          modelId: 'meta-llama/llama-prompt-guard-2-86m',
-          isFree: true,
-          freeLimits: {
-            requestsPerMinute: 30,
-            requestsPerDay: 14400,
-            tokensPerMinute: 18000,
-            tokensPerDay: 5184000
-          },
-          notes: 'Free tier - Prompt injection detection'
-        },
-        {
-          provider: 'groq',
-          modelId: 'moonshotai/kimi-k2-instruct',
-          isFree: true,
-          freeLimits: {
-            requestsPerMinute: 30,
-            requestsPerDay: 14400,
-            tokensPerMinute: 18000,
-            tokensPerDay: 5184000
-          },
-          notes: 'Free tier - Good for long context tasks'
-        },
-        {
-          provider: 'groq',
-          modelId: 'openai/gpt-oss-120b',
-          isFree: true,
-          freeLimits: {
-            requestsPerMinute: 30,
-            requestsPerDay: 14400,
-            tokensPerMinute: 18000,
-            tokensPerDay: 5184000
-          },
-          notes: 'Free tier - Large 120B reasoning model'
-        },
-        {
-          provider: 'groq',
-          modelId: 'openai/gpt-oss-20b',
-          isFree: true,
-          freeLimits: {
-            requestsPerMinute: 30,
-            requestsPerDay: 14400,
-            tokensPerMinute: 18000,
-            tokensPerDay: 5184000
-          },
-          notes: 'Free tier - 20B OpenAI-style model'
-        },
-        {
-          provider: 'groq',
-          modelId: 'playai-tts',
-          isFree: true,
-          freeLimits: {
-            requestsPerMinute: 30,
-            requestsPerDay: 14400,
-            tokensPerMinute: 18000,
-            tokensPerDay: 5184000,
-            audioSecondsPerHour: 7200,
-            audioSecondsPerDay: 28800
-          },
-          notes: 'Free tier - Text-to-speech generation'
-        },
-        {
-          provider: 'groq',
-          modelId: 'playai-tts-arabic',
-          isFree: true,
-          freeLimits: {
-            requestsPerMinute: 30,
-            requestsPerDay: 14400,
-            tokensPerMinute: 18000,
-            tokensPerDay: 5184000,
-            audioSecondsPerHour: 7200,
-            audioSecondsPerDay: 28800
-          },
-          notes: 'Free tier - Arabic text-to-speech'
-        },
-        {
-          provider: 'groq',
-          modelId: 'qwen/qwen3-32b',
-          isFree: true,
-          freeLimits: {
-            requestsPerMinute: 30,
-            requestsPerDay: 14400,
-            tokensPerMinute: 18000,
-            tokensPerDay: 5184000
-          },
-          notes: 'Free tier - Qwen3 32B model'
-        },
-        {
-          provider: 'groq',
-          modelId: 'whisper-large-v3',
-          isFree: true,
-          freeLimits: {
-            requestsPerMinute: 30,
-            requestsPerDay: 14400,
-            tokensPerMinute: 18000,
-            tokensPerDay: 5184000,
-            audioSecondsPerHour: 7200,
-            audioSecondsPerDay: 28800
-          },
-          notes: 'Free tier - BEST audio transcription for CodeGeek'
-        },
-        {
-          provider: 'groq',
-          modelId: 'whisper-large-v3-turbo',
-          isFree: true,
-          freeLimits: {
-            requestsPerMinute: 30,
-            requestsPerDay: 14400,
-            tokensPerMinute: 18000,
-            tokensPerDay: 5184000,
-            audioSecondsPerHour: 7200,
-            audioSecondsPerDay: 28800
-          },
-          notes: 'Free tier - Faster audio transcription'
-        },
-
-        // Gemini Free Tier
-        // UPDATED Aug 2026: 1.5-family is RETIRED upstream (404s) — flipped
-        // to isFree:false so free-only routing never selects a dead model.
-        // The live free entry is gemini-flash-latest, Google's stability
-        // alias for the current GA flash — matches the curated production
-        // records, so a seed re-run cannot corrupt them.
-        {
-          provider: 'gemini',
-          modelId: 'gemini-1.5-flash',
-          isFree: false,
-          freeLimits: {},
-          notes: 'RETIRED upstream — do not route here'
-        },
-        {
-          provider: 'gemini',
-          modelId: 'gemini-flash-latest',
-          isFree: true,
-          freeLimits: {},
-          notes: 'Free tier - stability alias for current GA flash; StoryGeek pinned GM model'
-        },
-        {
-          provider: 'gemini',
-          modelId: 'gemini-flash-lite-latest',
-          isFree: true,
-          freeLimits: {},
-          notes: 'Free tier - lite alias'
-        },
-
-        // Together.ai Free Tier Models
-        // UPDATED: Conservative estimates based on "Free" designation
-        // Together claims "up to 60 RPM" but free models may have lower actual limits
-        {
-          provider: 'together',
-          modelId: 'meta-llama/Llama-Vision-Free',
-          isFree: true,
-          freeLimits: {
-            requestsPerMinute: 60,
-            requestsPerDay: 14400, // 60 RPM * 24 hours * 10 minutes (conservative)
-            tokensPerMinute: 60000,
-            tokensPerDay: 1000000   // Conservative daily limit
-          },
-          notes: 'Free tier - Vision model (60 RPM)'
-        },
-        {
-          provider: 'together',
-          modelId: 'deepseek-ai/DeepSeek-R1-Distill-Llama-70B-free',
-          isFree: true,
-          freeLimits: {
-            requestsPerMinute: 60,
-            requestsPerDay: 14400,
-            tokensPerMinute: 60000,
-            tokensPerDay: 1000000
-          },
-          notes: 'Free tier - BEST reasoning fallback for CodeGeek when Groq throttles'
-        },
-        {
-          provider: 'together',
-          modelId: 'lgai/exaone-deep-32b',
-          isFree: true,
-          freeLimits: {
-            requestsPerMinute: 60,
-            requestsPerDay: 14400,
-            tokensPerMinute: 60000,
-            tokensPerDay: 1000000
-          },
-          notes: 'Free tier - EXAONE Deep 32B (60 RPM)'
-        },
-        {
-          provider: 'together',
-          modelId: 'lgai/exaone-3-5-32b-instruct',
-          isFree: true,
-          freeLimits: {
-            requestsPerMinute: 60,
-            requestsPerDay: 14400,
-            tokensPerMinute: 60000,
-            tokensPerDay: 1000000
-          },
-          notes: 'Free tier - EXAONE 3.5 32B (60 RPM)'
-        },
-        {
-          provider: 'together',
-          modelId: 'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free',
-          isFree: true,
-          freeLimits: {
-            requestsPerMinute: 60,
-            requestsPerDay: 14400,
-            tokensPerMinute: 60000,
-            tokensPerDay: 1000000
-          },
-          notes: 'Free tier - Llama 3.3 70B (rotating availability, 60 RPM)'
-        }
-      ];
-
-      for (const freeTier of freeTierData) {
-        await AIFreeTier.findOneAndUpdate(
-          { provider: freeTier.provider, modelId: freeTier.modelId },
-          {
-            isFree: freeTier.isFree,
-            freeLimits: freeTier.freeLimits,
-            notes: freeTier.notes
-          },
-          { upsert: true, new: true }
-        );
-      }
-
-      logger.info('Free tier information seeded successfully');
-      logger.info(`Seeded ${freeTierData.length} free tier records`);
-    } catch (error) {
-      logger.error({ err: error }, 'Failed to seed free tier information');
     }
   }
 

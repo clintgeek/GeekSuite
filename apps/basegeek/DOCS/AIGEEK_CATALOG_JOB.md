@@ -1,7 +1,69 @@
 # aiGeek catalog job — design of record
 
-Written 2026-09-07 (Sage) as the Phase 1 brief of `DOCS/AIGEEK_ELEVATION_PLAN.md`. Once built, this
-file describes how the job actually works; keep it current.
+Written 2026-09-07 (Sage) as the Phase 1 brief of `DOCS/AIGEEK_ELEVATION_PLAN.md`. **Built the same
+day**; this file now describes how the job actually works. Keep it current.
+
+## Built, and where it differs from the brief
+
+Everything below is as specified except these, which are the decisions the build had to make. Each
+is deliberate and each is explained where it happens in the code.
+
+1. **`aiCatalogDiscovery.js` owns more than the brief listed.** As well as the moved script
+   functions it carries `listedRows` (every model a provider lists, so `AIModel` stays current and
+   `deactivateUnlisted` has something to compare against), `openRouterCatalog`, `syncResults` (the
+   one writer, shared by the job and by `--sync`, so the scheduled run and the manual override
+   cannot write different catalogs), `summarizeByProvider` (what the run document records), and
+   `parseRateLimitHeaders` / `parseResetToMs`. `aiService.recordObservedLimits` calls the last two
+   rather than parsing headers itself: the parsing is pure and belongs where it can be tested
+   without a service.
+2. **`aiService.rateLimits` is not deleted — it is emptied.** `checkRateLimit`,
+   `updateRateLimitUsage` and every hand-typed RPM/TPM/RPD number are gone, and the property starts
+   as `{}`, filled only by `markRateLimited` from a real 429 (`{ [provider]: { rateLimitedUntil } }`)
+   and read only by the new `isRateLimited`. Two reasons: `routes/aiRoutes.js` reads
+   `aiService.rateLimits[provider]` and would have thrown on `undefined`, and
+   `aiFreeTierRouting.test.js` (which must stay green with additive changes only) iterates it
+   between cases. An empty object satisfies both and still deletes the declared numbers, which was
+   the point.
+3. **OpenRouter is sent `usage: { include: true }`.** The brief said `usage.cost` needs no request
+   flag. It is a documented OpenRouter request field, it costs nothing, and it is the only way the
+   ledger can price what an *auto-router* actually used — `openrouter/free` does not say which model
+   answered until it answers. `costUsd` is `null` (not 0) when the provider reported nothing, so
+   "unknown" and "free" stay distinguishable.
+4. **`markRateLimited` honours `retry-after`** via a new `aiService.retryAfterFrom(error)`, and the
+   429 branch of `callAI` passes it. It also no longer needs a pre-existing bucket to write into.
+5. **The probe's envelope unwrap uses the observed key as the schema name.** The probe sends no
+   schema, so there is no schema name for `unwrapSchemaEnvelope` to match; a wrapped answer has
+   exactly one key, and handing that key in as the name reuses the runner's own unwrapper without
+   copying it.
+6. **`AISpend` writes retry once on E11000.** Two calls in the same millisecond both find no
+   document and both try to insert; the unique index refuses the loser. Without the retry a burst
+   silently loses calls from the one collection that has to add up. `recordSpend` returns its
+   (never-rejecting) promise so a test can await the write instead of guessing at ticks.
+7. **`capabilities.source`** (`'openrouter-listing' | 'probe'`) is stamped on every `AIModel`
+   capability write, at the request of the agent that rewrote `aiModelCapabilitiesService`: the
+   schema gives every capability field a default, so an unobserved row reads back as a confident
+   claim. `source` is what `looksObserved()` reads. `capabilities.tasks.structuredOutput` is set
+   from the *probe* (can it produce JSON when asked) while `supportsJSONSchema` / `supportsJSONMode`
+   are only ever set from a listing (does it support `response_format` natively) — two different
+   questions that the old table conflated.
+8. **The deny overrides gained `-vl[-:]`** alongside `vision`: `qwen3-vl:235b` is a vision head that
+   answers text fine and would otherwise have been ranked as a general assistant. Still six
+   patterns, still under 30 lines.
+9. **`updateStats` lost a per-call `AIFreeTier` lookup and an `AIUsage.findOne`.** The latter
+   compared a Date field to `new Date().toDateString()`, so it never matched and the branch it
+   guarded never ran. Cost is resolved once, from the response or from `AIPricing` (cached ten
+   minutes), and a call is "free" when it cost nothing.
+10. **`AIFreeTier.observed.resetAt` tracks the *requests* window**, because that is what selection
+    gates on (`remainingRequests === 0 && resetAt > now`).
+11. **A tick that just ran discovery does not also re-probe.** Discovery probes every candidate;
+    doing it again minutes later spends free quota to learn nothing.
+
+Left for the other agent / Phase 2: `routes/aiRoutes.js:932` still returns
+`aiService.providers[provider].costPer1kTokens`, which is now `undefined` — that field is gone, and
+the route should read `AIPricing` or drop the key. `aiRoutes.js:153-185`'s `rateLimitStatus` block
+reads the emptied `rateLimits` table and will report `null` for every provider until it is rewritten
+against `AIFreeTier.freeLimits` / `.observed`. `aiModelCapabilitiesService.looksObserved()` can be
+removed once every active `AIModel` row carries `capabilities.source` (one discovery run).
 
 ## Why
 
@@ -36,7 +98,9 @@ status page reads the latest two. Runs are sequential within a provider (rate li
 across providers, exactly as `discover()` does today.
 
 Env: `AI_CATALOG_DISCOVERY_HOURS` (24), `AI_CATALOG_PROBE_HOURS` (6), `AI_CATALOG_JOB=off` disables
-(tests, local dev without keys).
+(tests, local dev without keys). A nonsense value is ignored with a warning rather than disabling
+the job. Ticks never overlap: a tick that starts while the previous one is still running returns
+`{ skipped: true }`.
 
 ## Discovery
 
@@ -81,12 +145,20 @@ Outcome (in `aiCatalogDiscovery.classifyProbe(result, error)`):
 |---|---|---|
 | `dead` | hard failure per `classifyFreeTierFailure`, or HTTP 200 with empty text | cool 30 d, `health.lastFailureCode` |
 | `unknown` | 429 / 5xx / timeout / network | leave row alone |
-| `alive` | non-empty text, but not parseable JSON with a string `task` | `isFree: true`, `fitness: 'basic'` |
-| `alive` | parseable JSON (fences stripped, envelope unwrapped, per `aiFeatureRunner.parseJson/unwrapSchemaEnvelope`) with `task` and `day` strings | `isFree: true`, `fitness: 'structured'` |
+| `alive` | non-empty text, but not parseable JSON with string `task` **and** `day` | `isFree: true`, `fitness: 'basic'` |
+| `alive` | parseable JSON (fences stripped, prose trimmed, one-key envelope unwrapped, per `aiFeatureRunner.parseJson/unwrapSchemaEnvelope`) with non-empty string `task` and `day` | `isFree: true`, `fitness: 'structured'` |
 
-`AIFreeTier` gains `fitness: 'structured'|'basic'|null` and `probedAt`. Selection
-(`selectFreeTierCandidates`) sorts `structured` above `basic` within a provider tier, then most
-recently proven, then fewest failures, as now. Nothing is excluded for being small; it is ranked.
+`classifyProbe(result, error)` returns `{ status, fitness, code, http }`; an error always wins over
+the content and carries `fitness: null`. `probeRow` sends the prompt as *both* a `prompt` string and
+a two-message `[system, user]` array, so the adapters that only read one see the same instruction.
+
+`AIFreeTier` gains `fitness: 'structured'|'basic'|null`, `probedAt` and `observed`. Selection
+(`selectFreeTierCandidates`) sorts, within a provider tier: the provider's auto-router first
+(`ROUTER_MODEL_IDS`, i.e. `openrouter/free`), then `structured` above `basic` above never-probed,
+then most recently proven, then fewest failures. A row the headers say is exhausted
+(`observed.remainingRequests === 0` before `observed.resetAt`) is moved to the `cooling` list rather
+than dropped, so a total free-tier outage still gets one long-shot attempt at whichever row wakes
+soonest. Nothing is excluded for being small; it is ranked.
 This is the whole replacement for the 30-term regex.
 
 ### Writes
@@ -113,7 +185,7 @@ success path `callAI` calls `recordObservedLimits(provider, model, headers)`:
   when present instead of the fixed 60.
 - Selection skips a row whose `observed.remainingRequests === 0` while `observed.resetAt > now`.
 
-Deleted: `aiService.rateLimits` (the static table), `checkRateLimit`, `updateRateLimitUsage`;
+Deleted: `aiService.rateLimits`'s *contents* (see deviation 2), `checkRateLimit`, `updateRateLimitUsage`;
 `rotationManager.PROVIDER_LIMITS`, `ROTATION_PRIORITY`, `DEFAULT_STATE.providers`, and the
 `rotation-state.json` file. `rotationManager` becomes an in-memory class: `cooldowns: Map`,
 `markProviderCooling`, `isCooling`, `getPriorityList() → FALLBACK_ORDER` from `aiProviders.js`,
@@ -166,10 +238,28 @@ makes the director a plain read.
 
 ## Verification
 
-- Unit: discovery module (candidates per provider shape, probe classification incl. fences and
-  envelopes, header parsing, pruning filter, tick scheduling with an injected clock), all without
-  network. `aiDiscoverFreeModels.test.js` and `aiFreeTierProbe.test.js` migrate to the new module.
-- Boot: `node --check` on every changed file and the `gatewaySchemaLoads` tripwire.
+Done 2026-09-07: 300 tests green across the 14 suites that touch this subsystem, no network in any
+of them.
+
+- `aiDiscoverFreeModels.test.js` (7 → 36): candidates per provider, `listedRows`, the OpenRouter
+  catalog split and its paid-fallback tagging, the overrides, `syncResults` and the pruning filter
+  against fake collections, `parseRateLimitHeaders` / `parseResetToMs`.
+- `aiFreeTierProbe.test.js` (14 → 30): the four real 2026-09-06 failures, the soft/hard split, and
+  the new fitness classification — fences, prose-wrapped JSON, one-key envelopes, `task`/`day`
+  strings, empty text = dead. Migrated to the module.
+- `aiCatalogJob.test.js` (new, 20): the schedule with an injected clock, the env knobs,
+  `AI_CATALOG_JOB=off`, overlapping ticks, and that a failure writes a run document rather than
+  propagating.
+- `aiQuotaAndSpend.test.js` (new, 30): the in-memory `RotationManager`, `recordObservedLimits` and
+  its debounce, `retry-after`, `resolveCostUsd`'s three sources, the `AISpend` ledger under
+  concurrency, the fitness/router/exhaustion ranking, and `headers` (plus OpenRouter's `costUsd`) off
+  all nine adapters.
+- `aiFreeTierRouting.test.js` (18) green **unchanged** — the free-tier state machine is untouched.
+- `node --check` on every changed file; `gatewaySchemaLoads`, `openaiCompat` and `aiDeadProviders`
+  green.
+- `openaiCompat.test.js` needed one fixture: `GET /v1/models/{id}` resolves the owner with a real
+  `AIModel.findOne`, and the row it used to find came from `seedInitialModels`. The test writes its
+  own row now, which is the honest version of that assertion.
 - Live, after deploy: `docker logs basegeek | grep CatalogJob` shows the boot tick; the aiGeek
   page's free list shows `probedAt` within the hour; `AICatalogRun` has one discovery document.
 

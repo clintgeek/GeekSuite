@@ -33,7 +33,7 @@
  * catalog, and none of that is what is under test here.
  */
 
-import { describe, it, expect, jest, beforeAll, afterAll, afterEach } from '@jest/globals';
+import { describe, it, expect, jest, beforeAll, beforeEach, afterAll, afterEach } from '@jest/globals';
 import request from 'supertest';
 import express from 'express';
 import cookieParser from 'cookie-parser';
@@ -47,6 +47,8 @@ const { default: logger } = await import('../lib/logger.js');
 const { default: aiDirectorService } = await import('../services/aiDirectorService.js');
 const { default: AIModel } = await import('../models/AIModel.js');
 const { default: AIFreeTier } = await import('../models/AIFreeTier.js');
+const { default: AIPricing } = await import('../models/AIPricing.js');
+const { default: aiService } = await import('../services/aiService.js');
 const { default: aiRoutes } = await import('../routes/aiRoutes.js');
 const { resolvers } = await import('../graphql/basegeek/resolvers.js');
 
@@ -585,5 +587,128 @@ describe('REST — /api/ai/director/recommend keeps its body shape', () => {
     const res = await auth(request(app).post('/api/ai/director/recommend'), token).send({});
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('MISSING_TASK');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * collectModelInformation — a read, not a fan-out (Phase 1, 2026-09-07).
+ *
+ * Every case above mocks this method out, because until now it was the most
+ * expensive thing in the service: on any director read whose catalog was more
+ * than 24 h old it called each keyed provider's live `models` endpoint, ran an
+ * `updateModelCapabilities` upsert per model, and seeded prices from a
+ * hand-typed table — mid-read, on a GET, spending provider quota to answer a
+ * question Mongo already knew. `/director/models`, `/director/free-models`,
+ * `/director/recommend`, `/director/analyze-cost`, their GraphQL twins and
+ * StoryGeek's epub pipeline all went through it.
+ *
+ * These two cases are the ones that mock nothing: the catalog comes out of
+ * AIModel + AIPricing + AIFreeTier, and a vendor listing call happens only
+ * when an admin path explicitly asks for `{ refresh: true }`.
+ */
+describe('collectModelInformation — a read, not a fan-out', () => {
+  let restoreProviders;
+  let restoreInitialized;
+
+  beforeEach(async () => {
+    restoreProviders = aiService.providers.groq;
+    restoreInitialized = aiService.initialized;
+    aiService.providers.groq = {
+      ...(aiService.providers.groq || {}),
+      name: 'Groq',
+      apiKey: 'test-placeholder-not-a-credential',
+      enabled: true,
+    };
+    aiService.initialized = true;
+
+    await AIModel.create({
+      provider: 'groq',
+      modelId: 'seeded-70b',
+      name: 'Seeded 70B',
+      isActive: true,
+      lastChecked: new Date(),
+      capabilities: { contextWindow: 131072, maxTokens: 32768, supportsJSONOutput: true },
+    });
+    // An inactive row: the catalog lists what exists upstream today.
+    await AIModel.create({
+      provider: 'groq', modelId: 'retired-8b', name: 'Retired 8B', isActive: false,
+    });
+    await AIPricing.create({
+      provider: 'groq', modelId: 'seeded-70b', inputPrice: 0.7, outputPrice: 0.7, isActive: true,
+    });
+    await AIFreeTier.create({
+      provider: 'groq',
+      modelId: 'seeded-70b',
+      isFree: true,
+      freeLimits: { requestsPerMinute: 30, requestsPerDay: 14400 },
+      notes: 'Free tier - seeded by the job',
+    });
+  });
+
+  afterEach(async () => {
+    aiService.providers.groq = restoreProviders;
+    aiService.initialized = restoreInitialized;
+    await AIPricing.deleteMany({});
+  });
+
+  it('reads price, free tier and capabilities off the rows, calling no vendor', async () => {
+    const refresh = jest.spyOn(aiService, 'refreshModels').mockResolvedValue([]);
+
+    const result = await aiDirectorService.collectModelInformation();
+
+    expect(refresh).not.toHaveBeenCalled();
+    expect(result.success).toBe(true);
+
+    const groq = result.data.providers.groq;
+    expect(groq.hasApiKey).toBe(true);
+    expect(groq.isEnabled).toBe(true);
+    expect(groq.models.map(m => m.id)).toEqual(['seeded-70b']);
+
+    const [model] = groq.models;
+    expect(model.name).toBe('Seeded 70B');
+    expect(model.pricing).toEqual({ input: 0.7, output: 0.7 });
+    expect(model.freeTier.isFree).toBe(true);
+    expect(model.freeTier.limits.requestsPerDay).toBe(14400);
+    // The observed row wins over inference, and the adapter facts are layered
+    // on top of it: callGroq forwards tools, and forwards no response_format.
+    expect(model.capabilities.contextWindow).toBe(131072);
+    expect(model.capabilities.supportsToolCalling).toBe(true);
+    expect(model.capabilities.supportsJSONSchema).toBe(false);
+
+    // Every roster provider is reported, keyed or not — the summary is what the
+    // admin page counts.
+    expect(Object.keys(result.data.providers).length).toBe(result.data.summary.totalProviders);
+    expect(result.data.summary.providersWithKeys).toBeGreaterThanOrEqual(1);
+  });
+
+  it('says Unknown for a model with no price row rather than calling it free', async () => {
+    await AIModel.create({
+      provider: 'groq', modelId: 'unpriced-model', name: 'Unpriced', isActive: true,
+    });
+
+    const { data } = await aiDirectorService.collectModelInformation();
+    const unpriced = data.providers.groq.models.find(m => m.id === 'unpriced-model');
+
+    expect(unpriced.pricing).toEqual({ input: 'Unknown', output: 'Unknown' });
+    expect(unpriced.freeTier).toEqual({ isFree: false, limits: {}, notes: '' });
+  });
+
+  it('calls the vendor listing only when an admin path passes refresh', async () => {
+    const refresh = jest.spyOn(aiService, 'refreshModels').mockResolvedValue([]);
+    // The 24h guard reads AIModel.lastChecked; age this provider's rows out.
+    await AIModel.updateMany({ provider: 'groq' }, { lastChecked: new Date('2026-01-01T00:00:00Z') });
+
+    await aiDirectorService.collectModelInformation({ refresh: true });
+
+    expect(refresh).toHaveBeenCalledWith('groq');
+  });
+
+  it('does not refresh a fresh provider even when asked', async () => {
+    const refresh = jest.spyOn(aiService, 'refreshModels').mockResolvedValue([]);
+
+    await aiDirectorService.collectModelInformation({ refresh: true });
+
+    expect(refresh).not.toHaveBeenCalled();
   });
 });

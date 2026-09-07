@@ -311,8 +311,8 @@ describe('GraphQL — the same rule, the same shape', () => {
       () => resolvers.Mutation.saveAIConfig(null, { config: {} }, ctx),
       () => resolvers.Mutation.testAIProvider(null, { provider: 'gemini' }, ctx),
       () => resolvers.Mutation.resetAIStats(null, null, ctx),
-      () => resolvers.Mutation.seedDirectorPricing(null, null, ctx),
-      () => resolvers.Mutation.seedDirectorFreeTier(null, null, ctx),
+      // seedDirectorPricing / seedDirectorFreeTier were in this list until
+      // 2026-09-07; both mutations went with the hand-typed catalog tables.
       () => resolvers.Mutation.syncProviderModels(null, { provider: 'gemini' }, ctx),
       () => resolvers.Mutation.updateModelPricing(null, { provider: 'gemini', modelId: 'm', inputPrice: 1, outputPrice: 1 }, ctx),
       () => resolvers.Mutation.deleteModelPricing(null, { provider: 'gemini', modelId: 'm' }, ctx),

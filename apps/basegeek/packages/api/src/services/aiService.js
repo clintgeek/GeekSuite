@@ -18,18 +18,24 @@ import AIFreeTier, {
 } from '../models/AIFreeTier.js';
 import AIAppConfig from '../models/AIAppConfig.js';
 import AIUsage from '../models/AIUsage.js';
+import AISpend, { spendDay } from '../models/AISpend.js';
 import RotationManager from './rotationManager.js';
 import aiModelCapabilitiesService from './aiModelCapabilitiesService.js';
+// The catalog module owns everything this service knows about the outside
+// world's model lists and quota headers. aiService calls it; it never calls
+// back (the job injects `callProvider`), so there is no cycle to reason about.
+import {
+  parseRateLimitHeaders,
+  ROUTER_MODEL_IDS,
+  listModels,
+  listedRows,
+  openRouterCatalog,
+  writeListed,
+  deactivateUnlisted
+} from './aiCatalogDiscovery.js';
 // Using cloud-based summarization instead of local transformers.js
 import crypto from 'crypto';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
 import { countTextTokens, countMessageTokens } from './tokenCounter.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 /**
  * How many free-tier rows one `freeOnly` call may try before giving up (R130).
@@ -163,14 +169,11 @@ class AIService {
     this.batchMaxWait = 100; // 100ms max wait for batching
     this.batchMaxSize = 5; // Max 5 requests per batch
 
-    // Provider rotation state
-    const rotationStateDir = path.join(__dirname, '../../logs');
-    try {
-      fs.mkdirSync(rotationStateDir, { recursive: true });
-    } catch (error) {
-      logger.warn({ err: error }, '[AIService] Failed to ensure rotation state directory');
-    }
-    this.rotationManager = new RotationManager(path.join(rotationStateDir, 'rotation-state.json'));
+    // Provider rotation cooldowns. In memory only since 2026-09-07: the old
+    // `logs/rotation-state.json` was per-container file state, written on every
+    // call, reset by every deploy, and held remaining-quota numbers that a
+    // response header reports for free (see rotationManager.js).
+    this.rotationManager = new RotationManager();
 
     // Per-(provider, model) free-tier health, mirroring AIFreeTier.health so
     // selection never waits on Mongo (R130). Keyed `<provider>/<modelId>`.
@@ -181,25 +184,23 @@ class AIService {
     // the defaults below come from, so the two cannot drift apart.
     this.rotationProviderOverrides = ROTATION_MODEL_OVERRIDES;
 
-    // `costPer1kTokens` below is dollars per 1,000 tokens — a different unit
-    // from the AIPricing collection, which stores dollars per 1,000,000 (see
-    // aiDirectorService's costForTokens). Both are correct as written: the
-    // values here match their per-1M equivalents divided by 1000 (cohere
-    // 0.0025 = $2.50/MTok), and updateStats() divides token counts by 1000 to
-    // match. Do not "fix" one to look like the other.
-    // These are single blended rates per provider, not per-model input/output
-    // prices — the AIPricing table is the accurate source for those.
+    // Each row below is a *connection*: base URL, credential, default model,
+    // and the two adapter facts (token ceiling, context ceiling). What it no
+    // longer carries is a price.
     //
-    // Every rate below is now either free or cohere's 0.0025: the one genuinely
-    // paid row, `anthropic` at a blended 0.006, was removed 2026-09-07 with the
-    // provider (out of credit, gone for good).
+    // `costPer1kTokens` lived here until Phase 1 (2026-09-07): one blended
+    // dollars-per-1,000-tokens rate per provider, in a different unit from the
+    // AIPricing collection's per-1,000,000, so the two could never be compared
+    // without a conversion nobody remembered. It was also a single rate for
+    // input and output. Cost now comes from the response (OpenRouter reports
+    // `usage.cost` in dollars, exact) or from AIPricing per model, and lands in
+    // the `AISpend` ledger — see `updateStats` and `resolveCostUsd`.
     this.providers = {
       groq: {
         name: 'Groq Llama 3.3 70B',
         apiKey: '',
         baseURL: 'https://api.groq.com/openai/v1',
         model: DEFAULT_MODELS.groq,
-        costPer1kTokens: 0.0,
         maxTokens: 8000,
         maxContextTokens: 32768, // 32K context limit
         temperature: 0.7,
@@ -211,7 +212,6 @@ class AIService {
         baseURL: 'https://generativelanguage.googleapis.com/v1beta',
         // Stable GA id — the -exp preview ids get retired without notice
         model: DEFAULT_MODELS.gemini,
-        costPer1kTokens: 0.0,
         maxTokens: 8000,
         maxContextTokens: 1000000, // 1M token context limit
         temperature: 0.7,
@@ -222,7 +222,6 @@ class AIService {
         apiKey: '',
         baseURL: 'https://api.together.xyz/v1',
         model: DEFAULT_MODELS.together,
-        costPer1kTokens: 0.0,
         maxTokens: 8000,
         maxContextTokens: 131072, // 128K context limit
         temperature: 0.7,
@@ -233,7 +232,6 @@ class AIService {
         apiKey: '',
         baseURL: 'https://api.cohere.ai/v1',
         model: DEFAULT_MODELS.cohere,
-        costPer1kTokens: 0.0025,
         maxTokens: 4000,
         temperature: 0.7,
         enabled: false
@@ -243,7 +241,6 @@ class AIService {
         apiKey: '',
         baseURL: 'https://openrouter.ai/api/v1',
         model: DEFAULT_MODELS.openrouter,
-        costPer1kTokens: 0.0,
         maxTokens: 8000,
         maxContextTokens: 131072, // 128K context limit
         temperature: 0.7,
@@ -254,7 +251,6 @@ class AIService {
         apiKey: '',
         baseURL: 'https://api.cerebras.ai/v1',
         model: DEFAULT_MODELS.cerebras,
-        costPer1kTokens: 0.0,
         maxTokens: 8000,
         maxContextTokens: 65536, // 64K context limit
         temperature: 0.7,
@@ -266,7 +262,6 @@ class AIService {
         baseURL: 'https://api.cloudflare.com/client/v4/accounts',
         accountId: '', // Cloudflare account ID
         model: DEFAULT_MODELS.cloudflare,
-        costPer1kTokens: 0.0,
         maxTokens: 8000,
         maxContextTokens: 131072, // 128K context limit
         temperature: 0.7,
@@ -278,7 +273,6 @@ class AIService {
         apiKey: '',
         baseURL: 'https://ollama.com/api',
         model: DEFAULT_MODELS.ollama,
-        costPer1kTokens: 0.0,
         maxTokens: 8000,
         temperature: 0.7,
         enabled: false
@@ -288,7 +282,6 @@ class AIService {
         apiKey: '',
         baseURL: 'https://api.llmgateway.io/v1',
         model: DEFAULT_MODELS.llmgateway,
-        costPer1kTokens: 0.0,
         maxTokens: 8000,
         maxContextTokens: 1000000, // 1M context limit
         temperature: 0.7,
@@ -299,66 +292,43 @@ class AIService {
     this.currentProvider = 'groq';
     this.fallbackOrder = [...FALLBACK_ORDER];
 
-    // Rate limit tracking per provider
-    this.rateLimits = {
-      cerebras: {
-        tokensPerMinute: 60000, // ACTUAL: 60K TPM (was incorrectly 120K)
-        requestsPerMinute: 30,
-        requestsPerDay: 14400, // NEW: Daily limit
-        lastReset: Date.now(),
-        tokensUsed: 0,
-        requestsUsed: 0,
-        dailyRequestsUsed: 0, // NEW: Daily tracking
-        lastDailyReset: Date.now(), // NEW
-        rateLimitedUntil: null
-      },
-      together: {
-        tokensPerMinute: 180000, // Together Build Tier 1
-        requestsPerMinute: 600,
-        lastReset: Date.now(),
-        tokensUsed: 0,
-        requestsUsed: 0,
-        rateLimitedUntil: null
-      },
-      groq: {
-        tokensPerMinute: 12000, // Average, varies by model (6K-30K)
-        requestsPerMinute: 30,
-        requestsPerDay: 14400, // NEW: Most models, but 70b only gets 1K/day
-        lastReset: Date.now(),
-        tokensUsed: 0,
-        requestsUsed: 0,
-        dailyRequestsUsed: 0, // NEW: Daily tracking
-        lastDailyReset: Date.now(), // NEW
-        rateLimitedUntil: null
-      },
-      cohere: {
-        // NO tokensPerMinute limit for trial keys
-        requestsPerMinute: 20,
-        requestsPerMonth: 1000, // NEW: Trial key monthly limit
-        lastReset: Date.now(),
-        tokensUsed: 0, // Keep for compatibility but not enforced
-        requestsUsed: 0,
-        monthlyRequestsUsed: 0, // NEW: Monthly tracking
-        lastMonthlyReset: Date.now(), // NEW
-        rateLimitedUntil: null
-      },
-      cloudflare: {
-        // NO tokensPerMinute limit for Cloudflare Workers AI
-        requestsPerMinute: 300, // ACTUAL: 300 RPM for text generation (was incorrectly 50)
-        lastReset: Date.now(),
-        tokensUsed: 0, // Keep for compatibility but not enforced
-        requestsUsed: 0,
-        rateLimitedUntil: null
-      },
-      gemini: {
-        tokensPerMinute: 250000, // NEW: Observed from logs (250K TPM free tier)
-        requestsPerMinute: 60, // Estimate
-        lastReset: Date.now(),
-        tokensUsed: 0,
-        requestsUsed: 0,
-        rateLimitedUntil: null
-      }
-    };
+    /**
+     * Per-provider 429 memory: `{ [provider]: { rateLimitedUntil } }`, written
+     * only by `markRateLimited` off a real response, read only by
+     * `isRateLimited`. Starts empty and stays empty until a provider says no.
+     *
+     * Until Phase 1 (2026-09-07) this was a hand-typed table of RPM / TPM /
+     * RPD / requests-per-month per provider, with in-process counters, and
+     * `checkRateLimit` refused a call it predicted would be refused upstream.
+     * Three problems, all of them expensive:
+     *
+     *   1. The numbers were wrong and unfixable. They were the *second* of
+     *      three copies in the repo (rotationManager.PROVIDER_LIMITS and
+     *      aiDirectorService's free-tier seed were the others) and all three
+     *      disagreed — Groq's TPM read 6000, 12000 or 18000 depending on the
+     *      file. A vendor changing a tier silently invalidated all three.
+     *   2. The counters were per process. Two containers each thought they had
+     *      the whole allowance.
+     *   3. It guessed *ahead* of the provider. A wrong low guess skipped a
+     *      provider that would have answered; the provider's own 429 is free,
+     *      accurate and arrives exactly when it is true.
+     *
+     * What replaced it: `recordObservedLimits` writes the provider's own
+     * `x-ratelimit-*` headers into the row (`AIFreeTier.freeLimits` for the
+     * ceilings, `.observed` for what is left), selection skips a row the
+     * headers say is exhausted, and a 429 cools the provider for as long as
+     * its own `retry-after` asks.
+     */
+    this.rateLimits = {};
+
+    /**
+     * `provider/modelId` → epoch ms of the last `recordObservedLimits` write,
+     * so a hot path cannot turn one Mongo write per call into the bottleneck.
+     */
+    this.observedLimitWrites = new Map();
+
+    /** `provider/modelId` → { at, inputPrice, outputPrice } from AIPricing. */
+    this.pricingCache = new Map();
 
     this.sessionStats = {
       totalCalls: 0,
@@ -375,7 +345,12 @@ class AIService {
   async initializeService() {
     try {
       await this.loadConfigurations();
-      await this.seedInitialModels();
+      // No seeding. `seedInitialModels` used to run here and re-stamp ~40
+      // hand-typed model ids `isActive: true` on every boot — including ids
+      // their vendors had retired, which defeated the 24-hour staleness sweep
+      // that was supposed to catch exactly that. The catalog is now written by
+      // observation (`aiCatalogJob` → `aiCatalogDiscovery`), and a model this
+      // process has never heard of is a model it does not claim exists.
       logger.info('AI Service initialized with configurations from database');
     } catch (error) {
       logger.error({ err: error }, 'Failed to initialize AI service');
@@ -415,142 +390,43 @@ class AIService {
     }
   }
 
+  /**
+   * Ask one provider what it offers and make `AIModel` match. Returns
+   * `[{ id, name }]`, unchanged — `aiDirectorService.collectModelInformation`
+   * and the admin refresh route both read that shape.
+   *
+   * This was ~140 lines of per-provider fetch code with a hardcoded Gemini
+   * model list as its fallback (a list that had already outlived the 1.5
+   * family). It is now a thin call into `aiCatalogDiscovery`, which is the same
+   * code the scheduled job and the two RUNBOOK scripts use — so the admin
+   * button and the nightly run can no longer produce different catalogs. No
+   * probing happens here: this is "what exists", not "what answers".
+   *
+   * A provider with no key throws, as it always did; a listing that fails
+   * throws with the provider's status and nothing else.
+   */
   async refreshModels(provider) {
+    const providerConfig = this.providers[provider];
+    if (!providerConfig) throw new Error(`Unknown provider: ${provider}`);
+    if (!providerConfig.apiKey) throw new Error(`${provider} API key not configured`);
+
     try {
-      let models = [];
-
-      switch (provider) {
-        case 'groq':
-          if (this.providers.groq.apiKey) {
-            const response = await axios.get('https://api.groq.com/openai/v1/models', {
-              headers: { 'Authorization': `Bearer ${this.providers.groq.apiKey}` },
-              // The one models fetch that had no cap; Together, Gemini and the
-              // rest all pass 10s, and axios's own default is "wait forever".
-              timeout: 10000
-            });
-            models = response.data.data || [];
-          }
-          break;
-
-        case 'together':
-          if (this.providers.together.apiKey) {
-            try {
-              logger.info('Fetching Together.ai models...');
-              const response = await axios.get('https://api.together.xyz/v1/models', {
-                headers: { 'Authorization': `Bearer ${this.providers.together.apiKey}` },
-                timeout: 10000
-              });
-              logger.debug({ data: response.data }, 'Together.ai response');
-              // Together.ai returns an array directly, not wrapped in data property
-              const togetherModels = response.data || [];
-              // Transform to match our expected format and save pricing
-              models = togetherModels.map(model => {
-                // Save pricing to database if available
-                if (model.pricing) {
-                  AIPricing.findOneAndUpdate(
-                    { provider: 'together', modelId: model.id },
-                    {
-                      inputPrice: model.pricing.input,
-                      outputPrice: model.pricing.output,
-                      lastUpdated: new Date(),
-                      isActive: true
-                    },
-                    { upsert: true, new: true }
-                  ).catch(error => {
-                      logger.error({ err: error }, `Failed to save pricing for ${model.id}`);
-                  });
-                }
-
-                return {
-                  id: model.id,
-                  name: model.display_name
-                };
-              });
-              logger.debug({ count: models.length }, 'Transformed Together.ai models');
-            } catch (error) {
-              logger.error({ err: error }, 'Together.ai API error');
-              if (error.response) {
-                logger.error({ status: error.response.status, data: error.response.data }, 'Together.ai response error details');
-              }
-              throw new Error(`Together.ai API error: ${error.message}`);
-            }
-          } else {
-            logger.info('Together.ai API key not configured');
-            throw new Error('Together.ai API key not configured');
-          }
-          break;
-
-        case 'gemini':
-          if (this.providers.gemini.apiKey) {
-            try {
-              logger.info('Fetching Gemini models via API...');
-              // The key goes in a header, not `?key=`. @geeksuite/logger's err
-              // serializer keeps `err.config.url` (it is the one thing that
-              // says which call failed) and drops `err.config.headers`, so a
-              // key in the query string was the one provider credential that
-              // still reached the logs in the clear on any failure.
-              const response = await axios.get(
-                'https://generativelanguage.googleapis.com/v1beta/models',
-                {
-                  headers: { 'x-goog-api-key': this.providers.gemini.apiKey },
-                  timeout: 10000
-                }
-              );
-              const geminiModels = response.data?.models || [];
-              // Filter to models that support generateContent (chat/text models)
-              models = geminiModels
-                .filter(m => m.supportedGenerationMethods?.includes('generateContent'))
-                .map(m => ({
-                  id: m.name.replace('models/', ''),
-                  name: m.displayName || m.name.replace('models/', '')
-                }));
-              logger.info(`Fetched ${models.length} Gemini models from API (filtered for generateContent)`);
-            } catch (apiError) {
-              logger.info({ err: apiError }, 'Gemini models API failed, using hardcoded fallback');
-              // 1.5 family retired upstream (Aug 2026) — fallback lists only live families
-              models = [
-                { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
-                { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite' },
-                { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' },
-                { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite' },
-                { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' }
-              ];
-            }
-          } else {
-            models = [
-              { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
-              { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite' },
-              { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' },
-              { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite' },
-              { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' }
-            ];
-          }
-          break;
+      const raw = await listModels(provider, providerConfig);
+      let rows;
+      if (provider === 'openrouter') {
+        const { free, paid } = openRouterCatalog(raw);
+        rows = [...free, ...paid];
+      } else {
+        rows = listedRows(provider, raw);
       }
 
-      // Update database with new models
-      for (const model of models) {
-        await AIModel.findOneAndUpdate(
-          { provider, modelId: model.id },
-          {
-            name: model.name,
-            lastChecked: new Date(),
-            isActive: true
-          },
-          { upsert: true, new: true }
-        );
+      const writeDeps = { model: AIModel, pricing: AIPricing, freeTier: AIFreeTier };
+      for (const row of rows) {
+        await writeListed({ provider, ...row }, writeDeps);
       }
+      await deactivateUnlisted({ provider, listedIds: rows.map(r => r.modelId) }, writeDeps);
 
-      // Mark models as inactive if they're no longer available
-      await AIModel.updateMany(
-        {
-          provider,
-          lastChecked: { $lt: new Date(Date.now() - 24 * 60 * 60 * 1000) } // Older than 24 hours
-        },
-        { isActive: false }
-      );
-
-      return models;
+      return rows.map(row => ({ id: row.modelId, name: row.name }));
     } catch (error) {
       logger.error({ err: error }, `Failed to refresh models for ${provider}`);
       throw error;
@@ -575,90 +451,18 @@ class AIService {
     }
   }
 
-    async seedInitialModels() {
-    try {
-      const initialModels = {
-        groq: [
-          { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B Versatile (Free)' },
-          { id: 'llama-3.1-70b-versatile', name: 'Llama 3.1 70B Versatile (Free)' },
-          { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B Instant (Free)' },
-          { id: 'mixtral-8x7b-32768', name: 'Mixtral 8x7B (Free)' }
-        ],
-        gemini: [
-          // 1.5 family retired upstream (Aug 2026) — seed only live families
-          { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Free)' },
-          { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite (Free)' },
-          { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (Free)' },
-          { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite (Free)' },
-          { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' }
-        ],
-        together: [
-          { id: 'meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo', name: 'Llama 3.1 70B Turbo (Free - Best for tool use)' },
-          { id: 'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free', name: 'Llama 3.3 70B (Free)' },
-          { id: 'deepseek-ai/DeepSeek-R1-Distill-Llama-70B-free', name: 'DeepSeek R1 70B (Free - Reasoning)' }
-        ],
-        cohere: [
-          { id: 'command-r-plus-08-2024', name: 'Command R+ (08-2024)' },
-          { id: 'command-r-plus', name: 'Command R+' },
-          { id: 'command-r', name: 'Command R' },
-          { id: 'command', name: 'Command' }
-        ],
-        openrouter: [
-          { id: 'google/gemini-2.0-flash-exp:free', name: 'Gemini 2.0 Flash (Free)' },
-          { id: 'meta-llama/llama-3.1-70b-instruct:free', name: 'Llama 3.1 70B (Free)' },
-          { id: 'meta-llama/llama-3.1-8b-instruct:free', name: 'Llama 3.1 8B (Free)' },
-          { id: 'nousresearch/hermes-3-llama-3.1-405b:free', name: 'Hermes 3 Llama 405B (Free - may be limited)' },
-          { id: 'google/gemini-flash-1.5', name: 'Gemini Flash 1.5' },
-          // `anthropic/claude-3.5-sonnet` sat here until 2026-09-07. It was an
-          // OpenRouter passthrough, not the retired anthropic provider — but it
-          // was a paid row for a model three generations stale, seeded by hand,
-          // and nothing in the suite pinned it. Phase 1 replaces this whole
-          // table with OpenRouter's own listing.
-          { id: 'openai/gpt-4o', name: 'GPT-4o' }
-        ],
-        cerebras: [
-          { id: 'llama-3.3-70b', name: 'Llama 3.3 70B (Free - Best for tool use)' },
-          { id: 'qwen-3-235b-a22b-instruct-2507', name: 'Qwen3 235B Instruct (Free)' },
-          { id: 'llama3.1-8b', name: 'Llama 3.1 8B (Free)' },
-          { id: 'llama3.1-70b', name: 'Llama 3.1 70B (Free)' }
-        ],
-        cloudflare: [
-          { id: '@cf/openai/gpt-oss-120b', name: 'GPT OSS 120B (Free)' },
-          { id: 'llama-3.3-70b-instruct-fp8-fast', name: 'Llama 3.3 70B Instruct FP8 Fast (Free)' }
-        ],
-        ollama: [
-          { id: 'qwen3-coder:480b', name: 'Qwen3 Coder 480B (Free)' },
-          { id: 'deepseek-v3.1:671b', name: 'DeepSeek V3.1 671B (Free)' },
-          { id: 'gpt-oss:120b', name: 'GPT OSS 120B (Free)' },
-          { id: 'gpt-oss:20b', name: 'GPT OSS 20B (Free)' },
-          { id: 'kimi-k2:1t', name: 'Kimi K2 1T (Free)' },
-          { id: 'glm-4.6', name: 'GLM 4.6 (Free)' },
-          { id: 'qwen3-vl:235b', name: 'Qwen3 VL 235B (Free)' }
-        ],
-        llmgateway: [
-          { id: 'llama-4-maverick-free', name: 'Llama 4 Maverick (Free - 1M context)' }
-        ]
-      };
-
-      for (const [provider, models] of Object.entries(initialModels)) {
-        for (const model of models) {
-          await AIModel.findOneAndUpdate(
-            { provider, modelId: model.id },
-            {
-              name: model.name,
-              lastChecked: new Date(),
-              isActive: true
-            },
-            { upsert: true, new: true }
-          );
-        }
-      }
-
-      logger.info('Initial AI models seeded successfully');
-    } catch (error) {
-      logger.error({ err: error }, 'Failed to seed initial models');
-    }
-  }
+  /*
+   * `seedInitialModels` lived here until Phase 1 (2026-09-07): ~90 lines of
+   * hand-typed model ids per provider, upserted `isActive: true` on every boot.
+   *
+   * Every failure mode it had was structural. It re-animated ids the vendors
+   * had retired (`llama-3.1-8b-instant`, `gemini-1.5-*`, `mixtral-8x7b-32768`),
+   * so the staleness sweep never fired; it claimed models this account has no
+   * access to; and it seeded a paid OpenRouter passthrough for a model three
+   * generations stale that nothing pinned. The catalog is written by
+   * observation now — `aiCatalogDiscovery.listedRows` per provider, on a
+   * schedule, plus `refreshModels` above for the admin button.
+   */
 
   /**
    * Get or initialize the summarization model (lazy loading)
@@ -976,20 +780,16 @@ class AIService {
       // Use a fast, free provider for summarization - load balance between Cerebras and Together
       let summarizationProvider = null;
 
-      // Check Cerebras first (fastest)
-      if (this.providers.cerebras.enabled && this.providers.cerebras.apiKey &&
-          this.checkRateLimit('cerebras', 2000)) {
-        summarizationProvider = 'cerebras';
-      }
-      // Fallback to Together (3X higher rate limit)
-      else if (this.providers.together.enabled && this.providers.together.apiKey &&
-               this.checkRateLimit('together', 2000)) {
-        summarizationProvider = 'together';
-      }
-      // Last resort: Groq
-      else if (this.providers.groq.enabled && this.providers.groq.apiKey &&
-               this.checkRateLimit('groq', 2000)) {
-        summarizationProvider = 'groq';
+      // Cerebras first (fastest), then Together, then Groq — skipping any that
+      // is inside its own `retry-after`. This used to consult the static
+      // per-minute token table; a summarization is a 2,000-token call and the
+      // provider's 429 is the only honest answer to whether it will take one.
+      for (const candidate of ['cerebras', 'together', 'groq']) {
+        const pc = this.providers[candidate];
+        if (pc?.enabled && pc.apiKey && !this.isRateLimited(candidate)) {
+          summarizationProvider = candidate;
+          break;
+        }
       }
 
       if (!summarizationProvider) {
@@ -1139,137 +939,83 @@ class AIService {
   }
 
   /**
-   * Check and update rate limits for a provider
+   * `true` when this provider answered 429 recently enough that its own
+   * `retry-after` has not elapsed. The only quota question this service asks
+   * before a call, and it is answered from what a provider actually said.
    */
-  checkRateLimit(provider, estimatedTokens = 1000) {
-    const limits = this.rateLimits[provider];
-    if (!limits) return true; // No rate limiting for this provider
-
-    const now = Date.now();
-
-    // Check if we're currently rate limited
-    if (limits.rateLimitedUntil && now < limits.rateLimitedUntil) {
-      const waitSeconds = Math.ceil((limits.rateLimitedUntil - now) / 1000);
-      logger.info(`⏳ ${provider} is rate limited, wait ${waitSeconds}s`);
-      return false;
-    }
-
-    // Reset per-minute counters if a minute has passed
-    if (now - limits.lastReset > 60000) {
-      limits.tokensUsed = 0;
-      limits.requestsUsed = 0;
-      limits.lastReset = now;
-      limits.rateLimitedUntil = null;
-    }
-
-    // Reset daily counters if a day has passed (for Cerebras, Groq)
-    if (limits.lastDailyReset && now - limits.lastDailyReset > 86400000) { // 24 hours
-      limits.dailyRequestsUsed = 0;
-      limits.lastDailyReset = now;
-    }
-
-    // Reset monthly counters if a month has passed (for Cohere, 1min.ai)
-    if (limits.lastMonthlyReset && now - limits.lastMonthlyReset > 2592000000) { // 30 days
-      limits.monthlyRequestsUsed = 0;
-      limits.monthlyCreditsUsed = 0;
-      limits.lastMonthlyReset = now;
-    }
-
-    // Check per-minute token limits (only if provider has tokensPerMinute)
-    const hasTokenLimit = limits.tokensPerMinute && limits.tokensPerMinute > 0;
-    if (hasTokenLimit) {
-      // Allow the first request even if it exceeds the limit (as long as we haven't used tokens yet this minute)
-      // But block if adding this request would exceed AND we've already used tokens
-      if (limits.tokensUsed > 0 && limits.tokensUsed + estimatedTokens > limits.tokensPerMinute) {
-        limits.rateLimitedUntil = limits.lastReset + 60000;
-        const waitSeconds = Math.ceil((limits.rateLimitedUntil - now) / 1000);
-        logger.info(`🚫 ${provider} would exceed token limit (${limits.tokensUsed}/${limits.tokensPerMinute} tokens, trying to add ${estimatedTokens}), pausing for ${waitSeconds}s`);
-        return false;
-      }
-
-      // If this single request is MUCH larger than the per-minute limit (2X), reject it
-      if (estimatedTokens > limits.tokensPerMinute * 2) {
-        logger.info(`🚫 ${provider} single request too large (${estimatedTokens} tokens exceeds 2x limit of ${limits.tokensPerMinute})`);
-        return false;
-      }
-    }
-
-    // Check per-minute request limits
-    if (limits.requestsUsed + 1 > limits.requestsPerMinute) {
-      limits.rateLimitedUntil = limits.lastReset + 60000;
-      const waitSeconds = Math.ceil((limits.rateLimitedUntil - now) / 1000);
-      logger.info(`🚫 ${provider} would exceed request limit (${limits.requestsUsed}/${limits.requestsPerMinute} reqs), pausing for ${waitSeconds}s`);
-      return false;
-    }
-
-    // Check daily request limits (for Cerebras, Groq)
-    if (limits.requestsPerDay && limits.dailyRequestsUsed + 1 > limits.requestsPerDay) {
-      limits.rateLimitedUntil = limits.lastDailyReset + 86400000; // Rate limited until next day
-      const waitHours = Math.ceil((limits.rateLimitedUntil - now) / 3600000);
-      logger.info(`🚫 ${provider} would exceed daily limit (${limits.dailyRequestsUsed}/${limits.requestsPerDay} reqs/day), pausing for ${waitHours}h`);
-      return false;
-    }
-
-    // Check monthly request limits (for Cohere)
-    if (limits.requestsPerMonth && limits.monthlyRequestsUsed + 1 > limits.requestsPerMonth) {
-      limits.rateLimitedUntil = limits.lastMonthlyReset + 2592000000; // Rate limited until next month
-      const waitDays = Math.ceil((limits.rateLimitedUntil - now) / 86400000);
-      logger.info(`🚫 ${provider} would exceed monthly limit (${limits.monthlyRequestsUsed}/${limits.requestsPerMonth} calls/month), pausing for ${waitDays} days`);
-      return false;
-    }
-
-    // Check monthly credit limits (for 1min.ai)
-    if (limits.creditsPerMonth && limits.monthlyCreditsUsed + estimatedTokens > limits.creditsPerMonth) {
-      limits.rateLimitedUntil = limits.lastMonthlyReset + 2592000000; // Rate limited until next month
-      const waitDays = Math.ceil((limits.rateLimitedUntil - now) / 86400000);
-      logger.info(`🚫 ${provider} would exceed monthly credit limit (${limits.monthlyCreditsUsed}/${limits.creditsPerMonth} credits/month), pausing for ${waitDays} days`);
-      return false;
-    }
-
-    return true;
+  isRateLimited(provider, now = Date.now()) {
+    const until = this.rateLimits[provider]?.rateLimitedUntil;
+    return Boolean(until) && now < until;
   }
 
   /**
-   * Update rate limit usage after a successful call
-   */
-  updateRateLimitUsage(provider, tokensUsed) {
-    const limits = this.rateLimits[provider];
-    if (limits) {
-      // Update per-minute counters
-      if (limits.tokensPerMinute && limits.tokensPerMinute > 0) {
-        limits.tokensUsed += tokensUsed;
-      }
-      limits.requestsUsed += 1;
-
-      // Update daily counters (for Cerebras, Groq)
-      if (limits.dailyRequestsUsed !== undefined) {
-        limits.dailyRequestsUsed += 1;
-      }
-
-      // Update monthly counters (for Cohere)
-      if (limits.monthlyRequestsUsed !== undefined) {
-        limits.monthlyRequestsUsed += 1;
-      }
-
-      // Update monthly credits (for 1min.ai)
-      if (limits.monthlyCreditsUsed !== undefined) {
-        limits.monthlyCreditsUsed += tokensUsed; // Approximate: 1 token ≈ 1 credit
-      }
-
-      logger.debug(`📊 ${provider} rate limit: ${limits.tokensUsed || 0}/${limits.tokensPerMinute || 'none'} tokens/min, ${limits.requestsUsed}/${limits.requestsPerMinute} reqs/min${limits.dailyRequestsUsed !== undefined ? `, ${limits.dailyRequestsUsed}/${limits.requestsPerDay} reqs/day` : ''}${limits.monthlyRequestsUsed !== undefined ? `, ${limits.monthlyRequestsUsed}/${limits.requestsPerMonth} calls/month` : ''}${limits.monthlyCreditsUsed !== undefined ? `, ${limits.monthlyCreditsUsed}/${limits.creditsPerMonth} credits/month` : ''}`);
-    }
-  }
-
-  /**
-   * Mark a provider as rate limited (from API 429 response)
+   * Mark a provider as rate limited, for as long as it asked.
+   *
+   * `retryAfterSeconds` comes from the response's `retry-after` header where
+   * the provider sent one (see `retryAfterFrom`), and falls back to 60 — which
+   * used to be the only value this ever used, whatever the provider said.
    */
   markRateLimited(provider, retryAfterSeconds = 60) {
-    const limits = this.rateLimits[provider];
-    if (limits) {
-      limits.rateLimitedUntil = Date.now() + (retryAfterSeconds * 1000);
-      logger.info(`⏸️  ${provider} marked as rate limited for ${retryAfterSeconds}s`);
-    }
+    const seconds = Number.isFinite(Number(retryAfterSeconds)) && Number(retryAfterSeconds) > 0
+      ? Number(retryAfterSeconds)
+      : 60;
+    const bucket = (this.rateLimits[provider] ||= {});
+    bucket.rateLimitedUntil = Date.now() + seconds * 1000;
+    logger.info(`⏸️  ${provider} marked as rate limited for ${seconds}s`);
+    return bucket.rateLimitedUntil;
   }
+
+  /**
+   * How long a provider asked us to wait, out of an error's own response.
+   * Returns null when it said nothing, and the caller's default applies.
+   */
+  retryAfterFrom(error) {
+    const headers = error?.response?.headers;
+    if (!headers) return null;
+    const { retryAfterSeconds } = parseRateLimitHeaders(headers);
+    return retryAfterSeconds ?? null;
+  }
+
+  /**
+   * Learn this row's quota from the response that just came back.
+   *
+   * The provider is the only party that knows our allowance, and it puts it in
+   * every response: `x-ratelimit-limit-*` is the ceiling, `-remaining-*` is
+   * what is left, `-reset-*` is when it refills.
+   * `aiCatalogDiscovery.parseRateLimitHeaders` normalizes the four dialects
+   * this suite meets (Groq/Cerebras/Together/LLM Gateway suffixed, OpenRouter
+   * unqualified) and ignores everything else.
+   *
+   * Ceilings go to `freeLimits` — the same fields `aiUsageService` meters
+   * against — and the live reading to `observed`. Debounced to one write per
+   * row per minute: a chatty app would otherwise turn this into a Mongo write
+   * per AI call to store a number that changes by one.
+   *
+   * Fire-and-forget by design: the caller is mid-request, and a quota reading
+   * is not worth making a user wait for. No upsert — a model with no free row
+   * is not made into one by having been called.
+   */
+  recordObservedLimits(provider, modelId, headers, now = Date.now()) {
+    if (!headers || !modelId) return null;
+    const { limits, observed } = parseRateLimitHeaders(headers, now);
+    if (Object.keys(limits).length === 0 && Object.keys(observed).length === 0) return null;
+
+    const key = this.freeTierKey(provider, modelId);
+    const last = this.observedLimitWrites.get(key) || 0;
+    if (now - last < 60 * 1000) return { limits, observed, wrote: false };
+    this.observedLimitWrites.set(key, now);
+
+    const $set = { 'observed.seenAt': new Date(now) };
+    for (const [field, value] of Object.entries(limits)) $set[`freeLimits.${field}`] = value;
+    for (const [field, value] of Object.entries(observed)) $set[`observed.${field}`] = value;
+
+    AIFreeTier.updateOne({ provider, modelId }, { $set }).catch((err) => {
+      logger.debug({ err, provider, modelId }, '[AIService] failed to record observed limits');
+    });
+
+    return { limits, observed, wrote: true };
+  }
+
 
   /* ─────────────────── free-tier health (R130, 2026-09-06) ─────────────────
    *
@@ -1415,11 +1161,24 @@ class AIService {
   /**
    * The ordered free-tier candidate list for one call.
    *
-   * Rows are dropped when the provider has no key or is disabled (as before)
-   * and when the row is cooling (new). What is left is ordered by provider
-   * priority, then by *most recently proven*, then by fewest failures — so a
-   * row that answered ten minutes ago outranks one that has never been tried,
-   * and a row that has been failing softly sinks.
+   * Rows are dropped when the provider has no key or is disabled, and set
+   * aside when the row is cooling (R130) or when the provider's own headers
+   * said this row has zero requests left before a reset that has not happened
+   * yet — the one case where we *know*, rather than guess, that a call would
+   * 429 (`observed`, written by `recordObservedLimits`).
+   *
+   * What is left is ordered within each provider tier by:
+   *
+   *   1. the provider's auto-router first, where it has one. `openrouter/free`
+   *      is alive whenever any free OpenRouter model is, which beats any
+   *      single row's odds;
+   *   2. `fitness: 'structured'` above `'basic'` above never-probed. Every AI
+   *      feature in this suite asks for structured output, so a model that
+   *      proved it can produce JSON is worth more than one that only proved it
+   *      can talk. Nothing is excluded for being small — it is ranked;
+   *   3. most recently proven — a row that answered ten minutes ago outranks
+   *      one that has never been tried;
+   *   4. fewest failures, so a row that has been failing softly sinks.
    *
    * @returns {{live: object[], cooling: object[]}}
    */
@@ -1438,9 +1197,17 @@ class AIService {
         provider: fm.provider,
         modelId: fm.modelId,
         limits: fm.freeLimits,
+        fitness: fm.fitness ?? null,
+        probedAt: fm.probedAt ?? null,
+        observed: fm.observed ?? null,
         health
       };
+
+      const resetAt = fm.observed?.resetAt ? new Date(fm.observed.resetAt).getTime() : null;
+      const exhausted = fm.observed?.remainingRequests === 0 && Number.isFinite(resetAt) && resetAt > now;
+
       if (isFreeTierCooling(health, now)) cooling.push(candidate);
+      else if (exhausted) cooling.push({ ...candidate, exhausted: true });
       else live.push(candidate);
     }
 
@@ -1448,19 +1215,29 @@ class AIService {
       const idx = priorityList.indexOf(provider);
       return idx === -1 ? 999 : idx;
     };
+    const routerFirst = (candidate) =>
+      ROUTER_MODEL_IDS[candidate.provider] === candidate.modelId ? 0 : 1;
+    const FITNESS_RANK = { structured: 0, basic: 1 };
+    const fitnessOf = (candidate) => FITNESS_RANK[candidate.fitness] ?? 2;
     const successAt = (candidate) =>
       candidate.health?.lastSuccessAt ? new Date(candidate.health.lastSuccessAt).getTime() : 0;
+    /** When a set-aside row may be tried again: its cooling, or its quota reset. */
+    const wakeAt = (candidate) => {
+      const until = candidate.health?.coolingUntil ?? candidate.observed?.resetAt ?? null;
+      const at = until ? new Date(until).getTime() : 0;
+      return Number.isFinite(at) ? at : 0;
+    };
 
     live.sort((a, b) =>
       priorityOf(a.provider) - priorityOf(b.provider) ||
+      routerFirst(a) - routerFirst(b) ||
+      fitnessOf(a) - fitnessOf(b) ||
       successAt(b) - successAt(a) ||
       (a.health?.consecutiveFailures ?? 0) - (b.health?.consecutiveFailures ?? 0)
     );
     // Soonest to wake first: if every row is cooling we try the one closest to
     // being allowed back rather than answering nothing.
-    cooling.sort((a, b) =>
-      new Date(a.health.coolingUntil).getTime() - new Date(b.health.coolingUntil).getTime()
-    );
+    cooling.sort((a, b) => wakeAt(a) - wakeAt(b));
 
     return { live, cooling };
   }
@@ -1776,9 +1553,6 @@ class AIService {
           toolCalls: cached.toolCalls || null,
           finishReason: cached.finishReason || 'stop'
         };
-        if (autoRotate) {
-          this.rotationManager.recordUsage(currentProvider, { requests: 1, tokens: 0 });
-        }
         return cached.content;
       }
 
@@ -1801,11 +1575,10 @@ class AIService {
         continue;
       }
 
-      if (!this.checkRateLimit(currentProvider, estimatedTokens)) {
-        logger.debug(`Skipping ${currentProvider}: rate limit would be exceeded`);
-        if (autoRotate) {
-          this.rotationManager.markProviderCooling(currentProvider, 60 * 1000);
-        }
+      // The provider's own 429 is the only rate-limit signal here now; the
+      // static table that used to predict one is gone (see `this.rateLimits`).
+      if (this.isRateLimited(currentProvider)) {
+        logger.debug(`Skipping ${currentProvider}: still inside its retry-after`);
         continue;
       }
 
@@ -1869,8 +1642,6 @@ class AIService {
           result.content = this.repairJSONContent(result.content);
         }
 
-        const totalTokens = (result.inputTokens || 0) + (result.outputTokens || 0);
-
         // Cache only plain-text responses; structured/tool-call responses
         // bypassed the cache at lookup (see comment there). cacheKeyBase is
         // null for those.
@@ -1881,8 +1652,18 @@ class AIService {
             finishReason: result.finishReason || 'stop'
           });
         }
-        this.updateRateLimitUsage(currentProvider, totalTokens);
-        await this.updateStats(currentProvider, result.inputTokens || 0, result.outputTokens || 0, providerModel, appId, featureId);
+        // What the provider just told us about our own quota, straight off the
+        // response. Debounced, fire-and-forget, never blocking the answer.
+        this.recordObservedLimits(currentProvider, providerModel, result.headers);
+        await this.updateStats(
+          currentProvider,
+          result.inputTokens || 0,
+          result.outputTokens || 0,
+          providerModel,
+          appId,
+          featureId,
+          result.costUsd ?? null
+        );
 
         const trackingUserId = userId || 'session';
         // trackUsage RESOLVES with `{success:false, error}` rather than
@@ -1899,10 +1680,6 @@ class AIService {
             { provider: currentProvider, model: providerModel, err: usageResult.error },
             '[AIService] free-tier usage was not recorded — quota accounting is behind for this model'
           );
-        }
-
-        if (autoRotate) {
-          this.rotationManager.recordUsage(currentProvider, { requests: 1, tokens: totalTokens });
         }
 
         // A free row that answers with no text at all (gpt-oss through the
@@ -1930,9 +1707,11 @@ class AIService {
         lastError = error;
 
         if (error.message.includes('429') || error.message.includes('rate limit') || error.message.includes('quota')) {
-          this.markRateLimited(currentProvider, 60);
+          // For as long as the provider asked, not a flat minute.
+          const retryAfter = this.retryAfterFrom(error);
+          this.markRateLimited(currentProvider, retryAfter ?? 60);
           if (autoRotate) {
-            this.rotationManager.markProviderCooling(currentProvider, 60 * 1000);
+            this.rotationManager.markProviderCooling(currentProvider, (retryAfter ?? 60) * 1000);
           }
         }
 
@@ -2014,7 +1793,13 @@ class AIService {
   }
 
   /**
-   * Call specific AI provider
+   * Call one specific AI provider.
+   *
+   * Signature is fixed by its callers (`aiCatalogDiscovery`'s probe, the
+   * OpenAI-compat surface, every feature through `callAI`). The result gained
+   * two *additive* fields in Phase 1: `headers`, the raw response headers, so
+   * `recordObservedLimits` can learn the quota; and `costUsd` on OpenRouter,
+   * the provider's own dollar figure for the call. Nothing has to read either.
    */
   async callProvider(provider, prompt, config = {}) {
     const providerConfig = this.providers[provider];
@@ -2137,7 +1922,13 @@ class AIService {
       return {
         content: result,
         inputTokens: response.data.result?.usage?.prompt_tokens || 0,
-        outputTokens: response.data.result?.usage?.completion_tokens || 0
+        outputTokens: response.data.result?.usage?.completion_tokens || 0,
+        // Every adapter hands the raw response headers back. `callAI` reads the
+        // provider's own `x-ratelimit-*` off them (recordObservedLimits) — the
+        // quota tables that used to be typed by hand are gone, so this is the
+        // only place a real allowance is ever learned. Additive: no caller has
+        // to look.
+        headers: response.headers
       };
     } catch (error) {
       logger.error({ err: error }, 'Cloudflare API error');
@@ -2194,7 +1985,8 @@ class AIService {
       return {
         content: result,
         inputTokens: response.data.prompt_eval_count || 0,
-        outputTokens: response.data.eval_count || 0
+        outputTokens: response.data.eval_count || 0,
+        headers: response.headers
       };
     } catch (error) {
       logger.error({ err: error }, 'Ollama Cloud API error');
@@ -2234,7 +2026,8 @@ class AIService {
       return {
         content: result,
         inputTokens: response.data.usage?.prompt_tokens || 0,
-        outputTokens: response.data.usage?.completion_tokens || 0
+        outputTokens: response.data.usage?.completion_tokens || 0,
+        headers: response.headers
       };
     } catch (error) {
       logger.error({ err: error }, 'LLM Gateway API error');
@@ -2408,7 +2201,8 @@ class AIService {
         inputTokens: response.data.usage?.prompt_tokens || 0,
         outputTokens: response.data.usage?.completion_tokens || 0,
         toolCalls,
-        finishReason
+        finishReason,
+        headers: response.headers
       };
     } catch (error) {
       logger.error({ err: error }, 'Groq API error');
@@ -2494,7 +2288,12 @@ class AIService {
         };
       }
 
-      // Key in a header, never the query string — see refreshModels('gemini').
+      // Key in a header, never the query string: @geeksuite/logger's err
+      // serializer keeps `err.config.url` (it is the one thing that says which
+      // call failed) and drops `err.config.headers`, so a key in a query
+      // string is the one provider credential that still reaches the logs in
+      // the clear on any failure. `aiCatalogDiscovery.listModels` carries the
+      // same rule for the Gemini listing.
       const response = await axios.post(`${this.providers.gemini.baseURL}/models/${model}:generateContent`, body, {
         headers: {
           'Content-Type': 'application/json',
@@ -2534,7 +2333,8 @@ class AIService {
         inputTokens: response.data.usageMetadata?.promptTokenCount || 0,
         outputTokens: response.data.usageMetadata?.candidatesTokenCount || 0,
         toolCalls,
-        finishReason
+        finishReason,
+        headers: response.headers
       };
     } catch (error) {
       logger.error({ err: error }, 'Gemini API error');
@@ -2577,7 +2377,8 @@ class AIService {
       return {
         content: result,
         inputTokens: response.data.usage?.prompt_tokens || 0,
-        outputTokens: response.data.usage?.completion_tokens || 0
+        outputTokens: response.data.usage?.completion_tokens || 0,
+        headers: response.headers
       };
     } catch (error) {
       logger.error({ err: error }, 'Together AI API error');
@@ -2664,7 +2465,8 @@ class AIService {
       return {
         content: result,
         inputTokens: response.data.meta?.tokens?.input_tokens || 0,
-        outputTokens: response.data.meta?.tokens?.output_tokens || 0
+        outputTokens: response.data.meta?.tokens?.output_tokens || 0,
+        headers: response.headers
       };
     } catch (error) {
       logger.error({ err: error }, 'Cohere API error');
@@ -2692,6 +2494,11 @@ class AIService {
         max_tokens: maxTokens,
         temperature: temperature,
         messages: requestMessages,
+        // Ask for the cost accounting. OpenRouter returns `usage.cost` (USD,
+        // exact) when this is set; without it the ledger would have to price
+        // an auto-router's answer from a table that does not know which model
+        // answered. It costs nothing and adds no latency.
+        usage: { include: true },
         ...openAISamplingFields(config)
       }, {
         headers: {
@@ -2708,7 +2515,14 @@ class AIService {
       return {
         content: result,
         inputTokens: response.data.usage?.prompt_tokens || 0,
-        outputTokens: response.data.usage?.completion_tokens || 0
+        outputTokens: response.data.usage?.completion_tokens || 0,
+        headers: response.headers,
+        // OpenRouter is the only provider that prices its own call for us:
+        // `usage.cost` is dollars, exact, for the model that actually answered
+        // — which matters most for `openrouter/free`, an auto-router whose
+        // model is not known until it replies. `updateStats` prefers this over
+        // any price table. Free rows report 0, and 0 is the truth.
+        costUsd: response.data.usage?.cost ?? null
       };
     } catch (error) {
       logger.error({ err: error }, 'OpenRouter API error');
@@ -2762,7 +2576,8 @@ class AIService {
       return {
         content: result,
         inputTokens: response.data.usage?.prompt_tokens || 0,
-        outputTokens: response.data.usage?.completion_tokens || 0
+        outputTokens: response.data.usage?.completion_tokens || 0,
+        headers: response.headers
       };
     } catch (error) {
       logger.error({ err: error }, 'Cerebras API error');
@@ -2822,6 +2637,80 @@ class AIService {
   }
 
   /**
+   * What one call cost, in dollars.
+   *
+   * Three sources, in order of how much we trust them:
+   *
+   *   1. **The response.** OpenRouter reports `usage.cost` in dollars, exact,
+   *      per call. When the adapter hands one back it is used verbatim — no
+   *      price table, no arithmetic, no drift when the vendor reprices.
+   *   2. **`AIPricing`.** Dollars per 1,000,000 tokens, per model, written by
+   *      the catalog job from the provider's own listing. Cached for ten
+   *      minutes so a busy minute is not a Mongo query per call.
+   *   3. **Zero.** Which is the truth for every free row, and the honest
+   *      answer for a provider whose price we have never been told.
+   *
+   * The `costPer1kTokens` table this replaced was one blended rate per
+   * provider in a *different unit* from AIPricing — see the note on
+   * `this.providers`.
+   */
+  async resolveCostUsd(provider, modelId, inputTokens, outputTokens, reported = null) {
+    if (reported != null && Number.isFinite(Number(reported))) return Number(reported);
+    if (!modelId) return 0;
+
+    const key = this.freeTierKey(provider, modelId);
+    const now = Date.now();
+    let price = this.pricingCache.get(key);
+    if (!price || now - price.at > 10 * 60 * 1000) {
+      try {
+        const row = await AIPricing.findOne({ provider, modelId }).lean();
+        price = {
+          at: now,
+          inputPrice: Number(row?.inputPrice) || 0,
+          outputPrice: Number(row?.outputPrice) || 0
+        };
+      } catch (error) {
+        logger.debug({ err: error, provider, modelId }, '[AIService] price lookup failed — booking 0');
+        price = { at: now, inputPrice: 0, outputPrice: 0 };
+      }
+      this.pricingCache.set(key, price);
+    }
+
+    // AIPricing stores dollars per 1,000,000 tokens (priceUnit: per_1m_tokens).
+    const cost = (inputTokens / 1e6) * price.inputPrice + (outputTokens / 1e6) * price.outputPrice;
+    return Number.isFinite(cost) ? cost : 0;
+  }
+
+  /**
+   * Book one call against the daily ledger: one upsert `$inc` per call, keyed
+   * (UTC day, provider, app, feature). Free rows book zero cost and still book
+   * the call, so "free" is a number rather than an absence.
+   *
+   * Fire-and-forget for callers: the ledger feeds Phase 2's governor and
+   * Phase 3's "dollars left", and neither is worth making a user wait for. The
+   * promise is returned anyway — never rejecting — so a test can await the
+   * write instead of guessing how many ticks it takes.
+   */
+  recordSpend(provider, appId, featureId, costUsd, now = new Date()) {
+    const key = { day: spendDay(now), provider, app: appId || 'unknown', feature: featureId || '' };
+    const inc = { $inc: { calls: 1, costUsd: Number(costUsd) || 0 } };
+    return AISpend.updateOne(key, inc, { upsert: true })
+      // Two calls in the same millisecond both find no document and both try
+      // to insert one; the unique index refuses the loser with E11000. The
+      // document exists by then, so the retry is a plain `$inc` and cannot
+      // race again. Without this, a burst silently loses calls from the
+      // ledger, which is the one collection that has to add up.
+      .catch((err) => {
+        if (err?.code !== 11000) throw err;
+        return AISpend.updateOne(key, inc);
+      })
+      .catch((err) => {
+        logger.debug({ err, ...key }, '[AIService] failed to book spend');
+      })
+      .then(() => key);
+  }
+
+  /**
    * Update usage statistics.
    *
    * `appName` is the resolved app id and `feature` an optional slice of it.
@@ -2830,61 +2719,21 @@ class AIService {
    * unrelated consumers, which made "what does fitnessgeek cost" unanswerable.
    * Now there is one app row with a `features` map inside it. The map is
    * additive — existing readers of `appUsage[app].calls` are unaffected.
+   *
+   * `reportedCostUsd` is the provider's own figure where it gave one
+   * (OpenRouter). Everything else is priced from `AIPricing`.
+   *
+   * What is gone from here (Phase 1, 2026-09-07): a per-call `AIFreeTier`
+   * lookup followed by `AIUsage.findOne({ date: new Date().toDateString() })`
+   * — a Date field compared to a string, so it never matched and the branch it
+   * guarded never ran — which decided whether to charge the blended
+   * `costPer1kTokens` rate. Cost is resolved once now, from the response or
+   * from the price table, and a call is "free" when it cost nothing.
    */
-    async updateStats(provider, inputTokens, outputTokens, modelId = null, appName = 'unknown', feature = null) {
-    // Cost below is (tokens / 1000) * costPer1kTokens — per-1K, matching the
-    // provider table's unit, NOT the per-1M unit of AIPricing/costForTokens.
+    async updateStats(provider, inputTokens, outputTokens, modelId = null, appName = 'unknown', feature = null, reportedCostUsd = null) {
     const totalTokens = inputTokens + outputTokens;
-
-    // Check if this model is free and within limits
-    let actualCost = 0;
-    let isFreeUsage = false;
-
-    if (modelId) {
-      try {
-        // Check if model is in free tier
-        const freeTier = await AIFreeTier.findOne({ provider, modelId });
-        if (freeTier?.isFree) {
-          // Check current usage for this model
-          const usage = await AIUsage.findOne({
-            provider,
-            modelId,
-            userId: 'session', // We'll need to pass actual userId
-            date: new Date().toDateString()
-          });
-
-          if (usage) {
-            // Check if we're still within free limits
-            const isWithinLimits = !usage.isAtLimit.requestsPerDay &&
-                                 !usage.isAtLimit.tokensPerDay &&
-                                 !usage.isAtLimit.requestsPerMinute &&
-                                 !usage.isAtLimit.tokensPerMinute;
-
-            if (isWithinLimits) {
-              isFreeUsage = true;
-              actualCost = 0; // Free!
-            } else {
-              // Exceeded free tier - calculate cost
-              actualCost = (totalTokens / 1000) * this.providers[provider].costPer1kTokens;
-            }
-          } else {
-            // No usage record yet - assume free
-            isFreeUsage = true;
-            actualCost = 0;
-          }
-        } else {
-          // Not a free model - always charge
-          actualCost = (totalTokens / 1000) * this.providers[provider].costPer1kTokens;
-        }
-      } catch (error) {
-        logger.error({ err: error }, 'Error checking free tier status');
-        // Fallback to charging
-        actualCost = (totalTokens / 1000) * this.providers[provider].costPer1kTokens;
-      }
-    } else {
-      // No modelId provided - charge normally
-      actualCost = (totalTokens / 1000) * this.providers[provider].costPer1kTokens;
-    }
+    const actualCost = await this.resolveCostUsd(provider, modelId, inputTokens, outputTokens, reportedCostUsd);
+    const isFreeUsage = actualCost === 0;
 
     this.sessionStats.totalCalls++;
     this.sessionStats.totalTokens += totalTokens;
@@ -2965,6 +2814,13 @@ class AIService {
       appStats.paidCalls++;
       if (featureStats) featureStats.paidCalls++;
     }
+
+    // sessionStats above is in-process and dies with the container. The ledger
+    // is the part that survives a deploy, and the only place a month of
+    // spending can be read from.
+    this.recordSpend(provider, appId, featureId, actualCost);
+
+    return { costUsd: actualCost, totalTokens, isFreeUsage };
   }
 
   /**
@@ -3032,14 +2888,14 @@ class AIService {
       providers: {
         current: this.currentProvider,
         available: this.getAvailableProviders(),
-        rateLimits: Object.entries(this.rateLimits).map(([provider, limits]) => ({
-          provider,
-          tokensUsed: limits.tokensUsed || 0,
-          tokensPerMinute: limits.tokensPerMinute || 'none',
-          requestsUsed: limits.requestsUsed,
-          requestsPerMinute: limits.requestsPerMinute,
-          rateLimited: limits.rateLimitedUntil && Date.now() < limits.rateLimitedUntil
-        }))
+        // Only what a provider actually told us: which ones are inside their
+        // own retry-after, and until when. The declared RPM/TPM columns that
+        // used to be here were the static table, and it was wrong — per-row
+        // ceilings now live on `AIFreeTier.freeLimits`, observed.
+        rateLimited: Object.entries(this.rateLimits)
+          .filter(([, limits]) => limits.rateLimitedUntil && Date.now() < limits.rateLimitedUntil)
+          .map(([provider, limits]) => ({ provider, until: new Date(limits.rateLimitedUntil).toISOString() })),
+        rotation: this.rotationManager.getState()
       }
     };
   }

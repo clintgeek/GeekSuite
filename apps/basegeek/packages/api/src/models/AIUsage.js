@@ -48,6 +48,18 @@ const aiUsageSchema = new mongoose.Schema({
     audioSecondsPerHour: { type: Number, default: 0 },
     audioSecondsPerDay: { type: Number, default: 0 }
   },
+  /**
+   * Dollars this record's calls have cost — OpenRouter's own `usage.cost` where
+   * it reported one, otherwise `AIPricing` (per 1,000,000 tokens) × tokens,
+   * otherwise 0. Free rows book 0 and still book their calls.
+   *
+   * The per-day / per-app / per-feature roll-up of the same figure lives in
+   * `AISpend`; this field is the per-model detail behind it.
+   */
+  costUsd: {
+    type: Number,
+    default: 0
+  },
   // Usage percentage tracking
   usagePercentages: {
     requestsPerMinute: { type: Number, default: 0 },

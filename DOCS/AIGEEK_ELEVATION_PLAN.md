@@ -190,6 +190,17 @@ now checks code lines only, so an incident comment may name a retired provider a
 
 Net: about −3,300 lines, one new ~500-line job, and the maintenance burden gone.
 
+**Shipped 2026-09-07.** Design of record: `apps/basegeek/DOCS/AIGEEK_CATALOG_JOB.md` (kept current
+by the build). Deviations worth knowing: `aiService.rateLimits` is an empty map filled only by live
+429s (deleting the property broke a route and a test helper); the OpenRouter adapter sends
+`usage: { include: true }` (documented, harmless) and records `costUsd: null` when unreported so
+"unknown" is never "free"; `AISpend` retries once on a duplicate-key race; the deny list gained a
+`-vl` vision pattern; the capabilities service carries a `looksObserved()` guard until one discovery
+run has stamped `capabilities.source` on every active row. Found on the way: the director had been
+inferring capabilities 100% of the time (it read a projection that never carried them), and
+`updateStats` compared a Date to a string so its usage branch never ran. `/capabilities` now reports
+only a live 429 cooldown; `/providers` dropped the blended per-1K cost field (no consumers).
+
 ### Phase 2 — One front door (M, two sessions; touches fitnessgeek and storygeek)
 
 - Collapse the 11 routing modes in `callAI:1650-1872` to `auto` and `pin`. `tier: free | rotation`

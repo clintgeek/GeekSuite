@@ -174,16 +174,14 @@ router.get('/capabilities', async (req, res) => {
         recommendedContextTokens: recommendedContextTokens,
         maxResponseTokens: config.maxTokens || 4000,
         availableProviders: Object.keys(aiService.providers).filter(p => aiService.providers[p].enabled),
-        rateLimitStatus: rateLimits ? {
-          tokensUsed: rateLimits.tokensUsed || 0,
-          tokensPerMinute: rateLimits.tokensPerMinute || null,
-          tokensAvailable: rateLimits.tokensPerMinute ? (rateLimits.tokensPerMinute - (rateLimits.tokensUsed || 0)) : null,
-          requestsUsed: rateLimits.requestsUsed || 0,
-          requestsPerMinute: rateLimits.requestsPerMinute || 30,
-          requestsAvailable: rateLimits.requestsPerMinute - (rateLimits.requestsUsed || 0),
-          isRateLimited: rateLimits.rateLimitedUntil ? Date.now() < rateLimits.rateLimitedUntil : false,
-          rateLimitedUntil: rateLimits.rateLimitedUntil || null
-        } : null
+        // Phase 1 (2026-09-07): the declared per-provider limits table is
+        // gone — quotas are learned from `x-ratelimit-*` headers into
+        // AIFreeTier.freeLimits/observed. `aiService.rateLimits[p]` now holds
+        // only a live 429 cooldown, so that is all this reports.
+        rateLimitStatus: {
+          isRateLimited: rateLimits?.rateLimitedUntil ? Date.now() < rateLimits.rateLimitedUntil : false,
+          rateLimitedUntil: rateLimits?.rateLimitedUntil || null
+        }
       }
     });
   } catch (error) {
@@ -926,10 +924,12 @@ router.get('/providers', async (req, res) => {
     if (permissionError) return;
 
     const availableProviders = aiService.getAvailableProviders();
+    // `costPer1kTokens` (one blended per-provider rate) went with Phase 1
+    // (2026-09-07): cost is now per call, from the provider's own `usage.cost`
+    // or AIPricing, and lands in AISpend. Nothing consumed the field.
     const providerInfo = availableProviders.map(provider => ({
       name: provider,
-      displayName: aiService.providers[provider].name,
-      costPer1kTokens: aiService.providers[provider].costPer1kTokens
+      displayName: aiService.providers[provider].name
     }));
 
     res.json({
@@ -1285,59 +1285,31 @@ router.post('/director/recommend', async (req, res) => {
   }
 });
 
-// POST /api/ai/director/seed-pricing - Seed initial pricing data
+// `POST /director/seed-pricing` and `POST /director/seed-free-tier` stood here
+// until 2026-09-07. Both took an admin's click and wrote a hand-typed table
+// over the shared catalog: ~45 prices and ~30 free-tier quota rows, typed from
+// vendor docs that change monthly and last checked by whoever typed them. Three
+// such quota tables existed and disagreed with each other.
 //
-// Q45, admin: writes the shared pricing table every routing and cost decision
-// in the suite reads. The three director mutators below are the same case.
-router.post('/director/seed-pricing', requireAdminUser, async (req, res) => {
-  try {
-    await aiDirectorService.seedInitialPricing();
-
-    res.json({
-      success: true,
-      data: {
-        message: 'Initial pricing data seeded successfully'
-      }
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: {
-        message: 'Failed to seed pricing data',
-        code: 'SEED_PRICING_ERROR',
-        details: error.message
-      }
-    });
-  }
-});
-
-// POST /api/ai/director/seed-free-tier - Seed free tier information
-router.post('/director/seed-free-tier', requireAdminUser, async (req, res) => {
-  try {
-    await aiDirectorService.seedFreeTierInformation();
-
-    res.json({
-      success: true,
-      data: {
-        message: 'Free tier information seeded successfully'
-      }
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: {
-        message: 'Failed to seed free tier data',
-        code: 'SEED_FREE_TIER_ERROR',
-        details: error.message
-      }
-    });
-  }
-});
+// Phase 1 of DOCS/AIGEEK_ELEVATION_PLAN.md replaced both with observation: the
+// catalog job (apps/basegeek/DOCS/AIGEEK_CATALOG_JOB.md) discovers models,
+// probes them under our own account, and learns quotas from the `x-ratelimit-*`
+// headers on real calls. Nothing seeds a price or a limit from a literal any
+// more, so there is nothing to restore defaults from. `POST
+// /director/force-refresh` below and `POST /models/:provider/refresh` above are
+// the admin doors that remain.
 
 // POST /api/ai/director/force-refresh - Force refresh all providers
+//
+// Q45, admin: spends the suite's provider credentials against every vendor's
+// catalog API and rewrites the shared AIModel collection every app then routes
+// against. Not a per-caller operation in any reading.
 router.post('/director/force-refresh', requireAdminUser, async (req, res) => {
   try {
-    const providers = ['gemini', 'groq', 'together'];
+    // The roster, not a copy of three of it typed here — which is why a
+    // force-refresh never touched cerebras, cloudflare, ollama, openrouter,
+    // cohere or llmgateway. Unkeyed and disabled providers are skipped below.
+    const providers = PROVIDER_IDS;
     const results = {};
 
     for (const provider of providers) {

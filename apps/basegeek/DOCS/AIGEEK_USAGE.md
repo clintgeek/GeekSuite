@@ -313,7 +313,8 @@ that. Two rules make the table readable:
 | `POST /reset-stats` | **admin** | nothing |
 | `POST /cache/clear` | **admin** | nothing |
 | `POST /summarization` | **admin** | nothing |
-| `POST /director/seed-pricing`, `/director/seed-free-tier`, `/director/force-refresh` | **admin** | nothing |
+| ~~`POST /director/seed-pricing`, `/director/seed-free-tier`~~ | **admin** | nothing — **both routes deleted 2026-09-07** |
+| `POST /director/force-refresh` | **admin** | nothing |
 
 `ai:providers`, `ai:models`, `ai:call` and — since 2026-09-06 — `ai:usage` are
 in the default set every mint path grants, so a key minted with the defaults
@@ -339,6 +340,23 @@ reads, or reseed the pricing table that decides what everything routes to. Their
 GraphQL twins (`resetAIStats`, `syncProviderModels`, `seedDirectorPricing`,
 `seedDirectorFreeTier`) were admin-gated all along; the REST forms were the
 back door standing open beside them, and nothing in the suite was using it.
+
+**The two seed routes are gone (Phase 1, 2026-09-07).** `POST
+/director/seed-pricing` and `POST /director/seed-free-tier` — and their GraphQL
+twins `seedDirectorPricing` / `seedDirectorFreeTier`, and the aiGeek console's
+**Restore defaults** button that fired both — wrote ~45 hand-typed prices and
+~30 hand-typed free-tier quota rows over the shared catalog on an admin's
+click. Prices, quotas and capabilities are observed now: the catalog job reads
+each vendor's listing, probes free candidates under our own account, and learns
+quotas from the `x-ratelimit-*` headers on real calls
+([AIGEEK_CATALOG_JOB.md](./AIGEEK_CATALOG_JOB.md),
+[AI_CATALOG.md](./AI_CATALOG.md#the-catalog-feeds-itself-phase-1-2026-09-07)).
+There is no hand-typed default left to restore. The admin doors that remain are
+`POST /models/:provider/refresh`, `POST /director/force-refresh` (widened in the
+same pass from a hardcoded `['gemini','groq','together']` to the whole roster)
+and GraphQL `syncProviderModels`; per-row manual overrides are still
+`updateModelPricing` / `updateModelFreeTier`. Callers of the deleted routes get
+a 404 — nothing in the suite called them but the console.
 
 `recommend` and `analyze-cost` are the deliberate exception. They mutate
 nothing, StoryGeek's epub pipeline calls `recommend` from a backend, and

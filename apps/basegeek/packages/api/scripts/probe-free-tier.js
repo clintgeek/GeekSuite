@@ -12,11 +12,15 @@
  * StartGeek's Ask — routing row `tier: free` — walked all of them inside a 3 s
  * budget and answered from its search fallback every single time.
  *
- * `aiService` now remembers a hard failure per row (see `AIFreeTier.health`),
- * so that self-heals within one call. This script is the *deliberate* version
- * of the same question: run it after a vendor changes its lineup, or when the
- * aiGeek page shows models nobody has used in a month, and it tells you which
- * rows are still worth having.
+ * Three things now answer that question without a human:
+ *   - `aiService` remembers a hard failure per row (`AIFreeTier.health`), so a
+ *     dead row self-heals within one call (R130);
+ *   - `services/aiCatalogJob.js` re-probes every free row every six hours;
+ *   - this script, which is the *deliberate* version — run it after a vendor
+ *     changes its lineup, or when the aiGeek page shows something odd.
+ *
+ * Everything it does lives in `src/services/aiCatalogDiscovery.js`. This file
+ * is argument parsing, a Mongo connection and some printing.
  *
  * Usage
  * -----
@@ -33,14 +37,17 @@
  *
  * What it sends
  * -------------
- * One 1-token "Reply OK" completion per row, through
- * `aiService.callProvider(provider, prompt, { model, maxTokens: 1 })` — the
+ * One structured-extraction probe per row, through
+ * `aiService.callProvider(provider, prompt, { model, maxTokens: 48 })` — the
  * same adapter a real call takes, so a row that passes here is a row that
- * works. Nothing about the request is user data.
+ * works. Nothing about the request is user data (it is a made-up vet
+ * appointment). A row that answers with parseable JSON is recorded
+ * `fitness: 'structured'` and ranked above one that answers with prose; empty
+ * text at HTTP 200 is dead.
  *
  * What it prints
  * --------------
- * provider, modelId, alive/dead/unknown, and a short classified code
+ * provider, modelId, alive/dead/unknown, fitness, and a short classified code
  * (`http_404`, `model_not_found`, `timeout`, …). **Never a key, never a key
  * hint, and never more than 80 characters of a provider's error text** —
  * provider bodies carry org ids, entitlement detail and vendor-redacted key
@@ -52,21 +59,16 @@
  * Connection strings and provider keys come from `apps/basegeek/.env.production`
  * via dotenv, the way `scripts/mint-api-key.js` reads them. They are never
  * printed. Run this on the baseGeek host.
- *
- * Everything above the CLI block is pure or dependency-injected so it can be
- * tested without a network — see `src/__tests__/aiFreeTierProbe.test.js`.
  */
 
 import path from 'path';
-import { classifyFreeTierFailure } from '../src/models/AIFreeTier.js';
-
-/** How long a `--mark`ed row stays out of selection. */
-export const PROBE_MARK_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
-/** Per-row wall clock budget. */
-export const DEFAULT_PROBE_TIMEOUT_MS = 8000;
-/** Hard ceiling on how much provider text may reach a terminal. */
-export const ERROR_TEXT_LIMIT = 80;
-export const ERROR_TEXT_LIMIT_DETAIL = 200;
+import {
+  DEFAULT_PROBE_TIMEOUT_MS,
+  ERROR_TEXT_LIMIT,
+  ERROR_TEXT_LIMIT_DETAIL,
+  renderTable,
+  runProbe
+} from '../src/services/aiCatalogDiscovery.js';
 
 /* ───────────────────────────── argument parsing ─────────────────────────── */
 
@@ -114,175 +116,6 @@ export function parseArgs(argv) {
   return opts;
 }
 
-/* ──────────────────────────── classification ────────────────────────────── */
-
-/**
- * Trim provider text to something safe to print.
- * @param {string} text
- * @param {number} limit
- */
-export function safeErrorText(text, limit = ERROR_TEXT_LIMIT) {
-  const flat = String(text ?? '').replace(/\s+/g, ' ').trim();
-  if (flat.length <= limit) return flat;
-  return `${flat.slice(0, limit - 1)}…`;
-}
-
-/**
- * The probe's verdict on one row.
- *
- * Pure, and the single reason this file is importable: it must agree with
- * `aiService`'s selection path about what "dead" means, or a row the probe
- * buries is dug up by the next call — so it delegates the judgement to
- * `classifyFreeTierFailure` in the model and only names the outcome.
- *
- *   alive   — the provider answered
- *   dead    — a hard failure: the model is gone, the slug was recycled, or the
- *             credential is refused. Retrying tomorrow changes nothing.
- *   unknown — a 429, a 5xx, a timeout, a socket. The row may be perfectly fine
- *             and this is a bad minute; `--mark` leaves these alone.
- *
- * @param {Error|null} error  null when the call returned
- * @returns {{status: 'alive'|'dead'|'unknown', code: string, http: number|null}}
- */
-export function classifyProbeOutcome(error) {
-  if (!error) return { status: 'alive', code: 'ok', http: null };
-  const { hard, code, status } = classifyFreeTierFailure(error);
-  return { status: hard ? 'dead' : 'unknown', code, http: status };
-}
-
-/* ──────────────────────────────── the probe ─────────────────────────────── */
-
-/**
- * Call one row, with a wall-clock cap the adapters do not provide themselves
- * (the per-provider axios timeouts are 60 s, which is not a probe).
- *
- * @param {{provider: string, modelId: string}} row
- * @param {{callProvider: Function, timeoutMs?: number}} deps
- */
-export async function probeRow(row, { callProvider, timeoutMs = DEFAULT_PROBE_TIMEOUT_MS }) {
-  const started = Date.now();
-  let timer = null;
-  try {
-    const call = Promise.resolve(
-      callProvider(row.provider, 'Reply OK', {
-        model: row.modelId,
-        // 8, not 1: a reasoning model spends its first tokens thinking and a
-        // 1-token cap makes every one of them look empty.
-        maxTokens: 8,
-        temperature: 0,
-      })
-    );
-    // Attached BEFORE the race: when the timeout wins, the adapter's own
-    // rejection arrives later with nobody listening, and an unhandled rejection
-    // in a script probing eight vendors in a row is a crash, not a warning.
-    call.catch(() => {});
-
-    const guard = new Promise((_, reject) => {
-      timer = setTimeout(() => reject(new Error(`probe timeout after ${timeoutMs}ms`)), timeoutMs);
-    });
-    const result = await Promise.race([call, guard]);
-    // HTTP 200 with no text (gpt-oss through the Cloudflare/Ollama adapters,
-    // 2026-09-06) is not alive: nothing downstream can use it.
-    if (!String(result?.content ?? '').trim()) {
-      return { status: 'dead', code: 'empty_content', http: null, ms: Date.now() - started, message: 'provider returned no text' };
-    }
-    return { ...classifyProbeOutcome(null), ms: Date.now() - started, message: '' };
-  } catch (error) {
-    return {
-      ...classifyProbeOutcome(error),
-      ms: Date.now() - started,
-      message: String(error?.message || ''),
-    };
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
-}
-
-/**
- * Render the results as a fixed-width table. Pure — takes rows, returns lines.
- * @param {Array<{provider: string, modelId: string, status: string, code: string, ms: number, message?: string}>} results
- */
-export function renderTable(results, { detail = false } = {}) {
-  const limit = detail ? ERROR_TEXT_LIMIT_DETAIL : ERROR_TEXT_LIMIT;
-  const columns = [
-    { key: 'provider', head: 'provider' },
-    { key: 'modelId', head: 'model' },
-    { key: 'status', head: 'result' },
-    { key: 'code', head: 'code' },
-    { key: 'ms', head: 'ms' },
-  ];
-  const cell = (row, key) => String(row[key] ?? '');
-  const widths = columns.map(c =>
-    Math.max(c.head.length, ...results.map(r => cell(r, c.key).length), 0)
-  );
-
-  const line = (values) => values.map((v, i) => String(v).padEnd(widths[i])).join('  ').trimEnd();
-  const out = [
-    line(columns.map(c => c.head)),
-    line(widths.map(w => '-'.repeat(w))),
-  ];
-  for (const r of results) {
-    out.push(line(columns.map(c => cell(r, c.key))));
-    if (r.status !== 'alive' && r.message) {
-      out.push(`    ${safeErrorText(r.message, limit)}`);
-    }
-  }
-  return out;
-}
-
-/**
- * Run the probe across a set of rows and (optionally) write the verdicts back.
- *
- * @param {object} deps
- * @param {Array} deps.rows          AIFreeTier documents (or plain objects)
- * @param {Function} deps.callProvider
- * @param {Function} [deps.updateOne] (filter, update) => Promise — omit for a dry run
- * @param {object} [deps.options]
- */
-export async function runProbe({ rows, callProvider, updateOne = null, options = {} }) {
-  const { mark = false, revive = false, timeout = DEFAULT_PROBE_TIMEOUT_MS, now = Date.now() } = options;
-  const results = [];
-
-  // Sequential on purpose: a parallel fan-out across eight vendors is a good
-  // way to trip the very rate limits this is trying to distinguish from death.
-  for (const row of rows) {
-    const outcome = await probeRow(row, { callProvider, timeoutMs: timeout });
-    const result = { provider: row.provider, modelId: row.modelId, ...outcome, marked: null };
-
-    if (updateOne && mark && outcome.status === 'dead') {
-      await updateOne(
-        { provider: row.provider, modelId: row.modelId },
-        {
-          $set: {
-            'health.lastFailureAt': new Date(now),
-            'health.lastFailureCode': outcome.code,
-            'health.coolingUntil': new Date(now + PROBE_MARK_COOLDOWN_MS),
-          },
-        }
-      );
-      result.marked = 'cooled 30d';
-    } else if (updateOne && revive && outcome.status === 'alive') {
-      await updateOne(
-        { provider: row.provider, modelId: row.modelId },
-        {
-          $set: {
-            'health.consecutiveFailures': 0,
-            'health.lastFailureAt': null,
-            'health.lastFailureCode': null,
-            'health.lastSuccessAt': new Date(now),
-            'health.coolingUntil': null,
-          },
-        }
-      );
-      result.marked = 'revived';
-    }
-
-    results.push(result);
-  }
-
-  return results;
-}
-
 const HELP = `
 probe-free-tier.js — ask every free-tier row whether it is still alive
 
@@ -294,9 +127,10 @@ probe-free-tier.js — ask every free-tier row whether it is still alive
   --timeout <ms>      per-row budget (default ${DEFAULT_PROBE_TIMEOUT_MS})
   --detail            allow ${ERROR_TEXT_LIMIT_DETAIL} characters of provider text instead of ${ERROR_TEXT_LIMIT}
 
-Default is report only. Keys and connection strings come from
-apps/basegeek/.env.production and are never printed; provider error text is
-always truncated.
+Default is report only. The catalog job re-probes every free row every six
+hours on its own; this is the manual override. Keys and connection strings come
+from apps/basegeek/.env.production and are never printed; provider error text
+is always truncated.
 `;
 
 /* ─────────────────────────── CLI entrypoint ─────────────────────────────── */
@@ -374,11 +208,12 @@ if (isMain) {
     for (const outLine of renderTable(results, { detail: opts.detail })) console.log(outLine);
 
     const alive = results.filter(r => r.status === 'alive').length;
+    const structured = results.filter(r => r.fitness === 'structured').length;
     const dead = results.filter(r => r.status === 'dead').length;
     const unknown = results.filter(r => r.status === 'unknown').length;
     const written = results.filter(r => r.marked).length;
     console.log('');
-    console.log(`${alive} alive, ${dead} dead, ${unknown} unknown${written ? `, ${written} row(s) updated` : ''}`);
+    console.log(`${alive} alive (${structured} structured), ${dead} dead, ${unknown} unknown${written ? `, ${written} row(s) updated` : ''}`);
     if (skipped.length) {
       console.log(`not probed (no provider key): ${skipped.map(r => `${r.provider}/${r.modelId}`).join(', ')}`);
     }

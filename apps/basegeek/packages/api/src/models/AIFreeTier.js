@@ -40,6 +40,28 @@ const aiFreeTierSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  /**
+   * How well this row answers the catalog probe, as of `probedAt`.
+   *
+   *   `structured` — returned parseable JSON with the fields the probe asked
+   *                  for. Every AI feature in the suite asks for structured
+   *                  output, so these are ranked first within a provider.
+   *   `basic`      — answered with text, but not JSON. Kept and ranked lower;
+   *                  nothing is excluded for being small, it is ranked.
+   *   `null`       — never probed (a row written by hand or by an older sync).
+   *
+   * This is the whole replacement for the 30-term `NOT_GENERAL` name regex
+   * that used to decide which models were "general assistants" (2026-09-07).
+   */
+  fitness: {
+    type: String,
+    enum: ['structured', 'basic'],
+    default: null
+  },
+  probedAt: {
+    type: Date,
+    default: null
+  },
   freeLimits: {
     requestsPerMinute: { type: Number, default: 0 },
     requestsPerDay: { type: Number, default: 0 },
@@ -47,6 +69,25 @@ const aiFreeTierSchema = new mongoose.Schema({
     tokensPerDay: { type: Number, default: 0 },
     audioSecondsPerHour: { type: Number, default: 0 },
     audioSecondsPerDay: { type: Number, default: 0 }
+  },
+  /**
+   * What the provider's own `x-ratelimit-remaining-*` / `-reset-*` headers said
+   * on our last real call to this row (`aiService.recordObservedLimits`).
+   * Debounced to one write per row per minute.
+   *
+   * `freeLimits` above is the ceiling the same headers reported; this is the
+   * live reading. Selection skips a row whose `remainingRequests` is 0 while
+   * `resetAt` is still in the future — the one case where we know, rather than
+   * guess, that a call would 429.
+   *
+   * Providers that send no rate-limit headers at all (Gemini, Cloudflare,
+   * Cohere, Ollama Cloud) simply never populate this.
+   */
+  observed: {
+    remainingRequests: { type: Number, default: null },
+    remainingTokens: { type: Number, default: null },
+    resetAt: { type: Date, default: null },
+    seenAt: { type: Date, default: null }
   },
   currentUsage: {
     requestsToday: { type: Number, default: 0 },

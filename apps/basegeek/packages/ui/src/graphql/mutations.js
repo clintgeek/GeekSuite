@@ -50,17 +50,9 @@ export const RESET_AI_STATS = gql`
   }
 `;
 
-export const SEED_DIRECTOR_PRICING = gql`
-  mutation SeedDirectorPricing {
-    seedDirectorPricing
-  }
-`;
-
-export const SEED_DIRECTOR_FREE_TIER = gql`
-  mutation SeedDirectorFreeTier {
-    seedDirectorFreeTier
-  }
-`;
+// SEED_DIRECTOR_PRICING / SEED_DIRECTOR_FREE_TIER were here until 2026-09-07.
+// Both mutations are gone from the schema: the catalog is observed by the
+// catalog job now, so there is no hand-typed default to restore.
 
 export const SYNC_PROVIDER_MODELS = gql`
   mutation SyncProviderModels($provider: String!) {

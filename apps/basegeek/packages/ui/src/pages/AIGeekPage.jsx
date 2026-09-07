@@ -39,7 +39,6 @@ import FreeTierDialog from './aigeek/dialogs/FreeTierDialog';
 import {
   ResetStatsDialog,
   ResetFreeTiersDialog,
-  RestoreDefaultsDialog,
   RevokeKeyDialog,
 } from './aigeek/dialogs/ConfirmDialogs';
 
@@ -174,7 +173,6 @@ export default function AIGeekPage() {
             dispatch({ type: 'freeTier/limit', provider, modelId, field, value })}
           onSaveAll={aigeek.saveAllFreeTiers}
           onResetAll={() => setConfirm('showResetConfirm', true)}
-          onRestoreDefaults={() => setConfirm('showRestoreDefaultsConfirm', true)}
           onEditPricing={aigeek.openPricingDialog}
           onEditFreeTier={aigeek.openFreeTierDialog}
         />
@@ -246,12 +244,6 @@ export default function AIGeekPage() {
         busy={state.savingBulk}
         onCancel={() => setConfirm('showResetConfirm', false)}
         onConfirm={aigeek.resetAllFreeTiers}
-      />
-      <RestoreDefaultsDialog
-        open={state.showRestoreDefaultsConfirm}
-        busy={state.savingBulk}
-        onCancel={() => setConfirm('showRestoreDefaultsConfirm', false)}
-        onConfirm={aigeek.restoreHardcodedDefaults}
       />
     </Box>
   );

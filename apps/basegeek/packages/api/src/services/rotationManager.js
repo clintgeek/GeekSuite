@@ -1,152 +1,97 @@
-import fs from 'fs';
-import path from 'path';
 import logger from '../lib/logger.js';
+import { FALLBACK_ORDER } from '../config/aiProviders.js';
 
-const DEFAULT_STATE = {
-  providers: {
-    groq: { remainingRequests: null, remainingTokens: null, lastUpdated: null },
-    cerebras: { remainingRequests: null, remainingTokens: null, lastUpdated: null },
-    together: { remainingRequests: null, remainingTokens: null, lastUpdated: null },
-    openrouter: { remainingRequests: null, remainingTokens: null, lastUpdated: null },
-    cloudflare: { remainingRequests: null, remainingTokens: null, lastUpdated: null },
-    ollama: { remainingRequests: null, remainingTokens: null, lastUpdated: null },
-    llmgateway: { remainingRequests: null, remainingTokens: null, lastUpdated: null }
-  },
-  activeProvider: 'groq'
-};
-
-const ROTATION_PRIORITY = ['groq', 'cerebras', 'together', 'openrouter', 'cloudflare', 'ollama', 'llmgateway'];
-
-const PROVIDER_LIMITS = {
-  groq: { rpm: 30, rpd: 1000, tpm: 6000 },
-  cerebras: { rpm: 10, tpm: 150000, tpd: 1000000 },
-  together: { rpm: 600, tpm: 180000 },
-  openrouter: { rpm: 20, rpd: 50 },
-  cloudflare: { rpm: 300, dailyNeurons: 10000 },
-  ollama: { hourly: 1000 },
-  llmgateway: { rpm: 20 }
-};
-
+/**
+ * RotationManager — provider-level cooldowns, in memory, and nothing else.
+ *
+ * What this used to be, and why none of it survived Phase 1 (2026-09-07):
+ *
+ *   - **`PROVIDER_LIMITS`** — a hand-typed RPM/TPM/RPD table. It was the third
+ *     copy of those numbers in the repo (`aiService.rateLimits` and
+ *     `aiDirectorService`'s free-tier seed were the others) and the three
+ *     disagreed: Groq's TPM was 6000, 12000 and 18000 depending on which file
+ *     you read. Quotas are now learned from the `x-ratelimit-*` headers of
+ *     real calls — see `aiService.recordObservedLimits` and
+ *     `aiCatalogDiscovery.parseRateLimitHeaders`. Nothing declares them.
+ *
+ *   - **`ROTATION_PRIORITY`** — a fourth restatement of the provider order.
+ *     `config/aiProviders.js` already carries `rotationPosition` per provider
+ *     and exports `FALLBACK_ORDER`; that is now the one list.
+ *
+ *   - **`rotation-state.json`** — per-container file state under `logs/`,
+ *     holding remaining-request counters that reset on every deploy and were
+ *     never shared between containers. It was written on *every* call
+ *     (`persistState` after each `recordUsage`) to hold numbers the request
+ *     path could read off a response header for free. Both the file and the
+ *     `recordUsage` / `updateRemaining` / `resetProviderUsage` methods that
+ *     fed it are gone; `AIFreeTier.observed` is where remaining quota lives
+ *     now, per row rather than per provider.
+ *
+ * What is left is the one thing that was load-bearing and correct: a
+ * short-lived, in-process cooldown so a provider that just answered 429 is
+ * skipped by the *next* rotation pick. Minutes long, per provider, and
+ * deliberately not persisted — a restart clearing it is the right failure
+ * direction.
+ *
+ * Row-level free-tier health (`AIFreeTier.health`, R130) is the other half and
+ * is orthogonal: this class knows nothing about models.
+ */
 export default class RotationManager {
-  constructor(stateFilePath) {
-    this.stateFilePath = stateFilePath || path.join(process.cwd(), 'rotation-state.json');
-    this.state = this.loadState();
-  }
-
-  loadState() {
-    try {
-      if (fs.existsSync(this.stateFilePath)) {
-        const raw = fs.readFileSync(this.stateFilePath, 'utf-8');
-        const parsed = JSON.parse(raw);
-        return { ...DEFAULT_STATE, ...parsed };
-      }
-    } catch (error) {
-      logger.error({ err: error }, '[RotationManager] Failed to load state');
-    }
-    return { ...DEFAULT_STATE };
-  }
-
-  persistState() {
-    try {
-      fs.writeFileSync(this.stateFilePath, JSON.stringify(this.state, null, 2), 'utf-8');
-    } catch (error) {
-      logger.error({ err: error }, '[RotationManager] Failed to persist state');
-    }
-  }
-
-  recordUsage(provider, { requests = 1, tokens = 0 } = {}) {
-    if (!this.state.providers[provider]) {
-      this.state.providers[provider] = { remainingRequests: null, remainingTokens: null, lastUpdated: null };
-    }
-    const entry = this.state.providers[provider];
-
-    if (entry.remainingRequests !== null) {
-      entry.remainingRequests = Math.max(0, entry.remainingRequests - requests);
-    }
-
-    if (entry.remainingTokens !== null) {
-      entry.remainingTokens = Math.max(0, entry.remainingTokens - tokens);
-    }
-
-    entry.lastUpdated = new Date().toISOString();
-
-    if (!entry.requestsUsed) entry.requestsUsed = 0;
-    if (!entry.tokensUsed) entry.tokensUsed = 0;
-    entry.requestsUsed += requests;
-    entry.tokensUsed += tokens;
-
-    this.persistState();
-  }
-
-  updateRemaining(provider, { remainingRequests, remainingTokens }) {
-    if (!this.state.providers[provider]) {
-      this.state.providers[provider] = { remainingRequests: null, remainingTokens: null, lastUpdated: null };
-    }
-
-    const entry = this.state.providers[provider];
-    if (typeof remainingRequests === 'number') {
-      entry.remainingRequests = remainingRequests;
-    }
-    if (typeof remainingTokens === 'number') {
-      entry.remainingTokens = remainingTokens;
-    }
-    entry.lastUpdated = new Date().toISOString();
-    this.persistState();
+  /**
+   * @param {{order?: string[]}} [opts] `order` is injectable for tests only;
+   *   production always uses `FALLBACK_ORDER`.
+   */
+  constructor(opts = {}) {
+    const order = Array.isArray(opts.order) ? opts.order : FALLBACK_ORDER;
+    this.order = [...order];
+    /** provider id → epoch ms at which it may be picked again. */
+    this.cooldowns = new Map();
+    this.activeProvider = this.order[0] || null;
   }
 
   markProviderCooling(provider, cooldownMs) {
-    if (!this.state.cooldowns) this.state.cooldowns = {};
-    this.state.cooldowns[provider] = Date.now() + cooldownMs;
-    this.persistState();
+    const until = Date.now() + Math.max(0, Number(cooldownMs) || 0);
+    this.cooldowns.set(provider, until);
+    logger.debug({ provider, until }, '[RotationManager] provider cooling');
+    return until;
   }
 
-  isCooling(provider) {
-    if (!this.state.cooldowns || !this.state.cooldowns[provider]) return false;
-    if (Date.now() > this.state.cooldowns[provider]) {
-      delete this.state.cooldowns[provider];
-      this.persistState();
+  isCooling(provider, now = Date.now()) {
+    const until = this.cooldowns.get(provider);
+    if (until === undefined) return false;
+    if (now > until) {
+      this.cooldowns.delete(provider);
       return false;
     }
     return true;
   }
 
-  selectProvider() {
-    for (const provider of ROTATION_PRIORITY) {
-      if (this.isCooling(provider)) continue;
-
-      const limits = PROVIDER_LIMITS[provider];
-      const entry = this.state.providers[provider];
-
-      if (entry) {
-        if (typeof entry.remainingRequests === 'number' && entry.remainingRequests <= 0) {
-          continue;
-        }
-        if (typeof entry.remainingTokens === 'number' && entry.remainingTokens <= 0) {
-          continue;
-        }
-      }
-
-      this.state.activeProvider = provider;
-      this.persistState();
-      return { provider, limits };
-    }
-
-    return { provider: ROTATION_PRIORITY[0], limits: PROVIDER_LIMITS[ROTATION_PRIORITY[0]], fallback: true };
-  }
-
-  getState() {
-    return this.state;
-  }
-
+  /** The rotation order, from `config/aiProviders.js`. Never a local copy. */
   getPriorityList() {
-    return [...ROTATION_PRIORITY];
+    return [...this.order];
   }
 
-  resetProviderUsage(provider) {
-    if (this.state.providers[provider]) {
-      this.state.providers[provider].requestsUsed = 0;
-      this.state.providers[provider].tokensUsed = 0;
-      this.persistState();
+  /**
+   * The first provider in rotation order that is not cooling. When every one
+   * is cooling, the head of the list is returned with `fallback: true` —
+   * answering with a long shot beats answering nothing, and the caller's own
+   * walk will move on if it fails.
+   */
+  selectProvider(now = Date.now()) {
+    for (const provider of this.order) {
+      if (this.isCooling(provider, now)) continue;
+      this.activeProvider = provider;
+      return { provider };
     }
+    return { provider: this.order[0] || null, fallback: true };
+  }
+
+  /** For the status surfaces. No file, no counters — just what is asleep. */
+  getState(now = Date.now()) {
+    const cooling = {};
+    for (const [provider, until] of this.cooldowns) {
+      if (until > now) cooling[provider] = new Date(until).toISOString();
+    }
+    return { activeProvider: this.activeProvider, cooling, order: this.getPriorityList() };
   }
 }

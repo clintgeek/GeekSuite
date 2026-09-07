@@ -185,8 +185,9 @@ export const typeDefs = gql`
     saveAIConfig(config: JSON!): JSON
     testAIProvider(provider: String!): Boolean
     resetAIStats: Boolean
-    seedDirectorPricing: Boolean
-    seedDirectorFreeTier: Boolean
+    # seedDirectorPricing / seedDirectorFreeTier retired 2026-09-07: the catalog
+    # is observed by the catalog job now, not seeded from a hand-typed table.
+    # See apps/basegeek/DOCS/AIGEEK_CATALOG_JOB.md.
 
     # Model Management
     syncProviderModels(provider: String!): JSON

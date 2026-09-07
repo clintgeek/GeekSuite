@@ -1,9 +1,12 @@
 /**
- * The three destructive confirmations, which differ only in wording and tone.
+ * The destructive confirmations, which differ only in wording and tone.
  *
- * They were three near-identical `<Dialog>` blocks at the bottom of the page.
- * One component, three call sites: the thing that actually varies — what is
- * about to be lost and whether it can be recovered — is the copy.
+ * They were near-identical `<Dialog>` blocks at the bottom of the page. One
+ * component, three call sites: the thing that actually varies — what is about
+ * to be lost and whether it can be recovered — is the copy.
+ *
+ * `RestoreDefaultsDialog` was the fourth until 2026-09-07; the seed mutations
+ * behind it went with the hand-typed catalog tables (Phase 1).
  */
 import {
   Alert,
@@ -86,22 +89,6 @@ export function RevokeKeyDialog({ apiKey, busy, onCancel, onConfirm }) {
       busy={busy}
       warning={apiKey ? `Anything calling aiGeek as ${apiKey.appName} with this key starts failing immediately.` : undefined}
       body="The key stops working the moment you confirm, and it cannot be shown or restored. Mint a replacement first if something is live on it."
-      onCancel={onCancel}
-      onConfirm={onConfirm}
-    />
-  );
-}
-
-export function RestoreDefaultsDialog({ open, busy, onCancel, onConfirm }) {
-  return (
-    <ConfirmDialog
-      open={open}
-      title="Restore hardcoded defaults?"
-      color="warning"
-      confirmLabel="Restore defaults"
-      busy={busy}
-      warning="This overwrites your manual free-tier selections for every known model with the defaults baked into the seed data."
-      body="Useful for recovering from an accidental bulk change. It cannot be undone."
       onCancel={onCancel}
       onConfirm={onConfirm}
     />

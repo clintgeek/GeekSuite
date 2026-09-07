@@ -1,17 +1,34 @@
 import AIModel from '../models/AIModel.js';
+import { PROVIDER_IDS } from '../config/aiProviders.js';
 import logger from '../lib/logger.js';
 
-// Canonical OpenAI-compatible capability flags layered on top of the legacy
-// (supportsFunctionCalling / supportsJSONOutput) flags. Populated by normalize()
-// so every entry in knownCapabilities gets the full set without per-entry edits.
+// ─── Adapter facts ───────────────────────────────────────────────────────────
+//
+// The three constants below are facts about *our adapters*, not claims about
+// models: they say which provider/model pairs aiService can actually put
+// `tools` or a `response_format` on the wire for. Nothing here is a vendor
+// catalogue and nothing here needs feeding — a pair joins a set the day the
+// adapter beside it learns the parameter, and leaves it the day the adapter
+// goes.
+//
+// The ~1,210-line `knownCapabilities` table that used to sit under them (model
+// context windows, speed and quality tiers, per-model tool and JSON flags,
+// hand-typed for nine vendors) was deleted on 2026-09-07 in Phase 1 of
+// DOCS/AIGEEK_ELEVATION_PLAN.md. What a model can do is now observed, not
+// declared: the catalog job writes `AIModel.capabilities` from OpenRouter's
+// `supported_parameters` or from a live probe, and `inferCapabilities` below is
+// the fallback for a listing that says nothing. `TOOL_CALLING_CORRECTIONS` — a
+// dozen groq ids that existed only to patch that table's stale
+// `supportsFunctionCalling: false` rows — went with it; groq's entry in
+// TOOL_FORWARDING_PROVIDERS is the whole of that fact now.
 //
 // JSON_SCHEMA_SUPPORTED / JSON_MODE_SUPPORTED:
 //   Provider/model pairs where aiService has a NATIVE translation implemented
 //   in its call*() method for response_format:{type: "json_schema"|"json_object"}.
 //
-// Pairs NOT in these sets fall through to the prompt-injection fallback
-// (item 5) — which preserves rotation: every provider can "do" structured
-// output one way or the other, just at varying fidelity.
+// Pairs NOT in these sets fall through to the prompt-injection fallback —
+// which preserves rotation: every provider can "do" structured output one way
+// or the other, just at varying fidelity.
 //
 // Expand these sets as native implementations land in callGroq / callCerebras /
 // callOpenRouter / etc. The legacy supportsJSONOutput flag is a softer "can
@@ -60,24 +77,6 @@ function forwardsTools(provider) {
   return TOOL_FORWARDING_PROVIDERS.has(provider);
 }
 
-// TOOL_CALLING_CORRECTIONS: overrides for supportsFunctionCalling/supportsToolCalling.
-// The legacy data in knownCapabilities predates Groq's function-calling support — this
-// set patches those entries without rewriting 50 blocks.
-const TOOL_CALLING_CORRECTIONS = new Set([
-  'groq:llama-3.3-70b-versatile',
-  'groq:llama-3.1-70b-versatile',
-  'groq:llama-3.1-8b-instant',
-  'groq:llama3-70b-8192',
-  'groq:llama3-8b-8192',
-  'groq:meta-llama/llama-4-scout-17b-16e-instruct',
-  'groq:meta-llama/llama-4-maverick-17b-128e-instruct',
-  'groq:qwen/qwen3-32b',
-  'groq:moonshotai/kimi-k2-instruct',
-  'groq:openai/gpt-oss-20b',
-  'groq:openai/gpt-oss-120b',
-  'groq:deepseek-r1-distill-llama-70b'
-]);
-
 function schemaSupportedFor(provider, modelId) {
   return JSON_SCHEMA_SUPPORTED.has(`${provider}:*`) ||
          JSON_SCHEMA_SUPPORTED.has(`${provider}:${modelId}`);
@@ -88,1080 +87,54 @@ function jsonModeSupportedFor(provider, modelId) {
          JSON_MODE_SUPPORTED.has(`${provider}:${modelId}`);
 }
 
-function toolCallingCorrectedFor(provider, modelId) {
-  return TOOL_CALLING_CORRECTIONS.has(`${provider}:${modelId}`);
+/**
+ * Has anything actually observed this row's capabilities?
+ *
+ * The AIModel schema gives every capability field a default (4096 tokens,
+ * false, false, false...), so a row written by a plain catalog upsert reads
+ * back as a complete object that claims a 4096-token context and no JSON
+ * support. "Nothing known" and "known to do nothing" are the same document,
+ * and preferring that document over `inferCapabilities` would make every
+ * refreshed model look worse than the guess.
+ *
+ * So: a stored object counts as observed when it says something a default
+ * never would. It can be replaced with a single flag the day the catalog job
+ * stamps one (a `capabilities.source`, or the additive `contextTokens`).
+ */
+function looksObserved(stored) {
+  if (!stored || typeof stored !== 'object') return false;
+  if (
+    stored.supportsVision || stored.supportsAudio ||
+    stored.supportsFunctionCalling || stored.supportsToolCalling ||
+    stored.supportsJSONOutput || stored.supportsJSONMode || stored.supportsJSONSchema
+  ) return true;
+  return Number(stored.contextWindow) > 4096 || Number(stored.maxTokens) > 4096;
 }
 
 class AIModelCapabilitiesService {
-  constructor() {
-    // Known model capabilities based on provider documentation and AI knowledge
-    this.knownCapabilities = {
-      'groq': {
-        'llama-3.1-8b-instant': {
-          maxTokens: 8192,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 8192,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: true,
-            reasoning: false,
-            analysis: true,
-            summarization: true,
-            translation: true,
-            questionAnswering: true,
-            creativeWriting: true,
-            structuredOutput: true
-          },
-          performance: {
-            speed: 'ultra-fast',
-            quality: 'good',
-            reasoning: 'basic'
-          }
-        },
-        'llama-3.1-70b-versatile': {
-          maxTokens: 8192,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 8192,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: true,
-            reasoning: true,
-            analysis: true,
-            summarization: true,
-            translation: true,
-            questionAnswering: true,
-            creativeWriting: true,
-            structuredOutput: true
-          },
-          performance: {
-            speed: 'fast',
-            quality: 'excellent',
-            reasoning: 'excellent'
-          }
-        },
-        'llama-3.1-405b-reasoning': {
-          maxTokens: 8192,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 8192,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: true,
-            reasoning: true,
-            analysis: true,
-            summarization: true,
-            translation: true,
-            questionAnswering: true,
-            creativeWriting: true,
-            structuredOutput: true
-          },
-          performance: {
-            speed: 'medium',
-            quality: 'excellent',
-            reasoning: 'state-of-the-art'
-          }
-        },
-        'mixtral-8x7b-instant': {
-          maxTokens: 8192,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 8192,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: true,
-            reasoning: false,
-            analysis: true,
-            summarization: true,
-            translation: true,
-            questionAnswering: true,
-            creativeWriting: true,
-            structuredOutput: true
-          },
-          performance: {
-            speed: 'ultra-fast',
-            quality: 'good',
-            reasoning: 'basic'
-          }
-        },
-        'gemma-2-9b-it': {
-          maxTokens: 8192,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 8192,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: true,
-            reasoning: false,
-            analysis: true,
-            summarization: true,
-            translation: true,
-            questionAnswering: true,
-            creativeWriting: true,
-            structuredOutput: true
-          },
-          performance: {
-            speed: 'ultra-fast',
-            quality: 'good',
-            reasoning: 'basic'
-          }
-        },
-        'llama-3.3-70b-versatile': {
-          maxTokens: 8192,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 8192,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: true,
-            reasoning: true,
-            analysis: true,
-            summarization: true,
-            translation: true,
-            questionAnswering: true,
-            creativeWriting: true,
-            structuredOutput: true
-          },
-          performance: {
-            speed: 'fast',
-            quality: 'excellent',
-            reasoning: 'excellent'
-          }
-        },
-        'llama3-8b-8192': {
-          maxTokens: 8192,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 8192,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: true,
-            reasoning: false,
-            analysis: true,
-            summarization: true,
-            translation: true,
-            questionAnswering: true,
-            creativeWriting: true,
-            structuredOutput: true
-          },
-          performance: {
-            speed: 'ultra-fast',
-            quality: 'good',
-            reasoning: 'basic'
-          }
-        },
-        'llama3-70b-8192': {
-          maxTokens: 8192,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 8192,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: true,
-            reasoning: true,
-            analysis: true,
-            summarization: true,
-            translation: true,
-            questionAnswering: true,
-            creativeWriting: true,
-            structuredOutput: true
-          },
-          performance: {
-            speed: 'fast',
-            quality: 'excellent',
-            reasoning: 'excellent'
-          }
-        },
-        'gemma2-9b-it': {
-          maxTokens: 8192,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 8192,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: true,
-            reasoning: false,
-            analysis: true,
-            summarization: true,
-            translation: true,
-            questionAnswering: true,
-            creativeWriting: true,
-            structuredOutput: true
-          },
-          performance: {
-            speed: 'ultra-fast',
-            quality: 'good',
-            reasoning: 'basic'
-          }
-        },
-        'compound-beta': {
-          maxTokens: 8192,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 8192,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: true,
-            reasoning: false,
-            analysis: true,
-            summarization: true,
-            translation: true,
-            questionAnswering: true,
-            creativeWriting: true,
-            structuredOutput: true
-          },
-          performance: {
-            speed: 'ultra-fast',
-            quality: 'good',
-            reasoning: 'basic'
-          }
-        },
-        'compound-beta-mini': {
-          maxTokens: 8192,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 8192,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: true,
-            reasoning: false,
-            analysis: true,
-            summarization: true,
-            translation: true,
-            questionAnswering: true,
-            creativeWriting: true,
-            structuredOutput: true
-          },
-          performance: {
-            speed: 'ultra-fast',
-            quality: 'good',
-            reasoning: 'basic'
-          }
-        },
-        'meta-llama/llama-4-scout-17b-16e-instruct': {
-          maxTokens: 8192,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 8192,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: true,
-            reasoning: true,
-            analysis: true,
-            summarization: true,
-            translation: true,
-            questionAnswering: true,
-            creativeWriting: true,
-            structuredOutput: true
-          },
-          performance: {
-            speed: 'fast',
-            quality: 'excellent',
-            reasoning: 'excellent'
-          }
-        },
-        'meta-llama/llama-4-maverick-17b-128e-instruct': {
-          maxTokens: 8192,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 8192,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: true,
-            reasoning: true,
-            analysis: true,
-            summarization: true,
-            translation: true,
-            questionAnswering: true,
-            creativeWriting: true,
-            structuredOutput: true
-          },
-          performance: {
-            speed: 'fast',
-            quality: 'excellent',
-            reasoning: 'excellent'
-          }
-        },
-        'meta-llama/llama-guard-4-12b': {
-          maxTokens: 8192,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 8192,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: false,
-            reasoning: false,
-            analysis: true,
-            summarization: true,
-            translation: false,
-            questionAnswering: true,
-            creativeWriting: false,
-            structuredOutput: false
-          },
-          performance: {
-            speed: 'fast',
-            quality: 'good',
-            reasoning: 'basic'
-          }
-        },
-        'meta-llama/llama-prompt-guard-2-22m': {
-          maxTokens: 8192,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 8192,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: false,
-            reasoning: false,
-            analysis: true,
-            summarization: true,
-            translation: false,
-            questionAnswering: true,
-            creativeWriting: false,
-            structuredOutput: false
-          },
-          performance: {
-            speed: 'ultra-fast',
-            quality: 'basic',
-            reasoning: 'basic'
-          }
-        },
-        'meta-llama/llama-prompt-guard-2-86m': {
-          maxTokens: 8192,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 8192,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: false,
-            reasoning: false,
-            analysis: true,
-            summarization: true,
-            translation: false,
-            questionAnswering: true,
-            creativeWriting: false,
-            structuredOutput: false
-          },
-          performance: {
-            speed: 'ultra-fast',
-            quality: 'basic',
-            reasoning: 'basic'
-          }
-        },
-        'qwen/qwen3-32b': {
-          maxTokens: 8192,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 8192,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: true,
-            reasoning: true,
-            analysis: true,
-            summarization: true,
-            translation: true,
-            questionAnswering: true,
-            creativeWriting: true,
-            structuredOutput: true
-          },
-          performance: {
-            speed: 'fast',
-            quality: 'excellent',
-            reasoning: 'excellent'
-          }
-        },
-        'moonshotai/kimi-k2-instruct': {
-          maxTokens: 8192,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 8192,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: true,
-            reasoning: true,
-            analysis: true,
-            summarization: true,
-            translation: true,
-            questionAnswering: true,
-            creativeWriting: true,
-            structuredOutput: true
-          },
-          performance: {
-            speed: 'fast',
-            quality: 'excellent',
-            reasoning: 'excellent'
-          }
-        },
-        'openai/gpt-oss-20b': {
-          maxTokens: 8192,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 8192,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: true,
-            reasoning: true,
-            analysis: true,
-            summarization: true,
-            translation: true,
-            questionAnswering: true,
-            creativeWriting: true,
-            structuredOutput: true
-          },
-          performance: {
-            speed: 'fast',
-            quality: 'excellent',
-            reasoning: 'excellent'
-          }
-        },
-        'openai/gpt-oss-120b': {
-          maxTokens: 8192,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 8192,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: true,
-            reasoning: true,
-            analysis: true,
-            summarization: true,
-            translation: true,
-            questionAnswering: true,
-            creativeWriting: true,
-            structuredOutput: true
-          },
-          performance: {
-            speed: 'medium',
-            quality: 'state-of-the-art',
-            reasoning: 'state-of-the-art'
-          }
-        },
-        'allam-2-7b': {
-          maxTokens: 8192,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 8192,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: true,
-            reasoning: false,
-            analysis: true,
-            summarization: true,
-            translation: true,
-            questionAnswering: true,
-            creativeWriting: true,
-            structuredOutput: true
-          },
-          performance: {
-            speed: 'ultra-fast',
-            quality: 'good',
-            reasoning: 'basic'
-          }
-        },
-        'deepseek-r1-distill-llama-70b': {
-          maxTokens: 8192,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 8192,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: true,
-            reasoning: true,
-            analysis: true,
-            summarization: true,
-            translation: true,
-            questionAnswering: true,
-            creativeWriting: true,
-            structuredOutput: true
-          },
-          performance: {
-            speed: 'fast',
-            quality: 'excellent',
-            reasoning: 'excellent'
-          }
-        },
-        'whisper-large-v3': {
-          maxTokens: 8192,
-          supportsVision: false,
-          supportsAudio: true,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 8192,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: false,
-            reasoning: false,
-            analysis: true,
-            summarization: true,
-            translation: false,
-            questionAnswering: true,
-            creativeWriting: false,
-            structuredOutput: false
-          },
-          performance: {
-            speed: 'fast',
-            quality: 'excellent',
-            reasoning: 'basic'
-          }
-        },
-        'whisper-large-v3-turbo': {
-          maxTokens: 8192,
-          supportsVision: false,
-          supportsAudio: true,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 8192,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: false,
-            reasoning: false,
-            analysis: true,
-            summarization: true,
-            translation: false,
-            questionAnswering: true,
-            creativeWriting: false,
-            structuredOutput: false
-          },
-          performance: {
-            speed: 'ultra-fast',
-            quality: 'excellent',
-            reasoning: 'basic'
-          }
-        },
-        'distil-whisper-large-v3-en': {
-          maxTokens: 8192,
-          supportsVision: false,
-          supportsAudio: true,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 8192,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: false,
-            reasoning: false,
-            analysis: true,
-            summarization: true,
-            translation: false,
-            questionAnswering: true,
-            creativeWriting: false,
-            structuredOutput: false
-          },
-          performance: {
-            speed: 'ultra-fast',
-            quality: 'good',
-            reasoning: 'basic'
-          }
-        },
-        'playai-tts': {
-          maxTokens: 8192,
-          supportsVision: false,
-          supportsAudio: true,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 8192,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: false,
-            reasoning: false,
-            analysis: true,
-            summarization: true,
-            translation: false,
-            questionAnswering: true,
-            creativeWriting: false,
-            structuredOutput: false
-          },
-          performance: {
-            speed: 'fast',
-            quality: 'good',
-            reasoning: 'basic'
-          }
-        },
-        'playai-tts-arabic': {
-          maxTokens: 8192,
-          supportsVision: false,
-          supportsAudio: true,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 8192,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: false,
-            reasoning: false,
-            analysis: true,
-            summarization: true,
-            translation: false,
-            questionAnswering: true,
-            creativeWriting: false,
-            structuredOutput: false
-          },
-          performance: {
-            speed: 'fast',
-            quality: 'good',
-            reasoning: 'basic'
-          }
-        }
-      },
-      'gemini': {
-        'gemini-1.5-flash': {
-          maxTokens: 1048576,
-          supportsVision: true,
-          supportsAudio: false,
-          supportsFunctionCalling: true,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 1048576,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: true,
-            reasoning: true,
-            analysis: true,
-            summarization: true,
-            translation: true,
-            questionAnswering: true,
-            creativeWriting: true,
-            structuredOutput: true
-          },
-          performance: {
-            speed: 'fast',
-            quality: 'excellent',
-            reasoning: 'excellent'
-          }
-        },
-        'gemini-1.5-pro': {
-          maxTokens: 1048576,
-          supportsVision: true,
-          supportsAudio: false,
-          supportsFunctionCalling: true,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 1048576,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: true,
-            reasoning: true,
-            analysis: true,
-            summarization: true,
-            translation: true,
-            questionAnswering: true,
-            creativeWriting: true,
-            structuredOutput: true
-          },
-          performance: {
-            speed: 'medium',
-            quality: 'state-of-the-art',
-            reasoning: 'state-of-the-art'
-          }
-        },
-        'gemini-pro': {
-          maxTokens: 1048576,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: true,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 1048576,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: true,
-            reasoning: true,
-            analysis: true,
-            summarization: true,
-            translation: true,
-            questionAnswering: true,
-            creativeWriting: true,
-            structuredOutput: true
-          },
-          performance: {
-            speed: 'medium',
-            quality: 'excellent',
-            reasoning: 'excellent'
-          }
-        }
-      },
-      'together': {
-        'meta-llama/Llama-Vision-Free': {
-          maxTokens: 4096,
-          supportsVision: true,
-          supportsAudio: false,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 4096,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: true,
-            reasoning: false,
-            analysis: true,
-            summarization: true,
-            translation: true,
-            questionAnswering: true,
-            creativeWriting: true,
-            structuredOutput: true
-          },
-          performance: {
-            speed: 'fast',
-            quality: 'good',
-            reasoning: 'basic'
-          }
-        },
-        'deepseek-ai/DeepSeek-R1-Distill-Llama-70B-free': {
-          maxTokens: 8192,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 8192,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: true,
-            reasoning: true,
-            analysis: true,
-            summarization: true,
-            translation: true,
-            questionAnswering: true,
-            creativeWriting: true,
-            structuredOutput: true
-          },
-          performance: {
-            speed: 'fast',
-            quality: 'excellent',
-            reasoning: 'excellent'
-          }
-        },
-        'lgai/exaone-deep-32b': {
-          maxTokens: 4096,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 4096,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: true,
-            reasoning: false,
-            analysis: true,
-            summarization: true,
-            translation: true,
-            questionAnswering: true,
-            creativeWriting: true,
-            structuredOutput: true
-          },
-          performance: {
-            speed: 'fast',
-            quality: 'good',
-            reasoning: 'basic'
-          }
-        },
-        'lgai/exaone-3-5-32b-instruct': {
-          maxTokens: 4096,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 4096,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: true,
-            reasoning: false,
-            analysis: true,
-            summarization: true,
-            translation: true,
-            questionAnswering: true,
-            creativeWriting: true,
-            structuredOutput: true
-          },
-          performance: {
-            speed: 'fast',
-            quality: 'good',
-            reasoning: 'basic'
-          }
-        },
-        'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free': {
-          maxTokens: 8192,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 8192,
-          tasks: {
-            textGeneration: true,
-            codeGeneration: true,
-            reasoning: true,
-            analysis: true,
-            summarization: true,
-            translation: true,
-            questionAnswering: true,
-            creativeWriting: true,
-            structuredOutput: true
-          },
-          performance: {
-            speed: 'fast',
-            quality: 'excellent',
-            reasoning: 'excellent'
-          }
-        }
-      },
-      'cerebras': {
-        'llama-3.3-70b': {
-          maxTokens: 8192,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: true,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 8192,
-          tasks: {
-            textGeneration: true, codeGeneration: true, reasoning: true,
-            analysis: true, summarization: true, translation: true,
-            questionAnswering: true, creativeWriting: true, structuredOutput: true
-          },
-          performance: { speed: 'ultra-fast', quality: 'excellent', reasoning: 'excellent' }
-        },
-        'llama3.1-70b': {
-          maxTokens: 8192,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: true,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 8192,
-          tasks: {
-            textGeneration: true, codeGeneration: true, reasoning: true,
-            analysis: true, summarization: true, translation: true,
-            questionAnswering: true, creativeWriting: true, structuredOutput: true
-          },
-          performance: { speed: 'ultra-fast', quality: 'excellent', reasoning: 'excellent' }
-        },
-        'qwen-3-235b': {
-          maxTokens: 32768,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 32768,
-          tasks: {
-            textGeneration: true, codeGeneration: true, reasoning: true,
-            analysis: true, summarization: true, translation: true,
-            questionAnswering: true, creativeWriting: true, structuredOutput: true
-          },
-          performance: { speed: 'fast', quality: 'excellent', reasoning: 'state-of-the-art' }
-        }
-      },
-      'cloudflare': {
-        '@cf/meta/llama-3.3-70b-instruct-fp8-fast': {
-          maxTokens: 4096,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: false,
-          supportsStreaming: true,
-          contextWindow: 4096,
-          tasks: {
-            textGeneration: true, codeGeneration: true, reasoning: true,
-            analysis: true, summarization: true, translation: true,
-            questionAnswering: true, creativeWriting: true, structuredOutput: false
-          },
-          performance: { speed: 'fast', quality: 'good', reasoning: 'good' }
-        }
-      },
-      'ollama': {
-        'qwen3-coder:480b-cloud': {
-          maxTokens: 32768,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 32768,
-          tasks: {
-            textGeneration: true, codeGeneration: true, reasoning: true,
-            analysis: true, summarization: true, translation: true,
-            questionAnswering: true, creativeWriting: true, structuredOutput: true
-          },
-          performance: { speed: 'medium', quality: 'excellent', reasoning: 'excellent' }
-        }
-      },
-      'openrouter': {
-        'meta-llama/llama-3.1-70b-instruct:free': {
-          maxTokens: 8192,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: true,
-          supportsStreaming: true,
-          contextWindow: 8192,
-          tasks: {
-            textGeneration: true, codeGeneration: true, reasoning: true,
-            analysis: true, summarization: true, translation: true,
-            questionAnswering: true, creativeWriting: true, structuredOutput: true
-          },
-          performance: { speed: 'fast', quality: 'excellent', reasoning: 'excellent' }
-        }
-      },
-      'cohere': {
-        'command-r': {
-          maxTokens: 128000,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: true,
-          supportsJSONOutput: false,
-          supportsStreaming: true,
-          contextWindow: 128000,
-          tasks: {
-            textGeneration: true, codeGeneration: true, reasoning: true,
-            analysis: true, summarization: true, translation: true,
-            questionAnswering: true, creativeWriting: true, structuredOutput: false
-          },
-          performance: { speed: 'medium', quality: 'excellent', reasoning: 'good' }
-        }
-      },
-      'llmgateway': {
-        'llama-4-maverick-free': {
-          maxTokens: 8192,
-          supportsVision: false,
-          supportsAudio: false,
-          supportsFunctionCalling: false,
-          supportsJSONOutput: false,
-          supportsStreaming: true,
-          contextWindow: 8192,
-          tasks: {
-            textGeneration: true, codeGeneration: true, reasoning: true,
-            analysis: true, summarization: true, translation: true,
-            questionAnswering: true, creativeWriting: true, structuredOutput: false
-          },
-          performance: { speed: 'fast', quality: 'excellent', reasoning: 'excellent' }
-        }
-      }
-    };
-
-    this.normalizeCapabilities();
-  }
-
-  /**
-   * Populate canonical OpenAI-compatible capability flags across all entries:
-   *   - supportsToolCalling (the model can do it AND we forward `tools` to it)
-   *   - supportsJSONMode    (mirrors supportsJSONOutput)
-   *   - supportsJSONSchema  (explicit allowlist)
-   *
-   * The two tool flags answer different questions and are deliberately allowed
-   * to disagree (F-04):
-   *
-   *   supportsFunctionCalling — "can this model call functions at all?" A fact
-   *     about the model, used by aiDirectorService when it scores candidates.
-   *   supportsToolCalling     — "will a `tools` request routed here actually
-   *     arrive?" A fact about *our* adapter, used by the rotation gate. False
-   *     for every provider outside TOOL_FORWARDING_PROVIDERS, however capable
-   *     the model itself is, because a request that reaches an adapter which
-   *     drops `tools` comes back as prose with finish_reason "stop".
-   */
-  normalizeCapabilities() {
-    for (const [provider, models] of Object.entries(this.knownCapabilities)) {
-      for (const [modelId, caps] of Object.entries(models)) {
-        const toolCallingCorrected = toolCallingCorrectedFor(provider, modelId);
-        const modelCanCall = caps.supportsFunctionCalling || toolCallingCorrected;
-
-        caps.supportsFunctionCalling = modelCanCall;
-        caps.supportsToolCalling = modelCanCall && forwardsTools(provider);
-        // supportsJSONMode / supportsJSONSchema reflect whether aiService has
-        // a native response_format translation for this pair; the legacy
-        // supportsJSONOutput flag is a looser "model is generally JSON-capable"
-        // signal and is left untouched.
-        caps.supportsJSONMode = jsonModeSupportedFor(provider, modelId);
-        caps.supportsJSONSchema = schemaSupportedFor(provider, modelId);
-      }
-    }
-  }
-
   /**
    * Canonical accessor: returns the full capabilities object for a provider/model,
    * falling back to inferCapabilities() for unknown models. Always returns an
    * object with the canonical flag set populated.
    */
-  getCapabilities(provider, modelId) {
-    const known = this.knownCapabilities[provider]?.[modelId];
-    if (known) return known;
-    const inferred = this.inferCapabilities(modelId);
-    inferred.supportsToolCalling = inferred.supportsFunctionCalling && forwardsTools(provider);
-    inferred.supportsJSONMode = jsonModeSupportedFor(provider, modelId);
-    inferred.supportsJSONSchema = schemaSupportedFor(provider, modelId);
-    return inferred;
+  getCapabilities(provider, modelId, storedCapabilities = null) {
+    // An observed row wins over the guess; a row that is only schema defaults
+    // is not an observation (see looksObserved).
+    const caps = looksObserved(storedCapabilities)
+      ? { ...storedCapabilities }
+      : this.inferCapabilities(modelId);
+    // F-04: `supportsToolCalling` answers 'will a `tools` request routed here
+    // actually arrive?' — a fact about our adapter, and the gate aiService
+    // rotates on. It is the adapter set and nothing else, because a request
+    // that reaches an adapter which drops `tools` comes back as prose with
+    // finish_reason 'stop'. The legacy `supportsFunctionCalling` is the looser
+    // 'can this model call functions at all?' signal the director scores on, so
+    // it is true whenever either the listing or the adapter says so.
+    caps.supportsToolCalling = forwardsTools(provider);
+    caps.supportsFunctionCalling = !!caps.supportsFunctionCalling || caps.supportsToolCalling;
+    caps.supportsJSONMode = jsonModeSupportedFor(provider, modelId);
+    caps.supportsJSONSchema = schemaSupportedFor(provider, modelId);
+    return caps;
   }
 
   /**
@@ -1183,12 +156,21 @@ class AIModelCapabilitiesService {
     return !!this.getCapabilities(provider, modelId).supportsJSONSchema;
   }
 
+  /**
+   * Bring one AIModel row's `capabilities` up to date.
+   *
+   * Reads what the catalog already knows (the job writes `capabilities` from
+   * OpenRouter's `supported_parameters` or from a probe) and falls back to
+   * `inferCapabilities` when the row says nothing. It consults no table: the
+   * hand-typed one it used to prefer over both is gone.
+   */
   async updateModelCapabilities(provider, modelId) {
     try {
-      // Get known capabilities or infer from model name
-      const capabilities = this.knownCapabilities[provider]?.[modelId] || this.inferCapabilities(modelId);
+      const existing = await AIModel.findOne({ provider, modelId })
+        .select('capabilities')
+        .lean();
+      const capabilities = this.getCapabilities(provider, modelId, existing?.capabilities);
 
-      // Update the model in the database
       await AIModel.findOneAndUpdate(
         { provider, modelId },
         {
@@ -1348,10 +330,12 @@ class AIModelCapabilitiesService {
 
   async updateAllModelCapabilities() {
     try {
-      const providers = ['groq', 'gemini', 'together'];
+      // The roster is the one list of providers (config/aiProviders.js). This
+      // used to be a hand-typed ['groq', 'gemini', 'together'], which quietly
+      // skipped the six providers added after it was written.
       let updatedCount = 0;
 
-      for (const provider of providers) {
+      for (const provider of PROVIDER_IDS) {
         const models = await AIModel.find({ provider, isActive: true });
 
         for (const model of models) {

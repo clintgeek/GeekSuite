@@ -33,6 +33,7 @@ import { summarizeDependencies, createCachedProbe } from './lib/healthCheck.js';
 import { initRefreshTokenStore, closeRefreshTokenStore, isRefreshTokenStoreConnected } from './services/refreshTokenStore.js';
 import { seedMissingApps } from './services/appRegistrySeed.js';
 import { startOAuthRefreshJob, stopOAuthRefreshJob } from './services/oauthRefreshJobService.js';
+import { startAICatalogJob, stopAICatalogJob } from './services/aiCatalogJob.js';
 import reminderService from './graphql/bujogeek/services/reminderService.js';
 import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@as-integrations/express4';
@@ -512,6 +513,18 @@ try {
   logger.error({ err }, '[OAuthRefreshJob] failed to start');
 }
 
+// The AI catalog steward (hourly tick; discovery at 24 h, re-probe at 6 h; see
+// services/aiCatalogJob.js). This is what replaced the monthly
+// `docker exec … discover-free-models.js --sync` ritual in RUNBOOK §12. Its
+// first tick waits 60 s so aiService has loaded the provider keys out of Mongo.
+// `AI_CATALOG_JOB=off` disables it — that is also the Phase 1 rollback. Stop is
+// wired into the shutdown path below, beside the OAuth job.
+try {
+  startAICatalogJob();
+} catch (err) {
+  logger.error({ err }, '[CatalogJob] failed to start');
+}
+
 // BuJoGeek task reminders. basegeek owns the task data and runs 24/7, so the
 // 60-second sweep lives here rather than in the client. start() is a logged
 // no-op when VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY are unset.
@@ -607,6 +620,11 @@ const shutdown = (signal) => {
       stopOAuthRefreshJob()
     } catch (err) {
       logger.error({ err }, 'Error stopping OAuth refresh job')
+    }
+    try {
+      stopAICatalogJob()
+    } catch (err) {
+      logger.error({ err }, 'Error stopping AI catalog job')
     }
     try {
       reminderService.stop()

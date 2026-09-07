@@ -469,25 +469,22 @@ export const resolvers = {
       return true;
     },
 
-    seedDirectorPricing: async (_, __, { user }) => {
-      await requireAdminUser(user);
-      await aiDirectorService.seedInitialPricing();
-      return true;
-    },
-
-    seedDirectorFreeTier: async (_, __, { user }) => {
-      await requireAdminUser(user);
-      await aiDirectorService.seedFreeTierInformation();
-      return true;
-    },
+    // `seedDirectorPricing` and `seedDirectorFreeTier` were here until
+    // 2026-09-07 (Phase 1, DOCS/AIGEEK_ELEVATION_PLAN.md). They wrote ~45
+    // hand-typed prices and ~30 hand-typed free-tier quota rows over the shared
+    // catalog on an admin's click. Prices and quotas are observed now — the
+    // catalog job reads vendor listings and the `x-ratelimit-*` headers on real
+    // calls — so there is no default to restore. `updateModelPricing` /
+    // `updateModelFreeTier` below remain as the per-row manual override.
 
     // Model Management
     syncProviderModels: async (_, { provider }, { user }) => {
       await requireAdminUser(user);
       try {
         const models = await aiService.refreshModels(provider);
-        // Also update pricing for any new models
-        await aiDirectorService.updatePricingForNewModels();
+        // `updatePricingForNewModels()` used to run here, filling any new
+        // model's price in from the hand-typed table that went with the seed
+        // mutations. Prices come from the listing now.
         return { success: true, provider, modelsFound: models.length, models };
       } catch (error) {
         throw new GraphQLError(`Failed to sync models for ${provider}: ${error.message}`);

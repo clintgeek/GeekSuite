@@ -335,8 +335,11 @@ const ADMIN_ROUTES = [
   ['post', '/api/ai/reset-stats', {}],
   ['post', '/api/ai/cache/clear', {}],
   ['post', '/api/ai/summarization', { enabled: true, threshold: 5000 }],
-  ['post', '/api/ai/director/seed-pricing', {}],
-  ['post', '/api/ai/director/seed-free-tier', {}],
+  // `/director/seed-pricing` and `/director/seed-free-tier` were the sixth and
+  // seventh rows until 2026-09-07, when both routes were deleted with the
+  // hand-typed price and quota tables behind them (Phase 1,
+  // DOCS/AIGEEK_ELEVATION_PLAN.md). `/director/force-refresh` is the admin
+  // catalog mutator that remains, and it keeps the gate.
   ['post', '/api/ai/director/force-refresh', {}],
 ];
 
@@ -358,8 +361,6 @@ describe('the admin-shaped AI routes take the admin gate', () => {
     stub(aiService, 'setSummarizationEnabled', undefined);
     stub(aiService, 'setSummarizationThreshold', undefined);
     stub(aiService, 'getModels', async () => [{ modelId: 'llama-3.3-70b' }]);
-    stub(aiDirectorService, 'seedInitialPricing', async () => undefined);
-    stub(aiDirectorService, 'seedFreeTierInformation', async () => undefined);
     stub(aiDirectorService, 'getCostAnalysis', async () => ({ success: true, data: { estimate: 0.01 } }));
     stub(aiDirectorService, 'recommendProvider', async () => ({
       success: true, data: { recommendations: [{ provider: 'groq', model: { id: 'llama-3.3-70b' } }] }

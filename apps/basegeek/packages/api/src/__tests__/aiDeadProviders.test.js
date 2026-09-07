@@ -140,15 +140,11 @@ describe('the services that carry per-provider tables have no retired providers'
   });
 
   it('aiDirectorService prices none of them, and walks none of them', async () => {
-    const { default: aiDirectorService } = await import('../services/aiDirectorService.js');
-    for (const retired of RETIRED) {
-      expect(aiDirectorService.providerPricing[retired]).toBeUndefined();
-    }
-    expect(aiDirectorService.providerPricing.groq).toBeDefined();
-
-    // The hardcoded provider list inside collectModelInformation is the one
-    // place a retired id can come back by copy-paste, and seedInitialPricing is
-    // the other, so read the source.
+    // `providerPricing` and `seedInitialPricing` were the two tables this case
+    // used to read; both went in Phase 1 (2026-09-07) — prices come from
+    // `AIPricing`, written by the catalog job from the providers' own
+    // listings. The source check is the whole assertion now: a retired id can
+    // only come back by copy-paste, and that is what this catches.
     const code = await codeOnly('../services/aiDirectorService.js');
     expect(code).not.toMatch(/llm7|onemin|LLM7|OneMin/i);
     expect(code.toLowerCase()).not.toContain('anthropic');
@@ -166,12 +162,13 @@ describe('the services that carry per-provider tables have no retired providers'
 });
 
 describe('the capability matrix has no retired providers', () => {
-  it('drops the llm7 and anthropic blocks', () => {
-    for (const retired of RETIRED) {
-      expect(aiModelCapabilitiesService.knownCapabilities?.[retired]).toBeUndefined();
-    }
-    expect(aiModelCapabilitiesService.knownCapabilities.gemini).toBeDefined();
-  });
+  // The `knownCapabilities` table — 1,210 hand-typed lines claiming what every
+  // model of every provider could do — was deleted in Phase 1 (2026-09-07).
+  // Capabilities are read from the providers' own listings now
+  // (`AIModel.capabilities`, stamped with `capabilities.source`) with
+  // `inferCapabilities` as the fallback. The case that asserted the table had
+  // no retired blocks went with the table; the source check below covers the
+  // file, and the adapter allowlists are asserted directly.
 
   // FINDING F-04: a provider marked capable with no adapter behind it does not
   // fail loudly — it is *selected*, and the tools or response_format are

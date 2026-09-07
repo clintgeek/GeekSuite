@@ -69,6 +69,7 @@ const { default: aiService } = await import('../services/aiService.js');
 const { default: aiUsageService } = await import('../services/aiUsageService.js');
 const { default: aiModelCapabilitiesService } = await import('../services/aiModelCapabilitiesService.js');
 const { default: openaiProxyRoutes } = await import('../routes/openaiProxy.js');
+const { default: AIModel } = await import('../models/AIModel.js');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Harness
@@ -1330,6 +1331,26 @@ describe('GET /v1/models', () => {
         : [{ id: 'gemini-2.5-flash' }]
     ));
   }
+
+  // `GET /v1/models/{bare-id}` resolves the owning provider with one indexed
+  // `AIModel.findOne` (Phase 0 replaced ten queries with that). `stubModels`
+  // only patches `aiService.getModels`, so the row has to exist: until
+  // 2026-09-07 it did, because `seedInitialModels` re-wrote ~40 hand-typed ids
+  // on every boot — which is exactly the behaviour Phase 1 deleted. A test
+  // that needs a catalog row now writes one.
+  beforeEach(async () => {
+    await AIModel.deleteMany({ modelId: 'llama-3.3-70b-versatile' });
+    await AIModel.create({
+      provider: 'groq',
+      modelId: 'llama-3.3-70b-versatile',
+      name: 'Llama 3.3 70B Versatile',
+      isActive: true,
+    });
+  });
+
+  afterEach(async () => {
+    await AIModel.deleteMany({ modelId: 'llama-3.3-70b-versatile' });
+  });
 
   it('returns {object:"list", data:[Model]} with the required Model fields', async () => {
     stubModels();

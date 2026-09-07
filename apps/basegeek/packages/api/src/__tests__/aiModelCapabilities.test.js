@@ -72,13 +72,16 @@ describe('aiModelCapabilitiesService — canonical capability flags', () => {
       expect(caps.supportsTools('gemini', 'gemini-1.5-pro')).toBe(true);
     });
 
-    it('is true for corrected Groq models (patched by TOOL_CALLING_CORRECTIONS)', () => {
-      // Legacy data in knownCapabilities had supportsFunctionCalling:false for
-      // Groq — corrections patch the post-normalize view for models that
-      // actually DO support tool calling.
+    it('is true for every Groq model, because callGroq forwards tools', () => {
+      // Until 2026-09-07 this was a twelve-id allowlist (TOOL_CALLING_CORRECTIONS)
+      // patching a hand-typed table that claimed supportsFunctionCalling:false
+      // for Groq. Both are gone: whether a `tools` request arrives is a fact
+      // about the adapter, so the answer is the same for any Groq id, including
+      // one the catalog has never seen.
       expect(caps.supportsTools('groq', 'llama-3.3-70b-versatile')).toBe(true);
       expect(caps.supportsTools('groq', 'llama-3.1-70b-versatile')).toBe(true);
       expect(caps.supportsTools('groq', 'openai/gpt-oss-120b')).toBe(true);
+      expect(caps.supportsTools('groq', 'a-model-shipped-tomorrow')).toBe(true);
     });
 
     it('is false for providers without tool-calling support', () => {
@@ -88,7 +91,7 @@ describe('aiModelCapabilitiesService — canonical capability flags', () => {
   });
 
   describe('getCapabilities', () => {
-    it('returns populated canonical flags on known entries', () => {
+    it('returns populated canonical flags for a native-translation provider', () => {
       const c = caps.getCapabilities('gemini', 'gemini-1.5-flash');
       expect(c).toMatchObject({
         supportsToolCalling: true,
@@ -110,6 +113,50 @@ describe('aiModelCapabilitiesService — canonical capability flags', () => {
       const c = caps.getCapabilities('groq', 'llama-3.3-70b-versatile');
       expect(c.supportsFunctionCalling).toBe(c.supportsToolCalling);
       expect(c.supportsFunctionCalling).toBe(true);
+    });
+
+    /**
+     * Phase 1: what a model can do is read from the AIModel row the catalog job
+     * writes, not from a table in this file. These two cases pin the choice
+     * between the row and the guess — including the case that matters most,
+     * because the AIModel schema defaults every capability field: a row that
+     * has never been observed reads back as a complete object claiming 4096
+     * tokens and no JSON, and preferring THAT to inference would make a
+     * refreshed model look worse than an unknown one.
+     */
+    it('prefers an observed AIModel.capabilities over inference', () => {
+      const c = caps.getCapabilities('cloudflare', '@cf/meta/llama-3.3-70b-instruct-fp8-fast', {
+        contextWindow: 131072,
+        maxTokens: 32768,
+        supportsJSONOutput: true,
+        performance: { speed: 'fast', quality: 'excellent', reasoning: 'good' }
+      });
+
+      expect(c.contextWindow).toBe(131072);
+      expect(c.supportsJSONOutput).toBe(true);
+      expect(c.performance.quality).toBe('excellent');
+      // Adapter facts still overwrite whatever the row claims about them.
+      expect(c.supportsToolCalling).toBe(false);
+      expect(c.supportsJSONSchema).toBe(false);
+    });
+
+    it('ignores a capabilities object that is only schema defaults', () => {
+      const bareDefaults = {
+        maxTokens: 4096,
+        contextWindow: 4096,
+        supportsVision: false,
+        supportsAudio: false,
+        supportsFunctionCalling: false,
+        supportsToolCalling: false,
+        supportsJSONOutput: false,
+        supportsJSONMode: false,
+        supportsJSONSchema: false
+      };
+      const c = caps.getCapabilities('groq', 'llama-3.3-70b-versatile', bareDefaults);
+
+      // Inference has an opinion about a 70B model; the defaults do not.
+      expect(c.contextWindow).toBe(8192);
+      expect(c.supportsJSONOutput).toBe(true);
     });
   });
 });
