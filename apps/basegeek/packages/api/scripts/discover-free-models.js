@@ -33,7 +33,7 @@ const PROVIDERS = ['groq', 'cerebras', 'together', 'openrouter', 'cloudflare', '
 const CHAT_EXCLUDE = /whisper|tts|guard|embed|embedding|rerank|vision-preview|image|audio|live|veo|imagen|aqa|moderation|distil/i;
 // Models that answer but are not general assistants: tiny/LoRA builds, translators, vision,
 // domain or safety models, code-only, "arabic"/"saudi" variants. `--all` keeps them.
-export const NOT_GENERAL = /lora|[-/](0\.6|1|1\.7|2|3|4)b[-_/:]|2\.6b|7b-chat-hf|translate|vision|arabic|saudi|safety|-code\b|code:free|:free$|fin:|sante|note-preview|laguna|sea-lion|granite|gemma-2b|gemma-7b|mistral-7b|allam|orpheus|compound|omni|ocr|reasoning/i;
+export const NOT_GENERAL = /lora|[-/](0\.6|1|1\.7|2|3|4)b[-_/:]|2\.6b|7b-chat-hf|translate|vision|arabic|saudi|safety|-code\b|coder|code:free|:free$|fin:|sante|note-preview|laguna|sea-lion|granite|gemma-2b|gemma-7b|mistral-7b|allam|orpheus|compound|omni|ocr|reasoning/i;
 export function isGeneralAssistant(modelId) {
   // openrouter ":free" slugs are kept only for the two general MiniMax models and the router
   if (/^(minimax\/minimax-m[0-9.]+:free|openrouter\/free)$/.test(modelId)) return true;
