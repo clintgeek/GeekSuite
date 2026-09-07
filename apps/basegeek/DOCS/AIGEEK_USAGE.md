@@ -41,6 +41,37 @@ await openai.chat.completions.create({
 });
 ```
 
+**Free-only means free, and it stays inside the free tier** (R130, 2026-09-06).
+A `basegeek-free` request — or any app whose App Routing row says `tier: free`
+— picks a row from `AIFreeTier`, and if that row fails it tries **the next free
+row**, up to three attempts, preferring a different provider each time. It does
+not fall through to the generic provider walk, because that walk calls each
+provider with *its own default model*, and those defaults are not all free. A
+free-tier caller that finds nothing free to call gets a **503
+`upstream_unavailable`** — "nothing left in the rotation" — not a bill.
+
+**Dead rows are remembered.** Free tiers move: Groq retired
+`llama-3.1-8b-instant`, Together stopped serving its `-Free` Llama variant,
+OpenRouter recycled a `:free` slug. Each `AIFreeTier` row now carries a `health`
+block, and a **hard** failure on a row — HTTP 400/401/403/404, or a message
+saying `model_not_found` / "does not exist" / "no longer" / "Wrong API Key" /
+"unauthorized" — puts that row to sleep for 6 hours, or 24 after three in a row.
+A 429, a 5xx or a timeout is **not** hard: that is a bad minute, and the
+existing per-provider rate-limit cooling already owns it. A row that answers has
+its health cleared.
+
+Selection orders the surviving rows by provider priority, then by *most
+recently proven* (`health.lastSuccessAt`), then by fewest failures. If every row
+is asleep, the one closest to waking is tried anyway — a free tier that answers
+nothing is worse than a long shot.
+
+`node scripts/probe-free-tier.js` (on the baseGeek host) is the deliberate
+version of the same question: it sends every free row a one-token "Reply OK" and
+prints alive/dead per row. `--mark` cools the dead ones for 30 days, `--revive`
+clears cooling on the ones that answered. **It never deletes a row** — the
+aiGeek page lists this collection, and a row that vanished reads as a config
+loss rather than a retired model. Default is report only.
+
 ### 3. Explicit provider pin
 
 Use `<provider>/<model>` to bypass rotation and target a specific

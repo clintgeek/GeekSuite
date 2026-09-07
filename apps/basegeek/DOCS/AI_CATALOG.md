@@ -83,6 +83,38 @@ one line:
 - `rateLimitService.js` still defines `llm7` and `onemin` limits (~L27, ~L33)
   that nothing consults.
 
+### A retired provider and a retired model are not the same problem (R130, 2026-09-06)
+
+Everything above is about **providers** leaving the roster: `llm7` and `onemin`
+were struck from `config/aiProviders.js`, so no row naming them can ever be
+selected — `aiService.providers[row.provider]` is `undefined` and the candidate
+filter drops it. `src/__tests__/aiDeadProviders.test.js` is the tripwire that
+keeps them gone.
+
+The other half of the same rot is **models retiring inside providers that are
+very much alive**, and until tonight nothing noticed it at all. On 2026-09-06
+the top-priority free row was `groq/llama-3.1-8b-instant` — retired by Groq,
+404 `model_not_found` — and it was picked first on every free-tier call,
+forever, because selection sorted on provider priority and nothing else. Three
+more rows in this file were in the same state:
+
+| Row | What the vendor now says |
+|---|---|
+| `groq/llama-3.1-8b-instant` | 404 `model_not_found` — retired |
+| `together/…-Turbo-Free` | 400 — no longer served serverless |
+| `openrouter/…:free` | 404 — the `:free` slug was recycled |
+| `cerebras/*` | 401 "Wrong API Key" — the key, not the model |
+
+`AIFreeTier` rows now carry a `health` block (`consecutiveFailures`,
+`lastFailureAt`, `lastFailureCode`, `lastSuccessAt`, `coolingUntil`) and a hard
+failure cools the row rather than the provider. See
+[AIGEEK_USAGE.md](./AIGEEK_USAGE.md#2-free-only) for the selection rules and
+`scripts/probe-free-tier.js` for the deliberate sweep.
+
+**This file is a snapshot, and snapshots of a free tier go stale.** Treat the
+per-provider model lists below as "what was true when someone wrote it down";
+`health.lastSuccessAt` on the row is what is true now.
+
 ---
 
 ## Anthropic (7 models)

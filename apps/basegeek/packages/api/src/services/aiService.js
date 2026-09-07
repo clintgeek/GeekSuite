@@ -9,7 +9,13 @@ import { DEFAULT_MODELS, FALLBACK_ORDER, ROTATION_MODEL_OVERRIDES, keyHintFor } 
 import AIModel from '../models/AIModel.js';
 import AIPricing from '../models/AIPricing.js';
 import aiUsageService from './aiUsageService.js';
-import AIFreeTier from '../models/AIFreeTier.js';
+import AIFreeTier, {
+  classifyFreeTierFailure,
+  isFreeTierCooling,
+  FREE_TIER_COOLDOWN_MS,
+  FREE_TIER_LONG_COOLDOWN_MS,
+  FREE_TIER_LONG_COOLDOWN_AFTER
+} from '../models/AIFreeTier.js';
 import AIAppConfig from '../models/AIAppConfig.js';
 import AIUsage from '../models/AIUsage.js';
 import RotationManager from './rotationManager.js';
@@ -24,6 +30,13 @@ import { countTextTokens, countMessageTokens } from './tokenCounter.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+/**
+ * How many free-tier rows one `freeOnly` call may try before giving up (R130).
+ * Three is the whole budget: StartGeek's Ask lives inside a 3 s GlanceIntent
+ * timeout, so a fourth attempt is a timeout dressed as a retry.
+ */
+const MAX_FREE_TIER_ATTEMPTS = 3;
 
 /**
  * Read a positive integer from an env var, falling back to `fallback` when
@@ -204,6 +217,10 @@ class AIService {
       logger.warn({ err: error }, '[AIService] Failed to ensure rotation state directory');
     }
     this.rotationManager = new RotationManager(path.join(rotationStateDir, 'rotation-state.json'));
+
+    // Per-(provider, model) free-tier health, mirroring AIFreeTier.health so
+    // selection never waits on Mongo (R130). Keyed `<provider>/<modelId>`.
+    this.freeTierHealth = new Map();
 
     // The rotation pins each provider to its default model, overriding any
     // model stored on the provider's database row. Derived from the same table
@@ -1400,6 +1417,219 @@ class AIService {
     }
   }
 
+  /* ─────────────────── free-tier health (R130, 2026-09-06) ─────────────────
+   *
+   * The free rows in AIFreeTier are a shopping list, not a promise. Vendors
+   * retire a model id without warning (groq/llama-3.1-8b-instant), stop serving
+   * a "-Free" variant (together), or recycle a ":free" slug (openrouter) — and
+   * because selection sorted only on provider priority, the same dead row was
+   * picked first on every call, forever. The three methods below are the memory
+   * that stops that: a hard failure cools the *row*, not the provider, and the
+   * next call picks the next live row instead.
+   *
+   * This is row-level and orthogonal to two things that already existed and
+   * stay untouched:
+   *   - `rotationManager.markProviderCooling` / `isCooling` — provider-level,
+   *     minutes long, consulted only when `autoRotate` is on (the free path
+   *     sets it off, deliberately: it has already chosen).
+   *   - `markRateLimited` — per-provider 429 handling, also unchanged. A 429 is
+   *     not a hard failure here; a retired model is.
+   *
+   * The Map exists so a failure recorded 40 ms ago is honoured even though its
+   * Mongo write is still in flight; the Mongo document is what survives a
+   * restart. Both are read, and whichever observed the row more recently wins.
+   */
+
+  freeTierKey(provider, modelId) {
+    return `${provider}/${modelId}`;
+  }
+
+  /**
+   * Merge the in-process mirror over a row's stored health. Never awaits.
+   * @param {string} provider
+   * @param {string} modelId
+   * @param {object|null} stored  the `health` subdocument off the AIFreeTier row
+   */
+  getFreeTierHealth(provider, modelId, stored = null) {
+    const base = {
+      consecutiveFailures: stored?.consecutiveFailures ?? 0,
+      lastFailureAt: stored?.lastFailureAt ?? null,
+      lastFailureCode: stored?.lastFailureCode ?? null,
+      lastSuccessAt: stored?.lastSuccessAt ?? null,
+      coolingUntil: stored?.coolingUntil ?? null
+    };
+    const live = this.freeTierHealth.get(this.freeTierKey(provider, modelId));
+    if (!live) return base;
+
+    // Whichever side observed the row more recently wins, whole. The mirror is
+    // usually it — our own Mongo write is still in flight — but not always:
+    // `scripts/probe-free-tier.js --mark` and any sibling process write
+    // straight to the document, and a stale mirror must not resurrect a row
+    // the probe just buried.
+    const asOf = (h) => Math.max(
+      h?.lastFailureAt ? new Date(h.lastFailureAt).getTime() : 0,
+      h?.lastSuccessAt ? new Date(h.lastSuccessAt).getTime() : 0
+    );
+    return asOf(base) > asOf(live) ? base : { ...base, ...live };
+  }
+
+  /**
+   * Record a hard failure against one free-tier row: bump the counters and put
+   * the row to sleep. Six hours for the first, twenty-four once it has failed
+   * three times running — a model that is gone is gone, and re-proving that
+   * every six hours costs a user-visible timeout each time.
+   *
+   * Fire-and-forget on the Mongo side: the caller is in the middle of a request
+   * and the mirror already carries the answer selection needs.
+   */
+  markFreeTierFailure(provider, modelId, code, storedHealth = null) {
+    const key = this.freeTierKey(provider, modelId);
+    // Count from the merged view, not the mirror alone: after a restart the
+    // mirror is empty and the row may already be two hard failures deep.
+    const previous = this.getFreeTierHealth(provider, modelId, storedHealth);
+    const consecutiveFailures = (previous?.consecutiveFailures ?? 0) + 1;
+    const now = new Date();
+    const cooldownMs = consecutiveFailures >= FREE_TIER_LONG_COOLDOWN_AFTER
+      ? FREE_TIER_LONG_COOLDOWN_MS
+      : FREE_TIER_COOLDOWN_MS;
+    const health = {
+      consecutiveFailures,
+      lastFailureAt: now,
+      lastFailureCode: code,
+      lastSuccessAt: previous?.lastSuccessAt ?? null,
+      coolingUntil: new Date(now.getTime() + cooldownMs)
+    };
+    this.freeTierHealth.set(key, health);
+
+    logger.warn(
+      { provider, modelId, code, consecutiveFailures, coolingUntil: health.coolingUntil },
+      `[FreeTier] ${provider}/${modelId} failed hard — cooling for ${Math.round(cooldownMs / 3600000)}h`
+    );
+
+    AIFreeTier.updateOne(
+      { provider, modelId },
+      {
+        $set: {
+          'health.consecutiveFailures': consecutiveFailures,
+          'health.lastFailureAt': health.lastFailureAt,
+          'health.lastFailureCode': code,
+          'health.coolingUntil': health.coolingUntil
+        }
+      }
+    ).catch((err) => {
+      logger.warn({ err, provider, modelId }, '[FreeTier] failed to persist health');
+    });
+
+    return health;
+  }
+
+  /**
+   * A row answered. Clear its failure memory so one bad afternoon does not
+   * follow it around, and record when it last worked — selection prefers the
+   * most recently proven row within a provider tier.
+   */
+  markFreeTierSuccess(provider, modelId) {
+    const key = this.freeTierKey(provider, modelId);
+    const now = new Date();
+    const health = {
+      consecutiveFailures: 0,
+      lastFailureAt: null,
+      lastFailureCode: null,
+      lastSuccessAt: now,
+      coolingUntil: null
+    };
+    this.freeTierHealth.set(key, health);
+
+    AIFreeTier.updateOne(
+      { provider, modelId },
+      {
+        $set: {
+          'health.consecutiveFailures': 0,
+          'health.lastFailureAt': null,
+          'health.lastFailureCode': null,
+          'health.lastSuccessAt': now,
+          'health.coolingUntil': null
+        }
+      }
+    ).catch((err) => {
+      logger.warn({ err, provider, modelId }, '[FreeTier] failed to persist health');
+    });
+
+    return health;
+  }
+
+  /**
+   * The ordered free-tier candidate list for one call.
+   *
+   * Rows are dropped when the provider has no key or is disabled (as before)
+   * and when the row is cooling (new). What is left is ordered by provider
+   * priority, then by *most recently proven*, then by fewest failures — so a
+   * row that answered ten minutes ago outranks one that has never been tried,
+   * and a row that has been failing softly sinks.
+   *
+   * @returns {{live: object[], cooling: object[]}}
+   */
+  async selectFreeTierCandidates(now = Date.now()) {
+    const freeModels = await AIFreeTier.find({ isFree: true });
+    const priorityList = this.rotationManager.getPriorityList();
+    const live = [];
+    const cooling = [];
+
+    for (const fm of freeModels) {
+      const pc = this.providers[fm.provider];
+      if (!pc || !pc.apiKey || pc.enabled === false) continue;
+
+      const health = this.getFreeTierHealth(fm.provider, fm.modelId, fm.health);
+      const candidate = {
+        provider: fm.provider,
+        modelId: fm.modelId,
+        limits: fm.freeLimits,
+        health
+      };
+      if (isFreeTierCooling(health, now)) cooling.push(candidate);
+      else live.push(candidate);
+    }
+
+    const priorityOf = (provider) => {
+      const idx = priorityList.indexOf(provider);
+      return idx === -1 ? 999 : idx;
+    };
+    const successAt = (candidate) =>
+      candidate.health?.lastSuccessAt ? new Date(candidate.health.lastSuccessAt).getTime() : 0;
+
+    live.sort((a, b) =>
+      priorityOf(a.provider) - priorityOf(b.provider) ||
+      successAt(b) - successAt(a) ||
+      (a.health?.consecutiveFailures ?? 0) - (b.health?.consecutiveFailures ?? 0)
+    );
+    // Soonest to wake first: if every row is cooling we try the one closest to
+    // being allowed back rather than answering nothing.
+    cooling.sort((a, b) =>
+      new Date(a.health.coolingUntil).getTime() - new Date(b.health.coolingUntil).getTime()
+    );
+
+    return { live, cooling };
+  }
+
+  /**
+   * Turn the ordered candidates into at most `limit` attempts, preferring a
+   * *different provider* for the retry. One vendor having retired a model is
+   * weak evidence about its other models and strong evidence about nothing;
+   * a 401 on that vendor's key is strong evidence about all of them. Spreading
+   * the retry across providers is right in both cases.
+   */
+  planFreeTierAttempts(candidates, limit = MAX_FREE_TIER_ATTEMPTS) {
+    const attempts = [];
+    const remaining = [...candidates];
+    while (remaining.length && attempts.length < limit) {
+      const usedProviders = new Set(attempts.map(a => a.provider));
+      let index = remaining.findIndex(c => !usedProviders.has(c.provider));
+      if (index === -1) index = 0;
+      attempts.push(remaining.splice(index, 1)[0]);
+    }
+    return attempts;
+  }
+
   /**
    * Generic AI call method that tries providers in fallback order
    */
@@ -1534,38 +1764,56 @@ class AIService {
       }
     }
 
-    // "free" mode: query DB for available free-tier models and pick the best one
-    if (freeOnly || requestedProvider === 'free') {
+    // "free" mode: query the DB for available free-tier models and plan the
+    // whole walk — the pick *and* its retries — rather than one pick and a
+    // silent slide into the paid fallback order (R130, 2026-09-06).
+    //
+    // What changed and why: the old code took `prioritized[0]` and stopped
+    // caring. When that row was a model its vendor had retired, the request
+    // fell into the generic provider walk below, which calls every other
+    // provider with *its own default model* — models nobody asked for and, for
+    // a caller whose routing row says `tier: free`, models that are not free.
+    // A free-tier caller now retries inside the free tier and nowhere else.
+    const isFreeCaller = freeOnly || requestedProvider === 'free';
+    let freeTierAttempts = [];
+    if (isFreeCaller) {
       try {
-        const freeModels = await AIFreeTier.find({ isFree: true });
-        // Group by provider and find one that's enabled with an API key
-        const candidates = [];
-        for (const fm of freeModels) {
-          const pc = this.providers[fm.provider];
-          if (pc && pc.apiKey && pc.enabled !== false) {
-            candidates.push({ provider: fm.provider, modelId: fm.modelId, limits: fm.freeLimits });
-          }
+        const { live, cooling } = await this.selectFreeTierCandidates();
+        let chosen = live;
+        if (chosen.length === 0 && cooling.length > 0) {
+          // Everything is asleep. Answering nothing is worse than one attempt
+          // at whichever row wakes soonest, so the free tier is never a total
+          // outage just because the probe marked a batch of rows dead.
+          logger.warn(
+            { coolingRows: cooling.length },
+            '[FreeOnly] every free-tier row is cooling — trying the one closest to waking'
+          );
+          chosen = cooling.slice(0, 1);
         }
-        if (candidates.length > 0) {
-          // Prefer rotation-style selection: pick from the priority list if available
-          const priorityList = this.rotationManager.getPriorityList();
-          const prioritized = candidates.sort((a, b) => {
-            const aIdx = priorityList.indexOf(a.provider);
-            const bIdx = priorityList.indexOf(b.provider);
-            return (aIdx === -1 ? 999 : aIdx) - (bIdx === -1 ? 999 : bIdx);
-          });
-          const pick = prioritized[0];
+
+        if (chosen.length > 0) {
+          freeTierAttempts = this.planFreeTierAttempts(chosen, noFallback ? 1 : MAX_FREE_TIER_ATTEMPTS);
+          const pick = freeTierAttempts[0];
           requestedProvider = pick.provider;
           model = pick.modelId;
           autoRotate = false; // We've already picked
-          logger.info(`[FreeOnly] Selected ${pick.provider}/${pick.modelId}`);
+          logger.info(
+            {
+              picked: `${pick.provider}/${pick.modelId}`,
+              lastSuccessAt: pick.health?.lastSuccessAt ?? null,
+              retries: freeTierAttempts.slice(1).map(a => `${a.provider}/${a.modelId}`),
+              skippedCooling: cooling.length
+            },
+            `[FreeOnly] Selected ${pick.provider}/${pick.modelId}`
+          );
         } else {
-          logger.warn('[FreeOnly] No free-tier models available with configured API keys, falling back to rotation');
-          autoRotate = true;
+          // No row at all — not even a cooling one. There is nothing free to
+          // call, and a free-tier caller must not be answered by a paid
+          // default model, so this fails as itself.
+          logger.warn('[FreeOnly] No free-tier models available with configured API keys');
         }
       } catch (freeError) {
-        logger.error({ err: freeError }, '[FreeOnly] Failed to query free tier, falling back to rotation');
-        autoRotate = true;
+        logger.error({ err: freeError }, '[FreeOnly] Failed to query free tier');
       }
     }
 
@@ -1601,9 +1849,29 @@ class AIService {
       }
     }
 
-    let lastError = null;
+    // The walk, as (provider, free-tier row) pairs. A `freeRow` says two
+    // things: call *this* model rather than the provider's default, and record
+    // the outcome against the row's health. Every non-free caller gets exactly
+    // the list it got before — provider ids, `freeRow: null`, same order.
+    const attemptPlan = freeTierAttempts.length > 0
+      ? freeTierAttempts.map(candidate => ({ provider: candidate.provider, freeRow: candidate }))
+      : rotationProviders.map(provider => ({ provider, freeRow: null }));
 
-    for (const currentProvider of rotationProviders) {
+    // Deliberate dead end (R130): a free-tier caller with nothing free to call
+    // stops here. Before, it fell through to the paid provider walk, so a
+    // caller whose routing row says `tier: free` could be answered — and
+    // billed — by whatever default model happened to answer first.
+    //
+    // The wording is load-bearing: `aiFailureEnvelope.classifyFailure` reads
+    // `/no .*providers/i` as `unavailable`, so this surfaces as a 503
+    // `upstream_unavailable` — "nothing left in the rotation", which is exactly
+    // what it is — rather than a 500 that says nothing.
+    const freeTierExhausted = isFreeCaller && freeTierAttempts.length === 0;
+    let lastError = freeTierExhausted
+      ? new Error('No free-tier model is available — no free providers left to try')
+      : null;
+
+    for (const { provider: currentProvider, freeRow } of (freeTierExhausted ? [] : attemptPlan)) {
       if (!currentProvider) continue;
 
       const providerConfig = this.providers[currentProvider];
@@ -1617,10 +1885,13 @@ class AIService {
 
       // Only honor the caller-specified model on the originally requested provider —
       // fallback providers (different family) reject it (e.g. gemini model on groq → 404).
+      // A free-tier retry names its own model, which is the whole point of it.
       const isRequestedProvider = currentProvider === requestedProvider;
-      let providerModel = isRequestedProvider
-        ? (model || providerConfig.model)
-        : providerConfig.model;
+      let providerModel = freeRow
+        ? freeRow.modelId
+        : isRequestedProvider
+          ? (model || providerConfig.model)
+          : providerConfig.model;
       if (autoRotate) {
         const rotationOverride = this.rotationProviderOverrides[currentProvider];
         if (rotationOverride?.model) {
@@ -1780,6 +2051,11 @@ class AIService {
           this.rotationManager.recordUsage(currentProvider, { requests: 1, tokens: totalTokens });
         }
 
+        // The row answered: clear its failure memory and stamp it proven.
+        if (freeRow) {
+          this.markFreeTierSuccess(currentProvider, providerModel);
+        }
+
         this.lastProviderInfo = {
           provider: currentProvider,
           model: providerModel,
@@ -1795,6 +2071,18 @@ class AIService {
           this.markRateLimited(currentProvider, 60);
           if (autoRotate) {
             this.rotationManager.markProviderCooling(currentProvider, 60 * 1000);
+          }
+        }
+
+        // A free-tier row that fails *hard* — the model is gone, the slug was
+        // recycled, the key is refused — is put to sleep so tomorrow's first
+        // call does not spend the same three seconds proving it again. A 429,
+        // a 5xx or a timeout is not hard and leaves the row's health alone;
+        // markRateLimited above already owns that case.
+        if (freeRow) {
+          const classification = classifyFreeTierFailure(error);
+          if (classification.hard) {
+            this.markFreeTierFailure(currentProvider, providerModel, classification.code, freeRow.health);
           }
         }
 

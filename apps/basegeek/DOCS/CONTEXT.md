@@ -1109,3 +1109,119 @@ fitnessgeek reads (`SleepIntraday`, `SleepSummary`, `HeartRateIntraday`,
 nothing else. A filter added blind returns zero rows and blanks the dashboard.
 The TODO in `routes/influx.js` says what to run against the live bucket to
 settle it; that needs the box, so it is Chef's, not an agent's.
+
+### The free tier remembers which models are dead (R130)
+
+**Stream R130, Night 2 — 2026-09-06.** `src/services/aiService.js` (the
+free-tier selection and fallback path only), `src/models/AIFreeTier.js`, a new
+`scripts/probe-free-tier.js`, and two suites:
+`src/__tests__/aiFreeTierRouting.test.js` (17 cases) and
+`src/__tests__/aiFreeTierProbe.test.js` (22 cases).
+
+**What happened.** StartGeek's Ask (`graphql/glance/askService.js`, app row
+`startgeek → tier: free`) called `callAI(..., { useAppConfig: true })`. The
+`freeOnly` branch built its candidates from every `AIFreeTier` row with
+`isFree: true` whose provider had a key, sorted them by the rotation manager's
+provider priority, and took `prioritized[0]` — `groq/llama-3.1-8b-instant`, a
+model Groq had retired (404 `model_not_found`). Nothing recorded that. The call
+then fell into the *generic* provider walk, which calls each remaining provider
+with **its own default model**: cerebras 401 "Wrong API Key", together 400 (its
+default `-Free` Llama is no longer serverless), openrouter 404 (recycled `:free`
+slug), cloudflare eventually — well past `GlanceIntent timed out after 3000ms`.
+The user got the "read it as a search" fallback every time, and would again
+tomorrow, because nothing remembered any of it.
+
+Two bugs in one path: **no memory**, and **a free-tier caller escaping the free
+tier**. The second is the more expensive one — a routing row that says `free`
+could be answered, and billed, by a paid default model.
+
+**What was built.**
+
+- **`AIFreeTier.health`** — `{ consecutiveFailures, lastFailureAt,
+  lastFailureCode, lastSuccessAt, coolingUntil }`, defaults 0/null. Plus three
+  pure exports the selection path and the probe both import, so they cannot
+  drift on what "dead" means: `classifyFreeTierFailure`, `isFreeTierCooling`,
+  and the cooldown constants. Classification reuses
+  `aiFailureEnvelope.upstreamStatusOf` rather than re-parsing adapter messages.
+- **A hard failure cools the row, not the provider.** HTTP 400/401/403/404, or
+  a message matching `model_not_found|does not exist|no longer|not
+  found|Wrong API Key|unauthorized` → `coolingUntil = now + 6h`, 24h once the
+  row has failed hard three times running. A 429, a 5xx or a timeout is **not**
+  hard and leaves health untouched — `markRateLimited` and the rotation
+  manager's per-provider cooling already own that case and are unchanged.
+- **An in-process `Map` mirror** (`aiService.freeTierHealth`) so selection never
+  waits on the Mongo write, which is fire-and-forget. On a read the two are
+  merged by *which side observed the row more recently* (max of
+  `lastFailureAt`/`lastSuccessAt`), so a stale mirror cannot resurrect a row the
+  probe just buried, and a restart does not lose the count.
+- **Selection** drops cooling rows, then orders by (provider priority,
+  `lastSuccessAt` desc, fewest failures).
+- **Fallback stays inside the free tier.** A failed free pick tries the next
+  free candidate — a *different provider* first, since one vendor retiring a
+  model says nothing about another's — up to three attempts, then stops.
+  `noFallback` cuts that to one.
+
+**Decisions taken on Chef's behalf.**
+
+1. **Three attempts, not more.** StartGeek's Ask lives inside a 3 s
+   `GlanceIntent` budget; a fourth attempt is a timeout wearing a retry's
+   clothes.
+2. **A free-tier caller with nothing free to call now fails instead of falling
+   through to the paid walk.** This is the one behaviour change that can turn a
+   slow answer into no answer. It is deliberate: `tier: free` is a budget
+   statement, and the callers that route this way (Ask, the glance brief,
+   fitnessgeek's classifiers) all have a deterministic fallback of their own.
+3. **If *every* row is cooling, the one closest to waking is tried anyway.**
+   Otherwise one `probe --mark` run could take the whole free tier offline for
+   30 days, and a long shot beats a guaranteed nothing.
+4. **The probe marks, it does not delete.** The aiGeek page lists this
+   collection; a row that vanished reads as a config loss rather than a retired
+   model. `--mark` is a 30-day cooling with a `lastFailureCode`, and any
+   successful call clears it.
+5. **`autoRotate` stays `false` on the free path**, so
+   `rotationManager.isCooling()` is still never consulted for it. That was
+   noted as odd, and it is correct: provider-level cooling is measured in
+   minutes and keyed on a provider's *default* model, which is not the model a
+   free row names. Row-level health is the right granularity here, and mixing
+   the two would hide a live free model behind a provider that is merely busy.
+
+**Nothing changed for a non-free caller.** The walk is now a list of
+`{ provider, freeRow }` pairs rather than bare provider ids, and for every
+caller that is not `freeOnly` the list is built exactly as before —
+`[requestedProvider, ...fallbackOrder]` or the rotation priority list, each
+entry with `freeRow: null`, each resolving its model through the same
+`isRequestedProvider ? (model || default) : default` expression. Pins,
+`noFallback`, rotation overrides, the cache, quota checks and rate limiting are
+untouched. Two cases in the new suite assert exactly this.
+
+**`scripts/probe-free-tier.js`** reads `apps/basegeek/.env.production` through
+dotenv the way `mint-api-key.js` does (dotenv *before* any model or service
+import — both read their URIs and keys at import time), then sends each free
+row a one-token "Reply OK" through `aiService.callProvider` with an 8 s cap, and
+prints provider / model / alive-dead-unknown / a classified code. It never
+prints a key, a key hint, or more than 80 characters of a provider body
+(`--detail` widens that to 200 and still truncates) — provider bodies carry org
+ids, entitlement detail and vendor-redacted key fragments. `--mark` cools dead
+rows for 30 days, `--revive` clears cooling on rows that answered; default is
+report only. **Not run against production by the agent** — that is Sage's to
+run on the host.
+
+**Relationship to `aiDeadProviders.test.js`.** That suite is about dead
+*providers* — `llm7` and `onemin`, whole vendors struck from the roster, with
+tripwires that they stay struck. This one is about dead *models inside living
+providers*, which nothing watched at all. They never overlap: a retired
+provider has no `aiService.providers` entry, so a free row naming one is
+dropped by the same `pc && pc.apiKey` guard that has always been there. The
+note in `AI_CATALOG.md` spells out the distinction.
+
+**Left undone, with reasons.**
+
+- **The aiGeek admin page does not show `health`.** The API and the model carry
+  it; surfacing "last worked / cooling until" on the free-tier list would make
+  the whole thing self-explanatory, but `packages/ui` is outside this stream's
+  file set.
+- **Nothing prunes the mirror.** `aiService.freeTierHealth` grows one entry per
+  (provider, model) actually called — bounded by the size of the free-tier
+  collection, tens of entries, so a bound would be ceremony.
+- **`AIUsage`'s read-modify-write undercount** (recorded in the 2026-09-05
+  going-over) is still open and untouched here.
