@@ -85,7 +85,7 @@ export const FREE_TIER_LONG_COOLDOWN_AFTER = 3;
  * having a bad minute, and the existing rate-limit and rotation cooling already
  * handle them.
  */
-export const HARD_FAILURE_STATUSES = new Set([400, 401, 403, 404]);
+export const HARD_FAILURE_STATUSES = new Set([400, 401, 403, 404, 410]); // 410: Ollama Cloud says "retired" with Gone
 
 /**
  * The vendors' own words for the same four situations. Kept as one expression

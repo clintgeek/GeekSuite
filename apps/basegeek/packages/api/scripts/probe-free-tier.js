@@ -314,8 +314,12 @@ if (isMain) {
     const envPath = path.resolve(here, '../../../.env.production');
     const { default: dotenv } = await import('dotenv');
     const loaded = dotenv.config({ path: envPath });
-    if (loaded.error) {
-      throw new Error(`Could not read ${envPath} — run this on the baseGeek host`);
+    // Inside the basegeek container the variables are already in the
+    // environment and there is no .env file — that is the normal way to run
+    // this (the aiGeek Mongo URI resolves only on the Docker network).
+    const alreadyConfigured = Boolean(process.env.AIGEEK_MONGODB_URI || process.env.MONGODB_URI);
+    if (loaded.error && !alreadyConfigured) {
+      throw new Error(`Could not read ${envPath} — run this on the baseGeek host or inside the basegeek container`);
     }
 
     const { default: AIFreeTier } = await import('../src/models/AIFreeTier.js');
