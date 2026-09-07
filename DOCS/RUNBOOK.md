@@ -559,3 +559,19 @@ A dedicated pass over `apps/*/Dockerfile`, `apps/*/docker-compose.yml`, `apps/*/
 - `DOCS/SUITE_TODO.md` — the detailed backlog `TODO_ORDER.md` sequences.
 - `DOCS/BURN_QUEUE.md` — if the tree is dirty and you don't know why, this is the live
   multi-stream work log explaining it, plus how to safely resume or commit each stream.
+
+## 12. aiGeek free-tier audit (monthly, or when Ask says "did not answer in time")
+
+The free tiers move under us. From the box:
+
+```
+docker exec basegeek sh -c 'cd /app/apps/basegeek/packages/api && node scripts/discover-free-models.js'          # report
+docker exec basegeek sh -c 'cd /app/apps/basegeek/packages/api && node scripts/discover-free-models.js --sync'   # write the catalog
+docker exec basegeek sh -c 'cd /app/apps/basegeek/packages/api && node scripts/probe-free-tier.js'               # re-probe existing rows only
+```
+
+Discovery asks each configured provider for its current model list, keeps the free-tier candidates
+(per-provider rules in the script header), drops non-general models (LoRA/tiny/code/translate/vision),
+probes each live (8-token budget; empty text counts as dead), and `--sync` upserts alive rows as
+`isFree` and cools dead ones 30 days. Selection at runtime also cools a row on its first hard
+failure, so a stale catalog costs one bad call per model, not one per user per day.
