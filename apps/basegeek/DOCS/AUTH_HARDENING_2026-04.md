@@ -26,7 +26,7 @@ Goal: move basegeek from risk-rating 4 → 3.
     - `console.log('msg')` → `logger.info('msg')` (or `req.log.info`)
     - `console.error('label:', err.stack)` → `req.log.error({ err }, 'label')`
     - `console.warn(...)` → `logger.warn(...)`
-- Do NOT touch test scripts at the repo root (`debug-api-keys.js`, etc.) — those are out of scope.
+- Do NOT touch test scripts at the repo root (`debug-api-keys.js`, etc.) — those are out of scope. *(2026-09-07: those root scripts — `update-ai-catalog.js`, `fix-models.js`, `setup-onemin-provider.sh`, `check-db-keys.js`, `debug-api-keys.js`, and `packages/api/{test-production-ai,debug-ai-config}.js` — were deleted in aiGeek Phase 0; see `DOCS/AIGEEK_ELEVATION_PLAN.md`.)*
 
 **Verification:** boot the server in dev, hit a route that errors, confirm log line is JSON (or pretty), includes `req.id`, and the response `X-Request-Id` matches the log.
 
