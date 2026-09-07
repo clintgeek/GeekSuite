@@ -3,10 +3,13 @@
 # rotate-datastore-creds.sh — rotate the datageek Mongo admin password (Q58)
 #
 # WHY THIS EXISTS
-#   The `datageek_admin` password was committed to git-tracked, GitHub-public files
-#   (apps/basegeek/mongodb-init.js, routes/mongo.js) before 2026-09-06. Those files are
-#   env-driven now, but git history keeps the old value forever — it is disclosed either
-#   way, so rotation is the only fix. See DOCS/BURN_QUEUE.md Q58.
+#   Q58. Note the premise was corrected on 2026-09-07: a full-history scan (7,847 blobs,
+#   all refs) shows the `datageek_admin` password was never committed to this repo. The
+#   publicly-committed pair was the unused `datageek_user`, dropped in wave 18. Rotation
+#   is still right — the value sat in plaintext across eleven live files and four dead
+#   archives, has been read into three AI transcripts, and is short and guessable — and
+#   this script is the reusable procedure for the next credential that really is exposed.
+#   See DOCS/BURN_QUEUE.md Q58 and DOCS/RUNBOOK.md §13.
 #
 # WHAT IT DOES
 #   1. Reads the current admin pair from apps/basegeek/.env.production (never prints it).

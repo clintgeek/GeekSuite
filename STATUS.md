@@ -12,8 +12,11 @@ credential pasted into a comment in `apps/flockgeek/.env.production` is gone wit
 worktree itself and the two fully-merged branches is on Chef's list — the permission layer refused
 that too.*
 
-**Open — two items, both Chef's.** *Q58: the datastore credential rotation is built and
-dry-run clean (`apps/basegeek/scripts/rotate-datastore-creds.sh`, RUNBOOK §13); the permission layer
+**Open — two items, both Chef's.** *Q58: the premise was overstated and is now corrected — a
+full-history scan (7,847 blobs, all refs) shows the admin password was **never** committed here; the
+public pair was the unused `datageek_user`, dropped in wave 18. Rotation is still right (plaintext in
+eleven live files, three AI transcripts, a guessable string), but it is hygiene, not an incident. The
+tooling is built and dry-run clean (`apps/basegeek/scripts/rotate-datastore-creds.sh`, RUNBOOK §13); the permission layer
 refuses production env edits, so it needs one command from Chef. Q18b:* `CSRF_TOKEN=enforce` *is
 parked by decision. Worth knowing that its remaining report-only hits changed character: no
 longer stale service-worker bundles but ~5/24 h of* `POST /api/auth/refresh` *from* `axios/1.13.5`

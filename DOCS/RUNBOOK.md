@@ -578,10 +578,19 @@ failure, so a stale catalog costs one bad call per model, not one per user per d
 
 ## 13. Rotating the datastore credential (Q58, 2026-09-07)
 
-The `datageek_admin` Mongo password was committed to git-tracked, GitHub-public files
-(`apps/basegeek/mongodb-init.js`, `routes/mongo.js`) before 2026-09-06. Those files are env-driven
-now, but git history keeps the old value forever — it is disclosed either way, so **rotation is the
-only fix**, and it is repeatable whenever a credential is exposed again.
+**What was actually disclosed** (checked 2026-09-07, because the board said something stronger):
+the `datageek_admin` password appears in **no blob in this repo's entire git history** — all 7,847
+blobs across all refs were scanned. The pair that was public in `apps/basegeek/mongodb-init.js` and
+`routes/mongo.js` was the unused `datageek_user`, and that account was dropped in wave 18. The three
+pre-monorepo repos that still carry a `.git` (`archive/{bookgeek,flockgeek,storygeek}` under
+`/mnt/Media/Docker`) point only at the retired self-hosted `git.clintgeek.com`, never at GitHub.
+
+So this was **never published**. It is still worth rotating, for three lesser reasons: the value sat
+in plaintext in eleven files on this box plus four dead archives; it has been read into at least
+three AI transcripts (a reviewer's on 09-05, and two on 09-07 — one of them mine, via a credential
+someone had pasted into an `# Example:` comment); and it is a short, guessable, year-suffixed
+string. Hygiene with a clock on it, not breach response — and the script below is the reusable
+procedure for the next time a credential really is exposed.
 
 ```
 ./apps/basegeek/scripts/rotate-datastore-creds.sh                    # dry run: inventory only
