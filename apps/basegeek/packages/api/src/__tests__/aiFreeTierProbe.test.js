@@ -129,7 +129,7 @@ function layer(answers) {
 }
 
 describe('runProbe', () => {
-  it('asks for one token and reports a row per model', async () => {
+  it('asks for a few tokens and reports a row per model', async () => {
     const { calls, callProvider } = layer({
       'groq/llama-3.1-8b-instant': REAL_FAILURES[0].error,
       'cerebras/llama3.1-8b': REAL_FAILURES[1].error,
@@ -137,7 +137,7 @@ describe('runProbe', () => {
 
     const results = await probe.runProbe({ rows: ROWS, callProvider });
 
-    expect(calls.every(c => c.maxTokens === 1)).toBe(true);
+    expect(calls.every(c => c.maxTokens === 8)).toBe(true);
     expect(calls.every(c => c.prompt === 'Reply OK')).toBe(true);
     expect(results.map(r => r.status)).toEqual(['dead', 'dead', 'alive']);
   });

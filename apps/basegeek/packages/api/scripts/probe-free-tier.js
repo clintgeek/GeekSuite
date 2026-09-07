@@ -166,7 +166,9 @@ export async function probeRow(row, { callProvider, timeoutMs = DEFAULT_PROBE_TI
     const call = Promise.resolve(
       callProvider(row.provider, 'Reply OK', {
         model: row.modelId,
-        maxTokens: 1,
+        // 8, not 1: a reasoning model spends its first tokens thinking and a
+        // 1-token cap makes every one of them look empty.
+        maxTokens: 8,
         temperature: 0,
       })
     );
@@ -178,7 +180,12 @@ export async function probeRow(row, { callProvider, timeoutMs = DEFAULT_PROBE_TI
     const guard = new Promise((_, reject) => {
       timer = setTimeout(() => reject(new Error(`probe timeout after ${timeoutMs}ms`)), timeoutMs);
     });
-    await Promise.race([call, guard]);
+    const result = await Promise.race([call, guard]);
+    // HTTP 200 with no text (gpt-oss through the Cloudflare/Ollama adapters,
+    // 2026-09-06) is not alive: nothing downstream can use it.
+    if (!String(result?.content ?? '').trim()) {
+      return { status: 'dead', code: 'empty_content', http: null, ms: Date.now() - started, message: 'provider returned no text' };
+    }
     return { ...classifyProbeOutcome(null), ms: Date.now() - started, message: '' };
   } catch (error) {
     return {
