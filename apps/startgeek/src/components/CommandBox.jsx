@@ -639,7 +639,14 @@ const CommandBox = ({ onOpenSettings }) => {
                 </button>
               </div>
             ) : (
-              <AnswerCard ask={ask} loading={askLoading} />
+              <AnswerCard
+                ask={ask}
+                loading={askLoading}
+                resultsCount={results.length}
+                // A tapped term re-runs as a plain search (no `??`), the
+                // cheapest way out of "read as a search, no matches".
+                onKeyword={(kw) => setValue(kw)}
+              />
             )}
 
             <SearchResults

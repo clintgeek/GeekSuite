@@ -1,3 +1,4 @@
+import { askStatusLine } from '../lib/askStatus'
 import { motion } from 'framer-motion'
 
 // The suite spells its own app names; the server sends the lowercase ids.
@@ -8,19 +9,27 @@ const APP_LABELS = {
   flockgeek: 'FlockGeek',
 }
 
-// One chip per thing the model understood. Non-interactive, so they sit at the
-// 12px floor rather than the 44px target size.
-const Chip = ({ tone = 'plain', children }) => (
-  <span
-    className={`inline-flex items-center h-[22px] px-2.5 rounded-full border font-mono text-[12px] leading-none whitespace-nowrap ${
-      tone === 'accent'
-        ? 'border-[rgba(230,179,90,0.35)] text-accent bg-accent-dim'
-        : 'border-hair text-ink-2'
-    }`}
-  >
-    {children}
-  </span>
-)
+// One chip per thing the model understood. A chip with `onClick` is a real
+// button — a 44px hit area (negative margin keeps the 22px visual row) so a
+// term can be re-run as a plain search when the planned one found nothing.
+const Chip = ({ tone = 'plain', children, onClick }) => {
+  const look = `inline-flex items-center h-[22px] px-2.5 rounded-full border font-mono text-[12px] leading-none whitespace-nowrap ${
+    tone === 'accent'
+      ? 'border-[rgba(230,179,90,0.35)] text-accent bg-accent-dim'
+      : 'border-hair text-ink-2'
+  }`
+  if (!onClick) return <span className={look}>{children}</span>
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={`Search for ${children}`}
+      className="inline-flex items-center min-h-[44px] -my-[11px] px-0 bg-transparent border-0 cursor-pointer"
+    >
+      <span className={`${look} hover:bg-panel-hover transition-colors`}>{children}</span>
+    </button>
+  )
+}
 
 /**
  * The Ask card: what the suite made of the question, above the results.
@@ -29,12 +38,12 @@ const Chip = ({ tone = 'plain', children }) => (
  * The answer is only ever what the server returned — when it is null the card
  * says so plainly rather than inventing a line.
  */
-const AnswerCard = ({ ask, loading }) => {
+const AnswerCard = ({ ask, loading, resultsCount = 0, onKeyword }) => {
   if (!loading && !ask) return null
 
   const intent = ask?.intent
   const answer = ask?.answer
-  const askedForAnswer = intent?.kind === 'answer'
+  const statusLine = askStatusLine({ ask, loading, resultsCount })
 
   return (
     <motion.div
@@ -67,22 +76,14 @@ const AnswerCard = ({ ask, loading }) => {
         <p className="text-[15px] leading-relaxed text-ink">{answer}</p>
       )}
 
-      {!loading && !answer && askedForAnswer && (
-        <p className="text-[13px] leading-relaxed text-ink-3">
-          Nothing in your own data answers that. The closest matches are below.
-        </p>
-      )}
-
-      {!loading && !answer && !askedForAnswer && intent && (
-        <p className="text-[13px] leading-relaxed text-ink-3">
-          Read as a search. Matches below.
-        </p>
+      {!loading && !answer && statusLine && (
+        <p className="text-[13px] leading-relaxed text-ink-3">{statusLine}</p>
       )}
 
       {!loading && intent && (
         <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
           {intent.keywords?.map((kw) => (
-            <Chip key={`kw-${kw}`} tone="accent">
+            <Chip key={`kw-${kw}`} tone="accent" onClick={onKeyword ? () => onKeyword(kw) : undefined}>
               {kw}
             </Chip>
           ))}
