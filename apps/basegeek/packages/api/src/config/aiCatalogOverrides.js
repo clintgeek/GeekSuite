@@ -14,7 +14,7 @@
  *
  * `allow` wins over `deny`: one genuine exception does not need a new rule.
  */
-export const deny = [/lora/i, /translate/i, /safety|guard/i, /-code\b|coder/i, /ocr/i, /vision|-vl[-:]/i];
+export const deny = [/lora/i, /translate/i, /safety|guard/i, /-code\b|coder/i, /ocr/i, /vision|-vl[-:]/i, /lyria|music/i];
 export const allow = [];
 
 /** `true` when this model id should never become a free-tier candidate. */
