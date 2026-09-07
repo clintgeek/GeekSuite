@@ -31,7 +31,14 @@ function fakeRuns(seed = []) {
       return {
         sort() { return this; },
         lean: async () => {
-          const matching = docs.filter(d => d.kind === kind);
+          // Honour the clean-run filter the job uses: `error: null` and
+          // `counts.listedError`/`counts.probeError: null` match a missing
+          // field or a null, the way Mongo does.
+          const wantsClean = filter && 'error' in filter;
+          const isClean = (d) => !wantsClean || (
+            d.error == null && d.counts?.listedError == null && d.counts?.probeError == null
+          );
+          const matching = docs.filter(d => d.kind === kind && isClean(d));
           if (matching.length === 0) return null;
           return matching.reduce((a, b) =>
             new Date(b.startedAt).getTime() > new Date(a.startedAt).getTime() ? b : a);
@@ -193,6 +200,28 @@ describe('tick', () => {
     expect(out.discovery).toBeNull();
     expect(out.probe).toBeNull();
     expect(discovery.log).toEqual([]);
+  });
+
+  it('re-runs discovery when the last run an hour ago completed with write errors', async () => {
+    // 2026-09-07 live: every AIModel upsert threw on a `name` path conflict,
+    // the run still got a document, and the 24 h gate would have held the
+    // broken catalog for a day. A run with error text is not a run.
+    const now = Date.UTC(2026, 8, 7, 12, 0, 0);
+    const runs = fakeRuns([{
+      kind: 'discovery', startedAt: new Date(now - HOUR), finishedAt: new Date(now - HOUR),
+      error: null, counts: { alive: 0, listedError: "Updating the path 'name' would create a conflict at 'name'" },
+    }]);
+    const { job, discovery } = makeJob({ at: now, runs });
+    await job.tick();
+    expect(discovery.log.some(l => l.call === 'discover')).toBe(true);
+  });
+
+  it('treats an aborted run (error set) the same way', async () => {
+    const now = Date.UTC(2026, 8, 7, 12, 0, 0);
+    const runs = fakeRuns([{ kind: 'discovery', startedAt: new Date(now - HOUR), finishedAt: new Date(now - HOUR), error: 'boom' }]);
+    const { job, discovery } = makeJob({ at: now, runs });
+    await job.tick();
+    expect(discovery.log.some(l => l.call === 'discover')).toBe(true);
   });
 
   it('re-runs discovery once the last one is 24 h old', async () => {

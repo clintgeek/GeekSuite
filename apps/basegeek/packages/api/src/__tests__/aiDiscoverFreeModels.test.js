@@ -16,6 +16,7 @@
  */
 
 import { describe, it, test, expect } from '@jest/globals';
+import { writeListed, writeAlive } from '../services/aiCatalogDiscovery.js';
 
 const {
   freeCandidates,
@@ -411,6 +412,46 @@ describe('parseRateLimitHeaders', () => {
     // that never learns a quota, not a crash.
     for (const headers of [undefined, null, {}, 'nonsense']) {
       expect(parseRateLimitHeaders(headers, 0)).toEqual({ limits: {}, observed: {}, retryAfterSeconds: null });
+    }
+  });
+});
+
+
+// ───────────────────────────────────────────────────────────────────────────
+describe('catalog writes name a path in one update operator only', () => {
+  // Mongo rejects `{ $set: { name }, $setOnInsert: { name } }` with
+  // "Updating the path 'name' would create a conflict at 'name'". The first
+  // live discovery run (2026-09-07) failed every AIModel write that way and
+  // deactivated 29 rows it could not re-list.
+  const capture = () => {
+    const writes = [];
+    return { writes, updateOne: async (filter, update) => { writes.push({ filter, update }); return { modifiedCount: 1 }; } };
+  };
+  const pathsOf = (update) => Object.entries(update).flatMap(([op, body]) => Object.keys(body).map(k => `${op}.${k}`));
+
+  it('writeListed with a name sets it and has no $setOnInsert', async () => {
+    const model = capture();
+    await writeListed({ provider: 'groq', modelId: 'm1', name: 'Model One' }, { model });
+    const [{ update }] = model.writes;
+    expect(update.$set.name).toBe('Model One');
+    expect(update.$setOnInsert).toBeUndefined();
+  });
+
+  it('writeListed without a name seeds it on insert only', async () => {
+    const model = capture();
+    await writeListed({ provider: 'groq', modelId: 'm1' }, { model });
+    const [{ update }] = model.writes;
+    expect(update.$set.name).toBeUndefined();
+    expect(update.$setOnInsert).toEqual({ name: 'm1' });
+  });
+
+  it('writeAlive never names `name` twice either way', async () => {
+    for (const name of ['Model One', null]) {
+      const model = capture(); const freeTier = capture();
+      await writeAlive({ provider: 'groq', modelId: 'm1', fitness: 'structured', name }, { model, freeTier });
+      const [{ update }] = model.writes;
+      const paths = pathsOf(update);
+      expect(paths.filter(p => p.endsWith('.name')).length).toBe(1);
     }
   });
 });

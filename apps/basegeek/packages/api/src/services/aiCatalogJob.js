@@ -161,7 +161,15 @@ export class AICatalogJob {
 
   /** When a run of this kind last started, or null. */
   async lastRunAt(kind) {
-    const doc = await this.catalogRun.findOne({ kind }).sort({ startedAt: -1 }).lean();
+    // Only a clean run counts. A run that aborted, or whose writes failed
+    // (2026-09-07: every AIModel upsert threw on a `name` path conflict and
+    // the run still "completed"), would otherwise hold the interval for a full
+    // day while the catalog stays wrong. Such runs are kept for the status page
+    // but do not satisfy the schedule; the next tick retries.
+    const doc = await this.catalogRun
+      .findOne({ kind, error: null, 'counts.listedError': null, 'counts.probeError': null })
+      .sort({ startedAt: -1 })
+      .lean();
     const at = doc?.finishedAt || doc?.startedAt;
     return at ? new Date(at).getTime() : null;
   }

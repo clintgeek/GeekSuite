@@ -27,6 +27,10 @@ const aiCatalogRunSchema = new mongoose.Schema({
   /** `{ AIModel: n, AIFreeTier: n, AIPricing: n }` — rows whose provider left the roster. */
   pruned: { type: mongoose.Schema.Types.Mixed, default: () => ({}) },
   /** Short, credential-free text. A run that failed halfway still writes a document. */
+  // Totals from syncResults (alive/dead/unknown/listed/deactivated plus any
+  // listedError/probeError text). Added 2026-09-07: the first live run set
+  // this and the strict schema silently dropped it.
+  counts: { type: mongoose.Schema.Types.Mixed, default: null },
   error: { type: String, default: null }
 }, {
   timestamps: true

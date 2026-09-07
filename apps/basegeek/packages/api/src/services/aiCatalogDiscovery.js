@@ -599,7 +599,8 @@ export async function writeAlive({ provider, modelId, fitness = null, name = nul
           ...(contextTokens ? { contextTokens } : {}),
           ...(maxOutputTokens ? { maxOutputTokens } : {})
         },
-        $setOnInsert: { name: name || modelId }
+        // See writeListed: one operator owns `name`, never both.
+        ...(name ? {} : { $setOnInsert: { name: modelId } })
       },
       { upsert: true }
     );
@@ -647,7 +648,11 @@ export async function writeListed(row, deps) {
         ...(maxOutputTokens ? { maxOutputTokens } : {}),
         ...(role ? { role } : {})
       },
-      $setOnInsert: { name: name || modelId }
+      // `name` may live in $set OR $setOnInsert, never both: Mongo rejects an
+      // update that names the same path twice ("would create a conflict at
+      // 'name'"), and on 2026-09-07 the first live discovery run failed every
+      // AIModel write that way, deactivating 29 rows it could not re-list.
+      ...(name ? {} : { $setOnInsert: { name: modelId } })
     },
     { upsert: true }
   );
