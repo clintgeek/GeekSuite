@@ -2320,19 +2320,32 @@ class AIService {
     // Use provided messages array or convert prompt to messages
     const requestMessages = messages || [{ role: 'user', content: prompt }];
 
-    // Format prompt for Cloudflare Workers AI text generation
-    const formattedPrompt = requestMessages.map(m => {
-      if (m.role === 'system') return `System: ${m.content}`;
-      if (m.role === 'assistant') return `Assistant: ${m.content}`;
-      return m.content;
-    }).join('\n\n');
+    // Chat mode, not a flattened `prompt`. Workers AI applies the model's own
+    // chat template to `messages` and stops at end-of-turn; the old "System:
+    // …\n\nAssistant: …" string had no template and no stop, so llama kept
+    // generating turns until max_tokens — 15 s+ for a two-word JSON answer
+    // (2026-09-07, the StartGeek Ask outage). `response_format` is Workers
+    // AI's JSON mode: the schema goes in directly, without OpenAI's
+    // { name, schema } wrapper.
+    const cfMessages = requestMessages.map(m => ({
+      role: m.role === 'system' || m.role === 'assistant' ? m.role : 'user',
+      content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content ?? ''),
+    }));
+    const rf = config.responseFormat;
+    const cfResponseFormat = rf?.type === 'json_schema'
+      ? { type: 'json_schema', json_schema: rf.json_schema?.schema || rf.json_schema }
+      : rf?.type === 'json_object'
+        ? { type: 'json_object' }
+        : null;
 
     try {
       const response = await axios.post(
         `${this.providers.cloudflare.baseURL}/${accountId}/ai/run/${model}`,
         {
-          prompt: formattedPrompt,
+          messages: cfMessages,
           max_tokens: maxTokens,
+          temperature,
+          ...(cfResponseFormat && { response_format: cfResponseFormat }),
           // Workers AI documents top_p / seed / the two penalties for
           // text-generation but not `stop`, and validates its input schema
           // strictly — an unknown property is a 400, so `stop` is dropped here.
@@ -2350,7 +2363,9 @@ class AIService {
         }
       );
 
-      const result = response.data.result?.response || response.data.result?.content || '';
+      // JSON mode returns `response` as an object; callers expect text.
+      let result = response.data.result?.response ?? response.data.result?.content ?? '';
+      if (result && typeof result === 'object') result = JSON.stringify(result);
 
       return {
         content: result,
