@@ -1110,6 +1110,18 @@ nothing else. A filter added blind returns zero rows and blanks the dashboard.
 The TODO in `routes/influx.js` says what to run against the live bucket to
 settle it; that needs the box, so it is Chef's, not an agent's.
 
+### The Cloudflare adapter talks chat (2026-09-07)
+
+`callCloudflare` used to flatten messages into one `prompt` string. Workers AI then ran the model
+without a chat template or stop token, so llama generated until `max_tokens` — 15 s+ for a two-word
+JSON answer, which is what made StartGeek Ask fall back every time on 2026-09-06. It now sends
+`messages` with roles, `temperature`, and Workers AI's `response_format` (`json_schema` takes the
+bare schema, no OpenAI `{ name, schema }` wrapper); a JSON-mode object response is stringified for
+callers. Live: 0.5–1.4 s for a schema call. Test: `aiCloudflareAdapter.test.js`. Still open: the
+gpt-oss models return empty text through this adapter and Ollama's (probably a reasoning field) —
+their free rows are cooled for 30 days; the probe (`scripts/probe-free-tier.js`, run inside the
+container) reports them as alive because they answer HTTP 200.
+
 ### The free tier remembers which models are dead (R130)
 
 **Stream R130, Night 2 — 2026-09-06.** `src/services/aiService.js` (the
