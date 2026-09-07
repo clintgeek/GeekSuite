@@ -34,35 +34,35 @@ Chef stacks tasks here; Sage launches when a slot and the files are free.
 | R130 | opus | aiGeek free-tier resilience (dead-model memory, free→free fallback, probe script) | **landed** `ecb4268` (wave 22) |
 
 **Push gate:** cleared 09-05 13:20 — frozen install passes on HEAD. Deploy prerequisite for R46 done: fitnessgeek's `.env.production` carries `KEY_VAULT_SECRET` (basegeek's value, copied by line, never printed).
-## Queued (launch when files free / prerequisite lands)
+## Queued — reconciled 2026-09-07
 
-| # | Item | Why waiting | Size |
-|---|------|-------------|------|
-| **Q58** | **ROTATE:** the datageek Mongo root credential pair was in git-tracked, GitHub-public files (removed from `routes/mongo.js` in R93; **still in `apps/basegeek/mongodb-init.js`**) and in plaintext in the gitignored `apps/notegeek/CURSOR-CONTEXT.md` (scrubbed by pattern 22:40; one reviewer's transcript on this box read it). Treat as disclosed: rotate the datastore user, update `.env.production`, strip it from mongodb-init.js | **Chef, soon** | S |
-| Q62 | basegeek policy (Chef): conversation ownership for API-key callers comes from the body (needs a migration to fix); any authenticated user can mint a key for any app name; storygeek's dead `src/graphql` ships @apollo/client; bookify is unbounded synchronous AI work; fitnessgeek `aiCoachRoutes` caller-less and unguarded; InfluxDB reads not user-scoped; flockgeek write-side foreign refs (createBird pairingId/locationId etc.) | Chef triage | M |
-| Q65 | notegeek: the folder feature is dead code calling deleted REST routes; bujogeek TemplateApplier is mounted but unreachable (so the styled TemplatePreview never renders — CONTEXT's Bundle note is wrong about it) | Q22-class / XS | S |
-| Q69 | review2 #11: `routes/oauthConnections.js` reads `INTERNAL_JWT_SECRET`, present in no env file — the route has been silently dead; decide: set the variable or remove the route | Chef | XS |
-| Q68 | an old `git stash` entry (`WIP on dashgeek-redesign`, 11 files incl. apps/basegeek/.env.example and server.js from April) sits on the box — drop it or apply what you still want | Chef | XS |
-| **Q56 (P0)** | **Chef:** `apps/storygeek/.env.production` line `DB_URI=MONGODB_URI=mongodb://…` is malformed — delete the stray `MONGODB_URI=` prefix, then remove the `DB_URI: ${DB_URI}` override from `apps/storygeek/docker-compose.yml` and `docker compose up -d`. Until then that override is the only shell interpolation in the fleet with no default, sourced from an untracked `.env` — a recreate from anywhere else boots storygeek with an empty URI | **Chef (env edit)** | XS |
-| Q6 | bookgeek web unit tests (vitest + RTL for LibraryView/FilterSheet/BookCard/detail) | none — launch next slot | M |
-| Q10 | Revoke the `LocalApps` key — env grep: no .env under Projects carries it; nginx: zero hits on /openai/v1 or /api/ai/ in the retained log window; key lastUsed 2025-11-03 | ready — Chef's confirm, then revoke via the Apps & keys tab | XS |
-| Q11 | basegeek `Databases.jsx`: wire into nav or delete | Chef's call | XS |
-| Q13 | verify COVERS_PATH now serves the old covers in the bookgeek UI (CONTEXT.md runtime line already fixed) | Chef eyeballs the UI | XS |
-| Q18b | `CSRF_TOKEN=enforce`: proxies fixed (R80, wave 8). Report lines since 17:00: **only startgeek** (start.clintgeek.com, Firefox), POST /graphql every ~10 min, cookie present, header missing. The deployed startgeek client sends the header and the cookie is domain-wide, so this fits a startgeek tab loaded before this morning's CSRF deploy running the old bundle. **Chef: reload the startgeek tab**, then re-check `docker logs basegeek \| grep report-only` after 24h; flip when clean | Chef: reload + log review | XS |
-| Q22 | flockgeek backend still mounts a full REST CRUD API (9 models) with no caller in the repo — decide: delete the layer or keep as API surface | Chef's call | S |
-| Q38 | storygeek gateway module: delete (typeDefs/resolvers/model/test + merge lines + the frontend's dead Apollo plumbing) per DOCS/STORYGEEK_GATEWAY_DECISION.md — or build out | Chef's call | XS |
-| Q39 | fitnessgeek: keep or delete the three caller-less instance methods (checkGoalsMet/getProgress/getNutrition); fix the sugar/sodium ceiling-vs-floor disagreement (mealRoutes' MEAL_TYPES part done `3b842e7`) | Chef on delete; the fix XS | XS |
-| Q40 | fitnessgeek FoodItem: soft-deleted rows keep their barcode under the unique index while findOrCreate filters is_deleted:false → E11000 on re-add; fix = partial index or clear barcode on soft delete (migration) | Chef: which | S |
-| Q41 | fitnessgeek FoodItem: reconcile search (user_id:null) with foodCatalogFilter (also $exists:false); foodRoutes.js:301 open-codes a third dedupe ladder minting user-owned rows — fold into findOrCreateFoodItem or keep | design | S |
-| Q42 | review #13: TZ=America/Chicago is inert in every alpine image (no tzdata) — today UTC-everywhere is what keeps the two services agreeing; decide: drop the misleading TZ env and document UTC, or install tzdata and re-audit every local-day site | Chef | S |
-| Q43 | review #21: `main` has no required status checks — enable branch protection requiring CI, syntax, boot-smoke and the harness | Chef (GitHub settings) | XS |
-| Q44 | basegeek config/database.js getAIGeekConnection has no error handler (a bad URI crashes the process); appConnections.js sibling has one | XS | XS |
-| Q48 | consolidation plan §12: 14 open follow-ups (search vs foodCatalogFilter, third dedupe ladder, soft-deleted barcode, caller-less methods, goals_met dead flags, snapshot-vs-catalog recompute, …) — triage | Chef triage | M |
-| Q49 | ai:usage permission is claimed by no route and not in the default mint set — either gate the two /usage routes with it and add it to the defaults, or drop the enum value | XS | XS |
-| Q52 | fitnessgeek: three chart libraries ship (Nivo, Recharts, chart.js) — consolidate on one (~270 kB async); BarcodeScanner loads ZXing from unpkg at runtime — vendor it or pin a hash | design / M | M |
-| Q55 | bujogeek: TaskEditor is always-mounted with open={bool}, keeping ~250 kB of @mui/x-date-pickers on /today — mount on open (loses the close transition) or lazy-load the pickers inside it | design, S | S |
-| Q20b | aiGeek: simulated streaming (F-21) and user-gated selection (F-14) documented, not fixed | design | S |
-| Q14 | storygeek CanonCard summary text through Narration too (agent left it as a separate render path) | Chef's call | XS |
+This table was written mid-burn and went stale: fifteen of its items landed in waves 18–19 and were
+never struck, which made the board read as far more open than it is. Reconciled against the wave
+record, `STATUS.md`, git history and the filesystem — every **closed** item below was verified on
+disk or by commit, not by what a doc claimed about it.
+
+**Closed, no action:** Q6 (`5346e06`) · Q10 (`73965db`) · Q22 (`4e8051e`) · Q38 (`1401dda`) ·
+Q40 (`7166e8b` — and the hazard was only ever latent: production never carried the unique barcode
+index) · Q42 (no `TZ=` left in any compose file; UTC-everywhere documented) · Q43 (ruleset
+"Protect main" active, 23 required checks) · Q44 (`61768d8`) · Q49 (`b8a8ab4`) · Q52 (`@nivo` only,
+recharts and chart.js gone; ZXing pinned with an SRI hash) · Q55 (TaskEditor pickers lazy) ·
+Q56 (`c6776b9`) · Q62 (whole policy bundle; the flockgeek half went moot with Q22) ·
+Q68 (`wip/dashgeek-redesign-2026-04`, stash list empty) · Q69 (`b8a8ab4`).
+
+**Still open.** Every row is a decision or an eyeball, not unfinished code:
+
+| # | Item | Waiting on | Size |
+|---|------|------------|------|
+| **Q58** | **ROTATE the datageek Mongo admin credential.** The pair was in git-tracked, GitHub-public files; history keeps it, so rotation is the fix. `apps/basegeek/scripts/rotate-datastore-creds.sh` does the whole job — dry-run by default, backs up, changes the password, verifies new works *and* old fails, rewrites the 11 live env files, recreates the seven DB-backed apps, and has `--rollback`. The permission layer refuses production env edits, so **Chef runs one command**: `./apps/basegeek/scripts/rotate-datastore-creds.sh --apply --restart` | **Chef (one command)** | S |
+| Q18b | `CSRF_TOKEN=enforce`. Parked deliberately 09-07. The remaining report-only hits are no longer stale bundles: 5 in 24 h, all `POST /api/auth/refresh` from `axios/1.13.5` with cookie auth and no header — an app-proxied refresh whose browser caller never attached one. All six backend proxies do forward the header, so the gap is browser-side in one app's refresh path. Find that caller before flipping | Chef parked it | S |
+| Q39 | *(decision half)* keep or delete the three caller-less fitnessgeek instance methods `checkGoalsMet` / `getProgress` / `getNutrition`. The sugar/sodium ceiling-vs-floor fix landed (`7166e8b`) | Chef | XS |
+| Q41 | *(decision half)* `foodRoutes.js` mints user-owned rows where the shared ladder would use global ones — a privacy-model call. The `search` / `foodCatalogFilter` reconciliation landed | design | S |
+| Q48 | *(decision half)* 11 of the 14 §12 follow-ups are fixed or ratified as out of scope. Three left, all product calls: the caller-less methods (= Q39), `goals_met` floor-vs-ceiling and its dead flags, snapshot-vs-catalog recompute | Chef triage | S |
+| Q65 | *(decision half)* bujogeek `TemplateApplier` is still mounted but unreachable, so the styled `TemplatePreview` never renders — a feature decision. The notegeek dead-folder half landed (`b25a000`) | Chef | XS |
+| Q11 | basegeek `Databases.jsx`: nothing imports it. Wire it into nav or delete it | Chef's call | XS |
+| Q13 | eyeball the bookgeek UI and confirm the covers render. The volume mount was fixed in `c54845e`; only Chef looking at it can close this — git cannot prove it either way | Chef eyeballs | XS |
+| Q14 | storygeek `CanonCard` summary text through `Narration` too (left as a separate render path) | Chef's call | XS |
+| Q20b | aiGeek: simulated streaming (F-21) and user-gated model selection (F-14) are documented in `apps/basegeek/DOCS/OPENAI_COMPAT_AUDIT.md`, not fixed | design | S |
 
 ## How to resume if this session is lost
 

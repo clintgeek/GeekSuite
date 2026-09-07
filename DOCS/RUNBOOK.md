@@ -575,3 +575,46 @@ Discovery asks each configured provider for its current model list, keeps the fr
 probes each live (8-token budget; empty text counts as dead), and `--sync` upserts alive rows as
 `isFree` and cools dead ones 30 days. Selection at runtime also cools a row on its first hard
 failure, so a stale catalog costs one bad call per model, not one per user per day.
+
+## 13. Rotating the datastore credential (Q58, 2026-09-07)
+
+The `datageek_admin` Mongo password was committed to git-tracked, GitHub-public files
+(`apps/basegeek/mongodb-init.js`, `routes/mongo.js`) before 2026-09-06. Those files are env-driven
+now, but git history keeps the old value forever — it is disclosed either way, so **rotation is the
+only fix**, and it is repeatable whenever a credential is exposed again.
+
+```
+./apps/basegeek/scripts/rotate-datastore-creds.sh                    # dry run: inventory only
+./apps/basegeek/scripts/rotate-datastore-creds.sh --apply --restart   # rotate + rewrite + recreate
+./apps/basegeek/scripts/rotate-datastore-creds.sh --rollback DIR      # undo, DIR from the run above
+```
+
+What it does, in order: reads the admin pair out of `apps/basegeek/.env.production`; verifies it
+authenticates against `datageek_mongodb`; backs up every affected file (mode 600) under
+`~/.geeksuite/rotation-backups/<timestamp>/`; generates a 48-char hex password (URI-safe, so no
+escaping in a connection string); `changeUserPassword` on `admin`; verifies the new pair works
+**and that the old one is refused**; only then rewrites the env files; then recreates the seven
+DB-backed apps. It aborts before touching a single file if any check fails.
+
+No credential is ever printed, logged, or passed on a command line — values reach `mongosh` through
+forwarded environment variables (`docker exec -e VAR`), which keeps them out of `argv`. The script's
+output names variables and files, never values.
+
+**Known caveats:**
+
+- **basegeek must be rolled with `--no-deps`.** `apps/basegeek/docker-compose.yml` doubles as the
+  datastore compose file, and rewriting `MONGO_INITDB_ROOT_PASSWORD` counts as config drift on the
+  `mongodb` service — a plain `docker compose up -d` there would recreate the datastores. The
+  script uses `docker compose up -d --no-deps basegeek`; do the same by hand. The running Mongo
+  container keeps its original env until it is next recreated, which is harmless: the `INITDB`
+  variables are read only when initialising an empty data directory.
+- **The reconnect window.** Existing connection pools survive the password change; a *new* connection
+  made between the change and an app's recreate will fail. The script closes that window itself with
+  `--restart`. Don't run `--apply` without it and then wander off.
+- **Scope.** 11 live env files across the seven DB-backed apps (`.env`, `.env.local`,
+  `.env.production`). `apps/basegeek/.env` is a symlink to `.env.production` and is skipped as such,
+  not missed. `.env` files under `archive/` were scrubbed to a placeholder rather than rotated —
+  those apps have no containers, and a dead app is no place for a live secret.
+- **Least privilege is still open.** Every app connects as this one admin-privileged user with
+  `authSource=admin`. Per-app users with per-database roles is the right shape and is not what we
+  have; rotating the shared credential doesn't change that.

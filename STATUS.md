@@ -1,15 +1,24 @@
 # GeekSuite — Status
 
-*Updated 2026-09-06 15:00 CDT. Night 2 (Chef: "all 5 issues and all 5 AI ideas brought to life") is
-done: waves 18–19 (`c6776b9`, `71a4a08`) shipped the five AI features from `DOCS/AI_IDEAS.md` on one
-shared runner (`aiFeatureRunner.js`: app routing row, per-user daily cap, deterministic fallback,
-provenance; all default-off opt-ins, verified live on free routing), and closed the decision list:
-Q58 (leaked `datageek_user` dropped, init script env-driven), Q56, Q10, Q43 (23 required checks on
-the existing ruleset), Q42, Q69, Q22, Q38, Q62, Q48, Q68, Q52, Q55, Q65, Q70, Q49. Decisions are in
-`DOCS/NIGHT2_PLAN.md`; the board is `DOCS/BURN_QUEUE.md`. **Open:** Q18b — `CSRF_TOKEN=enforce`
-locked Chef out (a service-worker-cached console bundle predating the header) and is back to
-`report`; the console now self-heals, so the flip is retried after Chef hard-reloads his devices and
-the report log is clean.*
+*Updated 2026-09-07. Quiet and current: `main` at `213b9d5`, CI + Release + the mobile harness green
+on it, all eight containers healthy. Night 2 is done (waves 18–25: the five AI features on one shared
+runner, the free-tier resilience work, and the Cloudflare chat-adapter fix that was the real cause of
+the Ask timeouts). The board's `Queued` table has been **reconciled** — fifteen items it still listed
+as open had actually landed in waves 18–19; what remains there is a short list of Chef's own
+decisions, each verified open on disk rather than assumed. Housekeeping: the merged
+`agents/cleanup-and-documentation-update` worktree's three edits were salvaged or found superseded,
+`apps/notegeek/.env.bak` (dead since February, carried the live Mongo password) is gone, and the
+credential pasted into a comment in `apps/flockgeek/.env.production` is gone with it. Removing the
+worktree itself and the two fully-merged branches is on Chef's list — the permission layer refused
+that too.*
+
+**Open — two items, both Chef's.** *Q58: the datastore credential rotation is built and
+dry-run clean (`apps/basegeek/scripts/rotate-datastore-creds.sh`, RUNBOOK §13); the permission layer
+refuses production env edits, so it needs one command from Chef. Q18b:* `CSRF_TOKEN=enforce` *is
+parked by decision. Worth knowing that its remaining report-only hits changed character: no
+longer stale service-worker bundles but ~5/24 h of* `POST /api/auth/refresh` *from* `axios/1.13.5`
+*with a cookie and no header — an app-proxied refresh whose browser caller never attached one. All
+six backend proxies do forward it, so one frontend's refresh path is the gap.*
 
 ## Phase 2 — the going-over (evening of 2026-09-05)
 

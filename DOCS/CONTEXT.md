@@ -4,7 +4,7 @@
 # GeekSuite Unified SSO — Technical Context
 
 Suite-wide SSO architecture reference. For the detailed SSO design, risks, and migration plan see
-[`THE_SSO_OVERVIEW.md`](SSO_OVERVIEW.md) (now renamed `SSO_OVERVIEW.md`). For basegeek-specific
+[`SSO_OVERVIEW.md`](SSO_OVERVIEW.md). For basegeek-specific
 auth implementation see `apps/basegeek/DOCS/SSO_IMPLEMENTATION.md`.
 
 ---

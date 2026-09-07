@@ -10,8 +10,14 @@ ordered by result per unit of work) — consult it first, then come here for det
 
 ## In flight
 
-All 8 apps consolidated and hardened (April 2026). `storygeek-auth-hardening` branch open —
-StoryGeek SSO alignment + Settings page fix + AuthProvider refactor. Pending merge.
+Nothing in flight. All 8 apps consolidated and hardened (April 2026); `storygeek-auth-hardening`
+merged long since. The 2026-09-05 → 09-06 burn program then took 130 work streams through the whole
+suite — mobile harness enforcing, five AI features on one shared runner, ~600 tests added, and the
+Phase-2 going-over's security and correctness fixes. The board and its per-wave record are
+`DOCS/BURN_QUEUE.md`; the queue is `TODO_ORDER.md`.
+
+What remains from that program is a short list of Chef's own decisions, tracked as `Q` items on the
+board rather than here.
 
 ---
 
