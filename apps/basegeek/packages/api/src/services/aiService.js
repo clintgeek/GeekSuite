@@ -2051,6 +2051,14 @@ class AIService {
           this.rotationManager.recordUsage(currentProvider, { requests: 1, tokens: totalTokens });
         }
 
+        // A free row that answers with no text at all (gpt-oss through the
+        // Cloudflare and Ollama adapters, 2026-09-06) is as useless as a dead
+        // one: cool it and move to the next candidate.
+        if (freeRow && !String(result?.content ?? '').trim()) {
+          this.markFreeTierFailure(currentProvider, providerModel, 'empty_content', freeRow.health);
+          throw new Error(`empty_content: ${currentProvider}/${providerModel} returned no text`);
+        }
+
         // The row answered: clear its failure memory and stamp it proven.
         if (freeRow) {
           this.markFreeTierSuccess(currentProvider, providerModel);

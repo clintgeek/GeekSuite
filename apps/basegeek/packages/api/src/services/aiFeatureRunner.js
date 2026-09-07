@@ -42,6 +42,9 @@ import { internalCaller } from './callerIdentity.js';
 
 export const DEFAULT_TIMEOUT_MS = 6000;
 export const DEFAULT_MAX_CALLS_PER_DAY = 20;
+// Never let a feature inherit a provider's 4000-token default: Cloudflare's
+// fast llama kept generating past its JSON and took 15 s+ (2026-09-06 live).
+export const DEFAULT_MAX_TOKENS = 600;
 
 // In-process, per-day counter. Restarts reset it, which is the right failure
 // direction for a ceiling meant to bound cost, not to enforce fairness: a
@@ -162,7 +165,7 @@ export async function runAIFeature(opts) {
     maxCallsPerDay = DEFAULT_MAX_CALLS_PER_DAY,
     timeoutMs = DEFAULT_TIMEOUT_MS,
     temperature = 0.2,
-    maxTokens = null,
+    maxTokens = DEFAULT_MAX_TOKENS,
     now = new Date(),
     ai = aiService,
   } = opts || {};
@@ -200,7 +203,7 @@ export async function runAIFeature(opts) {
         feature: caller.feature,
         userId: caller.userId,
         temperature,
-        ...(maxTokens ? { maxTokens } : {}),
+        maxTokens,
         ...(schema ? { responseFormat: { type: 'json_schema', json_schema: schema } } : {}),
       }),
       timeoutMs,

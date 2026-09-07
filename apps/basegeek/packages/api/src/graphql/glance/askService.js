@@ -35,7 +35,7 @@ import { internalCaller } from '../../services/callerIdentity.js';
 // aiGeek's App Routing alias. Expressed server-side as the same normalization
 // `/api/ai/call` performs for `model: "basegeek-app"`: useAppConfig + appName.
 export const ASK_APP_NAME = 'startgeek';
-export const ASK_TIMEOUT_MS = 3000;
+export const ASK_TIMEOUT_MS = 5000; // 3000 → 5000 on 2026-09-06: a 70B free model answers in ~1.2 s; leave room for one retry
 
 const THING_TYPES = `
 The suite stores four kinds of Thing, each in its own app:
@@ -334,6 +334,9 @@ async function callModel({ system, user, schema, context, feature = null }) {
       userId: caller.userId,
       responseFormat: { type: 'json_schema', json_schema: schema },
       temperature: 0,
+      // A plan, a one-line answer or a draft is a few hundred tokens at most;
+      // without a cap the provider default (4000) let a free model run for 15 s.
+      maxTokens: 400,
     }),
     ASK_TIMEOUT_MS,
     schema.name

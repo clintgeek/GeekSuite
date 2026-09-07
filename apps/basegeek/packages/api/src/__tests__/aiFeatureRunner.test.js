@@ -75,4 +75,12 @@ describe('runAIFeature', () => {
     expect(unwrapSchemaEnvelope({ T: 1 }, SCHEMA)).toEqual({ T: 1 });
     expect(unwrapSchemaEnvelope({ T: { a: 1 }, b: 2 }, SCHEMA)).toEqual({ T: { a: 1 }, b: 2 });
   });
+
+  test('a feature never inherits the provider default token budget', async () => {
+    const ai = fakeAI(async () => '{"a": 1}');
+    await runAIFeature({ app: 'x', feature: 'y', system: 's', user: 'u', schema: SCHEMA, fallback: () => ({ a: 0 }), ai });
+    expect(ai.callAI.mock.calls[0][1].maxTokens).toBe(600);
+    await runAIFeature({ app: 'x', feature: 'y', system: 's', user: 'u', schema: SCHEMA, fallback: () => ({ a: 0 }), ai, maxTokens: 120 });
+    expect(ai.callAI.mock.calls[1][1].maxTokens).toBe(120);
+  });
 });

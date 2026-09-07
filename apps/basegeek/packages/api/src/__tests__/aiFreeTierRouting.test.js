@@ -166,6 +166,28 @@ describe('a hard failure on the picked free model falls through to the next free
     expect(new Date(health.coolingUntil).getTime()).toBeGreaterThan(Date.now());
   });
 
+  it('treats an empty answer from a free row as a failure: cools it and moves on', async () => {
+    enable('cloudflare', 'ollama');
+    await seedRows([
+      { provider: 'cloudflare', modelId: '@cf/openai/gpt-oss-120b' },
+      { provider: 'ollama', modelId: 'gpt-oss:20b' },
+      { provider: 'cloudflare', modelId: '@cf/meta/llama-3.3-70b-instruct-fp8-fast' },
+    ]);
+
+    const calls = fakeProviderLayer({
+      'cloudflare/@cf/openai/gpt-oss-120b': '   ',
+      'ollama/gpt-oss:20b': 'pong',
+    });
+
+    const answer = await aiService.callAI('ping', { freeOnly: true, appName: 'startgeek' });
+
+    expect(answer).toBe('pong');
+    expect(calls).toEqual(['cloudflare/@cf/openai/gpt-oss-120b', 'ollama/gpt-oss:20b']);
+    const health = aiService.getFreeTierHealth('cloudflare', '@cf/openai/gpt-oss-120b');
+    expect(health.lastFailureCode).toBe('empty_content');
+    expect(new Date(health.coolingUntil).getTime()).toBeGreaterThan(Date.now());
+  });
+
   it('gives up after three free attempts rather than walking the whole collection', async () => {
     enable('groq', 'cerebras', 'together', 'cloudflare');
     await seedRows([
