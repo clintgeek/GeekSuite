@@ -455,3 +455,36 @@ describe('catalog writes name a path in one update operator only', () => {
     }
   });
 });
+
+
+// ───────────────────────────────────────────────────────────────────────────
+describe('paid-fallback tagging skips variable-price routers', () => {
+  const sp = ['structured_outputs', 'response_format', 'tools'];
+  const raw = { data: [
+    { id: 'openrouter/auto', pricing: { prompt: '-1', completion: '-1' }, supported_parameters: sp },
+    { id: 'openrouter/auto-beta', pricing: { prompt: '-1', completion: '-1' }, supported_parameters: sp },
+    { id: 'mistralai/mistral-nemo', pricing: { prompt: '0.000000019', completion: '0.00000003' }, supported_parameters: sp },
+    { id: 'cheap/no-json', pricing: { prompt: '0.00000001', completion: '0.00000001' }, supported_parameters: ['tools'] },
+    { id: 'meta/free-one:free', pricing: { prompt: '0', completion: '0' }, supported_parameters: sp },
+  ] };
+
+  it('never tags openrouter/auto* and never writes a negative price', () => {
+    const { free, paid } = openRouterCatalog(raw);
+    const byId = Object.fromEntries(paid.map(r => [r.modelId, r]));
+    expect(byId['openrouter/auto'].role).toBeUndefined();
+    expect(byId['openrouter/auto-beta'].role).toBeUndefined();
+    expect(byId['openrouter/auto'].inputPrice).toBeNull();
+    expect(byId['mistralai/mistral-nemo'].role).toBe('paid-fallback');
+    expect(byId['cheap/no-json'].role).toBeUndefined();
+    expect(free.map(r => r.modelId)).toEqual(['meta/free-one:free']);
+    expect(paid.every(r => r.inputPrice == null || r.inputPrice >= 0)).toBe(true);
+  });
+
+  it('writeListed clears a stale role when the row is no longer tagged', async () => {
+    const writes = [];
+    const model = { updateOne: async (f, u) => { writes.push(u); return { modifiedCount: 1 }; } };
+    await writeListed({ provider: 'openrouter', modelId: 'openrouter/auto', name: 'Auto' }, { model });
+    expect(writes[0].$unset).toEqual({ role: '' });
+    expect(writes[0].$set.role).toBeUndefined();
+  });
+});

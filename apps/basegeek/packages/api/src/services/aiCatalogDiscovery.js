@@ -294,16 +294,24 @@ export function openRouterCatalog(raw) {
       inputPrice: Number(p.prompt || 0) * 1e6,
       outputPrice: Number(p.completion || 0) * 1e6
     };
-    if (isZero(p.prompt) && isZero(p.completion)) free.push({ ...row, isFree: true });
+    // OpenRouter lists its meta-routers (`openrouter/auto`, `openrouter/auto-beta`)
+    // with pricing -1: "depends on what I route to". Live on 2026-09-07 those
+    // two sorted to the top of "cheapest" and got the paid-fallback tag — a
+    // governor estimating cost off a -1 price is no governor. Variable-price
+    // rows carry no price (so AIPricing is never written a negative number) and
+    // are never paid-fallback; nor is any `openrouter/*` router, whatever it says.
+    const variablePrice = Number(p.prompt) < 0 || Number(p.completion) < 0;
+    if (variablePrice) { row.inputPrice = null; row.outputPrice = null; }
+    row.variablePrice = variablePrice;
+    if (!variablePrice && isZero(p.prompt) && isZero(p.completion)) free.push({ ...row, isFree: true });
     else paid.push({ ...row, isFree: false });
   }
-  paid.sort((a, b) =>
-    (a.inputPrice + a.outputPrice) - (b.inputPrice + b.outputPrice) ||
-    a.modelId.localeCompare(b.modelId)
-  );
+  const total = (r) => (r.variablePrice ? Number.POSITIVE_INFINITY : r.inputPrice + r.outputPrice);
+  paid.sort((a, b) => total(a) - total(b) || a.modelId.localeCompare(b.modelId));
   let tagged = 0;
   for (const row of paid) {
     if (tagged >= PAID_FALLBACK_COUNT) break;
+    if (row.variablePrice || row.modelId.startsWith('openrouter/')) continue;
     if (row.capabilities.jsonSchema) { row.role = 'paid-fallback'; tagged++; }
   }
   return { free, paid };
@@ -648,6 +656,9 @@ export async function writeListed(row, deps) {
         ...(maxOutputTokens ? { maxOutputTokens } : {}),
         ...(role ? { role } : {})
       },
+      // A row that lost its tag since the last listing must lose it here too,
+      // or a stale `paid-fallback` outlives the pricing that earned it.
+      ...(role ? {} : { $unset: { role: '' } }),
       // `name` may live in $set OR $setOnInsert, never both: Mongo rejects an
       // update that names the same path twice ("would create a conflict at
       // 'name'"), and on 2026-09-07 the first live discovery run failed every

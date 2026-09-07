@@ -267,3 +267,23 @@ of them.
 
 `AI_CATALOG_JOB=off` in `apps/basegeek/.env.production` + `docker compose up -d --no-deps basegeek`
 stops the job; the manual scripts still work. Rows the job wrote are ordinary rows.
+
+## Incidents on the first live day (2026-09-07)
+
+- **`name` in two operators.** `writeListed`/`writeAlive` put `name` in both `$set` and
+  `$setOnInsert`; Mongo rejects that ("would create a conflict at 'name'"), so the first discovery
+  run failed every `AIModel` write and deactivated 29 rows it could not re-list. The free-tier rows
+  were written first and were right, so selection was unaffected. Fixed in `2ae4782a`; a run with
+  an error or a write error no longer satisfies the 24 h gate, and `AICatalogRun.counts` is now
+  persisted (the strict schema had been dropping it).
+- **Variable-price routers tagged `paid-fallback`.** OpenRouter lists `openrouter/auto` and
+  `openrouter/auto-beta` at price `-1` ("depends"); they sorted to the top of "cheapest" and took two
+  of the three tags. Variable-price rows now carry no price and are never tagged, nor is any
+  `openrouter/*` router; `writeListed` `$unset`s a stale `role`. The real cheapest structured paid
+  row that day was `mistralai/mistral-nemo` at $0.02 / $0.03 per million.
+- **Cerebras listing returned 401.** Every Cerebras row is cooling because the key is refused, not
+  because the models are gone. Replace the key in aiGeek → Configuration; discovery picks it up on
+  the next run.
+- **Adapter failure logging was too loud.** Each failed probe logged the provider's response body
+  at error level. The Phase 2 adapter registry logs one warn line per failure with `{provider,
+  model, status, code}` and the trimmed message only.
