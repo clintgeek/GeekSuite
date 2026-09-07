@@ -49,11 +49,22 @@ recharts and chart.js gone; ZXing pinned with an SRI hash) · Q55 (TaskEditor pi
 Q56 (`c6776b9`) · Q62 (whole policy bundle; the flockgeek half went moot with Q22) ·
 Q68 (`wip/dashgeek-redesign-2026-04`, stash list empty) · Q69 (`b8a8ab4`).
 
+**Q58 — closed by Chef's decision, 2026-09-07: no rotation.** The row had claimed the
+`datageek_admin` pair was in git-tracked, GitHub-public files. It was not: a full-history scan
+(every object via `git rev-list --all --objects` through `git cat-file --batch`, 7,847 blobs, all
+refs) finds the password in no blob, and the archived pre-monorepo repos only ever pointed at the
+retired self-hosted gitea. The publicly committed pair was the unused `datageek_user`, dropped in
+wave 18. Chef: *"I'm not worried about the rotation. As long as it wasn't in public git, that's
+fine."* The residual exposure is on-box plaintext in the eleven live env files (which is what env
+files are) plus three AI transcripts that read the value — accepted. The tooling stays as the
+procedure for the next credential that really is exposed:
+`apps/basegeek/scripts/rotate-datastore-creds.sh`, documented at RUNBOOK §13. Reopen this only on
+evidence of an actual disclosure.
+
 **Still open.** Every row is a decision or an eyeball, not unfinished code:
 
 | # | Item | Waiting on | Size |
 |---|------|------------|------|
-| **Q58** | **ROTATE the datageek Mongo admin credential.** *Premise corrected 09-07: this row previously said the admin pair was in git-tracked, GitHub-public files. It was not — a full-history scan (7,847 blobs, all refs) finds the password in no blob, and the archived pre-monorepo repos point only at the retired gitea. The publicly-committed pair was the unused `datageek_user`, dropped in wave 18. Rotate anyway: the value sat in plaintext across eleven live files and four dead archives, has been read into three AI transcripts, and is short and guessable — but this is hygiene, not breach response, so it need not jump the queue.* `apps/basegeek/scripts/rotate-datastore-creds.sh` does the whole job — dry-run by default, backs up, changes the password, verifies new works *and* old fails, rewrites the 11 live env files, recreates the seven DB-backed apps, and has `--rollback`. The permission layer refuses production env edits, so **Chef runs one command**: `./apps/basegeek/scripts/rotate-datastore-creds.sh --apply --restart` | **Chef (one command)** | S |
 | Q18b | `CSRF_TOKEN=enforce`. Parked deliberately 09-07. The remaining report-only hits are no longer stale bundles: 5 in 24 h, all `POST /api/auth/refresh` from `axios/1.13.5` with cookie auth and no header — an app-proxied refresh whose browser caller never attached one. All six backend proxies do forward the header, so the gap is browser-side in one app's refresh path. Find that caller before flipping | Chef parked it | S |
 | Q39 | *(decision half)* keep or delete the three caller-less fitnessgeek instance methods `checkGoalsMet` / `getProgress` / `getNutrition`. The sugar/sodium ceiling-vs-floor fix landed (`7166e8b`) | Chef | XS |
 | Q41 | *(decision half)* `foodRoutes.js` mints user-owned rows where the shared ladder would use global ones — a privacy-model call. The `search` / `foodCatalogFilter` reconciliation landed | design | S |

@@ -12,16 +12,19 @@ credential pasted into a comment in `apps/flockgeek/.env.production` is gone wit
 worktree itself and the two fully-merged branches is on Chef's list — the permission layer refused
 that too.*
 
-**Open — two items, both Chef's.** *Q58: the premise was overstated and is now corrected — a
-full-history scan (7,847 blobs, all refs) shows the admin password was **never** committed here; the
-public pair was the unused `datageek_user`, dropped in wave 18. Rotation is still right (plaintext in
-eleven live files, three AI transcripts, a guessable string), but it is hygiene, not an incident. The
-tooling is built and dry-run clean (`apps/basegeek/scripts/rotate-datastore-creds.sh`, RUNBOOK §13); the permission layer
-refuses production env edits, so it needs one command from Chef. Q18b:* `CSRF_TOKEN=enforce` *is
-parked by decision. Worth knowing that its remaining report-only hits changed character: no
-longer stale service-worker bundles but ~5/24 h of* `POST /api/auth/refresh` *from* `axios/1.13.5`
-*with a cookie and no header — an app-proxied refresh whose browser caller never attached one. All
-six backend proxies do forward it, so one frontend's refresh path is the gap.*
+**Open — one item, and it is parked.** *Q18b:* `CSRF_TOKEN=enforce` *stays on* `report` *by
+Chef's call. Its remaining report-only hits changed character, which is worth knowing whenever it is
+picked back up: no longer stale service-worker bundles but ~5 per 24 h of* `POST /api/auth/refresh`
+*from* `axios/1.13.5` *with a cookie present and no header — an app-proxied refresh whose browser
+caller never attached one. All six backend proxies do forward the header, so the gap is browser-side
+in one frontend's refresh path. Find that caller before flipping.*
+
+*Q58 is closed by decision (2026-09-07): the admin credential was never in public git — a
+full-history scan of all 7,847 blobs finds it in no blob, and the public pair was the unused
+`datageek_user`, dropped in wave 18. Chef accepted the residual on-box exposure and declined the
+rotation. The tooling stays as the procedure for a real disclosure
+(`apps/basegeek/scripts/rotate-datastore-creds.sh`, RUNBOOK §13). Everything else on the board is a
+product decision or an eyeball, listed there.*
 
 ## Phase 2 — the going-over (evening of 2026-09-05)
 

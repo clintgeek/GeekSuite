@@ -576,7 +576,12 @@ probes each live (8-token budget; empty text counts as dead), and `--sync` upser
 `isFree` and cools dead ones 30 days. Selection at runtime also cools a row on its first hard
 failure, so a stale catalog costs one bad call per model, not one per user per day.
 
-## 13. Rotating the datastore credential (Q58, 2026-09-07)
+## 13. Rotating the datastore credential (procedure; Q58 closed 2026-09-07)
+
+**This is a procedure, not an outstanding task.** Chef reviewed the evidence on 2026-09-07 and
+declined the rotation: the credential was never in public git (see below), so the residual exposure
+is on-box plaintext, which is accepted. Use this section when a credential *is* actually exposed.
+
 
 **What was actually disclosed** (checked 2026-09-07, because the board said something stronger):
 the `datageek_admin` password appears in **no blob in this repo's entire git history** — all 7,847
@@ -585,12 +590,13 @@ blobs across all refs were scanned. The pair that was public in `apps/basegeek/m
 pre-monorepo repos that still carry a `.git` (`archive/{bookgeek,flockgeek,storygeek}` under
 `/mnt/Media/Docker`) point only at the retired self-hosted `git.clintgeek.com`, never at GitHub.
 
-So this was **never published**. It is still worth rotating, for three lesser reasons: the value sat
-in plaintext in eleven files on this box plus four dead archives; it has been read into at least
-three AI transcripts (a reviewer's on 09-05, and two on 09-07 — one of them mine, via a credential
-someone had pasted into an `# Example:` comment); and it is a short, guessable, year-suffixed
-string. Hygiene with a clock on it, not breach response — and the script below is the reusable
-procedure for the next time a credential really is exposed.
+So this was **never published**. Three lesser reasons to rotate anyway were put to Chef: the value
+sits in plaintext in eleven live env files plus four dead archives (the archives were scrubbed, the
+live ones are simply what env files are); it has been read into at least three AI transcripts (a
+reviewer's on 09-05, and two on 09-07 — one of them mine, via a credential someone had pasted into
+an `# Example:` comment, since removed); and it is a short, guessable, year-suffixed string. He
+weighed those against a live-datastore change and declined — reasonable, given nothing was public.
+The script below stands as the procedure for the next credential that really is exposed.
 
 ```
 ./apps/basegeek/scripts/rotate-datastore-creds.sh                    # dry run: inventory only
