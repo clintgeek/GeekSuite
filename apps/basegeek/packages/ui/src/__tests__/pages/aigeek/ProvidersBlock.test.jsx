@@ -41,6 +41,7 @@ function baseProps(overrides = {}) {
     onRetry: vi.fn(),
     onFieldChange: vi.fn(),
     onBlurSave: vi.fn(),
+    onRemoveKey: vi.fn(),
     ...overrides,
   };
 }
@@ -133,5 +134,35 @@ describe('ProvidersBlock', () => {
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: 'Try again' }));
     expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+});
+
+
+describe('stopping a provider is one explicit button, not an empty box', () => {
+  // The server keeps a stored key when a blank one is saved (it can never echo
+  // a key back), so "clear the box to disable" was a promise the page could
+  // not keep. Remove key deletes the credential, behind a confirm.
+  it('offers Remove key only for providers that have a stored key', () => {
+    renderWithProviders(<ProvidersBlock {...baseProps()} />);
+    const buttons = screen.getAllByRole('button', { name: /remove key/i });
+    expect(buttons).toHaveLength(2); // groq + cerebras; cloudflare has no key
+  });
+
+  it('asks first, names the provider, and only then calls onRemoveKey', async () => {
+    const onRemoveKey = vi.fn().mockResolvedValue();
+    renderWithProviders(<ProvidersBlock {...baseProps({ onRemoveKey })} />);
+    const user = userEvent.setup();
+    await user.click(screen.getAllByRole('button', { name: /remove key/i })[0]);
+    expect(screen.getByText(/stop using groq\?/i)).toBeInTheDocument();
+    expect(onRemoveKey).not.toHaveBeenCalled();
+    // The dialog's confirm is the last "Remove key" button in the document.
+    await user.click(screen.getAllByRole('button', { name: /^remove key$/i }).at(-1));
+    expect(onRemoveKey).toHaveBeenCalledWith('groq');
+  });
+
+  it('the helper text no longer claims an empty box disables anything', () => {
+    renderWithProviders(<ProvidersBlock {...baseProps()} />);
+    expect(screen.queryByText(/clear the box to stop using/i)).not.toBeInTheDocument();
+    expect(screen.getAllByText(/use remove key to stop using this provider/i).length).toBeGreaterThan(0);
   });
 });

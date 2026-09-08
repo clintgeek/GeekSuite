@@ -277,6 +277,15 @@ class AIService {
       const configs = await AIConfig.find({});
       logger.info(`📊 Found ${configs.length} configurations in database`);
 
+      // Start from "no credential" for every provider, then apply what the
+      // database says. Without this a row that was deleted (removeAIProviderKey,
+      // 2026-09-08) kept its key in this process until the next restart — the
+      // admin page said "no key" while the rotation kept calling with it.
+      for (const id of Object.keys(this.providers)) {
+        this.providers[id].apiKey = '';
+        this.providers[id].enabled = false;
+      }
+
       for (const config of configs) {
         logger.debug(`  ${config.provider}: enabled=${config.enabled}, apiKey=${config.apiKey ? 'Set' : 'Not Set'}`);
         if (this.providers[config.provider]) {

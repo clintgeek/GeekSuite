@@ -164,6 +164,9 @@ export const typeDefs = gql`
 
     # AI Geek
     saveAIConfig(config: JSON!): JSON
+    # Deletes a provider's stored credential and drops it from the running
+    # service. saveAIConfig cannot do this: a blank key there means "keep".
+    removeAIProviderKey(provider: String!): JSON
     testAIProvider(provider: String!): Boolean
     resetAIStats: Boolean
     # seedDirectorPricing / seedDirectorFreeTier retired 2026-09-07: the catalog

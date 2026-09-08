@@ -11,7 +11,11 @@
  * it is `status.catalog.byProvider`, which counts the rows the catalog job's
  * probe found answering *under our account*, which is the only thing "does
  * this key work" can honestly mean (Principle 1). A provider with a key is
- * enabled; emptying the box disables it.
+ * enabled. Stopping one is the **Remove key** button: the server treats a blank
+ * key as "keep the stored one" (it can never be echoed back to the client), so
+ * "empty the box to disable" was never something this page could deliver
+ * (Chef, 2026-09-08). Removing deletes the credential; the rotation stops
+ * calling the provider at once.
  *
  * The roster is `Object.keys(config)` — whatever `aiConfig` returned. It used
  * to be `CONFIG_PROVIDERS`, a hand-typed copy of the server's list, which is
@@ -22,8 +26,10 @@
  * and never a credential, so the placeholder shows the last four characters to
  * tell two keys apart and an untouched box saves nothing.
  */
+import { useState } from 'react';
 import {
   Box,
+  Button,
   Chip,
   CircularProgress,
   TextField,
@@ -32,6 +38,7 @@ import {
 } from '@mui/material';
 import { GeekErrorState } from '@geeksuite/ui';
 import { providerAnchorId } from './useAIGeek';
+import { RemoveProviderKeyDialog } from './dialogs/ConfirmDialogs';
 
 /**
  * The live chip for one provider.
@@ -71,7 +78,7 @@ function ProviderChip({ hasKey, listingFailed, counts, statusKnown }) {
   );
 }
 
-function ProviderRow({ provider, entry, counts, listingFailed, statusKnown, saving, onFieldChange, onBlurSave }) {
+function ProviderRow({ provider, entry, counts, listingFailed, statusKnown, saving, onFieldChange, onBlurSave, onRemoveKey }) {
   return (
     <Box
       // The anchor the `provider_dead` / `provider_listing_failed` attention
@@ -92,6 +99,18 @@ function ProviderRow({ provider, entry, counts, listingFailed, statusKnown, savi
           statusKnown={statusKnown}
         />
         {saving && <CircularProgress size={14} />}
+        {entry.hasKey && (
+          <Button
+            size="small"
+            color="error"
+            variant="outlined"
+            onClick={() => onRemoveKey(provider)}
+            disabled={saving}
+            sx={{ ml: 'auto', minHeight: 44, fontSize: 12 }}
+          >
+            Remove key
+          </Button>
+        )}
       </Box>
 
       <Box
@@ -111,7 +130,7 @@ function ProviderRow({ provider, entry, counts, listingFailed, statusKnown, savi
           onBlur={() => onBlurSave(provider)}
           placeholder={entry.hasKey ? entry.keyHint : 'Paste a key'}
           helperText={entry.hasKey
-            ? 'A key is stored — leave blank to keep it, or clear the box to stop using this provider'
+            ? `A key is stored (${entry.keyHint || '…'}). Paste a new one to replace it; use Remove key to stop using this provider.`
             : 'Paste a key and click away; that is the whole setup'}
           sx={{ '& .MuiInputBase-root': { minHeight: 44 } }}
         />
@@ -140,8 +159,12 @@ export default function ProvidersBlock({
   onRetry,
   onFieldChange,
   onBlurSave,
+  onRemoveKey,
 }) {
   const providers = Object.keys(config);
+  // Which provider the Remove-key confirm is open for. Transient, so it lives
+  // here rather than in the reducer.
+  const [removing, setRemoving] = useState(null);
   const byProvider = status?.catalog?.byProvider || null;
   // `status` carries no per-provider error field — the failure is reported as
   // an attention item, which is where the exact text lives (§1). Reading it
@@ -182,8 +205,19 @@ export default function ProvidersBlock({
           saving={savingProvider === provider}
           onFieldChange={onFieldChange}
           onBlurSave={onBlurSave}
+          onRemoveKey={setRemoving}
         />
       ))}
+      <RemoveProviderKeyDialog
+        provider={removing}
+        busy={!!removing && savingProvider === removing}
+        onCancel={() => setRemoving(null)}
+        onConfirm={async () => {
+          const provider = removing;
+          setRemoving(null);
+          if (provider && onRemoveKey) await onRemoveKey(provider);
+        }}
+      />
     </Box>
   );
 }

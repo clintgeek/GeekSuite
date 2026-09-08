@@ -68,6 +68,22 @@ export function ResetStatsDialog({ open, onCancel, onConfirm }) {
  * cannot be re-minted — so from the caller's side this is destruction, and the
  * copy says so rather than hiding behind "deactivate".
  */
+export function RemoveProviderKeyDialog({ provider, busy, onCancel, onConfirm }) {
+  return (
+    <ConfirmDialog
+      open={!!provider}
+      title={provider ? `Stop using ${provider}?` : 'Stop using this provider?'}
+      color="error"
+      confirmLabel="Remove key"
+      busy={busy}
+      warning={provider ? `The stored ${provider} key is deleted and the rotation stops calling ${provider} immediately.` : undefined}
+      body="Nothing else changes: the provider's catalog rows stay visible, and pasting a key later brings it back on the next discovery run."
+      onCancel={onCancel}
+      onConfirm={onConfirm}
+    />
+  );
+}
+
 export function RevokeKeyDialog({ apiKey, busy, onCancel, onConfirm }) {
   return (
     <ConfirmDialog

@@ -167,6 +167,7 @@ export default function AIGeekPage() {
               onRetry: aigeek.loadConfiguration,
               onFieldChange: aigeek.setConfigField,
               onBlurSave: aigeek.saveProviderKey,
+              onRemoveKey: aigeek.removeProviderKey,
             }}
             onNewAppNameChange={(value) => dispatch({ type: 'apps/newName', value })}
             onRefresh={() => { aigeek.loadAppConfigs(); aigeek.loadApiKeys(); }}

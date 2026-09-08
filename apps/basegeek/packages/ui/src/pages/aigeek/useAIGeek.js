@@ -55,6 +55,7 @@ import {
   UPDATE_API_KEY,
   DELETE_API_KEY,
   SAVE_AI_CONFIG,
+  REMOVE_AI_PROVIDER_KEY,
   RESET_AI_STATS,
   SAVE_AI_APP_CONFIG,
   DELETE_AI_APP_CONFIG,
@@ -576,17 +577,20 @@ export function useAIGeek(notify) {
     if (!entry?.touched) return;
 
     const draft = (entry.apiKey || '').trim();
+    // A blank draft saves nothing. It used to send `enabled: false`, which
+    // switched the provider off while the server kept the key and the chip
+    // kept counting catalog rows — "I cleared it and nothing happened" (Chef,
+    // 2026-09-08). Stopping a provider is `removeProviderKey`, one button.
+    if (!draft && provider !== 'cloudflare') return;
+    if (!draft && provider === 'cloudflare' && !entry.accountId) return;
     dispatch({ type: 'config/saving', provider });
     try {
-      const payload = { [provider]: { enabled: !!draft } };
+      const payload = { [provider]: { enabled: true } };
       if (draft) payload[provider].apiKey = draft;
       if (provider === 'cloudflare') payload[provider].accountId = entry.accountId || '';
 
       await apolloClient.mutate({ mutation: SAVE_AI_CONFIG, variables: { config: payload } });
-      notify(
-        draft ? `${provider} key saved` : `${provider} disabled — no key in use`,
-        { tone: draft ? 'success' : 'warning' }
-      );
+      notify(draft ? `${provider} key saved` : `${provider} account id saved`, { tone: 'success' });
       await loadConfiguration(); // re-read the hint, clear the draft and `touched`
       // The chip on this row comes from the status endpoint, and a key paste
       // should light it up without waiting out the poll (§5, "a key paste
@@ -598,6 +602,21 @@ export function useAIGeek(notify) {
       dispatch({ type: 'config/saving', provider: null });
     }
   }, [state.config, notify, loadConfiguration, loadStatus]);
+
+  /** Delete a provider's stored credential; the service stops using it at once. */
+  const removeProviderKey = useCallback(async (provider) => {
+    dispatch({ type: 'config/saving', provider });
+    try {
+      await apolloClient.mutate({ mutation: REMOVE_AI_PROVIDER_KEY, variables: { provider } });
+      notify(`${provider} key removed — the provider is no longer used`, { tone: 'warning' });
+      await loadConfiguration();
+      await loadStatus({ silent: true });
+    } catch (err) {
+      notify(err.message || `Failed to remove the ${provider} key`, { tone: 'error' });
+    } finally {
+      dispatch({ type: 'config/saving', provider: null });
+    }
+  }, [notify, loadConfiguration, loadStatus]);
 
   // ── Usage ────────────────────────────────────────────────────────────────
 
@@ -1078,6 +1097,7 @@ export function useAIGeek(notify) {
     // providers
     setConfigField,
     saveProviderKey,
+    removeProviderKey,
     // usage
     resetStatistics,
     // needs attention

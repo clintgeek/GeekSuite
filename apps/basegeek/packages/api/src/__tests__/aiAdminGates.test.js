@@ -309,6 +309,7 @@ describe('GraphQL — the same rule, the same shape', () => {
 
     const calls = [
       () => resolvers.Mutation.saveAIConfig(null, { config: {} }, ctx),
+      () => resolvers.Mutation.removeAIProviderKey(null, { provider: 'gemini' }, ctx),
       () => resolvers.Mutation.testAIProvider(null, { provider: 'gemini' }, ctx),
       () => resolvers.Mutation.resetAIStats(null, null, ctx),
       // seedDirectorPricing / seedDirectorFreeTier were in this list until
@@ -345,5 +346,31 @@ describe('GraphQL — the same rule, the same shape', () => {
     const after = await AIConfig.findOne({ provider: 'gemini' });
     expect(after.apiKey).toBe(stored);
     expect(after.enabled).toBe(false);
+  });
+
+  it('removeAIProviderKey deletes the row and the running service forgets the key', async () => {
+    await storeGeminiKey({ enabled: true });
+    const { user } = await makeUserWithToken({ role: 'admin' });
+    const ctx = { user: { id: user._id.toString() } };
+    const { default: aiService } = await import('../services/aiService.js');
+    await aiService.loadConfigurations();
+    expect(aiService.providers.gemini.apiKey).toBe(SECRET_KEY);
+
+    const out = await resolvers.Mutation.removeAIProviderKey(null, { provider: 'gemini' }, ctx);
+
+    expect(out).toMatchObject({ success: true, provider: 'gemini', removed: true });
+    expect(await AIConfig.findOne({ provider: 'gemini' })).toBeNull();
+    expect(aiService.providers.gemini.apiKey).toBe('');
+    expect(aiService.providers.gemini.enabled).toBe(false);
+    // The masked read agrees: no key, no hint.
+    const config = await resolvers.Query.aiConfig(null, null, ctx);
+    expect(config.gemini).toMatchObject({ hasKey: false, keyHint: '' });
+  });
+
+  it('removeAIProviderKey refuses a provider that is not on the roster', async () => {
+    const { user } = await makeUserWithToken({ role: 'admin' });
+    await expect(
+      resolvers.Mutation.removeAIProviderKey(null, { provider: 'anthropic' }, { user: { id: user._id.toString() } })
+    ).rejects.toThrow(/Unknown provider/);
   });
 });

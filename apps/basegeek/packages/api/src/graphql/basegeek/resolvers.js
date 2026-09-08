@@ -450,6 +450,22 @@ export const resolvers = {
       return { success: true };
     },
 
+    // The one way to stop using a provider. `saveAIConfig` treats a blank key
+    // as "keep the stored one" (the client can never read a key back to echo
+    // it), so "clear the box to disable" was a promise the page made and the
+    // server refused (Chef, 2026-09-08). This deletes the row outright — the
+    // credential is gone from the database, not merely switched off — and
+    // reloads the running service so the key leaves the process too.
+    removeAIProviderKey: async (_, { provider }, { user }) => {
+      await requireAdminUser(user);
+      if (!CONFIG_PROVIDERS.includes(provider)) {
+        throw new GraphQLError(`Unknown provider: ${String(provider).slice(0, 40)}`);
+      }
+      const result = await AIConfig.deleteOne({ provider });
+      await aiService.loadConfigurations();
+      return { success: true, provider, removed: result.deletedCount > 0 };
+    },
+
     testAIProvider: async (_, { provider }, { user }) => {
       await requireAdminUser(user);
       const providerConfig = aiService.providers[provider];

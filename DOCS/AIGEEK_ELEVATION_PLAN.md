@@ -288,8 +288,9 @@ an AA contrast failure under a severity tint), both fixed.
 **Follow-ups left open (small, API-side):** `AIFreeTier.override: 'deny'|'allow'|null` plus a
 mutation, honoured by selection and discovery (the drawer is built and disabled until then);
 `fitness`/`health`/`observed` on the catalog read so cooling rows show their fitness and "limits
-observed" shows the live reading; a way to clear a provider credential (a blank key is currently
-"keep", so clearing disables via `enabled: false` and the encrypted key stays); `testAIProvider` /
+observed" shows the live reading; ~~a way to clear a provider credential~~ (done 2026-09-08: a **Remove key** button with a
+confirm, backed by `removeAIProviderKey`, which deletes the row and reloads the service; a blank
+key box now saves nothing rather than half-disabling); `testAIProvider` /
 `syncProviderModels` mutations have no UI caller left. Also for Chef: `ai:stats` is not in the
 default key mint set, so a StartGeek glance card reading `/status` needs it named.
 

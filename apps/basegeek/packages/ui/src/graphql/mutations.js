@@ -39,6 +39,12 @@ export const SAVE_AI_CONFIG = gql`
 `;
 
 
+export const REMOVE_AI_PROVIDER_KEY = gql`
+  mutation RemoveAIProviderKey($provider: String!) {
+    removeAIProviderKey(provider: $provider)
+  }
+`;
+
 export const RESET_AI_STATS = gql`
   mutation ResetAIStats {
     resetAIStats
