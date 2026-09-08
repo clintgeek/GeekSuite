@@ -123,7 +123,9 @@ describe('parseFoodEntry — the model refines, the split falls back', () => {
     await Q.parseFoodEntry(null, { text: 'two eggs', date: MORNING }, ctx(ALICE));
 
     const [, config] = callAI.mock.calls[0];
-    expect(config).toMatchObject({ useAppConfig: true, appName: 'fitnessgeek', feature: 'quickadd' });
+    // Phase 2: no routing switch — "nothing at all" is `auto` reading the
+    // app's row, which is what `useAppConfig: true` used to mean.
+    expect(config).toMatchObject({ appName: 'fitnessgeek', feature: 'quickadd' });
     expect(config.responseFormat.type).toBe('json_schema');
   });
 

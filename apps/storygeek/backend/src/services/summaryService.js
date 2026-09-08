@@ -52,7 +52,18 @@ IMPORTANT DETAILS:
 
 Keep the summary focused on what's most relevant for future story development.`;
 
-      const aiResponse = await aiService.generateSummaryResponse(summaryPrompt, userToken);
+      // Summaries run on aiGeek's `aux` feature, keyed on the story so the
+      // sticky pick holds. A summary is a nicety: when no model answers,
+      // `generateSummaryResponse` reports it and this returns null, exactly as
+      // it did when a failure was a throw. Nothing about the turn is lost.
+      const aiResponse = await aiService.generateSummaryResponse(summaryPrompt, userToken, {
+        conversationId: story?._id,
+        quotaKey: aiService.quotaKeyFor(story)
+      });
+      if (!aiResponse.ok) {
+        console.warn('Summary skipped — the model was unavailable:', aiResponse.reason);
+        return null;
+      }
       const parsed = this.parseSummaryResponse(aiResponse.content);
       return {
         summary: parsed.summary,

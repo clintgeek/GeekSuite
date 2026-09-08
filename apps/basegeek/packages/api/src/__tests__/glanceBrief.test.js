@@ -225,7 +225,9 @@ describe('buildBrief', () => {
 
     expect(res.provenance).toMatchObject({ source: 'model', provider: 'groq', model: 'llama-3.3-70b-versatile', cached: false });
     const [, cfg] = ai.callAI.mock.calls[0];
-    expect(cfg).toMatchObject({ useAppConfig: true, appName: 'startgeek', feature: 'brief', userId: 'u1' });
+    // Phase 2: no routing switch — "nothing at all" is `auto` reading the
+    // app's row, which is what `useAppConfig: true` used to mean.
+    expect(cfg).toMatchObject({ appName: 'startgeek', feature: 'brief', userId: 'u1' });
     // Free text: no JSON schema is imposed on a paragraph.
     expect(cfg.responseFormat).toBeUndefined();
     // The facts, and only the facts, are the user turn.

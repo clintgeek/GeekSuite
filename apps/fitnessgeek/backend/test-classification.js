@@ -9,14 +9,15 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-import baseGeekAIService from './src/services/baseGeekAIService.js';
+import aiFoodService from './src/services/aiFoodService.js';
+import aiGeekClient from './src/services/aiGeekClient.js';
 
 async function testClassification() {
   console.log('\n🧠 Testing AI Food Classification\n');
   console.log('=====================================\n');
 
   // Check configuration
-  const status = baseGeekAIService.getStatus();
+  const status = aiGeekClient.getStatus();
   console.log('1. Configuration Check:');
   console.log(`   - AI Key Configured: ${status.apiKeyConfigured ? '✅ Yes' : '❌ No'}`);
 
@@ -43,7 +44,7 @@ async function testClassification() {
     console.log(`   Input: "${input}"`);
     try {
       const startTime = Date.now();
-      const result = await baseGeekAIService.classifyFoodInput(input);
+      const result = await aiFoodService.classifyFoodInput(input);
       const duration = Date.now() - startTime;
 
       console.log(`   ✅ Classified in ${duration}ms:`);

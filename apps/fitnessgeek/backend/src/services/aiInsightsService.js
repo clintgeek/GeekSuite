@@ -1,13 +1,19 @@
 /**
  * AI Insights Service
  *
- * Generates intelligent health insights by aggregating user data
- * and sending to baseGeek AI for analysis.
+ * Generates intelligent health insights by aggregating user data and sending
+ * it to aiGeek's feature door (`POST /api/ai/feature`, via aiGeekClient).
+ *
+ * Every generator here produced prose, and prose has no deterministic
+ * fallback — so every one of them answers `{ ok: false, reason, message }`
+ * rather than throwing when the model cannot serve. The user's token is no
+ * longer forwarded: aiGeek resolves this app from the service credential, and
+ * these calls carry no per-user auth of their own.
  */
 
 import logger from '../config/logger.js';
 import cacheService from './cacheService.js';
-import baseGeekAIService from './baseGeekAIService.js';
+import aiGeekClient, { UNAVAILABLE_MESSAGE } from './aiGeekClient.js';
 import FoodLog from '../models/FoodLog.js';
 import Weight from '../models/Weight.js';
 import BloodPressure from '../models/BloodPressure.js';
@@ -16,6 +22,9 @@ import WeightGoals from '../models/WeightGoals.js';
 import garminConnectService from './garminConnectService.js';
 import foodReportService from './foodReportService.js';
 import { subDays, format } from 'date-fns';
+
+/** Prose is slow and worth waiting for; still under the door's 60s ceiling. */
+const PROSE_TIMEOUT_MS = 45000;
 
 class AIInsightsService {
 
@@ -378,17 +387,41 @@ class AIInsightsService {
   // ============================================
   // AI INSIGHT GENERATORS
   // ============================================
+  //
+  // None of these has a deterministic fallback: a health brief with the prose
+  // removed is not a brief, it is a JSON dump. So when aiGeek answers
+  // `ok: false` they return a **friendly refusal** — `{ ok: false, reason,
+  // message }` — and the routes hand that back as a 200. The card renders the
+  // sentence in place. Nothing here throws for an unavailable model; the only
+  // errors that still propagate are real ones (a broken Mongo query, say).
+
+  /** The one shape a generator answers with when no model could serve it. */
+  unavailable(type, result) {
+    logger.info('AI insight unavailable — answering with the friendly message', {
+      type,
+      reason: result.reason
+    });
+    return {
+      ok: false,
+      type,
+      reason: result.reason,
+      message: UNAVAILABLE_MESSAGE,
+      content: null,
+      generatedAt: new Date().toISOString(),
+      provenance: result.provenance || null
+    };
+  }
 
   /**
    * Generate morning briefing
    */
-  async generateMorningBrief(userId, userToken) {
+  async generateMorningBrief(userId) {
     const context = await this.buildUserContext(userId, {
       daysBack: 1, // Yesterday's data
       includeGarmin: true
     });
 
-    const prompt = `You are a friendly, concise health coach. Generate a brief morning health briefing based on yesterday's data.
+    const prompt = `Generate a brief morning health briefing based on yesterday's data.
 
 USER DATA:
 ${JSON.stringify(context, null, 2)}
@@ -403,24 +436,30 @@ Guidelines:
 
 Format as a short paragraph, no bullet points.`;
 
-    try {
-      const response = await baseGeekAIService.chat(prompt, userToken);
-      return {
-        type: 'morning_brief',
-        content: response,
-        generatedAt: new Date().toISOString(),
-        context: { date: format(new Date(), 'yyyy-MM-dd') }
-      };
-    } catch (error) {
-      logger.error('Error generating morning brief', { error: error.message });
-      throw error;
-    }
+    const result = await aiGeekClient.feature('brief', {
+      quotaKey: userId,
+      system: 'You are a friendly, concise health coach.',
+      user: prompt,
+      maxTokens: 800,
+      temperature: 0.7
+    }, { timeoutMs: PROSE_TIMEOUT_MS });
+
+    if (!result.ok) return this.unavailable('morning_brief', result);
+
+    return {
+      ok: true,
+      type: 'morning_brief',
+      content: result.data,
+      generatedAt: new Date().toISOString(),
+      context: { date: format(new Date(), 'yyyy-MM-dd') },
+      provenance: result.provenance
+    };
   }
 
   /**
    * Generate end-of-day summary
    */
-  async generateDailySummary(userId, userToken, date = null) {
+  async generateDailySummary(userId, date = null) {
     const targetDate = date || format(new Date(), 'yyyy-MM-dd');
 
     const context = await this.buildUserContext(userId, {
@@ -428,7 +467,7 @@ Format as a short paragraph, no bullet points.`;
       includeGarmin: true
     });
 
-    const prompt = `You are a health analytics assistant. Generate an end-of-day nutrition and health summary.
+    const prompt = `Generate an end-of-day nutrition and health summary.
 
 USER DATA FOR ${targetDate}:
 ${JSON.stringify(context, null, 2)}
@@ -443,30 +482,36 @@ Guidelines:
 
 Format with a brief intro, then 2-3 key insights.`;
 
-    try {
-      const response = await baseGeekAIService.chat(prompt, userToken);
-      return {
-        type: 'daily_summary',
-        content: response,
-        generatedAt: new Date().toISOString(),
-        context: { date: targetDate }
-      };
-    } catch (error) {
-      logger.error('Error generating daily summary', { error: error.message });
-      throw error;
-    }
+    const result = await aiGeekClient.feature('summary', {
+      quotaKey: userId,
+      system: 'You are a health analytics assistant.',
+      user: prompt,
+      maxTokens: 1000,
+      temperature: 0.7
+    }, { timeoutMs: PROSE_TIMEOUT_MS });
+
+    if (!result.ok) return this.unavailable('daily_summary', result);
+
+    return {
+      ok: true,
+      type: 'daily_summary',
+      content: result.data,
+      generatedAt: new Date().toISOString(),
+      context: { date: targetDate },
+      provenance: result.provenance
+    };
   }
 
   /**
    * Analyze health correlations
    */
-  async analyzeCorrelations(userId, userToken) {
+  async analyzeCorrelations(userId) {
     const context = await this.buildUserContext(userId, {
       daysBack: 30,
       includeGarmin: true
     });
 
-    const prompt = `You are a health data analyst. Analyze this 30-day health data for meaningful correlations and patterns.
+    const prompt = `Analyze this 30-day health data for meaningful correlations and patterns.
 
 USER DATA (30 DAYS):
 ${JSON.stringify(context, null, 2)}
@@ -487,47 +532,58 @@ Guidelines:
 
 Format as 3-5 key findings with brief explanations.`;
 
-    try {
-      const response = await baseGeekAIService.chat(prompt, userToken);
-      return {
-        type: 'correlations',
-        content: response,
-        generatedAt: new Date().toISOString(),
-        context: { daysAnalyzed: 30 }
-      };
-    } catch (error) {
-      logger.error('Error analyzing correlations', { error: error.message });
-      throw error;
-    }
+    const result = await aiGeekClient.feature('correlations', {
+      quotaKey: userId,
+      system: 'You are a health data analyst.',
+      user: prompt,
+      maxTokens: 1400,
+      temperature: 0.7
+    }, { timeoutMs: PROSE_TIMEOUT_MS });
+
+    if (!result.ok) return this.unavailable('correlations', result);
+
+    return {
+      ok: true,
+      type: 'correlations',
+      content: result.data,
+      generatedAt: new Date().toISOString(),
+      context: { daysAnalyzed: 30 },
+      provenance: result.provenance
+    };
   }
 
   /**
    * Generate AI summary for weekly nutrition report
+   *
+   * Cached for six hours — but only when a model answered. `cacheService.wrap`
+   * stores anything non-null, which would have pinned "the assistant isn't
+   * available right now" in front of this card for the rest of the afternoon,
+   * so the get/set is explicit here and a refusal is never written.
    */
-  async generateWeeklyReport(userId, userToken, options = {}) {
+  async generateWeeklyReport(userId, options = {}) {
     const days = options.days || 7;
     const start = options.start || format(subDays(new Date(), days - 1), 'yyyy-MM-dd');
-
-    // Generate cache key based on userId, start date, and days
     const cacheKey = cacheService.key('ai', 'user', userId, 'weekly-report', start, days);
 
-    // Try cache first - 6 hour TTL for AI insights
-    return cacheService.wrap(cacheKey, async () => {
-      const report = await foodReportService.getOverview(userId, {
-        start: options.start,
-        days
-      });
+    const cached = await cacheService.get(cacheKey).catch(() => null);
+    if (cached) return cached;
 
-      if (!report.daily.length) {
-        return {
-          type: 'weekly_report',
-          content: 'No nutrition logs were found for this period, so there is nothing to summarize yet.',
-          generatedAt: new Date().toISOString(),
-          context: report.range
-        };
-      }
+    const report = await foodReportService.getOverview(userId, {
+      start: options.start,
+      days
+    });
 
-      const prompt = `You are a precision nutrition coach. Summarize this ${report.range.days}-day food log report.
+    if (!report.daily.length) {
+      return {
+        ok: true,
+        type: 'weekly_report',
+        content: 'No nutrition logs were found for this period, so there is nothing to summarize yet.',
+        generatedAt: new Date().toISOString(),
+        context: report.range
+      };
+    }
+
+    const prompt = `Summarize this ${report.range.days}-day food log report.
 
 DATA:
 ${JSON.stringify(report, null, 2)}
@@ -539,48 +595,56 @@ Guidelines:
 - End with two focus recommendations for next week
 - Keep under 180 words, using short paragraphs/bullets.`;
 
-      try {
-        const response = await baseGeekAIService.chat(prompt, userToken);
-        return {
-          type: 'weekly_report',
-          content: response,
-          generatedAt: new Date().toISOString(),
-          context: report.range
-        };
-      } catch (error) {
-        logger.error('Error generating weekly report', { error: error.message });
-        throw error;
-      }
-    }, 6 * 3600); // 6 hours
+    const result = await aiGeekClient.feature('weeklyReport', {
+      quotaKey: userId,
+      system: 'You are a precision nutrition coach.',
+      user: prompt,
+      maxTokens: 1200,
+      temperature: 0.7
+    }, { timeoutMs: PROSE_TIMEOUT_MS });
+
+    if (!result.ok) return this.unavailable('weekly_report', result);
+
+    const payload = {
+      ok: true,
+      type: 'weekly_report',
+      content: result.data,
+      generatedAt: new Date().toISOString(),
+      context: report.range,
+      provenance: result.provenance
+    };
+    await cacheService.set(cacheKey, payload, 6 * 3600).catch(() => {});
+    return payload;
   }
 
   /**
-   * Generate AI highlights for longer-term trends
+   * Generate AI highlights for longer-term trends. Twelve-hour cache, and the
+   * same rule as the weekly report: a refusal is never cached.
    */
-  async generateTrendWatch(userId, userToken, options = {}) {
+  async generateTrendWatch(userId, options = {}) {
     const days = options.days || 30;
     const start = options.start || format(subDays(new Date(), days - 1), 'yyyy-MM-dd');
-
-    // Generate cache key
     const cacheKey = cacheService.key('ai', 'user', userId, 'trend-watch', start, days);
 
-    // Try cache first - 12 hour TTL for trend analysis
-    return cacheService.wrap(cacheKey, async () => {
-      const trends = await foodReportService.getTrends(userId, {
-        start: options.start,
-        days
-      });
+    const cached = await cacheService.get(cacheKey).catch(() => null);
+    if (cached) return cached;
 
-      if (!trends.daily.length) {
-        return {
-          type: 'trend_watch',
-          content: 'Trend analysis needs at least a few logged days to work.',
-          generatedAt: new Date().toISOString(),
-          context: trends.range
-        };
-      }
+    const trends = await foodReportService.getTrends(userId, {
+      start: options.start,
+      days
+    });
 
-      const prompt = `You are a health data analyst. Provide a concise trend watch summary for this ${trends.range.days}-day dataset.
+    if (!trends.daily.length) {
+      return {
+        ok: true,
+        type: 'trend_watch',
+        content: 'Trend analysis needs at least a few logged days to work.',
+        generatedAt: new Date().toISOString(),
+        context: trends.range
+      };
+    }
+
+    const prompt = `Provide a concise trend watch summary for this ${trends.range.days}-day dataset.
 
 DATA:
 ${JSON.stringify(trends, null, 2)}
@@ -592,31 +656,38 @@ Return exactly 3 sections with short bullet points:
 
 Use clear bullets, cite numbers, stay under 160 words.`;
 
-      try {
-        const response = await baseGeekAIService.chat(prompt, userToken);
-        return {
-          type: 'trend_watch',
-          content: response,
-          generatedAt: new Date().toISOString(),
-          context: trends.range
-        };
-      } catch (error) {
-        logger.error('Error generating trend watch', { error: error.message });
-        throw error;
-      }
-    }, 12 * 3600); // 12 hours
+    const result = await aiGeekClient.feature('trendWatch', {
+      quotaKey: userId,
+      system: 'You are a health data analyst.',
+      user: prompt,
+      maxTokens: 1200,
+      temperature: 0.7
+    }, { timeoutMs: PROSE_TIMEOUT_MS });
+
+    if (!result.ok) return this.unavailable('trend_watch', result);
+
+    const payload = {
+      ok: true,
+      type: 'trend_watch',
+      content: result.data,
+      generatedAt: new Date().toISOString(),
+      context: trends.range,
+      provenance: result.provenance
+    };
+    await cacheService.set(cacheKey, payload, 12 * 3600).catch(() => {});
+    return payload;
   }
 
   /**
    * Get coaching advice
    */
-  async getCoachingAdvice(userId, userToken) {
+  async getCoachingAdvice(userId) {
     const context = await this.buildUserContext(userId, {
       daysBack: 14,
       includeGarmin: true
     });
 
-    const prompt = `You are an experienced health coach. Based on this 2-week data, provide personalized coaching advice.
+    const prompt = `Based on this 2-week data, provide personalized coaching advice.
 
 USER DATA (14 DAYS):
 ${JSON.stringify(context, null, 2)}
@@ -637,24 +708,34 @@ Guidelines:
 
 Format as coaching advice with specific action items.`;
 
-    try {
-      const response = await baseGeekAIService.chat(prompt, userToken);
-      return {
-        type: 'coaching',
-        content: response,
-        generatedAt: new Date().toISOString(),
-        context: { daysAnalyzed: 14 }
-      };
-    } catch (error) {
-      logger.error('Error generating coaching advice', { error: error.message });
-      throw error;
-    }
+    const result = await aiGeekClient.feature('coaching', {
+      quotaKey: userId,
+      system: 'You are an experienced health coach.',
+      user: prompt,
+      maxTokens: 1200,
+      temperature: 0.7
+    }, { timeoutMs: PROSE_TIMEOUT_MS });
+
+    if (!result.ok) return this.unavailable('coaching', result);
+
+    return {
+      ok: true,
+      type: 'coaching',
+      content: result.data,
+      generatedAt: new Date().toISOString(),
+      context: { daysAnalyzed: 14 },
+      provenance: result.provenance
+    };
   }
 
   /**
-   * Chat with health data
+   * Chat with health data.
+   *
+   * `conversationId` is the user's id: aiGeek's sticky-pick machinery keys on
+   * `app:conversationId`, so one person's chat keeps landing on one model for
+   * as long as that model is alive, instead of changing voice mid-thread.
    */
-  async chat(userId, userToken, message, conversationHistory = []) {
+  async chat(userId, message, conversationHistory = []) {
     const context = await this.buildUserContext(userId, {
       daysBack: 30,
       includeGarmin: true
@@ -672,23 +753,30 @@ Guidelines:
 - Keep responses concise but helpful
 - Be supportive and encouraging`;
 
-    const messages = [
-      { role: 'system', content: systemPrompt },
-      ...conversationHistory,
-      { role: 'user', content: message }
-    ];
+    const history = Array.isArray(conversationHistory)
+      ? conversationHistory
+        .filter(turn => turn && typeof turn.content === 'string' && (turn.role === 'user' || turn.role === 'assistant'))
+        .slice(-20)
+      : [];
 
-    try {
-      const response = await baseGeekAIService.chatWithHistory(messages, userToken);
-      return {
-        type: 'chat',
-        content: response,
-        generatedAt: new Date().toISOString()
-      };
-    } catch (error) {
-      logger.error('Error in AI chat', { error: error.message });
-      throw error;
-    }
+    const result = await aiGeekClient.feature('chat', {
+      quotaKey: userId,
+      system: systemPrompt,
+      messages: [...history, { role: 'user', content: message }],
+      conversationId: userId ? String(userId) : undefined,
+      maxTokens: 2000,
+      temperature: 0.7
+    }, { timeoutMs: PROSE_TIMEOUT_MS });
+
+    if (!result.ok) return this.unavailable('chat', result);
+
+    return {
+      ok: true,
+      type: 'chat',
+      content: result.data,
+      generatedAt: new Date().toISOString(),
+      provenance: result.provenance
+    };
   }
 }
 

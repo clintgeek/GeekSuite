@@ -326,9 +326,12 @@ async function callModel({ system, user, schema, context, feature = null }) {
         { role: 'system', content: system },
         { role: 'user', content: user },
       ],
-      // aiGeek App Routing: `model: "basegeek-app"` for app id `startgeek`.
-      // `/api/ai/call` normalizes that alias to exactly these two fields.
-      useAppConfig: true,
+      // aiGeek App Routing for app id `startgeek`. This used to say
+      // `useAppConfig: true` — the normalized form of `/api/ai/call`'s
+      // `model: "basegeek-app"` alias. Phase 2 made that the default: a call
+      // that names no provider, model or tier is `auto` reading the app's
+      // routing row (services/aiRoute.js), so the switch is redundant and
+      // saying it twice invited the next reader to think it was load-bearing.
       appName: caller.appId,
       feature: caller.feature,
       userId: caller.userId,

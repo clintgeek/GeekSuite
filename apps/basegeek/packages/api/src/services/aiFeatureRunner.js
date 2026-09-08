@@ -42,6 +42,21 @@ import { internalCaller } from './callerIdentity.js';
 
 export const DEFAULT_TIMEOUT_MS = 6000;
 export const DEFAULT_MAX_CALLS_PER_DAY = 20;
+/**
+ * The default cap for the HTTP door, which is a different animal from the
+ * in-process one.
+ *
+ * In-process features are one-shot assists — a review draft, a food parse, a
+ * suggestion — and 20 a day per user is a generous hobby bound. An
+ * out-of-process consumer is a whole app: a StoryGeek session is dozens of GM
+ * turns in an evening, and 20 would end the story mid-scene. The real ceilings
+ * for those are the free tier's own rate limits and, for money, the governor
+ * (`AI_PAID_PER_DAY_USD`). This number exists so a runaway loop is bounded,
+ * not to ration a feature.
+ *
+ * A routing row may lower (or raise) it per app: `AIAppConfig.dailyCap`.
+ */
+export const DEFAULT_HTTP_MAX_CALLS_PER_DAY = 200;
 // Never let a feature inherit a provider's 4000-token default: Cloudflare's
 // fast llama kept generating past its JSON and took 15 s+ (2026-09-06 live).
 export const DEFAULT_MAX_TOKENS = 600;
@@ -57,6 +72,41 @@ export function utcDay(now = new Date()) {
 
 function counterKey(app, feature, userId, now) {
   return `${app}:${feature}:${userId || 'anon'}:${utcDay(now)}`;
+}
+
+/** A cap-bucket segment: short, trimmed, and never allowed to be a novel. */
+const MAX_QUOTA_KEY = 64;
+
+/**
+ * Which bucket this call's daily cap counts against.
+ *
+ * Normally the credential's `userId`. But a **service API key has no
+ * session**: `callerIdentity` gives a key caller the key's *owner* (the admin
+ * who minted it), which is an artefact of how the key was created and not the
+ * person making the request — so every StoryGeek player would share one
+ * bucket, and the first evening's play would spend the app's whole day.
+ *
+ * `quotaKey` is the opaque string a trusted backend sends to split that
+ * bucket: a user id, a story id, whatever it uses to mean "one of my
+ * sessions". It wins when it is present, because the only caller that sends it
+ * is the HTTP door, and the door passes it *only* for a credential with no
+ * session and no named user — that judgement needs `caller.source` and belongs
+ * where it can see it (`POST /api/ai/feature`).
+ *
+ * It is used for **nothing else**. It is not an identity, it is not resolved
+ * to a user, it is not logged as one, it does not reach `callAI`, and it does
+ * not touch `AIUsage`, `AISpend` or a conversation's ownership. It is a
+ * counter segment, and a request body may name a counter segment because the
+ * worst a liar gets is a fresh quota — which the free tier's own rate limits
+ * and the paid governor already bound. That is the entire threat model, and it
+ * is why this cannot be the pattern for anything else a body says.
+ */
+function quotaBucket(userId, quotaKey) {
+  if (typeof quotaKey === 'string') {
+    const trimmed = quotaKey.trim().slice(0, MAX_QUOTA_KEY);
+    if (trimmed) return trimmed;
+  }
+  return userId || null;
 }
 
 /** Drop yesterday's keys so the map does not grow one entry per user per day forever. */
@@ -131,8 +181,173 @@ function provenance(source, extra = {}) {
     cached: false,
     callsToday: 0,
     cap: null,
+    // What one call cost, in dollars, from the same figure `AISpend` booked
+    // (`aiService.updateStats` → `lastProviderInfo.costUsd`). `null` means
+    // "nobody told us", which is not the same as free — a free row books 0.
+    costUsd: null,
+    // Which legacy field, routing-row value or degradation produced the route
+    // this call took (`aiRoute.resolveRoute`). Useful in exactly one place:
+    // explaining to a player why their pinned model was not used.
+    hints: [],
     ...extra,
   };
+}
+
+/**
+ * runFeatureCore — everything `runAIFeature` does except call `fallback()`.
+ *
+ * Split out in Phase 2 so the same contract can be served over HTTP. The
+ * runner's four obligations (routing row, daily cap, fail-soft, provenance)
+ * were only available to code running *inside* the gateway; fitnessgeek and
+ * storygeek called `/api/ai/call` with their own axios wrappers, no fallback,
+ * and 500'd to the user on any failure. `POST /api/ai/feature` is this
+ * function with an envelope, so an out-of-process consumer gets the same
+ * deal — and, crucially, a **200** with `ok: false` instead of a 500, because
+ * the deterministic fallback for an out-of-process feature lives out there
+ * with the feature.
+ *
+ * The one difference from the wrapper: a refusal is `{ ok: false, reason }`
+ * with `provenance.source: 'none'`, not `'fallback'`. Nothing fell back here;
+ * that is the caller's next move.
+ *
+ * `fallback` is not required and not called. Everything else — the counter
+ * key (`app:feature:userId:day`), the schema unwrap, the validate hook, the
+ * reasons (`cap | unavailable | unparseable | empty | invalid`) — is
+ * byte-for-byte what the wrapper had.
+ *
+ * @param {object} opts  as `runAIFeature`, minus `fallback`, plus:
+ * @param {Array<{role: string, content: string}>} [opts.messages]  a whole
+ *        conversation instead of one `system`/`user` pair. The HTTP door
+ *        accepts this; in-process callers never needed it.
+ * @param {string} [opts.conversationId]  enables a sticky pick when the
+ *        routing row asks for one (`AIAppConfig.sticky`).
+ * @param {string} [opts.provider]  half of an explicit pin — see below.
+ * @param {string} [opts.model]     the other half. Both or neither.
+ * @param {string} [opts.quotaKey]  cap-bucket segment used ONLY when the
+ *        credential names no user. See `quotaBucket`.
+ * @returns {Promise<{ok: boolean, data: any, reason: string|null, provenance: object}>}
+ */
+export async function runFeatureCore(opts) {
+  const {
+    app,
+    feature,
+    userId = null,
+    quotaKey = null,
+    system,
+    user,
+    messages = null,
+    schema = null,
+    validate = null,
+    conversationId = null,
+    // An explicit pin, which for the HTTP door is StoryGeek's player picker:
+    // a player chose a model for their story and that choice is a `pin` on
+    // that story's turns. Both fields or neither — a provider with no model
+    // would silently become "that provider's default", which is not what a
+    // picker means. A pin whose row is cooling or gone degrades to the sticky
+    // auto pick and says so in `provenance.hints` (`pin_unavailable`), which
+    // is what lets StoryGeek show the player a notice instead of a failed
+    // turn.
+    provider = null,
+    model = null,
+    maxCallsPerDay = DEFAULT_MAX_CALLS_PER_DAY,
+    timeoutMs = DEFAULT_TIMEOUT_MS,
+    temperature = 0.2,
+    maxTokens = DEFAULT_MAX_TOKENS,
+    now = new Date(),
+    ai = aiService,
+  } = opts || {};
+
+  if (!app || !feature) throw new TypeError('runFeatureCore: app and feature are required');
+  const pinned = typeof provider === 'string' && provider && typeof model === 'string' && model
+    ? { provider, model }
+    : null;
+
+  const refuse = (reason, extra = {}) => ({
+    ok: false,
+    data: null,
+    reason,
+    provenance: provenance('none', { reason, ...extra }),
+  });
+
+  sweep(now);
+  const key = counterKey(app, feature, quotaBucket(userId, quotaKey), now);
+  const used = counters.get(key) || 0;
+  if (used >= maxCallsPerDay) {
+    logger.info({ app, feature, used, cap: maxCallsPerDay }, '[aiFeature] daily cap reached');
+    return refuse('cap', { callsToday: used, cap: maxCallsPerDay });
+  }
+
+  const caller = internalCaller({ appId: app, userId, feature });
+  const label = `${caller.appId}:${caller.feature}`;
+
+  // Either the caller's own conversation or the one-shot system/user pair
+  // every in-gateway feature sends. `prompt` stays the last user turn, which
+  // is what the cache subject and the adapters that only read a string want.
+  const turns = Array.isArray(messages) && messages.length > 0
+    ? messages
+    : [
+      { role: 'system', content: system },
+      { role: 'user', content: user },
+    ];
+  const prompt = [...turns].reverse().find(m => m?.role === 'user')?.content ?? user ?? '';
+
+  let content;
+  try {
+    counters.set(key, used + 1);
+    content = await withTimeout(
+      ai.callAI(prompt, {
+        messages: turns,
+        // No routing switch. "Nothing at all" is `auto` reading the app's
+        // routing row (DOCS/AIGEEK_FRONT_DOOR.md §1), which is exactly what
+        // `useAppConfig: true` used to mean here and no longer has to say.
+        appName: caller.appId,
+        feature: caller.feature,
+        // The credential's user, and only the credential's. `quotaKey` never
+        // reaches this object: it counts a cap and means nothing else.
+        userId: caller.userId,
+        ...(conversationId ? { conversationId } : {}),
+        ...(pinned || {}),
+        temperature,
+        maxTokens,
+        ...(schema ? { responseFormat: { type: 'json_schema', json_schema: schema } } : {}),
+      }),
+      timeoutMs,
+      label
+    );
+  } catch (err) {
+    logger.warn({ app, feature, err: err?.message }, '[aiFeature] model call failed');
+    return refuse('unavailable', { callsToday: used + 1, cap: maxCallsPerDay });
+  }
+
+  const info = ai.lastProviderInfo || {};
+  const meta = {
+    model: info.model || null,
+    provider: info.provider || null,
+    cached: Boolean(info.cached),
+    callsToday: used + 1,
+    cap: maxCallsPerDay,
+    costUsd: info.costUsd ?? null,
+    hints: Array.isArray(info.hints) ? info.hints : [],
+  };
+
+  let data = content;
+  if (schema) {
+    data = unwrapSchemaEnvelope(parseJson(content), schema);
+    if (data == null) {
+      logger.warn({ app, feature }, '[aiFeature] unparseable model output');
+      return refuse('unparseable', meta);
+    }
+  } else if (typeof data === 'string') {
+    data = data.trim();
+    if (!data) return refuse('empty', meta);
+  }
+
+  if (validate && !validate(data)) {
+    logger.warn({ app, feature }, '[aiFeature] model output failed validation');
+    return refuse('invalid', meta);
+  }
+
+  return { ok: true, data, reason: null, provenance: provenance('model', meta) };
 }
 
 /**
@@ -153,94 +368,20 @@ function provenance(source, extra = {}) {
  * @param {object} [opts.ai]         injectable aiService (tests)
  */
 export async function runAIFeature(opts) {
-  const {
-    app,
-    feature,
-    userId = null,
-    system,
-    user,
-    schema = null,
-    validate = null,
-    fallback,
-    maxCallsPerDay = DEFAULT_MAX_CALLS_PER_DAY,
-    timeoutMs = DEFAULT_TIMEOUT_MS,
-    temperature = 0.2,
-    maxTokens = DEFAULT_MAX_TOKENS,
-    now = new Date(),
-    ai = aiService,
-  } = opts || {};
-
+  const { app, feature, fallback } = opts || {};
   if (!app || !feature) throw new TypeError('runAIFeature: app and feature are required');
   if (typeof fallback !== 'function') throw new TypeError(`runAIFeature(${app}:${feature}): a fallback() is required`);
 
-  const settle = async (source, reason, extra = {}) => {
-    const data = await fallback();
-    return { data, provenance: provenance(source, { reason, ...extra }) };
+  const core = await runFeatureCore(opts);
+  if (core.ok) return { data: core.data, provenance: core.provenance };
+
+  // The wrapper's whole job: turn "no model answer" into the feature's
+  // deterministic one, and say so. `source` becomes `fallback` rather than
+  // `none` because something *did* answer — just not a model.
+  return {
+    data: await fallback(),
+    provenance: { ...core.provenance, source: 'fallback' },
   };
-
-  sweep(now);
-  const key = counterKey(app, feature, userId, now);
-  const used = counters.get(key) || 0;
-  if (used >= maxCallsPerDay) {
-    logger.info({ app, feature, used, cap: maxCallsPerDay }, '[aiFeature] daily cap reached; fallback');
-    return settle('fallback', 'cap', { callsToday: used, cap: maxCallsPerDay });
-  }
-
-  const caller = internalCaller({ appId: app, userId, feature });
-  const label = `${caller.appId}:${caller.feature}`;
-
-  let content;
-  try {
-    counters.set(key, used + 1);
-    content = await withTimeout(
-      ai.callAI(user, {
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: user },
-        ],
-        useAppConfig: true,
-        appName: caller.appId,
-        feature: caller.feature,
-        userId: caller.userId,
-        temperature,
-        maxTokens,
-        ...(schema ? { responseFormat: { type: 'json_schema', json_schema: schema } } : {}),
-      }),
-      timeoutMs,
-      label
-    );
-  } catch (err) {
-    logger.warn({ app, feature, err: err?.message }, '[aiFeature] model call failed; fallback');
-    return settle('fallback', 'unavailable', { callsToday: used + 1, cap: maxCallsPerDay });
-  }
-
-  const info = ai.lastProviderInfo || {};
-  const meta = {
-    model: info.model || null,
-    provider: info.provider || null,
-    cached: Boolean(info.cached),
-    callsToday: used + 1,
-    cap: maxCallsPerDay,
-  };
-
-  let data = content;
-  if (schema) {
-    data = unwrapSchemaEnvelope(parseJson(content), schema);
-    if (data == null) {
-      logger.warn({ app, feature }, '[aiFeature] unparseable model output; fallback');
-      return settle('fallback', 'unparseable', meta);
-    }
-  } else if (typeof data === 'string') {
-    data = data.trim();
-    if (!data) return settle('fallback', 'empty', meta);
-  }
-
-  if (validate && !validate(data)) {
-    logger.warn({ app, feature }, '[aiFeature] model output failed validation; fallback');
-    return settle('fallback', 'invalid', meta);
-  }
-
-  return { data, provenance: provenance('model', meta) };
 }
 
 /**
@@ -262,4 +403,4 @@ export const AI_PROVENANCE_SDL = `
   }
 `;
 
-export default { runAIFeature, callsToday, parseJson, unwrapSchemaEnvelope, utcDay, AI_PROVENANCE_SDL };
+export default { runAIFeature, runFeatureCore, callsToday, parseJson, unwrapSchemaEnvelope, utcDay, AI_PROVENANCE_SDL };

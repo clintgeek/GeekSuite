@@ -39,6 +39,10 @@ const metricLabels = {
 };
 
 const SECTION_PADDING = 3;
+
+/** The sentence the backend sends with `ok: false`; local default only. */
+const UNAVAILABLE_TEXT = "The assistant isn't available right now.";
+
 const Reports = () => {
   const theme = useTheme();
   const { notify } = useToast();
@@ -487,6 +491,13 @@ const Reports = () => {
                   <Box sx={{ color: theme.palette.text.primary, '& ul': { pl: 3 } }}>
                     {renderInsightContent(weeklyCoach.content)}
                   </Box>
+                ) : weeklyCoach?.ok === false ? (
+                  /* The model declined (cap, free tier having a day). A 200
+                     with a sentence, so it renders in place — no error tone
+                     for something that is simply not available this minute. */
+                  <Typography variant="body2" color="text.secondary">
+                    {weeklyCoach.message || UNAVAILABLE_TEXT}
+                  </Typography>
                 ) : (
                   <Typography variant="body2" color="text.secondary">
                     No AI summary available for this range yet.
@@ -513,6 +524,10 @@ const Reports = () => {
                   <Box sx={{ color: theme.palette.text.primary, '& ul': { pl: 3 } }}>
                     {renderInsightContent(trendWatch.content)}
                   </Box>
+                ) : trendWatch?.ok === false ? (
+                  <Typography variant="body2" color="text.secondary">
+                    {trendWatch.message || UNAVAILABLE_TEXT}
+                  </Typography>
                 ) : (
                   <Typography variant="body2" color="text.secondary">
                     Trend summary will appear once enough data is logged.

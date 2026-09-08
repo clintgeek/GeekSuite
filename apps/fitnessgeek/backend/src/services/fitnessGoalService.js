@@ -1,107 +1,262 @@
-import axios from 'axios';
 import logger from '../config/logger.js';
+import aiGeekClient, { UNAVAILABLE_MESSAGE } from './aiGeekClient.js';
 
 /**
  * fitnessGoalService — the nutrition-goal and meal-plan side of FitnessGeek.
  *
- * aiGeek resolves the calling app from the credential, so this presents
- * FitnessGeek's service key (AI_GEEK_API_KEY, app `fitnessgeek`) when one is
- * configured and forwards the user's JWT otherwise. The old
- * `appName: 'fitnessGeek:mealPlan'` was two things wearing one field — an app
- * and a feature — and made meal planning look like a separate app in the usage
- * breakdown. It is now `feature: 'mealPlan'` on an app resolved from the key.
+ * Both calls go through aiGeek's feature door (`POST /api/ai/feature`, via
+ * `aiGeekClient`), as features `nutritionGoals` and `mealPlan`. What that
+ * replaced, in order of how badly it behaved:
+ *
+ *   - Its own axios wrapper over the deprecated `POST /api/ai/call`, which
+ *     read the legacy `{ success, data: { response } }` envelope and threw on
+ *     every call once the route went OpenAI-compatible.
+ *   - `provider: 'anthropic'` on both calls until 2026-09-07 — a hard pin on
+ *     the one paid provider in the roster, which broke every meal plan and
+ *     every nutrition goal the day its credit ran out. Nothing in this file
+ *     names a provider or a model any more; aiGeek's routing row decides.
+ *   - A `throw` on any failure, surfacing as a 500 to the user.
+ *
+ * The two features fail differently, and deliberately:
+ *
+ *   - **nutritionGoals** has a deterministic answer — Mifflin-St Jeor for BMR,
+ *     an activity multiplier for TDEE, a 500 kcal/lb/week deficit and a 1200 /
+ *     BMR-20% floor. That is the same arithmetic the frontend planner
+ *     (`components/FitnessGoals/AIGoalPlanner.jsx`) has always done locally,
+ *     and it is the honest answer when no model replies, so `ok: false` takes
+ *     it instead of failing.
+ *   - **mealPlan** has none: a two-week menu cannot be computed from a BMR.
+ *     It answers `{ ok: false, reason, message }` and the route returns a 200.
  */
+
+/** Goal and plan prose are long; the door clamps this to 60s anyway. */
+const GOAL_TIMEOUT_MS = 60000;
+
+/** Activity multipliers, matching AIGoalPlanner.jsx exactly. */
+const ACTIVITY_MULTIPLIERS = {
+  sedentary: 1.2,
+  light: 1.375,
+  moderate: 1.55,
+  very: 1.725,
+  extra: 1.9
+};
+
+/** `5'11"` → 71. Returns null for anything it cannot read. */
+function parseHeightToInches(height) {
+  if (typeof height === 'number' && Number.isFinite(height)) return height;
+  const match = String(height || '').match(/(\d+)\s*'\s*(\d+)/);
+  if (match) return parseInt(match[1], 10) * 12 + parseInt(match[2], 10);
+  const bare = parseFloat(height);
+  return Number.isFinite(bare) && bare > 0 ? bare : null;
+}
+
 class FitnessGoalService {
-  constructor() {
-    this.baseGeekUrl = process.env.BASEGEEK_URL || 'https://basegeek.clintgeek.com';
-    this.jwtSecret = process.env.JWT_SECRET;
-    this.serviceKey = process.env.AI_GEEK_API_KEY || '';
-  }
-
-  async callAI(prompt, config = {}, userToken = null, userId = null) {
-    const authToken = this.serviceKey || userToken;
-    if (!authToken) {
-      throw new Error('User token is required for AI calls');
-    }
-
-    try {
-      const body = {
-        prompt,
-        config: {
-          ...config
-          // Provider/model/fallback are controlled server-side by this app's
-          // AIAppConfig routing row. Nothing here names a provider: both
-          // callers below passed `provider: 'anthropic'` until 2026-09-07,
-          // which was a hard pin on the one paid provider in the roster — and
-          // once its credit ran out, every meal plan and nutrition goal failed
-          // on every call. Removed with the provider; the row decides now.
-        },
-        feature: 'mealPlan'
-      };
-      if (userId) body.userId = String(userId).slice(0, 64);
-
-      const response = await axios.post(`${this.baseGeekUrl}/api/ai/call`, body, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`
-        },
-        timeout: 60000 // Increased timeout
-      });
-
-      // /api/ai/call answers in the OpenAI chat.completion shape. The legacy
-      // { success, data: { response } } envelope is kept as a fallback — this
-      // code only read the legacy one, which is why it threw on every call
-      // after the route was made OpenAI-compatible.
-      const openAIContent = response.data?.choices?.[0]?.message?.content;
-      if (openAIContent != null) return openAIContent;
-
-      if (response.data?.success && response.data?.data?.response != null) {
-        return response.data.data.response;
-      }
-
-      throw new Error(response.data?.error?.message || 'AI service call failed');
-    } catch (error) {
-      logger.error('baseGeek AI call failed for nutrition goals', {
-        error: error.message,
-        prompt: prompt.substring(0, 100) + '...',
-        statusCode: error.response?.status
-      });
-      throw new Error(`AI service unavailable: ${error.message}`);
-    }
-  }
+  // ============================================
+  // DETERMINISTIC FALLBACK — nutrition goals
+  // ============================================
 
   /**
-   * Create nutrition-focused fitness goals
+   * The calorie plan, with no model involved.
+   *
+   * @param {string} userInput
+   * @param {Object} userProfile - age, weight (lb), height, gender,
+   *        currentFitnessLevel, weightChangeRate, targetWeight
+   * @returns {Object|null} the same shape `parseNutritionGoalResponse`
+   *          produces, or null when the profile has too few numbers to
+   *          compute anything honest.
+   */
+  deterministicNutritionGoals(userInput, userProfile = {}) {
+    const age = parseFloat(userProfile.age);
+    const weight = parseFloat(userProfile.weight);
+    const heightInches = parseHeightToInches(userProfile.height);
+    const gender = String(userProfile.gender || '').toLowerCase();
+
+    if (!Number.isFinite(age) || !Number.isFinite(weight) || !heightInches) {
+      // No numbers, no arithmetic. Saying so beats inventing a calorie target.
+      return null;
+    }
+
+    // Mifflin-St Jeor.
+    let bmr = 10 * weight + 6.25 * heightInches - 5 * age;
+    bmr = gender === 'male' ? bmr + 5 : bmr - 161;
+    bmr = Math.round(bmr);
+
+    const level = ACTIVITY_MULTIPLIERS[userProfile.currentFitnessLevel] ? userProfile.currentFitnessLevel : 'sedentary';
+    const tdee = Math.round(bmr * ACTIVITY_MULTIPLIERS[level]);
+
+    const rate = Math.min(2, Math.max(0.25, parseFloat(userProfile.weightChangeRate) || 1));
+    const dailyDeficit = rate * 500; // 3500 kcal per lb, spread over a week
+    const minSafe = Math.max(1200, Math.round(bmr * 0.8));
+    const dailyCalories = Math.max(Math.round(tdee - dailyDeficit), minSafe);
+
+    const targetWeight = Number.isFinite(parseFloat(userProfile.targetWeight))
+      ? parseFloat(userProfile.targetWeight)
+      : null;
+    const weightToLose = targetWeight != null ? Math.abs(weight - targetWeight) : null;
+    const timelineWeeks = weightToLose != null ? Math.max(1, Math.ceil(weightToLose / rate)) : 12;
+
+    const grams = (percent, kcalPerGram) => Math.round((dailyCalories * percent) / kcalPerGram);
+
+    return {
+      source: 'deterministic',
+      primary_goal: {
+        title: 'Calorie and macro targets',
+        description: `Computed from your profile: BMR ${bmr} kcal, TDEE ${tdee} kcal at a ${level} activity level, ` +
+          `and a ${rate} lb/week rate. Daily target ${dailyCalories} kcal, floored at ${minSafe} kcal.`,
+        target_weight: targetWeight,
+        weight_to_lose: weightToLose,
+        timeline_weeks: timelineWeeks,
+        daily_calorie_target: dailyCalories,
+        macro_breakdown: { protein_percent: 30, carbs_percent: 40, fat_percent: 30 }
+      },
+      nutrition_phases: [
+        {
+          name: 'Adaptation',
+          duration_weeks: Math.min(2, timelineWeeks),
+          focus: 'Log consistently and settle into the calorie target',
+          daily_calories: dailyCalories,
+          meal_strategy: 'Three meals and one snack, hitting the protein target first',
+          key_foods: ['lean protein', 'vegetables', 'whole grains', 'fruit'],
+          foods_to_limit: ['sugary drinks', 'alcohol', 'fried food'],
+          tips: [
+            `Aim for about ${grams(0.30, 4)} g protein, ${grams(0.40, 4)} g carbs and ${grams(0.30, 9)} g fat a day.`,
+            'Weigh yourself on the same day each week, not daily.'
+          ]
+        },
+        {
+          name: 'Steady progress',
+          duration_weeks: Math.max(1, timelineWeeks - 2),
+          focus: 'Hold the target and let the weekly trend do the work',
+          daily_calories: dailyCalories,
+          meal_strategy: 'Repeat the meals that worked; keep one flexible meal a week',
+          key_foods: ['lean protein', 'legumes', 'vegetables'],
+          foods_to_limit: ['calorie-dense snacks'],
+          tips: [`Never drop below ${minSafe} kcal — that is the floor for your BMR.`]
+        }
+      ],
+      meal_planning_strategies: [
+        {
+          name: 'Repeatable breakfasts and lunches',
+          description: 'Fix the two meals you eat on autopilot, so only dinner needs thought.',
+          best_for: 'Weekdays',
+          example_meals: ['eggs and fruit', 'chicken and rice bowl']
+        }
+      ],
+      lifestyle_considerations: [
+        `Activity level assumed: ${level}.`,
+        'Social meals are planned for, not accidents — budget them into the week.'
+      ],
+      success_metrics: [
+        'Days logged per week',
+        'Weekly average weight trend',
+        `Days at or above the protein target (${grams(0.30, 4)} g)`
+      ],
+      estimated_timeline: {
+        total_weeks: timelineWeeks,
+        breakdown: weightToLose != null
+          ? `${weightToLose} lb at ${rate} lb/week is about ${timelineWeeks} weeks.`
+          : `No target weight given; ${timelineWeeks} weeks is a review point, not a finish line.`
+      }
+    };
+  }
+
+  // ============================================
+  // FEATURE: nutritionGoals
+  // ============================================
+
+  /**
+   * Create nutrition-focused fitness goals.
+   *
    * @param {string} userInput - User's goal description
    * @param {Object} userProfile - User profile data
-   * @param {string} userToken - User's JWT token (fallback auth)
-   * @param {string} userId - Who the call is for (usage attribution)
-   * @returns {Promise<Object>} Nutrition goals with phases
+   * @param {string|null} userId - the per-day cap bucket (`quotaKey`), so one
+   *        person's goal experiments cannot spend the whole app's allowance
+   * @returns {Promise<{ok: boolean, source: string, data: Object|null,
+   *                    reason: string|null, message?: string}>} — never throws
    */
-  async createNutritionGoals(userInput, userProfile = {}, userToken = null, userId = null) {
-    const prompt = this.buildNutritionGoalPrompt(userInput, userProfile);
-    const response = await this.callAI(prompt, {
+  async createNutritionGoals(userInput, userProfile = {}, userId = null) {
+    const result = await aiGeekClient.feature('nutritionGoals', {
+      quotaKey: userId,
+      system: 'You are an expert nutritionist and certified dietitian. Return ONLY valid JSON.',
+      user: this.buildNutritionGoalPrompt(userInput, userProfile),
       maxTokens: 3000,
       temperature: 0.6
-    }, userToken, userId);
-    return this.parseNutritionGoalResponse(response);
+    }, { timeoutMs: GOAL_TIMEOUT_MS });
+
+    if (result.ok) {
+      const parsed = this.parseNutritionGoalResponse(result.data);
+      if (parsed) {
+        return { ok: true, source: 'model', data: parsed, reason: null, provenance: result.provenance };
+      }
+      logger.warn('Nutrition goal response was unusable — falling back to the computed plan');
+    }
+
+    const computed = this.deterministicNutritionGoals(userInput, userProfile);
+    if (computed) {
+      return {
+        ok: false,
+        source: 'deterministic',
+        data: computed,
+        reason: result.ok ? 'unparseable' : result.reason,
+        provenance: result.provenance
+      };
+    }
+
+    return {
+      ok: false,
+      source: 'none',
+      data: null,
+      reason: result.ok ? 'unparseable' : result.reason,
+      message: UNAVAILABLE_MESSAGE,
+      provenance: result.provenance
+    };
   }
 
+  // ============================================
+  // FEATURE: mealPlan
+  // ============================================
+
   /**
-   * Generate detailed meal plan based on goals
+   * Generate detailed meal plan based on goals. No deterministic fallback
+   * exists for a two-week menu, so a refusal is the answer.
+   *
    * @param {Object} goal - Primary nutrition goal
    * @param {Object} userProfile - User profile data
-   * @param {string} userToken - User's JWT token (fallback auth)
-   * @param {string} userId - Who the call is for (usage attribution)
-   * @returns {Promise<Object>} Detailed meal plan
+   * @param {string|null} userId - the per-day cap bucket (`quotaKey`)
+   * @returns {Promise<{ok: boolean, data: Object|null, reason: string|null,
+   *                    message?: string}>} — never throws
    */
-  async generateMealPlan(goal, userProfile = {}, userToken = null, userId = null) {
-    const prompt = this.buildMealPlanPrompt(goal, userProfile);
-    const response = await this.callAI(prompt, {
+  async generateMealPlan(goal, userProfile = {}, userId = null) {
+    const result = await aiGeekClient.feature('mealPlan', {
+      quotaKey: userId,
+      system: 'You are an expert meal planner. Return ONLY valid JSON.',
+      user: this.buildMealPlanPrompt(goal, userProfile),
       maxTokens: 4000,
       temperature: 0.6
-    }, userToken, userId);
-    return this.parseMealPlanResponse(response);
+    }, { timeoutMs: GOAL_TIMEOUT_MS });
+
+    if (result.ok) {
+      const parsed = this.parseMealPlanResponse(result.data);
+      if (parsed) {
+        return { ok: true, data: parsed, reason: null, provenance: result.provenance };
+      }
+      logger.warn('Meal plan response was unusable');
+      return {
+        ok: false,
+        data: null,
+        reason: 'unparseable',
+        message: UNAVAILABLE_MESSAGE,
+        provenance: result.provenance
+      };
+    }
+
+    return {
+      ok: false,
+      data: null,
+      reason: result.reason,
+      message: UNAVAILABLE_MESSAGE,
+      provenance: result.provenance
+    };
   }
 
   /**
@@ -252,7 +407,12 @@ Keep it practical and achievable.`;
   }
 
   /**
-   * Parse nutrition goal response
+   * Read the model's nutrition goal answer.
+   *
+   * Returns `null` for anything unusable — an answer that will not parse is a
+   * reason to take the computed plan, not an exception. The truncation repair
+   * below is unchanged: long JSON from a small free-tier context gets cut off
+   * mid-phase often enough to be worth salvaging.
    */
   parseNutritionGoalResponse(responseText) {
     try {
@@ -309,18 +469,18 @@ Keep it practical and achievable.`;
 
           return result;
         } catch (secondParseError) {
-          logger.error({ err: secondParseError }, 'Failed to parse nutrition goal response');
-          throw new Error('Failed to parse nutrition goal response');
+          logger.warn({ err: secondParseError }, 'Nutrition goal response could not be read');
+          return null;
         }
       }
     } catch (error) {
-      logger.error({ err: error }, 'Failed to parse nutrition goal response');
-      throw new Error('Failed to parse nutrition goal response');
+      logger.warn({ err: error }, 'Nutrition goal response could not be read');
+      return null;
     }
   }
 
   /**
-   * Parse meal plan response
+   * Read the model's meal plan answer. `null` for anything unusable.
    */
   parseMealPlanResponse(responseText) {
     try {
@@ -377,26 +537,23 @@ Keep it practical and achievable.`;
 
           return result;
         } catch (secondParseError) {
-          logger.error({ err: secondParseError }, 'Failed to parse meal plan response');
-          throw new Error('Failed to parse meal plan response');
+          logger.warn({ err: secondParseError }, 'Meal plan response could not be read');
+          return null;
         }
       }
     } catch (error) {
-      logger.error({ err: error }, 'Failed to parse meal plan response');
-      throw new Error('Failed to parse meal plan response');
+      logger.warn({ err: error }, 'Meal plan response could not be read');
+      return null;
     }
   }
 
   getStatus() {
     return {
-      enabled: true,
-      baseGeekUrl: this.baseGeekUrl,
-      jwtSecretConfigured: !!this.jwtSecret,
-      // Nothing here picks a provider any more — aiGeek's routing row for this
-      // app does. These two fields read `anthropic` / `groq` until 2026-09-07,
-      // and nobody in this repo consumes them (fitnessGoalService.getStatus has
-      // no caller; the /ai/status route reads baseGeekAIService's).
-      routing: 'server-side (aiGeek AIAppConfig row for app fitnessgeek)'
+      enabled: aiGeekClient.isConfigured(),
+      baseGeekUrl: aiGeekClient.baseGeekUrl,
+      // Nothing here picks a provider — aiGeek's routing row for this app
+      // does. These two fields read `anthropic` / `groq` until 2026-09-07.
+      routing: 'auto (aiGeek routing row for app fitnessgeek)'
     };
   }
 }

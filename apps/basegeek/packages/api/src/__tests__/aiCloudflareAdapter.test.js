@@ -6,6 +6,13 @@
  * model never emitted end-of-turn and generated until max_tokens (15 s+ for
  * `{"word":"pong"}`). Chat `messages` + Workers AI's own `response_format`
  * make the same call return in ~1 s.
+ *
+ * The adapter moved to `services/ai/adapters/cloudflare.js` in Phase 2 and
+ * `aiService.callCloudflare` is gone, so these two cases go through
+ * `callProvider` — which is the honest test anyway: it proves the *registry*
+ * routes `cloudflare` to the adapter that knows Workers AI's dialect, on top
+ * of proving the dialect. The adapter's own quirks (the dropped `stop`, the
+ * 402, the missing account id) are pinned in `aiAdapters.test.js`.
  */
 import { jest } from '@jest/globals';
 import axios from 'axios';
@@ -36,10 +43,10 @@ function captureCloudflare(result) {
   return calls;
 }
 
-describe('callCloudflare', () => {
+describe('callProvider("cloudflare", ...)', () => {
   test('sends chat messages with roles, a temperature, and the bare JSON schema as response_format', async () => {
     const calls = captureCloudflare({ response: { word: 'pong' }, usage: { prompt_tokens: 3, completion_tokens: 2 } });
-    const out = await aiService.callCloudflare('ping', {
+    const out = await aiService.callProvider('cloudflare', 'ping', {
       model: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
       messages: [{ role: 'system', content: 'Reply with JSON.' }, { role: 'user', content: 'ping' }],
       maxTokens: 60,
@@ -62,7 +69,7 @@ describe('callCloudflare', () => {
 
   test('a bare prompt becomes one user message and no response_format is sent', async () => {
     const calls = captureCloudflare({ response: 'hello' });
-    const out = await aiService.callCloudflare('hi there', { model: 'm' });
+    const out = await aiService.callProvider('cloudflare', 'hi there', { model: 'm' });
     expect(calls[0].body.messages).toEqual([{ role: 'user', content: 'hi there' }]);
     expect(calls[0].body.response_format).toBeUndefined();
     expect(out.content).toBe('hello');

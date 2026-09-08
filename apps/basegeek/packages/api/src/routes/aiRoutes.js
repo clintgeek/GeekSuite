@@ -5,10 +5,11 @@ import { authenticateJWTOrAPIKey, requirePermission } from '../middleware/apiKey
 import {
   resolveCaller,
   resolveConversationOwner,
-  declaresAppRouting,
   logCaller,
 } from '../services/callerIdentity.js';
 import { resolveFailure } from '../services/aiFailureEnvelope.js';
+import { legacyRoutingSwitches } from '../services/aiRoute.js';
+import { runFeatureCore, DEFAULT_TIMEOUT_MS, DEFAULT_HTTP_MAX_CALLS_PER_DAY } from '../services/aiFeatureRunner.js';
 import logger from '../lib/logger.js';
 import aiService from '../services/aiService.js';
 import aiDirectorService from '../services/aiDirectorService.js';
@@ -18,6 +19,7 @@ import { countTextTokens, countMessageTokens } from '../services/tokenCounter.js
 import AIConfig from '../models/AIConfig.js';
 import { encrypt } from '@geeksuite/crypto-vault';
 import AIModel from '../models/AIModel.js';
+import AIFreeTier, { isFreeTierCooling } from '../models/AIFreeTier.js';
 import jwt from 'jsonwebtoken';
 import { formatResponse, formatStreamChunk } from '../utils/responseFormatter.js';
 
@@ -112,6 +114,70 @@ const failUpstream = (req, res, error, context = {}) => {
       code: failure.code
     }
   });
+};
+
+/**
+ * applyRoutingSwitches — the legacy body→config translation, in one place.
+ *
+ * `/call` and `/parse-json` both had their own copy of this, and they had
+ * already drifted once (`/parse-json` was missing the `ai:call` gate entirely
+ * until 2026-09-05). The vocabulary itself now lives in
+ * `services/aiRoute.js` — see `legacyRoutingSwitches` — so these two routes
+ * name none of it, and `resolveRoute` is the only reader of `freeOnly`,
+ * `useAppConfig` and the `basegeek-*` aliases in the whole service.
+ *
+ * Mutates `config` in place, because that is the object about to be handed to
+ * `callAI` and both routes then stamp identity onto it.
+ */
+const applyRoutingSwitches = (config, body) => {
+  const patch = legacyRoutingSwitches(body, config);
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined) delete config[key];
+    else config[key] = value;
+  }
+  return config;
+};
+
+/**
+ * `/api/ai/call` is deprecated (D2). One log line per caller app per hour —
+ * enough to see who is still on it before it is deleted, quiet enough that a
+ * busy consumer does not fill the log with its own obituary.
+ */
+const DEPRECATION_LOG_INTERVAL_MS = 60 * 60 * 1000;
+const deprecationLoggedAt = new Map();
+
+/**
+ * Is this caller's app due a deprecation line? Records the decision, so it is
+ * one call per app per hour and not one per request.
+ *
+ * Separated from `markDeprecated` because the throttle is the part worth
+ * testing and a pino child logger cannot be spied on after the fact — the
+ * child binds its methods at creation, so patching the parent's `warn` after
+ * `pino-http` has run catches nothing.
+ */
+export const _deprecationDue = (appId, now = Date.now()) => {
+  const last = deprecationLoggedAt.get(appId) || 0;
+  if (now - last < DEPRECATION_LOG_INTERVAL_MS) return false;
+  deprecationLoggedAt.set(appId, now);
+  return true;
+};
+
+/** Test hook: the hourly throttle is process state, and a suite is not an hour. */
+export const _resetDeprecationLog = () => deprecationLoggedAt.clear();
+
+const markDeprecated = (req, res, caller, replacement) => {
+  // RFC 8594's `Deprecation` header. `true` rather than a date: the date this
+  // route goes away is the next deploy after fitnessgeek and storygeek are
+  // verified on the feature door, and inventing a timestamp for it would be
+  // fiction.
+  res.setHeader('Deprecation', 'true');
+  res.setHeader('Link', `<${replacement}>; rel="successor-version"`);
+
+  if (!_deprecationDue(caller.appId)) return;
+  req.log.warn(
+    { app: caller.appId, feature: caller.feature, source: caller.source, replacement },
+    '[ai] /api/ai/call is deprecated — this app should move to POST /api/ai/feature'
+  );
 };
 
 // The providers /config reads and writes — config/aiProviders.js is the one
@@ -279,8 +345,7 @@ router.post('/conversation/message', async (req, res) => {
       autoSummarize = true,
       contextWindow,
       provider,
-      model,
-      freeOnly = false
+      model
     } = req.body;
 
     // Same rule as /call: the app is the credential's, not the body's. The
@@ -334,14 +399,58 @@ router.post('/conversation/message', async (req, res) => {
     const { systemPrompt: fullSystemPrompt, messages: allMessages, metadata } = 
       await conversationService.getMessagesForAPI(conversationId, userId);
 
-    // Call AI with full context
+    // Call AI with full context.
+    //
+    // `callAISmart` used to sit between this route and `callAI`, wrapping the
+    // answer in `{success, content, routing}`. It was the last survivor of the
+    // second routing stack (Phase 0's note on it is in aiService.js) and Phase
+    // 2 deleted it: it read `routing` out of `lastProviderInfo`, which is
+    // right here, and its `{success:false}` resolution only existed so this
+    // route could throw the string back — which Q46 then had to stop it
+    // doing. So the route calls `callAI` directly and builds the same two
+    // things itself; a provider failure lands in the catch, where
+    // `resolveFailure` has always owned the envelope.
+    //
+    // The body's legacy routing switches still work — they go through the same
+    // translation `/call` and `/parse-json` use, so `resolveRoute` is the only
+    // reader of that vocabulary anywhere in the service. A free signal is a
+    // hint on `auto` and a veto on `allowPaid`, so "free" still means free.
     const routingOptions = {
       conversationId,
       taskTypeHint: metadata?.taskTypeHint,
       userId: caller.userId || userId,
       appName,
       feature: caller.feature,
-      freeOnly: freeOnly || provider === 'free',
+    };
+    applyRoutingSwitches(routingOptions, { ...req.body, provider });
+
+    /**
+     * One turn, in the shape the two branches below want. Resolves rather than
+     * throwing on a provider failure, exactly as the deleted shim did, so the
+     * streaming branch can turn it into an error frame and the non-streaming
+     * one into the ordinary envelope.
+     */
+    const askModel = async () => {
+      const startedAt = Date.now();
+      try {
+        const content = await aiService.callAI(
+          allMessages[allMessages.length - 1]?.content || '',
+          { ...routingOptions, messages: allMessages }
+        );
+        const info = aiService.lastProviderInfo || {};
+        return {
+          success: true,
+          content,
+          routing: {
+            provider: info.provider || aiService.currentProvider,
+            model: info.model || null,
+            cached: !!info.cached,
+            latency: Date.now() - startedAt,
+          },
+        };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
     };
 
     // Declared out here, not inside the `if (stream)` block. They used to be
@@ -359,7 +468,7 @@ router.post('/conversation/message', async (req, res) => {
       res.setHeader('Connection', 'keep-alive');
 
       try {
-        const smartResult = await aiService.callAISmart(allMessages, routingOptions);
+        const smartResult = await askModel();
 
         if (!smartResult.success) {
           throw new Error(smartResult.error || 'AI routing failed');
@@ -383,7 +492,7 @@ router.post('/conversation/message', async (req, res) => {
         const timestamp = Math.floor(Date.now() / 1000);
         const id = `chatcmpl-${Date.now()}`;
         // `routing.provider` is a provider id; this field is a model id.
-        // callAISmart now reports both, so prefer the model.
+        // `askModel` reports both, so prefer the model.
         const usedModel = smartResult.routing?.model
           || smartResult.routing?.provider
           || aiService.currentProvider;
@@ -448,7 +557,7 @@ router.post('/conversation/message', async (req, res) => {
       }
     } else {
       // Non-streaming
-      const smartResult = await aiService.callAISmart(allMessages, routingOptions);
+      const smartResult = await askModel();
 
       if (!smartResult.success) {
         throw new Error(smartResult.error || 'AI routing failed');
@@ -611,6 +720,289 @@ router.post('/conversation/:conversationId/archive', async (req, res) => {
 });
 
 // ============================================================================
+// The feature door (Phase 2, DOCS/AIGEEK_FRONT_DOOR.md §4)
+// ============================================================================
+//
+// `aiFeatureRunner` has been the one door every *in-gateway* AI feature walks
+// through since night 2: routing row, per-user daily cap, deterministic
+// fallback, provenance. Consumers outside the gateway got none of it. They
+// called `/api/ai/call` with their own axios wrappers, no fallback, and 500'd
+// to the user on any failure — a free-tier hiccup showed up as a broken app.
+//
+// This is that contract over HTTP. Two things about it are deliberate and
+// worth saying out loud:
+//
+//   1. **A model failure is a 200.** `{ ok: false, reason, provenance }`. The
+//      deterministic fallback for an out-of-process feature lives out there
+//      with the feature — the food-parse comma split, "the assistant isn't
+//      available right now" — so this route's job is to say *clearly* that no
+//      model answered, not to make the consumer parse a 5xx to find out. A
+//      4xx/5xx here still means what it always means: the request was wrong,
+//      or the gateway is broken.
+//   2. **The app comes from the credential.** Same rule as every other AI
+//      route (services/callerIdentity.js). The body names a *feature* of the
+//      caller's own app and nothing else about who is calling.
+
+/** `timeoutMs` bounds. Below a second nothing free answers; above a minute no
+ *  HTTP client is still listening. §4. */
+const FEATURE_TIMEOUT_MIN_MS = 1000;
+const FEATURE_TIMEOUT_MAX_MS = 60000;
+
+const clampTimeout = (value) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return DEFAULT_TIMEOUT_MS;
+  return Math.min(FEATURE_TIMEOUT_MAX_MS, Math.max(FEATURE_TIMEOUT_MIN_MS, Math.round(parsed)));
+};
+
+/** A positive integer from the body, or the runner's default. */
+const positiveIntOr = (value, fallback) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return Math.floor(parsed);
+};
+
+/**
+ * POST /api/ai/feature
+ *
+ * request:  { feature, messages?: [{role, content}], system?, user?,
+ *             schema?: { name, description?, schema }, timeoutMs?,
+ *             conversationId?, provider?, model?, quotaKey?,
+ *             maxTokens?, temperature?, maxCallsPerDay? }
+ * response: 200 { ok: true,  data, provenance }
+ *           200 { ok: false, reason, provenance }
+ *              reason ∈ cap | unavailable | unparseable | empty | invalid
+ *
+ * `provider` + `model` are an explicit pin — StoryGeek's player picker, whose
+ * options come from `GET /api/ai/models/alive`. Both or neither: a provider
+ * with no model would quietly mean "that provider's default", which is not
+ * what a picker means. A pin whose catalog row is cooling or gone degrades to
+ * the app's ordinary `auto` walk (the sticky pick, where there is one) and
+ * `provenance.hints` carries `pin_unavailable`, so the consumer can show a
+ * notice instead of failing the turn.
+ *
+ * `quotaKey` is a cap-bucket segment and nothing else. It is honoured **only**
+ * when the credential names no user — which is every service-key caller, since
+ * a key has no session — and it is never treated as an identity, never
+ * resolved to a user, never logged as one, and never forwarded to `callAI`,
+ * `AIUsage`, `AISpend` or a conversation's ownership. A body may name a
+ * counter segment because the worst a liar gets is a fresh quota, which the
+ * free tier's own rate limits and the paid governor already bound; that
+ * reasoning does not extend to anything else a body says (see
+ * services/callerIdentity.js).
+ */
+router.post('/feature', async (req, res) => {
+  try {
+    const permissionError = requirePermission(req, res, 'ai:call');
+    if (permissionError) return;
+
+    // `resolveCaller` is handed a *narrowed* view of the body, not the body.
+    //
+    // For an API-key caller it reads `payload.userId ?? payload.config?.userId
+    // ?? payload.user` — the `user` fallback being an old spelling for "the
+    // person this service is calling on behalf of". On this route `user` is
+    // the **user turn's text**, so the whole body would have made a prompt
+    // into a billing identity: `{ user: 'hi' }` would bill every call in the
+    // suite to a user called `hi`, and pool their free-tier quota. (Long
+    // prompts escaped it only because `normalizeUserId` caps at 64 chars,
+    // which is luck, not a design.)
+    //
+    // So this route hands over exactly the two fields a body is entitled to
+    // speak about identity — the feature, and the user a service key is
+    // calling for — and the prompt stays a prompt.
+    const caller = resolveCaller(req, {
+      feature: req.body?.feature,
+      userId: req.body?.userId,
+    });
+    logCaller(req, caller, '[ai] /feature caller');
+
+    // The feature name is the one thing the body legitimately says about who
+    // is calling, and it is required: the daily cap is counted per feature,
+    // and an unnamed feature would share one bucket with every other.
+    const feature = caller.feature;
+    if (!feature) {
+      return res.status(400).json({
+        ok: false,
+        reason: 'invalid_request',
+        error: { message: 'feature is required', code: 'MISSING_FEATURE' }
+      });
+    }
+
+    const {
+      messages = null,
+      system = null,
+      user = null,
+      schema = null,
+      conversationId = null,
+      provider = null,
+      model = null,
+      quotaKey = null,
+      temperature,
+      maxTokens,
+      maxCallsPerDay,
+      timeoutMs
+    } = req.body || {};
+
+    const haveTurns = Array.isArray(messages) && messages.length > 0;
+    if (!haveTurns && !user && !system) {
+      return res.status(400).json({
+        ok: false,
+        reason: 'invalid_request',
+        error: { message: 'messages, or system/user, are required', code: 'MISSING_MESSAGES' }
+      });
+    }
+    if (schema && (typeof schema !== 'object' || !schema.name || !schema.schema)) {
+      return res.status(400).json({
+        ok: false,
+        reason: 'invalid_request',
+        error: { message: 'schema must be { name, description?, schema }', code: 'INVALID_SCHEMA' }
+      });
+    }
+    // Both or neither. Refused rather than half-honoured: a picker that sends
+    // only a provider has a bug, and answering it from that provider's default
+    // model would hide it behind a plausible answer.
+    const wantsPin = !!(provider || model);
+    if (wantsPin && !(typeof provider === 'string' && provider && typeof model === 'string' && model)) {
+      return res.status(400).json({
+        ok: false,
+        reason: 'invalid_request',
+        error: { message: 'provider and model must be sent together', code: 'INCOMPLETE_PIN' }
+      });
+    }
+    if (wantsPin && !PROVIDER_IDS.includes(provider)) {
+      return res.status(400).json({
+        ok: false,
+        reason: 'invalid_request',
+        error: { message: 'provider is not one this gateway serves', code: 'UNKNOWN_PROVIDER' }
+      });
+    }
+
+    // Whether the cap may be split by the body's `quotaKey`. For a key
+    // caller, `caller.userId` is the key's *owner* — the admin who minted it
+    // — which is one bucket for every player of every story that key serves.
+    const bodyNamedUser = typeof req.body?.userId === 'string' && !!req.body.userId.trim();
+    const splitsQuota = caller.source === 'api_key'
+      && !bodyNamedUser
+      && typeof quotaKey === 'string'
+      && !!quotaKey.trim();
+
+    // The cap, in order of who knows best: this request, then the app's
+    // routing row, then the door's default. Read-only — `routingRowFor`'s
+    // `lastSeen` touch and auto-discovery belong to `callAI`, which is about
+    // to do them anyway.
+    let rowCap = null;
+    try {
+      const row = await aiService.findAppConfig(caller.appId);
+      rowCap = Number.isFinite(Number(row?.dailyCap)) && Number(row.dailyCap) > 0
+        ? Math.floor(Number(row.dailyCap))
+        : null;
+    } catch (rowError) {
+      req.log.debug({ err: rowError }, '[ai] /feature could not read the routing row cap');
+    }
+
+    const core = await runFeatureCore({
+      app: caller.appId,
+      feature,
+      // The cap is keyed `app:feature:userId:day`, exactly as in process. A
+      // service key carries no session, so `userId` is null and the app-wide
+      // bucket is the right one — that is the honest accounting for a backend
+      // calling on nobody's behalf in particular.
+      userId: caller.userId,
+      // Only for a credential with no session that has not named a user. A
+      // JWT *is* a session, so its cap is counted against the person holding
+      // it and a body cannot hand itself a fresh quota; and a key that named
+      // the user it is calling for has already told us the bucket.
+      ...(splitsQuota ? { quotaKey } : {}),
+      system: typeof system === 'string' ? system : undefined,
+      user: typeof user === 'string' ? user : undefined,
+      ...(haveTurns ? { messages } : {}),
+      ...(schema ? { schema } : {}),
+      ...(typeof conversationId === 'string' && conversationId ? { conversationId } : {}),
+      ...(wantsPin ? { provider, model } : {}),
+      ...(Number.isFinite(Number(temperature)) ? { temperature: Number(temperature) } : {}),
+      ...(maxTokens !== undefined ? { maxTokens: positiveIntOr(maxTokens, undefined) } : {}),
+      maxCallsPerDay: positiveIntOr(maxCallsPerDay, rowCap ?? DEFAULT_HTTP_MAX_CALLS_PER_DAY),
+      timeoutMs: clampTimeout(timeoutMs)
+    });
+
+    return res.json(
+      core.ok
+        ? { ok: true, data: core.data, provenance: core.provenance }
+        : { ok: false, reason: core.reason, provenance: core.provenance }
+    );
+  } catch (error) {
+    // Only a genuine gateway fault reaches here — `runFeatureCore` turns every
+    // model-side outcome into `ok: false`. Same allowlisted envelope as the
+    // other doors: the provider's own words never leave the process (Q46).
+    return failUpstream(req, res, error, { stage: 'feature', feature: req.body?.feature ?? null });
+  }
+});
+
+/**
+ * GET /api/ai/models/alive
+ *
+ * `[{ provider, modelId, fitness, paid, lastSuccessAt }]` — every free row the
+ * catalog currently believes answers, plus the governed `paid-fallback` set.
+ * Deliberately a bare array, not the `{success, data}` envelope the older
+ * routes use: this is what a picker renders, and StoryGeek's player picker is
+ * its first consumer (§5).
+ *
+ * This replaces every hand-typed model list in a consumer's UI. Nobody types
+ * a model id again (D4) — the list is observed, by the catalog job, hourly.
+ */
+router.get('/models/alive', async (req, res) => {
+  try {
+    const permissionError = requirePermission(req, res, 'ai:models');
+    if (permissionError) return;
+
+    const [freeRows, paidRows] = await Promise.all([
+      AIFreeTier.find({ isFree: true }).lean(),
+      AIModel.find({ role: 'paid-fallback', isActive: true }).lean()
+    ]);
+
+    const configured = (provider) => {
+      const providerConfig = aiService.providers[provider];
+      return !!providerConfig?.apiKey && providerConfig.enabled !== false;
+    };
+
+    const alive = [];
+    for (const row of freeRows) {
+      if (!configured(row.provider)) continue;
+      // The same health view selection uses, mirror included, so the picker
+      // and the router cannot disagree about what is alive.
+      const health = aiService.getFreeTierHealth(row.provider, row.modelId, row.health);
+      if (isFreeTierCooling(health)) continue;
+      alive.push({
+        provider: row.provider,
+        modelId: row.modelId,
+        fitness: row.fitness ?? null,
+        paid: false,
+        lastSuccessAt: health.lastSuccessAt ?? null
+      });
+    }
+    for (const row of paidRows) {
+      if (!configured(row.provider)) continue;
+      const health = aiService.getFreeTierHealth(row.provider, row.modelId);
+      if (isFreeTierCooling(health)) continue;
+      alive.push({
+        provider: row.provider,
+        modelId: row.modelId,
+        fitness: row.capabilities?.tasks?.structuredOutput ? 'structured' : null,
+        paid: true,
+        lastSuccessAt: health.lastSuccessAt ?? null
+      });
+    }
+
+    return res.json(alive);
+  } catch (error) {
+    req.log.error({ err: error }, '[ai] /models/alive failed');
+    return res.status(500).json({
+      success: false,
+      error: { message: 'Failed to list alive models', code: 'ALIVE_MODELS_ERROR' }
+    });
+  }
+});
+
+// ============================================================================
 // Legacy API (DEPRECATED - Use /api/ai/conversation/message instead)
 // ============================================================================
 // 
@@ -645,6 +1037,7 @@ router.post('/call', async (req, res) => {
     // may still name a *feature* of that app.
     const caller = resolveCaller(req, req.body);
     logCaller(req, caller, '[ai] /call caller');
+    markDeprecated(req, res, caller, '/api/ai/feature');
 
     const stream = req.body.stream || false;
 
@@ -653,24 +1046,14 @@ router.post('/call', async (req, res) => {
     let prompt = req.body.prompt;
     let config = req.body.config || {};
 
-    // Support freeOnly flag — apps can request provider: "free" or freeOnly: true
-    if (config.provider === 'free' || config.freeOnly || req.body.freeOnly) {
-      config.freeOnly = true;
-      delete config.provider;
-    }
-
-    // Support app config routing — apps can omit provider/model to use server-side config
-    // Triggered when: no provider specified, or provider: "basegeek-app", or useAppConfig: true
-    if (config.provider === 'basegeek-app' || config.useAppConfig || req.body.useAppConfig) {
-      config.useAppConfig = true;
-      delete config.provider;
-    } else if (!config.provider && !config.freeOnly && declaresAppRouting(req.body)) {
-      // Legacy auto-trigger: a body that names an app and no provider wants
-      // app routing. It is now only a *switch* — the row looked up is the
-      // resolved caller's, whatever name the body used. The AIGeek "Try it"
-      // panel still sends neither, so it still exercises the raw rotation.
-      config.useAppConfig = true;
-    }
+    // The routing switches this route has always honoured — `provider: "free"`,
+    // `freeOnly`, `provider: "basegeek-app"`, `useAppConfig`, and the legacy
+    // auto-trigger for a body that names an app and no provider. They live in
+    // `services/aiRoute.js` now, with the rest of the legacy vocabulary, so
+    // this route no longer has an opinion about routing: it hands the config
+    // to `callAI`, which resolves one Route through `resolveRoute` like every
+    // other door. The switches choose a *mode*, never an identity.
+    applyRoutingSwitches(config, req.body);
 
     // Identity is stamped last so nothing in the body can survive it.
     config.appName = caller.appId;
@@ -863,18 +1246,8 @@ router.post('/parse-json', async (req, res) => {
       });
     }
 
-    // The same routing switches /call honours, in the same order.
-    if (config.provider === 'free' || config.freeOnly || req.body.freeOnly) {
-      config.freeOnly = true;
-      delete config.provider;
-    }
-
-    if (config.provider === 'basegeek-app' || config.useAppConfig || req.body.useAppConfig) {
-      config.useAppConfig = true;
-      delete config.provider;
-    } else if (!config.provider && !config.freeOnly && declaresAppRouting(req.body)) {
-      config.useAppConfig = true;
-    }
+    // The same routing switches /call honours, from the same function.
+    applyRoutingSwitches(config, req.body);
 
     // Identity is stamped last so nothing in the body can survive it.
     config.appName = caller.appId;

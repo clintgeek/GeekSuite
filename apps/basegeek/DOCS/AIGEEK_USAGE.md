@@ -15,13 +15,44 @@ worked example per use case.
 > **Gemini** is the provider with native `json_schema` *and* native tools;
 > **Groq** forwards tools only. Examples below use those.
 
-## Three routing modes
+## Two routing modes (`auto` and `pin`)
 
-### 1. Rotation (default — "keep me coding for free")
+> **Phase 2, 2026-09-07.** aiGeek used to accept eleven ways of saying where a request should go.
+> It now has two — `auto` and `pin` — and everything below is a *hint* on one of them. The design of
+> record is [AIGEEK_FRONT_DOOR.md](./AIGEEK_FRONT_DOOR.md); this section describes what the wire
+> still accepts, which is everything it accepted before.
+>
+> - **`auto`** walks the health-ranked free rows (Phase 1's fitness ranking, three attempts,
+>   different providers), then — only if the app's routing row carries `allowPaid` and the daily
+>   budget agrees — one governed paid attempt, then fails. `basegeek-rotation`, `basegeek-free`,
+>   `basegeek-app`, `freeOnly`, `autoRotate`, `useAppConfig` and **sending nothing at all** are all
+>   `auto`; the differences between them are now hints in the log line and in
+>   `provenance.hints`.
+> - **`pin`** is one provider and one model, because you meant it.
+>
+> What actually changed for a caller: **the old "rotation" no longer calls each provider with its
+> own default model.** It walks free-tier rows, like `basegeek-free` always did. A request that
+> named no model is never answered by a model nobody asked for, which is the whole of R130 and F-22.
+>
+> **New doors, and the one you should be using:** [`POST /api/ai/feature`](#the-feature-door) is the
+> front door for a backend consumer, and [`GET /api/ai/models/alive`](#get-apiaimodelsalive) is what
+> a model picker should show. **`POST /api/ai/call` is deprecated** — see
+> [below](#post-apiaicall-deprecated).
 
-Pick `basegeek-rotation` — or send no `model` at all. aiGeek cycles through
-free-tier providers by priority, respects per-provider quotas, and cools
+### 1. Rotation (`basegeek-rotation`, or no `model` at all)
+
+Pick `basegeek-rotation` — or send no `model` at all. aiGeek walks the free-tier
+rows in health-ranked order (the provider's auto-router first, then models that
+have proven they can produce JSON, then most recently proven), respects the
+quotas it has learned from the providers' own rate-limit headers, and cools
 providers after 429s. Best for high-volume or cost-sensitive workloads.
+
+**Since 2026-09-07 this is the same walk `basegeek-free` takes.** The two
+aliases differ only in that `basegeek-free` additionally forbids the governed
+paid fallback, which is off by default anyway (`AIAppConfig.allowPaid`). What
+`basegeek-rotation` used to do — call each provider in turn with *its own
+default model* — is gone: those defaults are not all free, and a caller that
+named no model should not be billed for one it never chose.
 
 (This used to say "or any model name not prefixed with a known provider".
 That is no longer true, and was never a good idea: since 2026-09-05 a model
@@ -35,11 +66,12 @@ await openai.chat.completions.create({
 });
 ```
 
-### 2. Free-only
+### 2. Free-only (`basegeek-free`, `freeOnly: true`, `provider: 'free'`)
 
-Identical to rotation but skips paid rows (Gemini when not free-tier'd, and
-Cohere; Anthropic was the paid provider here until 2026-09-07). Used by fitnessgeek and other suite apps for
-background inference where any free model will do.
+Identical to rotation, plus one guarantee: it can never reach the governed paid
+fallback, whatever the app's routing row says. A caller that asked for the free
+tier by name did not ask to be billed. Used by fitnessgeek and other suite apps
+for background inference where any free model will do.
 
 ```js
 await openai.chat.completions.create({
@@ -201,6 +233,139 @@ classified `internal` and answered `500 internal_error`. Both adapters now use
 the shared prefix, so Together and Groq classify identically for the same
 status.
 
+## The feature door
+
+`POST /api/ai/feature` — **the front door for a backend consumer**, and the one
+new route in Phase 2 that anything outside this gateway should be calling.
+
+`aiFeatureRunner` has been the one door every *in-gateway* AI feature walks
+through since night 2: the app's routing row, a per-user daily cap, a
+deterministic fallback, and provenance on every answer. Consumers outside the
+gateway got none of it. fitnessgeek and storygeek called `/api/ai/call` with
+their own axios wrappers, no fallback, and 500'd to the user on any failure — so
+a free-tier hiccup showed up as a broken app. This is that contract over HTTP.
+
+**Permission:** `ai:call`. **Identity:** from the credential, never the body.
+
+```
+POST /api/ai/feature
+{
+  "feature": "gm",                     // required; the cap is counted per feature
+  "messages": [{ "role": "system", "content": "..." },
+               { "role": "user",   "content": "..." }],
+  "system": "...", "user": "...",      // the one-shot alternative to `messages`
+  "schema": { "name": "Turn", "description": "...", "schema": { ... } },
+  "conversationId": "story-7",         // enables a sticky pick, if the row asks for one
+  "provider": "groq", "model": "...",  // an explicit pin — both or neither
+  "quotaKey": "player-7",              // a cap bucket, and nothing else (see below)
+  "timeoutMs": 8000,                   // clamped to [1000, 60000]
+  "maxTokens": 600, "temperature": 0.2,
+  "maxCallsPerDay": 200
+}
+```
+
+```
+200 { "ok": true,  "data": <parsed object, or trimmed text>, "provenance": {...} }
+200 { "ok": false, "reason": "cap" | "unavailable" | "unparseable" | "empty" | "invalid",
+      "provenance": {...} }
+400 { "ok": false, "reason": "invalid_request", "error": { "message", "code" } }
+
+provenance = {
+  "source":     "model" | "none",     // "none" = no model answered; nothing fell back here
+  "reason":     null | <as above>,
+  "provider":   "groq",               // what actually answered
+  "model":      "llama-3.3-70b-versatile",
+  "cached":     false,
+  "callsToday": 3, "cap": 200,
+  "costUsd":    0,                     // from the same figure AISpend booked; null = unknown
+  "hints":      ["app_config"]         // why the request routed where it did
+}
+```
+
+**A model failure is a 200.** This is the part worth reading twice. The
+deterministic fallback for an out-of-process feature lives out there *with the
+feature* — the food-parse comma split, "the assistant isn't available right
+now" — so this route's job is to say clearly that no model answered, not to make
+you parse a 5xx to find out. A 4xx or 5xx from this route still means what it
+always means: your request was wrong, or the gateway is broken.
+
+**`provider` + `model` are a pin, both or neither.** Half a pin is a `400`
+`INCOMPLETE_PIN`, not "that provider's default" — a picker that sends only a
+provider has a bug, and answering it plausibly would hide it. An unknown
+provider is a `400` `UNKNOWN_PROVIDER`. A pin whose catalog row is cooling or
+gone **degrades** to the app's ordinary `auto` walk and `provenance.hints`
+carries `pin_unavailable`, so you can show your user a notice instead of
+failing their turn. Source the options from `GET /api/ai/models/alive`; do not
+type a model id.
+
+**`quotaKey` is a cap-bucket segment and nothing else.** A service API key has
+no session, so aiGeek attributes a key caller to the key's *owner* — the admin
+who minted it — which is an artefact of how the key was created and not the
+person making the request. Without `quotaKey`, every StoryGeek player would
+share one bucket and the first evening's play would spend the app's whole day.
+So a trusted backend may send an opaque string — a user id, a story id — to
+split it. It is honoured **only** when the credential names no user and the
+body named no `userId`, and it is never treated as an identity, never resolved
+to a user, never logged as one, and never forwarded to `callAI`, `AIUsage`,
+`AISpend` or a conversation's ownership. A body may name a counter segment
+because the worst a liar gets is a fresh quota, which the free tier's own rate
+limits and the paid budget already bound. **That reasoning does not extend to
+anything else a body says** — see *Who is calling* below.
+
+**The cap** defaults to **200** a day per bucket, not the in-process 20: an
+in-process feature is a one-shot assist, a consumer is a whole app, and a
+StoryGeek evening is dozens of GM turns. It is a bound on a runaway loop, not a
+ration — the real ceilings are the free tier's rate limits and, for money, the
+`AI_PAID_PER_DAY_USD` governor. Precedence: your `maxCallsPerDay`, then the
+app's `AIAppConfig.dailyCap`, then 200.
+
+### `GET /api/ai/models/alive`
+
+**Permission:** `ai:models`. A **bare array** — not the `{success, data}`
+envelope the older routes use — because this is what a picker renders.
+
+```json
+[
+  { "provider": "groq", "modelId": "llama-3.3-70b-versatile",
+    "fitness": "structured", "paid": false, "lastSuccessAt": "2026-09-07T18:02:11.000Z" },
+  { "provider": "openrouter", "modelId": "openrouter/free",
+    "fitness": "structured", "paid": true,  "lastSuccessAt": null }
+]
+```
+
+Alive free rows plus the governed `paid-fallback` set, filtered by "we hold a key
+for that provider" and by the *same* health view routing uses — so a picker and
+the router cannot disagree about what is alive. `fitness: 'structured'` means
+the row has proven it can produce JSON when asked; `'basic'` means it answers
+but did not; `null` means it has not been probed. `paid: true` costs money and
+is only reachable by an app whose routing row says `allowPaid`.
+
+This is what replaces every hand-typed model list in a consumer's UI. **No human
+types a model id again** (D4) — the list is observed by the catalog job, hourly.
+
+### `POST /api/ai/call` (deprecated)
+
+Deprecated 2026-09-07 (D2) and **still working** — it resolves through the same
+`resolveRoute` as everything else. Responses now carry:
+
+```
+Deprecation: true
+Link: </api/ai/feature>; rel="successor-version"
+```
+
+and the gateway logs one line per caller app per hour naming the app that is
+still using it. It is deleted in a follow-up commit once fitnessgeek and
+storygeek are verified live on the feature door. If you are calling it from a
+backend, move to `POST /api/ai/feature`: you get fail-soft, provenance,
+`costUsd`, sticky picks and pins, and you stop 500-ing at your users when a
+free tier has a bad minute. If you are an OpenAI-SDK client, you were never
+using this route — `/openai/v1/chat/completions` is unchanged and is not going
+anywhere.
+
+`POST /api/ai/parse-json` is not deprecated but has no advantage over
+`/api/ai/feature` with a `schema`, which additionally validates and tells you
+*why* it could not parse.
+
 ## Who is calling
 
 Two decisions turn on the answer: which `AIAppConfig` row routes the call — so,
@@ -297,7 +462,9 @@ that. Two rules make the table readable:
 
 | Route | Asks for | Before 2026-09-05 |
 |---|---|---|
-| `POST /call` | `ai:call` + caller identity | unchanged |
+| `POST /feature` | `ai:call` + caller identity | **new 2026-09-07** |
+| `GET /models/alive` | `ai:models` | **new 2026-09-07** |
+| `POST /call` | `ai:call` + caller identity | unchanged — **deprecated 2026-09-07** |
 | `POST /parse-json` | `ai:call` + caller identity | unchanged (gated `267c4e3`) |
 | `POST /conversation/message`, `/conversation/:id/archive`, `DELETE /conversation/:id`, `POST /context/reset/:id` | `ai:call` | unchanged |
 | `GET /stats`, `/capabilities`, `/conversations`, `/conversation/:id` | `ai:stats` | unchanged |
@@ -371,7 +538,17 @@ regardless — that was never the same question as who may ask.
 
 ### What the App Routing row keys on
 
-The resolved app id. An admin pinning a model for `fitnessgeek` pins it for
+Since 2026-09-07 the row also carries the three Phase 2 routing controls, and
+**every** `auto` call reads it — not only the ones that said `useAppConfig`:
+
+| field | default | what it does |
+|---|---|---|
+| `tier` | `auto` | `auto` or `specific` (a pinned provider + model). `free` and `rotation` are legacy and are *read* as `auto`, then rewritten on the row's next save. No migration needed. |
+| `sticky` | `null` | `'per-conversation'` keeps one model per `conversationId` until it fails, then re-picks and flags the change. StoryGeek's GM. |
+| `allowPaid` | `false` | May this app reach the governed paid fallback when every free row is exhausted? Off by default, and it should stay off for anything with a decent deterministic fallback. |
+| `dailyCap` | `null` | Overrides `POST /api/ai/feature`'s default of 200 calls per bucket per UTC day. |
+
+The row is keyed on the resolved app id. An admin pinning a model for `fitnessgeek` pins it for
 every call from FitnessGeek — coach, meal plan and anything added later — and
 the feature shows up in the usage breakdown rather than as a second app to
 configure. Legacy rows are still honoured: the lookup falls back to a
@@ -511,11 +688,14 @@ every SSE client works; you just do not get the words any sooner.
 
 | Scenario | Mode | Why |
 |---|---|---|
+| **A backend feature of a suite app** | **`POST /api/ai/feature`** | Fail-soft, provenance, `costUsd`, a cap, pins, sticky picks. This is the answer unless you are an OpenAI-SDK client. |
 | High-volume coding assist | `basegeek-rotation` | Free providers, auto-failover |
-| Background/batch jobs | `basegeek-free` | Guaranteed no-cost |
+| Background/batch jobs | `basegeek-free` | Guaranteed no-cost, whatever the routing row says |
+| A long conversation that should not change voice | `sticky: 'per-conversation'` on the row, + `conversationId` | One model per conversation until it dies, then a flagged re-pick |
+| Letting a *user* choose a model | `GET /models/alive` → `provider` + `model` | A dead choice degrades with `pin_unavailable` instead of failing |
 | geekPR PR reviews | `gemini/gemini-2.5-flash` | Consistency across retries (was `anthropic/claude-3-5-sonnet-20241022` until 2026-09-07) |
-| Tool calling required | Rotation OR explicit pin | Rotation skips incapable providers |
-| Strict JSON schema output | Rotation (prefers native first) | Fallback keeps non-native providers useful |
+| Tool calling required | `auto` OR explicit pin | The walk skips rows whose provider lacks native tool calling; a pin fails as itself |
+| Strict JSON schema output | `auto` (prefers native first) | Fallback keeps non-native providers useful |
 
 ## Capability matrix
 
@@ -721,6 +901,13 @@ call that names either and no provider through the caller's `AIAppConfig` row,
 which would stop the panel testing the rotation at all. (Since routing is keyed
 on the credential, the *value* an admin could type there wouldn't matter — but
 its presence would still flip the switch.)
+
+Since 2026-09-07 that distinction buys less than it used to: `auto` is the same
+free-tier walk whether it came from an app's row or from nothing at all. The
+panel still exercises the raw walk with no row's `allowPaid`, `sticky` or token
+defaults applied, which is the honest reading of "as a caller gets it" for a
+caller that has no row. It posts to the deprecated `POST /api/ai/call`, and
+moves with it.
 
 Two additive fields on the non-streaming `/api/ai/call` response make this
 possible, and are useful to any caller:

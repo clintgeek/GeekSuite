@@ -45,7 +45,9 @@ jest.unstable_mockModule(mod('../../models/Story.js'), () => ({
 
 const mockGenerateStoryResponse = jest.fn();
 jest.unstable_mockModule(mod('../../services/aiService.js'), () => ({
-  default: { generateStoryResponse: mockGenerateStoryResponse, getGMConfig: jest.fn() },
+  // `getGMConfig` was on this double until Phase 2 retired it along with
+  // StoryGeek's GM env-var pin; nothing in routes/stories.js reads it.
+  default: { generateStoryResponse: mockGenerateStoryResponse },
 }));
 
 // continueStory routes a plain question straight to canonQueryService and

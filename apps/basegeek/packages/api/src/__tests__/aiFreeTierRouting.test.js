@@ -432,29 +432,63 @@ describe('a success clears the row', () => {
   });
 });
 
-/* ── (e) nothing changed for a non-free caller ────────────────────────────── */
+/* ── (e) a caller that named nothing, and a caller that named a model ─────── */
 
-describe('non-free callers walk exactly the list they always did', () => {
-  it('still tries the requested provider then the fallback order, each on its own default model', async () => {
+describe('a caller that names nothing takes the same walk as a free-tier caller', () => {
+  /**
+   * CHANGED BY PHASE 2, deliberately, and this is the one case in this file
+   * whose *behaviour* moved rather than being added to.
+   *
+   * It used to read "non-free callers walk exactly the list they always did"
+   * and pinned the generic provider walk: the requested (or default) provider
+   * followed by `fallbackOrder`, each called with *its own default model*.
+   * That walk is what DOCS/AIGEEK_FRONT_DOOR.md §2 deletes — "this is now the
+   * walk for every auto caller, not only freeOnly; the old provider default
+   * model rotation is gone" — because it is the mechanism behind R130 and
+   * F-22 both: a request that named no model was answered by whichever
+   * vendor's default replied first, at 200, and billed to whoever asked.
+   *
+   * The rule the old case was really defending — "a caller that named nothing
+   * still gets an answer" — survives, and is what is pinned below. What it no
+   * longer gets is an answer from a model nobody asked for.
+   */
+  it('walks the health-ranked free rows, not every provider on its own default model', async () => {
     enable('groq', 'cerebras', 'together');
-    await seedRows([{ provider: 'groq', modelId: 'a-free-row' }]);
+    await seedRows([
+      { provider: 'groq', modelId: 'dead-row' },
+      { provider: 'cerebras', modelId: 'a-free-row' },
+    ]);
 
-    const order = [aiService.currentProvider, ...aiService.fallbackOrder.filter(p => p !== aiService.currentProvider)];
-    const firstTwo = order.filter(p => ['groq', 'cerebras', 'together'].includes(p));
+    const calls = fakeProviderLayer({
+      'groq/dead-row': providerError('Groq', 404, {}),
+      'cerebras/a-free-row': 'ok',
+      // The provider defaults are listed so that a call to one is a visible
+      // failure rather than a silent pass — nothing may reach them now.
+      [`groq/${aiService.providers.groq.model}`]: 'off the free path',
+      [`cerebras/${aiService.providers.cerebras.model}`]: 'off the free path',
+      [`together/${aiService.providers.together.model}`]: 'off the free path',
+    });
 
-    const answers = {};
-    for (const provider of firstTwo) {
-      answers[`${provider}/${aiService.providers[provider].model}`] =
-        provider === firstTwo[firstTwo.length - 1]
-          ? 'ok'
-          : providerError(provider, 500, {});
-    }
-    const calls = fakeProviderLayer(answers);
-
+    // No provider, no model, no tier, no flags: the shape most in-process
+    // callers use, and the one the old code sent down the generic walk.
     await expect(aiService.callAI('hello', { appName: 'geekpr' })).resolves.toBe('ok');
-    expect(calls).toEqual(firstTwo.map(p => `${p}/${aiService.providers[p].model}`));
-    // No free row was consulted, and none was marked.
-    expect(aiService.freeTierHealth.size).toBe(0);
+    expect(calls).toEqual(['groq/dead-row', 'cerebras/a-free-row']);
+    // And the free rows were consulted, and marked — which is the point.
+    expect(aiService.getFreeTierHealth('groq', 'dead-row').lastFailureCode).toBe('http_404');
+  });
+
+  it('fails as itself rather than reaching a provider default when there is no free row', async () => {
+    enable('groq', 'cerebras', 'together');
+    await seedRows([]);
+
+    const calls = fakeProviderLayer({
+      [`groq/${aiService.providers.groq.model}`]: 'off the free path',
+      [`together/${aiService.providers.together.model}`]: 'off the free path',
+    });
+
+    await expect(aiService.callAI('hello', { appName: 'geekpr' }))
+      .rejects.toThrow(/No free-tier model is available/);
+    expect(calls).toEqual([]);
   });
 
   it('still honours an explicit model on the requested provider', async () => {
@@ -464,5 +498,287 @@ describe('non-free callers walk exactly the list they always did', () => {
       .resolves.toBe('ok');
     expect(calls).toEqual(['groq/a-model-i-named']);
     expect(aiService.freeTierHealth.size).toBe(0);
+  });
+});
+
+/* ── (f) Phase 2: the auto walk, the pin, sticky picks and the governor ────── */
+
+/**
+ * Everything below is Phase 2 (DOCS/AIGEEK_FRONT_DOOR.md). The free-tier state
+ * machine above is unchanged — these cases pin what was built *on top of* it:
+ * one route resolution, one walk for every auto caller, a pin that degrades
+ * only when the catalog says so, sticky picks, and money behind a governor.
+ */
+
+const { default: AIStickyPick } = await import('../models/AIStickyPick.js');
+const { default: AIModel } = await import('../models/AIModel.js');
+const { default: AIPricing } = await import('../models/AIPricing.js');
+const { default: AISpend } = await import('../models/AISpend.js');
+
+async function clearPhase2() {
+  await Promise.all([
+    AIStickyPick.deleteMany({}),
+    AIModel.deleteMany({}),
+    AIPricing.deleteMany({}),
+    AISpend.deleteMany({}),
+  ]);
+}
+
+describe('the auto walk skips what cannot serve the request', () => {
+  afterEach(clearPhase2);
+
+  it('skips a tool-incapable provider\'s row and lets the next free row answer', async () => {
+    // The walk half of the case openaiCompat.test.js used to carry: the
+    // capability skip is unchanged, and under `auto` the next *free row* picks
+    // it up rather than the next provider's default model.
+    enable('cerebras', 'groq');
+    await seedRows([
+      { provider: 'cerebras', modelId: 'llama3.1-8b' },
+      { provider: 'groq', modelId: 'llama-3.3-70b-versatile' },
+    ]);
+
+    const calls = fakeProviderLayer({
+      'groq/llama-3.3-70b-versatile': 'tools ok',
+      'cerebras/llama3.1-8b': 'should never be called with tools',
+    });
+
+    const out = await aiService.callAI('weather?', {
+      appName: 'geekpr',
+      tools: [{ type: 'function', function: { name: 'get_weather', parameters: { type: 'object', properties: {} } } }],
+      messages: [{ role: 'user', content: 'weather?' }],
+    });
+
+    expect(out).toBe('tools ok');
+    expect(calls).toEqual(['groq/llama-3.3-70b-versatile']);
+  });
+});
+
+describe('a pin is a promise for callers that said so, and a preference otherwise', () => {
+  afterEach(clearPhase2);
+
+  it('degrades a cooling pin to the auto walk', async () => {
+    enable('groq', 'cerebras');
+    await AIAppConfig.create({ appName: 'geekpr', tier: 'specific', provider: 'groq', model: 'pinned-but-cooling' });
+    await seedRows([
+      { provider: 'groq', modelId: 'pinned-but-cooling', health: { coolingUntil: new Date(Date.now() + 3600 * 1000) } },
+      { provider: 'cerebras', modelId: 'awake' },
+    ]);
+
+    const calls = fakeProviderLayer({ 'cerebras/awake': 'ok' });
+    await expect(aiService.callAI('hello', { appName: 'geekpr' })).resolves.toBe('ok');
+    expect(calls).toEqual(['cerebras/awake']);
+    expect(aiService.lastProviderInfo.hints).toContain('pin_unavailable');
+  });
+
+  it('keeps a cooling pin when the caller said noFallback', async () => {
+    enable('groq');
+    await seedRows([
+      { provider: 'groq', modelId: 'pinned-but-cooling', health: { coolingUntil: new Date(Date.now() + 3600 * 1000) } },
+    ]);
+
+    const calls = fakeProviderLayer({ 'groq/pinned-but-cooling': 'answered anyway' });
+    // F-22: a caller that said noFallback asked to fail as itself. Turning
+    // that into a different model's answer at 200 is the bug, not the fix.
+    await expect(aiService.callAI('hello', {
+      provider: 'groq', model: 'pinned-but-cooling', noFallback: true, appName: 'geekpr',
+    })).resolves.toBe('answered anyway');
+    expect(calls).toEqual(['groq/pinned-but-cooling']);
+  });
+
+  it('degrades a pin the provider\'s catalog does not list', async () => {
+    enable('groq', 'cerebras');
+    await AIModel.create({ provider: 'groq', modelId: 'a-model-groq-does-serve', name: 'a model groq does serve', isActive: true });
+    await seedRows([{ provider: 'cerebras', modelId: 'awake' }]);
+
+    const calls = fakeProviderLayer({ 'cerebras/awake': 'ok' });
+    await expect(aiService.callAI('hello', {
+      provider: 'groq', model: 'never-existed', appName: 'geekpr',
+    })).resolves.toBe('ok');
+    expect(calls).toEqual(['cerebras/awake']);
+  });
+
+  it('keeps a pin the catalog has no opinion about', async () => {
+    // An empty catalog is not evidence against a caller's pin: the catalog is
+    // observed and incomplete by construction, and refusing every unknown id
+    // would turn a missed discovery run into a total outage.
+    enable('groq');
+    const calls = fakeProviderLayer({ 'groq/unknown-to-us': 'ok' });
+    await expect(aiService.callAI('hello', {
+      provider: 'groq', model: 'unknown-to-us', appName: 'geekpr',
+    })).resolves.toBe('ok');
+    expect(calls).toEqual(['groq/unknown-to-us']);
+  });
+});
+
+describe('sticky picks keep one model per conversation', () => {
+  afterEach(clearPhase2);
+
+  it('records the pick on a sticky row and reuses it next turn', async () => {
+    enable('groq', 'cerebras');
+    await AIAppConfig.create({ appName: 'storygeek', tier: 'auto', sticky: 'per-conversation' });
+    await seedRows([
+      { provider: 'groq', modelId: 'the-gm', health: { lastSuccessAt: new Date() } },
+      { provider: 'cerebras', modelId: 'someone-else', fitness: 'structured' },
+    ]);
+
+    const calls = fakeProviderLayer({ 'groq/the-gm': 'turn one', 'cerebras/someone-else': 'a different voice' });
+    await aiService.callAI('go', { appName: 'storygeek', conversationId: 'story-1' });
+    await new Promise(resolve => setImmediate(resolve));
+
+    const pick = await AIStickyPick.findOne({ key: 'storygeek:story-1' }).lean();
+    expect(pick).toMatchObject({ app: 'storygeek', conversationId: 'story-1' });
+    expect(`${pick.provider}/${pick.modelId}`).toBe(calls[0]);
+
+    // Turn two goes to the stored pick even though the ranking would now
+    // prefer the `structured` cerebras row.
+    aiService.clearCache();
+    const secondCalls = fakeProviderLayer({ 'groq/the-gm': 'turn two', 'cerebras/someone-else': 'a different voice' });
+    await expect(aiService.callAI('again', { appName: 'storygeek', conversationId: 'story-1' })).resolves.toBe('turn two');
+    expect(secondCalls[0]).toBe('groq/the-gm');
+  });
+
+  it('re-picks when the stored pick dies, and files the old one in previous', async () => {
+    enable('groq', 'cerebras');
+    await AIAppConfig.create({ appName: 'storygeek', tier: 'auto', sticky: 'per-conversation' });
+    await AIStickyPick.create({
+      key: 'storygeek:story-2', app: 'storygeek', conversationId: 'story-2',
+      provider: 'groq', modelId: 'retired-gm',
+    });
+    await seedRows([
+      { provider: 'groq', modelId: 'retired-gm' },
+      { provider: 'cerebras', modelId: 'the-new-gm' },
+    ]);
+
+    fakeProviderLayer({
+      'groq/retired-gm': providerError('Groq', 404, { error: { code: 'model_not_found' } }),
+      'cerebras/the-new-gm': 'the story continues',
+    });
+
+    await expect(aiService.callAI('go', { appName: 'storygeek', conversationId: 'story-2' }))
+      .resolves.toBe('the story continues');
+    await new Promise(resolve => setImmediate(resolve));
+
+    const pick = await AIStickyPick.findOne({ key: 'storygeek:story-2' }).lean();
+    expect(`${pick.provider}/${pick.modelId}`).toBe('cerebras/the-new-gm');
+    // This is what Phase 3's needs-attention list reads.
+    expect(pick.previous).toHaveLength(1);
+    expect(pick.previous[0]).toMatchObject({ provider: 'groq', modelId: 'retired-gm', reason: 'http_404' });
+  });
+
+  it('is not sticky without a conversation id, however the row is configured', async () => {
+    enable('groq');
+    await AIAppConfig.create({ appName: 'storygeek', tier: 'auto', sticky: 'per-conversation' });
+    await seedRows([{ provider: 'groq', modelId: 'one-shot' }]);
+
+    fakeProviderLayer({ 'groq/one-shot': 'ok' });
+    await aiService.callAI('go', { appName: 'storygeek' });
+    await new Promise(resolve => setImmediate(resolve));
+    expect(await AIStickyPick.countDocuments({})).toBe(0);
+  });
+});
+
+describe('the paid fallback is behind allowPaid and the governor', () => {
+  afterEach(clearPhase2);
+
+  /** A paid-fallback row, priced per 1,000,000 tokens. */
+  async function seedPaid({ inputPrice, outputPrice }) {
+    await AIModel.create({ provider: 'openrouter', modelId: 'cheap-paid', name: 'Cheap Paid', isActive: true, role: 'paid-fallback' });
+    await AIPricing.create({ provider: 'openrouter', modelId: 'cheap-paid', inputPrice, outputPrice });
+  }
+
+  it('never reaches a paid row when allowPaid is off', async () => {
+    enable('groq', 'openrouter');
+    await AIAppConfig.create({ appName: 'startgeek', tier: 'auto', allowPaid: false });
+    await seedPaid({ inputPrice: 0.1, outputPrice: 0.1 });
+    await seedRows([{ provider: 'groq', modelId: 'dead' }]);
+
+    const calls = fakeProviderLayer({
+      'groq/dead': providerError('Groq', 404, {}),
+      'openrouter/cheap-paid': 'money was spent',
+    });
+
+    await expect(aiService.callAI('hi', { appName: 'startgeek' })).rejects.toThrow();
+    expect(calls).toEqual(['groq/dead']);
+  });
+
+  it('reaches a paid row when allowPaid is on and the estimate fits both caps', async () => {
+    enable('groq', 'openrouter');
+    await AIAppConfig.create({ appName: 'storygeek', tier: 'auto', allowPaid: true });
+    // $0.10 per 1M tokens: a short prompt plus a 4,000-token ceiling is well
+    // under the $0.01 per-call cap.
+    await seedPaid({ inputPrice: 0.1, outputPrice: 0.1 });
+    await seedRows([{ provider: 'groq', modelId: 'dead' }]);
+
+    const calls = fakeProviderLayer({
+      'groq/dead': providerError('Groq', 404, {}),
+      'openrouter/cheap-paid': 'the paid answer',
+    });
+
+    await expect(aiService.callAI('hi', { appName: 'storygeek' })).resolves.toBe('the paid answer');
+    expect(calls).toEqual(['groq/dead', 'openrouter/cheap-paid']);
+  });
+
+  it('skips the paid row when the per-call estimate is over the cap', async () => {
+    enable('groq', 'openrouter');
+    await AIAppConfig.create({ appName: 'storygeek', tier: 'auto', allowPaid: true });
+    // $500 per 1M output tokens × a 4,000-token ceiling = $2.00 a call.
+    await seedPaid({ inputPrice: 500, outputPrice: 500 });
+    await seedRows([{ provider: 'groq', modelId: 'dead' }]);
+
+    const calls = fakeProviderLayer({
+      'groq/dead': providerError('Groq', 404, {}),
+      'openrouter/cheap-paid': 'money was spent',
+    });
+
+    await expect(aiService.callAI('hi', { appName: 'storygeek' })).rejects.toThrow();
+    expect(calls).toEqual(['groq/dead']);
+  });
+
+  it('skips the paid row when today\'s ledger has already used the daily cap', async () => {
+    enable('groq', 'openrouter');
+    await AIAppConfig.create({ appName: 'storygeek', tier: 'auto', allowPaid: true });
+    await seedPaid({ inputPrice: 0.1, outputPrice: 0.1 });
+    await seedRows([{ provider: 'groq', modelId: 'dead' }]);
+    // The default per-day cap is $0.05.
+    await AISpend.create({ day: new Date().toISOString().slice(0, 10), provider: 'openrouter', app: 'storygeek', feature: 'gm', calls: 1, costUsd: 0.05 });
+
+    const calls = fakeProviderLayer({
+      'groq/dead': providerError('Groq', 404, {}),
+      'openrouter/cheap-paid': 'money was spent',
+    });
+
+    await expect(aiService.callAI('hi', { appName: 'storygeek' })).rejects.toThrow();
+    expect(calls).toEqual(['groq/dead']);
+  });
+
+  it('refuses an unpriced paid row rather than treating unknown as free', async () => {
+    enable('groq', 'openrouter');
+    await AIAppConfig.create({ appName: 'storygeek', tier: 'auto', allowPaid: true });
+    await AIModel.create({ provider: 'openrouter', modelId: 'cheap-paid', name: 'Cheap Paid', isActive: true, role: 'paid-fallback' });
+    await seedRows([{ provider: 'groq', modelId: 'dead' }]);
+
+    const calls = fakeProviderLayer({
+      'groq/dead': providerError('Groq', 404, {}),
+      'openrouter/cheap-paid': 'money was spent',
+    });
+
+    await expect(aiService.callAI('hi', { appName: 'storygeek' })).rejects.toThrow();
+    expect(calls).toEqual(['groq/dead']);
+  });
+
+  it('a free signal vetoes allowPaid, whatever the row says', async () => {
+    enable('groq', 'openrouter');
+    await AIAppConfig.create({ appName: 'storygeek', tier: 'auto', allowPaid: true });
+    await seedPaid({ inputPrice: 0.1, outputPrice: 0.1 });
+    await seedRows([{ provider: 'groq', modelId: 'dead' }]);
+
+    const calls = fakeProviderLayer({
+      'groq/dead': providerError('Groq', 404, {}),
+      'openrouter/cheap-paid': 'money was spent',
+    });
+
+    // A caller that asked for the free tier by name did not ask to be billed.
+    await expect(aiService.callAI('hi', { appName: 'storygeek', freeOnly: true })).rejects.toThrow();
+    expect(calls).toEqual(['groq/dead']);
   });
 });

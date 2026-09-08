@@ -82,13 +82,26 @@ export const UPSTREAM_FAILURES = {
   }
 };
 
-/** The HTTP status a provider answered with, if the failure carries one. */
+/**
+ * The HTTP status a provider answered with, if the failure carries one.
+ *
+ * Read in order of trust:
+ *
+ *   1. `error.response.status` — a raw axios failure, from code that talks to
+ *      a provider without going through an adapter.
+ *   2. `error.status` — an `AdapterError`, which is what every provider
+ *      adapter has thrown since Phase 2. A number in a field, which is what
+ *      this function always wanted.
+ *   3. The regex, kept for anything still throwing a string. `<Provider> API
+ *      error (<status>): <body>` was the wire format between the adapters and
+ *      this function for a year; the sentence is gone from the adapters, but
+ *      test doubles, older log-shaped errors and any code path that builds
+ *      one by hand still parse correctly here. None of the string is ever
+ *      returned to a caller.
+ */
 export function upstreamStatusOf(error) {
   const direct = error?.response?.status ?? error?.status;
   if (Number.isInteger(direct) && direct >= 400) return direct;
-  // Every provider adapter that has a response rethrows as
-  // `<Provider> API error (<status>): <body>`; that prefix is the only part of
-  // the string this function reads, and none of it is returned to the caller.
   const match = /API error \((\d{3})\)/.exec(String(error?.message || ''));
   return match ? Number(match[1]) : null;
 }
@@ -110,6 +123,15 @@ export function classifyFailure(error) {
     if (status >= 400 && status < 500) return 'invalid_request';
     return 'upstream_error';
   }
+
+  // An AdapterError that never got a status still says what happened, in the
+  // one vocabulary the probe and the free-tier health also speak. Read before
+  // the message patterns below, because a `code` is a fact and a regex over
+  // 80 characters of a vendor's prose is a guess.
+  const code = typeof error?.code === 'string' ? error.code : '';
+  if (code === 'timeout') return 'timeout';
+  if (code === 'rate_limited') return 'rate_limited';
+  if (code === 'network') return 'upstream_error';
 
   // aiService.parseJSONResponse's own words, for the one caller that asks for
   // JSON (`/api/ai/parse-json`). The model answered, and answered with

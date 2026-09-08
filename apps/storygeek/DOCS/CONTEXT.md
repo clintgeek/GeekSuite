@@ -219,14 +219,20 @@ backend `npx eslint .` 3 → 3; `npm run build` green; mobile harness
   `ai:director` permission on `AI_GEEK_API_KEY` (Q1's pending restart); if the
   key lacks it — or basegeek is briefly down, or the request times out — the
   rejection propagated out of `generateStoryResponse` as "Failed to generate
-  story response" and every turn of every story failed. `getFreeProviderModels`
-  now distinguishes `[]` (an answer — keep the last-resort walk) from `null`
-  (an outage — fall back to the pinned GM model, which is an operator choice
-  and is the free model in the deployed config), negative-caches the failure
-  for 60s so a broken director isn't re-dialled per turn, and prefers a stale
-  cached list over nothing. It deliberately does **not** fall back to the
-  caller's explicit pick: free-only exists to stop unintended spend, and with
-  the list unavailable there is no way to tell whether their pick is free.
+  story response" and every turn of every story failed. The 2026-09-05 fix
+  distinguished `[]` (an answer) from `null` (an outage) and negative-cached
+  the failure.
+
+  **Superseded 2026-09-07 (Phase 2).** The question was removed rather than
+  answered better: StoryGeek no longer asks which models are free, because it
+  no longer chooses one. `resolveGMModel`, `getFreeProviderModels`,
+  `getDirectorModels` and `recommendProviderModel` are gone, `ai:director` is
+  no longer a permission StoryGeek's key needs, and routing happens behind
+  aiGeek's feature door (`POST /api/ai/feature`, `feature: 'gm' | 'aux'`,
+  `conversationId: <storyId>`). See DOCS/CONTINUITY.md, "Model choice
+  (aiService)". A turn that still cannot be served now answers **200**
+  `{ type: 'ai_unavailable', reason, message }` in aiGeek's own words instead
+  of a generic 500.
 - **P1 `PUT /api/characters/story/:storyId/character/:characterName` destroyed
   the character.** It merged with `{ ...story.characters[idx], ...req.body }`,
   and a Mongoose subdocument's own enumerable properties are its internals

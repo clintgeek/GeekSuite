@@ -330,8 +330,9 @@ function StoryPlay() {
     setLoading(true);
 
     try {
-      // Only send provider/model when the user explicitly picked one —
-      // otherwise the backend's pinned GM model is used.
+      // Only send provider/model when the player pinned one in Settings —
+      // otherwise this is Automatic, and aiGeek's sticky pick for this story
+      // keeps the Game Master's voice consistent on its own.
       const response = await api.post(`/stories/${storyId}/continue`, {
         userInput: input,
         ...(selectedProvider && selectedModelId
@@ -342,7 +343,34 @@ function StoryPlay() {
       }, { timeout: LONG_REQUEST_TIMEOUT_MS });
       const data = response.data;
 
+      // The narrator could not serve this turn. The backend answers **200**
+      // with its own words and saved nothing — no event, no turn increment —
+      // so take the phantom user bubble back and hand the player their words
+      // instead of making them retype. Same treatment as the catch below,
+      // because the outcome is the same; only the transport differs.
+      if (data.type === 'ai_unavailable') {
+        setMessages(prev => (
+          prev.length > 0 && prev[prev.length - 1].type === 'user'
+            ? prev.slice(0, -1)
+            : prev
+        ));
+        setUserInput((current) => (current ? current : input));
+        setMessages(prev => [...prev, {
+          type: 'system',
+          content: data.message || 'The narrator is not answering right now. Nothing was lost — try again.',
+          timestamp: new Date()
+        }]);
+        return;
+      }
+
       if (data.type) { handleSpecialResponse(data); return; }
+
+      // A pin the Oracle could not honour: the turn happened on the automatic
+      // pick, and the player is told once rather than left wondering why the
+      // voice changed.
+      if (data.notice) {
+        setMessages(prev => [...prev, { type: 'system', content: data.notice, timestamp: new Date() }]);
+      }
 
       setMessages(prev => [...prev, {
         type: 'ai', content: data.aiResponse, timestamp: new Date(),
@@ -398,6 +426,7 @@ function StoryPlay() {
         break;
       case 'scene_reset':
         systemMsg(data.message);
+        if (data.notice) systemMsg(data.notice);
         if (data.aiResponse) setMessages(prev => [...prev, { type: 'ai', content: data.aiResponse, timestamp: new Date(), diceResults: [] }]);
         break;
       case 'story_ended':

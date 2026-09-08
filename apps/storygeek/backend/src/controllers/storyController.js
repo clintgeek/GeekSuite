@@ -16,6 +16,33 @@ const isStoryOwner = (story, userId) => {
   return story.userId?.toString() === userId;
 };
 
+/**
+ * `true` when this error is aiGeek saying "no model could serve that".
+ *
+ * Duck-typed on `.code` rather than `instanceof AIUnavailableError`, because a
+ * named import from `aiService.js` would break every test that replaces that
+ * module with a `{ default: … }` double (diagnosticRoutesAuth,
+ * storiesValidation). The code is the contract.
+ */
+const isAIUnavailable = (error) => error?.code === 'AI_UNAVAILABLE';
+
+/**
+ * The player-facing answer to an unavailable narrator: **200**, with aiGeek's
+ * own words and the reason it gave.
+ *
+ * Not a 500, and not "Failed to generate story response" — that string
+ * swallowed every cause this controller ever had, so a rate limit, a retired
+ * model and a missing key all read identically to the player and to whoever
+ * was reading the logs. Nothing was persisted on this path (the story is only
+ * saved at the end of a successful turn), so the player's words are still
+ * theirs to send again.
+ */
+const sendAIUnavailable = (res, error) => res.status(200).json({
+  type: 'ai_unavailable',
+  reason: error.reason || 'unavailable',
+  message: error.message
+});
+
 const requireAuth = (req, res) => {
   const userId = getAuthenticatedUserId(req);
   if (!userId) {
@@ -51,11 +78,21 @@ class StoryController {
       const authHeader = req.headers['authorization'];
       const userToken = authHeader && authHeader.split(' ')[1];
 
-      const questionsResponse = await aiService.generateStoryResponse(
-        { title: title || 'Untitled', genre: genre || 'Fantasy' },
-        questionsPrompt, null, userToken,
-        { provider: req.body.provider, model: req.body.model }
-      );
+      let questionsResponse;
+      try {
+        questionsResponse = await aiService.generateStoryResponse(
+          // No story document yet, so no conversation id: the setup questions
+          // are the one GM call with nothing to be sticky about.
+          { title: title || 'Untitled', genre: genre || 'Fantasy' },
+          questionsPrompt, null, userToken,
+          { provider: req.body.provider, model: req.body.model }
+        );
+      } catch (error) {
+        // Nothing has been written yet — no story, no events. Say why and let
+        // them try again rather than creating a half-story.
+        if (isAIUnavailable(error)) return sendAIUnavailable(res, error);
+        throw error;
+      }
 
       const story = new Story({
         userId: authenticatedUserId,
@@ -73,7 +110,9 @@ class StoryController {
       res.json({ storyId: story._id, aiResponse: questionsResponse.content, setupQuestions: questionsResponse.content, status: 'setup', needsClarification: true });
     } catch (error) {
       console.error('Error starting story:', error);
-      res.status(500).json({ error: 'Failed to start story' });
+      // The cause, not a fixed string. A 500 here is now only ever a real
+      // fault (a failed save, a bug), and the message says which.
+      res.status(500).json({ error: 'Failed to start story', message: error.message });
     }
   }
 
@@ -176,12 +215,18 @@ class StoryController {
           story.worldState.currentSituation = 'The situation has shifted. You find yourself in a new moment, the previous tension having dissipated.';
           const authHeader = req.headers['authorization'];
           const userToken = authHeader && authHeader.split(' ')[1];
-          const aiResponse = await aiService.generateStoryResponse(story, 'Continue the story from this new situation', null, userToken, { provider: req.body.provider, model: req.body.model });
+          let aiResponse;
+          try {
+            aiResponse = await aiService.generateStoryResponse(story, 'Continue the story from this new situation', null, userToken, { provider: req.body.provider, model: req.body.model });
+          } catch (error) {
+            if (isAIUnavailable(error)) return sendAIUnavailable(res, error);
+            throw error;
+          }
           story.events.push({ type: 'narrative', description: aiResponse.content, timestamp: new Date(), diceResults: [] });
           story.stats.totalInteractions++;
           story.stats.lastActive = new Date();
           await story.save();
-          return res.json({ type: 'scene_reset', message: 'Scene has been reset. The situation has changed.', aiResponse: aiResponse.content, story });
+          return res.json({ type: 'scene_reset', message: 'Scene has been reset. The situation has changed.', aiResponse: aiResponse.content, notice: aiResponse.notice || null, story });
         }
 
         return res.json({ type: 'error', message: 'Unknown command. Available commands: /recall, /char, /info, /checkpoint, /back, /timeout, /end' });
@@ -208,7 +253,15 @@ class StoryController {
             `;
             const authHeader = req.headers['authorization'];
             const userToken = authHeader && authHeader.split(' ')[1];
-            const aiResponse = await aiService.generateStoryResponse(story, openingPrompt, null, userToken, { provider: req.body.provider, model: req.body.model });
+            let aiResponse;
+            try {
+              aiResponse = await aiService.generateStoryResponse(story, openingPrompt, null, userToken, { provider: req.body.provider, model: req.body.model });
+            } catch (aiError) {
+              // The story stays in `setup` with its questions intact, so the
+              // player answers again rather than losing the story.
+              if (isAIUnavailable(aiError)) return sendAIUnavailable(res, aiError);
+              throw aiError;
+            }
             story.status = 'active';
             story.worldState.currentSituation = 'Story has begun';
             story.worldState.turnNumber = 1;
@@ -233,13 +286,14 @@ class StoryController {
             }
 
             await story.save();
-            return res.json({ aiResponse: aiResponse.content, status: 'active', storyStarted: true });
+            return res.json({ aiResponse: aiResponse.content, status: 'active', storyStarted: true, notice: aiResponse.notice || null });
           } else {
             return res.json({ type: 'error', message: 'Setup phase error. Please try creating a new story.' });
           }
         } catch (error) {
           console.error('Error in setup phase:', error);
-          return res.status(500).json({ error: 'Failed to process setup' });
+          if (isAIUnavailable(error)) return sendAIUnavailable(res, error);
+          return res.status(500).json({ error: 'Failed to process setup', message: error.message });
         }
       }
 
@@ -269,11 +323,20 @@ class StoryController {
         canonAlerts, userToken
       });
 
-      const aiResponse = await aiService.generateStoryResponse(
-        story, userInput, null, userToken,
-        { provider: req.body.provider, model: req.body.model },
-        prompt
-      );
+      let aiResponse;
+      try {
+        aiResponse = await aiService.generateStoryResponse(
+          story, userInput, null, userToken,
+          { provider: req.body.provider, model: req.body.model },
+          prompt
+        );
+      } catch (error) {
+        // The player's event and the turn increment were pushed onto the
+        // in-memory document above but `story.save()` has not run, so nothing
+        // is persisted — returning here leaves the record exactly as it was.
+        if (isAIUnavailable(error)) return sendAIUnavailable(res, error);
+        throw error;
+      }
 
       if (aiResponse.diceResult) {
         story.diceResults.push(aiResponse.diceResult);
@@ -322,7 +385,11 @@ class StoryController {
         diceResult: aiResponse.diceResult || null,
         diceMeta: aiResponse.diceMeta || null,
         turnNumber: turn,
-        stateChanges: { applied: commitReport.applied, conflicts: commitReport.conflicts.length }
+        stateChanges: { applied: commitReport.applied, conflicts: commitReport.conflicts.length },
+        // Set when the player's chosen model could not be honoured and aiGeek
+        // used the automatic pick instead (`provenance.hints` carried
+        // `pin_unavailable`). One line of notice; the turn went ahead.
+        notice: aiResponse.notice || null
       };
 
       // Full per-turn diagnostics for playtests: which model actually served
@@ -358,7 +425,10 @@ class StoryController {
       res.json(payload);
     } catch (error) {
       console.error('Error continuing story:', error);
-      res.status(500).json({ error: 'Failed to continue story' });
+      // Belt and braces: the three AI call sites above catch this themselves,
+      // and this is the net for anything they miss.
+      if (isAIUnavailable(error)) return sendAIUnavailable(res, error);
+      res.status(500).json({ error: 'Failed to continue story', message: error.message });
     }
   }
 
@@ -403,9 +473,25 @@ class StoryController {
       const authHeader = req.headers['authorization'];
       const userToken = authHeader && authHeader.split(' ')[1];
       const aiResponse = await aiService.generateStoryResponse(testStory, 'test', null, userToken, {}, prompt);
-      res.json({ status: 'All tests passed', storyFound: true, contextLength: prompt.length, aiResponseLength: aiResponse.content.length });
+      res.json({
+        status: 'All tests passed',
+        storyFound: true,
+        contextLength: prompt.length,
+        aiResponseLength: aiResponse.content.length,
+        modelUsed: aiResponse.modelUsed || null
+      });
     } catch (error) {
       console.error('Test endpoint error:', error);
+      // A diagnostic that cannot tell "the model declined" from "the pipeline
+      // is broken" is not much of a diagnostic.
+      if (isAIUnavailable(error)) {
+        return res.status(200).json({
+          status: 'AI unavailable',
+          storyFound: true,
+          reason: error.reason,
+          message: error.message
+        });
+      }
       res.status(500).json({ error: 'Test failed', message: error.message });
     }
   }

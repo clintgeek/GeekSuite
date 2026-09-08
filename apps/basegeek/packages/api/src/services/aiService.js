@@ -2,10 +2,19 @@
 // DISABLED: Causing Docker issues with onnxruntime-node dependency
 // import '../wasm-backend-init.js';
 
-import axios from 'axios';
 import logger from '../lib/logger.js';
 import AIConfig from '../models/AIConfig.js';
-import { DEFAULT_MODELS, FALLBACK_ORDER, ROTATION_MODEL_OVERRIDES, keyHintFor } from '../config/aiProviders.js';
+import {
+  FALLBACK_ORDER,
+  ROTATION_MODEL_OVERRIDES,
+  buildProviderConnections,
+  keyHintFor
+} from '../config/aiProviders.js';
+// Every provider dialect lives behind this one call (Phase 2). aiService owns
+// the credential, the model and the retry policy; the adapters own the wire
+// format and throw `AdapterError {provider, status, code, message}` — never a
+// sentence with the status inside it and never the provider's body (F-23).
+import { callAdapter } from './ai/adapters/index.js';
 import AIModel from '../models/AIModel.js';
 import AIPricing from '../models/AIPricing.js';
 import aiUsageService from './aiUsageService.js';
@@ -19,6 +28,18 @@ import AIFreeTier, {
 import AIAppConfig from '../models/AIAppConfig.js';
 import AIUsage from '../models/AIUsage.js';
 import AISpend, { spendDay } from '../models/AISpend.js';
+import AIStickyPick, { stickyKey } from '../models/AIStickyPick.js';
+// The routing decision is pure and lives next door (Phase 2). aiService owns
+// the I/O the decision needs — is this row cooling, what has today cost — and
+// nothing else about where a request goes.
+import {
+  resolveRoute,
+  degradePin,
+  explicitPinOf,
+  paidCaps,
+  paidBudgetVerdict,
+  estimatePaidCostUsd
+} from './aiRoute.js';
 import RotationManager from './rotationManager.js';
 import aiModelCapabilitiesService from './aiModelCapabilitiesService.js';
 // The catalog module owns everything this service knows about the outside
@@ -38,9 +59,14 @@ import crypto from 'crypto';
 import { countTextTokens, countMessageTokens } from './tokenCounter.js';
 
 /**
- * How many free-tier rows one `freeOnly` call may try before giving up (R130).
+ * How many free-tier rows one `auto` call may try before giving up (R130).
  * Three is the whole budget: StartGeek's Ask lives inside a 3 s GlanceIntent
  * timeout, so a fourth attempt is a timeout dressed as a retry.
+ *
+ * Phase 2 made this the budget for *every* auto caller, not only the ones
+ * that said `freeOnly` — there is one walk now. The governed paid attempt
+ * sits outside the count: it happens at most once, after the free rows, and
+ * only with `allowPaid` and the budget's blessing.
  */
 const MAX_FREE_TIER_ATTEMPTS = 3;
 
@@ -99,43 +125,12 @@ function normalizeMessages(messages) {
   }));
 }
 
-/**
- * The OpenAI sampling parameters, in OpenAI's own spelling, ready to spread
- * into the body of any OpenAI-shaped provider (groq, cerebras, together,
- * openrouter, llmgateway — all of which take these verbatim).
- *
- * FINDING F-09: these five used to be read off the request at the proxy door
- * and then dropped — `callAI` never destructured them and `callProvider` built
- * its downstream config from a whitelist that did not include them. They
- * travelled exactly one function call and died, at HTTP 200, with no hint to
- * the caller that `stop: ["\n\n"]` had been ignored.
- *
- * Absent values are omitted rather than sent as null, so a provider never has
- * to have an opinion about a key the caller never set.
- */
-function openAISamplingFields({ topP, stop, seed, presencePenalty, frequencyPenalty } = {}) {
-  return {
-    ...(topP != null && { top_p: topP }),
-    ...(stop != null && { stop }),
-    ...(seed != null && { seed }),
-    ...(presencePenalty != null && { presence_penalty: presencePenalty }),
-    ...(frequencyPenalty != null && { frequency_penalty: frequencyPenalty })
-  };
-}
-
-/**
- * OpenAI's `stop` (string | string[] | null) as the array form Gemini
- * (`generationConfig.stopSequences`) and Cohere (`stop_sequences`) want.
- * Returns null when there is nothing worth sending.
- */
-function stopSequencesFrom(stop) {
-  if (typeof stop === 'string') return stop ? [stop] : null;
-  if (Array.isArray(stop)) {
-    const list = stop.filter(s => typeof s === 'string' && s.length > 0);
-    return list.length > 0 ? list : null;
-  }
-  return null;
-}
+// The two sampling translators that used to live here — `openAISamplingFields`
+// (F-09, the five knobs the proxy accepted and this service dropped) and
+// `stopSequencesFrom` (OpenAI's `stop` as the array form Gemini, Cohere and
+// Ollama want) — moved to `ai/adapters/openaiCompatible.js` in Phase 2, beside
+// the bodies they are spread into. They were only ever called by the ten
+// `call<Provider>` methods that are now five adapter files.
 
 // Cloud-based summarization using existing free AI providers
 
@@ -184,9 +179,15 @@ class AIService {
     // the defaults below come from, so the two cannot drift apart.
     this.rotationProviderOverrides = ROTATION_MODEL_OVERRIDES;
 
-    // Each row below is a *connection*: base URL, credential, default model,
-    // and the two adapter facts (token ceiling, context ceiling). What it no
-    // longer carries is a price.
+    // The live *connection* per provider: base URL, credential, default model,
+    // the two ceilings, and whether it is enabled. Built from the roster
+    // (`config/aiProviders.js`) rather than typed here — until Phase 2 this was
+    // a second hand-kept table of the same nine rows, and the roster test
+    // existed precisely because the two could disagree about a base URL or a
+    // default model. The adapter facts (shape, headers, dropped knobs, tool
+    // forwarding) are *not* copied in: they stay on the descriptor, which the
+    // registry merges at call time, so nothing a database row says can
+    // overwrite one.
     //
     // `costPer1kTokens` lived here until Phase 1 (2026-09-07): one blended
     // dollars-per-1,000-tokens rate per provider, in a different unit from the
@@ -195,99 +196,7 @@ class AIService {
     // input and output. Cost now comes from the response (OpenRouter reports
     // `usage.cost` in dollars, exact) or from AIPricing per model, and lands in
     // the `AISpend` ledger — see `updateStats` and `resolveCostUsd`.
-    this.providers = {
-      groq: {
-        name: 'Groq Llama 3.3 70B',
-        apiKey: '',
-        baseURL: 'https://api.groq.com/openai/v1',
-        model: DEFAULT_MODELS.groq,
-        maxTokens: 8000,
-        maxContextTokens: 32768, // 32K context limit
-        temperature: 0.7,
-        enabled: false
-      },
-      gemini: {
-        name: 'Gemini 2.5 Flash',
-        apiKey: '',
-        baseURL: 'https://generativelanguage.googleapis.com/v1beta',
-        // Stable GA id — the -exp preview ids get retired without notice
-        model: DEFAULT_MODELS.gemini,
-        maxTokens: 8000,
-        maxContextTokens: 1000000, // 1M token context limit
-        temperature: 0.7,
-        enabled: false
-      },
-      together: {
-        name: 'Together Llama 3.3 70B Turbo Free',
-        apiKey: '',
-        baseURL: 'https://api.together.xyz/v1',
-        model: DEFAULT_MODELS.together,
-        maxTokens: 8000,
-        maxContextTokens: 131072, // 128K context limit
-        temperature: 0.7,
-        enabled: false
-      },
-      cohere: {
-        name: 'Cohere Command R+',
-        apiKey: '',
-        baseURL: 'https://api.cohere.ai/v1',
-        model: DEFAULT_MODELS.cohere,
-        maxTokens: 4000,
-        temperature: 0.7,
-        enabled: false
-      },
-      openrouter: {
-        name: 'OpenRouter Llama 3.1 70B Free',
-        apiKey: '',
-        baseURL: 'https://openrouter.ai/api/v1',
-        model: DEFAULT_MODELS.openrouter,
-        maxTokens: 8000,
-        maxContextTokens: 131072, // 128K context limit
-        temperature: 0.7,
-        enabled: false
-      },
-      cerebras: {
-        name: 'Cerebras Qwen 3 235B Instruct',
-        apiKey: '',
-        baseURL: 'https://api.cerebras.ai/v1',
-        model: DEFAULT_MODELS.cerebras,
-        maxTokens: 8000,
-        maxContextTokens: 65536, // 64K context limit
-        temperature: 0.7,
-        enabled: false
-      },
-      cloudflare: {
-        name: 'Cloudflare Llama 3.3 70B FP8 Fast',
-        apiKey: '',
-        baseURL: 'https://api.cloudflare.com/client/v4/accounts',
-        accountId: '', // Cloudflare account ID
-        model: DEFAULT_MODELS.cloudflare,
-        maxTokens: 8000,
-        maxContextTokens: 131072, // 128K context limit
-        temperature: 0.7,
-        enabled: false,
-        dailyNeuronLimit: 10000
-      },
-      ollama: {
-        name: 'Ollama Cloud Qwen3 Coder 480B',
-        apiKey: '',
-        baseURL: 'https://ollama.com/api',
-        model: DEFAULT_MODELS.ollama,
-        maxTokens: 8000,
-        temperature: 0.7,
-        enabled: false
-      },
-      llmgateway: {
-        name: 'LLM Gateway Llama 4 Maverick',
-        apiKey: '',
-        baseURL: 'https://api.llmgateway.io/v1',
-        model: DEFAULT_MODELS.llmgateway,
-        maxTokens: 8000,
-        maxContextTokens: 1000000, // 1M context limit
-        temperature: 0.7,
-        enabled: false
-      },
-    };
+    this.providers = buildProviderConnections();
 
     this.currentProvider = 'groq';
     this.fallbackOrder = [...FALLBACK_ORDER];
@@ -800,34 +709,32 @@ class AIService {
       const providerConfig = this.providers[summarizationProvider];
       const targetChars = Math.floor(targetTokens / 0.75);
 
-      // Call the AI provider to summarize
-      const response = await axios.post(
-        `${providerConfig.baseURL}/chat/completions`,
-        {
-          model: providerConfig.model,
-          messages: [
-            {
-              role: 'system',
-              content: `You are a text summarization assistant. Summarize the following text concisely while preserving key information. Target length: approximately ${targetChars} characters.`
-            },
-            {
-              role: 'user',
-              content: text
-            }
-          ],
-          max_tokens: Math.min(2000, targetTokens),
-          temperature: 0.3 // Low temperature for consistent summarization
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${providerConfig.apiKey}`
+      // Call the AI provider to summarize, through the same adapter a real
+      // call takes. This was a hand-rolled `axios.post` to
+      // `{baseURL}/chat/completions` until Phase 2 — the eleventh copy of the
+      // OpenAI-compatible request, and the one that would have kept working
+      // after the ten adapters were replaced, quietly, with its own headers
+      // and its own error handling. The three candidates above are all
+      // `shape: 'openai'` rows; if a future candidate is not, the registry
+      // will speak its dialect and this code will not have to know.
+      const result = (await callAdapter(summarizationProvider, providerConfig, {
+        messages: [
+          {
+            role: 'system',
+            content: `You are a text summarization assistant. Summarize the following text concisely while preserving key information. Target length: approximately ${targetChars} characters.`
           },
-          timeout: 10000 // 10 second timeout
-        }
-      );
-
-      const result = response.data.choices[0].message.content;
+          {
+            role: 'user',
+            content: text
+          }
+        ],
+        model: providerConfig.model,
+        maxTokens: Math.min(2000, targetTokens),
+        temperature: 0.3, // Low temperature for consistent summarization
+        // A summarization is a step on the way to the *real* call, so it gets
+        // a tenth of the adapter's patience: 10 s, as it always had.
+        timeoutMs: 10000
+      })).content;
       const resultTokens = this.estimateTokens(result);
 
       logger.info(`✅ Summarized in ${Date.now() - startTime}ms using ${summarizationProvider}: ${currentTokens} → ${resultTokens} tokens (${Math.round((1 - resultTokens/currentTokens) * 100)}% reduction)`);
@@ -1030,8 +937,10 @@ class AIService {
    * This is row-level and orthogonal to two things that already existed and
    * stay untouched:
    *   - `rotationManager.markProviderCooling` / `isCooling` — provider-level,
-   *     minutes long, consulted only when `autoRotate` is on (the free path
-   *     sets it off, deliberately: it has already chosen).
+   *     minutes long. It used to gate the all-provider rotation walk; with
+   *     that walk gone (Phase 2) it is written on every 429 and read by
+   *     `getServiceStats().rotation` and `getPriorityList`'s ordering, which
+   *     is the honest scope for a provider-level signal in a row-level world.
    *   - `markRateLimited` — per-provider 429 handling, also unchanged. A 429 is
    *     not a hard failure here; a retired model is.
    *
@@ -1262,7 +1171,412 @@ class AIService {
   }
 
   /**
-   * Generic AI call method that tries providers in fallback order
+   * The app's routing row, with its `lastSeen` touched and a default row
+   * created for an app nobody has configured yet.
+   *
+   * Every `auto` call reads this now, not only the ones that said
+   * `useAppConfig` — the row is where `allowPaid`, `sticky` and the token
+   * defaults live, and "nothing at all" is `auto` reading the app's row per
+   * DOCS/AIGEEK_FRONT_DOOR.md §1. A pin skips it (see `callAI`), so the extra
+   * query is one indexed `findOne` on the path that was already doing it for
+   * the majority of callers.
+   *
+   * Auto-discovery writes the *normalized* id, so the collection stops growing
+   * a row per spelling, and writes `tier: 'auto'` — the legacy default was
+   * `free`, which is read as `auto` anyway but leaves a row that lies about
+   * what it does.
+   *
+   * Never throws: a routing row we cannot read is a reason to fall back to
+   * plain `auto`, not a reason to fail the call.
+   */
+  async routingRowFor(appId) {
+    try {
+      const row = await this.findAppConfig(appId);
+      if (row) {
+        row.lastSeen = new Date();
+        row.save().catch(() => {}); // fire-and-forget
+        return row;
+      }
+      AIAppConfig.findOneAndUpdate(
+        { appName: appId },
+        { appName: appId, tier: 'auto', autoDiscovered: true, lastSeen: new Date() },
+        { upsert: true, new: true }
+      ).catch(() => {});
+      logger.info(`[Route] ${appId} → auto-discovered, defaulting to auto`);
+      return null;
+    } catch (error) {
+      logger.error({ err: error, appId }, '[Route] failed to resolve the routing row');
+      return null;
+    }
+  }
+
+  /**
+   * Can this pin actually serve a request? Asked only of a pin that did *not*
+   * say `noFallback` — §1: a pin is a promise for callers that said so, and a
+   * preference for everyone else.
+   *
+   * "Absent from the catalog" is read narrowly and deliberately. A model id we
+   * have simply never heard of is *attempted*: the catalog is observed, it is
+   * incomplete by construction (a provider we hold no key for lists nothing),
+   * and refusing every unknown id would turn an empty catalog into a total
+   * outage. What counts as evidence against a pin is evidence:
+   *
+   *   - the provider has no key, or is disabled — nothing to call;
+   *   - an `AIFreeTier` row for this exact model that is cooling (R130);
+   *   - an `AIModel` row for this exact model marked `isActive: false`, which
+   *     is what discovery writes when a vendor stops listing it;
+   *   - the provider has an active catalog and this id is not in it.
+   *
+   * @returns {Promise<{ok: boolean, reason: string|null}>}
+   */
+  async pinIsUsable(provider, modelId) {
+    const providerConfig = this.providers[provider];
+    if (!providerConfig || !providerConfig.apiKey || providerConfig.enabled === false) {
+      return { ok: false, reason: 'provider_unavailable' };
+    }
+    // A pin that named no model rides the provider's default, which is a
+    // roster constant rather than a catalog row — there is nothing to check.
+    if (!modelId) return { ok: true, reason: null };
+
+    try {
+      const [freeRow, modelRow] = await Promise.all([
+        AIFreeTier.findOne({ provider, modelId }).lean(),
+        AIModel.findOne({ provider, modelId }).lean()
+      ]);
+
+      if (freeRow) {
+        const health = this.getFreeTierHealth(provider, modelId, freeRow.health);
+        if (isFreeTierCooling(health)) return { ok: false, reason: 'pin_cooling' };
+      }
+      if (modelRow && modelRow.isActive === false) {
+        return { ok: false, reason: 'pin_retired' };
+      }
+      if (!modelRow) {
+        // Only actionable when we demonstrably *have* a catalog for this
+        // provider. No catalog means no opinion.
+        const hasCatalog = await AIModel.exists({ provider, isActive: true });
+        if (hasCatalog) return { ok: false, reason: 'pin_absent' };
+      }
+      return { ok: true, reason: null };
+    } catch (error) {
+      // A catalog we cannot read is not evidence against the caller's pin.
+      logger.debug({ err: error, provider, modelId }, '[Route] pin check failed — keeping the pin');
+      return { ok: true, reason: null };
+    }
+  }
+
+  /**
+   * A pin is one attempt at one model. `model: null` means the provider's own
+   * default, which is what `aiProviders.js` keeps `defaultModel` for now that
+   * the rotation no longer walks it (§2).
+   */
+  planPinAttempt(route) {
+    const modelId = route.model || this.providers[route.provider]?.model || null;
+    return {
+      attempts: [{ provider: route.provider, modelId, freeRow: null, paid: false, sticky: false }],
+      hints: []
+    };
+  }
+
+  /**
+   * The `auto` walk, as a plan (§2): sticky pick, then health-ranked free
+   * rows, then — if the row permits and the governor agrees — one paid
+   * fallback attempt.
+   *
+   * This is now the walk for *every* auto caller, not only `freeOnly`. What it
+   * replaced was the "generic provider walk": every provider in
+   * `fallbackOrder`, each called with *its own default model*. That was the
+   * right answer for a caller that asked for "an answer" and the wrong one for
+   * everybody, because it answered — and billed — a request for one app's
+   * routing row with whichever vendor's default happened to reply first
+   * (R130, 2026-09-06: StartGeek's Ask fell through groq 404 → cerebras 401 →
+   * together 400 → openrouter 404, well past its 3 s budget, and nothing
+   * remembered any of it). A free-tier caller retries inside the free tier;
+   * an auto caller now does the same, and money is a separate, gated step.
+   *
+   * @param {import('./aiRoute.js').Route} route
+   * @param {{appId: string}} ctx
+   */
+  async planAutoAttempts(route, { appId } = {}) {
+    const limit = route.singleAttempt ? 1 : MAX_FREE_TIER_ATTEMPTS;
+    const hints = [];
+    const attempts = [];
+
+    let live = [];
+    let cooling = [];
+    try {
+      ({ live, cooling } = await this.selectFreeTierCandidates());
+    } catch (freeError) {
+      logger.error({ err: freeError }, '[Auto] Failed to query free tier');
+    }
+
+    let chosen = live;
+    if (chosen.length === 0 && cooling.length > 0) {
+      // Everything is asleep. Answering nothing is worse than one attempt at
+      // whichever row wakes soonest, so the free tier is never a total outage
+      // just because the probe marked a batch of rows dead.
+      logger.warn(
+        { coolingRows: cooling.length },
+        '[Auto] every free-tier row is cooling — trying the one closest to waking'
+      );
+      chosen = cooling.slice(0, 1);
+    }
+
+    // ── 1. the sticky pick ────────────────────────────────────────────────
+    // Attempt one, ahead of the fitness ranking, because the point of a
+    // sticky row is that it does not change while the conversation is alive.
+    // It has to be a row selection already considers live: a stored pick that
+    // is cooling, no longer free, or no longer in the catalog is not a voice
+    // worth keeping.
+    let stickyCandidate = null;
+    let stored = null;
+    if (route.sticky) {
+      stored = await AIStickyPick.findOne({ key: route.sticky.key }).lean().catch(() => null);
+      if (stored) {
+        stickyCandidate = chosen.find(
+          c => c.provider === stored.provider && c.modelId === stored.modelId
+        ) || null;
+        if (stickyCandidate) {
+          hints.push('sticky_hit');
+          chosen = [stickyCandidate, ...chosen.filter(c => c !== stickyCandidate)];
+        } else if (stored.paid && route.allowPaid) {
+          // A paid sticky pick is not in the free candidate list at all. It
+          // still goes first, and still through the governor at dispatch.
+          hints.push('sticky_hit_paid');
+          attempts.push({
+            provider: stored.provider,
+            modelId: stored.modelId,
+            freeRow: null,
+            paid: true,
+            sticky: true
+          });
+        } else {
+          // The pick has died, or `allowPaid` was switched off under it. The
+          // ordinary walk re-picks and `callAI` files the old one in
+          // `previous` when the replacement answers.
+          hints.push('sticky_stale');
+        }
+      }
+    }
+
+    // ── 2. the free rows ──────────────────────────────────────────────────
+    for (const candidate of this.planFreeTierAttempts(chosen, Math.max(0, limit - attempts.length))) {
+      attempts.push({
+        provider: candidate.provider,
+        modelId: candidate.modelId,
+        freeRow: candidate,
+        paid: false,
+        sticky: !!(stickyCandidate && candidate === stickyCandidate)
+      });
+    }
+
+    if (attempts.length > 0) {
+      logger.info(
+        {
+          picked: `${attempts[0].provider}/${attempts[0].modelId}`,
+          retries: attempts.slice(1).map(a => `${a.provider}/${a.modelId}`),
+          skippedCooling: cooling.length,
+          hints: [...route.hints, ...hints]
+        },
+        `[Auto] Selected ${attempts[0].provider}/${attempts[0].modelId}`
+      );
+    } else {
+      // No row at all — not even a cooling one. There is nothing free to
+      // call, and an auto caller must not be answered by a paid default
+      // model, so this fails as itself unless the paid step below applies.
+      logger.warn('[Auto] No free-tier models available with configured API keys');
+    }
+
+    // ── 3. the governed paid fallback ─────────────────────────────────────
+    // One attempt, cheapest first, and only for a routing row that opted in.
+    // The governor itself runs at dispatch, not here: the estimate needs the
+    // preprocessed prompt, and a plan is not a decision to spend.
+    if (route.allowPaid && !route.singleAttempt) {
+      const paid = await this.selectPaidFallbackCandidates();
+      const already = new Set(attempts.map(a => `${a.provider}/${a.modelId}`));
+      const next = paid.find(p => !already.has(`${p.provider}/${p.modelId}`));
+      if (next) {
+        attempts.push({
+          provider: next.provider,
+          modelId: next.modelId,
+          freeRow: null,
+          paid: true,
+          sticky: false,
+          pricing: next.pricing
+        });
+        hints.push('paid_fallback_planned');
+      } else if (paid.length === 0) {
+        hints.push('paid_fallback_none');
+      }
+    }
+
+    return { attempts, hints };
+  }
+
+  /**
+   * The `paid-fallback` set, cheapest first.
+   *
+   * Written by the catalog job and nothing else: the three cheapest OpenRouter
+   * paid rows that report `structured_outputs` (see
+   * `apps/basegeek/DOCS/AIGEEK_CATALOG_JOB.md`). No human picks a paid model —
+   * that is D4, and it is also the only way the price stays current.
+   *
+   * A row with no `AIPricing` entry is kept in the list with `pricing: null`
+   * and refused by the governor, which is louder than dropping it silently: a
+   * paid-fallback row with no price is a catalog bug, and Phase 3's status
+   * page should be able to see it.
+   */
+  async selectPaidFallbackCandidates() {
+    try {
+      const rows = await AIModel.find({ role: 'paid-fallback', isActive: true }).lean();
+      const usable = rows.filter((row) => {
+        const providerConfig = this.providers[row.provider];
+        if (!providerConfig || !providerConfig.apiKey || providerConfig.enabled === false) return false;
+        // A paid row that just failed hard is skipped like any other; the
+        // health mirror is keyed provider/model and does not care about price.
+        return !isFreeTierCooling(this.getFreeTierHealth(row.provider, row.modelId));
+      });
+      if (usable.length === 0) return [];
+
+      const prices = await AIPricing.find({
+        $or: usable.map(row => ({ provider: row.provider, modelId: row.modelId }))
+      }).lean();
+      // A price of zero and no price at all are different facts, and this is
+      // the one place where confusing them spends money: `|| 0` on a missing
+      // field would present an unpriced paid row to the governor as free, and
+      // the governor would wave it through. Only a finite number counts as a
+      // price; a row with neither side priced is `null` — unpriced — and the
+      // governor refuses it (Phase 1's rule: unknown is never free).
+      const finiteOrNull = (value) => {
+        const n = Number(value);
+        return Number.isFinite(n) ? n : null;
+      };
+      const priceOf = new Map();
+      for (const p of prices) {
+        const inputPrice = finiteOrNull(p.inputPrice);
+        const outputPrice = finiteOrNull(p.outputPrice);
+        if (inputPrice === null && outputPrice === null) continue;
+        priceOf.set(this.freeTierKey(p.provider, p.modelId), {
+          inputPrice: inputPrice ?? 0,
+          outputPrice: outputPrice ?? 0
+        });
+      }
+
+      return usable
+        .map(row => ({
+          provider: row.provider,
+          modelId: row.modelId,
+          pricing: priceOf.get(this.freeTierKey(row.provider, row.modelId)) || null
+        }))
+        .sort((a, b) => {
+          // Unpriced rows last: they cannot pass the governor, so they must
+          // not stand in front of a row that can.
+          const cost = (row) => row.pricing
+            ? row.pricing.inputPrice + row.pricing.outputPrice
+            : Number.POSITIVE_INFINITY;
+          return cost(a) - cost(b);
+        });
+    } catch (error) {
+      logger.warn({ err: error }, '[Paid] failed to read the paid-fallback set');
+      return [];
+    }
+  }
+
+  /** Today's total spend across every provider, in dollars (UTC day). */
+  async spentTodayUsd(now = new Date()) {
+    try {
+      const rows = await AISpend.aggregate([
+        { $match: { day: spendDay(now) } },
+        { $group: { _id: null, costUsd: { $sum: '$costUsd' } } }
+      ]);
+      return Number(rows?.[0]?.costUsd) || 0;
+    } catch (error) {
+      // A ledger we cannot read is not permission to spend. Report the cap as
+      // already consumed so the paid attempt is skipped.
+      logger.warn({ err: error }, '[Paid] failed to read the spend ledger — refusing the paid attempt');
+      return Number.POSITIVE_INFINITY;
+    }
+  }
+
+  /**
+   * May this paid attempt happen? The governor of §3, in two layers:
+   *
+   *   estimate = AIPricing per-1M × (prompt tokens + maxTokens)
+   *   estimate ≤ AI_PAID_PER_CALL_USD   (default $0.01)
+   *   today's AISpend total + estimate ≤ AI_PAID_PER_DAY_USD   (default $0.05)
+   *
+   * The arithmetic is pure (`aiRoute.paidBudgetVerdict`); this method is the
+   * two reads it needs. Above both caps sits the credit limit on the
+   * OpenRouter key, which Chef sets and this code cannot see.
+   */
+  async paidGovernorVerdict({ provider, modelId, promptTokens = 0, maxTokens = 0, pricing = undefined }) {
+    let priced = pricing;
+    if (priced === undefined) {
+      try {
+        const row = await AIPricing.findOne({ provider, modelId }).lean();
+        priced = row ? { inputPrice: Number(row.inputPrice) || 0, outputPrice: Number(row.outputPrice) || 0 } : null;
+      } catch {
+        priced = null;
+      }
+    }
+    const estimateUsd = estimatePaidCostUsd(priced, promptTokens, maxTokens);
+    const verdict = paidBudgetVerdict({
+      spentTodayUsd: await this.spentTodayUsd(),
+      estimateUsd,
+      caps: paidCaps()
+    });
+    return { ...verdict, caps: paidCaps() };
+  }
+
+  /**
+   * Remember which model answered this conversation, and what it replaced.
+   *
+   * Written only when a sticky auto call succeeds on a row that differs from
+   * the stored one — a hit rewrites nothing, so a long story is not one write
+   * per turn. `retired` is the pick that just stopped working, if there was
+   * one; it is appended to `previous`, which is what Phase 3's needs-attention
+   * list reads to say the GM changed model.
+   *
+   * Never rejects. A sticky pick is an optimization; failing a turn because we
+   * could not write down which model answered it would be absurd.
+   */
+  recordStickyPick(key, { appId, conversationId, provider, modelId, paid = false, retired = null }) {
+    if (!key) return Promise.resolve(null);
+    const now = new Date();
+    const update = {
+      $set: {
+        key,
+        app: appId || 'unknown',
+        conversationId: conversationId ?? null,
+        provider,
+        modelId,
+        paid: !!paid,
+        pickedAt: now
+      }
+    };
+    if (retired && (retired.provider !== provider || retired.modelId !== modelId)) {
+      update.$push = {
+        previous: {
+          provider: retired.provider,
+          modelId: retired.modelId,
+          retiredAt: now,
+          reason: retired.reason || 'repin'
+        }
+      };
+    }
+    return AIStickyPick.updateOne({ key }, update, { upsert: true })
+      .catch((err) => {
+        if (err?.code !== 11000) throw err;
+        return AIStickyPick.updateOne({ key }, update);
+      })
+      .catch((err) => {
+        logger.debug({ err, key }, '[Sticky] failed to record the pick');
+      })
+      .then(() => key);
+  }
+
+  /**
+   * Generic AI call method that walks the resolved route's attempt plan.
    */
   async callAI(prompt, config = {}) {
     // Wait for service to be initialized
@@ -1278,28 +1592,19 @@ class AIService {
       }
     }
 
+    // What the request is *asking for* rather than where it should go. The
+    // eleven ways of saying "where" — `provider`, `model`, `tier`, `freeOnly`,
+    // `autoRotate`, `useAppConfig`, `noFallback`, the `basegeek-*` aliases —
+    // are no longer read here at all: `services/aiRoute.js` owns that whole
+    // vocabulary and answers it with a Route. This destructure is deliberately
+    // silent about routing so there is exactly one place to look.
     let {
-      provider: requestedProvider = this.currentProvider,
       maxTokens,
       temperature,
-      model,
       userId = null,
       appName = 'unknown',
       feature = null,
       messages = null,
-      autoRotate = false,
-      freeOnly = false,
-      useAppConfig = false,
-      // No cross-provider fallback: try the requested provider and stop.
-      //
-      // The fallback list below calls every other provider with *its own*
-      // default model, which is the right answer for a caller that asked for
-      // "an answer" and the wrong one for a caller that named a model. The
-      // OpenAI surface sets this whenever the request named a concrete model —
-      // a `<provider>/<model>` pin or a bare catalog id — so a pinned request
-      // whose provider is down or rate-limited fails as itself rather than
-      // being answered, and billed, as a model nobody asked for.
-      noFallback = false,
       cacheNamespace = 'default',
       responseFormat = null,
       tools = null,
@@ -1318,28 +1623,7 @@ class AIService {
     // Fingerprint for structured-output cache-key segregation (item 2).
     const structuredFingerprint = this.structuredOutputFingerprint(responseFormat, tools, toolChoice);
 
-    // Explicit provider/model pinning (item 7): "<provider>/<model>" pins the
-    // request to that exact provider with no rotation. Useful for workflows
-    // that need a single consistent provider per call (e.g., geekPR PR reviews).
-    // We only split when the prefix is a known provider — otherwise slashes
-    // in real model IDs (e.g., "meta-llama/llama-3.1-70b") are preserved.
-    if (typeof model === 'string' && model.includes('/')) {
-      const KNOWN_PROVIDERS = new Set(Object.keys(this.providers));
-      const slashIdx = model.indexOf('/');
-      const prefix = model.slice(0, slashIdx);
-      const rest = model.slice(slashIdx + 1);
-      if (KNOWN_PROVIDERS.has(prefix) && rest) {
-        requestedProvider = prefix;
-        model = rest;
-        autoRotate = false;
-        freeOnly = false;
-        useAppConfig = false;
-        logger.info(`[ExplicitPin] routed to ${prefix}/${rest} (rotation bypassed)`);
-      }
-    }
-
-    // App config resolution: look up server-side routing for the *resolved*
-    // app id. The id reaches here from the caller's credential (see
+    // The app id reaches here from the caller's credential (see
     // services/callerIdentity.js), never from a body field — routing decides
     // which model answers and at whose expense, and a request body is not a
     // credential. Normalizing again here covers in-process callers.
@@ -1347,110 +1631,74 @@ class AIService {
     const featureId = typeof feature === 'string' && feature.trim()
       ? feature.trim().toLowerCase()
       : null;
+    const conversationId = typeof config.conversationId === 'string' && config.conversationId
+      ? config.conversationId
+      : null;
 
-    if (useAppConfig || requestedProvider === 'basegeek-app') {
-      try {
-        const appConfig = await this.findAppConfig(appId);
-        if (appConfig) {
-          // Update lastSeen
-          appConfig.lastSeen = new Date();
-          appConfig.save().catch(() => {}); // fire-and-forget
-
-          if (appConfig.tier === 'specific' && appConfig.provider && appConfig.model) {
-            requestedProvider = appConfig.provider;
-            model = appConfig.model;
-            autoRotate = false;
-            freeOnly = false;
-            logger.info(`[AppConfig] ${appId} → specific: ${appConfig.provider}/${appConfig.model}`);
-          } else if (appConfig.tier === 'free') {
-            freeOnly = true;
-            logger.info(`[AppConfig] ${appId} → free tier`);
-          } else if (appConfig.tier === 'rotation') {
-            autoRotate = true;
-            logger.info(`[AppConfig] ${appId} → rotation`);
-          }
-
-          // Apply server-side defaults only if not specified in the request
-          if (appConfig.maxTokens && !config.maxTokens) maxTokens = appConfig.maxTokens;
-          if (appConfig.temperature != null && config.temperature == null) temperature = appConfig.temperature;
-          if (appConfig.fallbackOrder?.length > 0) {
-            // Will be used if provider fails — stored for fallback logic
-            config._appFallbackOrder = appConfig.fallbackOrder;
-          }
-        } else {
-          // Auto-discover: create a default config entry for this app
-          // Auto-discovery writes the normalized id, so the collection stops
-          // growing a new row per spelling.
-          AIAppConfig.findOneAndUpdate(
-            { appName: appId },
-            { appName: appId, tier: 'free', autoDiscovered: true, lastSeen: new Date() },
-            { upsert: true, new: true }
-          ).catch(() => {});
-          freeOnly = true;
-          logger.info(`[AppConfig] ${appId} → auto-discovered, defaulting to free tier`);
-        }
-      } catch (appConfigError) {
-        logger.error({ err: appConfigError }, `[AppConfig] Failed to resolve config for ${appId}`);
-        // Fall through to normal routing
-      }
-    }
-
-    // "free" mode: query the DB for available free-tier models and plan the
-    // whole walk — the pick *and* its retries — rather than one pick and a
-    // silent slide into the paid fallback order (R130, 2026-09-06).
+    // ── Where does this go? ─────────────────────────────────────────────────
     //
-    // What changed and why: the old code took `prioritized[0]` and stopped
-    // caring. When that row was a model its vendor had retired, the request
-    // fell into the generic provider walk below, which calls every other
-    // provider with *its own default model* — models nobody asked for and, for
-    // a caller whose routing row says `tier: free`, models that are not free.
-    // A free-tier caller now retries inside the free tier and nowhere else.
-    const isFreeCaller = freeOnly || requestedProvider === 'free';
-    let freeTierAttempts = [];
-    if (isFreeCaller) {
-      try {
-        const { live, cooling } = await this.selectFreeTierCandidates();
-        let chosen = live;
-        if (chosen.length === 0 && cooling.length > 0) {
-          // Everything is asleep. Answering nothing is worse than one attempt
-          // at whichever row wakes soonest, so the free tier is never a total
-          // outage just because the probe marked a batch of rows dead.
-          logger.warn(
-            { coolingRows: cooling.length },
-            '[FreeOnly] every free-tier row is cooling — trying the one closest to waking'
-          );
-          chosen = cooling.slice(0, 1);
-        }
+    // One pure function, one Route, two modes. What this replaced was ~150
+    // lines of interacting branches in which the explicit-pin block switched
+    // off `autoRotate`/`freeOnly`/`useAppConfig`, the app-config block
+    // switched them back on, and the free-tier block overwrote
+    // `requestedProvider` again — three writers to the same four variables,
+    // each correct on its own and none of them able to say what the caller
+    // had actually asked for. See DOCS/AIGEEK_FRONT_DOOR.md §1 for the table.
+    const providerIds = Object.keys(this.providers);
+    const routeCtx = { providerIds, appId, conversationId };
+    let appRow = null;
+    let route = config.route?.mode ? config.route : null;
+    if (!route) {
+      // A pin does not read the routing row, so it does not pay for the
+      // query. Everything else does: `allowPaid`, `sticky` and the token
+      // defaults all live on the row, and "nothing at all" is `auto` reading
+      // the app's row.
+      if (!explicitPinOf(config, providerIds)) {
+        appRow = await this.routingRowFor(appId);
+      }
+      route = resolveRoute(config, appRow, routeCtx);
+    }
 
-        if (chosen.length > 0) {
-          freeTierAttempts = this.planFreeTierAttempts(chosen, noFallback ? 1 : MAX_FREE_TIER_ATTEMPTS);
-          const pick = freeTierAttempts[0];
-          requestedProvider = pick.provider;
-          model = pick.modelId;
-          autoRotate = false; // We've already picked
-          logger.info(
-            {
-              picked: `${pick.provider}/${pick.modelId}`,
-              lastSuccessAt: pick.health?.lastSuccessAt ?? null,
-              retries: freeTierAttempts.slice(1).map(a => `${a.provider}/${a.modelId}`),
-              skippedCooling: cooling.length
-            },
-            `[FreeOnly] Selected ${pick.provider}/${pick.modelId}`
-          );
-        } else {
-          // No row at all — not even a cooling one. There is nothing free to
-          // call, and a free-tier caller must not be answered by a paid
-          // default model, so this fails as itself.
-          logger.warn('[FreeOnly] No free-tier models available with configured API keys');
-        }
-      } catch (freeError) {
-        logger.error({ err: freeError }, '[FreeOnly] Failed to query free tier');
+    // A pin whose row the catalog says is cooling, retired or absent degrades
+    // to `auto` — **unless** the caller said `noFallback`, in which case the
+    // pin is a promise and failing as itself is the honest answer (F-22: "a
+    // model pin is a promise"). `/openai/v1` sets `noFallback` on every
+    // concrete-model request, so no pinned OpenAI-SDK call is ever silently
+    // answered by a different model.
+    if (route.mode === 'pin' && !route.singleAttempt) {
+      const usable = await this.pinIsUsable(route.provider, route.model);
+      if (!usable.ok) {
+        if (!appRow) appRow = await this.routingRowFor(appId);
+        logger.info(
+          { appId, pin: `${route.provider}/${route.model ?? '(default)'}`, reason: usable.reason },
+          '[Route] pin unavailable — degrading to auto'
+        );
+        route = degradePin(route, config, appRow, routeCtx);
       }
     }
 
-    maxTokens = maxTokens || this.providers[requestedProvider]?.maxTokens || 4000;
-    temperature = temperature ?? (this.providers[requestedProvider]?.temperature || 0.7);
-    model = model || this.providers[requestedProvider]?.model;
+    // Server-side defaults from the row, applied only where the request was
+    // silent. The row is the app's standing preference; a per-call value is
+    // the caller knowing better about this one call.
+    if (appRow) {
+      if (appRow.maxTokens && !config.maxTokens) maxTokens = appRow.maxTokens;
+      if (appRow.temperature != null && config.temperature == null) temperature = appRow.temperature;
+    }
+
+    // ── The attempt plan ────────────────────────────────────────────────────
+    const planned = route.mode === 'pin'
+      ? this.planPinAttempt(route)
+      : await this.planAutoAttempts(route, { appId });
+    const attemptPlan = planned.attempts;
+    const routeHints = [...route.hints, ...planned.hints];
+
+    // The provider whose roster defaults stand in for a silent caller. Under
+    // the old code this was `requestedProvider`, which for an auto call was
+    // the first free pick — same thing, said once.
+    const primaryProvider = attemptPlan[0]?.provider || this.currentProvider;
+
+    maxTokens = maxTokens || this.providers[primaryProvider]?.maxTokens || 4000;
+    temperature = temperature ?? (this.providers[primaryProvider]?.temperature || 0.7);
 
     const normalizedMessages = normalizeMessages(messages);
 
@@ -1465,44 +1713,28 @@ class AIService {
     // when they would genuinely produce the same answer.
     const cacheSubject = this.conversationCacheSubject(normalizedMessages, basePrompt);
 
-    const rotationProviders = autoRotate
-      ? this.rotationManager.getPriorityList()
-      : noFallback
-        ? [requestedProvider]
-        : [requestedProvider, ...this.fallbackOrder.filter(p => p !== requestedProvider)];
-
-    if (autoRotate) {
-      const selection = this.rotationManager.selectProvider();
-      const index = rotationProviders.indexOf(selection.provider);
-      if (index > 0) {
-        rotationProviders.splice(index, 1);
-        rotationProviders.unshift(selection.provider);
-      }
-    }
-
-    // The walk, as (provider, free-tier row) pairs. A `freeRow` says two
-    // things: call *this* model rather than the provider's default, and record
-    // the outcome against the row's health. Every non-free caller gets exactly
-    // the list it got before — provider ids, `freeRow: null`, same order.
-    const attemptPlan = freeTierAttempts.length > 0
-      ? freeTierAttempts.map(candidate => ({ provider: candidate.provider, freeRow: candidate }))
-      : rotationProviders.map(provider => ({ provider, freeRow: null }));
-
-    // Deliberate dead end (R130): a free-tier caller with nothing free to call
-    // stops here. Before, it fell through to the paid provider walk, so a
-    // caller whose routing row says `tier: free` could be answered — and
-    // billed — by whatever default model happened to answer first.
+    // Deliberate dead end (R130): an `auto` caller with nothing free to call
+    // stops here. Before, it fell through to the generic provider walk, so a
+    // caller whose routing row said `tier: free` could be answered — and
+    // billed — by whatever default model happened to answer first. Phase 2
+    // extends that rule from `freeOnly` callers to every `auto` caller: money
+    // is reached only through `allowPaid` plus the governor, never by
+    // accident.
     //
     // The wording is load-bearing: `aiFailureEnvelope.classifyFailure` reads
     // `/no .*providers/i` as `unavailable`, so this surfaces as a 503
     // `upstream_unavailable` — "nothing left in the rotation", which is exactly
     // what it is — rather than a 500 that says nothing.
-    const freeTierExhausted = isFreeCaller && freeTierAttempts.length === 0;
-    let lastError = freeTierExhausted
+    let lastError = attemptPlan.length === 0
       ? new Error('No free-tier model is available — no free providers left to try')
       : null;
 
-    for (const { provider: currentProvider, freeRow } of (freeTierExhausted ? [] : attemptPlan)) {
+    // The pick that just stopped working, carried out of the loop so a
+    // successful re-pick can file it in `AIStickyPick.previous`.
+    let retiredSticky = null;
+
+    for (const attempt of attemptPlan) {
+      const currentProvider = attempt.provider;
       if (!currentProvider) continue;
 
       const providerConfig = this.providers[currentProvider];
@@ -1510,25 +1742,14 @@ class AIService {
         continue;
       }
 
-      if (autoRotate && this.rotationManager.isCooling(currentProvider)) {
-        continue;
-      }
-
-      // Only honor the caller-specified model on the originally requested provider —
-      // fallback providers (different family) reject it (e.g. gemini model on groq → 404).
-      // A free-tier retry names its own model, which is the whole point of it.
-      const isRequestedProvider = currentProvider === requestedProvider;
-      let providerModel = freeRow
-        ? freeRow.modelId
-        : isRequestedProvider
-          ? (model || providerConfig.model)
-          : providerConfig.model;
-      if (autoRotate) {
-        const rotationOverride = this.rotationProviderOverrides[currentProvider];
-        if (rotationOverride?.model) {
-          providerModel = rotationOverride.model;
-        }
-      }
+      const freeRow = attempt.freeRow;
+      // Every attempt now names its own model: a free row names the row's
+      // model, a paid-fallback row names the catalog's, and a pin names the
+      // caller's (or the provider's default when the pin named only a
+      // provider). The old three-way `isRequestedProvider` conditional is
+      // gone with the walk that needed it — nothing is called with a model
+      // nobody asked for any more.
+      const providerModel = attempt.modelId || providerConfig.model;
 
       // Structured / tool-calling requests bypass the cache entirely.
       // The cache is tuned for idempotent text completions; for tool_use
@@ -1551,7 +1772,11 @@ class AIService {
           model: providerModel,
           cached: true,
           toolCalls: cached.toolCalls || null,
-          finishReason: cached.finishReason || 'stop'
+          finishReason: cached.finishReason || 'stop',
+          hints: routeHints,
+          // A cache hit spends nothing. Zero, not null: "we did not pay for
+          // this" is a fact, unlike "we were not told what it cost".
+          costUsd: 0
         };
         return cached.content;
       }
@@ -1580,6 +1805,50 @@ class AIService {
       if (this.isRateLimited(currentProvider)) {
         logger.debug(`Skipping ${currentProvider}: still inside its retry-after`);
         continue;
+      }
+
+      // ── The governor (§3) ─────────────────────────────────────────────────
+      //
+      // The only place in this codebase that decides to spend money, and it
+      // decides here rather than in the plan because the estimate needs the
+      // preprocessed prompt. A refusal is a *skip*, not a queue: the point of
+      // a daily cap is that the calls above it do not happen, and a feature
+      // that would have been answered by a paid model falls to its
+      // deterministic fallback like any other free-tier miss.
+      if (attempt.paid) {
+        const verdict = await this.paidGovernorVerdict({
+          provider: currentProvider,
+          modelId: providerModel,
+          promptTokens: estimatedTokens,
+          maxTokens,
+          pricing: attempt.pricing
+        });
+        if (!verdict.ok) {
+          logger.info(
+            {
+              provider: currentProvider,
+              model: providerModel,
+              app: appId,
+              feature: featureId,
+              reason: verdict.reason,
+              estimateUsd: verdict.estimateUsd,
+              spentTodayUsd: verdict.spentTodayUsd,
+              caps: verdict.caps
+            },
+            'paid_budget — paid fallback skipped'
+          );
+          lastError = lastError || new Error('No free-tier model is available — no free providers left to try');
+          continue;
+        }
+        logger.info(
+          {
+            provider: currentProvider,
+            model: providerModel,
+            estimateUsd: verdict.estimateUsd,
+            spentTodayUsd: verdict.spentTodayUsd
+          },
+          '[Paid] governor cleared a paid fallback attempt'
+        );
       }
 
       // Tool-calling capability check: unlike structured output (which has a
@@ -1655,7 +1924,11 @@ class AIService {
         // What the provider just told us about our own quota, straight off the
         // response. Debounced, fire-and-forget, never blocking the answer.
         this.recordObservedLimits(currentProvider, providerModel, result.headers);
-        await this.updateStats(
+        // `updateStats` returns what it booked, so the feature door can report
+        // `provenance.costUsd` from the same figure the ledger holds rather
+        // than pricing the call a second time. `undefined` when a test has
+        // stubbed it out, which becomes a null cost — honestly unknown.
+        const booked = await this.updateStats(
           currentProvider,
           result.inputTokens || 0,
           result.outputTokens || 0,
@@ -1684,9 +1957,15 @@ class AIService {
 
         // A free row that answers with no text at all (gpt-oss through the
         // Cloudflare and Ollama adapters, 2026-09-06) is as useless as a dead
-        // one: cool it and move to the next candidate.
-        if (freeRow && !String(result?.content ?? '').trim()) {
-          this.markFreeTierFailure(currentProvider, providerModel, 'empty_content', freeRow.health);
+        // one: cool it and move to the next candidate. A *paid* row that does
+        // it is worse — we were billed for nothing — so it counts too. A pin
+        // is exempt: the caller named that model, an empty completion with
+        // `finish_reason: tool_calls` is a legitimate answer, and there is
+        // nowhere else to go anyway.
+        if ((freeRow || attempt.paid) && !String(result?.content ?? '').trim()) {
+          if (freeRow) {
+            this.markFreeTierFailure(currentProvider, providerModel, 'empty_content', freeRow.health);
+          }
           throw new Error(`empty_content: ${currentProvider}/${providerModel} returned no text`);
         }
 
@@ -1695,12 +1974,34 @@ class AIService {
           this.markFreeTierSuccess(currentProvider, providerModel);
         }
 
+        // Remember the pick for the rest of this conversation, and file
+        // whatever it replaced. Only when it *changed*: a sticky hit rewrites
+        // nothing, so a long story is not one write per turn. Awaited, unlike
+        // the health writes: the next turn may arrive before a fire-and-forget
+        // upsert lands (the full suite showed exactly that race), and a repin
+        // nobody can read is not sticky. recordStickyPick never rejects.
+        if (route.sticky && route.mode === 'auto' && (!attempt.sticky || retiredSticky)) {
+          await this.recordStickyPick(route.sticky.key, {
+            appId,
+            conversationId,
+            provider: currentProvider,
+            modelId: providerModel,
+            paid: !!attempt.paid,
+            retired: retiredSticky
+          });
+        }
+
         this.lastProviderInfo = {
           provider: currentProvider,
           model: providerModel,
           cached: false,
           toolCalls: result.toolCalls || null,
-          finishReason: result.finishReason || 'stop'
+          finishReason: result.finishReason || 'stop',
+          // Which legacy field, row value or degradation produced this route.
+          // Reported so a log line — and `provenance.hints` over HTTP — can
+          // say *why* a request landed where it did without re-deriving it.
+          hints: routeHints,
+          costUsd: booked?.costUsd ?? null
         };
         return result.content;
       } catch (error) {
@@ -1710,9 +2011,12 @@ class AIService {
           // For as long as the provider asked, not a flat minute.
           const retryAfter = this.retryAfterFrom(error);
           this.markRateLimited(currentProvider, retryAfter ?? 60);
-          if (autoRotate) {
-            this.rotationManager.markProviderCooling(currentProvider, (retryAfter ?? 60) * 1000);
-          }
+          // Unconditional now. This used to be gated on `autoRotate`, which
+          // was the only mode that read `isCooling` back — so with the
+          // rotation walk gone the gate would have made the cooldown map
+          // write-only. It still feeds `getServiceStats().rotation`, which is
+          // what the status page shows, so the signal is worth keeping.
+          this.rotationManager.markProviderCooling(currentProvider, (retryAfter ?? 60) * 1000);
         }
 
         // A free-tier row that fails *hard* — the model is gone, the slug was
@@ -1724,6 +2028,13 @@ class AIService {
           const classification = classifyFreeTierFailure(error);
           if (classification.hard) {
             this.markFreeTierFailure(currentProvider, providerModel, classification.code, freeRow.health);
+            // If the row that just died was this conversation's sticky pick,
+            // carry it out so the successful re-pick can file it in
+            // `previous` — which is how Phase 3's needs-attention list knows
+            // the GM changed model rather than leaving you to notice.
+            if (attempt.sticky) {
+              retiredSticky = { provider: currentProvider, modelId: providerModel, reason: classification.code };
+            }
           }
         }
 
@@ -1734,63 +2045,24 @@ class AIService {
     throw lastError || new Error('All AI providers failed');
   }
 
-  /**
-   * callAISmart — a thin shim over `callAI`, kept for its callers.
+  /*
+   * `callAISmart` was deleted here in Phase 2 (2026-09-07).
    *
-   * It used to be the front of a SECOND routing stack: aiRouterService
-   * (families.json + task detection) picked a family, aiBalancerService
-   * scored providers out of Redis, aiHealthJobService swept cooldowns every
-   * 60 s. All of it went in Phase 0 (2026-09-07). Nothing scheduled the
-   * router, the health job mutated a *local copy* of the cooldown map so it
-   * logged "✓ Cleared cooldown" forever without clearing anything, and it was
-   * still ranking `llm7` and `onemin`, both deleted in September. `callAI` —
-   * with its rotation, free-tier health rows and cross-provider fallback — is
-   * the one router.
+   * It was the front of a SECOND routing stack — aiRouterService picked a
+   * "family" out of families.json, aiBalancerService scored providers out of
+   * Redis, aiHealthJobService swept cooldowns every 60 s while mutating a
+   * local copy of the map, so it logged "✓ Cleared cooldown" forever without
+   * clearing anything. Phase 0 deleted that stack and left this 57-line shim
+   * because `POST /api/ai/conversation/message` read its `{success, content,
+   * routing}` shape on both branches and three test files pinned it (Q46).
    *
-   * The `{success, content, routing}` shape survives because
-   * `/api/ai/conversation/message` reads it on both its branches, and because
-   * a provider failure here is a resolved `{success:false}` that the route
-   * turns into the allowlisted envelope (Q46). `routing` now reports what
-   * actually answered, out of `lastProviderInfo`, instead of the family the
-   * old router had predicted.
-   *
-   * @param {array} messages - Conversation messages
-   * @param {object} options - Call options
-   * @param {string} options.userId - User ID for usage tracking
-   * @param {string} options.appName - App name for usage tracking
-   * @param {string} options.feature - Feature id for usage tracking
-   * @param {boolean} options.freeOnly - Restrict to the free-tier rotation
-   * @returns {Promise<object>} - `{success, content, routing}` or `{success:false, error}`
+   * Phase 2 has one front door, so the shim has no reason to exist: the route
+   * calls `callAI` directly and builds `routing` from `lastProviderInfo`,
+   * which is where the shim was getting it from anyway. The Q46 rule it
+   * carried — a provider's own words never reach the caller — moved with it
+   * and is enforced by the route's `resolveFailure` catch, which is where the
+   * other three front doors have always enforced it.
    */
-  async callAISmart(messages, options = {}) {
-    const prompt = messages[messages.length - 1]?.content || '';
-    const startTime = Date.now();
-    const freeOnly = !!options.freeOnly;
-
-    try {
-      const response = await this.callAI(prompt, {
-        freeOnly,
-        messages,
-        userId: options.userId,
-        appName: options.appName || (freeOnly ? 'free-tier' : 'unknown'),
-        feature: options.feature || null
-      });
-
-      const info = this.lastProviderInfo || {};
-      return {
-        success: true,
-        content: response,
-        routing: {
-          provider: info.provider || this.currentProvider,
-          model: info.model || null,
-          cached: !!info.cached,
-          latency: Date.now() - startTime
-        }
-      };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
-  }
 
   /**
    * Call one specific AI provider.
@@ -1822,772 +2094,57 @@ class AIService {
       frequencyPenalty = null
     } = config;
 
-    // Pass messages + structured-output + sampling params to all provider
-    // calls. Providers that don't support one ignore it — an unsupported
-    // sampling knob is dropped at the adapter, never sent upstream to become a
-    // 400 and never silently swallowed at this layer (F-09).
-    const callConfig = {
+    // Pass messages + structured-output + sampling params to every adapter.
+    // Providers that don't support one ignore it — an unsupported sampling
+    // knob is dropped at the adapter, by its descriptor's `dropSampling`,
+    // never sent upstream to become a 400 and never silently swallowed at this
+    // layer (F-09).
+    const request = {
+      prompt,
       maxTokens, temperature, model, messages, responseFormat, tools, toolChoice,
       topP, stop, seed, presencePenalty, frequencyPenalty
     };
 
-    switch (provider) {
-      case 'groq':
-        return await this.callGroq(prompt, callConfig);
-      case 'gemini':
-        return await this.callGemini(prompt, callConfig);
-      case 'together':
-        return await this.callTogether(prompt, callConfig);
-      case 'cohere':
-        return await this.callCohere(prompt, callConfig);
-      case 'openrouter':
-        return await this.callOpenRouter(prompt, callConfig);
-      case 'cerebras':
-        return await this.callCerebras(prompt, callConfig);
-      case 'cloudflare':
-        return await this.callCloudflare(prompt, callConfig);
-      case 'ollama':
-        return await this.callOllama(prompt, callConfig);
-      case 'llmgateway':
-        return await this.callLLMGateway(prompt, callConfig);
-      default:
-        throw new Error(`Unknown provider: ${provider}`);
-    }
+    // Until Phase 2 this was a ten-case switch over ten `call<Provider>`
+    // methods — about 600 lines, five of them the same OpenAI-compatible
+    // request with a different base URL, and a `default:` that threw
+    // `Unknown provider` for any roster id whose case someone forgot (cohere
+    // spent months in exactly that state: a fully configured connection, a
+    // working `callCohere`, and no `case 'cohere'` to reach it). The registry
+    // reads the shape off the provider's descriptor, so a missing adapter is
+    // now a missing *row*, which the roster test catches.
+    return await callAdapter(provider, providerConfig, request);
   }
 
   /**
-   * Call Cloudflare API (OpenAI-compatible)
-   */
-  /**
-   * Call Cloudflare Workers AI API
-   */
-  async callCloudflare(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = DEFAULT_MODELS.cloudflare, messages = null } = config;
-
-    const accountId = this.providers.cloudflare.accountId;
-    if (!accountId) {
-      throw new Error('Cloudflare account ID not configured');
-    }
-
-    // Use provided messages array or convert prompt to messages
-    const requestMessages = messages || [{ role: 'user', content: prompt }];
-
-    // Chat mode, not a flattened `prompt`. Workers AI applies the model's own
-    // chat template to `messages` and stops at end-of-turn; the old "System:
-    // …\n\nAssistant: …" string had no template and no stop, so llama kept
-    // generating turns until max_tokens — 15 s+ for a two-word JSON answer
-    // (2026-09-07, the StartGeek Ask outage). `response_format` is Workers
-    // AI's JSON mode: the schema goes in directly, without OpenAI's
-    // { name, schema } wrapper.
-    const cfMessages = requestMessages.map(m => ({
-      role: m.role === 'system' || m.role === 'assistant' ? m.role : 'user',
-      content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content ?? ''),
-    }));
-    const rf = config.responseFormat;
-    const cfResponseFormat = rf?.type === 'json_schema'
-      ? { type: 'json_schema', json_schema: rf.json_schema?.schema || rf.json_schema }
-      : rf?.type === 'json_object'
-        ? { type: 'json_object' }
-        : null;
-
-    try {
-      const response = await axios.post(
-        `${this.providers.cloudflare.baseURL}/${accountId}/ai/run/${model}`,
-        {
-          messages: cfMessages,
-          max_tokens: maxTokens,
-          temperature,
-          ...(cfResponseFormat && { response_format: cfResponseFormat }),
-          // Workers AI documents top_p / seed / the two penalties for
-          // text-generation but not `stop`, and validates its input schema
-          // strictly — an unknown property is a 400, so `stop` is dropped here.
-          ...(config.topP != null && { top_p: config.topP }),
-          ...(config.seed != null && { seed: config.seed }),
-          ...(config.presencePenalty != null && { presence_penalty: config.presencePenalty }),
-          ...(config.frequencyPenalty != null && { frequency_penalty: config.frequencyPenalty })
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.providers.cloudflare.apiKey}`
-          },
-          timeout: 60000
-        }
-      );
-
-      // JSON mode returns `response` as an object; callers expect text.
-      let result = response.data.result?.response ?? response.data.result?.content ?? '';
-      if (result && typeof result === 'object') result = JSON.stringify(result);
-
-      return {
-        content: result,
-        inputTokens: response.data.result?.usage?.prompt_tokens || 0,
-        outputTokens: response.data.result?.usage?.completion_tokens || 0,
-        // Every adapter hands the raw response headers back. `callAI` reads the
-        // provider's own `x-ratelimit-*` off them (recordObservedLimits) — the
-        // quota tables that used to be typed by hand are gone, so this is the
-        // only place a real allowance is ever learned. Additive: no caller has
-        // to look.
-        headers: response.headers
-      };
-    } catch (error) {
-      logger.error({ err: error }, 'Cloudflare API error');
-      if (error.response) {
-        logger.error({ status: error.response.status, data: error.response.data }, 'Cloudflare response error details');
-
-        // Handle 402 (out of neurons)
-        if (error.response.status === 402) {
-          // Same prefix rule as every other adapter, so the 402 is classified
-          // rather than flattened to a 500 — the words after it never reach
-          // the caller, only the status does.
-          throw new Error(`Cloudflare API error (402): daily neuron limit exceeded ${JSON.stringify(error.response.data)}`);
-        }
-
-        throw new Error(`Cloudflare API error (${error.response.status}): ${JSON.stringify(error.response.data)}`);
-      }
-      throw error;
-    }
-  }
-
-  /**
-   * Call Ollama Cloud API
-   */
-  async callOllama(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = DEFAULT_MODELS.ollama, messages = null } = config;
-
-    const requestMessages = messages || [{ role: 'user', content: prompt }];
-
-    try {
-      const response = await axios.post(`${this.providers.ollama.baseURL}/chat`, {
-        model: model,
-        messages: requestMessages,
-        stream: false,
-        options: {
-          temperature: temperature,
-          num_predict: maxTokens,
-          // Ollama takes the same knobs under different names, in `options`.
-          ...(config.topP != null && { top_p: config.topP }),
-          ...(stopSequencesFrom(config.stop) && { stop: stopSequencesFrom(config.stop) }),
-          ...(config.seed != null && { seed: config.seed }),
-          ...(config.presencePenalty != null && { presence_penalty: config.presencePenalty }),
-          ...(config.frequencyPenalty != null && { frequency_penalty: config.frequencyPenalty })
-        }
-      }, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.providers.ollama.apiKey}`
-        },
-        timeout: 60000
-      });
-
-      const result = response.data.message?.content || response.data.response || '';
-
-      return {
-        content: result,
-        inputTokens: response.data.prompt_eval_count || 0,
-        outputTokens: response.data.eval_count || 0,
-        headers: response.headers
-      };
-    } catch (error) {
-      logger.error({ err: error }, 'Ollama Cloud API error');
-      if (error.response) {
-        logger.error({ status: error.response.status, data: error.response.data }, 'Ollama response error details');
-        throw new Error(`Ollama Cloud API error (${error.response.status}): ${JSON.stringify(error.response.data)}`);
-      }
-      throw error;
-    }
-  }
-
-  /**
-   * Call LLM Gateway API
-   */
-  async callLLMGateway(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = DEFAULT_MODELS.llmgateway, messages = null } = config;
-
-    const requestMessages = messages || [{ role: 'user', content: prompt }];
-
-    try {
-      const response = await axios.post(`${this.providers.llmgateway.baseURL}/chat/completions`, {
-        model: model,
-        max_tokens: maxTokens,
-        temperature: temperature,
-        messages: requestMessages,
-        ...openAISamplingFields(config)
-      }, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.providers.llmgateway.apiKey}`
-        },
-        timeout: 60000
-      });
-
-      const result = response.data.choices[0].message.content;
-
-      return {
-        content: result,
-        inputTokens: response.data.usage?.prompt_tokens || 0,
-        outputTokens: response.data.usage?.completion_tokens || 0,
-        headers: response.headers
-      };
-    } catch (error) {
-      logger.error({ err: error }, 'LLM Gateway API error');
-      if (error.response) {
-        logger.error({ status: error.response.status, data: error.response.data }, 'LLM Gateway response error details');
-        throw new Error(`LLM Gateway API error (${error.response.status}): ${JSON.stringify(error.response.data)}`);
-      }
-      throw error;
-    }
-  }
-
-  /**
-   * The OpenAI conversation as Gemini `contents[]`.
+   * The ten `call<Provider>` methods that used to sit here — callCloudflare,
+   * callOllama, callLLMGateway, callGroq, callGemini, callTogether, callCohere,
+   * callOpenRouter, callCerebras, and the `geminiContentsFrom` translator they
+   * shared — moved to `services/ai/adapters/` in Phase 2 of
+   * DOCS/AIGEEK_ELEVATION_PLAN.md. About 600 lines became five files, because
+   * five of them were one OpenAI-compatible request with a different base URL
+   * and a different bearer token.
    *
-   * FINDING F-02 — the second half of the tool loop. Both message translators
-   * (this one and the Anthropic content-block translator that lived above it
-   * until 2026-09-07) used to be one line:
+   * Every incident note went with its code, not into a changelog:
    *
-   *   messages.map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user',
-   *                        content: m.content ?? '' }))
+   *   F-02  the tool-loop translation (`geminiContentsFrom`) and the
+   *         synthesized tool-call ids            → adapters/gemini.js
+   *   F-04  which adapters really forward `tools` → the `forwardsTools`
+   *         descriptor, honoured in openaiCompatible.js and gemini.js, and
+   *         deliberately absent from cohere.js and ollama.js
+   *   F-09  the five sampling knobs, in each provider's own spelling
+   *                                              → openAISamplingFields /
+   *                                                stopSequencesFrom /
+   *                                                `dropSampling`
+   *   F-23  the provider's raw body never reaching a caller → AdapterError
+   *   R130 / 2026-09-07 Ask outage  Cloudflare in chat mode with the bare
+   *         json_schema and no `stop`            → adapters/cloudflare.js
    *
-   * which is correct for plain chat and destroys a tool loop: every
-   * non-assistant role became `user` and every tool detail was dropped. The
-   * first tool call worked; the turn that feeds the result back did not. Every
-   * agent framework runs exactly that loop.
-   *
-   *   assistant + tool_calls[] → {role:"model", parts:[{functionCall:{name,args}}]}
-   *   role:"tool"              → {role:"user", parts:[{functionResponse:{name,response}}]}
-   *
-   * Gemini keys a function response by *name*, not by an id — it issues no
-   * tool-call ids at all (callGemini synthesizes them on the way out). So the
-   * id→name map built while walking the assistant turns is what lets a
-   * `tool_call_id` coming back from a client be resolved to the name Gemini
-   * expects.
-   *
-   * System turns are skipped; they go in `systemInstruction`.
+   * `callProvider` above is the only door, and it keeps its
+   * `(provider, prompt, config)` signature and its result shape — the probe
+   * (`aiCatalogDiscovery.probeRow`), the OpenAI-compat surface and `callAI`
+   * all depend on both.
    */
-  geminiContentsFrom(messages) {
-    const out = [];
-    const nameByCallId = new Map();
-
-    for (const m of messages) {
-      if (!m || m.role === 'system') continue;
-
-      if (m.role === 'tool') {
-        const name = nameByCallId.get(m.tool_call_id) || m.name || m.tool_call_id || 'tool';
-        let response;
-        try {
-          const parsed = typeof m.content === 'string' ? JSON.parse(m.content) : m.content;
-          response = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-            ? parsed
-            : { result: parsed };
-        } catch {
-          // Gemini wants an object; a bare string result gets wrapped rather
-          // than dropped.
-          response = { result: m.content ?? '' };
-        }
-        const part = { functionResponse: { name, response } };
-        const prev = out[out.length - 1];
-        if (prev && prev.role === 'user' && prev.parts.every(p => p.functionResponse)) {
-          prev.parts.push(part);
-        } else {
-          out.push({ role: 'user', parts: [part] });
-        }
-        continue;
-      }
-
-      if (m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.length > 0) {
-        const parts = [];
-        const text = typeof m.content === 'string' ? m.content : '';
-        if (text) parts.push({ text });
-        for (const tc of m.tool_calls) {
-          let args = {};
-          try {
-            const raw = tc?.function?.arguments;
-            args = typeof raw === 'string' ? (raw ? JSON.parse(raw) : {}) : (raw ?? {});
-          } catch {
-            args = {};
-          }
-          const name = tc?.function?.name;
-          if (tc?.id) nameByCallId.set(tc.id, name);
-          parts.push({ functionCall: { name, args } });
-        }
-        out.push({ role: 'model', parts });
-        continue;
-      }
-
-      out.push({
-        role: m.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: m.content ?? '' }]
-      });
-    }
-
-    return out;
-  }
-
-  /**
-   * Call Groq API
-   */
-  async callGroq(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = DEFAULT_MODELS.groq, messages = null, tools = null, toolChoice = null } = config;
-
-    const requestMessages = (messages && Array.isArray(messages) && messages.length > 0)
-      ? messages
-      : [{ role: 'user', content: prompt }];
-
-    try {
-      const body = {
-        model: model,
-        max_tokens: maxTokens,
-        temperature: temperature,
-        messages: requestMessages,
-        ...openAISamplingFields(config)
-      };
-
-      // FINDING F-04. Groq's chat/completions is OpenAI-shaped down to the
-      // field names — verified against console.groq.com/docs/api-reference
-      // (2026-09-05): `tools` is "a list of tools the model may call", and
-      // `tool_choice` takes none / auto / required / {type:"function",...}.
-      // So there is nothing to translate: the caller's own objects go on the
-      // wire verbatim, and the whole OpenAI-format conversation above
-      // (assistant.tool_calls turns, role:"tool" results with tool_call_id)
-      // is already in Groq's format too — no message rewriting either.
-      //
-      // Before this, callGroq destructured only {maxTokens, temperature,
-      // model, messages} while the capability matrix advertised twelve Groq
-      // models as tool-capable, so the rotation routed tool requests here and
-      // the caller got prose.
-      if (Array.isArray(tools) && tools.length > 0 && toolChoice !== 'none') {
-        body.tools = tools;
-        if (toolChoice) body.tool_choice = toolChoice;
-      }
-
-      const response = await axios.post(`${this.providers.groq.baseURL}/chat/completions`, body, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.providers.groq.apiKey}`
-        },
-        timeout: 60000
-      });
-
-      const choice = response.data.choices?.[0] || {};
-      const result = choice.message?.content ?? '';
-
-      // Read tool_calls back off the response in the same shape the OpenAI
-      // surface hands to the client — Groq already emits it, so this is a
-      // pass-through with a defensive normalize.
-      let toolCalls = null;
-      let finishReason = choice.finish_reason || 'stop';
-      const rawCalls = choice.message?.tool_calls;
-      if (Array.isArray(rawCalls) && rawCalls.length > 0) {
-        toolCalls = rawCalls.map((tc, i) => ({
-          id: tc?.id || `call_${i}`,
-          type: 'function',
-          function: {
-            name: tc?.function?.name,
-            arguments: typeof tc?.function?.arguments === 'string'
-              ? tc.function.arguments
-              : JSON.stringify(tc?.function?.arguments ?? {})
-          }
-        }));
-        finishReason = 'tool_calls';
-      } else if (finishReason === 'length') {
-        finishReason = 'length';
-      } else if (finishReason !== 'stop') {
-        finishReason = 'stop';
-      }
-
-      return {
-        content: result,
-        inputTokens: response.data.usage?.prompt_tokens || 0,
-        outputTokens: response.data.usage?.completion_tokens || 0,
-        toolCalls,
-        finishReason,
-        headers: response.headers
-      };
-    } catch (error) {
-      logger.error({ err: error }, 'Groq API error');
-      if (error.response) {
-        logger.error({ status: error.response.status, data: error.response.data }, 'Groq response error details');
-        throw new Error(`Groq API error (${error.response.status}): ${JSON.stringify(error.response.data)}`);
-      }
-      throw error;
-    }
-  }
-
-  /**
-   * Call Gemini API
-   */
-  async callGemini(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = DEFAULT_MODELS.gemini, messages = null, responseFormat = null, tools = null, toolChoice = null } = config;
-
-    // Gemini's contents[] takes role 'user' or 'model' (not 'assistant'),
-    // and system messages go into a separate systemInstruction field.
-    let systemInstruction = null;
-    let contents;
-    if (messages && Array.isArray(messages) && messages.length > 0) {
-      const systemMsgs = messages.filter(m => m.role === 'system');
-      const systemText = systemMsgs.map(m => m.content ?? '').filter(Boolean).join('\n\n');
-      if (systemText) {
-        systemInstruction = { parts: [{ text: systemText }] };
-      }
-      contents = this.geminiContentsFrom(messages);
-      if (contents.length === 0) {
-        contents = [{ role: 'user', parts: [{ text: prompt }] }];
-      }
-    } else {
-      contents = [{ role: 'user', parts: [{ text: prompt }] }];
-    }
-
-    try {
-      const generationConfig = {
-        maxOutputTokens: maxTokens,
-        temperature: temperature,
-        // Gemini's names for the two knobs it shares with OpenAI (F-09).
-        // seed and the two penalties are not in generationConfig for the
-        // model families this proxy routes to, so they are dropped here.
-        ...(config.topP != null && { topP: config.topP }),
-        ...(stopSequencesFrom(config.stop) && { stopSequences: stopSequencesFrom(config.stop) })
-      };
-      // Native OpenAI-style response_format → Gemini generationConfig mapping.
-      if (responseFormat?.type === 'json_object') {
-        generationConfig.responseMimeType = 'application/json';
-      } else if (responseFormat?.type === 'json_schema' && responseFormat.json_schema?.schema) {
-        generationConfig.responseMimeType = 'application/json';
-        generationConfig.responseSchema = responseFormat.json_schema.schema;
-      }
-
-      const body = { contents, generationConfig };
-      if (systemInstruction) body.systemInstruction = systemInstruction;
-
-      // Translate OpenAI-style tools → Gemini functionDeclarations,
-      // and tool_choice → toolConfig.functionCallingConfig.
-      if (tools && Array.isArray(tools) && tools.length > 0) {
-        const declarations = tools.map(t => {
-          const fn = t.function || t;
-          return {
-            name: fn.name,
-            description: fn.description || '',
-            parameters: fn.parameters || { type: 'object', properties: {} }
-          };
-        });
-        body.tools = [{ functionDeclarations: declarations }];
-
-        let mode = 'AUTO';
-        let allowedFunctionNames;
-        if (toolChoice === 'required') mode = 'ANY';
-        else if (toolChoice === 'none') mode = 'NONE';
-        else if (toolChoice?.type === 'function' && toolChoice.function?.name) {
-          mode = 'ANY';
-          allowedFunctionNames = [toolChoice.function.name];
-        }
-        body.toolConfig = {
-          functionCallingConfig: {
-            mode,
-            ...(allowedFunctionNames && { allowedFunctionNames })
-          }
-        };
-      }
-
-      // Key in a header, never the query string: @geeksuite/logger's err
-      // serializer keeps `err.config.url` (it is the one thing that says which
-      // call failed) and drops `err.config.headers`, so a key in a query
-      // string is the one provider credential that still reaches the logs in
-      // the clear on any failure. `aiCatalogDiscovery.listModels` carries the
-      // same rule for the Gemini listing.
-      const response = await axios.post(`${this.providers.gemini.baseURL}/models/${model}:generateContent`, body, {
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': this.providers.gemini.apiKey
-        },
-        timeout: 60000
-      });
-
-      const parts = response.data.candidates?.[0]?.content?.parts || [];
-      const functionCallParts = parts.filter(p => p.functionCall);
-
-      let result;
-      let toolCalls = null;
-      let finishReason = 'stop';
-
-      if (functionCallParts.length > 0) {
-        // Gemini doesn't issue tool_call IDs — synthesize stable ones from name+index.
-        toolCalls = functionCallParts.map((p, i) => ({
-          id: `call_${p.functionCall.name}_${i}`,
-          type: 'function',
-          function: {
-            name: p.functionCall.name,
-            arguments: JSON.stringify(p.functionCall.args || {})
-          }
-        }));
-        result = parts.filter(p => p.text).map(p => p.text).join('') || '';
-        finishReason = 'tool_calls';
-      } else {
-        result = parts.filter(p => p.text).map(p => p.text).join('') || '';
-      }
-
-      const geminiFinish = response.data.candidates?.[0]?.finishReason;
-      if (geminiFinish === 'MAX_TOKENS') finishReason = 'length';
-
-      return {
-        content: result,
-        inputTokens: response.data.usageMetadata?.promptTokenCount || 0,
-        outputTokens: response.data.usageMetadata?.candidatesTokenCount || 0,
-        toolCalls,
-        finishReason,
-        headers: response.headers
-      };
-    } catch (error) {
-      logger.error({ err: error }, 'Gemini API error');
-      if (error.response) {
-        logger.error({ status: error.response.status, data: error.response.data }, 'Gemini response error details');
-        throw new Error(`Gemini API error (${error.response.status}): ${JSON.stringify(error.response.data)}`);
-      }
-      throw error;
-    }
-  }
-
-  /**
-   * Call Together AI API
-   */
-  async callTogether(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = DEFAULT_MODELS.together, messages = null } = config;
-
-    const requestMessages = (messages && Array.isArray(messages) && messages.length > 0)
-      ? messages
-      : [{ role: 'user', content: prompt }];
-
-    try {
-      const response = await axios.post(`${this.providers.together.baseURL}/chat/completions`, {
-        model: model,
-        max_tokens: maxTokens,
-        temperature: temperature,
-        messages: requestMessages,
-        stream: false,
-        ...openAISamplingFields(config)
-      }, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.providers.together.apiKey}`
-        },
-        timeout: 60000
-      });
-
-      const result = response.data.choices[0].message.content;
-
-      return {
-        content: result,
-        inputTokens: response.data.usage?.prompt_tokens || 0,
-        outputTokens: response.data.usage?.completion_tokens || 0,
-        headers: response.headers
-      };
-    } catch (error) {
-      logger.error({ err: error }, 'Together AI API error');
-      if (error.response) {
-        logger.error({ status: error.response.status, data: error.response.data }, 'Together AI response error details');
-        // "Together AI API error", not "Together AI error": aiFailureEnvelope's
-        // upstreamStatusOf() reads the status out of the literal prefix
-        // `API error (<status>)`, and this was the one adapter that did not
-        // use it — so every Together failure, whatever its real status, was
-        // classified `internal` and answered 500 `internal_error` where a bad
-        // model pin is documented to be 404 `model_not_found`.
-        throw new Error(`Together AI API error (${error.response.status}): ${JSON.stringify(error.response.data)}`);
-      }
-      throw error;
-    }
-  }
-
-  /**
-   * Call Cohere API
-   */
-  async callCohere(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = DEFAULT_MODELS.cohere, messages = null } = config;
-
-    // Cohere /chat takes a preamble + chat_history + message (current turn).
-    // Fold system messages into preamble, use the last user turn as message,
-    // and place everything between into chat_history.
-    let preamble = '';
-    let currentMessage = prompt;
-    const chatHistory = [];
-    if (messages && Array.isArray(messages) && messages.length > 0) {
-      const systemMsgs = messages.filter(m => m.role === 'system');
-      preamble = systemMsgs.map(m => m.content ?? '').filter(Boolean).join('\n\n');
-      const convo = messages.filter(m => m.role !== 'system');
-      if (convo.length > 0) {
-        const last = convo[convo.length - 1];
-        currentMessage = last.content ?? prompt;
-        for (const m of convo.slice(0, -1)) {
-          chatHistory.push({ role: m.role === 'assistant' ? 'CHATBOT' : 'USER', message: m.content ?? '' });
-        }
-      }
-    }
-
-    try {
-      const body = {
-        model: model,
-        message: currentMessage,
-        max_tokens: maxTokens,
-        temperature: temperature
-      };
-      if (preamble) body.preamble = preamble;
-      if (chatHistory.length > 0) body.chat_history = chatHistory;
-
-      // Cohere's /chat sampling knobs, in Cohere's own spelling (F-09 for
-      // cohere): `p` is its top_p, `stop_sequences` takes up to 5 strings,
-      // and seed/frequency_penalty/presence_penalty are named the same as
-      // OpenAI's. Absent values are omitted rather than sent as null/0, same
-      // convention as openAISamplingFields.
-      if (config.topP != null) body.p = config.topP;
-      const cohereStop = stopSequencesFrom(config.stop);
-      if (cohereStop) body.stop_sequences = cohereStop;
-      if (config.seed != null) body.seed = config.seed;
-      if (config.presencePenalty != null) body.presence_penalty = config.presencePenalty;
-      if (config.frequencyPenalty != null) body.frequency_penalty = config.frequencyPenalty;
-
-      // No `tools` forwarding here, deliberately. Cohere's native tool-use
-      // contract (tool_results, force_single_step) is not the OpenAI
-      // {type:"function",...} shape the other adapters translate — doing it
-      // right needs its own translation layer, which is out of scope for
-      // this pass. TOOL_FORWARDING_PROVIDERS in aiModelCapabilitiesService.js
-      // does not include 'cohere', so supportsToolCalling stays false for
-      // every Cohere model regardless of what supportsFunctionCalling says,
-      // and the rotation will not route a `tools` request here (F-04).
-
-      const response = await axios.post(`${this.providers.cohere.baseURL}/chat`, body, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.providers.cohere.apiKey}`
-        },
-        timeout: 60000
-      });
-
-      const result = response.data.text;
-
-      return {
-        content: result,
-        inputTokens: response.data.meta?.tokens?.input_tokens || 0,
-        outputTokens: response.data.meta?.tokens?.output_tokens || 0,
-        headers: response.headers
-      };
-    } catch (error) {
-      logger.error({ err: error }, 'Cohere API error');
-      if (error.response) {
-        logger.error({ status: error.response.status, data: error.response.data }, 'Cohere response error details');
-        throw new Error(`Cohere API error (${error.response.status}): ${JSON.stringify(error.response.data)}`);
-      }
-      throw error;
-    }
-  }
-
-  /**
-   * Call OpenRouter API
-   */
-  async callOpenRouter(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = DEFAULT_MODELS.openrouter, messages = null } = config;
-
-    const requestMessages = (messages && Array.isArray(messages) && messages.length > 0)
-      ? messages
-      : [{ role: 'user', content: prompt }];
-
-    try {
-      const response = await axios.post(`${this.providers.openrouter.baseURL}/chat/completions`, {
-        model: model,
-        max_tokens: maxTokens,
-        temperature: temperature,
-        messages: requestMessages,
-        // Ask for the cost accounting. OpenRouter returns `usage.cost` (USD,
-        // exact) when this is set; without it the ledger would have to price
-        // an auto-router's answer from a table that does not know which model
-        // answered. It costs nothing and adds no latency.
-        usage: { include: true },
-        ...openAISamplingFields(config)
-      }, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.providers.openrouter.apiKey}`,
-          'HTTP-Referer': 'https://basegeek.clintgeek.com', // Optional: for rankings
-          'X-Title': 'BaseGeek aiGeek' // Optional: shows in OpenRouter dashboard
-        },
-        timeout: 60000
-      });
-
-      const result = response.data.choices[0].message.content;
-
-      return {
-        content: result,
-        inputTokens: response.data.usage?.prompt_tokens || 0,
-        outputTokens: response.data.usage?.completion_tokens || 0,
-        headers: response.headers,
-        // OpenRouter is the only provider that prices its own call for us:
-        // `usage.cost` is dollars, exact, for the model that actually answered
-        // — which matters most for `openrouter/free`, an auto-router whose
-        // model is not known until it replies. `updateStats` prefers this over
-        // any price table. Free rows report 0, and 0 is the truth.
-        costUsd: response.data.usage?.cost ?? null
-      };
-    } catch (error) {
-      logger.error({ err: error }, 'OpenRouter API error');
-      if (error.response) {
-        logger.error({ status: error.response.status, data: error.response.data }, 'OpenRouter response error details');
-        throw new Error(`OpenRouter API error (${error.response.status}): ${JSON.stringify(error.response.data)}`);
-      }
-      throw error;
-    }
-  }
-
-  /**
-   * Call Cerebras API (OpenAI-compatible)
-   */
-  async callCerebras(prompt, config = {}) {
-    const { maxTokens = 1000, temperature = 0.7, model = DEFAULT_MODELS.cerebras, messages = null } = config;
-
-    // Use provided messages array or convert prompt to messages
-    const requestMessages = messages || [
-      {
-        role: 'user',
-        content: prompt
-      }
-    ];
-
-    // Until 2026-09-07 this adapter appended a "tool-decisive" preamble to the
-    // system turn (via families.json -> PROMPT_STRATEGIES): a codeGeek-era
-    // instruction block about executing tool calls and reading THE_STEPS.md
-    // without asking. No suite feature is a coding agent; on an Ask parse or a
-    // food-log extraction it was pure noise, and because it mutated the
-    // caller's array in place it also leaked into whichever provider answered
-    // next after a Cerebras failure. Removed outright rather than folded.
-
-    try {
-      const response = await axios.post(`${this.providers.cerebras.baseURL}/chat/completions`, {
-        model: model,
-        max_tokens: maxTokens,
-        temperature: temperature,
-        messages: requestMessages,
-        ...openAISamplingFields(config)
-      }, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.providers.cerebras.apiKey}`
-        },
-        timeout: 60000
-      });
-
-      const result = response.data.choices[0].message.content;
-
-      return {
-        content: result,
-        inputTokens: response.data.usage?.prompt_tokens || 0,
-        outputTokens: response.data.usage?.completion_tokens || 0,
-        headers: response.headers
-      };
-    } catch (error) {
-      logger.error({ err: error }, 'Cerebras API error');
-      if (error.response) {
-        logger.error({ status: error.response.status, data: error.response.data }, 'Cerebras response error details');
-        throw new Error(`Cerebras API error (${error.response.status}): ${JSON.stringify(error.response.data)}`);
-      }
-      throw error;
-    }
-  }
 
   /**
    * Parse JSON response from AI

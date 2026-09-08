@@ -1,8 +1,13 @@
 import AIModel from '../models/AIModel.js';
-import { PROVIDER_IDS } from '../config/aiProviders.js';
+import {
+  PROVIDER_IDS,
+  TOOL_FORWARDING_PROVIDERS,
+  JSON_SCHEMA_SUPPORTED,
+  JSON_MODE_SUPPORTED
+} from '../config/aiProviders.js';
 import logger from '../lib/logger.js';
 
-// ─── Adapter facts ───────────────────────────────────────────────────────────
+// ─── Adapter facts, re-exported ──────────────────────────────────────────────
 //
 // The three constants below are facts about *our adapters*, not claims about
 // models: they say which provider/model pairs aiService can actually put
@@ -10,6 +15,17 @@ import logger from '../lib/logger.js';
 // catalogue and nothing here needs feeding — a pair joins a set the day the
 // adapter beside it learns the parameter, and leaves it the day the adapter
 // goes.
+//
+// **They are no longer typed here.** Until Phase 2 they were three hand-kept
+// Sets in this file, one directory away from the adapters they described — so
+// a provider could be listed with no adapter behind it (F-04, exactly what
+// happened to groq's twelve "tool-capable" models) or keep its membership
+// after its adapter was deleted (anthropic, for a day). They are derived from
+// the `forwardsTools` / `nativeJsonSchema` / `nativeJsonMode` fields of the
+// adapter descriptors in `config/aiProviders.js` now: the claim and the code
+// that honours it are the same line, and adding a provider cannot forget one.
+// This file re-exports them under their original names so every caller and
+// every test reads what it always did.
 //
 // The ~1,210-line `knownCapabilities` table that used to sit under them (model
 // context windows, speed and quality tiers, per-model tool and JSON flags,
@@ -19,35 +35,23 @@ import logger from '../lib/logger.js';
 // `supported_parameters` or from a live probe, and `inferCapabilities` below is
 // the fallback for a listing that says nothing. `TOOL_CALLING_CORRECTIONS` — a
 // dozen groq ids that existed only to patch that table's stale
-// `supportsFunctionCalling: false` rows — went with it; groq's entry in
-// TOOL_FORWARDING_PROVIDERS is the whole of that fact now.
+// `supportsFunctionCalling: false` rows — went with it; groq's `forwardsTools`
+// descriptor is the whole of that fact now.
 //
 // JSON_SCHEMA_SUPPORTED / JSON_MODE_SUPPORTED:
-//   Provider/model pairs where aiService has a NATIVE translation implemented
-//   in its call*() method for response_format:{type: "json_schema"|"json_object"}.
+//   Provider/model pairs whose adapter has a NATIVE translation for
+//   response_format:{type: "json_schema"|"json_object"}. Pairs NOT in these
+//   sets fall through to the prompt-injection fallback — which preserves
+//   rotation: every provider can "do" structured output one way or the other,
+//   just at varying fidelity. The legacy `supportsJSONOutput` flag is a softer
+//   "can produce JSON when asked" signal used elsewhere (aiDirectorService
+//   model selection); these are the stricter "we forward response_format
+//   correctly" signals. Both sets hold `provider:*` entries today; the
+//   per-model form (`provider:modelId`) is still read below, for the day one
+//   provider's adapter can only manage it on some ids.
 //
-// Pairs NOT in these sets fall through to the prompt-injection fallback —
-// which preserves rotation: every provider can "do" structured output one way
-// or the other, just at varying fidelity.
-//
-// Expand these sets as native implementations land in callGroq / callCerebras /
-// callOpenRouter / etc. The legacy supportsJSONOutput flag is a softer "can
-// produce JSON when asked" signal used elsewhere (aiDirectorService model
-// selection); these are the stricter "we forward response_format correctly"
-// signals.
-//
-// `anthropic:*` was the other member of both sets until 2026-09-07, when the
-// provider was retired (out of credit, gone for good). `gemini` is the one
-// bespoke adapter left that forwards both response_format shapes natively.
-const JSON_SCHEMA_SUPPORTED = new Set([
-  'gemini:*'
-]);
-const JSON_MODE_SUPPORTED = new Set([
-  'gemini:*'
-]);
-
-// TOOL_FORWARDING_PROVIDERS: the providers whose adapter in aiService actually
-// puts `tools` on the wire and reads `tool_calls` back off it.
+// TOOL_FORWARDING_PROVIDERS: the providers whose adapter actually puts `tools`
+// on the wire and reads `tool_calls` back off it.
 //
 // FINDING F-04: this set is the difference between a capability matrix and a
 // wish. `supportsToolCalling` gates the rotation (aiService.js — a `tools`
@@ -56,21 +60,12 @@ const JSON_MODE_SUPPORTED = new Set([
 // `tools` array is quietly dropped at the adapter, and the caller gets prose and
 // finish_reason "stop" where the contract promised tool_calls. Groq was marked
 // capable on twelve models for exactly that reason, and both aiGeek docs said
-// so; callGroq now forwards, so the claim is true.
+// so; its adapter forwards, so the claim is true.
 //
-// The rule: a provider goes in here the same day its call*() learns to forward
-// `tools` — never before. Everything else falls out of the rotation for tool
-// requests, which is the correct answer, because tool calling has no
-// prompt-injection fallback the way structured output does: a tool_calls
-// response shape can only come from native provider support.
-const TOOL_FORWARDING_PROVIDERS = new Set([
-  'gemini',     // callGemini — functionDeclarations + toolConfig + functionCall readback
-  'groq'        // callGroq   — OpenAI-shaped tools/tool_choice, verbatim
-]);
-// `anthropic` was the first entry here (callClaude forwarded tools and all four
-// tool_choice forms and read tool_use blocks back); removed 2026-09-07 with the
-// provider. Gemini is now the only adapter with both native tool forwarding and
-// native json_schema.
+// `anthropic:*` was a member of all three until 2026-09-07, when the provider
+// was retired (out of credit, gone for good). Gemini is the one bespoke
+// adapter left with native tool forwarding *and* both response_format shapes.
+export { TOOL_FORWARDING_PROVIDERS, JSON_SCHEMA_SUPPORTED, JSON_MODE_SUPPORTED };
 
 
 function forwardsTools(provider) {

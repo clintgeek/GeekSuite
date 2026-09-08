@@ -74,12 +74,27 @@ describe('aiService no longer carries the retired providers', () => {
     expect(aiService.call1minAI).toBeUndefined();
   });
 
-  it('has no callClaude / anthropicMessagesFrom', () => {
+  it('has no callClaude / anthropicMessagesFrom', async () => {
     expect(aiService.callClaude).toBeUndefined();
     expect(aiService.anthropicMessagesFrom).toBeUndefined();
     // The Gemini translator is the one that carries F-02 now, so it had better
-    // still be here.
-    expect(typeof aiService.geminiContentsFrom).toBe('function');
+    // still exist — in `services/ai/adapters/gemini.js` since Phase 2, which
+    // is where it belongs: beside the request body it builds. It left
+    // `aiService` with the other nine adapters, so this reads the adapter.
+    const { geminiContentsFrom } = await import('../services/ai/adapters/gemini.js');
+    expect(typeof geminiContentsFrom).toBe('function');
+    expect(aiService.geminiContentsFrom).toBeUndefined();
+  });
+
+  it('has none of the ten call<Provider> methods — callProvider is the one door', () => {
+    for (const method of [
+      'callGroq', 'callGemini', 'callTogether', 'callCohere', 'callOpenRouter',
+      'callCerebras', 'callCloudflare', 'callOllama', 'callLLMGateway',
+    ]) {
+      expect(aiService[method]).toBeUndefined();
+    }
+    expect(typeof aiService.callProvider).toBe('function');
+    expect(typeof aiService.callAI).toBe('function');
   });
 
   it('defines no anthropic provider, and callProvider cannot route to one', async () => {
@@ -96,6 +111,28 @@ describe('aiService no longer carries the retired providers', () => {
     // A claude model id would come back through a seed row or a default, which
     // is how a retired provider gets a second life.
     expect(code).not.toMatch(/claude/i);
+  });
+
+  it('nor does any adapter — a retired provider cannot come back as a descriptor', async () => {
+    // Phase 2 moved the ten adapters out of aiService, so the tripwire follows
+    // them: `services/ai/adapters/*` plus the registry and the roster the
+    // registry reads. A resurrected provider would need a row in one of these.
+    for (const file of [
+      '../services/ai/adapters/index.js',
+      '../services/ai/adapters/openaiCompatible.js',
+      '../services/ai/adapters/gemini.js',
+      '../services/ai/adapters/cohere.js',
+      '../services/ai/adapters/cloudflare.js',
+      '../services/ai/adapters/ollama.js',
+      '../services/ai/AdapterError.js',
+      '../config/aiProviders.js',
+    ]) {
+      const code = await codeOnly(file);
+      for (const retired of RETIRED) {
+        expect(code.toLowerCase()).not.toContain(retired);
+      }
+      expect(code).not.toMatch(/claude/i);
+    }
   });
 
   it('defines no rate-limit bucket for any of them', () => {

@@ -667,7 +667,21 @@ describe('tools and tool_choice', () => {
     expect(withCalls.choices[0].delta.tool_calls[0].index).toBe(0);
   });
 
-  it('rotation skips a tool-incapable provider instead of failing the request', async () => {
+  /**
+   * CHANGED BY PHASE 2 (2026-09-07). It used to read "rotation skips a
+   * tool-incapable provider instead of failing the request" and asserted that
+   * a pinned-but-incapable `cerebras` was skipped and **groq answered
+   * instead**, out of `fallbackOrder`, on groq's own default model.
+   *
+   * That is the generic provider walk, which DOCS/AIGEEK_FRONT_DOOR.md §2
+   * deletes: a request that named a backend is not answered by a different
+   * one (F-22, "a model pin is a promise"). The capability skip itself is
+   * untouched and is what still runs here — it just has nowhere else to go on
+   * a pin, so the request fails as itself. The *walk* version of the same
+   * behaviour, where the next free-tier row picks it up, is pinned in
+   * `aiFreeTierRouting.test.js` ("skips a tool-incapable provider's row").
+   */
+  it('a tool-incapable pin is skipped and fails as itself, not answered by another provider', async () => {
     // cerebras is not in TOOL_CALLING_CORRECTIONS and its call method takes no
     // tools; groq forwards them verbatim. (This was `anthropic` until
     // 2026-09-07, when that provider and callClaude were removed.)
@@ -689,15 +703,19 @@ describe('tools and tool_choice', () => {
     patch(aiService, 'fallbackOrder', ['cerebras', 'groq']);
     aiService.initialized = true;
 
-    const out = await aiService.callAI('weather?', {
+    // `noFallback` is what `/openai/v1` sets on every concrete-model request,
+    // so this is the shape a pinned SDK call actually arrives in.
+    await expect(aiService.callAI('weather?', {
       provider: 'cerebras',
+      model: 'llama3.1-8b',
+      noFallback: true,
       tools: [WEATHER_TOOL],
       messages: [{ role: 'user', content: 'weather?' }],
-    });
+    })).rejects.toThrow();
 
-    expect(tried).not.toContain('cerebras'); // skipped on capability, not tried and failed
-    expect(tried).toContain('groq');
-    expect(out).toBe('');
+    // Skipped on capability — not tried and failed, and not silently
+    // substituted either.
+    expect(tried).toEqual([]);
   });
 
   // Until 2026-09-07 this pair of cases exercised `callClaude` — the Anthropic

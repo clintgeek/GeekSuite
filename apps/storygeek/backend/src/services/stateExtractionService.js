@@ -3,8 +3,10 @@
  * PROPOSED state changes. Proposals are validated by canonValidationService
  * and committed by stateCommitService; nothing here touches canon directly.
  *
- * Uses a cheap auxiliary model (not the pinned GM model) since this is a
- * mechanical extraction task, not creative narration.
+ * Runs on aiGeek's `aux` feature — mechanical extraction, low temperature,
+ * never pinned. It used to ask `aiService.resolveAuxModel()` which model to
+ * name before every call; aiGeek picks now, and the model that answered comes
+ * back in `provenance` instead of being predicted here.
  */
 import aiService from './aiService.js';
 
@@ -58,19 +60,31 @@ class StateExtractionService {
   async extractChanges(story, playerInput, narration, turnContext, userToken = null) {
     let modelUsed = null;
     try {
-      const { provider, model } = await aiService.resolveAuxModel(userToken);
-      modelUsed = `${provider}:${model}`;
       const prompt = this.buildExtractionPrompt(story, playerInput, narration, turnContext);
-      const response = await aiService.callBaseGeekAI(prompt, {
+      const result = await aiService.callAuxAI(prompt, {
         maxTokens: 1500,
         temperature: 0.1, // extraction wants determinism, not creativity
-        provider, model
+        conversationId: story?._id,
+        quotaKey: aiService.quotaKeyFor(story)
       }, userToken);
-      return { proposal: this.parseProposal(response), modelUsed };
+
+      const provenance = result.provenance || {};
+      modelUsed = provenance.provider && provenance.model
+        ? `${provenance.provider}:${provenance.model}`
+        : null;
+
+      if (!result.ok) {
+        // Extraction must never break the player's turn. A missed extraction
+        // means one turn of changes goes unrecorded — recoverable. A failed
+        // turn is not.
+        console.warn('State extraction unavailable (turn continues):', result.reason);
+        return { proposal: null, modelUsed };
+      }
+
+      return { proposal: this.parseProposal(result.content), modelUsed };
     } catch (error) {
-      // Extraction must never break the player's turn. A missed extraction
-      // means one turn of changes goes unrecorded — recoverable. A failed
-      // turn is not.
+      // Only a real bug reaches here now; an unavailable model is the branch
+      // above.
       console.error('State extraction failed (turn continues):', error.message);
       return { proposal: null, modelUsed };
     }

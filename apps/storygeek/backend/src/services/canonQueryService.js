@@ -97,7 +97,7 @@ class CanonQueryService {
       note: 'Anything not listed here has not been established in canon.'
     };
 
-    payload.summary = await this.summarize(payload, stripped, userToken);
+    payload.summary = await this.summarize(payload, stripped, userToken, story?._id, aiService.quotaKeyFor(story));
     return payload;
   }
 
@@ -215,7 +215,7 @@ class CanonQueryService {
    * Short prose over the payload — REPORT-ONLY contract, aux model at
    * near-zero temperature, deterministic fallback if the call fails.
    */
-  async summarize(payload, question, userToken) {
+  async summarize(payload, question, userToken, conversationId = null, quotaKey = undefined) {
     if (payload.facts.length === 0 && payload.entities.length === 0) {
       return 'Nothing about that has been established in canon yet. If you act on it in the story, it will become part of the record.';
     }
@@ -244,11 +244,22 @@ ${payload.threads.map(t => `- THREAD [${t.status}]: ${t.name} — ${t.descriptio
 
 ANSWER:`;
 
-    try {
-      const answer = await aiService.callAuxAI(prompt, { maxTokens: 400, temperature: 0.1 }, userToken);
-      return String(answer).trim();
-    } catch (e) {
-      // Deterministic fallback — the payload alone is a complete answer.
+    const result = await aiService.callAuxAI(prompt, {
+      maxTokens: 400,
+      temperature: 0.1,
+      conversationId,
+      quotaKey
+    }, userToken).catch((e) => {
+      console.warn('Canon query aux call threw (falling back to the record):', e.message);
+      return { ok: false, reason: 'unavailable' };
+    });
+
+    if (result.ok) return String(result.content).trim();
+
+    // Deterministic fallback — the payload alone is a complete answer. This is
+    // the one AI call in StoryGeek that genuinely does not need a model: the
+    // canonical record IS the answer, and prose is only a nicety on top.
+    {
       const bySource = { player: [], narrator: [], setup: [], other: [] };
       for (const f of payload.facts) {
         (bySource[f.source] || bySource.other).push(f.text);

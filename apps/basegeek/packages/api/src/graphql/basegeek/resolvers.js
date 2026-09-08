@@ -4,6 +4,7 @@ import { encrypt } from '@geeksuite/crypto-vault';
 import AIPricing from '../../models/AIPricing.js';
 import AIFreeTier from '../../models/AIFreeTier.js';
 import AIAppConfig from '../../models/AIAppConfig.js';
+import { normalizeTier } from '../../services/aiRoute.js';
 import aiService from '../../services/aiService.js';
 import aiDirectorService from '../../services/aiDirectorService.js';
 import aiUsageService from '../../services/aiUsageService.js';
@@ -558,15 +559,29 @@ export const resolvers = {
     saveAIAppConfig: async (_, { appName, config }, { user }) => {
       await requireAdminUser(user);
       if (!appName?.trim()) throw new GraphQLError('appName is required');
+      // `free` and `rotation` are read as `auto` everywhere (aiRoute.js) and
+      // are rewritten here rather than by a migration: a save is the one
+      // moment we already have the row in hand and a reason to write it, so
+      // the legacy values drain away as rows are touched. `normalizeTier` also
+      // means a stale UI still sending `free` cannot re-introduce one.
+      const tier = normalizeTier(config.tier);
       const update = {
         appName: appName.trim(),
         displayName: config.displayName || '',
-        tier: config.tier || 'free',
-        provider: config.tier === 'specific' ? (config.provider || null) : null,
-        model: config.tier === 'specific' ? (config.model || null) : null,
+        tier,
+        provider: tier === 'specific' ? (config.provider || null) : null,
+        model: tier === 'specific' ? (config.model || null) : null,
         fallbackOrder: config.fallbackOrder || [],
         maxTokens: config.maxTokens || null,
         temperature: config.temperature != null ? config.temperature : null,
+        // Phase 2's two new routing controls. `sticky` is an enum of exactly
+        // one value plus null, so anything else is null — a typo must not
+        // become a mode.
+        sticky: config.sticky === 'per-conversation' ? 'per-conversation' : null,
+        allowPaid: config.allowPaid === true,
+        dailyCap: Number.isFinite(Number(config.dailyCap)) && Number(config.dailyCap) > 0
+          ? Math.floor(Number(config.dailyCap))
+          : null,
         notes: config.notes || '',
         enabled: config.enabled !== false
       };

@@ -7,6 +7,13 @@
  * and aborts a run that overruns its wall-clock allowance regardless of size
  * (`BOOKIFY_TIME_BUDGET_MS`, a 504-shaped error), rather than holding the
  * request open indefinitely.
+ *
+ * Re-pointed for Phase 2: the passes run on aiGeek's `aux` feature via
+ * `callAuxAI`, which answers `{ ok, content }` instead of throwing, and the
+ * per-export `aiDirectorService.recommendProvider` round trip is gone — the
+ * consistency pass is `auto` like everything else. The third case below is
+ * new: an export that cannot run because no model would serve says so (503)
+ * rather than coming back quietly short.
  */
 
 import { afterEach, beforeEach, describe, mock, test } from 'node:test';
@@ -19,11 +26,11 @@ import bookService, {
   BOOKIFY_TIME_BUDGET_MS,
   BookifyTooLargeError,
   BookifyTimeoutError,
+  BookifyUnavailableError,
 } from '../services/bookService.js';
 
 const realFindById = Story.findById;
-const realCallBaseGeekAI = aiService.callBaseGeekAI;
-const realRecommendProviderModel = aiService.recommendProviderModel;
+const realCallAuxAI = aiService.callAuxAI;
 
 function storyWithEvents(count) {
   const events = Array.from({ length: count }, (_, i) => ({ description: `Event ${i}` }));
@@ -36,16 +43,19 @@ beforeEach(() => {
 
 afterEach(() => {
   Story.findById = realFindById;
-  aiService.callBaseGeekAI = realCallBaseGeekAI;
-  aiService.recommendProviderModel = realRecommendProviderModel;
+  aiService.callAuxAI = realCallAuxAI;
   mock.timers.reset();
 });
+
+/** The `{ ok, content }` envelope `callAuxAI` answers with. */
+const served = (content) => async () => ({ ok: true, content, reason: null, provenance: { provider: 'groq', model: 'llama', hints: [] } });
+const declined = (reason) => async () => ({ ok: false, content: null, reason, message: 'The narrator is not answering right now.' });
 
 describe('bookify — size cap', () => {
   test('rejects a story over MAX_BOOKIFY_EVENTS before calling the AI at all', async () => {
     Story.findById = async () => storyWithEvents(MAX_BOOKIFY_EVENTS + 1);
     let called = false;
-    aiService.callBaseGeekAI = async () => { called = true; return 'should not run'; };
+    aiService.callAuxAI = async () => { called = true; return { ok: true, content: 'should not run' }; };
 
     await assert.rejects(
       () => bookService.bookify('story-too-big', 'tok'),
@@ -60,12 +70,46 @@ describe('bookify — size cap', () => {
 
   test('a story at the cap is allowed through to the AI step', async () => {
     Story.findById = async () => storyWithEvents(MAX_BOOKIFY_EVENTS);
-    aiService.callBaseGeekAI = async () => 'polished scene';
-    aiService.recommendProviderModel = async () => ({ provider: 'gemini', model: 'gemini-flash-latest' });
+    aiService.callAuxAI = served('polished scene');
 
     const result = await bookService.bookify('story-at-cap', 'tok');
     assert.equal(result.title, 'Test Tale');
     assert.ok(result.content.includes('polished scene'));
+  });
+});
+
+describe('bookify — an unavailable model', () => {
+  test('refuses the export rather than returning a short book', async () => {
+    Story.findById = async () => storyWithEvents(12);
+    aiService.callAuxAI = declined('cap');
+
+    await assert.rejects(
+      () => bookService.bookify('story-no-model', 'tok'),
+      (err) => {
+        assert.ok(err instanceof BookifyUnavailableError);
+        assert.equal(err.code, 'BOOKIFY_UNAVAILABLE');
+        assert.equal(err.reason, 'cap');
+        return true;
+      }
+    );
+  });
+
+  test('never asks a director which model to use — the pass is auto', async () => {
+    Story.findById = async () => storyWithEvents(6);
+    const seen = [];
+    aiService.callAuxAI = async (prompt, config) => {
+      seen.push(config);
+      return { ok: true, content: 'polished scene', reason: null, provenance: { hints: [] } };
+    };
+
+    await bookService.bookify('story-auto', 'tok');
+
+    assert.ok(seen.length >= 1);
+    for (const config of seen) {
+      assert.equal(config.provider, undefined, 'bookify must name no provider');
+      assert.equal(config.model, undefined, 'bookify must name no model');
+      assert.equal(config.conversationId, 'story-auto');
+    }
   });
 });
 
@@ -76,10 +120,10 @@ describe('bookify — time budget', () => {
     // of the first call makes the second scene's budget check trip.
     Story.findById = async () => storyWithEvents(12);
     let calls = 0;
-    aiService.callBaseGeekAI = async () => {
+    aiService.callAuxAI = async () => {
       calls += 1;
       if (calls === 1) mock.timers.tick(BOOKIFY_TIME_BUDGET_MS + 1);
-      return 'polished scene';
+      return { ok: true, content: 'polished scene', reason: null, provenance: { hints: [] } };
     };
 
     await assert.rejects(
@@ -95,8 +139,7 @@ describe('bookify — time budget', () => {
 
   test('a run that finishes inside the budget is unaffected', async () => {
     Story.findById = async () => storyWithEvents(6);
-    aiService.callBaseGeekAI = async () => 'polished scene';
-    aiService.recommendProviderModel = async () => ({ provider: 'gemini', model: 'gemini-flash-latest' });
+    aiService.callAuxAI = served('polished scene');
 
     const result = await bookService.bookify('story-fast', 'tok');
     assert.ok(result.content.includes('polished scene'));

@@ -371,6 +371,14 @@ describe('selectFreeTierCandidates', () => {
 describe('the adapters return headers, and OpenRouter returns its cost', () => {
   const HEADERS = { 'x-ratelimit-remaining-requests': '5' };
 
+  // These four cases called `aiService.callGroq` / `callOpenRouter` /
+  // `callCloudflare` … directly until Phase 2 (2026-09-07), when the ten
+  // `call<Provider>` methods became five adapter files behind
+  // `services/ai/adapters`. They go through `callProvider` now — the same door
+  // `callAI` and the probe use — so what is asserted is unchanged and the path
+  // is one step more real. The adapters' own wire shapes are pinned in
+  // `aiAdapters.test.js`; what matters *here* is that the header capture
+  // Phase 1 added survives the trip back through every shape.
   function stubPost(data, headers = HEADERS) {
     const calls = [];
     patch(axios, 'post', async (url, body, opts) => {
@@ -382,10 +390,10 @@ describe('the adapters return headers, and OpenRouter returns its cost', () => {
 
   it('groq, together, cerebras, llmgateway — the OpenAI-shaped four', async () => {
     const data = { choices: [{ message: { content: 'hi' }, finish_reason: 'stop' }], usage: { prompt_tokens: 1, completion_tokens: 2 } };
-    for (const [method, provider] of [['callGroq', 'groq'], ['callTogether', 'together'], ['callCerebras', 'cerebras'], ['callLLMGateway', 'llmgateway']]) {
+    for (const provider of ['groq', 'together', 'cerebras', 'llmgateway']) {
       patch(aiService.providers[provider], 'apiKey', 'test-key-not-a-real-credential');
       stubPost(data);
-      const out = await aiService[method]('hi', { model: 'm' });
+      const out = await aiService.callProvider(provider, 'hi', { model: 'm' });
       expect(out.headers).toEqual(HEADERS);
       while (patched.length && patched[patched.length - 1][1] === 'post') {
         const [obj, key, original, had] = patched.pop();
@@ -400,7 +408,7 @@ describe('the adapters return headers, and OpenRouter returns its cost', () => {
       choices: [{ message: { content: 'hi' } }],
       usage: { prompt_tokens: 1, completion_tokens: 2, cost: 0.0000123 },
     });
-    const out = await aiService.callOpenRouter('hi', { model: 'openrouter/free' });
+    const out = await aiService.callProvider('openrouter', 'hi', { model: 'openrouter/free' });
     expect(calls[0].body.usage).toEqual({ include: true });
     expect(out.costUsd).toBe(0.0000123);
     expect(out.headers).toEqual(HEADERS);
@@ -409,7 +417,7 @@ describe('the adapters return headers, and OpenRouter returns its cost', () => {
   it('openrouter reports null rather than zero when it said nothing', async () => {
     patch(aiService.providers.openrouter, 'apiKey', 'test-key-not-a-real-credential');
     stubPost({ choices: [{ message: { content: 'hi' } }], usage: { prompt_tokens: 1, completion_tokens: 2 } });
-    const out = await aiService.callOpenRouter('hi', { model: 'm' });
+    const out = await aiService.callProvider('openrouter', 'hi', { model: 'm' });
     // null means "ask the price table", 0 would mean "this was free".
     expect(out.costUsd).toBeNull();
   });
@@ -418,19 +426,19 @@ describe('the adapters return headers, and OpenRouter returns its cost', () => {
     patch(aiService.providers.cloudflare, 'apiKey', 'test-key-not-a-real-credential');
     patch(aiService.providers.cloudflare, 'accountId', 'acct');
     stubPost({ result: { response: 'hi' } });
-    expect((await aiService.callCloudflare('hi', { model: 'm' })).headers).toEqual(HEADERS);
+    expect((await aiService.callProvider('cloudflare', 'hi', { model: 'm' })).headers).toEqual(HEADERS);
     patched.pop()[0];
 
     patch(aiService.providers.ollama, 'apiKey', 'test-key-not-a-real-credential');
     patch(axios, 'post', async () => ({ data: { message: { content: 'hi' } }, headers: HEADERS }));
-    expect((await aiService.callOllama('hi', { model: 'm' })).headers).toEqual(HEADERS);
+    expect((await aiService.callProvider('ollama', 'hi', { model: 'm' })).headers).toEqual(HEADERS);
 
     patch(aiService.providers.cohere, 'apiKey', 'test-key-not-a-real-credential');
     patch(axios, 'post', async () => ({ data: { text: 'hi' }, headers: HEADERS }));
-    expect((await aiService.callCohere('hi', { model: 'm' })).headers).toEqual(HEADERS);
+    expect((await aiService.callProvider('cohere', 'hi', { model: 'm' })).headers).toEqual(HEADERS);
 
     patch(aiService.providers.gemini, 'apiKey', 'test-key-not-a-real-credential');
     patch(axios, 'post', async () => ({ data: { candidates: [{ content: { parts: [{ text: 'hi' }] } }] }, headers: HEADERS }));
-    expect((await aiService.callGemini('hi', { model: 'm' })).headers).toEqual(HEADERS);
+    expect((await aiService.callProvider('gemini', 'hi', { model: 'm' })).headers).toEqual(HEADERS);
   });
 });

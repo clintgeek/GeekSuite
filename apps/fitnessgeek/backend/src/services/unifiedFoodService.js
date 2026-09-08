@@ -22,7 +22,7 @@ import logger from '../config/logger.js';
 import FoodItem from '../models/FoodItem.js';
 import FoodLog from '../models/FoodLog.js';
 import UserSettings from '../models/UserSettings.js';
-import baseGeekAIService from './baseGeekAIService.js';
+import aiFoodService from './aiFoodService.js';
 import foodApiService from './foodApiService.js';
 import fatSecretService from './fatSecretService.js';
 import aiClassificationCacheService from './aiClassificationCacheService.js';
@@ -120,7 +120,7 @@ class UnifiedFoodService {
       if (results.length === 0 && includeAI) {
         logger.info('No API results, using AI estimation', { query: trimmedQuery });
         try {
-          var aiResults = await this.parseWithAI(trimmedQuery);
+          var aiResults = await this.parseWithAI(trimmedQuery, userId);
           if (aiResults && aiResults.length > 0) {
             // Mark as estimated so UI can show confidence indicator
             return aiResults.map(function(r) {
@@ -156,7 +156,7 @@ class UnifiedFoodService {
   async classifyInput(userId, input) {
     var self = this;
     return aiClassificationCacheService.getOrCompute(userId, input, function(inp) {
-      return baseGeekAIService.classifyFoodInput(inp);
+      return aiFoodService.classifyFoodInput(inp);
     });
   }
 
@@ -327,7 +327,7 @@ class UnifiedFoodService {
 
     const useAIScoring = includeAI && this.shouldUseAIScoring(searchTerm);
     if (useAIScoring) {
-      const scored = await baseGeekAIService.scoreResultsRelevance(searchTerm, results);
+      const scored = await aiFoodService.scoreResultsRelevance(searchTerm, results);
       const sorted = scored
         .sort((a, b) => (b.aiRelevanceScore || 0) - (a.aiRelevanceScore || 0));
       return this.deduplicateResults(sorted, limit);
@@ -397,7 +397,7 @@ class UnifiedFoodService {
 
     const useAIScoring = includeAI && this.shouldUseAIScoring(fullQuery);
     if (useAIScoring) {
-      const scored = await baseGeekAIService.scoreResultsRelevance(fullQuery, results);
+      const scored = await aiFoodService.scoreResultsRelevance(fullQuery, results);
       const sorted = scored
         .sort((a, b) => (b.aiRelevanceScore || 0) - (a.aiRelevanceScore || 0));
       return this.deduplicateResults(sorted, limit);
@@ -564,14 +564,31 @@ class UnifiedFoodService {
   // ============================================
 
   /**
-   * Parse natural language food description with AI
+   * Parse natural language food description with AI.
+   *
+   * This is the last resort in `search()` — every catalog API came back empty.
+   * When the model is unavailable, `parseFoodDescription` still answers, with
+   * the deterministic comma-split and `nutrition: null`. That split is a fine
+   * answer for a food *log* proposal but a bad one for a *search result*: an
+   * item with no numbers would render as a 0-calorie food. So this path takes
+   * only a model answer and otherwise returns nothing, exactly as it did when
+   * a failure was a throw.
+   *
    * @param {string} description - Natural language description
+   * @param {string|null} userId - the per-day cap bucket (`quotaKey`)
    * @returns {Promise<Array>} Array of parsed food items
    */
-  async parseWithAI(description) {
+  async parseWithAI(description, userId = null) {
     try {
-      var result = await baseGeekAIService.parseFoodDescription(description);
+      var envelope = await aiFoodService.parseFoodDescription(description, {}, { userId });
+      if (!envelope.ok) {
+        logger.info('AI estimation unavailable — no estimated results to add', {
+          reason: envelope.reason
+        });
+        return [];
+      }
 
+      var result = envelope.data;
       if (!result || !result.food_items) {
         return [];
       }
@@ -668,7 +685,7 @@ class UnifiedFoodService {
 
     try {
       // Step 1: Score results with AI
-      const scoredResults = await baseGeekAIService.scoreResultsRelevance(
+      const scoredResults = await aiFoodService.scoreResultsRelevance(
         originalQuery,
         results
       );
@@ -685,7 +702,7 @@ class UnifiedFoodService {
       }));
 
       // Step 4: Final sanity check
-      const validation = await baseGeekAIService.sanityCheckResults(
+      const validation = await aiFoodService.sanityCheckResults(
         originalQuery,
         topResults
       );

@@ -128,19 +128,45 @@ locations, threads, facts, summaries, dice history, stats. Restore rewinds
 all of it and runs the consistency audit. Pre-continuity checkpoints (missing
 the new fields) restore what they captured.
 
-### Model pinning (aiService)
+### Model choice (aiService) — Phase 2, 2026-09-07
 
-- GM: `STORYGEEK_GM_PROVIDER`/`STORYGEEK_GM_MODEL` (default
-  `gemini`/`gemini-2.0-flash` — the stable id of the flash family that was
-  already the empirical choice; the old default `gemini-1.5-flash-latest` is
-  retired upstream).
-- Free-only mode no longer means "first free model in an unordered list":
-  explicit user choice → pinned model → `STORYGEEK_GM_FALLBACKS` →
-  newest free gemini flash, all verified against the director's free list.
-- Extraction/summaries use the aux channel (`STORYGEEK_AUX_*`), low
-  temperature.
-- `GET /api/ai/gm-config` exposes the pin; the frontend Settings picker
-  defaults to it.
+**StoryGeek does not pick models.** Every call goes to aiGeek's feature door,
+`POST /api/ai/feature`, as one of two features:
+
+- `gm` — narration. Carries `conversationId: <storyId>` and a 45s
+  `timeoutMs`. aiGeek's routing row for `storygeek` is
+  `sticky: per-conversation`, so its *sticky pick* keeps one story on one
+  model for as long as that model is alive. That is what narrative
+  consistency is bought with now.
+- `aux` — state extraction, canon queries, summaries, bookify passes. Low
+  temperature, never pinned.
+
+The five env vars are gone: `STORYGEEK_GM_PROVIDER`, `STORYGEEK_GM_MODEL`,
+`STORYGEEK_GM_FALLBACKS`, `STORYGEEK_AUX_PROVIDER`, `STORYGEEK_AUX_MODEL` —
+along with `STORYGEEK_FREE_ONLY`, which is `allowPaid` on the routing row now.
+So are `resolveGMModel`, `getFreeProviderModels`, `getDirectorModels` and
+`recommendProviderModel`: the whole apparatus for asking "is this model free?"
+over `ai:director` on every single turn. Chef's decision D4 — nobody types a
+model id, consumer env vars included.
+
+**The player's picker** (Settings) reads `GET /api/ai/models/alive` and offers
+**Automatic** first. A chosen row becomes `provider` + `model` on that
+player's turns — a *pin*. A pin aiGeek cannot honour degrades to the automatic
+pick, the response's `provenance.hints` carries `pin_unavailable`, and the
+turn lands with a one-line notice. Before this, a dead pin failed every turn
+until an operator changed an env var.
+
+**Which model answered** is observed, not predicted: it comes back in
+`provenance` and surfaces as `modelUsed` on a turn, `payload.debug.gmModel`
+under `debug: true`, and `modelUsed` on `GET /api/stories/test-ai`.
+
+**A turn that cannot be served says why.** `ok: false` and aiGeek envelope
+errors become an `AIUnavailableError` (`code: 'AI_UNAVAILABLE'`) carrying
+aiGeek's own words plus its `reason` (`cap`, `unavailable`, `timeout`,
+`empty`, `unparseable`, `paid_budget`), and the controller answers **200**
+`{ type: 'ai_unavailable', reason, message }` — nothing was persisted, so the
+player gets their words back. The string "Failed to generate story response",
+which swallowed every cause this service ever had, is gone.
 
 ## Testing
 

@@ -1,4 +1,5 @@
-import baseGeekAIService from './src/services/baseGeekAIService.js';
+import aiFoodService from './src/services/aiFoodService.js';
+import aiGeekClient from './src/services/aiGeekClient.js';
 
 async function testAIIntegration() {
   console.log('🧪 Testing fitnessGeek AI Food Parsing Integration...\n');
@@ -6,7 +7,7 @@ async function testAIIntegration() {
   try {
     // Test 1: Check service status
     console.log('1. Checking AI service status...');
-    const status = baseGeekAIService.getStatus();
+    const status = aiGeekClient.getStatus();
     console.log('   Status:', status);
 
     if (!status.enabled) {
@@ -16,11 +17,15 @@ async function testAIIntegration() {
 
     // Test 2: Parse food description
     console.log('\n2. Testing food parsing...');
-    const foodResult = await baseGeekAIService.parseFoodDescription(
+    // The feature door answers `{ ok, source, data }` — a declined call still
+    // carries the deterministic split in `data`, so this probe reports which
+    // one it got rather than pretending everything is fine.
+    const envelope = await aiFoodService.parseFoodDescription(
       '2 chicken tacos and a dos equis',
       { dietary_preferences: [], goals: [] }
     );
-    console.log('   ✅ Food parsing successful');
+    const foodResult = envelope.data;
+    console.log(envelope.ok ? '   ✅ Food parsing successful (model)' : `   ⚠️  Model declined (${envelope.reason}) — deterministic split`);
     console.log('   Parsed items:', foodResult.food_items.length);
     console.log('   Estimated calories:', foodResult.estimated_calories);
     console.log('   Confidence:', foodResult.confidence);
@@ -29,7 +34,9 @@ async function testAIIntegration() {
     console.log('   Parsed food items:');
     foodResult.food_items.forEach((item, index) => {
       console.log(`     ${index + 1}. ${item.name} (${item.servings} ${item.estimated_serving_size})`);
-      console.log(`        Calories: ${item.nutrition.calories_per_serving}, Protein: ${item.nutrition.protein_grams}g`);
+      console.log(item.nutrition
+        ? `        Calories: ${item.nutrition.calories_per_serving}, Protein: ${item.nutrition.protein_grams}g`
+        : '        Nutrition: not estimated (deterministic split)');
     });
 
     console.log('\n🎉 AI food parsing integration test passed!');

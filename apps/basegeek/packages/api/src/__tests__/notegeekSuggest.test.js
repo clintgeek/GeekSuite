@@ -178,8 +178,10 @@ describe('the model half, behind the opt-in', () => {
     await optIn(ALICE, true);
     callAI.mockResolvedValue('{"related":[]}');
     await Query.suggestForNote(null, { title: 'nginx', excerpt: '', tags: [] }, ctx(ALICE));
+    // Phase 2: the runner names no routing switch. "Nothing at all" is
+    // `auto` reading the app's row (aiRoute.resolveRoute), which is exactly
+    // what `useAppConfig: true` used to mean — the row still routes this.
     expect(callAI.mock.calls[0][1]).toMatchObject({
-      useAppConfig: true,
       appName: 'notegeek',
       feature: 'suggest',
     });

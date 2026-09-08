@@ -234,6 +234,24 @@ only a live 429 cooldown; `/providers` dropped the blended per-1K cost field (no
 
 Net: `aiService.js` from 3,562 to roughly 1,100 lines.
 
+**Shipped 2026-09-07.** Design of record: `apps/basegeek/DOCS/AIGEEK_FRONT_DOOR.md`. As built:
+`resolveRoute` in `aiRoute.js` is pure and table-tested over every legacy input; a request pin
+outranks a row pin; `allowPaid` comes only from the row and any free signal vetoes it. A pin
+degrades to `auto` (hint `pin_unavailable`) on a cooling row, an inactive model, or an id missing
+from a provider's observed catalog; a wholly unknown id is still attempted, because an observed
+catalog is incomplete by construction. The governor refuses on an unpriced row and on an unreadable
+ledger as well as on the two caps. The feature door accepts `provider`+`model` (both or neither),
+and an opaque `quotaKey` used only as the cap bucket for service-key callers (default cap 200/day,
+row-overridable via `dailyCap`); it also closed a hole where `resolveCaller` read the prompt field
+`user` as a claimed user id. Adapters: five OpenAI-shaped providers are rows over one function,
+`AdapterError` carries `{provider, status, code, message}` with the body never logged, and
+`aiService.js` no longer imports axios. Consumers: fitnessgeek has one client and deterministic
+fallbacks for food parse and nutrition goals (Mifflin-St Jeor), friendly `ok:false` prose for coach
+and meal plan, and the opt-in gate on the REST food parse; storygeek's five model env vars are gone
+from code and compose, GM turns are sticky per story, the player picker reads `/models/alive`, and
+a failed turn is a 200 with the envelope's message and nothing persisted. `/api/ai/call` still
+answers (deprecation header) until the follow-up commit.
+
 ### Phase 3 — The admin page becomes a status page (M, two sessions)
 
 Three panels, in this order:

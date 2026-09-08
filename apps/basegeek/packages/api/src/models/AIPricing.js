@@ -1,11 +1,12 @@
 import mongoose from 'mongoose';
 import { getAIGeekConnection } from '../config/database.js';
+import { PROVIDER_IDS } from '../config/aiProviders.js';
 
 const aiPricingSchema = new mongoose.Schema({
   provider: {
     type: String,
     required: true,
-    enum: ['groq', 'gemini', 'together', 'cohere', 'openrouter', 'cerebras', 'cloudflare', 'ollama', 'llmgateway']
+    enum: PROVIDER_IDS
   },
   modelId: {
     type: String,

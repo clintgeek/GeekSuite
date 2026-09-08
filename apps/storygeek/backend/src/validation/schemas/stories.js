@@ -4,11 +4,16 @@ import { storyIdParamsSchema, boundedName, boundedText } from './common.js';
 // Story.status enum, from models/Story.js.
 const STORY_STATUSES = ['active', 'paused', 'completed', 'abandoned', 'setup'];
 
-// aiService resolves provider/model dynamically against basegeek's live
-// provider list (see aiService.resolveGMModel) — there is no fixed enum to
-// check them against here. Bound them as short identifier strings instead;
-// an unrecognized value is still rejected downstream by aiService/basegeek,
-// same as today.
+// `provider` + `model` together are the player's PIN — a row they chose from
+// aiGeek's alive-model list (`GET /api/ai/models/alive`). Absent means
+// "Automatic", which is the default and the common case.
+//
+// There is no enum to check them against here and there deliberately never
+// will be: the alive list is discovered nightly by aiGeek's catalog job, and a
+// hard-coded list of model ids in this repo is exactly what Phase 2 removed.
+// Bound them as short identifier strings; a pin aiGeek cannot honour degrades
+// to the automatic pick with a `pin_unavailable` hint, which the turn reports
+// as a one-line notice rather than a failure.
 const provider = z.string().trim().max(100).optional();
 const model = z.string().trim().max(200).optional();
 

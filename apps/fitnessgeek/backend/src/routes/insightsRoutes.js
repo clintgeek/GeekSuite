@@ -2,6 +2,21 @@
  * AI Insights Routes
  *
  * Endpoints for AI-powered health insights, summaries, and chat.
+ *
+ * **None of these answers 5xx because a model was unavailable.** Every
+ * generator in `aiInsightsService` now returns `{ ok: false, reason, message }`
+ * instead of throwing when aiGeek's feature door declines
+ * (`apps/basegeek/DOCS/AIGEEK_FRONT_DOOR.md` §4), and each route relays that
+ * as a **200** so the card can render the sentence in place instead of
+ * showing an error state about an API the user has never heard of. Insight
+ * prose has no deterministic fallback — a brief with the words taken out is
+ * not a brief — so the friendly refusal *is* the fallback.
+ *
+ * The `ok` / `reason` / `message` trio is hoisted to the top level as well as
+ * living inside `data`, because `data` is what the frontend's REST-shaped
+ * client unwraps and the top level is what the front door's contract
+ * describes. A 500 from here now means a real failure: a broken Mongo query,
+ * a bug in the context builder.
  */
 
 import express from 'express';
@@ -13,6 +28,24 @@ import logger from '../config/logger.js';
 // All routes require authentication
 router.use(authenticateToken);
 
+/** One shape for every insight answer, success or friendly refusal. */
+const answer = (res, payload) => res.json({
+  success: true,
+  ok: payload?.ok !== false,
+  reason: payload?.reason ?? null,
+  message: payload?.message,
+  data: payload
+});
+
+/**
+ * A route only reaches its catch on a real failure now. Keep the 500 for
+ * those, and keep the cause in the log rather than in the response.
+ */
+const fail = (res, what, error) => {
+  logger.error(what, { error: error.message });
+  return res.status(500).json({ success: false, error: what });
+};
+
 /**
  * GET /api/insights/morning-brief
  * Get AI-generated morning briefing based on yesterday's data
@@ -20,21 +53,9 @@ router.use(authenticateToken);
 router.get('/morning-brief', async (req, res) => {
   try {
     const userId = req.user.id || req.user._id;
-    const userToken = req.headers.authorization?.replace('Bearer ', '');
-
-    const brief = await aiInsightsService.generateMorningBrief(userId, userToken);
-
-    res.json({
-      success: true,
-      data: brief
-    });
+    return answer(res, await aiInsightsService.generateMorningBrief(userId));
   } catch (error) {
-    logger.error('Error generating morning brief', { error: error.message });
-    res.status(500).json({
-      success: false,
-      error: 'Failed to generate morning brief',
-      message: error.message
-    });
+    return fail(res, 'Failed to generate morning brief', error);
   }
 });
 
@@ -46,22 +67,10 @@ router.get('/morning-brief', async (req, res) => {
 router.get('/daily-summary', async (req, res) => {
   try {
     const userId = req.user.id || req.user._id;
-    const userToken = req.headers.authorization?.replace('Bearer ', '');
     const { date } = req.query;
-
-    const summary = await aiInsightsService.generateDailySummary(userId, userToken, date);
-
-    res.json({
-      success: true,
-      data: summary
-    });
+    return answer(res, await aiInsightsService.generateDailySummary(userId, date));
   } catch (error) {
-    logger.error('Error generating daily summary', { error: error.message });
-    res.status(500).json({
-      success: false,
-      error: 'Failed to generate daily summary',
-      message: error.message
-    });
+    return fail(res, 'Failed to generate daily summary', error);
   }
 });
 
@@ -72,21 +81,9 @@ router.get('/daily-summary', async (req, res) => {
 router.get('/correlations', async (req, res) => {
   try {
     const userId = req.user.id || req.user._id;
-    const userToken = req.headers.authorization?.replace('Bearer ', '');
-
-    const correlations = await aiInsightsService.analyzeCorrelations(userId, userToken);
-
-    res.json({
-      success: true,
-      data: correlations
-    });
+    return answer(res, await aiInsightsService.analyzeCorrelations(userId));
   } catch (error) {
-    logger.error('Error analyzing correlations', { error: error.message });
-    res.status(500).json({
-      success: false,
-      error: 'Failed to analyze correlations',
-      message: error.message
-    });
+    return fail(res, 'Failed to analyze correlations', error);
   }
 });
 
@@ -97,25 +94,13 @@ router.get('/correlations', async (req, res) => {
 router.get('/weekly-report', async (req, res) => {
   try {
     const userId = req.user.id || req.user._id;
-    const userToken = req.headers.authorization?.replace('Bearer ', '');
     const { start, days } = req.query;
-
-    const report = await aiInsightsService.generateWeeklyReport(userId, userToken, {
+    return answer(res, await aiInsightsService.generateWeeklyReport(userId, {
       start,
       days: days ? parseInt(days, 10) : undefined
-    });
-
-    res.json({
-      success: true,
-      data: report
-    });
+    }));
   } catch (error) {
-    logger.error('Error generating weekly report', { error: error.message });
-    res.status(500).json({
-      success: false,
-      error: 'Failed to generate weekly report',
-      message: error.message
-    });
+    return fail(res, 'Failed to generate weekly report', error);
   }
 });
 
@@ -126,25 +111,13 @@ router.get('/weekly-report', async (req, res) => {
 router.get('/trend-watch', async (req, res) => {
   try {
     const userId = req.user.id || req.user._id;
-    const userToken = req.headers.authorization?.replace('Bearer ', '');
     const { start, days } = req.query;
-
-    const report = await aiInsightsService.generateTrendWatch(userId, userToken, {
+    return answer(res, await aiInsightsService.generateTrendWatch(userId, {
       start,
       days: days ? parseInt(days, 10) : undefined
-    });
-
-    res.json({
-      success: true,
-      data: report
-    });
+    }));
   } catch (error) {
-    logger.error('Error generating trend watch', { error: error.message });
-    res.status(500).json({
-      success: false,
-      error: 'Failed to generate trend watch',
-      message: error.message
-    });
+    return fail(res, 'Failed to generate trend watch', error);
   }
 });
 
@@ -155,21 +128,9 @@ router.get('/trend-watch', async (req, res) => {
 router.get('/coaching', async (req, res) => {
   try {
     const userId = req.user.id || req.user._id;
-    const userToken = req.headers.authorization?.replace('Bearer ', '');
-
-    const advice = await aiInsightsService.getCoachingAdvice(userId, userToken);
-
-    res.json({
-      success: true,
-      data: advice
-    });
+    return answer(res, await aiInsightsService.getCoachingAdvice(userId));
   } catch (error) {
-    logger.error('Error generating coaching advice', { error: error.message });
-    res.status(500).json({
-      success: false,
-      error: 'Failed to generate coaching advice',
-      message: error.message
-    });
+    return fail(res, 'Failed to generate coaching advice', error);
   }
 });
 
@@ -181,7 +142,6 @@ router.get('/coaching', async (req, res) => {
 router.post('/chat', async (req, res) => {
   try {
     const userId = req.user.id || req.user._id;
-    const userToken = req.headers.authorization?.replace('Bearer ', '');
     const { message, history = [] } = req.body;
 
     if (!message || typeof message !== 'string') {
@@ -191,19 +151,9 @@ router.post('/chat', async (req, res) => {
       });
     }
 
-    const response = await aiInsightsService.chat(userId, userToken, message, history);
-
-    res.json({
-      success: true,
-      data: response
-    });
+    return answer(res, await aiInsightsService.chat(userId, message, history));
   } catch (error) {
-    logger.error('Error in AI chat', { error: error.message });
-    res.status(500).json({
-      success: false,
-      error: 'Failed to process chat message',
-      message: error.message
-    });
+    return fail(res, 'Failed to process chat message', error);
   }
 });
 
@@ -211,6 +161,8 @@ router.post('/chat', async (req, res) => {
  * GET /api/insights/context
  * Get raw user context data (for debugging/transparency)
  * Query params: days (default 7)
+ *
+ * No model involved — this is the aggregation the prompts are built from.
  */
 router.get('/context', async (req, res) => {
   try {
@@ -227,12 +179,7 @@ router.get('/context', async (req, res) => {
       data: context
     });
   } catch (error) {
-    logger.error('Error building user context', { error: error.message });
-    res.status(500).json({
-      success: false,
-      error: 'Failed to build user context',
-      message: error.message
-    });
+    return fail(res, 'Failed to build user context', error);
   }
 });
 

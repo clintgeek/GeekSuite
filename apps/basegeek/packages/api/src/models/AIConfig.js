@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { getAIGeekConnection } from '../config/database.js';
 import { encrypt, safeDecrypt, isEncrypted } from '@geeksuite/crypto-vault';
 import { logger } from '../lib/logger.js';
+import { PROVIDER_IDS } from '../config/aiProviders.js';
 
 // Track doc IDs for which we have already emitted the legacy-plaintext warning,
 // so we don't spam the logs on every read.
@@ -11,7 +12,7 @@ const aiConfigSchema = new mongoose.Schema({
   provider: {
     type: String,
     required: true,
-    enum: ['groq', 'gemini', 'together', 'cohere', 'openrouter', 'cerebras', 'cloudflare', 'ollama', 'llmgateway'],
+    enum: PROVIDER_IDS,
     unique: true
   },
   apiKey: {

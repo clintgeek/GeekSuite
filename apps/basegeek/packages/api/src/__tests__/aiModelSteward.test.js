@@ -706,6 +706,19 @@ describe('collectModelInformation — a read, not a fan-out', () => {
 
   it('does not refresh a fresh provider even when asked', async () => {
     const refresh = jest.spyOn(aiService, 'refreshModels').mockResolvedValue([]);
+    // The suite shares one database across files: a provider another file left
+    // with no active rows reads as "never listed" and would be refreshed here
+    // for reasons that have nothing to do with this case. Give every provider
+    // one fresh row so the only thing under test is the 24 h guard.
+    const { PROVIDER_IDS } = await import('../config/aiProviders.js');
+    const now = new Date();
+    for (const provider of PROVIDER_IDS) {
+      await AIModel.updateOne(
+        { provider, modelId: `fresh-${provider}` },
+        { $set: { name: `fresh ${provider}`, isActive: true, lastChecked: now } },
+        { upsert: true }
+      );
+    }
 
     await aiDirectorService.collectModelInformation({ refresh: true });
 

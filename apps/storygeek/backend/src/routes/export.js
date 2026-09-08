@@ -19,14 +19,23 @@ router.use('/stories/:storyId', requireStoryOwner);
 // (MAX_BOOKIFY_EVENTS, BOOKIFY_TIME_BUDGET_MS in bookService.js) — map those
 // to 413/504 so the client can tell "story too big" / "took too long" apart
 // from a generic failure; anything else stays a 500.
+//
+// BOOKIFY_UNAVAILABLE is the third: no model could serve a scene pass, so the
+// export cannot run. 503 with aiGeek's own words, because an export that
+// silently came back short would be worse than one that says why it didn't.
 const STATUS_BY_CODE = {
   BOOKIFY_TOO_LARGE: 413,
   BOOKIFY_TIMEOUT: 504,
+  BOOKIFY_UNAVAILABLE: 503,
 };
 
 function sendBookifyError(res, error) {
   const status = STATUS_BY_CODE[error.code] || 500;
-  res.status(status).json({ success: false, error: { message: error.message, code: error.code } });
+  const body = { success: false, error: { message: error.message, code: error.code } };
+  // The reason aiGeek gave (cap, unavailable, timeout, paid_budget) — useful
+  // to a client deciding whether "try again" is worth offering.
+  if (error.reason) body.error.reason = error.reason;
+  res.status(status).json(body);
 }
 
 // POST /api/export/stories/:storyId/bookify

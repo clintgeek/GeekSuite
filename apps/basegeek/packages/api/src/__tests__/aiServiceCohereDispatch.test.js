@@ -1,8 +1,8 @@
 /**
  * aiServiceCohereDispatch.test.js — `callProvider('cohere', ...)` actually
- * reaches `callCohere`.
+ * reaches the Cohere adapter.
  *
- * `callCohere` has existed in aiService.js for a long time, but `callProvider`'s
+ * `callCohere` existed in aiService.js for a long time, but `callProvider`'s
  * switch never had a `case 'cohere'` — every other provider in
  * `config/aiProviders.js` (the single roster) had one. Pinning a `cohere/*`
  * model, or the rotation choosing cohere (it never does — cohere has no
@@ -11,11 +11,19 @@
  * `Unknown provider: cohere` even though `this.providers.cohere` was fully
  * configured and `callCohere` was sitting right there, unreachable.
  *
- * This is the tripwire: case dispatch, sampling-param forwarding in Cohere's
- * own spelling, and that a *truly* unknown provider (not in the roster at all)
- * still fails exactly as it always has — that failure is a TypeError reading
- * `.apiKey` off `undefined` in `callProvider`'s own guard, one line before the
- * switch even runs, so it is unaffected by adding the cohere case.
+ * **The switch is gone (Phase 2, 2026-09-07)** and with it the whole class of
+ * bug: `callProvider` reads the shape off the provider's descriptor in
+ * `config/aiProviders.js` and calls `services/ai/adapters/<shape>`, so a
+ * roster row cannot be unreachable — there is no second list to forget it in.
+ * This file stays as the tripwire, one level up: roster row → descriptor →
+ * adapter → Cohere's own request shape, plus sampling-param forwarding in
+ * Cohere's own spelling, plus the deliberate refusal to forward tools.
+ *
+ * The last case pins the other end: a *truly* unknown provider (not in the
+ * roster at all) still fails exactly as it always has — a TypeError reading
+ * `.apiKey` off `undefined` in `callProvider`'s own guard, one line before any
+ * dispatch, which is why it reports the same words before and after this
+ * change.
  */
 
 import { describe, it, expect, afterEach } from '@jest/globals';
@@ -63,7 +71,7 @@ async function captureServer(respond) {
 }
 
 describe('callProvider dispatches cohere', () => {
-  it('routes provider "cohere" to callCohere, hitting the real Cohere endpoint shape', async () => {
+  it('routes provider "cohere" to the cohere adapter, hitting the real Cohere endpoint shape', async () => {
     const srv = await captureServer(() => ({
       text: 'It is sunny in Paris.',
       meta: { tokens: { input_tokens: 6, output_tokens: 5 } },
@@ -147,9 +155,11 @@ describe('callProvider dispatches cohere', () => {
   it('an unknown provider still fails the way it does today (not a switch case gap)', async () => {
     // aiService.providers has no such key at all, so callProvider's own guard
     // — `if (!providerConfig.apiKey)` — throws reading .apiKey off undefined
-    // before the switch is ever reached. This is unrelated to (and unaffected
-    // by) the cohere case added above: it was true before that fix and stays
-    // true after.
+    // before any dispatch happens. This is unrelated to (and unaffected by)
+    // the cohere fix, and unaffected by the registry replacing the switch:
+    // the guard is the same line it always was. A provider that *is* in the
+    // roster with no adapter for its shape is a different failure and an
+    // AdapterError — see aiAdapters.test.js.
     expect(aiService.providers.definitelyNotAProvider).toBeUndefined();
     await expect(aiService.callProvider('definitelyNotAProvider', 'hi', {}))
       .rejects.toThrow(/Cannot read propert/);

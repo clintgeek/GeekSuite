@@ -1,5 +1,5 @@
 import { jest } from '@jest/globals';
-import { runAIFeature, callsToday, parseJson, unwrapSchemaEnvelope, _resetCounters } from '../services/aiFeatureRunner.js';
+import { runAIFeature, runFeatureCore, callsToday, parseJson, unwrapSchemaEnvelope, _resetCounters } from '../services/aiFeatureRunner.js';
 
 const SCHEMA = { name: 'T', description: 't', schema: { type: 'object', properties: { a: { type: 'number' } }, required: ['a'] } };
 
@@ -16,7 +16,13 @@ describe('runAIFeature', () => {
     expect(r.data).toEqual({ a: 1 });
     expect(r.provenance).toMatchObject({ source: 'model', provider: 'groq', model: 'llama', callsToday: 1 });
     const cfg = ai.callAI.mock.calls[0][1];
-    expect(cfg).toMatchObject({ useAppConfig: true, appName: 'bujogeek', feature: 'review' });
+    // No routing switch: "nothing at all" is `auto` reading the app's routing
+    // row (DOCS/AIGEEK_FRONT_DOOR.md §1), which is exactly what
+    // `useAppConfig: true` used to mean here. The runner stopped saying it in
+    // Phase 2 — `services/aiRoute.js` owns that vocabulary now — and the
+    // routing it gets is identical.
+    expect(cfg).toMatchObject({ appName: 'bujogeek', feature: 'review' });
+    expect(cfg.useAppConfig).toBeUndefined();
     expect(cfg.responseFormat.type).toBe('json_schema');
   });
 
@@ -82,5 +88,66 @@ describe('runAIFeature', () => {
     expect(ai.callAI.mock.calls[0][1].maxTokens).toBe(600);
     await runAIFeature({ app: 'x', feature: 'y', system: 's', user: 'u', schema: SCHEMA, fallback: () => ({ a: 0 }), ai, maxTokens: 120 });
     expect(ai.callAI.mock.calls[1][1].maxTokens).toBe(120);
+  });
+});
+
+/**
+ * runFeatureCore — the half of the runner that `POST /api/ai/feature` serves.
+ *
+ * The wrapper's contract is pinned above and unchanged; these cases pin the
+ * split itself: the core never calls `fallback` (it does not need one), a
+ * refusal is `ok: false` with `source: 'none'` rather than `'fallback'`, and
+ * the counter is the same counter — an HTTP feature call and an in-process one
+ * for the same app/feature/user share one daily cap, because they are the same
+ * feature.
+ */
+describe('runFeatureCore — the feature door over HTTP', () => {
+  test('answers ok:true with provenance and never asks for a fallback', async () => {
+    const ai = fakeAI(async () => '{"a": 4}', { provider: 'groq', model: 'llama', costUsd: 0, hints: ['app_config'] });
+    const r = await runFeatureCore({ app: 'storygeek', feature: 'gm', userId: 'u1', system: 's', user: 'u', schema: SCHEMA, ai });
+    expect(r).toMatchObject({ ok: true, data: { a: 4 }, reason: null });
+    expect(r.provenance).toMatchObject({
+      source: 'model', provider: 'groq', model: 'llama', callsToday: 1, costUsd: 0, hints: ['app_config'],
+    });
+  });
+
+  test('a refusal is ok:false with source "none" — nothing fell back', async () => {
+    const ai = fakeAI(async () => { throw new Error('ECONNREFUSED'); });
+    const r = await runFeatureCore({ app: 'x', feature: 'y', system: 's', user: 'u', schema: SCHEMA, ai });
+    expect(r).toMatchObject({ ok: false, data: null, reason: 'unavailable' });
+    expect(r.provenance).toMatchObject({ source: 'none', reason: 'unavailable' });
+  });
+
+  test('the cap is the same bucket the in-process runner counts', async () => {
+    const ai = fakeAI(async () => '{"a":1}');
+    const base = { app: 'sharedcap', feature: 'f', userId: 'u1', system: 's', user: 'u', schema: SCHEMA, ai };
+    await runFeatureCore({ ...base, maxCallsPerDay: 1 });
+    // Same app:feature:user:day key, reached from the other function.
+    const over = await runAIFeature({ ...base, maxCallsPerDay: 1, fallback: () => ({ a: -1 }) });
+    expect(over.provenance).toMatchObject({ source: 'fallback', reason: 'cap', callsToday: 1, cap: 1 });
+    expect(callsToday({ app: 'sharedcap', feature: 'f', userId: 'u1' })).toBe(1);
+  });
+
+  test('a whole messages array replaces the system/user pair, and the prompt is the last user turn', async () => {
+    const ai = fakeAI(async () => 'hello');
+    const messages = [
+      { role: 'system', content: 'be terse' },
+      { role: 'user', content: 'first' },
+      { role: 'assistant', content: 'ok' },
+      { role: 'user', content: 'second' },
+    ];
+    const r = await runFeatureCore({ app: 'x', feature: 'y', messages, conversationId: 'story-7', ai });
+    expect(r.ok).toBe(true);
+    const [prompt, cfg] = ai.callAI.mock.calls[0];
+    expect(prompt).toBe('second');
+    expect(cfg.messages).toEqual(messages);
+    // A conversation id is what turns a sticky routing row into a sticky pick.
+    expect(cfg.conversationId).toBe('story-7');
+  });
+
+  test('a fallback is not required — that is the whole point of the split', async () => {
+    const ai = fakeAI(async () => 'text');
+    await expect(runFeatureCore({ app: 'x', feature: 'y', system: 's', user: 'u', ai })).resolves.toMatchObject({ ok: true });
+    await expect(runFeatureCore({ feature: 'y', system: 's', user: 'u', ai })).rejects.toThrow(/app and feature/);
   });
 });

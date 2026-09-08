@@ -147,13 +147,23 @@ TRANSCRIPT:
 ${lateTranscript}`;
 
   try {
+    // aiGeek's feature door, same as every other call StoryGeek makes.
+    // `/api/ai/call` is deprecated and going away; nothing names a provider.
     const BASEGEEK = process.env.BASEGEEK_URL || 'https://basegeek.clintgeek.com';
-    const { data: evalResp } = await axios.post(`${BASEGEEK}/api/ai/call`, {
-      prompt: evalPrompt,
-      config: { appName: 'storyGeek', maxTokens: 1500, temperature: 0.1 }
+    const { data: evalResp } = await axios.post(`${BASEGEEK}/api/ai/feature`, {
+      feature: 'aux',
+      messages: [{ role: 'user', content: evalPrompt }],
+      maxTokens: 1500,
+      temperature: 0.1,
+      timeoutMs: 60000
     }, { headers: { Authorization: `Bearer ${TOKEN}` }, timeout: 90000 });
-    const content = evalResp?.choices?.[0]?.message?.content || evalResp?.data?.response || '(no content)';
-    console.log(content);
+    if (evalResp?.ok) {
+      const prov = evalResp.provenance || {};
+      console.log(`(evaluator ran on ${prov.provider ?? '?'}:${prov.model ?? '?'})`);
+      console.log(evalResp.data || '(no content)');
+    } else {
+      console.log(`Evaluator declined: ${evalResp?.reason ?? 'unknown'} — findings are leads anyway, so this is not fatal.`);
+    }
   } catch (e) {
     console.log(`Evaluator call failed: ${e.message}`);
   }

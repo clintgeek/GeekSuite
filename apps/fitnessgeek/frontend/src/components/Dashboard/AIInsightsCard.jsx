@@ -27,6 +27,13 @@ import {
 } from '@mui/icons-material';
 import { insightsService } from '../../services/insightsService.js';
 
+/**
+ * The sentence the backend sends with `ok: false`. Kept here as the local
+ * default for the rare case a response omits it — never assembled from an
+ * HTTP status or a provider name, neither of which is the user's business.
+ */
+const UNAVAILABLE_TEXT = "The assistant isn't available right now.";
+
 const AIInsightsCard = () => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
@@ -73,6 +80,11 @@ const AIInsightsCard = () => {
         default:
           data = await insightsService.getDailySummary();
       }
+      // `ok: false` is the assistant saying "not right now" — a 200 with a
+      // sentence to show, not an error. Rendering it through `error` would
+      // put a red line and a Try Again button in front of a normal, expected
+      // condition (the free tier having a day, or the daily cap being hit).
+      // The `error` branch is now only for a genuinely broken request.
       setInsight(data);
     } catch (err) {
       setError(err.message || 'Failed to load insights');
@@ -94,7 +106,15 @@ const AIInsightsCard = () => {
 
     try {
       const response = await insightsService.chat(userMessage, chatHistory);
-      setChatHistory([...newHistory, { role: 'assistant', content: response.content }]);
+      // The coach has no deterministic fallback, so an unavailable model comes
+      // back as `{ ok: false, message }` at HTTP 200. Show that sentence in
+      // the thread; it says what happened without naming an API.
+      setChatHistory([...newHistory, {
+        role: 'assistant',
+        content: response?.ok === false
+          ? (response.message || UNAVAILABLE_TEXT)
+          : response.content
+      }]);
     } catch (err) {
       setChatHistory([...newHistory, { role: 'assistant', content: 'Sorry, I encountered an error. Please try again.' }]);
     } finally {
@@ -382,7 +402,22 @@ const AIInsightsCard = () => {
                   Try Again
                 </Button>
               </Box>
-            ) : insight ? (
+            ) : insight?.ok === false ? (
+              /* Not an error: the assistant is unavailable and said so. One
+                 line, in place, with a retry — no red text, no toast. */
+              <Box sx={{ textAlign: 'center', py: 2 }}>
+                <Typography sx={{ color: theme.palette.text.secondary, fontSize: '0.8125rem', mb: 0.5 }}>
+                  {insight.message || UNAVAILABLE_TEXT}
+                </Typography>
+                <Button
+                  size="small"
+                  onClick={() => loadInsight(activeTab)}
+                  sx={{ textTransform: 'none', fontSize: '0.75rem' }}
+                >
+                  Try Again
+                </Button>
+              </Box>
+            ) : insight?.content ? (
               <Box>
                 {renderInsightContent(insight.content)}
                 <Typography

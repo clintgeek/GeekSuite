@@ -719,9 +719,14 @@ export function useAIGeek(notify) {
           appName: editing.appName,
           config: {
             displayName: editing.displayName || '',
-            tier: editing.tier || 'free',
+            // `auto` is the default now (Phase 2). The resolver normalizes
+            // whatever arrives, so a legacy `free`/`rotation` row saved from
+            // an old tab still lands as `auto`.
+            tier: editing.tier || 'auto',
             provider: editing.provider || null,
             model: editing.model || null,
+            sticky: editing.sticky === 'per-conversation' ? 'per-conversation' : null,
+            allowPaid: editing.allowPaid === true,
             fallbackOrder: editing.fallbackOrder || [],
             maxTokens: editing.maxTokens ? parseInt(editing.maxTokens) : null,
             temperature: editing.temperature != null && editing.temperature !== ''
@@ -756,9 +761,14 @@ export function useAIGeek(notify) {
       value: {
         appName,
         displayName: appName,
-        tier: 'free',
+        // Automatic is the default for a newly discovered app (Phase 2). The
+        // server auto-discovers with the same value, so the dialog and the
+        // row it is about to overwrite agree.
+        tier: 'auto',
         provider: null,
         model: null,
+        sticky: null,
+        allowPaid: false,
         fallbackOrder: [],
         maxTokens: null,
         temperature: null,

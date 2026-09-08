@@ -34,6 +34,9 @@ const {
   DEFAULT_MODELS,
   FALLBACK_ORDER,
   ROTATION_MODEL_OVERRIDES,
+  ADAPTER_DESCRIPTORS,
+  TOOL_FORWARDING_PROVIDERS,
+  buildProviderConnections,
   keyHintFor,
 } = await import('../config/aiProviders.js');
 
@@ -102,6 +105,44 @@ describe('the roster table itself', () => {
     expect(PROVIDER_IDS).not.toContain('onemin');
   });
 
+  it('gives every row an adapter descriptor, and every descriptor an adapter', async () => {
+    // Phase 2: a row carries how to *talk* to the provider, not just its name.
+    // This is the assertion that makes "adding a provider is one row" true —
+    // a row with no shape, or a shape no adapter answers to, fails here rather
+    // than at the first call.
+    const { ADAPTER_SHAPES, ADAPTERS } = await import('../services/ai/adapters/index.js');
+    for (const provider of AI_PROVIDERS) {
+      const descriptor = ADAPTER_DESCRIPTORS[provider.id];
+      expect(descriptor).toBeDefined();
+      expect(ADAPTER_SHAPES).toContain(descriptor.shape);
+      expect(typeof ADAPTERS[descriptor.shape].call).toBe('function');
+      expect(descriptor.baseURL).toBeTruthy();
+      expect(descriptor.name).toBeTruthy();
+      expect(descriptor.maxTokens).toBeGreaterThan(0);
+      expect(typeof descriptor.temperature).toBe('number');
+      expect(descriptor.needsAccountId).toBe(provider.needsAccountId);
+    }
+  });
+
+  it('derives the three adapter-fact sets from the descriptors, not from a second list', async () => {
+    // These were hand-kept Sets in aiModelCapabilitiesService until Phase 2 —
+    // which is how a provider could be listed as tool-capable with no adapter
+    // behind it (F-04). The service re-exports them now; the roster owns them.
+    const caps = await import('../services/aiModelCapabilitiesService.js');
+    expect(caps.TOOL_FORWARDING_PROVIDERS).toBe(TOOL_FORWARDING_PROVIDERS);
+    expect([...TOOL_FORWARDING_PROVIDERS].sort()).toEqual(
+      AI_PROVIDERS.filter(p => p.adapter.forwardsTools).map(p => p.id).sort()
+    );
+    expect([...caps.JSON_SCHEMA_SUPPORTED].sort()).toEqual(
+      AI_PROVIDERS.filter(p => p.adapter.nativeJsonSchema).map(p => `${p.id}:*`).sort()
+    );
+    expect([...caps.JSON_MODE_SUPPORTED].sort()).toEqual(
+      AI_PROVIDERS.filter(p => p.adapter.nativeJsonMode).map(p => `${p.id}:*`).sort()
+    );
+    // Every id in a set is a live provider — a set cannot outlive its adapter.
+    for (const id of TOOL_FORWARDING_PROVIDERS) expect(PROVIDER_IDS).toContain(id);
+  });
+
   it('gives every rotation member a distinct position and nobody else one', () => {
     const inRotation = AI_PROVIDERS.filter(p => p.inRotation);
     const positions = inRotation.map(p => p.rotationPosition);
@@ -118,6 +159,33 @@ describe('the roster table itself', () => {
 describe('every consumer draws from the same list', () => {
   it('aiService.providers defines exactly the roster — no more, no less', () => {
     expect(Object.keys(aiService.providers).sort()).toEqual([...PROVIDER_IDS].sort());
+  });
+
+  it('aiService.providers IS the roster\'s connection table, not a second copy of it', async () => {
+    // Until Phase 2 this was ~100 hand-typed lines in the aiService
+    // constructor: base URL, display name, ceilings and default model, restated
+    // for all nine providers. The two could disagree — and this file exists
+    // because they did. `buildProviderConnections()` is the one builder now.
+    const fresh = buildProviderConnections();
+    expect(Object.keys(fresh).sort()).toEqual([...PROVIDER_IDS].sort());
+    for (const id of PROVIDER_IDS) {
+      const live = aiService.providers[id];
+      // apiKey / enabled / model move at runtime (loadConfigurations, the
+      // admin page); the address and the ceilings do not.
+      expect(live.baseURL).toBe(fresh[id].baseURL);
+      expect(live.name).toBe(fresh[id].name);
+      expect(live.maxContextTokens).toBe(fresh[id].maxContextTokens);
+      expect(live.baseURL).toBe(ADAPTER_DESCRIPTORS[id].baseURL);
+      // maxTokens and temperature are the two ceilings an admin MAY override
+      // per provider (AIConfig row → loadConfigurations). The suite shares one
+      // database across files, so a row another file left behind is a
+      // legitimate override here, not a second copy of the table.
+      const override = await AIConfig.findOne({ provider: id }).lean().catch(() => null);
+      expect(live.maxTokens).toBe(override?.maxTokens || fresh[id].maxTokens);
+      expect(live.temperature).toBe(override?.temperature || fresh[id].temperature);
+    }
+    // Each call hands back its own objects — aiService mutates these rows.
+    expect(fresh.groq).not.toBe(buildProviderConnections().groq);
   });
 
   it('aiService.fallbackOrder is the rotation, in rotationPosition order', () => {

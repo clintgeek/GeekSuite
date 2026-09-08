@@ -512,6 +512,85 @@ way any other unrecognized id does (`model_not_found`).
 
 ---
 
+## Adding a provider
+
+One row. Phase 2 (2026-09-07) made that literally true — it used to be about
+seventeen edits across ten files.
+
+1. **Add the row** to `AI_PROVIDERS` in
+   `packages/api/src/config/aiProviders.js`: the identity (`id`, `label`,
+   `needsAccountId`, `defaultModel`, `inRotation`, `rotationPosition`) and the
+   `adapter` descriptor — which shape it speaks, where it lives, and what it
+   can do:
+
+   ```js
+   {
+     id: 'newvendor',
+     label: 'New Vendor',
+     needsAccountId: false,
+     defaultModel: 'their-flagship-id',   // the probe's fallback id, nothing more
+     inRotation: true,
+     rotationPosition: 8,
+     adapter: {
+       shape: 'openai',                   // or gemini | cohere | cloudflare | ollama
+       baseURL: 'https://api.newvendor.com/v1',
+       name: 'New Vendor Flagship',
+       maxTokens: 8000,
+       maxContextTokens: 131072,          // omit if they publish none
+       temperature: 0.7,
+       // and only what is true:
+       // forwardsTools, nativeJsonSchema, nativeJsonMode,
+       // dropSampling: ['stop'], extraHeaders: { … }, sendsUsageInclude
+     },
+   }
+   ```
+
+2. **Paste the key** in aiGeek → Configuration (or `POST /api/ai/config`). The
+   schema enums, `aiService.providers`, the REST and GraphQL config surfaces,
+   the rotation order, the rate-limit accounting and the three adapter-fact
+   sets (`TOOL_FORWARDING_PROVIDERS`, `JSON_SCHEMA_SUPPORTED`,
+   `JSON_MODE_SUPPORTED`) are all derived from the row — there is nothing else
+   to edit and no second list to forget.
+
+3. **Let discovery run.** The catalog job reads the vendor's own `/models`,
+   probes each free candidate under our account, and writes `AIModel` /
+   `AIFreeTier` / `AIPricing` rows. Nothing about the vendor's models is typed
+   by hand, here or anywhere. (`docker exec … node scripts/discover-free-models.js`
+   if you do not want to wait for the nightly run.)
+
+**If the vendor's API is not one of the five shapes**, add a sixth: one file in
+`packages/api/src/services/ai/adapters/` exporting
+`call(providerConfig, request) → { content, inputTokens, outputTokens,
+toolCalls?, finishReason?, headers, costUsd? }`, throwing `AdapterError`
+(`services/ai/AdapterError.js`) and never letting the vendor's response body
+into the message it throws (F-23). Register it in `adapters/index.js`'s
+`ADAPTERS` map under its shape name. `aiAdapters.test.js` is where its wire
+shape gets pinned, and `aiProviderRoster.test.js` will fail on a row whose
+shape no adapter answers to.
+
+**The rules that are not negotiable**, because each one is an incident:
+
+- A descriptor claims `forwardsTools` only when the adapter really puts `tools`
+  on the wire *and* reads `tool_calls` back (F-04). A false claim is not a loud
+  failure — the provider is selected and the tools are silently dropped.
+- The same goes for `nativeJsonSchema` / `nativeJsonMode`: everything else
+  falls through to the prompt-injection fallback, which keeps the row in
+  rotation.
+- A sampling knob the vendor rejects goes in `dropSampling`, not in an `if` in
+  the adapter (F-09) — and never gets dropped one layer up in silence.
+- A credential goes in a header, never a query string: the logger keeps
+  `err.config.url` and drops `err.config.headers`.
+- A failure is logged **once**, at `warn`, through `raiseAdapterError`, with
+  `{ provider, model, status, code }` and the trimmed message — never `err`,
+  never the response `data`. Two error-level lines per failure with the
+  vendor's body in one of them is how a nightly discovery run used to fill the
+  production log with other people's entitlement detail. Probe failures are
+  expected behaviour, not errors.
+- Never a model id, price or quota typed into the descriptor. Those are
+  observed.
+
+---
+
 ## API Format Notes
 
 ### OpenAI-Compatible APIs
@@ -529,11 +608,19 @@ Most providers use OpenAI-compatible format:
 
 ### Special Formats
 
-**Cloudflare Workers AI:**
+**Cloudflare Workers AI:** chat, not prompt — and the schema goes in bare,
+without OpenAI's `{name, schema}` wrapper. A flattened `prompt` string has no
+chat template and no stop, so the model generates turns until `max_tokens`
+(15 s+ for a two-word answer: the 2026-09-07 StartGeek Ask outage). `stop` is
+not in Workers AI's input schema and an unknown property is a 400, so the
+descriptor drops it. A 402 means the daily neurons are gone, not that the
+request was bad.
 ```json
 {
-  "prompt": "formatted prompt string",
-  "max_tokens": 1000
+  "messages": [{"role": "user", "content": "prompt"}],
+  "max_tokens": 1000,
+  "temperature": 0.7,
+  "response_format": {"type": "json_schema", "json_schema": {"type": "object"}}
 }
 ```
 

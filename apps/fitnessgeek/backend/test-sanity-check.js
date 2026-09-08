@@ -6,7 +6,7 @@ import dotenv from 'dotenv';
  */
 
 dotenv.config();
-import baseGeekAIService from './src/services/baseGeekAIService.js';
+import aiFoodService from './src/services/aiFoodService.js';
 
 async function testSanityCheck() {
   console.log('\n🧠 Testing AI Sanity Check\n');
@@ -20,10 +20,10 @@ async function testSanityCheck() {
     { name: 'Boneless Skinless Chicken Breast', brand: 'Tyson', source: 'fatsecret', nutrition: { calories_per_serving: 170 } }
   ];
 
-  const scored1 = await baseGeekAIService.scoreResultsRelevance('chicken breast', goodResults);
+  const scored1 = await aiFoodService.scoreResultsRelevance('chicken breast', goodResults);
   console.log('Scores:', scored1.map(r => ({ name: r.name, score: r.aiRelevanceScore })));
 
-  const validation1 = await baseGeekAIService.sanityCheckResults('chicken breast', goodResults);
+  const validation1 = await aiFoodService.sanityCheckResults('chicken breast', goodResults);
   console.log('Validation:', validation1);
   console.log('');
 
@@ -35,10 +35,10 @@ async function testSanityCheck() {
     { name: 'Rubber Chicken Toy', brand: '', source: 'openfoodfacts', nutrition: { calories_per_serving: 0 } }
   ];
 
-  const scored2 = await baseGeekAIService.scoreResultsRelevance('chicken breast', badResults);
+  const scored2 = await aiFoodService.scoreResultsRelevance('chicken breast', badResults);
   console.log('Scores:', scored2.map(r => ({ name: r.name, score: r.aiRelevanceScore })));
 
-  const validation2 = await baseGeekAIService.sanityCheckResults('chicken breast', badResults);
+  const validation2 = await aiFoodService.sanityCheckResults('chicken breast', badResults);
   console.log('Validation:', validation2);
   console.log('');
 

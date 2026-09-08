@@ -42,8 +42,8 @@ function buildApp() {
 
 let app;
 let seq = 0;
-let originalCallAISmart;
-/** Set to a string and the next callAISmart reports it as a failure, once. */
+let originalCallAI;
+/** Set to a string and the next model call fails with it, once. */
 let nextSmartFailure = null;
 
 async function userToken() {
@@ -60,23 +60,37 @@ beforeAll(async () => {
   app = buildApp();
 
   // Never reach a provider.
-  originalCallAISmart = aiService.callAISmart;
-  aiService.callAISmart = async () => {
+  //
+  // This used to stub `callAISmart`, the 57-line shim between the route and
+  // `callAI`. Phase 2 deleted it — `/conversation/message` calls `callAI` and
+  // reads `lastProviderInfo` itself — so the stub moved down one level. The
+  // *rule* being pinned is unchanged and is the important part: a provider
+  // failure must reach the caller as the allowlisted envelope, never as the
+  // provider's own words (Q46). It is now a throw rather than a resolved
+  // `{success:false}`, which is what `callAI` has always done and what the
+  // shim was translating.
+  originalCallAI = aiService.callAI;
+  aiService.callAI = async () => {
     if (nextSmartFailure) {
       const error = nextSmartFailure;
       nextSmartFailure = null;
-      return { success: false, error };
+      throw new Error(error);
     }
-    return {
-      success: true,
-      content: 'the assistant answer',
-      routing: { provider: 'groq', model: 'llama-3.1-8b-instant' },
+    aiService.lastProviderInfo = {
+      provider: 'groq',
+      model: 'llama-3.1-8b-instant',
+      cached: false,
+      toolCalls: null,
+      finishReason: 'stop',
+      hints: [],
+      costUsd: 0,
     };
+    return 'the assistant answer';
   };
 }, 60000);
 
 afterAll(async () => {
-  aiService.callAISmart = originalCallAISmart;
+  aiService.callAI = originalCallAI;
   await Conversation.deleteMany({}).catch(() => {});
   await User.deleteMany({ username: /^going_over_ai_/ }).catch(() => {});
 });
@@ -114,9 +128,9 @@ describe('POST /api/ai/conversation/message — the non-streaming branch works a
 
   /**
    * `POST /call-smart` carried the same bug and was pinned by two cases here;
-   * the route went with the second routing stack (2026-09-07). This route is
-   * the surviving reader of callAISmart's resolved `{success:false, error}`,
-   * so the Q46 rule is pinned here.
+   * the route went with the second routing stack (2026-09-07), and the shim it
+   * called (`callAISmart`) went with Phase 2. This route is where the Q46 rule
+   * for a failed conversation turn is pinned.
    */
   it('never returns the provider\'s own words on a failure', async () => {
     // This is the string aiService builds. Relayed verbatim it hands an

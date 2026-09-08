@@ -57,7 +57,7 @@ function buildApp() {
 
 let app;
 let seq = 0;
-let originalCallAISmart;
+let originalCallAI;
 let originalUsageStatus;
 let originalProviderSummary;
 
@@ -108,12 +108,13 @@ beforeAll(async () => {
   app = buildApp();
 
   // Never reach a provider.
-  originalCallAISmart = aiService.callAISmart;
-  aiService.callAISmart = async () => ({
-    success: true,
-    content: 'an answer',
-    routing: { provider: 'test-provider' },
-  });
+  // Phase 2 removed `callAISmart` (the route calls `callAI` directly now), so
+  // the stub sits one level down. Nothing about ownership changed with it.
+  originalCallAI = aiService.callAI;
+  aiService.callAI = async () => {
+    aiService.lastProviderInfo = { provider: 'test-provider', model: null, cached: false };
+    return 'an answer';
+  };
   aiService.initialized = true;
 
   // Summarization must never fire in these tests; the bodies are two words.
@@ -136,7 +137,7 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
-  aiService.callAISmart = originalCallAISmart;
+  aiService.callAI = originalCallAI;
   aiUsageService.getUsageStatus = originalUsageStatus;
   aiUsageService.getProviderUsageSummary = originalProviderSummary;
   await userGeekConn.close();
@@ -296,10 +297,13 @@ describe('usage attribution is a separate question from ownership', () => {
     const conversationId = `conv-billing-${seq++}`;
 
     let billedTo = null;
-    const previous = aiService.callAISmart;
-    aiService.callAISmart = async (_messages, options) => {
-      billedTo = options?.userId ?? null;
-      return { success: true, content: 'an answer', routing: { provider: 'test-provider' } };
+    const previous = aiService.callAI;
+    aiService.callAI = async (_prompt, config) => {
+      // Billing attribution is a `callAI` config field, exactly as it was a
+      // `callAISmart` option — the shim passed it straight through.
+      billedTo = config?.userId ?? null;
+      aiService.lastProviderInfo = { provider: 'test-provider', model: null, cached: false };
+      return 'an answer';
     };
 
     try {
@@ -309,7 +313,7 @@ describe('usage attribution is a separate question from ownership', () => {
         .send(message(conversationId, { userId: 'the-player' }));
       expect(res.status).toBe(200);
     } finally {
-      aiService.callAISmart = previous;
+      aiService.callAI = previous;
     }
 
     expect(billedTo).toBe('the-player');

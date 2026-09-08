@@ -28,12 +28,35 @@ Create `backend/.env`:
 NODE_ENV=development
 PORT=5000
 DB_URI=mongodb://localhost:27017/storygeek?authSource=admin
-CLAUDE_API_KEY=your_claude_api_key_here
-GROQ_API_KEY=your_groq_api_key_here
-GEMINI_API_KEY=your_gemini_api_key_here
 JWT_SECRET=your_jwt_secret_here
 BASEGEEK_URL=http://localhost:9988
+AI_GEEK_API_KEY=bg_...
 ```
+
+**StoryGeek holds no provider keys and names no models.** Every AI call goes
+to aiGeek's feature door (`POST /api/ai/feature` on baseGeek) with StoryGeek's
+own service key, and aiGeek decides which model answers. So there is no
+`GROQ_API_KEY`, no `GEMINI_API_KEY`, and — since Phase 2 — no
+`STORYGEEK_GM_PROVIDER`, `STORYGEEK_GM_MODEL`, `STORYGEEK_FREE_ONLY`,
+`STORYGEEK_AUX_PROVIDER` or `STORYGEEK_AUX_MODEL` either. Those five were
+removed because a hand-typed model id is a promise that expires the next time
+a vendor retires a slug (`DOCS/AIGEEK_ELEVATION_PLAN.md`, Chef's decision D4).
+
+`AI_GEEK_API_KEY` is minted on the baseGeek host and needs two permissions,
+`ai:call` and `ai:models`:
+
+```sh
+cd apps/basegeek/packages/api
+node scripts/mint-api-key.js \
+  --app storygeek --name "storygeek backend" \
+  --permissions ai:call,ai:models \
+  --write-env ../../../storygeek/.env --var AI_GEEK_API_KEY
+```
+
+`ai:director` is no longer needed — StoryGeek stopped asking the model steward
+anything when the GM pin retired. Without a key at all, the backend forwards
+the player's own JWT instead, which still works but files every call under
+whoever is playing.
 
 **Frontend (.env):**
 ```bash
@@ -82,11 +105,23 @@ If you get port conflicts:
 ### Database Connection
 Make sure your DataGeek MongoDB is running and accessible at `192.168.1.17:27018`
 
-### API Keys
-You'll need valid API keys for:
-- Claude (Anthropic)
-- Groq
-- Gemini (Google)
+### AI calls
+StoryGeek needs exactly one credential: `AI_GEEK_API_KEY`, a baseGeek service
+key for app `storygeek` with `ai:call` and `ai:models` (see above). Provider
+keys (Groq, Gemini, OpenRouter, …) live in aiGeek and nowhere else.
+
+If turns come back with *"The narrator is not answering right now"*, that is
+aiGeek declining rather than StoryGeek failing — the response carries a
+`reason` (`cap`, `unavailable`, `timeout`, `paid_budget`), and the backend log
+line names the feature and status. Check aiGeek's status page before looking
+here.
+
+**Which model is answering** is aiGeek's choice, remembered per story (its
+*sticky pick*), and reported back on every turn: `GET /api/stories/test-ai`
+returns `modelUsed`, and a turn sent with `debug: true` puts `gmModel` and
+`extractionModel` in `payload.debug`. To hear a different one, pick it in
+Settings — that sends a pin for that player's stories, and if the pin stops
+answering the turn still lands on the automatic pick with a one-line notice.
 
 ## Benefits of Local Development
 

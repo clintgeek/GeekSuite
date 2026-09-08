@@ -147,7 +147,12 @@ describe('a task draft round-trips into CREATE_TASK variables', () => {
     await Query.glanceDraft(null, { input: VET_LINE, kind: 'task' }, ctx(ALICE));
 
     const [, config] = callAI.mock.calls[0];
-    expect(config.useAppConfig).toBe(true);
+    // Phase 2: App Routing is what a call with no provider, model or tier
+    // gets by default (`auto` reading the app's row — services/aiRoute.js), so
+    // the `useAppConfig: true` switch this used to assert is gone. What the
+    // case is really about is the app id the row is looked up under.
+    expect(config.useAppConfig).toBeUndefined();
+    expect(config.provider).toBeUndefined();
     expect(config.appName).toBe(askService.ASK_APP_NAME);
     expect(config.responseFormat.type).toBe('json_schema');
 

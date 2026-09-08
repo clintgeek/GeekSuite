@@ -288,7 +288,9 @@ describe('reviewDraft service — the model half', () => {
     await reviewService.reviewDraft({ userId: ALICE, weekStart: MONDAY, optedIn: true, ai });
 
     const [, config] = ai.callAI.mock.calls[0];
-    expect(config).toMatchObject({ useAppConfig: true, appName: 'bujogeek', feature: 'review' });
+    // Phase 2: no routing switch — "nothing at all" is `auto` reading the
+    // app's row, which is what `useAppConfig: true` used to mean.
+    expect(config).toMatchObject({ appName: 'bujogeek', feature: 'review' });
     const userTurn = config.messages.find((m) => m.role === 'user').content;
     const sent = JSON.parse(userTurn);
     expect(Object.keys(sent).sort()).toEqual(['blocked', 'counts', 'habits', 'overdue', 'weekEnd', 'weekStart']);

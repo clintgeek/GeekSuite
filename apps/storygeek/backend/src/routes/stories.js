@@ -31,8 +31,23 @@ router.get('/test-ai', async (req, res) => {
       null,
       userToken
     );
-    res.json({ status: 'AI Test Successful', response: testResponse.content });
+    // Report which model actually answered, from `provenance` — the whole
+    // point of a diagnostic against a door that chooses for you.
+    res.json({
+      status: 'AI Test Successful',
+      response: testResponse.content,
+      modelUsed: testResponse.modelUsed || null
+    });
   } catch (error) {
+    // "The model declined" and "the call is broken" are different answers, and
+    // a probe that returns 500 for both cannot tell an operator which.
+    if (error?.code === 'AI_UNAVAILABLE') {
+      return res.status(200).json({
+        status: 'AI Unavailable',
+        reason: error.reason,
+        message: error.message
+      });
+    }
     res.status(500).json({ status: 'AI Test Failed', error: error.message });
   }
 });

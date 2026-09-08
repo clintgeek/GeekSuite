@@ -66,8 +66,18 @@ function StoryCreation() {
         genre: formData.genre,
         prompt: formData.prompt,
         ...(formData.description ? { description: formData.description } : {}),
+        // provider + model only when the player pinned a model in Settings.
+        // Absent means Automatic, which is the default and the common case.
         ...(selectedProvider && selectedModelId ? { provider: selectedProvider, model: selectedModelId } : {})
       });
+      // The narrator may decline before a story exists at all: the backend
+      // answers 200 `{ type: 'ai_unavailable', reason, message }` and has
+      // written nothing. Show its words and leave the form filled in — the
+      // player can submit the same prompt again in a minute.
+      if (response.data?.type === 'ai_unavailable') {
+        setError(response.data.message || 'The narrator is not answering right now. Try again in a moment.');
+        return;
+      }
       navigate(`/play/${response.data.storyId}`);
     } catch (err) { setError(err.message || 'Failed to start story'); }
     finally { setLoading(false); }

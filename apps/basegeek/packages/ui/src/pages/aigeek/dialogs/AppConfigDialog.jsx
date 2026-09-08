@@ -14,7 +14,12 @@
  *
  * Both write `tier: 'specific'` along with the provider and model, because
  * `specific` is the only tier the router reads provider/model from; saving a
- * choice while the tier stayed `free` would put it in a field nothing looks at.
+ * choice while the tier stayed `auto` would put it in a field nothing looks at.
+ *
+ * Phase 2 (DOCS/AIGEEK_FRONT_DOOR.md) collapsed the routing tiers to `auto`
+ * and `specific` and added the two switches at the bottom. This is the
+ * *minimal* version of that: Phase 3 redesigns this whole page into a status
+ * page, so the controls are here to be reachable, not to be beautiful.
  */
 import { Box, Button, FormControlLabel, Grid, Switch, TextField } from '@mui/material';
 import ConsoleDialog from '../../../components/primitives/ConsoleDialog';
@@ -63,13 +68,16 @@ export default function AppConfigDialog({
           fullWidth
           select
           label="Routing tier"
-          value={editing?.tier ?? 'free'}
+          // A row still stored as `free` or `rotation` shows as Automatic,
+          // which is what it now does. Saving rewrites it (the GraphQL
+          // resolver normalizes), so the legacy values drain away as rows are
+          // touched rather than needing a migration.
+          value={editing?.tier === 'specific' ? 'specific' : 'auto'}
           onChange={(e) => onPatch({ tier: e.target.value })}
           margin="normal"
           SelectProps={{ native: true }}
         >
-          <option value="free">Free — free-tier models only</option>
-          <option value="rotation">Rotation — all providers</option>
+          <option value="auto">Automatic — health-ranked free rows, then paid if allowed</option>
           <option value="specific">Specific — pinned provider/model</option>
         </TextField>
 
@@ -159,6 +167,35 @@ export default function AppConfigDialog({
             />
           )}
           label="Enabled"
+        />
+
+        {/*
+          Sticky picks and the paid fallback: the two Phase 2 controls. Both
+          only mean anything under Automatic — a pinned row has already chosen
+          its model, and a pin never spends through the governor — so they are
+          disabled rather than hidden there, which says "not applicable"
+          instead of "gone".
+        */}
+        <FormControlLabel
+          control={(
+            <Switch
+              checked={editing?.sticky === 'per-conversation'}
+              disabled={editing?.tier === 'specific'}
+              onChange={(e) => onPatch({ sticky: e.target.checked ? 'per-conversation' : null })}
+            />
+          )}
+          label="Sticky per conversation — keep one model per conversation until it fails"
+        />
+
+        <FormControlLabel
+          control={(
+            <Switch
+              checked={editing?.allowPaid === true}
+              disabled={editing?.tier === 'specific'}
+              onChange={(e) => onPatch({ allowPaid: e.target.checked })}
+            />
+          )}
+          label="Allow paid fallback — only when every free row is exhausted, under the daily cap"
         />
       </Box>
     </ConsoleDialog>

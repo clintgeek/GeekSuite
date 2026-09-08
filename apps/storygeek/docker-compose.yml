@@ -20,15 +20,15 @@ services:
     environment:
       NODE_ENV: production
       PORT: 9977
-      STORYGEEK_FREE_ONLY: ${STORYGEEK_FREE_ONLY:-true}
-      # Pinned Game Master model — narrative consistency beats model rotation.
-      # gemini-flash-latest is the id the deployed aiGeek free-tier catalog
-      # maintains; set an exact snapshot id here to lock harder.
-      STORYGEEK_GM_PROVIDER: ${STORYGEEK_GM_PROVIDER:-gemini}
-      STORYGEEK_GM_MODEL: ${STORYGEEK_GM_MODEL:-gemini-flash-latest}
-      # Cheap auxiliary model for state extraction / summaries (defaults to GM model).
-      STORYGEEK_AUX_PROVIDER: ${STORYGEEK_AUX_PROVIDER:-}
-      STORYGEEK_AUX_MODEL: ${STORYGEEK_AUX_MODEL:-}
+      # No model configuration lives here any more (Phase 2 of
+      # DOCS/AIGEEK_ELEVATION_PLAN.md, Chef's decision D4). Five variables came
+      # out — STORYGEEK_FREE_ONLY, STORYGEEK_GM_PROVIDER, STORYGEEK_GM_MODEL,
+      # STORYGEEK_AUX_PROVIDER, STORYGEEK_AUX_MODEL — because a model id typed
+      # by a human is a promise that expires the next time a vendor retires a
+      # slug, and this file had no way to notice. Routing is aiGeek's
+      # AIAppConfig row for app `storygeek` (`sticky: per-conversation`,
+      # `allowPaid` where STORYGEEK_FREE_ONLY used to be), and the code simply
+      # stopped reading these — removing a variable needs no rebuild.
     ports:
       - "9977:9977"
     networks:

@@ -152,10 +152,19 @@ describe('no provider credential leaves this process in a URL', () => {
    * in the clear on any failure.
    */
   it('sends the Gemini key as a header, never as ?key=', async () => {
-    const { readFileSync } = await import('node:fs');
-    const src = readFileSync(new URL('../services/aiService.js', import.meta.url), 'utf8');
-    expect(src).not.toMatch(/\?key=\$\{/);
-    expect(src).toContain("'x-goog-api-key'");
+    // Phase 2 (2026-09-07): the Gemini request lives in its adapter now. The
+    // rule is the same and applies to every adapter: no credential in a URL.
+    const { readFileSync, readdirSync } = await import('node:fs');
+    const dir = new URL('../services/ai/adapters/', import.meta.url);
+    const gemini = readFileSync(new URL('gemini.js', dir), 'utf8');
+    expect(gemini).toContain("'x-goog-api-key'");
+    for (const file of readdirSync(dir)) {
+      const src = readFileSync(new URL(file, dir), 'utf8');
+      expect(src).not.toMatch(/\?key=\$\{/);
+      expect(src).not.toMatch(/[?&]key=/);
+    }
+    const aiService = readFileSync(new URL('../services/aiService.js', import.meta.url), 'utf8');
+    expect(aiService).not.toMatch(/\?key=\$\{/);
   });
 
   it('logs a key hint rather than a key fragment', async () => {
