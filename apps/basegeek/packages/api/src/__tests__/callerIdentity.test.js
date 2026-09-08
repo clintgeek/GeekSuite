@@ -1,7 +1,7 @@
 /**
  * callerIdentity.test.js — aiGeek attributes calls to the credential, not the body.
  *
- * The hole this closes: `/api/ai/call` read `config.appName` out of the
+ * The hole this closes: the legacy front door read `config.appName` out of the
  * request body and used it for two decisions that cost money — which
  * `AIAppConfig` row routes the call (so, which model answers) and which app
  * the usage lands against. Any holder of any key or token could name any app.
@@ -112,7 +112,10 @@ beforeAll(async () => {
   originalCallAI = aiService.callAI;
   aiService.callAI = async (prompt, config) => {
     captured = { prompt, config };
-    return 'stubbed answer';
+    // Valid JSON, because `/parse-json` parses what comes back and a parse
+    // failure would mask the identity assertion under test. Nothing here
+    // reads the answer; every case below reads `captured`.
+    return '{"ok": true}';
   };
   aiService.initialized = true;
 }, 60000);
@@ -230,12 +233,19 @@ describe('declaresAppRouting', () => {
 
 // ────────────────────────────── over the wire ───────────────────────────────
 
-describe('POST /api/ai/call', () => {
+// `/api/ai/call` was the route these cases were written against; it was
+// deleted 2026-09-08 (D2). `/api/ai/parse-json` is the surviving legacy door
+// and the same code path — same `resolveCaller`, same identity stamping after
+// the body, same `applyRoutingSwitches` — so the cases moved rather than went.
+// The legacy app-routing auto-trigger (the last two) exists *only* here now:
+// `POST /feature` reads a narrowed view of the body and has no legacy
+// vocabulary to trigger.
+describe('POST /api/ai/parse-json', () => {
   it('attributes to the key\'s app, not the appName in the body', async () => {
     const { apiKey } = await makeApiKey({ appName: 'storygeek' });
 
     const res = await request(app)
-      .post('/api/ai/call')
+      .post('/api/ai/parse-json')
       .set('Authorization', `Bearer ${apiKey}`)
       .send({ prompt: 'hi', config: { appName: 'fitnessgeek', provider: 'groq' } });
 
@@ -247,7 +257,7 @@ describe('POST /api/ai/call', () => {
     const { user, token } = await makeUserWithToken({ appClaim: 'bujogeek' });
 
     const res = await request(app)
-      .post('/api/ai/call')
+      .post('/api/ai/parse-json')
       .set('Authorization', `Bearer ${token}`)
       .send({ prompt: 'hi', config: { appName: 'storygeek', provider: 'groq' } });
 
@@ -260,7 +270,7 @@ describe('POST /api/ai/call', () => {
     const { apiKey } = await makeApiKey({ appName: 'fitnessgeek' });
 
     await request(app)
-      .post('/api/ai/call')
+      .post('/api/ai/parse-json')
       .set('Authorization', `Bearer ${apiKey}`)
       .send({ prompt: 'hi', feature: 'mealPlan', config: { provider: 'groq' } });
 
@@ -272,7 +282,7 @@ describe('POST /api/ai/call', () => {
     const { apiKey } = await makeApiKey({ appName: 'fitnessGeek' });
 
     await request(app)
-      .post('/api/ai/call')
+      .post('/api/ai/parse-json')
       .set('Authorization', `Bearer ${apiKey}`)
       .send({ prompt: 'hi', config: { provider: 'groq' } });
 
@@ -283,7 +293,7 @@ describe('POST /api/ai/call', () => {
     const { apiKey } = await makeApiKey({ appName: 'storygeek' });
 
     await request(app)
-      .post('/api/ai/call')
+      .post('/api/ai/parse-json')
       .set('Authorization', `Bearer ${apiKey}`)
       .send({ prompt: 'hi', userId: 'player-42', config: { provider: 'groq' } });
 
@@ -294,7 +304,7 @@ describe('POST /api/ai/call', () => {
     const { apiKey } = await makeApiKey({ appName: 'fitnessgeek' });
 
     await request(app)
-      .post('/api/ai/call')
+      .post('/api/ai/parse-json')
       .set('Authorization', `Bearer ${apiKey}`)
       .send({ prompt: 'hi', config: { appName: 'whatever-it-claims' } });
 
@@ -306,7 +316,7 @@ describe('POST /api/ai/call', () => {
     const { apiKey } = await makeApiKey({ appName: 'fitnessgeek' });
 
     await request(app)
-      .post('/api/ai/call')
+      .post('/api/ai/parse-json')
       .set('Authorization', `Bearer ${apiKey}`)
       .send({ prompt: 'hi' });
 

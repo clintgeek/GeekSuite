@@ -1,27 +1,47 @@
 /**
- * useAIGeek — all of the AIGeek page's state and every call it makes.
+ * useAIGeek — all of the AIGeek status page's state and every call it makes.
  *
  * What this replaces: twenty `useState` hooks and fourteen handlers in one
  * 2,200-line component, several of them writing the same strings from
- * different directions. `editingFreeTier`, the bulk `freeTierEdits` map and
- * the advanced dialog all edited the same model's limits, and which one won
- * depended on render order rather than intent.
+ * different directions. One reducer settles that: every transition is a named
+ * action, so the panels can only move state in ways this file has a name for.
+ * The panels themselves are presentational — they read `state` and call
+ * handlers, and none of them knows Apollo or axios exists.
  *
- * One reducer settles that: every transition is a named action, so the tabs
- * can only move state in ways this file has a name for. The tabs themselves
- * are presentational — they read `state` and call handlers, and none of them
- * knows Apollo exists.
+ * Phase 3 (DOCS/AIGEEK_STATUS_PAGE.md) kept the reducer and cut what fed it.
+ * Gone with the tabs:
  *
- * Errors split two ways, unchanged from before the split: a *fetch* failure
- * lands in a per-section error slot so the tab can render a `GeekErrorState`
- * with a retry, and everything transient — a save, a sync, a test — is a
- * toast. The page's own toast hook is passed in rather than called here, so
- * the hook stays testable outside a provider.
+ *   - `CONFIG_PROVIDERS` — a hand-typed copy of the server's roster, which is
+ *     how `llm7` stayed in the list for months after it was retired. The
+ *     roster is now whatever keys `aiConfig` returns; the server owns it
+ *     (`packages/api/src/config/aiProviders.js`) and the UI reads it.
+ *   - `freeTierEdits` / `savingBulk` / the pricing and free-tier dialogs /
+ *     `syncProviderModels` / `resetAllFreeTiers` — every one of them edited
+ *     something the catalog job now observes (AIGEEK_CATALOG_JOB.md). The
+ *     catalog is read-only here.
+ *   - `testProvider` — the chip on the provider row is the test. A key that
+ *     no model answers under shows up in `attention` as `provider_dead`,
+ *     which is the same question asked by the system rather than by a button.
+ *   - `saveConfiguration` (all providers at once) — replaced by
+ *     `saveProviderKey`, one row, on blur. A Save-all across nine providers
+ *     was one button that could fail for a reason belonging to one of them.
+ *
+ * New: `GET /api/ai/status` (the one round trip behind Needs attention and
+ * the spend line, polled every 60 s while the tab is visible),
+ * `GET /api/ai/models/alive` (the Pinned picker's list — nobody types a model
+ * id, D4), and `POST /api/ai/catalog/run` (the `discovery_stale` action).
+ *
+ * Errors split two ways, unchanged: a *fetch* failure lands in a per-section
+ * error slot so the panel can render a `GeekErrorState` with a retry, and
+ * everything transient — a save, a run — is a toast. The page's own toast hook
+ * is passed in rather than called here, so the hook stays testable outside a
+ * provider.
  */
 import { useCallback, useEffect, useMemo, useReducer } from 'react';
 import { gql } from '@apollo/client';
 import { apolloClient } from '../../apolloClient';
-import { FREE_TIER_DEFAULTS, UNATTRIBUTED_APP_ID, normalizeAppId } from './format';
+import api from '../../api';
+import { UNATTRIBUTED_APP_ID, normalizeAppId } from './format';
 import { emptyKeyDraft, keyDraftFrom } from './apiKeyDraft';
 import {
   GET_AI_CONFIG,
@@ -35,63 +55,34 @@ import {
   UPDATE_API_KEY,
   DELETE_API_KEY,
   SAVE_AI_CONFIG,
-  TEST_AI_PROVIDER,
   RESET_AI_STATS,
-  SYNC_PROVIDER_MODELS,
-  UPDATE_MODEL_PRICING,
-  UPDATE_MODEL_FREE_TIER,
-  RESET_ALL_FREE_TIERS,
-  BULK_UPDATE_FREE_TIERS,
   SAVE_AI_APP_CONFIG,
   DELETE_AI_APP_CONFIG,
 } from '../../graphql/mutations';
 
 /**
- * The model steward queries, declared here rather than in graphql/queries.js.
+ * The model steward's one surviving query, declared here rather than in
+ * graphql/queries.js.
  *
- * They are read by exactly one dialog on one page and by nothing else in the
- * app; keeping them next to the hook that runs them means the field list and
- * the state it lands in move together. If a second surface ever needs them,
- * promote them to graphql/queries.js with the rest.
+ * It is read by exactly one block on one page and by nothing else in the app;
+ * keeping it next to the hook that runs it means the field list and the state
+ * it lands in move together. If a second surface ever needs it, promote it to
+ * graphql/queries.js with the rest.
  *
- * Both are authenticated but not admin on the server — an app filling in its
- * own routing has to be able to ask the same questions this page does.
+ * `aiFreeModels` went with the steward's "Browse free models" select in Phase
+ * 3: the Pinned picker is that list now, and it reads `/api/ai/models/alive`,
+ * which is what *selection* reads. Two model lists that could disagree about
+ * which rows are alive is the bug this page keeps re-growing.
+ *
+ * Authenticated but not admin on the server — an app filling in its own
+ * routing has to be able to ask the same question this page does.
  */
-export const GET_AI_FREE_MODELS = gql`
-  query GetAIFreeModels {
-    aiFreeModels {
-      provider
-      modelId
-      name
-      contextWindow
-      supportsFunctionCalling
-      supportsJSONOutput
-      supportsVision
-      isFree
-      performance { speed quality reasoning }
-      freeLimits { requestsPerMinute requestsPerDay tokensPerMinute tokensPerDay }
-      pricing { input output }
-      notes
-      lastSeen
-      updatedAt
-    }
-  }
-`;
-
 export const RECOMMEND_AI_MODEL = gql`
   query RecommendAIModel($task: String!, $priority: String, $freeOnly: Boolean, $limit: Int) {
     aiRecommendModel(task: $task, priority: $priority, freeOnly: $freeOnly, limit: $limit) {
       task
       priority
       freeOnly
-      requirements {
-        needsVision
-        needsAudio
-        needsFunctionCalling
-        needsReasoning
-        needsCodeGeneration
-        needsJSONOutput
-      }
       recommendations {
         provider
         modelId
@@ -109,52 +100,40 @@ export const RECOMMEND_AI_MODEL = gql`
   }
 `;
 
+/** How often the status endpoint is re-read while the tab is visible (§2). */
+export const STATUS_POLL_MS = 60_000;
+
 /**
- * The providers this page can configure. Mirrors the server's one list in
- * `packages/api/src/config/aiProviders.js` — the UI is a separate package and
- * cannot import from the API, so this is the one place the roster is repeated;
- * `withKeyDrafts` drops anything the server sends that is not named here.
+ * The dom id a provider's key field registers under.
  *
- * `llm7` and `onemin` were removed 2026-09-04: neither had an implementation
- * in aiService, so a key saved for either went nowhere. `anthropic` was removed
- * 2026-09-07: the account is out of credit and the provider is gone for good,
- * adapter and all.
+ * Exported because it is a contract between two panels: the attention item
+ * that says "Open provider" and the provider row that has to be there when it
+ * scrolls. Neither should be spelling this out itself.
  */
-export const CONFIG_PROVIDERS = [
-  'groq', 'gemini', 'together', 'cohere', 'openrouter',
-  'cerebras', 'cloudflare', 'ollama', 'llmgateway',
-];
-
-/** A provider entry before the server has been heard from. */
-const emptyProviderConfig = (provider) => ({
-  hasKey: false,
-  keyHint: '',
-  enabled: false,
-  apiKey: '',
-  ...(provider === 'cloudflare' ? { accountId: '' } : {}),
-});
-
-const emptyConfig = () => Object.fromEntries(
-  CONFIG_PROVIDERS.map(provider => [provider, emptyProviderConfig(provider)])
-);
+export const providerAnchorId = (provider) => `provider-${provider}`;
 
 /**
+ * A provider entry before the server has been heard from.
+ *
  * The server sends `{ hasKey, keyHint, enabled }` and never the credential, so
  * `apiKey` here is a *draft* — whatever the admin has typed into the box this
- * session. Blank means "keep the stored key", which is why Save omits it.
+ * session. Blank means "keep the stored key", which is why a save omits it.
+ */
+const emptyProviderConfig = () => ({ hasKey: false, keyHint: '', enabled: false, apiKey: '', touched: false });
+
+/**
+ * The roster, straight from what `aiConfig` returned, with a blank draft
+ * field added to each row. No filtering: a provider the server knows about and
+ * this file does not is a provider whose key nobody could ever paste.
  */
 const withKeyDrafts = (serverConfig) => Object.fromEntries(
-  CONFIG_PROVIDERS
-    .filter(provider => serverConfig?.[provider])
-    .map(provider => [provider, {
-      ...emptyProviderConfig(provider),
-      ...serverConfig[provider],
-      apiKey: '',
-    }])
+  Object.entries(serverConfig || {}).map(([provider, entry]) => [provider, {
+    ...emptyProviderConfig(),
+    ...entry,
+    apiKey: '',
+    touched: false,
+  }])
 );
-
-/** `provider::modelId` — the key a pending free-tier edit is filed under. */
-export const freeTierKey = (provider, modelId) => `${provider}::${modelId}`;
 
 /**
  * Apps that reach aiGeek from inside the suite's own process boundary rather
@@ -164,10 +143,34 @@ export const freeTierKey = (provider, modelId) => `${provider}::${modelId}`;
  */
 export const INTERNAL_APP_IDS = new Set(['startgeek']);
 
+/** The two live routing modes, as the segmented control spells them. */
+export const AUTOMATIC = 'auto';
+export const PINNED = 'specific';
+
+/**
+ * Read any stored tier as one of the two live modes.
+ *
+ * `free` and `rotation` are Phase 2 legacy and are *read* as `auto`, which is
+ * what `aiRoute.resolveRoute` does with them (models/AIAppConfig.js). A
+ * control with no matching value would render blank and then silently rewrite
+ * the row to whatever its first option is.
+ */
+export const routingMode = (tier) => (tier === PINNED ? PINNED : AUTOMATIC);
+
 const initialState = {
-  activeTab: 0,
-  // The Configuration tab's own busy flag: save, and the per-provider key test.
-  loading: false,
+  // ── GET /api/ai/status: panel 1, and the top line of panel 2 ─────────────
+  status: null,
+  statusError: null,
+  statusLoading: false,
+  // True from the moment `POST /catalog/run` is accepted until the next status
+  // poll comes back — §2's "running…".
+  discoveryRunning: false,
+
+  // ── GET /api/ai/models/alive: the Pinned picker's whole vocabulary ───────
+  aliveModels: [],
+  aliveLoaded: false,
+  aliveLoading: false,
+  aliveError: null,
 
   // One error slot per fetch, so a failed load renders a GeekErrorState with a
   // retry in the section that failed. Everything transient is a toast.
@@ -176,7 +179,12 @@ const initialState = {
   directorError: null,
   appConfigsError: null,
 
-  config: emptyConfig(),
+  // { [provider]: { hasKey, keyHint, enabled, apiKey, accountId? } } — the
+  // roster as the server reports it, plus this session's key drafts.
+  config: {},
+  configLoading: false,
+  // Which provider row is mid-save, so exactly that row shows a spinner.
+  savingProvider: null,
 
   stats: {
     totalCalls: 0,
@@ -188,16 +196,7 @@ const initialState = {
 
   directorData: null,
   directorLoading: false,
-  syncingProvider: null,
 
-  // { "provider::modelId": { isFree?, freeLimits? } } — pending, unsaved.
-  freeTierEdits: {},
-  savingBulk: false,
-
-  editingPricing: null,
-  editingFreeTier: null,
-
-  showResetConfirm: false,
   showResetStatsConfirm: false,
 
   appConfigs: [],
@@ -205,8 +204,11 @@ const initialState = {
   appConfigsLoading: false,
   editingApp: null,
   newAppName: '',
+  // Which app row is mid-save. The card's controls write straight through, so
+  // this is what stops a second click before the first has landed.
+  savingApp: null,
 
-  // Apps & keys — the API keys that decide which app a call is attributed to.
+  // Apps and keys — the API keys that decide which app a call is attributed to.
   apiKeys: [],
   apiKeysLoading: false,
   apiKeysError: null,
@@ -216,15 +218,17 @@ const initialState = {
   newKeyPlaintext: null,
   revokingKey: null,
   revoking: false,
-  // Which app group has the inline model steward expanded. One at a time:
-  // the steward's task box and its answers are a single slot, and two open
-  // blocks fighting over them is how the old page grew its worst bug.
-  stewardApp: null,
 
-  // Model steward — the "which free model fits this?" block in the app dialog.
-  freeModels: [],
-  freeModelsLoaded: false,
-  freeModelsLoading: false,
+  // Which of the two collapsed sections at the bottom are open (§2).
+  openSections: { catalog: false, 'try-it': false },
+
+  // The catalog's per-row override drawer: `{ provider, modelId, name }`.
+  overrideRow: null,
+
+  // The steward, now a "Suggest" button inside the Pinned picker. One slot,
+  // and `suggestApp` says whose picker owns it — two open blocks fighting over
+  // one task box is how the old page grew its worst bug.
+  suggestApp: null,
   recommendTask: '',
   recommendPriority: 'cost',
   recommendations: null,
@@ -233,27 +237,58 @@ const initialState = {
 
 function reducer(state, action) {
   switch (action.type) {
-    case 'tab/set':
-      return { ...state, activeTab: action.value };
+    // ── Status ─────────────────────────────────────────────────────────────
+    case 'status/loading':
+      return { ...state, statusLoading: true };
+    case 'status/loaded':
+      return {
+        ...state,
+        statusLoading: false,
+        statusError: null,
+        status: action.status,
+        // A poll has landed, so whatever "running…" was waiting for has been
+        // asked and answered — even when the answer is "still the old run".
+        discoveryRunning: false,
+      };
+    case 'status/failed':
+      return { ...state, statusLoading: false, statusError: action.error, discoveryRunning: false };
+    case 'discovery/started':
+      return { ...state, discoveryRunning: true };
 
-    case 'busy/set':
-      return { ...state, loading: action.value };
+    // ── Alive models ───────────────────────────────────────────────────────
+    case 'alive/loading':
+      return { ...state, aliveLoading: true, aliveError: null };
+    case 'alive/loaded':
+      return { ...state, aliveLoading: false, aliveLoaded: true, aliveModels: action.models };
+    case 'alive/failed':
+      return { ...state, aliveLoading: false, aliveError: action.error };
 
-    // ── Configuration ──────────────────────────────────────────────────────
+    // ── Providers ──────────────────────────────────────────────────────────
     case 'config/loading':
-      return { ...state, loading: true, configError: null };
+      return { ...state, configLoading: true, configError: null };
     case 'config/loaded':
-      return { ...state, loading: false, config: action.config ?? state.config };
+      return { ...state, configLoading: false, config: action.config ?? state.config };
     case 'config/failed':
-      return { ...state, loading: false, configError: action.error };
+      return { ...state, configLoading: false, configError: action.error };
     case 'config/field':
       return {
         ...state,
         config: {
           ...state.config,
-          [action.provider]: { ...state.config[action.provider], [action.field]: action.value },
+          [action.provider]: {
+            ...state.config[action.provider],
+            [action.field]: action.value,
+            // `touched` is what makes save-on-blur safe. The server never
+            // sends a credential back, so an *untouched* key box is empty on
+            // every row that has a key — and blur fires on every tab-through.
+            // Without this marker, keyboard-traversing the provider list
+            // would read as "the admin emptied nine key boxes".
+            touched: true,
+          },
         },
       };
+    case 'config/saving':
+      return { ...state, savingProvider: action.provider };
 
     // ── Usage ──────────────────────────────────────────────────────────────
     case 'stats/loaded':
@@ -261,89 +296,29 @@ function reducer(state, action) {
     case 'stats/failed':
       return { ...state, statsError: action.error };
 
-    // ── Catalog / director ─────────────────────────────────────────────────
+    // ── Catalog (read-only) ────────────────────────────────────────────────
     case 'director/loading':
       return { ...state, directorLoading: true, directorError: null };
     case 'director/loaded':
-      return {
-        ...state,
-        directorLoading: false,
-        directorData: action.data ?? state.directorData,
-      };
+      return { ...state, directorLoading: false, directorData: action.data ?? state.directorData };
     case 'director/failed':
       return { ...state, directorLoading: false, directorError: action.error };
 
-    case 'sync/start':
-      return { ...state, syncingProvider: action.provider };
-    case 'sync/end':
-      return { ...state, syncingProvider: null };
-
-    case 'bulk/start':
-      return { ...state, savingBulk: true };
-    case 'bulk/end':
-      return { ...state, savingBulk: false };
-
-    // ── Pending free-tier edits ────────────────────────────────────────────
-    case 'freeTier/flag': {
-      const key = freeTierKey(action.provider, action.modelId);
-      return {
-        ...state,
-        freeTierEdits: {
-          ...state.freeTierEdits,
-          [key]: { ...(state.freeTierEdits[key] || {}), isFree: action.value },
-        },
-      };
-    }
-    case 'freeTier/limit': {
-      const key = freeTierKey(action.provider, action.modelId);
-      const existing = state.freeTierEdits[key] || {};
-      return {
-        ...state,
-        freeTierEdits: {
-          ...state.freeTierEdits,
-          [key]: {
-            ...existing,
-            freeLimits: {
-              ...(existing.freeLimits || {}),
-              [action.field]: action.value === '' ? undefined : parseInt(action.value) || 0,
-            },
-          },
-        },
-      };
-    }
-    case 'freeTier/clearAll':
-      return { ...state, freeTierEdits: {} };
-    case 'freeTier/clearOne': {
-      const next = { ...state.freeTierEdits };
-      delete next[freeTierKey(action.provider, action.modelId)];
-      return { ...state, freeTierEdits: next };
-    }
-
-    // ── Dialogs ────────────────────────────────────────────────────────────
-    case 'pricing/open':
-      return { ...state, editingPricing: action.value };
-    case 'pricing/patch':
-      return { ...state, editingPricing: { ...state.editingPricing, ...action.patch } };
-    case 'pricing/close':
-      return { ...state, editingPricing: null };
-
-    case 'freeTierDialog/open':
-      return { ...state, editingFreeTier: action.value };
-    case 'freeTierDialog/patch':
-      return { ...state, editingFreeTier: { ...state.editingFreeTier, ...action.patch } };
-    case 'freeTierDialog/limit':
-      return {
-        ...state,
-        editingFreeTier: {
-          ...state.editingFreeTier,
-          freeLimits: { ...state.editingFreeTier?.freeLimits, [action.field]: action.value },
-        },
-      };
-    case 'freeTierDialog/close':
-      return { ...state, editingFreeTier: null };
+    case 'override/open':
+      return { ...state, overrideRow: action.value };
+    case 'override/close':
+      return { ...state, overrideRow: null };
 
     case 'confirm/set':
       return { ...state, [action.which]: action.open };
+
+    case 'section/toggle':
+      return {
+        ...state,
+        openSections: { ...state.openSections, [action.id]: !state.openSections[action.id] },
+      };
+    case 'section/open':
+      return { ...state, openSections: { ...state.openSections, [action.id]: true } };
 
     // ── App routing ────────────────────────────────────────────────────────
     case 'apps/loading':
@@ -359,6 +334,8 @@ function reducer(state, action) {
       return { ...state, appConfigsLoading: false, appConfigsError: action.error };
     case 'apps/newName':
       return { ...state, newAppName: action.value };
+    case 'apps/saving':
+      return { ...state, savingApp: action.appId };
 
     case 'appDialog/open':
       return { ...state, editingApp: action.value };
@@ -408,18 +385,15 @@ function reducer(state, action) {
     case 'keys/revoking':
       return { ...state, revoking: action.value };
 
-    // ── Inline steward ─────────────────────────────────────────────────────
-    case 'steward/set':
-      return { ...state, stewardApp: action.appId };
-
-    // ── Model steward ──────────────────────────────────────────────────────
-    case 'freeModels/loading':
-      return { ...state, freeModelsLoading: true };
-    case 'freeModels/loaded':
-      return { ...state, freeModelsLoading: false, freeModelsLoaded: true, freeModels: action.models };
-    case 'freeModels/failed':
-      return { ...state, freeModelsLoading: false };
-
+    // ── Suggest (the steward, inside the Pinned picker) ─────────────────────
+    case 'suggest/set':
+      return {
+        ...state,
+        suggestApp: action.appId,
+        // A fresh host gets a fresh answer slot, seeded from that app's notes.
+        recommendations: null,
+        recommendTask: action.appId ? (action.task ?? '') : '',
+      };
     case 'recommend/task':
       return { ...state, recommendTask: action.value };
     case 'recommend/priority':
@@ -430,13 +404,15 @@ function reducer(state, action) {
       return { ...state, recommending: false, recommendations: action.recommendations };
     case 'recommend/failed':
       return { ...state, recommending: false };
-    case 'recommend/reset':
-      return { ...state, recommendations: null, recommendTask: action.task ?? '' };
 
     default:
       return state;
   }
 }
+
+/** The message off an axios error, without the "Request failed with status" noise. */
+const restMessage = (err, fallback) =>
+  err?.response?.data?.error?.message || err?.response?.data?.message || err?.message || fallback;
 
 /**
  * @param {(message: React.ReactNode, options?: object) => void} notify
@@ -446,6 +422,36 @@ export function useAIGeek(notify) {
   const [state, dispatch] = useReducer(reducer, initialState);
 
   // ── Fetches ──────────────────────────────────────────────────────────────
+
+  /**
+   * The status round trip. Cheap by contract — the server caches it for 60 s
+   * (§1) — so the poll below can be dumb about when it fires.
+   *
+   * `silent` is what the poll passes: a background refresh must not flash a
+   * spinner over a panel the admin is reading.
+   */
+  const loadStatus = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) dispatch({ type: 'status/loading' });
+    try {
+      const { data } = await api.get('/ai/status');
+      dispatch({ type: 'status/loaded', status: data?.data ?? data ?? null });
+    } catch (err) {
+      dispatch({ type: 'status/failed', error: err });
+    }
+  }, []);
+
+  const loadAliveModels = useCallback(async () => {
+    dispatch({ type: 'alive/loading' });
+    try {
+      // A bare array, not the `{success, data}` envelope — see the route's
+      // own note. Read both anyway: one endpoint changing shape should not
+      // empty a picker.
+      const { data } = await api.get('/ai/models/alive');
+      dispatch({ type: 'alive/loaded', models: Array.isArray(data) ? data : (data?.data ?? []) });
+    } catch (err) {
+      dispatch({ type: 'alive/failed', error: err });
+    }
+  }, []);
 
   const loadConfiguration = useCallback(async () => {
     dispatch({ type: 'config/loading' });
@@ -510,72 +516,88 @@ export function useAIGeek(notify) {
     }
   }, []);
 
-  const loadFreeModels = useCallback(async () => {
-    dispatch({ type: 'freeModels/loading' });
-    try {
-      const { data } = await apolloClient.query({ query: GET_AI_FREE_MODELS, fetchPolicy: 'network-only' });
-      dispatch({ type: 'freeModels/loaded', models: data?.aiFreeModels || [] });
-    } catch (err) {
-      dispatch({ type: 'freeModels/failed' });
-      notify(`Couldn't load free models: ${err.message}`, { tone: 'error' });
-    }
-  }, [notify]);
-
   useEffect(() => {
+    loadStatus();
+    loadAliveModels();
     loadConfiguration();
     loadStatistics();
     loadDirectorData();
     loadAppConfigs();
     loadApiKeys();
-  }, [loadConfiguration, loadStatistics, loadDirectorData, loadAppConfigs, loadApiKeys]);
+  }, [loadStatus, loadAliveModels, loadConfiguration, loadStatistics, loadDirectorData, loadAppConfigs, loadApiKeys]);
 
-  // ── Configuration ────────────────────────────────────────────────────────
+  /**
+   * Poll the status every 60 s **while visible** (§2).
+   *
+   * A background tab polling a status endpoint all afternoon is how a page
+   * left open on a second monitor becomes a load pattern. The tick checks
+   * visibility rather than tearing the interval down, and coming back to the
+   * tab refreshes immediately — a stale "Nothing needs you" is the one thing
+   * this panel must never show.
+   */
+  useEffect(() => {
+    const visible = () => typeof document === 'undefined' || document.visibilityState !== 'hidden';
+    const id = setInterval(() => { if (visible()) loadStatus({ silent: true }); }, STATUS_POLL_MS);
+    if (typeof document === 'undefined') return () => clearInterval(id);
+
+    const onVisibility = () => { if (visible()) loadStatus({ silent: true }); };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [loadStatus]);
+
+  // ── Providers ────────────────────────────────────────────────────────────
 
   const setConfigField = useCallback((provider, field, value) => {
     dispatch({ type: 'config/field', provider, field, value });
   }, []);
 
-  const saveConfiguration = useCallback(async () => {
-    dispatch({ type: 'busy/set', value: true });
+  /**
+   * Save one provider's key (and Cloudflare's account id), on blur.
+   *
+   * The whole provider onboarding, and the whole offboarding: a key present
+   * means enabled, an emptied box means disabled. There is no Enabled switch
+   * to disagree with the key, which is what the old Configuration tab's
+   * Enable + Test + Save ritual made possible.
+   *
+   * An untouched row is a no-op — see the `touched` note on `config/field`.
+   *
+   * Note what "disable" can and cannot mean here: `saveAIConfig` treats a
+   * blank `apiKey` as "keep the stored one" (it has to — the client cannot
+   * read a credential back to echo it), so emptying the box writes
+   * `enabled: false` rather than deleting the row's key. The provider stops
+   * being reachable, which is the effect §2 asks for; the credential itself
+   * outlives it until the API grows a way to clear one.
+   */
+  const saveProviderKey = useCallback(async (provider) => {
+    const entry = state.config[provider];
+    if (!entry?.touched) return;
+
+    const draft = (entry.apiKey || '').trim();
+    dispatch({ type: 'config/saving', provider });
     try {
-      // Send the toggles for every provider, but a key only where one was
-      // actually typed: an omitted key means "keep the stored one", and the
-      // client no longer has the stored one to echo back.
-      const payload = {};
-      for (const [provider, providerConfig] of Object.entries(state.config)) {
-        const entry = { enabled: !!providerConfig.enabled };
-        if (provider === 'cloudflare') entry.accountId = providerConfig.accountId || '';
-        const draftKey = (providerConfig.apiKey || '').trim();
-        if (draftKey) entry.apiKey = draftKey;
-        payload[provider] = entry;
-      }
+      const payload = { [provider]: { enabled: !!draft } };
+      if (draft) payload[provider].apiKey = draft;
+      if (provider === 'cloudflare') payload[provider].accountId = entry.accountId || '';
 
       await apolloClient.mutate({ mutation: SAVE_AI_CONFIG, variables: { config: payload } });
-      notify('AI configuration saved', { tone: 'success' });
-      await loadConfiguration(); // re-read the hints and clear the drafts
-      await loadStatistics();
+      notify(
+        draft ? `${provider} key saved` : `${provider} disabled — no key in use`,
+        { tone: draft ? 'success' : 'warning' }
+      );
+      await loadConfiguration(); // re-read the hint, clear the draft and `touched`
+      // The chip on this row comes from the status endpoint, and a key paste
+      // should light it up without waiting out the poll (§5, "a key paste
+      // shows a chip within one status poll").
+      await loadStatus({ silent: true });
     } catch (err) {
-      notify(err.message || 'Failed to save AI configuration', { tone: 'error' });
+      notify(err.message || `Failed to save ${provider}`, { tone: 'error' });
     } finally {
-      dispatch({ type: 'busy/set', value: false });
+      dispatch({ type: 'config/saving', provider: null });
     }
-  }, [state.config, notify, loadConfiguration, loadStatistics]);
-
-  const testProvider = useCallback(async (provider) => {
-    dispatch({ type: 'busy/set', value: true });
-    try {
-      const { data } = await apolloClient.mutate({ mutation: TEST_AI_PROVIDER, variables: { provider } });
-      if (data?.testAIProvider) {
-        notify(`${provider} API key is valid`, { tone: 'success' });
-      } else {
-        notify(`${provider} API key is invalid`, { tone: 'error' });
-      }
-    } catch (err) {
-      notify(`Failed to test ${provider} API key: ${err.message}`, { tone: 'error' });
-    } finally {
-      dispatch({ type: 'busy/set', value: false });
-    }
-  }, [notify]);
+  }, [state.config, notify, loadConfiguration, loadStatus]);
 
   // ── Usage ────────────────────────────────────────────────────────────────
 
@@ -590,124 +612,66 @@ export function useAIGeek(notify) {
     }
   }, [notify, loadStatistics]);
 
-  // ── Catalog ──────────────────────────────────────────────────────────────
+  // ── Needs attention ──────────────────────────────────────────────────────
 
-  const syncProviderModels = useCallback(async (provider) => {
-    dispatch({ type: 'sync/start', provider });
+  /**
+   * `discovery_stale` → "Run discovery now". Fire-and-forget by design: the
+   * route answers `202 { started: true }` and the job runs out of band for
+   * minutes, so the only honest thing the button can say afterwards is
+   * "running…".
+   *
+   * Two sources feed that label. `discoveryRunning` below covers the gap
+   * between this POST and the next poll; after that the server's own
+   * `status.catalog.running` takes over, which is why the poll clears the
+   * local flag rather than holding it on a timer.
+   *
+   * A `409 { started: false, reason: 'running' }` is not a failure — a tick
+   * was already in flight, which is exactly the state the button was asking
+   * for — so it sets the same flag and says so.
+   */
+  const runDiscovery = useCallback(async () => {
     try {
-      const { data } = await apolloClient.mutate({
-        mutation: SYNC_PROVIDER_MODELS,
-        variables: { provider },
-      });
-      const result = data?.syncProviderModels;
-      notify(`${provider}: synced ${result?.modelsFound || 0} models from API`, { tone: 'success' });
-      await loadDirectorData();
+      await api.post('/ai/catalog/run');
+      dispatch({ type: 'discovery/started' });
+      notify('Discovery started — the catalog updates as it goes', { tone: 'success' });
     } catch (err) {
-      notify(`Failed to sync ${provider} models: ${err.message}`, { tone: 'error' });
-    } finally {
-      dispatch({ type: 'sync/end' });
+      if (err?.response?.status === 409) {
+        dispatch({ type: 'discovery/started' });
+        notify('A discovery is already running', { tone: 'info' });
+        return;
+      }
+      notify(`Couldn't start discovery: ${restMessage(err, 'the route refused')}`, { tone: 'error' });
     }
-  }, [notify, loadDirectorData]);
-
-  const savePricing = useCallback(async () => {
-    const editing = state.editingPricing;
-    if (!editing) return;
-    try {
-      await apolloClient.mutate({
-        mutation: UPDATE_MODEL_PRICING,
-        variables: {
-          provider: editing.provider,
-          modelId: editing.modelId,
-          inputPrice: parseFloat(editing.inputPrice) || 0,
-          outputPrice: parseFloat(editing.outputPrice) || 0,
-        },
-      });
-      notify(`Pricing updated for ${editing.modelId}`, { tone: 'success' });
-      dispatch({ type: 'pricing/close' });
-      await loadDirectorData();
-    } catch (err) {
-      notify(`Failed to update pricing: ${err.message}`, { tone: 'error' });
-    }
-  }, [state.editingPricing, notify, loadDirectorData]);
-
-  /** The advanced dialog: one model, including the audio limits and notes. */
-  const saveFreeTier = useCallback(async () => {
-    const editing = state.editingFreeTier;
-    if (!editing) return;
-    try {
-      await apolloClient.mutate({
-        mutation: UPDATE_MODEL_FREE_TIER,
-        variables: {
-          provider: editing.provider,
-          modelId: editing.modelId,
-          isFree: editing.isFree,
-          freeLimits: editing.freeLimits || {},
-          notes: editing.notes || '',
-        },
-      });
-      notify(`Free tier updated for ${editing.modelId}`, { tone: 'success' });
-      // The server now holds the truth for this model, so drop its pending edit
-      // rather than leave a dirty row that would re-save the older values.
-      dispatch({ type: 'freeTier/clearOne', provider: editing.provider, modelId: editing.modelId });
-      dispatch({ type: 'freeTierDialog/close' });
-      await loadDirectorData();
-    } catch (err) {
-      notify(`Failed to update free tier: ${err.message}`, { tone: 'error' });
-    }
-  }, [state.editingFreeTier, notify, loadDirectorData]);
-
-  const saveAllFreeTiers = useCallback(async () => {
-    if (Object.keys(state.freeTierEdits).length === 0) return;
-    dispatch({ type: 'bulk/start' });
-    try {
-      const updates = Object.entries(state.freeTierEdits).map(([key, edit]) => {
-        const [provider, modelId] = key.split('::');
-        // Merge onto the model's stored limits: an edit that only flipped the
-        // checkbox carries no limits and must not blank the ones on record.
-        const model = state.directorData?.providers?.[provider]?.models?.find(m => m.id === modelId);
-        const originalLimits = model?.freeTier?.limits || {};
-        return {
-          provider,
-          modelId,
-          isFree: edit.isFree ?? false,
-          freeLimits: edit.freeLimits ? { ...originalLimits, ...edit.freeLimits } : originalLimits,
-        };
-      });
-      await apolloClient.mutate({ mutation: BULK_UPDATE_FREE_TIERS, variables: { updates } });
-      notify(`${updates.length} model${updates.length !== 1 ? 's' : ''} updated`, { tone: 'success' });
-      dispatch({ type: 'freeTier/clearAll' });
-      await loadDirectorData();
-    } catch (err) {
-      notify(`Failed to save free tier changes: ${err.message}`, { tone: 'error' });
-    } finally {
-      dispatch({ type: 'bulk/end' });
-    }
-  }, [state.freeTierEdits, state.directorData, notify, loadDirectorData]);
-
-  const resetAllFreeTiers = useCallback(async () => {
-    dispatch({ type: 'bulk/start' });
-    try {
-      const { data } = await apolloClient.mutate({ mutation: RESET_ALL_FREE_TIERS });
-      const count = data?.resetAllFreeTiers ?? 0;
-      notify(`Reset ${count} model${count !== 1 ? 's' : ''} to non-free`, { tone: 'success' });
-      dispatch({ type: 'confirm/set', which: 'showResetConfirm', open: false });
-      dispatch({ type: 'freeTier/clearAll' });
-      await loadDirectorData();
-    } catch (err) {
-      notify(`Failed to reset free tiers: ${err.message}`, { tone: 'error' });
-    } finally {
-      dispatch({ type: 'bulk/end' });
-    }
-  }, [notify, loadDirectorData]);
-
-  // `restoreHardcodedDefaults` was here until 2026-09-07: it fired
-  // seedDirectorPricing + seedDirectorFreeTier, which wrote ~45 hand-typed
-  // prices and ~30 hand-typed quota rows over the catalog. Both mutations were
-  // deleted with the tables (Phase 1, DOCS/AIGEEK_ELEVATION_PLAN.md) — the
-  // catalog job discovers and probes instead, so there are no defaults to
-  // restore. Per-row overrides are still the pricing / free-tier dialogs.
+  }, [notify]);
 
   // ── App routing ──────────────────────────────────────────────────────────
+
+  /** Everything `saveAIAppConfig` accepts, from a row plus a patch over it. */
+  const appConfigPayload = (row, patch) => {
+    const merged = { ...row, ...patch };
+    const tier = routingMode(merged.tier);
+    return {
+      displayName: merged.displayName || '',
+      tier,
+      // Only `specific` reads these two, and the resolver nulls them under
+      // `auto` anyway — sending them regardless keeps a pin recoverable if
+      // the mode is flipped back within one session.
+      provider: tier === PINNED ? (merged.provider || null) : null,
+      model: tier === PINNED ? (merged.model || null) : null,
+      sticky: merged.sticky === 'per-conversation' ? 'per-conversation' : null,
+      allowPaid: merged.allowPaid === true,
+      dailyCap: merged.dailyCap === '' || merged.dailyCap == null
+        ? null
+        : parseInt(merged.dailyCap, 10) || null,
+      fallbackOrder: merged.fallbackOrder || [],
+      maxTokens: merged.maxTokens ? parseInt(merged.maxTokens, 10) : null,
+      temperature: merged.temperature != null && merged.temperature !== ''
+        ? parseFloat(merged.temperature)
+        : null,
+      notes: merged.notes || '',
+      enabled: merged.enabled !== false,
+    };
+  };
 
   const saveAppConfig = useCallback(async () => {
     const editing = state.editingApp;
@@ -715,60 +679,74 @@ export function useAIGeek(notify) {
     try {
       await apolloClient.mutate({
         mutation: SAVE_AI_APP_CONFIG,
-        variables: {
-          appName: editing.appName,
-          config: {
-            displayName: editing.displayName || '',
-            // `auto` is the default now (Phase 2). The resolver normalizes
-            // whatever arrives, so a legacy `free`/`rotation` row saved from
-            // an old tab still lands as `auto`.
-            tier: editing.tier || 'auto',
-            provider: editing.provider || null,
-            model: editing.model || null,
-            sticky: editing.sticky === 'per-conversation' ? 'per-conversation' : null,
-            allowPaid: editing.allowPaid === true,
-            fallbackOrder: editing.fallbackOrder || [],
-            maxTokens: editing.maxTokens ? parseInt(editing.maxTokens) : null,
-            temperature: editing.temperature != null && editing.temperature !== ''
-              ? parseFloat(editing.temperature)
-              : null,
-            notes: editing.notes || '',
-            enabled: editing.enabled !== false,
-          },
-        },
+        variables: { appName: editing.appName, config: appConfigPayload(editing, {}) },
       });
-      notify(`App config saved for ${editing.appName}`, { tone: 'success' });
+      notify(`Routing saved for ${editing.appName}`, { tone: 'success' });
       dispatch({ type: 'appDialog/close' });
       await loadAppConfigs();
+      await loadStatus({ silent: true }); // an `unrouted_app` item just cleared
     } catch (err) {
       notify(`Failed to save app config: ${err.message}`, { tone: 'error' });
     }
-  }, [state.editingApp, notify, loadAppConfigs]);
+  }, [state.editingApp, notify, loadAppConfigs, loadStatus]);
+
+  /**
+   * Write one field of one app's routing row, straight through.
+   *
+   * This is what the app card's segmented control, its two switches and its
+   * daily cap all call. There is no Save button on the card because a switch
+   * that needs one is a chore, and this page is meant to have none. It is an
+   * upsert rather than a patch: an app can arrive here from a key alone, with
+   * no row to patch.
+   */
+  const patchAppConfig = useCallback(async (appId, patch) => {
+    const existing = state.appConfigs.find(c => normalizeAppId(c.appName) === appId);
+    dispatch({ type: 'apps/saving', appId });
+    try {
+      await apolloClient.mutate({
+        mutation: SAVE_AI_APP_CONFIG,
+        variables: {
+          appName: existing?.appName || appId,
+          config: appConfigPayload(existing || { appName: appId, displayName: appId }, patch),
+        },
+      });
+      await loadAppConfigs();
+    } catch (err) {
+      notify(`Failed to save ${appId}: ${err.message}`, { tone: 'error' });
+    } finally {
+      dispatch({ type: 'apps/saving', appId: null });
+    }
+  }, [state.appConfigs, notify, loadAppConfigs]);
 
   const deleteAppConfig = useCallback(async (appName) => {
     try {
       await apolloClient.mutate({ mutation: DELETE_AI_APP_CONFIG, variables: { appName } });
-      notify(`App config deleted for ${appName}`, { tone: 'success' });
+      notify(`Routing removed for ${appName}`, { tone: 'success' });
       await loadAppConfigs();
     } catch (err) {
       notify(`Failed to delete app config: ${err.message}`, { tone: 'error' });
     }
   }, [notify, loadAppConfigs]);
 
+  /**
+   * Open the routing dialog for an app that has no row yet.
+   *
+   * `tier: 'auto'` is the default and the one the server auto-discovers with,
+   * so the dialog and the row it is about to overwrite agree. This is also
+   * what the `unrouted_app` attention item's "Add routing" opens (§2).
+   */
   const addDiscoveredApp = useCallback((appName) => {
     dispatch({
       type: 'appDialog/open',
       value: {
         appName,
         displayName: appName,
-        // Automatic is the default for a newly discovered app (Phase 2). The
-        // server auto-discovers with the same value, so the dialog and the
-        // row it is about to overwrite agree.
-        tier: 'auto',
+        tier: AUTOMATIC,
         provider: null,
         model: null,
         sticky: null,
         allowPaid: false,
+        dailyCap: null,
         fallbackOrder: [],
         maxTokens: null,
         temperature: null,
@@ -777,6 +755,11 @@ export function useAIGeek(notify) {
       },
     });
   }, []);
+
+  const editAppConfig = useCallback((group) => {
+    if (group?.config) dispatch({ type: 'appDialog/open', value: { ...group.config } });
+    else addDiscoveredApp(group?.appId || group?.appName || '');
+  }, [addDiscoveredApp]);
 
   // ── API keys ─────────────────────────────────────────────────────────────
 
@@ -843,12 +826,14 @@ export function useAIGeek(notify) {
       }
       await loadApiKeys();
       await loadAppConfigs();
+      // A minted or re-dated key can clear a `key_expiring` item.
+      await loadStatus({ silent: true });
     } catch (err) {
       notify(err.message || 'Failed to save API key', { tone: 'error' });
     } finally {
       dispatch({ type: 'keys/saving', value: false });
     }
-  }, [state.editingKey, notify, loadApiKeys, loadAppConfigs]);
+  }, [state.editingKey, notify, loadApiKeys, loadAppConfigs, loadStatus]);
 
   const revokeApiKey = useCallback(async () => {
     const target = state.revokingKey;
@@ -878,7 +863,21 @@ export function useAIGeek(notify) {
     }
   }, [notify]);
 
-  // ── Model steward ────────────────────────────────────────────────────────
+  // ── Suggest ──────────────────────────────────────────────────────────────
+
+  /**
+   * Open or close the Suggest block for one app's Pinned picker. Toggling the
+   * same app closes it; the task box is seeded from that app's notes, which is
+   * where "what this app asks the model to do" already tends to be written.
+   */
+  const toggleSuggest = useCallback((appId) => {
+    if (state.suggestApp === appId) {
+      dispatch({ type: 'suggest/set', appId: null });
+      return;
+    }
+    const row = state.appConfigs.find(c => normalizeAppId(c.appName) === appId);
+    dispatch({ type: 'suggest/set', appId, task: row?.notes || '' });
+  }, [state.suggestApp, state.appConfigs]);
 
   const runRecommendation = useCallback(async () => {
     const task = state.recommendTask.trim();
@@ -897,151 +896,55 @@ export function useAIGeek(notify) {
     }
   }, [state.recommendTask, state.recommendPriority, notify]);
 
+  // ── Scrolling to a section, which two attention actions need ─────────────
+
   /**
-   * Choosing a model — from a recommendation row or the browse list — pins the
-   * app to it. Tier flips to `specific` because that is the only tier that
-   * reads provider/model; leaving it on `free` would save the choice into a
-   * field the router never looks at.
+   * The anchor nav and the `Open provider` action both scroll rather than
+   * navigate — this is one page, and a hash change that re-renders it would
+   * throw away the status the admin is looking at.
+   *
+   * `providerAnchorId` is the contract between the attention item and the
+   * provider row: the item knows a provider id, the row registers under it.
    */
-  const pickModel = useCallback((provider, modelId) => {
-    dispatch({ type: 'appDialog/patch', patch: { tier: 'specific', provider, model: modelId } });
+  const scrollToId = useCallback((id) => {
+    if (typeof document === 'undefined') return;
+    // Optional all the way down: jsdom does not implement `scrollIntoView`,
+    // and a page that cannot scroll is not a page that should throw.
+    document.getElementById(id)?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
   }, []);
 
-  // Opening the dialog seeds the task box from the app's notes (which is where
-  // "what this app asks the model to do" already tends to be written) and
-  // clears any recommendation left from the previous app. The catalog is
-  // fetched lazily on first open: it is a several-second provider sweep on the
-  // server and most visits to this page never open the dialog at all.
-  const editingAppName = state.editingApp?.appName;
-  const editingAppNotes = state.editingApp?.notes;
-  const { freeModelsLoaded, freeModelsLoading } = state;
-  useEffect(() => {
-    if (!editingAppName) return;
-    dispatch({ type: 'recommend/reset', task: editingAppNotes || '' });
-    if (!freeModelsLoaded && !freeModelsLoading) loadFreeModels();
-    // Keyed on the app being configured, not on every keystroke in the dialog.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editingAppName]);
-
-  /**
-   * The Apps & keys tab's inline steward, which is the same block with a
-   * different destination: a pick here goes straight to the saved routing row
-   * rather than into an open draft. Toggling the same app closes it.
-   */
-  const toggleSteward = useCallback((appId) => {
-    dispatch({ type: 'steward/set', appId: state.stewardApp === appId ? null : appId });
-  }, [state.stewardApp]);
-
-  const stewardApp = state.stewardApp;
-  const stewardNotes = state.appConfigs.find(c => normalizeAppId(c.appName) === stewardApp)?.notes;
-  useEffect(() => {
-    if (!stewardApp) return;
-    dispatch({ type: 'recommend/reset', task: stewardNotes || '' });
-    if (!freeModelsLoaded && !freeModelsLoading) loadFreeModels();
-    // Same rule as the dialog: keyed on which app, not on the task box.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stewardApp]);
-
-  /**
-   * Pin a model from the inline steward. There may be no routing row yet — an
-   * app can arrive here from a key alone — so this writes the whole row through
-   * the upsert rather than patching one that might not exist.
-   */
-  const pinModelForApp = useCallback(async (appId, provider, modelId) => {
-    const existing = state.appConfigs.find(c => normalizeAppId(c.appName) === appId);
-    try {
-      await apolloClient.mutate({
-        mutation: SAVE_AI_APP_CONFIG,
-        variables: {
-          appName: existing?.appName || appId,
-          config: {
-            displayName: existing?.displayName || '',
-            tier: 'specific',
-            provider,
-            model: modelId,
-            fallbackOrder: existing?.fallbackOrder || [],
-            maxTokens: existing?.maxTokens ?? null,
-            temperature: existing?.temperature ?? null,
-            notes: existing?.notes || '',
-            enabled: existing?.enabled !== false,
-          },
-        },
-      });
-      notify(`${appId} now routes to ${provider}/${modelId}`, { tone: 'success' });
-      await loadAppConfigs();
-    } catch (err) {
-      notify(`Failed to pin the model: ${err.message}`, { tone: 'error' });
-    }
-  }, [state.appConfigs, notify, loadAppConfigs]);
+  const openProvider = useCallback((provider) => {
+    scrollToId(providerAnchorId(provider));
+  }, [scrollToId]);
 
   // ── Selectors ────────────────────────────────────────────────────────────
 
   /**
-   * What the row should show for a model: the pending edit if there is one,
-   * otherwise what the server last said.
+   * The alive rows split the one way the picker offers them: free first, then
+   * the governed paid fallback. Free/paid is the only grouping that changes
+   * what a pick *costs*, and it is the only one this list can answer for —
+   * the rows carry `fitness` and `paid`, not names or capability matrices.
    */
-  const modelFreeTier = useCallback((provider, model) => {
-    const pending = state.freeTierEdits[freeTierKey(provider, model.id)];
-    const stored = {
-      isFree: model.freeTier?.isFree || false,
-      freeLimits: model.freeTier?.limits || {},
+  const aliveGroups = useMemo(() => {
+    const free = [];
+    const paid = [];
+    for (const row of state.aliveModels) (row.paid ? paid : free).push(row);
+    const byFitness = (a, b) => {
+      // `structured` first: every AI feature in the suite asks for structured
+      // output, so those are the rows a pin should reach for.
+      const rank = (row) => (row.fitness === 'structured' ? 0 : 1);
+      return rank(a) - rank(b)
+        || (a.provider || '').localeCompare(b.provider || '')
+        || (a.modelId || '').localeCompare(b.modelId || '');
     };
-    if (pending === undefined) return stored;
-    // Merge rather than replace: ticking the checkbox files an edit with no
-    // limits in it, and the row must keep showing the stored numbers instead
-    // of blanking four fields the user never touched.
-    return {
-      isFree: pending.isFree ?? stored.isFree,
-      freeLimits: { ...stored.freeLimits, ...(pending.freeLimits || {}) },
-    };
-  }, [state.freeTierEdits]);
-
-  const isModelDirty = useCallback(
-    (provider, modelId) => state.freeTierEdits[freeTierKey(provider, modelId)] !== undefined,
-    [state.freeTierEdits]
-  );
-
-  /** Open the pricing dialog seeded from what the catalog last returned. */
-  const openPricingDialog = useCallback((provider, model) => {
-    dispatch({
-      type: 'pricing/open',
-      value: {
-        provider,
-        modelId: model.id,
-        modelName: model.name,
-        inputPrice: typeof model.pricing?.input === 'number' ? model.pricing.input : 0,
-        outputPrice: typeof model.pricing?.output === 'number' ? model.pricing.output : 0,
-      },
-    });
-  }, []);
+    return [
+      { key: 'free', label: 'Free', rows: free.sort(byFitness) },
+      { key: 'paid', label: 'Paid fallback', rows: paid.sort(byFitness) },
+    ].filter(group => group.rows.length > 0);
+  }, [state.aliveModels]);
 
   /**
-   * Open the advanced free-tier dialog seeded from what the *row* currently
-   * shows — pending edit included — so opening it never silently discards an
-   * unsaved tick. A model with no limits on record starts from the defaults.
-   */
-  const openFreeTierDialog = useCallback((provider, model) => {
-    const current = modelFreeTier(provider, model);
-    dispatch({
-      type: 'freeTierDialog/open',
-      value: {
-        provider,
-        modelId: model.id,
-        modelName: model.name,
-        isFree: current.isFree,
-        freeLimits: Object.keys(current.freeLimits || {}).length ? current.freeLimits : FREE_TIER_DEFAULTS,
-        notes: model.freeTier?.notes || '',
-      },
-    });
-  }, [modelFreeTier]);
-
-  const dirtyCount = useMemo(
-    () => Object.keys(state.freeTierEdits).length,
-    [state.freeTierEdits]
-  );
-
-  /**
-   * The Apps & keys roster: one group per normalized app id, from three
+   * The Apps and keys roster: one group per normalized app id, from four
    * sources that each know something the others don't.
    *
    * - **API keys** are the authority on identity. aiGeek resolves the caller
@@ -1050,6 +953,8 @@ export function useAIGeek(notify) {
    *   key — `startgeek` calls in-process and never presents one.
    * - **Discovered apps** are names seen in traffic with neither of the above
    *   yet, kept so the admin can start a row from one tap.
+   * - **`status.apps`** adds what only the ledger knows: whether the app has
+   *   been seen in traffic lately, and when it last called.
    *
    * Ordering: apps with keys first (those are the ones being administered),
    * then alphabetical inside each half.
@@ -1058,7 +963,7 @@ export function useAIGeek(notify) {
     const groups = new Map();
     const ensure = (appId) => {
       if (!groups.has(appId)) {
-        groups.set(appId, { appId, config: null, keys: [], discovered: false });
+        groups.set(appId, { appId, config: null, keys: [], discovered: false, status: null });
       }
       return groups.get(appId);
     };
@@ -1071,6 +976,9 @@ export function useAIGeek(notify) {
     }
     for (const appName of state.discoveredApps) {
       ensure(normalizeAppId(appName)).discovered = true;
+    }
+    for (const row of state.status?.apps || []) {
+      ensure(normalizeAppId(row.app)).status = row;
     }
     // The unattributed bucket is not an app and gets its own section.
     groups.delete(UNATTRIBUTED_APP_ID);
@@ -1087,7 +995,7 @@ export function useAIGeek(notify) {
         if ((a.keys.length > 0) !== (b.keys.length > 0)) return a.keys.length > 0 ? -1 : 1;
         return a.appId.localeCompare(b.appId);
       });
-  }, [state.appConfigs, state.apiKeys, state.discoveredApps]);
+  }, [state.appConfigs, state.apiKeys, state.discoveredApps, state.status]);
 
   /**
    * Everything aiGeek recorded that it could not attribute to an app, summed
@@ -1113,32 +1021,75 @@ export function useAIGeek(notify) {
     return { total, byProvider: rows.map(([provider, usage]) => ({ provider, ...usage })) };
   }, [state.stats]);
 
+  /**
+   * The catalog as a flat, read-only table: one row per model the catalog
+   * holds, with what `/models/alive` knows about it layered on.
+   *
+   * Two sources because neither answers the whole question. `aiDirectorModels`
+   * lists every model, alive or not, with its free-tier ceilings;
+   * `/models/alive` says which rows answer *right now* and how well
+   * (`fitness`), which is the column an admin actually reads. A model in the
+   * catalog and not in the alive list is cooling or unkeyed — which is
+   * information, so it stays in the table rather than being filtered out.
+   */
+  const catalogRows = useMemo(() => {
+    const aliveBy = new Map(
+      state.aliveModels.map(row => [`${row.provider}::${row.modelId}`, row])
+    );
+    const rows = [];
+    for (const [provider, entry] of Object.entries(state.directorData?.providers || {})) {
+      for (const model of entry.models || []) {
+        const alive = aliveBy.get(`${provider}::${model.id}`) || null;
+        rows.push({
+          key: `${provider}::${model.id}`,
+          provider,
+          modelId: model.id,
+          name: model.name,
+          isFree: model.freeTier?.isFree === true,
+          // `fitness` lives on the AIFreeTier row and only reaches the UI
+          // through the alive list today — see the report's API asks.
+          fitness: alive?.fitness ?? null,
+          alive: !!alive,
+          paid: alive?.paid === true,
+          lastSuccessAt: alive?.lastSuccessAt ?? null,
+          limits: model.freeTier?.limits || {},
+          hasKey: entry.hasApiKey === true,
+        });
+      }
+    }
+    return rows.sort((a, b) =>
+      a.provider.localeCompare(b.provider) || a.modelId.localeCompare(b.modelId));
+  }, [state.directorData, state.aliveModels]);
+
+  /** Which providers the roster holds, in the order the server sent them. */
+  const providerIds = useMemo(() => Object.keys(state.config), [state.config]);
+
   return {
     state,
     dispatch,
     // fetches
+    loadStatus,
+    loadAliveModels,
     loadConfiguration,
     loadStatistics,
     loadDirectorData,
     loadAppConfigs,
     loadApiKeys,
-    loadFreeModels,
-    // configuration
+    // providers
     setConfigField,
-    saveConfiguration,
-    testProvider,
+    saveProviderKey,
     // usage
     resetStatistics,
-    // catalog
-    syncProviderModels,
-    savePricing,
-    saveFreeTier,
-    saveAllFreeTiers,
-    resetAllFreeTiers,
+    // needs attention
+    runDiscovery,
+    openProvider,
+    scrollToId,
     // app routing
     saveAppConfig,
+    patchAppConfig,
     deleteAppConfig,
     addDiscoveredApp,
+    editAppConfig,
     // api keys
     openCreateKey,
     openEditKey,
@@ -1148,19 +1099,14 @@ export function useAIGeek(notify) {
     saveApiKey,
     revokeApiKey,
     copyText,
-    // steward
+    // suggest
+    toggleSuggest,
     runRecommendation,
-    pickModel,
-    toggleSteward,
-    pinModelForApp,
-    // dialogs
-    openPricingDialog,
-    openFreeTierDialog,
     // selectors
-    modelFreeTier,
-    isModelDirty,
-    dirtyCount,
+    aliveGroups,
     appGroups,
     unattributedUsage,
+    catalogRows,
+    providerIds,
   };
 }

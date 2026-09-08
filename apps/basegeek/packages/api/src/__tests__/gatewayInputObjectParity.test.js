@@ -407,7 +407,7 @@ const FIXTURES = {
     // apps/bookgeek/web/src/App.jsx handleSaveCurrentFilter()
     //
     // Returns `[BookSavedFilter!]!` — non-null list; same `rootValue` fix as
-    // `bulkUpdateFreeTiers` above.
+    // `savePushSubscription` below, with an empty list rather than an object.
     source: `
       mutation SaveLibraryFilter($input: SaveLibraryFilterInput!) { saveLibraryFilter(input: $input) { id } }
     `,
@@ -475,38 +475,12 @@ const FIXTURES = {
     rootValue: { updateTask: () => ({}) },
   },
 
-  // ── basegeek (admin console) ───────────────────────────────────────────
-  'Mutation.bulkUpdateFreeTiers': {
-    // apps/basegeek/packages/ui/src/pages/aigeek/useAIGeek.js saveAllFreeTiers()
-    //
-    // Returns `[FreeTierUpdate!]!` — non-null list; `rootValue` hands back an
-    // empty array to clear that floor (see the `savePushSubscription` note
-    // above). An empty list has no items, so the `{ provider modelId isFree }`
-    // selection never has to resolve against one.
-    source: `
-      mutation BulkUpdateFreeTiers($updates: [FreeTierUpdateInput!]!) {
-        bulkUpdateFreeTiers(updates: $updates) { provider modelId isFree }
-      }
-    `,
-    rootValue: { bulkUpdateFreeTiers: () => [] },
-    variables: {
-      updates: [
-        {
-          provider: 'groq',
-          modelId: 'llama-3.1-70b',
-          isFree: true,
-          freeLimits: {
-            requestsPerMinute: 30,
-            requestsPerDay: 14400,
-            tokensPerMinute: 6000,
-            tokensPerDay: 500000,
-            audioSecondsPerHour: 0,
-            audioSecondsPerDay: 0,
-          },
-        },
-      ],
-    },
-  },
+  // basegeek's one entry here was 'Mutation.bulkUpdateFreeTiers' until Phase 3
+  // (2026-09-07). The mutation, its FreeTierUpdateInput and the Catalog tab's
+  // Save-all that called it all went together
+  // (apps/basegeek/DOCS/AIGEEK_STATUS_PAGE.md §3). Nothing on the status page
+  // sends an input object to basegeek's own schema, so the app has no case
+  // here rather than a placeholder one.
 
   // ── glance (StartGeek's calendar widget) ────────────────────────────────
   'Query.calendarEvents': {
@@ -514,7 +488,7 @@ const FIXTURES = {
     // apps/startgeek/src/hooks/useCalendarEvents.js (from/to)
     //
     // Returns `[CalendarEvent!]!` — non-null list; same `rootValue` fix as
-    // `bulkUpdateFreeTiers` above.
+    // `saveLibraryFilter` above.
     source: `
       query CalendarEvents($sources: [CalendarSourceInput!]!, $from: Date, $to: Date) {
         calendarEvents(sources: $sources, from: $from, to: $to) { id }
@@ -553,8 +527,11 @@ describe('every input-object-taking root field is enumerated and accounted for',
     expect(accounted).toEqual(actual);
   });
 
-  test('the count matches the audit: 23 root fields take an input-object argument', () => {
-    expect(inputObjectRootFields()).toHaveLength(23);
+  // 23 until Phase 3 (2026-09-07), when `bulkUpdateFreeTiers` and its
+  // `FreeTierUpdateInput` went with the Catalog tab's Save-all
+  // (apps/basegeek/DOCS/AIGEEK_STATUS_PAGE.md §3).
+  test('the count matches the audit: 22 root fields take an input-object argument', () => {
+    expect(inputObjectRootFields()).toHaveLength(22);
   });
 
   test('FIXTURES and NO_FRONTEND_CALLER never claim the same field', () => {

@@ -117,7 +117,9 @@ What went, in one pass:
 - the provider enum in all six models — `AIModel`, `AIFreeTier`, `AIPricing`,
   `AIConfig`, `AIUsage`, `AIAppConfig`;
 - `CONFIG_PROVIDERS` in the admin UI's `useAIGeek.js`, so the Configuration tab
-  no longer offers a key field for it;
+  no longer offers a key field for it — that list is itself gone as of Phase 3
+  (`AIGEEK_STATUS_PAGE.md`): the console reads the roster off `aiConfig`, so a
+  retired provider leaves the page the moment it leaves `config/aiProviders.js`;
 - the OpenRouter seed row `anthropic/claude-3.5-sonnet` — an OpenRouter
   passthrough rather than the provider itself, but a hand-typed paid row for a
   model three generations stale that nothing pinned;
@@ -268,8 +270,13 @@ and learns quotas from the `x-ratelimit-*` headers on real calls.
   learns the parameter.
 - *Prices* — `AIPricing`, written from the listing (OpenRouter quotes per token;
   the job multiplies by 1e6 for the per-1M unit this collection is denominated
-  in). `updateModelPricing` / `updateModelFreeTier` remain as the per-row manual
-  override for the rare exception.
+  in). `updateModelPricing` / `updateModelFreeTier` were the per-row manual
+  override until Phase 3 deleted both with the Catalog tab's edit controls
+  (`AIGEEK_STATUS_PAGE.md` §3). The replacement is a per-row
+  `AIFreeTier.override` (`'deny' | 'allow' | null`) that selection and
+  discovery honour; until it exists the status page's override drawer renders
+  disabled, and `deleteModelPricing` / `deleteModelFreeTier` are the only way
+  to intervene by hand.
 - *Quotas* — `AIFreeTier.freeLimits`, learned from response headers. Read at use
   and never snapshotted: `aiUsageService` used to freeze a copy onto the day's
   first `AIUsage` row, which then went stale for the rest of the day.
@@ -282,7 +289,8 @@ and learns quotas from the `x-ratelimit-*` headers on real calls.
   every keyed vendor's listing endpoint on any director read older than 24 h,
   spending provider quota to answer a question Mongo already knew. A vendor call
   now happens only when an admin path asks: `POST /api/ai/models/:provider/refresh`,
-  `POST /api/ai/director/force-refresh`, GraphQL `syncProviderModels`, or
+  `POST /api/ai/director/force-refresh`, `POST /api/ai/catalog/run` (Phase 3's
+  "Run discovery now"), GraphQL `syncProviderModels`, or
   `collectModelInformation({ refresh: true })`.
 
 ---

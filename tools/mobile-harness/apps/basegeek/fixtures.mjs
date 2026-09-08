@@ -6,7 +6,7 @@
 // object — sessionRoutes serves both shapes, which is why the admin-only
 // pages (UserGeek, DataGeek, AIGeek) render at all.
 import { json, sessionRoutes, graphqlRoute } from '../../lib/net.mjs';
-import { AI_OPS, AI_CALL } from './aigeek.mjs';
+import { AI_OPS, AI_STATUS, ALIVE_MODELS, AI_FEATURE } from './aigeek.mjs';
 
 export const APPS = [
   { name: 'fitnessgeek', displayName: 'fitnessGeek', description: 'Nutrition & fitness', icon: 'FitnessCenter', color: '#7dac8e', url: 'https://fitnessgeek.clintgeek.com', tag: 'health' },
@@ -96,6 +96,10 @@ export async function routes(ctx, { scheme = 'dark' } = {}) {
   await ctx.route('**/api/users', (r) => (r.request().method() === 'GET' ? json(r, USERS) : json(r, { success: true })));
   await ctx.route('**/api/databases', (r) => json(r, { databases: [] }));
   await ctx.route('**/api/users/bootstrap', (r) => json(r, bootstrapFor(scheme)));
-  await ctx.route('**/api/ai/call', (r) => json(r, AI_CALL));
+  // The status page's three REST reads/writes. `/api/ai/call` was routed here
+  // until Phase 3; the route is deleted and "Try it" is on the feature door.
+  await ctx.route('**/api/ai/status', (r) => json(r, AI_STATUS));
+  await ctx.route('**/api/ai/models/alive', (r) => json(r, ALIVE_MODELS));
+  await ctx.route('**/api/ai/feature', (r) => json(r, AI_FEATURE));
   await graphqlRoute(ctx, AI_OPS);
 }

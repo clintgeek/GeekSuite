@@ -1,25 +1,24 @@
+/**
+ * ModelStewardBlock.test.jsx — the Suggest half of the steward.
+ *
+ * Four cases went with the block's "Browse free models" select in Phase 3
+ * (apps/basegeek/DOCS/AIGEEK_STATUS_PAGE.md §3): the loading spinner, the
+ * empty-state Retry, the "lists every free model" listing and the pick from
+ * it. That list is `AliveModelPicker` now, fed by `/api/ai/models/alive`
+ * rather than `aiFreeModels`, and it has its own coverage — see
+ * `AppsKeysPanel.test.jsx`, which is also where the "never a text field for a
+ * model id" assertion lives.
+ *
+ * Everything below is the recommender, unchanged in behaviour and re-pointed
+ * only where the copy moved.
+ */
 import { describe, it, expect, vi } from 'vitest';
-import { screen, fireEvent, within } from '@testing-library/react';
+import { screen, fireEvent } from '@testing-library/react';
 import ModelStewardBlock from '../../../pages/aigeek/ModelStewardBlock';
 import { renderWithProviders } from '../../testUtils';
 
-const FREE_MODELS = [
-  {
-    provider: 'groq', modelId: 'llama-3.3-70b', name: 'Llama 3.3 70B', contextWindow: 131072,
-    supportsJSONOutput: true, supportsFunctionCalling: true, supportsVision: false,
-    performance: { speed: 'fast', quality: 'good' },
-  },
-  {
-    provider: 'cerebras', modelId: 'llama-4-scout', name: 'Llama 4 Scout', contextWindow: 8192,
-    supportsJSONOutput: false, supportsFunctionCalling: false, supportsVision: false,
-    performance: { speed: 'blazing', quality: 'ok' },
-  },
-];
-
 function baseProps(overrides = {}) {
   return {
-    freeModels: FREE_MODELS,
-    freeModelsLoading: false,
     recommendTask: '',
     recommendPriority: 'cost',
     recommendations: null,
@@ -29,7 +28,6 @@ function baseProps(overrides = {}) {
     onPriorityChange: vi.fn(),
     onRecommend: vi.fn(),
     onPickModel: vi.fn(),
-    onLoadFreeModels: vi.fn(),
     ...overrides,
   };
 }
@@ -83,9 +81,9 @@ describe('ModelStewardBlock', () => {
     expect(screen.getByText('fit 91')).toBeInTheDocument();
   });
 
-  it('shows a "no free model matched" warning when recommendations resolve empty', () => {
+  it('shows a "no model matched" warning when recommendations resolve empty', () => {
     renderWithProviders(<ModelStewardBlock {...baseProps({ recommendations: [] })} />);
-    expect(screen.getByText(/No free model matched that description/)).toBeInTheDocument();
+    expect(screen.getByText(/No model matched that description/)).toBeInTheDocument();
   });
 
   it('clicking a recommendation row calls onPickModel with its provider and modelId', () => {
@@ -113,35 +111,4 @@ describe('ModelStewardBlock', () => {
     expect(onPickModel).toHaveBeenCalledWith('groq', 'llama-3.3-70b');
   });
 
-  it('shows a loading spinner instead of the browse list while freeModelsLoading', () => {
-    const { container } = renderWithProviders(<ModelStewardBlock {...baseProps({ freeModelsLoading: true })} />);
-    expect(container.querySelector('.MuiCircularProgress-root')).toBeInTheDocument();
-    expect(screen.queryByLabelText('Free models')).not.toBeInTheDocument();
-  });
-
-  it('shows a GeekEmptyState with a Retry action when there are no free models', () => {
-    const onLoadFreeModels = vi.fn();
-    renderWithProviders(<ModelStewardBlock {...baseProps({ freeModels: [], onLoadFreeModels })} />);
-    expect(screen.getByText('No free models available')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
-    expect(onLoadFreeModels).toHaveBeenCalledTimes(1);
-  });
-
-  it('lists every free model in the browse select, with a count in the helper text', async () => {
-    renderWithProviders(<ModelStewardBlock {...baseProps()} />);
-    expect(screen.getByText('2 free models reachable right now')).toBeInTheDocument();
-    fireEvent.mouseDown(screen.getByLabelText('Free models'));
-    const listbox = await screen.findByRole('listbox');
-    expect(within(listbox).getByText(/Llama 3\.3 70B/)).toBeInTheDocument();
-    expect(within(listbox).getByText(/Llama 4 Scout/)).toBeInTheDocument();
-  });
-
-  it('picking a model from the browse select calls onPickModel', async () => {
-    const onPickModel = vi.fn();
-    renderWithProviders(<ModelStewardBlock {...baseProps({ onPickModel })} />);
-    fireEvent.mouseDown(screen.getByLabelText('Free models'));
-    const listbox = await screen.findByRole('listbox');
-    fireEvent.click(within(listbox).getByText(/Llama 4 Scout/));
-    expect(onPickModel).toHaveBeenCalledWith('cerebras', 'llama-4-scout');
-  });
 });

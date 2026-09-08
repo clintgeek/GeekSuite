@@ -314,12 +314,12 @@ describe('GraphQL — the same rule, the same shape', () => {
       // seedDirectorPricing / seedDirectorFreeTier were in this list until
       // 2026-09-07; both mutations went with the hand-typed catalog tables.
       () => resolvers.Mutation.syncProviderModels(null, { provider: 'gemini' }, ctx),
-      () => resolvers.Mutation.updateModelPricing(null, { provider: 'gemini', modelId: 'm', inputPrice: 1, outputPrice: 1 }, ctx),
+      // updateModelPricing / updateModelFreeTier / resetAllFreeTiers /
+      // bulkUpdateFreeTiers were in this list until Phase 3 (2026-09-07); all
+      // four went with the Catalog tab's edit controls
+      // (apps/basegeek/DOCS/AIGEEK_STATUS_PAGE.md §3).
       () => resolvers.Mutation.deleteModelPricing(null, { provider: 'gemini', modelId: 'm' }, ctx),
-      () => resolvers.Mutation.updateModelFreeTier(null, { provider: 'gemini', modelId: 'm', isFree: true }, ctx),
       () => resolvers.Mutation.deleteModelFreeTier(null, { provider: 'gemini', modelId: 'm' }, ctx),
-      () => resolvers.Mutation.resetAllFreeTiers(null, null, ctx),
-      () => resolvers.Mutation.bulkUpdateFreeTiers(null, { updates: [] }, ctx),
       () => resolvers.Mutation.saveAIAppConfig(null, { appName: 'x', config: {} }, ctx),
       () => resolvers.Mutation.deleteAIAppConfig(null, { appName: 'x' }, ctx),
     ];

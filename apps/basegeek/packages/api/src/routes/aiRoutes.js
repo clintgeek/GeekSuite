@@ -10,6 +10,8 @@ import {
 import { resolveFailure } from '../services/aiFailureEnvelope.js';
 import { legacyRoutingSwitches } from '../services/aiRoute.js';
 import { runFeatureCore, DEFAULT_TIMEOUT_MS, DEFAULT_HTTP_MAX_CALLS_PER_DAY } from '../services/aiFeatureRunner.js';
+import { cachedStatus, invalidateStatusCache } from '../services/aiStatusService.js';
+import { getInstance as catalogJob } from '../services/aiCatalogJob.js';
 import logger from '../lib/logger.js';
 import aiService from '../services/aiService.js';
 import aiDirectorService from '../services/aiDirectorService.js';
@@ -138,48 +140,6 @@ const applyRoutingSwitches = (config, body) => {
   return config;
 };
 
-/**
- * `/api/ai/call` is deprecated (D2). One log line per caller app per hour —
- * enough to see who is still on it before it is deleted, quiet enough that a
- * busy consumer does not fill the log with its own obituary.
- */
-const DEPRECATION_LOG_INTERVAL_MS = 60 * 60 * 1000;
-const deprecationLoggedAt = new Map();
-
-/**
- * Is this caller's app due a deprecation line? Records the decision, so it is
- * one call per app per hour and not one per request.
- *
- * Separated from `markDeprecated` because the throttle is the part worth
- * testing and a pino child logger cannot be spied on after the fact — the
- * child binds its methods at creation, so patching the parent's `warn` after
- * `pino-http` has run catches nothing.
- */
-export const _deprecationDue = (appId, now = Date.now()) => {
-  const last = deprecationLoggedAt.get(appId) || 0;
-  if (now - last < DEPRECATION_LOG_INTERVAL_MS) return false;
-  deprecationLoggedAt.set(appId, now);
-  return true;
-};
-
-/** Test hook: the hourly throttle is process state, and a suite is not an hour. */
-export const _resetDeprecationLog = () => deprecationLoggedAt.clear();
-
-const markDeprecated = (req, res, caller, replacement) => {
-  // RFC 8594's `Deprecation` header. `true` rather than a date: the date this
-  // route goes away is the next deploy after fitnessgeek and storygeek are
-  // verified on the feature door, and inventing a timestamp for it would be
-  // fiction.
-  res.setHeader('Deprecation', 'true');
-  res.setHeader('Link', `<${replacement}>; rel="successor-version"`);
-
-  if (!_deprecationDue(caller.appId)) return;
-  req.log.warn(
-    { app: caller.appId, feature: caller.feature, source: caller.source, replacement },
-    '[ai] /api/ai/call is deprecated — this app should move to POST /api/ai/feature'
-  );
-};
-
 // The providers /config reads and writes — config/aiProviders.js is the one
 // list; llm7 and onemin used to be named here and had no implementation.
 const CONFIG_PROVIDERS = PROVIDER_IDS;
@@ -258,6 +218,91 @@ router.get('/capabilities', async (req, res) => {
         message: 'Failed to get AI capabilities',
         code: 'CAPABILITIES_ERROR'
       }
+    });
+  }
+});
+
+// ============================================================================
+// The status page's one read (Phase 3 — DOCS/AIGEEK_STATUS_PAGE.md §1)
+// ============================================================================
+
+/**
+ * GET /api/ai/status — permission `ai:stats`.
+ *
+ * One round trip behind the whole `/aigeek` page: what the catalog last found,
+ * what needs a human, what the month cost, and which app is routed how. The
+ * shape is §1's and the rules are in `services/aiStatusService.js` — cheap
+ * indexed reads, no vendor calls, 60 s in-process cache.
+ *
+ * A **bare object**, not the `{success, data}` envelope the older routes use,
+ * for the same reason `GET /models/alive` is a bare array: this is what a page
+ * renders, and a StartGeek glance card will read the same document. There are
+ * no UI-only fields in it, deliberately.
+ *
+ * `ai:stats` rather than admin: the page itself is admin-gated client-side and
+ * every *write* it makes takes `requireAdminUser`, but a read of "is anything
+ * wrong" is the same class of question `/stats` and `/capabilities` already
+ * answer, and `requireAdminUser` refuses every API key outright — which would
+ * put a glance card out of reach of any credential a backend can hold.
+ *
+ * Note that `ai:stats` is **not** in the default mint set, so this reuses an
+ * existing permission's existing reach rather than granting anything: a key
+ * that wants this document must be minted `ai:stats` by name, exactly as for
+ * `/stats` today. Pinned in aiRoutesGates.test.js.
+ */
+router.get('/status', async (req, res) => {
+  try {
+    const permissionError = requirePermission(req, res, 'ai:stats');
+    if (permissionError) return;
+
+    const status = await cachedStatus();
+    return res.json(status);
+  } catch (error) {
+    // A read that failed is reported as a failure, not as a page full of
+    // zeros: "nothing needs you" because the ledger was unreadable is the
+    // worst possible answer this route could give.
+    req.log.error({ err: error }, '[ai] /status failed');
+    return res.status(500).json({
+      success: false,
+      error: { message: 'Failed to build the AI status', code: 'AI_STATUS_ERROR' }
+    });
+  }
+});
+
+/**
+ * POST /api/ai/catalog/run — admin only.
+ *
+ * The "Run discovery now" action on the `discovery_stale` item. It starts the
+ * catalog job's ordinary discovery out of band and returns immediately:
+ * `202 { started: true }`, or `409 { started: false, reason: 'running' }` when
+ * a tick — scheduled or a previous click — is already in flight.
+ *
+ * **Never awaited.** A discovery lists every provider and probes every free
+ * candidate; it is minutes of work whose entire report is an `AICatalogRun`
+ * document the next status poll reads. `202` is exactly the right word for
+ * that, and the job records the run like any other.
+ *
+ * `requireAdminUser`, so API keys are refused on sight: this spends the
+ * suite's free-tier quota across every provider, and a key belongs to an app,
+ * not to a person who can be asked why they clicked it.
+ */
+router.post('/catalog/run', requireAdminUser, async (req, res) => {
+  try {
+    const outcome = catalogJob().runDiscoveryNow();
+
+    if (!outcome.started) {
+      return res.status(409).json({ started: false, reason: outcome.reason || 'running' });
+    }
+
+    // The next poll must see `catalog.running`, not a minute-old "off".
+    invalidateStatusCache();
+    req.log.info({ user: req.user?.id ?? null }, '[ai] catalog discovery started out of band');
+    return res.status(202).json({ started: true });
+  } catch (error) {
+    req.log.error({ err: error }, '[ai] /catalog/run failed to start a discovery');
+    return res.status(500).json({
+      success: false,
+      error: { message: 'Failed to start a catalog discovery', code: 'CATALOG_RUN_ERROR' }
     });
   }
 });
@@ -1003,210 +1048,37 @@ router.get('/models/alive', async (req, res) => {
 });
 
 // ============================================================================
-// Legacy API (DEPRECATED - Use /api/ai/conversation/message instead)
+// `POST /api/ai/call` — deleted 2026-09-08 (D2, Phase 3)
 // ============================================================================
-// 
-// This endpoint is kept for compatibility with external tools, but is NOT recommended.
-// For CodeGeek (single-user), use the Phase 3 conversation API above.
 //
-// Why deprecated:
-// - Sends full context every time (inefficient)
-// - No conversation state management
-// - No automatic summarization
-// - Higher token usage
+// It was the original front door and it had every problem the feature door was
+// built to fix: full context on every request, no conversation state, no
+// summarization, no fallback (a free-tier hiccup was a 500 at somebody's
+// user), and a response that was OpenAI-shaped without being OpenAI-compatible.
+// Phase 2 deprecated it — `Deprecation: true`, a `Link` to its successor and
+// one log line per caller app per hour — and this deletes it.
 //
-// Will be removed in future version.
-// ============================================================================
-
-// POST /api/ai/call - Generic AI call endpoint with streaming support
-router.post('/call', async (req, res) => {
-  // Debug logging for incoming request
-  req.log.debug({
-    method: req.method,
-    path: req.originalUrl,
-    stream: req.body.stream,
-    messageCount: req.body.messages?.length,
-  }, '--- /api/ai/call invoked (DEPRECATED) ---');
-
-  try {
-    // Check permission for API key users
-    const permissionError = requirePermission(req, res, 'ai:call');
-    if (permissionError) return;
-
-    // Who is calling comes from the credential, never from the body. The body
-    // may still name a *feature* of that app.
-    const caller = resolveCaller(req, req.body);
-    logCaller(req, caller, '[ai] /call caller');
-    markDeprecated(req, res, caller, '/api/ai/feature');
-
-    const stream = req.body.stream || false;
-
-    // Support both legacy 'prompt' and OpenAI-style 'messages' array
-    let messages = req.body.messages;
-    let prompt = req.body.prompt;
-    let config = req.body.config || {};
-
-    // The routing switches this route has always honoured — `provider: "free"`,
-    // `freeOnly`, `provider: "basegeek-app"`, `useAppConfig`, and the legacy
-    // auto-trigger for a body that names an app and no provider. They live in
-    // `services/aiRoute.js` now, with the rest of the legacy vocabulary, so
-    // this route no longer has an opinion about routing: it hands the config
-    // to `callAI`, which resolves one Route through `resolveRoute` like every
-    // other door. The switches choose a *mode*, never an identity.
-    applyRoutingSwitches(config, req.body);
-
-    // Identity is stamped last so nothing in the body can survive it.
-    config.appName = caller.appId;
-    config.feature = caller.feature;
-    config.userId = caller.userId;
-
-    // If messages provided, use them directly (don't convert to string yet)
-    if (Array.isArray(messages) && messages.length > 0) {
-      config = { ...config, messages: messages };
-    } else if (!prompt) {
-      return res.status(400).json({
-        success: false,
-        error: {
-          message: 'Prompt or messages are required',
-          code: 'MISSING_PROMPT_OR_MESSAGES'
-        }
-      });
-    }
-
-    // Handle streaming response
-    if (stream) {
-      res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('Connection', 'keep-alive');
-
-      try {
-        const result = await aiService.callAI(prompt, config);
-        req.log.debug({ resultLength: result?.length || 0, resultType: typeof result }, 'AI result received');
-
-        const timestamp = Math.floor(Date.now() / 1000);
-        const id = `chatcmpl-${Date.now()}`;
-        // `model` used to fall back to `aiService.currentProvider` — a
-        // PROVIDER id in a field OpenAI clients read as a model id, on every
-        // rotation call that named no model. `lastProviderInfo` is stamped by
-        // callAI with the provider and model that actually answered (cache
-        // hits included), so the fallback is now the real model; the provider
-        // id stays only as the last resort when even that is missing.
-        const answered = aiService.lastProviderInfo || {};
-        const model = config.model || answered.model || aiService.currentProvider;
-
-        // Stream the response in chunks (simulate streaming for better UX)
-        const chunkSize = 50; // characters per chunk
-        for (let i = 0; i < result.length; i += chunkSize) {
-          const content = result.slice(i, i + chunkSize);
-          const chunk = {
-            id,
-            object: 'chat.completion.chunk',
-            created: timestamp,
-            model,
-            choices: [{
-              index: 0,
-              delta: { content },
-              finish_reason: null
-            }]
-          };
-          res.write(`data: ${JSON.stringify(chunk)}\n\n`);
-        }
-
-        // Send final chunk with finish_reason
-        const finalChunk = {
-          id,
-          object: 'chat.completion.chunk',
-          created: timestamp,
-          model,
-          choices: [{
-            index: 0,
-            delta: {},
-            finish_reason: 'stop'
-          }]
-        };
-        res.write(`data: ${JSON.stringify(finalChunk)}\n\n`);
-        res.write('data: [DONE]\n\n');
-        res.end();
-      } catch (streamError) {
-        // Headers are already out, so the frame is all the contract leaves us —
-        // but it says the same allowlisted words the non-streaming catch would,
-        // and the provider's body goes only to the redacting logger.
-        const failure = resolveFailure(
-          req, res, streamError,
-          { stage: 'call_stream', model: config.model ?? null },
-          '[ai] /call streaming upstream failure'
-        );
-        const errorChunk = {
-          error: {
-            message: failure.message,
-            type: failure.type,
-            code: failure.code
-          }
-        };
-        res.write(`data: ${JSON.stringify(errorChunk)}\n\n`);
-        res.end();
-      }
-    } else {
-      // Non-streaming response (OpenAI-compatible format)
-      const result = await aiService.callAI(prompt, config);
-      // Same fix as the streaming branch above: the model that answered, not
-      // the default provider's id wearing the `model` field.
-      const answered = aiService.lastProviderInfo || {};
-      const model = config.model || answered.model || aiService.currentProvider;
-
-      req.log.debug({ resultLength: result?.length }, 'Sending non-streaming response');
-
-      // `usage` used to be three hardcoded zeros, which is worse than absent:
-      // a caller cannot tell "no tokens" from "we didn't count". These are
-      // local estimates from the same tokenCounter the /smart route above
-      // uses — the rotation's providers do not all return usage, and an
-      // estimate that is honest about being one beats a zero that lies.
-      const promptTokens = Array.isArray(config.messages) && config.messages.length > 0
-        ? countMessageTokens(config.messages)
-        : countTextTokens(prompt || '');
-      const completionTokens = countTextTokens(result || '');
-
-      res.json({
-        id: `chatcmpl-${Date.now()}`,
-        object: 'chat.completion',
-        created: Math.floor(Date.now() / 1000),
-        model: model,
-        // Additive, outside the OpenAI shape: rotation callers pass no
-        // provider and had no way to learn which one actually answered. The
-        // AIGeek playground reads it; OpenAI clients ignore unknown fields.
-        //
-        // It reported `currentProvider` — the DEFAULT — which is the one thing
-        // the caller could already work out, and which is wrong for every call
-        // the rotation, the free-tier walk or the app-config row sent
-        // somewhere else. `lastProviderInfo.provider` is what answered.
-        provider: answered.provider || aiService.currentProvider,
-        choices: [
-          {
-            index: 0,
-            message: {
-              role: 'assistant',
-              content: result
-            },
-            finish_reason: 'stop'
-          }
-        ],
-        usage: {
-          prompt_tokens: promptTokens,
-          completion_tokens: completionTokens,
-          total_tokens: promptTokens + completionTokens,
-          estimated: true
-        }
-      });
-    }
-
-  } catch (error) {
-    if (!res.headersSent) {
-      failUpstream(req, res, error, { stage: 'call', model: req.body?.config?.model ?? null });
-    } else {
-      req.log.error({ err: error }, 'Error in /api/ai/call after headers sent');
-    }
-  }
-});
+// Where its callers went:
+//   - **fitnessgeek** and **storygeek** are live on `POST /api/ai/feature`,
+//     which is the same call with fail-soft, provenance, `costUsd`, sticky
+//     picks and pins (`services/aiFeatureRunner.js`, `AIGEEK_FRONT_DOOR.md` §4).
+//   - **CodeGeek** and **geekPR** were always on `/openai/v1/chat/completions`,
+//     which is untouched and is not going anywhere.
+//   - `POST /api/ai/parse-json` **stays** (below): it has its own callers and
+//     its own contract. `/feature` with a `schema` is strictly better — it
+//     validates, and it says *why* it could not parse — but "no advantage" is
+//     not "no callers".
+//
+// A request to the old path now takes the router's ordinary 404 through the
+// failure envelope, which is the honest answer: there is no such door. It is
+// not a 410 and not a redirect — the bodies are not the same shape, so a
+// client following one would send `{prompt, config}` to a route that reads
+// `{feature, messages}` and get a 400 it could not explain.
+//
+// Gone with it: the hourly deprecation logger (`_deprecationDue`,
+// `_resetDeprecationLog`, `markDeprecated`) and this route's copy of the
+// legacy auto-trigger comment. `applyRoutingSwitches` survives for
+// `/parse-json`, which is the last caller of the legacy vocabulary.
 
 // POST /api/ai/parse-json - AI call with JSON parsing
 //

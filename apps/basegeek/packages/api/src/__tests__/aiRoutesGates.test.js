@@ -15,9 +15,15 @@
  * caller authenticated as one app claiming to be another, spending another
  * user's quota. A test with an honest body passes against the vulnerable code.
  *
- * The `/call` cases at the bottom are the reference the parse-json cases are
- * measured against: the two routes are the same front door and must answer the
- * same way. Identity resolution itself is covered in callerIdentity.test.js.
+ * The reference the parse-json cases are measured against used to be
+ * `/api/ai/call`; that route was deleted 2026-09-08 (D2), so the permission
+ * comparison is now against `POST /api/ai/feature`, which is the door those
+ * callers moved to. The Q46 envelope cases moved onto `/parse-json` itself,
+ * which is the last route that renders `failUpstream` on this router —
+ * `/feature` turns every model-side outcome into a 200 by design, so there is
+ * no upstream envelope there to leak through. The one case that could not
+ * move is `/call`'s streaming error frame: nothing else on this router
+ * streams. Identity resolution itself is covered in callerIdentity.test.js.
  */
 
 import { describe, it, expect, beforeAll, afterAll, afterEach } from '@jest/globals';
@@ -36,6 +42,8 @@ const { default: aiRoutes } = await import('../routes/aiRoutes.js');
 const { default: aiService } = await import('../services/aiService.js');
 const { default: aiDirectorService } = await import('../services/aiDirectorService.js');
 const { default: aiUsageService } = await import('../services/aiUsageService.js');
+const { getInstance: catalogJobInstance } = await import('../services/aiCatalogJob.js');
+const { invalidateStatusCache } = await import('../services/aiStatusService.js');
 
 function buildApp() {
   const app = express();
@@ -169,17 +177,22 @@ describe('POST /api/ai/parse-json — the gate', () => {
     expect(captured).toBeNull();
   });
 
-  it('is gated by the same permission as /api/ai/call', async () => {
+  it('is gated by the same permission as the feature door', async () => {
+    // Measured against `/api/ai/feature` since `/api/ai/call` was deleted:
+    // both take `ai:call` from the same `requirePermission`, and a divergence
+    // between the two doors is exactly the drift that let `/parse-json` ship
+    // with no gate at all until 2026-09-05.
     const apiKey = await makeApiKey({ appName: 'notegeek', permissions: ['ai:models'] });
-    const body = { prompt: 'hi', config: { appName: 'storygeek' } };
 
     const parse = await request(app).post('/api/ai/parse-json')
-      .set('Authorization', `Bearer ${apiKey}`).send(body);
-    const call = await request(app).post('/api/ai/call')
-      .set('Authorization', `Bearer ${apiKey}`).send(body);
+      .set('Authorization', `Bearer ${apiKey}`)
+      .send({ prompt: 'hi', config: { appName: 'storygeek' } });
+    const feature = await request(app).post('/api/ai/feature')
+      .set('Authorization', `Bearer ${apiKey}`)
+      .send({ feature: 'probe', user: 'hi', appName: 'storygeek' });
 
-    expect(parse.status).toBe(call.status);
-    expect(parse.body.error.code).toBe(call.body.error.code);
+    expect(parse.status).toBe(feature.status);
+    expect(parse.body.error.code).toBe(feature.body.error.code);
   });
 
   it('attributes to the key\'s app, not the appName in the body', async () => {
@@ -291,14 +304,14 @@ describe('POST /api/ai/parse-json — the gate', () => {
 
 // ─────────────────── the reference the above is measured against ─────────────
 
-describe('POST /api/ai/call — unchanged', () => {
+describe('POST /api/ai/feature — the door those callers moved to', () => {
   it('refuses a key without ai:call', async () => {
     const apiKey = await makeApiKey({ appName: 'notegeek', permissions: ['ai:models'] });
 
     const res = await request(app)
-      .post('/api/ai/call')
+      .post('/api/ai/feature')
       .set('Authorization', `Bearer ${apiKey}`)
-      .send({ prompt: 'hi', config: { appName: 'storygeek' } });
+      .send({ feature: 'probe', user: 'hi', appName: 'storygeek' });
 
     expect(res.status).toBe(403);
     expect(captured).toBeNull();
@@ -308,9 +321,9 @@ describe('POST /api/ai/call — unchanged', () => {
     const apiKey = await makeApiKey({ appName: 'notegeek' });
 
     await request(app)
-      .post('/api/ai/call')
+      .post('/api/ai/feature')
       .set('Authorization', `Bearer ${apiKey}`)
-      .send({ prompt: 'hi', config: { appName: 'storygeek', provider: 'groq' } });
+      .send({ feature: 'probe', user: 'hi', appName: 'storygeek' });
 
     expect(captured.config.appName).toBe('notegeek');
   });
@@ -341,6 +354,13 @@ const ADMIN_ROUTES = [
   // DOCS/AIGEEK_ELEVATION_PLAN.md). `/director/force-refresh` is the admin
   // catalog mutator that remains, and it keeps the gate.
   ['post', '/api/ai/director/force-refresh', {}],
+  // Phase 3. It starts a catalog discovery out of band — every provider
+  // listed, every free candidate probed — so it spends the suite's free-tier
+  // quota across the whole roster on one click. `requireAdminUser` refuses
+  // API keys on sight, which is the point: a key belongs to an app, and an
+  // app cannot be asked why it clicked. `202`, not `200`: the run is left on
+  // the queue and its report is the `AICatalogRun` document.
+  ['post', '/api/ai/catalog/run', {}, 202],
 ];
 
 describe('the admin-shaped AI routes take the admin gate', () => {
@@ -354,6 +374,11 @@ describe('the admin-shaped AI routes take the admin gate', () => {
       spies.push([obj, method, obj[method]]);
       obj[method] = typeof value === 'function' ? value : () => value;
     };
+    // A real `runDiscoveryNow()` would list every provider and probe every
+    // free candidate — over the network, from a unit test. The gate is what
+    // these cases are about, so the job is stubbed at the singleton the route
+    // resolves.
+    stub(catalogJobInstance(), 'runDiscoveryNow', () => ({ started: true }));
     stub(aiService, 'setProvider', true);
     stub(aiService, 'refreshModels', async () => []);
     stub(aiService, 'resetSessionStats', undefined);
@@ -412,15 +437,18 @@ describe('the admin-shaped AI routes take the admin gate', () => {
     expect(res.body.code).toBe('ADMIN_REQUIRED');
   });
 
-  it.each(ADMIN_ROUTES)('%s %s lets an admin through', async (method, path, body) => {
+  it.each(ADMIN_ROUTES)('%s %s lets an admin through', async (method, path, body, okStatus = 200) => {
     const { token } = await makeUserWithToken({ role: 'admin' });
 
     const res = await request(app)[method](path)
       .set('Authorization', `Bearer ${token}`)
       .send(body);
 
-    expect(res.status).toBe(200);
-    expect(res.body.success).toBe(true);
+    expect(res.status).toBe(okStatus);
+    // The older routes all answer `{success: true}`; the newer ones answer in
+    // their own shape (`/catalog/run` says `{started: true}` with a 202), so
+    // the envelope is only asserted where the route claims to have one.
+    if (okStatus === 200) expect(res.body.success).toBe(true);
   });
 
   it('refuses an unauthenticated caller before it ever reaches the role lookup', async () => {
@@ -536,6 +564,73 @@ describe('the admin-shaped AI routes take the admin gate', () => {
     expect(yes.body.data.provider).toBe('groq');
   });
 
+  // ── GET /status — ai:stats, the same word /stats and /capabilities take ───
+  //
+  // Phase 3's one read (DOCS/AIGEEK_STATUS_PAGE.md §1). Deliberately *not*
+  // admin: the page is admin-gated client-side and every write it makes is
+  // `requireAdminUser`, but `requireAdminUser` refuses every API key, and a
+  // StartGeek glance card will read this document with the credential a
+  // backend actually holds.
+
+  it('GET /status takes ai:stats, and answers the bare §1 shape', async () => {
+    const denied = await makeApiKey({ appName: 'notegeek', permissions: ['ai:call'] });
+    const allowed = await makeApiKey({ appName: 'notegeek', permissions: ['ai:stats'] });
+
+    const no = await request(app).get('/api/ai/status').set('Authorization', `Bearer ${denied}`);
+    expect(no.status).toBe(403);
+    expect(no.body.error.code).toBe('INSUFFICIENT_PERMISSIONS');
+
+    invalidateStatusCache();
+    const yes = await request(app).get('/api/ai/status').set('Authorization', `Bearer ${allowed}`);
+    expect(yes.status).toBe(200);
+    // A bare object, not `{success, data}` — this is what a page renders.
+    expect(yes.body.success).toBeUndefined();
+    expect(yes.body).toMatchObject({
+      catalog: expect.any(Object),
+      attention: expect.any(Array),
+      spend: expect.any(Object),
+      apps: expect.any(Array),
+    });
+  });
+
+  it('GET /status is NOT in reach of a key minted with the defaults', async () => {
+    // `ai:stats` is not in the default mint set (models/APIKey.js:51 —
+    // `ai:call`, `ai:models`, `ai:providers`, `ai:usage`), and `/status` takes
+    // the same word `/stats` and `/capabilities` have always taken. So this is
+    // deliberately the *unchanged* reach of an existing permission rather than
+    // a new grant: a backend that wants the status document must be minted
+    // `ai:stats` by name. Pinned because the opposite is easy to assume — the
+    // route is a read, and reads on this router are mostly free.
+    const apiKey = await makeApiKey({ appName: 'notegeek', permissions: 'schema-default' });
+
+    invalidateStatusCache();
+    const res = await request(app).get('/api/ai/status').set('Authorization', `Bearer ${apiKey}`);
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe('INSUFFICIENT_PERMISSIONS');
+
+    // …and the same is true of its two siblings, which is the point: one word,
+    // one reach, no special case for the new route.
+    const stats = await request(app).get('/api/ai/stats').set('Authorization', `Bearer ${apiKey}`);
+    expect(stats.status).toBe(403);
+  });
+
+  it('POST /catalog/run answers 409 when a run is already in flight', async () => {
+    // The refusal is a fact, not an error: two discoveries at once is how a
+    // roster of free tiers earns a roster of 429s.
+    const { token } = await makeUserWithToken({ role: 'admin' });
+    const job = catalogJobInstance();
+    const original = job.runDiscoveryNow;
+    job.runDiscoveryNow = () => ({ started: false, reason: 'running' });
+    try {
+      const res = await request(app).post('/api/ai/catalog/run')
+        .set('Authorization', `Bearer ${token}`).send({});
+      expect(res.status).toBe(409);
+      expect(res.body).toEqual({ started: false, reason: 'running' });
+    } finally {
+      job.runDiscoveryNow = original;
+    }
+  });
+
   // ── GET /usage/:provider — identity from the credential ───────────────────
 
   it('GET /usage/:provider ignores ?userId= and answers for the caller', async () => {
@@ -632,13 +727,23 @@ function expectNothingLeaked(text) {
   }
 }
 
-describe('POST /api/ai/call — an upstream failure in aiGeek\'s own words', () => {
+describe('POST /api/ai/parse-json — an upstream failure in aiGeek\'s own words', () => {
+  // These four cases were written against `/api/ai/call` and moved here when
+  // that route was deleted (D2, 2026-09-08). `/parse-json` is the last route
+  // on this router that renders `failUpstream`, so it is where the Q46
+  // allowlist is still observable end to end; `/feature` turns every
+  // model-side outcome into a 200 by design and has no upstream envelope.
+  //
+  // `/call`'s fifth case — the streaming error frame — had nowhere to go: it
+  // was the only streaming branch on this router. The frame's words came from
+  // the same `resolveFailure` these cases exercise, and the proxy's streaming
+  // envelope is pinned in openaiCompat.test.js.
   it('answers the allowlisted envelope, with nothing of the provider\'s in it', async () => {
     const apiKey = await makeApiKey({ appName: 'storygeek' });
     nextFailure = LEAKY_UPSTREAM(401);
 
     const res = await request(app)
-      .post('/api/ai/call')
+      .post('/api/ai/parse-json')
       .set('Authorization', `Bearer ${apiKey}`)
       .send({ prompt: 'hi', config: { provider: 'gemini' } });
 
@@ -657,7 +762,7 @@ describe('POST /api/ai/call — an upstream failure in aiGeek\'s own words', () 
     nextFailure = LEAKY_UPSTREAM(500);
 
     const res = await request(app)
-      .post('/api/ai/call')
+      .post('/api/ai/parse-json')
       .set('Authorization', `Bearer ${apiKey}`)
       .set('X-Request-Id', 'gate-probe-call-1')
       .send({ prompt: 'hi', config: { provider: 'gemini' } });
@@ -671,7 +776,7 @@ describe('POST /api/ai/call — an upstream failure in aiGeek\'s own words', () 
     nextFailure = LEAKY_UPSTREAM(429);
 
     const res = await request(app)
-      .post('/api/ai/call')
+      .post('/api/ai/parse-json')
       .set('Authorization', `Bearer ${apiKey}`)
       .send({ prompt: 'hi', config: { provider: 'gemini' } });
 
@@ -686,7 +791,7 @@ describe('POST /api/ai/call — an upstream failure in aiGeek\'s own words', () 
     nextFailure = new Error('All AI providers failed: cerebras, groq, gemini');
 
     const res = await request(app)
-      .post('/api/ai/call')
+      .post('/api/ai/parse-json')
       .set('Authorization', `Bearer ${apiKey}`)
       .send({ prompt: 'hi' });
 
@@ -696,27 +801,6 @@ describe('POST /api/ai/call — an upstream failure in aiGeek\'s own words', () 
     expect(res.text).not.toContain('gemini');
   });
 
-  it('the streaming error frame says the same thing the body would', async () => {
-    const apiKey = await makeApiKey({ appName: 'storygeek' });
-    nextFailure = LEAKY_UPSTREAM(401);
-
-    const res = await request(app)
-      .post('/api/ai/call')
-      .set('Authorization', `Bearer ${apiKey}`)
-      .send({ prompt: 'hi', stream: true, config: { provider: 'gemini' } });
-
-    // Headers were already out, so the failure arrives as a frame, not a status.
-    const frame = res.text.split('\n').find(line => line.startsWith('data: ') && line.includes('error'));
-    expect(frame).toBeDefined();
-    const payload = JSON.parse(frame.slice('data: '.length));
-    expect(payload.error.code).toBe('upstream_error');
-    expect(payload.error.type).toBe('server_error');
-    expect(payload.error.message).toMatch(/^The upstream model provider failed to complete this request\./);
-    expectNothingLeaked(res.text);
-  });
-});
-
-describe('POST /api/ai/parse-json — the same envelope, on the same words', () => {
   it('no longer relays the provider body as error.details', async () => {
     const apiKey = await makeApiKey({ appName: 'storygeek' });
     nextFailure = LEAKY_UPSTREAM(401);
@@ -730,22 +814,6 @@ describe('POST /api/ai/parse-json — the same envelope, on the same words', () 
     expect(res.body.error.code).toBe('upstream_error');
     expect(res.body.error.details).toBeUndefined();
     expectNothingLeaked(res.text);
-  });
-
-  it('answers /call identically for the identical failure', async () => {
-    const apiKey = await makeApiKey({ appName: 'storygeek' });
-
-    nextFailure = LEAKY_UPSTREAM(429);
-    const parse = await request(app).post('/api/ai/parse-json')
-      .set('Authorization', `Bearer ${apiKey}`).send({ prompt: 'hi' });
-
-    nextFailure = LEAKY_UPSTREAM(429);
-    const call = await request(app).post('/api/ai/call')
-      .set('Authorization', `Bearer ${apiKey}`).send({ prompt: 'hi' });
-
-    expect(parse.status).toBe(call.status);
-    expect(parse.body.error.code).toBe(call.body.error.code);
-    expect(parse.body.error.type).toBe(call.body.error.type);
   });
 
   it('says so when the model answered with something that was not JSON', async () => {

@@ -2,11 +2,14 @@
  * The destructive confirmations, which differ only in wording and tone.
  *
  * They were near-identical `<Dialog>` blocks at the bottom of the page. One
- * component, three call sites: the thing that actually varies — what is about
+ * component, two call sites: the thing that actually varies — what is about
  * to be lost and whether it can be recovered — is the copy.
  *
- * `RestoreDefaultsDialog` was the fourth until 2026-09-07; the seed mutations
- * behind it went with the hand-typed catalog tables (Phase 1).
+ * There were four. `RestoreDefaultsDialog` went with the seed mutations and
+ * the hand-typed catalog tables (Phase 1, 2026-09-07). `ResetFreeTiersDialog`
+ * went with the "Reset all free tiers" button in Phase 3: the catalog job
+ * revives the rows it unticked, so the button's only lasting effect was to
+ * make the next probe do its work twice.
  */
 import {
   Alert,
@@ -58,20 +61,6 @@ export function ResetStatsDialog({ open, onCancel, onConfirm }) {
   );
 }
 
-export function ResetFreeTiersDialog({ open, busy, onCancel, onConfirm }) {
-  return (
-    <ConfirmDialog
-      open={open}
-      title="Reset all free tiers?"
-      color="error"
-      confirmLabel="Reset all"
-      busy={busy}
-      body="This unticks every model's free-tier flag. The limits themselves are kept and can be re-applied afterwards."
-      onCancel={onCancel}
-      onConfirm={onConfirm}
-    />
-  );
-}
 
 /**
  * Revoking a key. `deleteAPIKey` flips `isActive` false rather than deleting

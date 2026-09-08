@@ -10,30 +10,11 @@ export const typeDefs = gql`
     audioSecondsPerDay: Int
   }
 
-  type FreeTierUpdate {
-    provider: String!
-    modelId: String!
-    isFree: Boolean!
-    freeLimits: FreeTierLimits
-    notes: String
-  }
-
-  input FreeTierLimitsInput {
-    requestsPerMinute: Int
-    requestsPerDay: Int
-    tokensPerMinute: Int
-    tokensPerDay: Int
-    audioSecondsPerHour: Int
-    audioSecondsPerDay: Int
-  }
-
-  input FreeTierUpdateInput {
-    provider: String!
-    modelId: String!
-    isFree: Boolean!
-    freeLimits: FreeTierLimitsInput
-    notes: String
-  }
+  # FreeTierUpdate / FreeTierUpdateInput / FreeTierLimitsInput were here until
+  # Phase 3 (2026-09-07). They existed only for bulkUpdateFreeTiers, the
+  # Catalog tab's Save-all, which is gone with the tab
+  # (apps/basegeek/DOCS/AIGEEK_STATUS_PAGE.md §3). FreeTierLimits above stays:
+  # the model steward's reads still return it.
 
   # ── Model steward ────────────────────────────────────────────────────────
   # aiGeek answering two questions for the apps that route through it:
@@ -190,13 +171,27 @@ export const typeDefs = gql`
     # See apps/basegeek/DOCS/AIGEEK_CATALOG_JOB.md.
 
     # Model Management
+    #
+    # updateModelPricing, updateModelFreeTier, resetAllFreeTiers and
+    # bulkUpdateFreeTiers were here until Phase 3 (2026-09-07). Every one of
+    # them wrote a claim about a vendor that the catalog job now *observes* —
+    # the listing gives prices, the nightly probe gives the free-tier flag and
+    # its fitness, and the x-ratelimit-* headers on real calls give the quotas
+    # — and the admin controls behind all four were deleted with the Catalog
+    # tab (apps/basegeek/DOCS/AIGEEK_STATUS_PAGE.md §3). The console was the
+    # only caller of all four.
+    #
+    # The per-row escape hatch they stood in for becomes AIFreeTier.override
+    # ('deny' | 'allow' | null) and its own mutation; until that lands, the
+    # status page's override drawer renders disabled rather than pretending.
+    #
+    # syncProviderModels survives with no GraphQL caller: its REST twins
+    # (POST /api/ai/models/:provider/refresh, /api/ai/director/force-refresh)
+    # are the documented manual refresh, and dropping one spelling of a live
+    # capability is a separate decision from deleting a dead control.
     syncProviderModels(provider: String!): JSON
-    updateModelPricing(provider: String!, modelId: String!, inputPrice: Float!, outputPrice: Float!): JSON
     deleteModelPricing(provider: String!, modelId: String!): Boolean
-    updateModelFreeTier(provider: String!, modelId: String!, isFree: Boolean!, freeLimits: JSON, notes: String): JSON
     deleteModelFreeTier(provider: String!, modelId: String!): Boolean
-    resetAllFreeTiers: Int!
-    bulkUpdateFreeTiers(updates: [FreeTierUpdateInput!]!): [FreeTierUpdate!]!
 
     # App Routing
     saveAIAppConfig(appName: String!, config: JSON!): JSON

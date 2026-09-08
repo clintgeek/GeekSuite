@@ -27,7 +27,7 @@ import AIFreeTier, {
 } from '../models/AIFreeTier.js';
 import AIAppConfig from '../models/AIAppConfig.js';
 import AIUsage from '../models/AIUsage.js';
-import AISpend, { spendDay } from '../models/AISpend.js';
+import AISpend, { spendDay, recordRefusal } from '../models/AISpend.js';
 import AIStickyPick, { stickyKey } from '../models/AIStickyPick.js';
 // The routing decision is pure and lives next door (Phase 2). aiService owns
 // the I/O the decision needs — is this row cooling, what has today cost — and
@@ -1837,6 +1837,12 @@ class AIService {
             },
             'paid_budget — paid fallback skipped'
           );
+          // The log line above was the only trace a refusal left, and a log
+          // line cannot answer "did the cap bite this month" a week later.
+          // One `$inc` on the day's bucket; never rejects, never awaited —
+          // a refusal is already the cheap path and must not become slower
+          // than the call it declined (Phase 3, `paid_budget_hit`).
+          recordRefusal(currentProvider, appId, featureId);
           lastError = lastError || new Error('No free-tier model is available — no free providers left to try');
           continue;
         }

@@ -1,19 +1,22 @@
 /**
- * AppsKeysTab — one page for "who is calling, and where do their calls go".
+ * AppsKeysPanel — panel 3: who is calling, where their calls go, and the keys.
  *
- * This replaces the old App Routing tab and the standalone API Keys page,
- * which were two views of the same fact filed apart. aiGeek now resolves the
- * caller from the API key's own `appName` — normalized lowercase, with the
- * request body's `appName` ignored — so a key *is* an app's identity, and the
- * routing row that decides which model answers belongs directly under it. The
- * two screens could not be kept honest separately: an admin could revoke the
- * last key for an app on one page and leave a routing row on the other
- * pointing at a caller that no longer exists.
+ * This is the old Apps & keys tab with the routing controls brought out of the
+ * dialog and onto the card, and with Providers moved in underneath it (§2).
+ * The two belong on one panel: a provider key and an app's pin are the same
+ * question asked from two ends — "which vendor answers for this caller".
  *
- * A group is an app id, and it can arrive from three directions: a key filed
- * under it, a routing row naming it, or traffic seen from it with neither yet.
- * `startgeek` is the interesting case — it calls in-process and presents no
- * key, so it renders with an "internal" chip where the others get Mint.
+ * A group is an app id, and it can arrive from four directions: a key filed
+ * under it, a routing row naming it, traffic seen from it with neither yet, or
+ * the status endpoint's `apps` array. `startgeek` is the interesting case — it
+ * calls in-process and presents no key, so it renders with an "internal" chip
+ * where the others get Mint.
+ *
+ * Every control on a card writes straight through (`onPatchRouting`). There is
+ * no Save button, because a switch that needs one is a chore and this page is
+ * meant to have none; the routing *dialog* survives only for the fields a
+ * monthly visit does not touch (display name, notes, token/temperature
+ * overrides) and for an app that has no row yet.
  *
  * Below `md` the key tables become cards (`ResponsiveTable`); the group cards
  * are already one column there.
@@ -28,8 +31,12 @@ import {
   CircularProgress,
   Collapse,
   Divider,
+  FormControlLabel,
   IconButton,
+  Switch,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Tooltip,
   Typography,
 } from '@mui/material';
@@ -41,22 +48,14 @@ import {
   Block as BlockIcon,
   VpnKey as VpnKeyIcon,
   ContentCopy as CopyIcon,
-  AutoAwesome as AutoAwesomeIcon,
   HelpOutline as HelpOutlineIcon,
 } from '@mui/icons-material';
 import { GeekEmptyState, GeekErrorState } from '@geeksuite/ui';
 import ResponsiveTable from '../../components/primitives/ResponsiveTable';
-import ModelStewardBlock from './ModelStewardBlock';
-import { formatCost, formatTokens, formatWhen, parseWhen } from './format';
-
-/** The one-line description of where an app's calls actually go. */
-const routingLine = (config) => {
-  if (!config) return 'No routing row — falls back to the default rotation';
-  if (config.tier === 'specific') return `${config.provider}/${config.model}`;
-  if (config.tier === 'free') return 'Free-tier rotation';
-  if (config.tier === 'rotation') return 'All-provider rotation';
-  return null;
-};
+import AliveModelPicker from './AliveModelPicker';
+import ProvidersBlock from './ProvidersBlock';
+import { formatCost, formatTokens, formatWhen, formatAgo, parseWhen } from './format';
+import { AUTOMATIC, PINNED, routingMode } from './useAIGeek';
 
 const KeyName = (apiKey) => (
   <Box sx={{ minWidth: 0 }}>
@@ -176,10 +175,138 @@ function KeyTable({ keys, onCopy, onEdit, onRevoke }) {
   );
 }
 
-/** One app: its routing row, its steward, and every key filed under it. */
-function AppGroupCard({ group, steward, onEditRouting, onDeleteRouting, onMintKey, onCopy, onEditKey, onRevokeKey }) {
-  const { config, keys, appId, displayName, isInternal, discovered } = group;
-  const stewardOpen = steward.openApp === appId;
+/**
+ * One app's routing, as three controls and a number.
+ *
+ * `Automatic | Pinned` is a segmented toggle rather than a select because
+ * there are exactly two values and both fit on a phone; a two-option dropdown
+ * is a click to find out what the options are.
+ *
+ * The two switches are disabled under Pinned rather than hidden — a pinned row
+ * has already chosen its model, and a pin never spends through the governor,
+ * so neither means anything there. Disabled says "not applicable"; hidden says
+ * "gone".
+ */
+function RoutingControls({ group, saving, picker, onPatch }) {
+  const config = group.config;
+  const mode = routingMode(config?.tier);
+  const pinned = mode === PINNED;
+
+  return (
+    <Box sx={{ mt: 1.5 }}>
+      <ToggleButtonGroup
+        exclusive
+        size="small"
+        value={mode}
+        onChange={(_, value) => { if (value && value !== mode) onPatch({ tier: value }); }}
+        aria-label={`Routing for ${group.appId}`}
+        disabled={saving}
+      >
+        <ToggleButton value={AUTOMATIC} sx={{ minHeight: 44, px: 2, fontSize: 12 }}>Automatic</ToggleButton>
+        <ToggleButton value={PINNED} sx={{ minHeight: 44, px: 2, fontSize: 12 }}>Pinned</ToggleButton>
+      </ToggleButtonGroup>
+
+      <Typography variant="caption" color="text.muted" display="block" sx={{ fontSize: 12, mt: 0.5 }}>
+        {pinned
+          ? 'Every call goes to the model below, alive or not.'
+          : 'Health-ranked free rows first, then the paid fallback if allowed.'}
+      </Typography>
+
+      <Collapse in={pinned} unmountOnExit>
+        <Box sx={{ mt: 1.5 }}>
+          <AliveModelPicker
+            groups={picker.groups}
+            loading={picker.loading}
+            error={picker.error}
+            provider={config?.provider}
+            model={config?.model}
+            onPick={(provider, model) => onPatch({ tier: PINNED, provider, model })}
+            onReload={picker.onReload}
+            suggestOpen={picker.suggestApp === group.appId}
+            onToggleSuggest={() => picker.onToggleSuggest(group.appId)}
+            recommendTask={picker.recommendTask}
+            recommendPriority={picker.recommendPriority}
+            recommendations={picker.recommendations}
+            recommending={picker.recommending}
+            onTaskChange={picker.onTaskChange}
+            onPriorityChange={picker.onPriorityChange}
+            onRecommend={picker.onRecommend}
+          />
+        </Box>
+      </Collapse>
+
+      <Box sx={{ mt: 1 }}>
+        <FormControlLabel
+          sx={{ alignItems: 'flex-start', ml: 0 }}
+          control={(
+            <Switch
+              checked={config?.sticky === 'per-conversation'}
+              disabled={pinned || saving}
+              onChange={(e) => onPatch({ sticky: e.target.checked ? 'per-conversation' : null })}
+              inputProps={{ 'aria-label': `Sticky per conversation for ${group.appId}` }}
+            />
+          )}
+          label={(
+            <Box sx={{ pt: 1 }}>
+              <Typography variant="body2">Sticky per conversation</Typography>
+              <Typography variant="caption" color="text.muted" sx={{ fontSize: 12 }}>
+                Keeps one model for a whole conversation until it fails. Costs a slower
+                first answer after a model dies; buys a voice that does not change mid-story.
+              </Typography>
+            </Box>
+          )}
+        />
+
+        <FormControlLabel
+          sx={{ alignItems: 'flex-start', ml: 0 }}
+          control={(
+            <Switch
+              checked={config?.allowPaid === true}
+              disabled={pinned || saving}
+              onChange={(e) => onPatch({ allowPaid: e.target.checked })}
+              inputProps={{ 'aria-label': `May spend for ${group.appId}` }}
+            />
+          )}
+          label={(
+            <Box sx={{ pt: 1 }}>
+              <Typography variant="body2">May spend</Typography>
+              <Typography variant="caption" color="text.muted" sx={{ fontSize: 12 }}>
+                Lets this app reach the paid fallback when every free row is exhausted,
+                under the daily and per-call caps. Costs real money; off is right wherever
+                the deterministic fallback is good enough.
+              </Typography>
+            </Box>
+          )}
+        />
+      </Box>
+
+      <TextField
+        // Uncontrolled on purpose: the value is a number saved on blur, and the
+        // server is the source of truth the moment it lands. `key` re-seeds the
+        // box when a reload brings a different number back, which is the one
+        // case a stale uncontrolled input would get wrong.
+        key={`cap-${group.appId}-${config?.dailyCap ?? 'default'}`}
+        type="number"
+        label="Daily cap"
+        defaultValue={config?.dailyCap ?? ''}
+        onBlur={(e) => {
+          const raw = e.target.value.trim();
+          const next = raw === '' ? null : parseInt(raw, 10);
+          if ((config?.dailyCap ?? null) === (next ?? null)) return;
+          onPatch({ dailyCap: next });
+        }}
+        disabled={saving}
+        inputProps={{ min: 1, 'aria-label': `Daily cap for ${group.appId}` }}
+        helperText="Feature calls per bucket per day. Blank uses the door's default of 200."
+        sx={{ mt: 1, maxWidth: 280, '& .MuiInputBase-root': { minHeight: 44 } }}
+      />
+    </Box>
+  );
+}
+
+/** One app: its routing, and every key filed under it. */
+function AppGroupCard({ group, picker, saving, onEditRouting, onDeleteRouting, onPatchRouting, onMintKey, onCopy, onEditKey, onRevokeKey }) {
+  const { config, keys, appId, displayName, isInternal, discovered, status } = group;
 
   return (
     <Card variant="outlined">
@@ -194,24 +321,9 @@ function AppGroupCard({ group, steward, onEditRouting, onDeleteRouting, onMintKe
             )}
           </Box>
           <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            {config ? (
-              <>
-                <Chip
-                  size="small"
-                  label={config.tier}
-                  color={config.tier === 'free' ? 'success' : config.tier === 'specific' ? 'primary' : 'default'}
-                  sx={{ fontSize: 12 }}
-                />
-                <Chip
-                  size="small"
-                  variant="outlined"
-                  label={config.enabled === false ? 'Disabled' : 'Enabled'}
-                  color={config.enabled === false ? 'default' : 'success'}
-                  sx={{ fontSize: 12 }}
-                />
-              </>
-            ) : (
-              <Chip size="small" variant="outlined" color="warning" label="unrouted" sx={{ fontSize: 12 }} />
+            {!config && <Chip size="small" variant="outlined" color="warning" label="unrouted" sx={{ fontSize: 12 }} />}
+            {config?.enabled === false && (
+              <Chip size="small" variant="outlined" label="Disabled" sx={{ fontSize: 12 }} />
             )}
             {isInternal && (
               <Tooltip title="Calls aiGeek in-process and presents no API key">
@@ -219,16 +331,15 @@ function AppGroupCard({ group, steward, onEditRouting, onDeleteRouting, onMintKe
               </Tooltip>
             )}
             {discovered && !config && <Chip size="small" variant="outlined" label="seen in traffic" sx={{ fontSize: 12 }} />}
+            {saving && <CircularProgress size={16} />}
           </Box>
         </Box>
 
-        <Typography
-          variant="body2"
-          color={config?.tier === 'specific' ? 'text.primary' : 'text.secondary'}
-          sx={{ mt: 1, wordBreak: 'break-all' }}
-        >
-          {routingLine(config)}
-        </Typography>
+        {(status?.lastCallAt || config?.lastSeen) && (
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: 12, mt: 0.5 }}>
+            Last call {formatAgo(status?.lastCallAt || config?.lastSeen)}
+          </Typography>
+        )}
 
         {config?.notes && (
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5, fontSize: 12 }}>
@@ -236,11 +347,12 @@ function AppGroupCard({ group, steward, onEditRouting, onDeleteRouting, onMintKe
           </Typography>
         )}
 
-        {config?.lastSeen && (
-          <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: 12 }}>
-            Last seen {formatWhen(config.lastSeen, 'never')}
-          </Typography>
-        )}
+        <RoutingControls
+          group={group}
+          saving={saving}
+          picker={picker}
+          onPatch={(patch) => onPatchRouting(appId, patch)}
+        />
 
         <Box sx={{ mt: 1.5, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
           <Button
@@ -248,17 +360,9 @@ function AppGroupCard({ group, steward, onEditRouting, onDeleteRouting, onMintKe
             variant="outlined"
             startIcon={<EditIcon />}
             onClick={() => onEditRouting(group)}
-            sx={{ minHeight: 44 }}
+            sx={{ minHeight: 44, fontSize: 12 }}
           >
-            {config ? 'Edit routing' : 'Add routing'}
-          </Button>
-          <Button
-            size="small"
-            startIcon={<AutoAwesomeIcon />}
-            onClick={() => steward.onToggle(appId)}
-            sx={{ minHeight: 44 }}
-          >
-            {stewardOpen ? 'Hide steward' : 'Recommend a model'}
+            {config ? 'More routing options' : 'Add routing'}
           </Button>
           {isInternal ? (
             // Deliberately not a chip: in a row of buttons an outlined pill
@@ -273,7 +377,7 @@ function AppGroupCard({ group, steward, onEditRouting, onDeleteRouting, onMintKe
               variant="contained"
               startIcon={<VpnKeyIcon />}
               onClick={() => onMintKey(appId)}
-              sx={{ minHeight: 44 }}
+              sx={{ minHeight: 44, fontSize: 12 }}
             >
               Mint key
             </Button>
@@ -284,31 +388,12 @@ function AppGroupCard({ group, steward, onEditRouting, onDeleteRouting, onMintKe
               color="error"
               startIcon={<DeleteIcon />}
               onClick={() => onDeleteRouting(config.appName)}
-              sx={{ minHeight: 44 }}
+              sx={{ minHeight: 44, fontSize: 12 }}
             >
               Remove routing
             </Button>
           )}
         </Box>
-
-        <Collapse in={stewardOpen} unmountOnExit>
-          <ModelStewardBlock
-            sx={{ mt: 2 }}
-            freeModels={steward.freeModels}
-            freeModelsLoading={steward.freeModelsLoading}
-            recommendTask={steward.recommendTask}
-            recommendPriority={steward.recommendPriority}
-            recommendations={steward.recommendations}
-            recommending={steward.recommending}
-            isPinned={(provider, modelId) =>
-              config?.tier === 'specific' && config?.provider === provider && config?.model === modelId}
-            onTaskChange={steward.onTaskChange}
-            onPriorityChange={steward.onPriorityChange}
-            onRecommend={steward.onRecommend}
-            onPickModel={(provider, modelId) => steward.onPickModel(appId, provider, modelId)}
-            onLoadFreeModels={steward.onLoadFreeModels}
-          />
-        </Collapse>
 
         <Divider sx={{ my: 2 }} />
 
@@ -386,19 +471,22 @@ function UnattributedCard({ usage }) {
   );
 }
 
-export default function AppsKeysTab({
+export default function AppsKeysPanel({
   appGroups,
   unattributedUsage,
   discoveredApps,
   loading,
   error,
   newAppName,
-  steward,
+  savingApp,
+  picker,
+  providers,
   onNewAppNameChange,
   onRefresh,
   onAddApp,
   onEditRouting,
   onDeleteRouting,
+  onPatchRouting,
   onMintKey,
   onCopy,
   onEditKey,
@@ -412,7 +500,7 @@ export default function AppsKeysTab({
     <Card>
       <CardContent>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 1, flexWrap: 'wrap' }}>
-          <Typography variant="h6">Apps &amp; keys</Typography>
+          <Typography variant="h6">Apps and keys</Typography>
           <Button
             variant="outlined"
             startIcon={<RefreshIcon />}
@@ -485,9 +573,11 @@ export default function AppsKeysTab({
                   <AppGroupCard
                     key={group.appId}
                     group={group}
-                    steward={steward}
+                    picker={picker}
+                    saving={savingApp === group.appId}
                     onEditRouting={onEditRouting}
                     onDeleteRouting={onDeleteRouting}
+                    onPatchRouting={onPatchRouting}
                     onMintKey={onMintKey}
                     onCopy={onCopy}
                     onEditKey={onEditKey}
@@ -499,6 +589,10 @@ export default function AppsKeysTab({
             )}
           </>
         )}
+
+        <Divider sx={{ my: 3 }} />
+
+        <ProvidersBlock {...providers} />
       </CardContent>
     </Card>
   );

@@ -1,25 +1,37 @@
 /**
- * TestPromptPanel — "Try it": one prompt, through the real router.
+ * TestPromptPanel — "Try it": one prompt, through the real front door.
  *
  * Before this, the only way to find out whether a saved key actually worked
- * was `Test API Key`, which proves a credential authenticates and nothing else,
- * or to go and use an app. Neither answers the question an admin is usually
- * asking on this page: *given the rotation as configured right now, who answers
- * and what do they say?*
+ * was `Test API Key`, which proves a credential authenticates and nothing
+ * else, or to go and use an app. Neither answers the question an admin is
+ * usually asking on this page: *given the front door as configured right now,
+ * who answers and what do they say?*
  *
- * So this posts to `POST /api/ai/call` — the same endpoint the suite's apps
- * use, not a special admin path — and reports back what came out: the provider
- * and model that answered, the wall-clock latency, the token counts, and the
- * raw envelope for when the pretty version is not enough.
+ * So it posts to `POST /api/ai/feature` — the same door every app in the suite
+ * goes through, not an admin path — and reports the provenance envelope back:
+ * which model answered, why that one, whether the answer was cached, what it
+ * cost, and where that sits against the feature's daily cap.
  *
- * Two deliberate omissions in the request:
+ * **It used to post `/api/ai/call`**, which was deleted this phase (D2), and
+ * the move is not a path swap:
  *
- *  - **No `appName`.** The route auto-routes any call that names an app and no
- *    provider through that app's `AIAppConfig` row. Sending one would quietly
- *    stop this from testing the rotation, which is the default the panel is
- *    here to exercise.
- *  - **No `stream`.** The streaming branch returns SSE chunks with no usage and
- *    no provider, so there would be nothing to report.
+ *  - The door **fails soft**. A model failure is `200 { ok: false, reason,
+ *    provenance }`, not a 5xx, and it is rendered in place with its `hints`
+ *    rather than thrown as an error — the whole point of the runner's contract
+ *    is that a bad free-tier day is an answer, not an exception. Only a 4xx or
+ *    5xx is a transport or auth failure.
+ *  - **A pin is provider *and* model, or neither.** The door answers
+ *    `400 INCOMPLETE_PIN` for half of one, because a provider with no model
+ *    would silently mean "that provider's default", which is not what a picker
+ *    means. So the old Provider select and free-text "Model ID" box are gone
+ *    and this uses `AliveModelPicker` like every other pin on the page —
+ *    leaving it on "Automatic" is what exercises the health-ranked walk.
+ *  - **There are no token counts.** `/feature` reports cost, not tokens, so
+ *    the panel reports cost. A token fact filled with an em dash is worse than
+ *    no token fact.
+ *
+ * `feature: 'tryit'` is deliberate: the daily cap is counted per feature, so
+ * an admin poking at this cannot eat an app's bucket.
  */
 import { useState } from 'react';
 import {
@@ -32,7 +44,6 @@ import {
   CircularProgress,
   Collapse,
   FormControlLabel,
-  Grid,
   Switch,
   TextField,
   Typography,
@@ -44,6 +55,11 @@ import {
 } from '@mui/icons-material';
 import { useToast } from '@geeksuite/ui';
 import api from '../../api';
+import AliveModelPicker from './AliveModelPicker';
+import { formatCost } from './format';
+
+/** The feature name this panel books its calls under. */
+export const TRY_IT_FEATURE = 'tryit';
 
 const SCHEMA_PLACEHOLDER = `{
   "name": "FruitList",
@@ -56,7 +72,7 @@ const SCHEMA_PLACEHOLDER = `{
   }
 }`;
 
-/** A labelled fact about the answer — provider, model, latency, tokens. */
+/** A labelled fact about the answer — provider, model, latency, cost. */
 const Fact = ({ label, value, tone }) => (
   <Box sx={{ minWidth: 0 }}>
     <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: 12 }}>
@@ -71,11 +87,24 @@ const Fact = ({ label, value, tone }) => (
   </Box>
 );
 
-export default function TestPromptPanel({ config }) {
+/** `data` is whatever the feature returned: an object under a schema, else text. */
+const renderData = (data) => {
+  if (data == null) return '(empty answer)';
+  if (typeof data === 'string') return data || '(empty answer)';
+  return JSON.stringify(data, null, 2);
+};
+
+/** "free" reads better than "$0.0000" for the answer this page wants to see. */
+const costLabel = (costUsd) => {
+  const num = Number(costUsd);
+  if (!Number.isFinite(num) || num <= 0) return 'free';
+  return formatCost(num);
+};
+
+export default function TestPromptPanel({ picker }) {
   const { notify } = useToast();
 
-  const [provider, setProvider] = useState('');
-  const [model, setModel] = useState('');
+  const [pin, setPin] = useState({ provider: null, model: null });
   const [prompt, setPrompt] = useState('');
   const [useSchema, setUseSchema] = useState(false);
   const [schemaText, setSchemaText] = useState('');
@@ -84,17 +113,12 @@ export default function TestPromptPanel({ config }) {
   const [error, setError] = useState(null);
   const [showRaw, setShowRaw] = useState(false);
 
-  // Only providers that are enabled *and* hold a key can answer; offering the
-  // others would be offering a guaranteed 502.
-  const reachable = Object.entries(config)
-    .filter(([, entry]) => entry.hasKey && entry.enabled)
-    .map(([name]) => name);
-
   const run = async () => {
     const text = prompt.trim();
     if (!text) return;
 
-    let responseFormat = null;
+    const body = { feature: TRY_IT_FEATURE, user: text };
+
     if (useSchema) {
       const raw = schemaText.trim();
       if (!raw) {
@@ -103,21 +127,23 @@ export default function TestPromptPanel({ config }) {
       }
       try {
         const parsed = JSON.parse(raw);
-        // Accept either the bare schema or the full json_schema envelope, so a
-        // schema copied out of the docs works either way round.
-        responseFormat = parsed.schema
-          ? { type: 'json_schema', json_schema: parsed }
-          : { type: 'json_schema', json_schema: { name: 'output', schema: parsed } };
+        // Accept either the bare schema or the full `{ name, schema }`
+        // envelope, so a schema copied out of the docs works either way round.
+        // The door requires `{ name, schema }`, so a bare one gets a name.
+        body.schema = parsed.schema
+          ? { name: parsed.name || 'output', description: parsed.description, schema: parsed.schema }
+          : { name: 'output', schema: parsed };
       } catch (err) {
         setError(`That schema isn't valid JSON: ${err.message}`);
         return;
       }
     }
 
-    const callConfig = {};
-    if (provider) callConfig.provider = provider;
-    if (model.trim()) callConfig.model = model.trim();
-    if (responseFormat) callConfig.responseFormat = responseFormat;
+    // Both or neither — the door refuses half a pin, and rightly.
+    if (pin.provider && pin.model) {
+      body.provider = pin.provider;
+      body.model = pin.model;
+    }
 
     setRunning(true);
     setError(null);
@@ -125,158 +151,197 @@ export default function TestPromptPanel({ config }) {
     const startedAt = performance.now();
 
     try {
-      const { data } = await api.post('/ai/call', { prompt: text, config: callConfig });
+      const { data } = await api.post('/ai/feature', body);
       setResult({
         latencyMs: Math.round(performance.now() - startedAt),
-        content: data?.choices?.[0]?.message?.content ?? '',
-        provider: data?.provider || provider || 'rotation',
-        model: data?.model || model || '—',
-        usage: data?.usage || null,
+        ok: data?.ok === true,
+        reason: data?.reason ?? null,
+        data: data?.data ?? null,
+        provenance: data?.provenance || {},
         raw: data,
       });
     } catch (err) {
-      // The route answers 400 for a bad request and 502 for an upstream
-      // failure, both with `{ error: { message } }`.
+      // Only a 4xx/5xx lands here: the door answers a *model* failure with a
+      // 200 and `ok: false`, which is a result, not an error.
       const detail = err?.response?.data?.error?.message
         || err?.response?.data?.message
         || err.message
         || 'The call failed';
       setError(detail);
-      notify(`Test call failed: ${detail}`, { tone: 'error' });
+      notify(`Try it failed: ${detail}`, { tone: 'error' });
     } finally {
       setRunning(false);
     }
   };
 
-  const totalTokens = result?.usage?.total_tokens;
+  const provenance = result?.provenance || {};
+  const hints = Array.isArray(provenance.hints) ? provenance.hints : [];
 
   return (
-    <Card sx={{ mt: 3 }}>
-      <CardContent>
-        <Typography variant="h6" gutterBottom>Try it</Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontSize: 12 }}>
-          Sends one prompt through <code>POST /api/ai/call</code> — the same path the suite&apos;s
-          apps use. Leave the provider on Rotation to test the free-tier rotation exactly as a
-          caller would get it.
-        </Typography>
+    <Box>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontSize: 12 }}>
+        Sends one prompt through <code>POST /api/ai/feature</code> — the same door the suite&apos;s
+        apps use — as the <code>{TRY_IT_FEATURE}</code> feature, so it cannot eat an app&apos;s daily
+        cap. Leave the model on Automatic to exercise the health-ranked walk exactly as a caller
+        would get it.
+      </Typography>
 
-        <Grid container spacing={2}>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              select
-              size="small"
-              label="Provider"
-              value={provider}
-              onChange={(e) => setProvider(e.target.value)}
-              SelectProps={{ native: true }}
-              // A native select always shows its first option, so the label has
-              // to stay shrunk or "Provider" sits on top of "Rotation".
-              InputLabelProps={{ shrink: true }}
-              helperText={reachable.length ? 'Enabled providers holding a key' : 'No provider is enabled with a key yet'}
-            >
-              <option value="">Rotation (default)</option>
-              {reachable.map(name => <option key={name} value={name}>{name}</option>)}
-            </TextField>
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              size="small"
-              label="Model (optional)"
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              placeholder="leave blank for the default"
-              helperText="Exact model ID from the Catalog tab"
-            />
-          </Grid>
-        </Grid>
+      <AliveModelPicker
+        groups={picker?.groups || []}
+        loading={picker?.loading}
+        error={picker?.error}
+        provider={pin.provider}
+        model={pin.model}
+        onPick={(provider, model) => setPin(
+          provider && model ? { provider, model } : { provider: null, model: null }
+        )}
+        onReload={picker?.onReload}
+        label="Model (Automatic when unset)"
+      />
 
+      <TextField
+        fullWidth
+        label="Prompt"
+        value={prompt}
+        onChange={(e) => setPrompt(e.target.value)}
+        multiline
+        rows={3}
+        margin="normal"
+        placeholder="e.g. Name three fruits."
+      />
+
+      <FormControlLabel
+        control={<Switch checked={useSchema} onChange={(e) => setUseSchema(e.target.checked)} />}
+        label={<Typography variant="body2">JSON schema</Typography>}
+        sx={{ minHeight: 44 }}
+      />
+
+      <Collapse in={useSchema} unmountOnExit>
         <TextField
           fullWidth
-          label="Prompt"
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
+          label="Schema"
+          value={schemaText}
+          onChange={(e) => setSchemaText(e.target.value)}
           multiline
-          rows={3}
-          margin="normal"
-          placeholder="e.g. Name three fruits."
+          rows={6}
+          placeholder={SCHEMA_PLACEHOLDER}
+          inputProps={{ style: { fontFamily: '"Geist Mono", monospace', fontSize: 12 } }}
+          helperText="A bare schema, or the full { name, schema } envelope. Providers without native support get the prompt-injection fallback."
         />
+      </Collapse>
 
-        <FormControlLabel
-          control={<Switch checked={useSchema} onChange={(e) => setUseSchema(e.target.checked)} />}
-          label={<Typography variant="body2">JSON schema</Typography>}
+      <Box sx={{ mt: 2 }}>
+        <Button
+          variant="contained"
+          onClick={run}
+          disabled={running || !prompt.trim()}
+          startIcon={running ? <CircularProgress size={16} color="inherit" /> : <PlayArrowIcon />}
           sx={{ minHeight: 44 }}
-        />
+        >
+          {running ? 'Running…' : 'Run'}
+        </Button>
+      </Box>
 
-        <Collapse in={useSchema} unmountOnExit>
-          <TextField
-            fullWidth
-            label="Schema"
-            value={schemaText}
-            onChange={(e) => setSchemaText(e.target.value)}
-            multiline
-            rows={6}
-            placeholder={SCHEMA_PLACEHOLDER}
-            inputProps={{ style: { fontFamily: '"Geist Mono", monospace', fontSize: 12 } }}
-            helperText="A bare schema, or the full { name, schema } envelope. Providers without native support get the prompt-injection fallback."
-          />
-        </Collapse>
+      {error && (
+        <Alert severity="error" sx={{ mt: 2, fontSize: 12, wordBreak: 'break-word' }}>
+          {error}
+        </Alert>
+      )}
 
+      {result && (
         <Box sx={{ mt: 2 }}>
-          <Button
-            variant="contained"
-            onClick={run}
-            disabled={running || !prompt.trim()}
-            startIcon={running ? <CircularProgress size={16} color="inherit" /> : <PlayArrowIcon />}
-            sx={{ minHeight: 44 }}
+          {/*
+            A soft failure. `reason` is the door's own word for what happened
+            (cap | unavailable | unparseable | empty | invalid) and `hints`
+            carries the detail a consumer would show a user — `pin_unavailable`
+            being the one an admin on this page most wants to see, because it
+            means the pin they just chose is not answering.
+          */}
+          {!result.ok && (
+            <Alert severity="warning" sx={{ mb: 1.5, fontSize: 12 }}>
+              The door answered <strong>{result.reason || 'no answer'}</strong> rather than a
+              result. This is a soft failure, not an error: a caller would fall back.
+            </Alert>
+          )}
+
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr 1fr', sm: 'repeat(4, 1fr)' },
+              gap: 1.5,
+              mb: 1.5,
+            }}
           >
-            {running ? 'Running…' : 'Run'}
-          </Button>
-        </Box>
+            <Fact label="Provider" value={provenance.provider || '—'} />
+            <Fact label="Model" value={provenance.model || '—'} />
+            <Fact label="Latency" value={`${result.latencyMs} ms`} />
+            <Fact
+              label="Cost"
+              value={costLabel(provenance.costUsd)}
+              tone={Number(provenance.costUsd) > 0 ? 'warning.main' : 'success.main'}
+            />
+          </Box>
 
-        {error && (
-          <Alert severity="error" sx={{ mt: 2, fontSize: 12, wordBreak: 'break-word' }}>
-            {error}
-          </Alert>
-        )}
-
-        {result && (
-          <Box sx={{ mt: 2 }}>
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: { xs: '1fr 1fr', sm: 'repeat(4, 1fr)' },
-                gap: 1.5,
-                mb: 1.5,
-              }}
-            >
-              <Fact label="Provider" value={result.provider} />
-              <Fact label="Model" value={result.model} />
-              <Fact label="Latency" value={`${result.latencyMs} ms`} />
-              <Fact
-                label={result.usage?.estimated ? 'Tokens (est.)' : 'Tokens'}
-                value={typeof totalTokens === 'number' ? totalTokens.toLocaleString() : '—'}
-              />
-            </Box>
-
-            {result.usage && (
-              <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mb: 1.5 }}>
-                <Chip size="small" variant="outlined" sx={{ fontSize: 12 }} label={`in ${result.usage.prompt_tokens ?? 0}`} />
-                <Chip size="small" variant="outlined" sx={{ fontSize: 12 }} label={`out ${result.usage.completion_tokens ?? 0}`} />
-                {result.usage.estimated && (
-                  <Chip size="small" variant="outlined" color="warning" sx={{ fontSize: 12 }} label="counted locally" />
-                )}
-              </Box>
+          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mb: 1.5 }}>
+            {provenance.source && (
+              <Chip size="small" variant="outlined" sx={{ fontSize: 12 }} label={`source ${provenance.source}`} />
             )}
+            {provenance.reason && (
+              <Chip size="small" variant="outlined" sx={{ fontSize: 12 }} label={`why ${provenance.reason}`} />
+            )}
+            {provenance.cached && (
+              <Chip size="small" color="info" variant="outlined" sx={{ fontSize: 12 }} label="cached" />
+            )}
+            {typeof provenance.callsToday === 'number' && (
+              <Chip
+                size="small"
+                variant="outlined"
+                sx={{ fontSize: 12 }}
+                label={`${provenance.callsToday}${provenance.cap ? ` / ${provenance.cap}` : ''} today`}
+              />
+            )}
+            {hints.map((hint) => (
+              <Chip key={hint} size="small" color="warning" variant="outlined" sx={{ fontSize: 12 }} label={hint} />
+            ))}
+          </Box>
 
-            <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: 12, mb: 0.5 }}>
-              Response
-            </Typography>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: 12, mb: 0.5 }}>
+            Answer
+          </Typography>
+          <Box
+            component="pre"
+            sx={{
+              m: 0,
+              p: 1.5,
+              borderRadius: 1,
+              border: '1px solid',
+              borderColor: 'divider',
+              bgcolor: 'action.hover',
+              fontFamily: '"Geist Mono", monospace',
+              fontSize: 12,
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              maxHeight: 320,
+              overflowY: 'auto',
+            }}
+          >
+            {renderData(result.data)}
+          </Box>
+
+          <Button
+            size="small"
+            onClick={() => setShowRaw((open) => !open)}
+            endIcon={showRaw ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+            sx={{ mt: 1, minHeight: 44, fontSize: 12 }}
+          >
+            {showRaw ? 'Hide raw JSON' : 'Show raw JSON'}
+          </Button>
+          <Collapse in={showRaw} unmountOnExit>
             <Box
               component="pre"
               sx={{
                 m: 0,
+                mt: 1,
                 p: 1.5,
                 borderRadius: 1,
                 border: '1px solid',
@@ -285,47 +350,16 @@ export default function TestPromptPanel({ config }) {
                 fontFamily: '"Geist Mono", monospace',
                 fontSize: 12,
                 whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
+                wordBreak: 'break-all',
                 maxHeight: 320,
-                overflowY: 'auto',
+                overflow: 'auto',
               }}
             >
-              {result.content || '(empty response)'}
+              {JSON.stringify(result.raw, null, 2)}
             </Box>
-
-            <Button
-              size="small"
-              onClick={() => setShowRaw((open) => !open)}
-              endIcon={showRaw ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-              sx={{ mt: 1, minHeight: 44, fontSize: 12 }}
-            >
-              {showRaw ? 'Hide raw JSON' : 'Show raw JSON'}
-            </Button>
-            <Collapse in={showRaw} unmountOnExit>
-              <Box
-                component="pre"
-                sx={{
-                  m: 0,
-                  mt: 1,
-                  p: 1.5,
-                  borderRadius: 1,
-                  border: '1px solid',
-                  borderColor: 'divider',
-                  bgcolor: 'action.hover',
-                  fontFamily: '"Geist Mono", monospace',
-                  fontSize: 12,
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-all',
-                  maxHeight: 320,
-                  overflow: 'auto',
-                }}
-              >
-                {JSON.stringify(result.raw, null, 2)}
-              </Box>
-            </Collapse>
-          </Box>
-        )}
-      </CardContent>
-    </Card>
+          </Collapse>
+        </Box>
+      )}
+    </Box>
   );
 }

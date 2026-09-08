@@ -1,20 +1,24 @@
 /**
- * ModelStewardBlock — "which free model should answer for this app?"
+ * ModelStewardBlock — "which model should answer for this app?"
  *
- * Lifted out of `dialogs/AppConfigDialog.jsx` unchanged, because it now has
- * two callers: the routing dialog, where a pick patches the open draft, and
- * the Apps & keys tab, where a pick writes straight to that app's routing row.
+ * Phase 3 (§3) cut this to half its job. It used to be two halves: a
+ * recommender ("which of the free rows fits this task?", `aiRecommendModel`)
+ * and a browse list ("what is free right now?", `aiFreeModels`). The browse
+ * list is gone — `AliveModelPicker` is that list now, and it reads the same
+ * `/api/ai/models/alive` view that *selection* reads. Two model lists in one
+ * control that could disagree about which rows are alive was the seam the old
+ * page kept tearing along.
  *
- * The point of the block is that free tiers move. A model that was free in
- * June is retired in August, and the fastest free model this month is not last
- * month's. So rather than an admin typing a model id from memory, two
- * questions go to the server — "what is free right now?" (`aiFreeModels`) and
- * "which of those fits this job?" (`aiRecommendModel`) — and either answer
- * writes the pin.
+ * What is left is the useful half, and it lives inside the Pinned picker
+ * behind a "Suggest" button rather than on a tab of its own: free tiers move,
+ * so a model that was the right pin in June is retired in August, and the
+ * question "what should this app use?" is worth asking a ranker rather than
+ * a memory.
  *
- * Whoever owns `onPickModel` is responsible for also setting `tier: 'specific'`:
- * that is the only tier the router reads provider/model from, so a pick saved
- * under `free` would land in a field nothing looks at.
+ * `onPickModel(provider, modelId)` is the caller's — the picker writes the pin
+ * exactly as it would from its own select, so a suggestion and a hand-picked
+ * row take the same path. `isPinned` is the caller's too, because "currently"
+ * means the open draft in the routing dialog and the saved row on the app card.
  */
 import {
   Alert,
@@ -22,8 +26,6 @@ import {
   Button,
   Chip,
   CircularProgress,
-  Divider,
-  MenuItem,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
@@ -31,8 +33,7 @@ import {
 } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
 import { AutoAwesome as AutoAwesomeIcon } from '@mui/icons-material';
-import { GeekEmptyState } from '@geeksuite/ui';
-import { formatContextWindow, freeModelSummary } from './format';
+import { formatContextWindow } from './format';
 
 /** One ranked suggestion, clickable and keyboard-reachable. */
 function RecommendationRow({ rec, selected, onPick }) {
@@ -83,13 +84,9 @@ function RecommendationRow({ rec, selected, onPick }) {
 
 /**
  * @param {(provider: string, modelId: string) => boolean} isPinned
- *   Whether the row's model is the one this app currently routes to. Owned by
- *   the caller because "currently" means the dialog draft in one case and the
- *   saved routing row in the other.
+ *   Whether the row's model is the one this app currently routes to.
  */
 export default function ModelStewardBlock({
-  freeModels,
-  freeModelsLoading,
   recommendTask,
   recommendPriority,
   recommendations,
@@ -99,11 +96,9 @@ export default function ModelStewardBlock({
   onPriorityChange,
   onRecommend,
   onPickModel,
-  onLoadFreeModels,
   sx,
 }) {
   const theme = useTheme();
-  const pinnedValue = freeModels.find(m => isPinned(m.provider, m.modelId));
 
   return (
     <Box
@@ -118,7 +113,7 @@ export default function ModelStewardBlock({
     >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2.25 }}>
         <AutoAwesomeIcon fontSize="small" color="primary" />
-        <Typography variant="subtitle2">Recommend a free model</Typography>
+        <Typography variant="subtitle2">Suggest a model</Typography>
       </Box>
 
       <TextField
@@ -159,8 +154,8 @@ export default function ModelStewardBlock({
 
       {recommendations && recommendations.length === 0 && (
         <Alert severity="warning" sx={{ mt: 1.5, fontSize: 12 }}>
-          No free model matched that description. Loosen the requirements, or pick one
-          from the list below.
+          No model matched that description. Loosen the requirements, or pick one from
+          the list above.
         </Alert>
       )}
 
@@ -175,78 +170,6 @@ export default function ModelStewardBlock({
             />
           ))}
         </Box>
-      )}
-
-      <Divider sx={{ my: 2 }} />
-
-      <Typography variant="subtitle2" sx={{ mb: 1 }}>Browse free models</Typography>
-
-      {freeModelsLoading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-          <CircularProgress size={24} />
-        </Box>
-      ) : freeModels.length === 0 ? (
-        <GeekEmptyState
-          compact
-          title="No free models available"
-          description="Enable a provider with a free tier on the Configuration tab, then tick its models Free on the Catalog tab."
-          action={<Button onClick={onLoadFreeModels} sx={{ minHeight: 44 }}>Retry</Button>}
-        />
-      ) : (
-        <TextField
-          fullWidth
-          select
-          size="small"
-          label="Free models"
-          // displayEmpty renders a placeholder into the field, so the label
-          // has to stay shrunk or the two overlap.
-          InputLabelProps={{ shrink: true }}
-          value={pinnedValue ? `${pinnedValue.provider}::${pinnedValue.modelId}` : ''}
-          onChange={(e) => {
-            const [provider, ...rest] = e.target.value.split('::');
-            onPickModel(provider, rest.join('::'));
-          }}
-          SelectProps={{
-            displayEmpty: true,
-            // Each option is two lines and a row of chips; the closed field
-            // gets the one-line summary instead of all of that crammed in.
-            renderValue: (value) => {
-              if (!value) return 'Choose a model…';
-              const chosen = freeModels.find(m => `${m.provider}::${m.modelId}` === value);
-              return chosen ? freeModelSummary(chosen) : value;
-            },
-          }}
-          helperText={`${freeModels.length} free model${freeModels.length === 1 ? '' : 's'} reachable right now`}
-        >
-          {freeModels.map((model) => (
-            <MenuItem
-              key={`${model.provider}::${model.modelId}`}
-              value={`${model.provider}::${model.modelId}`}
-              sx={{ minHeight: 44, display: 'block', py: 1 }}
-            >
-              <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                {freeModelSummary(model)}
-              </Typography>
-              <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.5 }}>
-                {model.performance?.speed && (
-                  <Chip size="small" variant="outlined" label={model.performance.speed} sx={{ fontSize: 12 }} />
-                )}
-                {model.performance?.quality && (
-                  <Chip size="small" variant="outlined" label={model.performance.quality} sx={{ fontSize: 12 }} />
-                )}
-                {model.supportsJSONOutput && (
-                  <Chip size="small" variant="outlined" color="success" label="JSON" sx={{ fontSize: 12 }} />
-                )}
-                {model.supportsFunctionCalling && (
-                  <Chip size="small" variant="outlined" color="success" label="tools" sx={{ fontSize: 12 }} />
-                )}
-                {model.supportsVision && (
-                  <Chip size="small" variant="outlined" color="success" label="vision" sx={{ fontSize: 12 }} />
-                )}
-              </Box>
-            </MenuItem>
-          ))}
-        </TextField>
       )}
     </Box>
   );

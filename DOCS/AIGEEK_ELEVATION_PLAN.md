@@ -273,6 +273,26 @@ Keep "Try it" as a diagnostic, one panel, and the one-time key reveal dialog.
 
 Add a `GET /api/ai/status` that feeds panel 1, so the same data can go on the StartGeek glance.
 
+**Shipped 2026-09-08.** Design of record: `apps/basegeek/DOCS/AIGEEK_STATUS_PAGE.md`. As built:
+`GET /api/ai/status` (eight attention kinds, 60 s cache, refuses to report zeros on an unreadable
+ledger), `POST /api/ai/catalog/run` (admin, 202/409), `AISpend.refusals` incremented by the
+governor, `/api/ai/call` deleted (D2 done; its tests moved to `/feature` and `/parse-json`). The
+page is one scroll with an anchor nav: Needs attention, Usage and cost, Apps and keys, then
+collapsed read-only Catalog and Try it. Always-rendered controls 56 → 22; per catalog row 7 → 1;
+four tabs, the Enable/Test/Save ritual, Sync, Reset-all, Save-all, the Free checkbox and limit
+fields, both dialogs, the steward toggle and every free-text model id are gone. Four GraphQL
+mutations that only served them are deleted. The mobile harness ran locally on the new page: 26
+scenes, 0 violations, both themes, and it caught two real bugs (a 100%-wide screen-reader span and
+an AA contrast failure under a severity tint), both fixed.
+
+**Follow-ups left open (small, API-side):** `AIFreeTier.override: 'deny'|'allow'|null` plus a
+mutation, honoured by selection and discovery (the drawer is built and disabled until then);
+`fitness`/`health`/`observed` on the catalog read so cooling rows show their fitness and "limits
+observed" shows the live reading; a way to clear a provider credential (a blank key is currently
+"keep", so clearing disables via `enabled: false` and the encrypted key stays); `testAIProvider` /
+`syncProviderModels` mutations have no UI caller left. Also for Chef: `ai:stats` is not in the
+default key mint set, so a StartGeek glance card reading `/status` needs it named.
+
 ## Decisions
 
 Settled 2026-09-07:

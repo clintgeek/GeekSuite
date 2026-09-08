@@ -38,11 +38,6 @@ export const SAVE_AI_CONFIG = gql`
   }
 `;
 
-export const TEST_AI_PROVIDER = gql`
-  mutation TestAIProvider($provider: String!) {
-    testAIProvider(provider: $provider)
-  }
-`;
 
 export const RESET_AI_STATS = gql`
   mutation ResetAIStats {
@@ -53,40 +48,23 @@ export const RESET_AI_STATS = gql`
 // SEED_DIRECTOR_PRICING / SEED_DIRECTOR_FREE_TIER were here until 2026-09-07.
 // Both mutations are gone from the schema: the catalog is observed by the
 // catalog job now, so there is no hand-typed default to restore.
+//
+// Six more went the same way in Phase 3 (2026-09-07,
+// apps/basegeek/DOCS/AIGEEK_STATUS_PAGE.md §3), when the console became a
+// status page and the controls behind them were deleted:
+//
+//   UPDATE_MODEL_PRICING · UPDATE_MODEL_FREE_TIER · RESET_ALL_FREE_TIERS ·
+//   BULK_UPDATE_FREE_TIERS — the four server mutations went with them; the
+//   catalog job observes prices, free-tier flags and quotas now.
+//   TEST_AI_PROVIDER — the provider row's live chip is the test.
+//   SYNC_PROVIDER_MODELS — the job syncs on a schedule; `syncProviderModels`
+//   and `testAIProvider` stay in the schema because REST twins still serve
+//   them (`POST /api/ai/test`, `POST /api/ai/models/:provider/refresh`).
 
-export const SYNC_PROVIDER_MODELS = gql`
-  mutation SyncProviderModels($provider: String!) {
-    syncProviderModels(provider: $provider)
-  }
-`;
 
-export const UPDATE_MODEL_PRICING = gql`
-  mutation UpdateModelPricing($provider: String!, $modelId: String!, $inputPrice: Float!, $outputPrice: Float!) {
-    updateModelPricing(provider: $provider, modelId: $modelId, inputPrice: $inputPrice, outputPrice: $outputPrice)
-  }
-`;
 
-export const UPDATE_MODEL_FREE_TIER = gql`
-  mutation UpdateModelFreeTier($provider: String!, $modelId: String!, $isFree: Boolean!, $freeLimits: JSON, $notes: String) {
-    updateModelFreeTier(provider: $provider, modelId: $modelId, isFree: $isFree, freeLimits: $freeLimits, notes: $notes)
-  }
-`;
 
-export const RESET_ALL_FREE_TIERS = gql`
-  mutation ResetAllFreeTiers {
-    resetAllFreeTiers
-  }
-`;
 
-export const BULK_UPDATE_FREE_TIERS = gql`
-  mutation BulkUpdateFreeTiers($updates: [FreeTierUpdateInput!]!) {
-    bulkUpdateFreeTiers(updates: $updates) {
-      provider
-      modelId
-      isFree
-    }
-  }
-`;
 
 export const SAVE_AI_APP_CONFIG = gql`
   mutation SaveAIAppConfig($appName: String!, $config: JSON!) {

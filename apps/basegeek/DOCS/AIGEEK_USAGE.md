@@ -36,8 +36,9 @@ worked example per use case.
 >
 > **New doors, and the one you should be using:** [`POST /api/ai/feature`](#the-feature-door) is the
 > front door for a backend consumer, and [`GET /api/ai/models/alive`](#get-apiaimodelsalive) is what
-> a model picker should show. **`POST /api/ai/call` is deprecated** — see
-> [below](#post-apiaicall-deprecated).
+> a model picker should show. **`POST /api/ai/call` is gone** (deleted 2026-09-08) — see
+> [below](#post-apiaicall--deleted-2026-09-08). New in Phase 3:
+> [`GET /api/ai/status`](#get-apiaistatus), the one read the `/aigeek` page runs on.
 
 ### 1. Rotation (`basegeek-rotation`, or no `model` at all)
 
@@ -182,12 +183,15 @@ response, and the key to the log line that *does* hold the provider's full
 answer. Quote it when you ask an operator what actually went wrong.
 
 **This is one vocabulary, on every surface.** The table is
-`services/aiFailureEnvelope.js`, and the OpenAI-compat proxy, `POST /api/ai/call`
-(body *and* streaming error frame) and `POST /api/ai/parse-json` all render the
-same entries — only the envelope around them differs. `/openai/v1` speaks
-OpenAI's `{ error: { message, type, param, code } }`; the two REST routes speak
-baseGeek's `{ success: false, error: { message, type, code } }`. Same status,
-same `type`, same `code`, same words.
+`services/aiFailureEnvelope.js`, and the OpenAI-compat proxy (body *and*
+streaming error frame), `POST /api/ai/parse-json` and
+`POST /api/ai/conversation/message` all render the same entries — only the
+envelope around them differs. `/openai/v1` speaks OpenAI's
+`{ error: { message, type, param, code } }`; the REST routes speak baseGeek's
+`{ success: false, error: { message, type, code } }`. Same status, same `type`,
+same `code`, same words. (`POST /api/ai/call` was on this list, with the only
+streaming error frame on the REST side, until the route was deleted
+2026-09-08.)
 
 Until 2026-09-05 the REST pair did not: `/call` put `error.message` in the body
 and `/parse-json` put it in `error.details`, and those strings are built as
@@ -343,28 +347,53 @@ is only reachable by an app whose routing row says `allowPaid`.
 This is what replaces every hand-typed model list in a consumer's UI. **No human
 types a model id again** (D4) — the list is observed by the catalog job, hourly.
 
-### `POST /api/ai/call` (deprecated)
+### `GET /api/ai/status`
 
-Deprecated 2026-09-07 (D2) and **still working** — it resolves through the same
-`resolveRoute` as everything else. Responses now carry:
+**Permission:** `ai:stats` (not in the default mint set — name it explicitly for
+a backend). New 2026-09-08. One round trip behind the whole `/aigeek` page: what
+the catalog last found, what needs a human, what the month cost, and how each
+app is routed. A **bare object**, like `/models/alive`; cheap indexed reads only,
+no vendor calls, cached in-process for 60 s. The shape and every
+needs-attention rule are the design of record in
+[AIGEEK_STATUS_PAGE.md](./AIGEEK_STATUS_PAGE.md#1-get-apiaistatus-permission-aistats-admin-jwt-as-today--built-2026-09-08).
 
-```
-Deprecation: true
-Link: </api/ai/feature>; rel="successor-version"
-```
+### `POST /api/ai/catalog/run`
 
-and the gateway logs one line per caller app per hour naming the app that is
-still using it. It is deleted in a follow-up commit once fitnessgeek and
-storygeek are verified live on the feature door. If you are calling it from a
-backend, move to `POST /api/ai/feature`: you get fail-soft, provenance,
-`costUsd`, sticky picks and pins, and you stop 500-ing at your users when a
-free tier has a bad minute. If you are an OpenAI-SDK client, you were never
-using this route — `/openai/v1/chat/completions` is unchanged and is not going
-anywhere.
+**Admin only** (a person — `requireAdminUser` refuses every API key). New
+2026-09-08. Starts the catalog job's ordinary discovery out of band and returns
+`202 { started: true }` **without waiting for it**; `409 { started: false,
+reason: 'running' }` when a tick is already in flight. The run writes an
+`AICatalogRun` document like any scheduled one, so `GET /status` is how you read
+the result. This is the *Run discovery now* action on a stale-catalog warning,
+not a general-purpose refresh: it lists every provider and probes every free
+candidate, which spends free-tier quota across the whole roster.
 
-`POST /api/ai/parse-json` is not deprecated but has no advantage over
-`/api/ai/feature` with a `schema`, which additionally validates and tells you
-*why* it could not parse.
+### ~~`POST /api/ai/call`~~ — deleted 2026-09-08
+
+**The route is gone.** Deprecated 2026-09-07 (D2) with a `Deprecation: true`
+header, a `Link` to its successor and one log line per caller app per hour;
+deleted once both HTTP consumers were verified live on the feature door. The
+old address now takes the gateway's ordinary 404.
+
+Where its callers went:
+
+- **fitnessgeek** and **storygeek** are on [`POST /api/ai/feature`](#the-feature-door),
+  which is the same call with fail-soft, provenance, `costUsd`, sticky picks and
+  pins — and which stops 500-ing at your users when a free tier has a bad
+  minute.
+- **CodeGeek** and **geekPR** were always on `/openai/v1/chat/completions`. That
+  surface is unchanged and is not going anywhere; if you are an OpenAI-SDK
+  client you were never using `/call`.
+
+It is a 404 rather than a 410 or a redirect on purpose: the bodies are not the
+same shape, so a client following a redirect would send `{prompt, config}` to a
+route that reads `{feature, messages}` and get a 400 it could not explain.
+
+`POST /api/ai/parse-json` **survives** — it has its own callers, and it is now
+the only route left that speaks the legacy routing vocabulary (`freeOnly`,
+`useAppConfig`, the `basegeek-*` aliases, the app-routing auto-trigger). It is
+not deprecated, but it has no advantage over `/api/ai/feature` with a `schema`,
+which additionally validates and tells you *why* it could not parse.
 
 ## Who is calling
 
@@ -391,7 +420,12 @@ Ids are normalized: lowercased, and everything from the first `:` dropped.
 One thing: **`feature`** — a slice of the app you already are.
 
 ```js
-await axios.post('/api/ai/call', {
+await axios.post('/api/ai/feature', {
+  feature: 'mealPlan',
+  user: prompt
+});
+// or, on the surviving legacy door:
+await axios.post('/api/ai/parse-json', {
   prompt,
   feature: 'mealPlan',        // or config.feature
   config: { useAppConfig: true }
@@ -410,10 +444,10 @@ own `user` field for the same purpose.
 Usage groups the same way: one row per app, with `features` nested inside it,
 so "what does fitnessgeek cost" has one answer instead of three.
 
-This holds on **every** route that spends: `/api/ai/call`,
+This holds on **every** route that spends: `/api/ai/feature`,
 `/api/ai/conversation/message`, `/api/ai/parse-json`, `/api/ai/test` and the
-OpenAI proxy. (`/api/ai/call-smart` was on this list until 2026-09-07, when the
-route was deleted.) `/api/ai/parse-json` was the one that got away in the first pass —
+OpenAI proxy. (`/api/ai/call-smart` was on this list until 2026-09-07 and
+`/api/ai/call` until 2026-09-08, when each route was deleted.) `/api/ai/parse-json` was the one that got away in the first pass —
 it had neither the `ai:call` check nor the resolver until 2026-09-05, so a key
 minted with only `ai:models` could call it and name any app and any user. If you
 have a key that has been reaching `/parse-json` without `ai:call`, it stops
@@ -464,7 +498,8 @@ that. Two rules make the table readable:
 |---|---|---|
 | `POST /feature` | `ai:call` + caller identity | **new 2026-09-07** |
 | `GET /models/alive` | `ai:models` | **new 2026-09-07** |
-| `POST /call` | `ai:call` + caller identity | unchanged — **deprecated 2026-09-07** |
+| `GET /status` | `ai:stats` | **new 2026-09-08** |
+| ~~`POST /call`~~ | — | deprecated 2026-09-07, **route deleted 2026-09-08** (D2) |
 | `POST /parse-json` | `ai:call` + caller identity | unchanged (gated `267c4e3`) |
 | `POST /conversation/message`, `/conversation/:id/archive`, `DELETE /conversation/:id`, `POST /context/reset/:id` | `ai:call` | unchanged |
 | `GET /stats`, `/capabilities`, `/conversations`, `/conversation/:id` | `ai:stats` | unchanged |
@@ -482,12 +517,16 @@ that. Two rules make the table readable:
 | `POST /summarization` | **admin** | nothing |
 | ~~`POST /director/seed-pricing`, `/director/seed-free-tier`~~ | **admin** | nothing — **both routes deleted 2026-09-07** |
 | `POST /director/force-refresh` | **admin** | nothing |
+| `POST /catalog/run` | **admin** | **new 2026-09-08** — starts a catalog discovery out of band; `202`, never awaited |
 
 `ai:providers`, `ai:models`, `ai:call` and — since 2026-09-06 — `ai:usage` are
 in the default set every mint path grants, so a key minted with the defaults
-keeps everything it had. `ai:director` is **not** — a backend that asks the
-steward anything needs it named explicitly, which is why the StoryGeek example
-above passes `--permissions ai:call,ai:director`.
+keeps everything it had. `ai:director` and `ai:stats` are **not** — a backend
+that asks the steward anything, or that reads `GET /status`, needs its
+permission named explicitly, which is why the StoryGeek example above passes
+`--permissions ai:call,ai:director`. Adding `GET /status` in Phase 3 granted
+nothing new: it takes the same `ai:stats` `/stats` and `/capabilities` have
+always taken, and that word's reach is unchanged.
 
 **`ai:usage` (Q49, 2026-09-06).** It existed in the enum from the day the model
 did, claimed by no route and granted by no default: a word on the key-creation
@@ -887,6 +926,14 @@ audio limits and the notes, which have no column, and it clears that model's
 pending row edit as it saves so the two cannot fight.
 
 ### Try it
+
+> **Stale as of 2026-09-08 — Phase 3, UI half.** `POST /api/ai/call` was deleted
+> that day (D2) and `TestPromptPanel.jsx` was its last caller in the suite
+> (`api.post('/ai/call', …)`), so the panel must move to `POST /api/ai/feature`.
+> That is the one live consumer the route retirement leaves behind; the whole of
+> this section, and the four-tab description above it, is replaced by the one
+> scrolling page of [AIGEEK_STATUS_PAGE.md](./AIGEEK_STATUS_PAGE.md) §2. What
+> follows describes the panel as it was.
 
 A prompt box on the Configuration tab that posts to `POST /api/ai/call` — the
 same endpoint the suite's apps use, not a special admin path — and reports the

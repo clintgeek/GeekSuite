@@ -23,8 +23,12 @@
  * sends a body that *lies* about who is calling. A test with an honest body
  * passes against the vulnerable version.
  *
- * `/api/ai/call`'s deprecation is here too, because it is the other half of
- * the same change: the old door announces itself as old.
+ * `/api/ai/call`'s **retirement** is here too, because it is the other half of
+ * the same change: with fitnessgeek and storygeek live on the feature door and
+ * CodeGeek/geekPR on `/openai/v1`, the old door is gone (D2). Its deprecation
+ * cases — the `Deprecation` header, the `Link` to its successor, and the
+ * hourly per-app log throttle — went with it; what is pinned now is that the
+ * address is a 404 rather than a route that quietly still works.
  */
 
 import { describe, it, expect, beforeAll, afterAll, afterEach } from '@jest/globals';
@@ -39,7 +43,7 @@ const { default: jwt } = await import('jsonwebtoken');
 const { User, userGeekConn } = await import('../models/user.js');
 const { default: logger } = await import('../lib/logger.js');
 const { default: APIKey } = await import('../models/APIKey.js');
-const { default: aiRoutes, _resetDeprecationLog, _deprecationDue } = await import('../routes/aiRoutes.js');
+const { default: aiRoutes } = await import('../routes/aiRoutes.js');
 const { default: aiService } = await import('../services/aiService.js');
 const { default: AIFreeTier } = await import('../models/AIFreeTier.js');
 const { default: AIModel } = await import('../models/AIModel.js');
@@ -140,7 +144,6 @@ afterEach(async () => {
   nextFailure = null;
   nextAnswer = null;
   _resetCounters();
-  _resetDeprecationLog();
   await User.deleteMany({});
   await APIKey.deleteMany({});
   await AIFreeTier.deleteMany({});
@@ -473,40 +476,28 @@ describe('GET /api/ai/models/alive', () => {
   });
 });
 
-/* ── /api/ai/call says it is old ──────────────────────────────────────────── */
+/* ── /api/ai/call is gone ─────────────────────────────────────────────────── */
 
-describe('POST /api/ai/call — deprecated, and says so', () => {
-  it('sets Deprecation: true and points at the successor', async () => {
+describe('POST /api/ai/call — retired', () => {
+  it('is not a route any more, and nothing answered on the way to the 404', async () => {
+    // D2, 2026-09-08. Deprecated in Phase 2 with a `Deprecation` header, a
+    // `Link` to this file's subject and an hourly per-app log line; deleted
+    // once both HTTP consumers were verified on the feature door.
+    //
+    // Asserted with a *credentialled* request, because "404" from an
+    // unauthenticated caller would also be what a 401 looks like to a careless
+    // reader. A key that would have been allowed through gets a 404, and
+    // `callAI` is never reached — the door does not exist, so nothing is spent
+    // discovering that.
     const apiKey = await makeApiKey();
     const res = await request(app)
       .post('/api/ai/call')
       .set('Authorization', `Bearer ${apiKey}`)
       .send({ prompt: 'hi' });
-    expect(res.status).toBe(200);
-    expect(res.headers.deprecation).toBe('true');
-    expect(res.headers.link).toContain('/api/ai/feature');
-  });
 
-  it('still works — it is deprecated for one deploy, not broken', async () => {
-    const apiKey = await makeApiKey();
-    const res = await request(app)
-      .post('/api/ai/call')
-      .set('Authorization', `Bearer ${apiKey}`)
-      .send({ prompt: 'hi' });
-    expect(res.body.choices[0].message.content).toBe('{"ok": true}');
-  });
-
-  it('logs one line per caller app per hour, not one per call', async () => {
-    // The throttle itself, which is the part worth pinning. A busy consumer
-    // must not fill the log with its own obituary, and the next reader must
-    // still be able to see who is on this route before it is deleted.
-    const at = Date.parse('2026-09-07T12:00:00Z');
-    expect(_deprecationDue('storygeek', at)).toBe(true);
-    expect(_deprecationDue('storygeek', at + 1000)).toBe(false);
-    expect(_deprecationDue('storygeek', at + 59 * 60 * 1000)).toBe(false);
-    expect(_deprecationDue('storygeek', at + 60 * 60 * 1000)).toBe(true);
-    // Per app, so one chatty consumer does not hide a quiet one.
-    expect(_deprecationDue('fitnessgeek', at + 1000)).toBe(true);
+    expect(res.status).toBe(404);
+    expect(res.headers.deprecation).toBeUndefined();
+    expect(captured).toBeNull();
   });
 });
 

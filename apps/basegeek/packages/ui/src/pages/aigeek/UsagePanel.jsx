@@ -1,5 +1,18 @@
 /**
- * UsageTab — totals, then per-provider and per-app breakdowns.
+ * UsagePanel — panel 2: what it cost, and what it is allowed to cost.
+ *
+ * This is the old Usage & Cost tab with the one line it was missing at the
+ * top. `AISpend` is the ledger (Phase 2), so the month, the day and both caps
+ * are one read from `GET /api/ai/status` — and that line, not the tables, is
+ * what a monthly visit is actually for. The plan's target number: "the status
+ * page shows dollars left of the $10, and the number barely moves."
+ *
+ * Two Phase 3 changes below the line. Each feature row now carries the app's
+ * `dailyCap` next to its count, because a count with no ceiling next to it
+ * cannot tell you whether an app is near one. And "Reset stats" moved to the
+ * bottom, behind the same confirm: it was a top-right error-coloured button
+ * on a panel you open to *read*, which is a destructive action sitting where
+ * the eye lands first.
  *
  * Below `md` the two tables become card lists. Six and seven columns do not
  * survive a 390px viewport: the cells collapse to roughly 40px and every
@@ -8,7 +21,7 @@
  * the app. The tables themselves are unchanged at md and up.
  *
  * The app breakdown leads with the app, not the provider, and sorts by app id:
- * aiGeek now resolves the caller from its API key and records a `feature`
+ * aiGeek resolves the caller from its API key and records a `feature`
  * sub-label under it, so "what is storygeek spending, and on what" is the
  * question this table is asked. The feature line renders only where the server
  * actually recorded one — an app that never sets a feature gets no empty
@@ -19,6 +32,7 @@ import {
   Button,
   Card,
   CardContent,
+  Divider,
   Grid,
   Paper,
   Table,
@@ -31,11 +45,45 @@ import {
 } from '@mui/material';
 import { DeleteSweep as DeleteSweepIcon } from '@mui/icons-material';
 import { GeekEmptyState, GeekErrorState } from '@geeksuite/ui';
-import { formatCost, formatTokens, featureLine, normalizeAppId } from './format';
+import { formatCost, formatTokens, formatUsd, featureRows, normalizeAppId } from './format';
+
+/** The budget the whole plan is written against (DOCS/AIGEEK_ELEVATION_PLAN.md D1). */
+const MONTHLY_BUDGET_USD = 10;
+
+/**
+ * The spend line.
+ *
+ * Rendered from `status.spend` and nothing else — no client-side arithmetic
+ * over the usage tables, which count *session* calls (`aiService` resets them
+ * on restart) and would disagree with the ledger by however long ago the last
+ * deploy was.
+ */
+function SpendLine({ spend }) {
+  if (!spend) {
+    return (
+      <Typography variant="body2" color="text.muted" sx={{ fontSize: 12 }}>
+        Spend for the month is unavailable — the status endpoint did not answer.
+      </Typography>
+    );
+  }
+
+  return (
+    <Typography variant="body1" sx={{ fontVariantNumeric: 'tabular-nums', wordBreak: 'break-word' }}>
+      <Box component="span" sx={{ fontWeight: 600 }}>
+        This month: {formatUsd(spend.monthUsd)} of the ${MONTHLY_BUDGET_USD}
+      </Box>
+      {' · '}today {formatUsd(spend.todayUsd)}
+      {' · '}caps {formatUsd(spend.capPerDayUsd)}/day, {formatUsd(spend.capPerCallUsd)}/call
+      {typeof spend.paidCallsMonth === 'number' && (
+        <>{' · '}{spend.paidCallsMonth.toLocaleString()} paid call{spend.paidCallsMonth === 1 ? '' : 's'}</>
+      )}
+    </Typography>
+  );
+}
 
 /**
  * The compact form of a usage table.
- * `rows` are `{ key, title, subtitle?, fields: [{ label, value, sx? }] }`.
+ * `rows` are `{ key, title, subtitle?, note?, fields: [{ label, value, sx? }] }`.
  */
 const UsageCardList = ({ rows }) => (
   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
@@ -101,7 +149,34 @@ const TotalCard = ({ label, value }) => (
   </Grid>
 );
 
-export default function UsageTab({ stats, statsError, isCompact, onRetry, onResetStats }) {
+/**
+ * "review ×640 / 200 · commit-message ×163 / 200" — the feature line, with the
+ * app's daily cap beside each count (§2).
+ *
+ * The cap is a per-app, per-bucket ceiling on `POST /api/ai/feature`
+ * (models/AIAppConfig.js `dailyCap`), so it repeats per feature rather than
+ * being divided between them — which is what the door actually does. `null`
+ * means the door's own default, and an em dash would read as "no limit"; the
+ * word "default" is what it is.
+ */
+const featureLineWithCaps = (appUsage, dailyCap) => {
+  const rows = featureRows(appUsage);
+  if (rows.length === 0) return null;
+  const cap = typeof dailyCap === 'number' && dailyCap > 0 ? String(dailyCap) : 'default';
+  return rows
+    .map(row => (row.calls ? `${row.feature} ×${row.calls} / ${cap}` : `${row.feature} / ${cap}`))
+    .join(' · ');
+};
+
+export default function UsagePanel({
+  stats,
+  statsError,
+  spend,
+  dailyCapFor,
+  isCompact,
+  onRetry,
+  onResetStats,
+}) {
   const providerUsage = stats.providerUsage || {};
   const providerRows = Object.entries(providerUsage);
 
@@ -112,30 +187,35 @@ export default function UsageTab({ stats, statsError, isCompact, onRetry, onRese
    */
   const appRows = providerRows
     .flatMap(([provider, usage]) =>
-      Object.entries(usage.appUsage || {}).map(([appName, appUsage]) => ({
-        key: `${provider}-${appName}`,
-        appId: normalizeAppId(appName) || appName,
-        provider,
-        usage: appUsage,
-        features: featureLine(appUsage),
-      }))
+      Object.entries(usage.appUsage || {}).map(([appName, appUsage]) => {
+        const appId = normalizeAppId(appName) || appName;
+        return {
+          key: `${provider}-${appName}`,
+          appId,
+          provider,
+          usage: appUsage,
+          features: featureLineWithCaps(appUsage, dailyCapFor?.(appId)),
+        };
+      })
     )
     .sort((a, b) => a.appId.localeCompare(b.appId) || a.provider.localeCompare(b.provider));
 
   return (
     <Card>
       <CardContent>
-        <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-          <Typography variant="h6">Usage Statistics</Typography>
-          <Button
-            variant="outlined"
-            size="small"
-            onClick={onResetStats}
-            startIcon={<DeleteSweepIcon />}
-            color="error"
-          >
-            Reset Stats
-          </Button>
+        <Typography variant="h6" sx={{ mb: 1.5 }}>Usage and cost</Typography>
+
+        <Box
+          sx={{
+            p: 1.5,
+            mb: 3,
+            borderRadius: 1,
+            border: '1px solid',
+            borderColor: 'divider',
+            bgcolor: 'action.hover',
+          }}
+        >
+          <SpendLine spend={spend} />
         </Box>
 
         {statsError && (
@@ -250,6 +330,21 @@ export default function UsageTab({ stats, statsError, isCompact, onRetry, onRese
             )}
           </>
         )}
+
+        <Divider sx={{ mt: 4, mb: 2 }} />
+
+        <Box sx={{ display: 'flex', justifyContent: 'flex-start' }}>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={onResetStats}
+            startIcon={<DeleteSweepIcon />}
+            color="error"
+            sx={{ minHeight: 44, fontSize: 12 }}
+          >
+            Reset stats
+          </Button>
+        </Box>
       </CardContent>
     </Card>
   );

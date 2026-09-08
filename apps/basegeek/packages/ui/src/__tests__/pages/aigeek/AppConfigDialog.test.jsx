@@ -1,91 +1,129 @@
 /**
- * AppConfigDialog.test.jsx — the Phase 2 routing controls, minimally.
+ * AppConfigDialog.test.jsx — the routing dialog after Phase 3.
  *
- * DOCS/AIGEEK_FRONT_DOOR.md collapsed the routing tiers to `auto` and
- * `specific` and added two switches: sticky picks and the paid fallback.
- * Phase 3 redesigns this whole page into a status page, so these cases are
- * about the controls being *reachable and correct*, not about the layout.
+ * The dialog kept its job but lost its two worst controls. `Routing tier` was
+ * a native select; it is now the same segmented `Automatic | Pinned` toggle
+ * the app card uses, because one idea should have one control. And `Model ID`
+ * was a text field that an admin filled in by reading an id off another tab;
+ * it is now `AliveModelPicker`, whose whole vocabulary is what
+ * `/api/ai/models/alive` returned (D3 — nobody types a model id).
  *
- * The one thing here worth defending past Phase 3 is the tolerant read: a row
- * still stored as `free` or `rotation` — every row in production, until it is
- * next saved — must show as Automatic, which is what it now does, rather than
- * as a blank select or a value the enum no longer offers.
+ * The tier cases below are re-pointed, not new. The one worth defending
+ * longest is still the tolerant read: a row stored as `free` or `rotation` —
+ * every row in production until it is next saved — must show as Automatic,
+ * rather than as a blank control or a value the enum no longer offers.
+ *
+ * New here: the daily cap, and the two switches under their Phase 3 copy
+ * (`Sticky per conversation`, `May spend`).
  */
 import { describe, it, expect, vi } from 'vitest';
 import { screen, fireEvent } from '@testing-library/react';
 import AppConfigDialog from '../../../pages/aigeek/dialogs/AppConfigDialog';
 import { renderWithProviders } from '../../testUtils';
 
-function baseProps(editing = {}, overrides = {}) {
+const ALIVE_GROUPS = [
+  {
+    key: 'free',
+    label: 'Free',
+    rows: [
+      { provider: 'groq', modelId: 'llama-3.3-70b', fitness: 'structured', paid: false, lastSuccessAt: null },
+    ],
+  },
+];
+
+function basePicker(overrides = {}) {
   return {
-    editing: { appName: 'storygeek', tier: 'auto', ...editing },
-    providers: ['groq', 'gemini'],
-    freeModels: [],
-    freeModelsLoading: false,
+    groups: ALIVE_GROUPS,
+    loading: false,
+    error: null,
+    onReload: vi.fn(),
+    suggestApp: null,
+    onToggleSuggest: vi.fn(),
     recommendTask: '',
     recommendPriority: 'cost',
     recommendations: null,
     recommending: false,
-    onPatch: vi.fn(),
     onTaskChange: vi.fn(),
     onPriorityChange: vi.fn(),
     onRecommend: vi.fn(),
-    onPickModel: vi.fn(),
-    onLoadFreeModels: vi.fn(),
+    ...overrides,
+  };
+}
+
+function baseProps(editing = {}, overrides = {}) {
+  return {
+    editing: { appName: 'storygeek', tier: 'auto', ...editing },
+    picker: basePicker(),
+    onPatch: vi.fn(),
     onCancel: vi.fn(),
     onSave: vi.fn(),
     ...overrides,
   };
 }
 
-const tierSelect = () => screen.getByLabelText('Routing tier');
+const tierGroup = () => screen.getByRole('group', { name: 'Routing tier' });
+const automatic = () => screen.getByRole('button', { name: 'Automatic' });
+const pinned = () => screen.getByRole('button', { name: 'Pinned' });
 const stickySwitch = () => screen.getByLabelText(/Sticky per conversation/);
-const paidSwitch = () => screen.getByLabelText(/Allow paid fallback/);
+const paidSwitch = () => screen.getByLabelText(/May spend/);
+const capField = () => screen.getByLabelText('Daily cap');
 
 describe('AppConfigDialog — the routing tier', () => {
-  it('offers exactly Automatic and Specific', () => {
+  it('offers exactly Automatic and Pinned', () => {
     renderWithProviders(<AppConfigDialog {...baseProps()} />);
-    const values = [...tierSelect().querySelectorAll('option')].map(o => o.value);
-    expect(values).toEqual(['auto', 'specific']);
+    const labels = [...tierGroup().querySelectorAll('button')].map(b => b.textContent);
+    expect(labels).toEqual(['Automatic', 'Pinned']);
   });
 
   it('defaults a new row to Automatic', () => {
     renderWithProviders(<AppConfigDialog {...baseProps({ tier: undefined })} />);
-    expect(tierSelect().value).toBe('auto');
+    expect(automatic()).toHaveAttribute('aria-pressed', 'true');
   });
 
   for (const legacy of ['free', 'rotation']) {
     it(`shows a legacy tier: '${legacy}' row as Automatic, which is what it now does`, () => {
       // Every row in production is one of these until it is next saved, and
-      // `auto` is exactly what `aiRoute.resolveRoute` reads them as. A select
-      // with no matching option would render blank and silently rewrite the
-      // row to whatever the first option is on the next Save.
+      // `auto` is exactly what `aiRoute.resolveRoute` reads them as. A control
+      // with no matching value would render blank and silently rewrite the row
+      // to whatever its first option is on the next Save.
       renderWithProviders(<AppConfigDialog {...baseProps({ tier: legacy })} />);
-      expect(tierSelect().value).toBe('auto');
+      expect(automatic()).toHaveAttribute('aria-pressed', 'true');
     });
   }
 
-  it('keeps a pinned row on Specific and shows the provider and model fields', () => {
-    renderWithProviders(<AppConfigDialog {...baseProps({ tier: 'specific', provider: 'groq', model: 'llama' })} />);
-    expect(tierSelect().value).toBe('specific');
-    expect(screen.getByLabelText('Provider')).toHaveValue('groq');
-    expect(screen.getByLabelText('Model ID')).toHaveValue('llama');
+  it('keeps a pinned row on Pinned and shows the alive-model picker', () => {
+    renderWithProviders(<AppConfigDialog {...baseProps({ tier: 'specific', provider: 'groq', model: 'llama-3.3-70b' })} />);
+    expect(pinned()).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByLabelText('Pinned model')).toHaveValue('groq::llama-3.3-70b');
   });
 
-  it('hides the pin fields under Automatic', () => {
+  it('never offers a text field for a model id, pinned or not (D3)', () => {
+    renderWithProviders(<AppConfigDialog {...baseProps({ tier: 'specific', provider: 'groq', model: 'llama-3.3-70b' })} />);
+    expect(screen.getByLabelText('Pinned model').tagName).toBe('SELECT');
+    expect(screen.queryByLabelText(/model id/i)).toBeNull();
+  });
+
+  it('hides the picker under Automatic', () => {
     renderWithProviders(<AppConfigDialog {...baseProps()} />);
-    expect(screen.queryByLabelText('Model ID')).toBeNull();
+    expect(screen.queryByLabelText('Pinned model')).toBeNull();
   });
 
   it('patches the tier on change', () => {
     const onPatch = vi.fn();
     renderWithProviders(<AppConfigDialog {...baseProps({}, { onPatch })} />);
-    fireEvent.change(tierSelect(), { target: { value: 'specific' } });
+    fireEvent.click(pinned());
     expect(onPatch).toHaveBeenCalledWith({ tier: 'specific' });
+  });
+
+  it('a pick from the picker patches the tier, provider and model together', () => {
+    const onPatch = vi.fn();
+    renderWithProviders(<AppConfigDialog {...baseProps({ tier: 'specific' }, { onPatch })} />);
+    fireEvent.change(screen.getByLabelText('Pinned model'), { target: { value: 'groq::llama-3.3-70b' } });
+    expect(onPatch).toHaveBeenCalledWith({ tier: 'specific', provider: 'groq', model: 'llama-3.3-70b' });
   });
 });
 
-describe('AppConfigDialog — the two Phase 2 switches', () => {
+describe('AppConfigDialog — the two switches', () => {
   it('sticky is off by default and patches the enum value, not a boolean', () => {
     const onPatch = vi.fn();
     renderWithProviders(<AppConfigDialog {...baseProps({}, { onPatch })} />);
@@ -108,7 +146,7 @@ describe('AppConfigDialog — the two Phase 2 switches', () => {
     expect(onPatch).toHaveBeenCalledWith({ sticky: null });
   });
 
-  it('allowPaid is off by default — the default that keeps the $10 lasting', () => {
+  it('May spend is off by default — the default that keeps the $10 lasting', () => {
     const onPatch = vi.fn();
     renderWithProviders(<AppConfigDialog {...baseProps({}, { onPatch })} />);
     expect(paidSwitch()).not.toBeChecked();
@@ -116,16 +154,43 @@ describe('AppConfigDialog — the two Phase 2 switches', () => {
     expect(onPatch).toHaveBeenCalledWith({ allowPaid: true });
   });
 
-  it('allowPaid reads back from the row', () => {
+  it('May spend reads back from the row', () => {
     renderWithProviders(<AppConfigDialog {...baseProps({ allowPaid: true })} />);
     expect(paidSwitch()).toBeChecked();
   });
 
-  it('disables both under Specific rather than hiding them — not applicable, not gone', () => {
+  it('disables both under Pinned rather than hiding them — not applicable, not gone', () => {
     // A pinned row has already chosen its model, and a pin never spends
     // through the governor, so neither switch means anything there.
     renderWithProviders(<AppConfigDialog {...baseProps({ tier: 'specific', provider: 'groq', model: 'm' })} />);
     expect(stickySwitch()).toBeDisabled();
     expect(paidSwitch()).toBeDisabled();
+  });
+});
+
+describe('AppConfigDialog — the daily cap', () => {
+  it('is blank when the row has none, which means the door default', () => {
+    renderWithProviders(<AppConfigDialog {...baseProps()} />);
+    expect(capField()).toHaveValue(null);
+    expect(screen.getByText(/default of 200/)).toBeInTheDocument();
+  });
+
+  it('reads back the stored number', () => {
+    renderWithProviders(<AppConfigDialog {...baseProps({ dailyCap: 40 })} />);
+    expect(capField()).toHaveValue(40);
+  });
+
+  it('patches what was typed', () => {
+    const onPatch = vi.fn();
+    renderWithProviders(<AppConfigDialog {...baseProps({}, { onPatch })} />);
+    fireEvent.change(capField(), { target: { value: '40' } });
+    expect(onPatch).toHaveBeenCalledWith({ dailyCap: '40' });
+  });
+
+  it('patches null when cleared — the default, not zero', () => {
+    const onPatch = vi.fn();
+    renderWithProviders(<AppConfigDialog {...baseProps({ dailyCap: 40 }, { onPatch })} />);
+    fireEvent.change(capField(), { target: { value: '' } });
+    expect(onPatch).toHaveBeenCalledWith({ dailyCap: null });
   });
 });

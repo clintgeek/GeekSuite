@@ -226,6 +226,47 @@ export class AICatalogJob {
   }
 
   /**
+   * Run a discovery out of band — the "Run discovery now" action behind
+   * `POST /api/ai/catalog/run` (Phase 3, DOCS/AIGEEK_STATUS_PAGE.md §2).
+   *
+   * **Synchronous by design.** It decides and returns; the run itself is left
+   * on the microtask queue. A discovery lists every provider and probes every
+   * free candidate sequentially within a provider — minutes, not seconds — and
+   * an HTTP request that waits for it holds a socket open past every sane
+   * client timeout for a job whose whole report is a database document the
+   * next status poll reads anyway.
+   *
+   * It takes the same `ticking` latch a scheduled tick takes, in both
+   * directions: an admin cannot start a second run on top of the hourly one
+   * (429s and rate-limit cooldowns are the cost of that mistake), and the
+   * hourly tick skips itself while an admin's run is in flight. Refused is a
+   * fact, not an error — `{ started: false, reason: 'running' }`.
+   *
+   * The run records an `AICatalogRun` document like any other, because
+   * `runDiscovery` is the same method the schedule calls; a manual run that
+   * did not show up in the history would be a manual run nobody could audit.
+   *
+   * `promise` is returned so a test (and only a test) can await the run
+   * instead of guessing at ticks. It never rejects.
+   *
+   * @returns {{started: boolean, reason?: string, promise?: Promise<object|null>}}
+   */
+  runDiscoveryNow() {
+    if (this.ticking) return { started: false, reason: 'running' };
+    this.ticking = true;
+    this.log.info('[CatalogJob] out-of-band discovery requested');
+    const promise = this.runDiscovery()
+      .catch((err) => {
+        // `runDiscovery` records its own failures; this is the last resort for
+        // one that could not even write its document.
+        this.log.error({ err }, '[CatalogJob] out-of-band discovery failed');
+        return null;
+      })
+      .finally(() => { this.ticking = false; });
+    return { started: true, promise };
+  }
+
+  /**
    * Ask every configured provider what it offers today, probe the free
    * candidates, write the catalog, and retire what is gone.
    */

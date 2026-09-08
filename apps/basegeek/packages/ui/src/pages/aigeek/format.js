@@ -1,15 +1,17 @@
 /**
- * Shared formatting for the AIGeek tabs.
+ * Shared formatting for the AIGeek status page.
  *
  * These were inline consts in the 2,200-line page. They are here because two
- * or more tabs read each one, and because a money formatter that disagrees
- * with itself between the Usage tab and the Catalog tab is the kind of bug
+ * or more panels read each one, and because a money formatter that disagrees
+ * with itself between the Usage panel and the Catalog panel is the kind of bug
  * nobody files and everybody distrusts.
  *
- * Note the two price units in play, which the API keeps apart deliberately:
- * `formatCost` renders a recorded dollar total, while `formatPricingCell`
- * renders a *rate* from the AIPricing collection, which stores dollars per
- * 1,000,000 tokens.
+ * `formatPricingCell` and `FREE_TIER_DEFAULTS` were here until Phase 3
+ * (2026-09-07). The first rendered a per-1M-token *rate* from AIPricing in a
+ * catalog column that no longer exists; the second supplied starting numbers
+ * for a free-tier limits form that no longer exists either. The catalog job
+ * observes both now (DOCS/AIGEEK_CATALOG_JOB.md), so there was nothing left
+ * for a human to type and nothing left to seed a box with.
  */
 
 /** A recorded spend: `$0.0000`, four places, never blank. */
@@ -22,18 +24,6 @@ export const formatCost = (cost) => {
 export const formatTokens = (tokens) => {
   if (tokens === undefined || tokens === null) return '0';
   return tokens.toLocaleString();
-};
-
-/**
- * A per-1M-token price. The catalog stores the string `'Unknown'` for models
- * whose price nobody has confirmed, which is not the same as free — an em dash
- * says "we don't know", `$0/M` would claim "it's free".
- */
-export const formatPricingCell = (value) => {
-  if (value === undefined || value === null || value === 'Unknown' || value === '') return '—';
-  const num = typeof value === 'number' ? value : parseFloat(value);
-  if (isNaN(num)) return '—';
-  return `$${num}/M`;
 };
 
 /** A context window as a compact label: 131072 → "131k ctx". */
@@ -108,10 +98,91 @@ export const featureLine = (appUsage) => {
   return rows.map(row => (row.calls ? `${row.feature} ×${row.calls}` : row.feature)).join(' · ');
 };
 
-/** Free-tier limits applied when a model has no stored limits of its own. */
-export const FREE_TIER_DEFAULTS = {
-  requestsPerMinute: 30,
-  requestsPerDay: 14400,
-  tokensPerMinute: 18000,
-  tokensPerDay: 5184000
+
+/**
+ * A whole-dollar-ish money label for the spend line: `$1.76`, two places.
+ *
+ * Distinct from `formatCost` on purpose. `formatCost` renders a *recorded
+ * per-provider total* at four places, because a free-tier month is genuinely
+ * `$0.0004` and rounding it to `$0.00` would read as "nothing is metered".
+ * The spend line is the monthly headline against a $10 budget, where four
+ * places is noise.
+ */
+export const formatUsd = (value) => {
+  const num = typeof value === 'number' ? value : parseFloat(value);
+  if (!Number.isFinite(num)) return '$0.00';
+  return `$${num.toFixed(2)}`;
+};
+
+/**
+ * "6 minutes ago" / "2 days ago" / "never" — how long since `value`.
+ *
+ * The attention panel and the catalog line both answer "when did this last
+ * work?", and a raw locale timestamp makes a reader do the subtraction. Built
+ * on `parseWhen`, so it reads either envelope the API sends (see above).
+ *
+ * `Intl.RelativeTimeFormat` rather than a hand-rolled ladder: it is in every
+ * browser these apps support and it gets the plurals right.
+ */
+const AGO_STEPS = [
+  ['year', 365 * 24 * 60 * 60 * 1000],
+  ['month', 30 * 24 * 60 * 60 * 1000],
+  ['day', 24 * 60 * 60 * 1000],
+  ['hour', 60 * 60 * 1000],
+  ['minute', 60 * 1000],
+];
+
+export const formatAgo = (value, fallback = 'never') => {
+  const date = parseWhen(value);
+  if (!date) return fallback;
+  const elapsed = Date.now() - date.getTime();
+  if (elapsed < 60 * 1000) return 'just now';
+  const relative = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+  for (const [unit, ms] of AGO_STEPS) {
+    if (elapsed >= ms) return relative.format(-Math.round(elapsed / ms), unit);
+  }
+  return 'just now';
+};
+
+/**
+ * A rate-limit number as a compact label: `14400` → `14.4k`.
+ *
+ * The catalog table shows what the provider's own headers reported, and four
+ * of those columns at full width is what pushed the old tab into a sideways
+ * scroll on a phone.
+ */
+export const formatLimit = (value) => {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return '—';
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(value % 1_000_000 ? 1 : 0)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(value % 1_000 ? 1 : 0)}k`;
+  return String(value);
+};
+
+/**
+ * The five sections of the status page, in the order they scroll past.
+ *
+ * Shared between the anchor nav and the page body so a section can never be
+ * in the nav without existing, or exist without being reachable from it. The
+ * ids are also what `?tab=` maps onto — see `TAB_SECTIONS`.
+ */
+export const SECTIONS = [
+  { id: 'needs-attention', label: 'Needs attention' },
+  { id: 'usage', label: 'Usage and cost' },
+  { id: 'apps-keys', label: 'Apps and keys' },
+  { id: 'catalog', label: 'Catalog' },
+  { id: 'try-it', label: 'Try it' },
+];
+
+/**
+ * Where the retired tab slugs land now.
+ *
+ * `/api-keys` still redirects to `/aigeek?tab=keys` (App.jsx), and links to a
+ * tab exist in tickets and in the mobile harness. Configuration's providers
+ * moved into Apps and keys, so both slugs point there.
+ */
+export const TAB_SECTIONS = {
+  configuration: 'apps-keys',
+  usage: 'usage',
+  keys: 'apps-keys',
+  catalog: 'catalog',
 };

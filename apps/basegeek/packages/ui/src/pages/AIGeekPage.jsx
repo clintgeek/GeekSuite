@@ -1,58 +1,54 @@
 /**
- * AIGeekPage — the shell. Tabs, the hook, the dialogs.
+ * AIGeekPage — the status page. One scroll, five sections, an anchor nav.
  *
  * What used to be here: 2,216 lines holding twenty `useState`s, fourteen
  * handlers and five tabs' worth of JSX, with the free-tier editor and the
- * catalog both writing the same models through different mutations. The state
- * now lives in `aigeek/useAIGeek.js`, each tab is its own file, and the two
- * model tabs are one — see `aigeek/CatalogTab.jsx` for why they had to be.
+ * catalog both writing the same models through different mutations. Then, for
+ * two days, five tabs over `aigeek/useAIGeek.js`. Now, per
+ * `DOCS/AIGEEK_STATUS_PAGE.md`: **Needs attention**, **Usage and cost**,
+ * **Apps and keys**, then a collapsed **Catalog** and **Try it**.
  *
- * Four tabs: Configuration · Usage & Cost · Apps & keys · Catalog.
+ * Why not tabs. Tabs say the sections are alternatives, and the whole point of
+ * the redesign is the opposite: the page is read top to bottom, and the answer
+ * a monthly visit wants — "is anything wrong" — has to be visible without
+ * choosing anything. An empty first panel means close the tab.
  *
- * "Apps & keys" is what App Routing and the old standalone API Keys page
- * became once aiGeek started resolving the caller from the key's `appName`
- * rather than from a body field. `/api-keys` redirects here — see App.jsx.
+ * `?tab=` still works. `/api-keys` redirects to `/aigeek?tab=keys` (App.jsx),
+ * links to a tab exist in tickets, and the mobile harness drives the page that
+ * way; `TAB_SECTIONS` maps each retired slug onto the section that absorbed
+ * it. The param is consumed and dropped, same as before — a starting point,
+ * not a binding.
  *
  * The page is admin-only, gated by `RequireAdmin` in App.jsx and, where it
- * actually counts, by `requireAdminUser` on every mutation the server exposes.
+ * actually counts, by `requireAdminUser` on every mutation and route the
+ * server exposes.
  */
-import { useEffect } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Box, Tab, Tabs, useMediaQuery } from '@mui/material';
+import { Box, useMediaQuery } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
-import {
-  Settings as SettingsIcon,
-  Analytics as AnalyticsIcon,
-  Key as KeyIcon,
-  Apps as AppsIcon,
-} from '@mui/icons-material';
 import { useToast } from '@geeksuite/ui';
-import { useAIGeek, CONFIG_PROVIDERS } from './aigeek/useAIGeek';
-import ConfigurationTab from './aigeek/ConfigurationTab';
-import UsageTab from './aigeek/UsageTab';
-import CatalogTab from './aigeek/CatalogTab';
-import AppsKeysTab from './aigeek/AppsKeysTab';
+import { useAIGeek } from './aigeek/useAIGeek';
+import { SECTIONS, TAB_SECTIONS, normalizeAppId } from './aigeek/format';
+import StatusNav from './aigeek/StatusNav';
+import CollapsedSection from './aigeek/CollapsedSection';
+import AttentionPanel from './aigeek/AttentionPanel';
+import UsagePanel from './aigeek/UsagePanel';
+import AppsKeysPanel from './aigeek/AppsKeysPanel';
+import CatalogPanel from './aigeek/CatalogPanel';
+import TestPromptPanel from './aigeek/TestPromptPanel';
 import AppConfigDialog from './aigeek/dialogs/AppConfigDialog';
 import APIKeyDialog, { NewKeyDialog } from './aigeek/dialogs/APIKeyDialog';
-import PricingDialog from './aigeek/dialogs/PricingDialog';
-import FreeTierDialog from './aigeek/dialogs/FreeTierDialog';
-import {
-  ResetStatsDialog,
-  ResetFreeTiersDialog,
-  RevokeKeyDialog,
-} from './aigeek/dialogs/ConfirmDialogs';
+import { ResetStatsDialog, RevokeKeyDialog } from './aigeek/dialogs/ConfirmDialogs';
 
-/**
- * `slug` is what `?tab=` accepts. It exists so the retired `/api-keys` route
- * can redirect to a tab rather than to a page that no longer has one, and so
- * a link to a specific tab survives being pasted into a ticket.
- */
-const TABS = [
-  { slug: 'configuration', label: 'Configuration', icon: <SettingsIcon /> },
-  { slug: 'usage', label: 'Usage & Cost', icon: <AnalyticsIcon /> },
-  { slug: 'keys', label: 'Apps & keys', icon: <AppsIcon /> },
-  { slug: 'catalog', label: 'Catalog', icon: <KeyIcon /> },
-];
+/** A section wrapper: the anchor id, and enough margin to clear a sticky bar. */
+function Section({ id, children }) {
+  return (
+    <Box component="section" id={id} aria-label={SECTIONS.find(s => s.id === id)?.label} sx={{ scrollMarginTop: 88 }}>
+      {children}
+    </Box>
+  );
+}
 
 export default function AIGeekPage() {
   const { notify } = useToast();
@@ -63,136 +59,168 @@ export default function AIGeekPage() {
   const { state, dispatch } = aigeek;
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const setConfirm = (which, open) => dispatch({ type: 'confirm/set', which, open });
-
-  // `?tab=` is a starting point, not a binding: once the page is open the tabs
-  // own the selection, so the param is consumed and dropped rather than kept
-  // in sync with every click.
+  const { scrollToId } = aigeek;
   const requestedTab = searchParams.get('tab');
+  // Once, ever. Consuming the param re-runs this effect with `requestedTab`
+  // gone, and a cleanup that cancelled the pending scroll would mean the jump
+  // never happened — which is how the `?tab=` compatibility quietly broke the
+  // first time it was written.
+  const jumped = useRef(false);
   useEffect(() => {
-    if (!requestedTab) return;
-    const index = TABS.findIndex((tab) => tab.slug === requestedTab);
-    if (index >= 0) dispatch({ type: 'tab/set', value: index });
+    if (jumped.current || !requestedTab) return;
+    jumped.current = true;
+    const sectionId = TAB_SECTIONS[requestedTab];
     setSearchParams({}, { replace: true });
-  }, [requestedTab, dispatch, setSearchParams]);
+    if (!sectionId) return;
+    // A collapsed section cannot be scrolled to while it is collapsed.
+    if (sectionId === 'catalog' || sectionId === 'try-it') {
+      dispatch({ type: 'section/open', id: sectionId });
+    }
+    // The scroll has to wait for the anchor to exist: the section it names
+    // renders behind a fetch, and a collapse that was just opened has not
+    // mounted its body yet. One macrotask is enough, and a miss is a page
+    // that opened at the top rather than an error.
+    setTimeout(() => scrollToId(sectionId), 0);
+  }, [requestedTab, dispatch, setSearchParams, scrollToId]);
 
-  /** Everything the shared steward block needs, in one prop. */
-  const steward = {
-    openApp: state.stewardApp,
-    freeModels: state.freeModels,
-    freeModelsLoading: state.freeModelsLoading,
+  /**
+   * Everything `AliveModelPicker` needs, in one prop, because it has two hosts
+   * — the app card and the routing dialog — and a picker whose props drift
+   * between them is a picker that behaves differently depending on how you
+   * reached it.
+   */
+  const picker = {
+    groups: aigeek.aliveGroups,
+    loading: state.aliveLoading,
+    error: state.aliveError,
+    onReload: aigeek.loadAliveModels,
+    suggestApp: state.suggestApp,
+    onToggleSuggest: aigeek.toggleSuggest,
     recommendTask: state.recommendTask,
     recommendPriority: state.recommendPriority,
     recommendations: state.recommendations,
     recommending: state.recommending,
-    onToggle: aigeek.toggleSteward,
     onTaskChange: (value) => dispatch({ type: 'recommend/task', value }),
     onPriorityChange: (value) => dispatch({ type: 'recommend/priority', value }),
     onRecommend: aigeek.runRecommendation,
-    onPickModel: aigeek.pinModelForApp,
-    onLoadFreeModels: aigeek.loadFreeModels,
   };
+
+  /** The daily cap for one app id, for the usage panel's feature lines. */
+  const capsByApp = useMemo(() => {
+    const caps = new Map();
+    for (const row of state.appConfigs) caps.set(normalizeAppId(row.appName), row.dailyCap ?? null);
+    return caps;
+  }, [state.appConfigs]);
+
+  const attentionCount = state.status?.attention?.length ?? 0;
 
   return (
     <Box>
-      <Tabs
-        value={state.activeTab}
-        onChange={(_, value) => dispatch({ type: 'tab/set', value })}
-        variant="scrollable"
-        scrollButtons="auto"
-        allowScrollButtonsMobile
-        sx={{ mb: 3 }}
-      >
-        {TABS.map(tab => <Tab key={tab.slug} label={tab.label} icon={tab.icon} sx={{ minHeight: 44 }} />)}
-      </Tabs>
+      <StatusNav
+        attentionCount={attentionCount}
+        hasWarning={(state.status?.attention || []).some(item => item.severity === 'warn')}
+        onJump={aigeek.scrollToId}
+      />
 
-      {state.activeTab === 0 && (
-        <ConfigurationTab
-          config={state.config}
-          configError={state.configError}
-          loading={state.loading}
-          onFieldChange={aigeek.setConfigField}
-          onSave={aigeek.saveConfiguration}
-          onTest={aigeek.testProvider}
-          onRetry={aigeek.loadConfiguration}
-        />
-      )}
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <Section id="needs-attention">
+          <AttentionPanel
+            status={state.status}
+            statusError={state.statusError}
+            statusLoading={state.statusLoading}
+            discoveryRunning={state.discoveryRunning || state.status?.catalog?.running === true}
+            onRetry={aigeek.loadStatus}
+            onOpenProvider={aigeek.openProvider}
+            onAddRouting={aigeek.addDiscoveredApp}
+            onRotateKey={aigeek.openCreateKey}
+            onRunDiscovery={aigeek.runDiscovery}
+          />
+        </Section>
 
-      {state.activeTab === 1 && (
-        <UsageTab
-          stats={state.stats}
-          statsError={state.statsError}
-          isCompact={isCompact}
-          onRetry={aigeek.loadStatistics}
-          onResetStats={() => setConfirm('showResetStatsConfirm', true)}
-        />
-      )}
+        <Section id="usage">
+          <UsagePanel
+            stats={state.stats}
+            statsError={state.statsError}
+            spend={state.status?.spend}
+            dailyCapFor={(appId) => capsByApp.get(appId) ?? null}
+            isCompact={isCompact}
+            onRetry={aigeek.loadStatistics}
+            onResetStats={() => dispatch({ type: 'confirm/set', which: 'showResetStatsConfirm', open: true })}
+          />
+        </Section>
 
-      {state.activeTab === 2 && (
-        <AppsKeysTab
-          appGroups={aigeek.appGroups}
-          unattributedUsage={aigeek.unattributedUsage}
-          discoveredApps={state.discoveredApps}
-          loading={state.appConfigsLoading || state.apiKeysLoading}
-          error={state.appConfigsError || state.apiKeysError}
-          newAppName={state.newAppName}
-          steward={steward}
-          onNewAppNameChange={(value) => dispatch({ type: 'apps/newName', value })}
-          onRefresh={() => { aigeek.loadAppConfigs(); aigeek.loadApiKeys(); }}
-          onAddApp={(appName) => {
-            aigeek.addDiscoveredApp(appName);
-            dispatch({ type: 'apps/newName', value: '' });
-          }}
-          onEditRouting={(group) => (group.config
-            ? dispatch({ type: 'appDialog/open', value: { ...group.config } })
-            : aigeek.addDiscoveredApp(group.appId))}
-          onDeleteRouting={aigeek.deleteAppConfig}
-          onMintKey={aigeek.openCreateKey}
-          onCopy={aigeek.copyText}
-          onEditKey={aigeek.openEditKey}
-          onRevokeKey={(apiKey) => dispatch({ type: 'keys/revokeOpen', value: apiKey })}
-        />
-      )}
+        <Section id="apps-keys">
+          <AppsKeysPanel
+            appGroups={aigeek.appGroups}
+            unattributedUsage={aigeek.unattributedUsage}
+            discoveredApps={state.discoveredApps}
+            loading={state.appConfigsLoading || state.apiKeysLoading}
+            error={state.appConfigsError || state.apiKeysError}
+            newAppName={state.newAppName}
+            savingApp={state.savingApp}
+            picker={picker}
+            providers={{
+              config: state.config,
+              configError: state.configError,
+              savingProvider: state.savingProvider,
+              status: state.status,
+              onRetry: aigeek.loadConfiguration,
+              onFieldChange: aigeek.setConfigField,
+              onBlurSave: aigeek.saveProviderKey,
+            }}
+            onNewAppNameChange={(value) => dispatch({ type: 'apps/newName', value })}
+            onRefresh={() => { aigeek.loadAppConfigs(); aigeek.loadApiKeys(); }}
+            onAddApp={(appName) => {
+              aigeek.addDiscoveredApp(appName);
+              dispatch({ type: 'apps/newName', value: '' });
+            }}
+            onEditRouting={aigeek.editAppConfig}
+            onDeleteRouting={aigeek.deleteAppConfig}
+            onPatchRouting={aigeek.patchAppConfig}
+            onMintKey={aigeek.openCreateKey}
+            onCopy={aigeek.copyText}
+            onEditKey={aigeek.openEditKey}
+            onRevokeKey={(apiKey) => dispatch({ type: 'keys/revokeOpen', value: apiKey })}
+          />
+        </Section>
 
-      {state.activeTab === 3 && (
-        <CatalogTab
-          directorData={state.directorData}
-          directorLoading={state.directorLoading}
-          directorError={state.directorError}
-          syncingProvider={state.syncingProvider}
-          savingBulk={state.savingBulk}
-          dirtyCount={aigeek.dirtyCount}
-          isCompact={isCompact}
-          modelFreeTier={aigeek.modelFreeTier}
-          isModelDirty={aigeek.isModelDirty}
-          onRefresh={aigeek.loadDirectorData}
-          onSync={aigeek.syncProviderModels}
-          onFlag={(provider, modelId, value) =>
-            dispatch({ type: 'freeTier/flag', provider, modelId, value })}
-          onLimit={(provider, modelId, field, value) =>
-            dispatch({ type: 'freeTier/limit', provider, modelId, field, value })}
-          onSaveAll={aigeek.saveAllFreeTiers}
-          onResetAll={() => setConfirm('showResetConfirm', true)}
-          onEditPricing={aigeek.openPricingDialog}
-          onEditFreeTier={aigeek.openFreeTierDialog}
-        />
-      )}
+        <Section id="catalog">
+          <CollapsedSection
+            id="catalog"
+            title="Catalog (read-only)"
+            description="Every model the catalog job knows about. It maintains this; you do not."
+            open={state.openSections.catalog}
+            onToggle={() => dispatch({ type: 'section/toggle', id: 'catalog' })}
+          >
+            <CatalogPanel
+              rows={aigeek.catalogRows}
+              loading={state.directorLoading}
+              error={state.directorError}
+              overrideRow={state.overrideRow}
+              onRefresh={() => { aigeek.loadDirectorData(); aigeek.loadAliveModels(); }}
+              onOpenOverride={(row) => dispatch({ type: 'override/open', value: row })}
+              onCloseOverride={() => dispatch({ type: 'override/close' })}
+            />
+          </CollapsedSection>
+        </Section>
+
+        <Section id="try-it">
+          <CollapsedSection
+            id="try-it"
+            title="Try it"
+            description="One prompt through the real route, to see who answers and what they say."
+            open={state.openSections['try-it']}
+            onToggle={() => dispatch({ type: 'section/toggle', id: 'try-it' })}
+          >
+            <TestPromptPanel picker={picker} />
+          </CollapsedSection>
+        </Section>
+      </Box>
 
       <AppConfigDialog
         editing={state.editingApp}
-        providers={CONFIG_PROVIDERS}
-        freeModels={state.freeModels}
-        freeModelsLoading={state.freeModelsLoading}
-        recommendTask={state.recommendTask}
-        recommendPriority={state.recommendPriority}
-        recommendations={state.recommendations}
-        recommending={state.recommending}
+        picker={picker}
         onPatch={(patch) => dispatch({ type: 'appDialog/patch', patch })}
-        onTaskChange={(value) => dispatch({ type: 'recommend/task', value })}
-        onPriorityChange={(value) => dispatch({ type: 'recommend/priority', value })}
-        onRecommend={aigeek.runRecommendation}
-        onPickModel={aigeek.pickModel}
-        onLoadFreeModels={aigeek.loadFreeModels}
         onCancel={() => dispatch({ type: 'appDialog/close' })}
         onSave={aigeek.saveAppConfig}
       />
@@ -219,31 +247,10 @@ export default function AIGeekPage() {
         onConfirm={aigeek.revokeApiKey}
       />
 
-      <PricingDialog
-        editing={state.editingPricing}
-        onPatch={(patch) => dispatch({ type: 'pricing/patch', patch })}
-        onCancel={() => dispatch({ type: 'pricing/close' })}
-        onSave={aigeek.savePricing}
-      />
-
-      <FreeTierDialog
-        editing={state.editingFreeTier}
-        onPatch={(patch) => dispatch({ type: 'freeTierDialog/patch', patch })}
-        onPatchLimit={(field, value) => dispatch({ type: 'freeTierDialog/limit', field, value })}
-        onCancel={() => dispatch({ type: 'freeTierDialog/close' })}
-        onSave={aigeek.saveFreeTier}
-      />
-
       <ResetStatsDialog
         open={state.showResetStatsConfirm}
-        onCancel={() => setConfirm('showResetStatsConfirm', false)}
+        onCancel={() => dispatch({ type: 'confirm/set', which: 'showResetStatsConfirm', open: false })}
         onConfirm={aigeek.resetStatistics}
-      />
-      <ResetFreeTiersDialog
-        open={state.showResetConfirm}
-        busy={state.savingBulk}
-        onCancel={() => setConfirm('showResetConfirm', false)}
-        onConfirm={aigeek.resetAllFreeTiers}
       />
     </Box>
   );

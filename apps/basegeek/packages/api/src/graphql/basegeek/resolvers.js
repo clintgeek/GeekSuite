@@ -475,8 +475,19 @@ export const resolvers = {
     // hand-typed prices and ~30 hand-typed free-tier quota rows over the shared
     // catalog on an admin's click. Prices and quotas are observed now — the
     // catalog job reads vendor listings and the `x-ratelimit-*` headers on real
-    // calls — so there is no default to restore. `updateModelPricing` /
-    // `updateModelFreeTier` below remain as the per-row manual override.
+    // calls — so there is no default to restore.
+    //
+    // `updateModelPricing`, `updateModelFreeTier`, `resetAllFreeTiers` and
+    // `bulkUpdateFreeTiers` followed them in Phase 3 (same day), when the
+    // controls that called them — the Catalog tab's Free checkbox, its four
+    // limit fields, the pricing and free-tier dialogs, Save-all and Reset-all
+    // — were deleted with the tab (AIGEEK_STATUS_PAGE.md §3). The admin
+    // console was the only caller of all four. The per-row override they
+    // stood in for becomes `AIFreeTier.override` and its own mutation.
+    //
+    // `deleteModelPricing` / `deleteModelFreeTier` stay: neither had a UI
+    // caller before or after, and both are the operational way to drop a row
+    // the job keeps reviving.
 
     // Model Management
     syncProviderModels: async (_, { provider }, { user }) => {
@@ -492,15 +503,6 @@ export const resolvers = {
       }
     },
 
-    updateModelPricing: async (_, { provider, modelId, inputPrice, outputPrice }, { user }) => {
-      await requireAdminUser(user);
-      const pricing = await AIPricing.findOneAndUpdate(
-        { provider, modelId },
-        { inputPrice, outputPrice, lastUpdated: new Date(), isActive: true },
-        { upsert: true, new: true }
-      );
-      return { success: true, pricing: { provider, modelId, inputPrice: pricing.inputPrice, outputPrice: pricing.outputPrice } };
-    },
 
     deleteModelPricing: async (_, { provider, modelId }, { user }) => {
       await requireAdminUser(user);
@@ -508,20 +510,6 @@ export const resolvers = {
       return true;
     },
 
-    updateModelFreeTier: async (_, { provider, modelId, isFree, freeLimits, notes }, { user }) => {
-      await requireAdminUser(user);
-      const freeTier = await AIFreeTier.findOneAndUpdate(
-        { provider, modelId },
-        {
-          isFree,
-          freeLimits: freeLimits || {},
-          notes: notes || '',
-          lastUpdated: new Date()
-        },
-        { upsert: true, new: true }
-      );
-      return { success: true, freeTier: { provider, modelId, isFree: freeTier.isFree, freeLimits: freeTier.freeLimits, notes: freeTier.notes } };
-    },
 
     deleteModelFreeTier: async (_, { provider, modelId }, { user }) => {
       await requireAdminUser(user);
@@ -529,31 +517,7 @@ export const resolvers = {
       return true;
     },
 
-    resetAllFreeTiers: async (_, __, { user }) => {
-      await requireAdminUser(user);
-      const result = await AIFreeTier.updateMany({}, { isFree: false, lastUpdated: new Date() });
-      return result.modifiedCount;
-    },
 
-    bulkUpdateFreeTiers: async (_, { updates }, { user }) => {
-      await requireAdminUser(user);
-      const results = await Promise.all(
-        updates.map(({ provider, modelId, isFree, freeLimits, notes }) =>
-          AIFreeTier.findOneAndUpdate(
-            { provider, modelId },
-            { isFree, freeLimits: freeLimits || {}, notes: notes || '', lastUpdated: new Date() },
-            { upsert: true, new: true }
-          )
-        )
-      );
-      return results.map(doc => ({
-        provider: doc.provider,
-        modelId: doc.modelId,
-        isFree: doc.isFree,
-        freeLimits: doc.freeLimits || null,
-        notes: doc.notes || null
-      }));
-    },
 
     // App Routing
     saveAIAppConfig: async (_, { appName, config }, { user }) => {
