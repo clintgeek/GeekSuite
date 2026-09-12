@@ -560,9 +560,11 @@ quotas from the `x-ratelimit-*` headers on real calls
 There is no hand-typed default left to restore. The admin doors that remain are
 `POST /models/:provider/refresh`, `POST /director/force-refresh` (widened in the
 same pass from a hardcoded `['gemini','groq','together']` to the whole roster)
-and GraphQL `syncProviderModels`; per-row manual overrides are still
-`updateModelPricing` / `updateModelFreeTier`. Callers of the deleted routes get
-a 404 — nothing in the suite called them but the console.
+and `POST /catalog/run`; per-row manual overrides are `deleteModelPricing`,
+`deleteModelFreeTier` and the override drawer's `setCatalogOverride`. Callers
+of the deleted routes get a 404 — nothing in the suite called them but the
+console. (GraphQL `syncProviderModels` and `testAIProvider` retired
+2026-09-11; no caller ever reached for either.)
 
 `recommend` and `analyze-cost` are the deliberate exception. They mutate
 nothing, StoryGeek's epub pipeline calls `recommend` from a backend, and

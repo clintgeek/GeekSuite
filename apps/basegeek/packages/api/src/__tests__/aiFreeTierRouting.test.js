@@ -295,6 +295,83 @@ describe('a cooling row is not a candidate', () => {
   });
 });
 
+/* ── the human override (setCatalogOverride, 2026-09-11) ──────────────────── */
+
+describe('a human override on a row', () => {
+  it('deny takes a healthy row out of selection entirely', async () => {
+    enable('groq', 'cerebras');
+    await seedRows([
+      { provider: 'groq', modelId: 'refused', override: 'deny' },
+      { provider: 'cerebras', modelId: 'kept' },
+    ]);
+
+    const { live, cooling } = await aiService.selectFreeTierCandidates();
+    // Not live and not merely cooling — the row is out of both lists.
+    expect(live.map(c => c.modelId)).toEqual(['kept']);
+    expect(cooling).toEqual([]);
+  });
+
+  it('deny still applies when it is the only row', async () => {
+    enable('groq');
+    await seedRows([{ provider: 'groq', modelId: 'refused', override: 'deny' }]);
+
+    const { live, cooling } = await aiService.selectFreeTierCandidates();
+    expect(live).toEqual([]);
+    expect(cooling).toEqual([]);
+  });
+
+  it('allow keeps a cooling row a candidate', async () => {
+    enable('groq');
+    await seedRows([
+      {
+        provider: 'groq', modelId: 'insisted', override: 'allow',
+        health: { coolingUntil: new Date(Date.now() + 60 * 60 * 1000), consecutiveFailures: 2 },
+      },
+    ]);
+
+    const { live } = await aiService.selectFreeTierCandidates();
+    expect(live.map(c => c.modelId)).toEqual(['insisted']);
+  });
+
+  it('allow does not override a live 0-remaining quota reading', async () => {
+    enable('groq');
+    await seedRows([
+      {
+        provider: 'groq', modelId: 'insisted', override: 'allow',
+        observed: { remainingRequests: 0, resetAt: new Date(Date.now() + 60 * 1000), seenAt: new Date() },
+      },
+    ]);
+
+    // `allow` sets aside the cooling memory, not the quota reading: a call to
+    // a row the provider just said is empty would 429 anyway.
+    const { live, cooling } = await aiService.selectFreeTierCandidates();
+    expect(live).toEqual([]);
+    expect(cooling.map(c => c.modelId)).toEqual(['insisted']);
+  });
+
+  it('a pin that names a denied row is refused as pin_denied', async () => {
+    enable('groq');
+    await seedRows([{ provider: 'groq', modelId: 'refused', override: 'deny' }]);
+
+    await expect(aiService.pinIsUsable('groq', 'refused'))
+      .resolves.toEqual({ ok: false, reason: 'pin_denied' });
+  });
+
+  it('a cleared override hands the row back to observed behavior', async () => {
+    enable('groq');
+    await seedRows([
+      {
+        provider: 'groq', modelId: 'pardoned', override: null,
+        health: { coolingUntil: new Date(Date.now() + 60 * 60 * 1000) },
+      },
+    ]);
+
+    const { live, cooling } = await aiService.selectFreeTierCandidates();
+    expect(live).toEqual([]);
+    expect(cooling.map(c => c.modelId)).toEqual(['pardoned']);
+  });
+});
+
 /* ── (c) freeOnly never reaches a paid default model ──────────────────────── */
 
 describe('a free-tier caller is never answered by a paid default model', () => {

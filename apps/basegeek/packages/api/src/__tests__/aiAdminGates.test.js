@@ -39,6 +39,7 @@ const { default: jwt } = await import('jsonwebtoken');
 const { User, userGeekConn } = await import('../models/user.js');
 const { default: logger } = await import('../lib/logger.js');
 const { default: AIConfig } = await import('../models/AIConfig.js');
+const { default: AIFreeTier } = await import('../models/AIFreeTier.js');
 const { default: APIKey } = await import('../models/APIKey.js');
 const { default: aiRoutes } = await import('../routes/aiRoutes.js');
 const { resolvers } = await import('../graphql/basegeek/resolvers.js');
@@ -110,6 +111,7 @@ beforeAll(async () => {
 afterEach(async () => {
   await User.deleteMany({});
   await AIConfig.deleteMany({});
+  await AIFreeTier.deleteMany({});
   await APIKey.deleteMany({});
 });
 
@@ -310,11 +312,11 @@ describe('GraphQL — the same rule, the same shape', () => {
     const calls = [
       () => resolvers.Mutation.saveAIConfig(null, { config: {} }, ctx),
       () => resolvers.Mutation.removeAIProviderKey(null, { provider: 'gemini' }, ctx),
-      () => resolvers.Mutation.testAIProvider(null, { provider: 'gemini' }, ctx),
       () => resolvers.Mutation.resetAIStats(null, null, ctx),
       // seedDirectorPricing / seedDirectorFreeTier were in this list until
       // 2026-09-07; both mutations went with the hand-typed catalog tables.
-      () => resolvers.Mutation.syncProviderModels(null, { provider: 'gemini' }, ctx),
+      // testAIProvider / syncProviderModels were here until 2026-09-11: both
+      // retired, no caller ever reached for them.
       // updateModelPricing / updateModelFreeTier / resetAllFreeTiers /
       // bulkUpdateFreeTiers were in this list until Phase 3 (2026-09-07); all
       // four went with the Catalog tab's edit controls
@@ -323,6 +325,7 @@ describe('GraphQL — the same rule, the same shape', () => {
       () => resolvers.Mutation.deleteModelFreeTier(null, { provider: 'gemini', modelId: 'm' }, ctx),
       () => resolvers.Mutation.saveAIAppConfig(null, { appName: 'x', config: {} }, ctx),
       () => resolvers.Mutation.deleteAIAppConfig(null, { appName: 'x' }, ctx),
+      () => resolvers.Mutation.setCatalogOverride(null, { provider: 'groq', modelId: 'm', override: 'deny' }, ctx),
     ];
 
     for (const call of calls) {
@@ -372,5 +375,37 @@ describe('GraphQL — the same rule, the same shape', () => {
     await expect(
       resolvers.Mutation.removeAIProviderKey(null, { provider: 'anthropic' }, { user: { id: user._id.toString() } })
     ).rejects.toThrow(/Unknown provider/);
+  });
+
+  it('setCatalogOverride writes deny, then allow, then hands the row back', async () => {
+    const { user } = await makeUserWithToken({ role: 'admin' });
+    const ctx = { user: { id: user._id.toString() } };
+    const args = { provider: 'groq', modelId: 'some-model', override: 'deny' };
+
+    const denied = await resolvers.Mutation.setCatalogOverride(null, args, ctx);
+    expect(denied).toMatchObject({ success: true, provider: 'groq', modelId: 'some-model', override: 'deny' });
+    // It upserts: a deny can land before the job has ever written the row,
+    // and the row it makes is not a free-tier row for being overridden.
+    const row = await AIFreeTier.findOne({ provider: 'groq', modelId: 'some-model' });
+    expect(row.override).toBe('deny');
+    expect(row.isFree).toBe(false);
+
+    const allowed = await resolvers.Mutation.setCatalogOverride(null, { ...args, override: 'allow' }, ctx);
+    expect(allowed.override).toBe('allow');
+
+    const cleared = await resolvers.Mutation.setCatalogOverride(null, { ...args, override: null }, ctx);
+    expect(cleared.override).toBeNull();
+    expect((await AIFreeTier.findOne({ provider: 'groq', modelId: 'some-model' })).override).toBeNull();
+  });
+
+  it('setCatalogOverride refuses a provider off the roster and a blank modelId', async () => {
+    const { user } = await makeUserWithToken({ role: 'admin' });
+    const ctx = { user: { id: user._id.toString() } };
+    await expect(
+      resolvers.Mutation.setCatalogOverride(null, { provider: 'anthropic', modelId: 'm', override: 'deny' }, ctx)
+    ).rejects.toThrow(/Unknown provider/);
+    await expect(
+      resolvers.Mutation.setCatalogOverride(null, { provider: 'groq', modelId: '  ', override: 'deny' }, ctx)
+    ).rejects.toThrow(/modelId is required/);
   });
 });

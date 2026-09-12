@@ -290,8 +290,8 @@ and learns quotas from the `x-ratelimit-*` headers on real calls.
   spending provider quota to answer a question Mongo already knew. A vendor call
   now happens only when an admin path asks: `POST /api/ai/models/:provider/refresh`,
   `POST /api/ai/director/force-refresh`, `POST /api/ai/catalog/run` (Phase 3's
-  "Run discovery now"), GraphQL `syncProviderModels`, or
-  `collectModelInformation({ refresh: true })`.
+  "Run discovery now"), or `collectModelInformation({ refresh: true })`.
+  (GraphQL `syncProviderModels` went 2026-09-11 — nothing called it.)
 
 ---
 

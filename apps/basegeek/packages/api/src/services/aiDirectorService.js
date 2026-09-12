@@ -133,10 +133,18 @@ class AIDirectorService {
 
         const freeTierMap = {};
         for (const freeTier of freeTierRows) {
+          // The whole row, not just the flag: the status page's catalog shows
+          // fitness, cooling and the live quota reading off this, and the
+          // override drawer reads `override` to render its switches.
           freeTierMap[freeTier.modelId] = {
             isFree: freeTier.isFree,
             limits: freeTier.freeLimits,
-            notes: freeTier.notes
+            notes: freeTier.notes,
+            fitness: freeTier.fitness ?? null,
+            probedAt: freeTier.probedAt ?? null,
+            observed: freeTier.observed ?? null,
+            health: freeTier.health ?? null,
+            override: freeTier.override ?? null
           };
         }
 

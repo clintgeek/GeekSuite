@@ -42,6 +42,28 @@ const aiFreeTierSchema = new mongoose.Schema({
     default: false
   },
   /**
+   * The one hand a human still gets on a row (the status page's override
+   * drawer, `setCatalogOverride`, 2026-09-11).
+   *
+   *   `deny`  — never a candidate. Selection and `/models/alive` skip the row,
+   *             the re-probe sweep does not spend a call on it, and a live
+   *             probe verdict does not revive it. A pin that names it degrades
+   *             to `auto` (`pin_denied`).
+   *   `allow` — the cooling memory no longer applies: the row stays a
+   *             candidate even while the probe has it marked dead. The rare
+   *             exception, not a workflow.
+   *   `null`  — the row lives and dies by what the job observes (default).
+   *
+   * This is the per-row escape hatch the deleted Catalog tab's Free checkbox
+   * and Restore-defaults used to stand in for — everything else about a row
+   * is observed and belongs to the job.
+   */
+  override: {
+    type: String,
+    enum: ['deny', 'allow', null],
+    default: null
+  },
+  /**
    * How well this row answers the catalog probe, as of `probedAt`.
    *
    *   `structured` — returned parseable JSON with the fields the probe asked

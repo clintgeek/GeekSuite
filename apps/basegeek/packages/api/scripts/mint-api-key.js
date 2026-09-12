@@ -25,7 +25,7 @@
  *                           features are per-call, not per-key.
  *     --name <text>         human label for the key (required)
  *     --description <text>  optional note stored on the key
- *     --permissions a,b     default: ai:call,ai:models,ai:providers,ai:usage
+ *     --permissions a,b     default: ai:call,ai:models,ai:providers,ai:usage,ai:stats
  *     --rate-limit <spec>   per-minute[,per-hour[,per-day]] — e.g. 120,4000,40000
  *     --owner <username>    userGeek username or email to attribute the key to;
  *                           default: the first admin
@@ -67,10 +67,12 @@ import path from 'path';
 
 const FLAGS = new Set(['--replace', '--dry-run', '--help', '-h']);
 
-// Kept in step with models/APIKey.js's schema default and routes/apiKeys.js —
-// three copies of one list, because the script must not import a Mongoose
-// model to know what it is minting. `ai:usage` joined on 2026-09-06 (Q49).
-export const DEFAULT_PERMISSIONS = ['ai:call', 'ai:models', 'ai:providers', 'ai:usage'];
+// Kept in step with models/APIKey.js's DEFAULT_KEY_PERMISSIONS — the schema,
+// routes/apiKeys.js and the GraphQL resolver all read that constant, but this
+// script must not import a Mongoose model to know what it is minting, so the
+// one deliberate copy lives here. `ai:usage` joined 2026-09-06 (Q49),
+// `ai:stats` 2026-09-11 (a StartGeek glance card reads /api/ai/status).
+export const DEFAULT_PERMISSIONS = ['ai:call', 'ai:models', 'ai:providers', 'ai:usage', 'ai:stats'];
 export const VALID_PERMISSIONS = [
   'ai:call', 'ai:models', 'ai:providers', 'ai:stats', 'ai:director', 'ai:usage'
 ];

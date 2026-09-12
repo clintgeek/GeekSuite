@@ -15,13 +15,11 @@
  * ones do and how well. A row in the catalog and not in the alive list is
  * cooling or unkeyed, which is information — so it stays in the table.
  *
- * **The override drawer is disabled.** §2 asks for `Never pick` / `Always
- * allow` per row, written as `AIFreeTier.override: 'deny' | 'allow' | null`.
- * That field does not exist on the model yet and there is no mutation for it,
- * and adding a resolver for a field the schema lacks would be a control that
- * silently does nothing — worse than a control that says "not yet". So the
- * drawer renders with both switches disabled and a "coming soon" note, and the
- * ask is written up for the API side.
+ * **The override drawer is live** (2026-09-11). `Never pick` writes
+ * `AIFreeTier.override: 'deny'` — selection, `/models/alive`, pin resolution
+ * and the job's revive path all honour it. `Always allow` writes `'allow'` —
+ * the row stays a candidate through a cooling spell. Both off clears the
+ * field and the row goes back to living by what the job observes.
  */
 import {
   Box,
@@ -54,6 +52,19 @@ const limitLine = (limits) => {
 };
 
 /**
+ * The live reading off the last real call's `x-ratelimit-*` headers, when a
+ * provider reports one — "14 left · resets 3:04 PM". Providers that send no
+ * headers (Gemini, Cloudflare, Cohere, Ollama) simply have no `observed`.
+ */
+const observedLine = (observed) => {
+  if (typeof observed?.remainingRequests !== 'number') return null;
+  const reset = observed.resetAt
+    ? ` · resets ${new Date(observed.resetAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+    : '';
+  return `${formatLimit(observed.remainingRequests)} left${reset}`;
+};
+
+/**
  * The override drawer for one row.
  *
  * A `GeekSheet` rather than a dialog: it is a per-row "more" surface, which is
@@ -61,8 +72,15 @@ const limitLine = (limits) => {
  * phone and a centered dialog at `md`+, decided by the primitive rather than
  * by this file.
  */
-function OverrideDrawer({ row, onClose }) {
-  const notYet = 'Coming soon — AIFreeTier has no override field yet, so this would not persist.';
+function OverrideDrawer({ row, onClose, onSetOverride }) {
+  const deny = row?.override === 'deny';
+  const allow = row?.override === 'allow';
+  const toggle = (which) => () => {
+    // Each switch is its own value; turning one off clears the field rather
+    // than writing the other. Both off means "the job decides".
+    const next = (which === 'deny' ? deny : allow) ? null : which;
+    onSetOverride(row, next);
+  };
   return (
     <GeekSheet
       open={!!row}
@@ -71,38 +89,44 @@ function OverrideDrawer({ row, onClose }) {
       description="Take one row out of selection, or keep it in regardless of what the probe thinks."
       actions={<Button onClick={onClose} sx={{ minHeight: 44 }}>Close</Button>}
     >
-      <Tooltip title={notYet}>
-        <Box>
-          <FormControlLabel
-            control={<Switch disabled inputProps={{ 'aria-label': 'Never pick this model' }} />}
-            label={(
-              <Box>
-                <Typography variant="body2">Never pick</Typography>
-                <Typography variant="caption" color="text.muted" sx={{ fontSize: 12 }}>
-                  Selection and discovery both skip the row, however healthy it looks.
-                </Typography>
-              </Box>
-            )}
-            sx={{ alignItems: 'flex-start', ml: 0, mb: 1 }}
-          />
-          <FormControlLabel
-            control={<Switch disabled inputProps={{ 'aria-label': 'Always allow this model' }} />}
-            label={(
-              <Box>
-                <Typography variant="body2">Always allow</Typography>
-                <Typography variant="caption" color="text.muted" sx={{ fontSize: 12 }}>
-                  Keeps the row a candidate even while the probe has it cooling.
-                </Typography>
-              </Box>
-            )}
-            sx={{ alignItems: 'flex-start', ml: 0 }}
-          />
-        </Box>
-      </Tooltip>
-
-      <Typography variant="caption" color="text.muted" display="block" sx={{ fontSize: 12, mt: 2 }}>
-        {notYet}
-      </Typography>
+      <Box>
+        <FormControlLabel
+          control={(
+            <Switch
+              checked={deny}
+              onChange={toggle('deny')}
+              inputProps={{ 'aria-label': 'Never pick this model' }}
+            />
+          )}
+          label={(
+            <Box>
+              <Typography variant="body2">Never pick</Typography>
+              <Typography variant="caption" color="text.muted" sx={{ fontSize: 12 }}>
+                Selection and discovery both skip the row, however healthy it looks.
+              </Typography>
+            </Box>
+          )}
+          sx={{ alignItems: 'flex-start', ml: 0, mb: 1 }}
+        />
+        <FormControlLabel
+          control={(
+            <Switch
+              checked={allow}
+              onChange={toggle('allow')}
+              inputProps={{ 'aria-label': 'Always allow this model' }}
+            />
+          )}
+          label={(
+            <Box>
+              <Typography variant="body2">Always allow</Typography>
+              <Typography variant="caption" color="text.muted" sx={{ fontSize: 12 }}>
+                Keeps the row a candidate even while the probe has it cooling.
+              </Typography>
+            </Box>
+          )}
+          sx={{ alignItems: 'flex-start', ml: 0 }}
+        />
+      </Box>
     </GeekSheet>
   );
 }
@@ -115,6 +139,7 @@ export default function CatalogPanel({
   onRefresh,
   onOpenOverride,
   onCloseOverride,
+  onSetOverride,
 }) {
   if (error) {
     return <GeekErrorState title="Couldn't load the catalog" error={error} onRetry={onRefresh} />;
@@ -215,6 +240,13 @@ export default function CatalogPanel({
             key: 'alive',
             label: 'State',
             render: (row) => {
+              if (row.override === 'deny') {
+                return (
+                  <Tooltip title="Never picked — a human denied this row in the override drawer">
+                    <Chip size="small" color="error" variant="outlined" label="denied" sx={{ fontSize: 12 }} />
+                  </Tooltip>
+                );
+              }
               if (row.alive) {
                 return (
                   <Chip
@@ -247,11 +279,21 @@ export default function CatalogPanel({
           {
             key: 'limits',
             label: 'Limits observed',
-            render: (row) => (
-              <Typography variant="body2" sx={{ fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
-                {limitLine(row.limits)}
-              </Typography>
-            ),
+            render: (row) => {
+              const observed = observedLine(row.observed);
+              return (
+                <Box>
+                  <Typography variant="body2" sx={{ fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
+                    {limitLine(row.limits)}
+                  </Typography>
+                  {observed && (
+                    <Typography variant="caption" color="text.muted" sx={{ fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
+                      {observed}
+                    </Typography>
+                  )}
+                </Box>
+              );
+            },
           },
         ]}
         renderActions={(row) => (
@@ -268,7 +310,7 @@ export default function CatalogPanel({
         )}
       />
 
-      <OverrideDrawer row={overrideRow} onClose={onCloseOverride} />
+      <OverrideDrawer row={overrideRow} onClose={onCloseOverride} onSetOverride={onSetOverride} />
     </Box>
   );
 }

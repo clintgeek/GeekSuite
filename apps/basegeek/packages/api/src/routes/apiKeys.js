@@ -1,6 +1,6 @@
 import express from 'express';
 import { authenticateToken, lookupRole } from '../middleware/auth.js';
-import APIKey from '../models/APIKey.js';
+import APIKey, { DEFAULT_KEY_PERMISSIONS } from '../models/APIKey.js';
 import { VALID_APPS } from '../config/validApps.js';
 import { normalizeAppId } from '../services/callerIdentity.js';
 import logger from '../lib/logger.js';
@@ -11,11 +11,11 @@ const router = express.Router();
 router.use(authenticateToken);
 
 /**
- * The permission set a key is minted with when the caller names none. One list,
- * three copies — models/APIKey.js's schema default and scripts/mint-api-key.js
- * are the other two — because neither of those can import this router.
+ * The permission set a key is minted with when the caller names none. The
+ * model owns the one list now (`DEFAULT_KEY_PERMISSIONS`); this export keeps
+ * the name the rest of the package and its tests already import.
  */
-export const DEFAULT_PERMISSIONS = ['ai:call', 'ai:models', 'ai:providers', 'ai:usage'];
+export const DEFAULT_PERMISSIONS = DEFAULT_KEY_PERMISSIONS;
 
 /**
  * assertMintAuthority — who may mint or rotate a key for an app.

@@ -211,7 +211,7 @@ pages/AIGeekPage.jsx                  the shell: StatusNav + five <section>s + t
       aigeek/ModelStewardBlock.jsx        the Suggest half of the steward
     aigeek/ProvidersBlock.jsx           provider rows: key on blur + the live chip
   aigeek/CollapsedSection.jsx         the two disclosure sections at the bottom
-  aigeek/CatalogPanel.jsx             read-only table + the (disabled) override drawer
+  aigeek/CatalogPanel.jsx             read-only table + the override drawer (live)
   aigeek/TestPromptPanel.jsx          Try it, on POST /api/ai/feature
   aigeek/dialogs/AppConfigDialog.jsx  routing for the fields the card does not carry
   aigeek/dialogs/APIKeyDialog.jsx     mint / edit / the one-time reveal — unchanged
@@ -229,9 +229,9 @@ Deleted: `ConfigurationTab.jsx`, `CatalogTab.jsx`, `UsageTab.jsx`,
    because it read `aiFreeModels` while the picker beside it reads
    `/api/ai/models/alive` — two lists that can disagree about which rows are
    alive, in one control. The select went, the `aiFreeModels` query with it.
-2. **The override drawer is disabled.** `AIFreeTier` has no `override` field and
-   there is no mutation, so the drawer renders both switches disabled with a
-   "coming soon" note rather than a control that silently does nothing.
+2. **~~The override drawer is disabled~~ — live since 2026-09-11.**
+   `AIFreeTier.override` exists and `setCatalogOverride` writes it, honoured by
+   selection, `/models/alive`, pin resolution and the job's revive path.
 3. **"Clearing the key disables it" writes `enabled: false`, not a deleted key.**
    `saveAIConfig` treats a blank `apiKey` as "keep the stored one" — it has to,
    since the client cannot read a credential back to echo it — so an emptied box
@@ -261,15 +261,14 @@ Deleted: `ConfigurationTab.jsx`, `CatalogTab.jsx`, `UsageTab.jsx`,
   fitness`.
 - The roster is `Object.keys(aiConfig)`. `CONFIG_PROVIDERS` is gone.
 
-### Still owed by the API side
+### ~~Still owed by the API side~~ — all delivered 2026-09-11
 
-1. **`AIFreeTier.override`** (`'deny' | 'allow' | null`) and a mutation to set
-   it, honoured by selection and discovery. Unblocks §2's override drawer.
-2. **`fitness`, `health` and `observed` on the catalog read.** The read-only
-   table wants six columns per §2; `aiDirectorModels` exposes none of the three,
-   so the page joins `/models/alive` onto it to get `fitness`, alive/cooling and
-   `lastSuccessAt` — which means a *cooling* row shows no fitness at all, and
-   "limits observed" currently renders `freeLimits` (the ceiling the headers
-   reported) rather than `observed` (the live reading). Either field set on
-   `aiDirectorModels`, or a `catalog.rows` array on `/status`, closes it.
-3. **A way to clear a provider credential** — see difference 3 above.
+1. ~~**`AIFreeTier.override`**~~ — done: `setCatalogOverride` writes
+   `'deny' | 'allow' | null`, honoured by selection, `/models/alive`, pin
+   resolution (`pin_denied`) and the job's revive path. The drawer is live.
+2. ~~**`fitness`, `health` and `observed` on the catalog read**~~ — done:
+   `aiDirectorModels` free-tier rows now carry all three plus `probedAt`, so a
+   cooling row keeps its fitness and "limits observed" renders the live reading
+   under the ceiling line.
+3. ~~**A way to clear a provider credential**~~ — done 2026-09-08:
+   `removeAIProviderKey` behind a confirm button.

@@ -24,6 +24,7 @@ const {
   openRouterCatalog,
   renderReport,
   discover,
+  runProbe,
   syncResults,
   summarizeByProvider,
   pruneUnknownProviders,
@@ -226,6 +227,23 @@ describe('discover', () => {
       .toEqual(['llama-3.3-70b-versatile', 'qwen-2.5-coder-32b']);
   });
 
+  test('a human-denied row is still listed but never probed', async () => {
+    const probed = [];
+    const results = await discover({
+      providers: ['groq'],
+      listProvider: async () => ({ data: [{ id: 'kept' }, { id: 'refused' }] }),
+      probeProvider: async (_p, _prompt, config) => { probed.push(config.model); return { content: 'hello' }; },
+      timeoutMs: 500,
+      denied: new Set(['groq/refused']),
+    });
+    // Denied costs no quota: no probe call went out for the row.
+    expect(probed).toEqual(['kept']);
+    // But the AIModel row still records that the vendor lists it — the deny
+    // governs selection, not the truth of the catalog.
+    expect(results.some((r) => r.kind === 'listed' && r.modelId === 'refused')).toBe(true);
+    expect(results.some((r) => r.kind === 'probe' && r.modelId === 'refused')).toBe(false);
+  });
+
   test('summarizeByProvider is what the run document records', async () => {
     const results = await discover({
       providers: ['groq'],
@@ -303,6 +321,34 @@ describe('syncResults writes what discover found', () => {
     // `openrouter/free` is the auto-router: a candidate, not a listed model.
     expect(sweep.filter.modelId.$nin).toContain('openrouter/free');
     expect(sweep.filter.modelId.$nin).toContain('free/y');
+  });
+
+  it('a live verdict does not revive a row a human denied', async () => {
+    const deps = fakeCollections();
+    // `find` is the one extra method the denied-set read needs on the stub.
+    deps.freeTier.find = () => ({ lean: async () => [{ provider: 'openrouter', modelId: 'free/y' }] });
+    await syncResults(RESULTS, deps, { now: Date.UTC(2026, 8, 7) });
+    // No freeTier write touched the denied row — `writeAlive` returned
+    // `wrote: 'denied'` and skipped it…
+    expect(deps.writes.some((w) => w.label === 'freeTier' && w.filter?.modelId === 'free/y')).toBe(false);
+    // …while the AIModel row still records what the probe saw. Denied governs
+    // selection, not the truth of the listing.
+    expect(deps.writes.some((w) => w.label === 'model' && w.filter?.modelId === 'free/y')).toBe(true);
+  });
+});
+
+describe('runProbe revive honors the override in the filter', () => {
+  it('a denied row can never match the revive write', async () => {
+    const filters = [];
+    await runProbe({
+      rows: [{ provider: 'groq', modelId: 'm' }],
+      callProvider: async () => ({ content: '{"task":"t","day":"Friday"}' }),
+      updateOne: async (filter) => { filters.push(filter); },
+      options: { revive: true, timeout: 100 },
+    });
+    // The deny lives in the filter, not in a check: a caller that never heard
+    // of `override` still cannot resurrect one.
+    expect(filters[0]).toMatchObject({ provider: 'groq', modelId: 'm', override: { $ne: 'deny' } });
   });
 });
 

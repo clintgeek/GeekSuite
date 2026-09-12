@@ -8,6 +8,23 @@ import crypto from 'crypto';
 // getDecryptedKey / setKey are included for interface parity per the hardening
 // spec; they intentionally operate as no-ops / passthroughs on keyHash.
 
+/**
+ * The permission set a key is minted with when the caller names none. One
+ * list, read by the schema default below, `routes/apiKeys.js`
+ * (`DEFAULT_PERMISSIONS`), the `createAPIKey` GraphQL resolver and
+ * `scripts/mint-api-key.js` — it used to be typed out in four places, and
+ * they had already drifted (the resolver's copy lacked `ai:usage`).
+ *
+ * `ai:usage` joined on 2026-09-06 (Q49), in the same change that gated the
+ * two /api/ai/usage routes — gate and default ship together or the gate
+ * locks out every key that already exists. `ai:stats` joined on 2026-09-11:
+ * a StartGeek glance card reads `GET /api/ai/status` and should not need a
+ * special mint; the reach that adds is the `ai:stats` read family (`/status`,
+ * `/stats`, `/capabilities`, `/admin/stats`, `/routing`) — all reads of what
+ * the system is doing, for a key that already belongs to an app.
+ */
+export const DEFAULT_KEY_PERMISSIONS = ['ai:call', 'ai:models', 'ai:providers', 'ai:usage', 'ai:stats'];
+
 const apiKeySchema = new mongoose.Schema({
   keyId: {
     type: String,
@@ -42,13 +59,8 @@ const apiKeySchema = new mongoose.Schema({
   },
   permissions: {
     type: [String],
-    // The default mint set. `ai:usage` joined it on 2026-09-06 (Q49) in the
-    // same change that put a gate on the two /api/ai/usage routes — the enum
-    // value had existed since the model did, claimed by no route and granted
-    // by no default, which is a permission that reads as meaningful on the
-    // key-creation screen and does nothing. Gate and default ship together or
-    // the gate locks out every key that already exists.
-    default: ['ai:call', 'ai:models', 'ai:providers', 'ai:usage'],
+    // The default mint set — see DEFAULT_KEY_PERMISSIONS above.
+    default: () => [...DEFAULT_KEY_PERMISSIONS],
     validate: {
       validator: function(permissions) {
         const validPermissions = [

@@ -285,11 +285,19 @@ export class AICatalogJob {
 
     this.log.info({ providers }, `[CatalogJob] discovery starting for ${providers.length} provider(s)`);
     try {
+      // Rows a human denied are still listed (the AIModel row stays current)
+      // but are never probed — a denied row costs no quota and no verdict can
+      // revive it (`syncResults` applies the same set at write time).
+      const denied = new Set(
+        (await this.freeTier.find({ override: 'deny' }).lean())
+          .map((row) => `${row.provider}/${row.modelId}`)
+      );
       const results = await this.discovery.discover({
         providers,
         listProvider: (provider) => this.discovery.listModels(provider, this.ai.providers[provider]),
         probeProvider: (provider, prompt, config) => this.ai.callProvider(provider, prompt, config),
         timeoutMs: this.discovery.DEFAULT_PROBE_TIMEOUT_MS,
+        denied,
         now: this.now()
       });
 
@@ -328,7 +336,9 @@ export class AICatalogJob {
     try {
       const configured = new Set(this.configuredProviders());
       const all = await this.freeTier.find({ isFree: true }).lean();
-      const rows = all.filter((row) => configured.has(row.provider));
+      // Two kinds of row are not worth a probe call: one whose provider we
+      // cannot reach, and one a human denied — no verdict it returns may act.
+      const rows = all.filter((row) => configured.has(row.provider) && row.override !== 'deny');
       run.skipped = all.length - rows.length;
 
       if (rows.length === 0) {

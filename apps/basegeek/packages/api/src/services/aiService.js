@@ -1107,6 +1107,10 @@ class AIService {
     const cooling = [];
 
     for (const fm of freeModels) {
+      // A human's `deny` beats every health signal: the row is out, however
+      // healthy it looks. `/models/alive` applies the same rule, so the
+      // picker and the router cannot disagree.
+      if (fm.override === 'deny') continue;
       const pc = this.providers[fm.provider];
       if (!pc || !pc.apiKey || pc.enabled === false) continue;
 
@@ -1124,7 +1128,10 @@ class AIService {
       const resetAt = fm.observed?.resetAt ? new Date(fm.observed.resetAt).getTime() : null;
       const exhausted = fm.observed?.remainingRequests === 0 && Number.isFinite(resetAt) && resetAt > now;
 
-      if (isFreeTierCooling(health, now)) cooling.push(candidate);
+      // `allow` sets aside the cooling memory, not the quota reading: a row
+      // whose provider just said 0-remaining would still 429, and a human
+      // cannot override that.
+      if (fm.override !== 'allow' && isFreeTierCooling(health, now)) cooling.push(candidate);
       else if (exhausted) cooling.push({ ...candidate, exhausted: true });
       else live.push(candidate);
     }
@@ -1254,8 +1261,11 @@ class AIService {
       ]);
 
       if (freeRow) {
+        if (freeRow.override === 'deny') return { ok: false, reason: 'pin_denied' };
         const health = this.getFreeTierHealth(provider, modelId, freeRow.health);
-        if (isFreeTierCooling(health)) return { ok: false, reason: 'pin_cooling' };
+        if (freeRow.override !== 'allow' && isFreeTierCooling(health)) {
+          return { ok: false, reason: 'pin_cooling' };
+        }
       }
       if (modelRow && modelRow.isActive === false) {
         return { ok: false, reason: 'pin_retired' };

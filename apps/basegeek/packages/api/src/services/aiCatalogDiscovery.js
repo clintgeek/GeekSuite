@@ -463,7 +463,9 @@ export async function runProbe({ rows, callProvider, updateOne = null, options =
       result.marked = 'cooled 30d';
     } else if (updateOne && revive && outcome.status === 'alive') {
       await updateOne(
-        { provider: row.provider, modelId: row.modelId },
+        // A row a human denied is not revived: the filter, not a check, so a
+        // caller that never heard of `override` still cannot resurrect one.
+        { provider: row.provider, modelId: row.modelId, override: { $ne: 'deny' } },
         {
           $set: {
             isFree: true,
@@ -507,9 +509,12 @@ export async function runProbe({ rows, callProvider, updateOne = null, options =
  * @param {Function} deps.probeProvider  aiService.callProvider
  * @param {number} [deps.timeoutMs]
  * @param {boolean} [deps.all]           skip the aiCatalogOverrides deny list
+ * @param {Set<string>} [deps.denied]    'provider/modelId' keys with a human
+ *                                       `deny` override — still listed, never
+ *                                       probed. A denied row costs no quota.
  * @param {number} [deps.now]
  */
-export async function discover({ providers, probeProvider, listProvider, timeoutMs, all = false, now = Date.now() }) {
+export async function discover({ providers, probeProvider, listProvider, timeoutMs, all = false, denied = null, now = Date.now() }) {
   const results = [];
   await Promise.all(providers.map(async (provider) => {
     let raw;
@@ -520,7 +525,9 @@ export async function discover({ providers, probeProvider, listProvider, timeout
       return;
     }
 
-    const candidates = freeCandidates(provider, raw).filter((id) => all || !isDenied(id));
+    const candidates = freeCandidates(provider, raw)
+      .filter((id) => all || !isDenied(id))
+      .filter((id) => !denied?.has(`${provider}/${id}`));
     const candidateSet = new Set(candidates);
 
     // Catalog rows for everything the provider listed, so AIModel stays current
@@ -574,24 +581,30 @@ export async function discover({ providers, probeProvider, listProvider, timeout
  * the `AIModel` row is stamped `capabilities.source: 'probe'` unless the
  * caller passed richer capabilities from a listing.
  */
-export async function writeAlive({ provider, modelId, fitness = null, name = null, capabilities = null, contextTokens = null, maxOutputTokens = null, now = new Date() }, deps) {
+export async function writeAlive({ provider, modelId, fitness = null, name = null, capabilities = null, contextTokens = null, maxOutputTokens = null, now = new Date(), denied = false }, deps) {
   const at = new Date(now);
-  await deps.freeTier.updateOne(
-    { provider, modelId },
-    {
-      $set: {
-        isFree: true,
-        fitness,
-        probedAt: at,
-        'health.consecutiveFailures': 0,
-        'health.lastFailureAt': null,
-        'health.lastFailureCode': null,
-        'health.lastSuccessAt': at,
-        'health.coolingUntil': null
-      }
-    },
-    { upsert: true }
-  );
+  // `denied` carries a human's `deny` override through: the probe verdict is
+  // real (the AIModel row below still records it) but it does not put the row
+  // back in selection. The flag rather than a filter because this write
+  // upserts — a non-matching filter would try to insert over the unique key.
+  if (!denied) {
+    await deps.freeTier.updateOne(
+      { provider, modelId },
+      {
+        $set: {
+          isFree: true,
+          fitness,
+          probedAt: at,
+          'health.consecutiveFailures': 0,
+          'health.lastFailureAt': null,
+          'health.lastFailureCode': null,
+          'health.lastSuccessAt': at,
+          'health.coolingUntil': null
+        }
+      },
+      { upsert: true }
+    );
+  }
   if (deps.model) {
     const caps = capabilities
       ? capabilitiesUpdate(capabilities, 'openrouter-listing')
@@ -613,7 +626,7 @@ export async function writeAlive({ provider, modelId, fitness = null, name = nul
       { upsert: true }
     );
   }
-  return { provider, modelId, wrote: 'alive' };
+  return { provider, modelId, wrote: denied ? 'denied' : 'alive' };
 }
 
 /** A row is gone: cool it 30 days and take its model out of the active list. */
@@ -781,6 +794,25 @@ export async function syncResults(results, deps, { now = Date.now() } = {}) {
   }
 
   const probes = results.filter((r) => r.kind === 'probe');
+
+  // Rows a human denied (`AIFreeTier.override: 'deny'`) are listed and probed
+  // like any other — the verdict is real and the AIModel row records it — but
+  // a live verdict must not put one back in selection. Fetched here rather
+  // than passed in so the job and the `--sync` script honour it identically.
+  // `find` is not part of the injected-collection contract, so the stubbed
+  // deps in tests simply carry no denied rows.
+  const denied = new Set();
+  try {
+    if (typeof deps.freeTier?.find === 'function') {
+      for (const row of await deps.freeTier.find({ override: 'deny' }).lean()) {
+        denied.add(`${row.provider}/${row.modelId}`);
+      }
+    }
+  } catch {
+    // An unreadable override set must not stop the sync; the worst case is a
+    // denied row revived until the next run — logged nowhere, by design.
+  }
+
   // A row that answered stays active even if it was never in the listing —
   // `openrouter/free` is the auto-router, always a candidate and not always a
   // listed model, and deactivating it right after proving it alive would be a
@@ -806,6 +838,7 @@ export async function syncResults(results, deps, { now = Date.now() } = {}) {
           capabilities: listed?.capabilities ?? null,
           contextTokens: listed?.contextTokens ?? null,
           maxOutputTokens: listed?.maxOutputTokens ?? null,
+          denied: denied.has(`${row.provider}/${row.modelId}`),
           now
         }, deps);
         counts.alive++;

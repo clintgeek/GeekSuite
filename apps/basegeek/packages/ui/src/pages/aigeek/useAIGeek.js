@@ -59,6 +59,7 @@ import {
   RESET_AI_STATS,
   SAVE_AI_APP_CONFIG,
   DELETE_AI_APP_CONFIG,
+  SET_CATALOG_OVERRIDE,
 } from '../../graphql/mutations';
 
 /**
@@ -748,6 +749,27 @@ export function useAIGeek(notify) {
   }, [notify, loadAppConfigs]);
 
   /**
+   * The override drawer's write: 'deny' takes a row out of selection, 'allow'
+   * keeps it a candidate through a cooling spell, null hands it back to the
+   * job. Both switches map onto this one mutation — flipping one off clears
+   * the field rather than stacking the other on.
+   */
+  const setCatalogOverride = useCallback(async (row, override) => {
+    try {
+      await apolloClient.mutate({
+        mutation: SET_CATALOG_OVERRIDE,
+        variables: { provider: row.provider, modelId: row.modelId, override },
+      });
+      const word = override === 'deny' ? 'never picked' : override === 'allow' ? 'always allowed' : 'back to observed';
+      notify(`${row.modelId} is ${word}`, { tone: 'success' });
+      await loadDirectorData();
+      await loadAliveModels();
+    } catch (err) {
+      notify(`Override failed: ${err.message}`, { tone: 'error' });
+    }
+  }, [notify, loadDirectorData, loadAliveModels]);
+
+  /**
    * Open the routing dialog for an app that has no row yet.
    *
    * `tier: 'auto'` is the default and the one the server auto-discovers with,
@@ -1065,12 +1087,16 @@ export function useAIGeek(notify) {
           modelId: model.id,
           name: model.name,
           isFree: model.freeTier?.isFree === true,
-          // `fitness` lives on the AIFreeTier row and only reaches the UI
-          // through the alive list today — see the report's API asks.
-          fitness: alive?.fitness ?? null,
+          // The director read carries the whole AIFreeTier row now, so a
+          // cooling model still shows its fitness and the live quota reading —
+          // the alive list only knows the rows that answer right now.
+          fitness: model.freeTier?.fitness ?? alive?.fitness ?? null,
+          observed: model.freeTier?.observed ?? null,
+          health: model.freeTier?.health ?? null,
+          override: model.freeTier?.override ?? null,
           alive: !!alive,
           paid: alive?.paid === true,
-          lastSuccessAt: alive?.lastSuccessAt ?? null,
+          lastSuccessAt: alive?.lastSuccessAt ?? model.freeTier?.health?.lastSuccessAt ?? null,
           limits: model.freeTier?.limits || {},
           hasKey: entry.hasApiKey === true,
         });
@@ -1108,6 +1134,7 @@ export function useAIGeek(notify) {
     saveAppConfig,
     patchAppConfig,
     deleteAppConfig,
+    setCatalogOverride,
     addDiscoveredApp,
     editAppConfig,
     // api keys

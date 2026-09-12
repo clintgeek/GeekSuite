@@ -593,25 +593,23 @@ describe('the admin-shaped AI routes take the admin gate', () => {
     });
   });
 
-  it('GET /status is NOT in reach of a key minted with the defaults', async () => {
-    // `ai:stats` is not in the default mint set (models/APIKey.js:51 —
-    // `ai:call`, `ai:models`, `ai:providers`, `ai:usage`), and `/status` takes
-    // the same word `/stats` and `/capabilities` have always taken. So this is
-    // deliberately the *unchanged* reach of an existing permission rather than
-    // a new grant: a backend that wants the status document must be minted
-    // `ai:stats` by name. Pinned because the opposite is easy to assume — the
-    // route is a read, and reads on this router are mostly free.
+  it('GET /status answers a key minted with the defaults (ai:stats is in the set)', async () => {
+    // `ai:stats` joined the default mint set on 2026-09-11
+    // (models/APIKey.js DEFAULT_KEY_PERMISSIONS): a StartGeek glance card
+    // reads /status and needs no special mint. That grew a default key's
+    // reach by the whole `ai:stats` read family — this test pins the new
+    // contract, because "the route is a read, so it must be free" was the
+    // wrong inference in both directions.
     const apiKey = await makeApiKey({ appName: 'notegeek', permissions: 'schema-default' });
 
     invalidateStatusCache();
     const res = await request(app).get('/api/ai/status').set('Authorization', `Bearer ${apiKey}`);
-    expect(res.status).toBe(403);
-    expect(res.body.error.code).toBe('INSUFFICIENT_PERMISSIONS');
+    expect(res.status).toBe(200);
 
-    // …and the same is true of its two siblings, which is the point: one word,
-    // one reach, no special case for the new route.
+    // …and the same is true of its sibling, which is the point: one word,
+    // one reach, no special case for the status document.
     const stats = await request(app).get('/api/ai/stats').set('Authorization', `Bearer ${apiKey}`);
-    expect(stats.status).toBe(403);
+    expect(stats.status).toBe(200);
   });
 
   it('POST /catalog/run answers 409 when a run is already in flight', async () => {

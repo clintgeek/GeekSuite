@@ -167,11 +167,14 @@ export const typeDefs = gql`
     # Deletes a provider's stored credential and drops it from the running
     # service. saveAIConfig cannot do this: a blank key there means "keep".
     removeAIProviderKey(provider: String!): JSON
-    testAIProvider(provider: String!): Boolean
     resetAIStats: Boolean
     # seedDirectorPricing / seedDirectorFreeTier retired 2026-09-07: the catalog
     # is observed by the catalog job now, not seeded from a hand-typed table.
     # See apps/basegeek/DOCS/AIGEEK_CATALOG_JOB.md.
+    #
+    # testAIProvider / syncProviderModels retired 2026-09-11: no caller ever
+    # reached for them (the provider chip's probe and POST /api/ai/catalog/run
+    # do the same jobs over REST, and the job syncs on a schedule).
 
     # Model Management
     #
@@ -184,17 +187,16 @@ export const typeDefs = gql`
     # tab (apps/basegeek/DOCS/AIGEEK_STATUS_PAGE.md §3). The console was the
     # only caller of all four.
     #
-    # The per-row escape hatch they stood in for becomes AIFreeTier.override
-    # ('deny' | 'allow' | null) and its own mutation; until that lands, the
-    # status page's override drawer renders disabled rather than pretending.
+    # The per-row escape hatch they stood in for is AIFreeTier.override
+    # ('deny' | 'allow' | null), written by setCatalogOverride below and
+    # honoured by selection, /models/alive, pin resolution and the catalog
+    # job's revive path (models/AIFreeTier.js carries the contract).
     #
-    # syncProviderModels survives with no GraphQL caller: its REST twins
-    # (POST /api/ai/models/:provider/refresh, /api/ai/director/force-refresh)
-    # are the documented manual refresh, and dropping one spelling of a live
-    # capability is a separate decision from deleting a dead control.
-    syncProviderModels(provider: String!): JSON
     deleteModelPricing(provider: String!, modelId: String!): Boolean
     deleteModelFreeTier(provider: String!, modelId: String!): Boolean
+    # The status page's override drawer. override: 'deny' | 'allow' | null
+    # (anything else clears to null).
+    setCatalogOverride(provider: String!, modelId: String!, override: String): JSON
 
     # App Routing
     saveAIAppConfig(appName: String!, config: JSON!): JSON

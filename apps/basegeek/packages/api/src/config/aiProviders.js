@@ -38,9 +38,11 @@
  * verified against the provider's current catalog.
  *
  * `rotationPosition` orders the free-tier rotation. Providers with no position
- * are never auto-selected: cohere and gemini are quota-metered and reserved for
- * callers that name them. Every row in the table is now free-tier — the one
- * paid provider, anthropic, came out on 2026-09-07.
+ * are never auto-selected: cohere is quota-metered and reserved for callers
+ * that name it. Gemini joined the rotation on 2026-09-11 (D7) — the probe's
+ * health ranking, not the slot, does the real work of deciding when it is
+ * picked. Every row in the table is now free-tier — the one paid provider,
+ * anthropic, came out on 2026-09-07.
  */
 
 /**
@@ -120,8 +122,11 @@ export const AI_PROVIDERS = [
     // Was gemini-2.0-flash. 2.5-flash is the id this repo already prices and
     // lists (aiDirectorService seed data, aiService model lists).
     defaultModel: 'gemini-flash-lite-latest', // the alias Google keeps current; 2.5-flash stopped answering the free tier
-    inRotation: false,
-    rotationPosition: null,
+    // In rotation since 2026-09-11 (D7): the probe decides like any other
+    // provider. Last in the order — health ranking picks it when it earns it,
+    // and its daily-quota ceiling is a reason not to lead with it.
+    inRotation: true,
+    rotationPosition: 8,
     adapter: {
       shape: 'gemini',
       baseURL: 'https://generativelanguage.googleapis.com/v1beta',

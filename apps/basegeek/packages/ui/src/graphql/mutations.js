@@ -63,9 +63,20 @@ export const RESET_AI_STATS = gql`
 //   BULK_UPDATE_FREE_TIERS — the four server mutations went with them; the
 //   catalog job observes prices, free-tier flags and quotas now.
 //   TEST_AI_PROVIDER — the provider row's live chip is the test.
-//   SYNC_PROVIDER_MODELS — the job syncs on a schedule; `syncProviderModels`
-//   and `testAIProvider` stay in the schema because REST twins still serve
-//   them (`POST /api/ai/test`, `POST /api/ai/models/:provider/refresh`).
+//   SYNC_PROVIDER_MODELS — the job syncs on a schedule.
+//
+// The two schema spellings followed on 2026-09-11: `testAIProvider` and
+// `syncProviderModels` are gone from the schema too, since nothing ever
+// called them — the REST twins (`POST /api/ai/test`,
+// `POST /api/ai/catalog/run`) carry those capabilities.
+
+// The override drawer's write: 'deny' takes a row out of selection, 'allow'
+// keeps it a candidate through cooling, null hands it back to the job.
+export const SET_CATALOG_OVERRIDE = gql`
+  mutation SetCatalogOverride($provider: String!, $modelId: String!, $override: String) {
+    setCatalogOverride(provider: $provider, modelId: $modelId, override: $override)
+  }
+`;
 
 
 

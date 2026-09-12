@@ -1,4 +1,4 @@
-import APIKey from '../../models/APIKey.js';
+import APIKey, { DEFAULT_KEY_PERMISSIONS } from '../../models/APIKey.js';
 import AIConfig from '../../models/AIConfig.js';
 import { encrypt } from '@geeksuite/crypto-vault';
 import AIPricing from '../../models/AIPricing.js';
@@ -279,7 +279,7 @@ export const resolvers = {
     // ----------------------------------------------------------------------
     // API Keys
     // ----------------------------------------------------------------------
-    createAPIKey: async (_, { name, appName, description, permissions = ['ai:call', 'ai:models', 'ai:providers'], rateLimit, expiresAt }, { user }) => {
+    createAPIKey: async (_, { name, appName, description, permissions = DEFAULT_KEY_PERMISSIONS, rateLimit, expiresAt }, { user }) => {
       requireAuth(user);
       if (!name || !appName) throw new GraphQLError('Name and app name are required');
       if (!/^[a-zA-Z0-9_-]+$/.test(appName)) throw new GraphQLError('App name can only contain letters, numbers, hyphens, and underscores');
@@ -466,19 +466,14 @@ export const resolvers = {
       return { success: true, provider, removed: result.deletedCount > 0 };
     },
 
-    testAIProvider: async (_, { provider }, { user }) => {
-      await requireAdminUser(user);
-      const providerConfig = aiService.providers[provider];
-      if (!providerConfig || !providerConfig.apiKey) throw new GraphQLError('Provider not supported or API key not configured');
-
-      const testPrompt = 'Hello, this is a test message. Please respond with "OK" if you receive this.';
-      const result = await aiService.callProvider(provider, testPrompt, { maxTokens: 10, appName: 'graphql-test' });
-
-      if (result && result.content && result.content.toLowerCase().includes('ok')) {
-        return true;
-      }
-      return false; // Could also return true since response was received depending on how strict we want to be
-    },
+    // `testAIProvider` retired 2026-09-11: nothing called it — the provider
+    // chip's probe button uses REST `POST /api/ai/test`, and the catalog job's
+    // probe sweep is the observed answer to "does this provider work".
+    //
+    // `syncProviderModels` retired the same day: the catalog job syncs on a
+    // schedule and `POST /api/ai/catalog/run` (plus the older REST refresh
+    // routes) is the manual kick. A second spelling of a scheduled job is a
+    // mutation that can only drift.
 
     resetAIStats: async (_, __, { user }) => {
       await requireAdminUser(user);
@@ -499,26 +494,11 @@ export const resolvers = {
     // limit fields, the pricing and free-tier dialogs, Save-all and Reset-all
     // — were deleted with the tab (AIGEEK_STATUS_PAGE.md §3). The admin
     // console was the only caller of all four. The per-row override they
-    // stood in for becomes `AIFreeTier.override` and its own mutation.
+    // stood in for became `AIFreeTier.override` and `setCatalogOverride`.
     //
     // `deleteModelPricing` / `deleteModelFreeTier` stay: neither had a UI
     // caller before or after, and both are the operational way to drop a row
     // the job keeps reviving.
-
-    // Model Management
-    syncProviderModels: async (_, { provider }, { user }) => {
-      await requireAdminUser(user);
-      try {
-        const models = await aiService.refreshModels(provider);
-        // `updatePricingForNewModels()` used to run here, filling any new
-        // model's price in from the hand-typed table that went with the seed
-        // mutations. Prices come from the listing now.
-        return { success: true, provider, modelsFound: models.length, models };
-      } catch (error) {
-        throw new GraphQLError(`Failed to sync models for ${provider}: ${error.message}`);
-      }
-    },
-
 
     deleteModelPricing: async (_, { provider, modelId }, { user }) => {
       await requireAdminUser(user);
@@ -531,6 +511,27 @@ export const resolvers = {
       await requireAdminUser(user);
       await AIFreeTier.deleteOne({ provider, modelId });
       return true;
+    },
+
+    // The override drawer's write (AIGEEK_STATUS_PAGE.md §2). `deny` takes a
+    // row out of selection and keeps discovery from reviving it; `allow`
+    // keeps a row a candidate through a cooling spell; null hands the row
+    // back to the job. It upserts so a `deny` can be set before the job has
+    // ever written the row — a model that is not yet free-tier is still one
+    // an admin may want refused. Everything else about a row is the job's.
+    setCatalogOverride: async (_, { provider, modelId, override }, { user }) => {
+      await requireAdminUser(user);
+      if (!PROVIDER_IDS.includes(provider)) {
+        throw new GraphQLError(`Unknown provider: ${String(provider).slice(0, 40)}`);
+      }
+      if (!modelId?.trim()) throw new GraphQLError('modelId is required');
+      const value = ['deny', 'allow'].includes(override) ? override : null;
+      const row = await AIFreeTier.findOneAndUpdate(
+        { provider, modelId: modelId.trim() },
+        { $set: { override: value } },
+        { upsert: true, new: true }
+      );
+      return { success: true, provider: row.provider, modelId: row.modelId, override: row.override };
     },
 
 

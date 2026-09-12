@@ -285,14 +285,17 @@ mutations that only served them are deleted. The mobile harness ran locally on t
 scenes, 0 violations, both themes, and it caught two real bugs (a 100%-wide screen-reader span and
 an AA contrast failure under a severity tint), both fixed.
 
-**Follow-ups left open (small, API-side):** `AIFreeTier.override: 'deny'|'allow'|null` plus a
-mutation, honoured by selection and discovery (the drawer is built and disabled until then);
-`fitness`/`health`/`observed` on the catalog read so cooling rows show their fitness and "limits
-observed" shows the live reading; ~~a way to clear a provider credential~~ (done 2026-09-08: a **Remove key** button with a
+**Follow-ups — closed 2026-09-11:** ~~`AIFreeTier.override: 'deny'|'allow'|null` plus a
+mutation~~ — done: `setCatalogOverride`, honoured by selection, `/models/alive`, pin
+resolution and the job's revive path; the drawer is live.
+~~`fitness`/`health`/`observed` on the catalog read~~ — done.
+~~a way to clear a provider credential~~ (done 2026-09-08: a **Remove key** button with a
 confirm, backed by `removeAIProviderKey`, which deletes the row and reloads the service; a blank
-key box now saves nothing rather than half-disabling); `testAIProvider` /
-`syncProviderModels` mutations have no UI caller left. Also for Chef: `ai:stats` is not in the
-default key mint set, so a StartGeek glance card reading `/status` needs it named.
+key box now saves nothing rather than half-disabling).
+~~`testAIProvider` / `syncProviderModels` mutations have no UI caller left~~ — both deleted.
+~~`ai:stats` is not in the default key mint set~~ — it is now
+(`models/APIKey.js` `DEFAULT_KEY_PERMISSIONS`), so a StartGeek glance card
+reading `/status` needs no special mint.
 
 ## Decisions
 
@@ -307,18 +310,18 @@ Settled 2026-09-07:
 - **D5. Local model as the floor.** Dismissed: no GPU, four Haswell cores. The floor stays the
   deterministic fallbacks the runner already requires.
 
-Still Chef's call:
+Settled 2026-09-11:
 
-- **D6. OpenRouter privacy setting.** OpenRouter's docs: "If you opt out of training in your
-  account settings, OpenRouter will not route to providers that train." Many free endpoints are
-  free because the host trains on inputs, so opting out shrinks the free pool, possibly a lot. The
-  suite sends notes, food logs and health numbers. Recommended: opt out, then let the probe tell
-  us how many free rows survive. If the answer is too few, the other free providers pick up the
-  slack, and the AI_IDEAS rule "send ids and titles, not bodies" does the rest.
-- **D7. Gemini in `auto`.** Today it is off-rotation, reserved for callers that name it.
-  Recommended: let the probe decide like any other provider.
-- **D8. Which features get `allowPaid`.** Recommended: StoryGeek GM only, to start. Everything
-  else free-only.
+- **D6. OpenRouter privacy setting.** No opt-out. Chef: *"I'm not worried about
+  training on data. I'm not passing PII through this stuff."* The free pool
+  stays as wide as the vendors offer it.
+- **D7. Gemini in `auto`.** Yes — the probe decides like any other provider.
+  `inRotation: true`, `rotationPosition: 8` (tail of the order; the health
+  ranking earns it slots from there).
+- **D8. Which features get `allowPaid`.** StoryGeek's GM row only, to start.
+  Everything else stays free-only on its deterministic fallback. Blocked on
+  Chef's two OpenRouter actions (the $10 and the $5 key credit limit) — the
+  governor protects a balance that does not exist yet.
 
 ## Risks and landmines
 

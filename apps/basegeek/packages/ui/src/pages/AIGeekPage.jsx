@@ -201,6 +201,7 @@ export default function AIGeekPage() {
               onRefresh={() => { aigeek.loadDirectorData(); aigeek.loadAliveModels(); }}
               onOpenOverride={(row) => dispatch({ type: 'override/open', value: row })}
               onCloseOverride={() => dispatch({ type: 'override/close' })}
+              onSetOverride={aigeek.setCatalogOverride}
             />
           </CollapsedSection>
         </Section>

@@ -245,10 +245,12 @@ router.get('/capabilities', async (req, res) => {
  * answer, and `requireAdminUser` refuses every API key outright — which would
  * put a glance card out of reach of any credential a backend can hold.
  *
- * Note that `ai:stats` is **not** in the default mint set, so this reuses an
- * existing permission's existing reach rather than granting anything: a key
- * that wants this document must be minted `ai:stats` by name, exactly as for
- * `/stats` today. Pinned in aiRoutesGates.test.js.
+ * `ai:stats` joined the default mint set on 2026-09-11 — a StartGeek glance
+ * card reads this document and needs no special mint. The reach of a
+ * default-minted key grew by the whole `ai:stats` family that day (this
+ * route, `/stats`, `/capabilities`, `/admin/stats`, `/routing`): all reads,
+ * all answering "what is the system doing" for a key that already belongs
+ * to an app.
  */
 router.get('/status', async (req, res) => {
   try {
@@ -1011,11 +1013,13 @@ router.get('/models/alive', async (req, res) => {
 
     const alive = [];
     for (const row of freeRows) {
+      // A human's `deny` removes the row outright; `allow` sets aside its
+      // cooling — the same two rules `selectFreeTierCandidates` applies, so
+      // the picker and the router cannot disagree about what is alive.
+      if (row.override === 'deny') continue;
       if (!configured(row.provider)) continue;
-      // The same health view selection uses, mirror included, so the picker
-      // and the router cannot disagree about what is alive.
       const health = aiService.getFreeTierHealth(row.provider, row.modelId, row.health);
-      if (isFreeTierCooling(health)) continue;
+      if (row.override !== 'allow' && isFreeTierCooling(health)) continue;
       alive.push({
         provider: row.provider,
         modelId: row.modelId,
