@@ -484,4 +484,5 @@ Before merging any UI work, at 390×844 in both modes:
 
 *Drafted 2026-09-04; M0 and M1 landed the same day. M3–M6 landed 2026-09-05 — the mobile harness
 is in the repo and CI-enforcing (`.github/workflows/mobile-harness.yml`, green since 14:54). The
-review checklist above (§6) is written; it is not yet wired into a PR template or CI comment.*
+review checklist above (§6) is wired into `.github/PULL_REQUEST_TEMPLATE.md` (2026-09-11) — the
+harness enforces the measurable half, the template asks for the judgment half on UI-touching PRs.*

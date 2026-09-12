@@ -124,11 +124,11 @@ triage the consolidation follow-ups; Q11 `Databases.jsx`; Q14 CanonCard.
 | M3 flockgeek | **Done** | Bottom tab bar, harvest FAB + sheet, four tables as cards with sort/filter sheets, eleven Ledger dialogs. |
 | M4 storygeek, basegeek | **Done** | storygeek: rails as sheets, flex play surface, Codex dialogs, Bookify full-screen. basegeek: console dialogs, responsive tables, scrollable tabs, dvh public pages. |
 | M5 startgeek | **Done** | First manifest/SW/offline page, safe areas, labelled dock, phone hero, 44px targets. |
-| M6 guardrails | Not started | Harness into the repo (fix the moved Playwright path first), review checklist in CI. |
+| M6 guardrails | **Done** | `tools/mobile-harness` in the repo, enforcing in `.github/workflows/mobile-harness.yml` (green since 09-05 14:54); axe-core WCAG 2 A/AA enforcing too. §6 review checklist wired into `.github/PULL_REQUEST_TEMPLATE.md` (2026-09-11). |
 
 Open follow-ups are in `MOBILE_UI_PLAN.md` §4b and the M3–M5 list under it (GeekAppFrame `fill`,
-GeekSheet close control, notegeek dev-server fault, basegeek `Databases.jsx` orphan, the moved
-Playwright path).
+GeekSheet close control, notegeek dev-server fault). The `Databases.jsx` orphan was deleted and
+the moved Playwright path was mooted by the harness move — both closed 2026-09-11.
 
 ### basegeek
 
@@ -182,14 +182,13 @@ Step 5 (command routing fallback) landed 2026-09-05 (`dfe7473`).
 
 ## How the work was verified
 
-A Playwright harness (scratch, not in repo) stubs every API call with fixtures and screenshots
-each app at iPhone 14 in dark and light, plus 1280×900. Every view commit names what was
-screenshotted. Unit suites: `pnpm test` in `packages/ui` (340) and `apps/basegeek/packages/api`
+A Playwright harness (`tools/mobile-harness`, in the repo and CI-enforcing) stubs every API call
+with fixtures and screenshots each app at iPhone 14 in dark and light, plus 1280×900. Every view
+commit names what was screenshotted. Unit suites: `pnpm test` in `packages/ui` (340) and `apps/basegeek/packages/api`
 (552), `npx vitest run` in `apps/notegeek/frontend` (141). Builds and lint pass in every touched
 app with no new warnings.
 
 ## Next
 
 1. Poke at every app on a phone; report what feels wrong.
-2. M6 guardrails (harness into the repo; fix the moved Playwright path first).
-3. `DOCS/TODO_ORDER.md` #17 shared date utilities, #21 fitnessgeek UserSettings consolidation.
+2. `DOCS/TODO_ORDER.md` #17 shared date utilities, #21 fitnessgeek UserSettings consolidation.

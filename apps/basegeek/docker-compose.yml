@@ -120,9 +120,10 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=8987
-      # CSRF double-submit: enforce (flipped 2026-09-06 after a clean report-only
-      # window — the only report lines were a stale pre-deploy startgeek tab).
-      # Set to "report" here to roll back without touching .env.production.
+      # CSRF double-submit, parked at report (Q18b). 2026-09-11: the caller was
+      # found — one pre-rollout mobile bundle (bujogeek + basegeek login,
+      # Sep 8 14:30, six lines, then nothing). The soak has been clean since;
+      # the flip to "enforce" + restart is Chef's call per DOCS/CONTEXT.md.
       - CSRF_TOKEN=report
     ports:
       - "8987:8987"

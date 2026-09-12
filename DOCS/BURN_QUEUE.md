@@ -49,6 +49,18 @@ recharts and chart.js gone; ZXing pinned with an SRI hash) · Q55 (TaskEditor pi
 Q56 (`c6776b9`) · Q62 (whole policy bundle; the flockgeek half went moot with Q22) ·
 Q68 (`wip/dashgeek-redesign-2026-04`, stash list empty) · Q69 (`b8a8ab4`).
 
+**Closed in the closeout sweep, 2026-09-11:** Q39 + Q48's code halves (the three
+caller-less methods — `checkGoalsMet`, `getProgress`, `getNutrition` — deleted from
+`@geeksuite/schemas` along with `evaluateGoalsMet`, `computeGoalProgress`,
+`sumMealNutrition` and both attachers; deletion tripwires in both parity suites; the
+sugar/sodium ceiling shape survives in git history. The `goals_met` dead-flags and
+snapshot-vs-catalog recompute were ratified as shipped behaviour — recomputing
+against the live catalog row is the design, not a bug) · Q65 (`TemplateApplier`
+unmounted and deleted with `TemplatePreview`, its test, `react-markdown` and the
+vite `markdown` chunk group — ~46 kB gz gone; the live path is `TemplateApply`) ·
+Q11 (`Databases.jsx` deleted — nothing imported it) · Q14 (CanonCard summary now
+renders through `Narration`, one markdown path for generated prose).
+
 **Q58 — closed by Chef's decision, 2026-09-07: no rotation.** The row had claimed the
 `datageek_admin` pair was in git-tracked, GitHub-public files. It was not: a full-history scan
 (every object via `git rev-list --all --objects` through `git cat-file --batch`, 7,847 blobs, all
@@ -65,14 +77,9 @@ evidence of an actual disclosure.
 
 | # | Item | Waiting on | Size |
 |---|------|------------|------|
-| Q18b | `CSRF_TOKEN=enforce`. Parked deliberately 09-07. The remaining report-only hits are no longer stale bundles: 5 in 24 h, all `POST /api/auth/refresh` from `axios/1.13.5` with cookie auth and no header — an app-proxied refresh whose browser caller never attached one. All six backend proxies do forward the header, so the gap is browser-side in one app's refresh path. Find that caller before flipping | Chef parked it | S |
-| Q39 | *(decision half)* keep or delete the three caller-less fitnessgeek instance methods `checkGoalsMet` / `getProgress` / `getNutrition`. The sugar/sodium ceiling-vs-floor fix landed (`7166e8b`) | Chef | XS |
+| Q18b | `CSRF_TOKEN=enforce`. **Caller found 09-11**: the report lines were one burst (Sep 8 14:30, six lines) from a single Android device running a pre-rollout bundle — `POST /graphql` on bujogeek + `POST /api/auth/login` on basegeek, cookies+bearer but no `X-CSRF-Token`; the `axios/1.13.5` refreshes were the proxies faithfully forwarding it. Every current caller sends the header; no code gap exists. Container logs are clean Sep 8→11. The flip (`CSRF_TOKEN=enforce` in compose + restart, procedure in CONTEXT.md) only needs Chef's go — a stale-bundle device will 403 once until reloaded, then `csrfHeal` covers it | Chef's go | S |
 | Q41 | *(decision half)* `foodRoutes.js` mints user-owned rows where the shared ladder would use global ones — a privacy-model call. The `search` / `foodCatalogFilter` reconciliation landed | design | S |
-| Q48 | *(decision half)* 11 of the 14 §12 follow-ups are fixed or ratified as out of scope. Three left, all product calls: the caller-less methods (= Q39), `goals_met` floor-vs-ceiling and its dead flags, snapshot-vs-catalog recompute | Chef triage | S |
-| Q65 | *(decision half)* bujogeek `TemplateApplier` is still mounted but unreachable, so the styled `TemplatePreview` never renders — a feature decision. The notegeek dead-folder half landed (`b25a000`) | Chef | XS |
-| Q11 | basegeek `Databases.jsx`: nothing imports it. Wire it into nav or delete it | Chef's call | XS |
 | Q13 | eyeball the bookgeek UI and confirm the covers render. The volume mount was fixed in `c54845e`; only Chef looking at it can close this — git cannot prove it either way | Chef eyeballs | XS |
-| Q14 | storygeek `CanonCard` summary text through `Narration` too (left as a separate render path) | Chef's call | XS |
 | Q20b | aiGeek: simulated streaming (F-21) and user-gated model selection (F-14) are documented in `apps/basegeek/DOCS/OPENAI_COMPAT_AUDIT.md`, not fixed | design | S |
 
 ## How to resume if this session is lost
