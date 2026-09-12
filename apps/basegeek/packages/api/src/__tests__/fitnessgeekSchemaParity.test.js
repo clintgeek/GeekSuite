@@ -1186,133 +1186,35 @@ describe('ownership guards stayed app-side (statics policy)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// NutritionGoals — the shared instance methods, behaviour not presence
+// NutritionGoals — the instance methods stay deleted (Q39)
 // ---------------------------------------------------------------------------
 
-describe('NutritionGoals goal arithmetic (shared instance methods)', () => {
-  const { evaluateGoalsMet, computeGoalProgress } = nutritionGoalsShared;
-
-  const GOALS = {
-    user_id: OWNER,
-    calories: 2000,
-    protein_grams: 150,
-    carbs_grams: 50,
-    fat_grams: 130,
-    fiber_grams: 25,
-    sugar_grams: 30,
-    sodium_mg: 2300,
-  };
-
-  test('both models carry both methods, from the same implementation', () => {
-    for (const name of ['checkGoalsMet', 'getProgress']) {
-      expect(typeof NutritionGoalsRest.schema.methods[name]).toBe('function');
-      expect(String(NutritionGoalsGraphQL.schema.methods[name])).toBe(
-        String(NutritionGoalsRest.schema.methods[name])
-      );
+describe('NutritionGoals goal arithmetic (deleted with Q39)', () => {
+  // `checkGoalsMet` and `getProgress` were caller-less on every side; the
+  // shared module dropped them, their `evaluateGoalsMet` /
+  // `computeGoalProgress` exports and the attacher on 2026-09-11. The ceiling
+  // semantics they shipped (sugar/sodium as limits) survives in git history.
+  // This block is the tripwire: the methods stay gone on both writers.
+  test('neither model carries the methods', () => {
+    // `timestamps` auto-adds `initializeTimestamps`; the assertion is that the
+    // two deleted names — and only mongoose's own — are what remains.
+    for (const methods of [
+      NutritionGoalsRest.schema.methods,
+      NutritionGoalsGraphQL.schema.methods,
+    ]) {
+      expect(Object.keys(methods)).toEqual(['initializeTimestamps']);
+      expect(methods.checkGoalsMet).toBeUndefined();
+      expect(methods.getProgress).toBeUndefined();
     }
-    expect(String(NutritionGoalsRest.schema.methods.checkGoalsMet)).toContain(
-      'evaluateGoalsMet'
-    );
-    expect(String(NutritionGoalsRest.schema.methods.getProgress)).toContain(
-      'computeGoalProgress'
-    );
-  });
-
-  test('sugar and sodium are ceilings while the other five are floors', () => {
-    // The one piece of real logic in `checkGoalsMet`, and it was a trailing
-    // comment on two lines in two files before it lived in one module.
-    const totals = {
-      calories: 2000,
-      protein_grams: 150,
-      carbs_grams: 50,
-      fat_grams: 130,
-      fiber_grams: 25,
-      sugar_grams: 30,
-      sodium_mg: 2300,
-    };
-    const onTheNose = evaluateGoalsMet(GOALS, totals);
-    expect(onTheNose).toEqual({
-      calories: true,
-      protein: true,
-      carbs: true,
-      fat: true,
-      fiber: true,
-      sugar: true,
-      sodium: true,
-    });
-
-    const overEverything = evaluateGoalsMet(GOALS, {
-      ...totals,
-      calories: 2500,
-      sugar_grams: 31,
-      sodium_mg: 2301,
-    });
-    expect(overEverything.calories).toBe(true); // more is better
-    expect(overEverything.sugar).toBe(false); // more is worse
-    expect(overEverything.sodium).toBe(false);
-  });
-
-  test('an unset goal reads as not-met and zero progress, not as met', () => {
-    const bare = { user_id: OWNER };
-    const totals = { calories: 9999, sugar_grams: 0 };
-    expect(evaluateGoalsMet(bare, totals).calories).toBe(false);
-    expect(evaluateGoalsMet(bare, totals).sugar).toBe(false);
-    expect(computeGoalProgress(bare, totals).calories).toBe(0);
-  });
-
-  test('progress is clamped at 100 and matches the model’s own method', () => {
-    const doc = new NutritionGoalsGraphQL(GOALS);
-    const totals = {
-      calories: 3000,
-      protein_grams: 75,
-      carbs_grams: 50,
-      fat_grams: 0,
-      fiber_grams: 25,
-      sugar_grams: 15,
-      sodium_mg: 1150,
-    };
-    const viaMethod = doc.getProgress(totals);
-    expect(viaMethod).toEqual(computeGoalProgress(GOALS, totals));
-    expect(viaMethod.calories).toBe(100); // clamped, not 150
-    expect(viaMethod.protein).toBe(50);
-    expect(viaMethod.fat).toBe(0);
-    // Sugar and sodium are floors HERE even though they are ceilings in
-    // checkGoalsMet. Shipped asymmetry, moved verbatim, asserted so nobody
-    // "fixes" one without the other.
-    expect(viaMethod.sugar).toBe(50);
-    expect(viaMethod.sodium).toBe(50);
-  });
-
-  test('and the REST model’s method agrees with the GraphQL one', () => {
-    const totals = { calories: 1000, protein_grams: 150, sugar_grams: 60, sodium_mg: 3000 };
-    expect(new NutritionGoalsRest(GOALS).checkGoalsMet(totals)).toEqual(
-      new NutritionGoalsGraphQL(GOALS).checkGoalsMet(totals)
-    );
   });
 });
 
 // ---------------------------------------------------------------------------
-// Meal — the sub-schema, the hook and the nutrition arithmetic
+// Meal — the sub-schema, the hook, and the deleted arithmetic
 // ---------------------------------------------------------------------------
 
-describe('Meal sub-schema, hook and getNutrition', () => {
-  const { sumMealNutrition, MEAL_TYPES } = mealShared;
-
-  const food = (over = {}) => ({
-    food_item_id: {
-      nutrition: {
-        calories_per_serving: 100,
-        protein_grams: 10,
-        carbs_grams: 5,
-        fat_grams: 4,
-        fiber_grams: 2,
-        sugar_grams: 1,
-        sodium_mg: 200,
-        ...over,
-      },
-    },
-    servings: 1,
-  });
+describe('Meal sub-schema, hook and deleted getNutrition', () => {
+  const { MEAL_TYPES } = mealShared;
 
   afterEach(async () => {
     await MealGraphQL.deleteMany({ user_id: OWNER });
@@ -1353,56 +1255,12 @@ describe('Meal sub-schema, hook and getNutrition', () => {
     expect(doc.updated_at.getFullYear()).toBeGreaterThan(2020);
   });
 
-  test('getNutrition multiplies by servings and rounds to the shipped precision', () => {
-    const items = [food(), { ...food(), servings: 2.5 }];
-    const totals = sumMealNutrition(items);
-    expect(totals).toEqual({
-      calories: 350,
-      protein_grams: 35,
-      carbs_grams: 17.5,
-      fat_grams: 14,
-      fiber_grams: 7,
-      sugar_grams: 3.5,
-      sodium_mg: 700,
-    });
-    // Grams to one decimal, calories and sodium to the unit.
-    expect(sumMealNutrition([{ ...food({ protein_grams: 3.33 }), servings: 1 }]).protein_grams)
-      .toBe(3.3);
-  });
-
-  test('an un-populated or nutrition-less item contributes nothing, not NaN', () => {
-    const zero = {
-      calories: 0,
-      protein_grams: 0,
-      carbs_grams: 0,
-      fat_grams: 0,
-      fiber_grams: 0,
-      sugar_grams: 0,
-      sodium_mg: 0,
-    };
-    expect(sumMealNutrition([{ food_item_id: new mongoose.Types.ObjectId(), servings: 3 }]))
-      .toEqual(zero);
-    expect(sumMealNutrition([{ food_item_id: {}, servings: 3 }])).toEqual(zero);
-    expect(sumMealNutrition([])).toEqual(zero);
-    expect(sumMealNutrition(undefined)).toEqual(zero);
-  });
-
-  test('both models’ method is the shared implementation and agrees with it', () => {
-    expect(String(MealGraphQL.schema.methods.getNutrition)).toBe(
-      String(MealRest.schema.methods.getNutrition)
-    );
-    expect(String(MealRest.schema.methods.getNutrition)).toContain('sumMealNutrition');
-
-    // Called against a stand-in `this` rather than a real document: assigning
-    // a populated food item to an ObjectId path by hand would hit mongoose's
-    // caster, and what is under test here is that the method body delegates.
-    for (const M of [MealRest, MealGraphQL]) {
-      const totals = M.schema.methods.getNutrition.call({
-        food_items: [{ ...food(), servings: 2 }],
-      });
-      expect(totals.calories).toBe(200);
-      expect(totals).toEqual(sumMealNutrition([{ ...food(), servings: 2 }]));
-    }
+  test('getNutrition stays deleted on both writers (Q39)', () => {
+    // Caller-less on every side; removed 2026-09-11 with `sumMealNutrition`
+    // and `attachMealMethods`. The summed-and-rounded arithmetic survives in
+    // git history if a totals surface ever wants it back.
+    expect(Object.keys(MealRest.schema.methods)).toEqual([]);
+    expect(Object.keys(MealGraphQL.schema.methods)).toEqual([]);
   });
 });
 

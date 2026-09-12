@@ -2,8 +2,8 @@ import mongoose from 'mongoose';
 import { getAppConnection } from '../../shared/appConnections.js';
 import { requireUser, isValidObjectId } from '../ownership.js';
 
-// The field set, the embedded meal-item sub-schema, the `pre('save')`
-// `updated_at` stamp and the `getNutrition` instance method live in
+// The field set, the embedded meal-item sub-schema and the `pre('save')`
+// `updated_at` stamp live in
 // @geeksuite/schemas so that this model and fitnessgeek's REST copy
 // (apps/fitnessgeek/backend/src/models/Meal.js) cannot drift. Both point at
 // the `meals` collection in the same database — this gateway through its

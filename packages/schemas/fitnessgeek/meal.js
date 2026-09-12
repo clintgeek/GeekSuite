@@ -45,8 +45,11 @@
  *   - the embedded `mealItemSchema` (`food_items`), built from the caller's
  *     own mongoose so the sub-schema passes that instance's `instanceof`
  *   - the `pre('save')` hook that stamps `updated_at`
- *   - the instance method `getNutrition`, whose arithmetic is also exported as
- *     `sumMealNutrition(foodItems)` so it can be asserted without a database
+ *
+ * The instance method `getNutrition` moved too — and was later deleted (Q39,
+ * 2026-09-11): caller-less on every side, along with its `sumMealNutrition`
+ * export and `attachMealMethods`. The summed-and-rounded arithmetic survives
+ * in git history if a totals surface ever wants it back.
  *
  * Did NOT move — and this is the pair where leaving them alone is the *only*
  * safe answer, not merely the tidy one. The four statics do not agree about
@@ -189,61 +192,6 @@ function mealDefinition(mongoose) {
 // has the same three-part shape (definition, options, factory).
 const mealOptions = {};
 
-/** The zero totals a meal accumulates into, in the shipped key order. */
-const emptyMealNutrition = () => ({
-  calories: 0,
-  protein_grams: 0,
-  carbs_grams: 0,
-  fat_grams: 0,
-  fiber_grams: 0,
-  sugar_grams: 0,
-  sodium_mg: 0
-});
-
-/**
- * Sum a meal's nutrition from its **populated** items.
- *
- * Lifted verbatim out of `getNutrition` so it can be asserted without a
- * database, the same way `loginStreak.js` exports `applyLoginToStreak`.
- *
- * An item whose `food_item_id` is an un-populated ObjectId — or a populated
- * document with no `nutrition` block — contributes nothing rather than
- * throwing or poisoning the totals with `NaN`. Callers that forget to
- * `.populate()` therefore get zeros, quietly; that is shipped behaviour on
- * both sides.
- *
- * @param {Array<{food_item_id: any, servings: number}>} foodItems
- * @returns {Object} calories rounded to the unit, grams to one decimal,
- *   sodium to the unit — the shipped precision.
- */
-function sumMealNutrition(foodItems) {
-  const totals = emptyMealNutrition();
-
-  (foodItems || []).forEach(item => {
-    if (item.food_item_id && item.food_item_id.nutrition) {
-      const multiplier = item.servings || 1;
-      totals.calories += item.food_item_id.nutrition.calories_per_serving * multiplier;
-      totals.protein_grams += item.food_item_id.nutrition.protein_grams * multiplier;
-      totals.carbs_grams += item.food_item_id.nutrition.carbs_grams * multiplier;
-      totals.fat_grams += item.food_item_id.nutrition.fat_grams * multiplier;
-      totals.fiber_grams += item.food_item_id.nutrition.fiber_grams * multiplier;
-      totals.sugar_grams += item.food_item_id.nutrition.sugar_grams * multiplier;
-      totals.sodium_mg += item.food_item_id.nutrition.sodium_mg * multiplier;
-    }
-  });
-
-  // Round to reasonable precision
-  return {
-    calories: Math.round(totals.calories),
-    protein_grams: Math.round(totals.protein_grams * 10) / 10,
-    carbs_grams: Math.round(totals.carbs_grams * 10) / 10,
-    fat_grams: Math.round(totals.fat_grams * 10) / 10,
-    fiber_grams: Math.round(totals.fiber_grams * 10) / 10,
-    sugar_grams: Math.round(totals.sugar_grams * 10) / 10,
-    sodium_mg: Math.round(totals.sodium_mg)
-  };
-}
-
 /**
  * Attach the `updated_at` stamp. It is the only hook either side declares on
  * this schema and it is identical on both, so it belongs with the fields:
@@ -261,20 +209,7 @@ function attachMealTimestamps(schema) {
 }
 
 /**
- * Attach the shared instance methods. Split out so a consumer that builds the
- * schema by hand (a migration script, say) can still get them.
- *
- * @param {import('mongoose').Schema} schema
- */
-function attachMealMethods(schema) {
-  // Calculate total nutrition for the meal
-  schema.methods.getNutrition = function getNutrition() {
-    return sumMealNutrition(this.food_items);
-  };
-}
-
-/**
- * Build a fresh `Meal` schema — sub-schema, hook and instance method included.
+ * Build a fresh `Meal` schema — sub-schema and hook included.
  *
  * The only index is the path-level `index: true` on `user_id`; there is no
  * `schema.index()` call on either side.
@@ -289,16 +224,13 @@ function createMealSchema(mongoose) {
   const schema = new mongoose.Schema(mealDefinition(mongoose), mealOptions);
 
   attachMealTimestamps(schema);
-  attachMealMethods(schema);
 
   return schema;
 }
 
 module.exports = {
   MEAL_TYPES,
-  sumMealNutrition,
   attachMealTimestamps,
-  attachMealMethods,
   mealItemDefinition,
   createMealItemSchema,
   mealDefinition,

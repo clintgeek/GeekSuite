@@ -1,8 +1,7 @@
 import mongoose from 'mongoose';
 import { createNutritionGoalsSchema } from '@geeksuite/schemas/fitnessgeek/nutritionGoals';
 
-// The field set, the compound index and both instance methods
-// (`checkGoalsMet`, `getProgress`) live in @geeksuite/schemas so that this
+// The field set and the compound index live in @geeksuite/schemas so that this
 // model and basegeek's GraphQL copy
 // (apps/basegeek/packages/api/src/graphql/fitnessgeek/models/NutritionGoals.js)
 // cannot drift. Both point at the `nutritiongoals` collection in the same

@@ -231,7 +231,7 @@ const foodLogOptions = {
 /**
  * Scale one log's nutrition by its servings — the arithmetic behind the
  * `calculatedNutrition` virtual, lifted out so it can be asserted without a
- * database (the `applyLoginToStreak` / `sumMealNutrition` pattern).
+ * database (the `applyLoginToStreak` pattern).
  *
  * Three behaviours here are shipped, identical on both sides, and easy to
  * misread as bugs:

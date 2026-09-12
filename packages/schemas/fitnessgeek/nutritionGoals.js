@@ -48,29 +48,20 @@
  *
  * WHAT MOVED, AND WHAT DIDN'T
  * ---------------------------
- * The two *instance methods*, `checkGoalsMet` and `getProgress`, moved. They
- * are byte-identical on both sides and they read seven declared paths each, so
- * a divergence would not throw — it would quietly report a different answer to
- * each caller about whether a user hit their macros. Both are caller-less
- * today; they were promoted rather than deleted so the shared definition stays
- * byte-equivalent to what is deployed, which is what the rollback claim rests
- * on. Deleting them is a separate, deliberate ticket.
+ * The two *instance methods*, `checkGoalsMet` and `getProgress`, moved — and
+ * were later deleted (Q39, 2026-09-11): both were caller-less on every side,
+ * so the shared module kept them only as a rollback nicety. Their backing
+ * exports (`evaluateGoalsMet`, `computeGoalProgress`,
+ * `attachNutritionGoalsMethods`) went with them. The shipped ceiling
+ * semantics — sugar and sodium read as limits, not targets — is preserved in
+ * git history and in this note; reintroducing the arithmetic should re-use
+ * that shape rather than re-derive it.
  *
  * The three *statics* — `getActiveGoals`, `createGoals`, `updateGoals` — did
  * NOT move. basegeek's copies open with `requireUser(userId)` (fail-closed
  * ownership) and fitnessgeek's do not, because every fitnessgeek caller is
  * already past auth. Statics do not affect `schema.paths`, so the two writers
  * are free to disagree and neither is blocked on the other.
- *
- * WHY THE ARITHMETIC IS EXPORTED
- * ------------------------------
- * `evaluateGoalsMet` and `computeGoalProgress` are the method bodies with
- * `this` taken out: they take the goal document (or any object carrying the
- * same seven paths) as their first argument, so fitnessgeek's hermetic suite —
- * no Mongo, no Redis, no network — can assert the sugar/sodium ceiling
- * behaviour and the 100 % clamp directly. Same reason `loginStreak.js` exports
- * `applyLoginToStreak` and `bloodPressure.js` exports `classifyBloodPressure`:
- * a behaviour assertion needs something to call.
  *
  * WHY `mongoose` IS A PARAMETER, AND WHY THIS MODULE IS CJS
  * --------------------------------------------------------
@@ -158,85 +149,7 @@ const nutritionGoalsOptions = {
 };
 
 /**
- * Did the day's totals meet each goal?
- *
- * An unset (or zero) goal reads as `false` for that macro rather than
- * `true` — the shipped behaviour of `this.calories ? … : false` on both sides.
- * Do not "fix" that into a null check without a ticket: the dashboards read
- * these booleans.
- *
- * @param {Object} goals - a `NutritionGoals` document, or any object carrying
- *   the same seven target paths.
- * @param {Object} actualTotals - the day's totals, keyed as the schema is
- *   (`calories`, `protein_grams`, …).
- * @returns {Object} one boolean per macro, keyed short (`protein`, not
- *   `protein_grams`) — the shipped key set, which is on the wire.
- */
-function evaluateGoalsMet(goals, actualTotals) {
-  return {
-    calories: goals.calories ? actualTotals.calories >= goals.calories : false,
-    protein: goals.protein_grams ? actualTotals.protein_grams >= goals.protein_grams : false,
-    carbs: goals.carbs_grams ? actualTotals.carbs_grams >= goals.carbs_grams : false,
-    fat: goals.fat_grams ? actualTotals.fat_grams >= goals.fat_grams : false,
-    fiber: goals.fiber_grams ? actualTotals.fiber_grams >= goals.fiber_grams : false,
-    sugar: goals.sugar_grams ? actualTotals.sugar_grams <= goals.sugar_grams : false, // Sugar is a limit
-    sodium: goals.sodium_mg ? actualTotals.sodium_mg <= goals.sodium_mg : false // Sodium is a limit
-  };
-}
-
-/**
- * Progress towards each goal, as a percentage clamped at 100.
- *
- * Q39 (2026-09-06): sugar and sodium are now ceilings here too, matching
- * `evaluateGoalsMet` — they used to be treated as targets like the other five
- * (consumed ÷ goal), so hitting the limit exactly read as "100% progress" and
- * a day well under it read as "low progress," backwards for a number you are
- * trying to stay *under*. For these two, "progress" is compliance headroom:
- * 100 with nothing eaten, falling toward 0 as the limit is approached, and
- * never negative once it's blown past. The five floor macros are unchanged.
- *
- * An unset (or zero) goal reads as `0`.
- *
- * @param {Object} goals - as above.
- * @param {Object} actualTotals - as above.
- * @returns {Object} one number per macro, same short keys.
- */
-function computeGoalProgress(goals, actualTotals) {
-  return {
-    calories: goals.calories ? Math.min((actualTotals.calories / goals.calories) * 100, 100) : 0,
-    protein: goals.protein_grams ? Math.min((actualTotals.protein_grams / goals.protein_grams) * 100, 100) : 0,
-    carbs: goals.carbs_grams ? Math.min((actualTotals.carbs_grams / goals.carbs_grams) * 100, 100) : 0,
-    fat: goals.fat_grams ? Math.min((actualTotals.fat_grams / goals.fat_grams) * 100, 100) : 0,
-    fiber: goals.fiber_grams ? Math.min((actualTotals.fiber_grams / goals.fiber_grams) * 100, 100) : 0,
-    sugar: goals.sugar_grams
-      ? Math.max(0, Math.min(100, 100 - (actualTotals.sugar_grams / goals.sugar_grams) * 100))
-      : 0,
-    sodium: goals.sodium_mg
-      ? Math.max(0, Math.min(100, 100 - (actualTotals.sodium_mg / goals.sodium_mg) * 100))
-      : 0
-  };
-}
-
-/**
- * Attach the shared instance methods. Split out so a consumer that builds the
- * schema by hand (a migration script, say) can still get them.
- *
- * @param {import('mongoose').Schema} schema
- */
-function attachNutritionGoalsMethods(schema) {
-  // Method to check if goals are met
-  schema.methods.checkGoalsMet = function checkGoalsMet(actualTotals) {
-    return evaluateGoalsMet(this, actualTotals);
-  };
-
-  // Method to get progress percentages
-  schema.methods.getProgress = function getProgress(actualTotals) {
-    return computeGoalProgress(this, actualTotals);
-  };
-}
-
-/**
- * Build a fresh `NutritionGoals` schema — index and instance methods included.
+ * Build a fresh `NutritionGoals` schema — index included.
  * The index is part of the contract: an index divergence means one process
  * creating an index the other's queries depend on.
  *
@@ -254,15 +167,10 @@ function createNutritionGoalsSchema(mongoose) {
   // Compound index for user and active status
   schema.index({ user_id: 1, is_active: 1 });
 
-  attachNutritionGoalsMethods(schema);
-
   return schema;
 }
 
 module.exports = {
-  evaluateGoalsMet,
-  computeGoalProgress,
-  attachNutritionGoalsMethods,
   nutritionGoalsDefinition,
   nutritionGoalsOptions,
   createNutritionGoalsSchema,

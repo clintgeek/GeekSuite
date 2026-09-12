@@ -57,15 +57,10 @@ import {
   applyLoginToStreak,
 } from '@geeksuite/schemas/fitnessgeek/loginStreak';
 import { createWeightGoalsSchema } from '@geeksuite/schemas/fitnessgeek/weightGoals';
-import {
-  createNutritionGoalsSchema,
-  evaluateGoalsMet,
-  computeGoalProgress,
-} from '@geeksuite/schemas/fitnessgeek/nutritionGoals';
+import { createNutritionGoalsSchema } from '@geeksuite/schemas/fitnessgeek/nutritionGoals';
 import {
   createMealSchema,
   createMealItemSchema,
-  sumMealNutrition,
   MEAL_TYPES,
 } from '@geeksuite/schemas/fitnessgeek/meal';
 import {
@@ -267,7 +262,9 @@ const PAIRS = [
     ],
     expectedVirtuals: [],
     serializesVirtuals: false,
-    expectedMethods: ['checkGoalsMet', 'getProgress'],
+    // `checkGoalsMet`/`getProgress` were deleted with Q39 (2026-09-11) —
+    // caller-less on every side. The schema now declares no methods.
+    expectedMethods: [],
     expectedStatics: ['getActiveGoals', 'createGoals', 'updateGoals'],
   },
   {
@@ -291,7 +288,8 @@ const PAIRS = [
     ],
     expectedVirtuals: [],
     serializesVirtuals: false,
-    expectedMethods: ['getNutrition'],
+    // `getNutrition` was deleted with Q39 (2026-09-11) — caller-less.
+    expectedMethods: [],
     // `findOwned` is basegeek-only. These three are this side's, and they
     // scope only `if (userId)` — divergence C4. Left alone deliberately.
     expectedStatics: ['getActiveMeals', 'getMealsByType', 'searchMeals'],
@@ -792,122 +790,27 @@ describe("the deliberate statics divergence is still deliberate", () => {
   });
 });
 
-describe('the NutritionGoals goal arithmetic', () => {
-  // `checkGoalsMet` and `getProgress` are instance methods on a document, so
-  // the shared module exports the same arithmetic as `evaluateGoalsMet(goals,
-  // totals)` and `computeGoalProgress(goals, totals)` — which is what lets
-  // this hermetic suite (no Mongo) assert the branches at all.
-  const GOALS = {
-    calories: 2000,
-    protein_grams: 150,
-    carbs_grams: 50,
-    fat_grams: 130,
-    fiber_grams: 25,
-    sugar_grams: 30,
-    sodium_mg: 2300,
-  };
-  const HIT = {
-    calories: 2000,
-    protein_grams: 150,
-    carbs_grams: 50,
-    fat_grams: 130,
-    fiber_grams: 25,
-    sugar_grams: 30,
-    sodium_mg: 2300,
-  };
-
-  test('the five macro targets are floors: at or over the goal is met', () => {
-    const met = evaluateGoalsMet(GOALS, { ...HIT, calories: 2400, protein_grams: 200 });
-    expect(met.calories).toBe(true);
-    expect(met.protein).toBe(true);
-    const short = evaluateGoalsMet(GOALS, { ...HIT, calories: 1999, protein_grams: 149 });
-    expect(short.calories).toBe(false);
-    expect(short.protein).toBe(false);
-  });
-
-  test('sugar and sodium are ceilings: over the goal is NOT met', () => {
-    // The one asymmetry in the function, and it was a trailing comment on two
-    // lines in two files before it lived in one module.
-    expect(evaluateGoalsMet(GOALS, HIT).sugar).toBe(true);
-    expect(evaluateGoalsMet(GOALS, HIT).sodium).toBe(true);
-    expect(evaluateGoalsMet(GOALS, { ...HIT, sugar_grams: 31 }).sugar).toBe(false);
-    expect(evaluateGoalsMet(GOALS, { ...HIT, sodium_mg: 2301 }).sodium).toBe(false);
-  });
-
-  test('an unset or zero goal reads as not-met, not as trivially met', () => {
-    expect(evaluateGoalsMet({}, HIT)).toEqual({
-      calories: false,
-      protein: false,
-      carbs: false,
-      fat: false,
-      fiber: false,
-      sugar: false,
-      sodium: false,
-    });
-    expect(evaluateGoalsMet({ ...GOALS, sugar_grams: 0 }, { ...HIT, sugar_grams: 0 }).sugar)
-      .toBe(false);
-  });
-
-  test('progress is a percentage clamped at 100, and 0 for an unset goal', () => {
-    const p = computeGoalProgress(GOALS, { ...HIT, calories: 4000, protein_grams: 75 });
-    expect(p.calories).toBe(100);
-    expect(p.protein).toBe(50);
-    expect(computeGoalProgress({}, HIT).calories).toBe(0);
-  });
-
-  test('progress treats sugar and sodium as ceilings, same as checkGoalsMet (Q39, fixed 2026-09-06)', () => {
-    // Used to disagree: progress read consumed/goal like the five floor
-    // macros, so hitting the limit exactly showed "100% progress" and eating
-    // nothing showed "0%" — backwards for a number you want to stay under.
-    // Now progress is compliance headroom: 100 with nothing eaten, falling to
-    // 0 right at the limit, never negative past it.
-    expect(computeGoalProgress(GOALS, { ...HIT, sugar_grams: 0, sodium_mg: 0 }).sugar).toBe(100);
-    expect(computeGoalProgress(GOALS, { ...HIT, sugar_grams: 0, sodium_mg: 0 }).sodium).toBe(100);
-    expect(computeGoalProgress(GOALS, HIT).sugar).toBe(0); // at the limit exactly
-    expect(computeGoalProgress(GOALS, HIT).sodium).toBe(0);
-    expect(computeGoalProgress(GOALS, { ...HIT, sugar_grams: 60, sodium_mg: 4600 }).sugar).toBe(0); // over the limit, clamped not negative
-    expect(computeGoalProgress(GOALS, { ...HIT, sugar_grams: 60, sodium_mg: 4600 }).sodium).toBe(0);
-    const halfway = computeGoalProgress(GOALS, { ...HIT, sugar_grams: 15, sodium_mg: 1150 });
-    expect(halfway.sugar).toBe(50);
-    expect(halfway.sodium).toBe(50);
-    expect(evaluateGoalsMet(GOALS, { ...HIT, sugar_grams: 15, sodium_mg: 1150 }).sugar).toBe(true);
-  });
-
-  test('the real model carries both methods and they are the shared implementation', () => {
-    const doc = new NutritionGoals({ user_id: 'u1', ...GOALS });
-    expect(typeof doc.checkGoalsMet).toBe('function');
-    expect(typeof doc.getProgress).toBe('function');
-    expect(doc.checkGoalsMet(HIT)).toEqual(evaluateGoalsMet(GOALS, HIT));
-    expect(doc.getProgress(HIT)).toEqual(computeGoalProgress(GOALS, HIT));
+describe('the deleted NutritionGoals goal arithmetic (Q39)', () => {
+  // `checkGoalsMet` and `getProgress` were caller-less on every side; the
+  // shared module dropped them, their `evaluateGoalsMet` /
+  // `computeGoalProgress` exports and the attacher on 2026-09-11. The ceiling
+  // semantics they shipped (sugar/sodium as limits) survives in git history.
+  // This block is the tripwire: the methods stay gone.
+  test('the shared factory builds a schema with no goal methods', () => {
+    // `timestamps` auto-adds `initializeTimestamps`; the assertion is that the
+    // two deleted names — and only mongoose's own — are what remains.
+    for (const methods of [
+      createNutritionGoalsSchema(mongoose).methods,
+      NutritionGoals.schema.methods,
+    ]) {
+      expect(Object.keys(methods)).toEqual(['initializeTimestamps']);
+      expect(methods.checkGoalsMet).toBeUndefined();
+      expect(methods.getProgress).toBeUndefined();
+    }
   });
 });
 
-describe('the Meal sub-schema, enum and nutrition arithmetic', () => {
-  const food = (over = {}) => ({
-    food_item_id: {
-      nutrition: {
-        calories_per_serving: 100,
-        protein_grams: 10,
-        carbs_grams: 5,
-        fat_grams: 4,
-        fiber_grams: 2,
-        sugar_grams: 1,
-        sodium_mg: 200,
-        ...over,
-      },
-    },
-    servings: 1,
-  });
-  const ZERO = {
-    calories: 0,
-    protein_grams: 0,
-    carbs_grams: 0,
-    fat_grams: 0,
-    fiber_grams: 0,
-    sugar_grams: 0,
-    sodium_mg: 0,
-  };
-
+describe('the Meal sub-schema, enum and updated_at hook', () => {
   test('food_items embeds the shared sub-schema, ref and servings default intact', () => {
     const sub = Meal.schema.paths.food_items.schema;
     expect(Object.keys(sub.paths).sort()).toEqual(['_id', 'food_item_id', 'servings']);
@@ -946,42 +849,12 @@ describe('the Meal sub-schema, enum and nutrition arithmetic', () => {
     expect(code).not.toContain("pre('save'");
   });
 
-  test('getNutrition multiplies by servings and rounds to the shipped precision', () => {
-    expect(sumMealNutrition([food(), { ...food(), servings: 2.5 }])).toEqual({
-      calories: 350,
-      protein_grams: 35,
-      carbs_grams: 17.5,
-      fat_grams: 14,
-      fiber_grams: 7,
-      sugar_grams: 3.5,
-      sodium_mg: 700,
-    });
-    // Grams round to one decimal; calories and sodium to the unit.
-    expect(sumMealNutrition([food({ protein_grams: 3.33 })]).protein_grams).toBe(3.3);
-    expect(sumMealNutrition([food({ calories_per_serving: 100.6 })]).calories).toBe(101);
-  });
-
-  test('a missing servings count means one serving, not zero', () => {
-    expect(sumMealNutrition([{ food_item_id: food().food_item_id }]).calories).toBe(100);
-  });
-
-  test('an un-populated item contributes nothing rather than NaN', () => {
-    // The realistic failure: a caller that forgot to `.populate()`. Both sides
-    // return zeros quietly; that is shipped behaviour, asserted so it stays
-    // deliberate.
-    expect(sumMealNutrition([{ food_item_id: new mongoose.Types.ObjectId(), servings: 3 }]))
-      .toEqual(ZERO);
-    expect(sumMealNutrition([{ food_item_id: {}, servings: 3 }])).toEqual(ZERO);
-    expect(sumMealNutrition([])).toEqual(ZERO);
-    expect(sumMealNutrition(undefined)).toEqual(ZERO);
-  });
-
-  test('the real model carries getNutrition and it is the shared implementation', () => {
-    const items = [{ ...food(), servings: 2 }];
-    expect(Meal.schema.methods.getNutrition.call({ food_items: items })).toEqual(
-      sumMealNutrition(items)
-    );
-    expect(String(Meal.schema.methods.getNutrition)).toContain('sumMealNutrition');
+  test('getNutrition stays deleted (Q39)', () => {
+    // Caller-less on every side; removed 2026-09-11 with `sumMealNutrition`
+    // and `attachMealMethods`. The summed-and-rounded arithmetic survives in
+    // git history if a totals surface ever wants it back.
+    expect(Object.keys(createMealSchema(mongoose).methods)).toEqual([]);
+    expect(Object.keys(Meal.schema.methods)).toEqual([]);
   });
 });
 

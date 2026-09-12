@@ -1,8 +1,8 @@
 import mongoose from 'mongoose';
 import { createMealSchema } from '@geeksuite/schemas/fitnessgeek/meal';
 
-// The field set, the embedded meal-item sub-schema, the `pre('save')`
-// `updated_at` stamp and the `getNutrition` instance method live in
+// The field set, the embedded meal-item sub-schema and the `pre('save')`
+// `updated_at` stamp live in
 // @geeksuite/schemas so that this model and basegeek's GraphQL copy
 // (apps/basegeek/packages/api/src/graphql/fitnessgeek/models/Meal.js) cannot
 // drift. Both point at the `meals` collection in the same database — this side

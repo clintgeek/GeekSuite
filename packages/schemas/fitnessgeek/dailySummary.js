@@ -229,7 +229,7 @@ function emptyMealBreakdown() {
  * Recompute a day's `totals` and per-meal `meals` blocks from its food logs.
  *
  * This is the arithmetic both writers must agree on, lifted out so it can be
- * asserted without a database (the `applyLoginToStreak` / `sumMealNutrition` /
+ * asserted without a database (the `applyLoginToStreak` /
  * `foodItemDedupeFilters` pattern).
  *
  * Behaviours that are shipped and deliberate, on both sides:
@@ -300,13 +300,14 @@ function summarizeFoodLogs(logs) {
  * Two shipped behaviours worth naming, because both look like bugs and neither
  * was changed here:
  *
- *   - **An unset or zero goal reads as NOT met**, never as trivially met. Same
- *     `goal ? … : false` shape `NutritionGoals.checkGoalsMet` uses.
+ *   - **An unset or zero goal reads as NOT met**, never as trivially met —
+ *     the `goal ? … : false` shape.
  *   - **Every one of the four is a floor** (`actual >= goal`), including
  *     `carbs` and `fat`. A keto user under their carb ceiling therefore reads
- *     as *not meeting* the carb goal. `NutritionGoals.checkGoalsMet` disagrees
- *     with itself about ceilings in the same way (plan §10). It is a product
- *     question, not a refactor.
+ *     as *not meeting* the carb goal. Whether `carbs`/`fat` should be ceilings
+ *     is a product question, not a refactor — the deleted
+ *     `NutritionGoals.checkGoalsMet` made the opposite call for sugar/sodium
+ *     (Q39, removed 2026-09-11; its ceiling shape survives in git history).
  *
  * @param {Object} totals - the output of `summarizeFoodLogs`.
  * @param {Object|null} goals - `UserSettings.nutrition_goal`, or null.

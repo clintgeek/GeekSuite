@@ -88,7 +88,7 @@
  * app keeps a one-line static that delegates to it. The pure halves —
  * `foodItemDedupeFilters` and `newFoodItemAttrs` — are exported by name so a
  * hermetic suite with no database can assert the ladder and the defaults,
- * exactly as `applyLoginToStreak` and `sumMealNutrition` are.
+ * exactly as `applyLoginToStreak` is.
  *
  * Did NOT move — every static that expresses *who may see what*:
  *

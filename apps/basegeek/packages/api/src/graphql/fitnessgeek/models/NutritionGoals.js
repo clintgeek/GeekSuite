@@ -2,8 +2,7 @@ import mongoose from 'mongoose';
 import { getAppConnection } from '../../shared/appConnections.js';
 import { requireUser } from '../ownership.js';
 
-// The field set, the compound index and both instance methods
-// (`checkGoalsMet`, `getProgress`) live in @geeksuite/schemas so that this
+// The field set and the compound index live in @geeksuite/schemas so that this
 // model and fitnessgeek's REST copy
 // (apps/fitnessgeek/backend/src/models/NutritionGoals.js) cannot drift. Both
 // point at the `nutritiongoals` collection in the same database — this gateway
