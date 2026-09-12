@@ -60,8 +60,9 @@ const VENDOR_GROUPS = [
   // fitnessgeek's `mui` group is load-bearing for the opposite reason: without a
   // MUI chunk boundary rollup hoisted its chart vendors (nivo, recharts) into
   // the entry's graph. bujogeek has no chart library, and the first-load list
-  // confirms `markdown` and the pickers stay async without one. **If a heavy
-  // route-only vendor is ever added here, re-measure before trusting this.**
+  // confirms the pickers stay async without one (react-markdown left with the
+  // Q65 TemplateApplier delete). **If a heavy route-only vendor is ever added
+  // here, re-measure before trusting this.**
   //
   // The trade: app code changes every deploy, so the 449 kB entry (gz 139) is
   // re-fetched every deploy, ~284 kB of it MUI that did not change. The explicit
@@ -85,12 +86,6 @@ const VENDOR_GROUPS = [
   // but naming it still stops rollup welding all 47 kB into whichever route
   // chunk happened to reach it first.
   ['date-fns', /^date-fns\//],
-  // react-markdown's whole unified/remark/micromark/mdast/hast tail. Reached
-  // only through the `React.lazy` TemplatePreview island in
-  // components/templates/TemplateApplier.jsx, so this chunk is fetched when a
-  // template preview actually renders — never on load. Confirm after any change
-  // that it is absent from dist/index.html's modulepreload list.
-  ['markdown', /^(react-markdown|remark-[a-z-]+|micromark[a-z0-9-]*|mdast-util-[a-z-]+|hast-util-[a-z-]+|unified|unist-util-[a-z-]+|vfile[a-z-]*|property-information|space-separated-tokens|comma-separated-tokens|html-url-attributes|character-entities[a-z-]*|decode-named-character-reference|estree-util-is-identifier-name|markdown-table|longest-streak|zwitch|ccount|trim-lines|devlop|bail|trough|is-plain-obj|extend|style-to-js|style-to-object|inline-style-parser)\//],
 ]
 
 function manualChunks(id) {

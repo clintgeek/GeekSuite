@@ -68,9 +68,7 @@ function CanonCard({ canon, gold, theme }) {
         </Typography>
 
         {canon.summary && (
-          <Typography variant="body2" sx={{ mb: 1.5, lineHeight: 1.7, fontSize: '0.9rem' }}>
-            {canon.summary}
-          </Typography>
+          <Narration content={canon.summary} sx={{ mb: 1.5, '& p': { fontSize: '0.9rem', lineHeight: 1.7 } }} />
         )}
 
         {canon.entities?.length > 0 && (

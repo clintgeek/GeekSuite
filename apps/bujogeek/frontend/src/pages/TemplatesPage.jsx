@@ -1,6 +1,5 @@
 import { Box, Typography, useTheme } from '@mui/material';
 import TemplateList from '../components/templates/TemplateList';
-import TemplateApplier from '../components/templates/TemplateApplier';
 import TemplateFilters from '../components/templates/TemplateFilters';
 import { TemplateProvider } from '../context/TemplateContext';
 import useGlobalShortcuts from '../hooks/useGlobalShortcuts';
@@ -9,7 +8,7 @@ import useGlobalShortcuts from '../hooks/useGlobalShortcuts';
  * TemplatesPage — repeatable routines for daily/weekly/monthly planning.
  *
  * Editorial masthead matching the Plan and Review pages, wrapping the
- * existing template components (TemplateList, TemplateFilters, TemplateApplier)
+ * existing template components (TemplateList, TemplateFilters)
  * which retain their own internal state via TemplateContext.
  */
 const TemplatesPage = () => {
@@ -18,10 +17,6 @@ const TemplatesPage = () => {
 
   const captionInk = theme.palette.text.muted;
   const primaryInk = theme.palette.text.primary;
-
-  const handleTemplateApplied = () => {
-    // TemplateApplier surfaces its own success/failure feedback.
-  };
 
   return (
     <TemplateProvider>
@@ -83,9 +78,6 @@ const TemplatesPage = () => {
 
         {/* ─── Template list ──────────────────────────────────── */}
         <TemplateList />
-
-        {/* ─── Applier (modal-based) ──────────────────────────── */}
-        <TemplateApplier onTemplateApplied={handleTemplateApplied} />
       </Box>
     </TemplateProvider>
   );
