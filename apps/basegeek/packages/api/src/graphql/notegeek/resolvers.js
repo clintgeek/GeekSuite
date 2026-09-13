@@ -8,10 +8,12 @@ import {
   renameTagArgsSchema,
   deleteTagArgsSchema,
   suggestForNoteArgsSchema,
+  tidyMarkdownArgsSchema,
   assertContentCeiling,
 } from './validation.js';
 import { sanitizeNoteArgs } from './sanitize.js';
 import { suggestForNote } from './suggest.js';
+import { tidyMarkdown } from './tidy.js';
 
 const validateCreateNote = validateInput(createNoteArgsSchema);
 const validateUpdateNote = validateInput(updateNoteArgsSchema);
@@ -19,6 +21,7 @@ const validateDeleteNote = validateInput(deleteNoteArgsSchema);
 const validateRenameTag = validateInput(renameTagArgsSchema);
 const validateDeleteTag = validateInput(deleteTagArgsSchema);
 const validateSuggestForNote = validateInput(suggestForNoteArgsSchema);
+const validateTidyMarkdown = validateInput(tidyMarkdownArgsSchema);
 
 /** How many search hits one `searchNotes` call may return. */
 const SEARCH_RESULT_LIMIT = 100;
@@ -249,6 +252,12 @@ export const resolvers = {
       const note = await Note.findOneAndDelete({ _id: id, userId });
       if (!note) throw new Error('Note not found or you do not have permission to delete it');
       return true;
+    },
+    tidyMarkdown: async (_, rawArgs, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const { content } = validateTidyMarkdown(rawArgs);
+      return await tidyMarkdown({ content, userId });
     },
 
     renameTag: async (_, rawArgs, context) => {

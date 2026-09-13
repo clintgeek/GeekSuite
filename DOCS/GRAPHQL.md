@@ -122,9 +122,10 @@ these used to assert.
 | `deleteNote(id!)` | `Boolean!` |
 | `renameTag(oldTag!, newTag!)` | `Boolean!` |
 | `deleteTag(tag!)` | `Boolean!` |
+| `tidyMarkdown(content: String!)` | `TidyMarkdownResult!` — clean, structured markdown with `provenance` |
 
 Types: `Note` (`isLocked`, `isEncrypted`, `tags`), `SearchSnippet` (`score`, `snippet`),
-`SuggestedTag`, `RelatedNote` (`why` only set when a model was consulted), `NoteSuggestions`.
+`SuggestedTag`, `RelatedNote` (`why` only set when a model was consulted), `NoteSuggestions`, `TidyMarkdownResult` (`formatted!`, `provenance!`).
 Content is sanitized on save through `notegeek/sanitize.js` (same DOMPurify profile as the
 client).
 

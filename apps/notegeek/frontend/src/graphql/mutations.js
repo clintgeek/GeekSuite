@@ -45,3 +45,20 @@ export const DELETE_TAG = gql`
         deleteTag(tag: $tag)
     }
 `;
+
+export const TIDY_MARKDOWN = gql`
+    mutation TidyMarkdown($content: String!) {
+        tidyMarkdown(content: $content) {
+            formatted
+            provenance {
+                source
+                reason
+                model
+                provider
+                cached
+                callsToday
+                cap
+            }
+        }
+    }
+`;

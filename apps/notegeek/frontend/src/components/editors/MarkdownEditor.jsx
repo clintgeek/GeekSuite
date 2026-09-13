@@ -1,27 +1,89 @@
 import React, { useState } from 'react';
-import { Box, TextField, ToggleButton, ToggleButtonGroup, useMediaQuery, useTheme } from '@mui/material';
+import {
+    Box,
+    Button,
+    CircularProgress,
+    TextField,
+    ToggleButton,
+    ToggleButtonGroup,
+    Tooltip,
+    useMediaQuery,
+    useTheme,
+} from '@mui/material';
 // Deep-import (see RichTextEditor.jsx for why) instead of the
 // '@mui/icons-material' barrel.
 import Edit from '@mui/icons-material/Edit';
 import Visibility from '@mui/icons-material/Visibility';
 import VerticalSplit from '@mui/icons-material/VerticalSplit';
+import AutoFixHigh from '@mui/icons-material/AutoFixHigh';
+import { useMutation } from '@apollo/client';
+import { useToast } from '@geeksuite/ui';
 import ReactMarkdown from 'react-markdown';
 import { surfaces } from '../../theme/tokens';
+import { TIDY_MARKDOWN } from '../../graphql/mutations';
 
 /**
- * MarkdownEditor - Lightweight markdown editor with live preview
- * Uses react-markdown (already installed) for rendering
+ * MarkdownEditor - Lightweight markdown editor with live preview and AI Tidy
+ * Uses react-markdown for rendering
  * Three modes: edit, preview, split (desktop only)
  */
 function MarkdownEditor({ content = '', setContent, isLoading, readOnly = false, fontSize = 14 }) {
     const theme = useTheme();
     const isMobile = useMediaQuery('(max-width:600px)');
     const [viewMode, setViewMode] = useState(readOnly ? 'preview' : 'edit');
+    const { notify } = useToast();
+    const [tidyMarkdownMutation, { loading: isTidying }] = useMutation(TIDY_MARKDOWN);
 
     // On mobile, only allow edit or preview (no split)
     const handleViewModeChange = (event, newMode) => {
         if (newMode !== null) {
             setViewMode(newMode);
+        }
+    };
+
+    const handleTidy = async () => {
+        if (!content || !content.trim() || isTidying) return;
+        const previousContent = content;
+
+        try {
+            const { data } = await tidyMarkdownMutation({
+                variables: { content: previousContent },
+            });
+            const formatted = data?.tidyMarkdown?.formatted;
+
+            if (!formatted || formatted.trim() === previousContent.trim()) {
+                notify('Note is already in clean, structured markdown.', { tone: 'info' });
+                return;
+            }
+
+            setContent(formatted);
+
+            notify('Tidied into clean markdown', {
+                tone: 'success',
+                duration: 9000,
+                action: (
+                    <Button
+                        size="small"
+                        color="inherit"
+                        variant="outlined"
+                        onClick={() => {
+                            setContent(previousContent);
+                            notify('Reverted to original note', { tone: 'info', duration: 3000 });
+                        }}
+                        sx={{
+                            fontSize: '0.75rem',
+                            py: 0.25,
+                            px: 1,
+                            textTransform: 'none',
+                            borderColor: 'currentColor',
+                        }}
+                    >
+                        Revert
+                    </Button>
+                ),
+            });
+        } catch (err) {
+            notify(err?.message || 'Failed to tidy markdown note', { tone: 'error' });
         }
     };
 
@@ -142,18 +204,23 @@ function MarkdownEditor({ content = '', setContent, isLoading, readOnly = false,
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-            {/* Mode toggle toolbar */}
+            {/* Mode toggle and tidy toolbar */}
             {!readOnly && (
                 <Box
                     sx={{
                         display: 'flex',
-                        justifyContent: 'center',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
                         p: 1,
+                        px: { xs: 1, sm: 2 },
                         borderBottom: 1,
                         borderColor: 'divider',
                         bgcolor: surfaces(theme).paper,
+                        gap: 1,
                     }}
                 >
+                    <Box sx={{ display: { xs: 'none', sm: 'block' }, width: { sm: 100 } }} />
+
                     <ToggleButtonGroup
                         value={viewMode}
                         exclusive
@@ -175,6 +242,30 @@ function MarkdownEditor({ content = '', setContent, isLoading, readOnly = false,
                             Preview
                         </ToggleButton>
                     </ToggleButtonGroup>
+
+                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', width: { xs: 'auto', sm: 100 } }}>
+                        <Tooltip title="Tidy Markdown (clean up into proper, easily readable markdown)">
+                            <span>
+                                <Button
+                                    variant="outlined"
+                                    size="small"
+                                    color="primary"
+                                    disabled={isLoading || isTidying || !content || !content.trim()}
+                                    onClick={handleTidy}
+                                    startIcon={isTidying ? <CircularProgress size={14} color="inherit" /> : <AutoFixHigh fontSize="small" />}
+                                    sx={{
+                                        textTransform: 'none',
+                                        minHeight: 30,
+                                        px: 1,
+                                        fontSize: '0.8125rem',
+                                        whiteSpace: 'nowrap',
+                                    }}
+                                >
+                                    {isTidying ? 'Tidying...' : 'Tidy'}
+                                </Button>
+                            </span>
+                        </Tooltip>
+                    </Box>
                 </Box>
             )}
 

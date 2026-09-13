@@ -1,16 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { MantineProvider } from '@mantine/core';
+import { MockedProvider } from '@apollo/client/testing';
 import ThemeModeProvider from '../../../theme/ThemeModeProvider';
 import MarkdownEditor from '../../../components/editors/MarkdownEditor';
+import { TIDY_MARKDOWN } from '../../../graphql/mutations';
 
-const AllProviders = ({ children }) => (
-    <ThemeModeProvider>
-        <MantineProvider>
-            <MemoryRouter>{children}</MemoryRouter>
-        </MantineProvider>
-    </ThemeModeProvider>
+const AllProviders = ({ children, mocks = [] }) => (
+    <MockedProvider mocks={mocks}>
+        <ThemeModeProvider>
+            <MantineProvider>
+                <MemoryRouter>{children}</MemoryRouter>
+            </MantineProvider>
+        </ThemeModeProvider>
+    </MockedProvider>
 );
 
 // Mock window.matchMedia for Mantine and MUI
@@ -38,7 +42,6 @@ describe('MarkdownEditor', () => {
 
     it('renders editor by default when not readOnly', () => {
         render(<MarkdownEditor content="# Hello" setContent={mockSetContent} />, { wrapper: AllProviders });
-        // The editor should be visible and have the content
         const textbox = screen.getByPlaceholderText('# Start writing markdown...');
         expect(textbox).toBeInTheDocument();
         expect(textbox).toHaveValue('# Hello');
@@ -46,12 +49,10 @@ describe('MarkdownEditor', () => {
 
     it('renders preview by default when readOnly', () => {
         render(<MarkdownEditor content="# Read Only Header" readOnly={true} setContent={mockSetContent} />, { wrapper: AllProviders });
-        // The edit textbox should NOT be rendered
         expect(screen.queryByPlaceholderText('# Start writing markdown...')).not.toBeInTheDocument();
-        // The markdown preview should render the h1
         expect(screen.getByText('Read Only Header')).toBeInTheDocument();
-        // The mode toggles shouldn't be present
         expect(screen.queryByLabelText('edit mode')).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /tidy/i })).not.toBeInTheDocument();
     });
 
     it('calls setContent when typing', () => {
@@ -63,15 +64,11 @@ describe('MarkdownEditor', () => {
 
     it('can toggle to preview mode', () => {
         render(<MarkdownEditor content="**Bold text**" setContent={mockSetContent} />, { wrapper: AllProviders });
-
-        // Editor is originally open
         expect(screen.getByPlaceholderText('# Start writing markdown...')).toBeInTheDocument();
 
-        // Click preview toggle
         const previewToggle = screen.getByLabelText('preview mode');
         fireEvent.click(previewToggle);
 
-        // Editor should vanish, preview should appear
         expect(screen.queryByPlaceholderText('# Start writing markdown...')).not.toBeInTheDocument();
         expect(screen.getByText('Bold text')).toBeInTheDocument();
     });
@@ -80,5 +77,57 @@ describe('MarkdownEditor', () => {
         render(<MarkdownEditor content="" isLoading={true} setContent={mockSetContent} />, { wrapper: AllProviders });
         const textbox = screen.getByPlaceholderText('# Start writing markdown...');
         expect(textbox).toBeDisabled();
+    });
+
+    it('renders Tidy button and disables it when content is empty', () => {
+        render(<MarkdownEditor content="" setContent={mockSetContent} />, { wrapper: AllProviders });
+        const tidyButton = screen.getByRole('button', { name: /tidy/i });
+        expect(tidyButton).toBeInTheDocument();
+        expect(tidyButton).toBeDisabled();
+    });
+
+    it('enables Tidy button when content is present and triggers tidy mutation', async () => {
+        const rawText = 'messy raw text point 1 point 2';
+        const formattedText = '## Tidied Note\n\n- Point 1\n- Point 2';
+
+        const mocks = [
+            {
+                request: {
+                    query: TIDY_MARKDOWN,
+                    variables: { content: rawText },
+                },
+                result: {
+                    data: {
+                        tidyMarkdown: {
+                            formatted: formattedText,
+                            provenance: {
+                                source: 'model',
+                                reason: null,
+                                model: 'gemini-1.5-flash',
+                                provider: 'gemini',
+                                cached: false,
+                                callsToday: 1,
+                                cap: 50,
+                            },
+                        },
+                    },
+                },
+            },
+        ];
+
+        render(
+            <AllProviders mocks={mocks}>
+                <MarkdownEditor content={rawText} setContent={mockSetContent} />
+            </AllProviders>
+        );
+
+        const tidyButton = screen.getByRole('button', { name: /tidy/i });
+        expect(tidyButton).not.toBeDisabled();
+
+        fireEvent.click(tidyButton);
+
+        await waitFor(() => {
+            expect(mockSetContent).toHaveBeenCalledWith(formattedText);
+        });
     });
 });

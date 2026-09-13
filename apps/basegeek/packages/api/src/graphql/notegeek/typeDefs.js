@@ -43,6 +43,11 @@ export const typeDefs = gql`
     why: String
   }
 
+  type TidyMarkdownResult {
+    formatted: String!
+    provenance: AIProvenance!
+  }
+
   type NoteSuggestions {
     tags: [SuggestedTag!]!
     related: [RelatedNote!]!
@@ -65,5 +70,6 @@ export const typeDefs = gql`
     deleteNote(id: ID!): Boolean!
     renameTag(oldTag: String!, newTag: String!): Boolean!
     deleteTag(tag: String!): Boolean!
+    tidyMarkdown(content: String!): TidyMarkdownResult!
   }
 `;

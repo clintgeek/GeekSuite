@@ -211,3 +211,9 @@ export const suggestForNoteArgsSchema = z
     tags: z.array(z.string().trim().max(100)).max(50),
   })
   .strict();
+
+export const tidyMarkdownArgsSchema = z
+  .object({
+    content: z.string().max(DOC_CONTENT_MAX),
+  })
+  .strict();
