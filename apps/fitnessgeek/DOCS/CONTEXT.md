@@ -3,6 +3,66 @@
 How this app is actually built, run and deployed. Paths, ports and commands
 here override any reasonable-looking default.
 
+**2026-09-14 (food search rebuild):** food search was rebuilt end to end — see
+`DOCS/THE_FOOD_SEARCH_PLAN.md` for the full diagnosis and plan. What is true now:
+
+- **A query is ONE DISH until the text separates it.** `services/foodQueryParser.js` is the
+  deterministic front door: it strips a leading quantity (`4`) and provenance words
+  (`homemade`, `leftover`) into metadata, splits ONLY on separators the person actually typed
+  (`,` `and` `with` `+` `w/`), and never splits a fragment whose head noun names a dish
+  (`peanut butter and jelly sandwich`). No model is involved in any of that.
+  Before this, `aiFoodService.buildClassificationPrompt` opened with "CRITICAL: Extract EVERY
+  distinct food item mentioned. Split on 'and', commas, or implicit separators", so
+  `4 chocolate chip pancakes homemade` classified as `chocolate chip` ×4 + `pancakes` +
+  an invented `pancake mix` — three ingredient searches for a query naming one food, which is
+  why that search returned chocolate chips and no pancakes.
+- **The classifier is now a fallback, and it is fenced.** It is consulted only after the
+  whole-phrase search fails `foodRanker.isConfidentMatch` — a STRUCTURAL test (the winner
+  names the dish's head noun, covers ≥50% of the query tokens, and has calories), not a score
+  threshold. A points floor was tried first and was wrong: USDA answers "chocolate chip
+  pancakes" with "Pancakes, chocolate", plainly the right food, which scores only ~213 because
+  it drops a word — under any floor calibrated on a full-token match, and so it would have
+  been sent off to be decomposed into chocolate chips. Every item the classifier proposes
+  must pass `itemIsGroundedInQuery` — built from words the person actually typed. An
+  ungrounded item (`pancake mix`) is dropped with a `logger.warn` and never searched.
+  Decomposed results carry `decomposedFrom` so the UI can say what happened.
+- **One ranker, on every path.** `services/foodRanker.js` replaced `basicLexicalSort`,
+  `scoreRelevance` and the prepend-preferences trick — and replaced NO ranking at all on the
+  commonest path (any query ≤3 words skipped both AI gates, and `searchAPIs` returned results
+  in source-arrival order). It scores name match, penalises words the name ADDS that the query
+  never said, sinks a dish result missing its head noun, and folds in favourites / recents /
+  custom foods as SIGNALS rather than queue-jumpers. What you chose for this exact query last
+  time is pinned first.
+- **`GET /api/foods/suggest?q=`** is the typeahead: local catalog only, no external API, no
+  model, ownership-scoped, served off the `{name, brand}` text index (which existed all along
+  and nothing used — `searchLocalDB` was an unanchored `$regex`, i.e. a scan). With no query
+  it returns the starting shelf (favourites → recents → custom). `GET /api/foods?search=` is
+  still the deep search; the frontend fires suggest at 150ms and the deep search at 400ms, and
+  the deep results APPEND rather than replace.
+- **USDA and OpenFoodFacts go through `foodApiService`** (Redis-cached 7 days, wrapped in the
+  shared `usda`/`openfoodfacts` circuit breakers). `unifiedFoodService` used to call both
+  directly over axios on the generic path — no cache, no breaker — which is most of why a
+  multi-word search measured 3.5–5.4s in production. Separated fragments now fan out with
+  `Promise.allSettled` instead of a sequential `for` loop.
+- **`searchLocalDB` is ownership-scoped** via `foodCatalogVisibilityFilter`. It previously
+  filtered on `is_deleted` alone, so another household member's private custom foods were
+  reachable from search.
+- **Frontend:** one box, no submit step. `components/FoodSearch/UnifiedFoodSearch.jsx` (913 →
+  ~390 lines) renders rows (`FoodResultRow.jsx`), not a grid of animated cards; a tap logs one
+  serving with an undo in the toast (`hooks/useFoodLogging.js` owns log + undo for both
+  surfaces); `SessionRibbon.jsx` shows the running total from the second item. `/food-search`
+  is a real search page instead of a CTA that opened a dialog. DELETED: `FoodSearch.jsx`
+  (legacy), `AddFoodModal.jsx` (dead behind state nothing set), `StagingTray.jsx`,
+  `CompositeResolver.jsx`, `FoodCard.jsx`, `QuickAddPanel.jsx`, `NaturalLanguageQuickAdd.jsx`.
+- **Logging:** pino takes the object FIRST. Every structured field on the search path was
+  being silently discarded (`logger.info('Food search', {...})`), which is why none of the
+  above left a trace. Fixed across `unifiedFoodService.js`, `foodRoutes.js`, `aiFoodService.js`.
+- **Left standing, deliberately:** the Settings toggle for natural-language quick-add
+  (`ai.features.natural_language_food_logging`, `utils/quickAddPreference.js`,
+  `services/quickAddService.js`) still exists but no longer drives any UI — the sentence path
+  folded into the search box. Removing a settings control is Chef's call; flagged in
+  `THE_FOOD_SEARCH_PLAN.md` §5.
+
 **2026-09-05 (BURN_REVIEW #16 fix):** the household log view (`HouseholdLogView.jsx`) was dead
 twice over in `frontend/src/services/apiService.js`'s `routeRequest`. Both `/logs/household` (member
 list) and `/logs/household/:memberId/:date` (a member's logs) were shadowed by the earlier generic

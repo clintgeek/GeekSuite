@@ -42,6 +42,7 @@ Pull from here when planning the next pass; update as work lands or priorities s
 ## 3. UI / UX & Design Language
 
 ### Highest Leverage / Follow-ups
+- **FitnessGeek Food Search Rebuild** (approved 2026-09-14, full scope): search is submit-only, ranks by API arrival order for any query under four words, bypasses its own Redis cache and its own Mongo text index, and hides the input four interactions deep behind a CTA page and a modal. Measured 3.5–5.4s on multi-word queries in production. Worst of all, the AI classifier shreds one dish into its ingredients — `4 chocolate chip pancakes homemade` classifies as `chocolate chip` ×4 + `pancakes` + `pancake mix` (reproduced against the live container), which is why that query returns chocolate chips and no pancakes. Six-phase plan with named-query acceptance tests: [`apps/fitnessgeek/DOCS/THE_FOOD_SEARCH_PLAN.md`](../apps/fitnessgeek/DOCS/THE_FOOD_SEARCH_PLAN.md). Four Phase-4 UI decisions remain open in §5.
 - **Shell Grammar Visual Pass**: Verify every app at mobile viewports (iPhone 14) and desktop widths in both light and dark modes. Ensure no regressions from the GeekShell navigation migration.
 - **StoryGeek Three-Column Surface**: Three-column play surface loses 220px on desktop due to sidebar; evaluate breakpoint threshold for collapsing side panels to preserve editor breathing room.
 - **Shared Mobile Bottom-Nav Primitive**: Standardize bottom navigation across bujogeek, notegeek, fitnessgeek, and flockgeek into one `@geeksuite/ui` primitive.
