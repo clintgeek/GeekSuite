@@ -349,13 +349,13 @@ class AIFoodService {
       normalized_query: classificationContext.normalizedInput
     };
 
-    logger.debug('AI classification metadata', {
+    logger.debug({
       originalInput: input,
       normalizedInput: classificationContext.normalizedInput,
       detectedBrands: classificationContext.detectedBrands,
       resolvedBrand: parsed.brand,
       type: parsed.type
-    });
+    }, 'AI classification metadata');
 
     return enriched;
   }
@@ -456,7 +456,7 @@ Scoring guide:
         };
       });
     } catch (error) {
-      logger.error('AI result scoring could not be read', { error: error.message });
+      logger.error({ err: error }, 'AI result scoring could not be read');
       return results;
     }
   }
@@ -511,7 +511,7 @@ Flag issues like wrong food type, brand mismatches, or irrelevant items.`;
 
       return JSON.parse(jsonMatch[0]);
     } catch (error) {
-      logger.error('AI sanity check failed', { error: error.message });
+      logger.error({ err: error }, 'AI sanity check failed');
       return { valid: true, issues: [], confidence: 'unknown' };
     }
   }
@@ -589,10 +589,10 @@ Examples:
 
       return result;
     } catch (error) {
-      logger.error('Failed to parse classification response', {
+      logger.error({
         responseText: responseText,
-        error: error.message
-      });
+        err: error
+      }, 'Failed to parse classification response');
       // Return a safe fallback
       return {
         type: 'unknown',
@@ -621,7 +621,7 @@ Examples:
 
       return result;
     } catch (error) {
-      logger.warn('Failed to read food AI response', { error: error.message });
+      logger.warn({ err: error }, 'Failed to read food AI response');
       return null;
     }
   }
