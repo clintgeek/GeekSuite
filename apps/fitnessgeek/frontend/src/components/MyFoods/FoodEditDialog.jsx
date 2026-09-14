@@ -12,17 +12,22 @@ import {
 } from '@mui/material';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
 
+/**
+ * The custom-food form. `food` absent means "create" — the search box's
+ * "Can't find it? Create …" row lands here with the name prefilled, which is
+ * the escape hatch the old search never had: it dead-ended at "Nothing found".
+ */
 const FoodEditDialog = ({ open, food, form, onChange, onClose, onSave, loading }) => {
   return (
     <PremiumDialog
       open={open}
       onClose={onClose}
       eyebrow="My Foods"
-      title={`Edit ${food?.name ?? 'food'}`}
+      title={food ? `Edit ${food.name ?? 'food'}` : 'Create a food'}
       maxWidth="sm"
       primaryAction={
         <Button onClick={onSave} variant="contained" disabled={loading}>
-          {loading ? <CircularProgress size={20} /> : 'Save'}
+          {loading ? <CircularProgress size={20} /> : (food ? 'Save' : 'Create')}
         </Button>
       }
       secondaryAction={<Button onClick={onClose}>Cancel</Button>}

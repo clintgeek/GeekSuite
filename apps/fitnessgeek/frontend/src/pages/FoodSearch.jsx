@@ -1,174 +1,110 @@
-import React, { useState } from 'react';
-import { Box, Typography, Button } from '@mui/material';
-import { Add as AddIcon, AutoAwesome as WandIcon } from '@mui/icons-material';
+import React, { useCallback, useMemo, useState } from 'react';
+import { Box, Typography } from '@mui/material';
 import { useToast } from '@geeksuite/ui';
-import AddFoodDialog from '../components/FoodLog/AddFoodDialog';
+import { UnifiedFoodSearch } from '../components/FoodSearch';
+import BarcodeScanner from '../components/BarcodeScanner/BarcodeScanner.jsx';
+import FoodEditDialog from '../components/MyFoods/FoodEditDialog.jsx';
 import { fitnessGeekService } from '../services/fitnessGeekService.js';
-import {
-  Surface,
-  SectionLabel,
-  DisplayHeading,
-} from '../components/primitives';
+import { useFoodLogging } from '../hooks/useFoodLogging.js';
+import { SectionLabel, DisplayHeading } from '../components/primitives';
+
+const EMPTY_FOOD_FORM = {
+  name: '',
+  brand: '',
+  calories_per_serving: '',
+  protein_grams: '',
+  carbs_grams: '',
+  fat_grams: '',
+  serving_size: 100,
+  serving_unit: 'g'
+};
 
 /**
- * FoodSearch Page — a dedicated entry point for adding food to today's log.
+ * The full-page search.
  *
- * The real work happens inside AddFoodDialog (which uses the staging tray).
- * This page exists as a prominent CTA surface when users navigate here directly
- * from the nav, rather than from a meal slot in the Food Log.
+ * This page used to be a 177-line marketing panel — a wand icon, a headline
+ * and one button — whose only job was to open a dialog that contained the
+ * actual search. Reaching a text field took four interactions from the nav.
+ * Now the page IS the search, and the field has focus when it loads.
  */
 const FoodSearchPage = () => {
   const { notify } = useToast();
-  const [showAddDialog, setShowAddDialog] = useState(false);
-  const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
+  const today = useMemo(() => fitnessGeekService.formatDate(new Date()), []);
+  const [mealType, setMealType] = useState('snack');
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [createForm, setCreateForm] = useState(null);
+  const [creating, setCreating] = useState(false);
 
-  const handleCommitBatch = async (items) => {
-    if (!items || items.length === 0) return { ok: 0, fail: 0 };
+  const { logItems, undoLogs, createFood } = useFoodLogging({ date: today });
 
-    const today = fitnessGeekService.formatDate(new Date());
-    let ok = 0;
-    let fail = 0;
-
-    const results = await Promise.allSettled(
-      items.map(async (item) => {
-        if (item.type === 'meal' && item._id) {
-          return fitnessGeekService.addMealToLog(item._id, today, 'snack');
-        }
-        const logData = {
-          food_item: item,
-          meal_type: 'snack',
-          servings: Number(item.servings) || 1,
-          log_date: today,
-          nutrition: item.nutrition,
-        };
-        const resp = await fitnessGeekService.addFoodToLog(logData);
-        if (!(resp && resp.success)) {
-          throw new Error(resp?.error?.message || 'Failed to log item');
-        }
-        return true;
-      })
-    );
-
-    for (const r of results) {
-      if (r.status === 'fulfilled') ok += 1;
-      else fail += 1;
-    }
-
-    if (ok > 0) {
-      notify(`Added ${ok} item${ok !== 1 ? 's' : ''} to today's snack.`, {
-        tone: fail > 0 ? 'warning' : 'success',
-      });
-    }
-    if (fail > 0 && ok === 0) {
-      notify(`Failed to add ${fail} item${fail !== 1 ? 's' : ''}.`, { tone: 'error' });
-    }
-
-    return { ok, fail };
-  };
-
-  // Legacy single-item handler for Barcode / Custom tabs
-  const handleFoodSelect = async (food) => {
+  const handleCreate = useCallback(async () => {
+    if (!createForm?.name) return;
+    setCreating(true);
     try {
-      const today = fitnessGeekService.formatDate(new Date());
-      const logData = {
-        food_item: food,
-        meal_type: food.mealType || 'snack',
-        servings: food.servings || 1,
-        log_date: today,
-        nutrition: food.nutrition,
-      };
-      await fitnessGeekService.addFoodToLog(logData);
-      notify(`Added "${food.name}" to today's log`, { tone: 'success' });
-      setShowAddDialog(false);
+      const created = await createFood({
+        name: createForm.name.trim(),
+        brand: createForm.brand?.trim() || undefined,
+        nutrition: {
+          calories_per_serving: Number(createForm.calories_per_serving) || 0,
+          protein_grams: Number(createForm.protein_grams) || 0,
+          carbs_grams: Number(createForm.carbs_grams) || 0,
+          fat_grams: Number(createForm.fat_grams) || 0
+        },
+        serving: {
+          size: Number(createForm.serving_size) || 100,
+          unit: createForm.serving_unit || 'g'
+        }
+      });
+      setCreateForm(null);
+      if (created) {
+        await logItems([{ ...created, servings: 1 }], mealType);
+        notify(`Created and logged "${created.name}"`, { tone: 'success' });
+      }
     } catch (error) {
-      console.error('Error adding food to log:', error);
-      notify('Failed to add food. Please try again.', { tone: 'error' });
+      notify(error?.message || 'Could not create that food.', { tone: 'error' });
+    } finally {
+      setCreating(false);
     }
-  };
+  }, [createForm, createFood, logItems, mealType, notify]);
 
   return (
-    <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 960, mx: 'auto' }}>
-      {/* Editorial header */}
-      <Box sx={{ mb: 3 }}>
-        <SectionLabel sx={{ mb: 0.75 }}>Entry · Quick Add</SectionLabel>
+    <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 820, mx: 'auto' }}>
+      <Box sx={{ mb: 2 }}>
+        <SectionLabel sx={{ mb: 0.75 }}>Entry · Search</SectionLabel>
         <DisplayHeading size="page">Add Food</DisplayHeading>
-        <Typography
-          sx={{ color: 'text.secondary', mt: 0.5, fontSize: '0.9375rem' }}
-        >
-          Describe your meal, scan a barcode, or build a custom entry.
+        <Typography sx={{ color: 'text.secondary', mt: 0.5, fontSize: '0.9375rem' }}>
+          Your own foods come up first. Tap once to log it.
         </Typography>
       </Box>
 
-      {/* CTA Surface */}
-      <Surface
-        variant="ticket"
-        sx={{
-          maxWidth: 560,
-          mx: 'auto',
-          mt: 3,
-          textAlign: 'center',
-          py: { xs: 5, sm: 6 },
-        }}
-      >
-        <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
-          <Box
-            sx={{
-              width: 56,
-              height: 56,
-              borderRadius: '50%',
-              backgroundColor: 'primary.main',
-              color: 'primary.contrastText',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <WandIcon sx={{ fontSize: 26 }} />
-          </Box>
-        </Box>
-        <DisplayHeading size="card" sx={{ mb: 1 }}>
-          Ready to add food?
-        </DisplayHeading>
-        <Typography
-          sx={{
-            color: 'text.secondary',
-            fontSize: '0.9375rem',
-            maxWidth: 400,
-            mx: 'auto',
-            mb: 3,
-            lineHeight: 1.55,
-          }}
-        >
-          Use natural language ("2 tacos and a beer"), scan a barcode, or
-          create a custom food. Stage multiple items and log them all at once.
-        </Typography>
-        <Button
-          variant="contained"
-          size="large"
-          startIcon={<AddIcon />}
-          onClick={() => setShowAddDialog(true)}
-          sx={{
-            borderRadius: 999,
-            px: 4,
-            py: 1.25,
-            fontSize: '0.875rem',
-            fontWeight: 700,
-            textTransform: 'uppercase',
-            letterSpacing: '0.08em',
-          }}
-        >
-          Open Food Entry
-        </Button>
-      </Surface>
+      <UnifiedFoodSearch
+        mode="page"
+        autoFocus
+        mealType={mealType}
+        onMealTypeChange={setMealType}
+        onLogItems={logItems}
+        onUndo={undoLogs}
+        onBarcodeClick={() => setScannerOpen(true)}
+        onCreateFood={(query) => setCreateForm({ ...EMPTY_FOOD_FORM, name: query })}
+      />
 
-      <AddFoodDialog
-        open={showAddDialog}
-        onClose={() => setShowAddDialog(false)}
-        onFoodSelect={handleFoodSelect}
-        onCommitBatch={handleCommitBatch}
-        mealType="snack"
-        showBarcodeScanner={showBarcodeScanner}
-        onShowBarcodeScanner={setShowBarcodeScanner}
+      <BarcodeScanner
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onBarcodeScanned={async (food) => {
+          setScannerOpen(false);
+          if (food) await logItems([{ ...food, servings: 1 }], mealType);
+        }}
+      />
+
+      <FoodEditDialog
+        open={Boolean(createForm)}
+        food={null}
+        form={createForm || EMPTY_FOOD_FORM}
+        onChange={setCreateForm}
+        onClose={() => setCreateForm(null)}
+        onSave={handleCreate}
+        loading={creating}
       />
     </Box>
   );

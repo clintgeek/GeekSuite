@@ -15,8 +15,7 @@ import { useTheme } from '@mui/material/styles';
 import {
   ContentCopy as CopyIcon,
   People as PeopleIcon,
-  Add as AddIcon,
-  AutoAwesome as SparkleIcon
+  Add as AddIcon
 } from '@mui/icons-material';
 import NutritionSummary from '../components/FoodLog/NutritionSummary.jsx';
 import CalorieSummary from '../components/FoodLog/CalorieSummary.jsx';
@@ -25,8 +24,8 @@ import SaveMealDialog from '../components/FoodLog/SaveMealDialog.jsx';
 import EditLogDialog from '../components/FoodLog/EditLogDialog.jsx';
 import CopyMealDialog from '../components/FoodLog/CopyMealDialog.jsx';
 import HouseholdLogView from '../components/FoodLog/HouseholdLogView.jsx';
-import QuickAddPanel from '../components/FoodLog/QuickAddPanel.jsx';
-import NaturalLanguageQuickAdd from '../components/FoodLog/NaturalLanguageQuickAdd.jsx';
+import { UnifiedFoodSearch } from '../components/FoodSearch';
+import FoodEditDialog from '../components/MyFoods/FoodEditDialog.jsx';
 import {
   DateNavigator,
   AddFoodDialog
@@ -38,16 +37,24 @@ import { goalsService } from '../services/goalsService.js';
 import { useGeekPrimaryAction } from '@geeksuite/ui';
 import { Surface, SectionLabel, DisplayHeading, StatNumber } from '../components/primitives';
 import { netCarbs as calcNetCarbs, ketoStatus } from '../utils/ketoMath.js';
-import {
-  isNaturalQuickAddEnabled,
-  migrateLegacyQuickAddOptIn,
-} from '../utils/quickAddPreference.js';
+import { useFoodLogging } from '../hooks/useFoodLogging.js';
 
 /**
  * The meal a log at this hour most likely belongs to. The FAB opens the food
  * search with this pre-selected; the picker inside the dialog is how the user
  * disagrees (mobile grammar: the primary action never asks a question first).
  */
+const EMPTY_FOOD_FORM = {
+  name: '',
+  brand: '',
+  calories_per_serving: '',
+  protein_grams: '',
+  carbs_grams: '',
+  fat_grams: '',
+  serving_size: 100,
+  serving_unit: 'g'
+};
+
 const mealTypeForNow = (now = new Date()) => {
   const hour = now.getHours();
   if (hour < 10) return 'breakfast';
@@ -69,16 +76,8 @@ const FoodLog = () => {
   const [savingMeal, setSavingMeal] = useState(false);
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
 
-  // Natural-language quick-add (AI_IDEAS.md idea #2). Opt-in, default OFF, and
-  // the switch is `ai.features.natural_language_food_logging` on the settings
-  // document — see `utils/quickAddPreference.js`. Read once per mount from the
-  // settings load below: the Settings toggle is on another route, so a change
-  // arrives with the remount that navigating back here already causes. It
-  // starts false so the entry point can never flash on before the answer is
-  // known.
-  const [naturalQuickAddOn, setNaturalQuickAddOn] = useState(false);
-  const [showNaturalQuickAdd, setShowNaturalQuickAdd] = useState(false);
-  const [searchPrefill, setSearchPrefill] = useState('');
+  const [createForm, setCreateForm] = useState(null);
+  const [creatingFood, setCreatingFood] = useState(false);
 
   // Keto mode state (Task D2)
   const [mode, setMode] = useState('standard');
@@ -100,15 +99,50 @@ const FoodLog = () => {
     refreshGoals,
     refreshLogs,
     getLogsByMealType,
-    addFoodToLog,
     updateFoodLog,
     deleteFoodLog,
     saveMeal,
     showError,
-    showSuccess,
     clearSuccessMessage,
     clearErrorMessage
   } = useFoodLog(selectedDate);
+
+  // One definition of "log this" and "take it back", shared with the full-page
+  // search so a tap means the same thing on both surfaces.
+  const { logItems, undoLogs, createFood } = useFoodLogging({
+    date: selectedDate,
+    onChanged: async () => {
+      await refreshLogs();
+      await refreshGoals();
+    }
+  });
+
+  const handleCreateFood = async () => {
+    if (!createForm?.name) return;
+    setCreatingFood(true);
+    try {
+      const created = await createFood({
+        name: createForm.name.trim(),
+        brand: createForm.brand?.trim() || undefined,
+        nutrition: {
+          calories_per_serving: Number(createForm.calories_per_serving) || 0,
+          protein_grams: Number(createForm.protein_grams) || 0,
+          carbs_grams: Number(createForm.carbs_grams) || 0,
+          fat_grams: Number(createForm.fat_grams) || 0
+        },
+        serving: {
+          size: Number(createForm.serving_size) || 100,
+          unit: createForm.serving_unit || 'g'
+        }
+      });
+      setCreateForm(null);
+      if (created) await logItems([{ ...created, servings: 1 }], selectedMealType);
+    } catch (error) {
+      showError(error?.message || 'Could not create that food.');
+    } finally {
+      setCreatingFood(false);
+    }
+  };
 
   // Calorie goal adjustment state
   const todayCalorieGoal = useMemo(() => Math.round(nutritionSummary?.calorieGoal || 0), [nutritionSummary]);
@@ -186,22 +220,13 @@ const FoodLog = () => {
   // — one request, not two, since both live on `usersettings`.
   useEffect(() => {
     let cancelled = false;
-    settingsService.getSettings().then(async resp => {
+    settingsService.getSettings().then(resp => {
       const data = resp?.data || resp?.data?.data || resp;
       if (cancelled) return;
       const ng = data?.nutrition_goal || null;
       setMode(ng?.mode || 'standard');
       setNetCarbLimit(ng?.keto?.net_carb_limit_g ?? 20);
       setTrackNetCarbs(ng?.keto?.track_net_carbs ?? true);
-
-      // One-shot migration of an R115 per-browser opt-in. It resolves to the
-      // server answer when there is nothing to move, so this is also just
-      // "read the flag".
-      const on = await migrateLegacyQuickAddOptIn({
-        settings: data,
-        saveAISettings: settingsService.updateAISettings,
-      }).catch(() => isNaturalQuickAddEnabled(data));
-      if (!cancelled) setNaturalQuickAddOn(on);
     }).catch(() => {});
     return () => { cancelled = true; };
   }, []);
@@ -232,133 +257,6 @@ const FoodLog = () => {
     icon: <AddIcon />,
     onClick: () => handleAddFood(mealTypeForNow())
   });
-
-  // Legacy single-item callback — used by Barcode and Custom tabs
-  const handleFoodSelect = async (food, meta = {}) => {
-    try {
-      if (food && food.type === 'meal' && food._id) {
-        await fitnessGeekService.addMealToLog(food._id, selectedDate, selectedMealType || 'snack');
-        setShowAddDialog(false);
-        await refreshGoals();
-        await refreshLogs();
-        return;
-      }
-
-      const success = await addFoodToLog(food, selectedMealType);
-      if (success) {
-        if (!meta?.isBatch) {
-          setShowAddDialog(false);
-        }
-        await refreshLogs();
-      }
-    } catch (e) {
-      console.error('Failed to add selection to log', e);
-    }
-  };
-
-  // Batch commit from the staging tray. Fires all adds in parallel (one transaction
-  // per item, since the REST backend needs to create FoodItems for AI results),
-  // then does a single refresh at the end. Tracks partial failures.
-  const handleCommitBatch = async (items) => {
-    if (!items || items.length === 0) return { ok: 0, fail: 0 };
-
-    const meal = selectedMealType || 'snack';
-
-    const results = await Promise.allSettled(
-      items.map(async (item) => {
-        if (item.type === 'meal' && item._id) {
-          return fitnessGeekService.addMealToLog(item._id, selectedDate, meal);
-        }
-        // Go direct to the service so we skip the hook's per-item toast + reload
-        const parsedServings = Number(item.servings);
-        const safeServings = Number.isFinite(parsedServings) && parsedServings > 0 ? parsedServings : 1;
-        const logData = {
-          food_item: item,
-          meal_type: meal,
-          servings: Math.max(0.1, safeServings),
-          log_date: selectedDate,
-          nutrition: item.nutrition
-        };
-        const resp = await fitnessGeekService.addFoodToLog(logData);
-        if (!(resp && resp.success)) {
-          throw new Error(resp?.error?.message || 'Failed to log item');
-        }
-        return true;
-      })
-    );
-
-    let ok = 0;
-    let fail = 0;
-    for (const r of results) {
-      if (r.status === 'fulfilled') ok += 1;
-      else fail += 1;
-    }
-
-    // Single refresh at the end — much cheaper than N reloads
-    await refreshLogs();
-    await refreshGoals();
-
-    if (fail > 0 && ok === 0) {
-      showError('Failed to log item. Please try again.');
-    } else if (fail > 0) {
-      showError(`${fail} item(s) failed to log.`);
-    } else if (ok > 0) {
-      showSuccess(`Added ${ok} item${ok > 1 ? 's' : ''} to your log.`);
-    }
-
-    return { ok, fail };
-  };
-
-  /**
-   * Log the rows a person ticked on the quick-add proposal.
-   *
-   * Deliberately NOT `handleCommitBatch`: that one puts every item in the
-   * page's currently-selected meal, and a proposal carries a meal type per row
-   * ("eggs for breakfast, salad for lunch" is one sentence). Everything else is
-   * the same path — `fitnessGeekService.addFoodToLog` per row, one refresh at
-   * the end — so a drafted row and a hand-picked one are the same write.
-   */
-  const handleLogProposal = async (proposedRows) => {
-    if (!proposedRows || proposedRows.length === 0) return { ok: 0, fail: 0 };
-
-    const results = await Promise.allSettled(
-      proposedRows.map(async ({ food, servings, mealType }) => {
-        const parsedServings = Number(servings);
-        const safeServings = Number.isFinite(parsedServings) && parsedServings > 0 ? parsedServings : 1;
-        const resp = await fitnessGeekService.addFoodToLog({
-          food_item: food,
-          meal_type: mealType || selectedMealType || 'snack',
-          servings: Math.max(0.1, safeServings),
-          log_date: selectedDate,
-          nutrition: food?.nutrition
-        });
-        if (!(resp && resp.success)) {
-          throw new Error(resp?.error?.message || 'Failed to log item');
-        }
-        return true;
-      })
-    );
-
-    let ok = 0;
-    let fail = 0;
-    for (const r of results) {
-      if (r.status === 'fulfilled') ok += 1;
-      else fail += 1;
-    }
-
-    await refreshLogs();
-    await refreshGoals();
-
-    if (fail > 0 && ok === 0) {
-      showError('Failed to log those items. Please try again.');
-    } else if (fail > 0) {
-      showError(`${fail} item(s) failed to log.`);
-    } else if (ok > 0) {
-      showSuccess(`Added ${ok} item${ok > 1 ? 's' : ''} to your log.`);
-    }
-
-    return { ok, fail };
-  };
 
   const handleEditLog = (log) => {
     setEditingLog(log);
@@ -499,33 +397,6 @@ const FoodLog = () => {
             Copy Meal
           </Button>
         </Tooltip>
-        {/* `describeChild` on the Tooltip below: without it MUI puts the
-            tooltip text in the button's `aria-label`, which REPLACES the
-            visible label — a screen-reader user hears "type what you ate and
-            check the proposal" for a button everyone else calls "Describe a
-            meal" (WCAG 2.5.3, label in name). `describeChild` moves it to
-            `aria-describedby`, where a hint belongs. */}
-        {naturalQuickAddOn && (
-          <Tooltip title="Type what you ate and check the proposal" describeChild>
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<SparkleIcon />}
-              onClick={() => setShowNaturalQuickAdd(true)}
-              sx={{
-                minWidth: { xs: 44, sm: 'auto' },
-                minHeight: { xs: 44, sm: 40 },
-                px: { xs: 2, sm: 2.5 },
-                borderRadius: { xs: 2, sm: 999 },
-                '& .MuiButton-startIcon': {
-                  '& > svg': { fontSize: { xs: 20, sm: 22 } }
-                }
-              }}
-            >
-              Describe a meal
-            </Button>
-          </Tooltip>
-        )}
         <Tooltip title="See what household members ate">
           <Button
             variant="outlined"
@@ -579,19 +450,22 @@ const FoodLog = () => {
 
       {/* Removed standalone top calorie card; it's now embedded under the date picker */}
 
-      {/* Quick Add Panel (Favorites & Recent) */}
-      <QuickAddPanel
-        selectedMealType={selectedMealType}
-        onMealTypeChange={setSelectedMealType}
-        onAddFood={async (quickFood) => {
-          // Directly add the food with 1 serving
-          const food = quickFood.food_item;
-          await addFoodToLog(
-            { ...food, servings: 1 },
-            quickFood.meal_type || 'snack'
-          );
-        }}
-      />
+      {/* The search box, inline. It is the page's main job, so it is on the
+          page — not behind a button that opens a dialog that owns a tab that
+          contains a field. Its empty state is favourites and recents, which
+          is what the Quick Add accordion used to be. */}
+      <Surface sx={{ p: { xs: 1.5, sm: 2 }, mb: 3 }}>
+        <UnifiedFoodSearch
+          mode="page"
+          mealType={selectedMealType}
+          onMealTypeChange={setSelectedMealType}
+          onLogItems={logItems}
+          onUndo={undoLogs}
+          onBarcodeClick={() => setShowBarcodeScanner(true)}
+          onCreateFood={(query) => setCreateForm({ ...EMPTY_FOOD_FORM, name: query })}
+          ketoMode={mode === 'keto'}
+        />
+      </Surface>
 
       {/* Meal Sections */}
       {(['breakfast', 'lunch', 'dinner', 'snack']).map((mealType) => (
@@ -726,39 +600,33 @@ const FoodLog = () => {
         </Typography>
       )}
 
-      {/* Natural-language quick-add — proposal only, never a write */}
-      {naturalQuickAddOn && (
-        <NaturalLanguageQuickAdd
-          open={showNaturalQuickAdd}
-          onClose={() => setShowNaturalQuickAdd(false)}
-          defaultMealType={selectedMealType}
-          onLogRows={handleLogProposal}
-          onSearchFor={(query, mealType) => {
-            if (mealType) setSelectedMealType(mealType);
-            setSearchPrefill(query);
-            setShowNaturalQuickAdd(false);
-            setShowAddDialog(true);
-          }}
-        />
-      )}
-
-      {/* Add Food Dialog */}
+      {/* The meal-slot "+" opens the same box in a sheet, with that meal
+          already chosen. Same component, same behaviour, less chrome. */}
       <AddFoodDialog
         open={showAddDialog}
-        onClose={() => { setShowAddDialog(false); setSearchPrefill(''); }}
-        initialQuery={searchPrefill}
-        onFoodSelect={handleFoodSelect}
-        onCommitBatch={handleCommitBatch}
+        onClose={() => setShowAddDialog(false)}
         mealType={selectedMealType}
         onMealTypeChange={setSelectedMealType}
+        onLogItems={logItems}
+        onUndo={undoLogs}
+        onCreateFood={(query) => {
+          setShowAddDialog(false);
+          setCreateForm({ ...EMPTY_FOOD_FORM, name: query });
+        }}
         showBarcodeScanner={showBarcodeScanner}
         onShowBarcodeScanner={setShowBarcodeScanner}
-        onBarcodeScanned={(food) => {
-          handleFoodSelect(food);
-          setShowBarcodeScanner(false);
-        }}
-        mode={mode}
-        netCarbLimit={netCarbLimit}
+        ketoMode={mode === 'keto'}
+      />
+
+      {/* "Can't find it? Create …" lands here, with the name already filled */}
+      <FoodEditDialog
+        open={Boolean(createForm)}
+        food={null}
+        form={createForm || EMPTY_FOOD_FORM}
+        onChange={setCreateForm}
+        onClose={() => setCreateForm(null)}
+        onSave={handleCreateFood}
+        loading={creatingFood}
       />
 
       {/* Save Meal Dialog */}
