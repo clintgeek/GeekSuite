@@ -23,11 +23,15 @@ import FoodItem from '../models/FoodItem.js';
 import FoodLog from '../models/FoodLog.js';
 import UserSettings from '../models/UserSettings.js';
 import aiFoodService from './aiFoodService.js';
-import foodApiService from './foodApiService.js';
 import fatSecretService from './fatSecretService.js';
+import foodApiService from './foodApiService.js';
 import aiClassificationCacheService from './aiClassificationCacheService.js';
 import calorieNinjasService from './calorieNinjasService.js';
 import unitConversion from './unitConversion.js';
+import cacheService from './cacheService.js';
+import { foodCatalogVisibilityFilter } from '@geeksuite/schemas/fitnessgeek/foodItem';
+import { parseFoodQuery, parseFragment, itemIsGroundedInQuery } from './foodQueryParser.js';
+import { rankFoodResults, isConfidentMatch } from './foodRanker.js';
 
 /**
  * Confidence levels for food lookup results
@@ -41,13 +45,8 @@ const CONFIDENCE = {
   ESTIMATED: 20     // AI estimation (fallback)
 };
 
-// Stop words to ignore when tokenizing search queries
-const RAW_RESULT_STOP_WORDS = new Set([
-  'and', 'with', 'the', 'a', 'of', 'to', 'for', 'in', 'from', 'on', 'at', 'or', 'is'
-]);
-
-const MAX_SANITY_RESULTS = Number.parseInt(process.env.MAX_SANITY_RESULTS || '10', 10);
-const USER_PREFERENCE_LIMIT = Number.parseInt(process.env.USER_PREFERENCE_LIMIT || '20', 10);
+/** How many of the user's own foods to hold in the personal index. */
+const PERSONAL_INDEX_LIMIT = Number.parseInt(process.env.PERSONAL_INDEX_LIMIT || '200', 10);
 
 class UnifiedFoodService {
   constructor() {
@@ -67,87 +66,299 @@ class UnifiedFoodService {
    */
   async search(query, options) {
     options = options || {};
-    var limit = options.limit || 25;
-    var includeAI = options.includeAI !== false;
-    var userId = options.userId || 'anonymous';
+    const limit = options.limit || 25;
+    const includeAI = options.includeAI !== false;
+    const userId = options.userId || null;
 
-    if (!query || query.trim().length < 2) {
+    const parsed = parseFoodQuery(query);
+    if (parsed.fragments.length === 0) {
       return [];
     }
-
-    var trimmedQuery = query.trim();
 
     try {
-      const userPreferenceResults = userId ? await this.getUserPreferenceResults(userId, trimmedQuery, limit) : [];
+      const personal = await this.getPersonalIndex(userId);
 
-      // Step 1: Classify the input (cheap AI call, cached)
-      var classification = null;
-      if (includeAI && this.shouldUseAIClassification(trimmedQuery)) {
-        classification = await this.classifyInput(userId, trimmedQuery);
-        logger.info('Food input classified', {
-          query: trimmedQuery,
-          type: classification.type,
-          brand: classification.brand,
-          items: classification.items,
-          confidence: classification.confidence
+      // ── The person separated their foods themselves ──────────────────
+      if (parsed.explicitlySeparated) {
+        return this.searchSeparatedFragments(parsed.fragments, { limit, personal, includeAI });
+      }
+
+      // ── One dish. Search the whole phrase, as written ────────────────
+      const [fragment] = parsed.fragments;
+      const candidates = await this.fetchCandidates(fragment.searchText, limit, userId);
+      const ranked = rankFoodResults(candidates, fragment, { personal, limit });
+
+      logger.info({
+        query: parsed.normalized,
+        dish: fragment.searchText,
+        servings: fragment.servings,
+        candidates: candidates.length,
+        topScore: ranked[0]?.relevanceScore ?? null,
+        topName: ranked[0]?.name ?? null
+      }, 'Dish search');
+
+      if (ranked.length > 0 && isConfidentMatch(ranked[0], fragment)) {
+        return this.withRequestedServings(ranked, fragment);
+      }
+
+      // ── Nothing convincing. Only NOW may we consider ingredients ─────
+      // and the person is told, rather than silently handed a different
+      // question's answer. See DOCS/THE_FOOD_SEARCH_PLAN.md §1.0.
+      const ingredients = includeAI
+        ? await this.proposeIngredients(fragment, parsed.normalized, userId)
+        : [];
+
+      if (ingredients.length > 1) {
+        logger.info({
+          query: parsed.normalized,
+          ingredients: ingredients.map((f) => f.searchText)
+        }, 'Dish did not resolve — offering ingredients');
+
+        const decomposed = await this.searchSeparatedFragments(ingredients, {
+          limit,
+          personal,
+          includeAI
         });
+        return decomposed.map((item) => ({
+          ...item,
+          decomposedFrom: fragment.searchText
+        }));
       }
 
-      // Step 2: Route based on classification
-      var results = [];
-
-      if (classification && classification.type === 'branded' && classification.brand) {
-        // Branded item → prioritize FatSecret
-        results = await this.searchBranded(classification, limit, includeAI);
-      } else if (classification && classification.type === 'composite') {
-        // Multiple items → handle each and combine
-        results = await this.searchComposite(classification, limit, includeAI);
-      } else if (classification && classification.type === 'generic') {
-        // Generic food → prioritize USDA
-        results = await this.searchGeneric(classification, limit, includeAI);
-      } else {
-        // Unknown or no classification → search all APIs
-        results = await this.searchAPIs(trimmedQuery, limit);
+      // Weak matches beat no matches — hand back what we have, in order.
+      if (ranked.length > 0) {
+        return this.withRequestedServings(ranked, fragment);
       }
 
-      logger.info('Search results', {
-        query: trimmedQuery,
-        type: classification ? classification.type : 'unclassified',
-        count: results.length
-      });
-
-      // Step 3: If no results and AI enabled, fall back to AI estimation
-      if (results.length === 0 && includeAI) {
-        logger.info('No API results, using AI estimation', { query: trimmedQuery });
-        try {
-          var aiResults = await this.parseWithAI(trimmedQuery, userId);
-          if (aiResults && aiResults.length > 0) {
-            // Mark as estimated so UI can show confidence indicator
-            return aiResults.map(function(r) {
-              r.confidence = 'estimated';
-              return r;
-            }).slice(0, limit);
-          }
-        } catch (aiError) {
-          logger.error('AI estimation fallback failed', { error: aiError.message });
-        }
+      if (includeAI) {
+        const estimated = await this.estimateWithAI(parsed.normalized, userId, limit);
+        if (estimated.length > 0) return estimated;
       }
 
-      // Step 4: Apply AI sanity check to validate and rank results
-      let searchResults = results;
-      if (searchResults.length > 0 && includeAI && this.shouldUseAIScoring(trimmedQuery)) {
-        const sanityLimit = Math.min(limit, MAX_SANITY_RESULTS);
-        searchResults = await this.applySanityCheck(trimmedQuery, searchResults, sanityLimit);
-      } else if (searchResults.length > limit) {
-        searchResults = searchResults.slice(0, limit);
-      }
-
-      return this.mergePreferenceResults(userPreferenceResults, searchResults, limit);
+      return [];
 
     } catch (error) {
-      logger.error('Unified search failed', { query: query, error: error.message });
+      logger.error({ query, err: error }, 'Unified search failed');
       return [];
     }
+  }
+
+  /**
+   * The typeahead: the person's own catalog, ranked, with nothing on the wire
+   * but Mongo.
+   *
+   * This is what the search box calls on every keystroke. It touches no
+   * external API and no model, so it answers in milliseconds and can run
+   * while someone is still typing — which is the whole difference between a
+   * search box that feels alive and one you have to submit to.
+   *
+   * With no query it returns the starting shelf: favourites, then what they
+   * logged recently, then their own custom foods. That is the empty state of
+   * the box, and it is the answer most of the time.
+   *
+   * @param {string} query
+   * @param {{userId?: string, limit?: number}} [options]
+   * @returns {Promise<Array>}
+   */
+  async suggest(query, options = {}) {
+    const limit = options.limit || 15;
+    const userId = options.userId || null;
+    const parsed = parseFoodQuery(query);
+
+    try {
+      const personal = await this.getPersonalIndex(userId);
+
+      if (parsed.fragments.length === 0) {
+        return this.startingShelf(userId, personal, limit);
+      }
+
+      const [fragment] = parsed.fragments;
+      const candidates = await this.searchLocalDB(fragment.searchText, limit * 3, userId);
+      const ranked = rankFoodResults(candidates, fragment, { personal, limit });
+
+      return this.withRequestedServings(ranked, fragment);
+
+    } catch (error) {
+      logger.warn({ err: error, query }, 'Suggest failed');
+      return [];
+    }
+  }
+
+  /**
+   * Favourites, then recents, then their own foods — the box's empty state.
+   */
+  async startingShelf(userId, personal, limit) {
+    if (!userId) return [];
+
+    const ids = [
+      ...personal.favorites,
+      ...personal.recent.keys(),
+      ...personal.custom
+    ];
+    if (ids.length === 0) return [];
+
+    const unique = [...new Set(ids)].slice(0, limit * 2);
+    const foods = await FoodItem.find({ _id: { $in: unique }, is_deleted: false }).lean();
+    const byId = new Map(foods.map((f) => [String(f._id), f]));
+
+    const out = [];
+    const seen = new Set();
+    for (const id of unique) {
+      const doc = byId.get(String(id));
+      if (!doc || seen.has(String(id))) continue;
+      seen.add(String(id));
+      out.push({
+        ...this.transformToStandardFormat(doc, doc.source || 'local'),
+        isFavorite: personal.favorites.has(String(id)),
+        shelf: personal.favorites.has(String(id))
+          ? 'favorite'
+          : (personal.recent.has(String(id)) ? 'recent' : 'custom')
+      });
+      if (out.length >= limit) break;
+    }
+    return out;
+  }
+
+  /**
+   * Search fragments the person separated themselves, in parallel, tagging
+   * each result with the fragment it answers so the UI can group them.
+   *
+   * Sequential `await` in a `for` loop is what made a four-item query cost
+   * four round trips; these are independent questions and go out together.
+   */
+  async searchSeparatedFragments(fragments, { limit, personal, includeAI }) {
+    void includeAI;
+    const perFragment = Math.max(4, Math.ceil(limit / Math.max(1, fragments.length)));
+
+    const settled = await Promise.allSettled(
+      fragments.map((fragment) => this.fetchCandidates(fragment.searchText, perFragment * 2))
+    );
+
+    const out = [];
+    fragments.forEach((fragment, index) => {
+      const candidates = settled[index].status === 'fulfilled' ? settled[index].value : [];
+      const ranked = rankFoodResults(candidates, fragment, { personal, limit: perFragment });
+      for (const item of ranked) {
+        out.push({
+          ...item,
+          compositeItem: fragment.searchText,
+          compositeIndex: index,
+          requestedQuantity: fragment.servings,
+          requestedUnit: fragment.unit || 'serving'
+        });
+      }
+    });
+
+    logger.info({
+      fragments: fragments.map((f) => f.searchText),
+      count: out.length
+    }, 'Separated fragment search');
+
+    return out;
+  }
+
+  /** Carry the quantity the person typed onto every result. */
+  withRequestedServings(results, fragment) {
+    if (!fragment || fragment.servings === 1) return results;
+    return results.map((item) => ({
+      ...item,
+      requestedQuantity: fragment.servings,
+      requestedUnit: fragment.unit || 'serving'
+    }));
+  }
+
+  /**
+   * Ask the model whether an unresolved dish is really several foods — the
+   * ONLY place decomposition may originate, and it is gated twice:
+   *
+   *   1. it runs only after the whole-phrase search failed to convince, and
+   *   2. every item it proposes must be built from words the person actually
+   *      typed (`itemIsGroundedInQuery`).
+   *
+   * Guard 2 is what stops "4 chocolate chip pancakes homemade" from acquiring
+   * a "pancake mix" that appears nowhere in the query.
+   */
+  async proposeIngredients(fragment, normalizedQuery, userId) {
+    try {
+      const classification = await this.classifyInput(userId || 'anonymous', fragment.searchText);
+      const items = Array.isArray(classification?.items) ? classification.items : [];
+      if (items.length < 2) return [];
+
+      const grounded = [];
+      const seen = new Set();
+      for (const item of items) {
+        const name = String(item?.name || '').trim();
+        if (!name) continue;
+        if (!itemIsGroundedInQuery(name, normalizedQuery)) {
+          logger.warn({ item: name, query: normalizedQuery }, 'Dropped ungrounded classifier item');
+          continue;
+        }
+        const parsedItem = parseFragment(name);
+        if (!parsedItem) continue;
+        const key = parsedItem.tokens.join(' ');
+        if (seen.has(key)) continue;
+        seen.add(key);
+        if (Number(item?.quantity) > 0) parsedItem.servings = Number(item.quantity);
+        grounded.push(parsedItem);
+      }
+
+      // One surviving item is the dish we already searched — not a split.
+      return grounded.length > 1 ? grounded : [];
+
+    } catch (error) {
+      logger.warn({ err: error }, 'Ingredient proposal failed');
+      return [];
+    }
+  }
+
+  /** Last resort: let the model estimate a food nobody's catalog has. */
+  async estimateWithAI(query, userId, limit) {
+    try {
+      const results = await this.parseWithAI(query, userId);
+      return (results || [])
+        .map((r) => ({ ...r, confidence: 'estimated' }))
+        .slice(0, limit);
+    } catch (error) {
+      logger.error({ err: error }, 'AI estimation fallback failed');
+      return [];
+    }
+  }
+
+  /**
+   * Every source, in parallel, deduplicated. Ranking happens once, centrally,
+   * in `foodRanker` — no source gets to decide the order any more.
+   */
+  async fetchCandidates(searchText, limit, userId = null) {
+    if (!searchText) return [];
+
+    const fetchLimit = Math.min(Math.max(limit, 10) * 2, 40);
+    const useCalorieNinjas = this.detectNaturalLanguage(searchText);
+
+    // USDA and OpenFoodFacts go through `foodApiService`, which is Redis-cached
+    // (7 days) and wrapped in the shared 'usda' / 'openfoodfacts' circuit
+    // breakers. The old generic path called those two upstreams directly over
+    // axios instead — no cache, no breaker — which is most of why a
+    // multi-word search cost 3–5 seconds every single time.
+    const settled = await Promise.allSettled([
+      this.searchLocalDB(searchText, fetchLimit, userId),
+      fatSecretService.searchFoods(searchText, fetchLimit),
+      foodApiService.searchFoods(searchText, fetchLimit),
+      useCalorieNinjas ? calorieNinjasService.searchFoods(searchText) : Promise.resolve([])
+    ]);
+
+    const [local, fatsecret, external, cn] = settled.map((r) =>
+      (r.status === 'fulfilled' && Array.isArray(r.value)) ? r.value : []
+    );
+
+    logger.debug({
+      query: searchText,
+      local: local.length,
+      fatsecret: fatsecret.length,
+      external: external.length,
+      calorieninjas: cn.length
+    }, 'Candidate fetch');
+
+    return this.deduplicateResults([...local, ...fatsecret, ...external, ...cn], fetchLimit);
   }
 
   /**
@@ -155,371 +366,10 @@ class UnifiedFoodService {
    */
   async classifyInput(userId, input) {
     var self = this;
+    void self;
     return aiClassificationCacheService.getOrCompute(userId, input, function(inp) {
       return aiFoodService.classifyFoodInput(inp);
     });
-  }
-
-  /**
-   * Search for branded foods - prioritize FatSecret
-   */
-  async searchBranded(classification, limit, includeAI) {
-    var itemName = classification.items[0] ? classification.items[0].name : '';
-    var brand = classification.brand;
-
-    logger.debug('Searching branded food (FatSecret priority)', {
-      itemName,
-      brand
-    });
-
-    // Use new routing with FatSecret priority
-    return this.searchBrandedItem(itemName, brand, limit, includeAI);
-  }
-
-  /**
-   * Search for generic foods - prioritize USDA
-   */
-  async searchGeneric(classification, limit, includeAI) {
-    var searchTerm = classification.items[0] ? classification.items[0].name : '';
-    var searchTerms = classification.search_terms || [];
-
-    if (!searchTerm && searchTerms.length > 0) {
-      searchTerm = searchTerms.join(' ');
-    }
-
-    logger.debug('Searching generic food (USDA priority)', { searchTerm: searchTerm });
-
-    return this.searchRawIngredient(searchTerm, limit, includeAI);
-  }
-
-  /**
-   * Handle composite queries (multiple food items)
-   * Search for each item separately using appropriate API based on item type
-   */
-  async searchComposite(classification, limit, includeAI) {
-    var self = this;
-    var items = classification.items || [];
-    var overallBrand = classification.brand; // e.g., "McDonald's" for the whole query
-
-    if (items.length === 0) {
-      return [];
-    }
-
-    logger.info('Searching composite foods', {
-      itemCount: items.length,
-      items: items.map(function(i) { return i.name; }),
-      overallBrand: overallBrand
-    });
-
-    // Search for each item - get best matches only
-    var allResults = [];
-
-    for (var i = 0; i < items.length; i++) {
-      var item = items[i];
-      var searchTerm = item.name;
-      var itemBrand = item.brand || overallBrand; // Use item brand or fall back to overall brand
-
-      logger.debug('Searching for composite item', {
-        index: i,
-        name: item.name,
-        brand: itemBrand,
-        quantity: item.quantity
-      });
-
-      // Route to appropriate search based on whether item has a brand
-      var itemResults;
-      if (itemBrand) {
-        // Branded item - use FatSecret priority
-        itemResults = await self.searchBrandedItem(searchTerm, itemBrand, 10, includeAI);
-      } else {
-        // Generic item - use USDA priority
-        itemResults = await self.searchRawIngredient(searchTerm, 10, includeAI);
-      }
-
-      // Score and rank results by relevance to the search term
-      var scoredResults = itemResults.map(function(r) {
-        r.relevanceScore = self.scoreRelevance(r, searchTerm);
-        r.compositeItem = item.name;
-        r.compositeIndex = i;
-        r.requestedQuantity = item.quantity || 1;
-        r.requestedUnit = item.unit || 'serving';
-        return r;
-      });
-
-      // Sort by relevance
-      scoredResults.sort(function(a, b) {
-        return b.relevanceScore - a.relevanceScore;
-      });
-
-      // Determine how many results to show based on top score confidence
-      // Scoring: 100+ = exact match, 50+ = starts with, 30+ = contains
-      var topScore = scoredResults[0] ? scoredResults[0].relevanceScore : 0;
-      var resultsToShow;
-      if (topScore >= 100) {
-        // Exact or near-exact match - show just 1-2 options
-        resultsToShow = 2;
-      } else if (topScore >= 50) {
-        // Good match (starts with search term) - show a few options
-        resultsToShow = 3;
-      } else {
-        // Lower confidence - show more options
-        resultsToShow = 4;
-      }
-
-      var topResults = scoredResults.slice(0, resultsToShow);
-
-      logger.debug('Composite item results', {
-        item: item.name,
-        totalFound: itemResults.length,
-        topScore: topScore,
-        resultsToShow: resultsToShow,
-        topMatch: topResults[0] ? topResults[0].name : 'none'
-      });
-
-      allResults = allResults.concat(topResults);
-    }
-
-    // Sort final results: group by compositeIndex, then by relevance
-    allResults.sort(function(a, b) {
-      if (a.compositeIndex !== b.compositeIndex) {
-        return a.compositeIndex - b.compositeIndex;
-      }
-      return b.relevanceScore - a.relevanceScore;
-    });
-
-    return allResults;
-  }
-
-  /**
-   * Search for raw/generic ingredients
-   * Priority: USDA → OpenFoodFacts → CalorieNinjas
-   * AI handles ranking - no brittle lexical filtering
-   */
-  async searchRawIngredient(searchTerm, limit, includeAI) {
-    if (!searchTerm) {
-      return [];
-    }
-
-    // Fetch from multiple sources
-    const fetchLimit = Math.min(limit * 2, 30);
-    const results = [];
-
-    const useCalorieNinjas = this.detectNaturalLanguage(searchTerm);
-    const [usdaResults, offResults, cnResults] = await Promise.allSettled([
-      this.searchUSDA(searchTerm, fetchLimit),
-      this.searchOpenFoodFacts(searchTerm, fetchLimit),
-      useCalorieNinjas ? calorieNinjasService.searchFoods(searchTerm) : Promise.resolve([])
-    ]);
-
-    const resolvedUsda = usdaResults.status === 'fulfilled' ? usdaResults.value : [];
-    const resolvedOff = offResults.status === 'fulfilled' ? offResults.value : [];
-    const resolvedCn = cnResults.status === 'fulfilled' ? cnResults.value : [];
-
-    results.push(...resolvedUsda, ...resolvedOff, ...resolvedCn);
-
-    logger.info('Raw ingredient search results', {
-      query: searchTerm,
-      usda: resolvedUsda.length,
-      off: resolvedOff.length,
-      cn: resolvedCn.length,
-      total: results.length
-    });
-
-    const useAIScoring = includeAI && this.shouldUseAIScoring(searchTerm);
-    if (useAIScoring) {
-      const scored = await aiFoodService.scoreResultsRelevance(searchTerm, results);
-      const sorted = scored
-        .sort((a, b) => (b.aiRelevanceScore || 0) - (a.aiRelevanceScore || 0));
-      return this.deduplicateResults(sorted, limit);
-    }
-
-    const sorted = this.basicLexicalSort(results, searchTerm);
-    return this.deduplicateResults(sorted, limit);
-  }
-
-  /**
-   * Filter out results that don't contain ANY of the search tokens.
-   * DEPRECATED: Keeping for reference but AI scoring is preferred.
-   */
-  filterRelevantResults(results, searchTerm) {
-    if (!results || results.length === 0) return [];
-
-    const tokens = searchTerm.toLowerCase()
-      .split(/[\s\-]+/)
-      .filter(t => t && t.length > 1 && !RAW_RESULT_STOP_WORDS.has(t));
-
-    if (tokens.length === 0) return results;
-
-    return results.filter(item => {
-      const name = (item.name || '').toLowerCase();
-      const brand = (item.brand || '').toLowerCase();
-      const combined = `${name} ${brand}`;
-
-      // Must contain at least one meaningful token
-      return tokens.some(token => combined.includes(token));
-    });
-  }
-
-  /**
-   * Search for branded items - FatSecret first
-   * Chain: FatSecret → OpenFoodFacts → CalorieNinjas
-   * AI handles ranking - no brittle lexical filtering
-   */
-  async searchBrandedItem(searchTerm, brand, limit, includeAI) {
-    if (!searchTerm && !brand) {
-      return [];
-    }
-
-    const fullQuery = [brand, searchTerm].filter(Boolean).join(' ').trim();
-    const fetchLimit = Math.min(limit * 2, 30);
-    const results = [];
-
-    const useCalorieNinjas = this.detectNaturalLanguage(fullQuery);
-    const [fsResults, offResults, cnResults] = await Promise.allSettled([
-      fatSecretService.searchFoods(fullQuery, fetchLimit),
-      this.searchOpenFoodFacts(fullQuery, fetchLimit),
-      useCalorieNinjas ? calorieNinjasService.searchFoods(fullQuery) : Promise.resolve([])
-    ]);
-
-    const resolvedFs = fsResults.status === 'fulfilled' ? fsResults.value : [];
-    const resolvedOff = offResults.status === 'fulfilled' ? offResults.value : [];
-    const resolvedCn = cnResults.status === 'fulfilled' ? cnResults.value : [];
-
-    results.push(...resolvedFs, ...resolvedOff, ...resolvedCn);
-
-    logger.info('Branded item search results', {
-      query: fullQuery,
-      fatsecret: resolvedFs.length,
-      off: resolvedOff.length,
-      cn: resolvedCn.length,
-      total: results.length
-    });
-
-    const useAIScoring = includeAI && this.shouldUseAIScoring(fullQuery);
-    if (useAIScoring) {
-      const scored = await aiFoodService.scoreResultsRelevance(fullQuery, results);
-      const sorted = scored
-        .sort((a, b) => (b.aiRelevanceScore || 0) - (a.aiRelevanceScore || 0));
-      return this.deduplicateResults(sorted, limit);
-    }
-
-    const sorted = this.basicLexicalSort(results, fullQuery);
-    return this.deduplicateResults(sorted, limit);
-  }
-
-  /**
-   * Simple lexical pre-sort before AI ranking.
-   * Just does basic token matching to put obvious matches first.
-   * AI layer does the real filtering/ranking.
-   */
-  basicLexicalSort(results, searchTerm) {
-    if (!results || results.length === 0) {
-      return [];
-    }
-
-    const search = (searchTerm || '').toLowerCase();
-    const tokens = search.split(/[\s\-]+/).filter(t => t && !RAW_RESULT_STOP_WORDS.has(t));
-
-    return results
-      .map(item => {
-        const name = (item.name || '').toLowerCase();
-        let score = 0;
-
-        // Exact match
-        if (name === search) score += 100;
-        // Starts with query
-        else if (name.startsWith(search)) score += 50;
-        // Contains query
-        else if (name.includes(search)) score += 25;
-
-        // Token matches
-        tokens.forEach(token => {
-          if (name.includes(token)) score += 10;
-        });
-
-        return { ...item, lexicalScore: score };
-      })
-      .sort((a, b) => (b.lexicalScore || 0) - (a.lexicalScore || 0));
-  }
-
-  /**
-   * Score how relevant a food result is to the search term
-   * Higher score = better match
-   */
-  scoreRelevance(food, searchTerm) {
-    var score = 0;
-    var name = (food.name || '').toLowerCase();
-    var brand = (food.brand || '').toLowerCase();
-    var search = searchTerm.toLowerCase();
-    var searchWords = search.split(/\s+/);
-
-    // Exact name match
-    if (name === search) {
-      score += 100;
-    }
-
-    // Name starts with search term
-    if (name.indexOf(search) === 0) {
-      score += 50;
-    }
-
-    // Name contains search term
-    if (name.indexOf(search) !== -1) {
-      score += 30;
-    }
-
-    // Check each search word
-    for (var i = 0; i < searchWords.length; i++) {
-      var word = searchWords[i];
-      if (word.length < 2) continue;
-
-      if (name.indexOf(word) !== -1) {
-        score += 10;
-      }
-      if (brand.indexOf(word) !== -1) {
-        score += 5;
-      }
-    }
-
-    // Prefer verified sources
-    if (food.confidence === 'verified') {
-      score += 15;
-    }
-
-    // Prefer branded sources for branded items
-    if (food.source === 'fatsecret' || food.source === 'local') {
-      score += 10;
-    }
-
-    // USDA is good for generic items
-    if (food.source === 'USDA') {
-      score += 8;
-    }
-
-    // Penalize if name is much longer than search (probably not a good match)
-    if (name.length > search.length * 3) {
-      score -= 10;
-    }
-
-    return score;
-  }
-
-  shouldUseAIScoring(query) {
-    if (!query) return false;
-    const wordCount = query.trim().split(/\s+/).length;
-    if (wordCount <= 3 && !this.detectNaturalLanguage(query)) {
-      return false;
-    }
-    return true;
-  }
-
-  shouldUseAIClassification(query) {
-    if (!query) return false;
-    const wordCount = query.trim().split(/\s+/).length;
-    if (wordCount <= 3 && !this.detectNaturalLanguage(query)) {
-      return false;
-    }
-    return true;
   }
 
   // ============================================
@@ -554,7 +404,7 @@ class UnifiedFoodService {
       return null;
 
     } catch (error) {
-      logger.error('Barcode lookup failed', { barcode, error: error.message });
+      logger.error({ barcode, err: error }, 'Barcode lookup failed');
       return null;
     }
   }
@@ -582,9 +432,9 @@ class UnifiedFoodService {
     try {
       var envelope = await aiFoodService.parseFoodDescription(description, {}, { userId });
       if (!envelope.ok) {
-        logger.info('AI estimation unavailable — no estimated results to add', {
+        logger.info({
           reason: envelope.reason
-        });
+        }, 'AI estimation unavailable — no estimated results to add');
         return [];
       }
 
@@ -621,7 +471,7 @@ class UnifiedFoodService {
       });
 
     } catch (error) {
-      logger.error('AI parsing failed', { description: description, error: error.message });
+      logger.error({ description, err: error }, 'AI parsing failed');
       throw error;
     }
   }
@@ -631,189 +481,111 @@ class UnifiedFoodService {
   // ============================================
 
   /**
-   * Search across local DB and external APIs
-   * Uses cached foodApiService for external API calls
-   * Priority: Local DB > FatSecret (branded) > USDA/OpenFoodFacts
-   */
-  async searchAPIs(query, limit) {
-    const thirdLimit = Math.ceil(limit / 3);
-
-    // Search in parallel - include FatSecret for branded foods
-    const [localResults, fatSecretResults, externalResults] = await Promise.allSettled([
-      this.searchLocalDB(query, thirdLimit),
-      fatSecretService.searchFoods(query, thirdLimit),
-      foodApiService.searchFoods(query, thirdLimit)
-    ]);
-
-    // Combine results - prioritize local, then FatSecret (branded), then others
-    let allResults = [];
-
-    if (localResults.status === 'fulfilled') {
-      allResults.push(...localResults.value);
-    }
-
-    if (fatSecretResults.status === 'fulfilled' && fatSecretResults.value.length > 0) {
-      logger.debug('FatSecret results added', { count: fatSecretResults.value.length });
-      allResults.push(...fatSecretResults.value);
-    }
-
-    if (externalResults.status === 'fulfilled') {
-      // External results are already in standard format from foodApiService
-      allResults.push(...externalResults.value);
-    }
-
-    // Deduplicate by name+brand
-    return this.deduplicateResults(allResults, limit);
-  }
-
-  /**
-   * Apply AI sanity check to results
-   * 1. Score each result's relevance
-   * 2. Sort by AI score
-   * 3. Take top N
-   * 4. Final validation
-   *
-   * @param {string} originalQuery - User's original input
-   * @param {Array} results - Raw API results
-   * @param {number} topN - Number of results to return (default 3)
-   * @returns {Promise<Array>} Validated, scored, filtered results
-   */
-  async applySanityCheck(originalQuery, results, topN = 3) {
-    if (!results || results.length === 0) {
-      return results;
-    }
-
-    try {
-      // Step 1: Score results with AI
-      const scoredResults = await aiFoodService.scoreResultsRelevance(
-        originalQuery,
-        results
-      );
-
-      // Step 2: Sort by AI relevance score (highest first)
-      scoredResults.sort((a, b) =>
-        (b.aiRelevanceScore || 0) - (a.aiRelevanceScore || 0)
-      );
-
-      // Step 3: Take top N results
-      const topResults = scoredResults.slice(0, topN).map((result, index) => ({
-        ...result,
-        sanityRank: index + 1
-      }));
-
-      // Step 4: Final sanity check
-      const validation = await aiFoodService.sanityCheckResults(
-        originalQuery,
-        topResults
-      );
-
-      return topResults.map(result => ({
-        ...result,
-        sanityCheckPassed: validation.valid,
-        sanityCheckIssues: validation.issues || [],
-        sanityCheckConfidence: validation.confidence || 'unknown'
-      }));
-
-    } catch (error) {
-      logger.error('Sanity check failed, returning unvalidated results', {
-        error: error.message
-      });
-      return results.slice(0, topN);
-    }
-  }
-
-  /**
    * Search local MongoDB database
    */
-  async searchLocalDB(query, limit) {
-    try {
-      const foods = await FoodItem.find({
-        is_deleted: false,
-        $or: [
-          { name: { $regex: query, $options: 'i' } },
-          { brand: { $regex: query, $options: 'i' } }
-        ]
-      })
-      .limit(limit)
-      .lean();
+  async searchLocalDB(query, limit, userId = null) {
+    if (!query) return [];
 
-      return foods.map(f => this.transformToStandardFormat(f, 'local'));
+    // Ownership, not just liveness. This filter is the one definition of "a
+    // catalog row this person may see"; searching without it put another
+    // household member's private custom foods in your results.
+    const visibility = foodCatalogVisibilityFilter(userId);
+
+    try {
+      // The `{name: 'text', brand: 'text'}` index has existed all along and
+      // nothing used it — this path was an unanchored regex, i.e. a scan.
+      const textHits = await FoodItem.find(
+        { is_deleted: false, ...visibility, $text: { $search: query } },
+        { score: { $meta: 'textScore' } }
+      )
+        .sort({ score: { $meta: 'textScore' } })
+        .limit(limit)
+        .lean();
+
+      let foods = textHits;
+
+      // A text index matches whole words, so a half-typed word ("ched") finds
+      // nothing. Fall back to an ANCHORED, escaped prefix regex, which the
+      // {name, brand} index can still serve.
+      if (foods.length < Math.min(5, limit)) {
+        const escaped = String(query).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const prefix = new RegExp(`^${escaped}`, 'i');
+        const prefixHits = await FoodItem.find({
+          is_deleted: false,
+          ...visibility,
+          $or: [{ name: prefix }, { brand: prefix }]
+        })
+          .limit(limit)
+          .lean();
+
+        const seen = new Set(foods.map((f) => String(f._id)));
+        foods = [...foods, ...prefixHits.filter((f) => !seen.has(String(f._id)))];
+      }
+
+      return foods.map((f) => this.transformToStandardFormat(f, f.source || 'local'));
 
     } catch (error) {
-      logger.warn('Local DB search failed', { error: error.message });
+      logger.warn({ err: error, query }, 'Local DB search failed');
       return [];
     }
   }
 
   /**
-   * Search OpenFoodFacts API
+   * What this person actually eats — favourites, recent logs, their own custom
+   * foods, and what they picked the last time they typed this.
+   *
+   * This replaces `getUserPreferenceResults`, which ran a whole-phrase regex
+   * (so "greek yogurt 0" never found their saved "Fage Total 0% Greek Yogurt")
+   * and then PREPENDED its hits, letting up to 20 of 25 result slots go to the
+   * personal list before the search was even consulted. Personalisation is a
+   * ranking signal now, not a queue-jump.
    */
-  async searchOpenFoodFacts(query, limit) {
-    try {
-      const response = await axios.get(`${this.openFoodFactsBaseUrl}/cgi/search.pl`, {
-        params: {
-          search_terms: query,
-          page_size: limit,
-          json: 1
-        },
-        timeout: 8000
-      });
-
-      if (!response.data?.products) {
-        return [];
-      }
-
-      return response.data.products
-        .filter(p => p.product_name && p.nutriments)
-        .map(p => this.transformOpenFoodFacts(p));
-
-    } catch (error) {
-      logger.warn('OpenFoodFacts search failed', { error: error.message });
-      return [];
-    }
-  }
-
-  /**
-   * Search USDA FoodData Central API
-   */
-  async searchUSDA(query, limit) {
-    if (!this.usdaApiKey) {
-      logger.warn('USDA API key not configured');
-      return [];
-    }
+  async getPersonalIndex(userId) {
+    const empty = {
+      favorites: new Set(),
+      recent: new Map(),
+      custom: new Set(),
+      chosenForQuery: new Set()
+    };
+    if (!userId) return empty;
 
     try {
-      // Request more results than needed so we have room to filter
-      const requestLimit = Math.min(limit * 3, 50);
+      const [settings, recentLogs, customFoods] = await Promise.all([
+        UserSettings.findOne({ user_id: userId }).lean(),
+        FoodLog.aggregate([
+          { $match: { user_id: userId } },
+          { $sort: { created_at: -1 } },
+          {
+            $group: {
+              _id: '$food_item_id',
+              lastUsed: { $first: '$created_at' },
+              usageCount: { $sum: 1 }
+            }
+          },
+          { $sort: { lastUsed: -1 } },
+          { $limit: PERSONAL_INDEX_LIMIT }
+        ]),
+        FoodItem.find({ user_id: userId, is_deleted: false })
+          .select('_id')
+          .limit(PERSONAL_INDEX_LIMIT)
+          .lean()
+      ]);
 
-      // USDA API dataType values must match exactly
-      // Valid: Foundation, Branded, SR Legacy, Survey (FNDDS)
-      const response = await axios.get('https://api.nal.usda.gov/fdc/v1/foods/search', {
-        params: {
-          api_key: this.usdaApiKey,
-          query: query,
-          pageSize: requestLimit
-          // Removed dataType filter - let USDA return all types for better coverage
-        },
-        timeout: 8000
-      });
+      const favorites = new Set(
+        (settings?.favorite_foods || []).map((id) => String(id))
+      );
+      const recent = new Map(
+        recentLogs
+          .filter((log) => log._id)
+          .map((log) => [String(log._id), { lastUsed: log.lastUsed, usageCount: log.usageCount }])
+      );
+      const custom = new Set(customFoods.map((f) => String(f._id)));
 
-      if (!response.data?.foods) {
-        return [];
-      }
-
-      return response.data.foods
-        .filter(f => f.description && f.foodNutrients)
-        .map(f => this.transformUSDA(f));
+      return { favorites, recent, custom, chosenForQuery: empty.chosenForQuery };
 
     } catch (error) {
-      logger.warn('USDA search failed', {
-        error: error.message,
-        query: query,
-        status: error.response?.status,
-        data: error.response?.data
-      });
-      return [];
+      logger.warn({ err: error, userId }, 'Failed to build personal index');
+      return empty;
     }
   }
 
@@ -834,7 +606,7 @@ class UnifiedFoodService {
       return this.transformOpenFoodFacts(response.data.product);
 
     } catch (error) {
-      logger.warn('OpenFoodFacts barcode lookup failed', { barcode, error: error.message });
+      logger.warn({ barcode, err: error }, 'OpenFoodFacts barcode lookup failed');
       return null;
     }
   }
@@ -906,56 +678,6 @@ class UnifiedFoodService {
     };
   }
 
-  /**
-   * Transform USDA food to standard format
-   * Note: USDA data is per 100g. We keep it that way and let the frontend/AI
-   * handle serving size adjustments based on user input.
-   */
-  transformUSDA(food) {
-    const nutrients = {};
-    (food.foodNutrients || []).forEach(n => {
-      if (n.nutrientName && n.value != null) {
-        nutrients[n.nutrientName.toLowerCase()] = n.value;
-      }
-    });
-
-    // Use USDA's serving size if provided, otherwise default to 100g
-    // The AI classification handles user-specified quantities separately
-    let servingSize = food.servingSize || 100;
-    let servingUnit = food.servingSizeUnit || food.servingUnit || 'g';
-    const ratio = servingSize / 100;
-
-    // Convert ml to fl oz for US-friendly display
-    if (servingUnit === 'ml' || servingUnit === 'milliliter' || servingUnit === 'milliliters') {
-      const converted = unitConversion.fromBase(servingSize, 'floz');
-      servingSize = Math.round(converted.value * 10) / 10;
-      servingUnit = 'fl oz';
-    }
-
-    return {
-      id: 'usda_' + food.fdcId,
-      name: (food.description || '').trim(),
-      brand: food.brandOwner || food.brandName || '',
-      barcode: food.gtinUpc || '',
-      nutrition: {
-        calories_per_serving: Math.round((nutrients['energy'] || 0) * ratio),
-        protein_grams: Math.round((nutrients['protein'] || 0) * ratio * 10) / 10,
-        carbs_grams: Math.round((nutrients['carbohydrate, by difference'] || 0) * ratio * 10) / 10,
-        fat_grams: Math.round((nutrients['total lipid (fat)'] || 0) * ratio * 10) / 10,
-        fiber_grams: Math.round((nutrients['fiber, total dietary'] || 0) * ratio * 10) / 10,
-        sugar_grams: Math.round((nutrients['sugars, total including nlea'] || 0) * ratio * 10) / 10,
-        sodium_mg: Math.round((nutrients['sodium, na'] || 0) * ratio * 10) / 10
-      },
-      serving: {
-        size: servingSize,
-        unit: servingUnit
-      },
-      source: 'usda',
-      source_id: food.fdcId,
-      confidence: CONFIDENCE.HIGH
-    };
-  }
-
   // ============================================
   // INTERNAL: UTILITIES
   // ============================================
@@ -1022,150 +744,6 @@ class UnifiedFoodService {
     return unique;
   }
 
-  async getUserPreferenceResults(userId, query, limit) {
-    try {
-      const resultsMap = new Map();
-      const regex = this.buildQueryRegex(query);
-      const normalizedLimit = Math.max(5, Math.min(limit || USER_PREFERENCE_LIMIT, USER_PREFERENCE_LIMIT));
-
-      const settings = await UserSettings.findOne({ user_id: userId }).lean();
-      const favoriteIds = settings?.favorite_foods || [];
-
-      const addPreferenceResult = (foodDoc, meta) => {
-        if (!foodDoc) return;
-        if (regex && !this.matchesQueryText(foodDoc.name, foodDoc.brand, regex)) {
-          return;
-        }
-
-        const key = foodDoc._id ? foodDoc._id.toString() : `${(foodDoc.name || '').toLowerCase()}-${(foodDoc.brand || '').toLowerCase()}`;
-        const isFavorite = meta.preferenceType === 'favorite' || (favoriteIds.length && favoriteIds.some(id => id.toString() === key));
-        const transformed = this.transformToStandardFormat(foodDoc, foodDoc.source || 'local');
-
-        const preferencePayload = {
-          ...transformed,
-          isFavorite: isFavorite || transformed.isFavorite,
-          preferenceScore: meta.preferenceScore,
-          preferenceType: meta.preferenceType,
-          preferenceMeta: meta.preferenceMeta || {}
-        };
-
-        if (resultsMap.has(key)) {
-          const current = resultsMap.get(key);
-          if ((meta.preferenceScore || 0) > (current.preferenceScore || 0)) {
-            resultsMap.set(key, { ...current, ...preferencePayload });
-          } else {
-            resultsMap.set(key, {
-              ...current,
-              isFavorite: current.isFavorite || preferencePayload.isFavorite,
-              preferenceMeta: { ...preferencePayload.preferenceMeta, ...current.preferenceMeta }
-            });
-          }
-        } else {
-          resultsMap.set(key, preferencePayload);
-        }
-      };
-
-      if (favoriteIds.length) {
-        const favoriteFoods = await FoodItem.find({
-          _id: { $in: favoriteIds },
-          is_deleted: false
-        }).limit(normalizedLimit).lean();
-
-        favoriteFoods.forEach((foodDoc, index) => {
-          addPreferenceResult(foodDoc, {
-            preferenceType: 'favorite',
-            preferenceScore: 100 - index,
-            preferenceMeta: { rank: index + 1 }
-          });
-        });
-      }
-
-      const recentLogs = await FoodLog.aggregate([
-        { $match: { user_id: userId } },
-        { $sort: { created_at: -1 } },
-        {
-          $group: {
-            _id: '$food_item_id',
-            lastUsed: { $first: '$created_at' },
-            usageCount: { $sum: 1 }
-          }
-        },
-        { $sort: { lastUsed: -1 } },
-        { $limit: normalizedLimit }
-      ]);
-
-      if (recentLogs.length) {
-        const ids = recentLogs.map((log) => log._id).filter(Boolean);
-        if (ids.length) {
-          const foods = await FoodItem.find({
-            _id: { $in: ids },
-            is_deleted: false
-          }).lean();
-          const foodMap = new Map(foods.map((food) => [food._id.toString(), food]));
-
-          recentLogs.forEach((log, index) => {
-            const foodDoc = foodMap.get(log._id?.toString());
-            if (!foodDoc) return;
-            addPreferenceResult(foodDoc, {
-              preferenceType: 'recent',
-              preferenceScore: 80 - index,
-              preferenceMeta: {
-                lastUsed: log.lastUsed,
-                usageCount: log.usageCount
-              }
-            });
-          });
-        }
-      }
-
-      const customFoods = await FoodItem.find({
-        user_id: userId,
-        is_deleted: false
-      })
-        .limit(normalizedLimit)
-        .lean();
-
-      customFoods.forEach((foodDoc, index) => {
-        addPreferenceResult(foodDoc, {
-          preferenceType: 'custom',
-          preferenceScore: 60 - index,
-          preferenceMeta: { userOwned: true }
-        });
-      });
-
-      return Array.from(resultsMap.values())
-        .sort((a, b) => (b.preferenceScore || 0) - (a.preferenceScore || 0))
-        .slice(0, normalizedLimit);
-
-    } catch (error) {
-      logger.warn('Failed to build user preferences for search', { userId, error: error.message });
-      return [];
-    }
-  }
-
-  mergePreferenceResults(preferenceResults, searchResults, limit) {
-    const combined = [];
-    const seen = new Set();
-
-    const pushResult = (item) => {
-      if (!item) return;
-      const key = this.generateResultKey(item);
-      if (seen.has(key)) {
-        return;
-      }
-      seen.add(key);
-      combined.push(item);
-    };
-
-    (preferenceResults || [])
-      .sort((a, b) => (b.preferenceScore || 0) - (a.preferenceScore || 0))
-      .forEach((item) => pushResult(item));
-
-    (searchResults || []).forEach((item) => pushResult(item));
-
-    return combined.slice(0, limit || MAX_SANITY_RESULTS);
-  }
-
   matchesQueryText(name, brand, regex) {
     if (!regex) return true;
     return regex.test(name || '') || regex.test(brand || '');
@@ -1177,7 +755,7 @@ class UnifiedFoodService {
     try {
       return new RegExp(escaped, 'i');
     } catch (error) {
-      logger.warn('Failed to build query regex', { query, error: error.message });
+      logger.warn({ query, err: error }, 'Failed to build query regex');
       return null;
     }
   }
