@@ -25,22 +25,31 @@ router.get('/', async (req, res) => {
       const food = await unifiedFoodService.getByBarcode(barcode);
       foods = food ? [food] : [];
 
-      logger.info('Barcode lookup', { userId, barcode, found: !!food });
+      logger.info({ userId, barcode, found: !!food }, 'Barcode lookup');
 
     } else if (search) {
-      // Smart search with AI fallback (AI uses API key, no user token needed)
+      // The deep search: catalog APIs, and the model only where it earns its
+      // place. `GET /suggest` is the instant local tier the box types into.
+      const started = Date.now();
       foods = await unifiedFoodService.search(search, {
         limit: parseInt(limit),
         includeAI: includeAI === 'true',
         userId
       });
 
-      logger.info('Food search', {
+      // pino takes the object FIRST. Every structured field logged on this
+      // route used to be silently discarded, which is why a search that
+      // returned chocolate chips for "pancakes" left no trace to read.
+      logger.info({
         userId,
         query: search,
         count: foods.length,
+        ms: Date.now() - started,
+        decomposed: foods.some(f => f.decomposedFrom) || undefined,
+        topName: foods[0]?.name,
+        topScore: foods[0]?.relevanceScore,
         sources: [...new Set(foods.map(f => f.source))]
-      });
+      }, 'Food search');
 
     } else {
       // Get all foods from local DB
@@ -105,7 +114,7 @@ router.get('/favorites', async (req, res) => {
       isFavorite: true
     }));
 
-    logger.info('Favorites retrieved', { userId, count: result.length });
+    logger.info({ userId, count: result.length }, 'Favorites retrieved');
     res.json({ success: true, data: result });
 
   } catch (error) {
@@ -129,7 +138,7 @@ router.post('/favorites/:foodId', async (req, res) => {
       { upsert: true }
     );
 
-    logger.info('Food added to favorites', { userId, foodId });
+    logger.info({ userId, foodId }, 'Food added to favorites');
     res.json({ success: true, message: 'Added to favorites' });
 
   } catch (error) {
@@ -152,7 +161,7 @@ router.delete('/favorites/:foodId', async (req, res) => {
       { $pull: { favorite_foods: foodId } }
     );
 
-    logger.info('Food removed from favorites', { userId, foodId });
+    logger.info({ userId, foodId }, 'Food removed from favorites');
     res.json({ success: true, message: 'Removed from favorites' });
 
   } catch (error) {
@@ -160,6 +169,39 @@ router.delete('/favorites/:foodId', async (req, res) => {
     res.status(500).json({
       success: false,
       error: { message: 'Failed to remove favorite', code: 'FAVORITE_REMOVE_ERROR' }
+    });
+  }
+});
+
+// GET /api/foods/suggest - the typeahead: local catalog only, no external
+// API, no model. This is what the search box calls while the person is still
+// typing; `GET /` remains the deeper search that also reaches the food APIs.
+// Declared before `/:id` so "suggest" is never read as an id.
+router.get('/suggest', async (req, res) => {
+  try {
+    const { q = '', limit = 15 } = req.query;
+    const started = Date.now();
+
+    const foods = await unifiedFoodService.suggest(q, {
+      userId: req.user.id,
+      limit: Math.min(Number.parseInt(limit, 10) || 15, 50)
+    });
+
+    logger.info({
+      userId: req.user.id,
+      query: q,
+      count: foods.length,
+      ms: Date.now() - started,
+      path: 'local'
+    }, 'Food suggest');
+
+    res.json({ success: true, data: foods });
+
+  } catch (error) {
+    logger.error({ err: error }, 'Food suggest failed');
+    res.status(500).json({
+      success: false,
+      error: { message: 'Failed to suggest foods', code: 'FOOD_SUGGEST_ERROR' }
     });
   }
 });
@@ -217,7 +259,7 @@ router.get('/recent', async (req, res) => {
         };
       });
 
-    logger.info('Recent foods retrieved', { userId, count: result.length });
+    logger.info({ userId, count: result.length }, 'Recent foods retrieved');
     res.json({ success: true, data: result });
 
   } catch (error) {
@@ -256,7 +298,7 @@ router.get('/:id', async (req, res) => {
       });
     }
 
-    logger.info('Food item retrieved', { userId, foodId: id });
+    logger.info({ userId, foodId: id }, 'Food item retrieved');
 
     res.json({
       success: true,
@@ -328,12 +370,12 @@ router.post('/', async (req, res) => {
     }
 
     if (existingFood) {
-      logger.info('Food item already exists', {
+      logger.info({
         userId,
         foodId: existingFood._id,
         barcode: barcode || null,
         source: source || null
-      });
+      }, 'Food item already exists');
 
       return res.json({
         success: true,
@@ -367,12 +409,12 @@ router.post('/', async (req, res) => {
 
     const savedFood = await foodItem.save();
 
-    logger.info('Food item created', {
+    logger.info({
       userId,
       foodId: savedFood._id,
       name: savedFood.name,
       source: savedFood.source
-    });
+    }, 'Food item created');
 
     res.status(201).json({
       success: true,
@@ -426,11 +468,11 @@ router.put('/:id', async (req, res) => {
 
     const updatedFood = await food.save();
 
-    logger.info('Food item updated', {
+    logger.info({
       userId,
       foodId: id,
       updatedFields: Object.keys(updateData)
-    });
+    }, 'Food item updated');
 
     res.json({
       success: true,
@@ -477,11 +519,11 @@ router.delete('/:id', async (req, res) => {
     food.is_deleted = true;
     await food.save();
 
-    logger.info('Food item deleted', {
+    logger.info({
       userId,
       foodId: id,
       name: food.name
-    });
+    }, 'Food item deleted');
 
     res.json({
       success: true,
@@ -509,11 +551,11 @@ router.get('/search/:query', async (req, res) => {
 
     const foods = await FoodItem.search(query, userId, parseInt(limit));
 
-    logger.info('Food search performed', {
+    logger.info({
       userId,
       query,
       count: foods.length
-    });
+    }, 'Food search performed');
 
     res.json({
       success: true,
