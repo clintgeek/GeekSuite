@@ -12,10 +12,17 @@ import {
   Search as SearchIcon,
   QrCodeScanner as BarcodeIcon,
   SmartToy as AIIcon,
-  Clear as ClearIcon,
-  Send as SendIcon
+  Clear as ClearIcon
 } from '@mui/icons-material';
 
+/**
+ * The box.
+ *
+ * There is no send arrow any more: the search runs as you type (150ms to your
+ * own catalog, 400ms to the food databases), so a button that means "now
+ * actually search" is a button that means "the last four seconds of typing did
+ * nothing". Enter still works — it skips the second wait.
+ */
 const SearchBar = ({
   value,
   onChange,
@@ -88,29 +95,6 @@ const SearchBar = ({
                   >
                     <ClearIcon fontSize="small" />
                   </IconButton>
-                )}
-                {onSubmit && value && (
-                  <Tooltip title="Search" arrow>
-                    <IconButton
-                      onClick={onSubmit}
-                      disabled={loading || !value.trim()}
-                      sx={{
-                        color: theme.palette.primary.main,
-                        backgroundColor: `${theme.palette.primary.main}1a`,
-                        transition: 'all 0.15s ease',
-                        '&:hover': {
-                          color: theme.palette.primary.contrastText,
-                          backgroundColor: theme.palette.primary.main,
-                        },
-                        '&.Mui-disabled': {
-                          color: theme.palette.action.disabled,
-                          backgroundColor: theme.palette.action.disabledBackground
-                        }
-                      }}
-                    >
-                      <SendIcon />
-                    </IconButton>
-                  </Tooltip>
                 )}
                 {onBarcodeClick && (
                   <Tooltip title="Scan Barcode" arrow>

@@ -15,13 +15,36 @@ export const foodService = {
    * @param {Object} options - Search options
    */
   search: async (query, options = {}) => {
-    const { limit = 25, includeAI = true } = options;
+    const { limit = 25, includeAI = true, signal } = options;
     const response = await restApi.get('/foods', {
       params: {
         search: query,
         limit,
         includeAI: includeAI ? 'true' : 'false'
-      }
+      },
+      // The box fires a fresh search on every pause; an in-flight one whose
+      // query is already stale must not land on top of a newer answer.
+      signal
+    });
+    return response.data?.data || response.data || [];
+  },
+
+  /**
+   * The typeahead: the local catalog only — favourites, recents, your own
+   * foods, and anything already in the shared catalog. No external API, no
+   * model, so it is fast enough to call while someone is still typing.
+   *
+   * Called with no query it returns the starting shelf, which is the empty
+   * state of the search box.
+   *
+   * @param {string} query
+   * @param {{limit?: number, signal?: AbortSignal}} [options]
+   */
+  suggest: async (query, options = {}) => {
+    const { limit = 15, signal } = options;
+    const response = await restApi.get('/foods/suggest', {
+      params: { q: query || '', limit },
+      signal
     });
     return response.data?.data || response.data || [];
   },
