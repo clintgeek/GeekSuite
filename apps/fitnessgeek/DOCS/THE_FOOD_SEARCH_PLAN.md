@@ -39,7 +39,44 @@ reintroduced one layer down. Confidence is now structural (`foodRanker.isConfide
 head noun present, ≥50% token coverage, has calories) and the real USDA response is pinned as
 a fixture in `foodRanker.test.js`.
 
-**Still to do:** deploy, then walk the named queries in §4.1 on a real phone.
+**Deployed 2026-09-14** (commits `55f40d98`..`df39f675`). CI and the image release green;
+container recreated 23:44 UTC, `/api/health` 200, `/api/foods/suggest` live. The mobile
+harness run was red on two `color-contrast` findings in **bujogeek**, not here — it has failed
+every push since 2026-09-12, and this work's own result was 0 violations and 0 page errors
+across 150 scenes.
+
+### What's left, in the order worth doing it
+
+**Unfinished edges of this work:**
+
+1. **The "what you picked last time" pin is inert.** `foodRanker` pins the food you chose for
+   this exact query before — the strongest personalisation signal available — but
+   `getPersonalIndex` always returns an empty `chosenForQuery` set, because nothing records
+   the choice. Needs a query→food record written on log and read back. The machinery exists;
+   this is the highest value-per-line item remaining.
+2. **Undo does not cover saved meals.** A meal expands into several log rows and
+   `useFoodLogging` captures no ids for them, so the undo toast appears but cannot take a meal
+   back. Either return the created ids from `addMealToLog` or suppress the affordance for
+   meals rather than promise what it cannot do.
+3. **Walk §4.1's named queries on a real phone.** The harness checks geometry, not whether it
+   feels fast in a kitchen.
+
+**Dead weight this work exposed:**
+
+4. `GET /api/foods/search/:query` has no frontend callers, and it is the only caller of the
+   `FoodItem.search` static — a dead route and a dead static propping each other up.
+5. `getOpenFoodFactsByBarcode` still goes out over raw axios: no cache, no circuit breaker,
+   while every other upstream call on this path is now wrapped. Barcode is the one that
+   missed the treatment.
+6. basegeek still carries `parseFoodEntry`, its resolver and `quickAddParser.js` for a feature
+   with no client. Retiring it is a basegeek job with its own blast radius.
+
+**Tune once it has been used:**
+
+7. The head-noun and noise-word lists are deliberately small. Grow them as real queries
+   disappoint, pinning each one in the golden set.
+8. Read the telemetry after a week — suggest vs deep p90, how often decomposition fires,
+   whether the create-row gets used. That will say more than any guess from here.
 
 ---
 
