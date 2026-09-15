@@ -510,7 +510,7 @@ const HabitsPage = () => {
                           fontSize: '0.75rem',
                           fontWeight: 700,
                           letterSpacing: '0.04em',
-                          color: isToday ? colors.primary[500] : captionInk,
+                          color: isToday ? domainInk(colors.primary[500], theme) : captionInk,
                           lineHeight: 1.2,
                         }}
                       >
@@ -521,7 +521,7 @@ const HabitsPage = () => {
                           fontFamily: '"IBM Plex Mono", monospace',
                           fontSize: '0.75rem',
                           fontWeight: isToday ? 700 : 400,
-                          color: isToday ? colors.primary[500] : mutedInk,
+                          color: isToday ? domainInk(colors.primary[500], theme) : mutedInk,
                           lineHeight: 1.2,
                         }}
                       >
