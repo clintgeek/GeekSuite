@@ -1095,3 +1095,93 @@ describe('the routes', () => {
     expect(only(result, 'paid_budget_hit')[0].text).toBe('Paid budget was hit on 1 day(s) this month');
   });
 });
+
+/* ── a pin that no longer holds ───────────────────────────────────────────── */
+//
+// The most expensive invisible fact this page can show. On 2026-09-15
+// FitnessGeek was pinned to OpenRouter slugs the vendor had withdrawn: every
+// call 404'd, fell back to rotation and answered, so nothing looked broken —
+// the app had just silently stopped using the model it was configured to use.
+// Finding that took a day of reading the database by hand.
+
+describe('dead_pin', () => {
+  it('warns when an app is pinned to a model that was retired', async () => {
+    const result = await status({
+      appConfig: fakeCollection([{ appName: 'FitnessGeek', provider: 'openrouter', model: 'gone:free' }]),
+      model: fakeCollection([
+        {
+          provider: 'openrouter', modelId: 'gone:free', isActive: false,
+          retiredAt: hoursAgo(5), retiredReason: 'http_404',
+        },
+      ]),
+    });
+
+    const [item] = only(result, 'dead_pin');
+    expect(item.severity).toBe('warn');
+    expect(item.app).toBe('fitnessgeek');
+    expect(item.text).toContain('pinned to openrouter/gone:free');
+    expect(item.text).toContain('retired (http_404)');
+    expect(item.text).toContain('every call is falling back');
+  });
+
+  it('warns when the pinned model is not in the catalog at all', async () => {
+    const result = await status({
+      appConfig: fakeCollection([{ appName: 'FitnessGeek', provider: 'openrouter', model: 'never-listed' }]),
+      model: fakeCollection([]),
+    });
+
+    expect(only(result, 'dead_pin')[0].text).toContain('not in the catalog');
+  });
+
+  it('says nothing about a pin that is alive', async () => {
+    const result = await status({
+      appConfig: fakeCollection([{ appName: 'FitnessGeek', provider: 'openrouter', model: 'fine' }]),
+      model: fakeCollection([{ provider: 'openrouter', modelId: 'fine', isActive: true }]),
+    });
+
+    expect(kinds(result)).not.toContain('dead_pin');
+  });
+
+  it('says nothing about an app that pins nothing — auto is not a fault', async () => {
+    const result = await status({
+      appConfig: fakeCollection([{ appName: 'FitnessGeek', tier: 'auto' }]),
+      model: fakeCollection([]),
+    });
+
+    expect(kinds(result)).not.toContain('dead_pin');
+  });
+});
+
+/* ── a model the provider withdrew ────────────────────────────────────────── */
+
+describe('model_retired', () => {
+  it('reports the withdrawal and the reason', async () => {
+    const result = await status({
+      model: fakeCollection([
+        {
+          provider: 'openrouter', modelId: 'gone:free',
+          retiredAt: hoursAgo(2), retiredReason: 'http_404',
+        },
+      ]),
+    });
+
+    const [item] = only(result, 'model_retired');
+    // Informational: the system already dealt with it. This exists so the
+    // reason `retireModel` writes is visible rather than merely effective.
+    expect(item.severity).toBe('info');
+    expect(item.text).toBe('openrouter/gone:free was withdrawn by the provider (http_404)');
+  });
+
+  it('stops mentioning a withdrawal after a fortnight', async () => {
+    const result = await status({
+      model: fakeCollection([
+        {
+          provider: 'openrouter', modelId: 'ancient:free',
+          retiredAt: hoursAgo(24 * 30), retiredReason: 'http_404',
+        },
+      ]),
+    });
+
+    expect(kinds(result)).not.toContain('model_retired');
+  });
+});

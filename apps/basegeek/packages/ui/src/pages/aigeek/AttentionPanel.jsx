@@ -68,6 +68,14 @@ function itemAction(item, handlers, discoveryRunning) {
       return item.app
         ? { label: 'Add routing', onClick: () => handlers.onAddRouting(item.app) }
         : null;
+    // A dead pin is a chore, not a report: the app is configured to use a model
+    // that cannot answer, and the fix is to change or clear that pin. Same
+    // dialog as `unrouted_app`, different verb — this app HAS a row, and the
+    // row is the problem.
+    case 'dead_pin':
+      return item.app
+        ? { label: 'Fix pin', onClick: () => handlers.onAddRouting(item.app) }
+        : null;
     case 'key_expiring':
       return item.app
         ? { label: 'Rotate', onClick: () => handlers.onRotateKey(item.app) }
@@ -79,9 +87,10 @@ function itemAction(item, handlers, discoveryRunning) {
         busy: discoveryRunning,
       };
     default:
-      // `repinned`, `paid_budget_hit` and `plaintext_keys` are reports, not
-      // chores: the first two are the system telling you it coped, and the
-      // third is fixed by a migration script, not by a button on this page.
+      // `repinned`, `paid_budget_hit`, `plaintext_keys` and `model_retired`
+      // are reports, not chores: the first two and the last are the system
+      // telling you it coped, and the third is fixed by a migration script,
+      // not by a button on this page.
       return null;
   }
 }

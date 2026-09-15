@@ -43,6 +43,7 @@ import AIFreeTier, { isFreeTierCooling } from '../models/AIFreeTier.js';
 import AIStickyPick from '../models/AIStickyPick.js';
 import AISpend, { spendDay } from '../models/AISpend.js';
 import AIAppConfig from '../models/AIAppConfig.js';
+import AIModel from '../models/AIModel.js';
 import APIKey from '../models/APIKey.js';
 import AIConfig from '../models/AIConfig.js';
 import { PROVIDER_IDS, AI_PROVIDERS } from '../config/aiProviders.js';
@@ -69,6 +70,9 @@ export const TRAFFIC_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** Long enough to rotate a key without a fire drill. */
 export const KEY_EXPIRY_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+
+/** How long a withdrawal stays worth mentioning. */
+const RETIRED_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 
 /** id → human label, for the attention text. `aiProviders.js` is the one list. */
 export const PROVIDER_LABELS = Object.fromEntries(AI_PROVIDERS.map((p) => [p.id, p.label]));
@@ -162,6 +166,7 @@ export function defaultDeps() {
     stickyPick: AIStickyPick,
     spend: AISpend,
     appConfig: AIAppConfig,
+    model: AIModel,
     apiKey: APIKey,
     aiConfig: AIConfig,
     providerIds: PROVIDER_IDS,
@@ -321,6 +326,60 @@ function repinnedItems({ stickies, cutoff }) {
  * the `auto` path, so in practice this catches an app whose row was deleted or
  * one that only ever sends pins — both of which are worth a line.
  */
+/**
+ * `dead_pin` — an app is pinned to a model that cannot answer.
+ *
+ * The most expensive invisible fact in this system, and the reason this rule
+ * exists: on 2026-09-15 FitnessGeek was pinned to OpenRouter slugs the vendor
+ * had withdrawn. Every call 404'd, fell back to rotation, and answered — so
+ * nothing looked broken from the outside, the app just quietly stopped using
+ * the model it was configured to use. Finding that took a day of reading the
+ * database by hand; it should take a glance.
+ *
+ * `warn`, not `info`: a pin that does not hold is a configuration that is
+ * lying about what the app is doing.
+ */
+function deadPinItems({ rowsByApp, modelsByKey }) {
+  return [...rowsByApp.entries()]
+    .filter(([, row]) => row?.provider && row?.model)
+    .map(([app, row]) => ({ app, row, model: modelsByKey.get(`${row.provider}/${row.model}`) }))
+    .filter(({ model }) => !model || model.isActive === false)
+    .sort((a, b) => a.app.localeCompare(b.app))
+    .map(({ app, row, model }) => ({
+      kind: 'dead_pin',
+      severity: 'warn',
+      app,
+      text: model
+        ? `${app} is pinned to ${row.provider}/${row.model}, which is retired (${model.retiredReason || 'inactive'}) — every call is falling back`
+        : `${app} is pinned to ${row.provider}/${row.model}, which is not in the catalog — every call is falling back`,
+      since: model?.retiredAt || null,
+    }));
+}
+
+/**
+ * `model_retired` — a model a provider withdrew, noticed from a live failure.
+ *
+ * Informational: the system has already dealt with it (the row is inactive and
+ * stops being offered). This is here so the withdrawal is *visible* rather
+ * than only effective — the retirement reason is written by
+ * `aiService.retireModel`, and a field nothing ever shows is a field that may
+ * as well not be written.
+ */
+function retiredModelItems({ models, window = RETIRED_WINDOW_MS, now, limit = 20 }) {
+  const nowMs = new Date(now).getTime();
+  return (models || [])
+    .map((m) => ({ m, at: asDate(m?.retiredAt) }))
+    .filter(({ at }) => at && nowMs - at.getTime() <= window)
+    .sort((a, b) => b.at.getTime() - a.at.getTime())
+    .slice(0, limit)
+    .map(({ m, at }) => ({
+      kind: 'model_retired',
+      severity: 'info',
+      text: `${m.provider}/${m.modelId} was withdrawn by the provider (${m.retiredReason || 'unknown'})`,
+      since: at,
+    }));
+}
+
 function unroutedAppItems({ trafficApps, rowsByApp }) {
   return [...trafficApps.entries()]
     .filter(([app]) => !rowsByApp.has(app))
@@ -459,6 +518,7 @@ export async function buildStatus({ now = new Date(), deps = {} } = {}) {
     keys,
     stickies,
     configs,
+    catalogModels,
   ] = await Promise.all([
     d.catalogRun.findOne({ kind: 'discovery' }).sort({ startedAt: -1 }).lean(),
     d.catalogRun.findOne({ kind: 'probe' }).sort({ startedAt: -1 }).lean(),
@@ -475,6 +535,10 @@ export async function buildStatus({ now = new Date(), deps = {} } = {}) {
     d.stickyPick.find({ pickedAt: { $gte: repinCutoff } }).select('app previous').lean(),
     // Read for a count only; nothing from these documents is returned.
     d.aiConfig.find({}).select('provider apiKey').lean(),
+    // Only what the two model rules need. One read, not two: the retired rows
+    // are a subset of these, so filtering in memory costs nothing and keeps the
+    // query to a shape the rules can be tested against with a fake collection.
+    d.model.find({}).select('provider modelId isActive retiredAt retiredReason').lean(),
   ]);
 
   const providers = d.providers() || {};
@@ -574,7 +638,7 @@ export async function buildStatus({ now = new Date(), deps = {} } = {}) {
     // that mixed a paid fallback in with free answers.
     if (cost > 0) paidCallsMonth += calls;
 
-    const key = `${row.app || 'unknown'} ${row.feature || ''}`;
+    const key = `${row.app || 'unknown'}\u0000${row.feature || ''}`;
     const bucket = byAppKey.get(key)
       || { app: row.app || 'unknown', feature: row.feature || '', usd: 0, calls: 0 };
     bucket.usd += cost;
@@ -678,6 +742,11 @@ export async function buildStatus({ now = new Date(), deps = {} } = {}) {
     }),
     ...repinnedItems({ stickies: stickies || [], cutoff: repinCutoff }),
     ...unroutedAppItems({ trafficApps, rowsByApp }),
+    ...deadPinItems({
+      rowsByApp,
+      modelsByKey: new Map((catalogModels || []).map((m) => [`${m.provider}/${m.modelId}`, m])),
+    }),
+    ...retiredModelItems({ models: catalogModels, now: at }),
     ...keyExpiringItems({ keys: keys || [], now: at }),
     ...paidBudgetItems({ monthRows }),
     ...plaintextKeyItems({ configs: configs || [], isEncryptedFn: d.isEncrypted }),
