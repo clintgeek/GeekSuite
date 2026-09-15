@@ -3,6 +3,32 @@
 How this app is actually built, run and deployed. Paths, ports and commands
 here override any reasonable-looking default.
 
+**2026-09-15 (landmine — a Watchtower deploy does NOT pick up `.env.production` edits):**
+`docker-compose.yml` loads runtime env with `env_file: .env.production`, and compose resolves
+that at **container-create** time, baking the values into the container. Watchtower pulls a new
+image and RECREATES the container with the env it already had — so a new variable added to
+`.env.production` is on disk, in the file compose names, and still absent from
+`printenv` inside the running container.
+
+Observed with `DISH_ESTIMATE_*` / `DISH_JUDGE_*` on 2026-09-15: added to both `.env` and
+`.env.production`, pushed, Watchtower deployed the new image, and the vars were nowhere in the
+container. Nothing errored — the code simply read `undefined` and used its defaults, which is
+the worst shape of failure because it looks like it worked.
+
+The fix, from the app directory:
+
+```
+docker compose up -d fitnessgeek
+```
+
+That re-reads `env_file`. It is safe with respect to the RepoDigest landmine (CICD.md) because
+it uses the image Watchtower already pulled from the registry, which carries its digest — the
+digest problem only comes from a LOCAL `build.sh` image.
+
+**Rule of thumb:** a code-only change deploys fine on a push. A change that adds or edits an
+environment variable needs `docker compose up -d <app>` afterwards, or the variable silently
+does not exist.
+
 **2026-09-14 (food search rebuild):** food search was rebuilt end to end — see
 `DOCS/THE_FOOD_SEARCH_PLAN.md` for the full diagnosis and plan. What is true now:
 
