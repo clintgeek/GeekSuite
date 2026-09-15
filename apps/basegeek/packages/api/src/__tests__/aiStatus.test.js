@@ -149,6 +149,10 @@ function healthyDeps(overrides = {}) {
       { appName: 'storygeek', name: 'storygeek backend', expiresAt: null, isActive: true },
     ]),
     aiConfig: fakeCollection([{ provider: 'groq', apiKey: 'enc:v1:ciphertext' }]),
+    // Faked like every other collection: this module's whole design is that a
+    // rule can be exercised against fakes with no database, and a dep that
+    // falls through to the real model quietly reintroduces one.
+    model: fakeCollection([]),
     providerIds: ['groq', 'gemini'],
     labels: { groq: 'Groq', gemini: 'Google Gemini' },
     providers: () => ({
@@ -1183,5 +1187,17 @@ describe('model_retired', () => {
     });
 
     expect(kinds(result)).not.toContain('model_retired');
+  });
+});
+
+describe('provider labels reach the console', () => {
+  it('carries the vendor spelling, not the raw id', async () => {
+    const result = await status();
+    // The panel rendered ids through textTransform:capitalize, which spells
+    // OpenRouter "Openrouter" and LLM Gateway "Llmgateway" — neither is how
+    // those companies write their name, and the canonical labels have existed
+    // in the provider roster all along.
+    expect(result.catalog.labels.groq).toBe('Groq');
+    expect(result.catalog.labels.gemini).toBe('Google Gemini');
   });
 });

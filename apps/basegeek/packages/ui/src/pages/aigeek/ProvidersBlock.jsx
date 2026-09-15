@@ -78,7 +78,7 @@ function ProviderChip({ hasKey, listingFailed, counts, statusKnown }) {
   );
 }
 
-function ProviderRow({ provider, entry, counts, listingFailed, statusKnown, saving, onFieldChange, onBlurSave, onRemoveKey }) {
+function ProviderRow({ provider, label, entry, counts, listingFailed, statusKnown, saving, onFieldChange, onBlurSave, onRemoveKey }) {
   return (
     <Box
       // The anchor the `provider_dead` / `provider_listing_failed` attention
@@ -89,8 +89,15 @@ function ProviderRow({ provider, entry, counts, listingFailed, statusKnown, savi
       sx={{ scrollMarginTop: 88, py: 1.5, borderTop: '1px solid', borderColor: 'divider' }}
     >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, flexWrap: 'wrap' }}>
-        <Typography variant="subtitle2" sx={{ textTransform: 'capitalize' }}>
-          {provider}
+        {/*
+          * The vendor's own spelling, from `status.catalog.labels`. Capitalising
+          * the raw id gave "Openrouter" and "Llmgateway"; the canonical labels
+          * live in the API's provider roster and are what the attention items
+          * have always used. `capitalize` stays only as the fallback for an id
+          * the payload does not carry a label for.
+          */}
+        <Typography variant="subtitle2" sx={label ? undefined : { textTransform: 'capitalize' }}>
+          {label || provider}
         </Typography>
         <ProviderChip
           hasKey={entry.hasKey}
@@ -166,6 +173,7 @@ export default function ProvidersBlock({
   // here rather than in the reducer.
   const [removing, setRemoving] = useState(null);
   const byProvider = status?.catalog?.byProvider || null;
+  const labels = status?.catalog?.labels || {};
   // `status` carries no per-provider error field — the failure is reported as
   // an attention item, which is where the exact text lives (§1). Reading it
   // back from there keeps one source of truth for "this key is wrong".
@@ -198,6 +206,7 @@ export default function ProvidersBlock({
         <ProviderRow
           key={provider}
           provider={provider}
+          label={labels[provider]}
           entry={config[provider]}
           counts={byProvider?.[provider]}
           listingFailed={listingFailed.has(provider)}

@@ -606,6 +606,16 @@ export async function buildStatus({ now = new Date(), deps = {} } = {}) {
     structuredFree,
     byProvider,
     /**
+     * id → the vendor's own spelling of its name.
+     *
+     * The console was rendering raw ids through `textTransform: capitalize`,
+     * which produced "Openrouter" and "Llmgateway" — neither is how those
+     * companies write their name. The canonical labels have always existed in
+     * `config/aiProviders.js` and were used for attention text; they just
+     * never reached the panel that shows the names most often.
+     */
+    labels: { ...d.labels },
+    /**
      * Additive to §1: whether a run is in flight right now.
      *
      * §2 wants the `discovery_stale` item to read "running…" after the
