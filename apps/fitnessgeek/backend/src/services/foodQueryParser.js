@@ -92,7 +92,14 @@ const DISH_NOUNS = new Set([
   'sundae', 'sundaes', 'parfait', 'parfaits', 'cake', 'cakes', 'cookie',
   'cookies', 'brownie', 'brownies', 'roll', 'rolls', 'sub', 'subs',
   'hoagie', 'panini', 'melt', 'melts', 'hash', 'skillet', 'platter',
-  'combo', 'meal', 'plate'
+  'combo', 'meal', 'plate',
+  // Added 2026-09-15 after "a dozen nachos" found no dish noun at all.
+  'nacho', 'nachos', 'enchilada', 'enchiladas', 'flauta', 'flautas',
+  'taquito', 'taquitos', 'tamale', 'tamales', 'fajita', 'fajitas',
+  'gyro', 'gyros', 'kebab', 'kebabs', 'falafel', 'sushi', 'ramen', 'pho',
+  'dumpling', 'dumplings', 'wonton', 'wontons', 'samosa', 'samosas',
+  'chowder', 'bisque', 'poutine', 'wing', 'wings', 'nugget', 'nuggets',
+  'tender', 'tenders', 'rib', 'ribs', 'fry', 'fries', 'gumbo', 'jambalaya'
 ]);
 
 /** Separators the person wrote. Only these split a query. */
@@ -176,6 +183,15 @@ function splitFragments(normalized) {
   return out;
 }
 
+/**
+ * Quantity words that MULTIPLY a preceding one rather than standing alone.
+ * "a dozen" is twelve, not one — and reading only the first word left "dozen"
+ * sitting in the search text, which is how "a dozen nachos with beef and
+ * chicken and cheese" searched for the literal phrase "dozen nachos", found
+ * nothing, and returned only its own toppings (Chef's screenshot, 2026-09-15).
+ */
+const GROUP_QUANTITIES = { dozen: 12, couple: 2, few: 3, pair: 2, handful: 1 };
+
 /** A leading numeral, fraction or quantity word. Returns [servings, rest]. */
 function takeQuantity(words) {
   if (words.length === 0) return [null, words];
@@ -194,11 +210,31 @@ function takeQuantity(words) {
   // and `parseFloat('7up')` is 7.
   if (/^\d+(?:\.\d+)?$/.test(first)) {
     const numeric = Number(first);
-    if (numeric > 0 && numeric <= 200 && words.length > 1) return [numeric, words.slice(1)];
+    if (numeric > 0 && numeric <= 200 && words.length > 1) {
+      // "2 dozen eggs"
+      const group = GROUP_QUANTITIES[words[1]];
+      if (group != null && words.length > 2) return [numeric * group, words.slice(2)];
+      return [numeric, words.slice(1)];
+    }
   }
 
-  if (WORD_QUANTITIES[first] != null && words.length > 1) {
-    return [WORD_QUANTITIES[first], words.slice(1)];
+  // Consume a RUN of quantity words and multiply them, so "a dozen" is 1x12,
+  // "half a dozen" is 0.5x1x12 and "two dozen" is 2x12. Bare articles are the
+  // identity, which is what makes the chain work.
+  if (WORD_QUANTITIES[first] != null || GROUP_QUANTITIES[first] != null) {
+    let value = 1;
+    let index = 0;
+    while (index < words.length) {
+      const word = words[index];
+      const factor = GROUP_QUANTITIES[word] ?? WORD_QUANTITIES[word];
+      if (factor == null) break;
+      value *= factor;
+      index += 1;
+    }
+    // Something has to be left over to be the food's name.
+    if (index > 0 && index < words.length && value > 0) {
+      return [Math.round(value * 100) / 100, words.slice(index)];
+    }
   }
 
   return [null, words];
