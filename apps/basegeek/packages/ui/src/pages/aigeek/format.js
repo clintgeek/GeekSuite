@@ -16,7 +16,12 @@
 
 /** A recorded spend: `$0.0000`, four places, never blank. */
 export const formatCost = (cost) => {
-  if (cost === undefined || cost === null) return '$0.0000';
+  if (cost === undefined || cost === null) return '$0';
+  // Four places are right for a fraction of a cent — a free-tier month really
+  // is `$0.0004`, and `$0.00` would read as "nothing is metered". They are
+  // just noise for an exact zero, which is most cells on a quiet page: three
+  // `$0.0000`s in a column say nothing four times.
+  if (cost === 0) return '$0';
   return `$${cost.toFixed(4)}`;
 };
 

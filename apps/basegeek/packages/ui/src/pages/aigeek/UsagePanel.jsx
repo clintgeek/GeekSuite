@@ -41,6 +41,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import { DeleteSweep as DeleteSweepIcon } from '@mui/icons-material';
@@ -138,16 +139,37 @@ const usageFields = (usage) => [
   { label: 'Cost', value: formatCost(usage.cost || 0) },
 ];
 
-const TotalCard = ({ label, value }) => (
-  <Grid item xs={12} md={4}>
-    <Card variant="outlined">
-      <CardContent>
-        <Typography variant="h6" color="primary">{label}</Typography>
-        <Typography variant="h4">{value}</Typography>
-      </CardContent>
-    </Card>
-  </Grid>
-);
+/**
+ * The session counters, as one line rather than three cards.
+ *
+ * They used to be three outlined cards with `h4` numbers and accent-coloured
+ * labels — about 150px of chrome to say "1 call, 365 tokens, $0". On a console
+ * that is read occasionally to answer "is anything wrong and what did it
+ * cost", that is the least important number on the page wearing the most
+ * furniture, directly above the month figure that actually matters.
+ *
+ * It borrows `SpendLine`'s rhythm deliberately: bold lead-in, ` · ` separators,
+ * tabular numerals. That line is the best thing on this page, and two lines
+ * that scan the same way read as one fact each rather than two designs.
+ *
+ * Taking the cards also retires their `color="primary"` labels, which is how
+ * the accent stops meaning two things at once — it now appears only on figures
+ * that cost money.
+ */
+function SessionLine({ stats }) {
+  const calls = stats.totalCalls || 0;
+  return (
+    <Typography
+      variant="body1"
+      sx={{ fontVariantNumeric: 'tabular-nums', wordBreak: 'break-word', mt: 3 }}
+    >
+      <Box component="span" sx={{ fontWeight: 600 }}>Since basegeek last restarted:</Box>
+      {' '}{calls.toLocaleString()} call{calls === 1 ? '' : 's'}
+      {' · '}{formatTokens(stats.totalTokens || 0)} tokens
+      {' · '}{formatCost(stats.totalCost || 0)}
+    </Typography>
+  );
+}
 
 /**
  * "review ×640 / 200 · commit-message ×163 / 200" — the feature line, with the
@@ -227,25 +249,13 @@ export default function UsagePanel({
         )}
 
         {/*
-          * These three come from `aiService.sessionStats` — an IN-PROCESS
-          * counter that starts at zero every time basegeek restarts, which is
-          * every deploy that touches it. Calling them "Total" put them in
-          * direct contradiction with the month figure one line above: on
-          * 2026-09-15 this page read "122 paid calls" and "Total Calls 1" at
-          * the same time, both correct, neither labelled. The number is only
-          * honest with its period attached.
+          * `aiService.sessionStats` is an IN-PROCESS counter that starts at
+          * zero every time basegeek restarts — which is every deploy touching
+          * it. Without the period attached it contradicted the month figure
+          * one line above: on 2026-09-15 this page read "122 paid calls" and
+          * "Total Calls 1" simultaneously, both correct, neither labelled.
           */}
-        <Typography
-          variant="overline"
-          sx={{ display: 'block', color: 'text.secondary', mt: 3, mb: 1, letterSpacing: '0.08em' }}
-        >
-          Since basegeek last restarted
-        </Typography>
-        <Grid container spacing={3}>
-          <TotalCard label="Calls" value={stats.totalCalls || 0} />
-          <TotalCard label="Tokens" value={formatTokens(stats.totalTokens || 0)} />
-          <TotalCard label="Cost" value={formatCost(stats.totalCost || 0)} />
-        </Grid>
+        <SessionLine stats={stats} />
 
         <Typography variant="h6" sx={{ mt: 3, mb: 2 }}>Provider Usage</Typography>
 
@@ -325,10 +335,23 @@ export default function UsagePanel({
                       <TableRow key={row.key}>
                         <TableCell>
                           <Typography variant="body2" sx={{ fontWeight: 'bold' }}>{row.appId}</Typography>
+                          {/*
+                            * "brief x1 / default" is dense to the point of
+                            * being a cipher on first read — the shape is
+                            * documented at `featureLineWithCaps` and nowhere
+                            * the reader can see it. The tooltip is the cheapest
+                            * place to put the key without spending a row on it.
+                            */}
                           {row.features && (
-                            <Typography variant="caption" color="text.muted" sx={{ fontSize: 12 }}>
-                              {row.features}
-                            </Typography>
+                            <Tooltip title="feature × calls today / daily cap" arrow placement="bottom-start">
+                              <Typography
+                                variant="caption"
+                                color="text.muted"
+                                sx={{ fontSize: 12, cursor: 'help', textDecorationStyle: 'dotted' }}
+                              >
+                                {row.features}
+                              </Typography>
+                            </Tooltip>
                           )}
                         </TableCell>
                         <TableCell sx={{ textTransform: 'capitalize' }}>{row.provider}</TableCell>
