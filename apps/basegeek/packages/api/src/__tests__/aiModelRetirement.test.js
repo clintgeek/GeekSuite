@@ -19,6 +19,12 @@
  *
  * Conventions follow `aiFreeTierRouting.test.js`: provider layer faked by
  * patching `callProvider`, Mongo is the shared in-memory instance.
+ *
+ * The fixture ids are deliberately unlike any real model. `retireModel` writes
+ * fire-and-forget, so an unawaited `isFree: false` can land after this file's
+ * `afterEach` — and when these cases borrowed `llama-3.1-8b-instant` from the
+ * routing suite, that late write flipped a row that suite had seeded and broke
+ * it, but only in a full run.
  */
 
 import { describe, it, expect, beforeEach, afterEach, afterAll } from '@jest/globals';
@@ -107,30 +113,30 @@ describe('isRetirement', () => {
 
 describe('retireModel', () => {
   it('marks the catalog row inactive and records why', async () => {
-    await AIModel.create({ provider: 'groq', modelId: 'gone-model', name: 'Gone', isActive: true });
+    await AIModel.create({ provider: 'groq', modelId: 'retire-fixture-gone', name: 'Gone', isActive: true });
 
-    aiService.retireModel('groq', 'gone-model', 'http_404');
+    aiService.retireModel('groq', 'retire-fixture-gone', 'http_404');
     await settle();
 
-    const row = await AIModel.findOne({ provider: 'groq', modelId: 'gone-model' }).lean();
+    const row = await AIModel.findOne({ provider: 'groq', modelId: 'retire-fixture-gone' }).lean();
     expect(row.isActive).toBe(false);
     expect(row.retiredReason).toBe('http_404');
     expect(row.retiredAt).toBeInstanceOf(Date);
   });
 
   it('stops a matching free row being picked', async () => {
-    await AIFreeTier.create({ provider: 'groq', modelId: 'gone-model', isFree: true });
+    await AIFreeTier.create({ provider: 'groq', modelId: 'retire-fixture-gone', isFree: true });
 
-    aiService.retireModel('groq', 'gone-model', 'http_410');
+    aiService.retireModel('groq', 'retire-fixture-gone', 'http_410');
     await settle();
 
-    const row = await AIFreeTier.findOne({ provider: 'groq', modelId: 'gone-model' }).lean();
+    const row = await AIFreeTier.findOne({ provider: 'groq', modelId: 'retire-fixture-gone' }).lean();
     expect(row.isFree).toBe(false);
     expect(row.health.lastFailureCode).toBe('http_410');
   });
 
   it('is inert for a model nobody has heard of, and never throws', async () => {
-    expect(() => aiService.retireModel('groq', 'never-existed', 'http_404')).not.toThrow();
+    expect(() => aiService.retireModel('groq', 'retire-fixture-absent', 'http_404')).not.toThrow();
     expect(() => aiService.retireModel(null, null, 'http_404')).not.toThrow();
     await settle();
     expect(await AIModel.countDocuments({})).toBe(0);
@@ -140,46 +146,46 @@ describe('retireModel', () => {
 describe('a live 404 retires the model it was called on', () => {
   it('retires the row rather than only cooling it', async () => {
     enable('groq', 'cerebras');
-    await AIModel.create({ provider: 'groq', modelId: 'llama-3.1-8b-instant', name: 'x', isActive: true });
+    await AIModel.create({ provider: 'groq', modelId: 'retire-fixture-a', name: 'x', isActive: true });
     await AIFreeTier.insertMany([
-      { provider: 'groq', modelId: 'llama-3.1-8b-instant', isFree: true },
-      { provider: 'cerebras', modelId: 'llama3.1-8b', isFree: true }
+      { provider: 'groq', modelId: 'retire-fixture-a', isFree: true },
+      { provider: 'cerebras', modelId: 'retire-fixture-b', isFree: true }
     ]);
 
     fakeProviderLayer({
-      'groq/llama-3.1-8b-instant': providerError('Groq', 404, { error: { code: 'model_not_found' } }),
-      'cerebras/llama3.1-8b': 'the answer'
+      'groq/retire-fixture-a': providerError('Groq', 404, { error: { code: 'model_not_found' } }),
+      'cerebras/retire-fixture-b': 'the answer'
     });
 
     expect(await aiService.callAI('hello', { freeOnly: true, appName: 'startgeek' })).toBe('the answer');
     await settle();
 
-    const row = await AIModel.findOne({ provider: 'groq', modelId: 'llama-3.1-8b-instant' }).lean();
+    const row = await AIModel.findOne({ provider: 'groq', modelId: 'retire-fixture-a' }).lean();
     expect(row.isActive).toBe(false);
     expect(row.retiredReason).toBe('http_404');
   });
 
   it('leaves a 403 alone — a refusal is not a withdrawal', async () => {
     enable('groq', 'cerebras');
-    await AIModel.create({ provider: 'groq', modelId: 'llama-3.1-8b-instant', name: 'x', isActive: true });
+    await AIModel.create({ provider: 'groq', modelId: 'retire-fixture-a', name: 'x', isActive: true });
     await AIFreeTier.insertMany([
-      { provider: 'groq', modelId: 'llama-3.1-8b-instant', isFree: true },
-      { provider: 'cerebras', modelId: 'llama3.1-8b', isFree: true }
+      { provider: 'groq', modelId: 'retire-fixture-a', isFree: true },
+      { provider: 'cerebras', modelId: 'retire-fixture-b', isFree: true }
     ]);
 
     fakeProviderLayer({
-      'groq/llama-3.1-8b-instant': providerError('Groq', 403, { error: { message: 'forbidden' } }),
-      'cerebras/llama3.1-8b': 'the answer'
+      'groq/retire-fixture-a': providerError('Groq', 403, { error: { message: 'forbidden' } }),
+      'cerebras/retire-fixture-b': 'the answer'
     });
 
     await aiService.callAI('hello', { freeOnly: true, appName: 'startgeek' });
     await settle();
 
-    const row = await AIModel.findOne({ provider: 'groq', modelId: 'llama-3.1-8b-instant' }).lean();
+    const row = await AIModel.findOne({ provider: 'groq', modelId: 'retire-fixture-a' }).lean();
     // Still active, but cooled — the model exists, this call was refused.
     expect(row.isActive).toBe(true);
     expect(row.retiredReason).toBeNull();
-    expect(aiService.getFreeTierHealth('groq', 'llama-3.1-8b-instant').lastFailureCode).toBe('http_403');
+    expect(aiService.getFreeTierHealth('groq', 'retire-fixture-a').lastFailureCode).toBe('http_403');
   });
 
   it('retires a model that has NO free-tier row at all', async () => {
@@ -187,20 +193,20 @@ describe('a live 404 retires the model it was called on', () => {
     // so before this it had no failure memory of any kind and would 404 on
     // every call forever.
     enable('groq', 'cerebras');
-    await AIModel.create({ provider: 'groq', modelId: 'paid-only-model', name: 'x', isActive: true });
-    await AIFreeTier.create({ provider: 'cerebras', modelId: 'llama3.1-8b', isFree: true });
+    await AIModel.create({ provider: 'groq', modelId: 'retire-fixture-paid', name: 'x', isActive: true });
+    await AIFreeTier.create({ provider: 'cerebras', modelId: 'retire-fixture-b', isFree: true });
 
     fakeProviderLayer({
-      'groq/paid-only-model': providerError('Groq', 404, { error: { code: 'model_not_found' } }),
-      'cerebras/llama3.1-8b': 'the answer'
+      'groq/retire-fixture-paid': providerError('Groq', 404, { error: { code: 'model_not_found' } }),
+      'cerebras/retire-fixture-b': 'the answer'
     });
 
     await aiService.callAI('hello', {
-      appName: 'startgeek', provider: 'groq', model: 'paid-only-model'
+      appName: 'startgeek', provider: 'groq', model: 'retire-fixture-paid'
     }).catch(() => {});
     await settle();
 
-    const row = await AIModel.findOne({ provider: 'groq', modelId: 'paid-only-model' }).lean();
+    const row = await AIModel.findOne({ provider: 'groq', modelId: 'retire-fixture-paid' }).lean();
     expect(row.isActive).toBe(false);
     expect(row.retiredReason).toBe('http_404');
   });
