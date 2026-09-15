@@ -226,10 +226,25 @@ export default function UsagePanel({
           />
         )}
 
+        {/*
+          * These three come from `aiService.sessionStats` — an IN-PROCESS
+          * counter that starts at zero every time basegeek restarts, which is
+          * every deploy that touches it. Calling them "Total" put them in
+          * direct contradiction with the month figure one line above: on
+          * 2026-09-15 this page read "122 paid calls" and "Total Calls 1" at
+          * the same time, both correct, neither labelled. The number is only
+          * honest with its period attached.
+          */}
+        <Typography
+          variant="overline"
+          sx={{ display: 'block', color: 'text.secondary', mt: 3, mb: 1, letterSpacing: '0.08em' }}
+        >
+          Since basegeek last restarted
+        </Typography>
         <Grid container spacing={3}>
-          <TotalCard label="Total Calls" value={stats.totalCalls || 0} />
-          <TotalCard label="Total Tokens" value={formatTokens(stats.totalTokens || 0)} />
-          <TotalCard label="Total Cost" value={formatCost(stats.totalCost || 0)} />
+          <TotalCard label="Calls" value={stats.totalCalls || 0} />
+          <TotalCard label="Tokens" value={formatTokens(stats.totalTokens || 0)} />
+          <TotalCard label="Cost" value={formatCost(stats.totalCost || 0)} />
         </Grid>
 
         <Typography variant="h6" sx={{ mt: 3, mb: 2 }}>Provider Usage</Typography>
