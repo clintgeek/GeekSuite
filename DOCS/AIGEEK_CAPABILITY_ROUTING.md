@@ -110,27 +110,67 @@ The probe already runs one structured extraction per candidate and records alive
 - **whether the answer was right** → a quality signal, if the probe's fixture has a known
   answer.
 
-Add a small golden set — one extraction, one arithmetic, one reasoning question with known
-answers — scored on each discovery run. Ten cheap calls per candidate, on free models mostly
-free. That replaces `performance.*` with something earned.
+**The golden set.** Six questions with *known* answers, scored by code — no human, no judge
+model, no opinion. The binding constraint is that everything must be mechanically checkable,
+which rules out "is this prose good?" and rules in anything with a verifiable answer.
 
-Until then: route on task flags and measured latency only, and ignore `performance.*`.
+| # | class | what it asks | scored by |
+|---|---|---|---|
+| 1 | `structured` | messy sentence → exact JSON ("two eggs and a slice of toast for breakfast") | valid JSON? right item count? right quantities? |
+| 2 | `structured` | **refusal to invent** — ask for a field it cannot know | returns null rather than a confident fabrication |
+| 3 | `numeracy` | "a recipe serves 4 and totals 1,200 cal; how many in 1.5 servings?" | exact match (450) |
+| 4 | `calibration` | "roughly how many calories in two slices of pepperoni pizza?" | inside a band (400-800), not exact |
+| 5 | `instruction` | "exactly three sentences, none containing the letter e" | regex |
+| 6 | `reasoning` | short multi-step question, single verifiable answer | exact match |
+
+Question 2 is the most valuable one for this suite. Hallucinated values are the failure mode
+that actually hurt: a model that invented `pancake mix` from a query that never said "mix",
+and another that answered `"low_calories": false`. A model that fabricates should lose the
+`structured` class however fast it is. Question 4 is literally the judge's job, and is what
+separates the model that said 570 from the one that said 1,200 with 200g of carbs.
+
+**Sample, do not sweep.** Six questions across 104 free rows is 624 calls per run, which
+would trip the same 429s that broke today's pins. Run the full set on new candidates, on any
+model currently selected by a live app need, and on a rotating slice of the rest (~10/day).
+That is ~20-30 calls daily with the models that matter kept fresh.
+
+Two details to build in from the start: **scores decay** (a model measured 60 days ago is not
+trusted like one measured yesterday), and **record p50 latency from the same runs** — that is
+the weight class, measured rather than guessed from "8b" appearing in a name.
+
+Until the golden set exists: route on task flags and measured latency only, and ignore
+`performance.*` entirely.
 
 ### 3.3 Failure feeds back, by cause
 
 Today a failed sweep cools everything for 30 days uniformly. On 2026-09-15 that cooled nine
 OpenRouter models for a month, several of which were merely busy.
 
+**Correction, after reading the code properly.** An earlier draft of this section claimed
+failures were cooled uniformly for 30 days and that failure feedback was "currently
+discarded". Both were wrong, and the truth is much better:
+
+- `classifyFreeTierFailure` (`models/AIFreeTier.js`) already separates *hard* failures from
+  soft ones. A 429, 5xx, timeout or network error is `unknown` and leaves the row's health
+  completely alone.
+- A 429 is already cooled **for as long as the provider's own `Retry-After` asked**, not a
+  flat interval.
+- The request path already records hard failures with escalating cooldowns
+  (`markFreeTierFailure`), persists them, and re-picks — including carrying a dead sticky
+  pick out so the swap is visible.
+
+So the feedback loop exists. Two genuine gaps remained, and stage 1 closes both:
+
 | signal | meaning | action |
 |---|---|---|
-| 404 / "no endpoints" | the vendor retired it | retire the row NOW, re-resolve the need |
-| 429 | transient | cool minutes, not days |
-| timeout, repeatedly | it is not `fast` any more | demote its weight class |
-| empty / unparseable content | cannot do structured output | clear that task flag |
+| 404 / 410 / model_not_found | **the vendor withdrew it** | retire the row NOW — `isActive: false`, reason recorded. Cooling a retirement is a slower way of failing forever. |
+| 401 / 403 | this call was refused | cool and retry, unchanged — the model still exists |
+| 429 / 5xx / timeout | transient | unchanged; already handled well |
 
-And any resolution failure should trigger out-of-band discovery for that provider rather than
-waiting up to 24h for the tick. **Failure is the highest-quality signal in the system and it
-is currently discarded.** A 404 fixing itself immediately would have prevented my entire day.
+And the gap that actually cost the day: **failure memory only existed for models with an
+`AIFreeTier` row.** A paid or pinned model — FitnessGeek's judge is one — had none at all,
+so it could 404 on every call forever and nothing would learn. Retirement is now recorded
+outside that gate.
 
 ### 3.4 App config stores needs, not models
 
@@ -154,8 +194,9 @@ changeable at runtime, visible in the aiGeek UI, and immune to that whole class 
 
 Each stage is shippable alone and each removes a real failure that happened.
 
-1. **Cause-based failure handling** (§3.3). Smallest, highest value: a retired slug stops
-   being offered the moment it 404s. No new concepts.
+1. ~~**Cause-based failure handling** (§3.3)~~ — **DONE 2026-09-15.** `isRetirement()` in
+   `models/AIFreeTier.js`, `aiService.retireModel()`, recorded outside the free-tier gate so
+   paid and pinned models are covered. 17 tests in `aiModelRetirement.test.js`.
 2. **`need` resolution in `feature()`** (§3.1), reading only trustworthy facts — task flags,
    alive/cooling, pricing, app tier. Ignore `performance.*`.
 3. **Probe records latency and golden-set score** (§3.2); weight class becomes measured.
@@ -173,12 +214,15 @@ Each stage is shippable alone and each removes a real failure that happened.
   documents the manual kick; a second spelling of a scheduled job is drift waiting to happen
   (the codebase already retired `syncProviderModels` for exactly this reason).
 
-## 6. Open questions for Chef
+## 6. Decisions (Chef, 2026-09-15)
 
-1. **Budget per app, or one pot?** `dailyCap` exists per app; `monthlyBudgetUsd` would be new.
-   With only OpenRouter funded, one pot may be simpler.
-2. **How loud should a demotion be?** When a resolver silently swaps models, does that appear
-   anywhere he'd see it, or only in the aiGeek console?
-3. **Golden set content.** Three questions per task class is enough to catch "confidently
-   wrong", but the questions need writing once and they need to be things a nutrition app,
-   a note app and a story app all care about.
+**One pot, not per-app budgets.** Only OpenRouter is funded, so a single ceiling is simpler
+and there is nothing to apportion. `dailyCap` stays per app as a runaway guard.
+
+**A silent model swap is fine, as long as context survives or the change is not jarring.**
+This maps onto machinery that already exists: `AIAppConfig.sticky`. Stateless calls
+(FitnessGeek's estimate and judge) may swap freely between calls; anything conversational
+sets `sticky` and keeps its model for the thread, and the existing `retiredSticky` handoff
+already carries a dead pick out so the replacement is recorded rather than silent.
+
+**The golden set** is specified in §3.2 above.

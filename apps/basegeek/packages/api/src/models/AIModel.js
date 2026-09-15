@@ -16,6 +16,13 @@ const aiModelSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  // Set when a provider answers 404/410/model_not_found for this slug: the
+  // vendor withdrew it, so it stops being offered immediately rather than
+  // being retried on a cooldown forever. Free rows keep their own health
+  // record; this is the ONLY failure memory a paid or pinned model has.
+  retiredAt: { type: Date, default: null },
+  retiredReason: { type: String, default: null },
+
   isActive: {
     type: Boolean,
     default: true

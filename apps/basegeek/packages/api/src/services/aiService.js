@@ -20,6 +20,7 @@ import AIPricing from '../models/AIPricing.js';
 import aiUsageService from './aiUsageService.js';
 import AIFreeTier, {
   classifyFreeTierFailure,
+  isRetirement,
   isFreeTierCooling,
   FREE_TIER_COOLDOWN_MS,
   FREE_TIER_LONG_COOLDOWN_MS,
@@ -1000,6 +1001,42 @@ class AIService {
    * Fire-and-forget on the Mongo side: the caller is in the middle of a request
    * and the mirror already carries the answer selection needs.
    */
+  /**
+   * Take a withdrawn model out of circulation.
+   *
+   * Deliberately NOT a cooldown: a cooldown says "try again later", and there
+   * is no later for a slug the vendor deleted. `isActive: false` is the same
+   * flag `deactivateUnlisted` uses when a provider stops listing a model, so
+   * the catalog, the resolver and the admin UI all already understand it —
+   * this just reaches the same conclusion from a live failure instead of
+   * waiting up to 24h for the next discovery sweep.
+   *
+   * Fire-and-forget: a write that fails must not take the caller's request
+   * with it, and the next failure will try again.
+   */
+  retireModel(provider, modelId, code) {
+    if (!provider || !modelId) return;
+
+    logger.warn(
+      { provider, modelId, code },
+      `[Catalog] ${provider}/${modelId} answered ${code} — retiring the row rather than cooling it`
+    );
+
+    AIModel.updateOne(
+      { provider, modelId },
+      { $set: { isActive: false, retiredAt: new Date(), retiredReason: code, lastChecked: new Date() } }
+    ).catch((err) => {
+      logger.warn({ err, provider, modelId }, '[Catalog] failed to persist retirement');
+    });
+
+    // A free row for the same slug should stop being picked too. Its health
+    // record is the mechanism that selection already reads.
+    AIFreeTier.updateOne(
+      { provider, modelId },
+      { $set: { isFree: false, 'health.lastFailureAt': new Date(), 'health.lastFailureCode': code } }
+    ).catch(() => {});
+  }
+
   markFreeTierFailure(provider, modelId, code, storedHealth = null) {
     const key = this.freeTierKey(provider, modelId);
     // Count from the merged view, not the mirror alone: after a restart the
@@ -2049,8 +2086,21 @@ class AIService {
         // call does not spend the same three seconds proving it again. A 429,
         // a 5xx or a timeout is not hard and leaves the row's health alone;
         // markRateLimited above already owns that case.
+        const classification = classifyFreeTierFailure(error);
+
+        // A WITHDRAWN slug is not a cooldown case. 404/410/model_not_found
+        // means the vendor took it away, and no amount of waiting brings it
+        // back — so it stops being offered now instead of being retried every
+        // cooldown forever. This runs outside the `freeRow` gate below on
+        // purpose: a paid or pinned model has no free-tier row, and therefore
+        // no other failure memory at all. Three retired OpenRouter slugs sat
+        // in our catalog 404-ing all of 2026-09-15 while every pin to them
+        // fell back silently.
+        if (isRetirement(classification.code)) {
+          this.retireModel(currentProvider, providerModel, classification.code);
+        }
+
         if (freeRow) {
-          const classification = classifyFreeTierFailure(error);
           if (classification.hard) {
             this.markFreeTierFailure(currentProvider, providerModel, classification.code, freeRow.health);
             // If the row that just died was this conversation's sticky pick,

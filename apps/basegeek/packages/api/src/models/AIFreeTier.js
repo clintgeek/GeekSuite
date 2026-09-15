@@ -160,6 +160,28 @@ export const HARD_FAILURE_PATTERN =
   /model_not_found|does not exist|no longer|not found|wrong api key|unauthorized/i;
 
 /**
+ * The subset of hard failures that mean **the model is gone**, as opposed to
+ * "this call was refused".
+ *
+ * The distinction is the whole point. A 401 or 403 is a credential or
+ * entitlement problem: the model still exists and the row should be cooled and
+ * retried. A 404 or 410 means the vendor withdrew the slug, and no amount of
+ * waiting brings it back — retrying it every 30 days forever is just a slower
+ * way of failing.
+ *
+ * Observed 2026-09-15: `google/gemini-2.0-flash-exp:free`,
+ * `meta-llama/llama-3.1-70b-instruct:free` and
+ * `nousresearch/hermes-3-llama-3.1-405b:free` were all still in our catalog and
+ * all 404-ing, with OpenRouter replying in as many words: "This model is
+ * unavailable for free. The paid version is available now." Every pin to them
+ * fell back silently, all day, and nothing learned.
+ */
+export const RETIREMENT_CODES = new Set(['http_404', 'http_410', 'model_not_found']);
+
+/** `true` when this failure means the model no longer exists. */
+export const isRetirement = (code) => RETIREMENT_CODES.has(code);
+
+/**
  * Classify a thrown provider error for the free-tier health record.
  *
  * @param {Error} error
