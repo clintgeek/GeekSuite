@@ -6,6 +6,7 @@ import FoodLog from '../models/FoodLog.js';
 import DailySummary from '../models/DailySummary.js';
 import UserSettings from '../models/UserSettings.js';
 import logger from '../config/logger.js';
+import describeAndLogService from '../services/describeAndLogService.js';
 
 // Apply authentication to all routes
 router.use(authenticateToken);
@@ -266,6 +267,78 @@ router.get('/date/:date', async (req, res) => {
 
 // POST /api/logs/copy - Copy meal(s) from one date/meal to another
 // Supports copying from own logs or household member's logs
+// POST /api/logs/describe — the front door for describe-and-log.
+//
+// Chef says what he ate; this writes it. No search, no picking, no confirm
+// step: he is on record that he will simply not use anything that makes him
+// the search operator (DOCS/THE_DESCRIBE_AND_LOG_PLAN.md §1).
+//
+// `hour` is the caller's LOCAL clock, because the server runs UTC and cannot
+// otherwise guess which meal 8pm belongs to.
+router.post('/describe', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { text, date, hour } = req.body || {};
+
+    if (!text || !String(text).trim()) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Tell me what you ate', code: 'VALIDATION_ERROR' }
+      });
+    }
+    if (!date) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'A date is required', code: 'VALIDATION_ERROR' }
+      });
+    }
+
+    const started = Date.now();
+    const result = await describeAndLogService.logDescription(text, {
+      userId,
+      date: toUtcMidnight(date),
+      hour: Number.isFinite(Number(hour)) ? Number(hour) : undefined
+    });
+
+    // Nothing recognisable as food. Say so plainly rather than logging nothing
+    // and claiming success.
+    if (result.logged.length === 0 && result.skipped.length === 0) {
+      return res.status(422).json({
+        success: false,
+        error: {
+          message: "I couldn't find any food in that",
+          code: 'NOTHING_TO_LOG'
+        }
+      });
+    }
+
+    logger.info({
+      userId,
+      logged: result.logged.length,
+      skipped: result.skipped.length,
+      ms: Date.now() - started
+    }, 'Describe-and-log');
+
+    res.json({
+      success: true,
+      data: {
+        logged: result.logged,
+        skipped: result.skipped,
+        logIds: result.logIds,
+        questions: result.questions,
+        totalCalories: result.logged.reduce((sum, item) => sum + (item.calories || 0), 0)
+      }
+    });
+
+  } catch (error) {
+    logger.error({ err: error }, 'Describe-and-log failed');
+    res.status(500).json({
+      success: false,
+      error: { message: 'Could not log that. Try again.', code: 'DESCRIBE_LOG_ERROR' }
+    });
+  }
+});
+
 router.post('/copy', async (req, res) => {
   try {
     const userId = req.user.id;
