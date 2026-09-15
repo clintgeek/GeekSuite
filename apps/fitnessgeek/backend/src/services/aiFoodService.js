@@ -84,6 +84,61 @@ const FILLER_WORDS = new Set([
   'of', 'with', 'and', 'plus', 'some', 'the', 'my', 'for', 'a', 'an'
 ]);
 
+/**
+ * Which model judges a plate of food.
+ *
+ * Env-configurable on purpose. On 2026-09-15 three model slugs that aiGeek had
+ * cached as working — including `meta-llama/llama-3.1-70b-instruct:free` — had
+ * been retired by OpenRouter and 404'd, and every pin to them fell back
+ * silently. Model names rot, so this one must be changeable without a deploy.
+ *
+ * DEFAULT: UNPINNED, and that is a measured decision rather than laziness.
+ * Chef's requirement is that logging feels instant. Measured 2026-09-15 on the
+ * same prompt:
+ *
+ *   rotation (groq, 7B)          ~1s      variable, occasionally silly
+ *   mistral-small-24b            5.7s     good
+ *   gpt-oss-120b                 4.7-20s  good, but it is a REASONING model and
+ *                                         burns hidden tokens before answering
+ *   mistral-nemo                 13.4s    good
+ *
+ * Every better model costs five to twenty seconds, and this call sits on the
+ * critical path between Chef saying what he ate and seeing it logged. So the
+ * inline estimate stays fast, and quality is recovered off the critical path by
+ * the background judge (`DISH_JUDGE_*`), which may correct an entry after the
+ * fact. Anything he eats twice skips the model entirely via history.
+ *
+ * Set both to pin; either alone is ignored by aiGeek.
+ */
+const DISH_ESTIMATE_PROVIDER = process.env.DISH_ESTIMATE_PROVIDER || '';
+const DISH_ESTIMATE_MODEL = process.env.DISH_ESTIMATE_MODEL || '';
+
+/** Structured-output schema for `dishEstimate`. */
+const DISH_ESTIMATE_SCHEMA = {
+  type: 'object',
+  properties: {
+    dishes: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          index: { type: 'integer' },
+          name: { type: 'string' },
+          serving_description: { type: 'string' },
+          calories: { type: 'number' },
+          protein_grams: { type: 'number' },
+          carbs_grams: { type: 'number' },
+          fat_grams: { type: 'number' },
+          low_calories: { type: 'number' },
+          high_calories: { type: 'number' }
+        },
+        required: ['index', 'name', 'calories', 'protein_grams', 'carbs_grams', 'fat_grams']
+      }
+    }
+  },
+  required: ['dishes']
+};
+
 const MEAL_WORDS = { breakfast: 'breakfast', lunch: 'lunch', dinner: 'dinner', supper: 'dinner', snack: 'snack' };
 
 class AIFoodService {
@@ -202,6 +257,139 @@ class AIFoodService {
       .join(' ')
       .trim()
       .slice(0, 120);
+  }
+
+  // ============================================
+  // FEATURE: dishEstimate
+  // ============================================
+
+  /**
+   * Estimate what a described plate of food actually contained.
+   *
+   * This is the feature that makes describe-and-log possible, and it is a
+   * deliberate reversal of how this file used to work. Every other path here
+   * refuses to invent a food: `parseFoodDescription` returns a split with
+   * `nutrition: null` rather than guess, because a made-up number looks exactly
+   * like a real one. Chef chose the other trade knowingly (see
+   * DOCS/THE_DESCRIBE_AND_LOG_PLAN.md §5): he does not log at all, and an
+   * entry that is roughly right every day beats a precise entry never.
+   *
+   * So this asks for a judgement, not a lookup. The bar is "reasonable for the
+   * description" — a nacho plate at 960 or 1,220 are both fine answers. What it
+   * must NOT do is invent dishes nobody mentioned, which is why the prompt and
+   * the caller both pin results to the input by index.
+   *
+   * `low_calories`/`high_calories` carry the model's own uncertainty, and that
+   * spread — not a confidence word — is what decides whether we ask Chef a
+   * question.
+   *
+   * @param {Array<{dish: string, components: string[], servings: number, unit: string|null}>} entries
+   * @param {{userId?: string}} [options] the per-day cap bucket
+   * @returns {Promise<{ok: boolean, dishes: object[], reason: string|null, provenance: object|null}>}
+   */
+  async estimateDishes(entries, options = {}) {
+    const list = Array.isArray(entries) ? entries.filter(Boolean) : [];
+    if (list.length === 0) {
+      return { ok: false, dishes: [], reason: 'no-entries', provenance: null };
+    }
+
+    const described = list.map((entry, index) => {
+      const parts = [`${index + 1}. ${entry.dish}`];
+      if (entry.components?.length) parts.push(`(with ${entry.components.join(', ')})`);
+      const count = Number(entry.servings) > 1 ? ` — TOTAL amount eaten: ${entry.servings}${entry.unit ? ' ' + entry.unit : ''}` : '';
+      return parts.join(' ') + count;
+    }).join('\n');
+
+    const result = await aiGeekClient.feature('dishEstimate', {
+      quotaKey: options.userId,
+      ...(DISH_ESTIMATE_PROVIDER && DISH_ESTIMATE_MODEL
+        ? { provider: DISH_ESTIMATE_PROVIDER, model: DISH_ESTIMATE_MODEL }
+        : {}),
+      system: 'You are estimating the nutrition of real meals for a food log. Return ONLY valid JSON.',
+      user: this.buildDishEstimatePrompt(described),
+      schema: DISH_ESTIMATE_SCHEMA,
+      maxTokens: 900,
+      temperature: 0.2
+    }, { timeoutMs: 20000 });
+
+    if (!result.ok) {
+      logger.warn({ reason: result.reason, count: list.length }, 'Dish estimate unavailable');
+      return { ok: false, dishes: [], reason: result.reason, provenance: result.provenance };
+    }
+
+    const dishes = this.parseDishEstimateResponse(result.data, list.length);
+    if (dishes.length === 0) {
+      return { ok: false, dishes: [], reason: 'unparseable', provenance: result.provenance };
+    }
+
+    return { ok: true, dishes, reason: null, provenance: result.provenance };
+  }
+
+  buildDishEstimatePrompt(describedList) {
+    return `Estimate the nutrition of each dish below, as actually served.
+
+Dishes:
+${describedList}
+
+Rules:
+- Return EXACTLY one result per numbered dish, using the same index. Never add a dish that is not listed, and never split one dish into several.
+- Give nutrition for the FULL amount described, as a single entry. If it says 12 nachos, give the numbers for all twelve together. The caller does NOT multiply — whatever you return is what gets logged.
+- Assume a normal restaurant or home portion for the dish as described. If it says homemade, assume a home portion; if it names a restaurant, assume a restaurant portion.
+- Components in brackets are toppings or fillings that are part of that one dish. Include them in that dish's numbers. Do not return them separately.
+- Be reasonable rather than precise. Being 20% out is fine and expected.
+- low_calories and high_calories should express your genuine uncertainty for this dish as described. If the description could plausibly mean a small home plate or a large restaurant plate, say so with a wide range.
+
+Return JSON of the form:
+{"dishes":[{"index":1,"name":"<the dish, named back>","serving_description":"<the amount>","calories":0,"protein_grams":0,"carbs_grams":0,"fat_grams":0,"low_calories":0,"high_calories":0}]}
+
+Use your own numbers. The shape above is a template, not an answer.`;
+  }
+
+  /** Read the model's answer, keeping only rows that map back to a real input. */
+  parseDishEstimateResponse(responseText, expectedCount) {
+    try {
+      const text = typeof responseText === 'string' ? responseText : JSON.stringify(responseText);
+      const match = text.match(/\{[\s\S]*\}/);
+      if (!match) return [];
+
+      const parsed = JSON.parse(match[0]);
+      const rows = Array.isArray(parsed?.dishes) ? parsed.dishes : [];
+
+      return rows
+        .map((row) => {
+          const index = Number(row?.index);
+          if (!Number.isInteger(index) || index < 1 || index > expectedCount) return null;
+          const calories = Number(row?.calories);
+          if (!Number.isFinite(calories) || calories < 0) return null;
+
+          // Only a genuine number counts. A 7B model has answered this with
+          // `false`/`true` before now, and `Number(false)` is 0 — which would
+          // have become a silent, meaningless "range" of 0 to 1.
+          const asCalories = (value) =>
+            typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.round(value) : null;
+          let low = asCalories(row?.low_calories);
+          let high = asCalories(row?.high_calories);
+          if (low != null && high != null && low > high) [low, high] = [high, low];
+
+          return {
+            index: index - 1,
+            name: String(row?.name || '').trim(),
+            servingDescription: String(row?.serving_description || 'serving').trim(),
+            nutrition: {
+              calories_per_serving: Math.round(calories),
+              protein_grams: Math.max(0, Number(row?.protein_grams) || 0),
+              carbs_grams: Math.max(0, Number(row?.carbs_grams) || 0),
+              fat_grams: Math.max(0, Number(row?.fat_grams) || 0)
+            },
+            lowCalories: low,
+            highCalories: high
+          };
+        })
+        .filter(Boolean);
+    } catch (error) {
+      logger.warn({ err: error }, 'Failed to read dish estimate response');
+      return [];
+    }
   }
 
   // ============================================

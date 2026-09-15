@@ -171,3 +171,39 @@ describe('sanityCheckResults', () => {
     expect(feature).not.toHaveBeenCalled();
   });
 });
+
+describe('estimateDishes — reading a small model’s answer', () => {
+  test('a boolean range is discarded, not coerced to 0 and 1', async () => {
+    // allam-2-7b really did answer `"low_calories": false` on 2026-09-15.
+    // `Number(false)` is 0, which would have become a silent range of 0–1.
+    const [dish] = aiFoodService.parseDishEstimateResponse(JSON.stringify({
+      dishes: [{
+        index: 1, name: 'Nachos', calories: 1200,
+        protein_grams: 50, carbs_grams: 150, fat_grams: 80,
+        low_calories: false, high_calories: true
+      }]
+    }), 1);
+
+    expect(dish.lowCalories).toBeNull();
+    expect(dish.highCalories).toBeNull();
+    expect(dish.nutrition.calories_per_serving).toBe(1200);
+  });
+
+  test('a reversed range is put the right way round', () => {
+    const [dish] = aiFoodService.parseDishEstimateResponse(JSON.stringify({
+      dishes: [{ index: 1, name: 'X', calories: 500, protein_grams: 1, carbs_grams: 1, fat_grams: 1, low_calories: 900, high_calories: 300 }]
+    }), 1);
+    expect([dish.lowCalories, dish.highCalories]).toEqual([300, 900]);
+  });
+
+  test('a row pointing at a dish that was never asked about is dropped', () => {
+    const dishes = aiFoodService.parseDishEstimateResponse(JSON.stringify({
+      dishes: [
+        { index: 1, name: 'Asked for', calories: 100, protein_grams: 1, carbs_grams: 1, fat_grams: 1 },
+        { index: 7, name: 'Invented', calories: 100, protein_grams: 1, carbs_grams: 1, fat_grams: 1 }
+      ]
+    }), 1);
+    expect(dishes).toHaveLength(1);
+    expect(dishes[0].name).toBe('Asked for');
+  });
+});
