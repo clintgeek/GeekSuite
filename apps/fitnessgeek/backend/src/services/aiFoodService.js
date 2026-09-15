@@ -113,6 +113,40 @@ const FILLER_WORDS = new Set([
 const DISH_ESTIMATE_PROVIDER = process.env.DISH_ESTIMATE_PROVIDER || '';
 const DISH_ESTIMATE_MODEL = process.env.DISH_ESTIMATE_MODEL || '';
 
+/**
+ * The background judge. Allowed to be slow, because nothing waits on it.
+ *
+ * Pinned to a DIFFERENT provider and family from the estimator on purpose: the
+ * estimator runs on groq's Llama-derived 7B, so asking the same family again
+ * would mostly rubber-stamp its own mistakes. `gpt-oss-120b` is a reasoning
+ * model, which is exactly wrong inline (4.7-20s) and exactly right here —
+ * "is 200g of carbs reasonable for two slices of pizza?" IS a reasoning
+ * question.
+ */
+const DISH_JUDGE_PROVIDER = process.env.DISH_JUDGE_PROVIDER || 'openrouter';
+const DISH_JUDGE_MODEL = process.env.DISH_JUDGE_MODEL || 'openai/gpt-oss-120b';
+
+/** Structured-output schema for `dishJudge`. */
+const DISH_JUDGE_SCHEMA = {
+  type: 'object',
+  properties: {
+    verdicts: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          index: { type: 'integer' },
+          reasonable: { type: 'boolean' },
+          better_calories: { type: 'number' },
+          why: { type: 'string' }
+        },
+        required: ['index', 'reasonable']
+      }
+    }
+  },
+  required: ['verdicts']
+};
+
 /** Structured-output schema for `dishEstimate`. */
 const DISH_ESTIMATE_SCHEMA = {
   type: 'object',
@@ -388,6 +422,105 @@ Use your own numbers. The shape above is a template, not an answer.`;
         .filter(Boolean);
     } catch (error) {
       logger.warn({ err: error }, 'Failed to read dish estimate response');
+      return [];
+    }
+  }
+
+  // ============================================
+  // FEATURE: dishJudge
+  // ============================================
+
+  /**
+   * A second opinion on entries that were ESTIMATED, after they are already
+   * logged.
+   *
+   * Only estimates are judged. A history hit is a number Chef already accepted;
+   * a catalog hit is published fact. Re-litigating either would spend a model
+   * call to second-guess something more trustworthy than the model.
+   *
+   * The hard-won rule this obeys: a judge is only worth its latency if its
+   * verdict changes what Chef sees. `applySanityCheck` used to make a second
+   * LLM call setting `sanityCheckPassed` / `Issues` / `Confidence` — three
+   * fields no frontend code ever read. Deleted 2026-09-14. So this returns a
+   * BETTER NUMBER, not an opinion, and the caller writes it.
+   *
+   * @param {Array<{name: string, servings: number, calories: number, nutrition: object}>} entries
+   * @param {{userId?: string}} [options]
+   * @returns {Promise<{ok: boolean, verdicts: object[], reason: string|null, provenance: object|null}>}
+   */
+  async judgeEntries(entries, options = {}) {
+    const list = Array.isArray(entries) ? entries.filter(Boolean) : [];
+    if (list.length === 0) {
+      return { ok: false, verdicts: [], reason: 'no-entries', provenance: null };
+    }
+
+    const described = list.map((e, i) => {
+      const n = e.nutrition || {};
+      return `${i + 1}. ${e.name} — logged as ${e.calories} cal total `
+        + `(P${n.protein_grams || 0} C${n.carbs_grams || 0} F${n.fat_grams || 0})`;
+    }).join('\n');
+
+    const result = await aiGeekClient.feature('dishJudge', {
+      quotaKey: options.userId,
+      ...(DISH_JUDGE_PROVIDER && DISH_JUDGE_MODEL
+        ? { provider: DISH_JUDGE_PROVIDER, model: DISH_JUDGE_MODEL }
+        : {}),
+      system: 'You are checking a food log for obviously wrong numbers. Return ONLY valid JSON.',
+      user: `Each line is an entry already written to a food log. For each one, say whether the calorie total is reasonable for that food and amount.
+
+${described}
+
+Rules:
+- Judge the TOTAL shown, for the amount described. Do not re-scale it.
+- "Reasonable" is generous: anything within about a third of what you would expect is fine. A plate of nachos at 960 or 1,220 calories are both reasonable answers.
+- Mark reasonable=false ONLY for something clearly wrong — a factor of two or more out, or macros that could not belong to that food.
+- When reasonable=false, give better_calories: your own total for that food and amount, and one short clause in "why".
+- Return exactly one verdict per numbered line, same index.
+
+Return JSON: {"verdicts":[{"index":1,"reasonable":true},{"index":2,"reasonable":false,"better_calories":0,"why":""}]}`,
+      schema: DISH_JUDGE_SCHEMA,
+      maxTokens: 700,
+      temperature: 0.1
+    }, { timeoutMs: 45000 });
+
+    if (!result.ok) {
+      logger.warn({ reason: result.reason, count: list.length }, 'Dish judge unavailable');
+      return { ok: false, verdicts: [], reason: result.reason, provenance: result.provenance };
+    }
+
+    return {
+      ok: true,
+      verdicts: this.parseJudgeResponse(result.data, list.length),
+      reason: null,
+      provenance: result.provenance
+    };
+  }
+
+  /** Read the judge's answer, keeping only verdicts that map to a real entry. */
+  parseJudgeResponse(responseText, expectedCount) {
+    try {
+      const text = typeof responseText === 'string' ? responseText : JSON.stringify(responseText);
+      const match = text.match(/\{[\s\S]*\}/);
+      if (!match) return [];
+
+      const rows = JSON.parse(match[0])?.verdicts;
+      if (!Array.isArray(rows)) return [];
+
+      return rows.map((row) => {
+        const index = Number(row?.index);
+        if (!Number.isInteger(index) || index < 1 || index > expectedCount) return null;
+        const better = typeof row?.better_calories === 'number' && Number.isFinite(row.better_calories)
+          ? Math.round(row.better_calories)
+          : null;
+        return {
+          index: index - 1,
+          reasonable: row?.reasonable !== false,
+          betterCalories: better != null && better > 0 ? better : null,
+          why: String(row?.why || '').trim().slice(0, 160)
+        };
+      }).filter(Boolean);
+    } catch (error) {
+      logger.warn({ err: error }, 'Failed to read judge response');
       return [];
     }
   }

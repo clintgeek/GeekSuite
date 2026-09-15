@@ -41,6 +41,16 @@ import { parseFoodQuery, normalizeQuery, tokenize } from './foodQueryParser.js';
  */
 const QUESTION_SPREAD_CALORIES = 400;
 
+/**
+ * How far the judge must disagree before its number replaces the estimate.
+ *
+ * Deliberately blunt. Chef's standard is that a nacho plate at 960 or 1,220 is
+ * noise at the week level — that is 27% apart and must NOT trigger a rewrite,
+ * or the log churns for no benefit. 40% catches the factor-of-two errors that
+ * actually matter, and nothing else.
+ */
+const JUDGE_MATERIAL_RATIO = 0.4;
+
 /** How many of his own foods to consider when looking for a repeat. */
 const HISTORY_CANDIDATES = 200;
 
@@ -210,6 +220,85 @@ export async function resolveEntries(entries, { userId } = {}) {
   return resolved.filter(Boolean);
 }
 
+/**
+ * Second-guess the estimates, after they are already logged.
+ *
+ * Runs detached from the request: Chef sees his food logged immediately and
+ * this catches up behind him. Only entries that were ESTIMATED are reviewed —
+ * a history hit is a number he already accepted and a catalog hit is published
+ * fact, and spending a model call to doubt either would be worse than useless.
+ *
+ * When the judge disagrees materially it REWRITES the entry rather than
+ * flagging it, and says so in `notes`. A flag would be work handed back to
+ * him; his whole requirement is not having to think about this.
+ *
+ * @param {object[]} logged rows from `logDescription`
+ * @param {{userId: string, date: any}} options
+ * @returns {Promise<{reviewed: number, corrected: number}>}
+ */
+export async function reviewLoggedEntries(logged, { userId, date } = {}) {
+  const estimates = (logged || []).filter((row) => row.source === 'estimate' && row.logId);
+  if (estimates.length === 0) return { reviewed: 0, corrected: 0 };
+
+  const verdicts = await aiFoodService.judgeEntries(
+    estimates.map((row) => ({
+      name: row.name,
+      servings: row.servings,
+      calories: row.calories,
+      nutrition: row.nutrition || {}
+    })),
+    { userId }
+  );
+  if (!verdicts.ok) return { reviewed: 0, corrected: 0 };
+
+  let corrected = 0;
+
+  for (const verdict of verdicts.verdicts) {
+    const row = estimates[verdict.index];
+    if (!row || verdict.reasonable || !verdict.betterCalories) continue;
+
+    const was = Number(row.calories) || 0;
+    if (was <= 0) continue;
+    const drift = Math.abs(verdict.betterCalories - was) / was;
+    if (drift <= JUDGE_MATERIAL_RATIO) continue;
+
+    try {
+      const log = await FoodLog.findOne({ _id: row.logId, user_id: userId });
+      if (!log) continue;
+
+      // Scale the macros by the same factor. If the total was twice what it
+      // should be, the macros were too — and leaving them would fail the very
+      // rails that let this entry through.
+      const factor = verdict.betterCalories / was;
+      const n = log.nutrition || {};
+      log.nutrition = {
+        ...n,
+        calories_per_serving: Math.round((Number(n.calories_per_serving) || 0) * factor),
+        protein_grams: Math.round(((Number(n.protein_grams) || 0) * factor) * 10) / 10,
+        carbs_grams: Math.round(((Number(n.carbs_grams) || 0) * factor) * 10) / 10,
+        fat_grams: Math.round(((Number(n.fat_grams) || 0) * factor) * 10) / 10
+      };
+      const note = `Adjusted ${was} → ${verdict.betterCalories} cal on review${verdict.why ? `: ${verdict.why}` : ''}`;
+      log.notes = log.notes ? `${log.notes} · ${note}`.slice(0, 500) : note.slice(0, 500);
+      await log.save();
+      corrected += 1;
+
+      logger.info({
+        logId: row.logId, name: row.name, was, now: verdict.betterCalories, why: verdict.why
+      }, 'Judge corrected a logged estimate');
+
+    } catch (error) {
+      logger.warn({ err: error, logId: row.logId }, 'Could not apply judge correction');
+    }
+  }
+
+  if (corrected > 0 && date) {
+    await DailySummary.updateFromLogs(userId, date);
+  }
+
+  return { reviewed: estimates.length, corrected };
+}
+
 /** Mint (or reuse) the catalog row this log points at. */
 async function ensureFoodItem(resolution, userId) {
   if (resolution.foodId) return resolution.foodId;
@@ -233,7 +322,7 @@ async function ensureFoodItem(resolution, userId) {
  * @param {string} text
  * @param {{userId: string, date: string, hour?: number}} options
  */
-export async function logDescription(text, { userId, date, hour } = {}) {
+export async function logDescription(text, { userId, date, hour, ...options } = {}) {
   const parsed = parseMealDescription(text, { hour });
   if (parsed.entries.length === 0) {
     return { logged: [], skipped: [], logIds: [], questions: [], parsed };
@@ -284,6 +373,7 @@ export async function logDescription(text, { userId, date, hour } = {}) {
         loggedServings: servings,
         mealType: resolution.entry.mealType,
         calories: rails.totals.calories,
+        nutrition,
         source: resolution.source,
         flags: rails.flags,
         needsJudge: rails.severity === 'suspect'
@@ -317,7 +407,23 @@ export async function logDescription(text, { userId, date, hour } = {}) {
     sources: [...new Set(logged.map((l) => l.source))]
   }, 'Described meal logged');
 
+  // Detached on purpose: the response returns now, and the judge catches up.
+  // Never awaited, and never allowed to reject into the request path.
+  if (!options.skipReview) {
+    reviewLoggedEntries(logged, { userId, date })
+      .catch((error) => logger.warn({ err: error }, 'Background review failed'));
+  }
+
   return { logged, skipped, logIds, questions, parsed };
 }
 
-export default { logDescription, resolveEntries, findInHistory, detectBrand, entryKey, QUESTION_SPREAD_CALORIES };
+export default {
+  logDescription,
+  resolveEntries,
+  reviewLoggedEntries,
+  findInHistory,
+  detectBrand,
+  entryKey,
+  QUESTION_SPREAD_CALORIES,
+  JUDGE_MATERIAL_RATIO
+};

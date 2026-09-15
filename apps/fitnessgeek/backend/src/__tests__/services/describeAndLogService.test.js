@@ -30,16 +30,17 @@ const create = jest.fn(async (doc) => ({ ...doc, _id: 'food-new' }));
 const savedLogs = [];
 const updateFromLogs = jest.fn(async () => {});
 const estimateDishes = jest.fn(async () => ({ ok: false, dishes: [], reason: 'unavailable' }));
+const judgeEntries = jest.fn(async () => ({ ok: false, verdicts: [], reason: 'unavailable' }));
 const unifiedSearch = jest.fn(async () => []);
 
 class FakeFoodLog {
   constructor(doc) { Object.assign(this, doc); }
   async save() {
-    this._id = `log-${savedLogs.length + 1}`;
-    savedLogs.push(this);
+    if (!this._id) { this._id = `log-${savedLogs.length + 1}`; savedLogs.push(this); }
     return this;
   }
 }
+FakeFoodLog.findOne = jest.fn(async ({ _id }) => savedLogs.find((l) => l._id === _id) || null);
 
 jest.unstable_mockModule(mod('../../models/FoodItem.js'), () => ({
   __esModule: true,
@@ -57,6 +58,7 @@ jest.unstable_mockModule(mod('../../services/aiFoodService.js'), () => ({
   __esModule: true,
   default: {
     estimateDishes,
+    judgeEntries,
     prepareClassificationInput: (input) => ({
       detectedBrands: /kroger|pure protein|mcdonald/i.test(input) ? ['Kroger'] : []
     })
@@ -67,7 +69,7 @@ jest.unstable_mockModule(mod('../../services/unifiedFoodService.js'), () => ({
   default: { search: unifiedSearch }
 }));
 
-const { logDescription, findInHistory } = await import('../../services/describeAndLogService.js');
+const { logDescription, findInHistory, reviewLoggedEntries } = await import('../../services/describeAndLogService.js');
 
 const estimated = (index, name, calories, extra = {}) => ({
   index,
@@ -79,10 +81,11 @@ const estimated = (index, name, calories, extra = {}) => ({
   ...extra
 });
 
-const run = (text) => logDescription(text, { userId: 'u1', date: '2026-09-15', hour: 19 });
+const run = (text) => logDescription(text, { userId: 'u1', date: '2026-09-15', hour: 19, skipReview: true });
 
 beforeEach(() => {
   savedLogs.length = 0;
+  judgeEntries.mockImplementation(async () => ({ ok: false, verdicts: [], reason: 'unavailable' }));
   findOne.mockImplementation(() => chain(null));
   find.mockImplementation(() => chain([]));
   unifiedSearch.mockImplementation(async () => []);
@@ -174,7 +177,7 @@ describe('the rails guard the log', () => {
       dishes: [estimated(0, 'Beef flautas', 9020)]
     }));
 
-    const result = await logDescription('41 beef flautas', { userId: 'u1', date: '2026-09-15', hour: 19 });
+    const result = await logDescription('41 beef flautas', { userId: 'u1', date: '2026-09-15', hour: 19, skipReview: true });
 
     expect(result.logged).toHaveLength(0);
     expect(result.skipped[0].reason).toBe('absurd-total-calories');
@@ -234,5 +237,88 @@ describe('findInHistory', () => {
   test('is null for a user with no history', async () => {
     expect(await findInHistory('u1', 'nachos')).toBeNull();
     expect(await findInHistory(null, 'nachos')).toBeNull();
+  });
+});
+
+
+describe('the background judge', () => {
+  const logOneEstimate = async (calories) => {
+    estimateDishes.mockImplementation(async () => ({
+      ok: true, dishes: [estimated(0, 'Pepperoni pizza', calories)]
+    }));
+    const result = await run('two slices of pepperoni pizza');
+    return result.logged;
+  };
+
+  test('rewrites an entry the judge says is a factor out', async () => {
+    const logged = await logOneEstimate(1200);
+    judgeEntries.mockImplementation(async () => ({
+      ok: true,
+      verdicts: [{ index: 0, reasonable: false, betterCalories: 570, why: 'two slices is about 570' }]
+    }));
+
+    const out = await reviewLoggedEntries(logged, { userId: 'u1', date: '2026-09-15' });
+
+    expect(out).toEqual({ reviewed: 1, corrected: 1 });
+    const row = savedLogs[0];
+    // 570/1200 = 0.475, applied to calories AND macros so they stay coherent.
+    expect(row.nutrition.calories_per_serving).toBe(570);
+    expect(row.nutrition.protein_grams).toBeCloseTo(9.5, 1);
+    expect(row.notes).toMatch(/Adjusted 1200 → 570 cal on review: two slices is about 570/);
+    expect(updateFromLogs).toHaveBeenCalled();
+  });
+
+  test('leaves a merely imprecise entry alone', async () => {
+    // 960 vs 1220 is 27% — Chef calls that noise at the week level.
+    const logged = await logOneEstimate(1220);
+    judgeEntries.mockImplementation(async () => ({
+      ok: true, verdicts: [{ index: 0, reasonable: false, betterCalories: 960, why: 'a bit high' }]
+    }));
+
+    const out = await reviewLoggedEntries(logged, { userId: 'u1', date: '2026-09-15' });
+
+    expect(out.corrected).toBe(0);
+    expect(savedLogs[0].nutrition.calories_per_serving).toBe(1220);
+    expect(savedLogs[0].notes).toBeUndefined();
+  });
+
+  test('never judges history or catalog entries', async () => {
+    const out = await reviewLoggedEntries([
+      { logId: 'a', source: 'history', name: 'Nachos', calories: 1100 },
+      { logId: 'b', source: 'catalog', name: 'Kroger tenders', calories: 220 }
+    ], { userId: 'u1', date: '2026-09-15' });
+
+    expect(out).toEqual({ reviewed: 0, corrected: 0 });
+    expect(judgeEntries).not.toHaveBeenCalled();
+  });
+
+  test('a verdict of reasonable changes nothing', async () => {
+    const logged = await logOneEstimate(570);
+    judgeEntries.mockImplementation(async () => ({
+      ok: true, verdicts: [{ index: 0, reasonable: true, betterCalories: null, why: '' }]
+    }));
+
+    expect((await reviewLoggedEntries(logged, { userId: 'u1', date: '2026-09-15' })).corrected).toBe(0);
+  });
+
+  test('an unavailable judge is not an error', async () => {
+    const logged = await logOneEstimate(1200);
+    expect(await reviewLoggedEntries(logged, { userId: 'u1', date: '2026-09-15' }))
+      .toEqual({ reviewed: 0, corrected: 0 });
+    expect(savedLogs[0].nutrition.calories_per_serving).toBe(1200);
+  });
+
+  test('logging does not wait on the judge', async () => {
+    let released;
+    judgeEntries.mockImplementation(() => new Promise((r) => { released = r; }));
+    estimateDishes.mockImplementation(async () => ({
+      ok: true, dishes: [estimated(0, 'Pizza', 600)]
+    }));
+
+    // No skipReview: the detached review is left hanging and must not block.
+    const result = await logDescription('pizza', { userId: 'u1', date: '2026-09-15', hour: 19 });
+
+    expect(result.logged).toHaveLength(1);
+    released?.({ ok: false, verdicts: [] });
   });
 });
