@@ -421,3 +421,66 @@ describe('the golden set runs daily, not hourly', () => {
     expect(written[0].counts).toEqual({ scored: 0, offLanguage: 0 });
   });
 });
+
+/* ── learning quota from the calls we already make ────────────────────────── */
+
+/**
+ * Providers state their limits in `x-ratelimit-*` on every response. Until
+ * 2026-09-16 only the REQUEST path read them: `callAI` recorded, while the
+ * probe and the golden set called the adapter directly and discarded the
+ * headers. Between them those two are ~90 calls a day — most of what this
+ * system does to free rows — and exactly one row in the catalog had a
+ * remaining-quota reading to show for it.
+ */
+describe('the sweeps learn about quota from their own calls', () => {
+  function recordingJob() {
+    const recorded = [];
+    const { job, discovery } = makeJob({
+      // runProbeSweep returns early with no rows, so it needs one to probe.
+      freeRows: [{ provider: 'groq', modelId: 'm-1', isFree: true }],
+      discovery: fakeDiscovery({
+        runProbe: async ({ callProvider }) => {
+          await callProvider('groq', 'p', { model: 'm-1' });
+          return [];
+        },
+        runGoldenSet: async ({ callProvider }) => {
+          await callProvider('groq', 'p', { model: 'm-2' });
+          return [];
+        },
+      }),
+    });
+    job.ai.callProvider = async () => ({ content: 'ok', headers: { 'x-ratelimit-remaining-requests': '17' } });
+    job.ai.recordObservedLimits = (provider, modelId, headers) => recorded.push({ provider, modelId, headers });
+    return { job, recorded, discovery };
+  }
+
+  it('records the headers a probe call came back with', async () => {
+    const { job, recorded } = recordingJob();
+    await job.runProbeSweep();
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]).toMatchObject({ provider: 'groq', modelId: 'm-1' });
+    expect(recorded[0].headers['x-ratelimit-remaining-requests']).toBe('17');
+  });
+
+  it('records them for a golden-set call too', async () => {
+    const { job, recorded } = recordingJob();
+    await job.runGoldenSweep();
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]).toMatchObject({ provider: 'groq', modelId: 'm-2' });
+  });
+
+  it('never lets bookkeeping cost us the answer we just paid for', async () => {
+    const { job } = recordingJob();
+    job.ai.recordObservedLimits = () => { throw new Error('mongo is down'); };
+    const answer = await job.learningCallProvider()('groq', 'p', { model: 'm' });
+    expect(answer.content).toBe('ok');
+  });
+
+  it('is a no-op for a provider that sends no such headers', async () => {
+    // gemini, cloudflare, cohere, ollama, openrouter send nothing to read.
+    const { job, recorded } = recordingJob();
+    job.ai.callProvider = async () => ({ content: 'ok' });
+    await job.learningCallProvider()('gemini', 'p', { model: 'm' });
+    expect(recorded[0].headers).toBeUndefined();
+  });
+});

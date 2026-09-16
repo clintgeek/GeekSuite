@@ -527,6 +527,11 @@ export function selectGoldenCandidates(rows, { limit = GOLDEN_ROWS_PER_RUN, now 
     && row.fitness === 'structured'
     && row.override !== 'deny'
     && !isFreeTierCoolingRow(row, now)
+    // The one case where the provider has TOLD us a call would 429, rather
+    // than us finding out by making it. The selection path has honoured this
+    // since Phase 1; the measurement paths did not, which meant the golden set
+    // could spend six calls proving something the headers already said.
+    && !isExhausted(row, now)
   );
 
   const scoredAtOf = (row) => {
@@ -543,6 +548,21 @@ export function selectGoldenCandidates(rows, { limit = GOLDEN_ROWS_PER_RUN, now 
       return aFresh - bFresh || scoredAtOf(a) - scoredAtOf(b);
     })
     .slice(0, Math.max(0, limit));
+}
+
+/**
+ * Did the provider's own headers say this row has nothing left?
+ *
+ * `observed` is written from `x-ratelimit-remaining-*` on real calls. Only
+ * groq and together populate it today — the other seven providers send no such
+ * headers, so for them this is always false and a 429 remains the only way to
+ * find out. That is a limit of what vendors tell us, not of this check.
+ */
+function isExhausted(row, now) {
+  const observed = row?.observed;
+  if (!observed || observed.remainingRequests !== 0) return false;
+  const resetAt = observed.resetAt ? new Date(observed.resetAt).getTime() : 0;
+  return Number.isFinite(resetAt) && resetAt > now;
 }
 
 /** Local cooling check — `health.coolingUntil` in the future. */
@@ -565,6 +585,15 @@ function isFreeTierCoolingRow(row, now) {
 export async function runGoldenSetFor(row, { callProvider, timeoutMs = DEFAULT_PROBE_TIMEOUT_MS }) {
   const answers = [];
   for (const question of GOLDEN_SET) {
+    // A provider that just said "too many requests" will say it again. Asking
+    // the remaining questions anyway is five more knocks on a door that is
+    // already shut, and it is what turned one gemini rate limit into a run of
+    // 1-answered-of-6 on 2026-09-16. Stop and report what we have; `rollUp`
+    // already treats a short run as inconclusive rather than as a bad score.
+    if (rateLimitedAlready(answers)) {
+      answers.push({ id: question.id, className: question.className, score: null, errored: true, skipped: true });
+      continue;
+    }
     let timer = null;
     try {
       const call = Promise.resolve(callProvider(row.provider, question.user, {
@@ -582,16 +611,25 @@ export async function runGoldenSetFor(row, { callProvider, timeoutMs = DEFAULT_P
       });
       const result = await Promise.race([call, guard]);
       answers.push(scoreAnswer(question, result?.content ?? ''));
-    } catch {
+    } catch (error) {
       // Not a zero. A 429 or a timeout says nothing about the model, and
       // scoring it as a wrong answer is how a good model gets branded bad —
       // see `rollUp`, which excludes these from the mean.
-      answers.push({ id: question.id, className: question.className, score: null, errored: true });
+      const { code } = classifyFreeTierFailure(error);
+      answers.push({ id: question.id, className: question.className, score: null, errored: true, code });
     } finally {
       if (timer) clearTimeout(timer);
     }
   }
   return rollUp(answers);
+}
+
+/** Codes that mean "the door is shut for now", not "this model is bad". */
+const RATE_LIMIT_CODES = new Set(['http_429', 'rate_limited']);
+
+/** Has this row already told us to back off? */
+function rateLimitedAlready(answers) {
+  return answers.some((a) => RATE_LIMIT_CODES.has(a?.code));
 }
 
 /**

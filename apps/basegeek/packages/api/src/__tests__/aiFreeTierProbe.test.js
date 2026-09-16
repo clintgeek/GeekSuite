@@ -569,3 +569,75 @@ describe('an inconclusive golden run is not written', () => {
     expect(writes).toEqual([]);
   });
 });
+
+/**
+ * Not knocking on a door we have been told is shut.
+ *
+ * Two different facts, and the system only knew how to use one of them. The
+ * SELECTION path has honoured `observed.remainingRequests === 0` since Phase 1
+ * — the one case where a provider has told us a call would 429 rather than us
+ * finding out by making it. The MEASUREMENT paths had not, so the golden set
+ * would spend six calls proving what the headers already said, and would keep
+ * asking after the first 429 came back.
+ *
+ * Worth being plain about the ceiling here: only groq and together send
+ * `x-ratelimit-*` headers at all. For the other seven providers a 429 is still
+ * the only way to learn, because they do not say.
+ */
+describe('the golden set reads the headers before it knocks', () => {
+  const freeRow = (over = {}) => ({
+    provider: 'groq', modelId: 'm', isFree: true, fitness: 'structured',
+    health: {}, quality: {}, observed: {}, ...over
+  });
+
+  it('skips a row the provider said has nothing left', () => {
+    const rows = [
+      freeRow({ modelId: 'spent', observed: { remainingRequests: 0, resetAt: new Date(NOW_MS + 60_000) } }),
+      freeRow({ modelId: 'has-quota', observed: { remainingRequests: 500, resetAt: new Date(NOW_MS + 60_000) } }),
+    ];
+    expect(probe.selectGoldenCandidates(rows, { now: NOW_MS }).map((r) => r.modelId)).toEqual(['has-quota']);
+  });
+
+  it('asks again once the window has reset', () => {
+    const rows = [freeRow({ modelId: 'reset', observed: { remainingRequests: 0, resetAt: new Date(NOW_MS - 1) } })];
+    expect(probe.selectGoldenCandidates(rows, { now: NOW_MS })).toHaveLength(1);
+  });
+
+  it('still asks a provider that sends no headers at all', () => {
+    // gemini, cloudflare, cohere, ollama, openrouter: nothing to read, so this
+    // must not become a reason to never measure them.
+    const rows = [freeRow({ provider: 'gemini', modelId: 'silent', observed: {} })];
+    expect(probe.selectGoldenCandidates(rows, { now: NOW_MS })).toHaveLength(1);
+  });
+
+  it('stops after the first 429 instead of knocking five more times', async () => {
+    // The live case: one gemini rate limit produced a 1-answered-of-6 run,
+    // which is five wasted calls against a door already shut.
+    let calls = 0;
+    const callProvider = async () => {
+      calls += 1;
+      if (calls === 1) return { content: '450' };
+      const err = new Error('Rate limit reached for this model');
+      err.status = 429;
+      throw err;
+    };
+    const out = await probe.runGoldenSetFor({ provider: 'groq', modelId: 'limited' }, { callProvider });
+    // One good answer, one 429, and then it stops asking.
+    expect(calls).toBe(2);
+    expect(out.answered).toBe(1);
+    expect(out.errored).toBe(5);
+  });
+
+  it('keeps going through an ordinary failure, which says nothing about quota', async () => {
+    // A timeout is not a closed door. Only a rate limit stops the run.
+    let calls = 0;
+    const callProvider = async () => {
+      calls += 1;
+      if (calls === 2) throw new Error('socket hang up');
+      return { content: '450' };
+    };
+    const out = await probe.runGoldenSetFor({ provider: 'groq', modelId: 'flaky' }, { callProvider });
+    expect(calls).toBe(6);
+    expect(out.errored).toBe(1);
+  });
+});

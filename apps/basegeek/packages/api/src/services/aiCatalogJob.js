@@ -382,7 +382,7 @@ export class AICatalogJob {
       this.log.info(`[CatalogJob] re-probing ${rows.length} free row(s)`);
       const results = await this.discovery.runProbe({
         rows,
-        callProvider: (provider, prompt, config) => this.ai.callProvider(provider, prompt, config),
+        callProvider: this.learningCallProvider(),
         updateOne: (query, update) => this.freeTier.updateOne(query, update),
         options: { mark: true, revive: true, timeout: this.discovery.DEFAULT_PROBE_TIMEOUT_MS, now: this.now() }
       });
@@ -399,6 +399,37 @@ export class AICatalogJob {
     run.finishedAt = new Date(this.now());
     await this.writeRun(run);
     return run;
+  }
+
+  /**
+   * `callProvider`, wrapped so the call teaches us about our own quota.
+   *
+   * The provider states its limits in `x-ratelimit-*` on every response, and
+   * until 2026-09-16 only the REQUEST path read them — `callAI` records, the
+   * probe and the golden set called the adapter directly and threw the headers
+   * away. Between them those two make ~90 calls a day, which is most of what
+   * this system does to free rows, and none of it was being learned from: one
+   * row in the whole catalog had a remaining-quota reading.
+   *
+   * Recording here means the next run can skip a row the provider has already
+   * said is spent, instead of finding out with a 429. Debounced and
+   * fire-and-forget inside `recordObservedLimits`, so it cannot slow a sweep.
+   *
+   * Only groq and together send these headers at all; for the rest this is a
+   * no-op and a 429 remains the only signal. That is a limit of what vendors
+   * tell us, not of the wiring.
+   */
+  learningCallProvider() {
+    return async (provider, prompt, config) => {
+      const result = await this.ai.callProvider(provider, prompt, config);
+      try {
+        this.ai.recordObservedLimits?.(provider, config?.model, result?.headers);
+      } catch (err) {
+        // Learning about quota must never cost us the answer we just paid for.
+        this.log.debug({ err, provider }, '[CatalogJob] could not record observed limits');
+      }
+      return result;
+    };
   }
 
   /**
@@ -423,7 +454,7 @@ export class AICatalogJob {
 
       const results = await this.discovery.runGoldenSet({
         rows,
-        callProvider: (provider, prompt, config) => this.ai.callProvider(provider, prompt, config),
+        callProvider: this.learningCallProvider(),
         updateOne: (query, update) => this.freeTier.updateOne(query, update),
         options: { now: this.now(), timeout: this.discovery.DEFAULT_PROBE_TIMEOUT_MS }
       });
