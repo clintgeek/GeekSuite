@@ -43,6 +43,7 @@ import {
 } from './aiRoute.js';
 import RotationManager from './rotationManager.js';
 import aiModelCapabilitiesService from './aiModelCapabilitiesService.js';
+import { parseNeed, resolveNeed } from './aiNeedResolver.js';
 // The catalog module owns everything this service knows about the outside
 // world's model lists and quota headers. aiService calls it; it never calls
 // back (the job injects `callProvider`), so there is no cycle to reason about.
@@ -1159,6 +1160,9 @@ class AIService {
         fitness: fm.fitness ?? null,
         probedAt: fm.probedAt ?? null,
         observed: fm.observed ?? null,
+        // Measured by the probe. The need resolver ranks on it; nothing else
+        // reads it, and the rotation's own ordering is unchanged.
+        latency: fm.latency ?? null,
         health
       };
 
@@ -1202,6 +1206,27 @@ class AIService {
     cooling.sort((a, b) => wakeAt(a) - wakeAt(b));
 
     return { live, cooling };
+  }
+
+  /**
+   * A caller's `need` resolved against the live catalog, or `null`.
+   *
+   * `null` means "no opinion", and the caller must honour it by falling
+   * through to the ordinary rotation. A resolver that always named something
+   * would, on a bad day, name the least-bad row and present a guess as a
+   * decision — which is the failure this whole feature exists to end.
+   *
+   * Free rows only. Resolving into the paid set would put model choice on the
+   * money path, and the paid walk is already governed by its own caps; stage 2
+   * deliberately changes nothing about what gets billed.
+   *
+   * @param {string} need  e.g. `'structured:fast'`
+   * @returns {{provider, modelId, task, weight, why}|null}
+   */
+  async resolveNeed(need, now = Date.now()) {
+    if (!parseNeed(need)) return null;
+    const { live } = await this.selectFreeTierCandidates(now);
+    return resolveNeed(live, need, { now, allowPaid: false });
   }
 
   /**

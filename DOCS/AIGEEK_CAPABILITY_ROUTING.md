@@ -88,8 +88,20 @@ feature('dishJudge',    { need: 'reasoning:deep' })
 
 Two axes, because they are the two decisions that actually differ:
 
-- **task** — `structured`, `reasoning`, `prose`, `code`, `vision`. These map 1:1 onto
-  `capabilities.tasks`, which already exists.
+- **task** — `structured`, `reasoning`, `prose`, `code`, `vision`.
+
+  > **Correction, 2026-09-15, while building stage 2.** This bullet used to read "these map
+  > 1:1 onto `capabilities.tasks`, which already exists". Structurally true, and useless.
+  > Read the assignments in `aiModelCapabilitiesService.js`: `structuredOutput`,
+  > `codeGeneration` and `creativeWriting` are set `true` for *every* model and only ever
+  > turned off for whisper and guard names, and `tasks.reasoning` is `false` unless the id
+  > contains "70b"/"405b". It is a constant wearing a capability's name, and filtering on it
+  > would have felt like capability routing while changing nothing.
+  >
+  > So the task axis has exactly one member with a measurement behind it: `structured`,
+  > which is `AIFreeTier.fitness` — the probe either got JSON out of the row or it did not.
+  > The rest are accepted, recorded, and do not filter until the golden set exists. The
+  > resolver says so in its `why`, out loud, rather than implying a judgement it cannot make.
 - **weight** — `fast` (a person is waiting, ≤2s), `balanced`, `deep` (background, slow is
   fine).
 
@@ -197,9 +209,25 @@ Each stage is shippable alone and each removes a real failure that happened.
 1. ~~**Cause-based failure handling** (§3.3)~~ — **DONE 2026-09-15.** `isRetirement()` in
    `models/AIFreeTier.js`, `aiService.retireModel()`, recorded outside the free-tier gate so
    paid and pinned models are covered. 17 tests in `aiModelRetirement.test.js`.
-2. **`need` resolution in `feature()`** (§3.1), reading only trustworthy facts — task flags,
-   alive/cooling, pricing, app tier. Ignore `performance.*`.
-3. **Probe records latency and golden-set score** (§3.2); weight class becomes measured.
+2. ~~**`need` resolution in `feature()`** (§3.1)~~ — **DONE 2026-09-15.**
+   `services/aiNeedResolver.js`, `aiService.resolveNeed()`, and `need` on
+   `POST /api/ai/feature`. Reads only measured facts: `fitness`, `latency.p50Ms`, cooling,
+   observed rate limits, `isFree`. Reads neither `performance.*` nor `capabilities.tasks.*`,
+   and there are tests asserting that two rows differing only in those fields score the same.
+
+   Three behaviours worth keeping: an explicit pin always beats the resolver; an unresolved
+   need falls through to the ordinary rotation rather than failing the turn, with
+   `provenance.need.resolved: false` so the caller can tell; and a *malformed* need is a 400,
+   because silently ignoring `strutured:fast` would answer from a plausible model and hide
+   the typo for months. Free rows only — stage 2 changes nothing about what gets billed.
+   25 tests in `aiNeedResolver.test.js`, 7 more on the door.
+3. **Probe records golden-set score** (§3.2). ~~latency~~ — **latency DONE 2026-09-15**, and
+   it turned out `probeRow` had been measuring `ms` all along and discarding it; a revived row
+   now stores a five-deep FIFO and its median, and `weightClassOf()` turns that into
+   fast/balanced/deep. It returns `null`, not "deep", for a row nobody has timed — the
+   resolver has to tell *unknown* from *slow*, or a newly discovered model could never be
+   picked, so never timed, so never stop being unknown. Brought forward because stage 2 routes
+   on a weight axis and there was no data behind it. The golden set is the remaining half.
 4. **App configs move to needs** (§3.4); pins become override-only.
 5. **Retire the name-matching in `aiModelCapabilitiesService`** once (3) supplies real data.
 

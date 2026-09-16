@@ -9,6 +9,7 @@ import {
 } from '../services/callerIdentity.js';
 import { resolveFailure } from '../services/aiFailureEnvelope.js';
 import { legacyRoutingSwitches } from '../services/aiRoute.js';
+import { parseNeed, NEED_TASKS, NEED_WEIGHTS } from '../services/aiNeedResolver.js';
 import { runFeatureCore, DEFAULT_TIMEOUT_MS, DEFAULT_HTTP_MAX_CALLS_PER_DAY } from '../services/aiFeatureRunner.js';
 import { cachedStatus, invalidateStatusCache } from '../services/aiStatusService.js';
 import { getInstance as catalogJob } from '../services/aiCatalogJob.js';
@@ -813,7 +814,7 @@ const positiveIntOr = (value, fallback) => {
  *
  * request:  { feature, messages?: [{role, content}], system?, user?,
  *             schema?: { name, description?, schema }, timeoutMs?,
- *             conversationId?, provider?, model?, quotaKey?,
+ *             conversationId?, provider?, model?, need?, quotaKey?,
  *             maxTokens?, temperature?, maxCallsPerDay? }
  * response: 200 { ok: true,  data, provenance }
  *           200 { ok: false, reason, provenance }
@@ -826,6 +827,19 @@ const positiveIntOr = (value, fallback) => {
  * the app's ordinary `auto` walk (the sticky pick, where there is one) and
  * `provenance.hints` carries `pin_unavailable`, so the consumer can show a
  * notice instead of failing the turn.
+ *
+ * `need` is what a caller should send instead of a model id:
+ * `'structured:fast'` says what the call requires, and the gateway picks a
+ * model that measurably meets it (services/aiNeedResolver.js). It is the cure
+ * for the failure this route kept hitting — FitnessGeek pinned two slugs that
+ * the vendor had since retired, and nothing noticed until a person did.
+ *
+ * An explicit `provider`/`model` pin always wins: a human override beats the
+ * resolver, every time. A `need` that resolves to nothing is not an error —
+ * the call falls through to the ordinary rotation, exactly as if no need had
+ * been sent, and `provenance.need.resolved` is `false` so the caller can tell.
+ * A *malformed* need IS an error, because quietly ignoring `'strutured:fast'`
+ * would route the call somewhere plausible and hide the typo for months.
  *
  * `quotaKey` is a cap-bucket segment and nothing else. It is honoured **only**
  * when the credential names no user — which is every service-key caller, since
@@ -882,6 +896,7 @@ router.post('/feature', async (req, res) => {
       conversationId = null,
       provider = null,
       model = null,
+      need = null,
       quotaKey = null,
       temperature,
       maxTokens,
@@ -921,6 +936,40 @@ router.post('/feature', async (req, res) => {
         reason: 'invalid_request',
         error: { message: 'provider is not one this gateway serves', code: 'UNKNOWN_PROVIDER' }
       });
+    }
+
+    // A need that does not parse is refused rather than ignored. Silently
+    // treating `'strutured:fast'` as "no preference" would answer the call
+    // from some reasonable model and hide the typo until someone went looking.
+    if (need !== null && need !== undefined && !parseNeed(need)) {
+      return res.status(400).json({
+        ok: false,
+        reason: 'invalid_request',
+        error: {
+          message: `need must be <task>:<weight> — tasks ${NEED_TASKS.join('|')}, weights ${NEED_WEIGHTS.join('|')}`,
+          code: 'INVALID_NEED'
+        }
+      });
+    }
+
+    /*
+     * Resolve the need to a concrete model, unless the caller pinned one.
+     *
+     * An explicit pin wins: a human override beats the resolver every time.
+     * A resolution that comes back null is not a failure — the call proceeds
+     * on the ordinary rotation exactly as before, which is why this never
+     * throws and never blocks. `needPick` is reported in provenance either
+     * way, so "why did I get this model" has an answer.
+     */
+    let needPick = null;
+    if (need && !wantsPin) {
+      try {
+        needPick = await aiService.resolveNeed(need);
+      } catch (needError) {
+        // The rotation is a complete answer on its own; a resolver fault must
+        // not cost the caller their turn.
+        req.log.warn({ err: needError, need }, '[ai] /feature could not resolve need');
+      }
     }
 
     // Whether the cap may be split by the body's `quotaKey`. For a key
@@ -965,16 +1014,33 @@ router.post('/feature', async (req, res) => {
       ...(schema ? { schema } : {}),
       ...(typeof conversationId === 'string' && conversationId ? { conversationId } : {}),
       ...(wantsPin ? { provider, model } : {}),
+      // Not marked `noFallback`: a resolved pick is the gateway's best read of
+      // the catalog, not a promise from the caller, so a row that turns out
+      // unusable degrades to the ordinary walk rather than failing the turn.
+      ...(needPick ? { provider: needPick.provider, model: needPick.modelId } : {}),
       ...(Number.isFinite(Number(temperature)) ? { temperature: Number(temperature) } : {}),
       ...(maxTokens !== undefined ? { maxTokens: positiveIntOr(maxTokens, undefined) } : {}),
       maxCallsPerDay: positiveIntOr(maxCallsPerDay, rowCap ?? DEFAULT_HTTP_MAX_CALLS_PER_DAY),
       timeoutMs: clampTimeout(timeoutMs)
     });
 
+    // What the need did, attached to whatever the runner reported. A caller
+    // that asked for `structured:fast` can see which row served it and on what
+    // measurement, which is the question the old pinned-slug setup could not
+    // answer at all.
+    const provenance = need
+      ? {
+          ...core.provenance,
+          need: needPick
+            ? { asked: need, resolved: true, provider: needPick.provider, model: needPick.modelId, why: needPick.why }
+            : { asked: need, resolved: false, why: ['nothing in the catalog measurably meets this need'] }
+        }
+      : core.provenance;
+
     return res.json(
       core.ok
-        ? { ok: true, data: core.data, provenance: core.provenance }
-        : { ok: false, reason: core.reason, provenance: core.provenance }
+        ? { ok: true, data: core.data, provenance }
+        : { ok: false, reason: core.reason, provenance }
     );
   } catch (error) {
     // Only a genuine gateway fault reaches here — `runFeatureCore` turns every

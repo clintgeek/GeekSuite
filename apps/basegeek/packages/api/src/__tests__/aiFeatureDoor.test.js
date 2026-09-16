@@ -640,3 +640,144 @@ describe('POST /api/ai/feature — the quota bucket', () => {
     expect(res.body.provenance.cap).toBe(5);
   });
 });
+
+/* ── need routing ─────────────────────────────────────────────────────────── */
+
+/**
+ * `need` is what a caller should send instead of a model id. The failure it
+ * exists to end: FitnessGeek pinned two OpenRouter slugs, the vendor retired
+ * both, and nothing noticed until a person did. A need is re-resolved against
+ * the live catalog on every call, so a withdrawn model stops being chosen the
+ * moment the probe stops finding it.
+ */
+describe('POST /api/ai/feature — need routing', () => {
+  /** A probed, alive, timed free row. */
+  async function seedRow({ provider = 'groq', modelId, fitness = 'structured', p50Ms = 900 }) {
+    await AIFreeTier.create({
+      provider,
+      modelId,
+      isFree: true,
+      fitness,
+      latency: { recentMs: [p50Ms], p50Ms, measuredAt: new Date() },
+      health: { consecutiveFailures: 0, lastSuccessAt: new Date(), coolingUntil: null },
+    });
+  }
+
+  it('picks the measurably faster row for structured:fast', async () => {
+    enable('groq');
+    await seedRow({ modelId: 'slow-but-grand-405b', p50Ms: 11000 });
+    await seedRow({ modelId: 'quick-little-thing', p50Ms: 700 });
+    const apiKey = await makeApiKey({ appName: 'fitnessgeek' });
+
+    const res = await request(app)
+      .post('/api/ai/feature')
+      .set('Authorization', `Bearer ${apiKey}`)
+      .send({ feature: 'dishEstimate', user: 'two eggs and toast', need: 'structured:fast' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.provenance.need.resolved).toBe(true);
+    expect(res.body.provenance.need.model).toBe('quick-little-thing');
+    // Named for the fact that decided it, not for a score.
+    expect(res.body.provenance.need.why.join(' ')).toMatch(/700ms \(fast\)/);
+    expect(captured.config.model).toBe('quick-little-thing');
+  });
+
+  it('will not choose a row the probe could not get JSON out of', async () => {
+    enable('groq');
+    await seedRow({ modelId: 'talks-only', fitness: 'basic', p50Ms: 300 });
+    const apiKey = await makeApiKey({ appName: 'fitnessgeek' });
+
+    const res = await request(app)
+      .post('/api/ai/feature')
+      .set('Authorization', `Bearer ${apiKey}`)
+      .send({ feature: 'dishEstimate', user: 'hi', need: 'structured:fast' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.provenance.need.resolved).toBe(false);
+  });
+
+  it('falls through to the ordinary rotation when nothing meets the need', async () => {
+    // An unresolved need must cost the caller nothing: the call still happens.
+    enable('groq');
+    const apiKey = await makeApiKey({ appName: 'fitnessgeek' });
+
+    const res = await request(app)
+      .post('/api/ai/feature')
+      .set('Authorization', `Bearer ${apiKey}`)
+      .send({ feature: 'dishEstimate', user: 'hi', need: 'structured:fast' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.provenance.need.resolved).toBe(false);
+    expect(captured).not.toBeNull();
+  });
+
+  it('lets an explicit pin beat the resolver', async () => {
+    // A human override wins, every time.
+    enable('groq');
+    await seedRow({ modelId: 'what-the-resolver-would-pick', p50Ms: 200 });
+    const apiKey = await makeApiKey({ appName: 'fitnessgeek' });
+
+    const res = await request(app)
+      .post('/api/ai/feature')
+      .set('Authorization', `Bearer ${apiKey}`)
+      .send({
+        feature: 'dishEstimate',
+        user: 'hi',
+        need: 'structured:fast',
+        provider: 'groq',
+        model: 'the-human-said-this-one',
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.provenance.need.resolved).toBe(false);
+    expect(captured.config.model).toBe('the-human-said-this-one');
+  });
+
+  it('refuses a malformed need rather than ignoring it', async () => {
+    // Treating 'strutured:fast' as "no preference" would answer from some
+    // reasonable model and hide the typo for months.
+    const apiKey = await makeApiKey({ appName: 'fitnessgeek' });
+    const res = await request(app)
+      .post('/api/ai/feature')
+      .set('Authorization', `Bearer ${apiKey}`)
+      .send({ feature: 'dishEstimate', user: 'hi', need: 'strutured:fast' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('INVALID_NEED');
+  });
+
+  it('says nothing about needs when the caller sent none', async () => {
+    enable('groq');
+    const apiKey = await makeApiKey({ appName: 'fitnessgeek' });
+    const res = await request(app)
+      .post('/api/ai/feature')
+      .set('Authorization', `Bearer ${apiKey}`)
+      .send({ feature: 'dishEstimate', user: 'hi' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.provenance.need).toBeUndefined();
+  });
+
+  it('will not spend money to meet a need', async () => {
+    // Stage 2 changes nothing about what gets billed: the resolver reads free
+    // rows only, and the governed paid walk is untouched.
+    enable('groq');
+    await AIFreeTier.create({
+      provider: 'groq',
+      modelId: 'a-paid-row',
+      isFree: false,
+      fitness: 'structured',
+      latency: { recentMs: [100], p50Ms: 100, measuredAt: new Date() },
+      health: { lastSuccessAt: new Date() },
+    });
+    const apiKey = await makeApiKey({ appName: 'fitnessgeek' });
+
+    const res = await request(app)
+      .post('/api/ai/feature')
+      .set('Authorization', `Bearer ${apiKey}`)
+      .send({ feature: 'dishEstimate', user: 'hi', need: 'structured:fast' });
+
+    expect(res.body.provenance.need.resolved).toBe(false);
+  });
+});
