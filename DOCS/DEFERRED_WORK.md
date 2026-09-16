@@ -133,11 +133,17 @@ Likely rollout order once ready:
   for dev, sketchy for prod. Either enforce env in production
   (throw if unset) or strip the defaults in a future release.
 
-- **No tests on fitnessgeek, flockgeek, storygeek, bujogeek, notegeek.**
-  basegeek now has 33 auth tests; the apps have none. Coverage for
-  each app's critical paths (login flow via baseGeek, primary CRUD
-  routes, any GraphQL resolvers that touch state) is a slow-burn
-  project, not a single pass.
+- ~~**No tests on fitnessgeek, flockgeek, storygeek, bujogeek, notegeek.**~~
+  **Stale — struck 2026-09-16.** Every app has tests now: fitnessgeek 47
+  files, notegeek 41, bookgeek 27, storygeek 23, bujogeek 17, flockgeek 15,
+  startgeek 4. Depth still varies and startgeek is thin, but the blanket
+  claim was wrong and was hiding that.
+
+  What 2026-09-16 did show is a subtler coverage problem worth naming:
+  fitnessgeek's describe-and-log had a green suite at every layer while the
+  feature was **dead in production**, because the tests mock the gateway
+  client one boundary below the bug. Contract tests against the *shape* a
+  service actually sends are cheap and catch what mocks cannot.
 
 - ~~**fitnessgeek `docker-compose.dev.yml`**~~ — **deleted 2026-09-05** (housekeeping
   pass, TODO_ORDER #31). Referenced pre-pnpm-workspace `backend`/`frontend` services

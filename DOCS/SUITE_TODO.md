@@ -16,7 +16,8 @@ Pull from here when planning the next pass; update as work lands or priorities s
 ## 1. In Flight
 
 - **Suite-wide Documentation & Backlog Consolidation** (Stream 1–4): Establishing canonical Sage session files (`THE_CONTEXT.md`, `THE_PLAN.md`, `THE_STEPS.md`), tracking `GRAPHQL.md`, moving completed sprint docs to `ARCHIVE/`, and updating `README.md`.
-- **Mobile Harness CI Ratchet**: Maintaining 0 findings across 139 scenes in `.github/workflows/mobile-harness.yml`.
+- **Mobile Harness CI Ratchet**: Maintaining 0 findings across **150** scenes in `.github/workflows/mobile-harness.yml`. (Was written as 139; corrected 2026-09-16.)
+  - Note, learned 2026-09-16: a scene whose `setup` returns `false` is **skipped, not failed**, so the run still reports PASS. fitnessgeek's scene 11 covered nothing for two days that way. A skipped scene is silent — check the per-scene lines, not just the total.
 
 ---
 
@@ -42,7 +43,8 @@ Pull from here when planning the next pass; update as work lands or priorities s
 ## 3. UI / UX & Design Language
 
 ### Highest Leverage / Follow-ups
-- **FitnessGeek Food Search Rebuild** (approved 2026-09-14, full scope): search is submit-only, ranks by API arrival order for any query under four words, bypasses its own Redis cache and its own Mongo text index, and hides the input four interactions deep behind a CTA page and a modal. Measured 3.5–5.4s on multi-word queries in production. Worst of all, the AI classifier shreds one dish into its ingredients — `4 chocolate chip pancakes homemade` classifies as `chocolate chip` ×4 + `pancakes` + `pancake mix` (reproduced against the live container), which is why that query returns chocolate chips and no pancakes. Six-phase plan with named-query acceptance tests: [`apps/fitnessgeek/DOCS/THE_FOOD_SEARCH_PLAN.md`](../apps/fitnessgeek/DOCS/THE_FOOD_SEARCH_PLAN.md). Four Phase-4 UI decisions remain open in §5.
+- ~~**FitnessGeek Food Search Rebuild**~~ — **shipped 2026-09-14**, and superseded as the primary path by **describe-and-log, shipped and verified live 2026-09-16** ([`THE_DESCRIBE_AND_LOG_PLAN.md`](../apps/fitnessgeek/DOCS/THE_DESCRIBE_AND_LOG_PLAN.md)). The four Phase-4 UI decisions were all settled 2026-09-14; this entry claimed otherwise until 2026-09-16. Search remains as the fallback for picking a specific branded item.
+  - **Still open, small:** the ranker's `chosenForQuery` pin is read by `foodRanker` and written by nothing, so "what you picked for this query last time" does not rank. Note the describe path has its OWN history reuse (`findInHistory`), so the common case is already covered; this only improves the search fallback.
 - **Shell Grammar Visual Pass**: Verify every app at mobile viewports (iPhone 14) and desktop widths in both light and dark modes. Ensure no regressions from the GeekShell navigation migration.
 - **StoryGeek Three-Column Surface**: Three-column play surface loses 220px on desktop due to sidebar; evaluate breakpoint threshold for collapsing side panels to preserve editor breathing room.
 - **Shared Mobile Bottom-Nav Primitive**: Standardize bottom navigation across bujogeek, notegeek, fitnessgeek, and flockgeek into one `@geeksuite/ui` primitive.
@@ -64,7 +66,7 @@ Pull from here when planning the next pass; update as work lands or priorities s
 ## 4. Shared Libraries & Refactors
 
 - **Wire `installShutdownHooks`**: Connect `@geeksuite/logger`'s `installShutdownHooks(logger, server, { onClose })` into the 7 backend servers to replace bespoke shutdown logic.
-- **FitnessGeek Secrets Parity**: Confirm `KEY_VAULT_SECRET` is set in fitnessgeek's `.env.production` matching basegeek's secret, and verify Garmin password backfill script run.
+- **FitnessGeek Secrets Parity**: `KEY_VAULT_SECRET` **is** set in the fitnessgeek container (64 chars, checked 2026-09-16). What remains is running the Garmin password backfill (`scripts/encryptGarminPasswords.js`) — Chef's call, same shape as basegeek's encrypt-keys migration, which ran 2026-09-16.
 - **GraphQL Gateway Consolidation Follow-ups**:
   - Migrate remaining FitnessGeek REST reads (food search / barcode / favorites / recent in `foodService.js`) to gateway queries.
   - Retire FlockGeek caller-less mounted REST layer in `routes/api.js` (Chef item Q22).
@@ -95,10 +97,8 @@ Pull from here when planning the next pass; update as work lands or priorities s
 
 ## 7. Nice-to-Haves & Backlog Cleanups
 
-- **Dead Frontend Components Sweep**:
-  - Remove orphaned component files: bujogeek `BottomNav.jsx`, notegeek `LoginPage.jsx`/`RegisterPage.jsx`, startgeek `ResumeSection.jsx`/`WorldClocks.jsx`, fitnessgeek `WeightProgressRing.jsx`.
-- **BaseGeek Stale AI Model Defaults**:
-  - Refresh or deprecate outdated fallback strings like `gemini-1.5-flash-latest` in `aiService.js`.
+- ~~**Dead Frontend Components Sweep**~~ — **done.** All five named files were already gone when checked 2026-09-16.
+- ~~**BaseGeek Stale AI Model Defaults**~~ — **done.** `gemini-1.5-*` survives only in a comment describing retired models and in test fixtures; no production default names it (checked 2026-09-16).
 - **NoteGeek `formatRelativeTime` Deduplication**:
   - Extract duplicated date formatting functions across three files to `frontend/src/utils/dateUtils.js`.
 - **Gateway BroadcastChannel Logout**:
