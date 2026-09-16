@@ -44,6 +44,23 @@ export const PROVIDERS = [...PROVIDER_IDS];
 
 /** How long a row marked dead stays out of selection. */
 export const PROBE_MARK_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
+/**
+ * How long a row that answered **402 Payment Required** stays out.
+ *
+ * A day, because 402 is neither of the things the other codes are. It is not
+ * transient like a 429 — it will not clear on its own in a minute — and it is
+ * not terminal like a 404: the model exists and works the moment the account
+ * has credit. Left as `unknown` it got no write at all, so the row was
+ * re-probed every six hours forever, which is the "knocking on the door"
+ * problem exactly.
+ *
+ * Observed 2026-09-16: a fresh Cerebras key listed `gpt-oss-120b` and
+ * `qwen-3.8-27b` perfectly and answered 402 to every inference call. The
+ * published per-model limits are an entitlement once paid, not a free tier.
+ */
+export const PROBE_PAYMENT_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+/** The vendors' code for "your account cannot pay for this". */
+export const PAYMENT_REQUIRED_CODE = 'http_402';
 /** Per-row wall clock budget. The adapters' own axios timeout is 60 s, which is not a probe. */
 export const DEFAULT_PROBE_TIMEOUT_MS = 8000;
 /** Hard ceiling on how much provider text may reach a terminal or a log. */
@@ -453,7 +470,22 @@ export async function runProbe({ rows, callProvider, updateOne = null, options =
     const outcome = await probeRow(row, { callProvider, timeoutMs: timeout });
     const result = { provider: row.provider, modelId: row.modelId, ...outcome, marked: null };
 
-    if (updateOne && mark && outcome.status === 'dead' && isRetirement(outcome.code)) {
+    if (updateOne && mark && outcome.code === PAYMENT_REQUIRED_CODE) {
+      // Not dead and not transient: out for a day, so adding credit is noticed
+      // the same day without us re-asking every six hours in the meantime.
+      await updateOne(
+        { provider: row.provider, modelId: row.modelId },
+        {
+          $set: {
+            probedAt: new Date(now),
+            'health.lastFailureAt': new Date(now),
+            'health.lastFailureCode': outcome.code,
+            'health.coolingUntil': new Date(now + PROBE_PAYMENT_COOLDOWN_MS)
+          }
+        }
+      );
+      result.marked = 'needs credit (24h)';
+    } else if (updateOne && mark && outcome.status === 'dead' && isRetirement(outcome.code)) {
       /*
        * The vendor withdrew this slug. Cooling a retirement is a slower way of
        * failing forever: the row comes back in 30 days, 404s again, and cools
@@ -611,9 +643,15 @@ function isFreeTierCoolingRow(row, now) {
  * that refuses one of six is worse than one that answers all six, and that is
  * exactly what the score should say.
  */
-export async function runGoldenSetFor(row, { callProvider, timeoutMs = DEFAULT_PROBE_TIMEOUT_MS }) {
+export async function runGoldenSetFor(row, { callProvider, timeoutMs = DEFAULT_PROBE_TIMEOUT_MS, sleep = defaultSleep }) {
   const answers = [];
+  const gap = pacingFor(row);
+  let first = true;
   for (const question of GOLDEN_SET) {
+    // Space the calls to fit a stated per-minute ceiling. Before the call, not
+    // after, so the last question does not pay for a wait nobody needs.
+    if (!first && gap > 0) await sleep(gap);
+    first = false;
     // A provider that just said "too many requests" will say it again. Asking
     // the remaining questions anyway is five more knocks on a door that is
     // already shut, and it is what turned one gemini rate limit into a run of
@@ -653,6 +691,36 @@ export async function runGoldenSetFor(row, { callProvider, timeoutMs = DEFAULT_P
   return rollUp(answers);
 }
 
+/**
+ * Slowest we will pace ourselves to fit a stated per-minute ceiling, and the
+ * longest the whole six-question set may therefore take.
+ *
+ * Cerebras publishes `gpt-oss-120b` at **5 requests per minute**, and warns
+ * that a per-minute limit may be enforced over a shorter interval — 5 RPM is
+ * about one call every twelve seconds. Six questions fired back to back would
+ * 429 after the first, the run would be inconclusive, and the model would never
+ * be scored at all. Pacing is what makes a low-quota model measurable.
+ */
+export const GOLDEN_MAX_GAP_MS = 13000;
+export const GOLDEN_MAX_ROW_MS = 90000;
+
+/**
+ * How long to wait between questions for this row, from the ceiling the
+ * provider stated. Zero when nothing is known or the allowance is generous.
+ */
+export function pacingFor(row, questionCount = GOLDEN_SET.length) {
+  const rpm = Number(row?.freeLimits?.requestsPerMinute);
+  if (!Number.isFinite(rpm) || rpm <= 0) return 0;
+  // A comfortable allowance needs no pacing: at 60 RPM six sequential calls,
+  // each taking hundreds of ms, are nowhere near the ceiling.
+  if (rpm >= questionCount * 10) return 0;
+  const gap = Math.ceil(60000 / rpm);
+  return Math.min(gap, GOLDEN_MAX_GAP_MS);
+}
+
+/** Injectable so tests do not actually wait. */
+const defaultSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 /** Codes that mean "the door is shut for now", not "this model is bad". */
 const RATE_LIMIT_CODES = new Set(['http_429', 'rate_limited']);
 
@@ -671,12 +739,12 @@ function rateLimitedAlready(answers) {
  * @param {object} [deps.options]  { limit, now, timeout }
  */
 export async function runGoldenSet({ rows, callProvider, updateOne = null, options = {} }) {
-  const { limit = GOLDEN_ROWS_PER_RUN, now = Date.now(), timeout = DEFAULT_PROBE_TIMEOUT_MS } = options;
+  const { limit = GOLDEN_ROWS_PER_RUN, now = Date.now(), timeout = DEFAULT_PROBE_TIMEOUT_MS, sleep } = options;
   const chosen = selectGoldenCandidates(rows, { limit, now });
   const results = [];
 
   for (const row of chosen) {
-    const quality = await runGoldenSetFor(row, { callProvider, timeoutMs: timeout });
+    const quality = await runGoldenSetFor(row, { callProvider, timeoutMs: timeout, ...(sleep ? { sleep } : {}) });
     const conclusive = isConclusive(quality);
     results.push({ provider: row.provider, modelId: row.modelId, ...quality, conclusive });
 

@@ -718,3 +718,95 @@ describe('the modality filter keeps non-chat models out', () => {
     }
   });
 });
+
+/**
+ * 402 Payment Required — neither transient nor terminal.
+ *
+ * A fresh Cerebras key on 2026-09-16 listed `gpt-oss-120b` and `qwen-3.8-27b`
+ * perfectly and answered 402 to every inference call: the published per-model
+ * limits are an entitlement once paid, not a free tier.
+ *
+ * 402 is not in HARD_FAILURE_STATUSES, so it classified as `unknown`, and an
+ * `unknown` outcome gets NO write at all — meaning those rows would have been
+ * re-probed every six hours indefinitely, each time to be told the same thing.
+ * That is the knocking-on-the-door problem in miniature.
+ */
+describe('a row that needs credit is set aside for a day', () => {
+  const paymentRequired = () => {
+    const err = new Error('Cerebras API error (402): payment required');
+    err.status = 402;
+    return err;
+  };
+
+  it('cools for 24 hours rather than not writing at all', async () => {
+    const now = Date.UTC(2026, 8, 16, 3, 0, 0);
+    const { callProvider } = layer({ 'groq/llama-3.1-8b-instant': paymentRequired() });
+    const writes = [];
+    const results = await probe.runProbe({
+      rows: [ROWS[0]],
+      callProvider,
+      updateOne: async (query, update) => { writes.push({ query, update }); },
+      options: { mark: true, now },
+    });
+
+    expect(writes).toHaveLength(1);
+    const set = writes[0].update.$set;
+    expect(set['health.coolingUntil'].getTime() - now).toBe(probe.PROBE_PAYMENT_COOLDOWN_MS);
+    expect(results[0].marked).toBe('needs credit (24h)');
+  });
+
+  it('does not retire it — the model works the moment credit arrives', async () => {
+    const now = Date.UTC(2026, 8, 16, 3, 0, 0);
+    const { callProvider } = layer({ 'groq/llama-3.1-8b-instant': paymentRequired() });
+    const writes = [];
+    await probe.runProbe({
+      rows: [ROWS[0]],
+      callProvider,
+      updateOne: async (query, update) => { writes.push({ query, update }); },
+      options: { mark: true, now },
+    });
+    expect(writes[0].update.$set.isFree).toBeUndefined();
+  });
+
+  it('is a day, not the 30 a withdrawn model gets', () => {
+    expect(probe.PROBE_PAYMENT_COOLDOWN_MS).toBeLessThan(probe.PROBE_MARK_COOLDOWN_MS);
+    expect(probe.PROBE_PAYMENT_COOLDOWN_MS).toBe(24 * 60 * 60 * 1000);
+  });
+});
+
+describe('pacing the golden set to a stated ceiling', () => {
+  it('spaces the questions for a low per-minute allowance', () => {
+    // Cerebras publishes gpt-oss-120b at 5 requests/minute and warns the limit
+    // may be enforced over a shorter interval. Six back-to-back calls would
+    // 429 after the first and the model would never be scored at all.
+    expect(probe.pacingFor({ freeLimits: { requestsPerMinute: 5 } })).toBe(12000);   // 60s / 5
+    // The cap only bites below ~4.6/min, so a truly tiny allowance cannot stall a sweep.
+    expect(probe.pacingFor({ freeLimits: { requestsPerMinute: 1 } })).toBe(probe.GOLDEN_MAX_GAP_MS);
+    expect(probe.pacingFor({ freeLimits: { requestsPerMinute: 30 } })).toBe(2000);
+  });
+
+  it('does not pace a generous allowance', () => {
+    // 450/min (Cerebras qwen) or 60/min: six sequential calls are nowhere near.
+    expect(probe.pacingFor({ freeLimits: { requestsPerMinute: 450 } })).toBe(0);
+    expect(probe.pacingFor({ freeLimits: { requestsPerMinute: 60 } })).toBe(0);
+  });
+
+  it('does not pace when the provider never said', () => {
+    // Seven of nine send no limits at all; pacing on a guess would be a tax on
+    // every sweep for no reason.
+    expect(probe.pacingFor({ freeLimits: {} })).toBe(0);
+    expect(probe.pacingFor({})).toBe(0);
+  });
+
+  it('actually waits between questions', async () => {
+    const waits = [];
+    const callProvider = async () => ({ content: '450' });
+    await probe.runGoldenSetFor(
+      { provider: 'cerebras', modelId: 'gpt-oss-120b', freeLimits: { requestsPerMinute: 5 } },
+      { callProvider, sleep: async (ms) => { waits.push(ms); } }
+    );
+    // Five gaps for six questions — none before the first, none after the last.
+    expect(waits).toHaveLength(5);
+    expect(waits.every((w) => w === 12000)).toBe(true);
+  });
+});

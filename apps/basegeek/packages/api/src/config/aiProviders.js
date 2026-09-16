@@ -209,7 +209,12 @@ export const AI_PROVIDERS = [
     id: 'cerebras',
     label: 'Cerebras',
     needsAccountId: false,
-    defaultModel: 'qwen-3-235b-a22b-instruct-2507',
+    // Chef's Cerebras org lists `qwen-3.8-27b` and `gpt-oss-120b` (2026-09-16).
+    // The previous default, `qwen-3-235b-a22b-instruct-2507`, is not among them
+    // and would 404 on the first call. qwen3.8-27b is also a model we have
+    // already measured elsewhere — 0.9 on the golden set via groq, with perfect
+    // numeracy, calibration and reasoning.
+    defaultModel: 'qwen-3.8-27b',
     inRotation: true,
     rotationPosition: 2,
     adapter: {
