@@ -169,3 +169,137 @@ describe('dead ends', () => {
     expect(await screen.findByText('My Pancakes')).toBeInTheDocument();
   });
 });
+
+/**
+ * Describe-and-log: the path Chef actually asked for.
+ *
+ * The backend for this shipped 2026-09-15 and nothing called it for a day,
+ * while the box's placeholder invited you to "describe your meal" and then ran
+ * a search. These cases exist so that cannot silently come back: the offer and
+ * the behaviour have to be the same thing.
+ */
+describe('describing a meal', () => {
+  const describeMeal = vi.fn();
+
+  const renderDescribable = (props = {}) =>
+    render(
+      <GeekToastProvider>
+        <UnifiedFoodSearch onLogItems={vi.fn()} onDescribe={describeMeal} {...props} />
+      </GeekToastProvider>
+    );
+
+  const say = (value) =>
+    fireEvent.change(screen.getByPlaceholderText(/what did you eat/i), { target: { value } });
+
+  const logged = (over = {}) => ({
+    logId: 'log-1',
+    name: 'Chocolate chip pancakes',
+    servings: 4,
+    loggedServings: 1,
+    mealType: 'breakfast',
+    calories: 880,
+    nutrition: { calories_per_serving: 880 },
+    source: 'estimate',
+    flags: [],
+    ...over
+  });
+
+  beforeEach(() => {
+    describeMeal.mockReset();
+    describeMeal.mockResolvedValue({
+      ok: 1, fail: 0, logIds: ['log-1'], logged: [logged()], skipped: [], questions: [], totalCalories: 880
+    });
+  });
+
+  it('offers to log the sentence, above the search results', async () => {
+    renderDescribable();
+    say('4 chocolate chip pancakes homemade');
+    await vi.advanceTimersByTimeAsync(600);
+
+    expect(screen.getByText(/Log “4 chocolate chip pancakes homemade”/)).toBeInTheDocument();
+  });
+
+  it('logs on Enter rather than re-running a search that already ran', async () => {
+    renderDescribable();
+    say('a dozen nachos with beef and cheese');
+    await vi.advanceTimersByTimeAsync(600);
+
+    // SearchBar listens for the Enter key itself; there is no form element.
+    fireEvent.keyDown(screen.getByPlaceholderText(/what did you eat/i), { key: 'Enter' });
+    await waitFor(() => expect(describeMeal).toHaveBeenCalledWith('a dozen nachos with beef and cheese'));
+  });
+
+  it('logs when the offer itself is tapped', async () => {
+    renderDescribable();
+    say('  eggs and toast  ');
+    await vi.advanceTimersByTimeAsync(600);
+
+    fireEvent.click(screen.getByText(/Log “eggs and toast”/));
+    await waitFor(() => expect(describeMeal).toHaveBeenCalledWith('eggs and toast'));
+  });
+
+  it('clears the box once it is written, so the same meal is not logged twice', async () => {
+    renderDescribable();
+    say('nachos');
+    await vi.advanceTimersByTimeAsync(600);
+
+    fireEvent.click(screen.getByText(/Log “nachos”/));
+    await waitFor(() =>
+      expect(screen.getByPlaceholderText(/what did you eat/i)).toHaveValue('')
+    );
+  });
+
+  it('says what landed, not just that something did', async () => {
+    renderDescribable();
+    say('pancakes');
+    await vi.advanceTimersByTimeAsync(600);
+    fireEvent.click(screen.getByText(/Log “pancakes”/));
+
+    expect(await screen.findByText(/Chocolate chip pancakes · 880 cal/)).toBeInTheDocument();
+  });
+
+  it('reports the entries the rails threw out instead of hiding them', async () => {
+    // A line can partly succeed: one dish writes, its neighbour is nonsense.
+    // A log that quietly disagrees with what he said is worse than a warning.
+    describeMeal.mockResolvedValue({
+      ok: 1, fail: 1, logIds: ['log-1'],
+      logged: [logged()],
+      skipped: [{ name: 'Beef flautas', reason: 'portion-insane' }],
+      questions: [], totalCalories: 880
+    });
+    renderDescribable();
+    say('pancakes and 41 beef flautas');
+    await vi.advanceTimersByTimeAsync(600);
+    fireEvent.click(screen.getByText(/Log “pancakes and 41 beef flautas”/));
+
+    expect(await screen.findByText(/skipped Beef flautas/i)).toBeInTheDocument();
+  });
+
+  it('shows the server’s own words when there was no food in the text', async () => {
+    const err = new Error('request failed');
+    err.response = { data: { error: { message: "I couldn't find any food in that" } } };
+    describeMeal.mockRejectedValue(err);
+
+    renderDescribable();
+    say('asdfgh');
+    await vi.advanceTimersByTimeAsync(600);
+    fireEvent.click(screen.getByText(/Log “asdfgh”/));
+
+    expect(await screen.findByText(/couldn't find any food in that/i)).toBeInTheDocument();
+  });
+
+  it('offers nothing, and still searches on Enter, when the surface cannot describe', async () => {
+    // AddFoodDialog and friends may mount without the prop; the box must not
+    // grow a dead button, and Enter must keep its old meaning there.
+    render(
+      <GeekToastProvider>
+        <UnifiedFoodSearch onLogItems={vi.fn()} />
+      </GeekToastProvider>
+    );
+    fireEvent.change(screen.getByPlaceholderText(/search foods/i), { target: { value: 'pancakes' } });
+    await vi.advanceTimersByTimeAsync(600);
+
+    expect(screen.queryByText(/^Log “/)).toBeNull();
+    expect(describeMeal).not.toHaveBeenCalled();
+  });
+});

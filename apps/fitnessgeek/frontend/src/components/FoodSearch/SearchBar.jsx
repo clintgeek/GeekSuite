@@ -30,7 +30,10 @@ const SearchBar = ({
   onBarcodeClick,
   onAIClick,
   loading = false,
-  placeholder = "Search foods, scan barcode, or describe your meal...",
+  // Every real mount passes its own; this default is only a fallback, and it
+  // deliberately no longer promises describe-and-log, which depends on the
+  // host wiring `onDescribe`.
+  placeholder = "Search foods",
   autoFocus = false
 }) => {
   const theme = useTheme();
@@ -84,6 +87,11 @@ const SearchBar = ({
                 {value && !loading && (
                   <IconButton
                     size="small"
+                    // Only rendered once the box has text, which is why the
+                    // harness never caught it missing: the scene that covers
+                    // this surface had been skipping since 2026-09-14 and
+                    // never typed anything.
+                    aria-label="Clear search"
                     onClick={handleClear}
                     sx={{
                       color: theme.palette.text.secondary,
@@ -99,6 +107,7 @@ const SearchBar = ({
                 {onBarcodeClick && (
                   <Tooltip title="Scan Barcode" arrow>
                     <IconButton
+                      aria-label="Scan barcode"
                       onClick={onBarcodeClick}
                       sx={{
                         color: theme.palette.text.secondary,
@@ -116,6 +125,7 @@ const SearchBar = ({
                 {onAIClick && (
                   <Tooltip title="AI Parse" arrow>
                     <IconButton
+                      aria-label="Parse with AI"
                       onClick={onAIClick}
                       sx={{
                         color: theme.palette.text.secondary,

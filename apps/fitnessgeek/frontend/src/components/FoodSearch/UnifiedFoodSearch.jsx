@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { Box, Typography, Alert, Button, Skeleton, LinearProgress, Chip } from '@mui/material';
 import { AddCircleOutline as CreateIcon, AutoAwesome as WandIcon } from '@mui/icons-material';
 import { useTheme, alpha } from '@mui/material/styles';
-import { useToast } from '@geeksuite/ui';
+import { useToast, readableOn } from '@geeksuite/ui';
 import SearchBar from './SearchBar';
 import FoodResultRow from './FoodResultRow';
 import ServingSheet from './ServingSheet';
@@ -31,6 +31,20 @@ import { foodService } from '../../services/foodService';
  * Tapping a row logs it at its default serving with an undo in the toast; the
  * trailing control opens the serving editor for the adds that need one. From
  * the second item onward a ribbon shows what this sitting has come to.
+ *
+ * DESCRIBE IS THE PRIMARY PATH (2026-09-16). Chef does not want to be the
+ * search operator — he wants to say what he ate and have it written
+ * (DOCS/THE_DESCRIBE_AND_LOG_PLAN.md §1). So the first thing under the box is
+ * "Log …", and Enter fires it. Search still runs underneath on its own
+ * debounce and is still the right answer for picking one specific branded
+ * item, which is exactly the role the plan assigns it.
+ *
+ * Enter used to re-run the deep search. Nothing is lost: wave two already
+ * fires 400ms after you stop typing, so Enter was only ever impatience.
+ *
+ * The box asked to describe a meal in its placeholder for a day before any of
+ * this existed, and searched instead. Promising it and not doing it is worse
+ * than not offering it.
  */
 
 const DEBOUNCE_LOCAL_MS = 150;
@@ -52,6 +66,7 @@ const UnifiedFoodSearch = ({
   mealType = 'snack',
   onMealTypeChange,
   onLogItems,          // (items, mealType) => Promise<{ok, fail, logIds}>
+  onDescribe,          // (text) => Promise<{ok, fail, logIds, logged, skipped}>
   onUndo,              // (logIds) => Promise<void>
   onCreateFood,        // (query) => void
   onBarcodeClick,
@@ -73,6 +88,7 @@ const UnifiedFoodSearch = ({
   const [adjusting, setAdjusting] = useState(null);
   const [session, setSession] = useState([]);   // what this sitting has logged
   const [busy, setBusy] = useState(false);
+  const [describing, setDescribing] = useState(false);
 
   const localAbort = useRef(null);
   const deepAbort = useRef(null);
@@ -223,6 +239,85 @@ const UnifiedFoodSearch = ({
     }
   }, [onLogItems, onUndo, mealType, notify]);
 
+  /**
+   * Send the sentence; the backend writes the log and tells us what landed.
+   *
+   * The query is cleared on success because it HAS been logged — leaving it in
+   * the box is an invitation to log it twice, and this is the path that exists
+   * so nobody has to think about it.
+   */
+  const describe = useCallback(async () => {
+    const text = query.trim();
+    if (!text || !onDescribe || describing) return;
+
+    setDescribing(true);
+    setError(null);
+    try {
+      const result = await onDescribe(text);
+      const logged = result?.logged || [];
+      const skipped = result?.skipped || [];
+      const logIds = result?.logIds || [];
+
+      if (logged.length > 0) {
+        setQuery('');
+        // `loggedServings` is the multiplier actually written, which is what
+        // the ribbon multiplies `calories_per_serving` by. `servings` is what
+        // was asked for, and the two differ whenever the estimate came back as
+        // a whole-dish total.
+        setSession((prev) => [
+          ...prev,
+          ...logged.map((entry) => ({
+            name: entry.name,
+            logId: entry.logId,
+            servings: entry.loggedServings ?? entry.servings ?? 1,
+            nutrition: entry.nutrition
+          }))
+        ]);
+
+        const summary = logged.length === 1
+          ? `${logged[0].name} · ${Math.round(logged[0].calories || 0)} cal`
+          : `${logged.length} items · ${Math.round(result?.totalCalories || 0)} cal`;
+
+        notify(`Logged ${summary}`, {
+          tone: skipped.length > 0 ? 'warning' : 'success',
+          action: logIds.length > 0 && onUndo ? (
+            <Button
+              size="small"
+              sx={{ color: 'inherit', fontWeight: 700 }}
+              onClick={async () => {
+                await onUndo(logIds);
+                setSession((prev) => prev.filter((item) => !logIds.includes(item.logId)));
+              }}
+            >
+              Undo
+            </Button>
+          ) : undefined
+        });
+      }
+
+      // A described line can partly fail: the sanity rails reject one entry
+      // whose numbers are nonsense while its neighbours write fine. Saying so
+      // beats a log that quietly disagrees with what he told it.
+      if (skipped.length > 0) {
+        setError(
+          logged.length === 0
+            ? `Couldn't make sense of that: ${skipped.map((s) => s.name).join(', ')}.`
+            : `Logged the rest, but skipped ${skipped.map((s) => s.name).join(', ')} — the numbers looked wrong.`
+        );
+      }
+    } catch (err) {
+      // A 422 is a real answer ("no food in that"), not a fault; the server's
+      // own words are the clearest thing to show.
+      setError(
+        err?.response?.data?.error?.message
+        || err?.message
+        || 'Could not log that. Try again.'
+      );
+    } finally {
+      setDescribing(false);
+    }
+  }, [query, onDescribe, describing, onUndo, notify]);
+
   const handleTap = useCallback((food) => {
     const servings = Number(food.requestedQuantity) > 0 ? Number(food.requestedQuantity) : 1;
     logFoods([{ ...food, servings }], mealType);
@@ -282,6 +377,59 @@ const UnifiedFoodSearch = ({
     />
   );
 
+  const describeRow = searching && onDescribe ? (
+    <Box
+      role="button"
+      tabIndex={0}
+      aria-busy={describing}
+      onClick={describe}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); describe(); } }}
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1.5,
+        minHeight: 56,
+        px: 1.5,
+        py: 1,
+        mb: 1,
+        borderRadius: 2,
+        cursor: describing ? 'progress' : 'pointer',
+        opacity: describing ? 0.7 : 1,
+        pointerEvents: describing ? 'none' : 'auto',
+        border: `1px solid ${alpha(theme.palette.primary.main, 0.4)}`,
+        backgroundColor: alpha(theme.palette.primary.main, 0.06),
+        '&:hover': { backgroundColor: alpha(theme.palette.primary.main, 0.12) },
+        '&:focus-visible': { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: 2 }
+      }}
+    >
+      <WandIcon sx={{ color: theme.palette.primary.main }} />
+      <Box sx={{ minWidth: 0 }}>
+        <Typography sx={{ fontSize: '0.9375rem', color: ink, fontWeight: 600 }}>
+          {describing ? 'Logging…' : <>Log &ldquo;{query.trim()}&rdquo;</>}
+        </Typography>
+        {/*
+          * `muted` at 12px measured 4.42:1 on this tinted panel — just under
+          * the 4.5 AA floor for normal text, which 12px is. `readableOn` walks
+          * it until it clears, and needs `under` because the panel is an
+          * alpha() tint: a translucent surface is a colour AND the paper below
+          * it, and measuring against the tint alone gets a different answer.
+          */}
+        <Typography
+          sx={{
+            fontSize: '0.75rem',
+            color: readableOn(muted, alpha(theme.palette.primary.main, 0.06), {
+              under: theme.palette.background.paper
+            })
+          }}
+        >
+          {describing
+            ? 'Working out what that comes to'
+            : 'Writes it straight to your log — undo is one tap'}
+        </Typography>
+      </Box>
+    </Box>
+  ) : null;
+
   const createRow = searching && onCreateFood ? (
     <Box
       role="button"
@@ -314,11 +462,11 @@ const UnifiedFoodSearch = ({
       <SearchBar
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        onSubmit={() => runDeepSearch(query)}
+        onSubmit={() => (onDescribe ? describe() : runDeepSearch(query))}
         onBarcodeClick={onBarcodeClick}
         loading={loadingDeep}
         autoFocus={autoFocus || mode === 'dialog'}
-        placeholder="Search foods — or describe your meal"
+        placeholder={onDescribe ? 'What did you eat?' : 'Search foods'}
       />
 
       {onMealTypeChange && (
@@ -336,6 +484,13 @@ const UnifiedFoodSearch = ({
           ))}
         </Box>
       )}
+
+      {/*
+        * The primary action, above the results, because describing is the
+        * point and searching is the fallback. It says exactly what it will
+        * write, so "no confirm step" does not become "no idea what happened".
+        */}
+      {describeRow}
 
       {/* Wave two in flight, under results that are already usable */}
       {loadingDeep && (

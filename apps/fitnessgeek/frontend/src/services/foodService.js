@@ -30,6 +30,38 @@ export const foodService = {
   },
 
   /**
+   * Describe a meal in plain words; the backend writes the log.
+   *
+   * This is the front door for the whole describe-and-log design
+   * (DOCS/THE_DESCRIBE_AND_LOG_PLAN.md): Chef says what he ate and it gets
+   * logged — no searching, no picking, no confirm step. `search` above stays
+   * as the fallback for when he wants one specific branded item.
+   *
+   * `hour` is the caller's LOCAL clock. The server runs UTC and otherwise
+   * cannot tell which meal 8pm belongs to, so the browser has to say.
+   *
+   * Resolves to `{ logged, skipped, logIds, questions, totalCalories }`. A
+   * 422 means nothing in the text looked like food — that is a real answer,
+   * not a fault, so it is thrown with its message intact for the caller to
+   * show.
+   *
+   * @param {string} text
+   * @param {{date: string, hour?: number, signal?: AbortSignal}} options
+   */
+  describe: async (text, { date, hour, signal } = {}) => {
+    const response = await restApi.post(
+      '/logs/describe',
+      {
+        text,
+        date,
+        hour: Number.isFinite(hour) ? hour : new Date().getHours()
+      },
+      { signal }
+    );
+    return response.data?.data || null;
+  },
+
+  /**
    * The typeahead: the local catalog only — favourites, recents, your own
    * foods, and anything already in the shared catalog. No external API, no
    * model, so it is fast enough to call while someone is still typing.

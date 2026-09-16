@@ -12,6 +12,11 @@ import logger from '../utils/logger.js';
  * search mount the same box, so this lives here rather than being written
  * twice with two different notions of what "logged" means.
  *
+ * `describeMeal` is the other way in, and the one Chef actually asked for: a
+ * sentence goes to `POST /logs/describe` and comes back already written. It
+ * returns the same `{ok, fail, logIds}` shape as `logItems` precisely so undo
+ * and the session ribbon cannot develop two behaviours.
+ *
  * @param {{date: string, onChanged?: () => Promise<void>|void}} options
  */
 export const useFoodLogging = ({ date, onChanged }) => {
@@ -71,13 +76,49 @@ export const useFoodLogging = ({ date, onChanged }) => {
     await onChanged?.();
   }, [onChanged]);
 
+  /**
+   * Describe a meal; the backend writes it.
+   *
+   * Returns the same `{ok, fail, logIds}` shape `logItems` does, so the box
+   * can treat a described meal and a tapped row identically for undo and for
+   * the session ribbon — plus `logged`/`skipped` for what to actually say.
+   *
+   * A described meal can partially succeed: the sanity rails reject an entry
+   * whose numbers are nonsense while its neighbours on the same line write
+   * fine. That is reported, not hidden, or the log quietly disagrees with what
+   * he told it.
+   */
+  const describeMeal = useCallback(async (text) => {
+    const result = await foodService.describe(text, {
+      date,
+      // The server runs UTC and cannot guess which meal 8pm is.
+      hour: new Date().getHours()
+    });
+
+    const logged = result?.logged || [];
+    const skipped = result?.skipped || [];
+    const logIds = result?.logIds || [];
+
+    if (logged.length > 0) await onChanged?.();
+
+    return {
+      ok: logged.length,
+      fail: skipped.length,
+      logIds,
+      logged,
+      skipped,
+      questions: result?.questions || [],
+      totalCalories: result?.totalCalories ?? 0
+    };
+  }, [date, onChanged]);
+
   /** The "Can't find it? Create …" escape hatch. */
   const createFood = useCallback(async (payload) => {
     const created = await foodService.create(payload);
     return created?.data || created;
   }, []);
 
-  return { logItems, undoLogs, createFood };
+  return { logItems, undoLogs, describeMeal, createFood };
 };
 
 export default useFoodLogging;

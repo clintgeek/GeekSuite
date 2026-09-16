@@ -35,7 +35,7 @@ const FoodSearchPage = () => {
   const [createForm, setCreateForm] = useState(null);
   const [creating, setCreating] = useState(false);
 
-  const { logItems, undoLogs, createFood } = useFoodLogging({ date: today });
+  const { logItems, undoLogs, describeMeal, createFood } = useFoodLogging({ date: today });
 
   const handleCreate = useCallback(async () => {
     if (!createForm?.name) return;
@@ -83,6 +83,7 @@ const FoodSearchPage = () => {
         mealType={mealType}
         onMealTypeChange={setMealType}
         onLogItems={logItems}
+        onDescribe={describeMeal}
         onUndo={undoLogs}
         onBarcodeClick={() => setScannerOpen(true)}
         onCreateFood={(query) => setCreateForm({ ...EMPTY_FOOD_FORM, name: query })}
