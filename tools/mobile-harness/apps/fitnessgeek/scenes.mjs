@@ -160,6 +160,11 @@ export const scenes = [
     },
     teardown: (page, h) => h.esc(400),
   },
+  // Body-composition scan import. Reachable from the Android share sheet and
+  // from its own file picker, so it is a real destination rather than a
+  // sub-view of something already covered — it needs its own scene or the
+  // gate never looks at it.
+  { name: '12-scan-import', goto: '/scan-import', wait: 1600 },
 ];
 
 // Known, ticketed violations. Each one should die when the app is fixed —
