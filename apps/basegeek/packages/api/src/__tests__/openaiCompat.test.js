@@ -1594,7 +1594,14 @@ describe('routing aliases', () => {
     });
 
     expect(res.status).toBe(200);
-    expect(calls[0].config.model).toBe('gemini/gemini-2.5-flash-lite');
+    // Both halves, separately. This asserted the combined `<provider>/<model>`
+    // string until 2026-09-16, when the route relied on `explicitPinOf` to take
+    // it apart again downstream — which breaks the moment a provider namespaces
+    // its own models (Groq serves `groq/compound-mini`, and re-splitting that
+    // produced a model id that does not exist). The route has both halves in
+    // hand, so it passes both.
+    expect(calls[0].config.provider).toBe('gemini');
+    expect(calls[0].config.model).toBe('gemini-2.5-flash-lite');
   });
 
   it('F-22: the basegeek-* aliases keep every bit of their rotation', async () => {

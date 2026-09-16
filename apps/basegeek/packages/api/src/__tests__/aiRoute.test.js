@@ -410,3 +410,45 @@ describe('the governor — paidBudgetVerdict', () => {
       .toMatchObject({ ok: false, reason: 'paid_budget_per_call' });
   });
 });
+
+/**
+ * A model id may legitimately contain a slash.
+ *
+ * `explicitPinOf` splits `"provider/model"` as a convenience for callers that
+ * send only a model string — `/openai/v1` clients, mostly. Applied when the
+ * provider was ALSO given, it destroys ids that contain a slash of their own:
+ * Groq namespaces some of its models as `groq/compound` and
+ * `groq/compound-mini`.
+ *
+ * The cost of getting this wrong was invisible and total. On 2026-09-16 those
+ * two were the first models the golden set rated 1.0, so the resolver started
+ * choosing them — and every pin was rewritten to a model that does not exist,
+ * failed `pin_absent`, degraded to the ordinary walk, and served `allam-2-7b`
+ * (0.4) instead. The response reported the 1.0 model in `provenance.need` and
+ * the 0.4 model in `provenance.model`, and every layer called it a success.
+ */
+describe('a pin whose model id contains a slash', () => {
+  const ROSTER_IDS = ['groq', 'gemini', 'openrouter', 'cloudflare', 'ollama', 'cohere'];
+
+  it('keeps the model verbatim when the provider was named', () => {
+    expect(explicitPinOf({ provider: 'groq', model: 'groq/compound-mini' }, ROSTER_IDS))
+      .toEqual({ provider: 'groq', model: 'groq/compound-mini' });
+    expect(explicitPinOf({ provider: 'openrouter', model: 'openai/gpt-oss-120b' }, ROSTER_IDS))
+      .toEqual({ provider: 'openrouter', model: 'openai/gpt-oss-120b' });
+  });
+
+  it('still splits the convenience form when only a model was sent', () => {
+    // The behaviour this parse exists for, unchanged.
+    expect(explicitPinOf({ model: 'groq/llama-3.3-70b' }, ROSTER_IDS))
+      .toEqual({ provider: 'groq', model: 'llama-3.3-70b' });
+  });
+
+  it('leaves a vendor-namespaced id alone when the prefix is not a provider', () => {
+    expect(explicitPinOf({ model: 'meta-llama/llama-3.1-70b' }, ROSTER_IDS)).toBeNull();
+  });
+
+  it('handles the cloudflare ids, which begin with @cf and never split', () => {
+    expect(explicitPinOf({ provider: 'cloudflare', model: '@cf/meta/llama-4-scout-17b-16e-instruct' }, ROSTER_IDS))
+      .toEqual({ provider: 'cloudflare', model: '@cf/meta/llama-4-scout-17b-16e-instruct' });
+  });
+});

@@ -121,15 +121,35 @@ export function explicitPinOf(config = {}, providerIds = []) {
   const model = typeof config?.model === 'string' ? config.model : null;
   const provider = typeof config?.provider === 'string' ? config.provider : null;
 
+  /*
+   * A caller that named a provider is taken at its word, model and all.
+   *
+   * The `"provider/model"` split below is a convenience for callers who send
+   * only a model string — `/openai/v1` clients, mostly. Applying it when the
+   * provider was ALSO given destroys ids that legitimately contain a slash:
+   * Groq namespaces some of its own models as `groq/compound` and
+   * `groq/compound-mini`, so `{provider: 'groq', model: 'groq/compound-mini'}`
+   * was being rewritten to the model `compound-mini`, which does not exist.
+   *
+   * The pin then failed `pin_absent` and degraded to the ordinary walk. On
+   * 2026-09-16 those two models were the first ones the golden set rated 1.0,
+   * so every `structured:fast` call resolved to a perfect model and quietly
+   * served `allam-2-7b` (0.4) instead. Every layer reported success.
+   *
+   * `/openai/v1` was the one caller that sent a provider AND a combined
+   * `<provider>/<model>` string, relying on this function to take it apart
+   * again. It now sends the provider's own spelling of the id, which it has
+   * had in hand all along (`routes/openaiProxy.js`, `ownerModelId`).
+   */
+  if (provider && roster.has(provider)) {
+    return { provider, model: model || null };
+  }
+
   if (model && model.includes('/')) {
     const slashIdx = model.indexOf('/');
     const prefix = model.slice(0, slashIdx);
     const rest = model.slice(slashIdx + 1);
     if (roster.has(prefix) && rest) return { provider: prefix, model: rest };
-  }
-
-  if (provider && roster.has(provider)) {
-    return { provider, model: model || null };
   }
 
   return null;

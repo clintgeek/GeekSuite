@@ -507,11 +507,25 @@ router.post('/chat/completions', async (req, res) => {
     // The three `basegeek-*` aliases are the opposite promise and keep every
     // bit of their rotation.
     let ownerProvider = null;
+    /*
+     * The model id as the PROVIDER spells it, with any `<provider>/` prefix
+     * this route added already removed.
+     *
+     * This used to be left to `explicitPinOf` downstream, which re-split
+     * `callConfig.model` on the first slash. That worked until a provider
+     * namespaced its own models: Groq serves `groq/compound` and
+     * `groq/compound-mini`, and re-splitting those produced `compound-mini`,
+     * a model that does not exist. This route has both halves in hand already,
+     * so it passes both rather than recombining them for something else to
+     * take apart again.
+     */
+    let ownerModelId = null;
     if (!useRotationAlias) {
       if (isProviderPin(requestedModel)) {
         const slashIdx = requestedModel.indexOf('/');
         ownerProvider = requestedModel.slice(0, slashIdx);
         const pinnedModelId = requestedModel.slice(slashIdx + 1);
+        ownerModelId = pinnedModelId;
         const catalog = await providerCatalog(ownerProvider);
         if (catalog.length > 0 && !catalog.includes(pinnedModelId)) {
           return openAIError(
@@ -544,6 +558,8 @@ router.post('/chat/completions', async (req, res) => {
           );
         }
         ownerProvider = owner;
+        // A bare catalog id is already the provider's own spelling.
+        ownerModelId = requestedModel;
       }
     }
 
@@ -606,7 +622,7 @@ router.post('/chat/completions', async (req, res) => {
     };
 
     if (!useRotationAlias) {
-      callConfig.model = requestedModel;
+      callConfig.model = ownerModelId ?? requestedModel;
       // The provider that owns the id, so a bare catalog id reaches its own
       // backend rather than whichever provider happens to be current...
       callConfig.provider = ownerProvider;
