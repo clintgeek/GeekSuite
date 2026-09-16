@@ -92,66 +92,71 @@ export const scenes = [
     teardown: (page, h) => h.esc(400),
   },
   {
-    // Natural-language quick-add (DOCS/AI_IDEAS.md #2, Night 2 R115). The
-    // opt-in and the two extra network stubs are all page-scoped (not in
-    // fixtures.mjs's context-wide routes()), so this must stay the LAST scene
-    // in the file — page.route() beats ctx.route() only for navigations
-    // registered after it.
-    name: '11-quickadd-proposal',
+    /*
+     * Describe-and-log — the app's primary path
+     * (apps/fitnessgeek/DOCS/THE_DESCRIBE_AND_LOG_PLAN.md).
+     *
+     * This scene used to drive the natural-language quick-add sheet: a
+     * "Describe a meal" button behind the `natural_language_food_logging`
+     * opt-in, a `quick-add-text` field and a "Read it" button. All of that was
+     * deleted on 2026-09-14 when the sheet was folded into the search box, and
+     * this scene has been **silently skipping** ever since — `setup` returning
+     * false is a skip, not a failure, so the run kept saying PASS while one
+     * scene covered nothing. Worth remembering: a scene that bails is quieter
+     * than a scene that fails.
+     *
+     * What it covers now is the real thing: type a sentence into the one box,
+     * and the offer to log it is the first thing under it.
+     *
+     * The stubs are page-scoped, so this must stay the LAST scene in the file
+     * — page.route() beats ctx.route() only for requests registered after it.
+     */
+    name: '11-describe-and-log',
     async setup(page, h) {
-      await graphqlRoute(page, {
-        ...OPS,
-        GetFitnessUserSettings: {
-          fitnessUserSettings: {
-            ...SETTINGS,
-            ai: { ...SETTINGS.ai, features: { ...SETTINGS.ai.features, natural_language_food_logging: true } },
-          },
-        },
-        ParseFoodEntry: {
-          parseFoodEntry: {
-            __typename: 'ParsedFoodEntry',
-            fragments: [
-              { __typename: 'ParsedFoodFragment', text: 'two eggs', query: 'eggs', servings: 2, unit: null, mealType: 'breakfast' },
-              { __typename: 'ParsedFoodFragment', text: 'toast with butter', query: 'toast', servings: 1, unit: null, mealType: 'breakfast' },
-              { __typename: 'ParsedFoodFragment', text: 'kombucha', query: 'kombucha', servings: 1, unit: null, mealType: 'breakfast' },
-            ],
-            provenance: { __typename: 'AIProvenance', source: 'model', reason: null, model: 'llama-3.1-8b-instant', provider: 'groq', cached: false, callsToday: 1, cap: 40 },
-          },
-        },
-      });
+      // The box's two search waves. Neither should be what answers here, but
+      // both fire on a pause, and an unstubbed call would hang the scene.
+      await page.route('**/api/foods*', (r) => json(r, { success: true, data: [] }));
 
-      // foodService.search() calls fitnessgeek's own REST `/api/foods` directly
-      // (restClient, not the apiService→GraphQL rewrite) — "eggs" and "toast"
-      // match the catalog, "kombucha" comes back empty, i.e. "no match".
-      await page.route('**/api/foods*', (r) => {
-        const search = new URL(r.request().url()).searchParams.get('search') || '';
-        const q = search.toLowerCase();
-        let data = [];
-        if (q.includes('egg')) {
-          data = [{ id: 'f-egg', name: 'Two Large Eggs, fried', brand: null, source: 'usda' }];
-        } else if (q.includes('toast')) {
-          data = [{ id: 'f-toast', name: 'Sourdough Toast with Butter', brand: 'Boudin', source: 'custom' }];
-        }
-        return json(r, { success: true, data });
-      });
+      // POST /api/logs/describe — the front door. Shaped exactly as
+      // `logDescription` returns it (routes/logRoutes.js).
+      await page.route('**/api/logs/describe', (r) => json(r, {
+        success: true,
+        data: {
+          logged: [{
+            logId: 'log-desc-1',
+            name: 'Chocolate chip pancakes, homemade',
+            servings: 4,
+            loggedServings: 1,
+            mealType: 'breakfast',
+            calories: 880,
+            nutrition: { calories_per_serving: 880, protein_grams: 18, carbs_grams: 112, fat_grams: 34 },
+            source: 'estimate',
+            flags: [],
+            needsJudge: false,
+          }],
+          skipped: [],
+          logIds: ['log-desc-1'],
+          questions: [],
+          totalCalories: 880,
+        },
+      }));
 
       await page.goto(h.base + '/food-log', { waitUntil: 'networkidle' });
       await h.settle(1600);
 
-      const describeBtn = page.getByRole('button', { name: /^describe a meal$/i }).first();
-      if (!(await describeBtn.count())) return h.log('no "Describe a meal" button') ?? false;
-      await describeBtn.click();
-      await h.settle(600);
+      const box = page.getByPlaceholder(/what did you eat/i).first();
+      if (!(await box.count())) return h.log('no describe box on the food log') ?? false;
 
-      const textField = page.getByTestId('quick-add-text');
-      if (!(await textField.count())) return false;
-      await textField.fill('two eggs, toast with butter, kombucha');
-      await h.settle(200);
+      await box.fill('4 chocolate chip pancakes homemade');
+      // Long enough for the 400ms deep-search debounce to come and go, so the
+      // shot is of a settled surface rather than a spinner.
+      await h.settle(900);
 
-      const readBtn = page.getByRole('button', { name: /^read it$/i }).first();
-      if (!(await readBtn.count())) return false;
-      await readBtn.click();
-      await h.settle(1200);
+      // The offer is the point of the scene: if the box no longer leads with
+      // it, describing has stopped being the primary path and this should fail
+      // rather than quietly photograph a search box.
+      const offer = page.getByText(/^Log “/).first();
+      if (!(await offer.count())) return h.log('no "Log …" offer under the box') ?? false;
     },
     teardown: (page, h) => h.esc(400),
   },
