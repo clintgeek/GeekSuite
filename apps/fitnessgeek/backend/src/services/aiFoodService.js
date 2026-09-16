@@ -136,51 +136,69 @@ const DISH_ESTIMATE_MODEL = process.env.DISH_ESTIMATE_MODEL || '';
 const DISH_JUDGE_PROVIDER = process.env.DISH_JUDGE_PROVIDER || 'openrouter';
 const DISH_JUDGE_MODEL = process.env.DISH_JUDGE_MODEL || 'openai/gpt-oss-120b';
 
-/** Structured-output schema for `dishJudge`. */
+/**
+ * Structured-output schema for `dishJudge`.
+ *
+ * `{ name, schema }` is the envelope aiGeek's door requires — it validates
+ * `schema must be { name, description?, schema }` and answers 400
+ * INVALID_SCHEMA otherwise. Both of these constants were raw JSON Schema when
+ * they shipped, so every estimate and every judge call 400'd from the first
+ * one, and fitnessgeek reported it as the generic "Dish estimate unavailable".
+ * Nothing caught it because the tests mock `aiGeekClient` at the boundary
+ * BELOW this, so the envelope was never exercised against the real validator.
+ */
 const DISH_JUDGE_SCHEMA = {
-  type: 'object',
-  properties: {
-    verdicts: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          index: { type: 'integer' },
-          reasonable: { type: 'boolean' },
-          better_calories: { type: 'number' },
-          why: { type: 'string' }
-        },
-        required: ['index', 'reasonable']
+  name: 'dish_judge',
+  description: 'Whether each logged entry has a believable calorie total',
+  schema: {
+    type: 'object',
+    properties: {
+      verdicts: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            index: { type: 'integer' },
+            reasonable: { type: 'boolean' },
+            better_calories: { type: 'number' },
+            why: { type: 'string' }
+          },
+          required: ['index', 'reasonable']
+        }
       }
-    }
-  },
-  required: ['verdicts']
+    },
+    required: ['verdicts']
+  }
 };
 
-/** Structured-output schema for `dishEstimate`. */
+/** Structured-output schema for `dishEstimate`. See DISH_JUDGE_SCHEMA on the envelope. */
 const DISH_ESTIMATE_SCHEMA = {
-  type: 'object',
-  properties: {
-    dishes: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          index: { type: 'integer' },
-          name: { type: 'string' },
-          serving_description: { type: 'string' },
-          calories: { type: 'number' },
-          protein_grams: { type: 'number' },
-          carbs_grams: { type: 'number' },
-          fat_grams: { type: 'number' },
-          low_calories: { type: 'number' },
-          high_calories: { type: 'number' }
-        },
-        required: ['index', 'name', 'calories', 'protein_grams', 'carbs_grams', 'fat_grams']
+  name: 'dish_estimate',
+  description: 'One nutrition estimate per described dish',
+  schema: {
+    type: 'object',
+    properties: {
+      dishes: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            index: { type: 'integer' },
+            name: { type: 'string' },
+            serving_description: { type: 'string' },
+            calories: { type: 'number' },
+            protein_grams: { type: 'number' },
+            carbs_grams: { type: 'number' },
+            fat_grams: { type: 'number' },
+            low_calories: { type: 'number' },
+            high_calories: { type: 'number' }
+          },
+          required: ['index', 'name', 'calories', 'protein_grams', 'carbs_grams', 'fat_grams']
+        }
       }
-    }
-  },
-  required: ['dishes']
+    },
+    required: ['dishes']
+  }
 };
 
 const MEAL_WORDS = { breakfast: 'breakfast', lunch: 'lunch', dinner: 'dinner', supper: 'dinner', snack: 'snack' };

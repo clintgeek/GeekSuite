@@ -207,3 +207,57 @@ describe('estimateDishes — reading a small model’s answer', () => {
     expect(dishes[0].name).toBe('Asked for');
   });
 });
+
+/**
+ * The envelope aiGeek's door requires.
+ *
+ * Both schema constants shipped as RAW JSON Schema. The door validates
+ * `schema must be { name, description?, schema }` and answers 400
+ * INVALID_SCHEMA otherwise, so every dish estimate and every judge call failed
+ * from the first one — describe-and-log was dead on arrival in production and
+ * reported it as the generic "Dish estimate unavailable".
+ *
+ * Two things hid it. The tests mock `aiGeekClient` at the boundary BELOW this,
+ * so the envelope was never shown to the real validator; and fitnessgeek's
+ * logger calls were string-first, which under pino drops every structured
+ * field — so the one line naming the status never reached the log.
+ *
+ * These assert the shape against the door's own rule, which costs nothing and
+ * does not need a network.
+ */
+describe('the structured-output schemas match the gateway contract', () => {
+  // routes/aiRoutes.js: `if (schema && (typeof schema !== 'object' ||
+  //                       !schema.name || !schema.schema))` → 400.
+  const acceptedByTheDoor = (schema) =>
+    !!schema && typeof schema === 'object' && !!schema.name && !!schema.schema;
+
+  const sentSchemaFor = async (run) => {
+    feature.mockReset();
+    feature.mockResolvedValue(declined());
+    await run();
+    expect(feature).toHaveBeenCalled();
+    return feature.mock.calls[0][1].schema;
+  };
+
+  test('dishEstimate sends an envelope the door accepts', async () => {
+    const schema = await sentSchemaFor(() =>
+      aiFoodService.estimateDishes([{ dish: 'nachos', components: ['beef'] }])
+    );
+    expect(acceptedByTheDoor(schema)).toBe(true);
+    // The JSON Schema itself lives under `.schema`, not at the top level —
+    // which is exactly the mistake that took this feature down.
+    expect(schema.schema.type).toBe('object');
+    expect(schema.schema.properties.dishes).toBeTruthy();
+    expect(schema.name).toEqual(expect.any(String));
+    expect(schema.type).toBeUndefined();
+  });
+
+  test('dishJudge sends an envelope the door accepts', async () => {
+    const schema = await sentSchemaFor(() =>
+      aiFoodService.judgeEntries([{ name: 'Nachos', calories: 1200, nutrition: {} }])
+    );
+    expect(acceptedByTheDoor(schema)).toBe(true);
+    expect(schema.schema.properties.verdicts).toBeTruthy();
+    expect(schema.type).toBeUndefined();
+  });
+});
