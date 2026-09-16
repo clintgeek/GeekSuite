@@ -78,7 +78,7 @@ router.get('/', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Error getting food items:', error);
+    logger.error({ err: error }, 'Error getting food items:');
     res.status(500).json({
       success: false,
       error: {
@@ -118,7 +118,7 @@ router.get('/favorites', async (req, res) => {
     res.json({ success: true, data: result });
 
   } catch (error) {
-    logger.error('Error getting favorites:', error);
+    logger.error({ err: error }, 'Error getting favorites:');
     res.status(500).json({
       success: false,
       error: { message: 'Failed to retrieve favorites', code: 'FAVORITES_ERROR' }
@@ -142,7 +142,7 @@ router.post('/favorites/:foodId', async (req, res) => {
     res.json({ success: true, message: 'Added to favorites' });
 
   } catch (error) {
-    logger.error('Error adding favorite:', error);
+    logger.error({ err: error }, 'Error adding favorite:');
     res.status(500).json({
       success: false,
       error: { message: 'Failed to add favorite', code: 'FAVORITE_ADD_ERROR' }
@@ -165,7 +165,7 @@ router.delete('/favorites/:foodId', async (req, res) => {
     res.json({ success: true, message: 'Removed from favorites' });
 
   } catch (error) {
-    logger.error('Error removing favorite:', error);
+    logger.error({ err: error }, 'Error removing favorite:');
     res.status(500).json({
       success: false,
       error: { message: 'Failed to remove favorite', code: 'FAVORITE_REMOVE_ERROR' }
@@ -263,7 +263,7 @@ router.get('/recent', async (req, res) => {
     res.json({ success: true, data: result });
 
   } catch (error) {
-    logger.error('Error getting recent foods:', error);
+    logger.error({ err: error }, 'Error getting recent foods:');
     res.status(500).json({
       success: false,
       error: { message: 'Failed to retrieve recent foods', code: 'RECENT_FOODS_ERROR' }
@@ -306,7 +306,7 @@ router.get('/:id', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Error getting food item:', error);
+    logger.error({ err: error }, 'Error getting food item:');
     res.status(500).json({
       success: false,
       error: {
@@ -423,7 +423,7 @@ router.post('/', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Error creating food item:', error);
+    logger.error({ err: error }, 'Error creating food item:');
     res.status(500).json({
       success: false,
       error: {
@@ -481,7 +481,7 @@ router.put('/:id', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Error updating food item:', error);
+    logger.error({ err: error }, 'Error updating food item:');
     res.status(500).json({
       success: false,
       error: {
@@ -531,7 +531,7 @@ router.delete('/:id', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Error deleting food item:', error);
+    logger.error({ err: error }, 'Error deleting food item:');
     res.status(500).json({
       success: false,
       error: {
@@ -563,7 +563,7 @@ router.get('/search/:query', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Error searching foods:', error);
+    logger.error({ err: error }, 'Error searching foods:');
     res.status(500).json({
       success: false,
       error: {

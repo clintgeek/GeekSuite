@@ -28,7 +28,7 @@ router.get('/today', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Error getting today\'s summary:', error);
+    logger.error({ err: error }, 'Error getting today\'s summary:');
     res.status(500).json({
       success: false,
       error: {
@@ -47,11 +47,11 @@ router.get('/:date', async (req, res) => {
 
     const summary = await DailySummary.updateFromLogs(userId, date);
 
-    logger.info('Daily summary retrieved', {
+    logger.info({
       userId,
       date,
       hasData: summary.totals.calories > 0
-    });
+    }, 'Daily summary retrieved');
 
     res.json({
       success: true,
@@ -59,7 +59,7 @@ router.get('/:date', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Error getting daily summary:', error);
+    logger.error({ err: error }, 'Error getting daily summary:');
     res.status(500).json({
       success: false,
       error: {
@@ -78,12 +78,12 @@ router.get('/range/:startDate/:endDate', async (req, res) => {
 
     const summaries = await DailySummary.getSummaryRange(userId, startDate, endDate);
 
-    logger.info('Daily summaries retrieved for range', {
+    logger.info({
       userId,
       startDate,
       endDate,
       count: summaries.length
-    });
+    }, 'Daily summaries retrieved for range');
 
     res.json({
       success: true,
@@ -91,7 +91,7 @@ router.get('/range/:startDate/:endDate', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Error getting daily summaries for range:', error);
+    logger.error({ err: error }, 'Error getting daily summaries for range:');
     res.status(500).json({
       success: false,
       error: {
@@ -110,11 +110,11 @@ router.post('/:date/refresh', async (req, res) => {
 
     const summary = await DailySummary.updateFromLogs(userId, date);
 
-    logger.info('Daily summary refreshed', {
+    logger.info({
       userId,
       date,
       hasData: summary.totals.calories > 0
-    });
+    }, 'Daily summary refreshed');
 
     res.json({
       success: true,
@@ -123,7 +123,7 @@ router.post('/:date/refresh', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Error refreshing daily summary:', error);
+    logger.error({ err: error }, 'Error refreshing daily summary:');
     res.status(500).json({
       success: false,
       error: {
@@ -194,12 +194,12 @@ router.get('/week/:startDate', async (req, res) => {
       average_daily_calories: Math.round(weeklyTotals.calories / 7)
     };
 
-    logger.info('Weekly summary retrieved', {
+    logger.info({
       userId,
       startDate,
       endDate: end.toISOString().split('T')[0],
       averageCalories: weeklySummary.average_daily_calories
-    });
+    }, 'Weekly summary retrieved');
 
     res.json({
       success: true,
@@ -207,7 +207,7 @@ router.get('/week/:startDate', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Error getting weekly summary:', error);
+    logger.error({ err: error }, 'Error getting weekly summary:');
     res.status(500).json({
       success: false,
       error: {

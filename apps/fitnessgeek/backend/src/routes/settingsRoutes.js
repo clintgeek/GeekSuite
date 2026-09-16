@@ -48,7 +48,7 @@ router.get('/', async (req, res) => {
 
     const settings = await UserSettings.getOrCreate(userId);
 
-    logger.info('User settings retrieved', { userId });
+    logger.info({ userId }, 'User settings retrieved');
 
     // Never let the stored credential leave the API — see sanitizeSettings().
     const sanitized = sanitizeSettings(settings);
@@ -59,7 +59,7 @@ router.get('/', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Error getting user settings:', error);
+    logger.error({ err: error }, 'Error getting user settings:');
     res.status(500).json({
       success: false,
       error: {
@@ -139,10 +139,10 @@ router.put('/', validate({ body: settingsUpdateSchema }), async (req, res) => {
       { upsert: true, new: true }
     );
 
-    logger.info('User settings updated', {
+    logger.info({
       userId,
       updatedFields: Object.keys(validUpdateData)
-    });
+    }, 'User settings updated');
 
     const sanitized = sanitizeSettings(settings);
 
@@ -153,7 +153,7 @@ router.put('/', validate({ body: settingsUpdateSchema }), async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Error updating user settings:', error);
+    logger.error({ err: error }, 'Error updating user settings:');
     res.status(500).json({
       success: false,
       error: {
@@ -187,10 +187,10 @@ router.put('/ai', validate({ body: aiUpdateSchema }), async (req, res) => {
       ai: validAISettings
     });
 
-    logger.info('AI settings updated', {
+    logger.info({
       userId,
       aiSettings: validAISettings
-    });
+    }, 'AI settings updated');
 
     res.json({
       success: true,
@@ -199,7 +199,7 @@ router.put('/ai', validate({ body: aiUpdateSchema }), async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Error updating AI settings:', error);
+    logger.error({ err: error }, 'Error updating AI settings:');
     res.status(500).json({
       success: false,
       error: {
@@ -241,10 +241,10 @@ router.put('/dashboard', validate({ body: dashboardUpdateSchema }), async (req, 
       dashboard: validDashboardSettings
     });
 
-    logger.info('Dashboard settings updated', {
+    logger.info({
       userId,
       dashboardSettings: validDashboardSettings
-    });
+    }, 'Dashboard settings updated');
 
     res.json({
       success: true,
@@ -253,7 +253,7 @@ router.put('/dashboard', validate({ body: dashboardUpdateSchema }), async (req, 
     });
 
   } catch (error) {
-    logger.error('Error updating dashboard settings:', error);
+    logger.error({ err: error }, 'Error updating dashboard settings:');
     res.status(500).json({
       success: false,
       error: {
@@ -298,7 +298,7 @@ router.get('/household', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Error getting household settings:', error);
+    logger.error({ err: error }, 'Error getting household settings:');
     res.status(500).json({
       success: false,
       error: {
@@ -340,7 +340,7 @@ router.post('/household/create', validate({ body: householdCreateSchema }), asyn
 
     await settings.save();
 
-    logger.info('Household created', { userId, householdId });
+    logger.info({ userId, householdId }, 'Household created');
 
     res.status(201).json({
       success: true,
@@ -352,7 +352,7 @@ router.post('/household/create', validate({ body: householdCreateSchema }), asyn
     });
 
   } catch (error) {
-    logger.error('Error creating household:', error);
+    logger.error({ err: error }, 'Error creating household:');
     res.status(500).json({
       success: false,
       error: {
@@ -416,7 +416,7 @@ router.post('/household/join', validate({ body: householdJoinSchema }), async (r
 
     await settings.save();
 
-    logger.info('Joined household', { userId, householdId: household_id });
+    logger.info({ userId, householdId: household_id }, 'Joined household');
 
     res.json({
       success: true,
@@ -428,7 +428,7 @@ router.post('/household/join', validate({ body: householdJoinSchema }), async (r
     });
 
   } catch (error) {
-    logger.error('Error joining household:', error);
+    logger.error({ err: error }, 'Error joining household:');
     res.status(500).json({
       success: false,
       error: {
@@ -465,7 +465,7 @@ router.put('/household', validate({ body: householdUpdateSchema }), async (req, 
 
     await settings.save();
 
-    logger.info('Household settings updated', { userId });
+    logger.info({ userId }, 'Household settings updated');
 
     res.json({
       success: true,
@@ -474,7 +474,7 @@ router.put('/household', validate({ body: householdUpdateSchema }), async (req, 
     });
 
   } catch (error) {
-    logger.error('Error updating household settings:', error);
+    logger.error({ err: error }, 'Error updating household settings:');
     res.status(500).json({
       success: false,
       error: {
@@ -513,7 +513,7 @@ router.delete('/household', async (req, res) => {
 
     await settings.save();
 
-    logger.info('Left household', { userId, oldHouseholdId });
+    logger.info({ userId, oldHouseholdId }, 'Left household');
 
     res.json({
       success: true,
@@ -521,7 +521,7 @@ router.delete('/household', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Error leaving household:', error);
+    logger.error({ err: error }, 'Error leaving household:');
     res.status(500).json({
       success: false,
       error: {

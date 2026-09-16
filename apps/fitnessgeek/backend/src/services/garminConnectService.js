@@ -52,7 +52,7 @@ async function buildClient(userId) {
       client.loadToken(settings.garmin.oauth1_token, settings.garmin.oauth2_token);
       return { client, settings };
     } catch (err) {
-      logger.warn('Failed to load saved Garmin tokens, will relogin', { userId, err: err.message });
+      logger.warn({ userId, err: err.message }, 'Failed to load saved Garmin tokens, will relogin');
     }
   }
 
@@ -294,7 +294,7 @@ async function getSleepData(userId, date) {
 
     return result;
   } catch (err) {
-    logger.error('Error getting sleep data', { userId, error: err.message });
+    logger.error({ userId, error: err.message }, 'Error getting sleep data');
     throw err;
   }
 }
@@ -325,7 +325,7 @@ async function getActivities(userId, start = 0, limit = 20) {
 
     return transformed;
   } catch (err) {
-    logger.error('Error getting activities', { userId, error: err.message });
+    logger.error({ userId, error: err.message }, 'Error getting activities');
     throw err;
   }
 }

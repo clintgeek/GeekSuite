@@ -42,7 +42,7 @@ const influx = new InfluxDB({
  */
 async function query(queryString) {
   try {
-    logger.debug('InfluxDB query', { query: queryString });
+    logger.debug({ query: queryString }, 'InfluxDB query');
     const results = await influx.query(queryString);
     return results;
   } catch (err) {
@@ -55,12 +55,12 @@ async function query(queryString) {
       err.name ||
       'unknown influx error';
 
-    logger.error('InfluxDB query error', {
+    logger.error({
       query: queryString,
       diagnostic,
       statusCode: err.statusCode || err.status || null,
       errName: err.name || null
-    });
+    }, 'InfluxDB query error');
 
     throw new InfluxUnavailableError(`InfluxDB query failed: ${diagnostic}`, err);
   }
@@ -299,7 +299,7 @@ async function ping() {
     await influx.ping(5000);
     return { connected: true };
   } catch (err) {
-    logger.error('InfluxDB ping failed', { error: err.message });
+    logger.error({ error: err.message }, 'InfluxDB ping failed');
     return { connected: false, error: err.message };
   }
 }

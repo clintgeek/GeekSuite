@@ -32,7 +32,7 @@ async function checkInfluxEnabled(req, res, next) {
     }
     next();
   } catch (err) {
-    logger.error('Error checking influx status', { userId: req.user.id, error: err.message });
+    logger.error({ userId: req.user.id, error: err.message }, 'Error checking influx status');
     res.status(500).json({ error: 'Failed to check InfluxDB status' });
   }
 }
@@ -52,7 +52,7 @@ router.get('/status', authenticateToken, async (req, res) => {
       error: pingResult.error || null
     });
   } catch (err) {
-    logger.error('Influx status check error', { userId: req.user.id, error: err.message });
+    logger.error({ userId: req.user.id, error: err.message }, 'Influx status check error');
     res.status(500).json({ error: 'Failed to check InfluxDB status' });
   }
 });
@@ -74,14 +74,14 @@ router.get('/daily/:date', authenticateToken, checkInfluxEnabled, async (req, re
     res.json(data);
   } catch (err) {
     if (err instanceof InfluxUnavailableError) {
-      logger.warn('Influx unavailable for daily data', { userId: req.user.id, date: req.params.date, message: err.message });
+      logger.warn({ userId: req.user.id, date: req.params.date, message: err.message }, 'Influx unavailable for daily data');
       return res.json(influxUnavailableResponse(err, { date }));
     }
-    logger.error('Error fetching daily influx data', {
+    logger.error({
       userId: req.user.id,
       date: req.params.date,
       error: err.message
-    });
+    }, 'Error fetching daily influx data');
     res.status(500).json({ error: 'Failed to fetch daily data from InfluxDB' });
   }
 });
@@ -110,14 +110,14 @@ router.get('/sleep-analysis/:date', authenticateToken, checkInfluxEnabled, async
     res.json(analysis);
   } catch (err) {
     if (err instanceof InfluxUnavailableError) {
-      logger.warn('Influx unavailable for sleep analysis', { userId: req.user.id, date: req.params.date, message: err.message });
+      logger.warn({ userId: req.user.id, date: req.params.date, message: err.message }, 'Influx unavailable for sleep analysis');
       return res.json(influxUnavailableResponse(err, { date }));
     }
-    logger.error('Error analyzing sleep data', {
+    logger.error({
       userId: req.user.id,
       date: req.params.date,
       error: err.message
-    });
+    }, 'Error analyzing sleep data');
     res.status(500).json({ error: 'Failed to analyze sleep data' });
   }
 });
@@ -139,15 +139,15 @@ router.get('/intraday/:startDate/:endDate', authenticateToken, checkInfluxEnable
     res.json(data);
   } catch (err) {
     if (err instanceof InfluxUnavailableError) {
-      logger.warn('Influx unavailable for intraday metrics', { userId: req.user.id, startDate, endDate, message: err.message });
+      logger.warn({ userId: req.user.id, startDate, endDate, message: err.message }, 'Influx unavailable for intraday metrics');
       return res.json(influxUnavailableResponse(err, { startDate, endDate }));
     }
-    logger.error('Error fetching intraday metrics', {
+    logger.error({
       userId: req.user.id,
       startDate: req.params.startDate,
       endDate: req.params.endDate,
       error: err.message
-    });
+    }, 'Error fetching intraday metrics');
     res.status(500).json({ error: 'Failed to fetch intraday metrics' });
   }
 });
@@ -168,14 +168,14 @@ router.get('/heart-rate/:date', authenticateToken, checkInfluxEnabled, async (re
     res.json({ date, heartRate: data });
   } catch (err) {
     if (err instanceof InfluxUnavailableError) {
-      logger.warn('Influx unavailable for heart rate data', { userId: req.user.id, date: req.params.date, message: err.message });
+      logger.warn({ userId: req.user.id, date: req.params.date, message: err.message }, 'Influx unavailable for heart rate data');
       return res.json(influxUnavailableResponse(err, { date }));
     }
-    logger.error('Error fetching heart rate data', {
+    logger.error({
       userId: req.user.id,
       date: req.params.date,
       error: err.message
-    });
+    }, 'Error fetching heart rate data');
     res.status(500).json({ error: 'Failed to fetch heart rate data' });
   }
 });
@@ -196,14 +196,14 @@ router.get('/stress/:date', authenticateToken, checkInfluxEnabled, async (req, r
     res.json({ date, stress: data });
   } catch (err) {
     if (err instanceof InfluxUnavailableError) {
-      logger.warn('Influx unavailable for stress data', { userId: req.user.id, date: req.params.date, message: err.message });
+      logger.warn({ userId: req.user.id, date: req.params.date, message: err.message }, 'Influx unavailable for stress data');
       return res.json(influxUnavailableResponse(err, { date }));
     }
-    logger.error('Error fetching stress data', {
+    logger.error({
       userId: req.user.id,
       date: req.params.date,
       error: err.message
-    });
+    }, 'Error fetching stress data');
     res.status(500).json({ error: 'Failed to fetch stress data' });
   }
 });
@@ -224,14 +224,14 @@ router.get('/body-battery/:date', authenticateToken, checkInfluxEnabled, async (
     res.json({ date, bodyBattery: data });
   } catch (err) {
     if (err instanceof InfluxUnavailableError) {
-      logger.warn('Influx unavailable for body battery data', { userId: req.user.id, date: req.params.date, message: err.message });
+      logger.warn({ userId: req.user.id, date: req.params.date, message: err.message }, 'Influx unavailable for body battery data');
       return res.json(influxUnavailableResponse(err, { date }));
     }
-    logger.error('Error fetching body battery data', {
+    logger.error({
       userId: req.user.id,
       date: req.params.date,
       error: err.message
-    });
+    }, 'Error fetching body battery data');
     res.status(500).json({ error: 'Failed to fetch body battery data' });
   }
 });
@@ -252,14 +252,14 @@ router.get('/recovery-context/:date', authenticateToken, checkInfluxEnabled, asy
     res.json(data);
   } catch (err) {
     if (err instanceof InfluxUnavailableError) {
-      logger.warn('Influx unavailable for recovery context', { userId: req.user.id, date: req.params.date, message: err.message });
+      logger.warn({ userId: req.user.id, date: req.params.date, message: err.message }, 'Influx unavailable for recovery context');
       return res.json(influxUnavailableResponse(err, { date }));
     }
-    logger.error('Error generating recovery context', {
+    logger.error({
       userId: req.user.id,
       date: req.params.date,
       error: err.message
-    });
+    }, 'Error generating recovery context');
     res.status(500).json({ error: 'Failed to generate recovery context' });
   }
 });
@@ -280,14 +280,14 @@ router.get('/recovery-recommendations/:date', authenticateToken, checkInfluxEnab
     res.json(data);
   } catch (err) {
     if (err instanceof InfluxUnavailableError) {
-      logger.warn('Influx unavailable for recovery recommendations', { userId: req.user.id, date: req.params.date, message: err.message });
+      logger.warn({ userId: req.user.id, date: req.params.date, message: err.message }, 'Influx unavailable for recovery recommendations');
       return res.json(influxUnavailableResponse(err, { date }));
     }
-    logger.error('Error getting recovery recommendations', {
+    logger.error({
       userId: req.user.id,
       date: req.params.date,
       error: err.message
-    });
+    }, 'Error getting recovery recommendations');
     res.status(500).json({ error: 'Failed to get recovery recommendations' });
   }
 });

@@ -20,7 +20,7 @@ router.get('/', async (req, res) => {
     let logs;
 
     if (date) {
-      logger.info('Querying logs for date', { userId, date, meal_type });
+      logger.info({ userId, date, meal_type }, 'Querying logs for date');
       if (meal_type) {
         // Get logs for specific meal type on specific date
         logs = await FoodLog.getLogsByMealType(userId, meal_type, date);
@@ -28,18 +28,18 @@ router.get('/', async (req, res) => {
         // Get all logs for specific date
         logs = await FoodLog.getLogsForDate(userId, date);
       }
-      logger.info('Logs query result', { count: logs.length, date });
+      logger.info({ count: logs.length, date }, 'Logs query result');
     } else {
       // Get recent logs (last 10)
       logs = await FoodLog.getRecentLogs(userId, 10);
     }
 
-    logger.info('Food logs retrieved', {
+    logger.info({
       userId,
       count: logs.length,
       date: date || 'recent',
       mealType: meal_type || 'all'
-    });
+    }, 'Food logs retrieved');
 
     res.json({
       success: true,
@@ -47,7 +47,7 @@ router.get('/', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Error getting food logs:', error);
+    logger.error({ err: error }, 'Error getting food logs:');
     res.status(500).json({
       success: false,
       error: {
@@ -89,11 +89,11 @@ router.get('/household', async (req, res) => {
       shares_meals: m.household?.share_meals || false
     }));
 
-    logger.info('Household members retrieved', {
+    logger.info({
       userId,
       householdId: userSettings.household.household_id,
       memberCount: members.length
-    });
+    }, 'Household members retrieved');
 
     res.json({
       success: true,
@@ -104,7 +104,7 @@ router.get('/household', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Error getting household members:', error);
+    logger.error({ err: error }, 'Error getting household members:');
     res.status(500).json({
       success: false,
       error: {
@@ -161,12 +161,12 @@ router.get('/household/:memberId/:date', async (req, res) => {
     // Get the member's logs for the date
     const logs = await FoodLog.getLogsForDate(memberId, date);
 
-    logger.info('Household member logs retrieved', {
+    logger.info({
       userId,
       memberId,
       date,
       count: logs.length
-    });
+    }, 'Household member logs retrieved');
 
     res.json({
       success: true,
@@ -177,7 +177,7 @@ router.get('/household/:memberId/:date', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Error getting household member logs:', error);
+    logger.error({ err: error }, 'Error getting household member logs:');
     res.status(500).json({
       success: false,
       error: {
@@ -215,7 +215,7 @@ router.get('/:id', async (req, res) => {
       });
     }
 
-    logger.info('Food log retrieved', { userId, logId: id });
+    logger.info({ userId, logId: id }, 'Food log retrieved');
 
     res.json({
       success: true,
@@ -223,7 +223,7 @@ router.get('/:id', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Error getting food log:', error);
+    logger.error({ err: error }, 'Error getting food log:');
     res.status(500).json({
       success: false,
       error: {
@@ -242,11 +242,11 @@ router.get('/date/:date', async (req, res) => {
 
     const logs = await FoodLog.getLogsForDate(userId, date);
 
-    logger.info('Food logs retrieved for date', {
+    logger.info({
       userId,
       date,
       count: logs.length
-    });
+    }, 'Food logs retrieved for date');
 
     res.json({
       success: true,
@@ -254,7 +254,7 @@ router.get('/date/:date', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Error getting food logs for date:', error);
+    logger.error({ err: error }, 'Error getting food logs for date:');
     res.status(500).json({
       success: false,
       error: {
@@ -465,14 +465,14 @@ router.post('/copy', async (req, res) => {
       _id: { $in: newLogs.map(l => l._id) }
     }).populate('food_item_id');
 
-    logger.info('Meal copied', {
+    logger.info({
       userId,
       fromDate: from_date,
       fromMeal: from_meal_type || 'all',
       toDate: to_date,
       toMeal: to_meal_type || 'same',
       count: newLogs.length
-    });
+    }, 'Meal copied');
 
     res.status(201).json({
       success: true,
@@ -481,7 +481,7 @@ router.post('/copy', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Error copying meal:', error);
+    logger.error({ err: error }, 'Error copying meal:');
     res.status(500).json({
       success: false,
       error: {

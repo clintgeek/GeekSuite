@@ -123,7 +123,7 @@ class AIGeekClient {
     if (!this.isConfigured()) {
       // Not an error the user should see as an error: the app simply has no
       // AI credential, which is a deployment state, not a fault of theirs.
-      logger.warn('aiGeek feature skipped — AI_GEEK_API_KEY is not configured', { feature: name });
+      logger.warn({ feature: name }, 'aiGeek feature skipped — AI_GEEK_API_KEY is not configured');
       return softFailure('unavailable');
     }
 
@@ -170,18 +170,18 @@ class AIGeekClient {
       const provenance = envelope.provenance || noProvenance(envelope.reason || 'unavailable');
 
       if (envelope.ok) {
-        logger.info('aiGeek feature answered', {
+        logger.info({
           feature: name,
           provider: provenance.provider,
           model: provenance.model,
           cached: provenance.cached,
           callsToday: provenance.callsToday
-        });
+        }, 'aiGeek feature answered');
         return { ok: true, data: envelope.data, reason: null, provenance };
       }
 
       const reason = envelope.reason || 'unavailable';
-      logger.warn('aiGeek feature declined', { feature: name, reason, hints: provenance.hints });
+      logger.warn({ feature: name, reason, hints: provenance.hints }, 'aiGeek feature declined');
       return { ok: false, data: null, reason, message: UNAVAILABLE_MESSAGE, provenance };
 
     } catch (error) {
@@ -195,12 +195,12 @@ class AIGeekClient {
         ? 'timeout'
         : 'unavailable';
 
-      logger.error('aiGeek feature call failed', {
+      logger.error({
         feature: name,
         status,
         code,
         reason
-      });
+      }, 'aiGeek feature call failed');
 
       return softFailure(reason, { errorCode: code, status });
     }
@@ -224,7 +224,7 @@ class AIGeekClient {
       });
       return Array.isArray(response.data) ? response.data : [];
     } catch (error) {
-      logger.warn('aiGeek alive-model list unavailable', { status: error.response?.status ?? null });
+      logger.warn({ status: error.response?.status ?? null }, 'aiGeek alive-model list unavailable');
       return [];
     }
   }

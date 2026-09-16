@@ -13,7 +13,7 @@ export const getOverview = async (req, res) => {
     const data = await foodReportService.getOverview(req.user.id, parseOptions(req.query));
     res.json({ success: true, data });
   } catch (error) {
-    logger.error('Failed to build food overview report', { userId: req.user.id, error: error.message });
+    logger.error({ userId: req.user.id, error: error.message }, 'Failed to build food overview report');
     res.status(500).json({ success: false, error: 'Unable to build food overview report' });
   }
 };
@@ -23,7 +23,7 @@ export const getTrends = async (req, res) => {
     const data = await foodReportService.getTrends(req.user.id, parseOptions(req.query));
     res.json({ success: true, data });
   } catch (error) {
-    logger.error('Failed to build food trends report', { userId: req.user.id, error: error.message });
+    logger.error({ userId: req.user.id, error: error.message }, 'Failed to build food trends report');
     res.status(500).json({ success: false, error: 'Unable to build food trends report' });
   }
 };
@@ -44,7 +44,7 @@ export const exportReport = async (req, res) => {
     res.setHeader('Content-Disposition', 'attachment; filename="food-report.csv"');
     res.send(csv);
   } catch (error) {
-    logger.error('Failed to export food report', { userId: req.user.id, error: error.message });
+    logger.error({ userId: req.user.id, error: error.message }, 'Failed to export food report');
     res.status(500).json({ success: false, error: 'Unable to export food report' });
   }
 };

@@ -222,13 +222,13 @@ class FoodApiService {
     const nutriments = product.nutriments || {};
 
     // Log the product to see what serving data is available
-    logger.debug('OpenFoodFacts product serving data:', {
+    logger.debug({
       serving_size: product.serving_size,
       quantity: product.quantity,
       serving_unit: product.serving_unit,
       unit: product.unit,
       nutriments: nutriments
-    });
+    }, 'OpenFoodFacts product serving data:');
 
     // Parse serving size from various formats
     const parseServingSize = (size) => {

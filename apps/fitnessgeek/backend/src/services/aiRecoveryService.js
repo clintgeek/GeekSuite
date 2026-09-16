@@ -92,7 +92,7 @@ async function generateRecoveryContext(userId, date) {
     };
 
   } catch (err) {
-    logger.error('Error generating recovery context', { userId, date, error: err.message });
+    logger.error({ userId, date, error: err.message }, 'Error generating recovery context');
     throw err;
   }
 }
@@ -262,7 +262,7 @@ async function getRecoveryRecommendations(userId, date) {
     };
 
   } catch (err) {
-    logger.error('Error getting recovery recommendations', { userId, date, error: err.message });
+    logger.error({ userId, date, error: err.message }, 'Error getting recovery recommendations');
     throw err;
   }
 }

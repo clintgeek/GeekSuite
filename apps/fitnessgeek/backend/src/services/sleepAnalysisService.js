@@ -600,7 +600,7 @@ async function analyzeSleep(dateStr, userBaselines = {}) {
     };
 
   } catch (err) {
-    logger.error('Sleep analysis error', { date: dateStr, error: err.message });
+    logger.error({ date: dateStr, error: err.message }, 'Sleep analysis error');
     throw err;
   }
 }

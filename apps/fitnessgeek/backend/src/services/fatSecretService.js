@@ -64,16 +64,16 @@ class FatSecretService {
       // Token typically expires in 24 hours, but we'll respect the actual expiry
       this.tokenExpiry = Date.now() + (response.data.expires_in * 1000);
 
-      logger.debug('FatSecret access token obtained', {
+      logger.debug({
         expiresIn: response.data.expires_in,
-      });
+      }, 'FatSecret access token obtained');
 
       return this.accessToken;
     } catch (error) {
-      logger.error('Failed to get FatSecret access token', {
+      logger.error({
         error: error.message,
         status: error.response && error.response.status,
-      });
+      }, 'Failed to get FatSecret access token');
       throw new Error('FatSecret authentication failed');
     }
   }
@@ -105,12 +105,12 @@ class FatSecretService {
 
       return response.data;
     } catch (error) {
-      logger.error('FatSecret API request failed', {
+      logger.error({
         method,
         error: error.message,
         status: error.response && error.response.status,
         data: error.response && error.response.data,
-      });
+      }, 'FatSecret API request failed');
       throw error;
     }
   }
@@ -147,18 +147,18 @@ class FatSecretService {
         // FatSecret returns single object if only one result, array if multiple
         const foods = Array.isArray(data.foods.food) ? data.foods.food : [data.foods.food];
 
-        logger.debug('FatSecret search results', {
+        logger.debug({
           query,
           count: foods.length,
-        });
+        }, 'FatSecret search results');
 
         return foods.map(food => this.transformToStandardFormat(food));
       }, 7 * 24 * 3600); // 7 day cache
     } catch (error) {
-      logger.error('FatSecret search failed', {
+      logger.error({
         query,
         error: error.message,
-      });
+      }, 'FatSecret search failed');
       return [];
     }
   }
@@ -188,10 +188,10 @@ class FatSecretService {
         return this.transformDetailedFood(data.food);
       }, 30 * 24 * 3600); // 30 day cache for individual foods
     } catch (error) {
-      logger.error('FatSecret get food failed', {
+      logger.error({
         foodId,
         error: error.message,
-      });
+      }, 'FatSecret get food failed');
       return null;
     }
   }

@@ -186,7 +186,7 @@ router.put('/:id', authenticateToken, validate({ body: updateMedicationSchema })
     const medId = req.params.id;
     const body = req.body || {};
 
-    logger.debug('[PUT /meds/:id] Request:', { medId, userId, body });
+    logger.debug({ medId, userId, body }, '[PUT /meds/:id] Request:');
 
     const med = await Medication.findOne({ _id: medId, user_id: userId });
     if (!med) {

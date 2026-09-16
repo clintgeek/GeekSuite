@@ -36,15 +36,15 @@ class CacheService {
       const value = await client.get(key);
       
       if (!value) {
-        logger.debug('Cache miss', { key });
+        logger.debug({ key }, 'Cache miss');
         return null;
       }
 
-      logger.debug('Cache hit', { key });
+      logger.debug({ key }, 'Cache hit');
       return JSON.parse(value);
 
     } catch (error) {
-      logger.error('Cache get error', { key, error: error.message });
+      logger.error({ key, error: error.message }, 'Cache get error');
       return null;
     }
   }
@@ -66,12 +66,12 @@ class CacheService {
       const serialized = JSON.stringify(value);
       
       await client.setEx(key, ttlSeconds, serialized);
-      logger.debug('Cache set', { key, ttl: ttlSeconds });
+      logger.debug({ key, ttl: ttlSeconds }, 'Cache set');
       
       return true;
 
     } catch (error) {
-      logger.error('Cache set error', { key, error: error.message });
+      logger.error({ key, error: error.message }, 'Cache set error');
       return false;
     }
   }
@@ -87,12 +87,12 @@ class CacheService {
 
       const client = redisClient.getClient();
       await client.del(key);
-      logger.debug('Cache deleted', { key });
+      logger.debug({ key }, 'Cache deleted');
       
       return true;
 
     } catch (error) {
-      logger.error('Cache delete error', { key, error: error.message });
+      logger.error({ key, error: error.message }, 'Cache delete error');
       return false;
     }
   }
@@ -112,13 +112,13 @@ class CacheService {
       
       if (keys.length > 0) {
         await client.del(keys);
-        logger.debug('Cache pattern deleted', { pattern, count: keys.length });
+        logger.debug({ pattern, count: keys.length }, 'Cache pattern deleted');
       }
       
       return true;
 
     } catch (error) {
-      logger.error('Cache pattern delete error', { pattern, error: error.message });
+      logger.error({ pattern, error: error.message }, 'Cache pattern delete error');
       return false;
     }
   }
@@ -149,7 +149,7 @@ class CacheService {
       return data;
 
     } catch (error) {
-      logger.error('Cache wrap error', { key, error: error.message });
+      logger.error({ key, error: error.message }, 'Cache wrap error');
       // On error, try to fetch directly without caching
       return await fetchFn();
     }
@@ -164,7 +164,7 @@ class CacheService {
    */
   async invalidateUser(userId) {
     await this.deletePattern(`${this.prefix}*:user:${userId}:*`);
-    logger.info('User cache invalidated', { userId });
+    logger.info({ userId }, 'User cache invalidated');
   }
 
   /**
@@ -172,7 +172,7 @@ class CacheService {
    */
   async invalidateUserAI(userId) {
     await this.deletePattern(`${this.prefix}ai:user:${userId}:*`);
-    logger.info('User AI cache invalidated', { userId });
+    logger.info({ userId }, 'User AI cache invalidated');
   }
 
   /**
@@ -180,7 +180,7 @@ class CacheService {
    */
   async invalidateUserReports(userId) {
     await this.deletePattern(`${this.prefix}reports:user:${userId}:*`);
-    logger.info('User reports cache invalidated', { userId });
+    logger.info({ userId }, 'User reports cache invalidated');
   }
 }
 

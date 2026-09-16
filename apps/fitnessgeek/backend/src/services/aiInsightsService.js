@@ -102,7 +102,7 @@ class AIInsightsService {
       return context;
 
     } catch (error) {
-      logger.error('Error building user context', { userId, error: error.message });
+      logger.error({ userId, error: error.message }, 'Error building user context');
       throw error;
     }
   }
@@ -351,7 +351,7 @@ class AIInsightsService {
         latest: sleepData[0] || null
       };
     } catch (error) {
-      logger.error('Error fetching Garmin context', { error: error.message });
+      logger.error({ error: error.message }, 'Error fetching Garmin context');
       return null;
     }
   }
@@ -397,10 +397,10 @@ class AIInsightsService {
 
   /** The one shape a generator answers with when no model could serve it. */
   unavailable(type, result) {
-    logger.info('AI insight unavailable — answering with the friendly message', {
+    logger.info({
       type,
       reason: result.reason
-    });
+    }, 'AI insight unavailable — answering with the friendly message');
     return {
       ok: false,
       type,

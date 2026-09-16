@@ -47,7 +47,7 @@ var AIClassificationCacheService = {
       });
 
       if (!doc) {
-        logger.debug('Classification cache miss', { userId: userId, hash: hash.substring(0, 8) });
+        logger.debug({ userId: userId, hash: hash.substring(0, 8) }, 'Classification cache miss');
         return null;
       }
 
@@ -60,18 +60,18 @@ var AIClassificationCacheService = {
         }
       );
 
-      logger.debug('Classification cache hit', {
+      logger.debug({
         userId: userId,
         hash: hash.substring(0, 8),
         type: doc.result && doc.result.type
-      });
+      }, 'Classification cache hit');
 
       return doc.result;
     } catch (error) {
-      logger.error('Classification cache lookup failed', {
+      logger.error({
         error: error.message,
         userId: userId
-      });
+      }, 'Classification cache lookup failed');
       return null;
     }
   },
@@ -111,16 +111,16 @@ var AIClassificationCacheService = {
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
 
-      logger.debug('Classification cached', {
+      logger.debug({
         userId: userId,
         hash: hash.substring(0, 8),
         type: classification.type
-      });
+      }, 'Classification cached');
     } catch (error) {
-      logger.error('Classification cache write failed', {
+      logger.error({
         error: error.message,
         userId: userId
-      });
+      }, 'Classification cache write failed');
       // Don't throw - caching failure shouldn't break the flow
     }
   },

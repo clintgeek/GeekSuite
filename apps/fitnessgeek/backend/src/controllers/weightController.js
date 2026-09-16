@@ -43,7 +43,7 @@ const getWeightLogs = async (req, res) => {
       offset: parseInt(offset)
     });
   } catch (error) {
-    logger.error('Error getting weight logs:', error);
+    logger.error({ err: error }, 'Error getting weight logs:');
     res.status(500).json({
       success: false,
       message: 'Failed to retrieve weight logs',
@@ -74,7 +74,7 @@ const getWeightLog = async (req, res) => {
       data: weightLog
     });
   } catch (error) {
-    logger.error('Error getting weight log:', error);
+    logger.error({ err: error }, 'Error getting weight log:');
     res.status(500).json({
       success: false,
       message: 'Failed to retrieve weight log',
@@ -156,7 +156,7 @@ const createWeightLog = async (req, res) => {
       data: weightLog
     });
   } catch (error) {
-    logger.error('Error creating weight log:', error);
+    logger.error({ err: error }, 'Error creating weight log:');
     res.status(500).json({
       success: false,
       message: 'Failed to create weight log',
@@ -220,7 +220,7 @@ const updateWeightLog = async (req, res) => {
       data: weightLog
     });
   } catch (error) {
-    logger.error('Error updating weight log:', error);
+    logger.error({ err: error }, 'Error updating weight log:');
     res.status(500).json({
       success: false,
       message: 'Failed to update weight log',
@@ -257,7 +257,7 @@ const deleteWeightLog = async (req, res) => {
       message: 'Weight log deleted successfully'
     });
   } catch (error) {
-    logger.error('Error deleting weight log:', error);
+    logger.error({ err: error }, 'Error deleting weight log:');
     res.status(500).json({
       success: false,
       message: 'Failed to delete weight log',
@@ -358,7 +358,7 @@ const getWeightStats = async (req, res) => {
       }
     });
   } catch (error) {
-    logger.error('Error getting weight stats:', error);
+    logger.error({ err: error }, 'Error getting weight stats:');
     res.status(500).json({
       success: false,
       message: 'Failed to retrieve weight statistics',

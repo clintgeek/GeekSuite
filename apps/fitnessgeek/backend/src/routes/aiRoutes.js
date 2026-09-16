@@ -47,9 +47,9 @@ async function modelAllowedFor(userId) {
     .select('ai')
     .lean()
     .catch((error) => {
-      logger.warn('AI opt-in check could not read settings — treating as opted out', {
+      logger.warn({
         error: error.message
-      });
+      }, 'AI opt-in check could not read settings — treating as opted out');
       return null;
     });
 
@@ -65,7 +65,7 @@ router.get('/status', async (req, res) => {
       data: aiGeekClient.getStatus()
     });
   } catch (error) {
-    logger.error('Failed to get AI status', { error: error.message });
+    logger.error({ error: error.message }, 'Failed to get AI status');
     res.status(500).json({
       success: false,
       error: {
@@ -95,10 +95,10 @@ router.post('/parse-food', async (req, res) => {
     // Attempt cache lookup first for deterministic results
     const cached = await aiFoodPromptCacheService.getCachedResult(userId, description, userContext);
     if (cached?.result) {
-      logger.info('AI food parsing cache hit', {
+      logger.info({
         userId,
         cacheId: cached._id?.toString?.(),
-      });
+      }, 'AI food parsing cache hit');
 
       return res.json({
         success: true,
@@ -118,7 +118,7 @@ router.post('/parse-food', async (req, res) => {
     // The opt-in gate. Opted out is an answer, not an error.
     if (!(await modelAllowedFor(userId))) {
       const data = aiFoodService.deterministicParse(description);
-      logger.info('AI food parsing declined by user settings — answered with the split', { userId });
+      logger.info({ userId }, 'AI food parsing declined by user settings — answered with the split');
       return res.json({
         success: true,
         data,
@@ -135,13 +135,13 @@ router.post('/parse-food', async (req, res) => {
       aiFoodPromptCacheService.saveResult(userId, description, userContext, null, result.data);
     }
 
-    logger.info('AI food parsing completed', {
+    logger.info({
       userId,
       ok: result.ok,
       source: result.source,
       reason: result.reason,
       parsedItems: result.data?.food_items?.length || 0
-    });
+    }, 'AI food parsing completed');
 
     res.json({
       success: true,
@@ -157,10 +157,10 @@ router.post('/parse-food', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('AI food parsing failed', {
+    logger.error({
       userId: req.user.id,
       error: error.message
-    });
+    }, 'AI food parsing failed');
 
     res.status(500).json({
       success: false,
@@ -190,12 +190,12 @@ router.post('/create-nutrition-goals', async (req, res) => {
 
     const result = await fitnessGoalService.createNutritionGoals(userInput, userProfile, userId);
 
-    logger.info('AI nutrition goal creation completed', {
+    logger.info({
       userId,
       ok: result.ok,
       source: result.source,
       reason: result.reason
-    });
+    }, 'AI nutrition goal creation completed');
 
     // A computed plan is a real answer even though no model served it, so it
     // rides the success envelope with `meta.source` telling the truth. Only a
@@ -213,10 +213,10 @@ router.post('/create-nutrition-goals', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('AI nutrition goal creation failed', {
+    logger.error({
       userId: req.user.id,
       error: error.message
-    });
+    }, 'AI nutrition goal creation failed');
 
     res.status(500).json({
       success: false,
@@ -246,12 +246,12 @@ router.post('/generate-meal-plan', async (req, res) => {
 
     const result = await fitnessGoalService.generateMealPlan(goal, userProfile, userId);
 
-    logger.info('AI meal plan generation completed', {
+    logger.info({
       userId,
       ok: result.ok,
       reason: result.reason,
       weeklyPlans: result.data?.weekly_meal_plans?.length || 0
-    });
+    }, 'AI meal plan generation completed');
 
     // No deterministic two-week menu exists, so an unavailable model is a
     // 200 with a sentence the UI renders in place — never a 500 and never an
@@ -271,10 +271,10 @@ router.post('/generate-meal-plan', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('AI meal plan generation failed', {
+    logger.error({
       userId: req.user.id,
       error: error.message
-    });
+    }, 'AI meal plan generation failed');
 
     res.status(500).json({
       success: false,

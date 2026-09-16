@@ -35,12 +35,12 @@ router.get('/profile', async (req, res) => {
       });
     }
 
-    logger.info('User profile retrieved', {
+    logger.info({
       userId,
       hasAge: !!user.profile?.age,
       hasHeight: !!user.profile?.height,
       hasGender: !!user.profile?.gender
-    });
+    }, 'User profile retrieved');
 
     return res.json({
       success: true,
@@ -54,10 +54,10 @@ router.get('/profile', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Failed to get user profile', {
+    logger.error({
       userId: req.user.id,
       error: error.message
-    });
+    }, 'Failed to get user profile');
 
     if (!error.response) {
       return res.status(502).json({
@@ -149,10 +149,10 @@ router.put('/profile', async (req, res) => {
       });
     }
 
-    logger.info('User profile updated', {
+    logger.info({
       userId,
       updatedFields: Object.keys(updates)
-    });
+    }, 'User profile updated');
 
     return res.json({
       success: true,
@@ -168,10 +168,10 @@ router.put('/profile', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Failed to update user profile', {
+    logger.error({
       userId: req.user.id,
       error: error.message
-    });
+    }, 'Failed to update user profile');
 
     if (!error.response) {
       return res.status(502).json({
@@ -209,7 +209,7 @@ router.get('/settings', async (req, res) => {
       await settings.save();
     }
 
-    logger.info('User settings retrieved', { userId });
+    logger.info({ userId }, 'User settings retrieved');
 
     res.json({
       influxEnabled: settings.influxEnabled || false,
@@ -221,10 +221,10 @@ router.get('/settings', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Failed to get user settings', {
+    logger.error({
       userId: req.user.id,
       error: error.message
-    });
+    }, 'Failed to get user settings');
 
     res.status(500).json({
       error: 'Failed to get user settings',
@@ -251,7 +251,7 @@ router.patch('/settings', async (req, res) => {
     // Update fields if provided
     if (influxEnabled !== undefined) {
       settings.influxEnabled = influxEnabled;
-      logger.info('InfluxDB integration toggled', { userId, influxEnabled });
+      logger.info({ userId, influxEnabled }, 'InfluxDB integration toggled');
     }
 
     if (healthBaselines !== undefined && healthBaselines !== null) {
@@ -263,7 +263,7 @@ router.patch('/settings', async (req, res) => {
         restingHR: healthBaselines.restingHR,
         lastUpdated: healthBaselines.lastUpdated || new Date()
       };
-      logger.info('Health baselines updated', { userId });
+      logger.info({ userId }, 'Health baselines updated');
     }
 
     await settings.save();
@@ -274,10 +274,10 @@ router.patch('/settings', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Failed to update user settings', {
+    logger.error({
       userId: req.user.id,
       error: error.message
-    });
+    }, 'Failed to update user settings');
 
     res.status(500).json({
       error: 'Failed to update user settings',

@@ -63,22 +63,22 @@ class CalorieNinjasService {
 
           return response.data.items.map(item => this.transformToStandardFormat(item));
         } catch (error) {
-          logger.warn('CalorieNinjas search failed', {
+          logger.warn({
             query,
             error: error.message,
             status: error.response?.status,
             data: error.response?.data
-          });
+          }, 'CalorieNinjas search failed');
           return [];
         }
       }, 7 * 24 * 3600); // 7 day cache
 
     } catch (error) {
-      logger.warn('CalorieNinjas search failed', {
+      logger.warn({
         query,
         error: error.message,
         status: error.response?.status
-      });
+      }, 'CalorieNinjas search failed');
       return [];
     }
   }

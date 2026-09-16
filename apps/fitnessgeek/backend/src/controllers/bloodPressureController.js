@@ -40,7 +40,7 @@ const getBPLogs = async (req, res) => {
       offset: parseInt(offset)
     });
   } catch (error) {
-    logger.error('Error getting blood pressure logs:', error);
+    logger.error({ err: error }, 'Error getting blood pressure logs:');
     res.status(500).json({
       success: false,
       message: 'Failed to retrieve blood pressure logs',
@@ -71,7 +71,7 @@ const getBPLog = async (req, res) => {
       data: bpLog
     });
   } catch (error) {
-    logger.error('Error getting blood pressure log:', error);
+    logger.error({ err: error }, 'Error getting blood pressure log:');
     res.status(500).json({
       success: false,
       message: 'Failed to retrieve blood pressure log',
@@ -146,7 +146,7 @@ const createBPLog = async (req, res) => {
       data: bpLog
     });
   } catch (error) {
-    logger.error('Error creating blood pressure log:', error);
+    logger.error({ err: error }, 'Error creating blood pressure log:');
     res.status(500).json({
       success: false,
       message: 'Failed to create blood pressure log',
@@ -208,7 +208,7 @@ const updateBPLog = async (req, res) => {
       data: bpLog
     });
   } catch (error) {
-    logger.error('Error updating blood pressure log:', error);
+    logger.error({ err: error }, 'Error updating blood pressure log:');
     res.status(500).json({
       success: false,
       message: 'Failed to update blood pressure log',
@@ -241,7 +241,7 @@ const deleteBPLog = async (req, res) => {
       message: 'Blood pressure log deleted successfully'
     });
   } catch (error) {
-    logger.error('Error deleting blood pressure log:', error);
+    logger.error({ err: error }, 'Error deleting blood pressure log:');
     res.status(500).json({
       success: false,
       message: 'Failed to delete blood pressure log',
@@ -320,7 +320,7 @@ const getBPStats = async (req, res) => {
       }
     });
   } catch (error) {
-    logger.error('Error getting blood pressure stats:', error);
+    logger.error({ err: error }, 'Error getting blood pressure stats:');
     res.status(500).json({
       success: false,
       message: 'Failed to retrieve blood pressure statistics',

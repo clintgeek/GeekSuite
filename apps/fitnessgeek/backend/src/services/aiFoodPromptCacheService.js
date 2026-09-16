@@ -45,7 +45,7 @@ class AIFoodPromptCacheService {
       });
 
       if (!doc) {
-        logger.debug('AI prompt cache miss', { userId, promptHash });
+        logger.debug({ userId, promptHash }, 'AI prompt cache miss');
         return null;
       }
 
@@ -57,13 +57,13 @@ class AIFoodPromptCacheService {
         }
       );
 
-      logger.debug('AI prompt cache hit', { userId, promptHash });
+      logger.debug({ userId, promptHash }, 'AI prompt cache hit');
       return {
         ...doc.toObject(),
         normalizedPrompt,
       };
     } catch (error) {
-      logger.error('AI prompt cache lookup failed', { error: error.message, userId });
+      logger.error({ error: error.message, userId }, 'AI prompt cache lookup failed');
       return null;
     }
   }
@@ -95,9 +95,9 @@ class AIFoodPromptCacheService {
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
 
-      logger.debug('AI prompt cache stored', { userId, promptHash });
+      logger.debug({ userId, promptHash }, 'AI prompt cache stored');
     } catch (error) {
-      logger.error('AI prompt cache write failed', { error: error.message, userId });
+      logger.error({ error: error.message, userId }, 'AI prompt cache write failed');
     }
   }
 }

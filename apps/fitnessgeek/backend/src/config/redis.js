@@ -35,7 +35,7 @@ class RedisClient {
       });
 
       this.client.on('error', (err) => {
-        logger.error('Redis Client Error', { error: err.message });
+        logger.error({ error: err.message }, 'Redis Client Error');
       });
 
       this.client.on('connect', () => {
@@ -60,7 +60,7 @@ class RedisClient {
       return this.client;
 
     } catch (error) {
-      logger.error('Failed to connect to Redis', { error: error.message });
+      logger.error({ error: error.message }, 'Failed to connect to Redis');
       this.isConnected = false;
       // Don't throw - allow app to continue without cache
       return null;

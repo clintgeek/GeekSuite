@@ -24,12 +24,12 @@ router.get('/', async (req, res) => {
       meals = await Meal.getActiveMeals(userId);
     }
 
-    logger.info('Meals retrieved', {
+    logger.info({
       userId,
       count: meals.length,
       mealType: meal_type || 'all',
       search: search || 'none'
-    });
+    }, 'Meals retrieved');
 
     res.json({
       success: true,
@@ -37,7 +37,7 @@ router.get('/', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Error getting meals:', error);
+    logger.error({ err: error }, 'Error getting meals:');
     res.status(500).json({
       success: false,
       error: {
@@ -68,7 +68,7 @@ router.get('/:id', async (req, res) => {
       });
     }
 
-    logger.info('Meal retrieved', { userId, mealId: id });
+    logger.info({ userId, mealId: id }, 'Meal retrieved');
 
     res.json({
       success: true,
@@ -76,7 +76,7 @@ router.get('/:id', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Error getting meal:', error);
+    logger.error({ err: error }, 'Error getting meal:');
     res.status(500).json({
       success: false,
       error: {
@@ -143,13 +143,13 @@ router.post('/', async (req, res) => {
     const populatedMeal = await Meal.findById(savedMeal._id)
       .populate('food_items.food_item_id');
 
-    logger.info('Meal created', {
+    logger.info({
       userId,
       mealId: savedMeal._id,
       name: name,
       mealType: meal_type,
       itemCount: food_items.length
-    });
+    }, 'Meal created');
 
     res.status(201).json({
       success: true,
@@ -158,7 +158,7 @@ router.post('/', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Error creating meal:', error);
+    logger.error({ err: error }, 'Error creating meal:');
     res.status(500).json({
       success: false,
       error: {
@@ -244,11 +244,11 @@ router.put('/:id', async (req, res) => {
     const populatedMeal = await Meal.findById(updatedMeal._id)
       .populate('food_items.food_item_id');
 
-    logger.info('Meal updated', {
+    logger.info({
       userId,
       mealId: id,
       updatedFields: Object.keys(req.body)
-    });
+    }, 'Meal updated');
 
     res.json({
       success: true,
@@ -257,7 +257,7 @@ router.put('/:id', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Error updating meal:', error);
+    logger.error({ err: error }, 'Error updating meal:');
     res.status(500).json({
       success: false,
       error: {
@@ -294,11 +294,11 @@ router.delete('/:id', async (req, res) => {
     meal.is_deleted = true;
     await meal.save();
 
-    logger.info('Meal deleted', {
+    logger.info({
       userId,
       mealId: id,
       mealName: meal.name
-    });
+    }, 'Meal deleted');
 
     res.json({
       success: true,
@@ -306,7 +306,7 @@ router.delete('/:id', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Error deleting meal:', error);
+    logger.error({ err: error }, 'Error deleting meal:');
     res.status(500).json({
       success: false,
       error: {
