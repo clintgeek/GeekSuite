@@ -7,7 +7,7 @@
  *
  *   request  { feature, messages?, system?, user?, schema?, timeoutMs?,
  *              conversationId?, maxTokens?, temperature?, maxCallsPerDay?,
- *              provider?, model? }
+ *              provider?, model?, need? }
  *   response 200 { ok: true,  data, provenance }
  *            200 { ok: false, reason, provenance }
  *            4xx/5xx { success: false, error: { message, type, code } }
@@ -110,6 +110,16 @@ describe('the request it builds', () => {
     expect(body.schema).toBe(schema);
     expect(body.conversationId).toBe('42');
     expect(body.maxCallsPerDay).toBe(25);
+  });
+
+  test('a need is forwarded, so aiGeek can pick a model that measurably meets it', async () => {
+    await aiGeekClient.feature('dishEstimate', { user: 'x', need: 'structured:fast' });
+    expect(post.mock.calls[0][1]).toMatchObject({ need: 'structured:fast' });
+  });
+
+  test('sends no need when the caller did not ask for one', async () => {
+    await aiGeekClient.feature('gm', { user: 'x' });
+    expect(post.mock.calls[0][1].need).toBeUndefined();
   });
 
   test('a provider+model pair is forwarded as a pin; half a pair is not', async () => {

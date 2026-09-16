@@ -122,6 +122,16 @@ const DISH_ESTIMATE_MODEL = process.env.DISH_ESTIMATE_MODEL || '';
  * model, which is exactly wrong inline (4.7-20s) and exactly right here —
  * "is 200g of carbs reasonable for two slices of pizza?" IS a reasoning
  * question.
+ *
+ * **Deliberately still a pin, not a `need`** (2026-09-15). The estimator now
+ * sends `need: 'structured:fast'`, and the obvious next step looks like giving
+ * this one `need: 'reasoning:deep'`. It is not, yet: aiGeek has no measurement
+ * that separates a good reasoner from a bad one — that is what the golden set
+ * is for (DOCS/AIGEEK_CAPABILITY_ROUTING.md §3.2) — so `reasoning` does not
+ * filter anything today. This model was chosen by measuring its answers against
+ * three others. Trading a measured choice for a resolver that cannot yet beat
+ * it would be a regression wearing progress's clothes. Revisit when the golden
+ * set lands.
  */
 const DISH_JUDGE_PROVIDER = process.env.DISH_JUDGE_PROVIDER || 'openrouter';
 const DISH_JUDGE_MODEL = process.env.DISH_JUDGE_MODEL || 'openai/gpt-oss-120b';
@@ -336,6 +346,12 @@ class AIFoodService {
 
     const result = await aiGeekClient.feature('dishEstimate', {
       quotaKey: options.userId,
+      // Chef is waiting on this one, so it asks for a row aiGeek has *measured*
+      // as both JSON-capable and quick, rather than taking whatever the
+      // rotation offers. Unpinned by default, so before this it got whatever
+      // came up — which is how a retired slug served this feature for a day.
+      // An env pin still wins; see DISH_ESTIMATE_PROVIDER above.
+      need: 'structured:fast',
       ...(DISH_ESTIMATE_PROVIDER && DISH_ESTIMATE_MODEL
         ? { provider: DISH_ESTIMATE_PROVIDER, model: DISH_ESTIMATE_MODEL }
         : {}),

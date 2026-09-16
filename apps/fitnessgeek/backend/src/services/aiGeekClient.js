@@ -150,6 +150,12 @@ class AIGeekClient {
       body.provider = payload.provider;
       body.model = payload.model;
     }
+    // `need` says what the call requires — 'structured:fast' — and lets aiGeek
+    // choose a model that measurably meets it. This is what a caller sends
+    // INSTEAD of a model id: the pins above are the human override, and aiGeek
+    // honours them over any need. Sending a need costs nothing when aiGeek
+    // cannot meet it; the call falls through to the ordinary rotation.
+    if (payload.need != null) body.need = String(payload.need);
 
     try {
       const response = await this.http.post('/api/ai/feature', body, {
