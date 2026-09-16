@@ -198,8 +198,8 @@ describe('a clean catalog needs nobody', () => {
     // Every roster provider gets a row, keyed or not: panel 3 shows one line
     // per provider and the chip is what says "no key".
     expect(result.catalog.byProvider).toEqual({
-      groq: { alive: 1, cooling: 0, structured: 1 },
-      gemini: { alive: 0, cooling: 0, structured: 0 },
+      groq: { alive: 1, cooling: 0, structured: 1, quality: null },
+      gemini: { alive: 0, cooling: 0, structured: 0, quality: null },
     });
     expect(result.spend).toEqual({
       monthUsd: 0, todayUsd: 0, capPerDayUsd: 0.05, capPerCallUsd: 0.01,
@@ -225,7 +225,7 @@ describe('a clean catalog needs nobody', () => {
     expect(result.catalog.structuredFree).toBe(1);
     // The per-provider chip still counts it — the catalog knows the row is
     // alive; what it lacks is a credential, which is panel 3's business.
-    expect(result.catalog.byProvider.gemini).toEqual({ alive: 1, cooling: 0, structured: 1 });
+    expect(result.catalog.byProvider.gemini).toEqual({ alive: 1, cooling: 0, structured: 1, quality: null });
   });
 
   it('counts a cooling row as cooling and not as alive', async () => {
@@ -236,7 +236,7 @@ describe('a clean catalog needs nobody', () => {
       ]),
     });
 
-    expect(result.catalog.byProvider.groq).toEqual({ alive: 1, cooling: 1, structured: 0 });
+    expect(result.catalog.byProvider.groq).toEqual({ alive: 1, cooling: 1, structured: 0, quality: null });
     expect(result.catalog.aliveFree).toBe(1);
     expect(result.catalog.structuredFree).toBe(0);
   });
@@ -1199,5 +1199,60 @@ describe('provider labels reach the console', () => {
     // in the provider roster all along.
     expect(result.catalog.labels.groq).toBe('Groq');
     expect(result.catalog.labels.gemini).toBe('Google Gemini');
+  });
+});
+
+/**
+ * Quota, as the provider stated it.
+ *
+ * Chef asked on 2026-09-16 whether the limits can be known rather than
+ * discovered by tripping them. For groq and together they can — both send
+ * `x-ratelimit-*` — and the status payload carried none of it, so the console
+ * could not show it. The other seven send nothing, and the payload has to omit
+ * them rather than report zeros: "no quota left" and "never told" look
+ * identical on a dashboard and mean opposite things.
+ */
+describe('catalog.quota reports only what a provider actually said', () => {
+  it('carries the stated ceiling and the freshest remaining reading', async () => {
+    const seenAt = new Date(NOW - 60_000);
+    const result = await buildStatus({
+      now: new Date(NOW),
+      deps: healthyDeps({
+        freeTier: fakeCollection([
+          {
+            provider: 'groq', modelId: 'm-1', isFree: true, fitness: 'structured',
+            freeLimits: { requestsPerMinute: 30, requestsPerDay: 14400 },
+            observed: { remainingRequests: 17, resetAt: new Date(NOW + 60_000), seenAt },
+            health: {},
+          },
+        ]),
+      }),
+    });
+    expect(result.catalog.quota.groq).toMatchObject({ requestsPerMinute: 30, requestsPerDay: 14400, remaining: 17 });
+  });
+
+  it('omits a provider that sends no rate-limit headers', async () => {
+    const result = await buildStatus({
+      now: new Date(NOW),
+      deps: healthyDeps({
+        freeTier: fakeCollection([
+          { provider: 'gemini', modelId: 'm-1', isFree: true, fitness: 'structured', freeLimits: {}, observed: {}, health: {} },
+        ]),
+      }),
+    });
+    expect(result.catalog.quota.gemini).toBeUndefined();
+  });
+
+  it('reports the best golden-set score seen on a provider', async () => {
+    const result = await buildStatus({
+      now: new Date(NOW),
+      deps: healthyDeps({
+        freeTier: fakeCollection([
+          { provider: 'groq', modelId: 'weak', isFree: true, fitness: 'structured', quality: { score: 0.4 }, health: {} },
+          { provider: 'groq', modelId: 'strong', isFree: true, fitness: 'structured', quality: { score: 0.9 }, health: {} },
+        ]),
+      }),
+    });
+    expect(result.catalog.byProvider.groq.quality).toBe(0.9);
   });
 });

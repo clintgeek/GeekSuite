@@ -550,7 +550,18 @@ export async function buildStatus({ now = new Date(), deps = {} } = {}) {
   /* ── catalog ───────────────────────────────────────────────────────────── */
 
   const byProvider = {};
-  for (const id of d.providerIds) byProvider[id] = { alive: 0, cooling: 0, structured: 0 };
+  for (const id of d.providerIds) byProvider[id] = { alive: 0, cooling: 0, structured: 0, quality: null };
+  /**
+   * What each provider has told us about our own quota.
+   *
+   * Nothing here is inferred. `freeLimits` is the ceiling the provider stated
+   * in `x-ratelimit-limit-*`; `remaining`/`resetAt` are its own
+   * `x-ratelimit-remaining-*` from our last call to that row. A provider that
+   * sends no such headers — and as of 2026-09-16 that is seven of the nine —
+   * simply has no entry, which the console says out loud rather than showing a
+   * zero that would read as "none left".
+   */
+  const quota = {};
   /** Per provider, the newest success we can see — `provider_dead`'s `since`. */
   const lastSuccessAt = {};
 
@@ -574,6 +585,32 @@ export async function buildStatus({ now = new Date(), deps = {} } = {}) {
     bucket.alive += 1;
     const structured = row.fitness === 'structured';
     if (structured) bucket.structured += 1;
+
+    // The best quality score seen on this provider, so the console can say
+    // which providers are carrying good models rather than merely live ones.
+    const score = row.quality?.score;
+    if (typeof score === 'number' && (bucket.quality === null || score > bucket.quality)) {
+      bucket.quality = score;
+    }
+
+    // Stated ceilings, and the freshest remaining reading we hold.
+    const stated = row.freeLimits || {};
+    const ceiling = {
+      requestsPerMinute: int(stated.requestsPerMinute) || null,
+      requestsPerDay: int(stated.requestsPerDay) || null,
+    };
+    if (ceiling.requestsPerMinute || ceiling.requestsPerDay) {
+      quota[row.provider] = { ...(quota[row.provider] || {}), ...ceiling };
+    }
+    const seenAt = asDate(row.observed?.seenAt);
+    if (seenAt && (!quota[row.provider]?.seenAt || seenAt > quota[row.provider].seenAt)) {
+      quota[row.provider] = {
+        ...(quota[row.provider] || {}),
+        remaining: int(row.observed?.remainingRequests),
+        resetAt: asDate(row.observed?.resetAt),
+        seenAt,
+      };
+    }
     // The totals count only what is reachable: a live row on a provider we
     // hold no key for is not a model that answers.
     if (configured(row.provider)) {
@@ -605,6 +642,11 @@ export async function buildStatus({ now = new Date(), deps = {} } = {}) {
     aliveFree,
     structuredFree,
     byProvider,
+    /**
+     * Provider id → what it stated about our quota. Absent for a provider that
+     * sends no rate-limit headers, which is most of them.
+     */
+    quota,
     /**
      * id → the vendor's own spelling of its name.
      *

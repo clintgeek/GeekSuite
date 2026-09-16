@@ -219,3 +219,55 @@ describe('stopping a provider is one explicit button, not an empty box', () => {
     expect(screen.getAllByRole('button', { name: /remove key/i })).toHaveLength(2);
   });
 });
+
+/**
+ * What the provider said about our quota.
+ *
+ * Chef's question, 2026-09-16: is there a way of knowing the rate limits
+ * instead of knocking until we trip them? For two of the nine providers there
+ * is — groq and together state `x-ratelimit-*` on every response — and the
+ * console showed none of it. The other seven send nothing, and the line has to
+ * distinguish "no quota left" from "no information", because reading the
+ * second as the first is exactly the wrong conclusion.
+ */
+describe('the quota line', () => {
+  const withQuota = (quota) => baseProps({
+    status: {
+      ...STATUS,
+      attention: [],
+      catalog: { ...STATUS.catalog, quota },
+    },
+  });
+
+  it('states the ceiling the provider itself gave', () => {
+    renderWithProviders(
+      <ProvidersBlock {...withQuota({ groq: { requestsPerMinute: 30, requestsPerDay: 14400 } })} />
+    );
+    expect(screen.getByText(/30\/min · 14,400\/day/)).toBeInTheDocument();
+  });
+
+  it('adds what is left when the headers said', () => {
+    renderWithProviders(
+      <ProvidersBlock {...withQuota({ groq: { requestsPerMinute: 30, remaining: 17 } })} />
+    );
+    expect(screen.getByText(/30\/min · 17 left/)).toBeInTheDocument();
+  });
+
+  it('says a silent provider is silent, rather than showing it as empty', () => {
+    // The distinction that matters: "0 left" and "we were never told" look the
+    // same on a dashboard and mean opposite things.
+    renderWithProviders(<ProvidersBlock {...withQuota({})} />);
+    expect(screen.getAllByText(/sends no rate-limit headers/i).length).toBeGreaterThan(0);
+  });
+
+  it('shows nothing for a provider with no key, having never asked it anything', () => {
+    renderWithProviders(<ProvidersBlock {...withQuota({})} />);
+    // groq and cerebras have keys in CONFIG; cloudflare does not.
+    expect(screen.getAllByText(/sends no rate-limit headers/i)).toHaveLength(2);
+  });
+
+  it('reports zero remaining as zero, not as unknown', () => {
+    renderWithProviders(<ProvidersBlock {...withQuota({ groq: { remaining: 0 } })} />);
+    expect(screen.getByText(/0 left/)).toBeInTheDocument();
+  });
+});

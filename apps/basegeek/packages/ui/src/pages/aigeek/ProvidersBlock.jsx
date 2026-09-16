@@ -53,6 +53,7 @@ import {
   Typography,
 } from '@mui/material';
 import { GeekErrorState } from '@geeksuite/ui';
+import { useTheme } from '@mui/material/styles';
 import { providerAnchorId } from './useAIGeek';
 import { filledChipSx } from './chipTone';
 import { RemoveProviderKeyDialog } from './dialogs/ConfirmDialogs';
@@ -102,10 +103,41 @@ function ProviderChip({ hasKey, listingFailed, counts, statusKnown }) {
   );
 }
 
+/**
+ * What the provider itself said about our quota — never an inference.
+ *
+ * `quota` carries `x-ratelimit-*` as stated: the ceiling from
+ * `x-ratelimit-limit-*`, and `remaining` from our last real call. Seven of the
+ * nine providers send none of this, and for those the line says so rather than
+ * showing a zero that would read as "nothing left". Knowing the difference
+ * between "no quota" and "no information" is the whole point of the line.
+ */
+function QuotaLine({ quota }) {
+  const muted = useTheme().palette.text.secondary;
+  if (!quota) {
+    return (
+      <Typography variant="caption" sx={{ color: muted, fontSize: 12 }}>
+        sends no rate-limit headers — a 429 is the only signal
+      </Typography>
+    );
+  }
+  const parts = [];
+  if (quota.requestsPerMinute) parts.push(`${quota.requestsPerMinute.toLocaleString()}/min`);
+  if (quota.requestsPerDay) parts.push(`${quota.requestsPerDay.toLocaleString()}/day`);
+  if (Number.isFinite(quota.remaining)) parts.push(`${quota.remaining.toLocaleString()} left`);
+  if (parts.length === 0) return null;
+  return (
+    <Typography variant="caption" sx={{ color: muted, fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
+      {parts.join(' · ')}
+    </Typography>
+  );
+}
+
 function ProviderRow({
   provider,
   label,
   entry,
+  quota,
   counts,
   listingFailed,
   statusKnown,
@@ -157,6 +189,12 @@ function ProviderRow({
           </Typography>
         )}
         {saving && <CircularProgress size={14} />}
+
+        {/* Only where a key is stored: an unconfigured provider has told us
+            nothing because we have never asked it anything. */}
+        {entry.hasKey && !open && (
+          <QuotaLine quota={quota} />
+        )}
 
         <Stack direction="row" spacing={1} sx={{ ml: 'auto' }}>
           <Button
@@ -257,6 +295,7 @@ export default function ProvidersBlock({
   });
   const byProvider = status?.catalog?.byProvider || null;
   const labels = status?.catalog?.labels || {};
+  const quotaByProvider = status?.catalog?.quota || {};
   // `status` carries no per-provider error field — the failure is reported as
   // an attention item, which is where the exact text lives (§1). Reading it
   // back from there keeps one source of truth for "this key is wrong".
@@ -304,6 +343,7 @@ export default function ProvidersBlock({
           key={provider}
           provider={provider}
           label={labels[provider]}
+          quota={quotaByProvider[provider]}
           entry={config[provider]}
           counts={byProvider?.[provider]}
           listingFailed={listingFailed.has(provider)}
