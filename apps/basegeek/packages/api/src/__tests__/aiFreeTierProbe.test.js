@@ -33,6 +33,7 @@
 import { describe, it, expect } from '@jest/globals';
 
 const probe = await import('../services/aiCatalogDiscovery.js');
+const { withLatencySample, weightClassOf } = await import('../models/AIFreeTier.js');
 
 /* ── the four real failures ───────────────────────────────────────────────── */
 
@@ -340,5 +341,77 @@ describe('the printed table is safe to paste', () => {
     for (const outLine of lines) {
       expect(outLine.length).toBeLessThanOrEqual(120);
     }
+  });
+});
+
+/**
+ * The probe has always timed itself — `probeRow` has returned `ms` since it was
+ * written — and always thrown the number away. It is the only measured speed
+ * signal in the system, and without it `aiModelCapabilitiesService` decides
+ * "fast" by looking for "8b" or "instant" in the model's name.
+ */
+describe('the probe keeps the time it has always measured', () => {
+  it('records a latency sample on a row it revived', async () => {
+    const now = Date.UTC(2026, 8, 15, 3, 0, 0);
+    const { callProvider } = layer({});
+    const writes = [];
+    await probe.runProbe({
+      rows: [ROWS[2]],
+      callProvider,
+      updateOne: async (query, update) => { writes.push({ query, update }); },
+      options: { revive: true, now },
+    });
+    const { latency } = writes[0].update.$set;
+    expect(latency.recentMs).toHaveLength(1);
+    expect(Number.isFinite(latency.recentMs[0])).toBe(true);
+    expect(latency.p50Ms).toBe(latency.recentMs[0]);
+    expect(latency.measuredAt.getTime()).toBe(now);
+  });
+
+  it('does not time a row it is cooling — a timeout measures the timeout', async () => {
+    const now = Date.UTC(2026, 8, 15, 3, 0, 0);
+    const { callProvider } = layer({ 'groq/llama-3.1-8b-instant': REAL_FAILURES[0].error });
+    const writes = [];
+    await probe.runProbe({
+      rows: ROWS,
+      callProvider,
+      updateOne: async (query, update) => { writes.push({ query, update }); },
+      options: { mark: true, now },
+    });
+    expect(writes.every(w => w.update.$set.latency === undefined)).toBe(true);
+  });
+
+  it('keeps the last five timings and reports their median', () => {
+    // A vendor having one bad minute should not reclassify a quick row, which
+    // is why this is a median over a small window rather than the last value.
+    let block = { recentMs: [], p50Ms: null };
+    for (const ms of [800, 900, 9000, 850, 870]) {
+      block = withLatencySample(block, ms, Date.UTC(2026, 8, 15));
+    }
+    expect(block.recentMs).toEqual([800, 900, 9000, 850, 870]);
+    expect(block.p50Ms).toBe(870);
+
+    // A sixth sample pushes the first out.
+    block = withLatencySample(block, 810, Date.UTC(2026, 8, 15));
+    expect(block.recentMs).toEqual([900, 9000, 850, 870, 810]);
+    expect(block.p50Ms).toBe(870);
+  });
+
+  it('refuses a nonsense timing rather than poisoning the median', () => {
+    expect(withLatencySample({ recentMs: [800] }, NaN)).toBeNull();
+    expect(withLatencySample({ recentMs: [800] }, -1)).toBeNull();
+    expect(withLatencySample({ recentMs: [800] }, undefined)).toBeNull();
+  });
+
+  it('classes a measured p50, and calls an unmeasured one unknown rather than slow', () => {
+    expect(weightClassOf(900)).toBe('fast');
+    expect(weightClassOf(2000)).toBe('fast');
+    expect(weightClassOf(2001)).toBe('balanced');
+    expect(weightClassOf(6000)).toBe('balanced');
+    expect(weightClassOf(11000)).toBe('deep');
+    // The distinction that matters: a row nobody has timed is not a slow row.
+    // Treating null as slow would make an unmeasured model unpickable forever.
+    expect(weightClassOf(null)).toBeNull();
+    expect(weightClassOf(undefined)).toBeNull();
   });
 });

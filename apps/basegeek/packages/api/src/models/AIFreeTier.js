@@ -118,6 +118,27 @@ const aiFreeTierSchema = new mongoose.Schema({
     audioSecondsToday: { type: Number, default: 0 },
     lastResetDate: { type: Date, default: Date.now }
   },
+  /**
+   * How long this row takes to answer, measured.
+   *
+   * The probe has always timed itself — `probeRow` returns `ms` and the job
+   * logs it — and then thrown the number away. That left the routing layer
+   * with no measured notion of speed at all, so "is this model fast" was
+   * answered by `aiModelCapabilitiesService` looking for "8b" or "instant" in
+   * the model's *name*. On 2026-09-15 that rated a retired 405B slug
+   * state-of-the-art and gave the only model that actually served no rating at
+   * all, because its name matched no pattern.
+   *
+   * `recentMs` is a bounded FIFO of the last few successful probes and `p50Ms`
+   * its median — a median because one 9-second outlier on a busy vendor should
+   * not reclassify a row that is usually quick. Only successful probes are
+   * recorded: a timeout measures the timeout, not the model.
+   */
+  latency: {
+    recentMs: { type: [Number], default: () => [] },
+    p50Ms: { type: Number, default: null },
+    measuredAt: { type: Date, default: null }
+  },
   health: {
     type: aiFreeTierHealthSchema,
     default: () => ({})
@@ -132,6 +153,52 @@ const aiFreeTierSchema = new mongoose.Schema({
 
 // Compound index to ensure unique free tier per model
 aiFreeTierSchema.index({ provider: 1, modelId: 1 }, { unique: true });
+
+/* ──────────────────────────── measured latency ──────────────────────────── */
+
+/** How many probe timings a row keeps. Enough for a median, small enough to follow the model. */
+export const LATENCY_SAMPLES = 5;
+
+/**
+ * The weight classes `need` is expressed in, as measured milliseconds.
+ *
+ * `fast` is "a person is waiting": the doc's budget is ≤2s, which is the
+ * difference between FitnessGeek's inline dish estimate feeling instant and
+ * feeling broken. `deep` is a background job where slow is fine.
+ */
+export const WEIGHT_FAST_MS = 2000;
+export const WEIGHT_BALANCED_MS = 6000;
+
+/** Median of a small list. Even counts take the lower middle — no interpolating two samples. */
+export function medianOf(values = []) {
+  const sorted = [...values].filter(n => Number.isFinite(n)).sort((a, b) => a - b);
+  if (sorted.length === 0) return null;
+  return sorted[Math.floor((sorted.length - 1) / 2)];
+}
+
+/**
+ * The row's `latency` block after one more successful timing.
+ *
+ * Returned rather than applied so the probe can put it straight into the same
+ * `$set` as the rest of its verdict — one write per row, not two.
+ */
+export function withLatencySample(existing = {}, ms, now = Date.now()) {
+  if (!Number.isFinite(ms) || ms < 0) return null;
+  const recentMs = [...(existing?.recentMs || []), ms].slice(-LATENCY_SAMPLES);
+  return { recentMs, p50Ms: medianOf(recentMs), measuredAt: new Date(now) };
+}
+
+/**
+ * Which weight class a measured p50 falls in, or `null` when nothing has been
+ * measured yet. `null` is not "slow" — it is "unknown", and the resolver must
+ * treat the two differently or an unmeasured row can never be picked.
+ */
+export function weightClassOf(p50Ms) {
+  if (!Number.isFinite(p50Ms)) return null;
+  if (p50Ms <= WEIGHT_FAST_MS) return 'fast';
+  if (p50Ms <= WEIGHT_BALANCED_MS) return 'balanced';
+  return 'deep';
+}
 
 /* ───────────────────────── failure classification ───────────────────────── */
 

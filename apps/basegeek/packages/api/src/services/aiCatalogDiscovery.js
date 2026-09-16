@@ -28,7 +28,7 @@
  *      or a row this module buries is dug up by the next call.
  */
 
-import { classifyFreeTierFailure } from '../models/AIFreeTier.js';
+import { classifyFreeTierFailure, withLatencySample } from '../models/AIFreeTier.js';
 import { PROVIDER_IDS } from '../config/aiProviders.js';
 import { isDenied } from '../config/aiCatalogOverrides.js';
 // The one-door runner's JSON tolerances, imported rather than copied: a model
@@ -462,6 +462,11 @@ export async function runProbe({ rows, callProvider, updateOne = null, options =
       );
       result.marked = 'cooled 30d';
     } else if (updateOne && revive && outcome.status === 'alive') {
+      // The probe has always timed itself and the number has always been
+      // discarded. It is the only measured speed signal in the system, and
+      // without it "fast" is decided by looking for "8b" in a model's name.
+      // Only successful probes: a timeout measures the timeout.
+      const latency = withLatencySample(row.latency, outcome.ms, now);
       await updateOne(
         // A row a human denied is not revived: the filter, not a check, so a
         // caller that never heard of `override` still cannot resurrect one.
@@ -471,6 +476,7 @@ export async function runProbe({ rows, callProvider, updateOne = null, options =
             isFree: true,
             fitness: outcome.fitness,
             probedAt: new Date(now),
+            ...(latency ? { latency } : {}),
             'health.consecutiveFailures': 0,
             'health.lastFailureAt': null,
             'health.lastFailureCode': null,
