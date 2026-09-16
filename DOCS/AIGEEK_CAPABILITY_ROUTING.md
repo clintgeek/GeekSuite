@@ -221,15 +221,56 @@ Each stage is shippable alone and each removes a real failure that happened.
    because silently ignoring `strutured:fast` would answer from a plausible model and hide
    the typo for months. Free rows only — stage 2 changes nothing about what gets billed.
    25 tests in `aiNeedResolver.test.js`, 7 more on the door.
-3. **Probe records golden-set score** (§3.2). ~~latency~~ — **latency DONE 2026-09-15**, and
+3. ~~**Probe records golden-set score**~~ (§3.2) — **DONE 2026-09-16.**
+   `services/aiGoldenSet.js`: six questions with known answers, scored by code, run from
+   the existing catalog tick behind its own **daily** gate (the tick is hourly; six
+   questions across four rows is ~24 calls, which is the whole daily budget — ungated it
+   would have been 576/day). Quality outranks speed in the resolver, expires after 14 days,
+   and an unscored row sits mid-band rather than at zero.
+
+   **Three things the live run taught that the design above did not anticipate:**
+
+   a. **A language check was missing, and it was the decisive one.** Every consumer here
+      prompts in English; a reply in another script has not answered the question however
+      well-formed it is. It is applied to all six questions rather than being a seventh.
+      Nothing else would have caught `allam-2-7b`.
+
+   b. **An errored question is not a wrong answer.** Scoring 429s and timeouts as zero made
+      `gemini-3.1-flash-lite` read 1.0 in one run and 0.2 minutes later. Errored questions
+      are now set aside, and a run answering fewer than four of six is inconclusive and is
+      not written — a bad minute must not overwrite a score earned when the provider was
+      healthy.
+
+   c. **Do not rank on the class alone.** Every scored row came back `structured=1`, because
+      a row is only asked once `fitness` proved it emits JSON and both structured questions
+      are extraction questions. A constant is not a signal. Ranking on it let a model with
+      overall 0.4, numeracy 0 and reasoning 0 report "golden set 1 on structured" and keep
+      the work. It now ranks on the mean of the class and the overall: a specialist still
+      wins inside its class, but nothing broken elsewhere wins on one class alone.
+
+   **Measured effect.** `structured:fast` moved from `groq/allam-2-7b` (overall 0.4, p50
+   317ms) to `ollama/gemma4:31b` (overall 1.0, p50 542ms), and FitnessGeek's estimates moved
+   with it:
+
+   | said | allam-2-7b | gemma4:31b |
+   |---|---|---|
+   | 4 chocolate chip pancakes | 500 cal, range 0–1000 | **1100 cal, range 800–1400** |
+   | a dozen nachos with beef and cheese | 1200 cal, range 0–2400 | 720 cal |
+
+   The range is the part that matters beyond the number: §3.8's portion question could never
+   fire against a model that answers "0 to 1000", and does fire against one that answers
+   "800 to 1400".
+
+4. ~~latency~~ — **DONE 2026-09-15**, and
    it turned out `probeRow` had been measuring `ms` all along and discarding it; a revived row
    now stores a five-deep FIFO and its median, and `weightClassOf()` turns that into
    fast/balanced/deep. It returns `null`, not "deep", for a row nobody has timed — the
    resolver has to tell *unknown* from *slow*, or a newly discovered model could never be
    picked, so never timed, so never stop being unknown. Brought forward because stage 2 routes
    on a weight axis and there was no data behind it. The golden set is the remaining half.
-4. **App configs move to needs** (§3.4); pins become override-only.
-5. **Retire the name-matching in `aiModelCapabilitiesService`** once (3) supplies real data.
+5. **App configs move to needs** (§3.4); pins become override-only.
+6. **Retire the name-matching in `aiModelCapabilitiesService`** once (3) supplies real data.
+   Now unblocked: (3) supplies real data.
 
 ## 5. What NOT to do
 
