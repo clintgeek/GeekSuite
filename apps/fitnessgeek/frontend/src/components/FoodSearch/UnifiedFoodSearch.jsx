@@ -212,7 +212,15 @@ const UnifiedFoodSearch = ({
       const logIds = result?.logIds || [];
 
       if (ok > 0) {
-        setSession((prev) => [...prev, ...items.map((item, i) => ({ ...item, logId: logIds[i] }))]);
+        // `perItem` groups the ids by the item that produced them. Pairing by
+        // index was wrong the moment one item wrote more than one log: a saved
+        // meal expands into several, and every later item took an id belonging
+        // to the meal — so undoing a row deleted somebody else's food.
+        const perItem = result?.perItem || items.map((_, i) => (logIds[i] ? [logIds[i]] : []));
+        setSession((prev) => [
+          ...prev,
+          ...items.map((item, i) => ({ ...item, logIds: perItem[i] || [] }))
+        ]);
         notify(`Logged ${items.length === 1 ? items[0].name : `${ok} items`}`, {
           tone: result?.fail ? 'warning' : 'success',
           action: logIds.length > 0 && onUndo ? (
@@ -221,7 +229,7 @@ const UnifiedFoodSearch = ({
               sx={{ color: 'inherit', fontWeight: 700 }}
               onClick={async () => {
                 await onUndo(logIds);
-                setSession((prev) => prev.filter((s) => !logIds.includes(s.logId)));
+                setSession((prev) => prev.filter((entry) => !entry.logIds?.some((id) => logIds.includes(id))));
               }}
             >
               Undo
@@ -268,7 +276,7 @@ const UnifiedFoodSearch = ({
           ...prev,
           ...logged.map((entry) => ({
             name: entry.name,
-            logId: entry.logId,
+            logIds: entry.logId ? [entry.logId] : [],
             servings: entry.loggedServings ?? entry.servings ?? 1,
             nutrition: entry.nutrition
           }))
@@ -286,7 +294,7 @@ const UnifiedFoodSearch = ({
               sx={{ color: 'inherit', fontWeight: 700 }}
               onClick={async () => {
                 await onUndo(logIds);
-                setSession((prev) => prev.filter((item) => !logIds.includes(item.logId)));
+                setSession((prev) => prev.filter((item) => !item.logIds?.some((id) => logIds.includes(id))));
               }}
             >
               Undo
@@ -324,7 +332,7 @@ const UnifiedFoodSearch = ({
   }, [logFoods, mealType]);
 
   const undoAll = useCallback(async () => {
-    const ids = session.map((s) => s.logId).filter(Boolean);
+    const ids = session.flatMap((entry) => entry.logIds || []);
     if (ids.length === 0 || !onUndo) return;
     setBusy(true);
     try {
@@ -338,10 +346,11 @@ const UnifiedFoodSearch = ({
 
   const undoLast = useCallback(async () => {
     const last = session[session.length - 1];
-    if (!last?.logId || !onUndo) return;
+    if (!last?.logIds?.length || !onUndo) return;
     setBusy(true);
     try {
-      await onUndo([last.logId]);
+      // A meal's several logs go together: it was one gesture, so it is one undo.
+      await onUndo(last.logIds);
       setSession((prev) => prev.slice(0, -1));
     } finally {
       setBusy(false);

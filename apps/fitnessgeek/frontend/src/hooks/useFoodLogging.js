@@ -23,16 +23,28 @@ export const useFoodLogging = ({ date, onChanged }) => {
   /**
    * @param {object[]} items   foods carrying a `servings` count
    * @param {string} mealType
-   * @returns {Promise<{ok: number, fail: number, logIds: string[]}>}
+   * @returns {Promise<{ok, fail, logIds: string[], perItem: string[][]}>}
+   *          `logIds` is every id written, flat, which is what undo needs.
+   *          `perItem` is the same ids grouped by the item that produced them,
+   *          because one saved meal expands into several logs and anything
+   *          pairing items to ids by index would mis-attribute the rest.
    */
   const logItems = useCallback(async (items, mealType = 'snack') => {
     if (!items?.length) return { ok: 0, fail: 0, logIds: [] };
 
     const settled = await Promise.allSettled(
       items.map(async (item) => {
+        // A saved meal expands into several logs. Those ids used to be
+        // dropped on the floor — `addMealToLog` has always returned them — so
+        // logging a meal produced nothing to undo and the toast quietly came
+        // up without its button. Undo only means something if it covers
+        // everything that was written.
         if (item?.type === 'meal' && (item._id || item.id)) {
-          await fitnessGeekService.addMealToLog(item._id || item.id, date, mealType);
-          return null;   // a meal expands into several logs; undo is per-meal, not per-row
+          const response = await fitnessGeekService.addMealToLog(item._id || item.id, date, mealType);
+          return (response?.data?.logs || [])
+            .map((log) => log?.id || log?._id)
+            .filter(Boolean)
+            .map(String);
         }
 
         const servings = Number(item.servings);
@@ -47,19 +59,21 @@ export const useFoodLogging = ({ date, onChanged }) => {
         if (!response?.success) {
           throw new Error(response?.error?.message || 'Failed to log item');
         }
-        return response.data?.id || response.data?._id || null;
+        const id = response.data?.id || response.data?._id || null;
+        return id ? [String(id)] : [];
       })
     );
 
     let ok = 0;
     let fail = 0;
-    const logIds = [];
+    const perItem = [];
     for (const result of settled) {
       if (result.status === 'fulfilled') {
         ok += 1;
-        if (result.value) logIds.push(result.value);
+        perItem.push(result.value || []);
       } else {
         fail += 1;
+        perItem.push([]);
         logger.error('Failed to log food:', result.reason?.message);
       }
     }
@@ -67,7 +81,7 @@ export const useFoodLogging = ({ date, onChanged }) => {
     // One refresh for the batch, not one per item.
     if (ok > 0) await onChanged?.();
 
-    return { ok, fail, logIds };
+    return { ok, fail, logIds: perItem.flat(), perItem };
   }, [date, onChanged]);
 
   const undoLogs = useCallback(async (logIds) => {
