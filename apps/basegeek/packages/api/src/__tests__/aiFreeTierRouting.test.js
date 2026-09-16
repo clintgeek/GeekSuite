@@ -36,6 +36,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, afterAll } from '@jest/globals';
+import { eventually, settle } from './eventually.js';
 
 const { default: aiService } = await import('../services/aiService.js');
 const { default: AIFreeTier } = await import('../models/AIFreeTier.js');
@@ -465,8 +466,15 @@ describe('a success clears the row', () => {
     expect(health.lastSuccessAt).toBeInstanceOf(Date);
 
     // And it survives the process: the mirror is a mirror, not the record.
-    await new Promise(resolve => setImmediate(resolve));
-    const row = await AIFreeTier.findOne({ provider: 'groq', modelId: 'recovered' }).lean();
+    // `markFreeTierSuccess` fires the write without awaiting it, so this polls
+    // rather than assuming one tick is enough — see ./eventually.js.
+    const row = await eventually(
+      async () => {
+        const doc = await AIFreeTier.findOne({ provider: 'groq', modelId: 'recovered' }).lean();
+        return doc?.health?.lastSuccessAt ? doc : null;
+      },
+      { what: "the recovered row's cleared health" }
+    );
     expect(row.health.consecutiveFailures).toBe(0);
     expect(row.health.coolingUntil).toBeNull();
     expect(row.health.lastSuccessAt).toBeInstanceOf(Date);
@@ -484,9 +492,13 @@ describe('a success clears the row', () => {
       'cerebras/alive': 'ok',
     });
     await aiService.callAI('hello', { freeOnly: true, appName: 'startgeek' });
-    await new Promise(resolve => setImmediate(resolve));
-
-    const row = await AIFreeTier.findOne({ provider: 'groq', modelId: 'retired' }).lean();
+    const row = await eventually(
+      async () => {
+        const doc = await AIFreeTier.findOne({ provider: 'groq', modelId: 'retired' }).lean();
+        return doc?.health?.lastFailureCode ? doc : null;
+      },
+      { what: "the retired row's recorded failure" }
+    );
     expect(row.health.consecutiveFailures).toBe(1);
     expect(row.health.lastFailureCode).toBe('http_404');
     expect(new Date(row.health.coolingUntil).getTime()).toBeGreaterThan(Date.now());
@@ -705,9 +717,10 @@ describe('sticky picks keep one model per conversation', () => {
 
     const calls = fakeProviderLayer({ 'groq/the-gm': 'turn one', 'cerebras/someone-else': 'a different voice' });
     await aiService.callAI('go', { appName: 'storygeek', conversationId: 'story-1' });
-    await new Promise(resolve => setImmediate(resolve));
-
-    const pick = await AIStickyPick.findOne({ key: 'storygeek:story-1' }).lean();
+    const pick = await eventually(
+      () => AIStickyPick.findOne({ key: 'storygeek:story-1' }).lean(),
+      { what: 'the sticky pick for story-1' }
+    );
     expect(pick).toMatchObject({ app: 'storygeek', conversationId: 'story-1' });
     expect(`${pick.provider}/${pick.modelId}`).toBe(calls[0]);
 
@@ -738,9 +751,15 @@ describe('sticky picks keep one model per conversation', () => {
 
     await expect(aiService.callAI('go', { appName: 'storygeek', conversationId: 'story-2' }))
       .resolves.toBe('the story continues');
-    await new Promise(resolve => setImmediate(resolve));
-
-    const pick = await AIStickyPick.findOne({ key: 'storygeek:story-2' }).lean();
+    // Wait for the pick to MOVE, not merely to exist: the old value is already
+    // there, so a plain existence poll would return the stale row immediately.
+    const pick = await eventually(
+      async () => {
+        const doc = await AIStickyPick.findOne({ key: 'storygeek:story-2' }).lean();
+        return doc && `${doc.provider}/${doc.modelId}` === 'cerebras/the-new-gm' ? doc : null;
+      },
+      { what: 'the sticky pick handing over to cerebras' }
+    );
     expect(`${pick.provider}/${pick.modelId}`).toBe('cerebras/the-new-gm');
     // This is what Phase 3's needs-attention list reads.
     expect(pick.previous).toHaveLength(1);
@@ -754,7 +773,9 @@ describe('sticky picks keep one model per conversation', () => {
 
     fakeProviderLayer({ 'groq/one-shot': 'ok' });
     await aiService.callAI('go', { appName: 'storygeek' });
-    await new Promise(resolve => setImmediate(resolve));
+    // Polling cannot prove an absence, so this is the one place a fixed wait is
+    // the right shape — give the write a fair chance, then assert it never came.
+    await settle();
     expect(await AIStickyPick.countDocuments({})).toBe(0);
   });
 });

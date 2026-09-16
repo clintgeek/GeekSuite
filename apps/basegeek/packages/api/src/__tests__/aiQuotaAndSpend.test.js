@@ -15,6 +15,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, afterAll } from '@jest/globals';
 import axios from 'axios';
+import { eventually, settle } from './eventually.js';
 
 const { default: aiService } = await import('../services/aiService.js');
 const { default: AIFreeTier } = await import('../models/AIFreeTier.js');
@@ -32,21 +33,15 @@ function patch(obj, key, value) {
   return value;
 }
 
-const flush = () => new Promise((resolve) => setImmediate(resolve));
-
-/**
+/*
  * `updateStats` books the ledger fire-and-forget — that is the point of it, so
  * a user never waits on an accounting write. A test therefore has to wait for
  * the row rather than assume a tick is enough.
+ *
+ * This file had that right and kept a local `eventually`; the helper now lives
+ * in `./eventually.js` so every suite shares it, and it throws a named error on
+ * a miss rather than returning null into somebody's assertion.
  */
-async function eventually(read, tries = 40) {
-  for (let i = 0; i < tries; i++) {
-    const value = await read();
-    if (value) return value;
-    await new Promise((resolve) => setTimeout(resolve, 25));
-  }
-  return null;
-}
 
 beforeEach(async () => {
   // The unique index on (day, provider, app, feature) is what makes the
@@ -174,7 +169,8 @@ describe('recordObservedLimits', () => {
 
   it('never creates a row for a model that has none', async () => {
     aiService.recordObservedLimits('groq', 'not-a-free-row', HEADERS);
-    await flush();
+    // Absence: polling would return on the first read and prove nothing.
+    await settle();
     // A model is not made free by having been called.
     expect(await AIFreeTier.countDocuments({ modelId: 'not-a-free-row' })).toBe(0);
   });
@@ -250,9 +246,13 @@ describe('the AISpend ledger', () => {
       aiService.recordSpend('openrouter', 'startgeek', 'ask', 0.002),
       aiService.recordSpend('openrouter', 'startgeek', null, 0.5),
     ]);
-    await flush();
-
-    const ask = await AISpend.findOne({ provider: 'openrouter', app: 'startgeek', feature: 'ask' }).lean();
+    const ask = await eventually(
+      async () => {
+        const doc = await AISpend.findOne({ provider: 'openrouter', app: 'startgeek', feature: 'ask' }).lean();
+        return doc?.calls === 2 ? doc : null;   // wait for BOTH increments, not the first
+      },
+      { what: "startgeek's ask spend row" }
+    );
     expect(ask.calls).toBe(2);
     expect(ask.costUsd).toBeCloseTo(0.003, 9);
     expect(ask.day).toBe(spendDay());
