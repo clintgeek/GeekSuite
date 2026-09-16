@@ -1215,7 +1215,35 @@ class AIService {
       return Number.isFinite(at) ? at : 0;
     };
 
+    /*
+     * Two tiers, then the old order inside each.
+     *
+     * `fitness` used to be the THIRD key, behind provider priority, so a row
+     * the probe had proved could not produce JSON still outranked every
+     * structured row at a less-preferred provider. Live on 2026-09-16:
+     * `basegeek-free` fell past groq (rate-limited) onto two OpenRouter `basic`
+     * models sitting ahead of six structured ones, and returned prose to a
+     * caller that wanted YAML. "basic" means exactly that — it answers, in
+     * prose — so this was the catalog correctly reporting a model that cannot
+     * do the job and the sort preferring it anyway.
+     *
+     * Structured is a superset: those models produce prose perfectly well when
+     * that is what is asked for, so putting them first costs a prose caller
+     * nothing. Provider priority and the router preference are unchanged
+     * WITHIN each tier — this splits the list, it does not reorder it.
+     */
+    const tierOf = (candidate) => {
+      // The auto-router keeps its exemption. It is ranked first within its
+      // provider precisely BECAUSE its fitness reading is unreliable — it is a
+      // meta-model that forwards to whatever that vendor has free, so one probe
+      // says little about it, and it is alive whenever any of those rows is.
+      // That availability hedge is not what served prose to a YAML caller: two
+      // ordinary `basic` nemotron rows were.
+      if (ROUTER_MODEL_IDS[candidate.provider] === candidate.modelId) return 0;
+      return candidate.fitness === 'structured' ? 0 : 1;
+    };
     live.sort((a, b) =>
+      tierOf(a) - tierOf(b) ||
       priorityOf(a.provider) - priorityOf(b.provider) ||
       routerFirst(a) - routerFirst(b) ||
       fitnessOf(a) - fitnessOf(b) ||

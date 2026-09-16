@@ -693,8 +693,13 @@ describe('sticky picks keep one model per conversation', () => {
   it('records the pick on a sticky row and reuses it next turn', async () => {
     enable('groq', 'cerebras');
     await AIAppConfig.create({ appName: 'storygeek', tier: 'auto', sticky: 'per-conversation' });
+    // Both structured, so turn one is decided by provider priority and the
+    // fixture does not silently depend on the sort's shape. It did until
+    // 2026-09-16: `the-gm` had no fitness at all and won only because provider
+    // priority outranked fitness, which is the ordering that had `basegeek-free`
+    // serving prose to a caller that wanted YAML.
     await seedRows([
-      { provider: 'groq', modelId: 'the-gm', health: { lastSuccessAt: new Date() } },
+      { provider: 'groq', modelId: 'the-gm', fitness: 'structured', health: { lastSuccessAt: new Date() } },
       { provider: 'cerebras', modelId: 'someone-else', fitness: 'structured' },
     ]);
 
@@ -706,8 +711,8 @@ describe('sticky picks keep one model per conversation', () => {
     expect(pick).toMatchObject({ app: 'storygeek', conversationId: 'story-1' });
     expect(`${pick.provider}/${pick.modelId}`).toBe(calls[0]);
 
-    // Turn two goes to the stored pick even though the ranking would now
-    // prefer the `structured` cerebras row.
+    // Turn two reads the stored pick rather than ranking again — which is the
+    // whole point of a sticky row, and is what keeps one voice in a story.
     aiService.clearCache();
     const secondCalls = fakeProviderLayer({ 'groq/the-gm': 'turn two', 'cerebras/someone-else': 'a different voice' });
     await expect(aiService.callAI('again', { appName: 'storygeek', conversationId: 'story-1' })).resolves.toBe('turn two');
@@ -959,6 +964,53 @@ describe('modality is checked at selection, not only at listing', () => {
       { provider: 'cloudflare', modelId: '@cf/meta/llama-4-scout-17b-16e-instruct', fitness: 'structured' },
     ]);
     const { live } = await aiService.selectFreeTierCandidates();
+    expect(live).toHaveLength(3);
+  });
+});
+
+/**
+ * A model that cannot do the job never outranks one that can.
+ *
+ * `fitness` was the third sort key, behind provider priority, so a `basic` row
+ * — one the probe proved answers in prose rather than JSON — outranked every
+ * `structured` row at a less-preferred provider. Live on 2026-09-16:
+ * `basegeek-free` fell past a rate-limited groq onto two OpenRouter `basic`
+ * models sitting ahead of six structured ones, and returned prose to a caller
+ * that wanted YAML. The catalog was right; the sort ignored it.
+ */
+describe('structured rows come before basic ones, whoever hosts them', () => {
+  it('puts a structured row at a lesser provider above a basic row at a preferred one', async () => {
+    enable('groq', 'cloudflare');
+    await seedRows([
+      { provider: 'groq', modelId: 'prose-only', fitness: 'basic' },
+      { provider: 'cloudflare', modelId: 'does-json', fitness: 'structured' },
+    ]);
+    const { live } = await aiService.selectFreeTierCandidates();
+    expect(live.map((c) => c.modelId)).toEqual(['does-json', 'prose-only']);
+  });
+
+  it('keeps provider priority inside a tier', async () => {
+    // This splits the list; it does not reorder within a tier.
+    enable('groq', 'cloudflare');
+    await seedRows([
+      { provider: 'cloudflare', modelId: 'cf-structured', fitness: 'structured' },
+      { provider: 'groq', modelId: 'groq-structured', fitness: 'structured' },
+    ]);
+    const { live } = await aiService.selectFreeTierCandidates();
+    expect(live.map((c) => c.modelId)).toEqual(['groq-structured', 'cf-structured']);
+  });
+
+  it('still offers the basic rows, just after every structured one', async () => {
+    // Nothing is excluded for being weak — it is ranked. A prose caller with
+    // no structured row left still gets an answer.
+    enable('groq');
+    await seedRows([
+      { provider: 'groq', modelId: 'b-1', fitness: 'basic' },
+      { provider: 'groq', modelId: 's-1', fitness: 'structured' },
+      { provider: 'groq', modelId: 'never-probed' },
+    ]);
+    const { live } = await aiService.selectFreeTierCandidates();
+    expect(live[0].modelId).toBe('s-1');
     expect(live).toHaveLength(3);
   });
 });
