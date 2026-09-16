@@ -25,13 +25,29 @@
  * The key box holds a *draft*: the server sends `{ hasKey, keyHint, enabled }`
  * and never a credential, so the placeholder shows the last four characters to
  * tell two keys apart and an untouched box saves nothing.
+ *
+ * Rows are collapsed by default (2026-09-15). Nine providers each rendering a
+ * permanent password field and two lines of helper text gave this block about
+ * 1300px, nearly all of it empty boxes for the one action you take least often
+ * — a key gets pasted once and then works for months. Worse, nine identical
+ * password boxes made it genuinely unclear which one you meant to fill.
+ *
+ * So the default view is a roster: one line per provider, name and chip, which
+ * is what you actually come here to read. The field appears when you say which
+ * provider you are changing. A row whose listing failed opens itself, because
+ * that is the row you came to fix.
+ *
+ * Once open a row stays open until you close it. Collapsing on blur would be
+ * tidier and would sometimes eat a key you were still looking at.
  */
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Button,
   Chip,
   CircularProgress,
+  Collapse,
+  Stack,
   TextField,
   Tooltip,
   Typography,
@@ -78,7 +94,20 @@ function ProviderChip({ hasKey, listingFailed, counts, statusKnown }) {
   );
 }
 
-function ProviderRow({ provider, label, entry, counts, listingFailed, statusKnown, saving, onFieldChange, onBlurSave, onRemoveKey }) {
+function ProviderRow({
+  provider,
+  label,
+  entry,
+  counts,
+  listingFailed,
+  statusKnown,
+  saving,
+  open,
+  onToggle,
+  onFieldChange,
+  onBlurSave,
+  onRemoveKey,
+}) {
   return (
     <Box
       // The anchor the `provider_dead` / `provider_listing_failed` attention
@@ -86,9 +115,9 @@ function ProviderRow({ provider, label, entry, counts, listingFailed, statusKnow
       id={providerAnchorId(provider)}
       // Without this the smooth scroll lands with the row jammed under the
       // shell's sticky top bar.
-      sx={{ scrollMarginTop: 88, py: 1.5, borderTop: '1px solid', borderColor: 'divider' }}
+      sx={{ scrollMarginTop: 88, py: 1, borderTop: '1px solid', borderColor: 'divider' }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, flexWrap: 'wrap' }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', minHeight: 44 }}>
         {/*
           * The vendor's own spelling, from `status.catalog.labels`. Capitalising
           * the raw id gave "Openrouter" and "Llmgateway"; the canonical labels
@@ -105,55 +134,92 @@ function ProviderRow({ provider, label, entry, counts, listingFailed, statusKnow
           counts={counts}
           statusKnown={statusKnown}
         />
+        {/*
+          * The stored key's last characters, on the collapsed line. This is the
+          * only thing the old always-open field told you that the roster did
+          * not, and it is the one fact that distinguishes two keys.
+          */}
+        {entry.hasKey && entry.keyHint && !open && (
+          <Typography
+            variant="caption"
+            color="text.muted"
+            sx={{ fontFamily: 'monospace', fontSize: 12 }}
+          >
+            {entry.keyHint}
+          </Typography>
+        )}
         {saving && <CircularProgress size={14} />}
-        {entry.hasKey && (
+
+        <Stack direction="row" spacing={1} sx={{ ml: 'auto' }}>
           <Button
             size="small"
-            color="error"
-            variant="outlined"
-            onClick={() => onRemoveKey(provider)}
-            disabled={saving}
-            sx={{ ml: 'auto', minHeight: 44, fontSize: 12 }}
+            variant={entry.hasKey ? 'text' : 'outlined'}
+            onClick={() => onToggle(provider)}
+            sx={{ minHeight: 44, fontSize: 12 }}
           >
-            Remove key
+            {open ? 'Done' : entry.hasKey ? 'Replace key' : 'Add key'}
           </Button>
-        )}
+          {entry.hasKey && (
+            <Button
+              size="small"
+              color="error"
+              variant="outlined"
+              onClick={() => onRemoveKey(provider)}
+              disabled={saving}
+              sx={{ minHeight: 44, fontSize: 12 }}
+            >
+              Remove key
+            </Button>
+          )}
+        </Stack>
       </Box>
 
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: provider === 'cloudflare' ? '2fr 1fr' : '1fr' },
-          gap: 1.5,
-        }}
-      >
-        <TextField
-          fullWidth
-          label="API key"
-          type="password"
-          autoComplete="new-password"
-          value={entry.apiKey || ''}
-          onChange={(e) => onFieldChange(provider, 'apiKey', e.target.value)}
-          onBlur={() => onBlurSave(provider)}
-          placeholder={entry.hasKey ? entry.keyHint : 'Paste a key'}
-          helperText={entry.hasKey
-            ? `A key is stored (${entry.keyHint || '…'}). Paste a new one to replace it; use Remove key to stop using this provider.`
-            : 'Paste a key and click away; that is the whole setup'}
-          sx={{ '& .MuiInputBase-root': { minHeight: 44 } }}
-        />
-
-        {provider === 'cloudflare' && (
+      <Collapse in={open} unmountOnExit>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', md: provider === 'cloudflare' ? '2fr 1fr' : '1fr' },
+            gap: 1.5,
+            pt: 1.5,
+            pb: 1,
+          }}
+        >
           <TextField
             fullWidth
-            label="Account ID"
-            value={entry.accountId || ''}
-            onChange={(e) => onFieldChange(provider, 'accountId', e.target.value)}
+            // The row was opened to type in this box; opening it and then
+            // asking for a click is a step with no decision in it.
+            autoFocus
+            label="API key"
+            type="password"
+            autoComplete="new-password"
+            value={entry.apiKey || ''}
+            onChange={(e) => onFieldChange(provider, 'apiKey', e.target.value)}
             onBlur={() => onBlurSave(provider)}
-            helperText="Cloudflare needs this alongside the token"
+            placeholder={entry.hasKey ? entry.keyHint : 'Paste a key'}
+            helperText={entry.hasKey
+              ? `Replaces the stored key (${entry.keyHint || '…'}). Paste and click away.`
+              : 'Paste a key and click away; that is the whole setup'}
             sx={{ '& .MuiInputBase-root': { minHeight: 44 } }}
           />
-        )}
-      </Box>
+
+          {provider === 'cloudflare' && (
+            <TextField
+              fullWidth
+              label="Account ID"
+              value={entry.accountId || ''}
+              onChange={(e) => onFieldChange(provider, 'accountId', e.target.value)}
+              onBlur={() => onBlurSave(provider)}
+              // Deliberately not masked, and deliberately said out loud: this
+              // is the identifier out of the Cloudflare dashboard URL, not a
+              // credential, and it is useless without the token. It used to sit
+              // in the open next to masked key boxes, which made it look like
+              // a leak; the honest fix is to label it, not to hide it.
+              helperText="Identifier, not a secret — from your Cloudflare dashboard URL"
+              sx={{ '& .MuiInputBase-root': { minHeight: 44 } }}
+            />
+          )}
+        </Box>
+      </Collapse>
     </Box>
   );
 }
@@ -172,16 +238,39 @@ export default function ProvidersBlock({
   // Which provider the Remove-key confirm is open for. Transient, so it lives
   // here rather than in the reducer.
   const [removing, setRemoving] = useState(null);
+  // Which rows have their key editor revealed. Opened by the user, or by a
+  // failed listing below.
+  const [opened, setOpened] = useState(() => new Set());
+  const toggle = (provider) => setOpened(prev => {
+    const next = new Set(prev);
+    if (next.has(provider)) next.delete(provider);
+    else next.add(provider);
+    return next;
+  });
   const byProvider = status?.catalog?.byProvider || null;
   const labels = status?.catalog?.labels || {};
   // `status` carries no per-provider error field — the failure is reported as
   // an attention item, which is where the exact text lives (§1). Reading it
   // back from there keeps one source of truth for "this key is wrong".
-  const listingFailed = new Set(
+  const listingFailed = useMemo(() => new Set(
     (status?.attention || [])
       .filter(item => item.kind === 'provider_listing_failed' && item.provider)
       .map(item => item.provider)
-  );
+  ), [status?.attention]);
+
+  /*
+   * A provider whose listing was refused is the row you came here to retype,
+   * so it opens itself — once. `seeded` is why this is not simply folded into
+   * the `open` prop: that would make the row reopen every time you closed it,
+   * because the refusal is still in `status` until the next discovery run.
+   */
+  const seeded = useRef(new Set());
+  useEffect(() => {
+    const fresh = [...listingFailed].filter(p => !seeded.current.has(p));
+    if (fresh.length === 0) return;
+    fresh.forEach(p => seeded.current.add(p));
+    setOpened(prev => new Set([...prev, ...fresh]));
+  }, [listingFailed]);
 
   if (configError) {
     return (
@@ -213,6 +302,8 @@ export default function ProvidersBlock({
           statusKnown={!!byProvider}
           saving={savingProvider === provider}
           onFieldChange={onFieldChange}
+          open={opened.has(provider)}
+          onToggle={toggle}
           onBlurSave={onBlurSave}
           onRemoveKey={setRemoving}
         />

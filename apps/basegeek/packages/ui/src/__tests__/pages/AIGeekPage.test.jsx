@@ -169,7 +169,9 @@ describe('AIGeekPage', () => {
     mockTransports();
     renderWithProviders(<AIGeekPage />);
     await screen.findByRole('heading', { name: 'Providers' });
-    expect(screen.getAllByLabelText('API key')).toHaveLength(2);
+    // One row per provider the server named. Counting key fields used to stand
+    // in for this; rows collapse now, so the row's own control is the count.
+    expect(screen.getAllByRole('button', { name: /add key|replace key/i })).toHaveLength(2);
     expect(screen.getByText('4 alive · 3 structured')).toBeInTheDocument();
   });
 

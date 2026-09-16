@@ -6,9 +6,13 @@
  * cases below are as much about what is *absent* — no Enabled switch, no Test
  * button, no Save — as about what works, because those three are exactly what
  * §3 deleted and what a well-meant future patch would re-add.
+ *
+ * Rows collapse now, so most cases open one first. `openRow` is that click.
+ * The collapsed default is itself a contract — nine permanent password boxes
+ * were most of this block's height — so the first two cases assert it.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { screen, fireEvent } from '@testing-library/react';
+import { screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ProvidersBlock from '../../../pages/aigeek/ProvidersBlock';
 import { renderWithProviders } from '../../testUtils';
@@ -46,6 +50,16 @@ function baseProps(overrides = {}) {
   };
 }
 
+/**
+ * Reveal one provider's key editor. Keyed rows say Replace, keyless say Add —
+ * and several rows say the same thing, so this takes the nth match rather than
+ * `getByRole`, which throws on the ambiguity.
+ */
+async function openRow(name, index = 0) {
+  const user = userEvent.setup();
+  await user.click(screen.getAllByRole('button', { name })[index]);
+}
+
 describe('ProvidersBlock', () => {
   it('renders one row per provider the server reported, and no others', () => {
     // The roster used to be `CONFIG_PROVIDERS`, hand-typed in useAIGeek.js,
@@ -55,27 +69,46 @@ describe('ProvidersBlock', () => {
     expect(screen.getByText('cerebras')).toBeInTheDocument();
     expect(screen.getByText('cloudflare')).toBeInTheDocument();
     expect(screen.queryByText('together')).toBeNull();
-    expect(screen.getAllByLabelText('API key')).toHaveLength(3);
   });
 
-  it('the key field is a password input, so a pasted credential is never on screen', () => {
+  it('shows no key field until you say which provider you are changing', () => {
+    // Nine providers each holding an open password box and two lines of helper
+    // text was most of this block's height, spent on the action taken least
+    // often. The roster is what the page is for; the field is a detour.
     renderWithProviders(<ProvidersBlock {...baseProps()} />);
-    for (const field of screen.getAllByLabelText('API key')) {
-      expect(field).toHaveAttribute('type', 'password');
-    }
+    expect(screen.queryByLabelText('API key')).toBeNull();
+    expect(screen.queryByLabelText('Account ID')).toBeNull();
+    // ...but every row offers the way in, worded for what it will do.
+    expect(screen.getAllByRole('button', { name: /replace key/i })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: /add key/i })).toHaveLength(1);
   });
 
-  it('shows the stored key hint as the placeholder, never the key', () => {
+  it('the key field is a password input, so a pasted credential is never on screen', async () => {
     renderWithProviders(<ProvidersBlock {...baseProps()} />);
-    expect(screen.getAllByLabelText('API key')[0]).toHaveAttribute('placeholder', '…ab12');
+    await openRow(/add key/i);
+    expect(screen.getByLabelText('API key')).toHaveAttribute('type', 'password');
+  });
+
+  it('shows the stored key hint as the placeholder, never the key', async () => {
+    renderWithProviders(<ProvidersBlock {...baseProps()} />);
+    await openRow(/replace key/i, 0); // groq, the first keyed row
+    expect(screen.getByLabelText('API key')).toHaveAttribute('placeholder', '…ab12');
+  });
+
+  it('shows the stored key hint on the collapsed line, so two keys can be told apart', () => {
+    // The one fact the always-open field carried that the roster did not.
+    renderWithProviders(<ProvidersBlock {...baseProps()} />);
+    expect(screen.getByText('…ab12')).toBeInTheDocument();
+    expect(screen.getByText('…cd34')).toBeInTheDocument();
   });
 
   it('typing reports the field change; blurring is what saves', async () => {
     const onFieldChange = vi.fn();
     const onBlurSave = vi.fn();
     renderWithProviders(<ProvidersBlock {...baseProps({ onFieldChange, onBlurSave })} />);
+    await openRow(/replace key/i, 0); // groq
 
-    const field = screen.getAllByLabelText('API key')[0];
+    const field = screen.getByLabelText('API key');
     fireEvent.change(field, { target: { value: 'gsk_new' } });
     expect(onFieldChange).toHaveBeenCalledWith('groq', 'apiKey', 'gsk_new');
     expect(onBlurSave).not.toHaveBeenCalled();
@@ -84,14 +117,31 @@ describe('ProvidersBlock', () => {
     expect(onBlurSave).toHaveBeenCalledWith('groq');
   });
 
-  it('gives Cloudflare an Account ID field, and nobody else one', () => {
+  it('gives Cloudflare an Account ID field, and nobody else one', async () => {
     const onBlurSave = vi.fn();
     renderWithProviders(<ProvidersBlock {...baseProps({ onBlurSave })} />);
+    await openRow(/add key/i); // cloudflare is the only keyless row
     expect(screen.getAllByLabelText('Account ID')).toHaveLength(1);
     // Same blur contract as the key: the row saves as a unit, so the account
     // id and the token cannot be half-written.
     fireEvent.blur(screen.getByLabelText('Account ID'));
     expect(onBlurSave).toHaveBeenCalledWith('cloudflare');
+  });
+
+  it('opens the row whose key was refused, because that is the one you came to fix', () => {
+    renderWithProviders(<ProvidersBlock {...baseProps({ status: STATUS })} />);
+    // cerebras is the 401 in STATUS.attention, and only its editor is open.
+    expect(screen.getByLabelText('API key')).toHaveAttribute('placeholder', '…cd34');
+  });
+
+  it('lets you close a row that opened itself, and leaves it closed', async () => {
+    // The refusal stays in `status` until the next discovery run, so a naive
+    // "open when failed" would spring back open every time it was dismissed.
+    renderWithProviders(<ProvidersBlock {...baseProps({ status: STATUS })} />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: /^done$/i }));
+    // Collapse unmounts on exit, but only once the transition has run.
+    await waitFor(() => expect(screen.queryByLabelText('API key')).toBeNull());
   });
 
   it('has no Enabled switch, no Test button and no Save — a key is the whole configuration', () => {
@@ -160,9 +210,12 @@ describe('stopping a provider is one explicit button, not an empty box', () => {
     expect(onRemoveKey).toHaveBeenCalledWith('groq');
   });
 
-  it('the helper text no longer claims an empty box disables anything', () => {
+  it('never claims an empty box disables anything', () => {
     renderWithProviders(<ProvidersBlock {...baseProps()} />);
     expect(screen.queryByText(/clear the box to stop using/i)).not.toBeInTheDocument();
-    expect(screen.getAllByText(/use remove key to stop using this provider/i).length).toBeGreaterThan(0);
+    // The guidance used to be helper text under an always-open field. With the
+    // field collapsed, the button itself carries it: every keyed row shows the
+    // one control that actually stops a provider.
+    expect(screen.getAllByRole('button', { name: /remove key/i })).toHaveLength(2);
   });
 });
