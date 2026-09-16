@@ -14,11 +14,23 @@
  * on a panel you open to *read*, which is a destructive action sitting where
  * the eye lands first.
  *
- * Below `md` the two tables become card lists. Six and seven columns do not
+ * There used to be two tables here. "Provider Usage" carried six columns and
+ * "App Usage Breakdown" carried seven, five of them the same five numbers off
+ * the same `stats.providerUsage` object — the second table *is* the first one,
+ * disaggregated. Reading both meant reading every number twice and doing the
+ * addition yourself to check they agreed, which they always did.
+ *
+ * So the app table stays, because it is strictly the more informative of the
+ * two, and the provider totals became lines above it (2026-09-15). A line per
+ * provider still answers "which provider am I actually on" at a glance, and it
+ * keeps a provider visible even when it has no app rows behind it — which the
+ * app table alone would silently drop.
+ *
+ * Below `md` the remaining table becomes a card list. Seven columns do not
  * survive a 390px viewport: the cells collapse to roughly 40px and every
  * number wraps mid-digit. MOBILE_UI_PLAN §2 makes this a shared rule ("below
  * md a table renders as a card or definition list") with the layout left to
- * the app. The tables themselves are unchanged at md and up.
+ * the app. The table itself is unchanged at md and up.
  *
  * The app breakdown leads with the app, not the provider, and sorts by app id:
  * aiGeek resolves the caller from its API key and records a `feature`
@@ -172,6 +184,42 @@ function SessionLine({ stats }) {
 }
 
 /**
+ * The per-provider totals, one line each, in `SpendLine`'s rhythm.
+ *
+ * This replaces a six-column table whose every number also appeared in the app
+ * table below it. A line keeps all five figures and costs a fifth of the
+ * height, and — unlike the app table — it still shows a provider that has
+ * usage but no app rows behind it.
+ */
+function ProviderTotals({ rows, labels }) {
+  return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, mt: 1 }}>
+      {rows.map(([provider, usage]) => (
+        <Typography
+          key={provider}
+          variant="body2"
+          sx={{ fontVariantNumeric: 'tabular-nums', wordBreak: 'break-word' }}
+        >
+          <Box
+            component="span"
+            sx={{ fontWeight: 600, ...(labels[provider] ? null : { textTransform: 'capitalize' }) }}
+          >
+            {labels[provider] || provider}
+          </Box>
+          {' '}{(usage.calls || 0).toLocaleString()} call{usage.calls === 1 ? '' : 's'}
+          {' ('}
+          <Box component="span" sx={{ color: 'success.main' }}>{usage.freeCalls || 0} free</Box>
+          {' · '}
+          <Box component="span" sx={{ color: 'warning.main' }}>{usage.paidCalls || 0} paid</Box>
+          {') · '}{formatTokens(usage.tokens || 0)} tokens
+          {' · '}{formatCost(usage.cost || 0)}
+        </Typography>
+      ))}
+    </Box>
+  );
+}
+
+/**
  * "review ×640 / 200 · commit-message ×163 / 200" — the feature line, with the
  * app's daily cap beside each count (§2).
  *
@@ -195,12 +243,16 @@ export default function UsagePanel({
   statsError,
   spend,
   dailyCapFor,
+  providerLabels,
   isCompact,
   onRetry,
   onResetStats,
 }) {
   const providerUsage = stats.providerUsage || {};
   const providerRows = Object.entries(providerUsage);
+  // The vendors' own spelling, same source the Providers block reads. Without
+  // it `capitalize` renders "Openrouter" and "Llmgateway".
+  const labels = providerLabels || {};
 
   /**
    * One row per (app, provider) pair, ordered by app id so every row for an
@@ -257,7 +309,7 @@ export default function UsagePanel({
           */}
         <SessionLine stats={stats} />
 
-        <Typography variant="h6" sx={{ mt: 3, mb: 2 }}>Provider Usage</Typography>
+        <Typography variant="h6" sx={{ mt: 3, mb: 0.5 }}>By provider</Typography>
 
         {providerRows.length === 0 ? (
           <GeekEmptyState
@@ -265,53 +317,20 @@ export default function UsagePanel({
             title="No usage recorded yet"
             description="Provider rows appear once an app makes its first call through aiGeek."
           />
-        ) : isCompact ? (
-          <UsageCardList
-            rows={providerRows.map(([provider, usage]) => ({
-              key: provider,
-              title: provider,
-              fields: usageFields(usage),
-            }))}
-          />
         ) : (
-          <TableContainer component={Paper}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Provider</TableCell>
-                  <TableCell>Total Calls</TableCell>
-                  <TableCell>Free Calls</TableCell>
-                  <TableCell>Paid Calls</TableCell>
-                  <TableCell>Tokens</TableCell>
-                  <TableCell>Cost</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {providerRows.map(([provider, usage]) => (
-                  <TableRow key={provider}>
-                    <TableCell sx={{ textTransform: 'capitalize' }}>{provider}</TableCell>
-                    <TableCell>{usage.calls || 0}</TableCell>
-                    <TableCell sx={{ color: 'success.main' }}>{usage.freeCalls || 0}</TableCell>
-                    <TableCell sx={{ color: 'warning.main' }}>{usage.paidCalls || 0}</TableCell>
-                    <TableCell>{formatTokens(usage.tokens || 0)}</TableCell>
-                    <TableCell>{formatCost(usage.cost || 0)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <ProviderTotals rows={providerRows} labels={labels} />
         )}
 
         {appRows.length > 0 && (
           <>
-            <Typography variant="h6" sx={{ mt: 4, mb: 2 }}>App Usage Breakdown</Typography>
+            <Typography variant="h6" sx={{ mt: 4, mb: 2 }}>By app</Typography>
 
             {isCompact ? (
               <UsageCardList
                 rows={appRows.map(row => ({
                   key: row.key,
                   title: row.appId,
-                  subtitle: row.provider,
+                  subtitle: labels[row.provider] || row.provider,
                   note: row.features,
                   fields: usageFields(row.usage),
                 }))}
@@ -354,7 +373,9 @@ export default function UsagePanel({
                             </Tooltip>
                           )}
                         </TableCell>
-                        <TableCell sx={{ textTransform: 'capitalize' }}>{row.provider}</TableCell>
+                        <TableCell sx={labels[row.provider] ? undefined : { textTransform: 'capitalize' }}>
+                          {labels[row.provider] || row.provider}
+                        </TableCell>
                         <TableCell>{row.usage.calls || 0}</TableCell>
                         <TableCell sx={{ color: 'success.main' }}>{row.usage.freeCalls || 0}</TableCell>
                         <TableCell sx={{ color: 'warning.main' }}>{row.usage.paidCalls || 0}</TableCell>

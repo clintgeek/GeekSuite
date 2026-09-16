@@ -143,6 +143,7 @@ export default function AIGeekPage() {
             statsError={state.statsError}
             spend={state.status?.spend}
             dailyCapFor={(appId) => capsByApp.get(appId) ?? null}
+            providerLabels={state.status?.catalog?.labels}
             isCompact={isCompact}
             onRetry={aigeek.loadStatistics}
             onResetStats={() => dispatch({ type: 'confirm/set', which: 'showResetStatsConfirm', open: true })}
