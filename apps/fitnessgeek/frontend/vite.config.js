@@ -88,6 +88,16 @@ export default defineConfig({
       workbox: {
         cleanupOutdatedCaches: true,
         navigateFallback: '/index.html',
+        // Workbox's NavigationRoute (what navigateFallback registers) matches
+        // ANY navigation request regardless of HTTP method — not just GET.
+        // /share-target is the Web Share Target action from manifest.json:
+        // the Android share sheet POSTs a file there as a real top-level
+        // navigation. Left un-denylisted, the service worker would intercept
+        // that POST and answer with the precached index.html before it ever
+        // reached the network, silently dropping the shared file with no
+        // error. generateSW cannot express a custom POST fetch handler
+        // (DOCS/PWA_STANDARD.md), so the fix is exclusion, not interception.
+        navigateFallbackDenylist: [/^\/share-target/],
         runtimeCaching: [
           {
             // Auth endpoints must NEVER be cached — stale /api/me causes ghost sessions

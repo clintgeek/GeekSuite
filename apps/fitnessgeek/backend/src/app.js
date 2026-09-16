@@ -38,6 +38,8 @@ import medicationRoutes from './routes/medicationRoutes.js';
 import insightsRoutes from './routes/insightsRoutes.js';
 import foodReportRoutes from './routes/foodReportRoutes.js';
 import influxRoutes from './routes/influxRoutes.js';
+import shareTargetRoutes from './routes/shareTargetRoutes.js';
+import bodyCompRoutes from './routes/bodyCompRoutes.js';
 
 // ESM has no __dirname; derive it from import.meta.url (used for the built
 // frontend's public/ path below).
@@ -103,7 +105,20 @@ if (!usingEnvCorsOrigins && isProduction) {
 // into basegeek's unified GraphQL API: a GraphQL mutation is a POST, and it
 // is by far the most valuable thing on this backend for a third-party page to
 // try to reach. See DOCS/SSO_OVERVIEW.md#csrf.
-app.use(csrfGuard({ allowedOrigins, logger, appName: 'fitnessgeek' }));
+// `/share-target` is exempted deliberately, not because the guard would
+// otherwise misbehave (a request with neither Origin nor Referer already
+// passes it — see csrfGuard.js "why step 4 passes"), but because that path
+// is the Web Share Target action: a browser-initiated top-level navigation
+// from the Android share sheet, not a fetch this app's own JS made. Making
+// the exemption explicit means it doesn't depend on incidental
+// same-origin-navigation header behavior that could differ across
+// Android/Chrome versions. It's safe to exempt because that route performs
+// no authenticated, persistent write — it only stages bytes in memory under
+// a random single-use id (see shareTargetController.js for the full
+// reasoning); the real write happens at POST /api/body-comp/uploads, made
+// by this app's own authenticated fetch call, which is NOT exempted and
+// carries both a same-origin Origin header and the X-CSRF-Token header.
+app.use(csrfGuard({ allowedOrigins, logger, appName: 'fitnessgeek', exemptPaths: ['/share-target'] }));
 
 app.use(cors({
   origin: function (origin, callback) {
@@ -192,6 +207,13 @@ app.use('/api/meds', medicationRoutes);
 app.use('/api/insights', insightsRoutes);
 app.use('/api/food-reports', foodReportRoutes);
 app.use('/api/influx', influxRoutes);
+app.use('/api/body-comp', bodyCompRoutes);
+
+// Web Share Target action — top-level, not under /api/. See
+// shareTargetController.js for why it lives outside the CSRF-guarded
+// /api/body-comp mutation and outside VitePWA's navigateFallback
+// (vite.config.js's navigateFallbackDenylist).
+app.use('/share-target', shareTargetRoutes);
 
 // GraphQL reverse-proxy → BaseGeek unified API
 const BASEGEEK_URL = (process.env.BASEGEEK_URL || 'https://basegeek.clintgeek.com').replace(/\/$/, '');

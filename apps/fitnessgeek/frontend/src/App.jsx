@@ -28,6 +28,7 @@ const Activity = lazy(() => import('./pages/Activity.jsx'));
 const Reports = lazy(() => import('./pages/Reports.jsx'));
 const AIGoalPlanner = lazy(() => import('./components/FitnessGoals/AIGoalPlanner.jsx'));
 const HealthDashboard = lazy(() => import('./pages/HealthDashboard.jsx'));
+const ScanImport = lazy(() => import('./pages/ScanImport.jsx'));
 
 // Import contexts
 import { AuthProvider, useAuth } from '@geeksuite/auth';
@@ -86,6 +87,10 @@ function AppRoutes() {
         <Route path="activity" element={<Activity />} />
         <Route path="reports" element={<Reports />} />
         <Route path="health" element={<HealthDashboard />} />
+        {/* Web Share Target lands here (see manifest.json's share_target.action
+            and backend shareTargetController.js), plus the manual file-picker
+            fallback for iOS/desktop/re-imports. */}
+        <Route path="scan-import" element={<ScanImport />} />
         {/* Legacy goals route removed */}
         <Route path="calorie-wizard" element={<AIGoalPlanner />} />
         <Route path="profile" element={<Profile />} />
