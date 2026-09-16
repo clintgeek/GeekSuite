@@ -542,36 +542,4 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// GET /api/foods/search/:query - Search foods (alternative endpoint)
-router.get('/search/:query', async (req, res) => {
-  try {
-    const { query } = req.params;
-    const { limit = 25 } = req.query;
-    const userId = req.user.id;
-
-    const foods = await FoodItem.search(query, userId, parseInt(limit));
-
-    logger.info({
-      userId,
-      query,
-      count: foods.length
-    }, 'Food search performed');
-
-    res.json({
-      success: true,
-      data: foods
-    });
-
-  } catch (error) {
-    logger.error({ err: error }, 'Error searching foods:');
-    res.status(500).json({
-      success: false,
-      error: {
-        message: 'Failed to search foods',
-        code: 'FOOD_SEARCH_ERROR'
-      }
-    });
-  }
-});
-
 export default router;
