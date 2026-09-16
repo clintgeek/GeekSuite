@@ -197,6 +197,48 @@ describe('resolveNeed — no opinion is a real answer', () => {
   });
 });
 
+describe('vision — filters on the vendor\'s own modality claim, not a guess', () => {
+  it('will not offer a row the listing never declared image-capable', () => {
+    const rows = [row({ modelId: 'text-only', acceptsImageInput: false })];
+    expect(resolveNeed(rows, 'vision:fast', { now: NOW })).toBeNull();
+  });
+
+  it('treats "the provider never said" the same as "no" — unlike everywhere else in this file', () => {
+    // Every other axis lets an unmeasured row through mid-band so it can
+    // eventually be measured. Vision does not: an image sent to a model that
+    // cannot take one is a hard API error, not a quality risk worth finding
+    // out about live.
+    const rows = [row({ modelId: 'unknown-modality', acceptsImageInput: undefined })];
+    expect(resolveNeed(rows, 'vision:fast', { now: NOW })).toBeNull();
+    expect(scoreRow(rows[0], { task: 'vision', weight: 'fast' }, { now: NOW })).toBeNull();
+  });
+
+  it('picks the row the listing actually declared image-capable', () => {
+    const rows = [
+      row({ modelId: 'blind', acceptsImageInput: false }),
+      row({ modelId: 'sighted', acceptsImageInput: true }),
+    ];
+    expect(resolveNeed(rows, 'vision:balanced', { now: NOW }).modelId).toBe('sighted');
+  });
+
+  it('does not require fitness: structured for a vision pick', () => {
+    // Vision and structured are independent filters. A row that answers in
+    // prose but declares image input is still a valid vision candidate.
+    const rows = [row({ modelId: 'prose-but-sighted', fitness: 'basic', acceptsImageInput: true })];
+    expect(resolveNeed(rows, 'vision:balanced', { now: NOW }).modelId).toBe('prose-but-sighted');
+  });
+
+  it('explains a vision pick by what the listing declared', () => {
+    const picked = resolveNeed([row({ acceptsImageInput: true })], 'vision:balanced', { now: NOW });
+    expect(picked.why[0]).toMatch(/accepts image input/);
+  });
+
+  it('still honours ordinary exclusions for a vision need', () => {
+    const cooling = row({ modelId: 'cooling', acceptsImageInput: true, health: { coolingUntil: new Date(NOW + 60_000) } });
+    expect(resolveNeed([cooling], 'vision:fast', { now: NOW })).toBeNull();
+  });
+});
+
 describe('scoreRow ignores the fields that lie', () => {
   it('scores two rows identically when only performance.* differs', () => {
     const need = { task: 'structured', weight: 'fast' };

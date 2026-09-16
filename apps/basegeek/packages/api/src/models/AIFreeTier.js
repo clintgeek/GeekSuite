@@ -81,6 +81,45 @@ const aiFreeTierSchema = new mongoose.Schema({
     enum: ['structured', 'basic'],
     default: null
   },
+  /**
+   * Whether the vendor's own listing says this row will accept an image as
+   * input, for routing `need: 'vision:*'` (`aiNeedResolver.js`).
+   *
+   *   `true`  — the listing declared image among its input modalities
+   *   `false` — the listing declared input modalities and image was not one
+   *   `null`  — this provider's listing does not say (unknown)
+   *
+   * This field breaks the pattern every other `null` in this schema follows,
+   * and deliberately so. Everywhere else here, `null` means "unmeasured, so
+   * do not penalize it" — `fitness: null` still gets picked and probed,
+   * `quality.score: null` still ranks mid-band, `latency.p50Ms: null` still
+   * gets a fair shot at `fast` work. That principle exists because ranking an
+   * unmeasured row as *bad* would keep it from ever being selected, and
+   * therefore from ever being measured — a trap worth going out of the way to
+   * avoid for a quality signal.
+   *
+   * Vision is not a quality signal. Sending an image to a row that cannot
+   * accept one is not a worse answer to rank below a better one — it is a
+   * malformed request that the provider's API rejects outright, every time.
+   * There is no "try it and see how it does" here; there is only "does the
+   * request succeed at all". So `aiNeedResolver.js` treats `null` exactly like
+   * `false` for the `vision` task: both mean "do not send this row an image".
+   *
+   * The honest consequence, worth stating plainly: only OpenRouter's listing
+   * exposes `architecture.input_modalities` today (`aiCatalogDiscovery.js`'s
+   * `openRouterCatalog`). None of groq, cerebras, together, cloudflare,
+   * gemini, cohere, ollama or llmgateway's `/models` responses say anything
+   * about input modality, so every row from those eight providers carries
+   * `null` here indefinitely and is simply never a `vision` candidate — not
+   * because it cannot see images, but because nothing here has ever been told
+   * whether it can. That is a real limit of what those vendors' listings tell
+   * us, the same shape as "only groq and together send rate-limit headers" a
+   * few fields down, not a bug in this field or its resolver.
+   */
+  acceptsImageInput: {
+    type: Boolean,
+    default: null
+  },
   probedAt: {
     type: Date,
     default: null

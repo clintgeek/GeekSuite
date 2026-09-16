@@ -31,7 +31,7 @@
 import { classifyFreeTierFailure, withLatencySample, qualityIsFresh, isRetirement } from '../models/AIFreeTier.js';
 import { GOLDEN_SET, GOLDEN_MAX_TOKENS, scoreAnswer, rollUp, isConclusive } from './aiGoldenSet.js';
 import { PROVIDER_IDS } from '../config/aiProviders.js';
-import { isDenied } from '../config/aiCatalogOverrides.js';
+import { isDenied, deny as DENY_PATTERNS, VISION_HEAD_PATTERN } from '../config/aiCatalogOverrides.js';
 // The one-door runner's JSON tolerances, imported rather than copied: a model
 // that fences its JSON or wraps it in a one-key envelope is a model the
 // features can already use, so the probe must judge it the same way they do.
@@ -89,6 +89,19 @@ export const LIST_TIMEOUT_MS = 15000;
 // very confusing outage.
 export const CHAT_EXCLUDE =
   /whisper|tts|guard|embed|embedding|rerank|vision-preview|image|audio|veo|imagen|aqa|moderation|distil|lyria|music|(?:^|[-_/.])live(?:$|[-_/.])/i;
+
+/**
+ * `CHAT_EXCLUDE` above is about *output* modality — "can this thing answer in
+ * text at all" — and it stays a name pattern because vendors are consistent
+ * about naming a transcriber a transcriber. *Input* modality — "will this
+ * chat model also accept an image" — is a different question with a different
+ * answer: it is read from `architecture.input_modalities` in
+ * `openRouterCatalog` below, never guessed from an id, and it does not decide
+ * candidacy here. A model that cannot take an image is still a perfectly good
+ * `structured` or `reasoning` row; it is only excluded from `vision` work,
+ * downstream in `aiNeedResolver.js`. See `models/AIFreeTier.js` for the
+ * `acceptsImageInput` field this feeds and why its `null` is read as "no".
+ */
 
 /**
  * The provider's own auto-router, where it has one. It is ranked first within
@@ -305,6 +318,23 @@ export const PAID_FALLBACK_COUNT = 3;
  * `response_format` → jsonMode, `tools` → tools. `pricing` is dollars per
  * token, so ×1e6 for the per-1M unit AIPricing stores.
  *
+ * `architecture.input_modalities` → `acceptsImageInput`, the vendor's own
+ * statement of whether this row will accept an image at all. This is a
+ * different kind of fact than everything else in this function: `contextTokens`
+ * being wrong is a worse answer, `acceptsImageInput` being wrong is an API
+ * error on every call, because the request path sends the image whenever a
+ * caller asks for `need: 'vision:*'` and the vendor either accepts it or
+ * rejects the whole request. See `models/AIFreeTier.js` for why that makes its
+ * `null` behave unlike every other unmeasured field in this system, and
+ * `aiNeedResolver.js`'s header for how it is used.
+ *
+ * OpenRouter is the only listing this module reads that states input modality
+ * at all — none of groq, cerebras, together, cloudflare, gemini, cohere,
+ * ollama or llmgateway's `/models` responses carry an equivalent field, so
+ * their rows get no `acceptsImageInput` here and stay `null` (unknown) until
+ * one of those listings starts saying so. That is a real gap in what those
+ * vendors tell us, not a bug in this function.
+ *
  * Returns `{ free: rows[], paid: rows[] }`, paid sorted cheapest first, with
  * the first `PAID_FALLBACK_COUNT` structured-capable rows tagged
  * `role: 'paid-fallback'` for Phase 2's governed paid walk. Nothing else is
@@ -319,6 +349,12 @@ export function openRouterCatalog(raw) {
     const p = m.pricing || {};
     const outText = !m.architecture?.output_modalities || m.architecture.output_modalities.includes('text');
     if (!outText) continue;
+    // `null` when the listing says nothing about input modality at all (rare
+    // for OpenRouter, but not impossible); `true`/`false` when it does. Never
+    // guessed from the id — that is exactly the "vision" substring match this
+    // module's `CHAT_EXCLUDE` already avoids doing for output modality.
+    const inputModalities = Array.isArray(m.architecture?.input_modalities) ? m.architecture.input_modalities : null;
+    const acceptsImageInput = inputModalities ? inputModalities.includes('image') : null;
     const row = {
       provider: 'openrouter',
       modelId: m.id,
@@ -330,6 +366,7 @@ export function openRouterCatalog(raw) {
         jsonMode: params.includes('response_format'),
         tools: params.includes('tools')
       },
+      acceptsImageInput,
       inputPrice: Number(p.prompt || 0) * 1e6,
       outputPrice: Number(p.completion || 0) * 1e6
     };
@@ -789,6 +826,60 @@ export async function runGoldenSet({ rows, callProvider, updateOne = null, optio
 /* ──────────────────────────────── discovery ─────────────────────────────── */
 
 /**
+ * `deny` minus `VISION_HEAD_PATTERN`, computed once. Used below to ask "would
+ * this id still be denied for a reason OTHER than looking like a vision
+ * head?" — `translate`, `ocr`, `lyria|music` and the rest keep applying to a
+ * vision-capable row exactly as they would to any other; only the vision
+ * pattern itself gets an exception, and only where the listing earns it.
+ */
+const NON_VISION_DENY = DENY_PATTERNS.filter((re) => re !== VISION_HEAD_PATTERN);
+
+/**
+ * Does OpenRouter's own listing prove this id is a vision-capable *chat*
+ * model, not the OCR/vision-only head `VISION_HEAD_PATTERN` exists to catch?
+ *
+ * `aiCatalogOverrides.js`'s header names why that pattern exists: "a probe
+ * cannot see" whether a model that answers text is a real assistant or a
+ * narrow head, so a human wrote an id guess for the families a probe would be
+ * fooled by. That reasoning holds for `lora`, `translate`, `safety|guard`,
+ * `-code\b|coder`, `ocr` and `lyria|music` — none of those are observable from
+ * a listing. It stopped holding for vision specifically the moment
+ * `acceptsImageInput` existed: OpenRouter's listing already states whether a
+ * row accepts an image, and `CHAT_EXCLUDE`/`outText` above already prove
+ * whether it answers in text. A row that clears both is observed, not
+ * guessed, to be a vision-capable chat model — the exact distinction the
+ * pattern could not make on an id alone.
+ *
+ * Only OpenRouter's listing carries `architecture.input_modalities`, so this
+ * is `false` for every other provider by construction: the same limit
+ * documented in `models/AIFreeTier.js` — vision routing is observable
+ * OpenRouter-only until another vendor's listing says otherwise.
+ */
+function isObservedVisionChatModel(provider, id, raw) {
+  if (provider !== 'openrouter') return false;
+  const m = (raw?.data || []).find((entry) => entry?.id === id);
+  const inputModalities = Array.isArray(m?.architecture?.input_modalities) ? m.architecture.input_modalities : null;
+  if (!inputModalities?.includes('image')) return false;
+  const outputModalities = m?.architecture?.output_modalities;
+  return !outputModalities || outputModalities.includes('text');
+}
+
+/**
+ * `isDenied`, with the one narrow exception above applied. `isDenied` itself
+ * stays exactly as written — a blunt id gate that knows nothing about a
+ * listing — because it is tested and used elsewhere on that promise; the
+ * exception is call-site logic, not a change to what "denied" means.
+ */
+function isDeniedForDiscovery(provider, id, raw) {
+  if (!isDenied(id)) return false;
+  if (!VISION_HEAD_PATTERN.test(id)) return true; // denied by some other rule — unaffected
+  if (!isObservedVisionChatModel(provider, id, raw)) return true; // still an unproven guess
+  // Only the vision pattern denied this id, and the listing just disproved the
+  // guess it was making. Everything else in `deny` still gets a fair look.
+  return NON_VISION_DENY.some((re) => re.test(id));
+}
+
+/**
  * List every configured provider, pick the free-tier candidates, probe each
  * one, and report. Parallel across providers, sequential within one (rate
  * limits), and a provider that fails is reported and never aborts the others.
@@ -807,6 +898,11 @@ export async function runGoldenSet({ rows, callProvider, updateOne = null, optio
  * @param {Function} deps.probeProvider  aiService.callProvider
  * @param {number} [deps.timeoutMs]
  * @param {boolean} [deps.all]           skip the aiCatalogOverrides deny list
+ *                                       (see `isDeniedForDiscovery` for the one
+ *                                       narrow exception applied even when
+ *                                       `all` is false: an OpenRouter row the
+ *                                       listing proves is a vision-capable
+ *                                       chat model, not a vision-only head)
  * @param {Set<string>} [deps.denied]    'provider/modelId' keys with a human
  *                                       `deny` override — still listed, never
  *                                       probed. A denied row costs no quota.
@@ -824,7 +920,7 @@ export async function discover({ providers, probeProvider, listProvider, timeout
     }
 
     const candidates = freeCandidates(provider, raw)
-      .filter((id) => all || !isDenied(id))
+      .filter((id) => all || !isDeniedForDiscovery(provider, id, raw))
       .filter((id) => !denied?.has(`${provider}/${id}`));
     const candidateSet = new Set(candidates);
 
@@ -878,8 +974,17 @@ export async function discover({ providers, probeProvider, listProvider, timeout
  * parseable JSON can produce structured output, whatever its id suggests — so
  * the `AIModel` row is stamped `capabilities.source: 'probe'` unless the
  * caller passed richer capabilities from a listing.
+ *
+ * `acceptsImageInput` rides along from the listing (`openRouterCatalog`,
+ * today the only source of it) rather than from anything the probe itself
+ * measures — the probe sends text only, so it can prove a row alive and
+ * structured but has nothing to say about whether it would also accept an
+ * image. Written every time regardless of value (including `null`), because
+ * a row whose listing stopped saying "image" must lose that claim on the next
+ * alive write, the same way `fitness` is rewritten on every probe rather than
+ * only when it changes.
  */
-export async function writeAlive({ provider, modelId, fitness = null, name = null, capabilities = null, contextTokens = null, maxOutputTokens = null, now = new Date(), denied = false }, deps) {
+export async function writeAlive({ provider, modelId, fitness = null, name = null, capabilities = null, contextTokens = null, maxOutputTokens = null, acceptsImageInput = null, now = new Date(), denied = false }, deps) {
   const at = new Date(now);
   // `denied` carries a human's `deny` override through: the probe verdict is
   // real (the AIModel row below still records it) but it does not put the row
@@ -892,6 +997,7 @@ export async function writeAlive({ provider, modelId, fitness = null, name = nul
         $set: {
           isFree: true,
           fitness,
+          acceptsImageInput,
           probedAt: at,
           'health.consecutiveFailures': 0,
           'health.lastFailureAt': null,
@@ -1200,6 +1306,7 @@ export async function syncResults(results, deps, { now = Date.now() } = {}) {
           capabilities: listed?.capabilities ?? null,
           contextTokens: listed?.contextTokens ?? null,
           maxOutputTokens: listed?.maxOutputTokens ?? null,
+          acceptsImageInput: listed?.acceptsImageInput ?? null,
           denied: denied.has(`${row.provider}/${row.modelId}`),
           now
         }, deps);

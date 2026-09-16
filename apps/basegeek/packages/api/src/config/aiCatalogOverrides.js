@@ -14,7 +14,8 @@
  *
  * `allow` wins over `deny`: one genuine exception does not need a new rule.
  */
-export const deny = [/lora/i, /translate/i, /safety|guard/i, /-code\b|coder/i, /ocr/i, /vision|-vl[-:]/i, /lyria|music/i];
+export const VISION_HEAD_PATTERN = /vision|-vl[-:]/i; // discover() in aiCatalogDiscovery.js excepts THIS pattern alone when the listing proves otherwise
+export const deny = [/lora/i, /translate/i, /safety|guard/i, /-code\b|coder/i, /ocr/i, VISION_HEAD_PATTERN, /lyria|music/i];
 export const allow = [];
 
 /** `true` when this model id should never become a free-tier candidate. */
@@ -25,4 +26,4 @@ export function isDenied(modelId, overrides = { deny, allow }) {
   return (overrides.deny || []).some((re) => re.test(id));
 }
 
-export default { deny, allow, isDenied };
+export default { deny, allow, isDenied, VISION_HEAD_PATTERN };

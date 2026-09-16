@@ -102,6 +102,35 @@ Two axes, because they are the two decisions that actually differ:
   > which is `AIFreeTier.fitness` — the probe either got JSON out of the row or it did not.
   > The rest are accepted, recorded, and do not filter until the golden set exists. The
   > resolver says so in its `why`, out loud, rather than implying a judgement it cannot make.
+  >
+  > **Correction, 2026-09-16.** `vision` now filters too, ahead of the golden set, because the
+  > body-composition scan feature needed it and "recorded, not filtered" meant `need:
+  > 'vision:*'` silently ranked across every model in the catalog — including ones that
+  > cannot physically accept an image. The filter is `AIFreeTier.acceptsImageInput`, read
+  > from OpenRouter's `architecture.input_modalities` (`aiCatalogDiscovery.js`'s
+  > `openRouterCatalog`) — the only listing this suite reads that states input modality at
+  > all. It is a *different kind* of filter than `structured`'s, and deliberately so:
+  > sending an image to a model that cannot take one is not a quality question worth ranking,
+  > it is a hard API error on every call, so `null` ("this provider's listing never said") is
+  > treated the same as `false`, not as "unmeasured, be generous" the way every other field
+  > on this page is. The real consequence: groq, cerebras, together, cloudflare, gemini,
+  > cohere, ollama and llmgateway's listings say nothing about input modality, so their rows
+  > are simply never `vision` candidates today — not a bug, a limit of what those vendors'
+  > `/models` endpoints tell us. See `models/AIFreeTier.js` and `aiNeedResolver.js`'s headers
+  > for the full reasoning.
+  >
+  > **The landmine this uncovered, closed the same day.** `config/aiCatalogOverrides.js`'s
+  > `deny` list excluded any model id matching `/vision|-vl[-:]/i` from ever becoming a
+  > free-tier candidate at all — one layer upstream of the filter above, so a model could
+  > satisfy `acceptsImageInput` and still never reach it. That pattern was written when a probe
+  > genuinely could not tell a vision-*only* head from a real assistant; it could not tell
+  > Qwen's `-VL-` family or an OpenRouter "vision" slug apart from an OCR head either, and
+  > caught both. `discover()` in `aiCatalogDiscovery.js` now excepts that ONE pattern — never
+  > the other six — when OpenRouter's own listing proves the row both accepts an image and
+  > still answers in text (`isDeniedForDiscovery` / `isObservedVisionChatModel`). Every other
+  > `deny` pattern (`translate`, `ocr`, `lyria|music`, …) keeps applying to a vision-capable row
+  > exactly as before; an id matching two patterns at once (`qwen-vl-ocr`) stays denied on the
+  > one that is not vision. See §7.6 for the full account.
 - **weight** — `fast` (a person is waiting, ≤2s), `balanced`, `deep` (background, slow is
   fine).
 
@@ -385,3 +414,74 @@ call**. The published per-model limits are an entitlement once paid, not a free 
 `gemma4:31b` says 1,100 cal for four pancakes and `compound-mini` says 440, and both score
 `calibration=1`, because that question asks about pizza against a 400–800 band. The golden set
 measures correctness on known answers; it does not yet predict agreement on arbitrary dishes.
+
+### 7.6 `vision` was a name in the grammar with nothing behind it, 2026-09-16
+
+The body-composition scan feature needed a model that could actually look at an image, and
+`need: 'vision:*'` turned out to be exactly the gap §3.1's original correction admitted and
+left for later: "recorded, and do not filter." In practice that meant a vision request ranked
+across the entire catalog, including every text-only model in it, and would have silently
+handed a scan to a model that cannot see it.
+
+**Why this could not wait for the golden set the way `reasoning`/`prose`/`code` can.** Those
+three are ranking problems — a wrong guess produces a worse answer. Vision is a hard-capability
+problem — a wrong guess produces an API error, on every single call, because the request path
+sends the image and the vendor either accepts the whole request or refuses it. That is not a
+quality signal to defer until enough data exists; it is closer to `isFree` or `cooling`, a fact
+that must gate selection before ranking starts at all.
+
+**The filter and its `null`.** `AIFreeTier.acceptsImageInput` is read once, at listing time,
+from OpenRouter's `architecture.input_modalities` (`aiCatalogDiscovery.js`'s
+`openRouterCatalog`) — the only listing among the nine providers this suite calls that states
+input modality at all. `aiNeedResolver.js`'s `vision` filter requires it to be exactly `true`.
+This is the one field in the whole routing system where `null` is deliberately read as "no"
+rather than "unmeasured, be generous" — spelled out at length in both files' headers, because
+it looks, at a glance, like it violates this document's own "a row that has never been scored
+is NOT treated as a bad row" rule. It does not: that rule is about *quality*, where an
+unmeasured row still deserves a chance to be measured. There is no equivalent chance here — a
+model either accepts an image or the call fails, and nothing about asking more often changes
+that answer.
+
+**The real consequence.** groq, cerebras, together, cloudflare, gemini, cohere, ollama and
+llmgateway's `/models` listings say nothing about input modality, so every row from those eight
+providers carries `acceptsImageInput: null` indefinitely and is simply never offered for
+`vision` work — not because those vendors have no vision-capable models, but because nothing in
+this suite has ever been told which of their models qualify. Widening this beyond OpenRouter is
+future work, gated on a provider's listing actually saying so; guessing from a model's name
+would be exactly the mistake §2 documents `performance.*` making.
+
+**A landmine this uncovered, and closed the same day.**
+`config/aiCatalogOverrides.js`'s `deny` pattern (`/vision|-vl[-:]/i`) excludes any model id
+containing "vision" or "-vl-"/"-vl:" from ever becoming a free-tier candidate at all — one layer
+upstream of `acceptsImageInput`, in `discover()`'s call to `isDenied` (`aiCatalogDiscovery.js`).
+Written for OCR and vision-only heads that answer but are never a general pick, it also matched
+genuinely useful vision-capable chat models: Qwen's `-VL-` family and OpenRouter's `-vision-`
+slugs (`meta-llama/llama-3.2-11b-vision-instruct`) among free rows checked live. A model could
+satisfy `acceptsImageInput` and still never reach it, because the listing stage denied it first —
+this would have shipped a vision feature with, plausibly, zero working candidates.
+
+The fix is narrow, on purpose. `aiCatalogOverrides.js`'s own header explains why the file exists:
+"a probe cannot see" whether a model that answers text is a real assistant or a narrow head, so a
+human wrote id guesses for the families a probe would be fooled by. That reasoning still holds for
+`lora`, `translate`, `safety|guard`, `-code\b|coder` and `lyria|music` — none of those are
+observable from a listing, and none of them changed. It stopped holding for the vision pattern
+specifically the moment `acceptsImageInput` existed: OpenRouter's listing already states whether a
+row accepts an image, and the existing output-text check already proves whether it answers in
+text. A row that clears both is *observed*, not guessed, to be a vision-capable chat model.
+
+So `aiCatalogOverrides.js` now exports `VISION_HEAD_PATTERN` as its own name (the file stays a
+plain list — no new logic there, still 30 lines), and `aiCatalogDiscovery.js`'s `discover()`
+excepts an OpenRouter row from THAT pattern alone when `isObservedVisionChatModel` confirms it —
+every other pattern in `deny` still applies unchanged, so `qwen-vl-ocr` (vision AND `ocr`) stays
+denied, and a translate/safety/music row stays denied whether or not it happens to accept an
+image. The exception is OpenRouter-only by construction, for the same reason `acceptsImageInput`
+is: no other provider's listing states input modality, so `isObservedVisionChatModel` is
+unconditionally `false` elsewhere and those ids are denied exactly as they always were.
+
+**The limitation worth remembering.** Even with this fixed, vision routing is observable — not
+guessed, not broken, but also not general — for exactly one provider. Eight of the nine this suite
+calls (groq, cerebras, together, cloudflare, gemini, cohere, ollama, llmgateway) expose no
+input-modality data in their `/models` listings, so their rows can never earn `acceptsImageInput:
+true` and can never be excepted from `VISION_HEAD_PATTERN` either. `vision:*` today means
+"OpenRouter, or nothing" — a real ceiling on the free-tier pool for this feature, not a bug, and
+worth knowing before assuming the catalog has more vision coverage than it does.

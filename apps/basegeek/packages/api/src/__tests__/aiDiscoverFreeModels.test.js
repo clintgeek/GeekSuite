@@ -168,6 +168,38 @@ describe('openRouterCatalog — the one listing that carries price and capabilit
   });
 });
 
+/**
+ * Input modality — a different question than the output-modality filter above.
+ * `acceptsImageInput` feeds `aiNeedResolver.js`'s `vision` filter, and getting
+ * this wrong is not a ranking mistake, it is an API error on every call: see
+ * `models/AIFreeTier.js` for why `null` is read as "no" for this field alone.
+ */
+describe('openRouterCatalog — input modality, for vision routing', () => {
+  const RAW = { data: [
+    { id: 'sighted/one', pricing: { prompt: '0', completion: '0' },
+      architecture: { input_modalities: ['text', 'image'] }, supported_parameters: [] },
+    { id: 'blind/one', pricing: { prompt: '0', completion: '0' },
+      architecture: { input_modalities: ['text'] }, supported_parameters: [] },
+    { id: 'unstated/one', pricing: { prompt: '0', completion: '0' }, supported_parameters: [] },
+  ] };
+
+  it('reads true when the listing declares image among the input modalities', () => {
+    const { free } = openRouterCatalog(RAW);
+    expect(free.find(r => r.modelId === 'sighted/one').acceptsImageInput).toBe(true);
+  });
+
+  it('reads false when the listing states input modalities and image is not one', () => {
+    const { free } = openRouterCatalog(RAW);
+    expect(free.find(r => r.modelId === 'blind/one').acceptsImageInput).toBe(false);
+  });
+
+  it('reads null — not false — when the listing says nothing about input modality at all', () => {
+    // A model this file cannot rule OUT is not the same as one it can rule IN.
+    const { free } = openRouterCatalog(RAW);
+    expect(free.find(r => r.modelId === 'unstated/one').acceptsImageInput).toBeNull();
+  });
+});
+
 describe('aiCatalogOverrides — short, and last', () => {
   it('denies the families that answer but are never general assistants', () => {
     expect(isDenied('qwen2.5-coder-32b')).toBe(true);
@@ -257,6 +289,98 @@ describe('discover', () => {
     expect(summarizeByProvider(results).groq).toMatchObject({
       listed: 2, candidates: 2, alive: 1, dead: 1, structured: 1, error: null,
     });
+  });
+});
+
+/**
+ * The vision/OCR-head pattern in `aiCatalogOverrides.js` predates being able to
+ * observe input modality: it was a human's guess at families a probe could not
+ * tell apart from a real assistant, and it caught real vision-capable chat
+ * models (Qwen's `-VL-` family, anything OpenRouter names with "vision") right
+ * alongside the OCR/vision-only heads it was written for. `discover()` now
+ * excepts an OpenRouter row from THAT ONE pattern when the listing itself
+ * proves the row takes an image and still answers in text — every other deny
+ * pattern keeps applying unchanged, image input or not.
+ */
+describe('discover excepts an observed vision-capable chat model from the vision pattern only', () => {
+  const openRouterModel = (id, { input = ['text'], output = ['text'] } = {}) => ({
+    id,
+    pricing: { prompt: '0', completion: '0' },
+    architecture: { input_modalities: input, output_modalities: output },
+  });
+
+  it('lets a vision-capable chat model through, even though its id matches VISION_HEAD_PATTERN', async () => {
+    const listProvider = async () => ({ data: [
+      openRouterModel('meta-llama/llama-3.2-11b-vision-instruct:free', { input: ['text', 'image'] }),
+    ] });
+    const probed = [];
+    await discover({
+      providers: ['openrouter'],
+      listProvider,
+      probeProvider: async (_p, _prompt, config) => { probed.push(config.model); return { content: '{"task":"t","day":"Friday"}' }; },
+      timeoutMs: 500,
+    });
+    expect(probed).toContain('meta-llama/llama-3.2-11b-vision-instruct:free');
+  });
+
+  it('still denies a vision-pattern id whose listing does not declare image input', async () => {
+    const listProvider = async () => ({ data: [
+      openRouterModel('some/vision-model:free'), // input stays text-only
+    ] });
+    const probed = [];
+    await discover({
+      providers: ['openrouter'], listProvider,
+      probeProvider: async (_p, _prompt, config) => { probed.push(config.model); return { content: 'hello' }; },
+      timeoutMs: 500,
+    });
+    // `openrouter/free` (the auto-router) is always a candidate regardless of
+    // the listing; the id under test must not join it.
+    expect(probed).not.toContain('some/vision-model:free');
+  });
+
+  it('still denies ocr/translate/music rows on their own pattern, image input or not', async () => {
+    const listProvider = async () => ({ data: [
+      openRouterModel('some/ocr-model:free', { input: ['text', 'image'] }),
+      openRouterModel('some/translate-model:free', { input: ['text', 'image'] }),
+      openRouterModel('some/lyria-music:free', { input: ['text', 'image'] }),
+    ] });
+    const probed = [];
+    await discover({
+      providers: ['openrouter'], listProvider,
+      probeProvider: async (_p, _prompt, config) => { probed.push(config.model); return { content: 'hello' }; },
+      timeoutMs: 500,
+    });
+    expect(probed).not.toContain('some/ocr-model:free');
+    expect(probed).not.toContain('some/translate-model:free');
+    expect(probed).not.toContain('some/lyria-music:free');
+  });
+
+  it('still denies an id matching BOTH the vision pattern and another deny pattern', async () => {
+    // "qwen-vl-ocr" is exactly the case the exception must not swallow: vision
+    // input is real, but `ocr` denies it independently of the vision pattern.
+    const listProvider = async () => ({ data: [
+      openRouterModel('qwen-vl-ocr:free', { input: ['text', 'image'] }),
+    ] });
+    const probed = [];
+    await discover({
+      providers: ['openrouter'], listProvider,
+      probeProvider: async (_p, _prompt, config) => { probed.push(config.model); return { content: 'hello' }; },
+      timeoutMs: 500,
+    });
+    expect(probed).not.toContain('qwen-vl-ocr:free');
+  });
+
+  it('does not extend the exception to a provider whose listing states no modality at all', async () => {
+    // groq's `/models` carries no `architecture`, so this id is denied exactly
+    // as it always was — the exception is observable-OpenRouter-only.
+    const listProvider = async () => ({ data: [{ id: 'llava-vision-7b' }] });
+    const probed = [];
+    await discover({
+      providers: ['groq'], listProvider,
+      probeProvider: async (_p, _prompt, config) => { probed.push(config.model); return { content: 'hello' }; },
+      timeoutMs: 500,
+    });
+    expect(probed).toEqual([]);
   });
 });
 
@@ -499,6 +623,40 @@ describe('catalog writes name a path in one update operator only', () => {
       const paths = pathsOf(update);
       expect(paths.filter(p => p.endsWith('.name')).length).toBe(1);
     }
+  });
+});
+
+describe('writeAlive carries acceptsImageInput onto the AIFreeTier row', () => {
+  const capture = () => {
+    const writes = [];
+    return { writes, updateOne: async (filter, update) => { writes.push({ filter, update }); return { modifiedCount: 1 }; } };
+  };
+
+  it('writes true when the listing declared this row image-capable', async () => {
+    const model = capture(); const freeTier = capture();
+    await writeAlive(
+      { provider: 'openrouter', modelId: 'sighted/one', fitness: 'structured', acceptsImageInput: true },
+      { model, freeTier }
+    );
+    expect(freeTier.writes[0].update.$set.acceptsImageInput).toBe(true);
+  });
+
+  it('writes null when nothing was known, rather than defaulting to false', async () => {
+    // The distinction matters downstream: `aiNeedResolver.js` treats both
+    // `null` and `false` as "exclude from vision", but this write must not
+    // paper over "the listing never said" as if it were "the listing said no".
+    const model = capture(); const freeTier = capture();
+    await writeAlive({ provider: 'groq', modelId: 'text-only', fitness: 'structured' }, { model, freeTier });
+    expect(freeTier.writes[0].update.$set.acceptsImageInput).toBeNull();
+  });
+
+  it('does not write to AIFreeTier at all for a denied row', async () => {
+    const model = capture(); const freeTier = capture();
+    await writeAlive(
+      { provider: 'openrouter', modelId: 'sighted/one', fitness: 'structured', acceptsImageInput: true, denied: true },
+      { model, freeTier }
+    );
+    expect(freeTier.writes).toEqual([]);
   });
 });
 

@@ -51,16 +51,41 @@
  * forever, so it could never be scored — the same trap `weightClassOf` avoids.
  * An unscored row sits between measured-good and measured-bad.
  *
- * ── The honest gap that remains ─────────────────────────────────────────────
+ * That principle is about QUALITY specifically — whether a structured answer
+ * is any good — and it does not extend to `vision` below. A model nobody has
+ * scored yet might still turn out to be excellent; a model nobody has
+ * confirmed can accept an image might still turn out to reject the request.
+ * The two unknowns carry opposite risk, so they are handled oppositely.
  *
- * The task axis still has one member with a filter behind it: `structured`,
- * via `fitness`. `reasoning`, `prose`, `code` and `vision` are recorded and do
- * not filter — but the golden set's per-class scores now give `reasoning` and
- * `instruction` real signal to RANK on, which is most of the value.
+ * ── The task axis, updated ──────────────────────────────────────────────────
+ *
+ * Two members have a filter behind them now.
+ *
+ * `structured`, via `fitness` — the probe proved the row emits JSON.
+ *
+ * `vision`, via `AIFreeTier.acceptsImageInput` — the vendor's own listing said
+ * whether the row accepts image input at all. This is a *different kind* of
+ * filter than `structured`, and the difference matters: sending an image to a
+ * model that cannot take one is not a quality question to rank on, it is a
+ * hard API error on every single call, so unlike everything else in this
+ * file, `null` (the vendor's listing never said) is scored the same as
+ * `false` here rather than as "unmeasured, be generous". See
+ * `models/AIFreeTier.js` for the full reasoning and the real consequence:
+ * only OpenRouter's listing states input modality today, so every other
+ * provider's rows are simply not `vision` candidates until their listings
+ * start saying so.
+ *
+ * `reasoning`, `prose` and `code` are recorded and do not filter — but the
+ * golden set's per-class scores now give `reasoning` and `instruction` real
+ * signal to RANK on, which is most of the value.
  */
 import { weightClassOf, qualityIsFresh } from '../models/AIFreeTier.js';
 
-/** The task axis. Only `structured` is measurable today; see the header. */
+/**
+ * The task axis. `structured` and `vision` filter (see the header for why
+ * they filter differently); `reasoning`, `prose` and `code` are recorded and
+ * ranked on measured quality/latency only, not filtered.
+ */
 export const NEED_TASKS = Object.freeze(['structured', 'reasoning', 'prose', 'code', 'vision']);
 
 /** The weight axis: is a person waiting? */
@@ -158,6 +183,16 @@ export function qualityFor(row, task, now = Date.now()) {
 const isStructured = (row) => row?.fitness === 'structured';
 
 /**
+ * A row the vendor's own listing declared accepts image input.
+ *
+ * Deliberately strict equality to `true`: `false` and `null` (unknown) both
+ * fail this check, because both mean the same thing to a caller about to send
+ * an image — "do not". See `models/AIFreeTier.js` for why `vision` reads its
+ * `null` this way when nothing else in this file does.
+ */
+const isVisionCapable = (row) => row?.acceptsImageInput === true;
+
+/**
  * Why a row cannot serve this call at all, or `null` if it can.
  *
  * Every one of these is measured or stated, never inferred.
@@ -178,14 +213,19 @@ export function exclusionFor(row, { now = Date.now(), allowPaid = false } = {}) 
 /**
  * Points for one row against one parsed need. `null` means "cannot serve".
  *
- * The task axis is a hard filter for `structured` and a tie-breaker otherwise:
- * a row the probe watched emit valid JSON has demonstrated it can follow an
+ * The task axis is a hard filter for `structured` and `vision`, and a
+ * tie-breaker otherwise. `structured`'s filter is evidence-based: a row the
+ * probe watched emit valid JSON has demonstrated it can follow an
  * instruction precisely, which is weak evidence but is *evidence*, unlike
- * anything in `capabilities.tasks`.
+ * anything in `capabilities.tasks`. `vision`'s filter is not evidence about
+ * quality at all — it excludes on the vendor's own modality claim, because a
+ * wrong guess here is not a worse answer, it is a request the provider
+ * refuses outright.
  */
 export function scoreRow(row, need, { now = Date.now(), allowPaid = false } = {}) {
   if (exclusionFor(row, { now, allowPaid }) !== null) return null;
   if (need.task === 'structured' && !isStructured(row)) return null;
+  if (need.task === 'vision' && !isVisionCapable(row)) return null;
 
   const weightClass = weightClassOf(row.latency?.p50Ms) || 'unknown';
   let score = WEIGHT_POINTS[need.weight][weightClass];
@@ -238,7 +278,9 @@ export function resolveNeed(rows, need, { now = Date.now(), allowPaid = false } 
   const why = [
     parsed.task === 'structured'
       ? 'probe extracted JSON from this row'
-      : `task "${parsed.task}" has no measured discriminator yet — not filtered`,
+      : parsed.task === 'vision'
+        ? 'vendor listing declared this row accepts image input'
+        : `task "${parsed.task}" has no measured discriminator yet — not filtered`,
     weightClass === 'unknown'
       ? 'speed not measured yet'
       : `measured p50 ${best.row.latency.p50Ms}ms (${weightClass})`,
