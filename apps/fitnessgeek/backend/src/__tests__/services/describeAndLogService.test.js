@@ -69,7 +69,7 @@ jest.unstable_mockModule(mod('../../services/unifiedFoodService.js'), () => ({
   default: { search: unifiedSearch }
 }));
 
-const { logDescription, findInHistory, reviewLoggedEntries } = await import('../../services/describeAndLogService.js');
+const { logDescription, findInHistory, reviewLoggedEntries, usableRange } = await import('../../services/describeAndLogService.js');
 
 const estimated = (index, name, calories, extra = {}) => ({
   index,
@@ -320,5 +320,56 @@ describe('the background judge', () => {
 
     expect(result.logged).toHaveLength(1);
     released?.({ ok: false, verdicts: [] });
+  });
+});
+
+/**
+ * The one question is only asked when it can be answered.
+ *
+ * Plan §3.8 gates on the spread being wide enough to move the day. That is
+ * necessary and, as of 2026-09-16, not sufficient: asked for genuine
+ * uncertainty, `allam-2-7b` returned 0–1000 for pancakes and 0–2400 for
+ * nachos. The spread clears any threshold you like and the low end is zero,
+ * so the question would have rendered "Smaller · ~0 cal" — not a choice
+ * anybody can make.
+ *
+ * An unusable range is treated as no opinion: nothing is asked and the
+ * estimate stands, exactly as when a model gives no range at all.
+ */
+describe('usableRange', () => {
+  const range = (lowCalories, highCalories) => ({ lowCalories, highCalories });
+
+  test('accepts a real range around the logged value', () => {
+    expect(usableRange(range(400, 1200), 800)).toBe(true);
+  });
+
+  test('refuses a zero lower bound, however wide the spread', () => {
+    // The live case. 0–1000 is padding, not uncertainty.
+    expect(usableRange(range(0, 1000), 500)).toBe(false);
+    expect(usableRange(range(0, 2400), 1200)).toBe(false);
+  });
+
+  test('refuses a negative or inverted range', () => {
+    expect(usableRange(range(-100, 900), 500)).toBe(false);
+    expect(usableRange(range(1200, 400), 800)).toBe(false);
+  });
+
+  test('refuses a range the logged value sits outside', () => {
+    // If the number we wrote is not inside the model's own bounds, the bounds
+    // are describing something else.
+    expect(usableRange(range(400, 900), 1500)).toBe(false);
+    expect(usableRange(range(400, 900), 100)).toBe(false);
+  });
+
+  test('refuses a spread too narrow to be worth a tap', () => {
+    // Regular vs large fries is not a question (§3.8).
+    expect(usableRange(range(500, 700), 600)).toBe(false);
+  });
+
+  test('refuses a missing or non-numeric range', () => {
+    expect(usableRange(range(null, null), 500)).toBe(false);
+    expect(usableRange(range(undefined, 1200), 500)).toBe(false);
+    expect(usableRange({}, 500)).toBe(false);
+    expect(usableRange(null, 500)).toBe(false);
   });
 });

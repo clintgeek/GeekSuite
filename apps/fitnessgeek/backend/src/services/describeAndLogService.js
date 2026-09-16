@@ -322,6 +322,30 @@ async function ensureFoodItem(resolution, userId) {
 }
 
 /**
+ * Is this estimate's range worth putting in front of a person?
+ *
+ * Both ends have to be real numbers, the low above zero, the high above the
+ * low, and the logged value has to sit between them — otherwise the "range" is
+ * the model padding rather than describing its own uncertainty.
+ *
+ * Models are bad at this. Asked for genuine uncertainty on 2026-09-16,
+ * `allam-2-7b` returned 0-1000 for pancakes and 0-2400 for nachos: a lower
+ * bound of zero, and an upper that is just twice the estimate. "Smaller, about
+ * 0 cal" is not a choice, so an unusable range is treated as no opinion and
+ * nothing is asked — the same as when a model declines to give a range at all.
+ *
+ * The spread must still be wide enough to move the day (plan §3.8).
+ */
+export function usableRange(resolution, loggedCalories) {
+  const low = Number(resolution?.lowCalories);
+  const high = Number(resolution?.highCalories);
+  if (!Number.isFinite(low) || !Number.isFinite(high)) return false;
+  if (low <= 0 || high <= low) return false;
+  if (!Number.isFinite(loggedCalories) || loggedCalories < low || loggedCalories > high) return false;
+  return (high - low) > QUESTION_SPREAD_CALORIES;
+}
+
+/**
  * The whole job: a sentence about food becomes rows in the log.
  *
  * @param {string} text
@@ -384,8 +408,16 @@ export async function logDescription(text, { userId, date, hour, ...options } = 
         needsJudge: rails.severity === 'suspect'
       });
 
-      // Worth one question only when the answer moves the day.
-      if (resolution.spread != null && resolution.spread > QUESTION_SPREAD_CALORIES) {
+      // Worth one question only when the answer moves the day AND the range
+      // is one a person could actually pick from.
+      //
+      // Models are bad at this. Asked for genuine uncertainty, `allam-2-7b`
+      // returned 0–1000 for pancakes and 0–2400 for nachos on 2026-09-16:
+      // a lower bound of zero, and an upper that is just twice the estimate.
+      // "Smaller · ~0 cal" is not a choice, so an unusable range is treated as
+      // no opinion and nothing is asked — the estimate stands, which is the
+      // behaviour when a model declines to express a range at all.
+      if (usableRange(resolution, rails.totals.calories)) {
         questions.push({
           logId: String(log._id),
           name: resolution.name,
@@ -427,6 +459,7 @@ export async function logDescription(text, { userId, date, hour, ...options } = 
 
 export default {
   logDescription,
+  usableRange,
   resolveEntries,
   reviewLoggedEntries,
   findInHistory,
