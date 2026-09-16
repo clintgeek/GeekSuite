@@ -12,7 +12,8 @@ import { describe, it, expect } from '@jest/globals';
 
 const {
   GOLDEN_SET, GOLDEN_CLASSES, scoreAnswer, rollUp,
-  isLatinScript, firstJsonObject, firstNumber, sentenceCount, LATIN_RATIO_MIN
+  isLatinScript, firstJsonObject, firstNumber, sentenceCount, LATIN_RATIO_MIN,
+  isConclusive, GOLDEN_MIN_ANSWERED
 } = await import('../services/aiGoldenSet.js');
 
 const q = (id) => GOLDEN_SET.find((x) => x.id === id);
@@ -215,5 +216,59 @@ describe('the parsing helpers', () => {
   it('counts sentences by terminal punctuation', () => {
     expect(sentenceCount('One. Two! Three?')).toBe(3);
     expect(sentenceCount('No terminator here')).toBe(0);
+  });
+});
+
+/**
+ * An answer that never arrived is not a wrong answer.
+ *
+ * Found live on 2026-09-16: `gemini-3.1-flash-lite` scored 1.0 in one run and
+ * 0.2 minutes later, from the same six questions. Nothing about the model had
+ * changed — its free tier rate-limited four of the six the second time, and
+ * those were being scored as zeros. A rate limit says nothing about ability,
+ * and this is the same unmeasured-versus-bad distinction the resolver makes
+ * everywhere else, one level down.
+ */
+describe('errored questions are excluded, not zeroed', () => {
+  const ok = (id, className, score) => ({ id, className, score, offLanguage: false });
+  const failed = (id, className) => ({ id, className, score: null, errored: true });
+
+  it('does not let a rate limit drag the mean down', () => {
+    const rolled = rollUp([
+      ok('extract', 'structured', 1),
+      ok('refusal', 'structured', 1),
+      failed('numeracy', 'numeracy'),
+      failed('calibration', 'calibration'),
+    ]);
+    // Two perfect answers and two that never came back is a 1.0, not a 0.5.
+    expect(rolled.score).toBe(1);
+    expect(rolled.answered).toBe(2);
+    expect(rolled.errored).toBe(2);
+  });
+
+  it('reports nothing measurable when every question errored', () => {
+    const rolled = rollUp([failed('extract', 'structured'), failed('numeracy', 'numeracy')]);
+    expect(rolled.score).toBeNull();
+    expect(rolled.errored).toBe(2);
+  });
+
+  it('calls a run conclusive only when enough came back', () => {
+    const answered = (n) => rollUp(
+      Array.from({ length: n }, (_, i) => ok(`q${i}`, 'structured', 1))
+        .concat(Array.from({ length: 6 - n }, (_, i) => failed(`e${i}`, 'structured')))
+    );
+    expect(isConclusive(answered(6))).toBe(true);
+    expect(isConclusive(answered(4))).toBe(true);
+    expect(isConclusive(answered(3))).toBe(false);
+    expect(isConclusive(answered(0))).toBe(false);
+    expect(GOLDEN_MIN_ANSWERED).toBe(4);
+  });
+
+  it('still counts a genuine zero as a zero', () => {
+    // The distinction is "did not answer" vs "answered wrongly" — a wrong
+    // answer must keep costing the model its marks.
+    const rolled = rollUp([ok('numeracy', 'numeracy', 0), ok('extract', 'structured', 1)]);
+    expect(rolled.score).toBe(0.5);
+    expect(rolled.errored).toBe(0);
   });
 });

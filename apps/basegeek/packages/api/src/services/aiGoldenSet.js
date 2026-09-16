@@ -202,6 +202,20 @@ export const GOLDEN_CLASSES = Object.freeze(
 /* ──────────────────────────────── scoring ───────────────────────────────── */
 
 /**
+ * How many of the six must come back for a run to count as a measurement.
+ *
+ * Below this the run is inconclusive — a provider having a bad minute, not a
+ * model being bad — and must not overwrite a score earned when the provider was
+ * healthy.
+ */
+export const GOLDEN_MIN_ANSWERED = 4;
+
+/** Did enough questions come back to trust this run? */
+export function isConclusive(rolled) {
+  return !!rolled && typeof rolled.score === 'number' && rolled.answered >= GOLDEN_MIN_ANSWERED;
+}
+
+/**
  * Score one answer to one question.
  *
  * A reply in the wrong script scores zero whatever it says: the model did not
@@ -233,8 +247,16 @@ export function scoreAnswer(question, text) {
  * @param {Array<{id, className, score, offLanguage}>} answers
  */
 export function rollUp(answers = []) {
-  const scored = answers.filter((a) => a && typeof a.score === 'number');
-  if (scored.length === 0) return { score: null, byClass: {}, offLanguage: false, answered: 0 };
+  // An answer that never arrived is NOT a wrong answer. A 429 or a timeout
+  // says nothing about the model's ability, and scoring it zero is how a
+  // perfectly good model gets branded bad: on 2026-09-16 `gemini-3.1-flash-lite`
+  // scored 1.0 in one run and 0.2 minutes later, purely because its free tier
+  // rate-limited four of the six questions the second time.
+  const errored = answers.filter((a) => a && a.errored).length;
+  const scored = answers.filter((a) => a && !a.errored && typeof a.score === 'number');
+  if (scored.length === 0) {
+    return { score: null, byClass: {}, offLanguage: false, answered: 0, errored };
+  }
 
   const byClass = {};
   for (const className of new Set(scored.map((a) => a.className))) {
@@ -248,10 +270,11 @@ export function rollUp(answers = []) {
     // Recorded, because a model answering in the wrong script is a fact worth
     // seeing in the console rather than just a low number.
     offLanguage: scored.some((a) => a.offLanguage),
-    answered: scored.length
+    answered: scored.length,
+    errored
   };
 }
 
 const round2 = (n) => Math.round(n * 100) / 100;
 
-export default { GOLDEN_SET, GOLDEN_CLASSES, scoreAnswer, rollUp, isLatinScript };
+export default { GOLDEN_SET, GOLDEN_CLASSES, scoreAnswer, rollUp, isLatinScript, isConclusive };

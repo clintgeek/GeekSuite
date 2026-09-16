@@ -502,7 +502,11 @@ describe('golden set selection and scoring', () => {
     expect(out.offLanguage).toBe(true);
   });
 
-  it('counts a failing question as zero rather than losing the whole row', async () => {
+  it('sets one failing question aside rather than scoring it zero', async () => {
+    // This case asserted the opposite until 2026-09-16, and the opposite was
+    // wrong: a 429 is the provider having a bad minute, not the model being
+    // bad, and scoring it as a wrong answer is how `gemini-3.1-flash-lite`
+    // went from 1.0 to 0.2 between two runs minutes apart.
     let n = 0;
     const callProvider = async () => {
       n += 1;
@@ -510,7 +514,8 @@ describe('golden set selection and scoring', () => {
       return { content: '450' };   // right for numeracy, wrong for the rest
     };
     const out = await probe.runGoldenSetFor({ provider: 'groq', modelId: 'flaky' }, { callProvider });
-    expect(out.answered).toBe(6);
+    expect(out.answered).toBe(5);
+    expect(out.errored).toBe(1);
     expect(out.score).toBeGreaterThan(0);
     expect(out.score).toBeLessThan(1);
   });
@@ -539,5 +544,28 @@ describe('golden set selection and scoring', () => {
     });
     expect(out).toHaveLength(1);
     expect(out[0].modelId).toBe('dry');
+  });
+});
+
+describe('an inconclusive golden run is not written', () => {
+  it('skips the write when a provider was rate-limiting', async () => {
+    // Five of six errored. That is the provider having a bad minute, not a
+    // verdict on the model, and it must not overwrite a score earned when the
+    // provider was healthy.
+    let n = 0;
+    const callProvider = async () => {
+      n += 1;
+      if (n > 1) throw new Error('429 rate limited');
+      return { content: '450' };
+    };
+    const writes = [];
+    const out = await probe.runGoldenSet({
+      rows: [{ provider: 'groq', modelId: 'flaky', isFree: true, fitness: 'structured', health: {}, quality: {} }],
+      callProvider,
+      updateOne: async (query, update) => { writes.push({ query, update }); },
+      options: { now: NOW_MS },
+    });
+    expect(out[0].conclusive).toBe(false);
+    expect(writes).toEqual([]);
   });
 });

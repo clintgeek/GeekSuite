@@ -29,7 +29,7 @@
  */
 
 import { classifyFreeTierFailure, withLatencySample, qualityIsFresh } from '../models/AIFreeTier.js';
-import { GOLDEN_SET, GOLDEN_MAX_TOKENS, scoreAnswer, rollUp } from './aiGoldenSet.js';
+import { GOLDEN_SET, GOLDEN_MAX_TOKENS, scoreAnswer, rollUp, isConclusive } from './aiGoldenSet.js';
 import { PROVIDER_IDS } from '../config/aiProviders.js';
 import { isDenied } from '../config/aiCatalogOverrides.js';
 // The one-door runner's JSON tolerances, imported rather than copied: a model
@@ -583,7 +583,10 @@ export async function runGoldenSetFor(row, { callProvider, timeoutMs = DEFAULT_P
       const result = await Promise.race([call, guard]);
       answers.push(scoreAnswer(question, result?.content ?? ''));
     } catch {
-      answers.push({ id: question.id, className: question.className, score: 0, offLanguage: false });
+      // Not a zero. A 429 or a timeout says nothing about the model, and
+      // scoring it as a wrong answer is how a good model gets branded bad —
+      // see `rollUp`, which excludes these from the mean.
+      answers.push({ id: question.id, className: question.className, score: null, errored: true });
     } finally {
       if (timer) clearTimeout(timer);
     }
@@ -607,9 +610,12 @@ export async function runGoldenSet({ rows, callProvider, updateOne = null, optio
 
   for (const row of chosen) {
     const quality = await runGoldenSetFor(row, { callProvider, timeoutMs: timeout });
-    results.push({ provider: row.provider, modelId: row.modelId, ...quality });
+    const conclusive = isConclusive(quality);
+    results.push({ provider: row.provider, modelId: row.modelId, ...quality, conclusive });
 
-    if (updateOne) {
+    // An inconclusive run is a provider having a bad minute, not a verdict. It
+    // must not overwrite a score earned when that provider was healthy.
+    if (updateOne && conclusive) {
       await updateOne(
         { provider: row.provider, modelId: row.modelId },
         {
