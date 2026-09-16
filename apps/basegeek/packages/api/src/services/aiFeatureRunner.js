@@ -24,6 +24,15 @@
  * Nothing here writes to a user's data. Runners return proposals; the user's
  * confirmation drives the ordinary mutation.
  *
+ * **Attaching an image** (`ai/adapters/imageContent.js` has the full shape
+ * and rationale): a `messages[]` entry's `content` may be a content-parts
+ * array instead of a plain string, carrying `{type:'image', mediaType,
+ * data}` alongside `{type:'text', text}`. This function does not need to
+ * know that to carry it — `messages` was already opaque cargo all the way to
+ * `aiService.callAI` before images existed, and still is; the one thing this
+ * function *does* do differently is derive its own `prompt` fallback with
+ * `textOnly()` so an image never ends up base64-in-a-cache-key.
+ *
  * Usage:
  *
  *   const result = await runAIFeature({
@@ -39,6 +48,7 @@
 import logger from '../lib/logger.js';
 import aiService from './aiService.js';
 import { internalCaller } from './callerIdentity.js';
+import { textOnly } from './ai/adapters/imageContent.js';
 
 export const DEFAULT_TIMEOUT_MS = 6000;
 export const DEFAULT_MAX_CALLS_PER_DAY = 20;
@@ -289,7 +299,16 @@ export async function runFeatureCore(opts) {
       { role: 'system', content: system },
       { role: 'user', content: user },
     ];
-  const prompt = [...turns].reverse().find(m => m?.role === 'user')?.content ?? user ?? '';
+  // `content` may now be a content-parts array carrying an attached image
+  // (see `ai/adapters/imageContent.js` for the shape — the body-composition
+  // intake feature is the first caller of this). `prompt` is never the wire
+  // format for that image; it is only a fallback string for cache-key
+  // derivation and token estimation upstream in `aiService.callAI`, so
+  // `textOnly` strips any image part rather than letting one reach either as
+  // raw base64. The actual image still travels intact inside `turns`/
+  // `messages`, untouched by this function.
+  const lastUserContent = [...turns].reverse().find(m => m?.role === 'user')?.content;
+  const prompt = lastUserContent != null ? textOnly(lastUserContent) : (user ?? '');
 
   let content;
   try {

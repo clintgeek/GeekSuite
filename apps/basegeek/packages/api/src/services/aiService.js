@@ -15,6 +15,7 @@ import {
 // format and throw `AdapterError {provider, status, code, message}` — never a
 // sentence with the status inside it and never the provider's body (F-23).
 import { callAdapter } from './ai/adapters/index.js';
+import { partsOf, messagesNeedImageHandling } from './ai/adapters/imageContent.js';
 import AIModel from '../models/AIModel.js';
 import AIPricing from '../models/AIPricing.js';
 import aiUsageService from './aiUsageService.js';
@@ -96,6 +97,27 @@ function normalizeMessageContent(content) {
   }
 
   if (Array.isArray(content)) {
+    // An image-bearing content-parts array passes through UNTOUCHED, because
+    // the adapters are the only layer that knows how each provider wants an
+    // image and they can only do that job if the parts still exist when they
+    // see them.
+    //
+    // Flattening one here is not a lossy convenience, it is a silent wrong
+    // answer: the `JSON.stringify(part)` fallback below would join a base64
+    // blob into the prompt, the model would dutifully read it as text, and the
+    // call would come back confident and wrong having cost real quota. That is
+    // the same fault `adapters/cloudflare.js` carried until it was taught to
+    // refuse instead — this is one hop upstream of it, on the live
+    // `aiFeatureRunner` → `callAI` path.
+    //
+    // `partsOf` is imported rather than reimplemented so "a part this codebase
+    // recognizes" has exactly one definition. A text-only parts array still
+    // flattens, which is what every existing caller already relies on.
+    const { images, unrecognized } = partsOf(content);
+    if (!unrecognized && images.length > 0) {
+      return content;
+    }
+
     return content.map(part => {
       if (typeof part === 'string') return part;
       if (part?.text) return part.text;
@@ -823,6 +845,23 @@ class AIService {
     }
 
     logger.info(`📊 Context (${estimatedTokens} tokens) exceeds ${targetProvider} threshold (${threshold} tokens)`);
+
+    // An image cannot be summarized, and trying destroys it twice over: the
+    // summarizer reads only text, and the `newPrompt` reconstruction below
+    // interpolates `m.content` into a template string, which turns a
+    // content-parts array into `[object Object]`.
+    //
+    // Nothing should reach here carrying an image now that `extractTextContent`
+    // no longer counts base64 as prose, but "should not" is not "cannot": a
+    // genuinely long conversation that also has an image attached would still
+    // cross the threshold honestly. Send it as-is and let the provider be the
+    // one to complain about length — a real 413 from the model is a better
+    // outcome than a silently mangled request that costs quota and returns
+    // confident nonsense.
+    if (Array.isArray(messages) && messages.some((m) => messagesNeedImageHandling([m]))) {
+      logger.warn('Context exceeds threshold but carries an image — sending unsummarized rather than destroying it');
+      return { prompt, messages };
+    }
 
     // Summarize
     if (messages) {

@@ -19,7 +19,7 @@
 
 import { describe, test, expect, beforeEach, jest } from '@jest/globals';
 
-import aiGeekClient, { MAX_TIMEOUT_MS, UNAVAILABLE_MESSAGE } from '../../services/aiGeekClient.js';
+import aiGeekClient, { MAX_TIMEOUT_MS, UNAVAILABLE_MESSAGE, imagePart } from '../../services/aiGeekClient.js';
 
 const okEnvelope = (data = 'the answer') => ({
   data: {
@@ -216,6 +216,33 @@ describe('the answer it returns', () => {
 
   test('a missing feature name is a programming error and does throw', async () => {
     await expect(aiGeekClient.feature()).rejects.toThrow(TypeError);
+  });
+});
+
+describe('attaching an image', () => {
+  test('imagePart() builds aiGeek\'s neutral shape — no provider dialect in it', () => {
+    expect(imagePart('image/png', 'QUJD')).toEqual({
+      type: 'image',
+      mediaType: 'image/png',
+      data: 'QUJD'
+    });
+  });
+
+  test('a content-parts message carrying an image is forwarded verbatim — rule 2 holds', async () => {
+    const messages = [
+      { role: 'system', content: 'Extract the printed numbers.' },
+      { role: 'user', content: [
+        { type: 'text', text: 'Here is the scan.' },
+        imagePart('image/png', 'QUJD'),
+      ] },
+    ];
+    await aiGeekClient.feature('bodyCompExtract', { messages, need: 'vision:fast' });
+
+    const [, body] = post.mock.calls[0];
+    // Byte-for-byte: this client never inspects, rewrites or names a
+    // provider's own image field — it is exactly the array the caller built.
+    expect(body.messages).toEqual(messages);
+    expect(body.need).toBe('vision:fast');
   });
 });
 

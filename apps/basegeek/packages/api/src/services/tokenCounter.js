@@ -61,6 +61,23 @@ export function extractTextContent(content) {
 					if ('content' in block && typeof block.content === 'string') {
 						return block.content
 					}
+					// An image part contributes no TEXT. Falling through to
+					// `JSON.stringify` below would count its base64 payload as
+					// prose: a single ~750KB page image reads as roughly 190,000
+					// tokens, which clears every provider's context threshold on
+					// its own and sends the call into summarization — where the
+					// image does not survive. The count has to be wrong in the
+					// safe direction.
+					//
+					// This does NOT mean an image is free. Providers do charge
+					// tokens for one, at a rate that depends on the model and the
+					// image's dimensions rather than on its byte length, and
+					// nothing here models that yet. Under-counting risks a real
+					// context overflow the provider reports; over-counting broke
+					// the feature outright.
+					if (block.type === 'image') {
+						return ''
+					}
 				}
 				return JSON.stringify(block)
 			})

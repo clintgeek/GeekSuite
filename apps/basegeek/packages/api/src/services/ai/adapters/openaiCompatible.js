@@ -21,10 +21,18 @@
  *   dropSampling         sampling knobs this provider 400s on (none, here)
  *
  * Nothing in this file names a provider.
+ *
+ * **Vision.** This dialect's own multimodal shape — a `content` array of
+ * `{type:'text', text}` / `{type:'image_url', image_url:{url}}` parts — is
+ * what `messagesFrom`/`toOpenAIMessage` translate our provider-neutral
+ * content-parts shape into (see `imageContent.js`). A message with no image
+ * is forwarded exactly as it arrived; nothing about the plain-text path
+ * changes shape.
  */
 
 import axios from 'axios';
-import { throwAdapterError } from '../AdapterError.js';
+import { raiseAdapterError, throwAdapterError } from '../AdapterError.js';
+import { partsOf } from './imageContent.js';
 
 /** How long any adapter waits on a provider before giving up. */
 export const ADAPTER_TIMEOUT_MS = 60000;
@@ -77,11 +85,56 @@ export function stopSequencesFrom(stop) {
   return null;
 }
 
-/** The caller's messages, or the bare prompt as one user turn. */
-export function messagesFrom(messages, prompt) {
-  return (Array.isArray(messages) && messages.length > 0)
+/**
+ * Translate one message's neutral content (see `imageContent.js`) into
+ * OpenAI's own multimodal shape — but ONLY when it actually carries an
+ * image. A plain string stays a plain string, byte-for-byte, which is what
+ * keeps every caller that has never heard of an image untouched by this.
+ *
+ * groq, cerebras, together, openrouter and llmgateway all speak this dialect
+ * for vision the same way they speak it for text: `content` becomes an
+ * array of `{type:'text', text}` / `{type:'image_url', image_url:{url}}`
+ * parts, the image as a `data:` URI built from our neutral
+ * `{mediaType, data}` pair. Whether the *model* behind a given row can
+ * actually see it is the need-resolver's job (`aiNeedResolver.js`), not
+ * this adapter's — this only has to speak the wire format correctly.
+ *
+ * Throws `AdapterError` (`unsupported_content`) for a part this suite does
+ * not recognize, rather than the old behaviour of forwarding whatever
+ * `content` was verbatim and letting the provider 400 on a shape it had
+ * never heard of either.
+ */
+function toOpenAIMessage(message, ctx) {
+  const { text, images, unrecognized } = partsOf(message?.content);
+  if (unrecognized) {
+    raiseAdapterError({
+      provider: ctx.providerId,
+      model: ctx.model,
+      code: 'unsupported_content',
+      message: 'message content contained a part this adapter does not understand'
+    });
+  }
+  if (images.length === 0) {
+    // No image on this turn: leave the message exactly as it arrived. Tool
+    // turns, assistant `tool_calls`, everything else about the message is
+    // none of this function's business.
+    return message;
+  }
+  const parts = [];
+  if (text) parts.push({ type: 'text', text });
+  for (const image of images) {
+    parts.push({ type: 'image_url', image_url: { url: `data:${image.mediaType};base64,${image.data}` } });
+  }
+  return { ...message, content: parts };
+}
+
+/** The caller's messages, or the bare prompt as one user turn — translated
+ *  per-message for any attached image (see `toOpenAIMessage`). */
+export function messagesFrom(messages, prompt, ctx = {}) {
+  const base = (Array.isArray(messages) && messages.length > 0)
     ? messages
     : [{ role: 'user', content: prompt }];
+  return base.map(m => toOpenAIMessage(m, ctx));
 }
 
 /**
@@ -127,7 +180,7 @@ export async function call(pc, request = {}) {
     model,
     max_tokens: maxTokens,
     temperature,
-    messages: messagesFrom(messages, prompt),
+    messages: messagesFrom(messages, prompt, { providerId: pc.id, model }),
     ...(pc.sendsStreamFalse && { stream: false }),
     // Ask for the cost accounting. OpenRouter returns `usage.cost` (USD,
     // exact) when this is set; without it the ledger would have to price an

@@ -11,6 +11,7 @@ import { resolveFailure } from '../services/aiFailureEnvelope.js';
 import { legacyRoutingSwitches } from '../services/aiRoute.js';
 import { parseNeed, NEED_TASKS, NEED_WEIGHTS } from '../services/aiNeedResolver.js';
 import { runFeatureCore, DEFAULT_TIMEOUT_MS, DEFAULT_HTTP_MAX_CALLS_PER_DAY } from '../services/aiFeatureRunner.js';
+import { validateImageBudget } from '../services/ai/adapters/imageContent.js';
 import { cachedStatus, invalidateStatusCache } from '../services/aiStatusService.js';
 import { getInstance as catalogJob } from '../services/aiCatalogJob.js';
 import logger from '../lib/logger.js';
@@ -850,6 +851,18 @@ const positiveIntOr = (value, fallback) => {
  * free tier's own rate limits and the paid governor already bound; that
  * reasoning does not extend to anything else a body says (see
  * services/callerIdentity.js).
+ *
+ * **Attaching an image.** A `messages[]` entry's `content` may be a
+ * content-parts array instead of a plain string — `services/ai/adapters/
+ * imageContent.js` has the full shape (`{type:'image', mediaType, data}`
+ * alongside `{type:'text', text}`) and the reasoning for it. This route's
+ * only job with that array is `validateImageBudget` below: a per-image size
+ * cap, a per-request image count, and an allowed media-type list, checked
+ * BEFORE `runFeatureCore` ever attempts a call — a caller that oversteps
+ * gets a specific 400 rather than either a slow/expensive model call or
+ * Express's own generic body-too-large response. Translating the array into
+ * a provider's native wire format is each adapter's job, not this route's;
+ * whether the resolved model can actually see it is `need: 'vision:*'`'s.
  */
 router.post('/feature', async (req, res) => {
   try {
@@ -918,6 +931,20 @@ router.post('/feature', async (req, res) => {
         reason: 'invalid_request',
         error: { message: 'schema must be { name, description?, schema }', code: 'INVALID_SCHEMA' }
       });
+    }
+    // Any attached image's size/count/media-type budget — see the JSDoc
+    // above and `imageContent.js`. Checked before a call is ever attempted:
+    // a caller that oversteps gets a specific reason, not a slow model call
+    // or an opaque body-too-large from Express.
+    if (haveTurns) {
+      const imageBudget = validateImageBudget(messages);
+      if (!imageBudget.ok) {
+        return res.status(400).json({
+          ok: false,
+          reason: 'invalid_request',
+          error: { message: imageBudget.message, code: imageBudget.code }
+        });
+      }
     }
     // Both or neither. Refused rather than half-honoured: a picker that sends
     // only a provider has a bug, and answering it from that provider's default

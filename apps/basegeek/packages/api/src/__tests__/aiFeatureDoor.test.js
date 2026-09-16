@@ -51,7 +51,11 @@ const { _resetCounters } = await import('../services/aiFeatureRunner.js');
 
 function buildApp() {
   const app = express();
-  app.use(express.json());
+  // Match server.js's `aiBodyParser` (mounted ahead of the generic
+  // `express.json()` for `/api/ai`) rather than the default ~100kb limit —
+  // otherwise a real "too large" image test never reaches this route's own
+  // `validateImageBudget` refusal at all; Express's own limit 413s first.
+  app.use(express.json({ limit: process.env.AI_BODY_LIMIT || '8mb' }));
   app.use(cookieParser());
   const httpLogger = pinoHttp({
     logger,
@@ -233,6 +237,78 @@ describe('POST /api/ai/feature — the gate', () => {
       .send({ feature: 'gm', user: 'hi', schema: { name: 'T' } });
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('INVALID_SCHEMA');
+  });
+
+  // Body-composition intake (DOCS/BODY_COMPOSITION_INTAKE.md): a caller
+  // attaches an image via a content-parts array on `messages[].content`
+  // (services/ai/adapters/imageContent.js has the shape). These budgets are
+  // enforced here, before `runFeatureCore` ever attempts a call — the model
+  // is never asked, so `captured` (aiService.callAI) must stay untouched.
+  it('refuses an image over the per-image size cap', async () => {
+    const apiKey = await makeApiKey();
+    const tooBig = 'A'.repeat(6 * 1024 * 1024); // over the 5MB base64 cap
+    const res = await request(app)
+      .post('/api/ai/feature')
+      .set('Authorization', `Bearer ${apiKey}`)
+      .send({
+        feature: 'bodyCompExtract',
+        messages: [{ role: 'user', content: [
+          { type: 'text', text: 'read this scan' },
+          { type: 'image', mediaType: 'image/png', data: tooBig },
+        ] }],
+      });
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ ok: false, reason: 'invalid_request' });
+    expect(res.body.error.code).toBe('IMAGE_TOO_LARGE');
+    expect(captured).toBeNull();
+  });
+
+  it('refuses more than the per-request image count', async () => {
+    const apiKey = await makeApiKey();
+    const image = { type: 'image', mediaType: 'image/png', data: 'QUJD' };
+    const res = await request(app)
+      .post('/api/ai/feature')
+      .set('Authorization', `Bearer ${apiKey}`)
+      .send({
+        feature: 'bodyCompExtract',
+        messages: [{ role: 'user', content: [image, image, image, image, image, image, image, image, image] }],
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('TOO_MANY_IMAGES');
+    expect(captured).toBeNull();
+  });
+
+  it('refuses a media type it does not recognize as an image', async () => {
+    const apiKey = await makeApiKey();
+    const res = await request(app)
+      .post('/api/ai/feature')
+      .set('Authorization', `Bearer ${apiKey}`)
+      .send({
+        feature: 'bodyCompExtract',
+        messages: [{ role: 'user', content: [
+          { type: 'image', mediaType: 'application/pdf', data: 'QUJD' },
+        ] }],
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('INVALID_IMAGE_MEDIA_TYPE');
+    expect(captured).toBeNull();
+  });
+
+  it('accepts a well-formed image within budget and carries it to callAI untouched', async () => {
+    const apiKey = await makeApiKey();
+    const messages = [{ role: 'user', content: [
+      { type: 'text', text: 'read this scan' },
+      { type: 'image', mediaType: 'image/png', data: 'QUJD' },
+    ] }];
+    const res = await request(app)
+      .post('/api/ai/feature')
+      .set('Authorization', `Bearer ${apiKey}`)
+      .send({ feature: 'bodyCompExtract', messages });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    // Untranslated, untouched — provider translation is each adapter's job,
+    // never the front door's.
+    expect(captured.config.messages).toEqual(messages);
   });
 });
 

@@ -14,8 +14,9 @@
  */
 
 import axios from 'axios';
-import { throwAdapterError } from '../AdapterError.js';
+import { raiseAdapterError, throwAdapterError } from '../AdapterError.js';
 import { stopSequencesFrom, ADAPTER_TIMEOUT_MS } from './openaiCompatible.js';
+import { partsOf } from './imageContent.js';
 
 /**
  * The OpenAI conversation as Gemini `contents[]`.
@@ -42,8 +43,19 @@ import { stopSequencesFrom, ADAPTER_TIMEOUT_MS } from './openaiCompatible.js';
  * expects.
  *
  * System turns are skipped; they go in `systemInstruction`.
+ *
+ * **Vision.** A plain turn's content may be our neutral content-parts array
+ * (`imageContent.js`) instead of a bare string. Each image part becomes a
+ * Gemini `inlineData` part (`{mimeType, data}` — Gemini's own field names,
+ * camelCase, matching `generationConfig`/`systemInstruction` elsewhere in
+ * this file) alongside a `text` part for whatever text came with it. A part
+ * this suite does not recognize raises `AdapterError('unsupported_content')`
+ * rather than being silently dropped or serialized into the wrong field —
+ * `ctx` (`{providerId, model}`) is what lets that error say which row was
+ * asked. Tool-call and tool-result turns are untouched: an image inside a
+ * tool result is not a shape this suite has ever needed to support.
  */
-export function geminiContentsFrom(messages) {
+export function geminiContentsFrom(messages, ctx = {}) {
   const out = [];
   const nameByCallId = new Map();
 
@@ -93,9 +105,28 @@ export function geminiContentsFrom(messages) {
       continue;
     }
 
+    const { text, images, unrecognized } = partsOf(m.content);
+    if (unrecognized) {
+      raiseAdapterError({
+        provider: ctx.providerId,
+        model: ctx.model,
+        code: 'unsupported_content',
+        message: 'message content contained a part this adapter does not understand'
+      });
+    }
+    const parts = [];
+    if (text) parts.push({ text });
+    for (const image of images) {
+      parts.push({ inlineData: { mimeType: image.mediaType, data: image.data } });
+    }
+    // A turn with neither text nor an image (content was `''`/null) keeps
+    // sending one empty text part — the shape `generateContent` has always
+    // received from this branch, unchanged.
+    if (parts.length === 0) parts.push({ text: '' });
+
     out.push({
       role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content ?? '' }]
+      parts
     });
   }
 
@@ -125,7 +156,7 @@ export async function call(pc, request = {}) {
     if (systemText) {
       systemInstruction = { parts: [{ text: systemText }] };
     }
-    contents = geminiContentsFrom(messages);
+    contents = geminiContentsFrom(messages, { providerId: pc.id, model });
     if (contents.length === 0) {
       contents = [{ role: 'user', parts: [{ text: prompt }] }];
     }

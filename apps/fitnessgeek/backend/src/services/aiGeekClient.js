@@ -3,7 +3,7 @@
  *
  * Every AI call this backend makes goes through `feature(name, payload)` and
  * lands on `POST /api/ai/feature` (aiGeek front door, Phase 2 —
- * apps/basegeek/DOCS/AIGEEK_FRONT_DOOR.md §4). It replaces three separate
+ * apps/basegeek/DOCS/ARCHIVE/AIGEEK_FRONT_DOOR.md §4). It replaces three separate
  * axios wrappers (`baseGeekAIService.callAI`, `fitnessGoalService.callAI`,
  * `baseGeekAIService.chatWithHistory`) that each spoke a different dialect of
  * the deprecated `/api/ai/call` and each 500'd the user on any failure.
@@ -22,7 +22,44 @@
  * permission `ai:call`) — the same credential and header the old
  * `/api/ai/call` used. aiGeek resolves the app from that credential, so
  * nothing in the body says who is calling.
+ *
+ * **Attaching an image** (body-composition intake —
+ * apps/fitnessgeek/DOCS/BODY_COMPOSITION_INTAKE.md — is the first caller of
+ * this): put a content-parts array on the relevant `messages[]` entry's
+ * `content` instead of a plain string, mixing `{type:'text', text}` with
+ * `{type:'image', mediaType, data}` — `imagePart()` below builds the second
+ * kind. This is aiGeek's own provider-neutral shape
+ * (apps/basegeek/packages/api/src/services/ai/adapters/imageContent.js is
+ * the canonical definition; this file cannot import across the app boundary,
+ * so it restates the same literal shape rather than sharing the module —
+ * keep the two in sync if either changes) and rule 2 above is exactly why it
+ * has to be provider-neutral: naming `image_url` or `inlineData` here would
+ * be this file knowing a provider's dialect. `feature()` forwards `payload.
+ * messages` verbatim, so nothing about carrying an image needs a change to
+ * this method — the array rides inside a field this client already treats as
+ * opaque cargo. The front door enforces a per-image size cap, an image count
+ * cap and an allowed media-type list (`imageContent.js`'s constants) and
+ * refuses with `INVALID_REQUEST`-shaped reasons over that; this client's
+ * `feature()` reports any such refusal the same way it reports every other
+ * failure — `{ ok: false, reason: 'unavailable' }` — because rule 1 does not
+ * carve out an exception for "the caller's own request was bad."
  */
+
+/**
+ * Build one image content-part in aiGeek's neutral shape. A thin,
+ * deliberately dumb constructor — it does not sniff, resize or validate the
+ * image; the front door's `validateImageBudget` is what enforces the size
+ * and media-type budget, and BODY_COMPOSITION_INTAKE.md §4 is why sniffing
+ * the real bytes (never trusting a file extension) is the caller's job.
+ *
+ * @param {string} mediaType  a declared IANA media type — `image/png`,
+ *        `image/jpeg`, `image/webp` are the ones the front door accepts today
+ * @param {string} base64Data  raw base64, no `data:` URI prefix
+ * @returns {{type: 'image', mediaType: string, data: string}}
+ */
+export function imagePart(mediaType, base64Data) {
+  return { type: 'image', mediaType, data: base64Data };
+}
 
 import axios from 'axios';
 import logger from '../config/logger.js';
@@ -108,7 +145,13 @@ class AIGeekClient {
    *                             `schema`, `conversationId`, `maxTokens`,
    *                             `temperature`, `maxCallsPerDay`, and a
    *                             `provider`+`model` pin if the caller has one,
-   *                             and `quotaKey` (the per-user cap bucket)
+   *                             and `quotaKey` (the per-user cap bucket).
+   *                             Any `messages[].content` may be an
+   *                             image-attaching content-parts array — see
+   *                             `imagePart()` and the note above the class.
+   * @param {string} [payload.need]  `<task>:<weight>`, e.g. `'vision:fast'` —
+   *                             what a call attaching an image should send
+   *                             instead of a model id.
    * @param {object} [options]   `{ timeoutMs }` — clamped to [1000, 60000]
    * @returns {Promise<{ok: boolean, data: any, reason: string|null,
    *                    message?: string, provenance: object}>}

@@ -10,11 +10,22 @@
  * back, and F-04 is the rule that a provider joins TOOL_FORWARDING_PROVIDERS
  * the day its adapter learns the parameter — never before, because a false
  * claim is *selected* and then silently dropped.
+ *
+ * **Vision.** `/api/chat` genuinely supports it, and simply: a message-level
+ * `images` array of bare base64 strings — no media type, no `data:` wrapper,
+ * the server sniffs the bytes itself. A message whose content is our
+ * neutral content-parts array (`imageContent.js`) is translated into
+ * `{role, content: <joined text>, images: [<base64>, ...]}`; a plain-string
+ * message is forwarded completely unchanged, exactly as before this existed.
+ * A part this suite does not recognize raises `AdapterError
+ * ('unsupported_content')` rather than being sent as-is for Ollama's own
+ * chat endpoint to reject or misinterpret.
  */
 
 import axios from 'axios';
-import { throwAdapterError } from '../AdapterError.js';
+import { raiseAdapterError, throwAdapterError } from '../AdapterError.js';
 import { stopSequencesFrom, ADAPTER_TIMEOUT_MS } from './openaiCompatible.js';
+import { partsOf } from './imageContent.js';
 
 export async function call(pc, request = {}) {
   const {
@@ -26,7 +37,19 @@ export async function call(pc, request = {}) {
     timeoutMs = ADAPTER_TIMEOUT_MS
   } = request;
 
-  const requestMessages = messages || [{ role: 'user', content: prompt }];
+  const requestMessages = (messages || [{ role: 'user', content: prompt }]).map(m => {
+    const { text, images, unrecognized } = partsOf(m.content);
+    if (unrecognized) {
+      raiseAdapterError({
+        provider: pc.id,
+        model,
+        code: 'unsupported_content',
+        message: 'message content contained a part this adapter does not understand'
+      });
+    }
+    if (images.length === 0) return m;
+    return { ...m, content: text, images: images.map(image => image.data) };
+  });
   const dropped = new Set(pc.dropSampling || []);
   const stop = dropped.has('stop') ? null : stopSequencesFrom(request.stop);
 

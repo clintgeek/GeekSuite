@@ -6,11 +6,21 @@
  * verbatim out of `aiService.callCohere` in Phase 2, including the deliberate
  * refusal to forward `tools` (see the note below it) and Cohere's own spelling
  * of the sampling knobs (F-09).
+ *
+ * **No vision.** This is Cohere's classic `/chat` — text in, text out, no
+ * image field anywhere in its contract. (Cohere's vision-capable models sit
+ * behind a different endpoint this adapter does not speak.) A message
+ * carrying our neutral image content-parts (`imageContent.js`) is refused
+ * with `AdapterError('unsupported_content')` rather than being folded into
+ * `message`/`chat_history` as a value Cohere was never going to render as a
+ * picture — the fate the raw `JSON.stringify` fallthrough this file used to
+ * risk (see `cloudflare.js`'s header for the incident this pattern caused).
  */
 
 import axios from 'axios';
-import { throwAdapterError } from '../AdapterError.js';
+import { raiseAdapterError, throwAdapterError } from '../AdapterError.js';
 import { stopSequencesFrom, ADAPTER_TIMEOUT_MS } from './openaiCompatible.js';
+import { partsOf } from './imageContent.js';
 
 export async function call(pc, request = {}) {
   const {
@@ -29,14 +39,29 @@ export async function call(pc, request = {}) {
   let currentMessage = prompt;
   const chatHistory = [];
   if (messages && Array.isArray(messages) && messages.length > 0) {
+    // Refuse up front, before any text is folded together: this adapter has
+    // no field to put an image in, at any position in the conversation.
+    for (const m of messages) {
+      const { images, unrecognized } = partsOf(m?.content);
+      if (images.length > 0 || unrecognized) {
+        raiseAdapterError({
+          provider: pc.id,
+          model,
+          code: 'unsupported_content',
+          message: unrecognized
+            ? 'message content contained a part this adapter does not understand'
+            : 'cohere adapter cannot transmit image content'
+        });
+      }
+    }
     const systemMsgs = messages.filter(m => m.role === 'system');
-    preamble = systemMsgs.map(m => m.content ?? '').filter(Boolean).join('\n\n');
+    preamble = systemMsgs.map(m => partsOf(m.content).text).filter(Boolean).join('\n\n');
     const convo = messages.filter(m => m.role !== 'system');
     if (convo.length > 0) {
       const last = convo[convo.length - 1];
-      currentMessage = last.content ?? prompt;
+      currentMessage = partsOf(last.content).text || prompt;
       for (const m of convo.slice(0, -1)) {
-        chatHistory.push({ role: m.role === 'assistant' ? 'CHATBOT' : 'USER', message: m.content ?? '' });
+        chatHistory.push({ role: m.role === 'assistant' ? 'CHATBOT' : 'USER', message: partsOf(m.content).text });
       }
     }
   }

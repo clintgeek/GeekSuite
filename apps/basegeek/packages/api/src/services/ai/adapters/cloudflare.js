@@ -16,11 +16,25 @@
  * Plus: JSON mode answers with `result.response` as an *object*, and callers
  * expect text; and a 402 is "out of neurons for today", not a bad request.
  * Moved verbatim out of `aiService.callCloudflare` in Phase 2.
+ *
+ * **No vision, and this used to be dangerous rather than merely absent.**
+ * `cfMessages` used to build `content` as
+ * `typeof m.content === 'string' ? m.content : JSON.stringify(m.content ?? '')`
+ * — so any caller sending our neutral image content-parts (`imageContent.js`)
+ * would have had the whole part array `JSON.stringify`'d and read to the
+ * model as literal text: `[{"type":"image","mediaType":"image/png","data":
+ * "iVBOR…"}]`. The call would succeed, cost quota, and the model would
+ * confidently describe JSON syntax instead of a photo — wrong, but shaped
+ * exactly like a right answer. This endpoint's messages-based chat contract
+ * has no image field at all (Workers AI's vision models take a completely
+ * different `{image, prompt}` contract this adapter does not implement), so
+ * an image now raises `AdapterError('unsupported_content')` instead.
  */
 
 import axios from 'axios';
 import { raiseAdapterError, throwAdapterError } from '../AdapterError.js';
 import { ADAPTER_TIMEOUT_MS } from './openaiCompatible.js';
+import { partsOf } from './imageContent.js';
 
 export async function call(pc, request = {}) {
   const {
@@ -48,10 +62,23 @@ export async function call(pc, request = {}) {
 
   const requestMessages = messages || [{ role: 'user', content: prompt }];
 
-  const cfMessages = requestMessages.map(m => ({
-    role: m.role === 'system' || m.role === 'assistant' ? m.role : 'user',
-    content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content ?? ''),
-  }));
+  const cfMessages = requestMessages.map(m => {
+    const { text, images, unrecognized } = partsOf(m.content);
+    if (images.length > 0 || unrecognized) {
+      raiseAdapterError({
+        provider: pc.id,
+        model,
+        code: 'unsupported_content',
+        message: unrecognized
+          ? 'message content contained a part this adapter does not understand'
+          : 'cloudflare adapter cannot transmit image content'
+      });
+    }
+    return {
+      role: m.role === 'system' || m.role === 'assistant' ? m.role : 'user',
+      content: text,
+    };
+  });
   const rf = responseFormat;
   const cfResponseFormat = rf?.type === 'json_schema'
     ? { type: 'json_schema', json_schema: rf.json_schema?.schema || rf.json_schema }
