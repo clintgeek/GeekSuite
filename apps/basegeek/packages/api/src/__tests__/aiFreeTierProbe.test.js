@@ -810,3 +810,93 @@ describe('pacing the golden set to a stated ceiling', () => {
     expect(waits.every((w) => w === 12000)).toBe(true);
   });
 });
+
+/**
+ * Keeping the catalog and the free-tier list from disagreeing.
+ *
+ * `AIModel` and `AIFreeTier` describe the same models from two angles, and
+ * `selectFreeTierCandidates` reads only the second — it never joins the first.
+ * So every correction applied to `AIModel` alone left the row fully selectable,
+ * and the two collections could drift apart indefinitely with only one of them
+ * being maintained. These are the three places that drift happened.
+ */
+describe('the catalog reconciles itself', () => {
+  const collection = () => {
+    const writes = [];
+    return {
+      writes,
+      updateOne: async (filter, update) => { writes.push({ op: 'updateOne', filter, update }); return { modifiedCount: 1 }; },
+      updateMany: async (filter, update) => { writes.push({ op: 'updateMany', filter, update }); return { modifiedCount: 2 }; },
+      deleteMany: async (filter) => { writes.push({ op: 'deleteMany', filter }); return { deletedCount: 7 }; },
+    };
+  };
+
+  it('demotes a model the listing no longer counts as free', async () => {
+    // `discover` computes isFree for every listed model and `writeListed` threw
+    // the answer away, so adding `lyria` (a MUSIC model) to the modality filter
+    // would have changed nothing for the row already in the catalog.
+    const model = collection();
+    const freeTier = collection();
+    await probe.writeListed(
+      { provider: 'openrouter', modelId: 'google/lyria-3-pro-preview', name: 'Lyria', isFree: false },
+      { model, freeTier }
+    );
+    const demote = freeTier.writes.find((w) => w.update?.$set?.isFree === false);
+    expect(demote).toBeTruthy();
+    expect(demote.filter).toMatchObject({ provider: 'openrouter', modelId: 'google/lyria-3-pro-preview', isFree: true });
+  });
+
+  it('never promotes — a listing must not revive what a 404 retired', async () => {
+    // Demote-only is the whole safety property: proving a row usable is the
+    // probe's job, and a one-directional rule cannot undo retirement by accident.
+    const model = collection();
+    const freeTier = collection();
+    await probe.writeListed(
+      { provider: 'groq', modelId: 'some-model', name: 'Some', isFree: true },
+      { model, freeTier }
+    );
+    expect(freeTier.writes).toEqual([]);
+  });
+
+  it('takes an unlisted model out of selection, not just out of the catalog', async () => {
+    const model = collection();
+    const freeTier = collection();
+    const out = await probe.deactivateUnlisted(
+      { provider: 'groq', listedIds: ['still-here'] },
+      { model, freeTier }
+    );
+    expect(out.deactivated).toBe(2);
+    expect(out.demoted).toBe(2);
+    const demote = freeTier.writes.find((w) => w.update?.$set?.isFree === false);
+    expect(demote.filter.modelId).toEqual({ $nin: ['still-here'] });
+  });
+
+  it('prunes rows for a roster provider we hold no key for', async () => {
+    // together carried 416 catalog models and 16 free rows for a provider
+    // nothing could reach; pruneUnknownProviders only removes providers that
+    // have LEFT the roster, so nothing ever cleaned these.
+    const deps = { model: collection(), freeTier: collection(), pricing: collection() };
+    const out = await probe.pruneUnconfiguredProviders(
+      { configured: ['groq', 'gemini'], roster: ['groq', 'gemini', 'together', 'llmgateway'] },
+      deps
+    );
+    expect(out).toEqual({ AIModel: 7, AIFreeTier: 7, AIPricing: 7 });
+    expect(deps.model.writes[0].filter).toEqual({ provider: { $in: ['together', 'llmgateway'] } });
+  });
+
+  it('prunes nothing when every roster provider has a key', async () => {
+    const deps = { model: collection(), freeTier: collection(), pricing: collection() };
+    const out = await probe.pruneUnconfiguredProviders(
+      { configured: ['groq', 'gemini'], roster: ['groq', 'gemini'] },
+      deps
+    );
+    expect(out).toEqual({});
+    expect(deps.model.writes).toEqual([]);
+  });
+
+  it('never touches AIConfig — a job that can delete a key can lose Chef’s keys', async () => {
+    const deps = { model: collection(), freeTier: collection(), pricing: collection(), config: collection() };
+    await probe.pruneUnconfiguredProviders({ configured: [], roster: ['together'] }, deps);
+    expect(deps.config.writes).toEqual([]);
+  });
+});

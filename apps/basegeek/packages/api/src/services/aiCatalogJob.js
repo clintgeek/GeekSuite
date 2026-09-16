@@ -344,6 +344,24 @@ export class AICatalogJob {
         this.log.warn({ err }, '[CatalogJob] prune failed');
       }
 
+      // And rows for a provider still in the roster that we hold no key for.
+      // Those were never pruned by anything: inert, because selection skips a
+      // keyless provider, but read on every status build and wrong in every
+      // count the console shows.
+      try {
+        const stale = await this.discovery.pruneUnconfiguredProviders(
+          { configured: this.configuredProviders(), roster: this.providerIds },
+          this.writeDeps
+        );
+        const n = Object.values(stale).reduce((a, b) => a + (b || 0), 0);
+        if (n > 0) {
+          run.prunedUnconfigured = stale;
+          this.log.info({ pruned: stale }, `[CatalogJob] pruned ${n} row(s) for providers with no credential`);
+        }
+      } catch (err) {
+        this.log.warn({ err }, '[CatalogJob] unconfigured prune failed');
+      }
+
       this.log.info({ counts, perProvider: run.perProvider }, '[CatalogJob] discovery complete');
     } catch (err) {
       run.error = this.discovery.safeErrorText(err?.message || 'error', 200);

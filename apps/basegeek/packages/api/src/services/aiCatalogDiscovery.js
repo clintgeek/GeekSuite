@@ -934,6 +934,17 @@ export async function writeDead({ provider, modelId, code = 'unknown', now = new
  * A model the provider listed, whether or not it is a free candidate: keep the
  * `AIModel` row current, and where the listing carried a price (OpenRouter),
  * keep `AIPricing` current in its per-1,000,000-token unit.
+ *
+ * It also **demotes** a free-tier row the listing no longer counts as a free
+ * candidate. `discover` computes `isFree` for every listed model and, until
+ * 2026-09-16, threw the answer away here — so a model that stopped qualifying
+ * kept `AIFreeTier.isFree: true` and stayed selectable forever. Adding `lyria`
+ * (a MUSIC model) to the modality filter would have changed nothing for the row
+ * already in the catalog.
+ *
+ * Demote only, never promote. A listing saying "this is free" must not revive a
+ * row a 404 retired or a human denied — proving a row usable is the probe's job
+ * (`writeAlive`), and a one-directional rule cannot undo that work by accident.
  */
 export async function writeListed(row, deps) {
   const at = new Date(row.now || Date.now());
@@ -961,6 +972,12 @@ export async function writeListed(row, deps) {
     },
     { upsert: true }
   );
+
+  if (row.isFree === false && deps.freeTier) {
+    // No upsert: this only demotes a row that already exists.
+    await deps.freeTier.updateOne({ provider, modelId, isFree: true }, { $set: { isFree: false } });
+  }
+
   if (deps.pricing && (inputPrice != null || outputPrice != null)) {
     await deps.pricing.updateOne(
       { provider, modelId },
@@ -1022,12 +1039,30 @@ export function capabilitiesUpdate(caps, source) {
  * `isActive: true` on every boot (it was, until Phase 0).
  */
 export async function deactivateUnlisted({ provider, listedIds, now = new Date() }, deps) {
-  if (!Array.isArray(listedIds)) return { provider, deactivated: 0 };
+  if (!Array.isArray(listedIds)) return { provider, deactivated: 0, demoted: 0 };
+  const filter = { provider, modelId: { $nin: listedIds } };
   const res = await deps.model.updateMany(
-    { provider, modelId: { $nin: listedIds }, isActive: true },
+    { ...filter, isActive: true },
     { $set: { isActive: false, lastChecked: new Date(now) } }
   );
-  return { provider, deactivated: res?.modifiedCount ?? res?.nModified ?? 0 };
+
+  /*
+   * And out of selection, which is a different collection.
+   *
+   * `selectFreeTierCandidates` reads `AIFreeTier` and never joins `AIModel`, so
+   * deactivating the catalog row alone left the model fully selectable — the
+   * two collections could disagree indefinitely and only one of them was being
+   * corrected. `listedIds` is everything the provider listed plus anything that
+   * just answered a probe, so a row failing this filter is one the provider no
+   * longer offers at all.
+   */
+  let demoted = 0;
+  if (deps.freeTier?.updateMany) {
+    const free = await deps.freeTier.updateMany({ ...filter, isFree: true }, { $set: { isFree: false } });
+    demoted = free?.modifiedCount ?? free?.nModified ?? 0;
+  }
+
+  return { provider, deactivated: res?.modifiedCount ?? res?.nModified ?? 0, demoted };
 }
 
 /**
@@ -1038,6 +1073,35 @@ export async function deactivateUnlisted({ provider, listedIds, now = new Date()
  * provider credentials, and a job that can delete a key on the strength of a
  * roster edit is a job that can lose Chef's keys.
  */
+/**
+ * Catalog rows for a provider that is still in the roster but that we hold no
+ * credential for.
+ *
+ * `pruneUnknownProviders` below only removes providers that have LEFT the
+ * roster, so a provider whose key was never added — or was pulled — kept its
+ * rows indefinitely. On 2026-09-16 that was `together` (416 catalog models, 16
+ * free rows) and `llmgateway` (273 and 1) for providers nothing could reach.
+ * They were inert, because selection skips a row whose provider has no key, but
+ * they were read on every status build and every candidate selection and they
+ * made every count in the console wrong.
+ *
+ * Deleting is safe and reversible in the way that matters: discovery rebuilds
+ * the rows within a day of a key being added. `AIConfig` is never touched here
+ * — see the note on `pruneUnknownProviders`.
+ */
+export async function pruneUnconfiguredProviders({ configured = [], roster = PROVIDERS } = {}, deps) {
+  const unconfigured = roster.filter((id) => !configured.includes(id));
+  const out = {};
+  if (unconfigured.length === 0) return out;
+  const filter = { provider: { $in: unconfigured } };
+  for (const [label, collection] of Object.entries({ AIModel: deps.model, AIFreeTier: deps.freeTier, AIPricing: deps.pricing })) {
+    if (!collection) continue;
+    const res = await collection.deleteMany(filter);
+    out[label] = res?.deletedCount ?? 0;
+  }
+  return out;
+}
+
 export async function pruneUnknownProviders({ providers = PROVIDERS, now = Date.now() } = {}, deps) {
   const filter = { provider: { $nin: providers } };
   const out = {};
@@ -1377,6 +1441,7 @@ export default {
   writeListed,
   deactivateUnlisted,
   pruneUnknownProviders,
+  pruneUnconfiguredProviders,
   parseRateLimitHeaders,
   parseResetToMs,
   renderTable,
