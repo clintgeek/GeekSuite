@@ -233,7 +233,7 @@ describe('runProbe', () => {
     expect(results.every(r => r.marked === null)).toBe(true);
   });
 
-  it('mark cools a dead row for 30 days and leaves an unknown one alone', async () => {
+  it('mark writes for a dead row and leaves an unknown one alone', async () => {
     const now = Date.UTC(2026, 8, 6, 22, 15, 0);
     const { callProvider } = layer({
       'groq/llama-3.1-8b-instant': REAL_FAILURES[0].error,
@@ -247,11 +247,17 @@ describe('runProbe', () => {
       options: { mark: true, now },
     });
 
+    // The 503 row is 'unknown', not dead, so it gets no write at all — that is
+    // the half this case is really about.
     expect(writes).toHaveLength(1);
     expect(writes[0].query).toEqual({ provider: 'groq', modelId: 'llama-3.1-8b-instant' });
     const set = writes[0].update.$set;
     expect(set['health.lastFailureCode']).toBe('http_404');
-    expect(set['health.coolingUntil'].getTime() - now).toBe(probe.PROBE_MARK_COOLDOWN_MS);
+    // A 404 is a RETIREMENT as of 2026-09-16, not a 30-day cool — see
+    // "the probe retires what the vendor withdrew" below. This case asserted
+    // the cooldown until then.
+    expect(set.isFree).toBe(false);
+    expect(set['health.coolingUntil']).toBeNull();
     expect(set.probedAt.getTime()).toBe(now);
     // Deliberately no $unset / deleteOne anywhere — the aiGeek UI lists these
     // rows and a vanished row reads as a config loss.
@@ -639,5 +645,76 @@ describe('the golden set reads the headers before it knocks', () => {
     const out = await probe.runGoldenSetFor({ provider: 'groq', modelId: 'flaky' }, { callProvider });
     expect(calls).toBe(6);
     expect(out.errored).toBe(1);
+  });
+});
+
+/**
+ * A withdrawn slug is retired by the probe, not cooled.
+ *
+ * `aiService.retireModel` has done this on the REQUEST path since 2026-09-15,
+ * and the probe is where almost every 404 is actually discovered — so the half
+ * that mattered most was the half that still only cooled. Live on 2026-09-16:
+ * OpenRouter carried six rows on http_404 and Ollama five on http_410, every
+ * one of them scheduled to be retried in 30 days, fail again, and cool again.
+ * Cooling a retirement is a slower way of failing forever.
+ */
+describe('the probe retires what the vendor withdrew', () => {
+  const deadWith = (error) => ({ 'groq/llama-3.1-8b-instant': error });
+
+  it('retires on a 404 rather than cooling for 30 days', async () => {
+    const now = Date.UTC(2026, 8, 16, 3, 0, 0);
+    const { callProvider } = layer(deadWith(REAL_FAILURES[0].error));   // http_404
+    const writes = [];
+    const results = await probe.runProbe({
+      rows: [ROWS[0]],
+      callProvider,
+      updateOne: async (query, update) => { writes.push({ query, update }); },
+      options: { mark: true, now },
+    });
+
+    const set = writes[0].update.$set;
+    expect(set.isFree).toBe(false);
+    expect(set['health.coolingUntil']).toBeNull();
+    expect(results[0].marked).toMatch(/^retired/);
+  });
+
+  it('still cools an ordinary failure, which may yet recover', async () => {
+    // A 401 is a credential problem and a 5xx is a bad minute. The model still
+    // exists, so the row is cooled and retried — unchanged behaviour.
+    const now = Date.UTC(2026, 8, 16, 3, 0, 0);
+    const { callProvider } = layer(deadWith(new Error('Groq API error (401): {}')));
+    const writes = [];
+    const results = await probe.runProbe({
+      rows: [ROWS[0]],
+      callProvider,
+      updateOne: async (query, update) => { writes.push({ query, update }); },
+      options: { mark: true, now },
+    });
+
+    const set = writes[0].update.$set;
+    expect(set.isFree).toBeUndefined();
+    expect(set['health.coolingUntil'].getTime() - now).toBe(probe.PROBE_MARK_COOLDOWN_MS);
+    expect(results[0].marked).toBe('cooled 30d');
+  });
+});
+
+describe('the modality filter keeps non-chat models out', () => {
+  it('excludes a music model', () => {
+    // google/lyria-3-pro-preview was live in the chat catalog on 2026-09-16,
+    // eligible for any non-structured call.
+    expect(probe.CHAT_EXCLUDE.test('google/lyria-3-pro-preview')).toBe(true);
+    expect(probe.CHAT_EXCLUDE.test('some-music-gen-v2')).toBe(true);
+  });
+
+  it('still admits the chat models we actually use', () => {
+    // The filter is modality-only: it must never become a quality judgement,
+    // which is what the probe and the golden set are for.
+    for (const id of [
+      'gemini-3.1-flash-lite', 'gemma4:31b', 'qwen/qwen3.8-27b',
+      '@cf/meta/llama-4-scout-17b-16e-instruct', 'command-a-03-2025',
+      'openai/gpt-oss-120b', 'allam-2-7b'
+    ]) {
+      expect(probe.CHAT_EXCLUDE.test(id)).toBe(false);
+    }
   });
 });

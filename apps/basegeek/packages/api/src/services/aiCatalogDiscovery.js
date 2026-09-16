@@ -28,7 +28,7 @@
  *      or a row this module buries is dug up by the next call.
  */
 
-import { classifyFreeTierFailure, withLatencySample, qualityIsFresh } from '../models/AIFreeTier.js';
+import { classifyFreeTierFailure, withLatencySample, qualityIsFresh, isRetirement } from '../models/AIFreeTier.js';
 import { GOLDEN_SET, GOLDEN_MAX_TOKENS, scoreAnswer, rollUp, isConclusive } from './aiGoldenSet.js';
 import { PROVIDER_IDS } from '../config/aiProviders.js';
 import { isDenied } from '../config/aiCatalogOverrides.js';
@@ -59,7 +59,11 @@ export const LIST_TIMEOUT_MS = 15000;
  * naming a transcriber a transcriber, so this is cheap and safe; judging
  * whether a *chat* model is any good is the probe's job, not a regex's.
  */
-export const CHAT_EXCLUDE = /whisper|tts|guard|embed|embedding|rerank|vision-preview|image|audio|live|veo|imagen|aqa|moderation|distil/i;
+// `lyria` and `music` added 2026-09-16: Google's `lyria-3-pro-preview` is a
+// MUSIC generation model and was sitting live in the chat catalog, eligible for
+// any non-structured call. The list stays modality-only — nothing here is a
+// judgement about quality, which is the probe's and the golden set's job.
+export const CHAT_EXCLUDE = /whisper|tts|guard|embed|embedding|rerank|vision-preview|image|audio|live|veo|imagen|aqa|moderation|distil|lyria|music/i;
 
 /**
  * The provider's own auto-router, where it has one. It is ranked first within
@@ -449,7 +453,32 @@ export async function runProbe({ rows, callProvider, updateOne = null, options =
     const outcome = await probeRow(row, { callProvider, timeoutMs: timeout });
     const result = { provider: row.provider, modelId: row.modelId, ...outcome, marked: null };
 
-    if (updateOne && mark && outcome.status === 'dead') {
+    if (updateOne && mark && outcome.status === 'dead' && isRetirement(outcome.code)) {
+      /*
+       * The vendor withdrew this slug. Cooling a retirement is a slower way of
+       * failing forever: the row comes back in 30 days, 404s again, and cools
+       * again, and nothing ever learns.
+       *
+       * `aiService.retireModel` has done this on the REQUEST path since
+       * 2026-09-15, but the probe — which is where almost every 404 is actually
+       * discovered — still only cooled. On 2026-09-16 that left OpenRouter
+       * carrying six rows on http_404 and Ollama five on http_410, all of them
+       * scheduled to be retried indefinitely.
+       */
+      await updateOne(
+        { provider: row.provider, modelId: row.modelId },
+        {
+          $set: {
+            isFree: false,
+            probedAt: new Date(now),
+            'health.lastFailureAt': new Date(now),
+            'health.lastFailureCode': outcome.code,
+            'health.coolingUntil': null
+          }
+        }
+      );
+      result.marked = `retired (${outcome.code})`;
+    } else if (updateOne && mark && outcome.status === 'dead') {
       await updateOne(
         { provider: row.provider, modelId: row.modelId },
         {
