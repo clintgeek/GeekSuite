@@ -244,10 +244,19 @@ export function freeCandidates(provider, raw) {
       }
       break;
     case 'openrouter':
-      // The listing is the whole answer here: zero price on both halves and a
-      // text output modality. No name heuristics, no `:free` suffix rule.
+      // The listing is *nearly* the whole answer here: zero price on both
+      // halves and a text output modality. No `:free` suffix rule.
+      //
+      // The modality filter is applied too, and this branch was the only one
+      // without it until 2026-09-16. The gap is in the line below: a model that
+      // declares NO `output_modalities` is treated as text, which is the right
+      // default for a chat listing and wrong for Google's Lyria — a MUSIC
+      // generator that declares nothing. Both `lyria-3-pro-preview` and
+      // `lyria-3-clip-preview` sailed through, and the pro one reached fourth
+      // place in the free rotation and answered three of Chef's requests with
+      // prose where he wanted YAML.
       for (const m of raw?.data || []) {
-        if (!m?.id) continue;
+        if (!m?.id || CHAT_EXCLUDE.test(m.id)) continue;
         const p = m.pricing || {};
         const outText = !m.architecture?.output_modalities || m.architecture.output_modalities.includes('text');
         if (outText && isZero(p.prompt) && isZero(p.completion) && (String(p.prompt) === '0' || /:free$/.test(m.id))) ids.push(m.id);

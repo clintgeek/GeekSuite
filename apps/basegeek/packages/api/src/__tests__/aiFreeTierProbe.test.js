@@ -917,3 +917,43 @@ describe('the modality filter matches modalities, not substrings', () => {
     }
   });
 });
+
+/**
+ * OpenRouter's candidate branch was the only one skipping the modality filter.
+ *
+ * It decides on price and declared output modality alone, and a model that
+ * declares NO `output_modalities` is treated as text — the right default for a
+ * chat listing, and wrong for Google's Lyria, a MUSIC generator that declares
+ * nothing. Both Lyria models became free candidates, and the pro one reached
+ * fourth place in the free rotation and answered three requests with prose
+ * where the caller wanted YAML.
+ */
+describe('freeCandidates applies the modality filter for OpenRouter too', () => {
+  const listing = (...models) => ({ data: models });
+  const freeModel = (id, architecture) => ({
+    id, pricing: { prompt: '0', completion: '0' }, ...(architecture ? { architecture } : {})
+  });
+
+  it('drops a music model that declares no output modality', () => {
+    const ids = probe.freeCandidates('openrouter', listing(
+      freeModel('google/lyria-3-pro-preview'),
+      freeModel('google/lyria-3-clip-preview'),
+      freeModel('meta-llama/llama-3.3-70b:free')
+    ));
+    expect(ids).not.toContain('google/lyria-3-pro-preview');
+    expect(ids).not.toContain('google/lyria-3-clip-preview');
+    expect(ids).toContain('meta-llama/llama-3.3-70b:free');
+  });
+
+  it('still keeps the auto-router, which is a row by definition', () => {
+    const ids = probe.freeCandidates('openrouter', listing(freeModel('google/lyria-3-pro-preview')));
+    expect(ids).toContain(probe.ROUTER_MODEL_IDS.openrouter);
+  });
+
+  it('still admits an ordinary free chat model that declares text output', () => {
+    const ids = probe.freeCandidates('openrouter', listing(
+      freeModel('nvidia/nemotron-3.5-lightning:free', { output_modalities: ['text'] })
+    ));
+    expect(ids).toContain('nvidia/nemotron-3.5-lightning:free');
+  });
+});
