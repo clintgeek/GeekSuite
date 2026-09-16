@@ -900,7 +900,7 @@ describe('resolveNeed reads what the candidate builder actually carries', () => 
     ]);
     const picked = await aiService.resolveNeed('structured:fast');
     expect(picked?.modelId).toBe('slower-but-right');
-    expect(picked.why.join(' ')).toMatch(/golden set 0\.9 on structured/);
+    expect(picked.why.join(" ")).toMatch(/golden set 0\.9 \(overall 0\.9\)/);
   });
 
   it('returns no opinion when nothing can serve', async () => {

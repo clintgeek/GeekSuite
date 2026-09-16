@@ -117,21 +117,41 @@ export const QUALITY_POINTS = 150;
 export const QUALITY_UNMEASURED = 0.5;
 
 /**
- * The score this need should rank on: the matching class where the golden set
- * has one, else the overall.
+ * The score this need should rank on: the matching class and the overall,
+ * averaged.
  *
- * `structured:*` ranks on the structured class, `reasoning:*` on reasoning, and
- * so on — a model good at extraction and bad at arithmetic should win
- * extraction work and lose arithmetic work, which is exactly what per-class
- * scores are for.
+ * The first version of this ranked on the class alone, reasoning that a model
+ * good at extraction and bad at arithmetic should win extraction work. The
+ * first live scores showed why that is wrong here, in two ways.
+ *
+ * **The structured class is saturated.** Every row scored `structured=1` —
+ * unsurprising, since a row only gets asked at all once `fitness` proved it
+ * emits JSON, and the two structured questions are extraction questions. A
+ * signal that is 1 for every candidate is a constant, and ranking on it is the
+ * same mistake as ranking on `capabilities.tasks`. On 2026-09-16 that let
+ * `allam-2-7b` — overall 0.4, numeracy 0, reasoning 0 — report "golden set 1
+ * on structured" and keep the work.
+ *
+ * **And a class is rarely the whole job.** FitnessGeek's dish estimate is
+ * nominally `structured`, but what it actually asks for is JSON *containing
+ * arithmetic*: a model that emits perfect JSON with wrong numbers has failed
+ * the task completely. Real prompts mix concerns.
+ *
+ * So: the class is the specialist signal, the overall is "not broken
+ * elsewhere", and the mean of the two is what a person would weigh. A
+ * specialist still beats a generalist within its class; a model that is
+ * catastrophic outside its class no longer wins on the class alone.
  */
 export function qualityFor(row, task, now = Date.now()) {
   if (!qualityIsFresh(row?.quality, now)) return null;
+  const overall = row.quality.score;
+  if (typeof overall !== 'number') return null;
+
   const byClass = row.quality.byClass;
   const get = (key) => (byClass instanceof Map ? byClass.get(key) : byClass?.[key]);
   const perClass = get(task);
-  const value = typeof perClass === 'number' ? perClass : row.quality.score;
-  return typeof value === 'number' ? value : null;
+
+  return typeof perClass === 'number' ? (perClass + overall) / 2 : overall;
 }
 
 /** A row the probe proved can emit JSON. Measured, not claimed. */
@@ -224,7 +244,7 @@ export function resolveNeed(rows, need, { now = Date.now(), allowPaid = false } 
       : `measured p50 ${best.row.latency.p50Ms}ms (${weightClass})`,
     quality === null
       ? 'golden set not run against this row yet'
-      : `golden set ${quality} on ${parsed.task}`,
+      : `golden set ${Math.round(quality * 100) / 100} (overall ${best.row.quality.score})`,
   ];
 
   return {

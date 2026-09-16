@@ -245,8 +245,8 @@ describe('resolveNeed ranks on measured quality', () => {
     expect(resolveNeed(rows, 'structured:fast', { now: NOW }).modelId).toBe('quick');
   });
 
-  it('ranks on the class that matches the need', () => {
-    // Good at extraction, bad at arithmetic — should win one and lose the other.
+  it('still lets a specialist win inside its own class', () => {
+    // Same overall, different strengths: each should win its own kind of work.
     const specialist = row({
       modelId: 'extractor', latency: { p50Ms: 900 },
       quality: fresh(0.6, { structured: 1, reasoning: 0.2 })
@@ -258,6 +258,19 @@ describe('resolveNeed ranks on measured quality', () => {
     const rows = [specialist, thinker];
     expect(resolveNeed(rows, 'structured:fast', { now: NOW }).modelId).toBe('extractor');
     expect(resolveNeed(rows, 'reasoning:deep', { now: NOW }).modelId).toBe('thinker');
+  });
+
+  it('does not let one good class carry a model that is broken elsewhere', () => {
+    // The live case, 2026-09-16. EVERY scored row came back structured=1 — a
+    // row is only asked once `fitness` proved it emits JSON — so ranking on
+    // that class alone is ranking on a constant, and allam-2-7b (overall 0.4,
+    // numeracy 0, reasoning 0) reported "golden set 1 on structured" and kept
+    // the work. A dish estimate is JSON *containing arithmetic*.
+    const rows = [
+      row({ modelId: 'allam-like', latency: { p50Ms: 317 }, quality: fresh(0.4, { structured: 1 }) }),
+      row({ modelId: 'qwen-like', latency: { p50Ms: 196 }, quality: fresh(0.9, { structured: 1 }) }),
+    ];
+    expect(resolveNeed(rows, 'structured:fast', { now: NOW }).modelId).toBe('qwen-like');
   });
 
   it('keeps an unscored row selectable, so it can eventually be scored', () => {
@@ -291,7 +304,7 @@ describe('resolveNeed ranks on measured quality', () => {
 
   it('says what it measured, including when it has not', () => {
     const scored = resolveNeed([row({ quality: fresh(0.83, { structured: 0.83 }) })], 'structured:fast', { now: NOW });
-    expect(scored.why.join(' ')).toMatch(/golden set 0\.83 on structured/);
+    expect(scored.why.join(' ')).toMatch(/golden set 0\.83 \(overall 0\.83\)/);
 
     const unscored = resolveNeed([row()], 'structured:fast', { now: NOW });
     expect(unscored.why.join(' ')).toMatch(/golden set not run against this row yet/);
