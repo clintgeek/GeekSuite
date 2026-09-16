@@ -266,3 +266,85 @@ call routes to a model that cannot see the image.
 
 Does the Arboleaf app expose a **data export** (CSV or otherwise)? If it does, it beats
 this entire path and the extraction half of it becomes unnecessary. Nobody has checked.
+
+---
+
+## 10. The extraction contract
+
+What the vision model is asked for, and what it is not.
+
+### 10.1 It extracts, it does not compute
+
+The model returns **only** the stored primaries (§5.1, §5.2) plus the derived values
+**as printed on the page**. It is never asked to calculate anything.
+
+This matters more than it looks. If the model computed fat-free mass itself, its answer
+would agree with our recomputation by construction and the validation gate (§6) would
+verify nothing at all. The gate works precisely because the printed column is an
+*independent* witness produced by the device, not by the model. Asking the model to
+derive would collapse the two witnesses into one.
+
+So: two flat groups in the response — what the scale measured, and what the scale
+printed. Both transcribed, neither reasoned about.
+
+### 10.2 Response shape
+
+```jsonc
+{
+  "measured_at": "2026-09-16T08:01:00Z",  // the timestamp printed on the report
+  "height_cm": 180,                        // see §5.4 — centimetres, never the imperial rendering
+  "primaries": {
+    "weight_value": 317.2, "body_fat_mass_lb": 140.2, "body_water_l": 59.4,
+    "protein_lb": 33.6, "bone_mass_lb": 12.4, "skeletal_muscle_lb": 102.4,
+    "subcutaneous_fat_lb": 112, "visceral_fat_index": 20
+  },
+  "segments": {
+    "left_arm":  { "muscle_lb": 11,   "fat_lb": 13 },
+    "right_arm": { "muscle_lb": 12.4, "fat_lb": 12.6 },
+    "trunk":     { "muscle_lb": 86.4, "fat_lb": 74.8 },
+    "left_leg":  { "muscle_lb": 28.6, "fat_lb": 17.8 },
+    "right_leg": { "muscle_lb": 28.8, "fat_lb": 17.8 }
+  },
+  "printed": {                             // transcribed, NOT computed — see §10.1
+    "fat_free_mass_lb": 177, "muscle_mass_lb": 164.6,
+    "body_fat_pct": 44.2, "body_water_pct": 41.3, "protein_pct": 10.6,
+    "bone_mass_pct": 3.9, "skeletal_muscle_pct": 32.3,
+    "subcutaneous_fat_pct": 35.3, "muscle_mass_pct": 51.9,
+    "bmr_kcal": 2105, "bmi": 44.4, "smi": 11.3
+  }
+}
+```
+
+`printed` feeds straight into `validate(doc, printed)`. Anything the model could not read
+must come back **absent or `null`, never guessed** — a skipped check is honest, a
+fabricated one defeats the gate (`validate()` skips rather than fails on a missing value,
+by design).
+
+### 10.3 Height is the one trap
+
+The report displays height in feet and inches. That rendering is lossy, and recomputing
+from it produces a spurious BMI failure on a perfectly good scan (§5.4). The model must
+return centimetres.
+
+For the reference scan the page prints `Height:5'11"`, and the true value is **180 cm**
+— 5'11" is 180.34 cm, which would give BMI 44.2 against the printed 44.4. Where the
+report offers only imperial, convert and accept that BMI/SMI may need the wider tolerance
+band, or leave `height_cm` null and let those two checks skip.
+
+### 10.4 Which file reaches the model
+
+Per §4: the PDF's page 1 goes through as one image. The PNG must be sliced first — at
+1080 x 10037 it is unreadable after a vision API's downscale. Slicing is the caller's
+job, before the transport layer.
+
+### 10.5 What happens to the result
+
+1. Validate with `validate(primaries, printed)` from
+   `@geeksuite/schemas/fitnessgeek/bodyCompositionDerivation`.
+2. `passed` → save, with `extraction.validation_passed: true`.
+3. Mismatch → **do not save**; hand the user the confirm screen showing computed vs
+   printed per §6, so the disagreement is visible rather than silently resolved.
+4. Either way, dedupe on `(userId, measured_at)` (§7) so a re-share is not a new row.
+
+Note `validate()` passes vacuously when everything was skipped, so read `checked` too —
+a scan where nothing could be verified is not a scan that verified clean.
