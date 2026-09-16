@@ -80,7 +80,15 @@ export const LIST_TIMEOUT_MS = 15000;
 // MUSIC generation model and was sitting live in the chat catalog, eligible for
 // any non-structured call. The list stays modality-only — nothing here is a
 // judgement about quality, which is the probe's and the golden set's job.
-export const CHAT_EXCLUDE = /whisper|tts|guard|embed|embedding|rerank|vision-preview|image|audio|live|veo|imagen|aqa|moderation|distil|lyria|music/i;
+//
+// `live` is token-bounded, and the others deliberately are not. It is here for
+// Gemini's realtime `-live` models, and as a bare substring it also matches
+// **alive**, delivery and olive. That was survivable while this only filtered
+// listings; `selectFreeTierCandidates` now checks it on every pick, where
+// silently dropping a model whose name contains "live" would be a real and
+// very confusing outage.
+export const CHAT_EXCLUDE =
+  /whisper|tts|guard|embed|embedding|rerank|vision-preview|image|audio|veo|imagen|aqa|moderation|distil|lyria|music|(?:^|[-_/.])live(?:$|[-_/.])/i;
 
 /**
  * The provider's own auto-router, where it has one. It is ranked first within

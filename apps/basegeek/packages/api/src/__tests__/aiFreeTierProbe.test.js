@@ -900,3 +900,20 @@ describe('the catalog reconciles itself', () => {
     expect(deps.config.writes).toEqual([]);
   });
 });
+
+describe('the modality filter matches modalities, not substrings', () => {
+  it('excludes a realtime -live model', () => {
+    expect(probe.CHAT_EXCLUDE.test('gemini-2.0-flash-live')).toBe(true);
+    expect(probe.CHAT_EXCLUDE.test('live-preview')).toBe(true);
+    expect(probe.CHAT_EXCLUDE.test('models/live')).toBe(true);
+  });
+
+  it('does not exclude a model whose name merely contains those letters', () => {
+    // `live` as a bare substring matches ALIVE, delivery and olive. Harmless
+    // while this only filtered listings; once selection checks it on every
+    // pick, it would be a silent and very confusing outage.
+    for (const id of ['alive', 'cerebras/alive-model', 'delivery-7b', 'olive-32b']) {
+      expect(probe.CHAT_EXCLUDE.test(id)).toBe(false);
+    }
+  });
+});

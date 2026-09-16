@@ -54,7 +54,8 @@ import {
   listedRows,
   openRouterCatalog,
   writeListed,
-  deactivateUnlisted
+  deactivateUnlisted,
+  CHAT_EXCLUDE
 } from './aiCatalogDiscovery.js';
 // Using cloud-based summarization instead of local transformers.js
 import crypto from 'crypto';
@@ -1149,6 +1150,21 @@ class AIService {
       // healthy it looks. `/models/alive` applies the same rule, so the
       // picker and the router cannot disagree.
       if (fm.override === 'deny') continue;
+      /*
+       * Modality, checked at selection and not only at listing.
+       *
+       * The listing filter decides what becomes a candidate, so it protects
+       * rows discovered AFTER a term is added to it and does nothing for rows
+       * already in the table — a gap of up to a day, and longer if discovery
+       * fails. On 2026-09-16 `google/lyria-3-pro-preview`, a MUSIC model, was
+       * sitting fourth in the free walk: `basegeek-free` picked it three times
+       * running once groq rate-limited, and returned prose where the caller
+       * wanted YAML.
+       *
+       * Two lines here mean a non-chat row can never be served, whatever the
+       * table says and whenever it was written.
+       */
+      if (CHAT_EXCLUDE.test(fm.modelId)) continue;
       const pc = this.providers[fm.provider];
       if (!pc || !pc.apiKey || pc.enabled === false) continue;
 

@@ -915,3 +915,50 @@ describe('resolveNeed reads what the candidate builder actually carries', () => 
     expect(await aiService.resolveNeed('strutured:fast')).toBeNull();
   });
 });
+
+/**
+ * A non-chat model can never be selected, whenever its row was written.
+ *
+ * The modality filter runs at LISTING time, so it protects rows discovered
+ * after a term is added to it and does nothing for rows already in the table.
+ * On 2026-09-16 `google/lyria-3-pro-preview` — a MUSIC model — sat fourth in
+ * the free walk: provider priority is applied before fitness, so OpenRouter's
+ * `basic` rows outranked six working `structured` ones at other providers.
+ * When groq rate-limited, `basegeek-free` picked the music model three times
+ * running and returned prose where the caller wanted YAML.
+ */
+describe('modality is checked at selection, not only at listing', () => {
+  it('never offers a music model, however well placed its row is', async () => {
+    enable('groq', 'openrouter');
+    await seedRows([
+      { provider: 'openrouter', modelId: 'google/lyria-3-pro-preview', fitness: 'basic' },
+      { provider: 'groq', modelId: 'good-one', fitness: 'structured' },
+    ]);
+    const { live } = await aiService.selectFreeTierCandidates();
+    expect(live.map((c) => c.modelId)).not.toContain('google/lyria-3-pro-preview');
+    expect(live.map((c) => c.modelId)).toContain('good-one');
+  });
+
+  it('excludes the other non-chat modalities too', async () => {
+    enable('openrouter');
+    await seedRows([
+      { provider: 'openrouter', modelId: 'openai/whisper-large', fitness: 'basic' },
+      { provider: 'openrouter', modelId: 'some/tts-model', fitness: 'basic' },
+      { provider: 'openrouter', modelId: 'some/text-embedding-3', fitness: 'basic' },
+      { provider: 'openrouter', modelId: 'a/real-chat-model', fitness: 'structured' },
+    ]);
+    const { live } = await aiService.selectFreeTierCandidates();
+    expect(live.map((c) => c.modelId)).toEqual(['a/real-chat-model']);
+  });
+
+  it('leaves the chat models we actually route to alone', async () => {
+    enable('groq', 'ollama', 'cloudflare');
+    await seedRows([
+      { provider: 'groq', modelId: 'groq/compound-mini', fitness: 'structured' },
+      { provider: 'ollama', modelId: 'gemma4:31b', fitness: 'structured' },
+      { provider: 'cloudflare', modelId: '@cf/meta/llama-4-scout-17b-16e-instruct', fitness: 'structured' },
+    ]);
+    const { live } = await aiService.selectFreeTierCandidates();
+    expect(live).toHaveLength(3);
+  });
+});
