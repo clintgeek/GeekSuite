@@ -2,6 +2,30 @@
 
 *Agreed with Chef 2026-09-15. Supersedes search as the primary path.*
 
+> **Status: shipped and verified end to end, 2026-09-16.**
+>
+> Backend landed 2026-09-15. The frontend called none of it for a day, while both
+> placeholders invited you to "describe your meal" and then ran a search — so the feature
+> existed and could not be reached. Wired 2026-09-16 (`e5aa9c12`).
+>
+> It also could not have worked if it had been reached. Both structured-output schemas
+> shipped as raw JSON Schema where aiGeek's door requires `{ name, description?, schema }`,
+> so every estimate and judge call answered 400 INVALID_SCHEMA (`03c18757`). Two things hid
+> that: the unit tests mock `aiGeekClient` at the boundary *below* the envelope, and 175
+> logger calls were string-first, which under pino drops every structured field — including
+> the status and code that named this bug (`6c034e85`).
+>
+> **The lesson worth keeping: a feature is not shipped because its tests pass.** Every layer
+> here was green while the thing was dead. What found it was one run against the real stack.
+>
+> Verified live, with a scratch user whose rows are deleted afterwards:
+>
+> | said | logged | ms |
+> |---|---|---|
+> | `4 chocolate chip pancakes homemade` | Chocolate Chip Pancakes · dinner · 500 cal | 1180 |
+> | `a dozen nachos with beef and chicken and cheese` | Nachos · dinner · 1200 cal (ONE entry) | 505 |
+> | `eggs and toast for breakfast, chicken caesar at lunch` | Eggs + Toast · breakfast; Chicken Caesar · lunch | 608 |
+
 ## 1. The requirement, in Chef's words
 
 He is awful at logging. For years his wife did it: he described a meal, she wrote down one
@@ -125,11 +149,40 @@ stated. Anyone revisiting this should know it was a decision, not an oversight.
 
 ## 7. Build order
 
-1. `foodSanityRails.js` — pure, free, testable. Catches today's screenshot bug.
-2. Dish splitting: meal words and commas split; `with`/`and` do not.
-3. `POST /api/logs/describe` — route (barcode/branded → lookup) → history → estimate → rails → write.
-4. History reuse (finally wires `chosenForQuery`).
-5. One input on Food Log and `/food-search`, voice on phone.
-6. Background judge on a pinned second provider.
+1. ~~`foodSanityRails.js`~~ — **done.** Pure, free, testable.
+2. ~~Dish splitting: meal words and commas split; `with`/`and` do not.~~ — **done**, and
+   confirmed live: the nachos line logs as one entry.
+3. ~~`POST /api/logs/describe`~~ — **done**, and reachable from the UI since 2026-09-16.
+4. **History reuse — half done.** The describe path has its own (`findInHistory`, hit before
+   any model call). The *search ranker's* `chosenForQuery` pin is still unwired: `foodRanker`
+   reads it, `getPersonalIndex` hands it an empty Set, and nothing records which food was
+   chosen for which query. That is the last piece of the search rebuild.
+5. ~~One input on Food Log and `/food-search`~~ — **done.** Describing is the primary action
+   and Enter fires it; search runs underneath on its own debounce.
+   **Voice is deliberately NOT built** (Chef, 2026-09-16): phone keyboards already dictate
+   into any text field, so a `SpeechRecognition` implementation would be re-doing the OS's
+   job worse. The plain input gets voice for free.
+6. ~~Background judge on a pinned second provider.~~ — **done**, still pinned to
+   `openai/gpt-oss-120b` on purpose; see `DISH_JUDGE_PROVIDER` for why a `need` is wrong
+   there until the golden set exists.
 
 Search stays exactly where it is, as the fallback.
+
+## 8. What the live run exposed
+
+Two findings from the first real end-to-end run that no mock could have produced.
+
+**The model cannot express its own uncertainty.** Asked for a genuine range, `allam-2-7b`
+returned `0–1000` for the pancakes and `0–2400` for the nachos — a zero lower bound, and an
+upper that is just twice the estimate. §3.8's spread threshold passes happily on that, and
+the question would have offered "Smaller · ~0 cal". `usableRange` now refuses a range whose
+low is not above zero, whose high is not above the low, or that does not contain the logged
+value; an unusable range is treated as no opinion and nothing is asked.
+
+**`structured:fast` currently resolves to that same model.** aiGeek picked `allam-2-7b`
+because it is the only free row the probe has proved can emit JSON, and its `why` says
+"speed not measured yet". It also answered a plain English prompt in Arabic. Both are the
+golden set's absence showing through: nothing measures whether a structured model is any
+*good*, only that it is structured (`DOCS/AIGEEK_CAPABILITY_ROUTING.md` §3.2). The estimates
+are within Chef's stated bar — 500 cal for four pancakes is noise at the week level — but
+this is the argument for building the golden set, written down while it is concrete.

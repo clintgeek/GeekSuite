@@ -1460,3 +1460,53 @@ not committed): `/blood-pressure` painted 8 circles at `r="2.5"` (phone viewport
   audited — out of scope (the brief named BPChartNivo/WeightTimeline specifically, and the pie
   points R124 saw on `/blood-pressure`'s circle count are unrelated, incidental circles from that
   component, not this bug).
+
+## 2026-09-16 — describe-and-log reached the UI, and three bugs under it
+
+`POST /api/logs/describe` and everything behind it landed on 2026-09-15 and **nothing in the
+frontend called it for a day**. Both the search box and `SearchBar`'s default placeholder
+invited you to "describe your meal" and then ran a search. Wired `e5aa9c12`:
+`foodService.describe()`, `useFoodLogging.describeMeal`, and an offer pinned above the search
+results with Enter bound to it (Enter used to re-run the deep search, which was only ever
+impatience — wave two already fires 400 ms after you stop typing).
+
+Three defects came out of taking it to the real stack, and each is the kind that survives a
+green test suite.
+
+**1. The gateway rejected every call.** `DISH_ESTIMATE_SCHEMA` and `DISH_JUDGE_SCHEMA` were
+raw JSON Schema; aiGeek's door validates `schema must be { name, description?, schema }` and
+answers **400 INVALID_SCHEMA**. So describe-and-log had never once worked in production. The
+unit tests mock `aiGeekClient` at the boundary *below* the envelope, so the shape was never
+shown to the real validator — `aiFoodService.test.js` now asserts it against the door's own
+rule, which needs no network. (`03c18757`)
+
+**2. The log line that would have said so was empty.** pino takes the object FIRST.
+`logger.error('msg', { status, code })` silently drops the fields, and **175 call sites** in
+this backend were written that way — 123 with object literals, 52 passing a bare `Error` as
+`logger.error('msg', error)`, which loses the stack. The failure read
+`{"level":50,"msg":"aiGeek feature call failed"}` with nothing else. After the swap the same
+line read `"status":400,"code":"INVALID_SCHEMA"` and named the bug outright. (`6c034e85`)
+
+**3. The model cannot express uncertainty.** Asked for a genuine range, `allam-2-7b` returned
+`0–1000` for pancakes and `0–2400` for nachos — zero lower bound, upper exactly twice the
+estimate. §3.8's spread threshold passes on that and the portion question would have offered
+"Smaller · ~0 cal". `usableRange` now refuses a range whose low is not above zero, whose high
+is not above the low, or that does not contain the logged value. (`0e9dac7b`)
+
+**How to verify this end to end** (the only thing that found any of it): connect to Mongo
+first, use a scratch user id, delete its rows after. A script that imports the service without
+`connectDB()` buffers every query for 10 s and the whole feature looks like an AI outage —
+that misread cost a detour. With the connection, the three canonical lines log in ~0.5–1.2 s,
+the nachos stay ONE entry, and the breakfast/lunch line splits across two meals.
+
+**Also fixed, found by the harness scene rewrite:** logging a saved meal returned no log ids
+(`addMealToLog` has always returned them), so it had no undo; and callers paired items to ids
+by index, which mis-attributes as soon as one item writes several logs — undoing a row after
+a meal deleted somebody else's food. `logItems` now returns `perItem` alongside the flat
+`logIds`. (`cc11c6f9`)
+
+**Harness scene 11** drove the deleted quick-add sheet and had been **skipping** since
+2026-09-14 — `setup` returning false is a skip, not a failure, so the run kept saying PASS
+while one scene covered nothing. It now drives the real path, and finding it immediately
+surfaced a missing `aria-label` on the search bar's clear button (it only renders once the box
+has text, which is why nothing had caught it). 22 scenes, 0/0/0.
