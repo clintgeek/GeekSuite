@@ -7,6 +7,7 @@
   "exports": {
     ".": "./index.js",
     "./fitnessgeek/bloodPressure": "./fitnessgeek/bloodPressure.js",
+    "./fitnessgeek/bodyComposition": "./fitnessgeek/bodyComposition.js",
     "./fitnessgeek/dailySummary": "./fitnessgeek/dailySummary.js",
     "./fitnessgeek/foodItem": "./fitnessgeek/foodItem.js",
     "./fitnessgeek/foodLog": "./fitnessgeek/foodLog.js",

@@ -39,6 +39,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import mongoose from 'mongoose';
+import { toUtcMidnight } from '@geeksuite/utils';
 
 import { createWeightSchema } from '@geeksuite/schemas/fitnessgeek/weight';
 import {
@@ -84,6 +85,11 @@ import {
   updateDailySummaryFromLogs,
   emptyMealBreakdown,
 } from '@geeksuite/schemas/fitnessgeek/dailySummary';
+import {
+  createBodyCompositionSchema,
+  bodyCompositionBounds,
+  BODY_COMPOSITION_SOURCES,
+} from '@geeksuite/schemas/fitnessgeek/bodyComposition';
 
 import Weight from '../../models/Weight.js';
 import BloodPressure from '../../models/BloodPressure.js';
@@ -95,6 +101,7 @@ import Meal from '../../models/Meal.js';
 import FoodItem from '../../models/FoodItem.js';
 import FoodLog from '../../models/FoodLog.js';
 import DailySummary from '../../models/DailySummary.js';
+import BodyComposition from '../../models/BodyComposition.js';
 import { createBPSchema } from '../../validation/schemas/bloodPressure.js';
 import { createMedicationSchema as createMedicationZodSchema } from '../../validation/schemas/medication.js';
 
@@ -428,6 +435,51 @@ const PAIRS = [
     // policy after `FoodItem.findOrCreate`. `getOrCreate` and
     // `getSummaryRange` are genuinely this side's.
     expectedStatics: ['getOrCreate', 'updateFromLogs', 'getSummaryRange'],
+  },
+  {
+    name: 'BodyComposition',
+    Model: BodyComposition,
+    createSchema: createBodyCompositionSchema,
+    factory: 'createBodyCompositionSchema',
+    specifier: '@geeksuite/schemas/fitnessgeek/bodyComposition',
+    modelFile: '../../models/BodyComposition.js',
+    // 28 paths: 9 whole-body/provenance scalars, 10 segmental (5 segments x 2
+    // measures, nested OBJECTS so mongoose flattens them into dotted paths —
+    // see the shared module's header), measured_at/log_date/source, the
+    // 3-field extraction sub-object, notes, and the two timestamps.
+    expectedPaths: [
+      'userId',
+      'weight_value',
+      'body_fat_mass_lb',
+      'body_water_l',
+      'protein_lb',
+      'bone_mass_lb',
+      'skeletal_muscle_lb',
+      'subcutaneous_fat_lb',
+      'visceral_fat_index',
+      'left_arm.muscle_lb',
+      'left_arm.fat_lb',
+      'right_arm.muscle_lb',
+      'right_arm.fat_lb',
+      'trunk.muscle_lb',
+      'trunk.fat_lb',
+      'left_leg.muscle_lb',
+      'left_leg.fat_lb',
+      'right_leg.muscle_lb',
+      'right_leg.fat_lb',
+      'measured_at',
+      'log_date',
+      'source',
+      'extraction.validation_passed',
+      'extraction.confidence',
+      'extraction.method',
+      'notes',
+      'created_at',
+      'updated_at',
+    ],
+    expectedVirtuals: ['formatted_date'],
+    serializesVirtuals: true,
+    expectedStatics: [],
   },
 ];
 
@@ -1432,5 +1484,194 @@ describe('the DailySummary recompute (the shared updateFromLogs)', () => {
     expect(typeof DailySummary.updateFromLogs).toBe('function');
     expect(typeof DailySummary.getOrCreate).toBe('function');
     expect(typeof DailySummary.getSummaryRange).toBe('function');
+  });
+});
+
+describe('the BodyComposition field set, bounds, dedupe index and UTC handling', () => {
+  // A minimal legal document — every field this schema `required`s.
+  const legal = (over = {}) => ({
+    userId: 'u1',
+    weight_value: 246.0,
+    measured_at: new Date('2026-09-16T08:01:00.000Z'),
+    log_date: toUtcMidnight('2026-09-16'),
+    source: 'arboleaf_pdf',
+    ...over,
+  });
+
+  test.each(['userId', 'weight_value', 'measured_at', 'log_date', 'source'])(
+    '%s is required — a document missing it fails validation',
+    (field) => {
+      const doc = legal();
+      delete doc[field];
+      const err = new BodyComposition(doc).validateSync();
+      expect(err && err.errors[field]).toBeTruthy();
+    }
+  );
+
+  test('a fully-populated document, including both non-derivable primaries, validates clean', () => {
+    // subcutaneous_fat_lb and visceral_fat_index are the two the coordinator
+    // added after the first pass — neither is arithmetic over anything else
+    // stored here, so both are plain stored primaries. See the shared
+    // module's header.
+    const doc = new BodyComposition(
+      legal({
+        body_fat_mass_lb: 69.0,
+        body_water_l: 73.2,
+        protein_lb: 30.1,
+        bone_mass_lb: 9.2,
+        skeletal_muscle_lb: 125.3,
+        subcutaneous_fat_lb: 112,
+        visceral_fat_index: 20,
+        left_arm: { muscle_lb: 7.1, fat_lb: 3.2 },
+        right_arm: { muscle_lb: 7.3, fat_lb: 3.1 },
+        trunk: { muscle_lb: 61.4, fat_lb: 28.9 },
+        left_leg: { muscle_lb: 21.2, fat_lb: 9.8 },
+        right_leg: { muscle_lb: 21.5, fat_lb: 9.6 },
+        extraction: { validation_passed: true, confidence: 0.94, method: 'gpt-vision-scan' },
+        notes: 'first Arboleaf import',
+      })
+    );
+    expect(doc.validateSync()).toBeUndefined();
+  });
+
+  test('visceral_fat_index carries no lb/mass suffix and is bounded as its own index, not a mass', () => {
+    // It is a unitless proprietary index (e.g. "20"), not a mass — see the
+    // shared module's header. Asserting the bound is its OWN, not a reuse of
+    // `mass_lb`, is what stops someone "helpfully" merging the two ceilings.
+    expect(bodyCompositionBounds.visceral_fat_index).not.toBe(bodyCompositionBounds.mass_lb);
+    const p = BodyComposition.schema.paths.visceral_fat_index;
+    expect([p.options.min, p.options.max]).toEqual([
+      bodyCompositionBounds.visceral_fat_index.min,
+      bodyCompositionBounds.visceral_fat_index.max,
+    ]);
+    expect(new BodyComposition(legal({ visceral_fat_index: 61 })).validateSync().errors.visceral_fat_index).toBeTruthy();
+  });
+
+  test('every lb-denominated mass shares bodyCompositionBounds.mass_lb, path for path', () => {
+    const massPaths = [
+      'weight_value',
+      'body_fat_mass_lb',
+      'protein_lb',
+      'bone_mass_lb',
+      'skeletal_muscle_lb',
+      'subcutaneous_fat_lb',
+      'left_arm.muscle_lb',
+      'left_arm.fat_lb',
+      'right_arm.muscle_lb',
+      'right_arm.fat_lb',
+      'trunk.muscle_lb',
+      'trunk.fat_lb',
+      'left_leg.muscle_lb',
+      'left_leg.fat_lb',
+      'right_leg.muscle_lb',
+      'right_leg.fat_lb',
+    ];
+    for (const key of massPaths) {
+      const p = BodyComposition.schema.paths[key];
+      expect([p.options.min, p.options.max]).toEqual([
+        bodyCompositionBounds.mass_lb.min,
+        bodyCompositionBounds.mass_lb.max,
+      ]);
+    }
+  });
+
+  test('body_water_l is bounded in its own (generous) liter range, not the lb ceiling', () => {
+    const p = BodyComposition.schema.paths.body_water_l;
+    expect([p.options.min, p.options.max]).toEqual([
+      bodyCompositionBounds.body_water_l.min,
+      bodyCompositionBounds.body_water_l.max,
+    ]);
+    // 1000 is a legal mass_lb value but well outside a plausible liter
+    // reading — this pins the two bounds as genuinely different ceilings.
+    expect(bodyCompositionBounds.body_water_l.max).toBeLessThan(bodyCompositionBounds.mass_lb.max);
+  });
+
+  test('extraction.confidence is a 0..1 fraction, and notes shares the 500-char convention', () => {
+    const conf = BodyComposition.schema.paths['extraction.confidence'];
+    expect([conf.options.min, conf.options.max]).toEqual([0, 1]);
+    expect(BodyComposition.schema.paths.notes.options.maxlength).toBe(
+      bodyCompositionBounds.notes.maxlength
+    );
+    expect(bodyCompositionBounds.notes.maxlength).toBe(500);
+  });
+
+  test('source is the shared enum and rejects an unknown ingest path', () => {
+    expect(BodyComposition.schema.paths.source.enumValues).toEqual([...BODY_COMPOSITION_SOURCES]);
+    const err = new BodyComposition(legal({ source: 'apple_health' })).validateSync();
+    expect(err && err.errors.source).toBeTruthy();
+  });
+
+  test('the dedupe index is a UNIQUE compound on (userId, measured_at), not a file hash', () => {
+    // Two ingests of the same physical scan (a shared PDF, then a photo of the
+    // same printout) read the same instant off the same report — this index
+    // is what makes the second one collide instead of duplicating. See the
+    // shared module's header for why a file hash would be the wrong key.
+    const idx = BodyComposition.schema
+      .indexes()
+      .find(([keys]) => Object.keys(keys).join(',') === 'userId,measured_at');
+    expect(idx).toBeTruthy();
+    const [, opts] = idx;
+    expect(opts.unique).toBe(true);
+  });
+
+  test('a second scan for the same user at the same instant collides — the control case', async () => {
+    // Hermetic (no Mongo): this asserts the index is declared with the
+    // correct shape, the same way the FoodItem barcode test pins its partial
+    // filter without touching a database.
+    const shared = createBodyCompositionSchema(mongoose);
+    const uniqueIndexes = shared
+      .indexes()
+      .filter(([, opts = {}]) => opts.unique)
+      .map(([keys]) => keys);
+    expect(uniqueIndexes).toEqual([{ userId: 1, measured_at: 1 }]);
+  });
+
+  test('there is also a non-unique (userId, log_date) index, for the Weight join', () => {
+    const idx = BodyComposition.schema
+      .indexes()
+      .find(([keys]) => Object.keys(keys).join(',') === 'userId,log_date');
+    expect(idx).toBeTruthy();
+    const [, opts = {}] = idx;
+    expect(!!opts.unique).toBe(false);
+  });
+
+  test('log_date round-trips as exact UTC midnight — no local-time coercion on save', () => {
+    // The regression this guards: a schema-level `default: Date.now` (like
+    // `weight.js`'s, which stamps the current instant) would be wrong here —
+    // `log_date` is a calendar date, not an instant. This schema declares no
+    // default at all, so whatever UTC-midnight value the caller normalizes
+    // with `toUtcMidnight` is exactly what comes back.
+    const midnight = toUtcMidnight('2026-09-16');
+    expect(midnight.toISOString()).toBe('2026-09-16T00:00:00.000Z');
+
+    const doc = new BodyComposition(legal({ log_date: midnight }));
+    expect(doc.validateSync()).toBeUndefined();
+    expect(doc.log_date.toISOString()).toBe('2026-09-16T00:00:00.000Z');
+    // And the formatted_date virtual reads the same calendar day back.
+    expect(doc.toJSON().formatted_date).toBe('2026-09-16');
+  });
+
+  test('log_date has no default — unlike an instant field, a missing calendar day must not be guessed', () => {
+    expect(BodyComposition.schema.paths.log_date.options.default).toBeUndefined();
+    expect(BodyComposition.schema.paths.measured_at.options.default).toBeUndefined();
+  });
+
+  test('the model file declares no schema of its own', () => {
+    const src = fs.readFileSync(
+      path.resolve(__dirname, '../../models/BodyComposition.js'),
+      'utf8'
+    );
+    expect(src).toContain('@geeksuite/schemas/fitnessgeek/bodyComposition');
+    expect(src).toMatch(/createBodyCompositionSchema\s*\(\s*mongoose\s*\)/);
+    expect(src).not.toMatch(/new\s+mongoose\.Schema\s*\(/);
+  });
+
+  test("basegeek's copy exists and consumes the shared factory, not a schema of its own", () => {
+    const file = basegeekModel('BodyComposition');
+    expect(fs.existsSync(file)).toBe(true);
+    const src = fs.readFileSync(file, 'utf8');
+    expect(src).toContain('@geeksuite/schemas/fitnessgeek/bodyComposition');
+    expect(src).toMatch(/createBodyCompositionSchema\s*\(\s*mongoose\s*\)/);
+    expect(src).not.toMatch(/new\s+mongoose\.Schema\s*\(\s*\{/);
   });
 });

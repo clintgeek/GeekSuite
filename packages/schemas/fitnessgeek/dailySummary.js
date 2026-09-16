@@ -20,7 +20,7 @@
  * `findOneAndUpdate`, and for one day in September 2026 the gateway's copy of
  * the schema was missing `totals.net_carbs_grams` — so every gateway read of a
  * day erased the keto ring's number from the stored document. That is
- * divergence C1 in `DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md`; it was fixed in
+ * divergence C1 in `DOCS/ARCHIVE/FITNESSGEEK_MODEL_CONSOLIDATION.md`; it was fixed in
  * place in `0cecb4a` (PRE-1), before this module existed, and this module is
  * what stops it happening again.
  *

@@ -6,7 +6,7 @@ import { createWeightSchema } from '@geeksuite/schemas/fitnessgeek/weight';
 // (apps/basegeek/packages/api/src/graphql/fitnessgeek/models/Weight.js) cannot
 // drift. Both write the `weights` collection in the same database, and
 // mongoose strict mode silently drops paths one side doesn't know about — see
-// the shared module's header and DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md.
+// the shared module's header and DOCS/ARCHIVE/FITNESSGEEK_MODEL_CONSOLIDATION.md.
 //
 // Do NOT add fields here. Add them to the shared module; the tripwire tests in
 // both suites fail if this model stops matching it.

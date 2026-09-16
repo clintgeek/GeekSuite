@@ -15,7 +15,7 @@
  * Mongoose runs in strict mode by default: an unknown path in a `$set` is
  * dropped silently, not rejected. Two hand-synced copies of a schema is
  * therefore a data-loss hazard, not a style complaint — see
- * `DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md` and the April 2026 keto incident
+ * `DOCS/ARCHIVE/FITNESSGEEK_MODEL_CONSOLIDATION.md` and the April 2026 keto incident
  * in `apps/fitnessgeek/DOCS/USER_SETTINGS_SCHEMA.md`.
  *
  * The two copies were byte-identical when this module was created (2026-09-05)
@@ -62,7 +62,7 @@
 /**
  * The dosing slots a medication can be scheduled into. Shared by the schema,
  * fitnessgeek's zod validator, and (still by hand — see the carry-forward note
- * in DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md §8) `models/MedicationLog.js`.
+ * in DOCS/ARCHIVE/FITNESSGEEK_MODEL_CONSOLIDATION.md §8) `models/MedicationLog.js`.
  */
 const MED_TIME_OF_DAY = Object.freeze(['morning', 'afternoon', 'evening', 'bedtime']);
 

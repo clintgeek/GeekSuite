@@ -8,7 +8,7 @@ import { createWeightGoalsSchema } from '@geeksuite/schemas/fitnessgeek/weightGo
 // database — basegeek is the only writer, this side reads through
 // src/services/aiInsightsService.js — and mongoose strict mode silently drops
 // paths one side doesn't know about. See the shared module's header and
-// DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md.
+// DOCS/ARCHIVE/FITNESSGEEK_MODEL_CONSOLIDATION.md.
 //
 // This is NOT `UserSettings.weight_goal`. That is a nested sub-document on a
 // different collection with different bounds and extra fields; the shared

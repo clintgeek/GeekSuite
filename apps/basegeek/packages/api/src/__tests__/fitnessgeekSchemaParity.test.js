@@ -117,6 +117,17 @@ const { default: UserSettingsGraphQL } = await import(
   '../graphql/fitnessgeek/models/UserSettings.js'
 );
 
+// Pair 11.
+const { default: BodyCompositionGraphQL } = await import(
+  '../graphql/fitnessgeek/models/BodyComposition.js'
+);
+const { default: BodyCompositionRest } = await import(
+  '../../../../../fitnessgeek/backend/src/models/BodyComposition.js'
+);
+const { default: bodyCompositionShared } = await import(
+  '@geeksuite/schemas/fitnessgeek/bodyComposition'
+);
+
 const OWNER = String(new mongoose.Types.ObjectId());
 
 const PAIRS = [
@@ -586,6 +597,83 @@ const PAIRS = [
       lunch: doc.meals.lunch.calories,
       snack_fat: doc.meals.snack.fat_grams,
       goals_met: { ...doc.goals_met },
+    }),
+  },
+  {
+    name: 'BodyComposition',
+    Rest: BodyCompositionRest,
+    GraphQL: BodyCompositionGraphQL,
+    createSchema: bodyCompositionShared.createBodyCompositionSchema,
+    // 28 paths: 9 whole-body/provenance scalars, 10 segmental (5 segments x 2
+    // measures — nested OBJECTS, dotted paths, same shape as `DailySummary`'s
+    // `meals.<type>`), measured_at/log_date/source, the 3-field `extraction`
+    // sub-object, notes, and the two timestamps.
+    expectedPaths: [
+      'userId',
+      'weight_value',
+      'body_fat_mass_lb',
+      'body_water_l',
+      'protein_lb',
+      'bone_mass_lb',
+      'skeletal_muscle_lb',
+      'subcutaneous_fat_lb',
+      'visceral_fat_index',
+      'left_arm.muscle_lb',
+      'left_arm.fat_lb',
+      'right_arm.muscle_lb',
+      'right_arm.fat_lb',
+      'trunk.muscle_lb',
+      'trunk.fat_lb',
+      'left_leg.muscle_lb',
+      'left_leg.fat_lb',
+      'right_leg.muscle_lb',
+      'right_leg.fat_lb',
+      'measured_at',
+      'log_date',
+      'source',
+      'extraction.validation_passed',
+      'extraction.confidence',
+      'extraction.method',
+      'notes',
+      'created_at',
+      'updated_at',
+    ],
+    expectedVirtuals: ['formatted_date'],
+    serializesVirtuals: true,
+    ownerField: 'userId',
+    doc: () => ({
+      userId: OWNER,
+      weight_value: 246.0,
+      body_fat_mass_lb: 69.0,
+      body_water_l: 73.2,
+      protein_lb: 30.1,
+      bone_mass_lb: 9.2,
+      skeletal_muscle_lb: 125.3,
+      // The two the coordinator added after the first pass: neither is
+      // arithmetic over anything else stored here, so both are plain
+      // primaries. See the shared module's header.
+      subcutaneous_fat_lb: 112,
+      visceral_fat_index: 20,
+      left_arm: { muscle_lb: 7.1, fat_lb: 3.2 },
+      right_arm: { muscle_lb: 7.3, fat_lb: 3.1 },
+      trunk: { muscle_lb: 61.4, fat_lb: 28.9 },
+      left_leg: { muscle_lb: 21.2, fat_lb: 9.8 },
+      right_leg: { muscle_lb: 21.5, fat_lb: 9.6 },
+      measured_at: new Date('2026-09-16T08:01:00.000Z'),
+      log_date: new Date('2026-09-16T00:00:00.000Z'),
+      source: 'arboleaf_pdf',
+      extraction: { validation_passed: true, confidence: 0.94, method: 'gpt-vision-scan' },
+      notes: 'post-consolidation probe',
+    }),
+    // subcutaneous_fat_lb and visceral_fat_index are the fields a drifted
+    // copy would have silently eaten — see the shared module's header for why
+    // neither can be recomputed from anything else on this document.
+    probe: (doc) => ({
+      subcutaneous_fat_lb: doc.subcutaneous_fat_lb,
+      visceral_fat_index: doc.visceral_fat_index,
+      trunk: { muscle_lb: doc.trunk.muscle_lb, fat_lb: doc.trunk.fat_lb },
+      extraction: { ...doc.extraction },
+      notes: doc.notes,
     }),
   },
 ];
@@ -1848,4 +1936,112 @@ describe('DailySummary.updateFromLogs — one recompute, two schemas', () => {
     }
     await expect(SummaryRestSide.getSummaryRange(undefined, DAY, DAY)).resolves.toEqual([]);
   });
+});
+
+// ---------------------------------------------------------------------------
+// BodyComposition — the unique dedupe index, bounds, and log_date's UTC
+// handling, against real Mongo (the hermetic fitnessgeek suite covers the
+// same ground without a database; this half proves the index actually
+// enforces the constraint at the collection level).
+// ---------------------------------------------------------------------------
+
+describe('BodyComposition dedupe index, bounds and UTC log_date (real Mongo)', () => {
+  const legalDoc = (over = {}) => ({
+    userId: OWNER,
+    weight_value: 246.0,
+    measured_at: new Date('2026-09-16T08:01:00.000Z'),
+    log_date: new Date('2026-09-16T00:00:00.000Z'),
+    source: 'arboleaf_pdf',
+    ...over,
+  });
+
+  afterEach(async () => {
+    await BodyCompositionGraphQL.deleteMany({ userId: OWNER });
+  });
+
+  test('a second scan for the same user at the same measured_at collides — the real E11000', async () => {
+    // The scenario the shared module's header names: a user shares the PDF,
+    // then later shares a photo of the exact same printout. Same userId, same
+    // instant read off the report, so the second insert must collide rather
+    // than double-count the reading. A file hash could not do this — the two
+    // uploads are different bytes.
+    await BodyCompositionGraphQL.create(legalDoc());
+    await expect(BodyCompositionGraphQL.create(legalDoc())).rejects.toMatchObject({
+      code: 11000,
+    });
+    expect(await BodyCompositionGraphQL.countDocuments({ userId: OWNER })).toBe(1);
+  });
+
+  test('the same user at a DIFFERENT measured_at is a second, legitimate scan', async () => {
+    await BodyCompositionGraphQL.create(legalDoc());
+    await BodyCompositionGraphQL.create(
+      legalDoc({ measured_at: new Date('2026-09-17T08:03:00.000Z'), log_date: new Date('2026-09-17T00:00:00.000Z') })
+    );
+    expect(await BodyCompositionGraphQL.countDocuments({ userId: OWNER })).toBe(2);
+  });
+
+  test('a different user at the SAME measured_at is not a collision', async () => {
+    const other = String(new mongoose.Types.ObjectId());
+    await BodyCompositionGraphQL.create(legalDoc());
+    await BodyCompositionGraphQL.create(legalDoc({ userId: other }));
+    expect(await BodyCompositionGraphQL.countDocuments({ measured_at: legalDoc().measured_at })).toBe(2);
+    await BodyCompositionGraphQL.deleteMany({ userId: other });
+  });
+
+  test('both models declare the SAME unique index, not one each', () => {
+    const uniqueOf = (schema) =>
+      schema
+        .indexes()
+        .filter(([, opts = {}]) => opts.unique)
+        .map(([keys]) => keys);
+    expect(uniqueOf(BodyCompositionRest.schema)).toEqual([{ userId: 1, measured_at: 1 }]);
+    expect(uniqueOf(BodyCompositionGraphQL.schema)).toEqual([{ userId: 1, measured_at: 1 }]);
+  });
+
+  test('log_date persists as exact UTC midnight through a real write and read-back', async () => {
+    // Regression target: were `log_date` ever given a `Date.now`-shaped
+    // default (an INSTANT default on a CALENDAR field), a round-trip through
+    // Mongo would still show the seconds/milliseconds of whenever the row was
+    // inserted. This schema declares no default at all — the value written is
+    // the value read back, byte for byte.
+    const midnight = new Date('2026-09-16T00:00:00.000Z');
+    await BodyCompositionGraphQL.create(legalDoc({ log_date: midnight }));
+
+    const stored = await BodyCompositionGraphQL.findOne({ userId: OWNER }).lean();
+    expect(new Date(stored.log_date).toISOString()).toBe('2026-09-16T00:00:00.000Z');
+
+    const viaRest = await RestSide().findOne({ userId: OWNER });
+    expect(viaRest.toJSON().formatted_date).toBe('2026-09-16');
+  });
+
+  test('the numeric bounds are enforced identically by both models', async () => {
+    for (const Model of [BodyCompositionRest, BodyCompositionGraphQL]) {
+      const overWeight = new Model(legalDoc({ weight_value: 1001 }));
+      expect(overWeight.validateSync().errors.weight_value).toBeTruthy();
+
+      const overIndex = new Model(legalDoc({ visceral_fat_index: 61 }));
+      expect(overIndex.validateSync().errors.visceral_fat_index).toBeTruthy();
+
+      const badConfidence = new Model(legalDoc({ extraction: { confidence: 1.5 } }));
+      expect(badConfidence.validateSync().errors['extraction.confidence']).toBeTruthy();
+    }
+  });
+
+  test('an unknown source is rejected by both models', () => {
+    for (const Model of [BodyCompositionRest, BodyCompositionGraphQL]) {
+      const err = new Model(legalDoc({ source: 'fitbit' })).validateSync();
+      expect(err && err.errors.source).toBeTruthy();
+    }
+  });
+
+  // fitnessgeek's own schema bound to the gateway's connection and collection
+  // — the production topology, exactly as the write-through block above does
+  // for every other pair.
+  function RestSide() {
+    return BodyCompositionGraphQL.db.model(
+      'BodyCompositionRestSide',
+      BodyCompositionRest.schema,
+      BodyCompositionGraphQL.collection.name
+    );
+  }
 });

@@ -19,7 +19,7 @@
  * Mongoose runs in strict mode by default: an unknown path in a `$set` is
  * dropped silently, not rejected. Two hand-synced copies of a schema is
  * therefore a data-loss hazard, not a style complaint — see
- * `DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md`.
+ * `DOCS/ARCHIVE/FITNESSGEEK_MODEL_CONSOLIDATION.md`.
  *
  * The two copies were byte-identical when this module was created (2026-09-05)
  * apart from the connection binding and basegeek's `requireUser` guards, so

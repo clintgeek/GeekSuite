@@ -16,7 +16,7 @@
  * erroring — so a field present in one copy and absent from the other is
  * accepted by the API, logged as a success, and never written. That is how
  * `nutrition_goal.keto` evaporated from `UserSettings` in April 2026; see
- * `DOCS/FITNESSGEEK_MODEL_CONSOLIDATION.md` for the full audit.
+ * `DOCS/ARCHIVE/FITNESSGEEK_MODEL_CONSOLIDATION.md` for the full audit.
  *
  * The two copies were byte-identical when this module was created (2026-09-05)
  * apart from the connection binding, so promoting them here was a pure
