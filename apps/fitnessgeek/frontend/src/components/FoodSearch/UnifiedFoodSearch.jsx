@@ -7,6 +7,7 @@ import SearchBar from './SearchBar';
 import FoodResultRow from './FoodResultRow';
 import ServingSheet from './ServingSheet';
 import SessionRibbon from './SessionRibbon';
+import PortionQuestion from './PortionQuestion';
 import { foodService } from '../../services/foodService';
 
 /**
@@ -66,7 +67,8 @@ const UnifiedFoodSearch = ({
   mealType = 'snack',
   onMealTypeChange,
   onLogItems,          // (items, mealType) => Promise<{ok, fail, logIds}>
-  onDescribe,          // (text) => Promise<{ok, fail, logIds, logged, skipped}>
+  onDescribe,          // (text) => Promise<{ok, fail, logIds, logged, skipped, questions}>
+  onAdjustCalories,    // (logId, nutrition, servings, targetCalories) => Promise<boolean>
   onUndo,              // (logIds) => Promise<void>
   onCreateFood,        // (query) => void
   onBarcodeClick,
@@ -89,6 +91,8 @@ const UnifiedFoodSearch = ({
   const [session, setSession] = useState([]);   // what this sitting has logged
   const [busy, setBusy] = useState(false);
   const [describing, setDescribing] = useState(false);
+  // At most one, and only when the backend judged it worth asking (§3.8).
+  const [question, setQuestion] = useState(null);
 
   const localAbort = useRef(null);
   const deepAbort = useRef(null);
@@ -282,6 +286,15 @@ const UnifiedFoodSearch = ({
           }))
         ]);
 
+        // One question, and only when it moves the day. It is attached to the
+        // entry it asks about so answering can re-scale that log's macros.
+        const asked = (result?.questions || [])[0] || null;
+        setQuestion(
+          asked
+            ? { ...asked, entry: logged.find((entry) => entry.logId === asked.logId) || null }
+            : null
+        );
+
         const summary = logged.length === 1
           ? `${logged[0].name} · ${Math.round(logged[0].calories || 0)} cal`
           : `${logged.length} items · ${Math.round(result?.totalCalories || 0)} cal`;
@@ -325,6 +338,37 @@ const UnifiedFoodSearch = ({
       setDescribing(false);
     }
   }, [query, onDescribe, describing, onUndo, notify]);
+
+  /** Answering re-scales the log that was already written. */
+  const answerQuestion = useCallback(async (asked, targetCalories) => {
+    if (!onAdjustCalories || !asked?.entry) { setQuestion(null); return; }
+    setBusy(true);
+    try {
+      await onAdjustCalories(
+        asked.logId,
+        asked.entry.nutrition,
+        asked.entry.loggedServings ?? asked.entry.servings ?? 1,
+        targetCalories
+      );
+      setSession((prev) => prev.map((item) => (
+        item.logIds?.includes(asked.logId)
+          ? {
+            ...item,
+            nutrition: {
+              ...item.nutrition,
+              calories_per_serving: targetCalories / (item.servings || 1)
+            }
+          }
+          : item
+      )));
+      notify(`Updated to ${Math.round(targetCalories)} cal`, { tone: 'success' });
+    } catch (err) {
+      notify(err?.message || 'Could not update that.', { tone: 'error' });
+    } finally {
+      setQuestion(null);
+      setBusy(false);
+    }
+  }, [onAdjustCalories, notify]);
 
   const handleTap = useCallback((food) => {
     const servings = Number(food.requestedQuantity) > 0 ? Number(food.requestedQuantity) : 1;
@@ -500,6 +544,17 @@ const UnifiedFoodSearch = ({
         * write, so "no confirm step" does not become "no idea what happened".
         */}
       {describeRow}
+
+      {/*
+        * Asked only after the food is already in the log, and only when the
+        * spread is wide enough to matter. Ignoring it costs nothing.
+        */}
+      <PortionQuestion
+        question={question}
+        busy={busy}
+        onAnswer={answerQuestion}
+        onDismiss={() => setQuestion(null)}
+      />
 
       {/* Wave two in flight, under results that are already usable */}
       {loadingDeep && (

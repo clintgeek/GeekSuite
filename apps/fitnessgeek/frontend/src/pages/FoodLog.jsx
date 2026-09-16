@@ -109,7 +109,7 @@ const FoodLog = () => {
 
   // One definition of "log this" and "take it back", shared with the full-page
   // search so a tap means the same thing on both surfaces.
-  const { logItems, undoLogs, describeMeal, createFood } = useFoodLogging({
+  const { logItems, undoLogs, describeMeal, adjustLogCalories, createFood } = useFoodLogging({
     date: selectedDate,
     onChanged: async () => {
       await refreshLogs();
@@ -461,6 +461,7 @@ const FoodLog = () => {
           onMealTypeChange={setSelectedMealType}
           onLogItems={logItems}
           onDescribe={describeMeal}
+          onAdjustCalories={adjustLogCalories}
           onUndo={undoLogs}
           onBarcodeClick={() => setShowBarcodeScanner(true)}
           onCreateFood={(query) => setCreateForm({ ...EMPTY_FOOD_FORM, name: query })}
@@ -610,6 +611,7 @@ const FoodLog = () => {
         onMealTypeChange={setSelectedMealType}
         onLogItems={logItems}
         onDescribe={describeMeal}
+        onAdjustCalories={adjustLogCalories}
         onUndo={undoLogs}
         onCreateFood={(query) => {
           setShowAddDialog(false);

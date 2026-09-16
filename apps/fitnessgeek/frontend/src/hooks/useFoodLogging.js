@@ -126,13 +126,46 @@ export const useFoodLogging = ({ date, onChanged }) => {
     };
   }, [date, onChanged]);
 
+  /**
+   * Re-scale one already-written log to a different calorie total.
+   *
+   * This is what answering the portion question does. The macros move with the
+   * calories rather than staying put, because a bigger plate of the same dish
+   * has proportionally more of everything — keeping 34g of fat while doubling
+   * the calories would describe a food that does not exist, and the sanity
+   * rails would be right to object to it.
+   *
+   * The log is patched, not rewritten: `FoodLogUpdateInput` is a partial, so
+   * only `nutrition` moves and meal, date and servings stay as logged.
+   */
+  const adjustLogCalories = useCallback(async (logId, nutrition, servings, targetCalories) => {
+    const per = Number(nutrition?.calories_per_serving) || 0;
+    const count = Number(servings) || 1;
+    const current = per * count;
+    if (!logId || !Number.isFinite(targetCalories) || targetCalories <= 0 || current <= 0) return false;
+
+    const factor = targetCalories / current;
+    const scaled = Object.fromEntries(
+      Object.entries(nutrition || {}).map(([key, value]) => [
+        key,
+        typeof value === 'number' && Number.isFinite(value)
+          ? Math.round(value * factor * 10) / 10
+          : value
+      ])
+    );
+
+    await fitnessGeekService.updateFoodLog(logId, { nutrition: scaled });
+    await onChanged?.();
+    return true;
+  }, [onChanged]);
+
   /** The "Can't find it? Create …" escape hatch. */
   const createFood = useCallback(async (payload) => {
     const created = await foodService.create(payload);
     return created?.data || created;
   }, []);
 
-  return { logItems, undoLogs, describeMeal, createFood };
+  return { logItems, undoLogs, describeMeal, adjustLogCalories, createFood };
 };
 
 export default useFoodLogging;

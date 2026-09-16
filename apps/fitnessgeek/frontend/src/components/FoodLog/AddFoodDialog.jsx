@@ -23,6 +23,7 @@ const AddFoodDialog = ({
   onMealTypeChange,
   onLogItems,
   onDescribe,
+  onAdjustCalories,
   onUndo,
   onCreateFood,
   showBarcodeScanner,
@@ -47,6 +48,7 @@ const AddFoodDialog = ({
           onMealTypeChange={onMealTypeChange}
           onLogItems={onLogItems}
           onDescribe={onDescribe}
+          onAdjustCalories={onAdjustCalories}
           onUndo={onUndo}
           onCreateFood={onCreateFood}
           onBarcodeClick={() => onShowBarcodeScanner?.(true)}

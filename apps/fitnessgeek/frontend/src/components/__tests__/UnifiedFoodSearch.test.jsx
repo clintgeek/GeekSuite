@@ -303,3 +303,117 @@ describe('describing a meal', () => {
     expect(describeMeal).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * The one question (THE_DESCRIBE_AND_LOG_PLAN.md §3.8).
+ *
+ * The rule is "at most one, and only when the answer moves the day". The
+ * backend decides whether it is earned — an absolute 400 cal spread, not a
+ * percentage — so what matters here is that the question arrives AFTER the food
+ * is written, never blocks it, and costs nothing to ignore.
+ */
+describe('the portion question', () => {
+  const describeMeal = vi.fn();
+  const adjust = vi.fn();
+
+  const withQuestion = (over = {}) => ({
+    ok: 1, fail: 0, logIds: ['log-n'],
+    logged: [{
+      logId: 'log-n',
+      name: 'Nachos with beef and cheese',
+      servings: 1,
+      loggedServings: 1,
+      calories: 1150,
+      nutrition: { calories_per_serving: 1150, protein_grams: 40, carbs_grams: 100, fat_grams: 60 }
+    }],
+    skipped: [],
+    questions: [{ logId: 'log-n', name: 'Nachos with beef and cheese', spread: 800, low: 400, high: 1200, logged: 1150 }],
+    totalCalories: 1150,
+    ...over
+  });
+
+  const renderBox2 = () =>
+    render(
+      <GeekToastProvider>
+        <UnifiedFoodSearch onLogItems={vi.fn()} onDescribe={describeMeal} onAdjustCalories={adjust} />
+      </GeekToastProvider>
+    );
+
+  const say = (v) =>
+    fireEvent.change(screen.getByPlaceholderText(/what did you eat/i), { target: { value: v } });
+
+  const logIt = async () => {
+    say('a dozen nachos with beef and cheese');
+    await vi.advanceTimersByTimeAsync(600);
+    fireEvent.click(screen.getByText(/^Log “/));
+  };
+
+  beforeEach(() => {
+    describeMeal.mockReset();
+    adjust.mockReset().mockResolvedValue(true);
+    describeMeal.mockResolvedValue(withQuestion());
+  });
+
+  it('asks only after the food is already logged', async () => {
+    renderBox2();
+    say('nachos');
+    await vi.advanceTimersByTimeAsync(600);
+
+    // Nothing is asked while he is still typing — it must never be a gate.
+    expect(screen.queryByText(/how big was/i)).toBeNull();
+
+    fireEvent.click(screen.getByText(/^Log “/));
+    expect(await screen.findByText(/how big was the nachos with beef and cheese/i)).toBeInTheDocument();
+  });
+
+  it('offers the model’s own range rather than a vague bigger/smaller', async () => {
+    renderBox2();
+    await logIt();
+
+    expect(await screen.findByRole('button', { name: /smaller · ~400/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /bigger · ~1200/i })).toBeInTheDocument();
+    expect(screen.getByText(/logged at 1150 cal/i)).toBeInTheDocument();
+  });
+
+  it('re-scales the written log when answered', async () => {
+    renderBox2();
+    await logIt();
+
+    fireEvent.click(await screen.findByRole('button', { name: /smaller · ~400/i }));
+    await waitFor(() => expect(adjust).toHaveBeenCalledWith(
+      'log-n',
+      expect.objectContaining({ calories_per_serving: 1150 }),
+      1,
+      400
+    ));
+  });
+
+  it('goes away when he says it was about right, and changes nothing', async () => {
+    renderBox2();
+    await logIt();
+
+    fireEvent.click(await screen.findByRole('button', { name: /that's about right/i }));
+    await waitFor(() => expect(screen.queryByText(/how big was/i)).toBeNull());
+    expect(adjust).not.toHaveBeenCalled();
+  });
+
+  it('asks nothing when the backend judged it not worth a tap', async () => {
+    describeMeal.mockResolvedValue(withQuestion({ questions: [] }));
+    renderBox2();
+    await logIt();
+
+    await waitFor(() => expect(screen.queryByText(/^Log “/)).toBeNull());
+    expect(screen.queryByText(/how big was/i)).toBeNull();
+  });
+
+  it('asks nothing when the range is missing, rather than rendering an empty choice', async () => {
+    describeMeal.mockResolvedValue(withQuestion({
+      questions: [{ logId: 'log-n', name: 'Nachos', spread: 800, low: null, high: null, logged: 1150 }]
+    }));
+    renderBox2();
+    await logIt();
+
+    await waitFor(() => expect(screen.queryByText(/^Log “/)).toBeNull());
+    expect(screen.queryByText(/how big was/i)).toBeNull();
+  });
+});

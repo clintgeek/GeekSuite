@@ -211,6 +211,11 @@ export async function resolveEntries(entries, { userId } = {}) {
           serving: { size: 1, unit: dish.servingDescription || 'serving' },
           foodId: null,
           spread,
+          // Carried so the one question we are allowed to ask can offer real
+          // numbers. "Was it bigger or smaller?" is not answerable; "400 or
+          // 1,200?" is one tap.
+          lowCalories: dish.lowCalories ?? null,
+          highCalories: dish.highCalories ?? null,
           provenance: estimate.provenance
         };
       }
@@ -384,7 +389,10 @@ export async function logDescription(text, { userId, date, hour, ...options } = 
         questions.push({
           logId: String(log._id),
           name: resolution.name,
-          spread: resolution.spread
+          spread: resolution.spread,
+          low: resolution.lowCalories ?? null,
+          high: resolution.highCalories ?? null,
+          logged: rails.totals.calories
         });
       }
 
