@@ -36,13 +36,16 @@ Stored in `apps/basegeek/.env.production` (gitignored). See `.env.example` for t
 | `CORS_ORIGINS` | Comma-separated list of allowed origins. |
 | AI provider keys | `CEREBRAS_API_KEY`, `GROQ_API_KEY`, etc. — see `DOCS/AI_CATALOG.md`. |
 
-After the first deploy with `KEY_VAULT_SECRET` set, run the migration script to encrypt existing plaintext API keys:
+After the first deploy with `KEY_VAULT_SECRET` set, run the migration script to encrypt existing plaintext API keys. Run it **inside the container**, which is where `KEY_VAULT_SECRET` and `AIGEEK_MONGODB_URI` are set and where the aiGeek Mongo is reachable — from the host the URI's compose hostname does not resolve:
 
 ```bash
-node packages/api/scripts/encrypt-keys.js
+docker exec basegeek node scripts/encrypt-keys.js          # dry-run: reports, writes nothing
+docker exec basegeek node scripts/encrypt-keys.js --yes    # actually encrypt
 ```
 
-This is idempotent — already-encrypted values are skipped.
+Without `--yes` it is a dry run, so the first command above is safe to run any time and is the way to check whether the boot warning is still earned. This guide showed only the bare command until 2026-09-16, which read as "this encrypts your keys" and did nothing.
+
+It is idempotent — values already starting with `v1:` are skipped, so it can be re-run without double-encrypting.
 
 ---
 

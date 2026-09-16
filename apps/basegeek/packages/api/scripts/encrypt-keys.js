@@ -66,7 +66,15 @@ const DRY_RUN = !args.includes('--yes');
 // ---------------------------------------------------------------------------
 // We import the vault functions directly to avoid pulling in the full app
 // module graph (which expects a running Mongo connection, etc.).
-import { encrypt, isEncrypted } from '../src/lib/cryptoVault.js';
+//
+// This was `../src/lib/cryptoVault.js` until 2026-09-16, a path that had not
+// existed for some time: the vault was extracted into the `@geeksuite/crypto-vault`
+// workspace package and the old file deleted. The app moved with it
+// (`models/AIConfig.js`, `services/aiStatusService.js`); this script did not,
+// so the one thing that clears the "keys are stored unencrypted" warning died
+// of ERR_MODULE_NOT_FOUND before opening a connection. Nothing caught it,
+// because a one-shot script has no test and no boot path.
+import { encrypt, isEncrypted } from '@geeksuite/crypto-vault';
 
 // ---------------------------------------------------------------------------
 // Minimal inline schema — we only touch the fields we care about
