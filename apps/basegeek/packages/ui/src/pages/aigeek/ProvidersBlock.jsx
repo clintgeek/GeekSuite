@@ -54,6 +54,7 @@ import {
 } from '@mui/material';
 import { GeekErrorState } from '@geeksuite/ui';
 import { providerAnchorId } from './useAIGeek';
+import { filledChipSx } from './chipTone';
 import { RemoveProviderKeyDialog } from './dialogs/ConfirmDialogs';
 
 /**
@@ -67,7 +68,12 @@ function ProviderChip({ hasKey, listingFailed, counts, statusKnown }) {
   if (listingFailed) {
     return (
       <Tooltip title="The provider's own model listing refused our key on the last discovery run">
-        <Chip size="small" color="error" label="listing failed" sx={{ fontSize: 12 }} />
+        <Chip
+          size="small"
+          color="error"
+          label="listing failed"
+          sx={(theme) => ({ fontSize: 12, ...filledChipSx(theme, 'error') })}
+        />
       </Tooltip>
     );
   }
@@ -88,7 +94,9 @@ function ProviderChip({ hasKey, listingFailed, counts, statusKnown }) {
         color={alive > 0 ? 'success' : 'warning'}
         variant={alive > 0 ? 'filled' : 'outlined'}
         label={`${alive} alive · ${structured} structured`}
-        sx={{ fontSize: 12 }}
+        // Only the filled variant sits on a tinted fill; the outlined one is
+        // ink on paper and the theme already measures that.
+        sx={(theme) => ({ fontSize: 12, ...(alive > 0 ? filledChipSx(theme, 'success') : null) })}
       />
     </Tooltip>
   );
