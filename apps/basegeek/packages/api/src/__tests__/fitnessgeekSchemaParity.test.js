@@ -618,6 +618,7 @@ const PAIRS = [
       'skeletal_muscle_lb',
       'subcutaneous_fat_lb',
       'visceral_fat_index',
+      'height_cm',
       'left_arm.muscle_lb',
       'left_arm.fat_lb',
       'right_arm.muscle_lb',

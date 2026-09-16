@@ -11,6 +11,7 @@ module.exports = {
   fitnessgeek: {
     bloodPressure: require('./fitnessgeek/bloodPressure.js'),
     bodyComposition: require('./fitnessgeek/bodyComposition.js'),
+    bodyCompositionDerivation: require('./fitnessgeek/bodyCompositionDerivation.js'),
     dailySummary: require('./fitnessgeek/dailySummary.js'),
     foodItem: require('./fitnessgeek/foodItem.js'),
     foodLog: require('./fitnessgeek/foodLog.js'),

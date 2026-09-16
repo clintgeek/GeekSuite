@@ -159,6 +159,11 @@ const bodyCompositionBounds = Object.freeze({
   // The ceiling is generous on purpose: it exists to catch a gross ingest
   // error, not to model the index's real distribution.
   visceral_fat_index: Object.freeze({ min: 0, max: 60 }),
+  // The height the SCALE used, in cm — an input to the scan, not an output of
+  // it. Bounds are a sanity band around living adults, wide enough for the
+  // extremes and tight enough to catch a metres-for-centimetres slip (1.8
+  // fails; 180 passes).
+  height_cm: Object.freeze({ min: 50, max: 275 }),
   extraction: Object.freeze({
     confidence: Object.freeze({ min: 0, max: 1 }),
   }),
@@ -246,6 +251,29 @@ function bodyCompositionDefinition(mongoose) {
       type: Number,
       min: bodyCompositionBounds.visceral_fat_index.min,
       max: bodyCompositionBounds.visceral_fat_index.max,
+      default: null,
+    },
+    // The height the scale used for this scan, in cm. An INPUT, not a
+    // measurement: the scale cannot measure height, it is told.
+    //
+    // Stored per-scan rather than read from the user's profile for two
+    // reasons. First, fitnessgeek has nowhere to read it from — `userSettings`
+    // carries only a height *unit preference* (`'ft'`/`'cm'`), never a value —
+    // so without this field BMI and SMI are simply uncomputable. Second, it is
+    // the only way BMI and SMI reproduce exactly: those two are the only
+    // derived values that depend on something outside this document, and a
+    // later profile edit would silently change what a past scan "should" have
+    // said.
+    //
+    // Centimetres, because that is what the device holds. The report PRINTS
+    // imperial and the conversion is lossy — a scan that computed BMI 44.4 at
+    // 317.2 lb implies exactly 180 cm, which the same report renders as
+    // `5'11"` (really 5'10.87"). Recomputing from the printed imperial value
+    // gives 44.2 and a spurious validation failure. Store the centimetres.
+    height_cm: {
+      type: Number,
+      min: bodyCompositionBounds.height_cm.min,
+      max: bodyCompositionBounds.height_cm.max,
       default: null,
     },
     // Five segments, each a nested object (dotted paths) — see the header.
