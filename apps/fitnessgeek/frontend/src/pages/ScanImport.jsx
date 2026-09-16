@@ -2,10 +2,16 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Box, Typography, Button, CircularProgress } from '@mui/material';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import { useSearchParams } from 'react-router-dom';
 import { useToast } from '@geeksuite/ui';
 import { SectionLabel, DisplayHeading } from '../components/primitives';
-import { fetchStagedShareFile, uploadBodyCompFile } from '../services/bodyCompUploadService.js';
+import {
+  fetchStagedShareFile,
+  uploadBodyCompFile,
+  extractBodyCompUpload,
+} from '../services/bodyCompUploadService.js';
 
 // Minimal intake screen. This is where BOTH ways of getting a scan file
 // into the app land:
@@ -16,9 +22,13 @@ import { fetchStagedShareFile, uploadBodyCompFile } from '../services/bodyCompUp
 //      iOS Safari implements outbound navigator.share() only, never Web
 //      Share Target, and it's also useful on desktop / for re-importing an
 //      old scan.
-// Both paths call the same POST /api/body-comp/uploads endpoint. A later
-// pass builds the real confirm/review UI on top of this; this screen only
-// proves the file arrived and got stored.
+// Both paths call the same POST /api/body-comp/uploads endpoint, and once
+// that lands, this screen immediately triggers extraction
+// (POST /api/body-comp/uploads/:id/extract — DOCS/BODY_COMPOSITION_INTAKE.md
+// §10) and renders whatever it comes back with: a clean save, a mismatch
+// table (§6), a duplicate, or an unavailable model. Every one of those is a
+// normal outcome to show, not an error state — only a genuine network/server
+// failure reads as ERROR here.
 
 const ERROR_MESSAGES = {
   no_file: 'No file was shared.',
@@ -31,9 +41,83 @@ const STATUS = {
   IDLE: 'idle',
   CLAIMING: 'claiming',
   UPLOADING: 'uploading',
+  EXTRACTING: 'extracting',
   SUCCESS: 'success',
   ERROR: 'error',
 };
+
+/** One row of the mismatch/verification table — a label plus computed vs. printed. */
+function ValidationCheckRow({ check }) {
+  const tone = check.ok ? 'success.main' : 'error.main';
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 0.25,
+        py: 1,
+        px: 1.25,
+        borderRadius: 1.5,
+        bgcolor: check.ok ? 'action.hover' : 'error.main',
+        // A failing row gets a light tinted background, not a loud solid
+        // one — this still needs to read as "flagged," not "broken."
+        backgroundColor: check.ok ? 'action.hover' : 'rgba(211, 47, 47, 0.08)',
+      }}
+    >
+      <Typography sx={{ fontSize: '0.8125rem', fontWeight: 600 }}>{check.label}</Typography>
+      <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>
+        Computed {check.computed} · Printed {check.printed}
+        {' · '}
+        <Box component="span" sx={{ color: tone, fontWeight: 600 }}>
+          {check.ok ? 'match' : `off by ${Math.abs(check.delta).toFixed(2)}`}
+        </Box>
+      </Typography>
+    </Box>
+  );
+}
+
+/** The confirm/mismatch view: every check the gate actually ran, worst first. */
+function ValidationDetail({ validation }) {
+  const runChecks = (validation?.checks || []).filter((check) => !check.skipped);
+  const ordered = [...runChecks].sort((a, b) => Number(a.ok) - Number(b.ok));
+
+  return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, textAlign: 'left', mt: 1 }}>
+      {ordered.map((check) => (
+        <ValidationCheckRow key={check.key} check={check} />
+      ))}
+    </Box>
+  );
+}
+
+/** Human copy for every terminal extraction outcome the server can hand back. */
+function extractionSummary(extraction) {
+  switch (extraction?.status) {
+    case 'saved':
+      return { tone: 'success', title: 'Scan saved.', detail: 'Your body-composition scan was read, verified, and logged.' };
+    case 'duplicate':
+      return { tone: 'success', title: 'Already imported.', detail: extraction.message || 'This scan was already imported.' };
+    case 'mismatch':
+      return {
+        tone: 'error',
+        title: 'Needs a look.',
+        detail: "Some numbers on the report didn't match what we recomputed from it, so nothing was saved yet.",
+      };
+    case 'incomplete':
+      return {
+        tone: 'error',
+        title: 'Could not read enough of the scan.',
+        detail: extraction.message || 'The scan could not be fully read.',
+      };
+    case 'extraction_failed':
+    default:
+      return {
+        tone: 'error',
+        title: "Couldn't read this scan right now.",
+        detail: extraction?.message || 'Try again, or share a clearer photo of the report.',
+      };
+  }
+}
 
 function ScanImport() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -43,17 +127,30 @@ function ScanImport() {
   const [status, setStatus] = useState(STATUS.IDLE);
   const [fileMeta, setFileMeta] = useState(null); // { name, size, mimeType }
   const [uploadResult, setUploadResult] = useState(null);
+  const [extraction, setExtraction] = useState(null); // the server's { status, ... } from /extract
   const [errorMessage, setErrorMessage] = useState(null);
 
   const runUpload = useCallback(async (file) => {
     setStatus(STATUS.UPLOADING);
     setFileMeta({ name: file.name, size: file.size, mimeType: file.type });
+    setExtraction(null);
     setErrorMessage(null);
     try {
       const result = await uploadBodyCompFile(file);
       setUploadResult(result);
+      notify('Scan uploaded — reading it now…', { tone: 'success' });
+
+      // The upload is only step one. Immediately run extraction against it
+      // (DOCS/BODY_COMPOSITION_INTAKE.md §10) so the user sees one flow, not
+      // "uploaded" followed by a separate manual step. A failure HERE is
+      // still not an ERROR-status page — extractBodyCompUpload only throws
+      // for a genuine transport failure; every other outcome (mismatch,
+      // duplicate, unavailable model) is a normal `extraction.status` to
+      // render below.
+      setStatus(STATUS.EXTRACTING);
+      const extractionResult = await extractBodyCompUpload(result.id);
+      setExtraction(extractionResult);
       setStatus(STATUS.SUCCESS);
-      notify('Scan uploaded.', { tone: 'success' });
     } catch (error) {
       setStatus(STATUS.ERROR);
       setErrorMessage(error.message || 'Upload failed.');
@@ -102,7 +199,8 @@ function ScanImport() {
     runUpload(file);
   };
 
-  const busy = status === STATUS.CLAIMING || status === STATUS.UPLOADING;
+  const busy = status === STATUS.CLAIMING || status === STATUS.UPLOADING || status === STATUS.EXTRACTING;
+  const summary = status === STATUS.SUCCESS && extraction ? extractionSummary(extraction) : null;
 
   return (
     <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 720, mx: 'auto' }}>
@@ -137,22 +235,34 @@ function ScanImport() {
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5, py: 2 }}>
             <CircularProgress size={32} />
             <Typography sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>
-              {status === STATUS.CLAIMING ? 'Retrieving shared file…' : 'Uploading…'}
+              {status === STATUS.CLAIMING && 'Retrieving shared file…'}
+              {status === STATUS.UPLOADING && 'Uploading…'}
+              {status === STATUS.EXTRACTING && 'Reading your scan…'}
             </Typography>
           </Box>
         )}
 
-        {status === STATUS.SUCCESS && (
+        {status === STATUS.SUCCESS && summary && (
           <Box sx={{ py: 1 }}>
-            <Typography sx={{ fontSize: '0.9375rem', fontWeight: 600, mb: 0.5 }}>
-              Received: {fileMeta?.name}
+            <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', mb: 1 }}>
+              {fileMeta?.name}
+              {uploadResult && ` · ${Math.max(1, Math.round((uploadResult.size || 0) / 1024))} KB`}
             </Typography>
-            <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', mb: 2 }}>
-              {uploadResult?.mimeType} · {Math.max(1, Math.round((uploadResult?.size || 0) / 1024))} KB
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1, mb: 0.5 }}>
+              {summary.tone === 'success'
+                ? <CheckCircleIcon sx={{ color: 'success.main', fontSize: 22 }} />
+                : <ErrorOutlineIcon sx={{ color: 'error.main', fontSize: 22 }} />}
+              <Typography sx={{ fontSize: '0.9375rem', fontWeight: 600 }}>{summary.title}</Typography>
+            </Box>
+            <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', mb: 1.5 }}>
+              {summary.detail}
             </Typography>
-            <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
-              Stored. Review and extraction come next.
-            </Typography>
+
+            {/* The mismatch/verification detail — every check the gate actually
+                ran (§6), worst first, so it's clear WHICH numbers disagreed
+                rather than just that something did. Only rendered when the
+                server sent one (mismatch/incomplete), never on a clean save. */}
+            {extraction?.validation && <ValidationDetail validation={extraction.validation} />}
           </Box>
         )}
 

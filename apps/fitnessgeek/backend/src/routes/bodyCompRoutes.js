@@ -8,6 +8,7 @@ import {
   handleBodyCompUploadError,
   createBodyCompUpload,
 } from '../controllers/bodyCompUploadController.js';
+import { extractBodyCompUpload } from '../controllers/bodyCompExtractController.js';
 
 /**
  * @route GET /api/body-comp/share-staged/:id
@@ -32,5 +33,16 @@ router.post(
   createBodyCompUpload,
   handleBodyCompUploadError,
 );
+
+/**
+ * @route POST /api/body-comp/uploads/:id/extract
+ * @desc Run AI extraction against a stored upload, validate it against the
+ *       arithmetic gate (DOCS/BODY_COMPOSITION_INTAKE.md §6), and save a
+ *       `BodyComposition` row only if it verifies clean. A mismatch or an
+ *       unavailable model both come back as a 200 the UI can render, not an
+ *       error — see bodyCompExtractController.js.
+ * @access Private
+ */
+router.post('/uploads/:id/extract', authenticateToken, extractBodyCompUpload);
 
 export default router;

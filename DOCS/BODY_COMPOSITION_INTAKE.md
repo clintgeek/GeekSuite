@@ -99,10 +99,38 @@ reduced and the text is unreadable. It cannot be sent as a single image — read
 during design required slicing it into 8 chunks.
 
 Accept both formats, since Arboleaf offers both and users will send either. Detect the
-tall screenshot and slice it; pass the PDF straight through.
+tall screenshot and slice it; pull page 1's image out of the PDF (§4.1 — which is not
+quite "straight through", because of what the PDF actually stores).
 
 **Do not trust the file extension.** The sample file named `arboleaf.png` is JPEG data.
 Sniff content.
+
+### 4.1 What the PDF actually contains — measured, not assumed
+
+Page 1's image XObject is **`/FlateDecode`**, `/ICCBased` with 3 components, 8 bits per
+component, 1714 x 2797, no predictor. That matters because a `/DCTDecode` stream's bytes
+*are* a JPEG file and can be handed to a model untouched, while a FlateDecode one is a
+bare grid of colour samples with no header and no format — it has to be inflated and
+re-encoded.
+
+The first implementation assumed DCTDecode, passed its synthetic fixture, and failed on
+the real vendor file. Both paths are now handled and both are exercised against real
+files. Measured results:
+
+| Input | Output | Total base64 |
+|---|---|---|
+| `arboleaf.pdf` | 1 image, re-encoded JPEG q90 | **1.03 MB** |
+| `arboleaf.png` | 8 slices | **2.40 MB** |
+
+Both sit inside the 6 MB request budget, and the PDF is the better input on every axis:
+one image instead of eight, less than half the payload, no slicing. The re-encoded page
+was checked by eye — every printed figure, including the small segmental numbers, is
+legible.
+
+Unsupported terminal filters (JPXDecode, CCITTFaxDecode) and colour layouts that are not
+1- or 3-component 8-bit fail with a specific error telling the user to share the image
+export instead. The re-encode never guesses at a stride: a mis-strided buffer is still
+valid base64 and would hand the model a picture of noise to hallucinate over.
 
 ---
 
@@ -254,13 +282,26 @@ They are not interchangeable and both are required.
 
 | # | Piece | Status |
 |---|-------|--------|
-| 1 | aiGeek vision routing — capture `input_modalities`, flag on `AIFreeTier`, make the `vision` task filter | in flight |
-| 2 | `BodyComposition` shared schema + both consumers + tripwire registration | in flight |
-| 3 | Share-target manifest entry, POST endpoint, file-picker fallback | in flight |
-| 4 | Extraction service, arithmetic validation gate, confirm screen | not started |
+| 1 | aiGeek vision routing — `input_modalities` captured, flagged on `AIFreeTier`, `vision` filters; catalog deny list narrowed | landed |
+| 2 | `BodyComposition` shared schema + both consumers + tripwire registration | landed |
+| 3 | Share-target manifest entry, POST endpoint, file-picker fallback | landed |
+| 3b | aiGeek image transport + the three `JSON.stringify` fallthroughs above it | landed |
+| 4 | Image prep, extraction service, validation gate, confirm screen | landed |
 
-Piece 1 blocks piece 4: `need: 'vision:*'` parses today but does not filter, so a vision
-call routes to a model that cannot see the image.
+### What still needs a human
+
+- **Is OpenRouter configured, with a free vision-capable model?** Vision routing is
+  OpenRouter-only (§ AIGEEK_CAPABILITY_ROUTING §7.6): the other eight providers state
+  nothing about input modality and can never qualify. Keys live encrypted in `AIConfig`,
+  so the repo cannot answer this. If the answer is no, extraction fails closed — cleanly,
+  but it fails.
+- **Uploads do not survive a deploy.** They land on container-local disk and fitnessgeek
+  has no bind-mounted volume, while every push to `main` restarts the fleet. Harmless
+  while extraction is synchronous on the same live container. If it ever goes async, it
+  needs a real volume in `docker-compose` — an infrastructure decision, not a code one.
+- **WebP tall-image slicing** falls through unsliced (jimp has no WebP decoder). The
+  `checked > 0` guard still prevents a bad save. Arboleaf exports JPEG, so this is a
+  hypothetical.
 
 ### Open question for Chef
 

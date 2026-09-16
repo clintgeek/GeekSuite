@@ -93,3 +93,41 @@ export async function uploadBodyCompFile(file) {
 
   return body.data;
 }
+
+/**
+ * Run AI extraction against a previously stored upload: transcribe the
+ * report, check it against the arithmetic gate
+ * (DOCS/BODY_COMPOSITION_INTAKE.md §6), and save it server-side if it
+ * verifies clean.
+ *
+ * Every OUTCOME of this — a clean save, a mismatch, a duplicate, an
+ * unavailable model — is a 200 carrying `data.status`, matching this app's
+ * "no route 500s because a model was busy" convention
+ * (see bodyCompExtractController.js). This function only throws for a
+ * genuine transport/server failure, never for "the scan didn't verify."
+ *
+ * @param {string} uploadId
+ * @returns {Promise<{status: string, [key: string]: any}>}
+ */
+export async function extractBodyCompUpload(uploadId) {
+  const response = await fetch(`/api/body-comp/uploads/${encodeURIComponent(uploadId)}/extract`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { ...csrfHeaders('POST') },
+  });
+
+  let body = null;
+  try {
+    body = await response.json();
+  } catch {
+    // fall through to the generic error below
+  }
+
+  if (!response.ok || !body?.success) {
+    const error = new Error(body?.error?.message || 'Extraction failed.');
+    error.code = body?.error?.code || `HTTP_${response.status}`;
+    throw error;
+  }
+
+  return body.data;
+}
