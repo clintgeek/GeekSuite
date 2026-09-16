@@ -568,8 +568,18 @@ hourly after that:
 
 | what | when | what it does |
 |---|---|---|
-| discovery | last one older than 24 h | per provider with a key: list models → free candidates → probe each → write `AIModel` / `AIFreeTier` / `AIPricing`; retire models the provider stopped listing; prune rows for providers off the roster |
-| re-probe | last one older than 6 h | every free row of a configured provider gets one probe; alive rows revived, dead cooled 30 d |
+| discovery | last one older than 24 h | per provider with a key: list models → free candidates (modality-filtered) → probe each → write `AIModel` / `AIFreeTier` / `AIPricing`; retire models the provider stopped listing **and demote their free rows**; prune rows for providers off the roster **and for roster providers with no key** |
+| re-probe | last one older than 6 h | every free row of a configured provider gets one probe; alive rows revived |
+| golden set | last one older than 24 h | six questions with known answers, scored by code, against up to four `structured` rows — never-scored first, then stalest. ~24 provider calls, which is the whole daily budget; that is why it has a gate of its own on an hourly tick (`AI_CATALOG_GOLDEN_HOURS`) |
+
+**What a failed probe now means**, which is three different things and used to be one:
+
+| the row answered | what happens | why |
+|---|---|---|
+| 404 / 410 / `model_not_found` | **retired** — `isFree: false`, cooling cleared | the vendor withdrew the slug; cooling a retirement is a slower way of failing forever |
+| **402** | cooled **24 h** | pay-as-you-go with no credit. Not transient, not terminal — it works the moment the account is funded (Cerebras and, since 2026-09-16, several Ollama Cloud rows) |
+| 401 / 403 / 400 | cooled 30 d | the model exists; this call was refused |
+| 429 / 5xx / timeout | untouched | the provider is having a bad minute, which says nothing about the model |
 
 Every run writes one `AICatalogRun` document (`kind`, `startedAt`, `finishedAt`, per-provider counts,
 `pruned`, `error`) — **even a run that failed halfway**, so "no document" means "the job did not run",
@@ -588,6 +598,25 @@ docker exec basegeek sh -c 'cd /app/apps/basegeek/packages/api && node -e "
 
 A healthy discovery run logs `[CatalogJob] discovery complete` with per-provider counts. A provider
 with a key and `alive: 0` is the one thing worth looking at.
+
+### "I just pasted a key. Does it work?"
+
+```
+docker exec basegeek sh -lc 'cd /app/apps/basegeek/packages/api && node scripts/check-provider.js gemini'
+docker exec basegeek sh -lc 'cd /app/apps/basegeek/packages/api && node scripts/check-provider.js'   # every key
+```
+
+Writes nothing; safe against production at any time. It separates the four ways that question fails,
+because they are indistinguishable from outside:
+
+1. **key loaded** into the running service
+2. **listing accepted** — this is the auth test
+3. **free chat candidates** — what survives the modality filter
+4. **inference answers** — entitlement, quota and health
+
+A Cerebras key on 2026-09-16 passed 1–3 and failed 4 with `http_402`: the credential was perfectly
+valid and the account simply had no credit. A listing check alone calls that a success; a probe alone
+calls it a bad key. Neither is true.
 
 ### The manual override
 

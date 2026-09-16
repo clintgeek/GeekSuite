@@ -34,6 +34,14 @@ Pull from here when planning the next pass; update as work lands or priorities s
     - [ ] A full 24-hour window with zero `CSRF token check (report-only)` warnings in basegeek's logs.
     - [ ] Flip `CSRF_TOKEN=enforce` in `apps/basegeek/.env.production` and restart.
 
+- **`CORS_ORIGINS` is unset in the basegeek container** (live, seen 2026-09-16). Production is
+  running on the hardcoded fallback origin list and says so at boot:
+  `CORS_ORIGINS not set; production is running on the hardcoded fallback origin list`.
+  This is the Watchtower env landmine — `env_file` is resolved at container-create, so a
+  Watchtower deploy never picks up a new variable. Fixing it needs `docker compose up -d`, not a
+  push. (The related design concern — that the fallback arrays ship with dev and LAN origins — is
+  separate and lives in DEFERRED_WORK.)
+
 - **HttpOnly Cookies & Token Verification**
   - Verify no client frontend attempts to read `document.cookie` directly for `geek_token` or `geek_refresh_token`.
   - Confirm all auth hydration flows exclusively through `/api/users/me` or `@geeksuite/user`.
@@ -78,6 +86,18 @@ Pull from here when planning the next pass; update as work lands or priorities s
 
 ## 5. Features & Fixes
 
+- **aiGeek capability routing** — the live work stream lives in
+  [`DOCS/AIGEEK_CAPABILITY_ROUTING.md`](./AIGEEK_CAPABILITY_ROUTING.md). Stages 1–3 shipped
+  2026-09-15/16: cause-based retirement, `need:`-based resolution, measured latency, and the
+  golden set (model quality is measured now rather than inferred from model names). §7 records
+  what the live run corrected. **Remaining:** §3.4 app configs storing needs rather than models,
+  and §3.5 retiring the name-matching in `aiModelCapabilitiesService` — now unblocked, since the
+  golden set supplies the real data it was standing in for.
+- **FitnessGeek describe-and-log** — shipped and verified end to end 2026-09-16; see
+  [`apps/fitnessgeek/DOCS/THE_DESCRIBE_AND_LOG_PLAN.md`](../apps/fitnessgeek/DOCS/THE_DESCRIBE_AND_LOG_PLAN.md).
+  Remaining there: the search ranker's `chosenForQuery` pin is still unwired (the describe path
+  has its own history reuse, so this only sharpens the fallback).
+
 - **NoteGeek `getTagHierarchy` Intermittent 500**:
   - `GET /api/notes/tags` sets `children: null` for a shallow tag (`work`) and then indexes into it when a deeper tag (`work/project1`) arrives later. Mongo return order is non-deterministic.
   - Fix: Build the hierarchy tree with `children: {}` consistently, or sort tags by depth before building tree.
@@ -92,6 +112,15 @@ Pull from here when planning the next pass; update as work lands or priorities s
   - Priority: FlockGeek REST routes (if retained per Q22) and NoteGeek gateway resolvers.
 - **Mobile Harness CI Coverage**:
   - Add remaining edge scenes and modal interaction sequences to `tools/mobile-harness`.
+- ~~**Flaky: `aiFreeTierRouting > "resets the counters in the mirror and in Mongo"`**~~ —
+  **fixed 2026-09-16** (`84459025`). Worth keeping the shape in mind, because it was six sites
+  across two files and only one of them ever went red: several paths book their bookkeeping
+  fire-and-forget on purpose (`markFreeTierSuccess`, `recordStickyPick`, `updateStats`), and the
+  tests bridged that with `await new Promise(r => setImmediate(r))` — one macrotask tick, which is
+  a guess about how long a Mongo round-trip takes. It held when a file ran alone and lost under a
+  full 91-suite run. `src/__tests__/eventually.js` polls for the condition instead; `settle()` is
+  for the absence assertions, where polling proves nothing.
+  **If you add a test that asserts on a detached write, use those two.**
 
 ---
 

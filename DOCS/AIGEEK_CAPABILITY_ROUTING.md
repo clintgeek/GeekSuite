@@ -295,3 +295,93 @@ sets `sticky` and keeps its model for the thread, and the existing `retiredStick
 already carries a dead pick out so the replacement is recorded rather than silent.
 
 **The golden set** is specified in §3.2 above.
+
+
+---
+
+## 7. After the golden set — what the live system taught, 2026-09-16
+
+The plan above was written from reading the code. Everything in this section was found by
+running the result against real providers, and none of it was visible any other way.
+
+### 7.1 The bug that made the whole feature inert
+
+`explicitPinOf` splits `"provider/model"` as a convenience for callers that send only a model
+string. Applied when a provider was **also** named, it destroyed ids containing a slash of
+their own — and Groq namespaces its best models as `groq/compound` and `groq/compound-mini`.
+The pin became `compound-mini`, failed `pin_absent`, degraded to the ordinary walk, and served
+`allam-2-7b` (0.4).
+
+Those two are the first models the golden set rated 1.0. So **the moment quality routing
+started working, it started being discarded at the last step** — with `provenance.need` naming
+the 1.0 model and `provenance.model` naming the 0.4 one in the same response, and every layer
+reporting success.
+
+The lesson is not about slashes. It is that a chain of correct components can still deliver the
+wrong answer, and the only thing that catches it is asking the deployed system what it actually
+did. `/openai/v1` was the one caller relying on the old behaviour; it now passes both halves,
+which it had in hand all along.
+
+### 7.2 Three depths of defence, because one was not enough
+
+A **music model** — `google/lyria-3-pro-preview` — reached fourth place in the free rotation and
+answered three of Chef's requests with prose where he wanted YAML. Four separate things had to be
+true for that:
+
+1. OpenRouter's branch of `freeCandidates` was the only one that never applied the modality
+   filter. It decided on price and declared output modality, and a model declaring **no**
+   `output_modalities` is treated as text — right for a chat listing, wrong for Lyria.
+2. The filter ran at listing time only, so adding `lyria` to it did nothing for the row already
+   in the table.
+3. `fitness` sat below provider priority in the sort, so `basic` rows — ones the probe had
+   proved answer in prose — outranked `structured` rows at other providers.
+4. Nothing demoted a free row when the listing stopped counting it as a candidate.
+
+Modality is now checked at **listing** (all providers), at **write** (`writeListed` demotes), and
+at **selection** (a runtime guard). Fitness is a tier above provider priority. The auto-router
+keeps its exemption deliberately: it is a meta-model whose fitness reading is unreliable, and it
+is alive whenever any of that vendor's free rows is.
+
+That guard immediately exposed a latent bug in the filter itself: `live` as a bare substring also
+matches **alive**, delivery and olive. Harmless while it only chose what to list; as a check on
+every pick it would have been a silent outage. It is token-bounded now; the other terms are not.
+
+### 7.3 The catalog and the free-tier list could disagree forever
+
+`AIModel` and `AIFreeTier` describe the same models and `selectFreeTierCandidates` reads **only
+the second**. Every correction the job made went to `AIModel` alone, so the row stayed selectable
+and the two collections drifted with one of them maintained. Three fixes, all the same shape:
+`writeListed` now demotes (one-directionally — a listing must never revive what a 404 retired),
+`deactivateUnlisted` demotes too, and `pruneUnconfiguredProviders` removes rows for roster
+providers holding no key. One-time effect: AIModel 1336→643, AIPricing 907→492.
+
+### 7.4 Rate limits: knowable for two providers out of nine
+
+Only **groq** and **together** send `x-ratelimit-*`. The other seven send nothing, so for them a
+429 is the only signal — that is a limit of what vendors tell us, not of the wiring. What *was*
+ours: only the request path recorded those headers, so the ~90 sweep calls a day taught us
+nothing and exactly one row in the catalog held a remaining-quota reading. The sweeps record now,
+the golden set skips a row the headers say is spent, and it stops after the first 429 instead of
+knocking five more times.
+
+It also **paces** itself to a stated ceiling. Cerebras publishes `gpt-oss-120b` at 5 requests per
+minute; six questions back to back would 429 after the first and that model could never be scored
+at all.
+
+### 7.5 What the scores actually say
+
+| provider | best | fastest | note |
+|---|---|---|---|
+| groq | **1.0** (`compound`, `compound-mini`) | 196ms | best and fastest |
+| ollama | **1.0** (`gemma4:31b`) | 542ms | one live row, and it is excellent |
+| gemini | 0.9 | 440ms | strong and broad, but rate-limits hard |
+| cloudflare / cohere | 0.6–0.7 | 246ms | reliable breadth |
+| openrouter | — | 773ms | weakest free tier; its job is the paid fallback |
+
+Cerebras was tested and pulled: a valid key lists its models and answers **402 on every inference
+call**. The published per-model limits are an entitlement once paid, not a free tier.
+
+**The caveat worth keeping.** Estimates still vary by model more than these scores predict —
+`gemma4:31b` says 1,100 cal for four pancakes and `compound-mini` says 440, and both score
+`calibration=1`, because that question asks about pizza against a 400–800 band. The golden set
+measures correctness on known answers; it does not yet predict agreement on arbitrary dishes.

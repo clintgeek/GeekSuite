@@ -1,7 +1,6 @@
 # AI Provider & Model Catalog
-**Last Updated:** 2026-09-07
-**Total Providers:** 9
-**Total Models:** 35
+**Last Updated:** 2026-09-16
+**Roster:** 9 providers — **6 hold a key** (groq, gemini, cohere, openrouter, cloudflare, ollama)
 
 > **2026-09-07 — the model tables in this file are history, not the catalog.**
 > The catalog is written by the catalog job now; nothing seeds it from a
@@ -12,6 +11,36 @@
 
 <!-- API keys are stored in the database via BaseGeek UI - never commit real keys here -->
 <!-- Configure provider keys at: BaseGeek UI → AI Geek → Configuration -->
+
+## Which providers are actually worth having (measured 2026-09-16)
+
+Not an opinion. These are golden-set scores — six questions with known answers, scored by code
+(`services/aiGoldenSet.js`) — and probe-measured p50 latency. Re-read them from `AIFreeTier`
+rather than trusting this table to stay true.
+
+| provider | best score | fastest | what it is for |
+|---|---|---|---|
+| **groq** | **1.0** (`groq/compound`, `groq/compound-mini`) | 196ms | best and fastest free models we have |
+| **ollama** | **1.0** (`gemma4:31b`) | 542ms | one live row, and it is excellent |
+| **gemini** | 0.9 (several `flash-lite`) | 440ms | strong and broad — but rate-limits hard |
+| cloudflare | 0.7 | 246ms | reliable breadth, mid quality |
+| cohere | 0.7 | 358ms | mid |
+| **openrouter** | — | 773ms | weakest free tier; it exists for the **paid fallback** |
+| together / llmgateway | — | — | **no key.** Catalog rows pruned 2026-09-16 |
+| cerebras | — | — | **pay-as-you-go, key pulled** — see below |
+
+The surprise, recorded because the intuition ran the other way: OpenRouter and Gemini look like
+the obvious two to keep, and **groq and ollama are the two carrying the work**. OpenRouter's free
+tier had 14 rows of which six were withdrawn 404s and one was a music model; its value is the
+funded account, not the free models.
+
+**Cerebras is not a free tier.** A valid key on 2026-09-16 listed `gpt-oss-120b` and
+`qwen-3.8-27b` perfectly and answered **402 Payment Required** on every inference call. The
+published per-model limits (450 rpm / 648,000 per day on qwen) are an entitlement once the
+account is funded. The key was pulled — OpenRouter already fills the pay-as-you-go role.
+
+To re-measure any of this:
+`docker exec basegeek sh -lc 'cd /app/apps/basegeek/packages/api && node scripts/check-provider.js'`
 
 Qwen3Coder 30B a3B
 Mistral Devstral SMALL 2507
@@ -382,10 +411,14 @@ way any other unrecognized id does (`model_not_found`).
 
 ---
 
-## Cerebras (3 models)
+## Cerebras (3 models) — NO KEY, pay-as-you-go
 *API:* `https://api.cerebras.ai/v1`
-*Type:* Free tier (120K TPM, 30 RPM)
-*Default Model:* `qwen-3-235b-a22b-instruct-2507`
+*Type:* **Pay-as-you-go, not a free tier** (corrected 2026-09-16: a valid key answers
+**402 Payment Required** on every inference call; the published limits are an entitlement
+once funded). The "Free tier (120K TPM, 30 RPM)" this line claimed until then was wrong and
+would send somebody to mint a key expecting free inference.
+*Default Model:* `qwen-3.8-27b` (the org lists `qwen-3.8-27b` and `gpt-oss-120b`; the previous
+default `qwen-3-235b-a22b-instruct-2507` is not among them and would 404)
 
 | Model ID | Model Name | Status |
 |----------|------------|--------|
