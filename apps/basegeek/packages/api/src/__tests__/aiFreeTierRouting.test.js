@@ -859,3 +859,59 @@ describe('the paid fallback is behind allowPaid and the governor', () => {
     expect(calls).toEqual(['groq/dead']);
   });
 });
+
+/**
+ * `need` resolution, through the real candidate builder.
+ *
+ * The resolver is unit-tested against hand-built rows in `aiNeedResolver.test.js`.
+ * What THIS covers is the seam those tests cannot see: `selectFreeTierCandidates`
+ * builds its candidate objects field by field, so a signal the resolver reads
+ * has to be copied across explicitly or it silently arrives as undefined.
+ *
+ * That is exactly what happened on 2026-09-16. `quality` was written to the
+ * database, and the live gateway still answered "golden set not run against
+ * this row yet" for every row, because the candidate builder never carried the
+ * field. Latency had been added the same way an hour earlier and only worked by
+ * luck of being noticed.
+ */
+describe('resolveNeed reads what the candidate builder actually carries', () => {
+  const scored = (score) => ({
+    score, byClass: { structured: score }, offLanguage: false, answered: 6, scoredAt: new Date()
+  });
+
+  it('carries quality and latency onto the candidate', async () => {
+    enable('groq');
+    await seedRows([
+      { provider: 'groq', modelId: 'm-1', fitness: 'structured', latency: { p50Ms: 400, recentMs: [400] }, quality: scored(0.9) }
+    ]);
+    const { live } = await aiService.selectFreeTierCandidates();
+    const row = live.find(r => r.modelId === 'm-1');
+    expect(row.latency?.p50Ms).toBe(400);
+    expect(row.quality?.score).toBe(0.9);
+  });
+
+  it('picks the better answer over the faster one, end to end', async () => {
+    // The live failure this file exists to stop repeating: allam-2-7b at 0.4
+    // kept winning `structured:fast` on speed alone.
+    enable('groq');
+    await seedRows([
+      { provider: 'groq', modelId: 'quick-but-poor', fitness: 'structured', latency: { p50Ms: 300 }, quality: scored(0.4) },
+      { provider: 'groq', modelId: 'slower-but-right', fitness: 'structured', latency: { p50Ms: 1500 }, quality: scored(0.9) }
+    ]);
+    const picked = await aiService.resolveNeed('structured:fast');
+    expect(picked?.modelId).toBe('slower-but-right');
+    expect(picked.why.join(' ')).toMatch(/golden set 0\.9 on structured/);
+  });
+
+  it('returns no opinion when nothing can serve', async () => {
+    enable('groq');
+    await seedRows([{ provider: 'groq', modelId: 'prose-only', fitness: 'basic' }]);
+    expect(await aiService.resolveNeed('structured:fast')).toBeNull();
+  });
+
+  it('ignores a need it cannot parse', async () => {
+    enable('groq');
+    await seedRows([{ provider: 'groq', modelId: 'm-1', fitness: 'structured' }]);
+    expect(await aiService.resolveNeed('strutured:fast')).toBeNull();
+  });
+});

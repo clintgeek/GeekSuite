@@ -1163,6 +1163,11 @@ class AIService {
         // Measured by the probe. The need resolver ranks on it; nothing else
         // reads it, and the rotation's own ordering is unchanged.
         latency: fm.latency ?? null,
+        // Measured by the golden set, and the reason a good model beats a fast
+        // one. Omitted here until 2026-09-16, which made the resolver report
+        // "golden set not run against this row yet" for every row — including
+        // rows that had just been scored.
+        quality: fm.quality ?? null,
         health
       };
 
