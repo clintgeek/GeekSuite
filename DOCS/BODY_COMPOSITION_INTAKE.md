@@ -290,11 +290,28 @@ They are not interchangeable and both are required.
 
 ### What still needs a human
 
-- **Is OpenRouter configured, with a free vision-capable model?** Vision routing is
-  OpenRouter-only (§ AIGEEK_CAPABILITY_ROUTING §7.6): the other eight providers state
-  nothing about input modality and can never qualify. Keys live encrypted in `AIConfig`,
-  so the repo cannot answer this. If the answer is no, extraction fails closed — cleanly,
-  but it fails.
+- ~~Is OpenRouter configured, with a free vision-capable model?~~ **Answered
+  2026-09-16: yes.** Of 444 listed models, 22 pass the free-tier filter and 12 declare
+  image input; 11 would route for `need:'vision:*'`. One of them
+  (`inclusionai/ling-3.0-flash-vl:free`) is reachable only because of the narrowed deny
+  exception, and one vision-capable row (`nvidia/nemotron-3.5-content-safety:free`) stays
+  correctly denied by `/safety|guard/`.
+
+  Vision routing remains OpenRouter-only (`AIGEEK_CAPABILITY_ROUTING.md` §7.6): the other
+  eight providers state nothing about input modality and can never qualify. Free tiers
+  churn weekly, so re-run the check rather than trusting the count: fetch
+  `https://openrouter.ai/api/v1/models`, pass it through `freeCandidates('openrouter', raw)`,
+  and keep the rows whose `architecture.input_modalities` includes `image` and which are
+  not denied by a rule other than `VISION_HEAD_PATTERN`.
+
+  Two of the eleven deserve a caveat. `openrouter/free` is the auto-router — it declares
+  image input but forwards to whatever it selects, which may not see. `stealth/union-alpha`
+  is an unbadged preview that can disappear without notice. Neither is a reason to exclude
+  them, but neither is a model whose vision capability is guaranteed by its listing alone.
+
+  No free model here has been checked for quality on dense numeric-table reading, and that
+  is deliberately not a blocker: a weak reader produces a gate mismatch (§6) and is stopped
+  before it can write wrong numbers into the history.
 - **Uploads do not survive a deploy.** They land on container-local disk and fitnessgeek
   has no bind-mounted volume, while every push to `main` restarts the fleet. Harmless
   while extraction is synchronous on the same live container. If it ever goes async, it
