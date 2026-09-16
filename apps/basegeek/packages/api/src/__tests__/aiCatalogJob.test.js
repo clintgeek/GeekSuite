@@ -72,6 +72,7 @@ function fakeDiscovery(overrides = {}) {
     summarizeByProvider: () => ({ groq: { listed: 1, candidates: 1, alive: 1, dead: 0, unknown: 0, error: null } }),
     pruneUnknownProviders: async () => { log.push({ call: 'prune' }); return { AIModel: 0, AIFreeTier: 0, AIPricing: 0 }; },
     runProbe: async ({ rows }) => { log.push({ call: 'runProbe', rows: rows.length }); return rows.map(r => ({ ...r, status: 'alive', fitness: 'basic', code: 'ok' })); },
+    runGoldenSet: async ({ rows }) => { log.push({ call: 'runGoldenSet', rows: rows.length }); return []; },
     ...overrides,
   };
 }
@@ -103,6 +104,7 @@ beforeEach(() => {
   delete process.env.AI_CATALOG_JOB;
   delete process.env.AI_CATALOG_DISCOVERY_HOURS;
   delete process.env.AI_CATALOG_PROBE_HOURS;
+  delete process.env.AI_CATALOG_GOLDEN_HOURS;
 });
 afterEach(() => { process.env = savedEnv; });
 
@@ -186,7 +188,8 @@ describe('tick', () => {
     const { job, discovery } = makeJob();
     const out = await job.tick();
     expect(out.discovery).toBeTruthy();
-    expect(discovery.log.map(l => l.call)).toEqual(['discover', 'syncResults', 'prune']);
+    // `runGoldenSet` joined the tick 2026-09-16, behind its own daily gate.
+    expect(discovery.log.map(l => l.call)).toEqual(['discover', 'syncResults', 'prune', 'runGoldenSet']);
   });
 
   it('does not re-run discovery an hour later', async () => {
@@ -199,7 +202,10 @@ describe('tick', () => {
     const out = await job.tick();
     expect(out.discovery).toBeNull();
     expect(out.probe).toBeNull();
-    expect(discovery.log).toEqual([]);
+    // Scoped to what this case is about. The golden set runs on its own daily
+    // gate and has its own cases; a bare `toEqual([])` here silently made this
+    // a test of every step the tick would ever grow.
+    expect(discovery.log.filter(l => l.call !== 'runGoldenSet')).toEqual([]);
   });
 
   it('re-runs discovery when the last run an hour ago completed with write errors', async () => {
@@ -245,7 +251,7 @@ describe('tick', () => {
     const out = await job.tick();
     expect(out.discovery).toBeNull();
     expect(out.probe).toBeTruthy();
-    expect(discovery.log).toEqual([{ call: 'runProbe', rows: 2 }]);
+    expect(discovery.log.filter(l => l.call !== 'runGoldenSet')).toEqual([{ call: 'runProbe', rows: 2 }]);
   });
 
   it('does not re-probe in the same tick that just discovered', async () => {
@@ -274,7 +280,7 @@ describe('tick', () => {
       ],
     });
     const out = await job.tick();
-    expect(discovery.log).toEqual([{ call: 'runProbe', rows: 1 }]);
+    expect(discovery.log.filter(l => l.call !== 'runGoldenSet')).toEqual([{ call: 'runProbe', rows: 1 }]);
     expect(out.probe.skipped).toBe(2);
   });
 
@@ -321,7 +327,7 @@ describe('a failure is recorded, not propagated', () => {
     const { job, runs, discovery } = makeJob({ providers: {} });
     const out = await job.tick();
     expect(out.discovery.error).toMatch(/no provider is configured/);
-    expect(discovery.log).toEqual([]);
+    expect(discovery.log.filter(l => l.call !== 'runGoldenSet')).toEqual([]);
     expect(runs.docs.some(d => d.kind === 'discovery')).toBe(true);
   });
 
@@ -355,5 +361,63 @@ describe('configuredProviders', () => {
       },
     });
     expect(job.configuredProviders()).toEqual(['groq', 'gemini']);
+  });
+});
+
+/* ── the golden set's own gate ────────────────────────────────────────────── */
+
+/**
+ * The number that matters here is 24, and it is load-bearing.
+ *
+ * The tick is hourly. Six questions across four rows is ~24 provider calls,
+ * which is the golden set's ENTIRE daily budget (§3.2: "sample, do not
+ * sweep"). Running it on every tick would be 576 calls a day and would trip
+ * the very rate limits the probe exists to distinguish from death — so it has
+ * a gate of its own rather than riding the tick directly.
+ */
+describe('the golden set runs daily, not hourly', () => {
+  const at = Date.UTC(2026, 8, 16, 12, 0, 0);
+  const goldenRun = (finishedAt) => ({ kind: 'golden', startedAt: finishedAt, finishedAt, error: null, counts: {} });
+
+  it('defaults to once a day', () => {
+    const { job } = makeJob();
+    expect(job.goldenMs).toBe(24 * 60 * 60 * 1000);
+  });
+
+  it('runs when nothing has ever run', async () => {
+    const { job, discovery } = makeJob({ at });
+    await job.tick();
+    expect(discovery.log.some((e) => e.call === 'runGoldenSet')).toBe(true);
+  });
+
+  it('does NOT run again an hour later', async () => {
+    // The whole point. An hourly golden set is 576 calls a day.
+    const runs = fakeRuns([goldenRun(new Date(at - 60 * 60 * 1000))]);
+    const { job, discovery } = makeJob({ at, runs });
+    await job.tick();
+    expect(discovery.log.some((e) => e.call === 'runGoldenSet')).toBe(false);
+  });
+
+  it('runs again once the day is up', async () => {
+    const runs = fakeRuns([goldenRun(new Date(at - 25 * 60 * 60 * 1000))]);
+    const { job, discovery } = makeJob({ at, runs });
+    await job.tick();
+    expect(discovery.log.some((e) => e.call === 'runGoldenSet')).toBe(true);
+  });
+
+  it('honours AI_CATALOG_GOLDEN_HOURS', () => {
+    process.env.AI_CATALOG_GOLDEN_HOURS = '12';
+    const { job } = makeJob();
+    expect(job.goldenMs).toBe(12 * 60 * 60 * 1000);
+  });
+
+  it('records a run that scored nothing, so it does not retry every hour', async () => {
+    // An early return without writing would leave lastRunAt('golden') null
+    // forever, which is the hourly-run bug wearing a different hat.
+    const { job, runs } = makeJob({ at });
+    await job.runGoldenSweep();
+    const written = runs.docs.filter((d) => d.kind === 'golden');
+    expect(written).toHaveLength(1);
+    expect(written[0].counts).toEqual({ scored: 0, offLanguage: 0 });
   });
 });

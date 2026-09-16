@@ -35,6 +35,9 @@ import { describe, it, expect } from '@jest/globals';
 const probe = await import('../services/aiCatalogDiscovery.js');
 const { withLatencySample, weightClassOf } = await import('../models/AIFreeTier.js');
 
+/** A fixed clock for the golden-set selection cases. */
+const NOW_MS = Date.UTC(2026, 8, 16, 3, 0, 0);
+
 /* ── the four real failures ───────────────────────────────────────────────── */
 
 const REAL_FAILURES = [
@@ -413,5 +416,128 @@ describe('the probe keeps the time it has always measured', () => {
     // Treating null as slow would make an unmeasured model unpickable forever.
     expect(weightClassOf(null)).toBeNull();
     expect(weightClassOf(undefined)).toBeNull();
+  });
+});
+
+/**
+ * The golden set, run against rows.
+ *
+ * Six questions is a lot of calls, so the selection matters as much as the
+ * scoring: §3.2 says sample, do not sweep — six questions across every free row
+ * would trip the very rate limits the probe exists to distinguish from death.
+ */
+describe('golden set selection and scoring', () => {
+  const freeRow = (over = {}) => ({
+    provider: 'groq', modelId: 'm', isFree: true, fitness: 'structured',
+    health: {}, quality: {}, ...over
+  });
+
+  it('only asks rows that already proved they emit JSON', () => {
+    // Spending six calls to learn how badly a prose-only model does arithmetic
+    // buys nothing: it already ranks below every structured row.
+    const rows = [
+      freeRow({ modelId: 'structured-one' }),
+      freeRow({ modelId: 'prose-only', fitness: 'basic' }),
+      freeRow({ modelId: 'never-probed', fitness: null }),
+    ];
+    const picked = probe.selectGoldenCandidates(rows, { now: NOW_MS });
+    expect(picked.map((r) => r.modelId)).toEqual(['structured-one']);
+  });
+
+  it('skips cooling and human-denied rows', () => {
+    const rows = [
+      freeRow({ modelId: 'cooling', health: { coolingUntil: new Date(NOW_MS + 60_000) } }),
+      freeRow({ modelId: 'denied', override: 'deny' }),
+      freeRow({ modelId: 'fine' }),
+    ];
+    expect(probe.selectGoldenCandidates(rows, { now: NOW_MS }).map((r) => r.modelId)).toEqual(['fine']);
+  });
+
+  it('asks the never-scored rows first', () => {
+    // An unscored row carries no signal at all, and an unmeasured row is what
+    // lets a bad model win a tie-break.
+    const rows = [
+      freeRow({ modelId: 'scored-recently', quality: { score: 0.9, scoredAt: new Date(NOW_MS - 1000) } }),
+      freeRow({ modelId: 'never-scored' }),
+    ];
+    expect(probe.selectGoldenCandidates(rows, { now: NOW_MS })[0].modelId).toBe('never-scored');
+  });
+
+  it('then the stalest', () => {
+    const rows = [
+      freeRow({ modelId: 'yesterday', quality: { score: 0.5, scoredAt: new Date(NOW_MS - 86400_000) } }),
+      freeRow({ modelId: 'last-month', quality: { score: 0.5, scoredAt: new Date(NOW_MS - 30 * 86400_000) } }),
+    ];
+    expect(probe.selectGoldenCandidates(rows, { now: NOW_MS })[0].modelId).toBe('last-month');
+  });
+
+  it('caps the run, because six questions a row adds up', () => {
+    const rows = Array.from({ length: 30 }, (_, i) => freeRow({ modelId: `m${i}` }));
+    expect(probe.selectGoldenCandidates(rows, { now: NOW_MS })).toHaveLength(probe.GOLDEN_ROWS_PER_RUN);
+    expect(probe.GOLDEN_ROWS_PER_RUN * 6).toBeLessThanOrEqual(30);   // the doc's daily budget
+  });
+
+  it('scores a row that answers everything correctly', async () => {
+    const answers = {
+      extract: '{"task":"Call the vet","day":"Friday","time":"3pm","tag":"flock"}',
+      refusal: '{"person":"Sam","day":"Tuesday","phone":null}',
+      numeracy: '450',
+      calibration: '600',
+      instruction: 'Rain falls. Wind blows hard. All is dark now.',
+      reasoning: '13',
+    };
+    let i = 0;
+    const callProvider = async () => ({ content: Object.values(answers)[i++] });
+    const out = await probe.runGoldenSetFor({ provider: 'groq', modelId: 'good' }, { callProvider });
+    expect(out.score).toBe(1);
+    expect(out.answered).toBe(6);
+    expect(out.offLanguage).toBe(false);
+  });
+
+  it('scores a row that answers in the wrong script at zero, and says so', async () => {
+    // allam-2-7b, the model this whole feature exists because of.
+    const callProvider = async () => ({ content: 'حسنًا، يمكنني مساعدتك في ذلك الآن' });
+    const out = await probe.runGoldenSetFor({ provider: 'groq', modelId: 'allam' }, { callProvider });
+    expect(out.score).toBe(0);
+    expect(out.offLanguage).toBe(true);
+  });
+
+  it('counts a failing question as zero rather than losing the whole row', async () => {
+    let n = 0;
+    const callProvider = async () => {
+      n += 1;
+      if (n === 1) throw new Error('429 slow down');
+      return { content: '450' };   // right for numeracy, wrong for the rest
+    };
+    const out = await probe.runGoldenSetFor({ provider: 'groq', modelId: 'flaky' }, { callProvider });
+    expect(out.answered).toBe(6);
+    expect(out.score).toBeGreaterThan(0);
+    expect(out.score).toBeLessThan(1);
+  });
+
+  it('writes the score back under quality.*', async () => {
+    const callProvider = async () => ({ content: '450' });
+    const writes = [];
+    await probe.runGoldenSet({
+      rows: [freeRow({ modelId: 'target' })],
+      callProvider,
+      updateOne: async (query, update) => { writes.push({ query, update }); },
+      options: { now: NOW_MS },
+    });
+    expect(writes).toHaveLength(1);
+    expect(writes[0].query).toEqual({ provider: 'groq', modelId: 'target' });
+    const set = writes[0].update.$set;
+    expect(typeof set['quality.score']).toBe('number');
+    expect(set['quality.scoredAt'].getTime()).toBe(NOW_MS);
+    expect(set['quality.answered']).toBe(6);
+  });
+
+  it('writes nothing without an updateOne', async () => {
+    const callProvider = async () => ({ content: '450' });
+    const out = await probe.runGoldenSet({
+      rows: [freeRow({ modelId: 'dry' })], callProvider, options: { now: NOW_MS },
+    });
+    expect(out).toHaveLength(1);
+    expect(out[0].modelId).toBe('dry');
   });
 });

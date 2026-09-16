@@ -50,6 +50,15 @@ import { PROVIDER_IDS } from '../config/aiProviders.js';
 export const DEFAULT_TICK_MS = 60 * 60 * 1000;
 export const DEFAULT_DISCOVERY_HOURS = 24;
 export const DEFAULT_PROBE_HOURS = 6;
+/**
+ * How often the golden set runs. Daily, and that number is load-bearing.
+ *
+ * The tick is hourly. Six questions across `GOLDEN_ROWS_PER_RUN` rows is ~24
+ * calls, which is the doc's whole daily budget (§3.2) — so running it on every
+ * tick would be 576 calls a day and would trip the very rate limits the probe
+ * exists to distinguish from death. It gets its own gate for that reason.
+ */
+export const DEFAULT_GOLDEN_HOURS = 24;
 export const DEFAULT_BOOT_DELAY_MS = 60 * 1000;
 
 /** Read a positive number from the environment, else the default. */
@@ -79,6 +88,7 @@ export class AICatalogJob {
       intervalMs = DEFAULT_TICK_MS,
       discoveryHours = envHours('AI_CATALOG_DISCOVERY_HOURS', DEFAULT_DISCOVERY_HOURS),
       probeHours = envHours('AI_CATALOG_PROBE_HOURS', DEFAULT_PROBE_HOURS),
+      goldenHours = envHours('AI_CATALOG_GOLDEN_HOURS', DEFAULT_GOLDEN_HOURS),
       bootDelayMs = DEFAULT_BOOT_DELAY_MS,
       now = () => Date.now(),
       deps = {}
@@ -87,6 +97,7 @@ export class AICatalogJob {
     this.intervalMs = intervalMs;
     this.discoveryMs = discoveryHours * 60 * 60 * 1000;
     this.probeMs = probeHours * 60 * 60 * 1000;
+    this.goldenMs = goldenHours * 60 * 60 * 1000;
     this.bootDelayMs = bootDelayMs;
     this.now = now;
 
@@ -217,6 +228,26 @@ export class AICatalogJob {
           out.probe = await this.runProbeSweep();
         } catch (err) {
           this.log.error({ err }, '[CatalogJob] probe sweep failed');
+        }
+      }
+
+      // The golden set rides the same tick rather than taking a schedule of its
+      // own (§5: "do not add a second scheduled job" — the codebase already
+      // retired `syncProviderModels` for exactly that reason), but it gets its
+      // own due-gate: the tick is hourly and six questions a row is ~24 calls,
+      // which is the entire daily budget. Once a day, not twenty-four times.
+      let dueGolden = true;
+      try {
+        const last = await this.lastRunAt('golden');
+        dueGolden = last === null || this.now() - last >= this.goldenMs;
+      } catch (err) {
+        this.log.warn({ err }, '[CatalogJob] could not read the last golden run — running one');
+      }
+      if (dueGolden) {
+        try {
+          out.golden = await this.runGoldenSweep();
+        } catch (err) {
+          this.log.error({ err }, '[CatalogJob] golden set failed');
         }
       }
       return out;
@@ -363,6 +394,62 @@ export class AICatalogJob {
     } catch (err) {
       run.error = this.discovery.safeErrorText(err?.message || 'error', 200);
       this.log.error({ err }, '[CatalogJob] re-probe aborted');
+    }
+
+    run.finishedAt = new Date(this.now());
+    await this.writeRun(run);
+    return run;
+  }
+
+  /**
+   * Ask a few rows the golden set and record how they did.
+   *
+   * Six questions is a lot of calls, so this samples rather than sweeps
+   * (§3.2). `selectGoldenCandidates` takes the never-scored first and then the
+   * stalest, which keeps the rows that carry no signal — the ones that let a
+   * bad model win a tie-break — from staying unmeasured.
+   *
+   * Recorded as its own `AICatalogRun` kind so a quality run shows up in the
+   * history like every other, and a bad one can be pinned to a date.
+   */
+  async runGoldenSweep() {
+    const startedAt = new Date(this.now());
+    const run = { kind: 'golden', startedAt, perProvider: {}, pruned: {}, error: null };
+
+    try {
+      const configured = new Set(this.configuredProviders());
+      const all = await this.freeTier.find({ isFree: true }).lean();
+      const rows = all.filter((row) => configured.has(row.provider));
+
+      const results = await this.discovery.runGoldenSet({
+        rows,
+        callProvider: (provider, prompt, config) => this.ai.callProvider(provider, prompt, config),
+        updateOne: (query, update) => this.freeTier.updateOne(query, update),
+        options: { now: this.now(), timeout: this.discovery.DEFAULT_PROBE_TIMEOUT_MS }
+      });
+
+      if (results.length === 0) {
+        // Not a failure: every structured row may simply be freshly scored.
+        // The run is still RECORDED — returning early without writing would
+        // leave `lastRunAt('golden')` null and re-run this every hour.
+        this.log.debug('[CatalogJob] golden set — nothing due');
+        run.counts = { scored: 0, offLanguage: 0 };
+        run.finishedAt = new Date(this.now());
+        await this.writeRun(run);
+        return run;
+      }
+
+      run.counts = {
+        scored: results.length,
+        offLanguage: results.filter((r) => r.offLanguage).length
+      };
+      this.log.info(
+        { scored: results.map((r) => `${r.provider}/${r.modelId}=${r.score}`), ...run.counts },
+        '[CatalogJob] golden set complete'
+      );
+    } catch (err) {
+      run.error = this.discovery.safeErrorText(err?.message || 'error', 200);
+      this.log.error({ err }, '[CatalogJob] golden set aborted');
     }
 
     run.finishedAt = new Date(this.now());

@@ -18,7 +18,10 @@ const aiCatalogRunSchema = new mongoose.Schema({
   kind: {
     type: String,
     required: true,
-    enum: ['discovery', 'probe']
+    // `golden` added 2026-09-16 with the golden set. The enum is strict, so a
+    // run of an unlisted kind throws on save rather than recording — which is
+    // the same trap the `counts` note below describes, from the other side.
+    enum: ['discovery', 'probe', 'golden']
   },
   startedAt: { type: Date, required: true, default: Date.now },
   finishedAt: { type: Date, default: null },

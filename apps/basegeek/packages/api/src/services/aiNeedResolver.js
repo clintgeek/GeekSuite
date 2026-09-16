@@ -33,17 +33,32 @@
  * probe, over five runs), cooling and observed rate limits (measured), and
  * `isFree`.
  *
- * ── The honest gap ──────────────────────────────────────────────────────────
+ * ── Quality, measured ───────────────────────────────────────────────────────
  *
- * Only `structured` has a measured discriminator today. There is no measurement
- * anywhere in this system that distinguishes a good reasoner from a bad one —
- * that is what the golden set (§3.2) is for, and until it exists this module
- * will not pretend otherwise. For a non-`structured` task the task axis does
- * not filter; it is recorded, the weight axis still applies, and `why` says so
- * out loud. That is a smaller promise than the doc's §3.1 sketch, and it is the
- * one the data supports.
+ * `fitness` says a row CAN emit JSON. It does not say the JSON is any good, and
+ * on 2026-09-16 that gap had a cost: twenty-two rows tied for `structured:fast`,
+ * the tie fell to last-success, and the work went to `groq/allam-2-7b` — which
+ * answered a plain English prompt in Arabic and offered "0 to 1000" as its
+ * uncertainty about a plate of pancakes.
+ *
+ * `quality.score` is the golden set's answer to that: six questions with known
+ * answers, scored by code (`aiGoldenSet.js`). It outranks everything else here,
+ * because a fast wrong answer is worth less than a slow right one — the whole
+ * point of asking was to get an answer.
+ *
+ * A row that has never been scored is NOT treated as a bad row. `null` means
+ * unmeasured, and scoring it as zero would keep a new model out of selection
+ * forever, so it could never be scored — the same trap `weightClassOf` avoids.
+ * An unscored row sits between measured-good and measured-bad.
+ *
+ * ── The honest gap that remains ─────────────────────────────────────────────
+ *
+ * The task axis still has one member with a filter behind it: `structured`,
+ * via `fitness`. `reasoning`, `prose`, `code` and `vision` are recorded and do
+ * not filter — but the golden set's per-class scores now give `reasoning` and
+ * `instruction` real signal to RANK on, which is most of the value.
  */
-import { weightClassOf } from '../models/AIFreeTier.js';
+import { weightClassOf, qualityIsFresh } from '../models/AIFreeTier.js';
 
 /** The task axis. Only `structured` is measurable today; see the header. */
 export const NEED_TASKS = Object.freeze(['structured', 'reasoning', 'prose', 'code', 'vision']);
@@ -88,6 +103,37 @@ const WEIGHT_POINTS = Object.freeze({
   deep: { fast: 50, balanced: 50, deep: 50, unknown: 50 },
 });
 
+/**
+ * What a measured quality score is worth, relative to the weight axis.
+ *
+ * Deliberately larger than the whole weight range: a fast wrong answer is worth
+ * less than a slow right one. A perfect score adds 150 where the weight axis
+ * spans 100, so quality decides and speed breaks ties — which is the ordering
+ * a person would choose if asked.
+ */
+export const QUALITY_POINTS = 150;
+
+/** Where an unscored row sits: between measured-good and measured-bad. */
+export const QUALITY_UNMEASURED = 0.5;
+
+/**
+ * The score this need should rank on: the matching class where the golden set
+ * has one, else the overall.
+ *
+ * `structured:*` ranks on the structured class, `reasoning:*` on reasoning, and
+ * so on — a model good at extraction and bad at arithmetic should win
+ * extraction work and lose arithmetic work, which is exactly what per-class
+ * scores are for.
+ */
+export function qualityFor(row, task, now = Date.now()) {
+  if (!qualityIsFresh(row?.quality, now)) return null;
+  const byClass = row.quality.byClass;
+  const get = (key) => (byClass instanceof Map ? byClass.get(key) : byClass?.[key]);
+  const perClass = get(task);
+  const value = typeof perClass === 'number' ? perClass : row.quality.score;
+  return typeof value === 'number' ? value : null;
+}
+
 /** A row the probe proved can emit JSON. Measured, not claimed. */
 const isStructured = (row) => row?.fitness === 'structured';
 
@@ -123,6 +169,11 @@ export function scoreRow(row, need, { now = Date.now(), allowPaid = false } = {}
 
   const weightClass = weightClassOf(row.latency?.p50Ms) || 'unknown';
   let score = WEIGHT_POINTS[need.weight][weightClass];
+
+  // Quality outranks speed. An unscored row scores mid-band rather than zero,
+  // so a newly discovered model stays selectable long enough to be scored.
+  const quality = qualityFor(row, need.task, now);
+  score += Math.round((quality ?? QUALITY_UNMEASURED) * QUALITY_POINTS);
 
   // Weak, measured, and explicitly secondary to the weight axis.
   if (need.task !== 'structured' && isStructured(row)) score += 10;
@@ -163,6 +214,7 @@ export function resolveNeed(rows, need, { now = Date.now(), allowPaid = false } 
   if (!best) return null;
 
   const weightClass = weightClassOf(best.row.latency?.p50Ms) || 'unknown';
+  const quality = qualityFor(best.row, parsed.task, now);
   const why = [
     parsed.task === 'structured'
       ? 'probe extracted JSON from this row'
@@ -170,6 +222,9 @@ export function resolveNeed(rows, need, { now = Date.now(), allowPaid = false } 
     weightClass === 'unknown'
       ? 'speed not measured yet'
       : `measured p50 ${best.row.latency.p50Ms}ms (${weightClass})`,
+    quality === null
+      ? 'golden set not run against this row yet'
+      : `golden set ${quality} on ${parsed.task}`,
   ];
 
   return {
@@ -181,4 +236,4 @@ export function resolveNeed(rows, need, { now = Date.now(), allowPaid = false } 
   };
 }
 
-export default { parseNeed, resolveNeed, scoreRow, exclusionFor, NEED_TASKS, NEED_WEIGHTS };
+export default { parseNeed, resolveNeed, scoreRow, exclusionFor, qualityFor, NEED_TASKS, NEED_WEIGHTS };

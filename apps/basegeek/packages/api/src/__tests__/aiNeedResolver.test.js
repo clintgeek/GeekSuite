@@ -214,3 +214,96 @@ describe('scoreRow ignores the fields that lie', () => {
     expect(scoreRow(claims, need, { now: NOW }).score).toBe(scoreRow(denies, need, { now: NOW }).score);
   });
 });
+
+/**
+ * Quality ranking — the fix for the tie-break that picked a bad model.
+ *
+ * Before the golden set, `fitness: 'structured'` was the only structured
+ * signal, so on 2026-09-16 twenty-two rows scored identically, the tie fell to
+ * last-success, and `groq/allam-2-7b` won work it had no business doing. These
+ * cases pin the ordering that ends that.
+ */
+describe('resolveNeed ranks on measured quality', () => {
+  const fresh = (score, byClass = {}) => ({
+    score, byClass, offLanguage: false, answered: 6, scoredAt: new Date(NOW - 60_000)
+  });
+
+  it('prefers the better answer over the faster one', () => {
+    // The whole point: a fast wrong answer is worth less than a slow right one.
+    const rows = [
+      row({ modelId: 'quick-and-wrong', latency: { p50Ms: 300 }, quality: fresh(0.2) }),
+      row({ modelId: 'slower-and-right', latency: { p50Ms: 1800 }, quality: fresh(0.95) }),
+    ];
+    expect(resolveNeed(rows, 'structured:fast', { now: NOW }).modelId).toBe('slower-and-right');
+  });
+
+  it('still uses speed to break a tie between equals', () => {
+    const rows = [
+      row({ modelId: 'slow', latency: { p50Ms: 5000 }, quality: fresh(0.8) }),
+      row({ modelId: 'quick', latency: { p50Ms: 400 }, quality: fresh(0.8) }),
+    ];
+    expect(resolveNeed(rows, 'structured:fast', { now: NOW }).modelId).toBe('quick');
+  });
+
+  it('ranks on the class that matches the need', () => {
+    // Good at extraction, bad at arithmetic — should win one and lose the other.
+    const specialist = row({
+      modelId: 'extractor', latency: { p50Ms: 900 },
+      quality: fresh(0.6, { structured: 1, reasoning: 0.2 })
+    });
+    const thinker = row({
+      modelId: 'thinker', latency: { p50Ms: 900 },
+      quality: fresh(0.6, { structured: 0.3, reasoning: 1 })
+    });
+    const rows = [specialist, thinker];
+    expect(resolveNeed(rows, 'structured:fast', { now: NOW }).modelId).toBe('extractor');
+    expect(resolveNeed(rows, 'reasoning:deep', { now: NOW }).modelId).toBe('thinker');
+  });
+
+  it('keeps an unscored row selectable, so it can eventually be scored', () => {
+    // Scoring "never asked" as zero would keep a new model out of selection
+    // forever, so it could never be asked. It must beat a measured-bad row.
+    const rows = [
+      row({ modelId: 'measured-bad', latency: { p50Ms: 300 }, quality: fresh(0.1) }),
+      row({ modelId: 'never-scored', latency: { p50Ms: 300 } }),
+    ];
+    expect(resolveNeed(rows, 'structured:fast', { now: NOW }).modelId).toBe('never-scored');
+  });
+
+  it('still prefers a measured-good row over an unscored one', () => {
+    const rows = [
+      row({ modelId: 'never-scored', latency: { p50Ms: 300 } }),
+      row({ modelId: 'measured-good', latency: { p50Ms: 300 }, quality: fresh(0.9) }),
+    ];
+    expect(resolveNeed(rows, 'structured:fast', { now: NOW }).modelId).toBe('measured-good');
+  });
+
+  it('ignores a score too old to trust', () => {
+    // Vendors swap what sits behind a slug without renaming it, so a score has
+    // a shelf life. A stale good score must not outrank a fresh one.
+    const stale = row({
+      modelId: 'stale-good', latency: { p50Ms: 300 },
+      quality: { score: 1, byClass: {}, answered: 6, scoredAt: new Date(NOW - 60 * 86400_000) }
+    });
+    const current = row({ modelId: 'fresh-ok', latency: { p50Ms: 300 }, quality: fresh(0.7) });
+    expect(resolveNeed([stale, current], 'structured:fast', { now: NOW }).modelId).toBe('fresh-ok');
+  });
+
+  it('says what it measured, including when it has not', () => {
+    const scored = resolveNeed([row({ quality: fresh(0.83, { structured: 0.83 }) })], 'structured:fast', { now: NOW });
+    expect(scored.why.join(' ')).toMatch(/golden set 0\.83 on structured/);
+
+    const unscored = resolveNeed([row()], 'structured:fast', { now: NOW });
+    expect(unscored.why.join(' ')).toMatch(/golden set not run against this row yet/);
+  });
+
+  it('reads byClass whether it arrives as a Map or a plain object', () => {
+    // Mongoose hands back a Map; a .lean() read and the tests hand back an object.
+    const asMap = row({
+      modelId: 'from-mongoose', latency: { p50Ms: 900 },
+      quality: { ...fresh(0.5), byClass: new Map([['structured', 1]]) }
+    });
+    const asObject = row({ modelId: 'from-lean', latency: { p50Ms: 900 }, quality: fresh(0.5, { structured: 0.1 }) });
+    expect(resolveNeed([asMap, asObject], 'structured:fast', { now: NOW }).modelId).toBe('from-mongoose');
+  });
+});

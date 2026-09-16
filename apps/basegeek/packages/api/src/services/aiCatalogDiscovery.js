@@ -28,7 +28,8 @@
  *      or a row this module buries is dug up by the next call.
  */
 
-import { classifyFreeTierFailure, withLatencySample } from '../models/AIFreeTier.js';
+import { classifyFreeTierFailure, withLatencySample, qualityIsFresh } from '../models/AIFreeTier.js';
+import { GOLDEN_SET, GOLDEN_MAX_TOKENS, scoreAnswer, rollUp } from './aiGoldenSet.js';
 import { PROVIDER_IDS } from '../config/aiProviders.js';
 import { isDenied } from '../config/aiCatalogOverrides.js';
 // The one-door runner's JSON tolerances, imported rather than copied: a model
@@ -489,6 +490,139 @@ export async function runProbe({ rows, callProvider, updateOne = null, options =
     }
 
     results.push(result);
+  }
+
+  return results;
+}
+
+/* ─────────────────────────────── golden set ─────────────────────────────── */
+
+/**
+ * How many rows get the full six questions in one run.
+ *
+ * Six questions across every free row would be hundreds of calls and would trip
+ * the very rate limits the probe exists to distinguish from death (§3.2:
+ * "sample, do not sweep"). Four rows is 24 calls, which is the doc's
+ * ~20-30 daily budget, and the selection below keeps the rows that matter
+ * fresh rather than sampling uniformly.
+ */
+export const GOLDEN_ROWS_PER_RUN = 4;
+
+/**
+ * Which rows to ask next: never-scored first, then stalest.
+ *
+ * Only `structured` rows are candidates. A row that cannot emit JSON has
+ * already been ranked below one that can, and spending six calls to find out
+ * how badly it does arithmetic buys nothing.
+ *
+ * Pure, so the ordering is testable without a network or a database.
+ *
+ * @param {Array} rows   AIFreeTier-shaped rows
+ * @param {{limit?: number, now?: number}} [options]
+ */
+export function selectGoldenCandidates(rows, { limit = GOLDEN_ROWS_PER_RUN, now = Date.now() } = {}) {
+  const eligible = (rows || []).filter((row) =>
+    row
+    && row.isFree !== false
+    && row.fitness === 'structured'
+    && row.override !== 'deny'
+    && !isFreeTierCoolingRow(row, now)
+  );
+
+  const scoredAtOf = (row) => {
+    const at = row.quality?.scoredAt ? new Date(row.quality.scoredAt).getTime() : 0;
+    return Number.isFinite(at) ? at : 0;
+  };
+
+  return eligible
+    // A row nobody has asked sorts first: it is the one carrying no signal at
+    // all, and an unmeasured row is what lets a bad model win a tie-break.
+    .sort((a, b) => {
+      const aFresh = qualityIsFresh(a.quality, now) ? 1 : 0;
+      const bFresh = qualityIsFresh(b.quality, now) ? 1 : 0;
+      return aFresh - bFresh || scoredAtOf(a) - scoredAtOf(b);
+    })
+    .slice(0, Math.max(0, limit));
+}
+
+/** Local cooling check — `health.coolingUntil` in the future. */
+function isFreeTierCoolingRow(row, now) {
+  const until = row?.health?.coolingUntil ? new Date(row.health.coolingUntil).getTime() : 0;
+  return Number.isFinite(until) && until > now;
+}
+
+/**
+ * Ask one row the six questions and score every answer.
+ *
+ * Sequential within a row for the same reason `runProbe` is sequential across
+ * rows: six parallel calls to one free tier is a good way to manufacture the
+ * 429 you were trying to measure around.
+ *
+ * A question that errors scores zero rather than aborting the row — a model
+ * that refuses one of six is worse than one that answers all six, and that is
+ * exactly what the score should say.
+ */
+export async function runGoldenSetFor(row, { callProvider, timeoutMs = DEFAULT_PROBE_TIMEOUT_MS }) {
+  const answers = [];
+  for (const question of GOLDEN_SET) {
+    let timer = null;
+    try {
+      const call = Promise.resolve(callProvider(row.provider, question.user, {
+        model: row.modelId,
+        messages: [
+          { role: 'system', content: question.system },
+          { role: 'user', content: question.user }
+        ],
+        maxTokens: GOLDEN_MAX_TOKENS,
+        temperature: 0
+      }));
+      call.catch(() => {});
+      const guard = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`golden timeout after ${timeoutMs}ms`)), timeoutMs);
+      });
+      const result = await Promise.race([call, guard]);
+      answers.push(scoreAnswer(question, result?.content ?? ''));
+    } catch {
+      answers.push({ id: question.id, className: question.className, score: 0, offLanguage: false });
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+  return rollUp(answers);
+}
+
+/**
+ * Score a sampled set of rows and (optionally) write the results back.
+ *
+ * @param {object} deps
+ * @param {Array} deps.rows
+ * @param {Function} deps.callProvider
+ * @param {Function} [deps.updateOne]
+ * @param {object} [deps.options]  { limit, now, timeout }
+ */
+export async function runGoldenSet({ rows, callProvider, updateOne = null, options = {} }) {
+  const { limit = GOLDEN_ROWS_PER_RUN, now = Date.now(), timeout = DEFAULT_PROBE_TIMEOUT_MS } = options;
+  const chosen = selectGoldenCandidates(rows, { limit, now });
+  const results = [];
+
+  for (const row of chosen) {
+    const quality = await runGoldenSetFor(row, { callProvider, timeoutMs: timeout });
+    results.push({ provider: row.provider, modelId: row.modelId, ...quality });
+
+    if (updateOne) {
+      await updateOne(
+        { provider: row.provider, modelId: row.modelId },
+        {
+          $set: {
+            'quality.score': quality.score,
+            'quality.byClass': quality.byClass,
+            'quality.offLanguage': quality.offLanguage,
+            'quality.answered': quality.answered,
+            'quality.scoredAt': new Date(now)
+          }
+        }
+      );
+    }
   }
 
   return results;

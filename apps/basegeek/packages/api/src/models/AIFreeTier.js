@@ -139,6 +139,30 @@ const aiFreeTierSchema = new mongoose.Schema({
     p50Ms: { type: Number, default: null },
     measuredAt: { type: Date, default: null }
   },
+  /**
+   * How well this row answered the golden set — six questions with known
+   * answers, scored by code (services/aiGoldenSet.js).
+   *
+   * `fitness` says a row can emit JSON. This says whether what it emits is any
+   * good, which is a different question and the one that actually matters. On
+   * 2026-09-16, with only `fitness` to go on, twenty-two rows tied for
+   * `structured:fast` and the work went to a model that answered English
+   * prompts in Arabic.
+   *
+   * `score` is null until a row has been asked — "unmeasured", which the
+   * resolver must be able to tell from "measured and bad", or a new model could
+   * never be picked and so never be scored.
+   *
+   * `offLanguage` is kept separately because "replied in another script" is a
+   * fact worth seeing in the console, not just a low number.
+   */
+  quality: {
+    score: { type: Number, default: null },
+    byClass: { type: Map, of: Number, default: () => new Map() },
+    offLanguage: { type: Boolean, default: false },
+    answered: { type: Number, default: 0 },
+    scoredAt: { type: Date, default: null }
+  },
   health: {
     type: aiFreeTierHealthSchema,
     default: () => ({})
@@ -198,6 +222,22 @@ export function weightClassOf(p50Ms) {
   if (p50Ms <= WEIGHT_FAST_MS) return 'fast';
   if (p50Ms <= WEIGHT_BALANCED_MS) return 'balanced';
   return 'deep';
+}
+
+/**
+ * How long a quality score is trusted before the row is worth re-asking.
+ *
+ * Scores decay because a vendor can swap what sits behind a slug without
+ * renaming it — which is the same reason the catalog is re-probed rather than
+ * trusted forever.
+ */
+export const QUALITY_FRESH_MS = 14 * 24 * 60 * 60 * 1000;
+
+/** Has this row been scored recently enough to rank on? */
+export function qualityIsFresh(quality, now = Date.now()) {
+  if (!quality || typeof quality.score !== 'number') return false;
+  const at = quality.scoredAt ? new Date(quality.scoredAt).getTime() : 0;
+  return Number.isFinite(at) && (now - at) < QUALITY_FRESH_MS;
 }
 
 /* ───────────────────────── failure classification ───────────────────────── */
