@@ -485,3 +485,36 @@ input-modality data in their `/models` listings, so their rows can never earn `a
 true` and can never be excepted from `VISION_HEAD_PATTERN` either. `vision:*` today means
 "OpenRouter, or nothing" — a real ceiling on the free-tier pool for this feature, not a bug, and
 worth knowing before assuming the catalog has more vision coverage than it does.
+
+### 7.7 `vision` implies `structured`, 2026-09-17
+
+The day after §7.6 shipped, the first real discovery ran and put three
+vision-capable rows in the catalog. One of them, `nex-agi/nex-n2.5-pro:free`,
+carried `fitness: 'basic'` — it declares image input and failed the structured
+probe. It was a legitimate `vision:balanced` pick for a call it could not have
+completed, because the task axis was a plain either/or: `structured` filtered on
+`fitness`, `vision` filtered on `acceptsImageInput`, and neither asked about the
+other.
+
+That is §7.6's own fault one layer in. A model that cannot do the job was
+outranking one that can — the wording of 57f43912, arrived at from a different
+direction.
+
+`scoreRow` now requires both for a `vision` need. The implication runs one way
+only: a structured row that cannot see is still not a vision candidate.
+
+The justification is that nothing asks to look at a picture for its own sake.
+Every vision caller in this suite hands over an image and wants JSON back; the
+body-composition scan reader is the first and sets the shape. A row that sees
+the page and answers in prose is not a candidate for the only kind of work
+`vision` is requested for.
+
+**If that stops being true** — a caller that genuinely wants prose about an
+image, a caption or a description — this is the line to revisit, and the honest
+fix is a compound need (`vision+prose`) rather than loosening this one back to
+an either/or. The grammar has two axes today because task and weight were the
+two decisions that actually differed (§1); a third would need the same argument
+made for it.
+
+Cost of the fix: the free-tier vision pool drops from 3 rows to 2, both
+`fitness: 'structured'` and both unscored by the golden set.
