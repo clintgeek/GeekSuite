@@ -120,7 +120,24 @@ if (!usingEnvCorsOrigins && isProduction) {
 // carries both a same-origin Origin header and the X-CSRF-Token header.
 app.use(csrfGuard({ allowedOrigins, logger, appName: 'fitnessgeek', exemptPaths: ['/share-target'] }));
 
-app.use(cors({
+// The Web Share Target action is exempt from CORS for the same reason it is
+// exempt from the CSRF guard above, and it has to be stated separately because
+// the two middlewares fail on different things.
+//
+// An Android share-sheet POST is a top-level navigation the OS initiated, so
+// Chrome sends `Origin: null` — the literal four-character string, not an
+// absent header. The `!origin` branch below handles absent and does not handle
+// that, so the allow-list rejected it, `cors` called back with an Error, and
+// the user got a 500 with no clue why. (Observed 2026-09-17, the first real
+// share from a phone.)
+//
+// Allowing the string `'null'` globally would be the smaller diff and the
+// wrong fix: every sandboxed iframe and opaque origin sends exactly that, so
+// it would widen the allow-list for the entire app to serve one route. The
+// path-scoped bypass keeps the blast radius at the one navigation that needs
+// it, and that route still performs no authenticated write — it only stages
+// bytes under a single-use id.
+const corsMiddleware = cors({
   origin: function (origin, callback) {
     if (!origin) return callback(null, true);
     if (allowedOrigins.indexOf(origin) === -1) {
@@ -142,7 +159,11 @@ app.use(cors({
     // cross-origin preflight for a REST mutation fails outright.
     'X-CSRF-Token'
   ]
-}));
+});
+
+app.use((req, res, next) => (
+  req.path === '/share-target' ? next() : corsMiddleware(req, res, next)
+));
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
