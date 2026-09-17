@@ -999,6 +999,34 @@ router.post('/feature', async (req, res) => {
       }
     }
 
+    // `vision` is the one need where falling back is worse than refusing.
+    //
+    // For every other task the rotation is a fair second answer: a row that is
+    // merely unranked still speaks the language and still returns something
+    // usable. A text-only model handed an image does not — it cannot see the
+    // attachment at all, so it answers confidently about nothing, burns a call
+    // and a day's quota, and hands the caller a plausible fabrication.
+    //
+    // Observed 2026-09-17: with no vision row resolvable, a body-composition
+    // scan went to `groq/qwen/qwen3.8-27b`, which returned no readable figures.
+    // The arithmetic gate caught it downstream — but the gate is the last line,
+    // not the first, and a caller that asked for vision is entitled to be told
+    // no rather than handed an answer from something blind.
+    //
+    // Deliberately narrow: only when the caller named a vision task, and only
+    // when nothing resolved. A vision row that resolves and then fails still
+    // degrades to the walk as before.
+    if (!needPick && !wantsPin && typeof need === 'string' && need.trim().toLowerCase().startsWith('vision')) {
+      req.log.warn({ need, feature }, '[ai] /feature refusing a vision need with no vision-capable row');
+      return res.status(503).json({
+        success: false,
+        error: {
+          code: 'NO_VISION_MODEL',
+          message: 'No vision-capable model is available right now.',
+        },
+      });
+    }
+
     // Whether the cap may be split by the body's `quotaKey`. For a key
     // caller, `caller.userId` is the key's *owner* — the admin who minted it
     // — which is one bucket for every player of every story that key serves.

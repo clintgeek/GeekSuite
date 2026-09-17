@@ -1223,6 +1223,25 @@ class AIService {
         // "golden set not run against this row yet" for every row — including
         // rows that had just been scored.
         quality: fm.quality ?? null,
+        // Stated by the vendor's listing, and the only thing that makes a
+        // `vision` need resolvable. Omitted here until 2026-09-17 — the third
+        // field in this object to be forgotten, after `latency` and `quality`,
+        // and the most damaging of the three.
+        //
+        // The other two degraded a ranking. This one silently disabled a
+        // feature: with the field absent the resolver saw no vision-capable
+        // row anywhere, returned null, and `/feature` did what it does with a
+        // null resolution — fell through to the ordinary rotation, which
+        // cheerfully sent a body-composition scan to a text-only model on
+        // groq. The extraction came back with nothing readable and the gate
+        // refused to save it, which is the system working, for a failure that
+        // began here.
+        //
+        // This hand-copied projection is the hazard: the row in Mongo is
+        // correct, the schema declares the field, discovery writes it, and a
+        // field missing from THIS list is invisible to every reader
+        // downstream. `aiFreeTierProjection.test.js` now pins it.
+        acceptsImageInput: fm.acceptsImageInput ?? null,
         health
       };
 
