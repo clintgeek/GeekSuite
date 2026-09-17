@@ -149,6 +149,51 @@ export function raiseAdapterError({ provider, model = null, status = null, code 
  * @param {string|null} [model]  the model id that was asked for, for the log
  * @returns {never}
  */
+/**
+ * Some OpenAI-compatible providers answer HTTP 200 with the failure
+ * described in the BODY instead of a real status. Observed live,
+ * 2026-09-17, from OpenRouter passing an upstream vendor's own failure
+ * straight through:
+ *
+ *   {"error":{"message":"Upstream error from Nvidia: ResourceExhausted:
+ *   Worker local total request limit reached (16/16)","code":502,
+ *   "metadata":{"error_type":"provider_unavailable"}}}
+ *
+ * — no `choices` at all. The adapter's tolerant read
+ * (`choices?.[0] || {}`) turned that into `content: ''`, indistinguishable
+ * from a model that genuinely has nothing to say. The request path cannot
+ * classify a failure it was never told about, so it fell back to treating
+ * every empty completion identically: `empty_content`, a hard failure, a
+ * flat six-hour cooldown. A capacity blip at whatever vendor OpenRouter
+ * routed to is not a dead OpenRouter row.
+ *
+ * `error.code` inside the body is trusted exactly as a transport status
+ * would be, when it actually looks like one (`400`-`599`) — which is what
+ * lets `502` here reach `classifyFreeTierFailure` as `http_502` (soft, the
+ * same as a real 5xx) while a `404` embedded the same way still reaches the
+ * retirement path, the correct outcome for a model the transport never got
+ * the chance to 404 on directly. A body with no numeric code at all (or one
+ * outside that range) reports `status: null`, which is already `unknown`
+ * and soft by default — never guessed into something harder than the vendor
+ * actually said.
+ *
+ * Returns `null` when `data` carries no error envelope at all, which is the
+ * ordinary shape for every successful call and must fall through untouched.
+ *
+ * @param {unknown} data  the parsed response body
+ * @returns {{status: number|null, message: string}|null}
+ */
+export function upstreamErrorEnvelope(data) {
+  const err = data?.error;
+  const message = typeof err?.message === 'string' ? err.message.trim() : '';
+  if (!message) return null;
+  const embeddedCode = Number(err?.code);
+  const status = Number.isInteger(embeddedCode) && embeddedCode >= 400 && embeddedCode <= 599
+    ? embeddedCode
+    : null;
+  return { status, message };
+}
+
 export function throwAdapterError(provider, error, model = null) {
   // Already ours (a nested adapter call, or a re-throw): pass it through
   // rather than wrap it and lose the status — and do not log it twice.

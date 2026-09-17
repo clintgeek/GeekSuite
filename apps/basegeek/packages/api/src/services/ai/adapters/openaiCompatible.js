@@ -31,7 +31,7 @@
  */
 
 import axios from 'axios';
-import { raiseAdapterError, throwAdapterError } from '../AdapterError.js';
+import { raiseAdapterError, throwAdapterError, upstreamErrorEnvelope } from '../AdapterError.js';
 import { partsOf } from './imageContent.js';
 
 /** How long any adapter waits on a provider before giving up. */
@@ -231,7 +231,28 @@ export async function call(pc, request = {}) {
   // is content '' for all five now, which is the case the probe already
   // judges — `classifyProbe` calls a 200 with no text dead (`empty_content`),
   // which is the truth about a row that answers that way.
-  const choice = response.data.choices?.[0] || {};
+  //
+  // But a 200 with no choices AND a populated `error` body is a DIFFERENT
+  // truth — OpenRouter's own passthrough of an upstream vendor's failure
+  // (see `upstreamErrorEnvelope`'s header) — and must never fall into the
+  // tolerant read below: doing so is exactly how a capacity blip earned the
+  // same six-hour cooldown as a model that is actually gone. Checked before
+  // the read, not after, so a real answer is never second-guessed by an
+  // `error` key a provider happened to send alongside it.
+  const rawChoice = response.data.choices?.[0];
+  if (!rawChoice) {
+    const envelope = upstreamErrorEnvelope(response.data);
+    if (envelope) {
+      raiseAdapterError({
+        provider: pc.id,
+        model,
+        status: envelope.status,
+        code: envelope.status ? `http_${envelope.status}` : 'unknown',
+        message: envelope.message
+      });
+    }
+  }
+  const choice = rawChoice || {};
   const content = choice.message?.content ?? '';
 
   const toolCalls = pc.forwardsTools ? toolCallsFrom(choice) : null;

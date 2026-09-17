@@ -662,6 +662,94 @@ describe('writeAlive carries acceptsImageInput onto the AIFreeTier row', () => {
 
 
 // ───────────────────────────────────────────────────────────────────────────
+describe('writeListed records modality for every listed row, probed or not', () => {
+  // The bug this closes: `acceptsImageInput` was only ever written by
+  // `writeAlive`, reached only for a row BOTH probed this run AND alive.
+  // Live, 2026-09-17: 83 AIFreeTier rows, 14 from OpenRouter, and the field
+  // set on 5 of them, while OpenRouter's own listing described input
+  // modality for all 14 — a measurement gap wearing a capability's clothes.
+  // Modality is vendor-STATED (the listing), not measured (the probe), so it
+  // belongs in `writeListed`, which runs for every row the listing named.
+  const capture = () => {
+    const writes = [];
+    return { writes, updateOne: async (filter, update) => { writes.push({ filter, update }); return { modifiedCount: 1 }; } };
+  };
+
+  it('writes true onto an EXISTING free-tier row that was not probed this run', async () => {
+    const model = capture(); const freeTier = capture();
+    await writeListed(
+      { provider: 'openrouter', modelId: 'sighted/one', name: 'Sighted One', acceptsImageInput: true },
+      { model, freeTier }
+    );
+    const write = freeTier.writes.find((w) => w.filter.modelId === 'sighted/one');
+    expect(write.update.$set).toEqual({ acceptsImageInput: true });
+    // No upsert: a row with no AIFreeTier document yet is `writeAlive`'s job,
+    // once it actually proves alive — never conjured from a listing alone.
+    expect(write.filter).toEqual({ provider: 'openrouter', modelId: 'sighted/one' });
+  });
+
+  it('writes null explicitly when the listing said nothing about modality', async () => {
+    // Same rule `writeAlive` already follows one line up: a row whose
+    // listing stopped saying "image" must lose that claim on the next write
+    // that reads the listing, not keep a stale `true` forever.
+    const model = capture(); const freeTier = capture();
+    await writeListed(
+      { provider: 'openrouter', modelId: 'unstated/one', acceptsImageInput: null },
+      { model, freeTier }
+    );
+    const write = freeTier.writes.find((w) => w.filter.modelId === 'unstated/one');
+    expect(write.update.$set.acceptsImageInput).toBeNull();
+  });
+
+  it('leaves the field untouched for a provider whose listing never carries it', async () => {
+    // `listedRows` never sets `acceptsImageInput` for groq/cerebras/etc — the
+    // key is `undefined`, not `null`, and that distinction is the whole
+    // point: nothing here claims to know, so nothing here should write.
+    const model = capture(); const freeTier = capture();
+    await writeListed({ provider: 'groq', modelId: 'text-only/one' }, { model, freeTier });
+    expect(freeTier.writes).toEqual([]);
+  });
+
+  it('does not upsert a free-tier document that does not exist yet', async () => {
+    const model = capture(); const freeTier = capture();
+    await writeListed(
+      { provider: 'openrouter', modelId: 'brand-new/one', acceptsImageInput: true },
+      { model, freeTier }
+    );
+    const write = freeTier.writes.find((w) => w.filter.modelId === 'brand-new/one');
+    expect(write.update).not.toHaveProperty('opts');
+    // No `upsert: true` anywhere in the call — `updateOne` here is invoked
+    // with exactly two arguments, matching `isFree: false`'s demotion above.
+    expect(freeTier.writes.length).toBe(1);
+  });
+});
+
+describe('syncResults carries modality onto a row that was listed but not probed', () => {
+  it('an alive-elsewhere provider run still updates a sibling row\'s acceptsImageInput', async () => {
+    // The real-world shape: OpenRouter lists 14 rows every run; this run's
+    // sample of probes touches a handful. A row the probe skipped (denied,
+    // rate-limited, or simply not selected for this pass) must still pick up
+    // whatever the listing said about it — probing is for fitness, not for
+    // modality.
+    const deps = fakeCollections();
+    const results = [
+      { kind: 'listed', provider: 'openrouter', modelId: 'unprobed/vision', name: 'Unprobed Vision', isFree: true, acceptsImageInput: true },
+      { kind: 'listed', provider: 'openrouter', modelId: 'probed/other', name: 'Probed Other', isFree: true, acceptsImageInput: false },
+      { kind: 'listing', provider: 'openrouter', count: 2, candidates: 2 },
+      { kind: 'probe', provider: 'openrouter', modelId: 'probed/other', status: 'alive', fitness: 'structured', code: 'ok' },
+    ];
+    await syncResults(results, deps, { now: Date.UTC(2026, 8, 17) });
+
+    // `unprobed/vision` never appears in a `probe` row above — `writeAlive`
+    // never runs for it this cycle — and it still ends up with the listing's
+    // answer on its AIFreeTier document.
+    const unprobedWrite = deps.writes.find(
+      (w) => w.label === 'freeTier' && w.filter.modelId === 'unprobed/vision' && 'acceptsImageInput' in (w.update.$set || {})
+    );
+    expect(unprobedWrite.update.$set.acceptsImageInput).toBe(true);
+  });
+});
+
 describe('paid-fallback tagging skips variable-price routers', () => {
   const sp = ['structured_outputs', 'response_format', 'tools'];
   const raw = { data: [

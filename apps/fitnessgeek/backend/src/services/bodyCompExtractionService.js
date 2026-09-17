@@ -38,8 +38,16 @@
 //      field name here against the actual printed labels rather than
 //      assuming they still line up.
 //
-// This runs on a FREE-TIER model (aiGeekClient's `need: 'vision:*'` routes to
-// whatever the rotation currently has that can see an image — no paid pin).
+// This runs on a FREE-TIER model (aiGeekClient's `need: 'vision+structured:*'`
+// routes to whatever the rotation currently has that can both see an image
+// AND emit JSON — no paid pin). Until 2026-09-17 this sent bare `vision:*`
+// and relied on `scoreRow` silently requiring `structured` too whenever
+// `vision` was asked for; that implication is gone now that the grammar
+// supports naming both explicitly (DOCS/AIGEEK_CAPABILITY_ROUTING.md's
+// compound-needs entry), so this caller says what it actually needs instead
+// of depending on a one-off special case in the resolver. If the implication
+// had been removed without updating this call, extraction could have routed
+// to a model that sees the report but cannot answer in JSON.
 // That means the response is treated as adversarial input, not a well-formed
 // API payload: prose before or after the JSON, a markdown code fence around
 // it, a missing key, a stringified number, a hedge like "approximately 44.2"
@@ -265,7 +273,13 @@ export async function extractBodyComposition({ buffer, mimeType, userId }) {
     // path a user is staring at (contrast aiFoodService's inline dish
     // estimate), and reading a dense report image correctly is worth more
     // here than shaving a few seconds.
-    need: 'vision:balanced',
+    //
+    // Compound task, not bare `vision`: this call needs BOTH halves — a model
+    // that can see the report image and one that can answer in the JSON
+    // shape `parseExtractionResponse` above expects. `vision` alone would
+    // only guarantee the first half now that the resolver no longer implies
+    // `structured` from it (see this file's header).
+    need: 'vision+structured:balanced',
     // Per-user cap bucket — see aiGeekClient.js's header on why this
     // service key needs one at all (no session on a service-key call).
     quotaKey: userId,

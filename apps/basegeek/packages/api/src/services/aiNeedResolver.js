@@ -78,6 +78,36 @@
  * `reasoning`, `prose` and `code` are recorded and do not filter — but the
  * golden set's per-class scores now give `reasoning` and `instruction` real
  * signal to RANK on, which is most of the value.
+ *
+ * ── Compound needs, 2026-09-17 ──────────────────────────────────────────────
+ *
+ * The task axis used to be single-valued: a caller named exactly one of
+ * `structured`, `reasoning`, `prose`, `code`, `vision`. Real work wants
+ * combinations — the body-composition scan reader needs a model that can
+ * both SEE the report image AND EMIT JSON, which is two requirements landing
+ * on one slot.
+ *
+ * The first fix for that (§7.7 of the routing doc, shipped a day earlier) was
+ * `scoreRow` making `vision` silently *imply* `structured` — reasonable once,
+ * because at the time every vision caller in the suite wanted JSON back. It
+ * did not generalise: the moment something wants prose ABOUT an image, or
+ * reasoning over a document's contents, the implication is simply wrong for
+ * that caller, and "loosen the one hard-coded pair" is not a design.
+ *
+ * So the grammar grew a second dimension instead: `need` may name one or more
+ * tasks, joined by `+`, before the weight — `'vision+structured:balanced'`.
+ * `parseNeed` returns `{ tasks: string[], weight }` rather than a single
+ * `task` string; every caller below reads `need.tasks`, never a bare
+ * `need.task`, and there is no implication left anywhere in `scoreRow` — a
+ * bare `vision:*` filters on image input alone, exactly as `structured:*`
+ * filters on JSON-capability alone, and asking for both is spelled out by
+ * asking for both.
+ *
+ * A compound need is a hard AND on every named task's filter. `structured`
+ * and `vision` are the two tasks with a filter behind them; naming
+ * `reasoning`, `prose` or `code` inside a compound must not start filtering
+ * on them just because they showed up next to a filtering task — they stay
+ * rank-only, in a compound exactly as alone. See `scoreRow` below.
  */
 import { weightClassOf, qualityIsFresh } from '../models/AIFreeTier.js';
 
@@ -91,23 +121,47 @@ export const NEED_TASKS = Object.freeze(['structured', 'reasoning', 'prose', 'co
 /** The weight axis: is a person waiting? */
 export const NEED_WEIGHTS = Object.freeze(['fast', 'balanced', 'deep']);
 
-/** The weight assumed when a caller names only a task. */
+/** The weight assumed when a caller names only a task (or task compound). */
 export const DEFAULT_WEIGHT = 'balanced';
 
 /**
- * `'structured:fast'` → `{ task, weight }`, or `null` if it is not a need.
+ * `'structured:fast'` → `{ tasks: ['structured'], weight: 'fast' }`, or
+ * `'vision+structured:balanced'` → `{ tasks: ['vision', 'structured'],
+ * weight: 'balanced' }`. Returns `null` if it is not a need at all.
  *
- * Deliberately strict: an unknown task or weight is a caller bug, and quietly
- * treating `'strutured:fast'` as "no preference" would route the call
- * somewhere reasonable and hide the typo for months.
+ * A single task is the common case and behaves exactly as it always has —
+ * every existing caller sends this form and none of them may change
+ * behaviour. A compound is one or more tasks joined by `+`, in the order the
+ * caller wrote them; that order is preserved (not sorted) because it is
+ * meant to be read back in `why`/provenance the way the caller wrote it, and
+ * nothing here depends on a canonical order.
+ *
+ * Deliberately strict, on every part: an unknown task, an unknown weight, a
+ * duplicated task, or an empty task slot (a stray `+`, e.g. `'vision+:fast'`
+ * or `'vision++structured:fast'`) is a caller bug, and quietly treating any
+ * of those as "no preference" would route the call somewhere plausible and
+ * hide the typo for months — the same reasoning that made the single-task
+ * form strict, extended to the new shape rather than relaxed for it.
+ * `'vision+strutured:fast'` is `null`, not "vision, and something else we
+ * shrugged at".
  */
 export function parseNeed(need) {
   if (typeof need !== 'string' || !need.trim()) return null;
-  const [task, weight = DEFAULT_WEIGHT, ...rest] = need.trim().toLowerCase().split(':');
+  const [taskPart, weight = DEFAULT_WEIGHT, ...rest] = need.trim().toLowerCase().split(':');
   if (rest.length > 0) return null;
-  if (!NEED_TASKS.includes(task)) return null;
   if (!NEED_WEIGHTS.includes(weight)) return null;
-  return { task, weight };
+  if (!taskPart) return null;
+
+  const tasks = taskPart.split('+');
+  // Every slot must be a real, known task — `''` (from a stray leading,
+  // trailing, or doubled `+`) is not one, and neither is a misspelling.
+  if (tasks.some((task) => !NEED_TASKS.includes(task))) return null;
+  // Naming the same task twice (`'vision+vision:fast'`) says nothing a
+  // single mention would not, and is far more likely a copy-paste slip than
+  // an intentional need — refused for the same reason a typo is.
+  if (new Set(tasks).size !== tasks.length) return null;
+
+  return { tasks, weight };
 }
 
 /**
@@ -142,8 +196,8 @@ export const QUALITY_POINTS = 150;
 export const QUALITY_UNMEASURED = 0.5;
 
 /**
- * The score this need should rank on: the matching class and the overall,
- * averaged.
+ * The score this need should rank on: the matching class(es) and the
+ * overall, averaged.
  *
  * The first version of this ranked on the class alone, reasoning that a model
  * good at extraction and bad at arithmetic should win extraction work. The
@@ -162,21 +216,35 @@ export const QUALITY_UNMEASURED = 0.5;
  * arithmetic*: a model that emits perfect JSON with wrong numbers has failed
  * the task completely. Real prompts mix concerns.
  *
- * So: the class is the specialist signal, the overall is "not broken
- * elsewhere", and the mean of the two is what a person would weigh. A
+ * So: the class(es) named are the specialist signal, the overall is "not
+ * broken elsewhere", and the mean of the two is what a person would weigh. A
  * specialist still beats a generalist within its class; a model that is
  * catastrophic outside its class no longer wins on the class alone.
+ *
+ * **Compound needs.** `tasks` may name more than one class
+ * (`'vision+structured'`). `vision` itself has no golden-set class — the six
+ * questions never asked a model to look at anything — so it never
+ * contributes a class score; this only matters in practice for the other
+ * axis in the pair. Where more than one named task DOES have a class score
+ * (e.g. a future `structured+reasoning`), the specialist signal is the mean
+ * of those class scores, not any single one — "the classes it was actually
+ * asked to combine", generalising the single-task case exactly: with one
+ * task named, "mean of the scores that exist" is just that one score.
  */
-export function qualityFor(row, task, now = Date.now()) {
+export function qualityFor(row, tasks, now = Date.now()) {
   if (!qualityIsFresh(row?.quality, now)) return null;
   const overall = row.quality.score;
   if (typeof overall !== 'number') return null;
 
   const byClass = row.quality.byClass;
   const get = (key) => (byClass instanceof Map ? byClass.get(key) : byClass?.[key]);
-  const perClass = get(task);
 
-  return typeof perClass === 'number' ? (perClass + overall) / 2 : overall;
+  const taskList = Array.isArray(tasks) ? tasks : [tasks];
+  const perClassScores = taskList.map(get).filter((value) => typeof value === 'number');
+
+  if (perClassScores.length === 0) return overall;
+  const meanPerClass = perClassScores.reduce((sum, value) => sum + value, 0) / perClassScores.length;
+  return (meanPerClass + overall) / 2;
 }
 
 /** A row the probe proved can emit JSON. Measured, not claimed. */
@@ -221,42 +289,42 @@ export function exclusionFor(row, { now = Date.now(), allowPaid = false } = {}) 
  * quality at all — it excludes on the vendor's own modality claim, because a
  * wrong guess here is not a worse answer, it is a request the provider
  * refuses outright.
+ *
+ * `need.tasks` may name more than one task (§"Compound needs" in the header).
+ * Every named task's filter — if it has one — must pass; there is
+ * deliberately no cross-task implication here any more. Until 2026-09-17
+ * this function made `vision` silently require `structured` too, reasoning
+ * that nothing in the suite wanted a picture described rather than
+ * transcribed. That stopped being true the moment a second kind of vision
+ * call could exist, and hard-coding one compound as an exception to the
+ * either/or was always going to be wrong for the next one — the fix is that
+ * a caller wanting both says so (`vision+structured`), and a caller wanting
+ * only sight gets only sight, exactly like every other task on this axis.
  */
 export function scoreRow(row, need, { now = Date.now(), allowPaid = false } = {}) {
   if (exclusionFor(row, { now, allowPaid }) !== null) return null;
-  if (need.task === 'structured' && !isStructured(row)) return null;
 
-  // `vision` implies `structured`, which is the one place the task axis is not
-  // a plain either/or.
-  //
-  // Nothing asks to look at a picture for its own sake. Every vision caller in
-  // this suite hands over an image and wants a JSON object back — the
-  // body-composition scan reader is the first and the shape of the rest — so a
-  // row that sees perfectly and answers in prose cannot do the job it would be
-  // picked for. That is exactly the fault 57f43912 named: a model that cannot
-  // do the work outranking one that can.
-  //
-  // It cost a real candidate to find. `nex-agi/nex-n2.5-pro:free` declares
-  // image input and failed the structured probe (`fitness: 'basic'`), and was
-  // a legitimate pick for an extraction call it could not have completed — one
-  // wasted call in three, caught downstream by a parse failure rather than by
-  // routing.
-  //
-  // If a caller ever genuinely wants prose ABOUT an image — a description, a
-  // caption — this is the line to revisit, and the honest fix then is a
-  // compound need (`vision+prose`) rather than loosening this one.
-  if (need.task === 'vision' && (!isVisionCapable(row) || !isStructured(row))) return null;
+  // A hard AND: every named task that has a filter must pass it.
+  // `reasoning` / `prose` / `code` have no `is*` check at all, so naming them
+  // alongside a filtering task in a compound cannot accidentally start
+  // filtering on them — there is simply nothing here that would.
+  if (need.tasks.includes('structured') && !isStructured(row)) return null;
+  if (need.tasks.includes('vision') && !isVisionCapable(row)) return null;
 
   const weightClass = weightClassOf(row.latency?.p50Ms) || 'unknown';
   let score = WEIGHT_POINTS[need.weight][weightClass];
 
   // Quality outranks speed. An unscored row scores mid-band rather than zero,
   // so a newly discovered model stays selectable long enough to be scored.
-  const quality = qualityFor(row, need.task, now);
+  const quality = qualityFor(row, need.tasks, now);
   score += Math.round((quality ?? QUALITY_UNMEASURED) * QUALITY_POINTS);
 
-  // Weak, measured, and explicitly secondary to the weight axis.
-  if (need.task !== 'structured' && isStructured(row)) score += 10;
+  // Weak, measured, and explicitly secondary to the weight axis. Unchanged by
+  // compounding: this rewards a row that happens to be structured-capable
+  // even when nothing asked for it, so it should not fire when `structured`
+  // is already one of the named tasks (that case is already fully accounted
+  // for by the filter and the quality term above).
+  if (!need.tasks.includes('structured') && isStructured(row)) score += 10;
 
   // Among equals, the row that answered most recently. Guards against picking
   // a row that is technically not cooling but has not served in weeks.
@@ -272,8 +340,9 @@ export function scoreRow(row, need, { now = Date.now(), allowPaid = false } = {}
  * bad day, name the least-bad row and present a guess as a decision.
  *
  * @param {object[]} rows   AIFreeTier-shaped rows (plain objects are fine)
- * @param {string}   need   e.g. 'structured:fast'
- * @returns {{provider, modelId, task, weight, why}|null}
+ * @param {string}   need   e.g. 'structured:fast', or a compound like
+ *                          'vision+structured:balanced'
+ * @returns {{provider, modelId, tasks, weight, why}|null}
  */
 export function resolveNeed(rows, need, { now = Date.now(), allowPaid = false } = {}) {
   const parsed = parseNeed(need);
@@ -294,13 +363,22 @@ export function resolveNeed(rows, need, { now = Date.now(), allowPaid = false } 
   if (!best) return null;
 
   const weightClass = weightClassOf(best.row.latency?.p50Ms) || 'unknown';
-  const quality = qualityFor(best.row, parsed.task, now);
-  const why = [
-    parsed.task === 'structured'
+  const quality = qualityFor(best.row, parsed.tasks, now);
+
+  // One reason per named task, joined — for the common single-task need this
+  // is exactly the one string it always was; for a compound it reads as "why
+  // each half of the request is satisfied", in the order the caller named
+  // them.
+  const taskWhy = parsed.tasks.map((task) => (
+    task === 'structured'
       ? 'probe extracted JSON from this row'
-      : parsed.task === 'vision'
+      : task === 'vision'
         ? 'vendor listing declared this row accepts image input'
-        : `task "${parsed.task}" has no measured discriminator yet — not filtered`,
+        : `task "${task}" has no measured discriminator yet — not filtered`
+  ));
+
+  const why = [
+    taskWhy.join('; '),
     weightClass === 'unknown'
       ? 'speed not measured yet'
       : `measured p50 ${best.row.latency.p50Ms}ms (${weightClass})`,
@@ -312,7 +390,7 @@ export function resolveNeed(rows, need, { now = Date.now(), allowPaid = false } 
   return {
     provider: best.row.provider,
     modelId: best.row.modelId,
-    task: parsed.task,
+    tasks: parsed.tasks,
     weight: parsed.weight,
     why,
   };
