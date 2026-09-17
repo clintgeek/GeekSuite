@@ -62,8 +62,18 @@ const upload = multer({
   limits: { fileSize: MAX_UPLOAD_BYTES },
 });
 
-// Field name must match `manifest.json`'s `share_target.params.files[0].name`.
-export const shareTargetUploadMiddleware = upload.single('file');
+// `any()` rather than `single('file')`, deliberately.
+//
+// The manifest names the field `file` and Chrome is supposed to honour that,
+// but on the first real share from a phone the POST arrived with a 75-byte
+// multipart body and no `file` part at all, and `single()` cannot tell the
+// difference between "Android sent nothing", "Android used a different field
+// name" and "Android sent it under `files[]`". All three look like `no_file`.
+//
+// Taking whatever arrives and inspecting it turns a guess into an
+// observation, and costs nothing: the size limit still applies per file, and
+// the content sniffing below is what actually decides whether we keep it.
+export const shareTargetUploadMiddleware = upload.any();
 
 const RECEIVED_PATH = '/scan-import';
 
@@ -81,23 +91,45 @@ function redirectTo(res, query) {
  */
 export async function receiveShareTarget(req, res) {
   try {
-    if (!req.file || !req.file.buffer || req.file.buffer.length === 0) {
+    // `any()` gives an array; take the first part with actual bytes whatever
+    // it was called. A share carries one file.
+    const parts = Array.isArray(req.files) ? req.files : [];
+    const file = parts.find((p) => p?.buffer?.length > 0) || null;
+
+    if (!file) {
+      // Say what DID arrive. A bare "no file" is what sent us guessing the
+      // first time; the field names and the non-file fields are the whole
+      // diagnosis, and they cost one log line on a path that is only hit by
+      // a deliberate share.
+      logger.warn(
+        {
+          partCount: parts.length,
+          fieldNames: parts.map((p) => p?.fieldname),
+          partSizes: parts.map((p) => p?.size),
+          textFields: Object.keys(req.body || {}),
+          textFieldValues: Object.fromEntries(
+            Object.entries(req.body || {}).map(([k, v]) => [k, String(v).slice(0, 200)]),
+          ),
+          contentLength: req.headers['content-length'],
+        },
+        'share-target: the POST carried no file — this is what it did carry',
+      );
       return redirectTo(res, { error: 'no_file' });
     }
 
-    const mimeType = sniffContentType(req.file.buffer);
+    const mimeType = sniffContentType(file.buffer);
     if (!mimeType) {
       logger.warn(
-        { declaredMimeType: req.file.mimetype, originalName: req.file.originalname },
+        { declaredMimeType: file.mimetype, originalName: file.originalname, fieldName: file.fieldname },
         'share-target: rejected a file whose content did not match any allowed signature',
       );
       return redirectTo(res, { error: 'unsupported_type' });
     }
 
     const id = stageFile({
-      buffer: req.file.buffer,
+      buffer: file.buffer,
       mimeType,
-      originalName: req.file.originalname,
+      originalName: file.originalname,
     });
 
     return redirectTo(res, { stagedId: id });
