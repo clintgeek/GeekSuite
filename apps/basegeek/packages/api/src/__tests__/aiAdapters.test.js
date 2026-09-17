@@ -410,6 +410,52 @@ describe('the OpenAI-compatible adapter', () => {
     expect(out.inputTokens).toBe(0);
   });
 
+  it('a 200 with an error envelope and no choices is a typed, transient failure — not empty content', async () => {
+    // Observed live, 2026-09-17: OpenRouter passing an upstream vendor's own
+    // capacity failure straight through, HTTP 200, no `choices` at all.
+    capture({
+      error: {
+        message: 'Upstream error from Nvidia: ResourceExhausted: Worker local total request limit reached (16/16)',
+        code: 502,
+        metadata: { error_type: 'provider_unavailable' },
+      },
+    });
+    const error = await callAdapter('openrouter', row('openrouter'), { prompt: 'hi', model: 'nvidia/x:free' }).catch(e => e);
+    expect(error).toBeInstanceOf(AdapterError);
+    // The embedded `code` is trusted exactly as a transport status would be —
+    // this is what lets `classifyFreeTierFailure` see it as a plain soft 5xx
+    // (never a hard failure) rather than the `empty_content` a bare `''`
+    // read would have produced.
+    expect(error.status).toBe(502);
+    expect(error.code).toBe('http_502');
+    expect(error.message).toMatch(/ResourceExhausted/);
+  });
+
+  it('an embedded 404 in the same envelope shape still reaches retirement', async () => {
+    // The transport never got the chance to 404 directly — OpenRouter ate
+    // that into a 200 — but the vendor's own words say the model is gone,
+    // and that must not be indistinguishable from a capacity blip.
+    capture({ error: { message: 'This model has been retired.', code: 404 } });
+    const error = await callAdapter('openrouter', row('openrouter'), { prompt: 'hi', model: 'gone/x:free' }).catch(e => e);
+    expect(error.status).toBe(404);
+    expect(error.code).toBe('http_404');
+  });
+
+  it('an error envelope with no numeric code falls back to unknown, not a guess', async () => {
+    capture({ error: { message: 'something vague went wrong' } });
+    const error = await callAdapter('groq', row('groq'), { prompt: 'hi' }).catch(e => e);
+    expect(error.status).toBeNull();
+    expect(error.code).toBe('unknown');
+  });
+
+  it('an error envelope alongside real choices never overrides a real answer', async () => {
+    // Defensive: this shape has not been observed, but the check must never
+    // second-guess a completion the provider actually sent.
+    capture({ choices: [{ message: { content: 'hi' } }], error: { message: 'ignored', code: 500 } });
+    const out = await callAdapter('groq', row('groq'), { prompt: 'hi' });
+    expect(out.content).toBe('hi');
+  });
+
   it('together sends the explicit stream:false, and nobody else does', async () => {
     const together = capture(OPENAI_OK);
     await callAdapter('together', row('together'), { prompt: 'hi' });

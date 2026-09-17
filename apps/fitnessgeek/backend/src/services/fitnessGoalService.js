@@ -177,6 +177,14 @@ class FitnessGoalService {
   async createNutritionGoals(userInput, userProfile = {}, userId = null) {
     const result = await aiGeekClient.feature('nutritionGoals', {
       quotaKey: userId,
+      // `parseNutritionGoalResponse` below only ever accepts a JSON object
+      // with `primary_goal`/`nutrition_phases` — anything else falls back to
+      // the computed plan. That is a `structured` requirement in fact, not
+      // just in the schema this sends; `balanced` because someone is
+      // waiting on this in the goal-setup flow, but it is a one-time setup
+      // step rather than the kind of "waiting right now, every day" call
+      // `dishEstimate` is.
+      need: 'structured:balanced',
       system: 'You are an expert nutritionist and certified dietitian. Return ONLY valid JSON.',
       user: this.buildNutritionGoalPrompt(userInput, userProfile),
       maxTokens: 3000,
@@ -229,6 +237,11 @@ class FitnessGoalService {
   async generateMealPlan(goal, userProfile = {}, userId = null) {
     const result = await aiGeekClient.feature('mealPlan', {
       quotaKey: userId,
+      // Same reasoning as `nutritionGoals`: `parseMealPlanResponse` below
+      // requires `weekly_meal_plans` as an array and there is no
+      // deterministic fallback for it at all, so a model that cannot emit
+      // JSON is a wasted 4000-token call rather than a degraded answer.
+      need: 'structured:balanced',
       system: 'You are an expert meal planner. Return ONLY valid JSON.',
       user: this.buildMealPlanPrompt(goal, userProfile),
       maxTokens: 4000,

@@ -131,6 +131,12 @@ Two axes, because they are the two decisions that actually differ:
   > `deny` pattern (`translate`, `ocr`, `lyria|music`, …) keeps applying to a vision-capable row
   > exactly as before; an id matching two patterns at once (`qwen-vl-ocr`) stays denied on the
   > one that is not vision. See §7.6 for the full account.
+  > **Correction, 2026-09-17.** The task axis is now compound-capable: a caller may name
+  > more than one task, joined by `+` — `need: 'vision+structured:balanced'` — when the
+  > work genuinely needs both at once. See §7.9 for why this replaced an earlier hack
+  > where `vision` silently implied `structured`, and why that hack could not be
+  > generalised. A single task still behaves exactly as documented above; nothing about
+  > the existing single-task callers changes.
 - **weight** — `fast` (a person is waiting, ≤2s), `balanced`, `deep` (background, slow is
   fine).
 
@@ -518,3 +524,158 @@ made for it.
 
 Cost of the fix: the free-tier vision pool drops from 3 rows to 2, both
 `fitness: 'structured'` and both unscored by the golden set.
+
+### 7.8 Vision was barely working for three separate reasons, 2026-09-17
+
+§7.6 and §7.7 made `vision` a real filter. It still routed to almost nothing
+live, for three reasons that had nothing to do with the filter itself.
+
+**Modality was recorded on 5 of 83 catalog rows.** `acceptsImageInput` was
+written only by `writeAlive`, reached only for a row both probed THIS run
+and alive. Live count: 14 OpenRouter rows in `AIFreeTier`, the field set on
+5 of them, `true` on 3 — while OpenRouter's own listing described input
+modality for all 14, and its live `/models` response named 12 image-capable
+rows, 11 of which would route. A row that 429'd on this hour's probe, or
+simply wasn't sampled this cycle, lost its vision candidacy until the next
+successful one — a measurement gap wearing a capability fact's clothes.
+
+The fix follows straight from the field's own header: modality is
+vendor-**stated**, from the listing, not measured, from the probe. So
+`writeListed` — which runs for every row a provider listed, probed or not,
+alive or not — now carries `acceptsImageInput` onto the `AIFreeTier` row
+alongside it, the same restraint `isFree: false`'s demotion already takes:
+no upsert, so a row with no document yet still waits for `writeAlive` to
+create it once it actually answers something. `undefined` (every listing
+but OpenRouter's) leaves the row untouched; `null` (OpenRouter listed the
+row and said nothing about modality) is written explicitly, because a row
+whose listing stopped saying "image" must lose that claim on the very next
+write that reads the listing — `writeAlive` already keeps this rule for the
+alive path, and now the listing path keeps it too. `fitness`, `latency` and
+`quality` are untouched by this change; they still need a probe, because
+nothing about "can this thing produce JSON" or "how fast is it" is written
+anywhere but this suite's own listing.
+
+**A capacity blip cost a 6-hour cooldown.** Observed live: OpenRouter
+answered HTTP 200 with no `choices` and an error body —
+`{"error":{"message":"Upstream error from Nvidia: ResourceExhausted: Worker
+local total request limit reached (16/16)","code":502,"metadata":
+{"error_type":"provider_unavailable"}}}` — passing an upstream vendor's own
+failure straight through. `openaiCompatible.js`'s tolerant read
+(`choice.message?.content ?? ''`) turned that into `content: ''`,
+indistinguishable from a model that genuinely has nothing to say, and the
+request path's `empty_content` handling put the row to sleep for six hours
+— the same cooldown a truly dead model earns.
+
+The adapter now checks for this shape (`AdapterError.js`'s
+`upstreamErrorEnvelope`) BEFORE the tolerant read, and — only when there are
+no `choices` at all — throws a typed `AdapterError` instead of returning
+empty text. The embedded `error.code` is trusted exactly as a transport
+status would be, when it actually looks like one (`400`-`599`): that is
+what lets this specific failure reach `classifyFreeTierFailure` as
+`http_502`, which is not in `HARD_FAILURE_STATUSES` and therefore soft —
+left alone, same as any other 5xx, rather than the flat six-hour cooldown.
+An embedded `404` in the same envelope shape reaches the retirement path
+instead, correctly, because OpenRouter ate a real retirement into a 200 the
+same way it ate this capacity blip. No numeric code at all falls back to
+`unknown`, which is already soft by default. **No new cooldown tier was
+added.** `aiFreeTierRouting.test.js` already pins, and has since R130, that
+a soft failure leaves a row's health completely alone rather than earning
+some shorter cooldown of its own ("putting the row to sleep for six hours
+would be an overreaction" — the existing test's words, not new ones) — the
+existing hard/soft split already IS the proportional handling this needed;
+the bug was that this failure never reached that split, not that the split
+was missing a rung. Checked the other four adapters for the same shape:
+Gemini, Cohere and Ollama's contracts all fail with a real HTTP status
+(nothing in their documented error paths passes a nested failure through a
+200), and Cloudflare's existing 402 handling already reads its real
+transport status the same way — none of them needed the same fix, because
+none of them had the same disease.
+
+**A text feature could still burn the only vision-capable row.**
+`fitnessInsightsMorningBrief` — plain text, no image anywhere in it — picked
+OpenRouter's vision-capable row through the ordinary free-tier rotation
+(nothing about routing keeps a vision-capable row out of a non-vision
+caller's hands, nor should it — the row answers text fine), hit the capacity
+blip above, and the pre-fix cooldown logic took `vision` down to zero live
+candidates suite-wide for six hours over a call that never touched an
+image.
+
+**Nothing further was added for this.** The capacity-blip fix above removes
+the actual mechanism: the same call, today, gets classified soft and leaves
+the row alone entirely, so a text caller hitting a transient failure on a
+vision-capable row no longer touches `vision`'s availability at all. What
+is left is the case where a vision-capable row fails **hard** — genuinely
+gone, credential rejected — and that must still cool or retire the row
+regardless of which caller discovered it: a model that is actually dead
+must stop being offered to the vision caller too, and there is no way to
+"protect" `vision` from that fact except having more than two free rows
+that can see, which is a catalog-coverage problem (§7.6's ceiling: `vision`
+means OpenRouter or nothing) and not something request-level routing can
+paper over. Reserving vision-capable rows away from ordinary callers, or
+giving `vision` its own cooldown curve, would be task-scoped cooling wearing
+capability-scoped clothes, and was left undone on that basis.
+
+### 7.9 Compound needs replace the vision-implies-structured hack, 2026-09-17
+
+§7.7's fix was correct for exactly one call and admitted as much in its own last
+paragraph: "if that stops being true — a caller that genuinely wants prose about
+an image — the honest fix is a compound need... rather than loosening this one
+back to an either/or." That day arrived the next morning, not because a new
+caller showed up wanting prose-about-an-image, but because the shape of the
+problem was obviously going to recur: `reasoning` over a document, `code`
+generated from a diagram, any pairing nobody has asked for yet. Hard-coding one
+compound (`vision` ⟹ `structured`) into `scoreRow` was right once and had no path
+to being right twice — the next caller with a two-part need would have needed
+its own bespoke `if`, and the one after that another, until the task axis was a
+pile of special cases pretending to be five clean options.
+
+**The grammar grew a second dimension instead of another exception.** `need`
+may now name one or more tasks joined by `+` before the weight —
+`'vision+structured:balanced'` — and `parseNeed` returns `{ tasks: string[],
+weight }` rather than a single `task` string. Every consumer
+(`scoreRow`, `qualityFor`, `resolveNeed`'s `why`, and the `/feature` route's own
+need-parsing and vision no-fallback guard) reads `need.tasks`; there is no
+`need.task` left anywhere. A single task behaves exactly as it always has —
+every existing caller sends this form, and changing their behaviour was a hard
+constraint, not a nice-to-have — because a compound is simply a list of length
+one that happens to run through the same code path as a list of length two.
+
+**The filter rule generalised cleanly.** A compound need is a hard AND: every
+named task that has a filter (`structured` via `fitness`, `vision` via
+`acceptsImageInput`) must pass its filter, and naming a non-filtering task
+(`reasoning`, `prose`, `code`) inside a compound must not start filtering on it
+just because it appears next to one that does — there is no code path in
+`scoreRow` that could make that happen, which is a stronger guarantee than "we
+tested that it doesn't." `qualityFor` generalised the same way: the specialist
+signal it ranks on becomes the mean of whichever named tasks actually have a
+golden-set class score (today, in practice, that is `structured` alone —
+`vision` has no class of its own, the six questions never asked a model to look
+at anything), averaged with the overall exactly as the single-task case always
+was.
+
+**`scoreRow`'s implication came out entirely.** A bare `vision:*` now filters on
+`acceptsImageInput` alone, exactly as `structured:*` filters on `fitness` alone
+— `nex-agi/nex-n2.5-pro:free` (image input, `fitness: 'basic'`) is once again a
+legitimate `vision:*` pick, because nothing about asking to see a picture
+promises anything about what comes back in words. Wanting both is now spelled
+out by asking for both.
+
+**One caller had to move in the same commit, or removing the hack would have
+been a regression wearing a cleanup's clothes.**
+`bodyCompExtractionService.js` sent bare `need: 'vision:balanced'` and relied
+entirely on the implication — it wants a model that can see the scan report
+AND answer in the JSON shape `parseExtractionResponse` expects. It now sends
+`need: 'vision+structured:balanced'`, unchanged in every other respect. Every
+other `need:`-sending caller in the suite was audited for the same
+mistaken-implicit-requirement pattern while this was open (fitnessgeek's
+`aiFoodService.js` and `fitnessGoalService.js`); the two callers found asking
+for JSON without saying `structured` (`foodParse`, `foodClassify`) or without
+saying anything at all (`nutritionGoals`, `mealPlan`) were given honest needs
+in the same pass, on the same reasoning `dishEstimate` already used — see the
+routing table in this repo's change history for the full caller-by-caller
+account. Callers that generate prose with no deterministic fallback
+(`aiInsightsService.js`'s seven generators, StoryGeek's `gm`/`aux`) were left
+alone: `prose` does not filter, so sending it would add no safety, and
+StoryGeek's own `aiService.js` does not forward a `need` field to aiGeek at all
+today — widening that is future work, not a same-day fix riding along with this
+one.

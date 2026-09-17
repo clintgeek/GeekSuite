@@ -577,6 +577,16 @@ Return JSON: {"verdicts":[{"index":1,"reasonable":true},{"index":2,"reasonable":
   async parseFoodDescription(description, userContext = {}, options = {}) {
     const result = await aiGeekClient.feature('foodParse', {
       quotaKey: options.userId,
+      // A person is on the other end of this either way it is called: the
+      // `/api/ai/food/parse` route (someone typed a description and is
+      // waiting) or `unifiedFoodService.parseWithAI`'s last-resort search
+      // fallback (someone is waiting on search results). And the caller only
+      // ever wants `food_items` JSON back — `parseFoodAIResponse` below
+      // throws the answer away and falls back to the deterministic split the
+      // moment it is not parseable JSON — so `structured` is an honest ask,
+      // not a guess, and `fast` matches what "waiting" means everywhere else
+      // in this file.
+      need: 'structured:fast',
       system: 'You are a nutrition expert. Return ONLY valid JSON, no explanations.',
       user: this.buildFoodParsingPrompt(description, userContext),
       maxTokens: 1000,
@@ -685,6 +695,11 @@ Return JSON: {"verdicts":[{"index":1,"reasonable":true},{"index":2,"reasonable":
       classificationContext
     );
     const result = await aiGeekClient.feature('foodClassify', {
+      // Same reasoning as `foodParse`: this call exists to be parsed as JSON
+      // (`parseClassificationResponse` below) and it sits on the search path
+      // a person is waiting on, so `structured:fast` is what it actually
+      // needs, not a guess dressed up as one.
+      need: 'structured:fast',
       system: 'You are a food classification expert. Return ONLY valid JSON.',
       user: prompt,
       maxTokens: 300,     // Small response = cheap

@@ -1071,7 +1071,7 @@ export async function writeDead({ provider, modelId, code = 'unknown', now = new
  */
 export async function writeListed(row, deps) {
   const at = new Date(row.now || Date.now());
-  const { provider, modelId, name, capabilities, contextTokens, maxOutputTokens, role, inputPrice, outputPrice } = row;
+  const { provider, modelId, name, capabilities, contextTokens, maxOutputTokens, role, inputPrice, outputPrice, acceptsImageInput } = row;
   await deps.model.updateOne(
     { provider, modelId },
     {
@@ -1099,6 +1099,42 @@ export async function writeListed(row, deps) {
   if (row.isFree === false && deps.freeTier) {
     // No upsert: this only demotes a row that already exists.
     await deps.freeTier.updateOne({ provider, modelId, isFree: true }, { $set: { isFree: false } });
+  }
+
+  /*
+   * Modality is vendor-STATED, not measured (see `openRouterCatalog` and
+   * `AIFreeTier.acceptsImageInput`'s header). Fitness needs a probe — you
+   * cannot know whether a row can produce JSON without asking it something —
+   * but whether the listing described image input is right there in THIS
+   * row, probed or not, alive or not.
+   *
+   * Until now the only writer of this field was `writeAlive`, reached only
+   * for rows that were both probed THIS run and answered. Live count,
+   * 2026-09-17: 83 AIFreeTier rows, 14 from OpenRouter, and `acceptsImageInput`
+   * set on 5 of them — the other 9 sat at their default `null` ("no vision")
+   * for no better reason than "wasn't probed, or was probed and failed, in
+   * this particular hour", while OpenRouter's live listing described input
+   * modality for all 14. A vision-capable row that 429'd on THIS run's probe
+   * lost its vision candidacy until the next successful one — a measurement
+   * gap masquerading as a capability fact.
+   *
+   * So it is written here too, from the listing alone, for every row the
+   * listing describes — no upsert, the same restraint `isFree: false` above
+   * takes: a row with no AIFreeTier document yet is created by `writeAlive`
+   * once it actually proves alive, never conjured from a listing that has
+   * never seen it answer anything.
+   *
+   * `undefined` (every non-OpenRouter listing; `listedRows` never sets this
+   * field at all) leaves the row exactly as it was — no listing on earth
+   * claims to know, so nothing here should overwrite what the row already
+   * says. `null` (OpenRouter listed the row but said nothing about input
+   * modality) is written explicitly, on purpose, matching `writeAlive`'s own
+   * rule one line up: a row whose listing stopped saying "image" must lose
+   * that claim on the very next write that reads the listing, the same way
+   * `fitness` is rewritten on every probe rather than only when it changes.
+   */
+  if (acceptsImageInput !== undefined && deps.freeTier) {
+    await deps.freeTier.updateOne({ provider, modelId }, { $set: { acceptsImageInput } });
   }
 
   if (deps.pricing && (inputPrice != null || outputPrice != null)) {

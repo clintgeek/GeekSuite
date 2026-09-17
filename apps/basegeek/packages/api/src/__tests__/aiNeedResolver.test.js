@@ -33,16 +33,16 @@ const row = (over = {}) => ({
 
 describe('parseNeed', () => {
   it('reads both axes', () => {
-    expect(parseNeed('structured:fast')).toEqual({ task: 'structured', weight: 'fast' });
-    expect(parseNeed('reasoning:deep')).toEqual({ task: 'reasoning', weight: 'deep' });
+    expect(parseNeed('structured:fast')).toEqual({ tasks: ['structured'], weight: 'fast' });
+    expect(parseNeed('reasoning:deep')).toEqual({ tasks: ['reasoning'], weight: 'deep' });
   });
 
   it('defaults the weight when only a task is named', () => {
-    expect(parseNeed('structured')).toEqual({ task: 'structured', weight: 'balanced' });
+    expect(parseNeed('structured')).toEqual({ tasks: ['structured'], weight: 'balanced' });
   });
 
   it('is case and whitespace insensitive', () => {
-    expect(parseNeed('  STRUCTURED:Fast ')).toEqual({ task: 'structured', weight: 'fast' });
+    expect(parseNeed('  STRUCTURED:Fast ')).toEqual({ tasks: ['structured'], weight: 'fast' });
   });
 
   it('refuses a typo rather than quietly treating it as no preference', () => {
@@ -59,6 +59,48 @@ describe('parseNeed', () => {
   it('names the axes it accepts', () => {
     expect(NEED_TASKS).toContain('structured');
     expect(NEED_WEIGHTS).toEqual(['fast', 'balanced', 'deep']);
+  });
+
+  /**
+   * Compound needs, 2026-09-17: one or more tasks joined by `+`, replacing
+   * the single hard-coded "vision implies structured" special case with a
+   * grammar a caller can use for any pair. See aiNeedResolver.js's header.
+   */
+  describe('compound needs', () => {
+    it('reads a two-task compound, preserving the order the caller wrote', () => {
+      expect(parseNeed('vision+structured:balanced')).toEqual({
+        tasks: ['vision', 'structured'],
+        weight: 'balanced',
+      });
+      expect(parseNeed('structured+vision:balanced')).toEqual({
+        tasks: ['structured', 'vision'],
+        weight: 'balanced',
+      });
+    });
+
+    it('defaults the weight on a compound exactly as it does on a single task', () => {
+      expect(parseNeed('vision+structured')).toEqual({
+        tasks: ['vision', 'structured'],
+        weight: 'balanced',
+      });
+    });
+
+    it('is strict about a typo anywhere in the compound, not just the first slot', () => {
+      // The whole point of staying strict: a typo in the second task must not
+      // be quietly dropped or treated as "no preference" either.
+      expect(parseNeed('vision+strutured:fast')).toBeNull();
+      expect(parseNeed('vison+structured:fast')).toBeNull();
+    });
+
+    it('refuses an empty task slot from a stray or doubled +', () => {
+      expect(parseNeed('vision+:fast')).toBeNull();
+      expect(parseNeed('+structured:fast')).toBeNull();
+      expect(parseNeed('vision++structured:fast')).toBeNull();
+    });
+
+    it('refuses a task named twice', () => {
+      expect(parseNeed('vision+vision:fast')).toBeNull();
+    });
   });
 });
 
@@ -210,7 +252,7 @@ describe('vision — filters on the vendor\'s own modality claim, not a guess', 
     // out about live.
     const rows = [row({ modelId: 'unknown-modality', acceptsImageInput: undefined })];
     expect(resolveNeed(rows, 'vision:fast', { now: NOW })).toBeNull();
-    expect(scoreRow(rows[0], { task: 'vision', weight: 'fast' }, { now: NOW })).toBeNull();
+    expect(scoreRow(rows[0], { tasks: ['vision'], weight: 'fast' }, { now: NOW })).toBeNull();
   });
 
   it('picks the row the listing actually declared image-capable', () => {
@@ -221,32 +263,21 @@ describe('vision — filters on the vendor\'s own modality claim, not a guess', 
     expect(resolveNeed(rows, 'vision:balanced', { now: NOW }).modelId).toBe('sighted');
   });
 
-  it('DOES require fitness: structured for a vision pick', () => {
-    // Vision implies structured — see `scoreRow`. A row that sees the image
-    // and answers in prose cannot complete the only kind of call that asks
-    // for vision here, so it is not a candidate.
+  it('does NOT require fitness: structured for a bare vision pick, 2026-09-17', () => {
+    // Until 2026-09-17, `scoreRow` made `vision` silently imply `structured`
+    // — reasonable while every vision caller in the suite wanted JSON back,
+    // but a hard-coded exception to the task axis's either/or that could
+    // only ever fit one shape of call. It has been replaced by compound
+    // needs (below): a caller that wants both now says so
+    // (`vision+structured`), and a bare `vision:*` goes back to meaning
+    // exactly what its name says — sight, and nothing else filtered on.
     //
-    // This is a real row, not a hypothetical: `nex-agi/nex-n2.5-pro:free`
-    // declares image input and failed the structured probe.
+    // `nex-agi/nex-n2.5-pro:free` is the real row that prompted the
+    // implication in the first place: it declares image input and failed
+    // the structured probe. Under the new grammar it IS a legitimate
+    // `vision:*` pick — it is simply not a `vision+structured:*` one.
     const rows = [row({ modelId: 'prose-but-sighted', fitness: 'basic', acceptsImageInput: true })];
-    expect(resolveNeed(rows, 'vision:balanced', { now: NOW })).toBeNull();
-  });
-
-  it('prefers the row that can do both over the one that only sees', () => {
-    // The failure this prevents is selection, not error: before the fix the
-    // prose row was not merely allowed, it could outrank a capable one.
-    const rows = [
-      row({ modelId: 'prose-but-sighted', fitness: 'basic', acceptsImageInput: true }),
-      row({ modelId: 'sighted-and-structured', fitness: 'structured', acceptsImageInput: true }),
-    ];
-    expect(resolveNeed(rows, 'vision:balanced', { now: NOW }).modelId).toBe('sighted-and-structured');
-  });
-
-  it('a structured row that cannot see is still not a vision candidate', () => {
-    // The implication runs one way only. Requiring structured must not have
-    // quietly loosened the image-input half.
-    const rows = [row({ modelId: 'blind-but-structured', fitness: 'structured', acceptsImageInput: null })];
-    expect(resolveNeed(rows, 'vision:balanced', { now: NOW })).toBeNull();
+    expect(resolveNeed(rows, 'vision:balanced', { now: NOW }).modelId).toBe('prose-but-sighted');
   });
 
   it('explains a vision pick by what the listing declared', () => {
@@ -260,9 +291,55 @@ describe('vision — filters on the vendor\'s own modality claim, not a guess', 
   });
 });
 
+/**
+ * Compound needs, 2026-09-17 — replacing `scoreRow`'s "vision implies
+ * structured" hack with a caller saying what it actually needs.
+ * `bodyCompExtractionService.js` (real caller) sends
+ * `'vision+structured:balanced'` for exactly this reason: it hands a report
+ * image to a model and needs BOTH that the model can see it and that it
+ * answers in JSON.
+ */
+describe('compound needs — every named task\'s filter must pass', () => {
+  it('requires both halves: seeing is not enough, structured is not enough', () => {
+    const rows = [
+      row({ modelId: 'sighted-only', fitness: 'basic', acceptsImageInput: true }),
+      row({ modelId: 'structured-only', fitness: 'structured', acceptsImageInput: false }),
+    ];
+    expect(resolveNeed(rows, 'vision+structured:balanced', { now: NOW })).toBeNull();
+  });
+
+  it('picks the row that clears both filters', () => {
+    const rows = [
+      row({ modelId: 'sighted-only', fitness: 'basic', acceptsImageInput: true }),
+      row({ modelId: 'structured-only', fitness: 'structured', acceptsImageInput: false }),
+      row({ modelId: 'sighted-and-structured', fitness: 'structured', acceptsImageInput: true }),
+    ];
+    expect(resolveNeed(rows, 'vision+structured:balanced', { now: NOW }).modelId).toBe('sighted-and-structured');
+  });
+
+  it('does not care which order the caller named the tasks in', () => {
+    const rows = [row({ modelId: 'both', fitness: 'structured', acceptsImageInput: true })];
+    expect(resolveNeed(rows, 'vision+structured:balanced', { now: NOW }).modelId).toBe('both');
+    expect(resolveNeed(rows, 'structured+vision:balanced', { now: NOW }).modelId).toBe('both');
+  });
+
+  it('naming a non-filtering task in a compound does not start filtering on it', () => {
+    // `reasoning` has no `is*` check anywhere in `scoreRow`. A row that is
+    // vision-capable but has never been measured for reasoning must still be
+    // selectable for `vision+reasoning` — the compound must not accidentally
+    // graft a filter onto an axis that was never meant to have one.
+    const rows = [row({ modelId: 'sighted-unmeasured-reasoning', fitness: 'structured', acceptsImageInput: true })];
+    expect(resolveNeed(rows, 'vision+reasoning:balanced', { now: NOW }).modelId).toBe('sighted-unmeasured-reasoning');
+  });
+
+  it('a malformed compound resolves to no opinion, same as a malformed single task', () => {
+    expect(resolveNeed([row()], 'vision+strutured:fast', { now: NOW })).toBeNull();
+  });
+});
+
 describe('scoreRow ignores the fields that lie', () => {
   it('scores two rows identically when only performance.* differs', () => {
-    const need = { task: 'structured', weight: 'fast' };
+    const need = { tasks: ['structured'], weight: 'fast' };
     const grand = row({ capabilities: { performance: { quality: 'state-of-the-art', reasoning: 'excellent' } } });
     const plain = row({ capabilities: { performance: { quality: 'basic', reasoning: 'basic' } } });
     expect(scoreRow(grand, need, { now: NOW }).score).toBe(scoreRow(plain, need, { now: NOW }).score);
@@ -271,7 +348,7 @@ describe('scoreRow ignores the fields that lie', () => {
   it('scores two rows identically when only capabilities.tasks differs', () => {
     // tasks.* is true for nearly every model and false only for whisper and
     // guard names — a constant wearing a capability's name.
-    const need = { task: 'reasoning', weight: 'deep' };
+    const need = { tasks: ['reasoning'], weight: 'deep' };
     const claims = row({ capabilities: { tasks: { reasoning: true, structuredOutput: true } } });
     const denies = row({ capabilities: { tasks: { reasoning: false, structuredOutput: false } } });
     expect(scoreRow(claims, need, { now: NOW }).score).toBe(scoreRow(denies, need, { now: NOW }).score);

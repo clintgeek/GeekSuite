@@ -968,12 +968,21 @@ router.post('/feature', async (req, res) => {
     // A need that does not parse is refused rather than ignored. Silently
     // treating `'strutured:fast'` as "no preference" would answer the call
     // from some reasonable model and hide the typo until someone went looking.
-    if (need !== null && need !== undefined && !parseNeed(need)) {
+    //
+    // `need` may name one task (`'structured:fast'`) or a compound of several
+    // joined by `+` (`'vision+structured:balanced'`) — see aiNeedResolver.js's
+    // header for why the grammar grew a second dimension instead of teaching
+    // `scoreRow` another hard-coded implication. `parseNeed` is exactly as
+    // strict about the compound form as it always was about the single one:
+    // an unknown or duplicated task anywhere in the `+`-joined list is still
+    // a 400, not a quietly-ignored typo.
+    const parsedNeed = need !== null && need !== undefined ? parseNeed(need) : undefined;
+    if (need !== null && need !== undefined && !parsedNeed) {
       return res.status(400).json({
         ok: false,
         reason: 'invalid_request',
         error: {
-          message: `need must be <task>:<weight> — tasks ${NEED_TASKS.join('|')}, weights ${NEED_WEIGHTS.join('|')}`,
+          message: `need must be <task>[+<task>...]:<weight> — tasks ${NEED_TASKS.join('|')}, weights ${NEED_WEIGHTS.join('|')}`,
           code: 'INVALID_NEED'
         }
       });
@@ -1016,7 +1025,14 @@ router.post('/feature', async (req, res) => {
     // Deliberately narrow: only when the caller named a vision task, and only
     // when nothing resolved. A vision row that resolves and then fails still
     // degrades to the walk as before.
-    if (!needPick && !wantsPin && typeof need === 'string' && need.trim().toLowerCase().startsWith('vision')) {
+    //
+    // Reads `parsedNeed.tasks` rather than sniffing the raw string for a
+    // `'vision'` prefix: now that a need can be a `+`-joined compound, vision
+    // is not always the first task named (`'structured+vision:balanced'` is
+    // just as valid as `'vision+structured:balanced'`), and a prefix check
+    // would silently stop catching this case for exactly the callers this
+    // guard exists for.
+    if (!needPick && !wantsPin && parsedNeed?.tasks.includes('vision')) {
       req.log.warn({ need, feature }, '[ai] /feature refusing a vision need with no vision-capable row');
       return res.status(503).json({
         success: false,

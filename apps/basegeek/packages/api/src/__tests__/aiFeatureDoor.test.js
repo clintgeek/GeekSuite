@@ -856,4 +856,72 @@ describe('POST /api/ai/feature — need routing', () => {
 
     expect(res.body.provenance.need.resolved).toBe(false);
   });
+
+  /**
+   * Compound needs, 2026-09-17. `bodyCompExtractionService.js` sends
+   * `'vision+structured:balanced'` because a report scan needs both halves;
+   * this pins the door's end of that contract, including that the vision
+   * no-fallback guard reads the parsed task LIST rather than sniffing the
+   * raw string for a `'vision'` prefix — a compound need does not always
+   * name vision first.
+   */
+  it('resolves a compound need that requires both halves', async () => {
+    enable('groq');
+    await AIFreeTier.create({
+      provider: 'groq',
+      modelId: 'sighted-and-structured',
+      isFree: true,
+      fitness: 'structured',
+      acceptsImageInput: true,
+      latency: { recentMs: [900], p50Ms: 900, measuredAt: new Date() },
+      health: { consecutiveFailures: 0, lastSuccessAt: new Date(), coolingUntil: null },
+    });
+    const apiKey = await makeApiKey({ appName: 'fitnessgeek' });
+
+    const res = await request(app)
+      .post('/api/ai/feature')
+      .set('Authorization', `Bearer ${apiKey}`)
+      .send({ feature: 'bodyCompExtract', user: 'hi', need: 'vision+structured:balanced' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.provenance.need.resolved).toBe(true);
+    expect(res.body.provenance.need.model).toBe('sighted-and-structured');
+  });
+
+  it('refuses a vision need with no vision-capable row, whichever order the tasks were named in', async () => {
+    enable('groq');
+    // A row that emits JSON but the listing never said it takes an image —
+    // no vision candidate exists at all.
+    await AIFreeTier.create({
+      provider: 'groq',
+      modelId: 'structured-but-blind',
+      isFree: true,
+      fitness: 'structured',
+      acceptsImageInput: false,
+      latency: { recentMs: [900], p50Ms: 900, measuredAt: new Date() },
+      health: { consecutiveFailures: 0, lastSuccessAt: new Date(), coolingUntil: null },
+    });
+    const apiKey = await makeApiKey({ appName: 'fitnessgeek' });
+
+    // `structured+vision` — vision named SECOND, which the old prefix check
+    // on the raw string would have missed entirely.
+    const res = await request(app)
+      .post('/api/ai/feature')
+      .set('Authorization', `Bearer ${apiKey}`)
+      .send({ feature: 'bodyCompExtract', user: 'hi', need: 'structured+vision:balanced' });
+
+    expect(res.status).toBe(503);
+    expect(res.body.error.code).toBe('NO_VISION_MODEL');
+  });
+
+  it('refuses a malformed compound the same as a malformed single task', async () => {
+    const apiKey = await makeApiKey({ appName: 'fitnessgeek' });
+    const res = await request(app)
+      .post('/api/ai/feature')
+      .set('Authorization', `Bearer ${apiKey}`)
+      .send({ feature: 'bodyCompExtract', user: 'hi', need: 'vision+strutured:balanced' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('INVALID_NEED');
+  });
 });

@@ -37,6 +37,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, afterAll } from '@jest/globals';
 import { eventually, settle } from './eventually.js';
+import { AdapterError } from '../services/ai/AdapterError.js';
 
 const { default: aiService } = await import('../services/aiService.js');
 const { default: AIFreeTier } = await import('../models/AIFreeTier.js');
@@ -231,6 +232,65 @@ describe('a hard failure on the picked free model falls through to the next free
     const health = aiService.getFreeTierHealth('groq', 'busy-model');
     expect(health.consecutiveFailures).toBe(0);
     expect(health.coolingUntil).toBeNull();
+  });
+
+  it('a 200-with-error-body capacity blip leaves the row alone, same as any other soft failure', async () => {
+    // The adapter now throws a typed `AdapterError` for OpenRouter's
+    // 200-with-an-error-body shape (`openaiCompatible.js`'s
+    // `upstreamErrorEnvelope`) instead of returning `content: ''`. This pins
+    // the effect one layer up: once that error reaches `callAI`, a capacity
+    // blip (`http_502`, not in `HARD_FAILURE_STATUSES`) must be treated
+    // exactly like any other soft failure — left alone — never the flat
+    // six-hour cooldown `empty_content` used to earn for the same root cause.
+    // groq (rotationPosition 1) ahead of cerebras (2), so the blip is what
+    // the walk actually hits first rather than being skipped over.
+    enable('groq', 'cerebras');
+    await seedRows([
+      { provider: 'groq', modelId: 'nvidia/x:free' },
+      { provider: 'cerebras', modelId: 'llama3.1-8b' },
+    ]);
+
+    const calls = fakeProviderLayer({
+      'groq/nvidia/x:free': new AdapterError({
+        provider: 'groq',
+        status: 502,
+        code: 'http_502',
+        message: 'Upstream error from Nvidia: ResourceExhausted: Worker local total request limit reached (16/16)',
+      }),
+      'cerebras/llama3.1-8b': 'ok',
+    });
+
+    await aiService.callAI('hello', { freeOnly: true, appName: 'startgeek' });
+
+    // Confirms the blip row really was hit, not skipped by rotation order.
+    expect(calls).toContain('groq/nvidia/x:free');
+    const health = aiService.getFreeTierHealth('groq', 'nvidia/x:free');
+    expect(health.consecutiveFailures).toBe(0);
+    expect(health.coolingUntil).toBeNull();
+  });
+
+  it('a genuinely empty answer still earns the long cooldown, unaffected by the capacity fix', async () => {
+    // The other half of the same boundary: no `error` envelope, just a model
+    // that truly said nothing. `empty_content` must keep meaning what it
+    // means — this is the scenario (b) above already pins end-to-end; this
+    // case isolates it against the new soft path so a future change to one
+    // cannot silently blur into the other.
+    enable('cloudflare', 'ollama');
+    await seedRows([
+      { provider: 'cloudflare', modelId: 'truly-silent' },
+      { provider: 'ollama', modelId: 'gpt-oss:20b' },
+    ]);
+
+    fakeProviderLayer({
+      'cloudflare/truly-silent': '',
+      'ollama/gpt-oss:20b': 'pong',
+    });
+
+    await aiService.callAI('hello', { freeOnly: true, appName: 'startgeek' });
+
+    const health = aiService.getFreeTierHealth('cloudflare', 'truly-silent');
+    expect(health.lastFailureCode).toBe('empty_content');
+    expect(new Date(health.coolingUntil).getTime()).toBeGreaterThan(Date.now());
   });
 
   it('escalates to a 24h cooldown on the third consecutive hard failure', async () => {

@@ -192,12 +192,15 @@ describe('extractBodyComposition — the full flow, aiGeek mocked', () => {
     expect(result.candidate.weight_value).toBe(317.2);
     expect(result.provenance.provider).toBe('groq');
 
-    // The call itself must ask for a vision-capable model and carry an
-    // image content-part, not a plain string -- this is the one thing that
-    // silently breaks the whole feature if it regresses.
+    // The call itself must ask for a model that is BOTH vision-capable and
+    // structured-output-capable, and must carry an image content-part, not a
+    // plain string -- this is the one thing that silently breaks the whole
+    // feature if it regresses. It is a compound need, not bare `vision`,
+    // because the resolver no longer implies `structured` from `vision` on
+    // its own (2026-09-17) -- see this service's header comment.
     const [featureName, payload] = aiGeekClient.feature.mock.calls[0];
     expect(featureName).toBe('bodyCompExtract');
-    expect(payload.need).toBe('vision:balanced');
+    expect(payload.need).toBe('vision+structured:balanced');
     const userMessage = payload.messages.find((m) => m.role === 'user');
     expect(Array.isArray(userMessage.content)).toBe(true);
     expect(userMessage.content.some((part) => part.type === 'image')).toBe(true);
