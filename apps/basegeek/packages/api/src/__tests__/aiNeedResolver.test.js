@@ -221,11 +221,32 @@ describe('vision — filters on the vendor\'s own modality claim, not a guess', 
     expect(resolveNeed(rows, 'vision:balanced', { now: NOW }).modelId).toBe('sighted');
   });
 
-  it('does not require fitness: structured for a vision pick', () => {
-    // Vision and structured are independent filters. A row that answers in
-    // prose but declares image input is still a valid vision candidate.
+  it('DOES require fitness: structured for a vision pick', () => {
+    // Vision implies structured — see `scoreRow`. A row that sees the image
+    // and answers in prose cannot complete the only kind of call that asks
+    // for vision here, so it is not a candidate.
+    //
+    // This is a real row, not a hypothetical: `nex-agi/nex-n2.5-pro:free`
+    // declares image input and failed the structured probe.
     const rows = [row({ modelId: 'prose-but-sighted', fitness: 'basic', acceptsImageInput: true })];
-    expect(resolveNeed(rows, 'vision:balanced', { now: NOW }).modelId).toBe('prose-but-sighted');
+    expect(resolveNeed(rows, 'vision:balanced', { now: NOW })).toBeNull();
+  });
+
+  it('prefers the row that can do both over the one that only sees', () => {
+    // The failure this prevents is selection, not error: before the fix the
+    // prose row was not merely allowed, it could outrank a capable one.
+    const rows = [
+      row({ modelId: 'prose-but-sighted', fitness: 'basic', acceptsImageInput: true }),
+      row({ modelId: 'sighted-and-structured', fitness: 'structured', acceptsImageInput: true }),
+    ];
+    expect(resolveNeed(rows, 'vision:balanced', { now: NOW }).modelId).toBe('sighted-and-structured');
+  });
+
+  it('a structured row that cannot see is still not a vision candidate', () => {
+    // The implication runs one way only. Requiring structured must not have
+    // quietly loosened the image-input half.
+    const rows = [row({ modelId: 'blind-but-structured', fitness: 'structured', acceptsImageInput: null })];
+    expect(resolveNeed(rows, 'vision:balanced', { now: NOW })).toBeNull();
   });
 
   it('explains a vision pick by what the listing declared', () => {

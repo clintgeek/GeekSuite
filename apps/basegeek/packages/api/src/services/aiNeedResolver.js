@@ -225,7 +225,27 @@ export function exclusionFor(row, { now = Date.now(), allowPaid = false } = {}) 
 export function scoreRow(row, need, { now = Date.now(), allowPaid = false } = {}) {
   if (exclusionFor(row, { now, allowPaid }) !== null) return null;
   if (need.task === 'structured' && !isStructured(row)) return null;
-  if (need.task === 'vision' && !isVisionCapable(row)) return null;
+
+  // `vision` implies `structured`, which is the one place the task axis is not
+  // a plain either/or.
+  //
+  // Nothing asks to look at a picture for its own sake. Every vision caller in
+  // this suite hands over an image and wants a JSON object back — the
+  // body-composition scan reader is the first and the shape of the rest — so a
+  // row that sees perfectly and answers in prose cannot do the job it would be
+  // picked for. That is exactly the fault 57f43912 named: a model that cannot
+  // do the work outranking one that can.
+  //
+  // It cost a real candidate to find. `nex-agi/nex-n2.5-pro:free` declares
+  // image input and failed the structured probe (`fitness: 'basic'`), and was
+  // a legitimate pick for an extraction call it could not have completed — one
+  // wasted call in three, caught downstream by a parse failure rather than by
+  // routing.
+  //
+  // If a caller ever genuinely wants prose ABOUT an image — a description, a
+  // caption — this is the line to revisit, and the honest fix then is a
+  // compound need (`vision+prose`) rather than loosening this one.
+  if (need.task === 'vision' && (!isVisionCapable(row) || !isStructured(row))) return null;
 
   const weightClass = weightClassOf(row.latency?.p50Ms) || 'unknown';
   let score = WEIGHT_POINTS[need.weight][weightClass];
