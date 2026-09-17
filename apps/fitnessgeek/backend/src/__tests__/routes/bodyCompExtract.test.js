@@ -194,6 +194,36 @@ describe('POST /api/body-comp/uploads/:id/extract', () => {
     expect(res.body.data.validation.passed).toBe(false);
     expect(res.body.data.validation.mismatches.length).toBeGreaterThan(0);
     expect(BodyComposition.create).not.toHaveBeenCalled();
+
+    // A genuinely misread primary (body_fat_mass_lb feeds several checks)
+    // must NOT classify as safe to accept -- see the /accept tests below for
+    // the case that should.
+    expect(res.body.data.classification.safeToAccept).toBe(false);
+    expect(res.body.data.classification.suspectPrimaries).toContain('body_fat_mass_lb');
+  });
+
+  test('the real printed-only mismatch (a misread "Muscle Mass" witness) classifies as safe to accept', async () => {
+    const id = await seedUpload('user-1');
+    const raw = JSON.parse(modelAnswer());
+    // The actual 2026-09-17 failure: the model found no row labelled "Muscle
+    // Mass," so it grabbed "Skeletal Muscle" (102.4) for printed.muscle_mass_lb
+    // instead of "Soft Lean Mass" (164.6). Every primary is untouched here --
+    // this is purely a bad printed witness.
+    raw.printed.muscle_mass_lb = 102.4;
+    aiGeekClient.feature.mockResolvedValue({ ok: true, data: JSON.stringify(raw), reason: null, provenance: {} });
+
+    const res = await request(buildApp())
+      .post(`/api/body-comp/uploads/${id}/extract`)
+      .set('x-test-user', 'user-1');
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('mismatch');
+    expect(res.body.data.classification.safeToAccept).toBe(true);
+    expect(res.body.data.classification.suspectPrimaries).toEqual([]);
+    // The candidate/printed/measuredAt round-trip needed by POST .../accept.
+    expect(res.body.data.candidate.weight_value).toBe(317.2);
+    expect(res.body.data.measuredAt).toBe('2026-09-16T08:01:00.000Z');
+    expect(BodyComposition.create).not.toHaveBeenCalled();
   });
 
   test('a scan that verifies NOTHING (checked: 0) does not save even though validate() passes vacuously', async () => {
@@ -258,5 +288,145 @@ describe('POST /api/body-comp/uploads/:id/extract', () => {
 
     expect(res.status).toBe(500);
     expect(res.body.success).toBe(false);
+  });
+});
+
+describe('POST /api/body-comp/uploads/:id/accept', () => {
+  test('requires authentication', async () => {
+    const id = await seedUpload('user-1');
+    const res = await request(buildApp())
+      .post(`/api/body-comp/uploads/${id}/accept`)
+      .send({ candidate: SCAN, printed: PRINTED, measuredAt: '2026-09-16T08:01:00.000Z' });
+    expect(res.status).toBe(401);
+  });
+
+  test('a printed-only mismatch (bad "Muscle Mass" witness) saves, honestly marked as not gate-verified', async () => {
+    const id = await seedUpload('user-1');
+    // Same shape the /extract mismatch response would have handed the UI:
+    // every PRIMARY is untouched, only the printed witness for muscle mass
+    // is wrong (the real 2026-09-17 failure -- see classifyMismatches's own
+    // test fixture).
+    const badPrinted = { ...PRINTED, muscle_mass_lb: 102.4 };
+    BodyComposition.create.mockResolvedValue({ _id: 'saved-doc-id', toObject: () => ({}) });
+
+    const res = await request(buildApp())
+      .post(`/api/body-comp/uploads/${id}/accept`)
+      .set('x-test-user', 'user-1')
+      .send({ candidate: SCAN, printed: badPrinted, measuredAt: '2026-09-16T08:01:00Z' });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.status).toBe('saved');
+
+    expect(BodyComposition.create).toHaveBeenCalledTimes(1);
+    const [doc] = BodyComposition.create.mock.calls[0];
+    // Honest bookkeeping: this was NOT a clean gate pass, and the row must
+    // say so even though it was saved -- a reader (or a later trend) needs
+    // to be able to tell "the arithmetic actually agreed" from "a human
+    // decided to save it anyway."
+    expect(doc.extraction.validation_passed).toBe(false);
+    expect(doc.extraction.method).toBe('aiGeek:bodyCompExtract+partialAccept');
+    // The row explains itself later without needing this request's
+    // ephemeral validation result to still exist anywhere.
+    expect(doc.notes).toMatch(/Muscle mass/);
+    expect(doc.weight_value).toBe(317.2);
+    expect(doc.measured_at.toISOString()).toBe('2026-09-16T08:01:00.000Z');
+  });
+
+  test('the server refuses a primary-suspect mismatch, even though the client never claimed it was safe', async () => {
+    const id = await seedUpload('user-1');
+    // Bone mass feeds muscle mass AND its own percentage, and nothing else
+    // confirms it -- a genuinely bad primary, not a bad witness. The
+    // request carries no "safeToAccept" field at all: this endpoint must
+    // reject it on its OWN re-derivation, not on anything the client sent.
+    const badCandidate = { ...SCAN, bone_mass_lb: 21.4 };
+
+    const res = await request(buildApp())
+      .post(`/api/body-comp/uploads/${id}/accept`)
+      .set('x-test-user', 'user-1')
+      .send({ candidate: badCandidate, printed: PRINTED, measuredAt: '2026-09-16T08:01:00Z' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('refused');
+    expect(res.body.data.classification.safeToAccept).toBe(false);
+    expect(res.body.data.classification.suspectPrimaries).toContain('bone_mass_lb');
+    expect(BodyComposition.create).not.toHaveBeenCalled();
+  });
+
+  test('a request that LIES about safety (a fabricated "safeToAccept" field) is still refused', async () => {
+    // The endpoint contract: only `candidate`/`printed`/`measuredAt` are
+    // ever read from the body. A caller attaching its own verdict must have
+    // zero effect -- the gate and classifier are re-run from the numbers
+    // alone, every time.
+    const id = await seedUpload('user-1');
+    const badCandidate = { ...SCAN, weight_value: 371.2 }; // implicates weight loudly
+
+    const res = await request(buildApp())
+      .post(`/api/body-comp/uploads/${id}/accept`)
+      .set('x-test-user', 'user-1')
+      .send({
+        candidate: badCandidate,
+        printed: PRINTED,
+        measuredAt: '2026-09-16T08:01:00Z',
+        safeToAccept: true, // a lie the endpoint must never read
+        classification: { safeToAccept: true, suspectPrimaries: [] }, // also a lie
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('refused');
+    expect(BodyComposition.create).not.toHaveBeenCalled();
+  });
+
+  test('a clean candidate (nothing actually mismatched) still saves via accept, marked gate-verified', async () => {
+    const id = await seedUpload('user-1');
+    BodyComposition.create.mockResolvedValue({ _id: 'saved-doc-id', toObject: () => ({}) });
+    const res = await request(buildApp())
+      .post(`/api/body-comp/uploads/${id}/accept`)
+      .set('x-test-user', 'user-1')
+      .send({ candidate: SCAN, printed: PRINTED, measuredAt: '2026-09-16T08:01:00Z' });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.status).toBe('saved');
+    const [doc] = BodyComposition.create.mock.calls[0];
+    expect(doc.extraction.validation_passed).toBe(true);
+    expect(doc.extraction.method).toBe('aiGeek:bodyCompExtract');
+    // No note is attached at all on a genuinely clean pass -- the schema's
+    // own `notes` default ('') applies once this reaches a real model; the
+    // call itself just omits the key rather than sending an empty string.
+    expect(doc.notes).toBeFalsy();
+  });
+
+  test('a duplicate (userId, measured_at) reports "already imported," not a 500', async () => {
+    const id = await seedUpload('user-1');
+    const duplicateError = new Error('E11000 duplicate key error');
+    duplicateError.code = 11000;
+    BodyComposition.create.mockRejectedValue(duplicateError);
+
+    const res = await request(buildApp())
+      .post(`/api/body-comp/uploads/${id}/accept`)
+      .set('x-test-user', 'user-1')
+      .send({ candidate: SCAN, printed: { ...PRINTED, muscle_mass_lb: 102.4 }, measuredAt: '2026-09-16T08:01:00Z' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('duplicate');
+  });
+
+  test('a missing candidate or printed body is a 400, not a crash', async () => {
+    const id = await seedUpload('user-1');
+    const res = await request(buildApp())
+      .post(`/api/body-comp/uploads/${id}/accept`)
+      .set('x-test-user', 'user-1')
+      .send({ measuredAt: '2026-09-16T08:01:00Z' });
+
+    expect(res.status).toBe(400);
+    expect(BodyComposition.create).not.toHaveBeenCalled();
+  });
+
+  test("404s (not 403) on another user's upload -- ownership doesn't leak", async () => {
+    const id = await seedUpload('user-owner');
+    const res = await request(buildApp())
+      .post(`/api/body-comp/uploads/${id}/accept`)
+      .set('x-test-user', 'user-other')
+      .send({ candidate: SCAN, printed: PRINTED, measuredAt: '2026-09-16T08:01:00Z' });
+    expect(res.status).toBe(404);
   });
 });
