@@ -16,6 +16,9 @@ import {
   validate,
   segmentalDrift,
   TOLERANCES,
+  CHECKS,
+  CHECK_INPUTS,
+  classifyMismatches,
 } from '@geeksuite/schemas/fitnessgeek/bodyCompositionDerivation';
 
 /** The stored primaries, exactly as the report gives them. */
@@ -199,5 +202,60 @@ describe('null handling', () => {
 
   test('TOLERANCES is frozen so a caller cannot widen the gate in place', () => {
     expect(Object.isFrozen(TOLERANCES)).toBe(true);
+  });
+});
+
+describe('classifyMismatches — telling a bad number from a bad witness', () => {
+  test('the real 2026-09-17 failure is printed-only, and safe to accept', () => {
+    // What actually happened on the first real scan. Page 1 prints "Soft Lean
+    // Mass" (164.6) and, in a different table, "Skeletal Muscle" (102.4). The
+    // extractor was asked for muscle mass, found no such label, and took the
+    // latter — so the muscle-mass check failed while everything else matched.
+    const printedWithBadMuscle = { ...PRINTED, muscle_mass_lb: 102.4 };
+    const result = validate(SCAN, printedWithBadMuscle);
+    expect(result.passed).toBe(false);
+
+    const c = classifyMismatches(result);
+    expect(c.printedOnly.map((m) => m.key)).toEqual(['muscle_mass_lb']);
+    expect(c.primarySuspect).toHaveLength(0);
+    expect(c.suspectPrimaries).toEqual([]);
+    expect(c.safeToAccept).toBe(true);
+  });
+
+  test('a genuinely misread primary is NOT safe to accept', () => {
+    // Bone mass feeds muscle mass and its own percentage, and nothing else
+    // confirms it — so a wrong bone mass leaves a primary unaccounted for.
+    const result = validate({ ...SCAN, bone_mass_lb: 21.4 }, PRINTED);
+    const c = classifyMismatches(result);
+
+    expect(c.safeToAccept).toBe(false);
+    expect(c.suspectPrimaries).toContain('bone_mass_lb');
+  });
+
+  test('a wrong weight implicates a primary, loudly', () => {
+    // Weight is the denominator of nearly everything, so getting it wrong
+    // fails many checks at once and confirms almost nothing.
+    const result = validate({ ...SCAN, weight_value: 371.2 }, PRINTED);
+    const c = classifyMismatches(result);
+
+    expect(c.safeToAccept).toBe(false);
+    expect(c.primarySuspect.length).toBeGreaterThan(3);
+    expect(c.suspectPrimaries).toContain('weight_value');
+  });
+
+  test('a clean scan classifies as nothing to review', () => {
+    const c = classifyMismatches(validate(SCAN, PRINTED));
+    expect(c.printedOnly).toHaveLength(0);
+    expect(c.primarySuspect).toHaveLength(0);
+    expect(c.safeToAccept).toBe(true);
+  });
+
+  test('every check in CHECKS has its inputs declared', () => {
+    // The classifier is only as good as this map. A check added without inputs
+    // would silently classify as printed-only and wave a bad number through.
+    for (const check of CHECKS) {
+      expect(Array.isArray(CHECK_INPUTS[check.key])).toBe(true);
+      expect(CHECK_INPUTS[check.key].length).toBeGreaterThan(0);
+    }
   });
 });

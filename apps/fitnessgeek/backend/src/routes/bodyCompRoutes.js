@@ -8,7 +8,7 @@ import {
   handleBodyCompUploadError,
   createBodyCompUpload,
 } from '../controllers/bodyCompUploadController.js';
-import { extractBodyCompUpload } from '../controllers/bodyCompExtractController.js';
+import { extractBodyCompUpload, acceptBodyCompUpload } from '../controllers/bodyCompExtractController.js';
 
 /**
  * @route GET /api/body-comp/share-staged/:id
@@ -44,5 +44,19 @@ router.post(
  * @access Private
  */
 router.post('/uploads/:id/extract', authenticateToken, extractBodyCompUpload);
+
+/**
+ * @route POST /api/body-comp/uploads/:id/accept
+ * @desc The partial-accept path (DOCS/BODY_COMPOSITION_INTAKE.md §6, extended
+ *       by the printed-only/primary-suspect split in
+ *       `bodyCompositionDerivation.js`'s `classifyMismatches`). Called by the
+ *       confirm screen after a `.../extract` mismatch whose `classification`
+ *       came back `safeToAccept: true`. Re-runs the gate and the classifier
+ *       server-side on whatever the request body actually contains — the
+ *       client's own opinion of "safe" is never trusted (see
+ *       bodyCompExtractController.js's header on `acceptBodyCompUpload`).
+ * @access Private
+ */
+router.post('/uploads/:id/accept', authenticateToken, acceptBodyCompUpload);
 
 export default router;

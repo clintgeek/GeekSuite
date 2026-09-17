@@ -131,3 +131,44 @@ export async function extractBodyCompUpload(uploadId) {
 
   return body.data;
 }
+
+/**
+ * The partial-accept path (DOCS/BODY_COMPOSITION_INTAKE.md §6): called from
+ * the confirm screen only when a `.../extract` mismatch came back with
+ * `classification.safeToAccept === true` — the printed witness disagreed but
+ * every stored number it touches was independently confirmed.
+ *
+ * This sends back exactly the `candidate`/`printed`/`measuredAt` the
+ * `.../extract` call handed to the UI a moment ago. The server does NOT take
+ * this call's word for it that the scan is safe — it re-runs the gate and
+ * the classifier itself on these numbers (bodyCompExtractController.js's
+ * `acceptBodyCompUpload`) and refuses to save if that comes back any other
+ * way, so there is nothing this function needs to pre-check.
+ *
+ * @param {string} uploadId
+ * @param {{candidate: object, printed: object, measuredAt: string|null}} payload
+ * @returns {Promise<{status: string, [key: string]: any}>}
+ */
+export async function acceptBodyCompUpload(uploadId, payload) {
+  const response = await fetch(`/api/body-comp/uploads/${encodeURIComponent(uploadId)}/accept`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', ...csrfHeaders('POST') },
+    body: JSON.stringify(payload),
+  });
+
+  let body = null;
+  try {
+    body = await response.json();
+  } catch {
+    // fall through to the generic error below
+  }
+
+  if (!response.ok || !body?.success) {
+    const error = new Error(body?.error?.message || 'Could not save the scan.');
+    error.code = body?.error?.code || `HTTP_${response.status}`;
+    throw error;
+  }
+
+  return body.data;
+}

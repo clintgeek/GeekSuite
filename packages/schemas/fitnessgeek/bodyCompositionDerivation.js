@@ -202,6 +202,99 @@ const CHECKS = Object.freeze([
 ]);
 
 /**
+ * Which stored primaries each check consumes.
+ *
+ * This is what lets a failure be diagnosed rather than merely reported. A
+ * mismatch has two possible causes and they could not matter more differently:
+ *
+ *   - a PRIMARY was misread — the stored number is wrong, and saving it
+ *     poisons the history;
+ *   - the PRINTED value was misread — the stored numbers are fine and only the
+ *     witness was wrong, so there is nothing to fix and nothing at risk.
+ *
+ * The first real scan was the second kind. Page 1 of the report never prints a
+ * figure labelled "muscle mass" — it prints "Soft Lean Mass" (164.6) and, in a
+ * different table, "Skeletal Muscle" (102.4). The extractor took the latter, so
+ * the muscle-mass check failed while fat-free mass, body fat % and BMR all
+ * matched exactly. Every primary feeding muscle mass had already been confirmed
+ * by one of those, so the data was good and the screen still said stop.
+ *
+ * Keep in sync with `CHECKS`.
+ */
+const CHECK_INPUTS = Object.freeze({
+  fat_free_mass_lb: ['weight_value', 'body_fat_mass_lb'],
+  muscle_mass_lb: ['weight_value', 'body_fat_mass_lb', 'bone_mass_lb'],
+  body_fat_pct: ['weight_value', 'body_fat_mass_lb'],
+  body_water_pct: ['weight_value', 'body_water_l'],
+  protein_pct: ['weight_value', 'protein_lb'],
+  bone_mass_pct: ['weight_value', 'bone_mass_lb'],
+  skeletal_muscle_pct: ['weight_value', 'skeletal_muscle_lb'],
+  subcutaneous_fat_pct: ['weight_value', 'subcutaneous_fat_lb'],
+  muscle_mass_pct: ['weight_value', 'body_fat_mass_lb', 'bone_mass_lb'],
+  bmr_kcal: ['weight_value', 'body_fat_mass_lb'],
+  bmi: ['weight_value', 'height_cm'],
+  smi: ['height_cm', 'left_arm.muscle_lb', 'right_arm.muscle_lb', 'left_leg.muscle_lb', 'right_leg.muscle_lb'],
+});
+
+/**
+ * Sort a gate result's failures into the ones that implicate stored data and
+ * the ones that only implicate the page.
+ *
+ * A primary counts as CONFIRMED when it feeds at least one check that passed.
+ * A failing check is PRINTED-ONLY when every primary it consumes is confirmed
+ * somewhere else; otherwise the shared primary is the suspect and the failure
+ * is PRIMARY-SUSPECT.
+ *
+ * **The honest limit of this.** A passing check confirms its inputs *jointly*,
+ * not one by one: two compensating errors would satisfy it and this would call
+ * them confirmed. That requires two misreadings whose effects cancel to within
+ * a tenth of a unit, which is not a realistic transcription failure — but it is
+ * the reason this returns a recommendation for a person to act on rather than
+ * silently saving.
+ *
+ * @returns {{printedOnly: Array, primarySuspect: Array,
+ *            suspectPrimaries: string[], confirmedPrimaries: string[],
+ *            safeToAccept: boolean}}
+ */
+function classifyMismatches(validation) {
+  const checks = validation?.checks || [];
+  const confirmed = new Set();
+
+  for (const check of checks) {
+    if (check.ok === true) {
+      for (const input of CHECK_INPUTS[check.key] || []) confirmed.add(input);
+    }
+  }
+
+  const printedOnly = [];
+  const primarySuspect = [];
+  const suspectPrimaries = new Set();
+
+  for (const check of checks) {
+    if (check.ok !== false) continue;
+    const inputs = CHECK_INPUTS[check.key] || [];
+    const unconfirmed = inputs.filter((i) => !confirmed.has(i));
+
+    if (unconfirmed.length === 0) {
+      printedOnly.push({ ...check, verdict: 'printed_only', unconfirmedInputs: [] });
+    } else {
+      primarySuspect.push({ ...check, verdict: 'primary_suspect', unconfirmedInputs: unconfirmed });
+      for (const i of unconfirmed) suspectPrimaries.add(i);
+    }
+  }
+
+  return {
+    printedOnly,
+    primarySuspect,
+    suspectPrimaries: [...suspectPrimaries],
+    confirmedPrimaries: [...confirmed],
+    // Nothing failed in a way that implicates a stored number. Still requires a
+    // person to say yes — see the joint-confirmation caveat above.
+    safeToAccept: primarySuspect.length === 0,
+  };
+}
+
+/**
  * Run the gate.
  *
  * @param {Object} doc     - the extracted `BodyComposition` primaries.
@@ -297,6 +390,8 @@ function segmentalDrift(doc, { warnAtPct = 10 } = {}) {
 module.exports = {
   derive,
   validate,
+  classifyMismatches,
+  CHECK_INPUTS,
   segmentalDrift,
   TOLERANCES,
   CHECKS,
