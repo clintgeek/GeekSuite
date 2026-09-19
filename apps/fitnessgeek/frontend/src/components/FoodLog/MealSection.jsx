@@ -62,7 +62,12 @@ const MealSection = ({
   onSaveMeal,
   showActions = true,
   compact = false,
-  mode = 'standard'
+  mode = 'standard',
+  // Real favourite state, keyed by food id (see useFoodLog.js's
+  // `favoriteFoodIds`/`toggleFavoriteId`). Both default to "nothing is
+  // favourited yet" rather than undefined, so FoodLogItem never has to guess.
+  favoriteFoodIds,
+  onFavoriteChange
 }) => {
   const theme = useTheme();
   const config = MEAL_CONFIG[mealType];
@@ -225,17 +230,23 @@ const MealSection = ({
       <Box sx={{ p: { xs: 1.5, sm: 2 } }}>
         {logs.length > 0 ? (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            {logs.map((log) => (
-              <FoodLogItem
-                key={log.id || log._id || `${log.food_item?.name || log.food_item_id?.name}-${log.meal_type}`}
-                log={log}
-                onEdit={onEditLog}
-                onDelete={onDeleteLog}
-                showActions={showActions}
-                compact={compact}
-                mode={mode}
-              />
-            ))}
+            {logs.map((log) => {
+              const food_item = log.food_item || log.food_item_id;
+              const foodId = food_item?._id || food_item?.id;
+              return (
+                <FoodLogItem
+                  key={log.id || log._id || `${food_item?.name}-${log.meal_type}`}
+                  log={log}
+                  onEdit={onEditLog}
+                  onDelete={onDeleteLog}
+                  showActions={showActions}
+                  compact={compact}
+                  mode={mode}
+                  isFavorite={Boolean(foodId && favoriteFoodIds?.has(String(foodId)))}
+                  onFavoriteChange={onFavoriteChange}
+                />
+              );
+            })}
           </Box>
         ) : (
           <Box sx={{

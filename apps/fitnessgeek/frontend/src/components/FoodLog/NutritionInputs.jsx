@@ -5,7 +5,14 @@ const NutritionInputs = ({
   values = {},
   onChange,
   showAdvanced = false,
-  spacing = 1.5
+  spacing = 1.5,
+  // Appended to every field label. Plain "Calories" is ambiguous wherever a
+  // caller might show it next to a *total* for N servings elsewhere on the
+  // same screen (see EditLogDialog.jsx) — someone who remembers "that was
+  // 440 total" can type 440 here while servings > 1 and silently multiply
+  // the real total. Left blank by default so a caller that only ever shows
+  // one number stays exactly as it read before.
+  qualifier = ''
 }) => {
   const handleChange = (field) => (e) => {
     const num = parseFloat(e.target.value);
@@ -13,16 +20,16 @@ const NutritionInputs = ({
   };
 
   const baseFields = [
-    { key: 'calories_per_serving', label: 'Calories', adorn: 'kcal' },
-    { key: 'protein_grams', label: 'Protein', adorn: 'g' },
-    { key: 'carbs_grams', label: 'Carbs', adorn: 'g' },
-    { key: 'fat_grams', label: 'Fat', adorn: 'g' }
+    { key: 'calories_per_serving', label: `Calories${qualifier}`, adorn: 'kcal' },
+    { key: 'protein_grams', label: `Protein${qualifier}`, adorn: 'g' },
+    { key: 'carbs_grams', label: `Carbs${qualifier}`, adorn: 'g' },
+    { key: 'fat_grams', label: `Fat${qualifier}`, adorn: 'g' }
   ];
 
   const advancedFields = [
-    { key: 'fiber_grams', label: 'Fiber', adorn: 'g' },
-    { key: 'sugar_grams', label: 'Sugar', adorn: 'g' },
-    { key: 'sodium_mg', label: 'Sodium', adorn: 'mg' }
+    { key: 'fiber_grams', label: `Fiber${qualifier}`, adorn: 'g' },
+    { key: 'sugar_grams', label: `Sugar${qualifier}`, adorn: 'g' },
+    { key: 'sodium_mg', label: `Sodium${qualifier}`, adorn: 'mg' }
   ];
 
   const fields = showAdvanced ? [...baseFields, ...advancedFields] : baseFields;

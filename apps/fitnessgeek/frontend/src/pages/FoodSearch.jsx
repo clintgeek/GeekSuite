@@ -20,6 +20,21 @@ const EMPTY_FOOD_FORM = {
 };
 
 /**
+ * The meal a log at this hour most likely belongs to (mirrors FoodLog.jsx's
+ * helper of the same name). This page IS the "one tap to log it" path, so its
+ * default chip has to agree with the clock — it used to hardcode 'snack',
+ * which meant tapping a breakfast search result before 10am logged it as a
+ * snack until you noticed and changed the chip yourself.
+ */
+const mealTypeForNow = (now = new Date()) => {
+  const hour = now.getHours();
+  if (hour < 10) return 'breakfast';
+  if (hour < 15) return 'lunch';
+  if (hour < 21) return 'dinner';
+  return 'snack';
+};
+
+/**
  * The full-page search.
  *
  * This page used to be a 177-line marketing panel — a wand icon, a headline
@@ -30,7 +45,7 @@ const EMPTY_FOOD_FORM = {
 const FoodSearchPage = () => {
   const { notify } = useToast();
   const today = useMemo(() => fitnessGeekService.formatDate(new Date()), []);
-  const [mealType, setMealType] = useState('snack');
+  const [mealType, setMealType] = useState(() => mealTypeForNow());
   const [scannerOpen, setScannerOpen] = useState(false);
   const [createForm, setCreateForm] = useState(null);
   const [creating, setCreating] = useState(false);

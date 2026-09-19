@@ -1,4 +1,3 @@
-export { default as FoodLogHeader } from './FoodLogHeader';
 export { default as DateNavigator } from './DateNavigator';
 export { default as AddFoodDialog } from './AddFoodDialog';
 export { default as FoodLogItem } from './FoodLogItem.jsx';

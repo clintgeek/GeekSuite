@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Box,
   Container,
+  Button,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -28,11 +29,24 @@ import { weightService } from '../services/weightService.js';
 import { bpService } from '../services/bpService.js';
 import { streakService } from '../services/streakService.js';
 import { settingsService } from '../services/settingsService.js';
+import { useFoodLogging } from '../hooks/useFoodLogging.js';
 
 const DashboardNew = () => {
   const { notify } = useToast();
   const [loading, setLoading] = useState(true);
   const [removingLogIds, setRemovingLogIds] = useState(new Set());
+  // Full log objects (food_item, nutrition snapshot, servings, meal_type) keyed
+  // by log id — the dashboard's own `foods` array only carries a display
+  // projection (name/brand/calories), which isn't enough to re-create a log.
+  // Kept alongside it so Undo has what it needs without a second network trip.
+  const [logsById, setLogsById] = useState({});
+  // Today, in the same local-date format the rest of the log/undo path uses.
+  // The dashboard only ever shows today, so this is also the date a removed
+  // item's Undo re-logs it to.
+  const today = fitnessGeekService.formatDate(new Date());
+  // Same "log this" mechanism the Food Log page and search box use, so
+  // undoing a delete here doesn't invent a second "add it back" path.
+  const { logItems } = useFoodLogging({ date: today });
   // Keto mode state
   const [nutritionGoal, setNutritionGoal] = useState(null);
   const [dashboardData, setDashboardData] = useState({
@@ -116,6 +130,16 @@ const DashboardNew = () => {
         snack: [],
         dinner: [],
       };
+
+      // Index the raw logs by id too, so a later delete can find enough of
+      // the original (food_item, nutrition snapshot, servings) to offer a
+      // real Undo instead of the display-only projection built below.
+      const rawLogsById = {};
+      foodLogs.forEach((log) => {
+        const id = log._id || log.id;
+        if (id) rawLogsById[id] = log;
+      });
+      setLogsById(rawLogsById);
 
       foodLogs.forEach(log => {
         const mealType = log.meal_type || 'snack';
@@ -328,9 +352,21 @@ const DashboardNew = () => {
     }
   };
 
-  // Remove a food log directly from the dashboard
+  // Remove a food log directly from the dashboard.
+  //
+  // Bug this fixes: this used to be one tap with nothing to undo, while
+  // logging a food always shipped an in-toast Undo (useFoodLogging.js). The
+  // asymmetry meant an accidental swipe/tap here was permanent. Undo re-logs
+  // the item via the same `logItems()` the search box's own undo calls — it
+  // lands as a new log (a REST delete can't hand back the old id), but it
+  // reads and totals identically to the row that was removed.
   const handleRemoveFood = async (logId) => {
     if (!logId) return;
+    // Snapshot before it's gone; the dashboard's `foods` projection
+    // (name/brand/calories only) isn't enough to reconstruct a log.
+    const log = logsById[logId];
+    const food_item = log?.food_item || log?.food_item_id;
+
     // Mark as removing so the row fades out
     setRemovingLogIds((prev) => new Set(prev).add(logId));
     try {
@@ -344,6 +380,27 @@ const DashboardNew = () => {
           return next;
         });
       }, 220);
+
+      if (food_item) {
+        notify(`Deleted ${food_item.name || 'item'}`, {
+          tone: 'info',
+          action: (
+            <Button
+              size="small"
+              sx={{ color: 'inherit', fontWeight: 700 }}
+              onClick={async () => {
+                await logItems(
+                  [{ ...food_item, servings: log?.servings, nutrition: log?.nutrition }],
+                  log?.meal_type
+                );
+                loadDashboardData();
+              }}
+            >
+              Undo
+            </Button>
+          )
+        });
+      }
     } catch (err) {
       console.error('Failed to remove food log:', err);
       notify('Could not remove that item. Try again.', { tone: 'error' });
