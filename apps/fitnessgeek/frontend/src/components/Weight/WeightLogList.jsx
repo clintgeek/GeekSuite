@@ -16,26 +16,41 @@ import {
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon
 } from '@mui/icons-material';
+import { displayCalendarDate, localDateString, utcDateString } from '@geeksuite/utils';
 
 const WeightLogList = ({ logs, onDelete, unit = 'lbs' }) => {
 
+  // `log_date` is a CALENDAR date stored at UTC midnight, not an instant —
+  // same class of bug already fixed in BPLogList. `new Date(dateString)` then
+  // `.toDateString()`/`.toLocaleDateString()` reads that UTC midnight back in
+  // the browser's own zone, which is the previous evening for anyone west of
+  // UTC: a Central-time user's entry logged today rendered as yesterday's
+  // date, and `date.toDateString() === today.toDateString()` (also LOCAL)
+  // never matched, so "Today" never appeared. Comparing calendar-day strings
+  // via `utcDateString`/`localDateString` and rendering with
+  // `displayCalendarDate` (which forces `timeZone: 'UTC'`) fixes both.
   const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
+    const day = utcDateString(dateString);
+    const today = localDateString();
 
-    if (date.toDateString() === today.toDateString()) {
+    if (day === today) {
       return 'Today';
-    } else if (date.toDateString() === yesterday.toDateString()) {
-      return 'Yesterday';
-    } else {
-      return date.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric'
-      });
     }
+
+    // "Yesterday" from the viewer's own local calendar, not
+    // `Date.now() - 86400000` — that drifts across a DST transition.
+    const now = new Date();
+    const yesterday = localDateString(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1));
+
+    if (day === yesterday) {
+      return 'Yesterday';
+    }
+
+    return displayCalendarDate(dateString, 'en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
   };
 
   const getChangeIndicator = (currentLog, previousLog) => {

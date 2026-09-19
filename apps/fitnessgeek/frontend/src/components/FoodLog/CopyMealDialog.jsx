@@ -24,6 +24,29 @@ import DateField from '../primitives/DateField.jsx';
 
 const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'];
 
+/**
+ * Shift a CALENDAR date (`YYYY-MM-DD`, e.g. `currentDate` — the day the food
+ * log page is showing, not a moment in time) by whole days, staying in local
+ * time throughout.
+ *
+ * The bug this replaces: `new Date(currentDate)` parses a bare `YYYY-MM-DD`
+ * as UTC midnight, but the `.getDate()`/`.setDate()` that followed read and
+ * wrote LOCAL calendar fields. For anyone west of UTC those name different
+ * days — UTC midnight is 7pm the previous day in Central — so `+1 day`
+ * landed back on the day already showing (silently overwriting TODAY'S log
+ * instead of tomorrow's, which is data loss, not a display glitch) and
+ * `-1 day` landed two days back instead of one. `pages/FoodLog.jsx`'s
+ * `goToPreviousDay`/`goToNextDay` avoid this by destructuring year/month/day
+ * first and building the `Date` in local time from the start; this is that
+ * same pattern, not a new one.
+ */
+const shiftDate = (dateString, deltaDays) => {
+  const [y, m, d] = dateString.split('-').map(Number);
+  const date = new Date(y, (m || 1) - 1, d || 1);
+  date.setDate(date.getDate() + deltaDays);
+  return fitnessGeekService.formatDate(date);
+};
+
 const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = null }) => {
   const [copying, setCopying] = useState(false);
   const [error, setError] = useState('');
@@ -46,9 +69,7 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
       // Set default dates
       setFromDate(currentDate);
       // Default to date is tomorrow
-      const tomorrow = new Date(currentDate);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      setToDate(fitnessGeekService.formatDate(tomorrow));
+      setToDate(shiftDate(currentDate, 1));
       setFromMealType('');
       setToMealType('');
       setFromUserId('');
@@ -121,30 +142,25 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
 
   // Quick copy presets
   const handleQuickCopy = (preset) => {
-    const tomorrow = new Date(currentDate);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
+    // Computed lazily per-preset (not hoisted to one shared `tomorrow`) so
+    // neither branch pays for a shift it doesn't use.
     switch (preset) {
       case 'dinner-to-lunch':
         setFromDate(currentDate);
         setFromMealType('dinner');
-        setToDate(fitnessGeekService.formatDate(tomorrow));
+        setToDate(shiftDate(currentDate, 1));
         setToMealType('lunch');
         break;
       case 'yesterday-dinner':
-        {
-          const yesterday = new Date(currentDate);
-          yesterday.setDate(yesterday.getDate() - 1);
-          setFromDate(fitnessGeekService.formatDate(yesterday));
-          setFromMealType('dinner');
-          setToDate(currentDate);
-          setToMealType('lunch');
-        }
+        setFromDate(shiftDate(currentDate, -1));
+        setFromMealType('dinner');
+        setToDate(currentDate);
+        setToMealType('lunch');
         break;
       case 'all-to-tomorrow':
         setFromDate(currentDate);
         setFromMealType('');
-        setToDate(fitnessGeekService.formatDate(tomorrow));
+        setToDate(shiftDate(currentDate, 1));
         setToMealType('');
         break;
       default:

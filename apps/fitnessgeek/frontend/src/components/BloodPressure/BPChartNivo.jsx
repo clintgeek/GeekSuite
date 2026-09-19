@@ -6,6 +6,7 @@ import {
   useMediaQuery,
 } from '@mui/material';
 import { ResponsiveLine } from '@nivo/line';
+import { displayCalendarDate } from '@geeksuite/utils';
 import {
   Surface,
   SectionLabel,
@@ -63,7 +64,13 @@ const BPChartNivo = ({ data, unit = 'mmHg' }) => {
       })
       .sort((a, b) => new Date(a.log_date) - new Date(b.log_date))
       .map((item) => ({
-        date: new Date(item.log_date).toLocaleDateString('en-US', {
+        // `log_date` is a CALENDAR date stored at UTC midnight, not an
+        // instant — plain `toLocaleDateString()` reads that UTC midnight in
+        // the browser's own zone, which is the previous day for anyone west
+        // of UTC. `displayCalendarDate` forces `timeZone: 'UTC'` so the x-axis
+        // label and tooltip (which reuses this `date` field via `point.data.x`)
+        // show the day the reading was actually logged.
+        date: displayCalendarDate(item.log_date, 'en-US', {
           month: 'short',
           day: 'numeric',
         }),
