@@ -160,3 +160,34 @@ describe('aiModelCapabilitiesService — canonical capability flags', () => {
     });
   });
 });
+
+describe('a probe-confirmed row is not mistaken for an unmeasured one', () => {
+  it('capabilities.source alone marks a row observed, so the stored row is kept', async () => {
+    // What a probe-only write actually looks like: `source` plus one task
+    // flag, and none of the `supports*` booleans or context sizes the older
+    // heuristic checks. Before 2026-09-19 that was judged unobserved and the
+    // measurement was replaced by `inferCapabilities`' name-string guessing.
+    //
+    // The assertion is on `source`, deliberately. An earlier version of this
+    // test asserted `tasks.structuredOutput` and passed with the fix removed,
+    // because `inferCapabilities` sets that true for EVERY model — it could
+    // not tell the two branches apart. `source` exists only on the stored
+    // object, so it survives only down the observed branch.
+    const svc = (await import('../services/aiModelCapabilitiesService.js')).default;
+    const probeWrite = { source: 'probe', tasks: { structuredOutput: true } };
+
+    // A name deliberately containing "70b", which `inferCapabilities` reads as
+    // state-of-the-art — so if the guess wins, it is unmistakable.
+    const caps = svc.getCapabilities('groq', 'vendor/some-70b-model', probeWrite);
+
+    expect(caps.source).toBe('probe');
+    expect(caps.performance?.quality).toBeUndefined();
+  });
+
+  it('a row with nothing measured still falls back to inference', async () => {
+    // The fix must not turn every empty row into a fake observation.
+    const svc = (await import('../services/aiModelCapabilitiesService.js')).default;
+    const caps = svc.getCapabilities('groq', 'vendor/some-70b-model', { tasks: {} });
+    expect(caps.source).toBeUndefined();
+  });
+});

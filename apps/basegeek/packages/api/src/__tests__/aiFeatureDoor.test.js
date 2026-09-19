@@ -910,9 +910,16 @@ describe('POST /api/ai/feature — need routing', () => {
       .set('Authorization', `Bearer ${apiKey}`)
       .send({ feature: 'bodyCompExtract', user: 'hi', need: 'structured+vision:balanced' });
 
-    expect(res.status).toBe(503);
-    expect(res.body.error.code).toBe('NO_VISION_MODEL');
+    // A 200 with `ok: false`, the shape this route documents for every
+    // refusal. It answered 503 with an `error.code` for a day, which meant a
+    // consumer branching on `body.ok` — as the JSDoc instructs — read
+    // `undefined` and took its success path.
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(false);
+    expect(res.body.reason).toBe('unavailable');
+    expect(res.body.detail).toBe('no_vision_model');
   });
+
 
   it('refuses a malformed compound the same as a malformed single task', async () => {
     const apiKey = await makeApiKey({ appName: 'fitnessgeek' });

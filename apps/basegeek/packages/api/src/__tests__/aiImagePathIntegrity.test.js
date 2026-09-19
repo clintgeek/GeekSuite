@@ -25,6 +25,7 @@
 import { jest } from '@jest/globals';
 import { extractTextContent, countMessageTokens } from '../services/tokenCounter.js';
 import { messagesNeedImageHandling, TEXT_PART, IMAGE_PART } from '../services/ai/adapters/imageContent.js';
+import { normalizeMessageContent, normalizeMessages } from '../services/aiService.js';
 
 /** The canonical part shapes, built here so the test pins the wire contract. */
 const textPart = (text) => ({ type: TEXT_PART, text });
@@ -71,10 +72,11 @@ describe('aiService.normalizeMessages passes an image through intact', () => {
   });
 
   test('the content-parts array is the SAME array after normalization', async () => {
-    const messages = [imageMessage()];
-    const { messages: out } = await aiService.preprocessContext('', messages, 'nonexistent-provider');
-    // An unknown provider has no context limit, so preprocessing is a no-op and
-    // the array must come back untouched — not flattened, not re-wrapped.
+    // Calls `normalizeMessages` DIRECTLY. An earlier version of this test went
+    // through `preprocessContext` with an unconfigured provider, which returns
+    // before it reaches the normalizer — so it passed whether the bug was
+    // present or not, and proved nothing.
+    const out = normalizeMessages([imageMessage()]);
     expect(Array.isArray(out[0].content)).toBe(true);
     expect(out[0].content).toHaveLength(2);
     expect(out[0].content[1]).toMatchObject({ type: 'image', mediaType: 'image/png' });
@@ -156,5 +158,49 @@ describe('messagesNeedImageHandling is the one detector', () => {
   test('true for an image-bearing message, false for plain text', () => {
     expect(messagesNeedImageHandling([imageMessage()])).toBe(true);
     expect(messagesNeedImageHandling([{ role: 'user', content: 'hello' }])).toBe(false);
+  });
+});
+
+describe('a malformed part must never cost the image', () => {
+  let aiService;
+  beforeAll(async () => {
+    ({ default: aiService } = await import('../services/aiService.js'));
+  });
+
+  test('one bad part alongside a valid image still passes the image through', async () => {
+    // The fourth instance of this bug, and it lived inside the fix for the
+    // other three. `partsOf` reports `unrecognized` for the WHOLE array if any
+    // single part fails to match, so the old `!unrecognized && images.length`
+    // guard failed on a mixed array, fell through to the join, and stringified
+    // the base64 into the prompt — reachable over HTTP with a confident wrong
+    // answer at the end of it.
+    //
+    // Refusing a malformed part belongs to the adapters, which already do it.
+    // This layer only has to not throw the image away on the way there.
+    const content = [
+      textPart('Extract the numbers.'),
+      imagePart('image/png', BIG_B64),
+      { type: 'tool_use', id: 'something-this-layer-does-not-know' },
+    ];
+
+    const out = normalizeMessageContent(content);
+    expect(Array.isArray(out)).toBe(true);
+    const img = out.find((p) => p.type === 'image');
+    expect(img).toBeTruthy();
+    expect(img.data).toBe(BIG_B64);
+  });
+
+  test('the base64 never becomes prompt text', async () => {
+    // The observable harm, asserted directly: whatever this layer returns, the
+    // payload must not have been flattened into a string.
+    const out = normalizeMessageContent([imagePart('image/png', BIG_B64), { nonsense: true }]);
+    expect(typeof out).not.toBe('string');
+    expect(Array.isArray(out)).toBe(true);
+  });
+
+  test('a parts array with no image at all still flattens as before', () => {
+    // The narrowing must not change text-only behaviour, which every existing
+    // caller relies on.
+    expect(extractTextContent([textPart('one'), textPart('two')])).toBe('one\ntwo');
   });
 });

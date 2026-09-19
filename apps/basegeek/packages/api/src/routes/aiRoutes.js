@@ -1034,12 +1034,23 @@ router.post('/feature', async (req, res) => {
     // guard exists for.
     if (!needPick && !wantsPin && parsedNeed?.tasks.includes('vision')) {
       req.log.warn({ need, feature }, '[ai] /feature refusing a vision need with no vision-capable row');
-      return res.status(503).json({
-        success: false,
-        error: {
-          code: 'NO_VISION_MODEL',
-          message: 'No vision-capable model is available right now.',
-        },
+      // A 200 with `ok: false`, like every other refusal this door makes.
+      //
+      // This returned `503 { success: false, error: { code } }` when it was
+      // written, which broke three of this route's own promises at once: the
+      // documented status (a model failure is a 200, so consumers never parse a
+      // 5xx), the envelope key (`ok`, not `success`), and the `reason` enum. A
+      // caller branching on `body.ok` — which is what the JSDoc tells them to
+      // do — got `undefined` and fell through to its success path.
+      //
+      // Refusing rather than degrading to a blind model is still right; see
+      // the block above. Only the shape was wrong.
+      return res.json({
+        ok: false,
+        reason: 'unavailable',
+        detail: 'no_vision_model',
+        provenance: { source: 'none', reason: 'no_vision_model', model: null, provider: null, cached: false, costUsd: 0, hints: [] },
+        content: null,
       });
     }
 
@@ -1619,12 +1630,19 @@ router.post('/director/analyze-cost', async (req, res) => {
 
 // POST /api/ai/director/recommend - Get provider recommendations
 //
-// Q45: read-only like analyze-cost, and `ai:director` for a second reason —
-// StoryGeek's epub pipeline calls it from a backend
-// (apps/storygeek/backend/src/services/aiService.js:395, whose sibling
-// getDirectorModels already carries the note "Needs the ai:director permission
-// — mint the key with it"). An admin gate would refuse that credential on the
-// spot, because a key belongs to an app and not to a person.
+// Q45: read-only like analyze-cost, and `ai:director` rather than admin so a
+// service key can reach it too — a key belongs to an app, not a person, and
+// `requireAdminUser` refuses every key outright.
+//
+// StoryGeek's epub pipeline used to call this from its backend; that
+// integration was removed in Phase 2 of DOCS/AIGEEK_ELEVATION_PLAN.md (see
+// apps/storygeek/backend/src/services/aiService.js, which documents the
+// cutover — `recommendProviderModel` is gone from that file). The only live
+// callers today are basegeek's own console: `ModelStewardBlock.jsx` via
+// `useAIGeek.js`'s `aiRecommendModel` GraphQL query, and `AliveModelPicker.jsx`
+// — both reach `recommendProvider` through the GraphQL resolver
+// (graphql/basegeek/resolvers.js), which, like this route, calls it with the
+// options-object form.
 router.post('/director/recommend', async (req, res) => {
   try {
     const permissionError = requirePermission(req, res, 'ai:director');
@@ -1643,9 +1661,8 @@ router.post('/director/recommend', async (req, res) => {
     }
 
     // `freeOnly` and `limit` are additive: a body without them behaves exactly
-    // as it did before, which is what StoryGeek's epub pipeline sends
-    // (apps/storygeek/backend/src/services/aiService.js — task, priority,
-    // requirements, and it reads recommendations[0].model.id back out).
+    // as it did before this route grew them — just `task`, `priority` and
+    // `requirements`, reading `recommendations[0].model.id` back out.
     const result = await aiDirectorService.recommendProvider(task, {
       budget: budget ?? null,
       priority,
@@ -2066,48 +2083,12 @@ router.post('/test', requireAdminUser, async (req, res) => {
   }
 });
 
-/**
- * POST /api/ai/context/reset/:conversationId
- * Reset cached context for a conversation
- */
-router.post('/context/reset/:conversationId', async (req, res) => {
-  try {
-    // Check permission for API key users
-    const permissionError = requirePermission(req, res, 'ai:call');
-    if (permissionError) return;
-
-    const { conversationId } = req.params;
-    const { family } = req.body;
-
-    if (!conversationId) {
-      return res.status(400).json({
-        success: false,
-        error: {
-          message: 'Conversation ID is required',
-          code: 'MISSING_CONVERSATION_ID'
-        }
-      });
-    }
-
-    // For now, just return success (context cache will be implemented in Phase 2A½)
-    res.json({
-      success: true,
-      message: 'Context reset queued (Phase 2A½ feature)',
-      conversationId,
-      family: family || 'all'
-    });
-
-  } catch (error) {
-    req.log.error({ err: error }, '[API] Context reset error');
-    res.status(500).json({
-      success: false,
-      error: {
-        message: error.message || 'Failed to reset context',
-        code: 'CONTEXT_RESET_ERROR'
-      }
-    });
-  }
-});
+// `POST /api/ai/context/reset/:conversationId` — removed 2026-09-19 (aiGeek
+// review §2). It was a stub that always answered `{success:true, message:
+// 'Context reset queued (Phase 2A½ feature)'}` regardless of input — Phase 2A½
+// never arrived, and nothing in the repo, including the test suite, ever
+// called it. A caller checking this response would believe context had been
+// reset when nothing had happened. See DOCS/AIGEEK_REVIEW_2026-09.md §2.
 
 // POST /api/ai/cache/clear - Clear response cache
 //

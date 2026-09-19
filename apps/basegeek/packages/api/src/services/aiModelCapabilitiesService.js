@@ -1,11 +1,8 @@
-import AIModel from '../models/AIModel.js';
 import {
-  PROVIDER_IDS,
   TOOL_FORWARDING_PROVIDERS,
   JSON_SCHEMA_SUPPORTED,
   JSON_MODE_SUPPORTED
 } from '../config/aiProviders.js';
-import logger from '../lib/logger.js';
 
 // ─── Adapter facts, re-exported ──────────────────────────────────────────────
 //
@@ -98,6 +95,20 @@ function jsonModeSupportedFor(provider, modelId) {
  */
 function looksObserved(stored) {
   if (!stored || typeof stored !== 'object') return false;
+
+  // `source` is the direct answer, and until 2026-09-19 this function did not
+  // read it — while both `AIModel.js` and `aiCatalogDiscovery.js` carried
+  // comments asserting that it did.
+  //
+  // The cost of that gap: a probe-only write stamps `capabilities.source` and
+  // `capabilities.tasks.structuredOutput` and NONE of the flags checked below,
+  // so a row the probe had genuinely confirmed was judged unobserved, and
+  // `getCapabilities()` discarded it in favour of `inferCapabilities()` — the
+  // name-string guessing ("70b" means excellent) that
+  // DOCS/AIGEEK_CAPABILITY_ROUTING.md §2 calls demonstrably wrong in both
+  // directions. A real measurement was being thrown away for a guess.
+  if (stored.source) return true;
+
   if (
     stored.supportsVision || stored.supportsAudio ||
     stored.supportsFunctionCalling || stored.supportsToolCalling ||
@@ -151,38 +162,14 @@ class AIModelCapabilitiesService {
     return !!this.getCapabilities(provider, modelId).supportsJSONSchema;
   }
 
-  /**
-   * Bring one AIModel row's `capabilities` up to date.
-   *
-   * Reads what the catalog already knows (the job writes `capabilities` from
-   * OpenRouter's `supported_parameters` or from a probe) and falls back to
-   * `inferCapabilities` when the row says nothing. It consults no table: the
-   * hand-typed one it used to prefer over both is gone.
-   */
-  async updateModelCapabilities(provider, modelId) {
-    try {
-      const existing = await AIModel.findOne({ provider, modelId })
-        .select('capabilities')
-        .lean();
-      const capabilities = this.getCapabilities(provider, modelId, existing?.capabilities);
-
-      await AIModel.findOneAndUpdate(
-        { provider, modelId },
-        {
-          $set: {
-            capabilities,
-            lastChecked: new Date()
-          }
-        },
-        { upsert: true }
-      );
-
-      return { success: true, capabilities };
-    } catch (error) {
-      logger.error({ err: error }, 'Error updating model capabilities');
-      return { success: false, error: error.message };
-    }
-  }
+  // `updateModelCapabilities(provider, modelId)` and `updateAllModelCapabilities()`
+  // — removed 2026-09-19 (aiGeek review §2). Zero callers anywhere in the repo,
+  // tests included: `getCapabilities` below is read-only and every live caller
+  // (aiService, aiDirectorService, the adapter-facts re-exports) only ever
+  // reads a capabilities object, never writes one back to Mongo. The catalog
+  // job writes `AIModel.capabilities` directly from OpenRouter's
+  // `supported_parameters` or a live probe; nothing routes through an upsert
+  // here any more. See DOCS/AIGEEK_REVIEW_2026-09.md §2.
 
   inferCapabilities(modelId) {
     // Handle null/undefined modelId
@@ -322,36 +309,6 @@ class AIModelCapabilitiesService {
   // neither path, so mongoose 8 throws StrictPopulateError on every call. The
   // ranking idea (free first, then price, or speed, or quality) survives in
   // aiDirectorService.recommendProvider, which is the version that runs.
-
-  async updateAllModelCapabilities() {
-    try {
-      // The roster is the one list of providers (config/aiProviders.js). This
-      // used to be a hand-typed ['groq', 'gemini', 'together'], which quietly
-      // skipped the six providers added after it was written.
-      let updatedCount = 0;
-
-      for (const provider of PROVIDER_IDS) {
-        const models = await AIModel.find({ provider, isActive: true });
-
-        for (const model of models) {
-          const updated = await this.updateModelCapabilities(provider, model.modelId);
-          if (updated) updatedCount++;
-        }
-      }
-
-      logger.info(`Updated capabilities for ${updatedCount} models`);
-      return {
-        success: true,
-        updatedCount
-      };
-    } catch (error) {
-      logger.error({ err: error }, 'Failed to update all model capabilities');
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  }
 }
 
 export default new AIModelCapabilitiesService();
