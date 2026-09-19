@@ -12,6 +12,7 @@ import {
   uploadBodyCompFile,
   extractBodyCompUpload,
   acceptBodyCompUpload,
+  importBodyCompXlsx,
 } from '../services/bodyCompUploadService.js';
 
 // Minimal intake screen. This is where BOTH ways of getting a scan file
@@ -23,13 +24,24 @@ import {
 //      iOS Safari implements outbound navigator.share() only, never Web
 //      Share Target, and it's also useful on desktop / for re-importing an
 //      old scan.
-// Both paths call the same POST /api/body-comp/uploads endpoint, and once
-// that lands, this screen immediately triggers extraction
-// (POST /api/body-comp/uploads/:id/extract — DOCS/BODY_COMPOSITION_INTAKE.md
-// §10) and renders whatever it comes back with: a clean save, a mismatch
-// table (§6), a duplicate, or an unavailable model. Every one of those is a
-// normal outcome to show, not an error state — only a genuine network/server
-// failure reads as ERROR here.
+// Both paths call the same POST /api/body-comp/uploads endpoint. What
+// happens next depends on WHAT was uploaded, decided purely by the sniffed
+// `mimeType` the upload endpoint hands back (never the file's extension —
+// see fileSniff.js):
+//   - A PDF or image triggers the vision extraction path
+//     (POST /api/body-comp/uploads/:id/extract — DOCS/BODY_COMPOSITION_INTAKE.md
+//     §10), rendering a clean save, a mismatch table (§6), a duplicate, or an
+//     unavailable model.
+//   - The Arboleaf app's own ".xlsx" history export triggers the spreadsheet
+//     import path instead (POST /api/body-comp/uploads/:id/import-xlsx) — no
+//     AI, no confirm screen, and a single file can carry the user's WHOLE
+//     scan history, so the outcome is an aggregate
+//     {imported, skipped, failed} count rather than one scan's status.
+// Every one of those outcomes is normal to show, not an error state — only a
+// genuine network/server failure reads as ERROR here.
+
+/** The Arboleaf data export's real MIME type, as `fileSniff.js` identifies it — never guessed from a `.xlsx` extension. */
+const XLSX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 const ERROR_MESSAGES = {
   no_file: 'No file was shared.',
@@ -43,6 +55,7 @@ const STATUS = {
   CLAIMING: 'claiming',
   UPLOADING: 'uploading',
   EXTRACTING: 'extracting',
+  IMPORTING: 'importing', // the xlsx bulk-import path — see this file's header
   SUCCESS: 'success',
   ERROR: 'error',
 };
@@ -185,8 +198,45 @@ function ValidationDetail({ validation }) {
   );
 }
 
+/**
+ * Human copy for the spreadsheet import outcome — plain counts, no
+ * per-check validation table (there's no single scan's numbers to show; a
+ * whole file's worth of rows already ran the gate server-side, and
+ * `results` carries the per-row detail for anyone who wants it, but this
+ * screen stays minimal per the task's own instruction: report the outcome
+ * plainly, e.g. "imported 5 scans, skipped 1 already present").
+ */
+function xlsxImportSummary(extraction) {
+  if (extraction.status === 'unreadable') {
+    return {
+      tone: 'error',
+      title: "Couldn't read this file.",
+      detail: extraction.message || 'Could not read this file as a spreadsheet export.',
+    };
+  }
+
+  const { imported = 0, skipped = 0, failed = 0 } = extraction;
+  const parts = [`imported ${imported} scan${imported === 1 ? '' : 's'}`];
+  if (skipped > 0) parts.push(`skipped ${skipped} already present`);
+  if (failed > 0) parts.push(`could not verify ${failed}`);
+  const detail = `${parts.join(', ')}.`;
+
+  return {
+    // Success reads as "at least one row is now safely in the history," even
+    // if some rows were skipped as duplicates — a re-import of an
+    // already-imported file (§7) is a normal, successful no-op, not an
+    // error. Only "nothing imported AND something failed the gate" reads as
+    // an error tone.
+    tone: imported > 0 || failed === 0 ? 'success' : 'error',
+    title: imported > 0 ? 'Scan history imported.' : skipped > 0 ? 'Already imported.' : 'Nothing to import.',
+    detail: detail.charAt(0).toUpperCase() + detail.slice(1),
+  };
+}
+
 /** Human copy for every terminal extraction outcome the server can hand back. */
 function extractionSummary(extraction) {
+  if (extraction?.kind === 'xlsxImport') return xlsxImportSummary(extraction);
+
   switch (extraction?.status) {
     case 'saved':
       return { tone: 'success', title: 'Scan saved.', detail: 'Your body-composition scan was read, verified, and logged.' };
@@ -244,6 +294,20 @@ function ScanImport() {
     try {
       const result = await uploadBodyCompFile(file);
       setUploadResult(result);
+
+      // Which path runs next depends entirely on the SNIFFED mimeType the
+      // upload endpoint handed back, never on the file's name/extension —
+      // matching the sniff-don't-trust rule the whole intake pipeline is
+      // built around (fileSniff.js).
+      if (result.mimeType === XLSX_MIME_TYPE) {
+        notify('Spreadsheet uploaded — importing your scan history…', { tone: 'success' });
+        setStatus(STATUS.IMPORTING);
+        const importResult = await importBodyCompXlsx(result.id);
+        setExtraction({ kind: 'xlsxImport', ...importResult });
+        setStatus(STATUS.SUCCESS);
+        return;
+      }
+
       notify('Scan uploaded — reading it now…', { tone: 'success' });
 
       // The upload is only step one. Immediately run extraction against it
@@ -255,7 +319,7 @@ function ScanImport() {
       // render below.
       setStatus(STATUS.EXTRACTING);
       const extractionResult = await extractBodyCompUpload(result.id);
-      setExtraction(extractionResult);
+      setExtraction({ kind: 'extraction', ...extractionResult });
       setStatus(STATUS.SUCCESS);
     } catch (error) {
       setStatus(STATUS.ERROR);
@@ -333,7 +397,8 @@ function ScanImport() {
     runUpload(file);
   };
 
-  const busy = status === STATUS.CLAIMING || status === STATUS.UPLOADING || status === STATUS.EXTRACTING;
+  const busy = status === STATUS.CLAIMING || status === STATUS.UPLOADING
+    || status === STATUS.EXTRACTING || status === STATUS.IMPORTING;
   const summary = status === STATUS.SUCCESS && extraction ? extractionSummary(extraction) : null;
 
   return (
@@ -360,7 +425,7 @@ function ScanImport() {
           <>
             <InsertDriveFileIcon sx={{ fontSize: 40, color: 'text.secondary', mb: 1 }} />
             <Typography sx={{ mb: 2, fontSize: '0.875rem', color: 'text.secondary' }}>
-              PDF or image, up to 10MB.
+              A scan report (PDF or image), or your full history as a spreadsheet export — up to 10MB.
             </Typography>
           </>
         )}
@@ -372,6 +437,7 @@ function ScanImport() {
               {status === STATUS.CLAIMING && 'Retrieving shared file…'}
               {status === STATUS.UPLOADING && 'Uploading…'}
               {status === STATUS.EXTRACTING && 'Reading your scan…'}
+              {status === STATUS.IMPORTING && 'Importing your scan history…'}
             </Typography>
           </Box>
         )}
@@ -430,7 +496,7 @@ function ScanImport() {
           <input
             ref={fileInputRef}
             type="file"
-            accept="application/pdf,image/*"
+            accept={`application/pdf,image/*,.xlsx,${XLSX_MIME_TYPE}`}
             hidden
             onChange={handleFilePicked}
           />
